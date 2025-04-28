@@ -70,7 +70,8 @@ Session(app)
 migrate = Migrate(app, db)
 
 
-app.config['SERVER_NAME'] = 'orange-space-pancake-j9456jjjv9vcqrxx-5001.app.github.dev'
+app.config['SERVER_NAME'] = 'petorlandia.onrender.com'
+
 
 
 with app.app_context():
