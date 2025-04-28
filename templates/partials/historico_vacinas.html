@@ -1,0 +1,96 @@
+{% if animal.vacinas %}
+<div class="card mb-3">
+  <div class="card-body">
+    <h5 class="card-title">💉 Histórico de Vacinas</h5>
+
+    <ul class="list-group list-group-flush mb-2">
+      {% for vacina in animal.vacinas|sort(attribute='data', reverse=True) %}
+      <li class="list-group-item" data-vacina-id="{{ vacina.id }}">
+        <div class="vacina-info">
+          <strong class="vacina-nome">{{ vacina.nome }}</strong>
+          {% if vacina.tipo %} — <span class="vacina-tipo">{{ vacina.tipo }}</span>{% endif %}
+          {% if vacina.data %}
+            em <span class="vacina-data" data-date="{{ vacina.data.strftime('%Y-%m-%d') }}">
+              {{ vacina.data.strftime('%d/%m/%Y') }}
+            </span>
+          {% endif %}
+          {% if vacina.observacoes %}
+            <br><em class="vacina-obs">{{ vacina.observacoes }}</em>
+          {% endif %}
+        </div>
+
+        <div class="mt-2 d-flex gap-2">
+          <form method="POST" action="{{ url_for('deletar_vacina', vacina_id=vacina.id) }}"
+                onsubmit="return confirm('Deseja mesmo remover esta vacina?')">
+            <button class="btn btn-sm btn-danger">🗑️ Remover</button>
+          </form>
+
+          <button class="btn btn-sm btn-outline-primary" onclick="editarVacina({{ vacina.id }})">
+            ✏️ Editar
+          </button>
+        </div>
+      </li>
+      {% endfor %}
+    </ul>
+  </div>
+</div>
+{% else %}
+<p class="text-muted">Nenhuma vacina registrada ainda para este animal.</p>
+{% endif %}
+
+<script>
+function editarVacina(id) {
+  const li = document.querySelector(`[data-vacina-id='${id}']`);
+  const nome = li.querySelector('.vacina-nome')?.textContent.trim() || '';
+  const tipo = li.querySelector('.vacina-tipo')?.textContent.trim() || '';
+  const data = li.querySelector('.vacina-data')?.dataset.date || '';
+  const obs = li.querySelector('.vacina-obs')?.textContent.trim() || '';
+
+  li.innerHTML = `
+    <div class="mb-2">
+      <label class="form-label">Nome</label>
+      <input class="form-control" id="edit-nome-${id}" value="${nome}">
+    </div>
+    <div class="mb-2">
+      <label class="form-label">Tipo</label>
+      <input class="form-control" id="edit-tipo-${id}" value="${tipo}">
+    </div>
+    <div class="mb-2">
+      <label class="form-label">Data</label>
+      <input type="date" class="form-control" id="edit-data-${id}" value="${data}">
+    </div>
+    <div class="mb-2">
+      <label class="form-label">Observações</label>
+      <textarea class="form-control" id="edit-obs-${id}">${obs}</textarea>
+    </div>
+    <button class="btn btn-sm btn-success" onclick="salvarEdicaoVacina(${id})">💾 Salvar</button>
+    <button class="btn btn-sm btn-secondary" onclick="location.reload()">Cancelar</button>
+  `;
+}
+
+function salvarEdicaoVacina(id) {
+  const nome = document.getElementById(`edit-nome-${id}`).value.trim();
+  const tipo = document.getElementById(`edit-tipo-${id}`).value.trim();
+  const data = document.getElementById(`edit-data-${id}`).value.trim();
+  const observacoes = document.getElementById(`edit-obs-${id}`).value.trim();
+
+  fetch(`/vacina/${id}/editar`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ nome, tipo, data, observacoes })
+  })
+  .then(res => res.json())
+  .then(d => {
+    if (d.success) {
+      alert("Vacina atualizada!");
+      location.reload();
+    } else {
+      alert("Erro ao salvar.");
+    }
+  })
+  .catch(err => {
+    console.error(err);
+    alert("Erro na requisição.");
+  });
+}
+</script>

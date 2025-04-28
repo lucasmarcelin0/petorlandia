@@ -1,0 +1,129 @@
+{% extends 'base_consulta.html' %}
+{% block main %}
+<div class="container py-4">
+  <h2 class="mb-4">📝 Editar Bloco de Prescrição</h2>
+
+  <div id="form-edicao">
+    <!-- Lista Temporária de Medicamentos (com edição) -->
+    <div id="prescricao-lista" class="mb-3"></div>
+
+    <button class="btn btn-outline-primary mb-3" onclick="adicionarMedicamento()">➕ Adicionar Medicamento</button>
+    <button class="btn btn-success" onclick="salvarEdicaoBloco({{ bloco.id }})">💾 Salvar alterações</button>
+  </div>
+</div>
+
+<script>
+let medicamentos = [
+  {% for p in bloco.prescricoes %}
+    {
+      medicamento: "{{ p.medicamento|escape }}",
+      dosagem: "{{ p.dosagem|escape }}",
+      frequencia: "{{ p.frequencia|escape }}",
+      duracao: "{{ p.duracao|escape }}",
+      observacoes: `{{ p.observacoes|default('', true)|escape }}`
+    },
+  {% endfor %}
+];
+
+function renderListaEdicao() {
+  const container = document.getElementById('prescricao-lista');
+  container.innerHTML = '';
+  medicamentos.forEach((m, i) => {
+    const card = document.createElement('div');
+    card.className = 'card mb-2';
+    card.innerHTML = `
+      <div class="card-body">
+        <div class="form-group mb-2 position-relative">
+          <label>Medicamento</label>
+          <input class="form-control medicamento-input" data-index="${i}" value="${m.medicamento}" onchange="medicamentos[${i}].medicamento = this.value">
+          <ul class="list-group position-absolute w-100 mt-1 sugestoes" style="z-index:10;"></ul>
+        </div>
+        <div class="form-row mb-2">
+          <div class="col">
+            <label>Dosagem</label>
+            <input class="form-control" value="${m.dosagem}" onchange="medicamentos[${i}].dosagem = this.value">
+          </div>
+          <div class="col">
+            <label>Frequência</label>
+            <input class="form-control" value="${m.frequencia}" onchange="medicamentos[${i}].frequencia = this.value">
+          </div>
+          <div class="col">
+            <label>Duração</label>
+            <input class="form-control" value="${m.duracao}" onchange="medicamentos[${i}].duracao = this.value">
+          </div>
+        </div>
+        <div class="form-group">
+          <label>Observações</label>
+          <textarea class="form-control" rows="2" onchange="medicamentos[${i}].observacoes = this.value">${m.observacoes}</textarea>
+        </div>
+        <button class="btn btn-danger btn-sm mt-2" onclick="removerMedicamento(${i})">🗑 Remover</button>
+      </div>
+    `;
+    container.appendChild(card);
+  });
+  ativarAutocomplete();
+}
+
+function adicionarMedicamento() {
+  medicamentos.push({ medicamento: '', dosagem: '', frequencia: '', duracao: '', observacoes: '' });
+  renderListaEdicao();
+}
+
+function removerMedicamento(index) {
+  medicamentos.splice(index, 1);
+  renderListaEdicao();
+}
+
+function salvarEdicaoBloco(bloco_id) {
+  fetch(`/bloco_prescricao/${bloco_id}/atualizar`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ medicamentos })
+  })
+  .then(res => res.json())
+  .then(data => {
+    if (data.success) {
+      alert('Bloco atualizado com sucesso!');
+      window.location.href = document.referrer || '/';
+    } else {
+      alert('Erro ao atualizar bloco.');
+    }
+  });
+}
+
+function ativarAutocomplete() {
+  document.querySelectorAll('.medicamento-input').forEach(input => {
+    const index = input.getAttribute('data-index');
+    const sugestoes = input.parentElement.querySelector('.sugestoes');
+
+    input.addEventListener('input', function () {
+      const query = this.value;
+      if (query.length < 2) return sugestoes.innerHTML = '';
+
+      fetch(`/buscar_medicamentos?q=${encodeURIComponent(query)}`)
+        .then(res => res.json())
+        .then(data => {
+          sugestoes.innerHTML = '';
+          data.forEach(item => {
+            const li = document.createElement('li');
+            li.className = 'list-group-item list-group-item-action';
+            li.textContent = item.nome;
+            li.onclick = () => {
+              input.value = item.nome;
+              medicamentos[index].medicamento = item.nome;
+              medicamentos[index].dosagem = item.dosagem_recomendada || '';
+              medicamentos[index].frequencia = '';
+              medicamentos[index].duracao = item.duracao_tratamento || '';
+              medicamentos[index].observacoes = item.observacoes || '';
+              renderListaEdicao();
+            };
+            sugestoes.appendChild(li);
+          });
+        });
+    });
+  });
+}
+
+renderListaEdicao();
+</script>
+{% endblock %}

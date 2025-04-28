@@ -1,0 +1,91 @@
+<div class="row g-3 data-idade" data-prefixo="{{ prefixo }}">
+  <div class="col-md-4">
+    <label class="form-label">Data de Nascimento</label>
+    <input
+      type="text"
+      name="{{ nome_data or 'date_of_birth' }}"
+      class="form-control"
+      id="{{ prefixo }}_dob"
+      value="{{ valor_data or '' }}"
+      data-dob
+    >
+  </div>
+  <div class="col-md-2">
+    <label class="form-label">Idade</label>
+    <input
+      type="number"
+      min="0"
+      class="form-control"
+      id="{{ prefixo }}_age"
+      value="{{ valor_idade or '' }}"
+      data-age
+    >
+  </div>
+</div>
+
+<script>
+  document.addEventListener('DOMContentLoaded', () => {
+    const wrapper = document.querySelector('.data-idade[data-prefixo="{{ prefixo }}"]');
+    if (!wrapper) return;
+
+    const dobInput = wrapper.querySelector('[data-dob]');
+    const ageInput = wrapper.querySelector('[data-age]');
+    if (!dobInput || !ageInput) return;
+
+    // Máscara de input dd/mm/yyyy
+    Inputmask("99/99/9999").mask(dobInput);
+
+    // Inicializa flatpickr diretamente no campo visível
+    const fp = flatpickr(dobInput, {
+      locale: "pt",
+      dateFormat: "d/m/Y", // mesmo formato que o usuário vê
+      allowInput: true,
+      maxDate: "today",
+      defaultDate: dobInput.value || null,
+
+      onReady: function () {
+        const parsed = parseData(dobInput.value);
+        if (parsed) atualizarIdade(parsed);
+      },
+
+      onChange: function (selectedDates) {
+        if (selectedDates.length) {
+          atualizarIdade(selectedDates[0]);
+        }
+      }
+    });
+
+    function atualizarIdade(dataNascimento) {
+      const hoje = new Date();
+      let idade = hoje.getFullYear() - dataNascimento.getFullYear();
+      const m = hoje.getMonth() - dataNascimento.getMonth();
+      if (m < 0 || (m === 0 && hoje.getDate() < dataNascimento.getDate())) idade--;
+      ageInput.value = idade;
+    }
+
+    // Quando o usuário digita a idade
+    ageInput.addEventListener("input", () => {
+      const idade = parseInt(ageInput.value);
+      if (!isNaN(idade) && idade > 0 && idade < 120) {
+        const hoje = new Date();
+        const estimada = new Date(hoje.getFullYear() - idade, hoje.getMonth(), hoje.getDate());
+        fp.setDate(estimada, true);
+      }
+    });
+
+    // Quando o usuário termina de digitar a data
+    dobInput.addEventListener("blur", () => {
+      const parsed = parseData(dobInput.value);
+      if (parsed) fp.setDate(parsed, true);
+    });
+
+    function parseData(str) {
+      const match = str.trim().match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+      if (!match) return null;
+      const [_, d, m, y] = match;
+      const date = new Date(Number(y), Number(m) - 1, Number(d)); // 💡 forma segura!
+      return isNaN(date) ? null : date;
+    }
+
+  });
+</script>

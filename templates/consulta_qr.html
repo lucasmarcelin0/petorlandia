@@ -1,0 +1,112 @@
+{% extends 'base_consulta.html' %}
+
+{% block main %}
+
+<div class="container py-4">
+
+  {% if animal %}
+    <h2 class="mb-4">🩺 Consulta de {{ animal.name }}</h2>
+  {% elif tutor %}
+    <h2 class="mb-4">🩺 Novo Atendimento para {{ tutor.name }}</h2>
+  {% else %}
+    <h2 class="mb-4">🩺 Novo Atendimento Veterinário</h2>
+  {% endif %}
+
+<!-- Botões -->
+<div class="mb-4 d-flex flex-wrap gap-2">
+  <button class="btn btn-outline-primary" onclick="toggleSection('tutor-info')">🧑 Tutor</button>
+  <button class="btn btn-outline-primary" onclick="toggleSection('animal-info')">🐾 Animal</button>
+
+  {% if animal and worker == 'veterinario' %}
+    <button class="btn btn-outline-dark" onclick="toggleSection('consulta-info')">📋 Consulta</button>
+    <button class="btn btn-outline-success" onclick="toggleSection('medicamentos')">💊 Prescrição</button>
+    <button class="btn btn-outline-info" onclick="toggleSection('exames')">🧪 Exames</button>
+    <button class="btn btn-outline-warning" onclick="toggleSection('vacinas')">💉 Vacinas</button>
+  {% endif %}
+</div>
+
+  <!-- Seção: Tutor -->
+  <div id="tutor-info" class="card mb-3 d-none">
+    <div class="card-body">
+      {% include 'partials/tutor_form.html' %}
+    </div>
+  </div>
+
+  <!-- Seção: Animal -->
+  <div id="animal-info" class="card mb-3 d-none">
+    <div class="card-body">
+      {% if animal or tutor %}
+        {% include 'partials/animal_form.html' with context %}
+      {% else %}
+        <p class="text-muted">⚠️ Cadastre um tutor antes de registrar o animal.</p>
+      {% endif %}
+    </div>
+  </div>
+
+  <!-- Info extra se só houver tutor -->
+  {% if tutor and not animal %}
+    <div class="alert alert-info mt-4">
+      🐶 Nenhum animal cadastrado ainda para <strong>{{ tutor.name }}</strong>. Preencha o formulário acima para adicionar.
+    </div>
+  {% endif %}
+
+  <!-- Seções visíveis apenas para veterinários -->
+  {% if animal and worker == 'veterinario' %}
+    <div id="consulta-info" class="card mb-3 d-none">
+      <div class="card-body">
+        {% include 'partials/consulta_form.html' %}
+        {% include 'partials/historico_consultas.html' %}
+      </div>
+    </div>
+
+    <div id="medicamentos" class="card mb-3 d-none">
+      <div class="card-body">
+        {% include 'partials/prescricao_form.html' %}
+      </div>
+    </div>
+
+    <div id="exames" class="card mb-3 d-none">
+      <div class="card-body">
+        <p>Animal: {{ animal }}</p>
+        {% include 'partials/exames_form.html' %}
+      </div>
+    </div>
+
+    <div id="vacinas" class="card mb-3 d-none">
+      <div class="card-body">
+        <p>Animal: {{ animal }}</p>
+        {% include 'partials/vacinas_form.html' %}
+      </div>
+    </div>
+  {% endif %}
+
+</div>
+
+<script>
+  function toggleSection(id) {
+    const sections = ['tutor-info', 'animal-info', 'consulta-info', 'medicamentos', 'exames', 'vacinas'];
+    sections.forEach(sec => {
+      const el = document.getElementById(sec);
+      if (el) el.classList.add('d-none');
+    });
+
+    const selected = document.getElementById(id);
+    if (selected) {
+      selected.classList.remove('d-none');
+      localStorage.setItem('abaAtivaConsulta', id);
+
+      if (id === 'medicamentos') {
+        setTimeout(() => ativarAutocomplete(), 100);
+        const medInput = document.getElementById('medicamento');
+        if (medInput) medInput.dispatchEvent(new Event('input'));
+      }
+    }
+  }
+
+  document.addEventListener('DOMContentLoaded', function () {
+    const abaSalva = localStorage.getItem('abaAtivaConsulta') || 'tutor-info';
+    toggleSection(abaSalva);
+  });
+</script>
+
+{% endblock %}

@@ -1,0 +1,46 @@
+{% extends "layout.html" %}
+{% block main %}
+<h2>Editar Animal</h2>
+
+<form method="POST" enctype="multipart/form-data">
+    {{ form.hidden_tag() }}
+    {{ form.name.label }} {{ form.name(class="form-control") }}
+    {{ form.species.label }} {{ form.species(class="form-control") }}
+    {{ form.breed.label }} {{ form.breed(class="form-control") }}
+    {{ form.age.label }} {{ form.age(class="form-control") }}
+    {{ form.sex.label }} {{ form.sex(class="form-select") }}
+    {{ form.description.label }} {{ form.description(class="form-control") }}
+    {{ form.image.label }} {{ form.image(class="form-control") }}
+    <div class="mb-3">
+        {{ form.modo.label(class="form-label") }}
+        {{ form.modo(class="form-select") }}
+    </div>
+
+    <div class="mb-3" id="price-field" style="display: none;">
+        {{ form.price.label(class="form-label") }}
+        {{ form.price(class="form-control") }}
+    </div>
+
+    <script>
+        const modoSelect = document.getElementById("modo");
+        const priceField = document.getElementById("price-field");
+
+        function togglePriceField() {
+            if (modoSelect.value === "venda") {
+                priceField.style.display = "block";
+            } else {
+                priceField.style.display = "none";
+            }
+        }
+
+        modoSelect.addEventListener("change", togglePriceField);
+        document.addEventListener("DOMContentLoaded", togglePriceField);
+    </script>
+
+    <button class="btn btn-primary mt-2">Salvar</button>
+</form>
+<form action="{{ url_for('deletar_animal', animal_id=animal.id) }}" method="POST" onsubmit="return confirm('Tem certeza que deseja deletar este animal? Esta ação não poderá ser desfeita.');">
+    <button type="submit" class="btn btn-danger mt-3">🗑️ Deletar Animal</button>
+</form>
+
+{% endblock %}

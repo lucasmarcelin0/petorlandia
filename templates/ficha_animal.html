@@ -1,0 +1,151 @@
+{% extends "layout.html" %}
+{% block main %}
+
+<div class="container py-4">
+
+  {% if animal.removido_em %}
+    <div class="alert alert-warning">
+      Este animal foi removido do sistema em {{ animal.removido_em.strftime('%d/%m/%Y') }}. Histórico preservado.
+    </div>
+  {% endif %}
+
+  <!-- TÍTULO -->
+  <h2 class="mb-4 text-center">
+    <i class="bi bi-clipboard-heart text-primary me-2"></i>
+    Ficha de {{ animal.name }}
+  </h2>
+
+  <!-- DADOS DO ANIMAL -->
+  <div class="card shadow-sm p-4 mb-4">
+    <div class="row g-3 align-items-center">
+      {% if animal.image %}
+      <div class="col-md-3 text-center">
+        <img src="{{ animal.image }}" class="img-fluid rounded shadow-sm" style="max-height: 200px;">
+      </div>
+      {% endif %}
+      <div class="col-md">
+        <div class="row g-3">
+          {% if animal.species %}<div class="col-md-4"><strong>Espécie:</strong> {{ animal.species }}</div>{% endif %}
+          {% if animal.breed %}<div class="col-md-4"><strong>Raça:</strong> {{ animal.breed }}</div>{% endif %}
+          {% if animal.sex %}<div class="col-md-4"><strong>Sexo:</strong> {{ animal.sex }}</div>{% endif %}
+          {% if animal.age %}<div class="col-md-4"><strong>Idade:</strong> {{ animal.age }}</div>{% endif %}
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- BOTÃO NOVA CONSULTA -->
+  {% if current_user.worker == 'veterinario' %}
+  <div class="text-end mb-4">
+    <a href="{{ url_for('consulta_direct', animal_id=animal.id) }}" class="btn btn-outline-primary">
+      🩺 Iniciar Nova Consulta
+    </a>
+  </div>
+  {% endif %}
+
+  <!-- HISTÓRICO MÉDICO -->
+  <div class="card shadow-sm p-4 mb-4">
+    <h4 class="mb-3"><i class="bi bi-journal-medical text-success me-2"></i>Histórico Médico</h4>
+
+    <!-- PRESCRIÇÕES -->
+    <h6 class="mt-4 text-muted">💊 Prescrições</h6>
+    {% if blocos_prescricao %}
+      {% for bloco in blocos_prescricao[:3] %}
+      <div class="card mb-2 shadow-sm">
+        <div class="card-body d-flex justify-content-between align-items-center">
+          <span class="text-dark">
+            {{ bloco.data_criacao.strftime('%d/%m/%Y') }} — {{ bloco.prescricoes | length }} medicação(ões)
+          </span>
+          {% if current_user.worker == 'veterinario' %}
+            <a href="{{ url_for('imprimir_bloco_prescricao', bloco_id=bloco.id) }}"
+               class="btn btn-sm btn-outline-primary">🖨️ Imprimir</a>
+          {% endif %}
+        </div>
+      </div>
+      {% endfor %}
+    {% else %}
+      <p class="text-muted">Nenhuma prescrição encontrada.</p>
+    {% endif %}
+
+    <!-- EXAMES -->
+    <h6 class="mt-4 text-muted">🧪 Exames Solicitados</h6>
+    {% if blocos_exames %}
+      {% for bloco in blocos_exames[:3] %}
+      <div class="card mb-2 shadow-sm">
+        <div class="card-body d-flex justify-content-between align-items-center">
+          <span class="text-dark">
+            {{ bloco.data_criacao.strftime('%d/%m/%Y') }} — {{ bloco.exames | length }} exame(s)
+          </span>
+          {% if current_user.worker == 'veterinario' %}
+            <a href="{{ url_for('imprimir_bloco_exames', bloco_id=bloco.id) }}"
+               class="btn btn-sm btn-outline-primary">🖨️ Imprimir</a>
+          {% endif %}
+        </div>
+      </div>
+      {% endfor %}
+    {% else %}
+      <p class="text-muted">Nenhum exame solicitado.</p>
+    {% endif %}
+
+    <!-- CONSULTAS -->
+    <h6 class="mt-4 text-muted">📅 Consultas Veterinárias</h6>
+    {% if consultas %}
+      <ul class="list-group mb-2">
+        {% for c in consultas[:3] %}
+        <li class="list-group-item d-flex justify-content-between align-items-center">
+          <span>{{ c.created_at.strftime('%d/%m/%Y') }}</span>
+          <span class="text-muted small">{{ c.veterinario.name }}</span>
+        </li>
+        {% endfor %}
+      </ul>
+      {% if consultas|length > 3 %}
+        <a href="{{ url_for('historico_consultas', animal_id=animal.id) }}" class="btn btn-sm btn-outline-dark">🔍 Ver todas</a>
+      {% endif %}
+    {% else %}
+      <p class="text-muted">Nenhuma consulta registrada.</p>
+    {% endif %}
+
+
+<!-- VACINAS -->
+<h6 class="mt-4 text-muted">💉 Vacinas Aplicadas</h6>
+{% if animal.vacinas %}
+  <ul class="list-group mb-2">
+    {% for v in animal.vacinas|sort(attribute='data', reverse=True) %}
+    <li class="list-group-item d-flex justify-content-between align-items-center">
+      <div>
+        <strong>{{ v.nome }}</strong> — {{ v.tipo or "Tipo não informado" }} em {{ v.data.strftime('%d/%m/%Y') if v.data else 'Data não registrada' }}
+        {% if v.observacoes %}
+          <br><em class="text-muted">Obs: {{ v.observacoes }}</em>
+        {% endif %}
+      </div>
+    </li>
+    {% endfor %}
+  </ul>
+{% else %}
+  <p class="text-muted">Nenhuma vacina registrada.</p>
+{% endif %}
+
+
+  </div>
+
+
+
+
+
+
+  <!-- FUNCIONALIDADES FUTURAS -->
+  <div class="card shadow-sm p-4 mb-4">
+    <h5 class="text-muted mb-3"><i class="bi bi-tools"></i> Funcionalidades Futuras</h5>
+    <ul class="list-unstyled">
+      <li><strong>🛍️ Histórico de Compras:</strong> <span class="text-muted">Função em breve 🛠️</span></li>
+      <li><strong>🧼 Banhos e Tosa:</strong> <span class="text-muted">Função em breve 🛠️</span></li>
+    </ul>
+  </div>
+
+  <!-- VOLTAR -->
+  <div class="text-start mt-4">
+    <a href="{{ url_for('profile') }}" class="btn btn-secondary">← Voltar ao Perfil</a>
+  </div>
+
+</div>
+{% endblock %}

@@ -1,0 +1,132 @@
+<!-- templates/imprimir_consulta.html -->
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+  <meta charset="UTF-8">
+  <title>Consulta de {{ animal.name }}</title>
+  <style>
+    body {
+      font-family: 'Arial', sans-serif;
+      margin: 2cm;
+      color: #000;
+      font-size: 12pt;
+    }
+
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 1em;
+    }
+
+    .header img {
+      max-height: 80px;
+    }
+
+    .clinica-nome {
+      text-align: center;
+      font-size: 18pt;
+      font-weight: bold;
+    }
+
+    h2 {
+      text-align: center;
+      font-size: 16pt;
+      margin: 0 0 20px;
+      border-bottom: 2px solid #000;
+      padding-bottom: 8px;
+    }
+
+    .section-title {
+      font-weight: bold;
+      margin-top: 1.2em;
+      margin-bottom: 0.4em;
+    }
+
+    .assinatura {
+      margin-top: 60px;
+      text-align: center;
+    }
+
+    .assinatura span {
+      display: block;
+      margin-top: 5px;
+    }
+
+    footer {
+      margin-top: 60px;
+      font-size: 10pt;
+      text-align: center;
+      border-top: 1px solid #aaa;
+      padding-top: 10px;
+    }
+
+    @media print {
+      .no-print {
+        display: none !important;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <div class="no-print" style="margin-bottom: 1em;">
+    <button onclick="window.print()">🖨️ Imprimir</button>
+    <a href="{{ url_for('consulta_direct', animal_id=animal.id) }}" style="margin-left: 15px;">← Voltar</a>
+  </div>
+
+  {% if clinica and clinica.logotipo %}
+  <div class="header">
+    <img src="{{ url_for('static', filename='uploads/clinicas/' + clinica.logotipo) }}" alt="Logo da clínica">
+    <div class="clinica-nome">{{ clinica.nome }}</div>
+    <img src="{{ url_for('static', filename='uploads/clinicas/' + clinica.logotipo) }}" alt="Logo da clínica">
+  </div>
+  {% endif %}
+
+  <h2>Resumo da Consulta Clínica</h2>
+
+  <div class="section-title">Animal:</div>
+  <p>
+    Nome: {{ animal.name }}<br>
+    Espécie: {{ animal.species }}<br>
+    Raça: {{ animal.breed or '—' }}<br>
+    Sexo: {{ animal.sex or '—' }}<br>
+    Peso: {{ animal.peso or '—' }} kg<br>
+    Microchip: {{ animal.microchip_number or '—' }}
+  </p>
+
+  <div class="section-title">Tutor:</div>
+  <p>
+    Nome: {{ tutor.name }}<br>
+    CPF: {{ tutor.cpf or '—' }}<br>
+    Endereço: {{ tutor.address or '—' }}
+  </p>
+
+  <div class="section-title">Queixa Principal:</div>
+  <p>{{ consulta.queixa_principal or '—' }}</p>
+
+  <div class="section-title">Histórico Clínico:</div>
+  <p>{{ consulta.historico_clinico or '—' }}</p>
+
+  <div class="section-title">Exame Físico:</div>
+  <p>{{ consulta.exame_fisico or '—' }}</p>
+
+  <div class="section-title">Conduta:</div>
+  <p>{{ consulta.conduta or '—' }}</p>
+
+  <div class="assinatura">
+    ___________________________________________<br>
+    {{ current_user.name }}<br>
+    CRMV: {{ current_user.veterinario.crmv if current_user.veterinario else '—' }}
+  </div>
+
+  {% if clinica %}
+  <footer>
+    {{ clinica.nome }} – {{ clinica.endereco }}<br>
+    {% if clinica.telefone %}Telefone: {{ clinica.telefone }} – {% endif %}
+    {% if clinica.email %}Email: {{ clinica.email }} – {% endif %}
+    {% if clinica.cnpj %}CNPJ: {{ clinica.cnpj }}{% endif %}
+  </footer>
+  {% endif %}
+</body>
+</html>

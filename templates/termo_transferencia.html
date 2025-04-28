@@ -1,0 +1,47 @@
+{% extends "layout.html" %}
+{% block main %}
+<h2>Termo de Transferência de Tutoria</h2>
+
+<p>Você está prestes a transferir a tutoria do animal <strong>{{ animal.name }}</strong> para <strong>{{ novo_dono.name }}</strong>.</p>
+
+<h4>Dados do Atual Tutor</h4>
+<ul>
+    <li><strong>Nome:</strong> {{ current_user.name }}</li>
+    <li><strong>Email:</strong> {{ current_user.email }}</li>
+    <li><strong>Telefone:</strong> {{ current_user.phone }}</li>
+    <li><strong>Endereço:</strong> {{ current_user.address }}</li>
+</ul>
+
+<h4>Dados do Novo Tutor</h4>
+<ul>
+    <li><strong>Nome:</strong> {{ novo_dono.name }}</li>
+    <li><strong>Email:</strong> {{ novo_dono.email }}</li>
+    <li><strong>Telefone:</strong> {{ novo_dono.phone }}</li>
+    <li><strong>Endereço:</strong> {{ novo_dono.address }}</li>
+</ul>
+
+<h4>Dados do Animal</h4>
+<ul>
+    <li><strong>Nome:</strong> {{ animal.name }}</li>
+    <li><strong>Espécie:</strong> {{ animal.species }}</li>
+    <li><strong>Raça:</strong> {{ animal.breed }}</li>
+    <li><strong>Sexo:</strong> {{ animal.sex }}</li>
+    <li><strong>Idade:</strong> {{ animal.age }}</li>
+</ul>
+
+<h4>Declaração do Tutor Atual</h4>
+<p>Declaro que estou ciente e de acordo com a transferência de responsabilidade sobre este animal, e que o novo tutor assumirá todos os cuidados, conforme os princípios de bem-estar animal.</p>
+
+<p><strong>Data:</strong> {{ data_atual }}</p>
+
+<form method="POST">
+    <div class="form-check mb-3">
+        <input class="form-check-input" type="checkbox" id="confirmo" required>
+        <label class="form-check-label" for="confirmo">
+            Confirmo que desejo realizar esta transferência.
+        </label>
+    </div>
+    <button class="btn btn-success" type="submit">Transferir Tutoria</button>
+    <a href="{{ url_for('conversa', animal_id=animal.id, user_id=novo_dono.id) }}" class="btn btn-secondary ms-2">Cancelar</a>
+</form>
+{% endblock %}

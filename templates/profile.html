@@ -1,0 +1,169 @@
+{% extends "layout.html" %}
+
+{% block main %}
+<div class="container py-4">
+
+  <!-- Cabeçalho do Perfil -->
+  <div class="card shadow-sm rounded-4 p-4 mb-4">
+    <form method="POST" enctype="multipart/form-data">
+      {{ form.hidden_tag() }}
+      <div class="row g-4 align-items-center">
+
+        <!-- Foto de Perfil -->
+        <div class="col-md-4 text-center">
+          {% if current_user.profile_photo %}
+            <img src="{{ current_user.profile_photo }}" class="img-fluid" "
+              style="width: 280px; height: 280px; object-fit: cover; border-radius: 10px;">
+          {% else %}
+            <div class="bg-light border rounded my-2"
+              style="width: 180px; height: 180px; position: relative; border-radius: 10px;">
+              <span style="position: absolute; top: 35%; left: 50%; transform: translate(-50%, -50%); color: #999;">
+                Sem Foto
+              </span>
+            </div>
+          {% endif %}
+
+          <!-- Campo de upload da imagem (oculto inicialmente) -->
+          <div id="campo-upload-foto" class="mt-2 d-none">
+            {{ form.profile_photo(class="form-control form-control-sm") }}
+          </div>
+        </div>
+
+        <!-- Dados do Usuário -->
+        <div class="col-md-8">
+          <h4 class="mb-3"><i class="bi bi-person-circle me-2"></i>Meu Perfil</h4>
+
+          {% macro field_row(label, field, field_name, value) %}
+          <div class="mb-3">
+            <label class="form-label"><strong>{{ label }}:</strong></label>
+            <div class="d-flex align-items-center">
+              <span id="{{ field_name }}-display" class="me-2">{{ value if value else '---' }}</span>
+              {% if value %}
+                <span class="text-success">✅</span>
+              {% else %}
+                <span class="text-danger">⚠️</span>
+              {% endif %}
+            </div>
+            {{ field(class="form-control d-none mt-2", id=field_name ~ '-input') }}
+          </div>
+          {% endmacro %}
+
+          {{ field_row('Nome', form.name, 'name', current_user.name) }}
+          {{ field_row('Email', form.email, 'email', current_user.email) }}
+          {{ field_row('Telefone', form.phone, 'phone', current_user.phone) }}
+          {{ field_row('Endereço', form.address, 'address', current_user.address) }}
+
+          <div class="d-flex justify-content-start mt-4 gap-2">
+            <button type="button" class="btn btn-outline-secondary rounded-pill" onclick="toggleAll()">
+              ✏️ Editar Informações
+            </button>
+            <button type="submit" class="btn btn-success rounded-pill">
+              Salvar Alterações
+            </button>
+          </div>
+        </div>
+      </div>
+    </form>
+  </div>
+
+  <!-- Meus Animais -->
+  <div class="mb-5">
+    <h4 class="mb-3">🐾 Meus Animais Cadastrados</h4>
+    <div class="row g-3">
+      {% for animal in user.animals if not animal.removido_em %}
+      <div class="col-md-4">
+        <div class="card shadow-sm rounded-4 h-100">
+          {% if animal.image %}
+          <img src="{{ animal.image }}" class="card-img-top rounded-top-4" style="height: 180px; object-fit: cover;">
+          {% endif %}
+          <div class="card-body">
+            <h5 class="card-title">{{ animal.name }}</h5>
+            <p class="mb-1"><strong>Espécie:</strong> {{ animal.species }}</p>
+            <p class="mb-1"><strong>Raça:</strong> {{ animal.breed }}</p>
+            <p class="mb-1"><strong>Idade:</strong> {{ animal.age }}</p>
+            <div class="d-flex flex-wrap gap-2 mt-2">
+              <a href="{{ url_for('ficha_animal', animal_id=animal.id) }}" class="btn btn-sm btn-outline-dark">📋 Ficha</a>
+              <a href="{{ url_for('editar_animal', animal_id=animal.id) }}" class="btn btn-sm btn-outline-secondary">✏️ Editar</a>
+              <a href="{{ url_for('planosaude_animal', animal_id=animal.id) }}" class="btn btn-sm btn-outline-success">🩺 Plano</a>
+            </div>
+          </div>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+
+    <!-- Botão para animais removidos -->
+    <div class="mt-4 text-end">
+      <button class="btn btn-sm btn-link text-muted" onclick="toggleRemovidos()">
+        📁 Ver Animais Removidos
+      </button>
+    </div>
+
+    <div id="removidos-container" class="mt-2 d-none">
+      <ul class="list-group">
+        {% for animal in user.animals if animal.removido_em %}
+        <li class="list-group-item text-muted">
+          {{ animal.name }} — <small>Removido em {{ animal.removido_em.strftime('%d/%m/%Y') }}</small>
+        </li>
+        {% endfor %}
+      </ul>
+    </div>
+  </div>
+
+  <!-- Histórico de Transações -->
+  {% if transactions %}
+  <div class="mb-5">
+    <h4 class="mb-3">📜 Histórico de Adoções / Vendas</h4>
+    <ul class="list-group">
+      {% for t in transactions %}
+      <li class="list-group-item transaction-item {% if loop.index > 3 %}d-none{% endif %}">
+        <strong>{{ t.animal.name }}</strong><br>
+        Tipo: {{ t.type|capitalize }}<br>
+        Data: {{ t.date.strftime('%d/%m/%Y') }}<br>
+        {% if t.from_user_id == current_user.id %}
+        Para: {{ t.to_user.name }}
+        {% else %}
+        De: {{ t.from_user.name }}
+        {% endif %}
+      </li>
+      {% endfor %}
+    </ul>
+    {% if transactions|length > 3 %}
+    <div class="text-end mt-2">
+      <button class="btn btn-sm btn-outline-primary" onclick="mostrarTodasTransacoes()">Ver todas</button>
+    </div>
+    {% endif %}
+  </div>
+  {% endif %}
+
+</div>
+
+<script>
+  function toggleField(field) {
+    const display = document.getElementById(field + '-display');
+    const input = document.getElementById(field + '-input');
+    if (input) {
+      if (display) display.classList.toggle('d-none');
+      input.classList.toggle('d-none');
+      if (!input.classList.contains('d-none')) input.focus();
+    }
+  }
+
+  function toggleAll() {
+    ['name', 'email', 'phone', 'address'].forEach(toggleField);
+    const campoFoto = document.getElementById('campo-upload-foto');
+    if (campoFoto) campoFoto.classList.toggle('d-none');
+  }
+
+  function toggleRemovidos() {
+    document.getElementById('removidos-container').classList.toggle('d-none');
+  }
+
+  function mostrarTodasTransacoes() {
+    document.querySelectorAll('.transaction-item.d-none').forEach(function(item) {
+      item.classList.remove('d-none');
+    });
+    event.target.style.display = 'none';
+  }
+</script>
+{% endblock %}

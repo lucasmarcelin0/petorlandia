@@ -1,0 +1,151 @@
+<!-- templates/partials/animal_register_form.html -->
+<form method="POST" action="{{ url_for('novo_animal') }}" onsubmit="return validarTutor();">
+    <h5 class="mb-3">🐾 Cadastro do Animal</h5>
+
+    {% if not tutor %}
+    <!-- 🔎 Tutor -->
+    <div class="mb-3 position-relative">
+      <label for="autocomplete-tutor" class="form-label">👤 Tutor</label>
+      <input type="text" id="autocomplete-tutor" class="form-control" placeholder="Digite nome ou e-mail do tutor">
+      <input type="hidden" name="tutor_id" id="tutor_id">
+      <ul class="list-group position-absolute w-100 mt-1 d-none" id="tutor-results" style="z-index: 1000;"></ul>
+      <div class="text-end mt-2">
+        <a href="{{ url_for('tutores') }}" class="btn btn-sm btn-outline-secondary">
+          ➕ Cadastrar novo tutor
+        </a>
+      </div>
+    </div>
+    {% endif %}
+
+    <div class="row g-3">
+      <div class="col-md-6">
+        <label class="form-label">Nome</label>
+        <input type="text" name="name" class="form-control input-focus" required>
+      </div>
+      <div class="col-md-6">
+        <label class="form-label">Espécie</label>
+        <input type="text" name="species" class="form-control input-focus">
+      </div>
+      <div class="col-md-6">
+        <label class="form-label">Raça</label>
+        <input type="text" name="breed" class="form-control input-focus">
+      </div>
+      <div class="col-md-6">
+        <label class="form-label">Sexo</label>
+        <select name="sex" class="form-select">
+          <option value="">Selecionar</option>
+          <option value="M">Macho</option>
+          <option value="F">Fêmea</option>
+        </select>
+      </div>
+      <div class="col-md-6">
+        <label class="form-label">Data de Nascimento</label>
+        <input type="date" name="date_of_birth" id="date_of_birth" class="form-control">
+      </div>
+      <div class="col-md-6">
+        <label class="form-label">Idade (anos)</label>
+        <input type="number" id="age" class="form-control" min="0">
+      </div>
+      <div class="col-md-6">
+        <label class="form-label">Microchip</label>
+        <input type="text" name="microchip_number" class="form-control">
+      </div>
+      <div class="col-md-6">
+        <label class="form-label">Peso (kg)</label>
+        <input type="number" name="peso" class="form-control" step="0.01">
+      </div>
+      <div class="col-md-6">
+        <label class="form-label">Plano de Saúde</label>
+        <input type="text" name="health_plan" class="form-control">
+      </div>
+      <div class="col-md-6">
+        <label class="form-label">Castrado?</label>
+        <select name="neutered" class="form-select">
+          <option value="">Selecionar</option>
+          <option value="1">Sim</option>
+          <option value="0">Não</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="mt-4 text-end">
+      <button type="submit" class="btn btn-outline-success">
+        📂 Salvar Animal
+      </button>
+    </div>
+  </form>
+
+  <script>
+    function calcularDataNascimentoPorIdade() {
+      const idade = parseInt(document.getElementById('age').value);
+      if (!isNaN(idade)) {
+        const hoje = new Date();
+        const nascimento = new Date();
+        nascimento.setFullYear(hoje.getFullYear() - idade);
+        document.getElementById('date_of_birth').value = nascimento.toISOString().split('T')[0];
+      }
+    }
+
+    function calcularIdadePorDataNascimento() {
+      const dataNascStr = document.getElementById('date_of_birth').value;
+      if (dataNascStr) {
+        const nascimento = new Date(dataNascStr);
+        const hoje = new Date();
+        let idade = hoje.getFullYear() - nascimento.getFullYear();
+        const m = hoje.getMonth() - nascimento.getMonth();
+        if (m < 0 || (m === 0 && hoje.getDate() < nascimento.getDate())) {
+          idade--;
+        }
+        document.getElementById('age').value = idade;
+      }
+    }
+
+    document.getElementById('age').addEventListener('input', calcularDataNascimentoPorIdade);
+    document.getElementById('date_of_birth').addEventListener('change', calcularIdadePorDataNascimento);
+
+    function validarTutor() {
+      {% if not tutor %}
+      if (!document.getElementById('tutor_id').value) {
+        alert('Por favor, selecione um tutor antes de salvar o animal.');
+        return false;
+      }
+      {% endif %}
+      return true;
+    }
+
+    const tutorInput = document.getElementById('autocomplete-tutor');
+    const tutorResults = document.getElementById('tutor-results');
+    const tutorIdField = document.getElementById('tutor_id');
+
+    tutorInput?.addEventListener('input', async () => {
+      const q = tutorInput.value.trim();
+      if (q.length < 2) {
+        tutorResults.classList.add('d-none');
+        tutorResults.innerHTML = '';
+        return;
+      }
+      const res = await fetch(`/buscar_tutores?q=${encodeURIComponent(q)}`);
+      const data = await res.json();
+      tutorResults.innerHTML = '';
+      data.forEach(t => {
+        const li = document.createElement('li');
+        li.className = 'list-group-item list-group-item-action';
+        li.textContent = `${t.name} (${t.email})`;
+        li.onclick = () => {
+          tutorInput.value = t.name;
+          tutorIdField.value = t.id;
+          tutorResults.classList.add('d-none');
+        };
+        tutorResults.appendChild(li);
+      });
+      tutorResults.classList.toggle('d-none', data.length === 0);
+    });
+  </script>
+
+  <style>
+    .input-focus:focus {
+      border-color: #198754;
+      box-shadow: 0 0 0 0.2rem rgba(25, 135, 84, 0.25);
+      transition: all 0.3s ease;
+    }
+  </style>

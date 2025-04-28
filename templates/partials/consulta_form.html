@@ -1,0 +1,72 @@
+{% if edit_mode %}
+  <div class="alert alert-warning">
+    ✏️ Editando consulta de {{ consulta.created_at.strftime('%d/%m/%Y %H:%M') }}.
+    <a href="{{ url_for('consulta_direct', animal_id=animal.id) }}">Cancelar edição</a>
+  </div>
+{% endif %}
+
+<form method="POST"
+      action="{{ url_for('update_consulta', consulta_id=consulta.id) }}{% if edit_mode %}?edit=1{% endif %}">
+
+  <div class="mb-3">
+    <label class="form-label">Queixa Principal</label>
+    <textarea name="queixa_principal" class="form-control" rows="2">{{ consulta.queixa_principal or '' }}</textarea>
+  </div>
+
+  <div class="mb-3">
+    <label class="form-label">Histórico Clínico</label>
+    <textarea name="historico_clinico" class="form-control" rows="3">{{ consulta.historico_clinico or '' }}</textarea>
+  </div>
+
+  <div class="mb-3">
+    <label class="form-label">Exame Físico</label>
+    <textarea name="exame_fisico" class="form-control" rows="3">{{ consulta.exame_fisico or '' }}</textarea>
+  </div>
+
+  <div class="mb-3">
+    <label class="form-label">Conduta</label>
+    <textarea name="conduta" class="form-control" rows="3">{{ consulta.conduta or '' }}</textarea>
+  </div>
+
+  <button type="submit" class="btn btn-primary">
+    {% if edit_mode %}
+      💾 Salvar Alterações
+    {% else %}
+      💾 Salvar Consulta
+    {% endif %}
+  </button>
+</form>
+
+
+<input id="campo-medicamento" class="form-control" placeholder="Digite o nome do medicamento">
+<div id="sugestoes" class="list-group position-absolute d-none" style="z-index: 1000;"></div>
+
+<script>
+document.getElementById("campo-medicamento").addEventListener("input", function () {
+  const query = this.value;
+
+  if (query.length < 2) {
+    document.getElementById("sugestoes").classList.add("d-none");
+    return;
+  }
+
+  fetch(`/buscar_medicamentos?q=${encodeURIComponent(query)}`)
+    .then(response => response.json())
+    .then(data => {
+      const sugestoes = document.getElementById("sugestoes");
+      sugestoes.innerHTML = "";
+      data.forEach(med => {
+        const item = document.createElement("button");
+        item.type = "button";
+        item.className = "list-group-item list-group-item-action";
+        item.textContent = med.nome;
+        item.onclick = () => {
+          document.getElementById("campo-medicamento").value = med.nome;
+          sugestoes.classList.add("d-none");
+        };
+        sugestoes.appendChild(item);
+      });
+      sugestoes.classList.remove("d-none");
+    });
+});
+</script>

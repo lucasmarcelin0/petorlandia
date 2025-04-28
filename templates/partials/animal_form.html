@@ -1,0 +1,131 @@
+{# partials/animal_form.html - versão reestruturada e segura #}
+
+<form method="POST" action="{{ url_for('update_animal', animal_id=animal.id) }}" enctype="multipart/form-data" onsubmit="return validarCadastroAnimal();">
+  <h5 class="mb-3">🐾 Cadastro do Animal</h5>
+
+  <div class="row g-3">
+    <div class="col-md-6 d-flex align-items-center gap-3">
+      <div class="col-md-12">
+        <label class="form-label">Foto e Nome do Animal</label>
+        <div class="d-flex align-items-center gap-3">
+          <label for="animal-image" style="cursor: pointer;">
+            {% if animal.image %}
+              <img id="animal-preview" src="{{ animal.image }}" alt="Foto de {{ animal.name }}" class="img-thumbnail" style="width: 60px; height: 60px; object-fit: cover;">
+            {% else %}
+              <div id="animal-preview-placeholder" class="bg-light border rounded-circle d-flex align-items-center justify-content-center" style="width: 60px; height: 60px; font-size: 28px;">
+                🐾
+              </div>
+            {% endif %}
+          </label>
+
+          <input id="animal-image" name="image" type="file" accept="image/*" class="form-control d-none">
+
+          <div class="flex-grow-1">
+            <input type="text" name="name" class="form-control" placeholder="Nome do animal" value="{{ animal.name or '' }}" required>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-md-6">
+      <label class="form-label">Espécie</label>
+      <input type="text" name="species" class="form-control" value="{{ animal.species or '' }}">
+    </div>
+    <div class="col-md-6">
+      <label class="form-label">Raça</label>
+      <input type="text" name="breed" class="form-control" value="{{ animal.breed or '' }}">
+    </div>
+    <div class="col-md-6">
+      <label class="form-label">Sexo</label>
+      <select name="sex" class="form-select">
+        <option value="">Selecionar</option>
+        <option value="M" {% if animal.sex == 'M' %}selected{% endif %}>Macho</option>
+        <option value="F" {% if animal.sex == 'F' %}selected{% endif %}>Fêmea</option>
+      </select>
+    </div>
+
+    {% set prefixo = 'animal' %}
+    {% set nome_data = 'date_of_birth' %}
+    {% set valor_data = animal.date_of_birth.strftime('%d/%m/%Y') if animal.date_of_birth else '' %}
+    {% set valor_idade = animal_idade if animal_idade else '' %}
+
+    {% include 'components/campo_data_idade.html' %}
+
+    <div class="col-md-6">
+      <label class="form-label">Microchip</label>
+      <input type="text" name="microchip_number" class="form-control" value="{{ animal.microchip_number or '' }}">
+    </div>
+    <div class="col-md-6">
+      <label class="form-label">Peso (kg)</label>
+      <input type="number" name="peso" class="form-control" step="0.01" value="{{ animal.peso or '' }}">
+    </div>
+    <div class="col-md-6">
+      <label class="form-label">Plano de Saúde</label>
+      <input type="text" name="health_plan" class="form-control" value="{{ animal.health_plan or '' }}">
+    </div>
+    <div class="col-md-12">
+      <label class="form-label">Descrição</label>
+      <textarea name="description" class="form-control" rows="2">{{ animal.description }}</textarea>
+    </div>
+    <div class="col-md-12">
+      <label class="form-label">Castrado?</label>
+      <select name="neutered" class="form-select">
+        <option value="">Selecionar</option>
+        <option value="1" {% if animal.neutered %}selected{% endif %}>Sim</option>
+        <option value="0" {% if animal.neutered == False %}selected{% endif %}>Não</option>
+      </select>
+    </div>
+  </div>
+
+  <div class="mt-4 d-flex justify-content-between">
+    <button type="submit" class="btn btn-success">📂 Salvar</button>
+  </div>
+</form>
+
+<form method="POST" action="{{ url_for('deletar_animal', animal_id=animal.id) }}" onsubmit="return confirm('Deseja mesmo remover este animal?');" class="mt-2">
+  <button type="submit" class="btn btn-outline-danger">🗑️ Remover Animal</button>
+</form>
+
+{% block scripts %}
+<script>
+  document.addEventListener('DOMContentLoaded', () => {
+    const tutorIdField = document.getElementById('tutor_id');
+    window.validarCadastroAnimal = function () {
+      if (tutorIdField && !tutorIdField.value) {
+        alert('Selecione um tutor antes de salvar o animal.');
+        return false;
+      }
+      return true;
+    };
+
+    const fileInput = document.getElementById('animal-image');
+    const previewImg = document.getElementById('animal-preview');
+    const placeholder = document.getElementById('animal-preview-placeholder');
+
+    fileInput?.addEventListener('change', (e) => {
+      const file = e.target.files[0];
+      if (file) {
+        const reader = new FileReader();
+        reader.onload = (event) => {
+          if (previewImg) {
+            previewImg.src = event.target.result;
+          } else {
+            // substitui o placeholder por imagem nova
+            const newImg = document.createElement('img');
+            newImg.id = 'animal-preview';
+            newImg.src = event.target.result;
+            newImg.alt = 'Foto do animal';
+            newImg.className = 'img-thumbnail';
+            newImg.style.width = '60px';
+            newImg.style.height = '60px';
+            newImg.style.objectFit = 'cover';
+            placeholder?.replaceWith(newImg);
+          }
+        };
+        reader.readAsDataURL(file);
+      }
+    });
+  });
+</script>
+
+{% endblock %}

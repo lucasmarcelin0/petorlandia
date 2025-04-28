@@ -1,0 +1,145 @@
+{% extends "layout.html" %}
+{% block main %}
+<div class="container mt-4">
+  <h2 class="mb-4 text-center">🐾 Animais 🐾</h2>
+
+  <!-- Filtro -->
+  <form method="GET" action="{{ url_for('list_animals') }}" class="mb-4">
+    <div class="row g-2 justify-content-center">
+      <div class="col-md-4">
+        <select name="modo" class="form-select rounded-pill">
+          <option value="">Todos os Modos</option>
+          <option value="doação" {% if modo == 'doação' %}selected{% endif %}>Adoção</option>
+          <option value="venda" {% if modo == 'venda' %}selected{% endif %}>Venda</option>
+          <option value="adotado" {% if modo == 'adotado' %}selected{% endif %}>Adotados/Com Tutor</option>
+        </select>
+      </div>
+      <div class="col-md-2">
+        <button type="submit" class="btn btn-outline-primary w-100 rounded-pill">Filtrar</button>
+      </div>
+    </div>
+  </form>
+
+  <!-- Cards -->
+  {% if animals %}
+  <div class="row row-cols-1 row-cols-md-2 row-cols-lg-3 g-4">
+    {% for animal in animals %}
+    <div class="col">
+      <div class="card h-100 shadow-sm border-0 rounded-4">
+        {% if animal.image %}
+        <img src="{{ animal.image }}" class="card-img-top rounded-top-4" alt="Imagem de {{ animal.name }}">
+        {% endif %}
+        <div class="card-body">
+          <h5 class="card-title d-flex justify-content-between align-items-start">
+            <span data-bs-toggle="popover" data-bs-trigger="hover focus" data-bs-content="{{ animal.description }}"
+              data-bs-placement="top">
+              {{ animal.name }}
+            </span>
+            {% if animal.modo == 'adotado' %}
+            <span class="badge bg-success">Adotado</span>
+            {% elif animal.modo == 'vendido' %}
+            <span class="badge bg-secondary">Vendido</span>
+            {% elif animal.modo == 'venda' %}
+            <span class="badge bg-warning text-dark">À venda</span>
+            {% else %}
+            <span class="badge bg-info text-dark">Para adoção</span>
+            {% endif %}
+          </h5>
+
+          <ul class="list-unstyled text-start small mb-3">
+            <li><strong>Espécie:</strong> {{ animal.species }}</li>
+            <li><strong>Raça:</strong> {{ animal.breed }}</li>
+            <li><strong>Idade:</strong> {{ animal.age }}</li>
+            <li><strong>Sexo:</strong> {{ animal.sex }}</li>
+            <li><strong>Modo:</strong> {{ animal.modo|capitalize }}</li>
+            {% if animal.modo == 'venda' %}
+            <li><strong>Preço:</strong> R$ {{ "%.2f"|format(animal.price) }}</li>
+            {% endif %}
+          </ul>
+
+          <div class="d-flex flex-wrap gap-2">
+            {% if animal.owner != current_user %}
+            <a href="{{ url_for('conversa', animal_id=animal.id, user_id=animal.owner.id) }}"
+              class="btn btn-outline-primary btn-sm rounded-pill">
+              💬 Tenho Interesse
+            </a>
+            {% endif %}
+
+            {% if current_user.worker == 'veterinario' or animal.owner == current_user %}
+            <button class="btn btn-outline-success btn-sm rounded-pill" data-bs-toggle="modal"
+              data-bs-target="#modalFicha{{ animal.id }}">
+              📋 Ver Ficha
+            </button>
+            {% endif %}
+
+            {% if animal.owner == current_user %}
+            <a href="{{ url_for('editar_animal', animal_id=animal.id) }}"
+              class="btn btn-outline-secondary btn-sm rounded-pill">
+              ✏️ Editar
+            </a>
+            {% endif %}
+          </div>
+        </div>
+      </div>
+
+      <!-- Modal Ficha -->
+      <div class="modal fade" id="modalFicha{{ animal.id }}" tabindex="-1"
+        aria-labelledby="fichaLabel{{ animal.id }}" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+          <div class="modal-content rounded-4 shadow">
+            <div class="modal-header">
+              <h5 class="modal-title" id="fichaLabel{{ animal.id }}">Ficha de {{ animal.name }}</h5>
+              <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+            </div>
+            <div class="modal-body text-start">
+              {% if animal.image %}
+              <img src="{{ animal.image }}" class="img-fluid rounded mb-3" alt="Imagem de {{ animal.name }}">
+              {% endif %}
+              <p><strong>Espécie:</strong> {{ animal.species }}</p>
+              <p><strong>Raça:</strong> {{ animal.breed }}</p>
+              <p><strong>Idade:</strong> {{ animal.age }}</p>
+              <p><strong>Sexo:</strong> {{ animal.sex }}</p>
+              <p><strong>Modo:</strong> {{ animal.modo|capitalize }}</p>
+              {% if animal.modo == 'venda' %}
+              <p><strong>Preço:</strong> R$ {{ "%.2f"|format(animal.price) }}</p>
+              {% endif %}
+              <p><strong>Descrição:</strong><br>{{ animal.description }}</p>
+
+              {% if current_user.worker == 'veterinario' %}
+              <hr>
+              <p class="mb-1"><strong>Tutor:</strong> {{ animal.owner.name }}</p>
+              <p class="mb-1"><strong>Email:</strong> {{ animal.owner.email }}</p>
+              <p class="mb-3"><strong>Telefone:</strong> {{ animal.owner.phone }}</p>
+              <a href="{{ url_for('consulta_direct', animal_id=animal.id) }}"
+                class="btn btn-outline-success rounded-pill w-100">
+                🩺 Iniciar Consulta
+              </a>
+              {% endif %}
+            </div>
+            <div class="modal-footer">
+              <button type="button" class="btn btn-outline-secondary rounded-pill" data-bs-dismiss="modal">Fechar</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+
+  <!-- Paginação -->
+  {% if total_pages > 1 %}
+  <nav class="mt-4">
+    <ul class="pagination justify-content-center">
+      {% for p in range(1, total_pages + 1) %}
+      <li class="page-item {% if p == page %}active{% endif %}">
+        <a class="page-link" href="{{ url_for('list_animals', modo=modo, page=p) }}">{{ p }}</a>
+      </li>
+      {% endfor %}
+    </ul>
+  </nav>
+  {% endif %}
+  {% else %}
+  <p class="mt-3 text-center">Nenhum animal encontrado com esse filtro.</p>
+  {% endif %}
+</div>
+{% endblock %}

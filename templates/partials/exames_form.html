@@ -1,0 +1,180 @@
+<form>
+  <h5 class="mb-3">Solicitação de Exames</h5>
+
+  <!-- Campo com autocomplete -->
+  <div class="mb-3 position-relative">
+    <label for="nome-exame" class="form-label">Tipo de Exame</label>
+    <input type="text" id="nome-exame" class="form-control" placeholder="Ex: Hemograma, Raio-X, Ultrassom...">
+    <ul id="sugestoes-exames" class="list-group position-absolute w-100" style="z-index: 10;"></ul>
+  </div>
+
+  <!-- Justificativa -->
+  <div class="mb-3">
+    <label for="justificativa-exame" class="form-label">Justificativa</label>
+    <textarea id="justificativa-exame" class="form-control" rows="2" placeholder="Por que o exame é necessário?"></textarea>
+  </div>
+
+  <!-- Botão para adicionar à lista -->
+  <button type="button" class="btn btn-success mb-4" onclick="adicionarExame()">➕ Adicionar Exame</button>
+
+  <!-- Lista de exames temporária -->
+  <div id="exames-lista" class="mb-4"></div>
+
+  <!-- Observações gerais -->
+  <div class="mb-3">
+    <label for="observacoes-exames" class="form-label">Observações Gerais</label>
+    <textarea id="observacoes-exames" class="form-control" rows="3" placeholder="Ex: Jejum de 12h, trazer histórico clínico anterior..."></textarea>
+  </div>
+
+  <!-- Botão para finalizar -->
+  <button type="button" class="btn btn-primary mt-2" onclick="finalizarBlocoExames()">💾 Finalizar Solicitação</button>
+</form>
+
+<!-- Histórico de prescrições -->
+<div id="historico-prescricoes" class="mt-5">
+  {% include 'partials/historico_exames.html' %}
+</div>
+
+
+
+
+
+
+<script>
+  let exames = [];
+
+  document.addEventListener('DOMContentLoaded', function () {
+    const inputExame = document.getElementById('nome-exame');
+    const sugestoes = document.getElementById('sugestoes-exames');
+
+    inputExame.addEventListener('input', function () {
+      const query = this.value;
+      if (query.length < 2) {
+        sugestoes.innerHTML = '';
+        return;
+      }
+
+      fetch(`/buscar_exames?q=${encodeURIComponent(query)}`)
+        .then(res => res.json())
+        .then(data => {
+          sugestoes.innerHTML = '';
+          data.forEach(item => {
+            const li = document.createElement('li');
+            li.className = 'list-group-item list-group-item-action';
+            li.textContent = item.nome;
+            li.onclick = () => {
+              inputExame.value = item.nome;
+              sugestoes.innerHTML = '';
+            };
+            sugestoes.appendChild(li);
+          });
+        });
+  });
+
+  renderExamesTemp(); // Inicializa a lista se já houver dados
+  });
+
+  function adicionarExame() {
+    const nome = document.getElementById('nome-exame').value.trim();
+    const justificativa = document.getElementById('justificativa-exame').value.trim();
+
+    if (!nome || !justificativa) {
+      alert('Preencha o nome do exame e a justificativa.');
+      return;
+    }
+
+    exames.push({ nome, justificativa });
+    renderExamesTemp();
+
+    document.getElementById('nome-exame').value = '';
+    document.getElementById('justificativa-exame').value = '';
+  }
+
+  function removerExame(index) {
+    exames.splice(index, 1);
+    renderExamesTemp();
+  }
+
+  function editarExame(index) {
+    const div = document.getElementById(`exame-${index}`);
+    const exame = exames[index];
+
+    div.innerHTML = `
+      <div class="mb-2">
+        <label class="form-label">Nome do Exame</label>
+        <input type="text" class="form-control" id="edit-nome-${index}" value="${exame.nome}">
+      </div>
+      <div class="mb-2">
+        <label class="form-label">Justificativa</label>
+        <textarea class="form-control" id="edit-just-${index}">${exame.justificativa}</textarea>
+      </div>
+      <button class="btn btn-sm btn-success me-2" onclick="salvarEdicaoExame(${index})">💾 Salvar</button>
+      <button class="btn btn-sm btn-secondary" onclick="renderExamesTemp()">Cancelar</button>
+    `;
+  }
+
+  function salvarEdicaoExame(index) {
+    const nome = document.getElementById(`edit-nome-${index}`).value.trim();
+    const justificativa = document.getElementById(`edit-just-${index}`).value.trim();
+
+    if (!nome || !justificativa) {
+      alert('Preencha os dois campos.');
+      return;
+    }
+
+    exames[index] = { nome, justificativa };
+    renderExamesTemp();
+  }
+
+  function renderExamesTemp() {
+    const lista = document.getElementById('exames-lista');
+    lista.innerHTML = '';
+
+    exames.forEach((exame, i) => {
+      const div = document.createElement('div');
+      div.className = 'border p-2 mb-2';
+      div.id = `exame-${i}`;
+      div.innerHTML = `
+        🧪 <strong>${exame.nome}</strong><br>
+        <em>${exame.justificativa}</em><br>
+        <button class="btn btn-sm btn-warning me-2" onclick="editarExame(${i})">✏️ Editar</button>
+        <button class="btn btn-sm btn-danger" onclick="removerExame(${i})">🗑️ Remover</button>
+      `;
+      lista.appendChild(div);
+    });
+  }
+
+  function finalizarBlocoExames() {
+    if (exames.length === 0) {
+      alert('Adicione pelo menos um exame antes de finalizar.');
+      return;
+    }
+
+    const obsGerais = document.getElementById('observacoes-exames')?.value || '';
+
+    fetch(`/consulta/{{ consulta.id }}/bloco_exames`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        exames: exames,
+        observacoes_gerais: obsGerais
+      })
+    })
+    .then(res => res.json())
+    .then(data => {
+      if (data.success) {
+        alert('Solicitação de exames salva com sucesso!');
+        location.reload();
+      } else {
+        alert('Erro ao salvar exames.');
+      }
+    })
+    .catch(err => {
+      console.error('Erro na requisição:', err);
+      alert('Erro ao salvar exames.');
+    });
+  }
+</script>
+

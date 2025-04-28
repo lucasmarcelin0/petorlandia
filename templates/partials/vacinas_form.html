@@ -1,0 +1,171 @@
+<form>
+    <h5 class="mb-3">💉 Registro de Vacinas</h5>
+
+    <!-- Campo com autocomplete -->
+    <div class="mb-3 position-relative">
+      <label for="nome-vacina" class="form-label">Vacina</label>
+      <input type="text" id="nome-vacina" class="form-control" placeholder="Ex: Antirrábica, V10, V8..." autocomplete="off">
+      <ul id="sugestoes-vacinas" class="list-group position-absolute w-100 bg-white shadow border rounded mt-1" style="z-index: 1050;"></ul>
+    </div>
+
+    <!-- Tipo e data -->
+    <div class="row mb-3">
+      <div class="col-md-6">
+        <label for="tipo-vacina" class="form-label">Tipo</label>
+        <select id="tipo-vacina" class="form-select">
+          <option value="">Selecione...</option>
+          <option value="Campanha">Campanha</option>
+          <option value="Reforço">Reforço</option>
+          <option value="Obrigatória">Obrigatória</option>
+          <option value="Opcional">Opcional</option>
+        </select>
+      </div>
+      <div class="col-md-6">
+        <label for="data-vacina" class="form-label">Data da Aplicação</label>
+        <input type="date" id="data-vacina" class="form-control">
+      </div>
+    </div>
+
+    <!-- Botão de adicionar -->
+    <button type="button" class="btn btn-success mb-4" onclick="adicionarVacina()">➕ Adicionar Vacina</button>
+
+    <!-- Lista temporária -->
+    <div id="vacinas-lista" class="mb-4"></div>
+
+    <!-- Observações -->
+    <div class="mb-3">
+      <label for="observacoes-vacinas" class="form-label">Observações Gerais</label>
+      <textarea id="observacoes-vacinas" class="form-control" rows="3"></textarea>
+    </div>
+
+    <!-- Finalizar -->
+    <button type="button" class="btn btn-primary mt-2" onclick="finalizarBlocoVacinas()">💾 Finalizar Aplicações</button>
+  </form>
+
+  <!-- Histórico -->
+  <div id="historico-vacinas" class="mt-5">
+    {% include 'partials/historico_vacinas.html' %}
+  </div>
+
+  <script>
+    let vacinas = [];
+
+    document.addEventListener('DOMContentLoaded', () => {
+      const input = document.getElementById('nome-vacina');
+      const sugestoes = document.getElementById('sugestoes-vacinas');
+
+      input.addEventListener('input', function () {
+        const q = this.value.trim();
+        console.log("🟡 Buscando vacina:", q);
+
+        if (q.length < 2) {
+          sugestoes.innerHTML = '';
+          return;
+        }
+
+        fetch(`/buscar_vacinas?q=${encodeURIComponent(q)}`)
+          .then(res => res.json())
+          .then(data => {
+            console.log("🟢 Resultados:", data);
+            sugestoes.innerHTML = '';
+
+            if (!data.length) {
+              sugestoes.innerHTML = '<li class="list-group-item text-muted">Nenhuma vacina encontrada</li>';
+              return;
+            }
+
+            data.forEach(item => {
+              const li = document.createElement('li');
+              li.className = 'list-group-item list-group-item-action';
+              li.textContent = item.nome;
+              li.onclick = () => {
+                input.value = item.nome;
+                sugestoes.innerHTML = '';
+              };
+              sugestoes.appendChild(li);
+            });
+          })
+          .catch(err => {
+            console.error("❌ Erro no autocomplete:", err);
+          });
+      });
+
+      // Fecha sugestões ao clicar fora
+      document.addEventListener('click', e => {
+        if (!sugestoes.contains(e.target) && e.target !== input) {
+          sugestoes.innerHTML = '';
+        }
+      });
+
+      renderVacinasTemp();
+    });
+
+    function adicionarVacina() {
+      const nome = document.getElementById('nome-vacina').value.trim();
+      const tipo = document.getElementById('tipo-vacina').value.trim();
+      const data = document.getElementById('data-vacina').value;
+
+      if (!nome || !tipo || !data) {
+        alert('Preencha todos os campos.');
+        return;
+      }
+
+      vacinas.push({ nome, tipo, data });
+      renderVacinasTemp();
+
+      document.getElementById('nome-vacina').value = '';
+      document.getElementById('tipo-vacina').value = '';
+      document.getElementById('data-vacina').value = '';
+    }
+
+    function removerVacina(index) {
+      vacinas.splice(index, 1);
+      renderVacinasTemp();
+    }
+
+    function renderVacinasTemp() {
+      const lista = document.getElementById('vacinas-lista');
+      lista.innerHTML = '';
+
+      vacinas.forEach((v, i) => {
+        const div = document.createElement('div');
+        div.className = 'border p-2 mb-2 bg-light rounded shadow-sm';
+        div.innerHTML = `
+          💉 <strong>${v.nome}</strong> — ${v.tipo} em ${v.data}
+          <button class="btn btn-sm btn-danger ms-2" onclick="removerVacina(${i})">🗑️ Remover</button>
+        `;
+        lista.appendChild(div);
+      });
+    }
+
+    function finalizarBlocoVacinas() {
+      const obs = document.getElementById('observacoes-vacinas').value.trim();
+
+      if (vacinas.length === 0) {
+        alert('Adicione pelo menos uma vacina.');
+        return;
+      }
+
+      fetch(`/animal/{{ animal.id }}/vacinas`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          vacinas,
+          observacoes_gerais: obs
+        })
+      })
+      .then(res => res.json())
+      .then(data => {
+        if (data.success) {
+          alert('Vacinas registradas com sucesso!');
+          location.reload();
+        } else {
+          alert('Erro ao salvar vacinas.');
+        }
+      })
+      .catch(err => {
+        console.error('❌ Erro na requisição:', err);
+        alert('Erro técnico ao salvar vacinas.');
+      });
+    }
+  </script>

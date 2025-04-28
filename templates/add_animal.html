@@ -1,0 +1,121 @@
+{% extends "layout.html" %}
+
+{% block main %}
+<div class="container d-flex justify-content-center align-items-center mt-5">
+    <div class="card shadow-lg p-4 rounded-4" style="width: 100%; max-width: 700px;">
+        <h3 class="mb-4 text-center">➕ Cadastrar Novo Animal</h3>
+
+        <!-- Flash Messages -->
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                    <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
+                        {{ message }}
+                        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Fechar"></button>
+                    </div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+
+        <form method="POST" enctype="multipart/form-data">
+            {{ form.hidden_tag() }}
+
+            <div class="mb-3">
+                {{ form.name.label(class="form-label") }}
+                {{ form.name(class="form-control rounded-pill" + (" is-invalid" if form.name.errors else ""), placeholder="Ex: Luna") }}
+                {% for error in form.name.errors %}
+                    <div class="invalid-feedback d-block">{{ error }}</div>
+                {% endfor %}
+            </div>
+
+            <div class="mb-3">
+                {{ form.species.label(class="form-label") }}
+                {{ form.species(class="form-control rounded-pill" + (" is-invalid" if form.species.errors else ""), placeholder="Ex: Gato, Cachorro") }}
+                {% for error in form.species.errors %}
+                    <div class="invalid-feedback d-block">{{ error }}</div>
+                {% endfor %}
+            </div>
+
+            <div class="mb-3">
+                {{ form.breed.label(class="form-label") }}
+                {{ form.breed(class="form-control rounded-pill" + (" is-invalid" if form.breed.errors else ""), placeholder="Ex: SRD, Poodle, Persa") }}
+                {% for error in form.breed.errors %}
+                    <div class="invalid-feedback d-block">{{ error }}</div>
+                {% endfor %}
+            </div>
+
+            <div class="mb-3">
+                {{ form.age.label(class="form-label") }}
+                {{ form.age(class="form-control rounded-pill" + (" is-invalid" if form.age.errors else ""), placeholder="Ex: 2 anos") }}
+                {% for error in form.age.errors %}
+                    <div class="invalid-feedback d-block">{{ error }}</div>
+                {% endfor %}
+            </div>
+
+            <div class="mb-3">
+                {{ form.sex.label(class="form-label") }}
+                {{ form.sex(class="form-select rounded-pill" + (" is-invalid" if form.sex.errors else "")) }}
+                {% for error in form.sex.errors %}
+                    <div class="invalid-feedback d-block">{{ error }}</div>
+                {% endfor %}
+            </div>
+
+            <div class="mb-3">
+                {{ form.description.label(class="form-label") }}
+                {{ form.description(class="form-control rounded-4" + (" is-invalid" if form.description.errors else ""), rows="3", placeholder="Descreva a personalidade, comportamento, histórico do animal...") }}
+                {% for error in form.description.errors %}
+                    <div class="invalid-feedback d-block">{{ error }}</div>
+                {% endfor %}
+            </div>
+
+            <div class="mb-3">
+                {{ form.modo.label(class="form-label") }}
+                {{ form.modo(class="form-select rounded-pill" + (" is-invalid" if form.modo.errors else ""), id="modo") }}
+                {% for error in form.modo.errors %}
+                    <div class="invalid-feedback d-block">{{ error }}</div>
+                {% endfor %}
+            </div>
+
+            <div class="mb-3" id="price-field" style="display: none;">
+                {{ form.price.label(class="form-label") }}
+                {{ form.price(class="form-control rounded-pill" + (" is-invalid" if form.price.errors else ""), placeholder="Digite o valor de venda") }}
+                {% for error in form.price.errors %}
+                    <div class="invalid-feedback d-block">{{ error }}</div>
+                {% endfor %}
+            </div>
+
+            <div class="mb-3">
+                {{ form.image.label(class="form-label") }}
+                {{ form.image(class="form-control rounded-pill" + (" is-invalid" if form.image.errors else "")) }}
+                {% for error in form.image.errors %}
+                    <div class="invalid-feedback d-block">{{ error }}</div>
+                {% endfor %}
+            </div>
+
+            <div class="d-grid">
+                <button type="submit" class="btn btn-success rounded-pill py-2 d-flex justify-content-center align-items-center gap-2">
+                    🐾 <span>Cadastrar Animal</span>
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+    document.addEventListener("DOMContentLoaded", function () {
+        const modoSelect = document.getElementById("modo");
+        const priceField = document.getElementById("price-field");
+
+        function togglePriceField() {
+            if (modoSelect.value === "venda") {
+                priceField.style.display = "block";
+            } else {
+                priceField.style.display = "none";
+            }
+        }
+
+        modoSelect.addEventListener("change", togglePriceField);
+        togglePriceField();
+    });
+</script>
+{% endblock %}

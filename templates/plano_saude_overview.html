@@ -1,0 +1,76 @@
+{% extends "layout.html" %}
+{% block main %}
+<div class="container mt-4">
+
+    <!-- Imagem de destaque mais compacta -->
+    <div class="d-flex justify-content-center mb-3">
+        <img src="{{ url_for('static', filename='plano_saude_banner1.png') }}"
+             class="rounded-4 shadow-sm"
+             style="height: 220px; width: auto; max-width: 100%; object-fit: cover;"
+             alt="Banner Plano de Saúde Pet">
+    </div>
+
+    <div class="row text-center mb-5 g-4">
+        <div class="col-md-4">
+            <div class="border p-3 rounded-4 shadow-sm h-100 bg-light">
+                🩺 <strong>Consultas com Desconto</strong><br>
+                Reduza seus custos com atendimento veterinário.
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="border p-3 rounded-4 shadow-sm h-100 bg-light">
+                💉 <strong>Lembrete de Vacinação</strong><br>
+                Receba alertas para manter a imunização em dia.
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="border p-3 rounded-4 shadow-sm h-100 bg-light">
+                🚨 <strong>Atendimento Emergencial</strong><br>
+                Conte com suporte em situações inesperadas.
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="border p-3 rounded-4 shadow-sm h-100 bg-light">
+                🧪 <strong>Exames com Desconto</strong><br>
+                Economize em análises laboratoriais essenciais.
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="border p-3 rounded-4 shadow-sm h-100 bg-light">
+                🏥 <strong>Cirurgias e Internações</strong><br>
+                Em breve: cobertura total para procedimentos complexos.
+            </div>
+        </div>
+    </div>
+
+    <hr class="my-5">
+
+    <h4 class="mb-4">Animais sob sua tutoria</h4>
+
+    {% if animais %}
+        <div class="row row-cols-1 row-cols-md-2 row-cols-lg-3 g-4 mt-2">
+            {% for animal in animais %}
+                <div class="col">
+                    <div class="card h-100 shadow-sm border-0 rounded-4">
+                        {% if animal.image %}
+                            <img src="{{ animal.image }}" class="card-img-top rounded-top-4" style="max-height: 200px; object-fit: cover;">
+                        {% endif %}
+                        <div class="card-body">
+                            <h5 class="card-title">{{ animal.name }}</h5>
+                            <ul class="list-unstyled small text-start mb-3">
+                                <li><strong>Espécie:</strong> {{ animal.species }}</li>
+                                <li><strong>Raça:</strong> {{ animal.breed }}</li>
+                                <li><strong>Idade:</strong> {{ animal.age }}</li>
+                                <li><strong>Sexo:</strong> {{ animal.sex }}</li>
+                            </ul>
+                            <a href="{{ url_for('planosaude_animal', animal_id=animal.id) }}" class="btn btn-outline-success rounded-pill w-100">📋 Ver Plano de Saúde</a>
+                        </div>
+                    </div>
+                </div>
+            {% endfor %}
+        </div>
+    {% else %}
+        <p class="text-muted mt-3">Você ainda não possui animais cadastrados. <a href="{{ url_for('add_animal') }}">Cadastre um agora!</a></p>
+    {% endif %}
+</div>
+{% endblock %}

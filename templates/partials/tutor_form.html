@@ -1,0 +1,151 @@
+{% set has_tutor = tutor is defined and tutor %}
+
+<!-- 🔍 Busca de Tutor -->
+<div class="mb-4 position-relative" id="tutor-search-box" {% if has_tutor %}style="display:none;"{% endif %}>
+  <label for="autocomplete-tutor" class="form-label">🔍 Buscar Tutor</label>
+  <input type="text" id="autocomplete-tutor" class="form-control" placeholder="Digite nome, e-mail, CPF ou telefone">
+  <ul class="list-group position-absolute w-100 mt-1 d-none" id="autocomplete-results" style="z-index:1000;"></ul>
+</div>
+
+
+
+
+
+
+
+<!-- 👤 Formulário de Tutor -->
+<form id="tutor-form" method="POST" enctype="multipart/form-data" {% if has_tutor %}action="{{ url_for('update_tutor', user_id=tutor.id) }}"{% endif %}>
+  <h5 class="mb-4">👤 Cadastro do Tutor</h5>
+
+  <div class="row g-3">
+    <!-- Foto + Nome -->
+    <div class="col-md-6">
+      <label class="form-label">Foto e Nome</label>
+      <div class="d-flex align-items-center gap-3">
+        <label for="tutor-image" style="cursor: pointer; margin-bottom: 0;">
+          {% if tutor.profile_photo %}
+            <img id="tutor-preview" src="{{ tutor.profile_photo }}" alt="Foto de {{ tutor.name }}" class="img-thumbnail" style="width: 50px; height: 50px; object-fit: cover;">
+          {% else %}
+            <div id="tutor-preview-placeholder" class="rounded-circle bg-light d-flex align-items-center justify-content-center border" style="width: 50px; height: 50px; font-size: 26px;">
+              👤
+            </div>
+          {% endif %}
+
+        </label>
+        <input id="tutor-image" name="image" type="file" accept="image/*" class="form-control d-none">
+        <input type="text" name="tutor_name" class="form-control" placeholder="Nome do tutor" value="{{ tutor.name if has_tutor else '' }}" required>
+      </div>
+    </div>
+
+    <!-- Telefone -->
+    <div class="col-md-6">
+      <label class="form-label">Telefone</label>
+      <input type="tel" name="tutor_phone" class="form-control" placeholder="(99) 99999-9999" value="{{ tutor.phone if has_tutor else '' }}">
+    </div>
+
+    <!-- Endereço -->
+    <div class="col-md-12">
+      <label class="form-label">Endereço</label>
+      <input type="text" name="tutor_address" class="form-control" placeholder="Rua, número, bairro, cidade" value="{{ tutor.address if has_tutor else '' }}">
+    </div>
+
+    <!-- CPF e RG -->
+    <div class="col-md-6">
+      <label class="form-label">CPF</label>
+      <input type="text" name="tutor_cpf" class="form-control" placeholder="000.000.000-00" value="{{ tutor.cpf if has_tutor else '' }}">
+    </div>
+    <div class="col-md-6">
+      <label class="form-label">RG</label>
+      <input type="text" name="tutor_rg" class="form-control" placeholder="00.000.000-0" value="{{ tutor.rg if has_tutor else '' }}">
+    </div>
+
+    <!-- Data de nascimento + Idade -->
+    <div class="col-md-6">
+      <label class="form-label">Data de Nascimento</label>
+      <input type="date" name="tutor_date_of_birth" id="tutor_date_of_birth" class="form-control" value="{{ tutor.date_of_birth.strftime('%Y-%m-%d') if has_tutor and tutor.date_of_birth else '' }}">
+    </div>
+    <div class="col-md-6">
+      <label class="form-label">Idade</label>
+      <input type="text" id="tutor_idade" class="form-control" disabled>
+    </div>
+
+    <!-- Email -->
+    <div class="col-md-12">
+      <label class="form-label">E‑mail</label>
+      <input type="email" name="tutor_email" class="form-control" placeholder="exemplo@email.com" value="{{ tutor.email if has_tutor else '' }}" required>
+    </div>
+
+    <!-- Botão -->
+    <div class="col-12 mt-3">
+      <button type="submit" class="btn btn-outline-primary w-100">💾 Salvar Tutor</button>
+    </div>
+  </div>
+</form>
+
+<script>
+  function preencherCamposTutor(dados) {
+    document.querySelector('input[name="tutor_name"]').value          = dados.name          || '';
+    document.querySelector('input[name="tutor_phone"]').value         = dados.phone         || '';
+    document.querySelector('input[name="tutor_address"]').value       = dados.address       || '';
+    document.querySelector('input[name="tutor_cpf"]').value           = dados.cpf           || '';
+    document.querySelector('input[name="tutor_rg"]').value            = dados.rg            || '';
+    document.querySelector('input[name="tutor_email"]').value         = dados.email         || '';
+    document.querySelector('input[name="tutor_date_of_birth"]').value = dados.date_of_birth || '';
+    calcularIdadeTutor();
+  }
+
+  function calcularIdadeTutor() {
+    const data = document.getElementById("tutor_date_of_birth").value;
+    const idadeInput = document.getElementById("tutor_idade");
+    if (data) {
+      const hoje = new Date();
+      const nascimento = new Date(data);
+      let idade = hoje.getFullYear() - nascimento.getFullYear();
+      const m = hoje.getMonth() - nascimento.getMonth();
+      if (m < 0 || (m === 0 && hoje.getDate() < nascimento.getDate())) idade--;
+      idadeInput.value = idade;
+    } else {
+      idadeInput.value = '';
+    }
+  }
+
+  document.getElementById("tutor_date_of_birth")?.addEventListener("change", calcularIdadeTutor);
+
+  document.getElementById("tutor-image")?.addEventListener("change", function (event) {
+    const preview = document.getElementById('tutor-preview');
+    const placeholder = document.getElementById('tutor-preview-placeholder');
+    const file = event.target.files[0];
+
+    if (file) {
+      const reader = new FileReader();
+      reader.onload = function (e) {
+        if (preview) {
+          preview.src = e.target.result;
+          preview.classList.remove('d-none');
+        } else {
+          const img = document.createElement('img');
+          img.src = e.target.result;
+          img.className = 'img-thumbnail';
+          img.style = 'width: 50px; height: 50px; object-fit: cover;';
+          placeholder.replaceWith(img);
+          img.id = 'tutor-preview';
+        }
+      };
+      reader.readAsDataURL(file);
+    }
+  });
+
+  {% if has_tutor %}
+  document.addEventListener('DOMContentLoaded', () => {
+    preencherCamposTutor({
+      name:          {{ tutor.name          | tojson }},
+      phone:         {{ tutor.phone         | tojson }},
+      address:       {{ tutor.address       | tojson }},
+      cpf:           {{ tutor.cpf           | tojson }},
+      rg:            {{ tutor.rg            | tojson }},
+      email:         {{ tutor.email         | tojson }},
+      date_of_birth: {{ (tutor.date_of_birth.strftime('%Y-%m-%d') if tutor.date_of_birth else '') | tojson }}
+    });
+  });
+  {% endif %}
+</script>

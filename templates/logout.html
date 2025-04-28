@@ -1,0 +1,6 @@
+@app.route('/logout')
+@login_required
+def logout():
+    logout_user()
+    flash('Você saiu da sua conta com sucesso.', 'success')
+    return redirect(url_for('index'))
