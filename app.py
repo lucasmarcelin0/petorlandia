@@ -37,7 +37,7 @@ from flask_mail import Mail, Message as MailMessage
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 
-app = Flask(__name__)
+app = Flask(__name__, static_folder='static')
 UPLOAD_FOLDER = os.path.join('static', 'uploads')
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
