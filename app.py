@@ -29,7 +29,7 @@ from werkzeug.utils import secure_filename
 
 from math import ceil
 
-from petorlandia.helpers import calcular_idade, parse_data_nascimento
+from helpers import calcular_idade, parse_data_nascimento
 
 from flask_mail import Mail, Message as MailMessage
 
