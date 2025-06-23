@@ -75,7 +75,7 @@ app.config['SERVER_NAME'] = 'orange-space-pancake-j9456jjjv9vcqrxx-5000.app.gith
 
 with app.app_context():
     init_admin(app)      # ⬅️ Primeiro registra o admin e os modelos
-    db.create_all()      # ⬅️ Só depois chama o create_all()
+  #  db.create_all()      # ⬅️ Só depois chama o create_all()
 
 
 @login.user_loader
