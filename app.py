@@ -6,19 +6,19 @@ from datetime import timedelta
 import secrets
 import qrcode
 import base64
-from petorlandia.forms import MessageForm, RegistrationForm, LoginForm, AnimalForm, EditProfileForm, ResetPasswordRequestForm, ResetPasswordForm
-from petorlandia.admin import init_admin
+from forms import MessageForm, RegistrationForm, LoginForm, AnimalForm, EditProfileForm, ResetPasswordRequestForm, ResetPasswordForm
+from admin import init_admin
 from flask_migrate import Migrate, upgrade, migrate, init
 from flask_sqlalchemy import SQLAlchemy
 from flask_session import Session
 from flask_login import LoginManager, login_required, current_user, logout_user
 
-from petorlandia.models import (Racao, TipoRacao, VacinaModelo, Vacina, ExameSolicitado, BlocoExames, ExameModelo, Clinica, ConsultaToken, Consulta, Medicamento, Prescricao, BlocoPrescricao,
+from models import (Racao, TipoRacao, VacinaModelo, Vacina, ExameSolicitado, BlocoExames, ExameModelo, Clinica, ConsultaToken, Consulta, Medicamento, Prescricao, BlocoPrescricao,
                     Veterinario, User, Animal, Message, Transaction, Review, Favorite, AnimalPhoto, Interest
                     )
-from petorlandia.extensions import db
+from extensions import db
 from wtforms.fields import SelectField
-from petorlandia.config import Config
+from config import Config
 from flask import Flask, jsonify, render_template, redirect, url_for, request, session, flash
 
 
@@ -29,7 +29,7 @@ from werkzeug.utils import secure_filename
 
 from math import ceil
 
-from petorlandia.helpers import calcular_idade, parse_data_nascimento
+from helpers import calcular_idade, parse_data_nascimento
 
 from flask_mail import Mail, Message as MailMessage
 
