@@ -6,19 +6,19 @@ from datetime import timedelta
 import secrets
 import qrcode
 import base64
-from .forms import MessageForm, RegistrationForm, LoginForm, AnimalForm, EditProfileForm, ResetPasswordRequestForm, ResetPasswordForm
-from .admin import init_admin
+from petorlandia.forms import MessageForm, RegistrationForm, LoginForm, AnimalForm, EditProfileForm, ResetPasswordRequestForm, ResetPasswordForm
+from petorlandia.admin import init_admin
 from flask_migrate import Migrate, upgrade, migrate, init
 from flask_sqlalchemy import SQLAlchemy
 from flask_session import Session
 from flask_login import LoginManager, login_required, current_user, logout_user
 
-from .models import (VacinaModelo, Vacina, ExameSolicitado, BlocoExames, ExameModelo, Clinica, ConsultaToken, Consulta, Medicamento, Prescricao, BlocoPrescricao,
+from petorlandia.models import (Racao, TipoRacao, VacinaModelo, Vacina, ExameSolicitado, BlocoExames, ExameModelo, Clinica, ConsultaToken, Consulta, Medicamento, Prescricao, BlocoPrescricao,
                     Veterinario, User, Animal, Message, Transaction, Review, Favorite, AnimalPhoto, Interest
                     )
-from .extensions import db
+from petorlandia.extensions import db
 from wtforms.fields import SelectField
-from .config import Config
+from petorlandia.config import Config
 from flask import Flask, jsonify, render_template, redirect, url_for, request, session, flash
 
 
@@ -70,7 +70,7 @@ Session(app)
 migrate = Migrate(app, db)
 
 
-app.config['SERVER_NAME'] = 'orange-space-pancake-j9456jjjv9vcqrxx-5001.app.github.dev'
+app.config['SERVER_NAME'] = 'orange-space-pancake-j9456jjjv9vcqrxx-5000.app.github.dev'
 
 
 with app.app_context():
@@ -234,7 +234,9 @@ def add_animal():
             description=form.description.data,
             image=f"/static/uploads/{filename}" if filename else None,
             status='disponível',
-            owner=current_user
+            owner=current_user,
+            is_alive=True  # 👈 garante que o animal é salvo como vivo
+
         )
 
         db.session.add(animal)
@@ -638,24 +640,25 @@ def plano_saude_overview():
 @login_required
 def ficha_animal(animal_id):
     animal = Animal.query.get_or_404(animal_id)
+    tutor = animal.owner  # ✅ Acesso direto ao tutor
 
-    # Consultas finalizadas
     consultas = (Consulta.query
                  .filter_by(animal_id=animal.id, status='finalizada')
                  .order_by(Consulta.created_at.desc())
                  .all())
 
-    # Buscar blocos de prescrição e exames relacionados
     blocos_prescricao = BlocoPrescricao.query.join(Consulta).filter(Consulta.animal_id == animal.id).all()
     blocos_exames = BlocoExames.query.join(Consulta).filter(Consulta.animal_id == animal.id).all()
+    vacinas = Vacina.query.filter_by(animal_id=animal.id).all()
 
     return render_template(
         'ficha_animal.html',
         animal=animal,
+        tutor=tutor,  # ✅ Agora disponível no template
         consultas=consultas,
         blocos_prescricao=blocos_prescricao,
         blocos_exames=blocos_exames,
-         vacinas = db.relationship('Vacina', backref='animal', lazy=True, cascade="all, delete-orphan")
+        vacinas=vacinas
     )
 
 
@@ -913,9 +916,17 @@ def tutores():
             flash('Já existe um tutor com esse e‑mail.', 'warning')
             return redirect(url_for('tutores'))
 
-        # Cria o novo usuário
-        novo = User(name=name.strip(), email=email.strip(), role='adotante')
+        print(f"[DEBUG] current_user.clinica_id: {current_user.clinica_id}")
+
+
+        novo = User(
+            name=name.strip(),
+            email=email.strip(),
+            role='adotante',
+            clinica_id=current_user.clinica_id  # 🛠️ já no construtor
+        )
         novo.set_password('123456789')  # senha padrão
+
 
         # Tenta pegar campos extras
         phone = request.form.get('tutor_phone') or request.form.get('phone')
@@ -953,7 +964,23 @@ def tutores():
         return redirect(url_for('ficha_tutor', tutor_id=novo.id))
 
     # — GET — apenas exibe a página
-    return render_template('tutores.html')
+    # 🔥 Buscar tutores associados à clínica
+    if current_user.clinica_id:
+        tutores_adicionados = User.query\
+            .filter(
+                User.role.in_(['adotante', 'doador']),
+                User.clinica_id == current_user.clinica_id
+            )\
+            .order_by(User.name.asc())\
+            .all()
+    else:
+        tutores_adicionados = []
+
+
+
+    return render_template('tutores.html', tutores_adicionados=tutores_adicionados)
+
+
 
 
 
@@ -966,9 +993,14 @@ def deletar_tutor(tutor_id):
         flash('Apenas veterinários podem excluir tutores.', 'danger')
         return redirect(url_for('index'))
 
-    db.session.delete(tutor)
-    db.session.commit()
-    flash('Tutor e todos os seus animais foram excluídos com sucesso!', 'success')
+    try:
+        db.session.delete(tutor)
+        db.session.commit()
+        flash('Tutor e todos os seus dados foram excluídos com sucesso.', 'success')
+    except Exception as e:
+        db.session.rollback()
+        flash(f'Erro ao excluir tutor: {str(e)}', 'danger')
+
     return redirect(url_for('tutores'))
 
 
@@ -1009,20 +1041,19 @@ def update_tutor(user_id):
         flash('Apenas veterinários podem editar dados do tutor.', 'danger')
         return redirect(request.referrer or url_for('index'))
 
-    # Segurança: validação mínima de nome
-    nome = request.form.get('tutor_name')  # ⚠️ conferindo o nome correto do campo
+    nome = request.form.get('name')  # 🟢 Nome no formulário atual
     if not nome:
         flash('O nome do tutor é obrigatório.', 'danger')
         return redirect(request.referrer or url_for('index'))
 
     user.name = nome
-    user.phone = request.form.get('tutor_phone')
-    user.address = request.form.get('tutor_address')
-    user.cpf = request.form.get('tutor_cpf')
-    user.rg = request.form.get('tutor_rg')
+    user.email = request.form.get('email')
+    user.phone = request.form.get('phone')
+    user.address = request.form.get('address')  # 🟢 campo do HTML
+    user.cpf = request.form.get('cpf')
+    user.rg = request.form.get('rg')
 
-    # Data de nascimento com tratamento robusto
-    date_str = request.form.get('tutor_date_of_birth')
+    date_str = request.form.get('date_of_birth')
     if date_str:
         try:
             user.date_of_birth = datetime.strptime(date_str, '%Y-%m-%d').date()
@@ -1030,9 +1061,8 @@ def update_tutor(user_id):
             flash('Data de nascimento inválida. Use o formato correto.', 'danger')
             return redirect(request.referrer or url_for('index'))
 
-    # Upload de imagem (caso exista)
-    if 'image' in request.files and request.files['image'].filename != '':
-        file = request.files['image']
+    if 'profile_photo' in request.files and request.files['profile_photo'].filename != '':
+        file = request.files['profile_photo']
         filename = secure_filename(file.filename)
         path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
         file.save(path)
@@ -1164,6 +1194,65 @@ def update_consulta(consulta_id):
         flash('Consulta salva e movida para o histórico!', 'success')
 
     return redirect(url_for('consulta_direct', animal_id=consulta.animal_id))
+
+
+@app.route('/animal/<int:animal_id>/racoes', methods=['POST'])
+@login_required
+def salvar_racao(animal_id):
+    animal = Animal.query.get_or_404(animal_id)
+
+    # Verifica se o usuário pode editar esse animal
+    if current_user.worker != 'veterinario':
+        return jsonify({'success': False, 'error': 'Permissão negada.'}), 403
+
+    data = request.get_json()
+    racoes_data = data.get('racoes', [])
+
+    try:
+        for r in racoes_data:
+            marca = r.get('marca_racao', '').strip()
+            linha = r.get('linha_racao', '').strip()
+
+            if not marca:
+                continue  # ignora se não houver marca
+
+            # Verifica se o TipoRacao já existe
+            tipo_racao = TipoRacao.query.filter_by(marca=marca, linha=linha).first()
+
+            if not tipo_racao:
+                tipo_racao = TipoRacao(marca=marca, linha=linha)
+                db.session.add(tipo_racao)
+                db.session.flush()  # Para garantir ID sem dar commit ainda
+
+            nova_racao = Racao(
+                animal_id=animal.id,
+                tipo_racao_id=tipo_racao.id,
+                peso_animal=r.get('peso_animal'),
+                recomendacao_custom=r.get('recomendacao_custom'),
+                observacoes_racao=r.get('observacoes_racao')
+            )
+            db.session.add(nova_racao)
+
+        db.session.commit()
+        return jsonify({'success': True})
+
+    except Exception as e:
+        db.session.rollback()
+        print(f"Erro ao salvar ração: {e}")
+        return jsonify({'success': False, 'error': 'Erro técnico ao salvar ração.'}), 500
+
+
+@app.route('/tipos_racao')
+def tipos_racao():
+    termos = request.args.get('q', '')
+    resultados = TipoRacao.query.filter(
+        (TipoRacao.marca + ' - ' + (TipoRacao.linha or '')).ilike(f'%{termos}%')
+    ).limit(15).all()
+
+    return jsonify([
+        f"{r.marca} - {r.linha}" if r.linha else r.marca
+        for r in resultados
+    ])
 
 
 
@@ -1298,6 +1387,9 @@ def criar_prescricao(consulta_id):
     return redirect(url_for('consulta_qr', animal_id=Consulta.query.get(consulta_id).animal_id))
 
 
+from flask import request, jsonify
+
+
 @app.route('/prescricao/<int:prescricao_id>/deletar', methods=['POST'])
 @login_required
 def deletar_prescricao(prescricao_id):
@@ -1317,7 +1409,7 @@ def deletar_prescricao(prescricao_id):
 @app.route('/importar_medicamentos')
 def importar_medicamentos():
     import pandas as pd
-    from models import Medicamento
+
 
     try:
         df = pd.read_csv("medicamentos_pet_orlandia.csv")
@@ -1364,6 +1456,7 @@ def buscar_medicamentos():
 
     return jsonify([
         {
+            "id": m.id,  # ✅ ESSENCIAL PARA O FUNCIONAMENTO
             "nome": m.nome,
             "classificacao": m.classificacao,
             "principio_ativo": m.principio_ativo,
@@ -1375,6 +1468,40 @@ def buscar_medicamentos():
         }
         for m in resultados
     ])
+
+
+
+@app.route("/buscar_apresentacoes")
+def buscar_apresentacoes():
+    try:
+        medicamento_id = request.args.get("medicamento_id")
+        q = (request.args.get("q") or "").strip()
+
+        if not medicamento_id or not medicamento_id.isdigit():
+            return jsonify([])
+
+        # Log for debugging
+        print(f"Searching for presentations of medicamento_id={medicamento_id}, query='{q}'")
+
+        apresentacoes = (
+            ApresentacaoMedicamento.query
+            .filter(
+                ApresentacaoMedicamento.medicamento_id == int(medicamento_id),
+                (ApresentacaoMedicamento.forma.ilike(f"%{q}%")) |
+                (ApresentacaoMedicamento.concentracao.ilike(f"%{q}%"))
+            )
+            .all()
+        )
+
+        return jsonify([
+            {"forma": a.forma, "concentracao": a.concentracao}
+            for a in apresentacoes
+        ])
+
+    except Exception as e:
+        print(f"[ERROR] /buscar_apresentacoes: {str(e)}")
+        return jsonify({"error": str(e)}), 500
+
 
 
 @app.route('/consulta/<int:consulta_id>/prescricao/lote', methods=['POST'])
@@ -1689,7 +1816,9 @@ def criar_tutor_ajax():
         cpf=request.form.get('cpf'),
         rg=request.form.get('rg'),
         email=email,
-        role='adotante'
+        role='adotante',
+        clinica_id=current_user.clinica_id
+
     )
 
     date_str = request.form.get('date_of_birth')
@@ -1717,7 +1846,6 @@ def novo_animal():
     if current_user.worker not in ['veterinario', 'colaborador']:
         flash('Apenas veterinários ou colaboradores podem cadastrar animais.', 'danger')
         return redirect(url_for('index'))
-
 
     if request.method == 'POST':
         tutor_id = request.form.get('tutor_id', type=int)
@@ -1757,22 +1885,94 @@ def novo_animal():
             health_plan=request.form.get('health_plan'),
             neutered=neutered,
             user_id=tutor.id,
+            added_by_id=current_user.id,
+            clinica_id=current_user.clinica_id,  # 🆕 adicionando a clínica
             status='disponível',
-            image=image_path
+            image=image_path,
+            is_alive=True  # 👈 garante que o animal é salvo como vivo
+
         )
         db.session.add(animal)
         db.session.commit()
 
         consulta = Consulta(animal_id=animal.id,
-                            created_by=current_user.id,
-                            status='in_progress')
+                             created_by=current_user.id,
+                             status='in_progress')
         db.session.add(consulta)
         db.session.commit()
 
         flash('Animal cadastrado com sucesso!', 'success')
         return redirect(url_for('consulta_direct', animal_id=animal.id))
 
-    return render_template('novo_animal.html')
+    # 🔥 Agora buscando animais pela clínica, e não apenas pelo usuário
+    if current_user.clinica_id:
+        animais_adicionados = Animal.query.filter_by(clinica_id=current_user.clinica_id).order_by(Animal.date_added.desc()).all()
+    else:
+        # fallback: se não tiver clínica, mostra apenas os animais adicionados por ele mesmo
+        animais_adicionados = Animal.query.filter_by(added_by_id=current_user.id).order_by(Animal.date_added.desc()).all()
+
+    return render_template('novo_animal.html', animais_adicionados=animais_adicionados)
+
+
+@app.route('/animal/<int:animal_id>/marcar_falecido', methods=['POST'])
+@login_required
+def marcar_como_falecido(animal_id):
+    animal = Animal.query.get_or_404(animal_id)
+
+    if current_user.worker != 'veterinario':
+        flash('Apenas veterinários podem realizar essa ação.', 'danger')
+        return redirect(url_for('ficha_animal', animal_id=animal.id))
+
+    data = request.form.get('falecimento_em')
+
+    try:
+        animal.falecido_em = datetime.strptime(data, '%Y-%m-%dT%H:%M') if data else datetime.utcnow()
+        animal.is_alive = False
+        db.session.commit()
+        flash(f'{animal.name} foi marcado como falecido.', 'success')
+    except Exception as e:
+        flash(f'Erro ao marcar como falecido: {str(e)}', 'danger')
+
+    return redirect(url_for('ficha_animal', animal_id=animal.id))
+
+
+
+
+@app.route('/animal/<int:animal_id>/reverter_falecimento', methods=['POST'])
+@login_required
+def reverter_falecimento(animal_id):
+    if current_user.worker != 'veterinario':
+        abort(403)
+
+    animal = Animal.query.get_or_404(animal_id)
+    animal.is_alive = True
+    animal.falecido_em = None
+    db.session.commit()
+    flash('Falecimento revertido com sucesso.', 'success')
+    return redirect(url_for('ficha_animal', animal_id=animal.id))
+
+
+
+
+
+@app.route('/animal/<int:animal_id>/arquivar', methods=['POST'])
+@login_required
+def arquivar_animal(animal_id):
+    animal = Animal.query.get_or_404(animal_id)
+
+    if current_user.worker != 'veterinario':
+        flash('Apenas veterinários podem excluir animais definitivamente.', 'danger')
+        return redirect(request.referrer or url_for('index'))
+
+    try:
+        db.session.delete(animal)
+        db.session.commit()
+        flash(f'Animal {animal.name} excluído permanentemente.', 'success')
+    except Exception as e:
+        db.session.rollback()
+        flash(f'Erro ao excluir: {str(e)}', 'danger')
+
+    return redirect(url_for('ficha_tutor', tutor_id=animal.user_id))
 
 
 
@@ -1785,3 +1985,14 @@ def novo_animal():
 @login_required
 def loja():
     return render_template('loja.html')
+
+
+
+
+
+import os
+
+if __name__ == "__main__":
+    # Usa a porta 8080 se existir no ambiente (como no Docker), senão usa 5000
+    port = int(os.environ.get("PORT", 5000))
+    app.run(host="0.0.0.0", port=port)

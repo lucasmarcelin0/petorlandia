@@ -38,7 +38,18 @@ class User(UserMixin, db.Model):
     veterinario = db.relationship('Veterinario', back_populates='user', uselist=False)
 
 
-    animals = db.relationship('Animal', backref='owner', cascade="all, delete", lazy=True)
+
+
+    animals = db.relationship(
+        'Animal',
+        backref='owner',
+        cascade="all, delete",
+        lazy=True,
+        foreign_keys='Animal.user_id'  # 🛠 THIS LINE
+    )
+
+
+
 
     # Correção dos campos:
     sent_messages = db.relationship('Message', foreign_keys='Message.sender_id', back_populates='sender', lazy=True)
@@ -47,6 +58,17 @@ class User(UserMixin, db.Model):
     given_reviews = db.relationship('Review', foreign_keys='Review.reviewer_id', backref='reviewer', lazy=True)
     received_reviews = db.relationship('Review', foreign_keys='Review.reviewed_user_id', backref='reviewed', lazy=True)
     favorites = db.relationship('Favorite', backref='user', lazy=True)
+
+    added_by_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True)  # 🆕
+    added_by = db.relationship('User', remote_side=[id], backref='users_added')  # 🆕
+
+    clinica_id = db.Column(db.Integer, db.ForeignKey('clinica.id'), nullable=True)
+    clinica = db.relationship('Clinica', backref='usuarios')
+
+
+
+
+
 
     def set_password(self, password):
         self.password_hash = generate_password_hash(password)
@@ -102,6 +124,7 @@ class Animal(db.Model):
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
 
 
+
     photos = db.relationship('AnimalPhoto', backref='animal', cascade='all, delete-orphan', lazy=True)
     transactions = db.relationship('Transaction', backref='animal', cascade='all, delete-orphan', lazy=True)
     favorites = db.relationship('Favorite', backref='animal', cascade='all, delete-orphan', lazy=True)
@@ -114,6 +137,21 @@ class Animal(db.Model):
     health_plan = db.Column(db.String(100), nullable=True)  # 🆕
 
     removido_em = db.Column(db.DateTime, nullable=True)  # Soft delete marker
+
+
+    added_by_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True)  # 🆕
+    added_by = db.relationship('User', foreign_keys=[added_by_id])  # 🆕
+
+
+
+    clinica_id = db.Column(db.Integer, db.ForeignKey('clinica.id'), nullable=True)
+    clinica = db.relationship('Clinica', backref='animais')
+
+    is_alive = db.Column(db.Boolean, default=True)  # Animal está vivo ou já faleceu
+
+    falecido_em = db.Column(db.DateTime, nullable=True)  # opcional
+
+
 
 
 # Transações
@@ -273,10 +311,26 @@ class Medicamento(db.Model):
     principio_ativo = db.Column(db.String(100))  # opcional
     via_administracao = db.Column(db.String(50))  # oral, IM, IV...
     dosagem_recomendada = db.Column(db.String(100))  # Ex: 5 mg/kg SID
+    frequencia = db.Column(db.String(50))  # Ex: SID, BID, TID
     duracao_tratamento = db.Column(db.String(100))  # Ex: 7 dias
     observacoes = db.Column(db.Text)  # para contraindicações, interações, etc.
     bula = db.Column(db.Text)  # 🆕 Texto completo da bula, opcional
 
+    apresentacoes = db.relationship('ApresentacaoMedicamento', backref='medicamento', cascade='all, delete-orphan')
+
+    def __str__(self):
+        return self.nome
+
+class ApresentacaoMedicamento(db.Model):
+    __tablename__ = 'apresentacao_medicamento'
+    id = db.Column(db.Integer, primary_key=True)
+    medicamento_id = db.Column(db.Integer, db.ForeignKey('medicamento.id'), nullable=False)
+
+    forma = db.Column(db.String(50), nullable=False)          # cápsula, líquido, etc.
+    concentracao = db.Column(db.String(100), nullable=False)  # Ex: 50 mg/mL, 500 mg/cápsula
+
+    def __str__(self):
+        return f"{self.medicamento.nome} – {self.forma} ({self.concentracao})"
 
 
 class ExameModelo(db.Model):
@@ -319,6 +373,30 @@ class Vacina(db.Model):
     data = db.Column(db.Date)        # Data da aplicação
     observacoes = db.Column(db.Text)
     criada_em = db.Column(db.DateTime, default=datetime.utcnow)
+
+
+class TipoRacao(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    marca = db.Column(db.String(100), nullable=False)
+    linha = db.Column(db.String(100))  # Ex: "Premium Filhotes", "Golden Fórmula"
+    recomendacao = db.Column(db.Float)  # g/kg/dia
+    observacoes = db.Column(db.Text)
+
+
+class Racao(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+
+    animal_id = db.Column(db.Integer, db.ForeignKey('animal.id'), nullable=False)
+    tipo_racao_id = db.Column(db.Integer, db.ForeignKey('tipo_racao.id'), nullable=False)
+
+    peso_animal = db.Column(db.Float)
+    recomendacao_custom = db.Column(db.Float)  # se quiser ajustar a recomendação
+    observacoes_racao = db.Column(db.Text)
+
+    data_cadastro = db.Column(db.DateTime, default=datetime.utcnow)
+
+    animal = db.relationship('Animal', backref=db.backref('racoes', lazy=True, cascade='all, delete-orphan'))
+    tipo_racao = db.relationship('TipoRacao', backref=db.backref('usos', lazy=True))
 
 
 

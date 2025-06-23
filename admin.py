@@ -3,11 +3,13 @@ from flask_admin.contrib.sqla import ModelView
 from flask import redirect, url_for, flash
 from flask_login import current_user
 from .models import (
-    VacinaModelo, Consulta, Veterinario, Clinica, Prescricao, Medicamento, db, User, Animal, Message,
+    ApresentacaoMedicamento, VacinaModelo, Consulta, Veterinario, Clinica, Prescricao, Medicamento, db, User, Animal, Message,
     Transaction, Review, Favorite, AnimalPhoto, UserRole, ExameModelo  # 👈 adicionado aqui
 )
 
 from wtforms import SelectField, DateField
+
+from flask_admin.menu import MenuLink
 
 
 from flask_admin.form import ImageUploadField
@@ -25,7 +27,7 @@ class UserAdminView(MyModelView):
     column_list = (
         'name', 'email', 'role', 'worker',
         'cpf', 'rg', 'date_of_birth',
-        'phone', 'address'
+        'phone', 'address', 'clinica'  # 🆕 adicionado clinica aqui
     )
 
     form_overrides = {
@@ -39,11 +41,20 @@ class UserAdminView(MyModelView):
         }
     }
 
+    form_columns = (
+        'name', 'email', 'password_hash', 'role', 'worker',
+        'cpf', 'rg', 'date_of_birth', 'phone', 'address',
+        'clinica'  # 🆕 permitir edição de clínica aqui também
+    )
+
+
 
 class VeterinarioAdmin(ModelView):
     # Use os relacionamentos para que o formulário mostre dropdowns
     form_columns = ['user', 'crmv', 'clinica']
     column_list = ['id', 'user', 'crmv', 'clinica']
+
+
 
 
 
@@ -56,6 +67,9 @@ class ClinicaAdmin(MyModelView):
             allowed_extensions=['jpg', 'png', 'jpeg', 'gif']
         )
     }
+
+
+
 
 
 
@@ -74,6 +88,9 @@ def init_admin(app):
     admin.add_view(MyModelView(ExameModelo, db.session))  # 👈 nova entrada
     admin.add_view(MyModelView(Consulta, db.session))
     admin.add_view(ModelView(VacinaModelo, db.session))
+    admin.add_view(MyModelView(ApresentacaoMedicamento, db.session))  # 🆕 exibir apresentações
+    admin.add_link(MenuLink(name='🏠 Voltar ao Site', url='/'))
+
 
 
 class TutorAdminView(ModelView):

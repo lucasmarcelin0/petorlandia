@@ -73,6 +73,7 @@
 </div>
 
 <script>
+  let medicamentoSelecionado = null;
   let prescricoes = [];
 
   document.addEventListener('DOMContentLoaded', function () {
@@ -95,7 +96,8 @@
             li.className = 'list-group-item list-group-item-action';
             li.textContent = item.nome;
             li.onclick = () => {
-              preencherCardMedicamento(item);
+              medicamentoSelecionado = item;
+              preencherCardMedicamento(medicamentoSelecionado);
               input.value = item.nome;
               document.getElementById('dose').value = item.dosagem_recomendada || '';
               document.getElementById('duracao').value = item.duracao_tratamento || '';
@@ -103,11 +105,12 @@
             };
             sugestoes.appendChild(li);
           });
-        });
+        })
+        .catch(err => console.error("Erro ao buscar medicamentos:", err));
+    });
   });
 
   renderPrescricoesTemp();
-  });
 
   function preencherCardMedicamento(m) {
     document.getElementById('med-nome-card').textContent = m.nome;
@@ -116,9 +119,10 @@
     document.getElementById('med-dosagem').textContent = m.dosagem_recomendada || '–';
     document.getElementById('med-duracao').textContent = m.duracao_tratamento || '–';
     document.getElementById('med-observacoes').textContent = m.observacoes || '–';
-    document.getElementById('med-bula').textContent = m.bula || '–';
+    document.getElementById('med-bula').textContent = m.bula ? 'Ver bula' : '–';
     document.getElementById('med-bula').href = m.bula || '#';
 
+    // Mostrar card de informações
     document.getElementById('info-medicamento').classList.remove('d-none');
   }
 
@@ -127,8 +131,6 @@
     document.getElementById('modo-detalhado').classList.toggle('d-none', custom);
     document.getElementById('modo-simplificado').classList.toggle('d-none', !custom);
   }
-
-
 
   function renderPrescricoesTemp() {
     const lista = document.getElementById('medicamentos-lista');
@@ -147,50 +149,50 @@
   }
 
   function adicionarMedicamento() {
-  const nome = document.getElementById('nome-medicamento').value.trim();
-  const modoPersonalizado = document.getElementById('modo-personalizado').checked;
+    const nome = document.getElementById('nome-medicamento').value.trim();
+    const modoPersonalizado = document.getElementById('modo-personalizado').checked;
 
-  if (!nome) {
-    alert('Informe o nome do medicamento.');
-    return;
+    if (!nome) {
+      alert('Informe o nome do medicamento.');
+      return;
+    }
+
+    const observacoes = document.getElementById('instrucao-unica').value.trim();
+    let texto = '';
+    let dose = '';
+    let frequencia = '';
+    let duracao = '';
+
+    if (modoPersonalizado) {
+      texto = observacoes;
+      if (!texto) return alert('Escreva a prescrição personalizada.');
+    } else {
+      frequencia = document.getElementById('frequencia').value.trim();
+      dose = document.getElementById('dose').value.trim();
+      duracao = document.getElementById('duracao').value.trim();
+      if (!frequencia || !dose || !duracao) return alert('Preencha frequência, dose e duração.');
+      texto = `${dose}, ${frequencia}, por ${duracao}`;
+    }
+
+    prescricoes.push({
+      medicamento: nome,
+      texto: texto,
+      dosagem: dose || '',
+      frequencia: frequencia || '',
+      duracao: duracao || '',
+      observacoes: observacoes || ''
+    });
+
+    renderPrescricoesTemp();
+
+    // Limpar campos
+    document.getElementById('nome-medicamento').value = '';
+    document.getElementById('instrucao-unica').value = '';
+    document.getElementById('frequencia').value = '';
+    document.getElementById('dose').value = '';
+    document.getElementById('duracao').value = '';
+    document.getElementById('info-medicamento').classList.add('d-none');
   }
-
-  const observacoes = document.getElementById('instrucao-unica').value.trim();
-  let texto = '';
-  let dose = '';
-  let frequencia = '';
-  let duracao = '';
-
-  if (modoPersonalizado) {
-    texto = observacoes;
-    if (!texto) return alert('Escreva a prescrição personalizada.');
-  } else {
-    frequencia = document.getElementById('frequencia').value.trim();
-    dose = document.getElementById('dose').value.trim();
-    duracao = document.getElementById('duracao').value.trim();
-    if (!frequencia || !dose || !duracao) return alert('Preencha frequência, dose e duração.');
-    texto = `${dose}, ${frequencia}, por ${duracao}`;
-  }
-
-  prescricoes.push({
-    medicamento: nome,
-    texto: texto,
-    dosagem: dose || '',
-    frequencia: frequencia || '',
-    duracao: duracao || '',
-    observacoes: observacoes || ''
-  });
-
-  renderPrescricoesTemp();
-
-  document.getElementById('nome-medicamento').value = '';
-  document.getElementById('instrucao-unica').value = '';
-  document.getElementById('frequencia').value = '';
-  document.getElementById('dose').value = '';
-  document.getElementById('duracao').value = '';
-  document.getElementById('info-medicamento').classList.add('d-none');
-}
-
 
   function removerPrescricao(i) {
     prescricoes.splice(i, 1);

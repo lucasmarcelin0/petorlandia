@@ -132,12 +132,26 @@
 
 <body class="d-flex flex-column min-vh-100">
 
-    <nav class="navbar navbar-expand-lg fixed-top bg-white border-bottom shadow-sm py-2">
-        <div class="container">
-          <a class="navbar-brand fw-bold d-flex align-items-center" href="{{ url_for('index') }}">
-            <img src="{{ url_for('static', filename='favicon.png') }}" alt="Logo" style="height: 30px; margin-right: 10px;">
-            PetOrlândia
-          </a>
+  <nav class="navbar navbar-expand-lg fixed-top bg-white border-bottom shadow-sm py-2">
+    <div class="container d-flex align-items-center">
+      {% if current_user.is_authenticated and current_user.email == "admin@petorlandia.com" %}
+        <a href="{{ url_for('painel_admin.index') }}">
+          <img src="{{ url_for('static', filename='favicon.png') }}"
+               alt="Logo"
+               style="height: 30px; margin-right: 10px;"
+               title="Ir para o Painel Admin">
+        </a>
+      {% else %}
+        <img src="{{ url_for('static', filename='favicon.png') }}"
+             alt="Logo"
+             style="height: 30px; margin-right: 10px;">
+      {% endif %}
+
+      <a class="navbar-brand fw-bold" href="{{ url_for('index') }}">
+        PetOrlândia
+      </a>
+
+
 
           <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
             <span class="navbar-toggler-icon"></span>
@@ -184,9 +198,11 @@
                 </li>
 
               {% else %}
+              <!--
                 <li class="nav-item">
                   <a class="nav-link" href="{{ url_for('register') }}">Registrar</a>
                 </li>
+              -->
                 <li class="nav-item">
                   <a class="nav-link" href="{{ url_for('login') }}">Entrar</a>
                 </li>

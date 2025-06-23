@@ -65,7 +65,7 @@
             </a>
             {% endif %}
 
-            {% if current_user.worker == 'veterinario' or animal.owner == current_user %}
+            {% if current_user.worker == 'veterinario' or current_user.worker == 'colaborador' or animal.owner == current_user %}
             <button class="btn btn-outline-success btn-sm rounded-pill" data-bs-toggle="modal"
               data-bs-target="#modalFicha{{ animal.id }}">
               📋 Ver Ficha
@@ -105,7 +105,7 @@
               {% endif %}
               <p><strong>Descrição:</strong><br>{{ animal.description }}</p>
 
-              {% if current_user.worker == 'veterinario' %}
+              {% if current_user.worker == 'veterinario' or current_user.worker == 'colaborador' %}
               <hr>
               <p class="mb-1"><strong>Tutor:</strong> {{ animal.owner.name }}</p>
               <p class="mb-1"><strong>Email:</strong> {{ animal.owner.email }}</p>

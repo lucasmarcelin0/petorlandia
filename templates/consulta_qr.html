@@ -16,12 +16,14 @@
 <div class="mb-4 d-flex flex-wrap gap-2">
   <button class="btn btn-outline-primary" onclick="toggleSection('tutor-info')">🧑 Tutor</button>
   <button class="btn btn-outline-primary" onclick="toggleSection('animal-info')">🐾 Animal</button>
+  <button class="btn btn-outline-primary" onclick="toggleSection('racoes')">🍖 Ração</button>
 
   {% if animal and worker == 'veterinario' %}
     <button class="btn btn-outline-dark" onclick="toggleSection('consulta-info')">📋 Consulta</button>
     <button class="btn btn-outline-success" onclick="toggleSection('medicamentos')">💊 Prescrição</button>
     <button class="btn btn-outline-info" onclick="toggleSection('exames')">🧪 Exames</button>
     <button class="btn btn-outline-warning" onclick="toggleSection('vacinas')">💉 Vacinas</button>
+
   {% endif %}
 </div>
 
@@ -32,16 +34,29 @@
     </div>
   </div>
 
-  <!-- Seção: Animal -->
-  <div id="animal-info" class="card mb-3 d-none">
-    <div class="card-body">
-      {% if animal or tutor %}
-        {% include 'partials/animal_form.html' with context %}
-      {% else %}
-        <p class="text-muted">⚠️ Cadastre um tutor antes de registrar o animal.</p>
-      {% endif %}
-    </div>
+<!-- Seção: Animal -->
+<div id="animal-info" class="card mb-3 d-none">
+  <div class="card-body">
+    {% if animal or tutor %}
+      {% include 'partials/animal_form.html' with context %}
+    {% else %}
+      <p class="text-muted">⚠️ Cadastre um tutor antes de registrar o animal.</p>
+    {% endif %}
   </div>
+</div>
+
+<!-- Seção: Ração (AGORA FORA do animal-info) -->
+<div id="racoes" class="card mb-3 d-none">
+  <div class="card-body">
+    {% if animal %}
+      {% include 'partials/food_form.html' with context %}
+    {% else %}
+      <p class="text-muted">⚠️ Cadastre um tutor e um animal antes de registrar a ração.</p>
+    {% endif %}
+    <p>Formulário de Ração carregado aqui!</p>
+  </div>
+</div>
+
 
   <!-- Info extra se só houver tutor -->
   {% if tutor and not animal %}
@@ -84,7 +99,7 @@
 
 <script>
   function toggleSection(id) {
-    const sections = ['tutor-info', 'animal-info', 'consulta-info', 'medicamentos', 'exames', 'vacinas'];
+    const sections = ['tutor-info', 'animal-info', 'racoes', 'consulta-info', 'medicamentos', 'exames', 'vacinas'];
     sections.forEach(sec => {
       const el = document.getElementById(sec);
       if (el) el.classList.add('d-none');

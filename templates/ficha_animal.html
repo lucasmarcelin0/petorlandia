@@ -15,6 +15,9 @@
     Ficha de {{ animal.name }}
   </h2>
 
+
+
+
   <!-- DADOS DO ANIMAL -->
   <div class="card shadow-sm p-4 mb-4">
     <div class="row g-3 align-items-center">
@@ -143,9 +146,111 @@
   </div>
 
   <!-- VOLTAR -->
-  <div class="text-start mt-4">
-    <a href="{{ url_for('profile') }}" class="btn btn-secondary">← Voltar ao Perfil</a>
+  <h3>Ficha de {{ animal.name }}</h3>
+  <p><strong>Tutor:</strong>
+    <a href="{{ url_for('ficha_tutor', tutor_id=tutor.id) }}">{{ tutor.name }}</a>
+  </p>
+
+<!-- STATUS DE VIDA -->
+{% if animal.is_alive and current_user.worker == 'veterinario' %}
+  <div class="card border-dark p-3 mb-4">
+    <div class="text-start">
+
+      <!-- Botão inicial -->
+      <button type="button" class="btn btn-outline-dark btn-sm" onclick="mostrarOpcoesFalecimento()">
+        ❌ Marcar como falecido
+      </button>
+
+      <!-- Opções (inicialmente ocultas) -->
+      <div id="opcoes-falecimento" class="mt-3 d-none">
+
+        <!-- Falecido agora -->
+        <form method="POST" action="{{ url_for('marcar_como_falecido', animal_id=animal.id) }}" class="mb-2">
+          <input type="hidden" name="falecimento_em" value="">
+          <button class="btn btn-dark btn-sm" type="submit">✅ Falecido agora</button>
+        </form>
+
+        <!-- Escolher data -->
+        <form method="POST" action="{{ url_for('marcar_como_falecido', animal_id=animal.id) }}">
+          <div class="mb-2">
+            <label for="falecimento_em" class="form-label mb-1">Data e hora do falecimento:</label>
+            <input type="datetime-local" name="falecimento_em" id="falecimento_em" class="form-control form-control-sm">
+          </div>
+          <button class="btn btn-dark btn-sm" type="submit">✅ Confirmar data</button>
+        </form>
+      </div>
+
+      <!-- Botão: Arquivar definitivamente -->
+      <form method="POST" action="{{ url_for('arquivar_animal', animal_id=animal.id) }}"
+            onsubmit="return confirm('Tem certeza que deseja excluir este animal permanentemente?');"
+            class="mt-3">
+        <button class="btn btn-outline-danger btn-sm" type="submit">
+          🗑️ Deletar definitivamente
+        </button>
+      </form>
+
+    </div>
   </div>
+{% elif not animal.is_alive %}
+  <div class="alert alert-secondary d-flex justify-content-between align-items-center">
+    <div>
+      Este animal foi marcado como <strong>falecido</strong>.
+      {% if animal.falecido_em %}
+        Data do falecimento: {{ animal.falecido_em.strftime('%d/%m/%Y %H:%M') }}
+      {% endif %}
+    </div>
+
+    {% if current_user.worker == 'veterinario' %}
+      <form method="POST" action="{{ url_for('reverter_falecimento', animal_id=animal.id) }}">
+        <button class="btn btn-sm btn-outline-success">↩️ Reverter Falecimento</button>
+      </form>
+
+      <!-- Botão: Arquivar definitivamente -->
+      <form method="POST" action="{{ url_for('arquivar_animal', animal_id=animal.id) }}"
+            onsubmit="return confirm('Tem certeza que deseja excluir este animal permanentemente?');"
+            class="ms-2">
+        <button class="btn btn-outline-danger btn-sm" type="submit">
+          🗑️ Deletar definitivamente
+        </button>
+      </form>
+    {% endif %}
+  </div>
+{% endif %}
+
+
 
 </div>
+
+
+
+<script>
+  function toggleFalecimento() {
+    const field = document.getElementById('falecimento-fields');
+    const button = document.querySelector('#falecimento-form button');
+
+    if (field.classList.contains('d-none')) {
+      field.classList.remove('d-none');
+      button.type = 'submit';
+      button.textContent = '✅ Confirmar falecimento';
+      button.classList.remove('btn-outline-dark');
+      button.classList.add('btn-dark');
+    } else {
+      field.classList.add('d-none');
+      button.type = 'button';
+      button.textContent = '❌ Marcar como falecido';
+      button.classList.remove('btn-dark');
+      button.classList.add('btn-outline-dark');
+    }
+  }
+
+
+    function mostrarOpcoesFalecimento() {
+      const campo = document.getElementById('opcoes-falecimento');
+      campo.classList.remove('d-none');
+    }
+
+
+</script>
+
+
 {% endblock %}

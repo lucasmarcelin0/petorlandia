@@ -1,16 +1,7 @@
 import os
 
-basedir = os.path.abspath(os.path.dirname(__file__))
+SQLALCHEMY_DATABASE_URI = os.getenv("DATABASE_URL", "sqlite:///petorlandia.db")
 
-class Config:
-    SECRET_KEY = 'supersegredo123'
-    SQLALCHEMY_DATABASE_URI = 'sqlite:///' + os.path.join(basedir, 'petorlandia.db')
-    SQLALCHEMY_TRACK_MODIFICATIONS = False
-
-    MAIL_SERVER = 'smtp.gmail.com'
-    MAIL_PORT = 587
-    MAIL_USE_TLS = True
-    MAIL_USE_SSL = False
-    MAIL_USERNAME = 'gpt.assistente.orlandia@gmail.com'
-    MAIL_PASSWORD = 'tpezhrlnqawjslxg'  # <--- pasted App Password here
-    MAIL_DEFAULT_SENDER = ('PetOrlândia', 'gpt.assistente.orlandia@gmail.com')
+# Corrigir Heroku PostgreSQL URL (caso necessário)
+if SQLALCHEMY_DATABASE_URI.startswith("postgres://"):
+    SQLALCHEMY_DATABASE_URI = SQLALCHEMY_DATABASE_URI.replace("postgres://", "postgresql://", 1)
