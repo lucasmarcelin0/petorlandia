@@ -15,13 +15,18 @@ from flask_admin.menu import MenuLink
 from flask_admin.form import ImageUploadField
 import os
 
+
 class MyModelView(ModelView):
     def is_accessible(self):
-        return current_user.is_authenticated and current_user.email == "admin@petorlandia.com"
+        return current_user.is_authenticated and current_user.email == "lukemarki3@gmail.com"
 
     def inaccessible_callback(self, name, **kwargs):
         flash("Acesso restrito à administração.", "danger")
         return redirect(url_for('login'))
+
+    def scaffold_list_columns(self):
+        return [c.key for c in self.model.__table__.columns]
+
 
 class UserAdminView(MyModelView):
     column_list = (
