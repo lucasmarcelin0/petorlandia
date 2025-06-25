@@ -1,3 +1,28 @@
+import os
+from flask import Flask
+
+from config import Config
+from extensions import db, migrate, mail, login, session
+
+# Cria o diretório instance (caso não exista)
+instance_path = os.path.join(os.getcwd(), 'instance')
+os.makedirs(instance_path, exist_ok=True)
+
+# Cria o app Flask
+app = Flask(__name__, instance_path=instance_path)
+app.config.from_object(Config)
+
+# Inicializa as extensões
+db.init_app(app)
+migrate.init_app(app, db)
+mail.init_app(app)
+login.init_app(app)
+session.init_app(app)
+
+
+
+
+
 from io import BytesIO
 from datetime import date, datetime  # Certifique-se de ter isso no topo do arquivo
 from flask_login import login_user
@@ -9,14 +34,15 @@ import base64
 from forms import MessageForm, RegistrationForm, LoginForm, AnimalForm, EditProfileForm, ResetPasswordRequestForm, ResetPasswordForm
 from admin import init_admin
 from flask_migrate import Migrate, upgrade, migrate, init
+
 from flask_sqlalchemy import SQLAlchemy
 from flask_session import Session
 from flask_login import LoginManager, login_required, current_user, logout_user
 
-from models import (Racao, TipoRacao, VacinaModelo, Vacina, ExameSolicitado, BlocoExames, ExameModelo, Clinica, ConsultaToken, Consulta, Medicamento, Prescricao, BlocoPrescricao,
+from models import (db, Racao, TipoRacao, VacinaModelo, Vacina, ExameSolicitado, BlocoExames, ExameModelo, Clinica, ConsultaToken, Consulta, Medicamento, Prescricao, BlocoPrescricao,
                     Veterinario, User, Animal, Message, Transaction, Review, Favorite, AnimalPhoto, Interest
                     )
-from extensions import db
+
 from wtforms.fields import SelectField
 from config import Config
 from flask import Flask, jsonify, render_template, redirect, url_for, request, session, flash

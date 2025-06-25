@@ -1,11 +1,9 @@
-import os
-
 class Config:
-    SQLALCHEMY_DATABASE_URI = os.getenv("DATABASE_URL", "sqlite:///petorlandia.db")
-    
-    # Corrigir Heroku PostgreSQL URL (caso necessário)
-    if SQLALCHEMY_DATABASE_URI.startswith("postgres://"):
-        SQLALCHEMY_DATABASE_URI = SQLALCHEMY_DATABASE_URI.replace("postgres://", "postgresql://", 1)
-    
+    SECRET_KEY = "dev-key"  # substitua por uma variável segura em produção
+    SQLALCHEMY_DATABASE_URI = (
+        "postgresql://u82pgjdcmkbq7v:"
+        "p0204cb9289674b66bfcbb9248eaf9d6a71e2dece2722fe22d6bd976c77b411e6"
+        "@c2hbg00ac72j9d.cluster-czrs8kj4isg7.us-east-1.rds.amazonaws.com:5432/d2nnmcuqa8ljli"
+    )
     SQLALCHEMY_TRACK_MODIFICATIONS = False
-    SECRET_KEY = os.getenv("SECRET_KEY", "chave-secreta-padrao")
+    SESSION_TYPE = "filesystem"
