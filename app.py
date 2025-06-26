@@ -1,3 +1,6 @@
+import uuid
+
+
 import os
 
 import boto3
@@ -120,7 +123,7 @@ app = Flask(__name__, instance_path=instance_path)
 
 app.config.from_object(Config)
 
-
+ 
 migrate = Migrate(app, db)
 
 db.init_app(app)  # Aqui sim você registra o app corretamente
@@ -286,20 +289,26 @@ def register():
     return render_template('register.html', form=form)
 
 
+
+
+
+
+
+
+
 @app.route('/add-animal', methods=['GET', 'POST'])
 @login_required
 def add_animal():
     form = AnimalForm()
 
     if form.validate_on_submit():
-        # Salvar o arquivo de imagem
-        filename = None
+        image_url = None
         if form.image.data:
-            filename = secure_filename(form.image.data.filename)
-            image_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-            form.image.data.save(image_path)
+            file = form.image.data
+            original_filename = secure_filename(file.filename)
+            filename = f"{uuid.uuid4().hex}_{original_filename}"
+            image_url = upload_to_s3(file, filename, folder="animals")
 
-        # Criar o animal com o caminho da imagem (caso tenha)
         animal = Animal(
             name=form.name.data,
             species=form.species.data,
@@ -307,11 +316,10 @@ def add_animal():
             age=form.age.data,
             sex=form.sex.data,
             description=form.description.data,
-            image=f"/static/uploads/{filename}" if filename else None,
+            image=image_url,
             status='disponível',
             owner=current_user,
-            is_alive=True  # 👈 garante que o animal é salvo como vivo
-
+            is_alive=True
         )
 
         db.session.add(animal)
@@ -324,6 +332,7 @@ def add_animal():
         return redirect(url_for('index'))
 
     return render_template('add_animal.html', form=form)
+
 
 
 @app.route('/login', methods=['GET', 'POST'])
@@ -359,17 +368,23 @@ def profile():
         current_user.phone = form.phone.data
         current_user.address = form.address.data
 
-        if form.profile_photo.data and hasattr(form.profile_photo.data, 'filename') and form.profile_photo.data.filename != '':
-            filename = secure_filename(form.profile_photo.data.filename)
-            path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-            form.profile_photo.data.save(path)
-            current_user.profile_photo = f"/static/uploads/{filename}"
+        # Upload da nova foto de perfil para o S3
+        if (
+            form.profile_photo.data and
+            hasattr(form.profile_photo.data, 'filename') and
+            form.profile_photo.data.filename != ''
+        ):
+            file = form.profile_photo.data
+            original_filename = secure_filename(file.filename)
+            filename = f"{uuid.uuid4().hex}_{original_filename}"
+            image_url = upload_to_s3(file, filename, folder="profile_photos")
+            current_user.profile_photo = image_url  # agora com URL do S3
 
         db.session.commit()
         flash('Perfil atualizado com sucesso!', 'success')
         return redirect(url_for('profile'))
 
-    # Apenas envia as 3 primeiras transações
+    # Apenas envia as 10 últimas transações
     transactions = Transaction.query.filter(
         (Transaction.from_user_id == current_user.id) | (Transaction.to_user_id == current_user.id)
     ).order_by(Transaction.date.desc()).limit(10).all()
