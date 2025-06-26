@@ -1,8 +1,37 @@
 import os
+
+import boto3
+
+from dotenv import load_dotenv
+load_dotenv()
+
+s3 = boto3.client(
+    "s3",
+    aws_access_key_id=os.getenv("AWS_ACCESS_KEY_ID"),
+    aws_secret_access_key=os.getenv("AWS_SECRET_ACCESS_KEY")
+)
+
+bucket_name = os.getenv("S3_BUCKET_NAME")
+
+
+
+
+import os
+print("🧪 AWS Key:", os.getenv("AWS_ACCESS_KEY_ID"))
+
+
 from flask import Flask
 
-from config import Config
-from extensions import db, migrate, mail, login, session
+try:
+    from config import Config
+except ImportError:
+    from .config import Config
+
+
+try:
+    from extensions import db, migrate, mail, login, session
+except ImportError:
+    from .extensions import db, migrate, mail, login, session
 
 # Cria o diretório instance (caso não exista)
 instance_path = os.path.join(os.getcwd(), 'instance')
@@ -31,20 +60,34 @@ from datetime import timedelta
 import secrets
 import qrcode
 import base64
-from forms import MessageForm, RegistrationForm, LoginForm, AnimalForm, EditProfileForm, ResetPasswordRequestForm, ResetPasswordForm
-from admin import init_admin
+
+try:
+    from forms import MessageForm, RegistrationForm, LoginForm, AnimalForm, EditProfileForm, ResetPasswordRequestForm, ResetPasswordForm
+except ImportError:
+    from .forms import MessageForm, RegistrationForm, LoginForm, AnimalForm, EditProfileForm, ResetPasswordRequestForm, ResetPasswordForm
+
+try:
+    from admin import init_admin
+except ImportError:
+    from .admin import init_admin
+
+
 from flask_migrate import Migrate, upgrade, migrate, init
 
 from flask_sqlalchemy import SQLAlchemy
 from flask_session import Session
 from flask_login import LoginManager, login_required, current_user, logout_user
 
-from models import (db, Racao, TipoRacao, VacinaModelo, Vacina, ExameSolicitado, BlocoExames, ExameModelo, Clinica, ConsultaToken, Consulta, Medicamento, Prescricao, BlocoPrescricao,
+try:
+    from models import (db, Racao, TipoRacao, VacinaModelo, Vacina, ExameSolicitado, BlocoExames, ExameModelo, Clinica, ConsultaToken, Consulta, Medicamento, Prescricao, BlocoPrescricao,
+                    Veterinario, User, Animal, Message, Transaction, Review, Favorite, AnimalPhoto, Interest
+                    )
+except ImportError:
+    from .models import (db, Racao, TipoRacao, VacinaModelo, Vacina, ExameSolicitado, BlocoExames, ExameModelo, Clinica, ConsultaToken, Consulta, Medicamento, Prescricao, BlocoPrescricao,
                     Veterinario, User, Animal, Message, Transaction, Review, Favorite, AnimalPhoto, Interest
                     )
 
 from wtforms.fields import SelectField
-from config import Config
 from flask import Flask, jsonify, render_template, redirect, url_for, request, session, flash
 
 
@@ -55,7 +98,10 @@ from werkzeug.utils import secure_filename
 
 from math import ceil
 
-from helpers import calcular_idade, parse_data_nascimento
+try:
+    from helpers import calcular_idade, parse_data_nascimento
+except ImportError:
+    from .helpers import calcular_idade, parse_data_nascimento
 
 from flask_mail import Mail, Message as MailMessage
 
@@ -2025,3 +2071,53 @@ if __name__ == "__main__":
     # Usa a porta 8080 se existir no ambiente (como no Docker), senão usa 5000
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+from flask import request, redirect, url_for, render_template, flash
+from s3_utils import upload_to_s3
+
+@app.route('/upload-test', methods=['GET', 'POST'])
+def upload_test():
+    if request.method == 'POST':
+        file = request.files.get('file')
+        if not file:
+            flash('Nenhum arquivo enviado.', 'danger')
+            return redirect(request.url)
+
+        # Upload to S3
+        filename = file.filename
+        image_url = upload_to_s3(file, filename, folder="testes")
+
+        flash(f"Imagem enviada com sucesso: {image_url}", 'success')
+        return render_template('upload_result.html', image_url=image_url)
+
+    return '''
+        <form method="post" enctype="multipart/form-data">
+            <input type="file" name="file">
+            <button type="submit">Enviar</button>
+        </form>
+    '''

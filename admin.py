@@ -2,7 +2,13 @@ from flask_admin import Admin
 from flask_admin.contrib.sqla import ModelView
 from flask import redirect, url_for, flash
 from flask_login import current_user
-from models import (
+try:
+    from models import (
+    ApresentacaoMedicamento, VacinaModelo, Consulta, Veterinario, Clinica, Prescricao, Medicamento, db, User, Animal, Message,
+    Transaction, Review, Favorite, AnimalPhoto, UserRole, ExameModelo  # 👈 adicionado aqui
+)
+except ImportError:
+    from .models import (
     ApresentacaoMedicamento, VacinaModelo, Consulta, Veterinario, Clinica, Prescricao, Medicamento, db, User, Animal, Message,
     Transaction, Review, Favorite, AnimalPhoto, UserRole, ExameModelo  # 👈 adicionado aqui
 )
