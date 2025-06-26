@@ -12,8 +12,9 @@
         <!-- Foto de Perfil -->
         <div class="col-md-4 text-center">
           {% if current_user.profile_photo %}
-            <img src="{{ current_user.profile_photo }}" class="img-fluid" "
-              style="width: 280px; height: 280px; object-fit: cover; border-radius: 10px;">
+            <img src="{{ current_user.profile_photo }}" class="img-fluid"
+            style="width: 280px; height: 280px; object-fit: cover; border-radius: 10px;">
+
           {% else %}
             <div class="bg-light border rounded my-2"
               style="width: 180px; height: 180px; position: relative; border-radius: 10px;">

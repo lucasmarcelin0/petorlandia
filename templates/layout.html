@@ -2,6 +2,9 @@
 <html lang="pt-br">
 <head>
 
+    <link rel="icon" type="image/png" href="{{ url_for('static', filename='favicon.png') }}">
+
+
     <meta charset="UTF-8">
     <title>PetOrlândia 🐶</title>
     <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -34,6 +37,7 @@
         .navbar-brand {
             font-weight: bold;
             font-size: 1.5rem;
+        }
 
         .navbar-nav .nav-link {
             font-size: 1rem;
@@ -93,7 +97,8 @@
             if (Notification.permission === "granted") {
                 new Notification("🐾 PetOrlândia", {
                     body: "{{ message }}",
-                    icon: "/static/favicon.png"
+                    icon: "{{ url_for('static', filename='favicon.png') }}"
+
                 });
             }
         {% endfor %}
