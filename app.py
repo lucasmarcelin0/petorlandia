@@ -317,10 +317,13 @@ def add_animal():
             sex=form.sex.data,
             description=form.description.data,
             image=image_url,
-            status='disponível',
+            modo=form.modo.data,  # <- Adicionado aqui
+            price=form.price.data if form.modo.data == 'venda' else None,
+            status='disponível',  # Ou defina com base no modo
             owner=current_user,
             is_alive=True
         )
+
 
         db.session.add(animal)
         db.session.commit()
@@ -1153,10 +1156,10 @@ def update_tutor(user_id):
 
     if 'profile_photo' in request.files and request.files['profile_photo'].filename != '':
         file = request.files['profile_photo']
-        filename = secure_filename(file.filename)
-        path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-        file.save(path)
-        user.profile_photo = f"/static/uploads/{filename}"
+        original_filename = secure_filename(file.filename)
+        filename = f"{uuid.uuid4().hex}_{original_filename}"
+        image_url = upload_to_s3(file, filename, folder="tutors")
+        user.profile_photo = image_url
 
     try:
         db.session.commit()
@@ -1238,10 +1241,11 @@ def update_animal(animal_id):
 
     if 'image' in request.files and request.files['image'].filename != '':
         image_file = request.files['image']
-        filename = secure_filename(image_file.filename)
-        path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-        image_file.save(path)
-        animal.image = f"/static/uploads/{filename}"
+        original_filename = secure_filename(image_file.filename)
+        filename = f"{uuid.uuid4().hex}_{original_filename}"
+        image_url = upload_to_s3(image_file, filename, folder="animals")
+        animal.image = image_url
+
 
     db.session.commit()
     flash('Dados do animal atualizados com sucesso!', 'success')
