@@ -147,10 +147,14 @@
                title="Ir para o Painel Admin">
         </a>
       {% else %}
-        <img src="{{ url_for('static', filename='favicon.png') }}"
-             alt="Logo"
-             style="height: 30px; margin-right: 10px;">
+        <a href="{{ url_for('index') }}">
+          <img src="{{ url_for('static', filename='favicon.png') }}"
+              alt="Logo"
+              style="height: 30px; margin-right: 10px;"
+              title="Ir para a Página Inicial">
+        </a>
       {% endif %}
+
 
       <a class="navbar-brand fw-bold" href="{{ url_for('index') }}">
         PetOrlândia
