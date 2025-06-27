@@ -725,8 +725,14 @@ def planosaude_animal(animal_id):
 @app.route('/plano-saude')
 @login_required
 def plano_saude_overview():
-    animais_do_usuario = Animal.query.filter_by(user_id=current_user.id).all()
-    return render_template('plano_saude_overview.html', animais=animais_do_usuario)
+    animais_do_usuario = Animal.query.filter_by(user_id=current_user.id).filter(Animal.removido_em == None).all()
+    return render_template(
+        'plano_saude_overview.html',
+        animais=animais_do_usuario,
+        user=current_user  # ← esta linha resolve o erro
+    )
+
+
 
 
 @app.route('/animal/<int:animal_id>/ficha')

@@ -49,7 +49,7 @@
 
     {% if animais %}
         <div class="row row-cols-1 row-cols-md-2 row-cols-lg-3 g-4 mt-2">
-            {% for animal in animais %}
+            {% for animal in user.animals if not animal.removido_em %}
                 <div class="col">
                     <div class="card h-100 shadow-sm border-0 rounded-4">
                         {% if animal.image %}
