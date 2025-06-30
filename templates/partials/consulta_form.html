@@ -10,22 +10,22 @@
 
   <div class="mb-3">
     <label class="form-label">Queixa Principal</label>
-    <textarea name="queixa_principal" class="form-control" rows="2">{{ consulta.queixa_principal or '' }}</textarea>
+    <textarea name="queixa_principal" class="form-control auto-expand" rows="2">{{ consulta.queixa_principal or '' }}</textarea>
   </div>
 
   <div class="mb-3">
     <label class="form-label">Histórico Clínico</label>
-    <textarea name="historico_clinico" class="form-control" rows="3">{{ consulta.historico_clinico or '' }}</textarea>
+    <textarea name="historico_clinico" class="form-control auto-expand" rows="3">{{ consulta.historico_clinico or '' }}</textarea>
   </div>
 
   <div class="mb-3">
     <label class="form-label">Exame Físico</label>
-    <textarea name="exame_fisico" class="form-control" rows="3">{{ consulta.exame_fisico or '' }}</textarea>
+    <textarea name="exame_fisico" class="form-control auto-expand" rows="3">{{ consulta.exame_fisico or '' }}</textarea>
   </div>
 
   <div class="mb-3">
     <label class="form-label">Conduta</label>
-    <textarea name="conduta" class="form-control" rows="3">{{ consulta.conduta or '' }}</textarea>
+    <textarea name="conduta" class="form-control auto-expand" rows="3">{{ consulta.conduta or '' }}</textarea>
   </div>
 
   <button type="submit" class="btn btn-primary">
@@ -69,4 +69,25 @@ document.getElementById("campo-medicamento").addEventListener("input", function 
       sugestoes.classList.remove("d-none");
     });
 });
+
+
+
+
+
+
+
+
+
+  // Faz todos os textareas com classe "auto-expand" crescerem automaticamente
+  document.querySelectorAll('textarea.auto-expand').forEach(function (textarea) {
+    function autoResize() {
+      this.style.height = 'auto';
+      this.style.height = this.scrollHeight + 'px';
+    }
+    textarea.addEventListener('input', autoResize);
+    // Aplica o resize ao carregar com conteúdo já existente
+    autoResize.call(textarea);
+  });
+
+
 </script>
