@@ -66,13 +66,18 @@ class User(UserMixin, db.Model):
     added_by_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True)  # 🆕
     added_by = db.relationship('User', remote_side=[id], backref='users_added')  # 🆕
 
+
+
     clinica_id = db.Column(db.Integer, db.ForeignKey('clinica.id'), nullable=True)
     clinica = db.relationship('Clinica', backref='usuarios')
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
 
 
 
-
+    @property
+    def added_by_display(self):
+        return self.added_by.name if self.added_by else "N/A"
 
     def set_password(self, password):
         self.password_hash = generate_password_hash(password)
@@ -82,6 +87,9 @@ class User(UserMixin, db.Model):
 
     def __str__(self):
         return f'{self.name} ({self.email})'
+
+
+
 
 
 

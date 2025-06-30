@@ -30,16 +30,25 @@ class MyModelView(ModelView):
         flash("Acesso restrito à administração.", "danger")
         return redirect(url_for('login'))
 
-    def scaffold_list_columns(self):
-        return [c.key for c in self.model.__table__.columns]
+    #def scaffold_list_columns(self):
+    #    return [c.key for c in self.model.__table__.columns]
 
 
 class UserAdminView(MyModelView):
     column_list = (
         'name', 'email', 'role', 'worker',
         'cpf', 'rg', 'date_of_birth',
-        'phone', 'address', 'clinica'  # 🆕 adicionado clinica aqui
+        'phone', 'address', 'clinica',
+        'added_by'  # ✅ Certifique-se que está aqui!
     )
+
+    column_labels = {
+        'added_by': 'Adicionado por'
+    }
+
+    column_formatters = {
+        'added_by': lambda v, c, m, p: m.added_by.name if m.added_by else '—'
+    }
 
     form_overrides = {
         'role': SelectField,
@@ -55,8 +64,15 @@ class UserAdminView(MyModelView):
     form_columns = (
         'name', 'email', 'password_hash', 'role', 'worker',
         'cpf', 'rg', 'date_of_birth', 'phone', 'address',
-        'clinica'  # 🆕 permitir edição de clínica aqui também
+        'clinica',
+        # ⚠️ Não inclua 'added_by' aqui se você não quer que editem manualmente
     )
+
+    # Se quiser mostrar "added_by" também na tela de detalhes:
+    column_details_list = column_list
+
+
+
 
 
 

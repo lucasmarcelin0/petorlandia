@@ -14,6 +14,7 @@
 
 
 <!-- 👤 Formulário de Tutor -->
+
 <form id="tutor-form" method="POST" enctype="multipart/form-data" {% if has_tutor %}action="{{ url_for('update_tutor', user_id=tutor.id) }}"{% endif %}>
   <h5 class="mb-4">👤 Cadastro do Tutor</h5>
 
@@ -74,12 +75,27 @@
       <input type="email" name="email" class="form-control" placeholder="exemplo@email.com" value="{{ tutor.email if has_tutor else '' }}" required>
     </div>
 
+    <!-- Adicionado por e data -->
+    {% if has_tutor and tutor.added_by %}
+      <div class="col-md-12">
+        <label class="form-label">👤 Adicionado por</label>
+        <input type="text" class="form-control" 
+              value="{{ tutor.added_by.name }} em {{ tutor.created_at.strftime('%d/%m/%Y às %H:%M') if tutor.created_at else 'data desconhecida' }}" 
+              disabled>
+      </div>
+    {% endif %}
+
+
     <!-- Botão -->
     <div class="col-12 mt-3">
       <button type="submit" class="btn btn-outline-primary w-100">💾 Salvar Tutor</button>
     </div>
   </div>
 </form>
+
+
+
+
 
 
 <script>

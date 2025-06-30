@@ -56,7 +56,31 @@ session.init_app(app)
 
 
 from io import BytesIO
-from datetime import date, datetime  # Certifique-se de ter isso no topo do arquivo
+
+
+from datetime import datetime
+import pytz
+
+# Fuso horário de São Paulo
+br_tz = pytz.timezone('America/Sao_Paulo')
+
+# Filtro para converter datetime UTC para o fuso de Brasília
+def format_datetime_brazil(value, format="%d/%m/%Y %H:%M"):
+    if value is None:
+        return ""
+    if value.tzinfo is None:
+        value = pytz.utc.localize(value)
+    local_dt = value.astimezone(br_tz)
+    return local_dt.strftime(format)
+
+app.jinja_env.filters['datetime_brazil'] = format_datetime_brazil
+
+
+
+
+
+
+
 from flask_login import login_user
 from dateutil.relativedelta import relativedelta
 from datetime import timedelta
@@ -77,7 +101,15 @@ except ImportError:
 
 from flask_migrate import Migrate, upgrade, migrate, init
 
+
+
 from flask_sqlalchemy import SQLAlchemy
+
+
+
+
+
+
 from flask_session import Session
 from flask_login import LoginManager, login_required, current_user, logout_user
 
@@ -1022,7 +1054,8 @@ def tutores():
             name=name.strip(),
             email=email.strip(),
             role='adotante',
-            clinica_id=current_user.clinica_id  # 🛠️ já no construtor
+            clinica_id=current_user.clinica_id,  # 🛠️ já no construtor
+            added_by=current_user  # ✅ define quem criou esse usuário
         )
         novo.set_password('123456789')  # senha padrão
 
@@ -1039,6 +1072,8 @@ def tutores():
         novo.address = address.strip() if address else None
         novo.cpf = cpf.strip() if cpf else None
         novo.rg = rg.strip() if rg else None
+
+
 
         if date_str:
             try:
