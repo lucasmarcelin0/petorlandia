@@ -4,12 +4,12 @@ from flask import redirect, url_for, flash
 from flask_login import current_user
 try:
     from models import (
-    ApresentacaoMedicamento, VacinaModelo, Consulta, Veterinario, Clinica, Prescricao, Medicamento, db, User, Animal, Message,
+    TipoRacao, ApresentacaoMedicamento, VacinaModelo, Consulta, Veterinario, Clinica, Prescricao, Medicamento, db, User, Animal, Message,
     Transaction, Review, Favorite, AnimalPhoto, UserRole, ExameModelo  # 👈 adicionado aqui
 )
 except ImportError:
     from .models import (
-    ApresentacaoMedicamento, VacinaModelo, Consulta, Veterinario, Clinica, Prescricao, Medicamento, db, User, Animal, Message,
+    TipoRacao, ApresentacaoMedicamento, VacinaModelo, Consulta, Veterinario, Clinica, Prescricao, Medicamento, db, User, Animal, Message,
     Transaction, Review, Favorite, AnimalPhoto, UserRole, ExameModelo  # 👈 adicionado aqui
 )
 
@@ -117,7 +117,7 @@ def init_admin(app):
     admin.add_view(ModelView(VacinaModelo, db.session))
     admin.add_view(MyModelView(ApresentacaoMedicamento, db.session))  # 🆕 exibir apresentações
     admin.add_link(MenuLink(name='🏠 Voltar ao Site', url='/'))
-
+    admin.add_view(ModelView(TipoRacao, db.session))
 
 
 class TutorAdminView(ModelView):

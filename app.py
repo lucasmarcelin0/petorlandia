@@ -912,6 +912,13 @@ def consulta_direct(animal_id):
                     .filter_by(animal_id=animal.id, status='finalizada')
                     .order_by(Consulta.created_at.desc())
                     .all())
+        
+    # 🔧 Aqui está a correção: carregar todos os tipos de ração
+    tipos_racao = TipoRacao.query.order_by(TipoRacao.marca.asc()).all()
+    # Extra: coletar todas as marcas e linhas existentes
+    marcas_existentes = sorted(set([t.marca for t in tipos_racao if t.marca]))
+    linhas_existentes = sorted(set([t.linha for t in tipos_racao if t.linha]))
+
 
     return render_template('consulta_qr.html',
                            animal=animal,
@@ -919,7 +926,10 @@ def consulta_direct(animal_id):
                            consulta=consulta,
                            historico_consultas=historico,
                            edit_mode=edit_mode,
-                           worker=current_user.worker)  # sending worker role
+                           worker=current_user.worker,
+                           tipos_racao=tipos_racao,
+                           marcas_existentes=marcas_existentes,
+                           linhas_existentes=linhas_existentes)  # sending worker role
 
 
 
@@ -1341,32 +1351,54 @@ def salvar_racao(animal_id):
         return jsonify({'success': False, 'error': 'Permissão negada.'}), 403
 
     data = request.get_json()
-    racoes_data = data.get('racoes', [])
 
     try:
-        for r in racoes_data:
-            marca = r.get('marca_racao', '').strip()
-            linha = r.get('linha_racao', '').strip()
+        # ✅ SUPORTE AO FORMATO NOVO: tipo_racao_id direto
+        if 'tipo_racao_id' in data:
+            tipo_racao_id = data.get('tipo_racao_id')
+            recomendacao_custom = data.get('recomendacao_custom')
+            observacoes_racao = data.get('observacoes_racao')
 
-            if not marca:
-                continue  # ignora se não houver marca
-
-            # Verifica se o TipoRacao já existe
-            tipo_racao = TipoRacao.query.filter_by(marca=marca, linha=linha).first()
-
+            # Garante que tipo_racao existe
+            tipo_racao = TipoRacao.query.get(tipo_racao_id)
             if not tipo_racao:
-                tipo_racao = TipoRacao(marca=marca, linha=linha)
-                db.session.add(tipo_racao)
-                db.session.flush()  # Para garantir ID sem dar commit ainda
+                return jsonify({'success': False, 'error': 'Tipo de ração não encontrado.'}), 404
 
             nova_racao = Racao(
                 animal_id=animal.id,
                 tipo_racao_id=tipo_racao.id,
-                peso_animal=r.get('peso_animal'),
-                recomendacao_custom=r.get('recomendacao_custom'),
-                observacoes_racao=r.get('observacoes_racao')
+                recomendacao_custom=recomendacao_custom,
+                observacoes_racao=observacoes_racao
             )
             db.session.add(nova_racao)
+
+        # ✅ SUPORTE AO FORMATO ANTIGO: lista de racoes com marca/linha
+        elif 'racoes' in data:
+            racoes_data = data.get('racoes', [])
+            for r in racoes_data:
+                marca = r.get('marca_racao', '').strip()
+                linha = r.get('linha_racao', '').strip()
+
+                if not marca:
+                    continue  # ignora se não houver marca
+
+                tipo_racao = TipoRacao.query.filter_by(marca=marca, linha=linha).first()
+
+                if not tipo_racao:
+                    tipo_racao = TipoRacao(marca=marca, linha=linha)
+                    db.session.add(tipo_racao)
+                    db.session.flush()  # garante que o ID estará disponível
+
+                nova_racao = Racao(
+                    animal_id=animal.id,
+                    tipo_racao_id=tipo_racao.id,
+                    recomendacao_custom=r.get('recomendacao_custom'),
+                    observacoes_racao=r.get('observacoes_racao')
+                )
+                db.session.add(nova_racao)
+
+        else:
+            return jsonify({'success': False, 'error': 'Formato de dados inválido.'}), 400
 
         db.session.commit()
         return jsonify({'success': True})
@@ -1375,6 +1407,46 @@ def salvar_racao(animal_id):
         db.session.rollback()
         print(f"Erro ao salvar ração: {e}")
         return jsonify({'success': False, 'error': 'Erro técnico ao salvar ração.'}), 500
+
+
+@app.route('/tipo_racao', methods=['POST'])
+@login_required
+def criar_tipo_racao():
+    if current_user.worker != 'veterinario':
+        return jsonify({'success': False, 'error': 'Permissão negada.'}), 403
+
+    data = request.get_json()
+    marca = data.get('marca', '').strip()
+    linha = data.get('linha', '').strip()
+    recomendacao = data.get('recomendacao')
+    observacoes = data.get('observacoes', '').strip()
+
+    if not marca:
+        return jsonify({'success': False, 'error': 'Marca é obrigatória.'}), 400
+
+    try:
+        # Evita duplicidade
+        existente = TipoRacao.query.filter_by(marca=marca, linha=linha).first()
+        if existente:
+            return jsonify({'success': False, 'error': 'Esta ração já existe.'}), 409
+
+        nova_racao = TipoRacao(
+            marca=marca,
+            linha=linha if linha else None,
+            recomendacao=recomendacao,
+            observacoes=observacoes if observacoes else None
+        )
+        db.session.add(nova_racao)
+        db.session.commit()
+
+        return jsonify({'success': True, 'id': nova_racao.id})
+
+    except Exception as e:
+        db.session.rollback()
+        print(f"Erro ao cadastrar tipo de ração: {e}")
+        return jsonify({'success': False, 'error': 'Erro técnico ao cadastrar tipo de ração.'}), 500
+
+
 
 
 @app.route('/tipos_racao')
@@ -1389,6 +1461,45 @@ def tipos_racao():
         for r in resultados
     ])
 
+
+@app.route('/racao/<int:racao_id>/editar', methods=['PUT'])
+@login_required
+def editar_racao(racao_id):
+    racao = Racao.query.get_or_404(racao_id)
+
+    if current_user.worker != 'veterinario':
+        return jsonify({'success': False, 'error': 'Permissão negada.'}), 403
+
+    data = request.get_json()
+    racao.recomendacao_custom = data.get('recomendacao_custom') or None
+    racao.observacoes_racao = data.get('observacoes_racao') or ''
+
+    try:
+        db.session.commit()
+        return jsonify({'success': True})
+    except Exception as e:
+        db.session.rollback()
+        print(f"Erro ao editar ração: {e}")
+        return jsonify({'success': False, 'error': 'Erro técnico ao editar ração.'}), 500
+
+
+
+@app.route('/racao/<int:racao_id>/excluir', methods=['DELETE'])
+@login_required
+def excluir_racao(racao_id):
+    racao = Racao.query.get_or_404(racao_id)
+
+    if current_user.worker != 'veterinario':
+        return jsonify({'success': False, 'error': 'Permissão negada.'}), 403
+
+    try:
+        db.session.delete(racao)
+        db.session.commit()
+        return jsonify({'success': True})
+    except Exception as e:
+        db.session.rollback()
+        print(f"Erro ao excluir ração: {e}")
+        return jsonify({'success': False, 'error': 'Erro técnico ao excluir ração.'}), 500
 
 
 

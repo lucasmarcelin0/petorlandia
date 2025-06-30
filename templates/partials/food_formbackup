@@ -1,0 +1,101 @@
+<form id="form-racao" class="mt-4">
+
+
+
+  <div class="mb-3">
+    <label for="tipo_racao" class="form-label">Tipo de Ração</label>
+    <input type="text" class="form-control" id="tipo_racao" name="tipo_racao"
+           placeholder="Digite para buscar ou adicionar (ex: Golden - Filhotes)" list="sugestoes_racao">
+    <datalist id="sugestoes_racao">
+    {% for tipo in tipos_racao %}
+        <option value="{{ tipo.marca }} - {{ tipo.linha or '' }}"></option>
+    {% endfor %}
+    </datalist>
+
+  </div>
+
+  <div class="mb-3">
+    <label for="peso_animal" class="form-label">Peso Atual do Animal (kg)</label>
+    <input type="number" step="0.1" class="form-control" id="peso_animal" name="peso_animal"
+           value="{{ animal.peso if animal and animal.peso else '' }}">
+  </div>
+
+  <div class="mb-3">
+    <label for="recomendacao_custom" class="form-label">Recomendação Ajustada (g/kg/dia)</label>
+    <input type="number" step="0.1" class="form-control" id="recomendacao_custom" name="recomendacao_custom"
+           placeholder="Deixe em branco para usar a recomendação padrão">
+  </div>
+
+  <div class="mb-3">
+    <label for="observacoes_racao" class="form-label">Observações</label>
+    <textarea class="form-control" id="observacoes_racao" name="observacoes_racao" rows="3"
+              placeholder="Notas adicionais..."></textarea>
+  </div>
+
+  <button type="button" class="btn btn-primary" onclick="salvarRacao()">💾 Salvar Ração</button>
+</form>
+
+<hr class="my-4">
+
+<h5>📋 Histórico de Rações</h5>
+{% if animal.racoes %}
+  <ul class="list-group">
+    {% for racao in animal.racoes %}
+      <li class="list-group-item">
+        <strong>Marca:</strong> {{ racao.tipo_racao.marca }}<br>
+        <strong>Linha:</strong> {{ racao.tipo_racao.linha or 'Não informada' }}<br>
+        <strong>Peso Animal:</strong> {{ racao.peso_animal }} kg<br>
+        <strong>Recomendação:</strong>
+        {{ racao.recomendacao_custom or racao.tipo_racao.recomendacao }} g/kg/dia<br>
+        <strong>Observações:</strong>
+        {{ racao.observacoes_racao or racao.tipo_racao.observacoes or 'Nenhuma' }}<br>
+        <small class="text-muted">Registrado em {{ racao.data_cadastro.strftime('%d/%m/%Y') }}</small>
+      </li>
+    {% endfor %}
+  </ul>
+{% else %}
+  <p class="text-muted">Nenhuma ração cadastrada ainda para este animal.</p>
+{% endif %}
+
+<script>
+function salvarRacao() {
+  const animalId = {{ animal.id }};
+  const tipoRacaoTexto = document.getElementById('tipo_racao').value.trim();
+
+  let marca = '';
+  let linha = '';
+  const partes = tipoRacaoTexto.split(' - ');
+  if (partes.length === 2) {
+    [marca, linha] = partes.map(s => s.trim());
+  } else {
+    marca = tipoRacaoTexto.trim();
+  }
+
+  const racao = {
+    marca_racao: marca,
+    linha_racao: linha,
+    peso_animal: parseFloat(document.getElementById('peso_animal').value) || null,
+    recomendacao_custom: parseFloat(document.getElementById('recomendacao_custom').value) || null,
+    observacoes_racao: document.getElementById('observacoes_racao').value
+  };
+
+  fetch(`/animal/${animalId}/racoes`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ racoes: [racao] })
+  })
+  .then(response => response.json())
+  .then(data => {
+    if (data.success) {
+      alert('Ração salva com sucesso!');
+      location.reload();
+    } else {
+      alert('Erro ao salvar: ' + (data.error || 'Erro desconhecido.'));
+    }
+  })
+  .catch(error => {
+    console.error('Erro ao enviar requisição:', error);
+    alert('Erro técnico ao salvar ração.');
+  });
+}
+</script>
