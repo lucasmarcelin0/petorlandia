@@ -15,6 +15,19 @@
   </div>
 
   <div class="mb-3">
+  <label for="preco_pago" class="form-label">💰 Preço pago pelo tutor (R$)</label>
+  <input type="number" step="0.01" class="form-control" id="preco_pago" name="preco_pago"
+         placeholder="Ex: 89.90">
+</div>
+
+<div class="mb-3">
+  <label for="tamanho_embalagem" class="form-label">📦 Tamanho da Embalagem</label>
+  <input type="text" class="form-control" id="tamanho_embalagem" name="tamanho_embalagem"
+         placeholder="Ex: 15kg, 2.5kg">
+</div>
+
+
+  <div class="mb-3">
     <label for="peso_animal" class="form-label">Peso Atual do Animal (kg)</label>
     <input type="number" step="0.1" class="form-control" id="peso_animal" name="peso_animal"
            value="{{ animal.peso if animal and animal.peso else '' }}">
@@ -45,6 +58,8 @@
         <strong>Marca:</strong> {{ racao.tipo_racao.marca }}<br>
         <strong>Linha:</strong> {{ racao.tipo_racao.linha or 'Não informada' }}<br>
         <strong>Peso Animal:</strong> {{ racao.peso_animal }} kg<br>
+        <strong>Preço pago:</strong> R$ {{ racao.preco_pago or 'Não informado' }}<br>
+        <strong>Tamanho da embalagem:</strong> {{ racao.tamanho_embalagem or 'Não informado' }}<br>
         <strong>Recomendação:</strong>
         {{ racao.recomendacao_custom or racao.tipo_racao.recomendacao }} g/kg/dia<br>
         <strong>Observações:</strong>
@@ -74,6 +89,8 @@ function salvarRacao() {
   const racao = {
     marca_racao: marca,
     linha_racao: linha,
+    preco_pago: parseFloat(document.getElementById('preco_pago').value) || null,
+    tamanho_embalagem: document.getElementById('tamanho_embalagem').value || null,
     peso_animal: parseFloat(document.getElementById('peso_animal').value) || null,
     recomendacao_custom: parseFloat(document.getElementById('recomendacao_custom').value) || null,
     observacoes_racao: document.getElementById('observacoes_racao').value

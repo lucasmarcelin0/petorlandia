@@ -1368,7 +1368,9 @@ def salvar_racao(animal_id):
                 animal_id=animal.id,
                 tipo_racao_id=tipo_racao.id,
                 recomendacao_custom=recomendacao_custom,
-                observacoes_racao=observacoes_racao
+                observacoes_racao=observacoes_racao,
+                preco_pago=data.get('preco_pago'),  # ✅ CORRIGIDO
+                tamanho_embalagem=data.get('tamanho_embalagem')  # ✅ CORRIGIDO
             )
             db.session.add(nova_racao)
 
@@ -1419,6 +1421,7 @@ def criar_tipo_racao():
     marca = data.get('marca', '').strip()
     linha = data.get('linha', '').strip()
     recomendacao = data.get('recomendacao')
+    peso_pacote_kg = data.get('peso_pacote_kg')  # Novo campo
     observacoes = data.get('observacoes', '').strip()
 
     if not marca:
@@ -1434,6 +1437,7 @@ def criar_tipo_racao():
             marca=marca,
             linha=linha if linha else None,
             recomendacao=recomendacao,
+            peso_pacote_kg=peso_pacote_kg or 15.0,  # valor padrão se não enviado
             observacoes=observacoes if observacoes else None
         )
         db.session.add(nova_racao)
@@ -1473,6 +1477,8 @@ def editar_racao(racao_id):
     data = request.get_json()
     racao.recomendacao_custom = data.get('recomendacao_custom') or None
     racao.observacoes_racao = data.get('observacoes_racao') or ''
+    racao.preco_pago = data.get('preco_pago') or None
+    racao.tamanho_embalagem = data.get('tamanho_embalagem') or None
 
     try:
         db.session.commit()
@@ -1500,6 +1506,62 @@ def excluir_racao(racao_id):
         db.session.rollback()
         print(f"Erro ao excluir ração: {e}")
         return jsonify({'success': False, 'error': 'Erro técnico ao excluir ração.'}), 500
+
+
+
+
+
+from sqlalchemy.orm import aliased
+from sqlalchemy import func, desc
+
+from collections import defaultdict
+
+@app.route("/relatorio/racoes")
+@login_required
+def relatorio_racoes():
+    subquery = (
+        db.session.query(
+            Racao.animal_id,
+            func.max(Racao.data_cadastro).label("ultima_data")
+        )
+        .group_by(Racao.animal_id)
+        .subquery()
+    )
+
+    RacaoAlias = aliased(Racao)
+
+    racoes_recentes = (
+        db.session.query(RacaoAlias)
+        .join(subquery, (RacaoAlias.animal_id == subquery.c.animal_id) & 
+                         (RacaoAlias.data_cadastro == subquery.c.ultima_data))
+        .all()
+    )
+
+    # Agrupar por tipo_racao
+    racoes_por_tipo = defaultdict(list)
+    for r in racoes_recentes:
+        racoes_por_tipo[r.tipo_racao].append(r)
+
+    return render_template("relatorio_racoes.html", racoes_por_tipo=racoes_por_tipo)
+
+
+@app.route("/historico_animal/<int:animal_id>")
+@login_required
+def historico_animal(animal_id):
+    animal = Animal.query.get_or_404(animal_id)
+    racoes = Racao.query.filter_by(animal_id=animal.id).order_by(Racao.data_cadastro.desc()).all()
+    return render_template("historico_racoes.html", animal=animal, racoes=racoes)
+
+
+
+@app.route('/relatorio/racoes/<int:tipo_id>')
+@login_required
+def detalhes_racao(tipo_id):
+    tipo = TipoRacao.query.get_or_404(tipo_id)
+    racoes = tipo.usos  # usa o backref 'usos'
+    return render_template('detalhes_racao.html', tipo=tipo, racoes=racoes)
+
+
 
 
 
