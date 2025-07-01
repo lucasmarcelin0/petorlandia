@@ -7,3 +7,14 @@ class Config:
     )
     SQLALCHEMY_TRACK_MODIFICATIONS = False
     SESSION_TYPE = "filesystem"
+
+    # Configurações do Flask-Mail (Gmail)
+    MAIL_SERVER = 'smtp.gmail.com'
+    MAIL_PORT = 587
+    MAIL_USE_TLS = True
+    MAIL_USE_SSL = False
+    MAIL_USERNAME = 'gpt.assistente.orlandia@gmail.com'
+    MAIL_PASSWORD = 'toso zrgb uuwx nzkp'  # Use a senha de app, não a senha normal da conta
+    MAIL_DEFAULT_SENDER = ('PetOrlândia', 'gpt.assistente.orlandia@gmail.com')
+
+

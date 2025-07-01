@@ -1,6 +1,8 @@
 import uuid
 
 
+from flask import current_app
+
 import os
 
 import boto3
@@ -140,6 +142,18 @@ except ImportError:
 
 from flask_mail import Mail, Message as MailMessage
 
+from flask_mail import Mail
+app.config['MAIL_SERVER'] = 'smtp.gmail.com'
+app.config['MAIL_PORT'] = 587
+app.config['MAIL_USE_TLS'] = True
+app.config['MAIL_USE_SSL'] = False
+app.config['MAIL_USERNAME'] = 'gpt.assistente.orlandia@gmail.com'
+app.config['MAIL_PASSWORD'] = 'SENHA_DE_APP'  # ← Cole a senha de aplicativo aqui
+app.config['MAIL_DEFAULT_SENDER'] = ('PetOrlândia', 'gpt.assistente.orlandia@gmail.com')
+
+mail = Mail(app)
+
+
 
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
@@ -198,7 +212,6 @@ from itsdangerous import URLSafeTimedSerializer
 
 
 
-# Serializer for generating token
 s = URLSafeTimedSerializer(app.config['SECRET_KEY'])
 
 @app.route('/reset_password_request', methods=['GET', 'POST'])
@@ -208,57 +221,34 @@ def reset_password_request():
         user = User.query.filter_by(email=form.email.data).first()
         if user:
             token = s.dumps(user.email, salt='password-reset-salt')
-            link = url_for('reset_password', token=token, _external=True)
+            base_url = app.config.get('FRONTEND_URL', 'http://127.0.0.1:5000')
+            link = f"{base_url}{url_for('reset_password', token=token)}"
+
             msg = MailMessage(
                 subject='Redefinir sua senha - PetOrlândia',
-                sender='noreply@petorlandia.com',
-                recipients=[user.email]
-            )
-            msg.html = f"""
-                <!DOCTYPE html>
-                <html lang="pt-BR">
-                <head>
-                    <meta charset="UTF-8">
-                    <title>Redefinição de Senha - PetOrlândia</title>
-                </head>
-                <body style="font-family: Arial, sans-serif; background-color: #f8f9fa; margin: 0; padding: 20px;">
-                    <table align="center" style="max-width: 600px; background: #ffffff; padding: 20px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.05);">
-                        <tr>
-                            <td align="center">
-                                <h2 style="color: #0d6efd;">🐾 PetOrlândia</h2>
-                            </td>
-                        </tr>
-                        <tr>
-                            <td>
-                                <p>Olá,</p>
-                                <p>Recebemos uma solicitação para redefinir a sua senha.</p>
-                                <p>Para criar uma nova senha, clique no botão abaixo:</p>
-                                <div style="text-align: center; margin: 30px 0;">
-                                    <a href="{link}" style="background-color: #0d6efd; color: white; padding: 14px 24px; text-decoration: none; border-radius: 6px; font-weight: bold; display: inline-block;">Redefinir Senha</a>
-                                </div>
-                                <p style="font-size: 0.9em; color: #6c757d;">
-                                    Se você não solicitou esta alteração, pode ignorar este e-mail com segurança.
-                                </p>
-                                <hr style="border: none; border-top: 1px solid #dee2e6; margin: 30px 0;">
-                                <p style="font-size: 0.8em; color: #adb5bd; text-align: center;">
-                                    PetOrlândia • Cuidando com amor dos seus melhores amigos
-                                </p>
-                            </td>
-                        </tr>
-                    </table>
-                </body>
-                </html>
+                sender=app.config['MAIL_DEFAULT_SENDER'],
+                recipients=[user.email],
+                body=f'Clique no link para redefinir sua senha: {link}',
+                html=f""" 
+                    <!DOCTYPE html>
+                    <html lang="pt-BR">
+                    <head><meta charset="UTF-8"><title>Redefinição de Senha</title></head>
+                    <body style="font-family: Arial; padding: 20px;">
+                        <h2>🐾 PetOrlândia</h2>
+                        <p>Recebemos uma solicitação para redefinir sua senha.</p>
+                        <p><a href="{link}" style="background:#0d6efd;color:white;padding:10px 20px;text-decoration:none;border-radius:5px;">Redefinir Senha</a></p>
+                        <p>Se você não solicitou, ignore este e-mail.</p>
+                        <hr><small>PetOrlândia • Cuidando com amor dos seus melhores amigos</small>
+                    </body>
+                    </html>
                 """
-
-
-
-            msg.body = f'Clique no link para redefinir sua senha: {link}'
+            )
             mail.send(msg)
             flash('Um e-mail foi enviado com instruções para redefinir sua senha.', 'info')
             return redirect(url_for('login'))
-        else:
-            flash('E-mail não encontrado.', 'danger')
+        flash('E-mail não encontrado.', 'danger')
     return render_template('reset_password_request.html', form=form)
+
 
 
 @app.route('/reset_password/<token>', methods=['GET', 'POST'])
