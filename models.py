@@ -393,6 +393,7 @@ class TipoRacao(db.Model):
     linha = db.Column(db.String(100))  # Ex: "Premium Filhotes", "Golden Fórmula"
     recomendacao = db.Column(db.Float)  # g/kg/dia
     observacoes = db.Column(db.Text)
+    peso_pacote_kg = db.Column(db.Float, default=15.0)  # Peso do pacote (kg)
 
 
 class Racao(db.Model):
@@ -401,7 +402,6 @@ class Racao(db.Model):
     animal_id = db.Column(db.Integer, db.ForeignKey('animal.id'), nullable=False)
     tipo_racao_id = db.Column(db.Integer, db.ForeignKey('tipo_racao.id'), nullable=False)
 
-    peso_animal = db.Column(db.Float)
     recomendacao_custom = db.Column(db.Float)  # se quiser ajustar a recomendação
     observacoes_racao = db.Column(db.Text)
 
@@ -409,6 +409,9 @@ class Racao(db.Model):
 
     animal = db.relationship('Animal', backref=db.backref('racoes', lazy=True, cascade='all, delete-orphan'))
     tipo_racao = db.relationship('TipoRacao', backref=db.backref('usos', lazy=True))
+
+    preco_pago = db.Column(db.Float)  # R$ que o tutor paga
+    tamanho_embalagem = db.Column(db.String(50))  # Ex: "15kg", "10,1kg", etc.
 
 
 

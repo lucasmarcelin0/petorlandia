@@ -1,0 +1,29 @@
+_{% extends "layout.html" %}
+{% block main %}
+<h2 class="mb-4">📊 Rações mais usadas (última por animal)</h2>
+<table class="table table-hover">
+  <thead>
+    <tr>
+      <th>Marca</th>
+      <th>Linha</th>
+      <th>Total de Animais</th>
+      <th>Ação</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for tipo, racoes in racoes_por_tipo.items() %}
+    <tr>
+      <td>{{ tipo.marca }}</td>
+      <td>{{ tipo.linha or "Não informada" }}</td>
+      <td>{{ racoes|length }}</td>
+      <td>
+        <a href="{{ url_for('detalhes_racao', tipo_id=tipo.id) }}" class="btn btn-outline-primary btn-sm">
+          Ver Detalhes
+        </a>
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+
+{% endblock %}
