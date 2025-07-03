@@ -116,13 +116,10 @@ from flask_session import Session
 from flask_login import LoginManager, login_required, current_user, logout_user
 
 try:
-    from models import (Pais, Estado, Cidade, Bairro, Endereco, db, Racao, TipoRacao, VacinaModelo, Vacina, ExameSolicitado, BlocoExames, ExameModelo, Clinica, ConsultaToken, Consulta, Medicamento, Prescricao, BlocoPrescricao,
-                    Veterinario, User, Animal, Message, Transaction, Review, Favorite, AnimalPhoto, Interest
-                    )
+    from models import Pais, Estado, Cidade, Bairro, Endereco, db, Racao, TipoRacao, VacinaModelo, Vacina, ExameSolicitado, BlocoExames, ExameModelo, Clinica, ConsultaToken, Consulta, Medicamento, Prescricao, BlocoPrescricao, Veterinario, User, Animal, Message, Transaction, Review, Favorite, AnimalPhoto, Interest
 except ImportError:
-    from .models import (Pais, Estado, Cidade, Bairro, Endereco, db, Racao, TipoRacao, VacinaModelo, Vacina, ExameSolicitado, BlocoExames, ExameModelo, Clinica, ConsultaToken, Consulta, Medicamento, Prescricao, BlocoPrescricao,
-                    Veterinario, User, Animal, Message, Transaction, Review, Favorite, AnimalPhoto, Interest
-                    )
+    from .models import Pais, Estado, Cidade, Bairro, Endereco, db, Racao, TipoRacao, VacinaModelo, Vacina, ExameSolicitado, BlocoExames, ExameModelo, Clinica, ConsultaToken, Consulta, Medicamento, Prescricao, BlocoPrescricao, Veterinario, User, Animal, Message, Transaction, Review, Favorite, AnimalPhoto, Interest
+                    
 
 from wtforms.fields import SelectField
 from flask import Flask, jsonify, render_template, redirect, url_for, request, session, flash
