@@ -18,6 +18,23 @@ s3 = boto3.client(
 
 bucket_name = os.getenv("S3_BUCKET_NAME")
 
+def upload_to_s3(file, filename, folder="uploads"):
+    """Envia um arquivo para o S3 e retorna a URL pública."""
+    try:
+        s3_path = f"{folder}/{filename}"
+        s3.upload_fileobj(
+            file,
+            bucket_name,
+            s3_path,
+            ExtraArgs={
+                "ACL": "public-read",
+                "ContentType": file.content_type  # importante para imagens e PDFs
+            }
+        )
+        return f"https://{bucket_name}.s3.amazonaws.com/{s3_path}"
+    except Exception as e:
+        print(f"[ERRO S3] Falha ao enviar para o S3: {e}")
+        return None
 
 
 
