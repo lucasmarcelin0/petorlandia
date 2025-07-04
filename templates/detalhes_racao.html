@@ -1,17 +1,19 @@
 {% extends "layout.html" %}
+
 {% block main %}
 <div class="container py-4">
   <h2 class="mb-4">📦 Detalhes da Ração: {{ tipo.marca }} — {{ tipo.linha or "Não informada" }}</h2>
 
-  {% set ns = namespace(total=0, diaria_total=0, tutores=[]) %}
+  {% set ns = namespace(total=0, diaria_total=0, tutores=[], precos=[]) %}
 
   <table class="table table-bordered table-striped">
     <thead class="table-light">
       <tr>
         <th>Animal</th>
+        <th>Preço Pago (R$)</th>
         <th>Tutor</th>
+        <th>Celular</th>
         <th>Data</th>
-        <th>Observações</th>
         <th>Recomendação</th>
         <th>Estimativa (pacotes/mês)</th>
         <th>Ação</th>
@@ -21,10 +23,19 @@
       {% for r in racoes %}
         <tr>
           <td>{{ r.animal.name }}</td>
+          <td>
+            {% if r.preco_pago %}
+              R$ {{ '%.2f' | format(r.preco_pago) }}
+              {% set _ = ns.precos.append(r.preco_pago) %}
+            {% else %}
+              —
+            {% endif %}
+          </td>
           <td>{{ r.animal.owner.name }}</td>
+          <td>{{ r.animal.owner.phone or "—" }}</td>
           <td>{{ r.data_cadastro.strftime('%d/%m/%Y') }}</td>
-          <td>{{ r.observacoes_racao or "—" }}</td>
 
+          {# Cálculo da recomendação diária #}
           {% if r.recomendacao_custom %}
             {% set diaria = r.recomendacao_custom %}
           {% elif r.animal.peso and r.tipo_racao.recomendacao %}
@@ -60,6 +71,14 @@
       {% if racoes %}
         <tr class="table-light fw-bold">
           <td>📊 {{ racoes|length }} animais</td>
+          <td>
+            {% if ns.precos %}
+              💰 Média: R$ {{ (ns.precos | sum / ns.precos | length) | round(2) }}<br>
+              🛒 Mínimo: R$ {{ ns.precos | min | round(2) }}
+            {% else %}
+              —
+            {% endif %}
+          </td>
           <td>👤 {{ ns.tutores|length }} tutores</td>
           <td colspan="2">—</td>
           <td>🍽️ {{ ns.diaria_total|round(1) }} g/dia</td>
