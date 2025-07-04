@@ -14,65 +14,21 @@ from flask_sqlalchemy import SQLAlchemy
 
 db = SQLAlchemy()
 
-class Pais(db.Model):
-    __tablename__ = 'pais'
-    id = db.Column(db.Integer, primary_key=True)
-    nome = db.Column(db.String(100), nullable=False)
-    sigla = db.Column(db.String(5), nullable=False, unique=True)
 
-    estados = db.relationship('Estado', backref='pais', cascade="all, delete")
-
-    def __repr__(self):
-        return f"{self.nome} ({self.sigla})"
-
-class Estado(db.Model):
-    __tablename__ = 'estado'
-    id = db.Column(db.Integer, primary_key=True)
-    nome = db.Column(db.String(100), nullable=False)
-    sigla = db.Column(db.String(2), nullable=False)
-    pais_id = db.Column(db.Integer, db.ForeignKey('pais.id'), nullable=False)
-
-    cidades = db.relationship('Cidade', backref='estado', cascade="all, delete")
-
-    def __repr__(self):
-        return f"{self.sigla} - {self.nome}"
-
-class Cidade(db.Model):
-    __tablename__ = 'cidade'
-    id = db.Column(db.Integer, primary_key=True)
-    nome = db.Column(db.String(100), nullable=False)
-    estado_id = db.Column(db.Integer, db.ForeignKey('estado.id'), nullable=False)
-
-    bairros = db.relationship('Bairro', backref='cidade', cascade="all, delete")
-
-    def __repr__(self):
-        return f"{self.nome} ({self.estado.sigla})"
-
-class Bairro(db.Model):
-    __tablename__ = 'bairro'
-    id = db.Column(db.Integer, primary_key=True)
-    nome = db.Column(db.String(100), nullable=False)
-    cidade_id = db.Column(db.Integer, db.ForeignKey('cidade.id'), nullable=False)
-
-    def __repr__(self):
-        return f"{self.nome} - {self.cidade.nome}"
 
 class Endereco(db.Model):
     __tablename__ = 'endereco'
     id = db.Column(db.Integer, primary_key=True)
-    rua = db.Column(db.String(120), nullable=False)
+    cep = db.Column(db.String(9), nullable=False)  # Ex: 14620-000
+    rua = db.Column(db.String(120), nullable=True)
     numero = db.Column(db.String(20), nullable=True)
     complemento = db.Column(db.String(100), nullable=True)
-    cep = db.Column(db.String(10), nullable=True)
-
-    bairro_id = db.Column(db.Integer, db.ForeignKey('bairro.id'), nullable=True)
-    bairro = db.relationship('Bairro', backref='enderecos')
+    bairro = db.Column(db.String(100), nullable=True)
+    cidade = db.Column(db.String(100), nullable=True)
+    estado = db.Column(db.String(2), nullable=True)  # Ex: SP
 
     def __repr__(self):
-        bairro_nome = self.bairro.nome if self.bairro else "Sem bairro"
-        return f"{self.rua}, {self.numero or 's/n'} - {bairro_nome}"
-
-
+        return f"{self.rua}, {self.numero or 's/n'} - {self.bairro}, {self.cidade}/{self.estado} - {self.cep}"
 
 
 

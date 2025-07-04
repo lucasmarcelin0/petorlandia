@@ -1,270 +1,65 @@
+{% set endereco = tutor.endereco if tutor else None %}
+
+
 <div class="card shadow-sm rounded-4 p-4 mb-4 border-0">
   <h5 class="mb-3 text-primary-emphasis">📍 Endereço</h5>
   <div class="row g-3">
 
-    <!-- País -->
-    <div class="col-md-6 col-12">
-      <label for="pais" class="form-label">País <span class="text-danger">*</span></label>
-      <div class="input-group">
-        <select class="form-select select2" id="pais" name="pais_id" required aria-label="Selecionar país">
-          <option disabled selected>Selecione o país</option>
-          {% for pais in paises %}
-            <option value="{{ pais.id }}" {% if endereco and endereco.bairro and endereco.bairro.cidade.estado.pais.id == pais.id %}selected{% endif %}>{{ pais.nome }}</option>
-          {% endfor %}
-        </select>
-        <button class="btn btn-outline-secondary ms-2" type="button" data-bs-toggle="modal" data-bs-target="#modalPais" title="Adicionar novo país">
-          <i class="bi bi-plus-circle"></i>
-        </button>
-      </div>
-    </div>
-
-    <!-- Estado -->
-    <div class="col-md-6 col-12">
-      <label for="estado" class="form-label">Estado <span class="text-danger">*</span></label>
-      <div class="input-group">
-        <select class="form-select select2" id="estado" name="estado_id" required aria-label="Selecionar estado">
-          <option disabled selected>Selecione o estado</option>
-          {% if estados %}
-            {% for estado in estados %}
-              <option value="{{ estado.id }}" {% if endereco and endereco.bairro.cidade.estado.id == estado.id %}selected{% endif %}>{{ estado.nome }}</option>
-            {% endfor %}
-          {% endif %}
-        </select>
-        <button class="btn btn-outline-secondary ms-2" type="button" data-bs-toggle="modal" data-bs-target="#modalEstado" title="Adicionar novo estado">
-          <i class="bi bi-plus-circle"></i>
-        </button>
-      </div>
-    </div>
-
-    <!-- Cidade -->
-    <div class="col-md-6 col-12">
-      <label for="cidade" class="form-label">Cidade <span class="text-danger">*</span></label>
-      <div class="input-group">
-        <select class="form-select select2" id="cidade" name="cidade_id" required aria-label="Selecionar cidade">
-          <option disabled selected>Selecione a cidade</option>
-          {% if cidades %}
-            {% for cidade in cidades %}
-              <option value="{{ cidade.id }}" {% if endereco and endereco.bairro.cidade.id == cidade.id %}selected{% endif %}>{{ cidade.nome }}</option>
-            {% endfor %}
-          {% endif %}
-        </select>
-        <button class="btn btn-outline-secondary ms-2" type="button" data-bs-toggle="modal" data-bs-target="#modalCidade" title="Adicionar nova cidade">
-          <i class="bi bi-plus-circle"></i>
-        </button>
-      </div>
-    </div>
-
-    <!-- Bairro -->
-    <div class="col-md-6 col-12">
-      <label for="bairro" class="form-label">Bairro</label>
-      <div class="input-group">
-        <select class="form-select select2" id="bairro" name="bairro_id" aria-label="Selecionar bairro">
-          <option disabled selected>Selecione o bairro</option>
-          {% if bairros %}
-            {% for bairro in bairros %}
-              <option value="{{ bairro.id }}" {% if endereco and endereco.bairro.id == bairro.id %}selected{% endif %}>{{ bairro.nome }}</option>
-            {% endfor %}
-          {% endif %}
-        </select>
-        <button class="btn btn-outline-secondary ms-2" type="button" data-bs-toggle="modal" data-bs-target="#modalBairro" title="Adicionar novo bairro">
-          <i class="bi bi-plus-circle"></i>
-        </button>
+    <!-- CEP -->
+    <div class="col-md-4">
+      <label for="cep" class="form-label">CEP</label>
+      <input type="text" class="form-control" name="cep" id="cep" value="{{ endereco.cep if endereco else '' }}" maxlength="9" placeholder="00000-000" onblur="buscarCep()">
+      <div id="cep-loading" class="form-text text-muted d-none">
+        <i class="bi bi-arrow-repeat me-1"></i> Buscando informações do CEP...
       </div>
     </div>
 
     <!-- Rua -->
-    <div class="col-md-6 col-12">
+    <div class="col-md-8">
       <label for="rua" class="form-label">Rua <span class="text-danger">*</span></label>
-      <input type="text" class="form-control rounded-pill" name="rua" id="rua" value="{{ endereco.rua if endereco else '' }}" required placeholder="Digite a rua" autofocus>
+      <input type="text" class="form-control" name="rua" id="rua" value="{{ endereco.rua if endereco else '' }}">
     </div>
 
     <!-- Número -->
-    <div class="col-md-3 col-6">
+    <div class="col-md-3">
       <label for="numero" class="form-label">Número</label>
-      <input type="text" class="form-control rounded-pill" name="numero" id="numero" value="{{ endereco.numero if endereco else '' }}" inputmode="numeric" pattern="\d*" maxlength="10">
+      <input type="text" class="form-control" name="numero" id="numero" value="{{ endereco.numero if endereco else '' }}">
     </div>
 
     <!-- Complemento -->
-    <div class="col-md-3 col-6">
+    <div class="col-md-3">
       <label for="complemento" class="form-label">Complemento</label>
-      <input type="text" class="form-control rounded-pill" name="complemento" id="complemento" value="{{ endereco.complemento if endereco else '' }}" maxlength="50">
+      <input type="text" class="form-control" name="complemento" id="complemento" value="{{ endereco.complemento if endereco else '' }}">
     </div>
 
-    <!-- CEP -->
-    <div class="col-md-6 col-12">
-      <label for="cep" class="form-label">CEP</label>
-      <div class="input-group">
-        <input type="text" class="form-control rounded-pill" name="cep" id="cep" value="{{ endereco.cep if endereco else '' }}" placeholder="00000-000" maxlength="9">
-<button type="button" class="btn btn-outline-secondary rounded-pill ms-2" onclick="buscarEnderecoPorCep()" title="Buscar endereço pelo CEP">🔄</button>
-      </div>
-      <div id="cep-loading" class="form-text d-none">🔄 Buscando informações...</div>
+    <!-- Bairro -->
+    <div class="col-md-3">
+      <label for="bairro" class="form-label">Bairro</label>
+      <input type="text" class="form-control" name="bairro" id="bairro" value="{{ endereco.bairro if endereco else '' }}">
+    </div>
+
+    <!-- Cidade -->
+    <div class="col-md-3">
+      <label for="cidade" class="form-label">Cidade <span class="text-danger">*</span></label>
+      <input type="text" class="form-control" name="cidade" id="cidade" value="{{ endereco.cidade if endereco else '' }}">
+    </div>
+
+    <!-- Estado -->
+    <div class="col-md-2">
+      <label for="estado" class="form-label">UF <span class="text-danger">*</span></label>
+      <input type="text" class="form-control" name="estado" id="estado" value="{{ endereco.estado if endereco else '' }}">
     </div>
 
   </div>
 </div>
 
-
 <script>
-document.addEventListener("DOMContentLoaded", function () {
-  $('.select2').select2({ theme: "bootstrap-5", width: '100%' });
+function buscarCep() {
+  const cep = document.getElementById("cep").value.replace(/\D/g, '');
+  const loading = document.getElementById("cep-loading");
+  if (cep.length !== 8) return;
 
-  // API ViaCEP
-  document.getElementById("cep")?.addEventListener("blur", function () {
-    const cep = this.value.replace(/\D/g, '');
-    if (cep.length === 8) {
-      fetch(`https://viacep.com.br/ws/${cep}/json/`)
-        .then(res => res.json())
-        .then(data => {
-          if (data.erro) return;
-          document.getElementById("rua").value = data.logradouro || "";
-          document.getElementById("complemento").value = data.complemento || "";
-
-          const cidade = data.localidade?.trim();
-          const estado = data.uf?.trim();
-
-          fetch(`/api/local_por_cep?cidade=${cidade}&uf=${estado}`)
-            .then(res => res.json())
-            .then(resp => {
-              if (resp.estado_id) {
-                document.getElementById("estado").value = resp.estado_id;
-                document.getElementById("estado").dispatchEvent(new Event("change"));
-
-                setTimeout(() => {
-                  if (resp.cidade_id) {
-                    document.getElementById("cidade").value = resp.cidade_id;
-                    document.getElementById("cidade").dispatchEvent(new Event("change"));
-                  }
-
-                  setTimeout(() => {
-                    if (resp.bairro_id) {
-                      document.getElementById("bairro").value = resp.bairro_id;
-                    }
-                  }, 500);
-                }, 500);
-              }
-            });
-        });
-    }
-  });
-
-  // Relacionamentos dinâmicos
-  const selects = {
-    pais: document.getElementById("pais"),
-    estado: document.getElementById("estado"),
-    cidade: document.getElementById("cidade"),
-    bairro: document.getElementById("bairro")
-  };
-
-  selects.pais?.addEventListener("change", function () {
-    fetch(`/api/estados/${this.value}`)
-      .then(r => r.json())
-      .then(estados => {
-        selects.estado.innerHTML = '<option disabled selected>Selecione o estado</option>';
-        estados.forEach(e => {
-          const opt = document.createElement("option");
-          opt.value = e.id;
-          opt.textContent = e.nome;
-          selects.estado.appendChild(opt);
-        });
-        $('#estado').val(null).trigger('change');
-      });
-  });
-
-  selects.estado?.addEventListener("change", function () {
-    fetch(`/api/cidades/${this.value}`)
-      .then(r => r.json())
-      .then(cidades => {
-        selects.cidade.innerHTML = '<option disabled selected>Selecione a cidade</option>';
-        cidades.forEach(c => {
-          const opt = document.createElement("option");
-          opt.value = c.id;
-          opt.textContent = c.nome;
-          selects.cidade.appendChild(opt);
-        });
-        $('#cidade').val(null).trigger('change');
-      });
-  });
-
-  selects.cidade?.addEventListener("change", function () {
-    fetch(`/api/bairros/${this.value}`)
-      .then(r => r.json())
-      .then(bairros => {
-        selects.bairro.innerHTML = '<option disabled selected>Selecione o bairro</option>';
-        bairros.forEach(b => {
-          const opt = document.createElement("option");
-          opt.value = b.id;
-          opt.textContent = b.nome;
-          selects.bairro.appendChild(opt);
-        });
-        $('#bairro').val(null).trigger('change');
-      });
-  });
-});
-
-// Lógica para salvar novo local
-function salvarNovo(tipo) {
-  const input = document.getElementById(`novo_${tipo}`);
-  const valor = input.value.trim();
-  if (!valor) return;
-
-  const payload = { nome: valor };
-
-  if (tipo === 'estado') {
-    const paisId = document.getElementById('pais')?.value;
-    if (!paisId) return alert("Selecione um país antes.");
-    payload.pais_id = paisId;
-  } else if (tipo === 'cidade') {
-    const estadoId = document.getElementById('estado')?.value;
-    if (!estadoId) return alert("Selecione um estado antes.");
-    payload.estado_id = estadoId;
-  } else if (tipo === 'bairro') {
-    const cidadeId = document.getElementById('cidade')?.value;
-    if (!cidadeId) return alert("Selecione uma cidade antes.");
-    payload.cidade_id = cidadeId;
-  }
-
-  fetch(`/api/novo_${tipo}`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload)
-  })
-  .then(r => r.json())
-  .then(data => {
-    if (data.erro) {
-      alert(data.erro);
-    } else {
-      const select = document.getElementById(tipo);
-      const opt = document.createElement("option");
-      opt.value = data.id;
-      opt.textContent = data.nome;
-      opt.selected = true;
-      select.appendChild(opt);
-      select.dispatchEvent(new Event("change"));
-      const modalId = `modal${tipo.charAt(0).toUpperCase() + tipo.slice(1)}`;
-      const modal = bootstrap.Modal.getInstance(document.getElementById(modalId));
-      if (modal) modal.hide();
-      input.value = '';
-    }
-  })
-  .catch(error => {
-    console.error('Erro ao salvar:', error);
-    alert("Erro ao salvar. Verifique a conexão ou tente novamente.");
-  });
-}
-
-
-
-function buscarEnderecoPorCep() {
-  const cepInput = document.getElementById("cep");
-  const cepLoading = document.getElementById("cep-loading");
-  const cep = cepInput.value.replace(/\D/g, '');
-
-  if (cep.length !== 8) {
-    alert("Digite um CEP válido com 8 dígitos.");
-    return;
-  }
-
-  cepLoading.classList.remove("d-none");
+  loading.classList.remove("d-none");
 
   fetch(`https://viacep.com.br/ws/${cep}/json/`)
     .then(res => res.json())
@@ -274,53 +69,39 @@ function buscarEnderecoPorCep() {
         return;
       }
 
-      // Preenche rua e complemento
       document.getElementById("rua").value = data.logradouro || "";
       document.getElementById("complemento").value = data.complemento || "";
-
-      // Busca cidade/estado no banco via endpoint interno
-      const cidade = data.localidade?.trim();
-      const estado = data.uf?.trim();
-
-      if (!cidade || !estado) return;
-
-      return fetch(`/api/local_por_cep?cidade=${cidade}&uf=${estado}`);
+      document.getElementById("bairro").value = data.bairro || "";
+      document.getElementById("cidade").value = data.localidade || "";
+      document.getElementById("estado").value = data.uf || "";
     })
-    .then(res => res?.json?.())
-    .then(resp => {
-      if (!resp) return;
-
-      const estadoSelect = document.getElementById("estado");
-      const cidadeSelect = document.getElementById("cidade");
-      const bairroSelect = document.getElementById("bairro");
-
-      if (resp.estado_id) {
-        estadoSelect.value = resp.estado_id;
-        estadoSelect.dispatchEvent(new Event("change"));
-
-        // Espera a carga das cidades
-        setTimeout(() => {
-          if (resp.cidade_id) {
-            cidadeSelect.value = resp.cidade_id;
-            cidadeSelect.dispatchEvent(new Event("change"));
-          }
-
-          // Espera a carga dos bairros
-          setTimeout(() => {
-            if (resp.bairro_id) {
-              bairroSelect.value = resp.bairro_id;
-            }
-          }, 500);
-        }, 500);
-      }
-    })
-    .catch(err => {
-      console.error(err);
-      alert("Erro ao buscar endereço pelo CEP.");
-    })
-    .finally(() => {
-      cepLoading.classList.add("d-none");
-    });
+    .catch(() => alert("Erro ao buscar o CEP."))
+    .finally(() => loading.classList.add("d-none"));
 }
 
+// Validação visual
+document.addEventListener("DOMContentLoaded", function () {
+  document.querySelector("form")?.addEventListener("submit", function (e) {
+    const rua = document.getElementById("rua");
+    const cidade = document.getElementById("cidade");
+    const estado = document.getElementById("estado");
+
+    [rua, cidade, estado].forEach(field => field.classList.remove("is-invalid"));
+
+    if (!rua.value || !cidade.value || !estado.value) {
+      e.preventDefault();
+      [rua, cidade, estado].forEach(field => {
+        if (!field.value) field.classList.add("is-invalid");
+      });
+      alert("Por favor, preencha os campos obrigatórios: rua, cidade e estado.");
+    }
+  });
+});
 </script>
+
+<style>
+.is-invalid {
+  border-color: #dc3545 !important;
+  box-shadow: 0 0 0 0.2rem rgba(220, 53, 69, 0.25);
+}
+</style>

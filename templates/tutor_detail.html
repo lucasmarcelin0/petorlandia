@@ -43,10 +43,7 @@
           <label class="form-label">Telefone</label>
           <input name="phone" class="form-control" value="{{ tutor.phone or '' }}">
         </div>
-        <div class="col-md-6">
-          <label class="form-label">Endereço</label>
-          <input name="address" class="form-control" value="{{ tutor.address or '' }}">
-        </div>
+
         <div class="col-md-4">
           <label class="form-label">CPF</label>
           <input name="cpf" class="form-control" value="{{ tutor.cpf or '' }}">
@@ -67,6 +64,12 @@
           <label class="form-label">Foto do Tutor</label>
           <input type="file" name="profile_photo" id="profile_photo" accept="image/*" class="form-control">
         </div>
+
+
+        <!-- ======================== Endereço ======================== -->
+        {% include "partials/endereco_form.html" with context %}
+
+
         <div class="col-12 d-grid">
           <button class="btn btn-primary">💾 Salvar Alterações</button>
         </div>
