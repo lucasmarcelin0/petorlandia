@@ -43,12 +43,6 @@
       <input type="tel" name="phone" class="form-control" placeholder="(99) 99999-9999" value="{{ tutor.phone if has_tutor else '' }}">
     </div>
 
-    <!-- Endereço -->
-    <div class="col-md-12">
-      <label class="form-label">Endereço</label>
-      <input type="text" name="address" class="form-control" placeholder="Rua, número, bairro, cidade" value="{{ tutor.address if has_tutor else '' }}">
-    </div>
-
     <!-- CPF e RG -->
     <div class="col-md-6">
       <label class="form-label">CPF</label>
@@ -75,15 +69,30 @@
       <input type="email" name="email" class="form-control" placeholder="exemplo@email.com" value="{{ tutor.email if has_tutor else '' }}" required>
     </div>
 
+    <!-- Endereço completo via CEP -->
+    <div class="col-md-12">
+      {% if has_tutor %}
+        {% set endereco = tutor.endereco %}
+      {% else %}
+        {% set endereco = None %}
+      {% endif %}
+      {% include "partials/endereco_form.html" with context %}
+    </div>
+
+
     <!-- Adicionado por e data -->
     {% if has_tutor and tutor.added_by %}
       <div class="col-md-12">
         <label class="form-label">👤 Adicionado por</label>
-        <input type="text" class="form-control" 
-              value="{{ tutor.added_by.name }} em {{ tutor.created_at.strftime('%d/%m/%Y às %H:%M') if tutor.created_at else 'data desconhecida' }}" 
+        <input type="text"
+              class="form-control"
+              data-nome="{{ tutor.added_by.name }}"
+              data-created-at="{{ tutor.created_at.isoformat() if tutor.created_at else '' }}"
+              id="created-info"
               disabled>
       </div>
     {% endif %}
+
 
 
     <!-- Botão -->
@@ -164,4 +173,33 @@
     });
   });
   {% endif %}
+
+
+
+
+
+
+
+
+  document.addEventListener('DOMContentLoaded', function () {
+    const el = document.getElementById('created-info');
+    if (el) {
+      const nome = el.dataset.nome;
+      const createdAtRaw = el.dataset.createdAt;
+
+      if (createdAtRaw) {
+        const dt = new Date(createdAtRaw);
+        const formatted = dt.toLocaleString("pt-BR", {
+          day: '2-digit',
+          month: '2-digit',
+          year: 'numeric',
+          hour: '2-digit',
+          minute: '2-digit'
+        });
+        el.value = `${nome} em ${formatted}`;
+      } else {
+        el.value = `${nome} (data desconhecida)`;
+      }
+    }
+  });
 </script>

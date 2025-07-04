@@ -129,9 +129,9 @@ from flask_session import Session
 from flask_login import LoginManager, login_required, current_user, logout_user
 
 try:
-    from models import db, Racao, TipoRacao, VacinaModelo, Vacina, ExameSolicitado, BlocoExames, ExameModelo, Clinica, ConsultaToken, Consulta, Medicamento, Prescricao, BlocoPrescricao, Veterinario, User, Animal, Message, Transaction, Review, Favorite, AnimalPhoto, Interest
+    from models import Endereco, db, Racao, TipoRacao, VacinaModelo, Vacina, ExameSolicitado, BlocoExames, ExameModelo, Clinica, ConsultaToken, Consulta, Medicamento, Prescricao, BlocoPrescricao, Veterinario, User, Animal, Message, Transaction, Review, Favorite, AnimalPhoto, Interest
 except ImportError:
-    from .models import db, Racao, TipoRacao, VacinaModelo, Vacina, ExameSolicitado, BlocoExames, ExameModelo, Clinica, ConsultaToken, Consulta, Medicamento, Prescricao, BlocoPrescricao, Veterinario, User, Animal, Message, Transaction, Review, Favorite, AnimalPhoto, Interest
+    from .models import Endereco, db, Racao, TipoRacao, VacinaModelo, Vacina, ExameSolicitado, BlocoExames, ExameModelo, Clinica, ConsultaToken, Consulta, Medicamento, Prescricao, BlocoPrescricao, Veterinario, User, Animal, Message, Transaction, Review, Favorite, AnimalPhoto, Interest
                     
 
 from wtforms.fields import SelectField
@@ -1033,18 +1033,14 @@ def tutor_detail(tutor_id):
     return render_template('tutor_detail.html', tutor=tutor, animais=animais)
 
 
-# ———  BUSCAR / CRIAR TUTORES  ——————————————————————————
 @app.route('/tutores', methods=['GET', 'POST'])
 @login_required
 def tutores():
-    """Página de busca de tutor + criação rápida."""
     if current_user.worker not in ['veterinario', 'colaborador']:
         flash('Apenas veterinários ou colaboradores podem acessar esta página.', 'danger')
         return redirect(url_for('index'))
 
-
     if request.method == 'POST':
-        # Pega os campos principais
         name  = request.form.get('tutor_name') or request.form.get('name')
         email = request.form.get('tutor_email') or request.form.get('email')
 
@@ -1052,39 +1048,25 @@ def tutores():
             flash('Nome e e‑mail são obrigatórios.', 'warning')
             return redirect(url_for('tutores'))
 
-        # Evita duplicidade por e‑mail
         if User.query.filter_by(email=email).first():
             flash('Já existe um tutor com esse e‑mail.', 'warning')
             return redirect(url_for('tutores'))
-
-        print(f"[DEBUG] current_user.clinica_id: {current_user.clinica_id}")
-
 
         novo = User(
             name=name.strip(),
             email=email.strip(),
             role='adotante',
-            clinica_id=current_user.clinica_id,  # 🛠️ já no construtor
-            added_by=current_user  # ✅ define quem criou esse usuário
+            clinica_id=current_user.clinica_id,
+            added_by=current_user
         )
-        novo.set_password('123456789')  # senha padrão
+        novo.set_password('123456789')
 
+        novo.phone = (request.form.get('tutor_phone') or request.form.get('phone') or '').strip() or None
+        novo.address = None  # ❌ campo legado, pode ser mantido vazio
+        novo.cpf = (request.form.get('tutor_cpf') or request.form.get('cpf') or '').strip() or None
+        novo.rg = (request.form.get('tutor_rg') or request.form.get('rg') or '').strip() or None
 
-        # Tenta pegar campos extras
-        phone = request.form.get('tutor_phone') or request.form.get('phone')
-        address = request.form.get('tutor_address') or request.form.get('address')
-        cpf = request.form.get('tutor_cpf') or request.form.get('cpf')
-        rg = request.form.get('tutor_rg') or request.form.get('rg')
         date_str = request.form.get('tutor_date_of_birth') or request.form.get('date_of_birth')
-
-        # Salva se existirem
-        novo.phone = phone.strip() if phone else None
-        novo.address = address.strip() if address else None
-        novo.cpf = cpf.strip() if cpf else None
-        novo.rg = rg.strip() if rg else None
-
-
-
         if date_str:
             try:
                 novo.date_of_birth = datetime.strptime(date_str.strip(), '%Y-%m-%d').date()
@@ -1092,7 +1074,30 @@ def tutores():
                 flash('Data de nascimento inválida. Use o formato AAAA-MM-DD.', 'danger')
                 return redirect(url_for('tutores'))
 
-        # Tenta salvar a imagem se foi enviada
+        # 📍 Endereço completo (novo)
+        cep = request.form.get('cep')
+        rua = request.form.get('rua')
+        numero = request.form.get('numero')
+        complemento = request.form.get('complemento')
+        bairro = request.form.get('bairro')
+        cidade = request.form.get('cidade')
+        estado = request.form.get('estado')
+
+        if cep and rua and cidade and estado:
+            endereco = Endereco(
+                cep=cep,
+                rua=rua,
+                numero=numero,
+                complemento=complemento,
+                bairro=bairro,
+                cidade=cidade,
+                estado=estado
+            )
+            db.session.add(endereco)
+            db.session.flush()
+            novo.endereco_id = endereco.id
+
+        # 📸 Foto
         if 'image' in request.files and request.files['image'].filename:
             file = request.files['image']
             filename = secure_filename(file.filename)
@@ -1100,15 +1105,14 @@ def tutores():
             file.save(path)
             novo.profile_photo = f"/static/uploads/{filename}"
 
-        # Salva no banco
         db.session.add(novo)
         db.session.commit()
 
         flash('Tutor criado com sucesso!', 'success')
         return redirect(url_for('ficha_tutor', tutor_id=novo.id))
 
-    # — GET — apenas exibe a página
-    # 🔥 Buscar tutores associados à clínica
+    # — GET —
+    tutores_adicionados = []
     if current_user.clinica_id:
         tutores_adicionados = User.query\
             .filter(
@@ -1117,10 +1121,6 @@ def tutores():
             )\
             .order_by(User.name.asc())\
             .all()
-    else:
-        tutores_adicionados = []
-
-
 
     return render_template('tutores.html', tutores_adicionados=tutores_adicionados)
 
@@ -1185,18 +1185,27 @@ def update_tutor(user_id):
         flash('Apenas veterinários podem editar dados do tutor.', 'danger')
         return redirect(request.referrer or url_for('index'))
 
-    nome = request.form.get('name')  # 🟢 Nome no formulário atual
+    # Dados básicos
+    nome = request.form.get('name')
     if not nome:
         flash('O nome do tutor é obrigatório.', 'danger')
         return redirect(request.referrer or url_for('index'))
 
     user.name = nome
-    user.email = request.form.get('email')
-    user.phone = request.form.get('phone')
-    user.address = request.form.get('address')  # 🟢 campo do HTML
-    user.cpf = request.form.get('cpf')
-    user.rg = request.form.get('rg')
 
+    email = request.form.get('email')
+    if email: user.email = email
+
+    phone = request.form.get('phone')
+    if phone: user.phone = phone
+
+    cpf = request.form.get('cpf')
+    if cpf: user.cpf = cpf
+
+    rg = request.form.get('rg')
+    if rg: user.rg = rg
+
+    # 📅 Data de nascimento
     date_str = request.form.get('date_of_birth')
     if date_str:
         try:
@@ -1205,12 +1214,39 @@ def update_tutor(user_id):
             flash('Data de nascimento inválida. Use o formato correto.', 'danger')
             return redirect(request.referrer or url_for('index'))
 
+    # 📸 Foto de perfil
     if 'profile_photo' in request.files and request.files['profile_photo'].filename != '':
         file = request.files['profile_photo']
         original_filename = secure_filename(file.filename)
         filename = f"{uuid.uuid4().hex}_{original_filename}"
         image_url = upload_to_s3(file, filename, folder="tutors")
         user.profile_photo = image_url
+
+    # 📍 Endereço (usando nova estrutura direta no tutor)
+    cep = request.form.get('cep')
+    rua = request.form.get('rua')
+    numero = request.form.get('numero')
+    complemento = request.form.get('complemento')
+    bairro = request.form.get('bairro')
+    cidade = request.form.get('cidade')
+    estado = request.form.get('estado')
+
+    if cep and rua and cidade and estado:
+        if user.endereco:
+            endereco = user.endereco
+        else:
+            endereco = Endereco()
+            db.session.add(endereco)
+            db.session.flush()  # necessário para obter o ID
+            user.endereco_id = endereco.id
+
+        endereco.cep = cep
+        endereco.rua = rua
+        endereco.numero = numero
+        endereco.complemento = complemento
+        endereco.bairro = bairro
+        endereco.cidade = cidade
+        endereco.estado = estado
 
     try:
         db.session.commit()
@@ -2304,3 +2340,40 @@ if __name__ == "__main__":
     app.run(host="0.0.0.0", port=port)
 
 
+
+
+
+
+
+
+
+
+
+@app.route('/teste_endereco', methods=['GET', 'POST'])
+def teste_endereco():
+    endereco = None
+
+    if request.method == 'POST':
+        cep = request.form.get('cep')
+        rua = request.form.get('rua')
+        numero = request.form.get('numero')
+        complemento = request.form.get('complemento')
+        bairro = request.form.get('bairro')
+        cidade = request.form.get('cidade')
+        estado = request.form.get('estado')
+
+        endereco = Endereco(
+            cep=cep,
+            rua=rua,
+            numero=numero,
+            complemento=complemento,
+            bairro=bairro,
+            cidade=cidade,
+            estado=estado
+        )
+        db.session.add(endereco)
+        db.session.commit()
+        flash('Endereço salvo com sucesso!', 'success')
+        return redirect(url_for('teste_endereco'))
+
+    return render_template('teste_endereco.html', endereco=endereco)
