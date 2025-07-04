@@ -114,6 +114,15 @@
                 class="btn btn-outline-success rounded-pill w-100">
                 🩺 Iniciar Consulta
               </a>
+              <a href="{{ url_for('ficha_animal', animal_id=animal.id) }}"
+                class="btn btn-outline-primary rounded-pill w-100 mb-2">
+                📄 Ficha do Animal
+              </a>
+
+              <a href="{{ url_for('ficha_tutor', tutor_id=animal.owner.id) }}"
+                class="btn btn-outline-secondary rounded-pill w-100">
+                👤 Ficha do Tutor
+              </a>
               {% endif %}
             </div>
             <div class="modal-footer">

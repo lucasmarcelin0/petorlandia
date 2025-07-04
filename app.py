@@ -2231,7 +2231,8 @@ def novo_animal():
             clinica_id=current_user.clinica_id,  # 🆕 adicionando a clínica
             status='disponível',
             image=image_path,
-            is_alive=True  # 👈 garante que o animal é salvo como vivo
+            is_alive=True,  # 👈 garante que o animal é salvo como vivo
+            modo='adotado',  # 👈 Aqui está a correção
 
         )
         db.session.add(animal)
