@@ -919,6 +919,7 @@ def consulta_direct(animal_id):
     marcas_existentes = sorted(set([t.marca for t in tipos_racao if t.marca]))
     linhas_existentes = sorted(set([t.linha for t in tipos_racao if t.linha]))
 
+    animal = Animal.query.get_or_404(animal_id)
 
     return render_template('consulta_qr.html',
                            animal=animal,
@@ -1857,7 +1858,7 @@ def salvar_prescricoes_lote(consulta_id):
 
     for item in novas_prescricoes:
         nova = Prescricao(
-            consulta_id=consulta.id,
+            animal_id=consulta.animal_id,
             medicamento=item.get('nome'),
             dosagem=item.get('dosagem'),
             frequencia=item.get('frequencia'),
@@ -1888,13 +1889,13 @@ def salvar_bloco_prescricao(consulta_id):
         return jsonify({'success': False, 'message': 'Nenhuma prescrição recebida.'}), 400
 
     # ⬇️ Aqui é onde a instrução geral precisa ser usada
-    bloco = BlocoPrescricao(consulta_id=consulta.id, instrucoes_gerais=instrucoes)
+    bloco = BlocoPrescricao(animal_id=consulta.animal_id, instrucoes_gerais=instrucoes)
     db.session.add(bloco)
     db.session.flush()  # Garante o ID do bloco
 
     for item in lista_prescricoes:
         nova = Prescricao(
-            consulta_id=consulta.id,
+            animal_id=consulta.animal_id,
             bloco_id=bloco.id,
             medicamento=item.get('medicamento'),
             dosagem=item.get('dosagem'),
@@ -1917,12 +1918,12 @@ def deletar_bloco_prescricao(bloco_id):
         flash('Apenas veterinários podem excluir prescrições.', 'danger')
         return redirect(request.referrer or url_for('index'))
 
-    consulta_id = bloco.consulta_id
+    animal_id = bloco.animal_id
     db.session.delete(bloco)
     db.session.commit()
     flash('Bloco de prescrição excluído com sucesso!', 'info')
-    return redirect(url_for('consulta_direct',
-                        animal_id=Consulta.query.get(consulta_id).animal_id))
+    return redirect(url_for('consulta_direct', animal_id=animal_id))
+
 
 @app.route('/bloco_prescricao/<int:bloco_id>/editar', methods=['GET'])
 @login_required
@@ -1954,7 +1955,7 @@ def atualizar_bloco_prescricao(bloco_id):
     # Adiciona os novos medicamentos ao bloco
     for item in novos_medicamentos:
         nova = Prescricao(
-            consulta_id=bloco.consulta_id,
+            animal_id=bloco.animal_id,
             bloco_id=bloco.id,
             medicamento=item.get('medicamento'),
             dosagem=item.get('dosagem'),
@@ -1977,8 +1978,7 @@ def imprimir_bloco_prescricao(bloco_id):
         flash('Apenas veterinários podem imprimir prescrições.', 'danger')
         return redirect(url_for('index'))
 
-    consulta = bloco.consulta
-    animal = consulta.animal
+    animal = bloco.animal
     tutor = animal.owner
 
     # Pegando a clínica do veterinário (se houver)
@@ -1989,21 +1989,21 @@ def imprimir_bloco_prescricao(bloco_id):
     return render_template(
         'imprimir_bloco.html',
         bloco=bloco,
-        consulta=consulta,
+        consulta = animal.consultas[-1] if animal.consultas else None,
         animal=animal,
         tutor=tutor,
         clinica=clinica  # ✅ incluído
     )
 
 
-@app.route('/consulta/<int:consulta_id>/bloco_exames', methods=['POST'])
+@app.route('/animal/<int:animal_id>/bloco_exames', methods=['POST'])
 @login_required
-def salvar_bloco_exames(consulta_id):
+def salvar_bloco_exames(animal_id):
     data = request.get_json()
     exames_data = data.get('exames', [])
     observacoes_gerais = data.get('observacoes_gerais', '')
 
-    bloco = BlocoExames(consulta_id=consulta_id, observacoes_gerais=observacoes_gerais)
+    bloco = BlocoExames(animal_id=animal_id, observacoes_gerais=observacoes_gerais)
     db.session.add(bloco)
     db.session.flush()  # Garante que bloco.id esteja disponível
 
@@ -2019,6 +2019,7 @@ def salvar_bloco_exames(consulta_id):
     return jsonify({'success': True})
 
 
+
 @app.route('/buscar_exames')
 @login_required
 def buscar_exames():
@@ -2031,12 +2032,12 @@ def buscar_exames():
 @login_required
 def imprimir_bloco_exames(bloco_id):
     bloco = BlocoExames.query.get_or_404(bloco_id)
+    animal = bloco.animal
+    tutor = animal.owner
 
-    # Corrige o acesso à clínica via modelo Veterinario
-    veterinario = Veterinario.query.filter_by(user_id=bloco.consulta.created_by).first()
-    clinica = veterinario.clinica if veterinario else Clinica.query.first()
+    clinica = current_user.veterinario.clinica if current_user.veterinario else Clinica.query.first()
 
-    return render_template('imprimir_exames.html', bloco=bloco, clinica=clinica)
+    return render_template('imprimir_exames.html', bloco=bloco, animal=animal, tutor=tutor, clinica=clinica)
 
 
 @app.route('/bloco_exames/<int:bloco_id>/deletar', methods=['POST'])
@@ -2048,12 +2049,12 @@ def deletar_bloco_exames(bloco_id):
         flash('Apenas veterinários podem excluir blocos de exames.', 'danger')
         return redirect(request.referrer or url_for('index'))
 
-    consulta_id = bloco.consulta_id
+    animal_id = bloco.animal_id
     db.session.delete(bloco)
     db.session.commit()
 
     flash('Bloco de exames excluído com sucesso!', 'info')
-    return redirect(url_for('consulta_direct', animal_id=Consulta.query.get(consulta_id).animal_id))
+    return redirect(url_for('consulta_direct', animal_id=animal_id))
 
 
 

@@ -195,6 +195,7 @@ class Animal(db.Model):
 
 
 
+
 # Transações
 class Transaction(db.Model):
     __table_args__ = {'extend_existing': True}
@@ -280,7 +281,6 @@ class Consulta(db.Model):
     # Relacionamentos (se quiser acessar animal ou vet diretamente)
     animal = db.relationship('Animal', backref=db.backref('consultas', cascade='all, delete-orphan'))
     veterinario = db.relationship('User', backref='consultas', foreign_keys=[created_by])
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
 
 
@@ -291,20 +291,21 @@ class BlocoPrescricao(db.Model):
     __tablename__ = 'bloco_prescricao'
 
     id = db.Column(db.Integer, primary_key=True)
-    consulta_id = db.Column(db.Integer, db.ForeignKey('consulta.id'), nullable=False)
     data_criacao = db.Column(db.DateTime, default=datetime.utcnow)
 
-    consulta = db.relationship('Consulta', backref=db.backref('blocos_prescricao', cascade='all, delete-orphan', lazy=True))
     prescricoes = db.relationship('Prescricao', backref='bloco', cascade='all, delete-orphan')
     instrucoes_gerais = db.Column(db.Text)
 
+
+    # em BlocoPrescricao
+    animal_id = db.Column(db.Integer, db.ForeignKey('animal.id'), nullable=False)
+    animal = db.relationship('Animal', backref='blocos_prescricao')  # em BlocoPrescricao
 
 class Prescricao(db.Model):
     __tablename__ = 'prescricao'
 
     id = db.Column(db.Integer, primary_key=True)
-    consulta_id = db.Column(db.Integer, db.ForeignKey('consulta.id'), nullable=False)
-    bloco_id = db.Column(db.Integer, db.ForeignKey('bloco_prescricao.id'))  # 🆕
+    bloco_id = db.Column(db.Integer, db.ForeignKey('bloco_prescricao.id'))  # pode manter se quiser blocos
 
     medicamento = db.Column(db.String(100), nullable=False)
     dosagem = db.Column(db.String(100))
@@ -313,7 +314,9 @@ class Prescricao(db.Model):
     observacoes = db.Column(db.Text)
     data_prescricao = db.Column(db.DateTime, default=datetime.utcnow)
 
-    consulta = db.relationship('Consulta', backref=db.backref('prescricoes', cascade='all, delete-orphan', lazy=True))
+    # em Prescricao
+    animal_id = db.Column(db.Integer, db.ForeignKey('animal.id'), nullable=False)
+    animal = db.relationship('Animal', backref='prescricoes')  # em Prescricao
 
     def __repr__(self):
         return f'<Prescrição {self.medicamento} para Consulta {self.consulta_id}>'
@@ -380,11 +383,11 @@ class ExameModelo(db.Model):
 
 class BlocoExames(db.Model):
     id = db.Column(db.Integer, primary_key=True)
-    consulta_id = db.Column(db.Integer, db.ForeignKey('consulta.id'), nullable=False)
+    animal_id = db.Column(db.Integer, db.ForeignKey('animal.id'), nullable=False)  # <- novo campo
     observacoes_gerais = db.Column(db.Text)
     data_criacao = db.Column(db.DateTime, default=datetime.utcnow)
 
-    consulta = db.relationship('Consulta', backref=db.backref('blocos_exames', cascade='all, delete-orphan', lazy=True))
+    animal = db.relationship('Animal', backref=db.backref('blocos_exames', cascade='all, delete-orphan', lazy=True))
     exames = db.relationship('ExameSolicitado', backref='bloco', cascade='all, delete-orphan')
 
 class ExameSolicitado(db.Model):

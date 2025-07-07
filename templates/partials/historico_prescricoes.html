@@ -1,9 +1,9 @@
-{% if consulta.blocos_prescricao %}
+{% if animal.blocos_prescricao %}
 <div class="card mb-3">
   <div class="card-body">
     <h5 class="card-title">📜 Histórico de Prescrições</h5>
 
-    {% for bloco in consulta.blocos_prescricao|reverse %}
+    {% for bloco in animal.blocos_prescricao|reverse %}
     <div class="border rounded p-3 mb-3">
       <h6 class="text-muted">Prescrição feita em {{ bloco.data_criacao.strftime('%d/%m/%Y %H:%M') }}</h6>
 

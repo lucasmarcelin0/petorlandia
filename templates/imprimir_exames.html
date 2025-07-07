@@ -2,7 +2,7 @@
 <html lang="pt-br">
 <head>
   <meta charset="UTF-8">
-  <title>Exames de {{ bloco.consulta.animal.name }}</title>
+  <title>Exames de {{ animal.name }}</title>
   <style>
     body {
       font-family: 'Arial', sans-serif;
@@ -110,8 +110,8 @@
   <!-- Botões -->
   <div class="no-print" style="margin-bottom: 1em;">
     <button onclick="window.print()">🖨️ Imprimir</button>
-    <a href="{{ url_for('consulta_direct', animal_id=bloco.consulta.animal.id) }}"
-    style="margin-left: 15px;">← Voltar</a>
+    <a href="{{ url_for('consulta_direct', animal_id=animal.id) }}"
+       style="margin-left: 15px;">← Voltar</a>
   </div>
 
   {% if clinica.logotipo %}
@@ -122,60 +122,57 @@
   </div>
   {% endif %}
 
-
-
   <h2>Solicitação de Exames</h2>
 
-<div class="top-info">
-  {% if current_user.name or (current_user.veterinario and current_user.veterinario.crmv) %}
-    <div class="info-box">
-      <strong>Veterinário:</strong><br>
-      {% if current_user.name %}
-        {{ current_user.name }}<br>
-      {% endif %}
-      {% if current_user.veterinario and current_user.veterinario.crmv %}
-        CRMV: {{ current_user.veterinario.crmv }}
-      {% endif %}
-    </div>
-  {% endif %}
+  <div class="top-info">
+    {% if current_user.name or (current_user.veterinario and current_user.veterinario.crmv) %}
+      <div class="info-box">
+        <strong>Veterinário:</strong><br>
+        {% if current_user.name %}
+          {{ current_user.name }}<br>
+        {% endif %}
+        {% if current_user.veterinario and current_user.veterinario.crmv %}
+          CRMV: {{ current_user.veterinario.crmv }}
+        {% endif %}
+      </div>
+    {% endif %}
 
-  {% if bloco.consulta.animal.name or bloco.consulta.animal.species or bloco.consulta.animal.breed or bloco.consulta.animal.sex or bloco.consulta.animal.microchip_number %}
-    <div class="info-box">
-      <strong>Animal:</strong><br>
-      {% if bloco.consulta.animal.name %}
-        Nome: {{ bloco.consulta.animal.name }}<br>
-      {% endif %}
-      {% if bloco.consulta.animal.species %}
-        Espécie: {{ bloco.consulta.animal.species }}<br>
-      {% endif %}
-      {% if bloco.consulta.animal.breed %}
-        Raça: {{ bloco.consulta.animal.breed }}<br>
-      {% endif %}
-      {% if bloco.consulta.animal.sex %}
-        Sexo: {{ bloco.consulta.animal.sex }}<br>
-      {% endif %}
-      {% if bloco.consulta.animal.microchip_number %}
-        Microchip: {{ bloco.consulta.animal.microchip_number }}
-      {% endif %}
-    </div>
-  {% endif %}
+    {% if animal.name or animal.species or animal.breed or animal.sex or animal.microchip_number %}
+      <div class="info-box">
+        <strong>Animal:</strong><br>
+        {% if animal.name %}
+          Nome: {{ animal.name }}<br>
+        {% endif %}
+        {% if animal.species %}
+          Espécie: {{ animal.species }}<br>
+        {% endif %}
+        {% if animal.breed %}
+          Raça: {{ animal.breed }}<br>
+        {% endif %}
+        {% if animal.sex %}
+          Sexo: {{ animal.sex }}<br>
+        {% endif %}
+        {% if animal.microchip_number %}
+          Microchip: {{ animal.microchip_number }}
+        {% endif %}
+      </div>
+    {% endif %}
 
-  {% if bloco.consulta.animal.owner.name or bloco.consulta.animal.owner.cpf or bloco.consulta.animal.owner.address %}
-    <div class="info-box">
-      <strong>Tutor:</strong><br>
-      {% if bloco.consulta.animal.owner.name %}
-        Nome: {{ bloco.consulta.animal.owner.name }}<br>
-      {% endif %}
-      {% if bloco.consulta.animal.owner.cpf %}
-        CPF: {{ bloco.consulta.animal.owner.cpf }}<br>
-      {% endif %}
-      {% if bloco.consulta.animal.owner.address %}
-        Endereço: {{ bloco.consulta.animal.owner.address }}
-      {% endif %}
-    </div>
-  {% endif %}
-</div>
-
+    {% if tutor.name or tutor.cpf or tutor.address %}
+      <div class="info-box">
+        <strong>Tutor:</strong><br>
+        {% if tutor.name %}
+          Nome: {{ tutor.name }}<br>
+        {% endif %}
+        {% if tutor.cpf %}
+          CPF: {{ tutor.cpf }}<br>
+        {% endif %}
+        {% if tutor.address %}
+          Endereço: {{ tutor.address }}
+        {% endif %}
+      </div>
+    {% endif %}
+  </div>
 
   <div class="section-title">Exames Solicitados:</div>
   <div class="exames">
@@ -203,4 +200,5 @@
   </footer>
 
 </body>
+
 </html>
