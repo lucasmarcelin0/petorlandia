@@ -2,19 +2,19 @@
 <html lang="pt-br">
 <head>
   <meta charset="UTF-8">
-  <title>Receita de {{ bloco.consulta.animal.name }}</title>
+  <title>Receita de {{ bloco.animal.name }}</title>
   <style>
     .assinaturas {
-    display: flex;
-    justify-content: space-between;
-    margin-top: 80px;
-    gap: 40px;
-  }
+      display: flex;
+      justify-content: space-between;
+      margin-top: 80px;
+      gap: 40px;
+    }
 
-  .assinaturas > div {
-    flex: 1;
-    text-align: center;
-  }
+    .assinaturas > div {
+      flex: 1;
+      text-align: center;
+    }
 
     body {
       font-family: 'Arial', sans-serif;
@@ -70,7 +70,7 @@
       margin-bottom: 0.5em;
     }
 
-    .exames {
+    .prescricao {
       border: 1px dashed #666;
       padding: 15px;
       background-color: #fdfdfd;
@@ -79,15 +79,15 @@
       margin-bottom: 1.5em;
     }
 
-    .exame-item {
+    .prescricao-item {
       margin-bottom: 12px;
     }
 
-    .exame-item:last-child {
+    .prescricao-item:last-child {
       margin-bottom: 0;
     }
 
-    .exame-item strong {
+    .prescricao-item strong {
       font-size: 13pt;
     }
 
@@ -99,73 +99,59 @@
       padding-top: 10px;
     }
 
-    .assinatura {
-      margin-top: 60px;
-      text-align: center;
-    }
-
-    .assinatura span {
-      display: block;
-      margin-top: 5px;
-    }
-
     @media print {
       .no-print {
         display: none !important;
       }
     }
   </style>
-
 </head>
 <body>
 
-  <!-- Botões de ação -->
-  <div class="no-print" style="margin-bottom: 1em;">
-    <button onclick="window.print()">🖨️ Imprimir</button>
-    <a href="{{ url_for('consulta_direct', animal_id=bloco.consulta.animal.id) }}"
-    style="margin-left: 15px;">← Voltar</a>
+<!-- Botões -->
+<div class="no-print" style="margin-bottom: 1em;">
+  <button onclick="window.print()">🖨️ Imprimir</button>
+  <a href="{{ url_for('consulta_direct', animal_id=bloco.animal.id) }}" style="margin-left: 15px;">← Voltar</a>
+</div>
+
+<!-- Cabeçalho com logo -->
+{% if clinica.logotipo %}
+<div class="header">
+  <img src="{{ url_for('static', filename='uploads/clinicas/' + clinica.logotipo) }}" alt="Logotipo da clínica">
+  <div class="clinica-nome">{{ clinica.nome }}</div>
+  <img src="{{ url_for('static', filename='uploads/clinicas/' + clinica.logotipo) }}" alt="Logotipo da clínica">
+</div>
+{% endif %}
+
+<h2>Receita de Controle Especial</h2>
+
+<!-- Informações -->
+<div class="top-info">
+  <div class="info-box">
+    <strong>Veterinário:</strong><br>
+    {{ current_user.name }}<br>
+    CRMV: {{ current_user.veterinario.crmv if current_user.veterinario else '—' }}
   </div>
 
-  {% if clinica.logotipo %}
-  <div class="header">
-    <img src="{{ url_for('static', filename='uploads/clinicas/' + clinica.logotipo) }}" alt="Logotipo da clínica">
-    <div class="clinica-nome">{{ clinica.nome }}</div>
-    <img src="{{ url_for('static', filename='uploads/clinicas/' + clinica.logotipo) }}" alt="Logotipo da clínica">
-  </div>
-  {% endif %}
-
-  </div>
-
-
-  <h2>Receita de Controle Especial</h2>
-
-  <!-- Informações superiores -->
-  <div class="top-info">
-    <div class="info-box">
-      <strong>Veterinário:</strong><br>
-      {{ current_user.name }}<br>
-      CRMV: {{ current_user.veterinario.crmv if current_user.veterinario else '—' }}
-    </div>
-
-    <div class="info-box">
-      <strong>Animal:</strong><br>
-      Nome: {{ bloco.consulta.animal.name }}<br>
-      Espécie: {{ bloco.consulta.animal.species }}<br>
-      {% if bloco.consulta.animal.breed %}Raça: {{ bloco.consulta.animal.breed }}<br>{% endif %}
-      {% if bloco.consulta.animal.sex %}Sexo: {{ bloco.consulta.animal.sex }}<br>{% endif %}
-      {% if bloco.consulta.animal.age %}Idade: {{ bloco.consulta.animal.age }}<br>{% endif %}
-      {% if bloco.consulta.animal.microchip_number %}Microchip: {{ bloco.consulta.animal.microchip_number }}{% endif %}
-    </div>
-
-    <div class="info-box">
-      <strong>Tutor:</strong><br>
-      Nome: {{ bloco.consulta.animal.owner.name }}<br>
-      {% if bloco.consulta.animal.owner.cpf %}CPF: {{ bloco.consulta.animal.owner.cpf }}<br>{% endif %}
-      {% if bloco.consulta.animal.owner.address %}Endereço: {{ bloco.consulta.animal.owner.address }}{% endif %}
-    </div>
+  <div class="info-box">
+    <strong>Animal:</strong><br>
+    Nome: {{ bloco.animal.name }}<br>
+    Espécie: {{ bloco.animal.species }}<br>
+    {% if bloco.animal.breed %}Raça: {{ bloco.animal.breed }}<br>{% endif %}
+    {% if bloco.animal.sex %}Sexo: {{ bloco.animal.sex }}<br>{% endif %}
+    {% if bloco.animal.age %}Idade: {{ bloco.animal.age }}<br>{% endif %}
+    {% if bloco.animal.microchip_number %}Microchip: {{ bloco.animal.microchip_number }}{% endif %}
   </div>
 
-<!-- Bloco de prescrição -->
+  <div class="info-box">
+    <strong>Tutor:</strong><br>
+    Nome: {{ bloco.animal.owner.name }}<br>
+    {% if bloco.animal.owner.cpf %}CPF: {{ bloco.animal.owner.cpf }}<br>{% endif %}
+    {% if bloco.animal.owner.address %}Endereço: {{ bloco.animal.owner.address }}{% endif %}
+  </div>
+</div>
+
+<!-- Prescrições -->
 <div class="section-title">Prescrição:</div>
 <div class="prescricao">
   {% for item in bloco.prescricoes %}
@@ -181,31 +167,28 @@
   {% endfor %}
 </div>
 
-
-
 <!-- Instruções Gerais -->
 {% if bloco.instrucoes_gerais %}
   <div class="section-title">Instruções Gerais:</div>
   <p>{{ bloco.instrucoes_gerais }}</p>
 {% endif %}
 
-
-  <!-- Assinaturas -->
-  <div class="assinaturas">
-    <div>
-      ___________________________________________<br>
-      {{ current_user.name }}<br>
-      CRMV: {{ current_user.veterinario.crmv if current_user.veterinario else '—' }}
-    </div>
-
+<!-- Assinatura -->
+<div class="assinaturas">
+  <div>
+    ___________________________________________<br>
+    {{ current_user.name }}<br>
+    CRMV: {{ current_user.veterinario.crmv if current_user.veterinario else '—' }}
   </div>
+</div>
 
-  <!-- Rodapé -->
-  <footer>
-    {{ clinica.nome }} – {{ clinica.endereco }}<br>
-    {% if clinica.telefone %}Telefone: {{ clinica.telefone }} – {% endif %}
-    {% if clinica.email %}Email: {{ clinica.email }} – {% endif %}
-    {% if clinica.cnpj %}CNPJ: {{ clinica.cnpj }}{% endif %}
-  </footer>
+<!-- Rodapé -->
+<footer>
+  {{ clinica.nome }} – {{ clinica.endereco }}<br>
+  {% if clinica.telefone %}Telefone: {{ clinica.telefone }} – {% endif %}
+  {% if clinica.email %}Email: {{ clinica.email }} – {% endif %}
+  {% if clinica.cnpj %}CNPJ: {{ clinica.cnpj }}{% endif %}
+</footer>
+
 </body>
 </html>
