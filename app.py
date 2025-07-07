@@ -771,26 +771,27 @@ def plano_saude_overview():
 @login_required
 def ficha_animal(animal_id):
     animal = Animal.query.get_or_404(animal_id)
-    tutor = animal.owner  # ✅ Acesso direto ao tutor
+    tutor = animal.owner
 
     consultas = (Consulta.query
                  .filter_by(animal_id=animal.id, status='finalizada')
                  .order_by(Consulta.created_at.desc())
                  .all())
 
-    blocos_prescricao = BlocoPrescricao.query.join(Consulta).filter(Consulta.animal_id == animal.id).all()
-    blocos_exames = BlocoExames.query.join(Consulta).filter(Consulta.animal_id == animal.id).all()
+    blocos_prescricao = BlocoPrescricao.query.filter_by(animal_id=animal.id).all()
+    blocos_exames = BlocoExames.query.filter_by(animal_id=animal.id).all()
     vacinas = Vacina.query.filter_by(animal_id=animal.id).all()
 
     return render_template(
         'ficha_animal.html',
         animal=animal,
-        tutor=tutor,  # ✅ Agora disponível no template
+        tutor=tutor,
         consultas=consultas,
         blocos_prescricao=blocos_prescricao,
         blocos_exames=blocos_exames,
         vacinas=vacinas
     )
+
 
 
 
