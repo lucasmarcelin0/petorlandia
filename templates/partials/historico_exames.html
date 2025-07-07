@@ -4,7 +4,7 @@
 <div class="container py-4">
   <h2 class="mb-4">📋 Histórico e Edição de Exames</h2>
 
-  {% for bloco in consulta.blocos_exames|reverse %}
+{% for bloco in animal.blocos_exames|reverse %}
   <div class="border p-3 mb-4 bg-light rounded" id="bloco-{{ bloco.id }}">
     <div class="d-flex justify-content-between align-items-center mb-2">
       <div>

@@ -152,7 +152,7 @@
 
     const obsGerais = document.getElementById('observacoes-exames')?.value || '';
 
-    fetch(`/consulta/{{ consulta.id }}/bloco_exames`, {
+    fetch(`/animal/{{ animal.id }}/bloco_exames`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json'
