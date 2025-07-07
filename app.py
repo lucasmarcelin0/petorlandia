@@ -1177,70 +1177,65 @@ def buscar_animais():
 
 
 
+
+
 @app.route('/update_tutor/<int:user_id>', methods=['POST'])
 @login_required
 def update_tutor(user_id):
     user = User.query.get_or_404(user_id)
 
+    # 🔐 Permissão: somente veterinários
     if current_user.worker != 'veterinario':
         flash('Apenas veterinários podem editar dados do tutor.', 'danger')
         return redirect(request.referrer or url_for('index'))
 
-    # Dados básicos
-    nome = request.form.get('name')
-    if not nome:
-        flash('O nome do tutor é obrigatório.', 'danger')
-        return redirect(request.referrer or url_for('index'))
+    # 🧪 Debug: imprime o formulário recebido
+    print("📥 FORM DATA RECEBIDA:")
+    for campo in ["cep", "rua", "numero", "complemento", "bairro", "cidade", "estado"]:
+        print(f"→ {campo}: {request.form.get(campo)}")
 
-    user.name = nome
-
-    email = request.form.get('email')
-    if email: user.email = email
-
-    phone = request.form.get('phone')
-    if phone: user.phone = phone
-
-    cpf = request.form.get('cpf')
-    if cpf: user.cpf = cpf
-
-    rg = request.form.get('rg')
-    if rg: user.rg = rg
+    # 📋 Dados básicos
+    user.name = request.form.get("name") or user.name
+    user.email = request.form.get("email") or user.email
+    user.phone = request.form.get("phone") or user.phone
+    user.cpf = request.form.get("cpf") or user.cpf
+    user.rg = request.form.get("rg") or user.rg
 
     # 📅 Data de nascimento
-    date_str = request.form.get('date_of_birth')
+    date_str = request.form.get("date_of_birth")
     if date_str:
         try:
-            user.date_of_birth = datetime.strptime(date_str, '%Y-%m-%d').date()
+            user.date_of_birth = datetime.strptime(date_str, "%Y-%m-%d").date()
         except ValueError:
-            flash('Data de nascimento inválida. Use o formato correto.', 'danger')
-            return redirect(request.referrer or url_for('index'))
+            flash("Data de nascimento inválida. Use o formato correto.", "danger")
+            return redirect(request.referrer or url_for("index"))
 
     # 📸 Foto de perfil
     if 'profile_photo' in request.files and request.files['profile_photo'].filename != '':
         file = request.files['profile_photo']
-        original_filename = secure_filename(file.filename)
-        filename = f"{uuid.uuid4().hex}_{original_filename}"
+        filename = f"{uuid.uuid4().hex}_{secure_filename(file.filename)}"
         image_url = upload_to_s3(file, filename, folder="tutors")
         user.profile_photo = image_url
 
-    # 📍 Endereço (usando nova estrutura direta no tutor)
-    cep = request.form.get('cep')
-    rua = request.form.get('rua')
-    numero = request.form.get('numero')
-    complemento = request.form.get('complemento')
-    bairro = request.form.get('bairro')
-    cidade = request.form.get('cidade')
-    estado = request.form.get('estado')
+    # 📍 Endereço
+    cep         = request.form.get('cep') or None
+    rua         = request.form.get('rua') or None
+    numero      = request.form.get('numero') or None
+    complemento = request.form.get('complemento') or None
+    bairro      = request.form.get('bairro') or None
+    cidade      = request.form.get('cidade') or None
+    estado      = request.form.get('estado') or None
 
-    if cep and rua and cidade and estado:
+    campos_obrigatorios = [cep, rua, numero, bairro, cidade, estado]
+
+    if all(campos_obrigatorios):
         if user.endereco:
             endereco = user.endereco
         else:
             endereco = Endereco()
             db.session.add(endereco)
-            db.session.flush()  # necessário para obter o ID
-            user.endereco_id = endereco.id
 
+        # Primeiro preenche os dados
         endereco.cep = cep
         endereco.rua = rua
         endereco.numero = numero
@@ -1249,15 +1244,27 @@ def update_tutor(user_id):
         endereco.cidade = cidade
         endereco.estado = estado
 
+        # Só depois faz flush para pegar o ID
+        if not user.endereco_id:
+            db.session.flush()
+            user.endereco_id = endereco.id
+
+    elif any([cep, rua, numero, bairro, cidade, estado]):
+        flash('Por favor, preencha todos os campos obrigatórios do endereço.', 'warning')
+        return redirect(request.referrer or url_for('index'))
+    else:
+        print("📭 Nenhum campo de endereço preenchido. Endereço não será criado.")
+
+    # 💾 Commit final
     try:
         db.session.commit()
         flash('Dados do tutor atualizados com sucesso!', 'success')
     except Exception as e:
         db.session.rollback()
+        print(f"❌ ERRO ao salvar tutor: {e}")
         flash(f'Ocorreu um erro ao salvar: {str(e)}', 'danger')
 
     return redirect(request.referrer or url_for('index'))
-
 
 
 
