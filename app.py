@@ -432,29 +432,36 @@ def profile():
     )
 
 
-
 @app.route('/animals')
 def list_animals():
     page = request.args.get('page', 1, type=int)
-    per_page = 12
+    per_page = 9
     modo = request.args.get('modo')
 
-    query = Animal.query.filter(Animal.removido_em == None)  # 🧠 ignora animais removidos
+    # Base query: ignora animais removidos
+    query = Animal.query.filter(Animal.removido_em == None)
 
-    if modo:
+    # Filtro por modo
+    if modo and modo.lower() != 'todos':
         query = query.filter_by(modo=modo)
+    else:
+        # Evita mostrar adotados para usuários não autorizados
+        if not current_user.is_authenticated or current_user.worker not in ['veterinario', 'colaborador']:
+            query = query.filter(Animal.modo != 'adotado')
 
-    total_animais = query.count()
-    animals = query.order_by(Animal.date_added.desc()).offset((page - 1) * per_page).limit(per_page).all()
-    total_pages = ceil(total_animais / per_page)
+    # Ordenação e paginação
+    query = query.order_by(Animal.date_added.desc())
+    pagination = query.paginate(page=page, per_page=per_page, error_out=False)
+    animals = pagination.items
 
     return render_template(
         'animals.html',
         animals=animals,
         page=page,
-        total_pages=total_pages,
+        total_pages=pagination.pages,
         modo=modo
     )
+
 
 
 
