@@ -4,41 +4,39 @@
 <div class="container py-4">
 
   <!-- Cabeçalho do Perfil -->
-  <div class="card shadow-sm rounded-4 p-4 mb-4">
+  <div class="card shadow rounded-4 p-4 mb-5 border-0">
     <form method="POST" enctype="multipart/form-data">
       {{ form.hidden_tag() }}
       <div class="row g-4 align-items-center">
 
-        <!-- Foto de Perfil -->
+        <!-- Foto -->
         <div class="col-md-4 text-center">
           {% if current_user.profile_photo %}
-            <img src="{{ current_user.profile_photo }}" class="img-fluid"
-            style="width: 280px; height: 280px; object-fit: cover; border-radius: 10px;">
-
+            <img src="{{ current_user.profile_photo }}" class="img-thumbnail shadow-sm mb-2"
+                 style="width: 240px; height: 240px; object-fit: cover; border-radius: 1rem;">
           {% else %}
-            <div class="bg-light border rounded my-2"
-              style="width: 180px; height: 180px; position: relative; border-radius: 10px;">
-              <span style="position: absolute; top: 35%; left: 50%; transform: translate(-50%, -50%); color: #999;">
-                Sem Foto
-              </span>
+            <div class="bg-light border d-flex align-items-center justify-content-center mb-2"
+                 style="width: 240px; height: 240px; border-radius: 1rem; font-size: 1.2rem; color: #999;">
+              Sem Foto
             </div>
           {% endif %}
 
-          <!-- Campo de upload da imagem (oculto inicialmente) -->
           <div id="campo-upload-foto" class="mt-2 d-none">
             {{ form.profile_photo(class="form-control form-control-sm") }}
           </div>
         </div>
 
-        <!-- Dados do Usuário -->
+        <!-- Informações -->
         <div class="col-md-8">
-          <h4 class="mb-3"><i class="bi bi-person-circle me-2"></i>Meu Perfil</h4>
+          <h4 class="mb-4"><i class="bi bi-person-circle me-2"></i> Meu Perfil</h4>
 
           {% macro field_row(label, field, field_name, value) %}
           <div class="mb-3">
-            <label class="form-label"><strong>{{ label }}:</strong></label>
+            <label class="form-label">{{ label }}</label>
             <div class="d-flex align-items-center">
-              <span id="{{ field_name }}-display" class="me-2">{{ value if value else '---' }}</span>
+              <span id="{{ field_name }}-display" class="me-2 text-muted">
+                {{ value if value else '---' }}
+              </span>
               {% if value %}
                 <span class="text-success">✅</span>
               {% else %}
@@ -52,20 +50,46 @@
           {{ field_row('Nome', form.name, 'name', current_user.name) }}
           {{ field_row('Email', form.email, 'email', current_user.email) }}
           {{ field_row('Telefone', form.phone, 'phone', current_user.phone) }}
-          {{ field_row('Endereço', form.address, 'address', current_user.address) }}
 
-          <div class="d-flex justify-content-start mt-4 gap-2">
-            <button type="button" class="btn btn-outline-secondary rounded-pill" onclick="toggleAll()">
+          <!-- Endereço -->
+          {% set tutor = current_user %}
+          {% set endereco = tutor.endereco if tutor and tutor.endereco else None %}
+          <div class="mb-3">
+            <label class="form-label">Endereço</label>
+            <div class="d-flex align-items-center text-muted">
+              <span>
+                {% if endereco and endereco.rua %}
+                  {{ endereco.rua }}{% if endereco.numero %}, {{ endereco.numero }}{% endif %}
+                  {% if endereco.bairro %} - {{ endereco.bairro }}{% endif %}
+                {% else %}
+                  ---
+                {% endif %}
+              </span>
+              {% if endereco and endereco.rua %}
+                <span class="text-success ms-2">✅</span>
+              {% else %}
+                <span class="text-danger ms-2">⚠️</span>
+              {% endif %}
+            </div>
+          </div>
+
+          <div id="endereco-campos" class="d-none">
+            {% include 'partials/endereco_form.html' %}
+          </div>
+
+          <div class="d-flex gap-3 mt-4">
+            <button type="button" class="btn btn-outline-dark rounded-pill px-4" onclick="toggleAll()">
               ✏️ Editar Informações
             </button>
-            <button type="submit" class="btn btn-success rounded-pill">
-              Salvar Alterações
+            <button type="submit" class="btn btn-success rounded-pill px-4">
+              💾 Salvar Alterações
             </button>
           </div>
         </div>
       </div>
     </form>
   </div>
+
 
   <!-- Meus Animais -->
   <div class="mb-5">
@@ -150,15 +174,24 @@
     }
   }
 
-  function toggleAll() {
-    ['name', 'email', 'phone', 'address'].forEach(toggleField);
-    const campoFoto = document.getElementById('campo-upload-foto');
-    if (campoFoto) campoFoto.classList.toggle('d-none');
+function toggleAll() {
+  ['name', 'email', 'phone', 'address'].forEach(toggleField);
+  const campoFoto = document.getElementById('campo-upload-foto');
+  const camposEndereco = document.getElementById('endereco-campos');
+  if (campoFoto) campoFoto.classList.toggle('d-none');
+  if (camposEndereco) {
+    camposEndereco.classList.toggle('d-none');
+    
+    // Reforça a exibição dos valores ao ativar
+    if (!camposEndereco.classList.contains('d-none')) {
+      const inputs = camposEndereco.querySelectorAll('input');
+      inputs.forEach(input => {
+        input.value = input.defaultValue;  // ou input.setAttribute('value', input.value)
+      });
+    }
   }
+}
 
-  function toggleRemovidos() {
-    document.getElementById('removidos-container').classList.toggle('d-none');
-  }
 
   function mostrarTodasTransacoes() {
     document.querySelectorAll('.transaction-item.d-none').forEach(function(item) {

@@ -300,35 +300,52 @@ def index():
 @app.route('/register', methods=['GET', 'POST'])
 def register():
     form = RegistrationForm()
+
     if form.validate_on_submit():
+        # Verifica se o e-mail já está em uso
         existing_user = User.query.filter_by(email=form.email.data).first()
         if existing_user:
             flash('Email já está em uso.', 'danger')
             return render_template('register.html', form=form)
 
+        # Cria o endereço
+        endereco = Endereco(
+            cep=request.form.get('cep'),
+            rua=request.form.get('rua'),
+            numero=request.form.get('numero'),
+            complemento=request.form.get('complemento'),
+            bairro=request.form.get('bairro'),
+            cidade=request.form.get('cidade'),
+            estado=request.form.get('estado')
+        )
+
+        # Upload da foto de perfil para o S3
+        photo_url = None
+        if form.profile_photo.data:
+            file = form.profile_photo.data
+            filename = secure_filename(file.filename)
+            photo_url = upload_to_s3(file, filename, folder="users")
+
+
+        # Cria o usuário com a URL da imagem no S3
         user = User(
             name=form.name.data,
             email=form.email.data,
             phone=form.phone.data,
-            address=form.address.data,
-            profile_photo=form.profile_photo.data
+            profile_photo=photo_url,
+            endereco=endereco
         )
-
         user.set_password(form.password.data)
+
+        # Salva no banco
+        db.session.add(endereco)
         db.session.add(user)
         db.session.commit()
+
         flash('Usuário registrado com sucesso!', 'success')
-
-        print("Método do form:", request.method)
-        print("Erros do form:", form.errors)
-
         return redirect(url_for('index'))
 
-    return render_template('register.html', form=form)
-
-
-
-
+    return render_template('register.html', form=form, endereco=None)
 
 
 
@@ -397,35 +414,47 @@ def logout():
     flash('Você saiu com sucesso!', 'success')
     return redirect(url_for('index'))
 
-
 @app.route('/profile', methods=['GET', 'POST'])
 @login_required
 def profile():
+    # Garante que current_user.endereco exista para pré-preenchimento
+    if not current_user.endereco:
+        current_user.endereco = Endereco()
+
     form = EditProfileForm(obj=current_user)
 
     if form.validate_on_submit():
         current_user.name = form.name.data
         current_user.email = form.email.data
         current_user.phone = form.phone.data
-        current_user.address = form.address.data
 
-        # Upload da nova foto de perfil para o S3
+        # Atualiza ou cria endereço
+        endereco = current_user.endereco
+        endereco.cep = request.form.get("cep")
+        endereco.rua = request.form.get("rua")
+        endereco.numero = request.form.get("numero")
+        endereco.complemento = request.form.get("complemento")
+        endereco.bairro = request.form.get("bairro")
+        endereco.cidade = request.form.get("cidade")
+        endereco.estado = request.form.get("estado")
+
+        db.session.add(endereco)
+
+        # Upload de imagem para S3 (se houver nova)
         if (
             form.profile_photo.data and
             hasattr(form.profile_photo.data, 'filename') and
             form.profile_photo.data.filename != ''
         ):
             file = form.profile_photo.data
-            original_filename = secure_filename(file.filename)
-            filename = f"{uuid.uuid4().hex}_{original_filename}"
-            image_url = upload_to_s3(file, filename, folder="profile_photos")
-            current_user.profile_photo = image_url  # agora com URL do S3
+            filename = f"{uuid.uuid4().hex}_{secure_filename(file.filename)}"
+            current_user.profile_photo = upload_to_s3(file, filename, folder="profile_photos")
 
         db.session.commit()
         flash('Perfil atualizado com sucesso!', 'success')
         return redirect(url_for('profile'))
 
-    # Apenas envia as 10 últimas transações
+    # Transações recentes
     transactions = Transaction.query.filter(
         (Transaction.from_user_id == current_user.id) | (Transaction.to_user_id == current_user.id)
     ).order_by(Transaction.date.desc()).limit(10).all()
@@ -436,6 +465,8 @@ def profile():
         form=form,
         transactions=transactions
     )
+
+
 
 
 @app.route('/animals')

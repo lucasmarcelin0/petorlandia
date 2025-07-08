@@ -2,11 +2,12 @@
 
 {% block main %}
 <div class="container d-flex justify-content-center align-items-center mt-5">
-    <div class="card shadow-lg p-4 rounded-4" style="width: 100%; max-width: 600px;">
+    <div class="card shadow-lg p-4 rounded-4" style="width: 100%; max-width: 700px;">
         <h3 class="mb-4 text-center">🧑 Criar Conta na PetOrlândia</h3>
         <form method="POST" enctype="multipart/form-data">
             {{ form.hidden_tag() }}
 
+            <!-- Nome -->
             <div class="mb-3">
                 {{ form.name.label(class="form-label") }}
                 {{ form.name(class="form-control rounded-pill") }}
@@ -15,6 +16,7 @@
                 {% endfor %}
             </div>
 
+            <!-- Email -->
             <div class="mb-3">
                 {{ form.email.label(class="form-label") }}
                 {{ form.email(class="form-control rounded-pill") }}
@@ -23,6 +25,7 @@
                 {% endfor %}
             </div>
 
+            <!-- Telefone -->
             <div class="mb-3">
                 {{ form.phone.label(class="form-label") }}
                 {{ form.phone(class="form-control rounded-pill") }}
@@ -31,7 +34,20 @@
                 {% endfor %}
             </div>
 
+            <!-- Foto de Perfil -->
             <div class="mb-3">
+                {{ form.profile_photo.label(class="form-label") }}
+                {{ form.profile_photo(class="form-control") }}
+                {% for error in form.profile_photo.errors %}
+                    <div class="text-danger">{{ error }}</div>
+                {% endfor %}
+            </div>
+
+            <!-- Endereço (Partial Reutilizável) -->
+            {% include "partials/endereco_form.html" %}
+
+            <!-- Senha -->
+            <div class="mb-3 mt-4">
                 {{ form.password.label(class="form-label") }}
                 {{ form.password(class="form-control rounded-pill") }}
                 {% for error in form.password.errors %}
@@ -39,6 +55,7 @@
                 {% endfor %}
             </div>
 
+            <!-- Confirmar Senha -->
             <div class="mb-3">
                 {{ form.confirm_password.label(class="form-label") }}
                 {{ form.confirm_password(class="form-control rounded-pill") }}
@@ -47,6 +64,7 @@
                 {% endfor %}
             </div>
 
+            <!-- Botão -->
             <div class="d-grid">
                 {{ form.submit(class="btn btn-success rounded-pill py-2") }}
             </div>
