@@ -59,6 +59,12 @@ os.makedirs(instance_path, exist_ok=True)
 app = Flask(__name__, instance_path=instance_path)
 app.config.from_object(Config)
 
+app.config['FRONTEND_URL'] = os.environ.get('FRONTEND_URL', 'http://127.0.0.1:5000')
+
+
+print(f"FRONTEND_URL carregado: {app.config['FRONTEND_URL']}")
+
+
 # Inicializa as extensões
 db.init_app(app)
 migrate.init_app(app, db)
