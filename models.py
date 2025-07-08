@@ -319,7 +319,7 @@ class Prescricao(db.Model):
     animal = db.relationship('Animal', backref='prescricoes')  # em Prescricao
 
     def __repr__(self):
-        return f'<Prescrição {self.medicamento} para Consulta {self.consulta_id}>'
+        return f'<Prescrição {self.medicamento} (ID: {self.id})>'
 
 
 class Clinica(db.Model):
