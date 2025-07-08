@@ -140,59 +140,54 @@ class VeterinarianAccess(db.Model):
 
 # Animal
 class Animal(db.Model):
-    __tablename__ = 'animal'  # força o nome da tabela
-    __table_args__ = {'extend_existing': True}  # evita conflito de redefinição
+    __tablename__ = 'animal'
+    __table_args__ = {'extend_existing': True}
 
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(100))
-    species = db.Column(db.String(50))  # cão, gato, etc.
+    species = db.Column(db.String(50))
     breed = db.Column(db.String(100))
     age = db.Column(db.String(50))
-    peso = db.Column(db.Float, nullable=True)  # em kg
-    date_of_birth = db.Column(db.Date, nullable=True)  # 🆕
-    sex = db.Column(db.String(10))  # macho, fêmea
+    peso = db.Column(db.Float, nullable=True)
+    date_of_birth = db.Column(db.Date, nullable=True)
+    sex = db.Column(db.String(10))
     description = db.Column(db.Text)
-    status = db.Column(db.String(20))  # disponível, adotado, vendido
+    status = db.Column(db.String(20))
     image = db.Column(db.String(200))
     date_added = db.Column(db.DateTime, default=datetime.utcnow)
 
- # Novos campos adicionados com segurança:
-    modo = db.Column(db.String(20), default='doação')  # doação, venda, adotado
-    price = db.Column(db.Float, nullable=True)         # apenas se for venda
+    modo = db.Column(db.String(20), default='doação')
+    price = db.Column(db.Float, nullable=True)
     vacinas = db.relationship('Vacina', backref='animal', cascade='all, delete-orphan')
 
-
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
-
-
 
     photos = db.relationship('AnimalPhoto', backref='animal', cascade='all, delete-orphan', lazy=True)
     transactions = db.relationship('Transaction', backref='animal', cascade='all, delete-orphan', lazy=True)
     favorites = db.relationship('Favorite', backref='animal', cascade='all, delete-orphan', lazy=True)
 
+    microchip_number = db.Column(db.String(50), nullable=True)
+    neutered = db.Column(db.Boolean, default=False)
+    health_plan = db.Column(db.String(100), nullable=True)
 
+    removido_em = db.Column(db.DateTime, nullable=True)
 
-
-    microchip_number = db.Column(db.String(50), nullable=True)  # 🆕 novo campo
-    neutered = db.Column(db.Boolean, default=False)  # 🆕
-    health_plan = db.Column(db.String(100), nullable=True)  # 🆕
-
-    removido_em = db.Column(db.DateTime, nullable=True)  # Soft delete marker
-
-
-    added_by_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True)  # 🆕
-    added_by = db.relationship('User', foreign_keys=[added_by_id])  # 🆕
-
-
+    added_by_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True)
+    added_by = db.relationship('User', foreign_keys=[added_by_id])
 
     clinica_id = db.Column(db.Integer, db.ForeignKey('clinica.id'), nullable=True)
     clinica = db.relationship('Clinica', backref='animais')
 
-    is_alive = db.Column(db.Boolean, default=True)  # Animal está vivo ou já faleceu
+    is_alive = db.Column(db.Boolean, default=True)
+    falecido_em = db.Column(db.DateTime, nullable=True)
 
-    falecido_em = db.Column(db.DateTime, nullable=True)  # opcional
+    blocos_prescricao = db.relationship(
+        'BlocoPrescricao',
+        back_populates='animal',
+        cascade='all, delete-orphan'
+    )
 
-
+    
 
 
 
@@ -286,7 +281,6 @@ class Consulta(db.Model):
 
 # models.py
 
-
 class BlocoPrescricao(db.Model):
     __tablename__ = 'bloco_prescricao'
 
@@ -296,10 +290,8 @@ class BlocoPrescricao(db.Model):
     prescricoes = db.relationship('Prescricao', backref='bloco', cascade='all, delete-orphan')
     instrucoes_gerais = db.Column(db.Text)
 
-
-    # em BlocoPrescricao
     animal_id = db.Column(db.Integer, db.ForeignKey('animal.id'), nullable=False)
-    animal = db.relationship('Animal', backref='blocos_prescricao')  # em BlocoPrescricao
+    animal = db.relationship('Animal', back_populates='blocos_prescricao')
 
 class Prescricao(db.Model):
     __tablename__ = 'prescricao'

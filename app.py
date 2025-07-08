@@ -1051,12 +1051,14 @@ def tutor_detail(tutor_id):
 @app.route('/tutores', methods=['GET', 'POST'])
 @login_required
 def tutores():
+    # Restrição de acesso
     if current_user.worker not in ['veterinario', 'colaborador']:
         flash('Apenas veterinários ou colaboradores podem acessar esta página.', 'danger')
         return redirect(url_for('index'))
 
+    # Criação de novo tutor
     if request.method == 'POST':
-        name  = request.form.get('tutor_name') or request.form.get('name')
+        name = request.form.get('tutor_name') or request.form.get('name')
         email = request.form.get('tutor_email') or request.form.get('email')
 
         if not name or not email:
@@ -1070,17 +1072,19 @@ def tutores():
         novo = User(
             name=name.strip(),
             email=email.strip(),
-            role='adotante',
+            role='adotante',  # padrão inicial
             clinica_id=current_user.clinica_id,
             added_by=current_user
         )
-        novo.set_password('123456789')
+        novo.set_password('123456789')  # ⚠️ Sugestão: depois trocar por um token de convite
 
+        # Campos opcionais
         novo.phone = (request.form.get('tutor_phone') or request.form.get('phone') or '').strip() or None
-        novo.address = None  # ❌ campo legado, pode ser mantido vazio
         novo.cpf = (request.form.get('tutor_cpf') or request.form.get('cpf') or '').strip() or None
         novo.rg = (request.form.get('tutor_rg') or request.form.get('rg') or '').strip() or None
+        novo.address = None
 
+        # Data de nascimento
         date_str = request.form.get('tutor_date_of_birth') or request.form.get('date_of_birth')
         if date_str:
             try:
@@ -1089,7 +1093,7 @@ def tutores():
                 flash('Data de nascimento inválida. Use o formato AAAA-MM-DD.', 'danger')
                 return redirect(url_for('tutores'))
 
-        # 📍 Endereço completo (novo)
+        # Endereço
         cep = request.form.get('cep')
         rua = request.form.get('rua')
         numero = request.form.get('numero')
@@ -1112,7 +1116,7 @@ def tutores():
             db.session.flush()
             novo.endereco_id = endereco.id
 
-        # 📸 Foto
+        # Foto
         if 'image' in request.files and request.files['image'].filename:
             file = request.files['image']
             filename = secure_filename(file.filename)
@@ -1126,20 +1130,23 @@ def tutores():
         flash('Tutor criado com sucesso!', 'success')
         return redirect(url_for('ficha_tutor', tutor_id=novo.id))
 
-    # — GET —
-    tutores_adicionados = []
+    # — GET com paginação —
+    page = request.args.get('page', 1, type=int)
     if current_user.clinica_id:
-        tutores_adicionados = User.query\
-            .filter(
-                User.role.in_(['adotante', 'doador']),
-                User.clinica_id == current_user.clinica_id
-            )\
-            .order_by(User.name.asc())\
-            .all()
+        pagination = User.query \
+            .filter(User.clinica_id == current_user.clinica_id) \
+            .order_by(User.created_at.desc()) \
+            .paginate(page=page, per_page=9)
+        tutores_adicionados = pagination.items
+    else:
+        pagination = None
+        tutores_adicionados = []
 
-    return render_template('tutores.html', tutores_adicionados=tutores_adicionados)
-
-
+    return render_template(
+        'tutores.html',
+        tutores_adicionados=tutores_adicionados,
+        pagination=pagination
+    )
 
 
 
@@ -1153,9 +1160,20 @@ def deletar_tutor(tutor_id):
         return redirect(url_for('index'))
 
     try:
+        with db.session.no_autoflush:
+            for animal in tutor.animals:
+                # Deletar blocos de prescrição manualmente
+                for bloco in animal.blocos_prescricao:
+                    db.session.delete(bloco)
+
+                # Você pode incluir aqui: exames, vacinas, etc., se necessário
+
+                db.session.delete(animal)
+
         db.session.delete(tutor)
         db.session.commit()
         flash('Tutor e todos os seus dados foram excluídos com sucesso.', 'success')
+
     except Exception as e:
         db.session.rollback()
         flash(f'Erro ao excluir tutor: {str(e)}', 'danger')
@@ -2236,7 +2254,7 @@ def novo_animal():
         if 'image' in request.files and request.files['image'].filename != '':
             image_file = request.files['image']
             filename = secure_filename(image_file.filename)
-            image_path = upload_to_s3(image_file, filename)  # função que você já usa para enviar ao S3
+            image_path = upload_to_s3(image_file, filename)
 
         animal = Animal(
             name=request.form.get('name'),
@@ -2250,33 +2268,45 @@ def novo_animal():
             neutered=neutered,
             user_id=tutor.id,
             added_by_id=current_user.id,
-            clinica_id=current_user.clinica_id,  # 🆕 adicionando a clínica
+            clinica_id=current_user.clinica_id,
             status='disponível',
             image=image_path,
-            is_alive=True,  # 👈 garante que o animal é salvo como vivo
-            modo='adotado',  # 👈 Aqui está a correção
-
+            is_alive=True,
+            modo='adotado',
         )
         db.session.add(animal)
         db.session.commit()
 
         consulta = Consulta(animal_id=animal.id,
-                             created_by=current_user.id,
-                             status='in_progress')
+                            created_by=current_user.id,
+                            status='in_progress')
         db.session.add(consulta)
         db.session.commit()
 
         flash('Animal cadastrado com sucesso!', 'success')
         return redirect(url_for('consulta_direct', animal_id=animal.id))
 
-    # 🔥 Agora buscando animais pela clínica, e não apenas pelo usuário
+    # Paginação para animais adicionados pela clínica ou pelo usuário
+    page = request.args.get('page', 1, type=int)
     if current_user.clinica_id:
-        animais_adicionados = Animal.query.filter_by(clinica_id=current_user.clinica_id).order_by(Animal.date_added.desc()).all()
+        pagination = Animal.query \
+            .filter_by(clinica_id=current_user.clinica_id) \
+            .filter(Animal.removido_em == None) \
+            .order_by(Animal.date_added.desc()) \
+            .paginate(page=page, per_page=9)
     else:
-        # fallback: se não tiver clínica, mostra apenas os animais adicionados por ele mesmo
-        animais_adicionados = Animal.query.filter_by(added_by_id=current_user.id).order_by(Animal.date_added.desc()).all()
+        pagination = Animal.query \
+            .filter_by(added_by_id=current_user.id) \
+            .filter(Animal.removido_em == None) \
+            .order_by(Animal.date_added.desc()) \
+            .paginate(page=page, per_page=9)
 
-    return render_template('novo_animal.html', animais_adicionados=animais_adicionados)
+    animais_adicionados = pagination.items
+
+    return render_template('novo_animal.html',
+                           animais_adicionados=animais_adicionados,
+                           pagination=pagination)
+
 
 
 @app.route('/animal/<int:animal_id>/marcar_falecido', methods=['POST'])
