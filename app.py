@@ -231,7 +231,7 @@ def reset_password_request():
         user = User.query.filter_by(email=form.email.data).first()
         if user:
             token = s.dumps(user.email, salt='password-reset-salt')
-            base_url = app.config.get('FRONTEND_URL', 'http://127.0.0.1:5000')
+            base_url = os.environ.get('FRONTEND_URL', 'http://127.0.0.1:5000')
             link = f"{base_url}{url_for('reset_password', token=token)}"
 
             msg = MailMessage(
