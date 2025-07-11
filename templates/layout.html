@@ -141,7 +141,11 @@
   <nav class="navbar navbar-expand-lg fixed-top bg-white border-bottom shadow-sm py-2">
     <div class="container d-flex align-items-center">
       {% if current_user.is_authenticated and current_user.role == "admin" %}
-        <a href="{{ url_for('painel_admin.index') }}">
+{% if current_user.is_authenticated and current_user.role == "admin" %}
+  <a href="{{ url_for('painel_inicio.index') }}">
+{% else %}
+  <a href="{{ url_for('index') }}">
+{% endif %}
           <img src="{{ url_for('static', filename='favicon.png') }}"
                alt="Logo"
                style="height: 30px; margin-right: 10px;"

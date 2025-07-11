@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Painel PetOrlândia</title>
+
+  <!-- Bootstrap -->
+  <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
+
+  <style>
+    :root {
+      --sidebar-width: 220px;
+    }
+
+    body {
+      background-color: #f8f9fa;
+      margin: 0;
+    }
+
+    .sidebar {
+      height: 100vh;
+      width: var(--sidebar-width);
+      position: fixed;
+      top: 0;
+      left: 0;
+      background-color: #343a40;
+      padding-top: 70px;
+      z-index: 1000;
+      color: white;
+    }
+
+    .sidebar a {
+      color: #ccc;
+      display: block;
+      padding: 10px 20px;
+      text-decoration: none;
+    }
+
+    .sidebar a:hover {
+      background-color: #495057;
+      color: #fff;
+    }
+
+    .content {
+      margin-left: calc(var(--sidebar-width));
+      padding: 30px;
+    }
+
+    .navbar {
+      position: fixed;
+      top: 0;
+      width: 100%;
+      z-index: 1100;
+    }
+
+    .navbar-brand {
+      font-weight: bold;
+    }
+
+    @media (max-width: 768px) {
+      .sidebar {
+        position: relative;
+        width: 100%;
+        height: auto;
+        padding-top: 0;
+      }
+
+      .content {
+        margin-left: 0;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Navbar superior -->
+  <nav class="navbar navbar-expand-lg navbar-light bg-light border-bottom">
+    <a class="navbar-brand ml-3" href="{{ url_for('painel_inicio.index') }}">🐾 PetOrlândia Admin</a>
+    <div class="ml-auto mr-3">
+      <a href="{{ url_for('index') }}" class="btn btn-outline-primary btn-sm">Voltar ao Site</a>
+    </div>
+  </nav>
+
+  <!-- Menu lateral -->
+  <div class="sidebar">
+    <a href="{{ url_for('painel_inicio.index') }}">🏠 Início</a>
+    <a href="{{ url_for('user.index_view') }}">👤 Usuários</a>
+    <a href="{{ url_for('animal.index_view') }}">🐶 Animais</a>
+    <a href="{{ url_for('consulta.index_view') }}">📋 Consultas</a>
+    <a href="{{ url_for('prescricao.index_view') }}">💊 Prescrições</a>
+    <a href="{{ url_for('veterinario.index_view') }}">👨‍⚕️ Veterinários</a>
+    <a href="{{ url_for('clinica.index_view') }}">🏥 Clínicas</a>
+    <a href="{{ url_for('medicamento.index_view') }}">🧪 Medicamentos</a>
+    <a href="{{ url_for('vacinamodelo.index_view') }}">💉 Vacinas</a>
+    <a href="{{ url_for('tiporacao.index_view') }}">🍗 Rações</a>
+  </div>
+
+  <!-- Conteúdo principal -->
+  <div class="content">
+    {% block body %}
+    {% block content %}{% endblock %}
+    {% endblock %}
+  </div>
+
+  <!-- Scripts -->
+  <script src="https://code.jquery.com/jquery-3.5.1.slim.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@4.5.2/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>
