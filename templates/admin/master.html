@@ -15,6 +15,8 @@
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css">
 
   <style>
+    
+
     body {
       margin: 0;
       background-color: #f8f9fa;
@@ -83,6 +85,39 @@
       font-size: 1.3rem;
       font-weight: 600;
     }
+
+    /* Estilo dos botões administrativos */
+    .admin-action a {
+      display: inline-block;
+      margin-right: 10px;
+      font-weight: 500;
+      padding: 6px 14px;
+      border-radius: 8px;
+      background-color: #0d6efd;
+      color: #fff !important;
+      text-decoration: none;
+      transition: background-color 0.2s ease;
+    }
+
+    .admin-action a:hover {
+      background-color: #0b5ed7;
+    }
+
+    .admin-action a.create {
+      background-color: #198754;
+    }
+
+    .admin-action a.create:hover {
+      background-color: #146c43;
+    }
+
+    .admin-action a.delete {
+      background-color: #dc3545;
+    }
+
+    .admin-action a.delete:hover {
+      background-color: #bb2d3b;
+    }
   </style>
 </head>
 <body>
@@ -117,6 +152,23 @@
 
   <!-- Bootstrap JS -->
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+
+  <!-- Script para estilizar automaticamente os botões padrão -->
+  <script>
+    document.addEventListener('DOMContentLoaded', () => {
+      const actions = document.querySelectorAll('a');
+
+      actions.forEach(link => {
+        if (link.href.includes('create')) {
+          link.classList.add('admin-action', 'create');
+        } else if (link.href.includes('delete')) {
+          link.classList.add('admin-action', 'delete');
+        } else if (link.href.includes('list')) {
+          link.classList.add('admin-action');
+        }
+      });
+    });
+  </script>
 
 </body>
 </html>

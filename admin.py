@@ -12,13 +12,13 @@ import os
 # --------------------------------------------------------------------------
 try:
     from models import (
-        TipoRacao, ApresentacaoMedicamento, VacinaModelo, Consulta, Veterinario,
+        Breed, Species, TipoRacao, ApresentacaoMedicamento, VacinaModelo, Consulta, Veterinario,
         Clinica, Prescricao, Medicamento, db, User, Animal, Message,
         Transaction, Review, Favorite, AnimalPhoto, UserRole, ExameModelo
     )
 except ImportError:
     from .models import (
-        TipoRacao, ApresentacaoMedicamento, VacinaModelo, Consulta, Veterinario,
+        Breed, Species, TipoRacao, ApresentacaoMedicamento, VacinaModelo, Consulta, Veterinario,
         Clinica, Prescricao, Medicamento, db, User, Animal, Message,
         Transaction, Review, Favorite, AnimalPhoto, UserRole, ExameModelo
     )
@@ -110,6 +110,66 @@ class TutorAdminView(MyModelView):
                 db.session.delete(consulta)
             db.session.delete(animal)
 
+
+from markupsafe import Markup
+from flask import url_for
+
+class AnimalAdminView(MyModelView):
+    column_list = (
+        'name', 'species.name', 'breed.name', 'age', 'peso',
+        'date_of_birth', 'sex', 'status', 'clinica',
+        'added_by'
+    )
+
+    column_labels = {
+        'name': 'Nome',
+        'species.name': 'Espécie',
+        'breed.name': 'Raça',
+        'date_of_birth': 'Nascimento',
+        'peso': 'Peso (kg)',
+        'added_by': 'Criado por'
+    }
+
+    form_columns = (
+        'name', 'species', 'breed', 'age', 'peso', 'date_of_birth',
+        'sex', 'status', 'clinica', 'added_by'
+    )
+
+
+    column_formatters = {
+        'name': lambda v, c, m, p: Markup(
+            f'<a href="{url_for("consulta_direct", animal_id=m.id)}" target="_blank">{m.name}</a>'
+        ),
+        'status': lambda v, c, m, p: Markup(
+            f'<span class="badge bg-{"success" if m.status == "disponível" else "secondary"}">{m.status}</span>'
+        ),
+        'added_by': lambda v, c, m, p: m.added_by.name if m.added_by else '—'
+    }
+
+    # 🔧 Atualizado para apontar para atributos relacionados
+    column_searchable_list = ('name', 'breed.name', 'species.name')
+    column_filters = ('species.name', 'breed.name', 'sex', 'status', 'clinica')
+
+    column_default_sort = ('name', True)
+
+
+class SpeciesAdminView(MyModelView):
+    form_excluded_columns = ['breeds']
+    column_labels = {'name': 'Espécie'}
+    column_searchable_list = ['name']
+    column_default_sort = ('name', True)
+
+
+class BreedAdminView(MyModelView):
+    form_excluded_columns = ['animals']
+    column_labels = {
+        'name': 'Raça',
+        'species': 'Espécie'
+    }
+    column_searchable_list = ['name']
+    column_filters = ['species']
+    column_default_sort = ('name', True)
+
 # --------------------------------------------------------------------------
 # Função de inicialização do painel
 # --------------------------------------------------------------------------
@@ -126,8 +186,12 @@ def init_admin(app):
     )
 
     # Registro das demais views
+    admin.add_view(AnimalAdminView(Animal, db.session, name='Animais'))
+
+    admin.add_view(SpeciesAdminView(Species, db.session, name='Espécies'))
+    admin.add_view(MyModelView(Breed, db.session, name='Raças'))
+
     admin.add_view(UserAdminView(User, db.session))
-    admin.add_view(MyModelView(Animal, db.session))
     admin.add_view(MyModelView(Message, db.session))
     admin.add_view(MyModelView(Transaction, db.session))
     admin.add_view(MyModelView(Medicamento, db.session))
