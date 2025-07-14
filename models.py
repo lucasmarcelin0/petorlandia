@@ -181,6 +181,13 @@ class Animal(db.Model):
     is_alive = db.Column(db.Boolean, default=True)
     falecido_em = db.Column(db.DateTime, nullable=True)
 
+    species_id = db.Column(db.Integer, db.ForeignKey('species.id'))
+    breed_id   = db.Column(db.Integer, db.ForeignKey('breed.id'))
+
+    species = db.relationship('Species')
+    breed   = db.relationship('Breed')
+
+
     blocos_prescricao = db.relationship(
         'BlocoPrescricao',
         back_populates='animal',
@@ -188,6 +195,22 @@ class Animal(db.Model):
     )
 
     
+
+class Species(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(100), nullable=False)
+
+    def __str__(self):
+        return self.name  # 👈 Isso garante que apareça como texto legível no admin
+
+class Breed(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(100), nullable=False)
+    species_id = db.Column(db.Integer, db.ForeignKey('species.id'), nullable=False)
+    species = db.relationship('Species', backref='breeds')
+
+    def __str__(self):
+        return self.name
 
 
 
