@@ -142,7 +142,7 @@
     <div class="container d-flex align-items-center">
       {% if current_user.is_authenticated and current_user.role == "admin" %}
 {% if current_user.is_authenticated and current_user.role == "admin" %}
-  <a href="{{ url_for('painel_inicio.index') }}">
+  <a href="{{ url_for('painel_admin.index') }}">
 {% else %}
   <a href="{{ url_for('index') }}">
 {% endif %}
