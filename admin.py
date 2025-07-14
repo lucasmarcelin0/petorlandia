@@ -70,16 +70,24 @@ class AdminDashboard(BaseView):
 # --------------------------------------------------------------------------
 # Views específicas
 # --------------------------------------------------------------------------
+
+
 class UserAdminView(MyModelView):
     column_list = (
         'name', 'email', 'role', 'worker',
         'cpf', 'rg', 'date_of_birth',
         'phone', 'address', 'clinica', 'added_by'
     )
+
     column_labels = {'added_by': 'Adicionado por'}
+
     column_formatters = {
+        'name': lambda v, c, m, p: Markup(
+            f'<a href="{url_for("ficha_tutor", tutor_id=m.id)}">{m.name}</a>'
+        ),
         'added_by': lambda v, c, m, p: m.added_by.name if m.added_by else '—'
     }
+
     form_overrides = {'role': SelectField, 'date_of_birth': DateField}
     form_args = {'role': {'choices': [(r.name, r.value) for r in UserRole]}}
     form_columns = (
@@ -87,6 +95,27 @@ class UserAdminView(MyModelView):
         'cpf', 'rg', 'date_of_birth', 'phone', 'address', 'clinica'
     )
     column_details_list = column_list
+
+
+    
+
+
+
+class EnderecoAdmin(MyModelView):
+    column_list = ['cep', 'rua', 'numero', 'bairro', 'cidade', 'estado']
+    column_searchable_list = ['cep', 'rua', 'bairro', 'cidade']
+    column_filters = ['cidade', 'estado']
+    form_columns = ['cep', 'rua', 'numero', 'complemento', 'bairro', 'cidade', 'estado']
+    column_labels = {
+        'cep': 'CEP',
+        'rua': 'Rua',
+        'numero': 'Número',
+        'complemento': 'Complemento',
+        'bairro': 'Bairro',
+        'cidade': 'Cidade',
+        'estado': 'UF'
+    }
+
 
 class VeterinarioAdmin(MyModelView):
     form_columns = ['user', 'crmv', 'clinica']
@@ -101,6 +130,8 @@ class ClinicaAdmin(MyModelView):
             allowed_extensions=['jpg', 'jpeg', 'png', 'gif']
         )
     }
+
+
 
 class TutorAdminView(MyModelView):
     """Exemplo de deleção em cascata (caso use tutores)."""
