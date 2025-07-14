@@ -433,8 +433,12 @@ def logout():
 @login_required
 def profile():
     # Garante que current_user.endereco exista para pré-preenchimento
-    if not current_user.endereco:
-        current_user.endereco = Endereco()
+    form = EditProfileForm(obj=current_user)
+
+    if form.validate_on_submit():
+        if not current_user.endereco:
+            current_user.endereco = Endereco()
+
 
     form = EditProfileForm(obj=current_user)
 

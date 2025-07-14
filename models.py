@@ -56,8 +56,9 @@ class User(UserMixin, db.Model):
     phone = db.Column(db.String(20))
 
     address = db.Column(db.String(200))
-    endereco_id = db.Column(db.Integer, db.ForeignKey('endereco.id'))
+    endereco_id = db.Column(db.Integer, db.ForeignKey('endereco.id'), nullable=True)
     endereco = db.relationship('Endereco', backref='usuarios')
+
 
 
     profile_photo = db.Column(db.String(200))
@@ -193,6 +194,9 @@ class Animal(db.Model):
         back_populates='animal',
         cascade='all, delete-orphan'
     )
+
+    def __str__(self):
+        return f"{self.name} ({self.species.name if self.species else self.species})"
 
     
 
@@ -360,6 +364,8 @@ class Veterinario(db.Model):
 
     user = db.relationship('User', back_populates='veterinario', uselist=False)
 
+    def __str__(self):
+        return f"{self.user.name} (CRMV: {self.crmv})"
 
 
 
