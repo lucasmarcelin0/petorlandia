@@ -59,6 +59,12 @@ os.makedirs(instance_path, exist_ok=True)
 app = Flask(__name__, instance_path=instance_path)
 app.config.from_object(Config)
 
+app.config['FRONTEND_URL'] = os.environ.get('FRONTEND_URL', 'http://127.0.0.1:5000')
+
+
+print(f"FRONTEND_URL carregado: {app.config['FRONTEND_URL']}")
+
+
 # Inicializa as extensões
 db.init_app(app)
 migrate.init_app(app, db)
@@ -231,7 +237,7 @@ def reset_password_request():
         user = User.query.filter_by(email=form.email.data).first()
         if user:
             token = s.dumps(user.email, salt='password-reset-salt')
-            base_url = app.config.get('FRONTEND_URL', 'http://127.0.0.1:5000')
+            base_url = os.environ.get('FRONTEND_URL', 'http://127.0.0.1:5000')
             link = f"{base_url}{url_for('reset_password', token=token)}"
 
             msg = MailMessage(
@@ -281,6 +287,21 @@ def reset_password(token):
 
 
 
+#admin configuration
+
+@app.route('/painel')
+@login_required
+def painel_dashboard():
+    cards = [
+        {"icon": "👤", "title": "Usuários", "description": f"Total: {User.query.count()}"},
+        {"icon": "🐶", "title": "Animais", "description": f"Total: {Animal.query.count()}"},
+        {"icon": "🏥", "title": "Clínicas", "description": f"Total: {Clinica.query.count()}"},
+        {"icon": "💉", "title": "Vacinas", "description": f"Hoje: {VacinaModelo.query.count()}"},
+        {"icon": "📋", "title": "Consultas", "description": f"Pendentes: {Consulta.query.filter_by(status='pendente').count()}"},
+        {"icon": "💊", "title": "Prescrições", "description": f"Semana: {Prescricao.query.count()}"},
+    ]
+    return render_template('admin/admin_dashboard.html', cards=cards)
+
 
 
 # Rota principal
@@ -294,35 +315,52 @@ def index():
 @app.route('/register', methods=['GET', 'POST'])
 def register():
     form = RegistrationForm()
+
     if form.validate_on_submit():
+        # Verifica se o e-mail já está em uso
         existing_user = User.query.filter_by(email=form.email.data).first()
         if existing_user:
             flash('Email já está em uso.', 'danger')
             return render_template('register.html', form=form)
 
+        # Cria o endereço
+        endereco = Endereco(
+            cep=request.form.get('cep'),
+            rua=request.form.get('rua'),
+            numero=request.form.get('numero'),
+            complemento=request.form.get('complemento'),
+            bairro=request.form.get('bairro'),
+            cidade=request.form.get('cidade'),
+            estado=request.form.get('estado')
+        )
+
+        # Upload da foto de perfil para o S3
+        photo_url = None
+        if form.profile_photo.data:
+            file = form.profile_photo.data
+            filename = secure_filename(file.filename)
+            photo_url = upload_to_s3(file, filename, folder="users")
+
+
+        # Cria o usuário com a URL da imagem no S3
         user = User(
             name=form.name.data,
             email=form.email.data,
             phone=form.phone.data,
-            address=form.address.data,
-            profile_photo=form.profile_photo.data
+            profile_photo=photo_url,
+            endereco=endereco
         )
-
         user.set_password(form.password.data)
+
+        # Salva no banco
+        db.session.add(endereco)
         db.session.add(user)
         db.session.commit()
+
         flash('Usuário registrado com sucesso!', 'success')
-
-        print("Método do form:", request.method)
-        print("Erros do form:", form.errors)
-
         return redirect(url_for('index'))
 
-    return render_template('register.html', form=form)
-
-
-
-
+    return render_template('register.html', form=form, endereco=None)
 
 
 
@@ -391,35 +429,47 @@ def logout():
     flash('Você saiu com sucesso!', 'success')
     return redirect(url_for('index'))
 
-
 @app.route('/profile', methods=['GET', 'POST'])
 @login_required
 def profile():
+    # Garante que current_user.endereco exista para pré-preenchimento
+    if not current_user.endereco:
+        current_user.endereco = Endereco()
+
     form = EditProfileForm(obj=current_user)
 
     if form.validate_on_submit():
         current_user.name = form.name.data
         current_user.email = form.email.data
         current_user.phone = form.phone.data
-        current_user.address = form.address.data
 
-        # Upload da nova foto de perfil para o S3
+        # Atualiza ou cria endereço
+        endereco = current_user.endereco
+        endereco.cep = request.form.get("cep")
+        endereco.rua = request.form.get("rua")
+        endereco.numero = request.form.get("numero")
+        endereco.complemento = request.form.get("complemento")
+        endereco.bairro = request.form.get("bairro")
+        endereco.cidade = request.form.get("cidade")
+        endereco.estado = request.form.get("estado")
+
+        db.session.add(endereco)
+
+        # Upload de imagem para S3 (se houver nova)
         if (
             form.profile_photo.data and
             hasattr(form.profile_photo.data, 'filename') and
             form.profile_photo.data.filename != ''
         ):
             file = form.profile_photo.data
-            original_filename = secure_filename(file.filename)
-            filename = f"{uuid.uuid4().hex}_{original_filename}"
-            image_url = upload_to_s3(file, filename, folder="profile_photos")
-            current_user.profile_photo = image_url  # agora com URL do S3
+            filename = f"{uuid.uuid4().hex}_{secure_filename(file.filename)}"
+            current_user.profile_photo = upload_to_s3(file, filename, folder="profile_photos")
 
         db.session.commit()
         flash('Perfil atualizado com sucesso!', 'success')
         return redirect(url_for('profile'))
 
-    # Apenas envia as 10 últimas transações
+    # Transações recentes
     transactions = Transaction.query.filter(
         (Transaction.from_user_id == current_user.id) | (Transaction.to_user_id == current_user.id)
     ).order_by(Transaction.date.desc()).limit(10).all()
@@ -433,28 +483,37 @@ def profile():
 
 
 
+
 @app.route('/animals')
 def list_animals():
     page = request.args.get('page', 1, type=int)
-    per_page = 12
+    per_page = 9
     modo = request.args.get('modo')
 
-    query = Animal.query.filter(Animal.removido_em == None)  # 🧠 ignora animais removidos
+    # Base query: ignora animais removidos
+    query = Animal.query.filter(Animal.removido_em == None)
 
-    if modo:
+    # Filtro por modo
+    if modo and modo.lower() != 'todos':
         query = query.filter_by(modo=modo)
+    else:
+        # Evita mostrar adotados para usuários não autorizados
+        if not current_user.is_authenticated or current_user.worker not in ['veterinario', 'colaborador']:
+            query = query.filter(Animal.modo != 'adotado')
 
-    total_animais = query.count()
-    animals = query.order_by(Animal.date_added.desc()).offset((page - 1) * per_page).limit(per_page).all()
-    total_pages = ceil(total_animais / per_page)
+    # Ordenação e paginação
+    query = query.order_by(Animal.date_added.desc())
+    pagination = query.paginate(page=page, per_page=per_page, error_out=False)
+    animals = pagination.items
 
     return render_template(
         'animals.html',
         animals=animals,
         page=page,
-        total_pages=total_pages,
+        total_pages=pagination.pages,
         modo=modo
     )
+
 
 
 
@@ -1038,12 +1097,14 @@ def tutor_detail(tutor_id):
 @app.route('/tutores', methods=['GET', 'POST'])
 @login_required
 def tutores():
+    # Restrição de acesso
     if current_user.worker not in ['veterinario', 'colaborador']:
         flash('Apenas veterinários ou colaboradores podem acessar esta página.', 'danger')
         return redirect(url_for('index'))
 
+    # Criação de novo tutor
     if request.method == 'POST':
-        name  = request.form.get('tutor_name') or request.form.get('name')
+        name = request.form.get('tutor_name') or request.form.get('name')
         email = request.form.get('tutor_email') or request.form.get('email')
 
         if not name or not email:
@@ -1057,17 +1118,19 @@ def tutores():
         novo = User(
             name=name.strip(),
             email=email.strip(),
-            role='adotante',
+            role='adotante',  # padrão inicial
             clinica_id=current_user.clinica_id,
             added_by=current_user
         )
-        novo.set_password('123456789')
+        novo.set_password('123456789')  # ⚠️ Sugestão: depois trocar por um token de convite
 
+        # Campos opcionais
         novo.phone = (request.form.get('tutor_phone') or request.form.get('phone') or '').strip() or None
-        novo.address = None  # ❌ campo legado, pode ser mantido vazio
         novo.cpf = (request.form.get('tutor_cpf') or request.form.get('cpf') or '').strip() or None
         novo.rg = (request.form.get('tutor_rg') or request.form.get('rg') or '').strip() or None
+        novo.address = None
 
+        # Data de nascimento
         date_str = request.form.get('tutor_date_of_birth') or request.form.get('date_of_birth')
         if date_str:
             try:
@@ -1076,7 +1139,7 @@ def tutores():
                 flash('Data de nascimento inválida. Use o formato AAAA-MM-DD.', 'danger')
                 return redirect(url_for('tutores'))
 
-        # 📍 Endereço completo (novo)
+        # Endereço
         cep = request.form.get('cep')
         rua = request.form.get('rua')
         numero = request.form.get('numero')
@@ -1099,7 +1162,7 @@ def tutores():
             db.session.flush()
             novo.endereco_id = endereco.id
 
-        # 📸 Foto
+        # Foto
         if 'image' in request.files and request.files['image'].filename:
             file = request.files['image']
             filename = secure_filename(file.filename)
@@ -1113,20 +1176,23 @@ def tutores():
         flash('Tutor criado com sucesso!', 'success')
         return redirect(url_for('ficha_tutor', tutor_id=novo.id))
 
-    # — GET —
-    tutores_adicionados = []
+    # — GET com paginação —
+    page = request.args.get('page', 1, type=int)
     if current_user.clinica_id:
-        tutores_adicionados = User.query\
-            .filter(
-                User.role.in_(['adotante', 'doador']),
-                User.clinica_id == current_user.clinica_id
-            )\
-            .order_by(User.name.asc())\
-            .all()
+        pagination = User.query \
+            .filter(User.clinica_id == current_user.clinica_id) \
+            .order_by(User.created_at.desc()) \
+            .paginate(page=page, per_page=9)
+        tutores_adicionados = pagination.items
+    else:
+        pagination = None
+        tutores_adicionados = []
 
-    return render_template('tutores.html', tutores_adicionados=tutores_adicionados)
-
-
+    return render_template(
+        'tutores.html',
+        tutores_adicionados=tutores_adicionados,
+        pagination=pagination
+    )
 
 
 
@@ -1140,9 +1206,20 @@ def deletar_tutor(tutor_id):
         return redirect(url_for('index'))
 
     try:
+        with db.session.no_autoflush:
+            for animal in tutor.animals:
+                # Deletar blocos de prescrição manualmente
+                for bloco in animal.blocos_prescricao:
+                    db.session.delete(bloco)
+
+                # Você pode incluir aqui: exames, vacinas, etc., se necessário
+
+                db.session.delete(animal)
+
         db.session.delete(tutor)
         db.session.commit()
         flash('Tutor e todos os seus dados foram excluídos com sucesso.', 'success')
+
     except Exception as e:
         db.session.rollback()
         flash(f'Erro ao excluir tutor: {str(e)}', 'danger')
@@ -2223,7 +2300,7 @@ def novo_animal():
         if 'image' in request.files and request.files['image'].filename != '':
             image_file = request.files['image']
             filename = secure_filename(image_file.filename)
-            image_path = upload_to_s3(image_file, filename)  # função que você já usa para enviar ao S3
+            image_path = upload_to_s3(image_file, filename)
 
         animal = Animal(
             name=request.form.get('name'),
@@ -2237,33 +2314,45 @@ def novo_animal():
             neutered=neutered,
             user_id=tutor.id,
             added_by_id=current_user.id,
-            clinica_id=current_user.clinica_id,  # 🆕 adicionando a clínica
+            clinica_id=current_user.clinica_id,
             status='disponível',
             image=image_path,
-            is_alive=True,  # 👈 garante que o animal é salvo como vivo
-            modo='adotado',  # 👈 Aqui está a correção
-
+            is_alive=True,
+            modo='adotado',
         )
         db.session.add(animal)
         db.session.commit()
 
         consulta = Consulta(animal_id=animal.id,
-                             created_by=current_user.id,
-                             status='in_progress')
+                            created_by=current_user.id,
+                            status='in_progress')
         db.session.add(consulta)
         db.session.commit()
 
         flash('Animal cadastrado com sucesso!', 'success')
         return redirect(url_for('consulta_direct', animal_id=animal.id))
 
-    # 🔥 Agora buscando animais pela clínica, e não apenas pelo usuário
+    # Paginação para animais adicionados pela clínica ou pelo usuário
+    page = request.args.get('page', 1, type=int)
     if current_user.clinica_id:
-        animais_adicionados = Animal.query.filter_by(clinica_id=current_user.clinica_id).order_by(Animal.date_added.desc()).all()
+        pagination = Animal.query \
+            .filter_by(clinica_id=current_user.clinica_id) \
+            .filter(Animal.removido_em == None) \
+            .order_by(Animal.date_added.desc()) \
+            .paginate(page=page, per_page=9)
     else:
-        # fallback: se não tiver clínica, mostra apenas os animais adicionados por ele mesmo
-        animais_adicionados = Animal.query.filter_by(added_by_id=current_user.id).order_by(Animal.date_added.desc()).all()
+        pagination = Animal.query \
+            .filter_by(added_by_id=current_user.id) \
+            .filter(Animal.removido_em == None) \
+            .order_by(Animal.date_added.desc()) \
+            .paginate(page=page, per_page=9)
 
-    return render_template('novo_animal.html', animais_adicionados=animais_adicionados)
+    animais_adicionados = pagination.items
+
+    return render_template('novo_animal.html',
+                           animais_adicionados=animais_adicionados,
+                           pagination=pagination)
+
 
 
 @app.route('/animal/<int:animal_id>/marcar_falecido', methods=['POST'])

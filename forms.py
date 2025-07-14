@@ -61,8 +61,10 @@ class AnimalForm(FlaskForm):
     modo = SelectField('Modo de Disponibilidade', choices=[
     ('doação', 'Doação'),
     ('venda', 'Venda'),
-    ('adotado', 'Adotado (meu)')
+    ('adotado', 'Adotado (meu)'),
+    ('perdido', 'Perdido')
 ], validators=[DataRequired()], render_kw={"id": "modo"})
+
 
     submit = SubmitField('Cadastrar Animal')
 

@@ -47,8 +47,9 @@
     <!-- Estado -->
     <div class="col-md-2">
       <label for="estado" class="form-label">UF <span class="text-danger">*</span></label>
-      <input type="text" class="form-control" name="estado" id="estado" value="{{ endereco.estado if endereco else '' }}">
+      <input type="text" class="form-control" name="estado" id="estado" value="{{ endereco.estado if endereco else '' }}" maxlength="2" pattern="[A-Z]{2}" title="Use a sigla do estado, como SP ou MG" required>
     </div>
+
 
   </div>
 </div>
