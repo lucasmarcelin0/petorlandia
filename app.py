@@ -1377,22 +1377,51 @@ def update_tutor(user_id):
 
 
 # ——— FICHA DO TUTOR (dados + lista de animais) ————————————
+from sqlalchemy.orm import joinedload
+
 @app.route('/ficha_tutor/<int:tutor_id>')
 @login_required
 def ficha_tutor(tutor_id):
+    # Restrição de acesso
     if current_user.worker not in ['veterinario', 'colaborador']:
         flash('Apenas veterinários ou colaboradores podem acessar esta página.', 'danger')
         return redirect(url_for('index'))
 
+    # Dados do tutor
+    tutor = User.query.get_or_404(tutor_id)
 
-    tutor   = User.query.get_or_404(tutor_id)
-    animais = Animal.query.filter_by(user_id=tutor.id).order_by(Animal.name).all()
+    # Lista de animais do tutor (com species e breed carregados)
+    animais = Animal.query.options(
+        joinedload(Animal.species),
+        joinedload(Animal.breed)
+    ).filter_by(user_id=tutor.id).order_by(Animal.name).all()
+
+    # Ano atual
     current_year = datetime.now().year
 
-    return render_template('tutor_detail.html',
-                           tutor=tutor,
-                           animais=animais,
-                           current_year=current_year)
+    # Busca todas as espécies e raças
+    species_list = Species.query.order_by(Species.name).all()
+    breeds = Breed.query.options(joinedload(Breed.species)).all()
+
+    # Mapeia raças por species_id (como string, para uso seguro no JS)
+    breed_map = {}
+    for breed in breeds:
+        sp_id = str(breed.species.id)
+        breed_map.setdefault(sp_id, []).append({
+            'id': breed.id,
+            'name': breed.name
+        })
+
+    return render_template(
+        'tutor_detail.html',
+        tutor=tutor,
+        animais=animais,
+        current_year=current_year,
+        species_list=species_list,
+        breed_map=breed_map
+    )
+
+
 
 
 
