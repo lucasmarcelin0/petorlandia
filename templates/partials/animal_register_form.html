@@ -22,14 +22,28 @@
         <label class="form-label">Nome</label>
         <input type="text" name="name" class="form-control input-focus" required>
       </div>
+      <!-- Espécie -->
       <div class="col-md-6">
         <label class="form-label">Espécie</label>
-        <input type="text" name="species" class="form-control input-focus">
+        <select name="species_id" class="form-select" required>
+          <option value="">Selecionar</option>
+          {% for especie in species_list %}
+            <option value="{{ especie.id }}">{{ especie.name }}</option>
+          {% endfor %}
+        </select>
       </div>
+
+      <!-- Raça -->
       <div class="col-md-6">
         <label class="form-label">Raça</label>
-        <input type="text" name="breed" class="form-control input-focus">
+        <select name="breed_id" class="form-select">
+          <option value="">Selecionar</option>
+          {% for raca in breed_list %}
+            <option value="{{ raca.id }}">{{ raca.name }}</option>
+          {% endfor %}
+        </select>
       </div>
+
       <div class="col-md-6">
         <label class="form-label">Sexo</label>
         <select name="sex" class="form-select">

@@ -135,9 +135,9 @@ from flask_session import Session
 from flask_login import LoginManager, login_required, current_user, logout_user
 
 try:
-    from models import Endereco, db, Racao, TipoRacao, VacinaModelo, Vacina, ExameSolicitado, BlocoExames, ExameModelo, Clinica, ConsultaToken, Consulta, Medicamento, Prescricao, BlocoPrescricao, Veterinario, User, Animal, Message, Transaction, Review, Favorite, AnimalPhoto, Interest
+    from models import Species, Breed, Endereco, db, Racao, TipoRacao, VacinaModelo, Vacina, ExameSolicitado, BlocoExames, ExameModelo, Clinica, ConsultaToken, Consulta, Medicamento, Prescricao, BlocoPrescricao, Veterinario, User, Animal, Message, Transaction, Review, Favorite, AnimalPhoto, Interest
 except ImportError:
-    from .models import Endereco, db, Racao, TipoRacao, VacinaModelo, Vacina, ExameSolicitado, BlocoExames, ExameModelo, Clinica, ConsultaToken, Consulta, Medicamento, Prescricao, BlocoPrescricao, Veterinario, User, Animal, Message, Transaction, Review, Favorite, AnimalPhoto, Interest
+    from .models import Species, Breed, Endereco, db, Racao, TipoRacao, VacinaModelo, Vacina, ExameSolicitado, BlocoExames, ExameModelo, Clinica, ConsultaToken, Consulta, Medicamento, Prescricao, BlocoPrescricao, Veterinario, User, Animal, Message, Transaction, Review, Favorite, AnimalPhoto, Interest
                     
 
 from wtforms.fields import SelectField
@@ -365,47 +365,74 @@ def register():
 
 
 
-
 @app.route('/add-animal', methods=['GET', 'POST'])
 @login_required
 def add_animal():
     form = AnimalForm()
 
+    # Listas para o template
+    species_list = Species.query.order_by(Species.name).all()
+    breed_list = Breed.query.order_by(Breed.name).all()
+
+    # Debug da requisição
+    print("📥 Método da requisição:", request.method)
+    print("📋 Dados recebidos:", request.form)
+
     if form.validate_on_submit():
+        print("✅ Formulário validado com sucesso.")
+
         image_url = None
         if form.image.data:
             file = form.image.data
             original_filename = secure_filename(file.filename)
             filename = f"{uuid.uuid4().hex}_{original_filename}"
+            print("🖼️ Upload de imagem iniciado:", filename)
             image_url = upload_to_s3(file, filename, folder="animals")
+            print("✅ Upload concluído. URL:", image_url)
 
+        # IDs das listas
+        species_id = request.form.get("species_id", type=int)
+        breed_id = request.form.get("breed_id", type=int)
+        print("🔍 Species ID:", species_id)
+        print("🔍 Breed ID:", breed_id)
+
+        # Criação do animal
         animal = Animal(
             name=form.name.data,
-            species=form.species.data,
-            breed=form.breed.data,
+            species_id=species_id,
+            breed_id=breed_id,
             age=form.age.data,
             sex=form.sex.data,
             description=form.description.data,
             image=image_url,
-            modo=form.modo.data,  # <- Adicionado aqui
+            modo=form.modo.data,
             price=form.price.data if form.modo.data == 'venda' else None,
-            status='disponível',  # Ou defina com base no modo
+            status='disponível',
             owner=current_user,
             is_alive=True
         )
 
-
         db.session.add(animal)
-        db.session.commit()
-        flash('Animal cadastrado com sucesso!', 'success')
+        try:
+            db.session.commit()
+            print("✅ Animal salvo com ID:", animal.id)
+            flash('Animal cadastrado com sucesso!', 'success')
+            return redirect(url_for('index'))
+        except Exception as e:
+            db.session.rollback()
+            print("❌ Erro ao salvar no banco:", str(e))
+            flash('Erro ao salvar o animal.', 'danger')
 
-        print("Método do form:", request.method)
-        print("Erros do form:", form.errors)
+    else:
+        print("⚠️ Formulário inválido.")
+        print("🧾 Erros do formulário:", form.errors)
 
-        return redirect(url_for('index'))
-
-    return render_template('add_animal.html', form=form)
-
+    return render_template(
+        'add_animal.html',
+        form=form,
+        species_list=species_list,
+        breed_list=breed_list
+    )
 
 
 @app.route('/login', methods=['GET', 'POST'])
@@ -540,6 +567,7 @@ def adotar_animal(animal_id):
 
 
 @app.route('/animal/<int:animal_id>/editar', methods=['GET', 'POST'])
+@app.route('/editar_animal/<int:animal_id>', methods=['GET', 'POST'])
 @login_required
 def editar_animal(animal_id):
     animal = Animal.query.get_or_404(animal_id)
@@ -548,30 +576,30 @@ def editar_animal(animal_id):
         flash('Você não tem permissão para editar este animal.', 'danger')
         return redirect(url_for('profile'))
 
-    form = AnimalForm(obj=animal)  # <- AQUI é onde o form é definido
+    form = AnimalForm(obj=animal)
+
+    species_list = Species.query.order_by(Species.name).all()
+    breed_list = Breed.query.order_by(Breed.name).all()
 
     if form.validate_on_submit():
-        animal.name = form.name.data
-        animal.species = form.species.data
-        animal.breed = form.breed.data
-        animal.age = form.age.data
-        animal.sex = form.sex.data
-        animal.description = form.description.data
-        animal.status = 'disponível'
-        animal.modo = form.modo.data
-        animal.price = form.price.data
-
-        if form.image.data and hasattr(form.image.data, 'filename'):
-            filename = secure_filename(form.image.data.filename)
-            path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-            form.image.data.save(path)
-            animal.image = f"/static/uploads/{filename}"
+        form.populate_obj(animal)  # pega tudo do form automaticamente
+        # Atualiza os relacionamentos manuais
+        species_id = request.form.get('species_id')
+        breed_id = request.form.get('breed_id')
+        if species_id:
+            animal.species_id = int(species_id)
+        if breed_id:
+            animal.breed_id = int(breed_id)
 
         db.session.commit()
         flash('Animal atualizado com sucesso!', 'success')
         return redirect(url_for('profile'))
 
-    return render_template('editar_animal.html', form=form, animal=animal)
+    return render_template('editar_animal.html',
+                           form=form,
+                           animal=animal,
+                           species_list=species_list,
+                           breed_list=breed_list)
 
 
 @app.route('/mensagem/<int:animal_id>', methods=['GET', 'POST'])
@@ -938,12 +966,11 @@ def consulta_qr():
 
 
 
-
 @app.route('/consulta/<int:animal_id>')
 @login_required
 def consulta_direct(animal_id):
     if current_user.worker not in ['veterinario', 'colaborador']:
-        abort(403)  # forbidden access if not vet or colaborador
+        abort(403)
 
     animal = Animal.query.get_or_404(animal_id)
     tutor  = animal.owner
@@ -951,12 +978,11 @@ def consulta_direct(animal_id):
     edit_id = request.args.get('c', type=int)
     edit_mode = False
 
-    # Only veterinarians should create or edit consultations
     if current_user.worker == 'veterinario':
-        if edit_id:  # ← veio do botão Editar
+        if edit_id:
             consulta = Consulta.query.get_or_404(edit_id)
             edit_mode = True
-        else:  # fluxo normal
+        else:
             consulta = (Consulta.query
                         .filter_by(animal_id=animal.id, status='in_progress')
                         .first())
@@ -967,23 +993,22 @@ def consulta_direct(animal_id):
                 db.session.add(consulta)
                 db.session.commit()
     else:
-        consulta = None  # colaboradores can't create or edit consultations
+        consulta = None
 
-    # Historical consultations: veterinário sees them; colaborador maybe not
     historico = []
     if current_user.worker == 'veterinario':
         historico = (Consulta.query
                     .filter_by(animal_id=animal.id, status='finalizada')
                     .order_by(Consulta.created_at.desc())
                     .all())
-        
-    # 🔧 Aqui está a correção: carregar todos os tipos de ração
+
     tipos_racao = TipoRacao.query.order_by(TipoRacao.marca.asc()).all()
-    # Extra: coletar todas as marcas e linhas existentes
     marcas_existentes = sorted(set([t.marca for t in tipos_racao if t.marca]))
     linhas_existentes = sorted(set([t.linha for t in tipos_racao if t.linha]))
 
-    animal = Animal.query.get_or_404(animal_id)
+    # 🆕 Carregar listas de espécies e raças para o formulário
+    species_list = Species.query.order_by(Species.name).all()
+    breed_list = Breed.query.order_by(Breed.name).all()
 
     return render_template('consulta_qr.html',
                            animal=animal,
@@ -994,8 +1019,9 @@ def consulta_direct(animal_id):
                            worker=current_user.worker,
                            tipos_racao=tipos_racao,
                            marcas_existentes=marcas_existentes,
-                           linhas_existentes=linhas_existentes)  # sending worker role
-
+                           linhas_existentes=linhas_existentes,
+                           species_list=species_list,
+                           breed_list=breed_list)
 
 
 
@@ -1380,19 +1406,31 @@ def update_animal(animal_id):
         flash('Apenas veterinários podem editar dados do animal.', 'danger')
         return redirect(request.referrer or url_for('index'))
 
+    # Campos básicos
     animal.name = request.form.get('name')
-    animal.species = request.form.get('species')
-    animal.breed = request.form.get('breed')
     animal.sex = request.form.get('sex')
-    animal.description = request.form.get('description')
+    animal.description = request.form.get('description') or ''
     animal.microchip_number = request.form.get('microchip_number')
     animal.health_plan = request.form.get('health_plan')
     animal.neutered = request.form.get('neutered') == '1'
 
-    # 📅 Aqui está a data
-    animal.date_of_birth = parse_data_nascimento(request.form.get('date_of_birth'))
+    # Espécie (relacional)
+    species_id = request.form.get('species_id')
+    if species_id:
+        try:
+            animal.species_id = int(species_id)
+        except ValueError:
+            flash('ID de espécie inválido.', 'warning')
 
+    # Raça (relacional)
+    breed_id = request.form.get('breed_id')
+    if breed_id:
+        try:
+            animal.breed_id = int(breed_id)
+        except ValueError:
+            flash('ID de raça inválido.', 'warning')
 
+    # Peso
     peso_valor = request.form.get('peso')
     if peso_valor:
         try:
@@ -1402,6 +1440,7 @@ def update_animal(animal_id):
     else:
         animal.peso = None
 
+    # Data de nascimento ou idade
     dob_str = request.form.get('date_of_birth')
     age_input = request.form.get('age')
     if dob_str:
@@ -1414,8 +1453,9 @@ def update_animal(animal_id):
             age_years = int(age_input)
             animal.date_of_birth = date.today() - relativedelta(years=age_years)
         except ValueError:
-            flash('Idade inválida. Deve ser um número.', 'warning')
+            flash('Idade inválida. Deve ser um número inteiro.', 'warning')
 
+    # Upload de imagem
     if 'image' in request.files and request.files['image'].filename != '':
         image_file = request.files['image']
         original_filename = secure_filename(image_file.filename)
@@ -1423,10 +1463,11 @@ def update_animal(animal_id):
         image_url = upload_to_s3(image_file, filename, folder="animals")
         animal.image = image_url
 
-
     db.session.commit()
     flash('Dados do animal atualizados com sucesso!', 'success')
     return redirect(request.referrer or url_for('index'))
+
+
 
 
 @app.route('/update_consulta/<int:consulta_id>', methods=['POST'])
@@ -2306,10 +2347,19 @@ def novo_animal():
             filename = secure_filename(image_file.filename)
             image_path = upload_to_s3(image_file, filename)
 
+        # IDs para espécie e raça
+        species_id = request.form.get('species_id', type=int)
+        breed_id = request.form.get('breed_id', type=int)
+
+        # Carrega os objetos Species e Breed (opcional)
+        species_obj = Species.query.get(species_id) if species_id else None
+        breed_obj = Breed.query.get(breed_id) if breed_id else None
+
+        # Criação do animal
         animal = Animal(
             name=request.form.get('name'),
-            species=request.form.get('species'),
-            breed=request.form.get('breed'),
+            species_id=species_id,
+            breed_id=breed_id,
             sex=request.form.get('sex'),
             date_of_birth=dob,
             microchip_number=request.form.get('microchip_number'),
@@ -2327,16 +2377,19 @@ def novo_animal():
         db.session.add(animal)
         db.session.commit()
 
-        consulta = Consulta(animal_id=animal.id,
-                            created_by=current_user.id,
-                            status='in_progress')
+        # Criação da consulta
+        consulta = Consulta(
+            animal_id=animal.id,
+            created_by=current_user.id,
+            status='in_progress'
+        )
         db.session.add(consulta)
         db.session.commit()
 
         flash('Animal cadastrado com sucesso!', 'success')
         return redirect(url_for('consulta_direct', animal_id=animal.id))
 
-    # Paginação para animais adicionados pela clínica ou pelo usuário
+    # GET: lista de animais adicionados para exibição
     page = request.args.get('page', 1, type=int)
     if current_user.clinica_id:
         pagination = Animal.query \
@@ -2353,9 +2406,19 @@ def novo_animal():
 
     animais_adicionados = pagination.items
 
-    return render_template('novo_animal.html',
-                           animais_adicionados=animais_adicionados,
-                           pagination=pagination)
+    # Lista de espécies e raças para os <select> do formulário
+    species_list = Species.query.order_by(Species.name).all()
+    breed_list = Breed.query.order_by(Breed.name).all()
+
+    return render_template(
+        'novo_animal.html',
+        animais_adicionados=animais_adicionados,
+        pagination=pagination,
+        species_list=species_list,
+        breed_list=breed_list
+    )
+
+
 
 
 

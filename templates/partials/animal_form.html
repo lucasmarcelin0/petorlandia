@@ -1,40 +1,51 @@
-{# partials/animal_form.html - versão reestruturada e segura #}
+<form method="POST" action="{{ url_for('update_animal', animal_id=animal.id) }}"
+      enctype="multipart/form-data" onsubmit="return validarCadastroAnimal();">
 
-<form method="POST" action="{{ url_for('update_animal', animal_id=animal.id) }}" enctype="multipart/form-data" onsubmit="return validarCadastroAnimal();">
   <h5 class="mb-3">🐾 Cadastro do Animal</h5>
 
-  <div class="row g-3">
-    <div class="col-md-6 d-flex align-items-center gap-3">
-      <div class="col-md-12">
-        <label class="form-label">Foto e Nome do Animal</label>
-        <div class="d-flex align-items-center gap-3">
-          <label for="animal-image" style="cursor: pointer;">
-            {% if animal.image %}
-              <img id="animal-preview" src="{{ animal.image }}" alt="Foto de {{ animal.name }}" class="img-thumbnail" style="width: 60px; height: 60px; object-fit: cover;">
-            {% else %}
-              <div id="animal-preview-placeholder" class="bg-light border rounded-circle d-flex align-items-center justify-content-center" style="width: 60px; height: 60px; font-size: 28px;">
-                🐾
-              </div>
-            {% endif %}
-          </label>
-
-          <input id="animal-image" name="image" type="file" accept="image/*" class="form-control d-none">
-
-          <div class="flex-grow-1">
-            <input type="text" name="name" class="form-control" placeholder="Nome do animal" value="{{ animal.name or '' }}" required>
-          </div>
-        </div>
+  <div class="row g-4">
+    <!-- Foto e Nome -->
+    <div class="col-md-6">
+      <label class="form-label">Foto e Nome do Animal</label>
+      <div class="d-flex align-items-center gap-3">
+        <label for="animal-image" style="cursor: pointer;">
+          {% if animal.image %}
+            <img id="animal-preview" src="{{ animal.image }}" alt="Foto de {{ animal.name }}"
+                 class="img-thumbnail border" style="width: 60px; height: 60px; object-fit: cover;">
+          {% else %}
+            <div id="animal-preview-placeholder"
+                 class="bg-light border rounded-circle d-flex align-items-center justify-content-center"
+                 style="width: 60px; height: 60px; font-size: 28px;">🐾</div>
+          {% endif %}
+        </label>
+        <input id="animal-image" name="image" type="file" accept="image/*" class="form-control d-none">
+        <input type="text" name="name" class="form-control" placeholder="Nome do animal" value="{{ animal.name or '' }}" required>
       </div>
     </div>
 
+    <!-- Espécie -->
     <div class="col-md-6">
       <label class="form-label">Espécie</label>
-      <input type="text" name="species" class="form-control" value="{{ animal.species or '' }}">
+      <select name="species_id" class="form-select">
+        <option value="">Selecionar</option>
+        {% for s in species_list %}
+          <option value="{{ s.id }}" {% if animal.species_id == s.id %}selected{% endif %}>{{ s.name }}</option>
+        {% endfor %}
+      </select>
     </div>
+
+    <!-- Raça -->
     <div class="col-md-6">
       <label class="form-label">Raça</label>
-      <input type="text" name="breed" class="form-control" value="{{ animal.breed or '' }}">
+      <select name="breed_id" class="form-select">
+        <option value="">Selecionar</option>
+        {% for b in breed_list %}
+          <option value="{{ b.id }}" {% if animal.breed_id == b.id %}selected{% endif %}>{{ b.name }}</option>
+        {% endfor %}
+      </select>
     </div>
+
+    <!-- Sexo -->
     <div class="col-md-6">
       <label class="form-label">Sexo</label>
       <select name="sex" class="form-select">
@@ -44,30 +55,39 @@
       </select>
     </div>
 
+    <!-- Data de nascimento / idade -->
     {% set prefixo = 'animal' %}
     {% set nome_data = 'date_of_birth' %}
     {% set valor_data = animal.date_of_birth.strftime('%d/%m/%Y') if animal.date_of_birth else '' %}
     {% set valor_idade = animal_idade if animal_idade else '' %}
-
     {% include 'components/campo_data_idade.html' %}
 
+    <!-- Microchip -->
     <div class="col-md-6">
       <label class="form-label">Microchip</label>
       <input type="text" name="microchip_number" class="form-control" value="{{ animal.microchip_number or '' }}">
     </div>
+
+    <!-- Peso -->
     <div class="col-md-6">
       <label class="form-label">Peso (kg)</label>
       <input type="number" name="peso" class="form-control" step="0.01" value="{{ animal.peso or '' }}">
     </div>
+
+    <!-- Plano de Saúde -->
     <div class="col-md-6">
       <label class="form-label">Plano de Saúde</label>
       <input type="text" name="health_plan" class="form-control" value="{{ animal.health_plan or '' }}">
     </div>
+
+    <!-- Descrição -->
     <div class="col-md-12">
       <label class="form-label">Descrição</label>
-      <textarea name="description" class="form-control" rows="2">{{ animal.description }}</textarea>
+      <textarea name="description" class="form-control" rows="2">{{ animal.description or '' }}</textarea>
     </div>
-    <div class="col-md-12">
+
+    <!-- Castrado -->
+    <div class="col-md-6">
       <label class="form-label">Castrado?</label>
       <select name="neutered" class="form-select">
         <option value="">Selecionar</option>
@@ -82,10 +102,13 @@
   </div>
 </form>
 
-<form method="POST" action="{{ url_for('deletar_animal', animal_id=animal.id) }}" onsubmit="return confirm('Deseja mesmo remover este animal?');" class="mt-2">
+<!-- Botão de deletar -->
+<form method="POST" action="{{ url_for('deletar_animal', animal_id=animal.id) }}"
+      onsubmit="return confirm('Deseja mesmo remover este animal?');" class="mt-2">
   <button type="submit" class="btn btn-outline-danger">🗑️ Remover Animal</button>
 </form>
 
+<!-- Scripts -->
 {% block scripts %}
 <script>
   document.addEventListener('DOMContentLoaded', () => {
@@ -110,7 +133,6 @@
           if (previewImg) {
             previewImg.src = event.target.result;
           } else {
-            // substitui o placeholder por imagem nova
             const newImg = document.createElement('img');
             newImg.id = 'animal-preview';
             newImg.src = event.target.result;
@@ -127,5 +149,4 @@
     });
   });
 </script>
-
 {% endblock %}

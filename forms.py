@@ -47,8 +47,6 @@ class LoginForm(FlaskForm):
 
 class AnimalForm(FlaskForm):
     name = StringField('Nome do Animal', validators=[DataRequired()])
-    species = StringField('Espécie', validators=[DataRequired()])
-    breed = StringField('Raça', validators=[DataRequired()])
     age = StringField('Idade', validators=[DataRequired()])
     sex = SelectField('Sexo', choices=[('Macho', 'Macho'), ('Fêmea', 'Fêmea')], validators=[DataRequired()])
     description = TextAreaField('Descrição', validators=[Optional(), Length(max=500)])
