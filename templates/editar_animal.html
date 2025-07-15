@@ -1,19 +1,39 @@
 {% extends "layout.html" %}
+
 {% block main %}
 <h2>Editar Animal</h2>
 
 <form method="POST" enctype="multipart/form-data">
     {{ form.hidden_tag() }}
+
     {{ form.name.label }} {{ form.name(class="form-control") }}
-    {{ form.species.label }} {{ form.species(class="form-control") }}
-    {{ form.breed.label }} {{ form.breed(class="form-control") }}
-    {{ form.age.label }} {{ form.age(class="form-control") }}
-    {{ form.sex.label }} {{ form.sex(class="form-select") }}
-    {{ form.description.label }} {{ form.description(class="form-control") }}
-    {{ form.image.label }} {{ form.image(class="form-control") }}
-    <div class="mb-3">
+
+    <!-- Espécie manual -->
+    <label for="species_id" class="form-label mt-2">Espécie</label>
+    <select name="species_id" id="species_id" class="form-select">
+        <option value="">Selecionar</option>
+        {% for s in species_list %}
+            <option value="{{ s.id }}" {% if animal.species_id == s.id %}selected{% endif %}>{{ s.name }}</option>
+        {% endfor %}
+    </select>
+
+    <!-- Raça manual -->
+    <label for="breed_id" class="form-label mt-2">Raça</label>
+    <select name="breed_id" id="breed_id" class="form-select">
+        <option value="">Selecionar</option>
+        {% for b in breed_list %}
+            <option value="{{ b.id }}" {% if animal.breed_id == b.id %}selected{% endif %}>{{ b.name }}</option>
+        {% endfor %}
+    </select>
+
+    {{ form.age.label(class="mt-2") }} {{ form.age(class="form-control") }}
+    {{ form.sex.label(class="mt-2") }} {{ form.sex(class="form-select") }}
+    {{ form.description.label(class="mt-2") }} {{ form.description(class="form-control") }}
+    {{ form.image.label(class="mt-2") }} {{ form.image(class="form-control") }}
+
+    <div class="mb-3 mt-2">
         {{ form.modo.label(class="form-label") }}
-        {{ form.modo(class="form-select") }}
+        {{ form.modo(class="form-select", id="modo") }}
     </div>
 
     <div class="mb-3" id="price-field" style="display: none;">
@@ -21,26 +41,27 @@
         {{ form.price(class="form-control") }}
     </div>
 
-    <script>
-        const modoSelect = document.getElementById("modo");
-        const priceField = document.getElementById("price-field");
-
-        function togglePriceField() {
-            if (modoSelect.value === "venda") {
-                priceField.style.display = "block";
-            } else {
-                priceField.style.display = "none";
-            }
-        }
-
-        modoSelect.addEventListener("change", togglePriceField);
-        document.addEventListener("DOMContentLoaded", togglePriceField);
-    </script>
-
     <button class="btn btn-primary mt-2">Salvar</button>
 </form>
-<form action="{{ url_for('deletar_animal', animal_id=animal.id) }}" method="POST" onsubmit="return confirm('Tem certeza que deseja deletar este animal? Esta ação não poderá ser desfeita.');">
+
+<form action="{{ url_for('deletar_animal', animal_id=animal.id) }}" method="POST"
+      onsubmit="return confirm('Tem certeza que deseja deletar este animal? Esta ação não poderá ser desfeita.');">
     <button type="submit" class="btn btn-danger mt-3">🗑️ Deletar Animal</button>
 </form>
 
+<script>
+    const modoSelect = document.getElementById("modo");
+    const priceField = document.getElementById("price-field");
+
+    function togglePriceField() {
+        if (modoSelect.value === "venda") {
+            priceField.style.display = "block";
+        } else {
+            priceField.style.display = "none";
+        }
+    }
+
+    modoSelect.addEventListener("change", togglePriceField);
+    document.addEventListener("DOMContentLoaded", togglePriceField);
+</script>
 {% endblock %}

@@ -29,19 +29,23 @@
             </div>
 
             <div class="mb-3">
-                {{ form.species.label(class="form-label") }}
-                {{ form.species(class="form-control rounded-pill" + (" is-invalid" if form.species.errors else ""), placeholder="Ex: Gato, Cachorro") }}
-                {% for error in form.species.errors %}
-                    <div class="invalid-feedback d-block">{{ error }}</div>
-                {% endfor %}
+                <label for="species_id" class="form-label">Espécie</label>
+                <select name="species_id" id="species_id" class="form-select rounded-pill" required>
+                    <option value="">Selecionar</option>
+                    {% for s in species_list %}
+                        <option value="{{ s.id }}">{{ s.name }}</option>
+                    {% endfor %}
+                </select>
             </div>
 
             <div class="mb-3">
-                {{ form.breed.label(class="form-label") }}
-                {{ form.breed(class="form-control rounded-pill" + (" is-invalid" if form.breed.errors else ""), placeholder="Ex: SRD, Poodle, Persa") }}
-                {% for error in form.breed.errors %}
-                    <div class="invalid-feedback d-block">{{ error }}</div>
-                {% endfor %}
+                <label for="breed_id" class="form-label">Raça</label>
+                <select name="breed_id" id="breed_id" class="form-select rounded-pill" required>
+                    <option value="">Selecionar</option>
+                    {% for b in breed_list %}
+                        <option value="{{ b.id }}">{{ b.name }}</option>
+                    {% endfor %}
+                </select>
             </div>
 
             <div class="mb-3">
