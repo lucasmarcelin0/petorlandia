@@ -72,6 +72,8 @@ class AdminDashboard(BaseView):
 # --------------------------------------------------------------------------
 
 
+import re
+
 class UserAdminView(MyModelView):
     column_list = (
         'name', 'email', 'role', 'worker',
@@ -85,6 +87,9 @@ class UserAdminView(MyModelView):
         'name': lambda v, c, m, p: Markup(
             f'<a href="{url_for("ficha_tutor", tutor_id=m.id)}">{m.name}</a>'
         ),
+        'phone': lambda v, c, m, p: Markup(
+            f'<a href="https://wa.me/55{re.sub(r"\\D", "", m.phone)}" target="_blank">{m.phone}</a>'
+        ) if m.phone else '—',
         'added_by': lambda v, c, m, p: m.added_by.name if m.added_by else '—'
     }
 
@@ -96,8 +101,6 @@ class UserAdminView(MyModelView):
     )
     column_details_list = column_list
 
-
-    
 
 
 
