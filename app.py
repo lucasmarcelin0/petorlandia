@@ -71,10 +71,6 @@ mail.init_app(app)
 login.init_app(app)
 session.init_app(app)
 
-app.register_blueprint(auth_bp)
-app.register_blueprint(animals_bp)
-app.register_blueprint(clinic_bp)
-
 
 
 
@@ -154,6 +150,9 @@ from blueprints.auth import auth_bp
 from blueprints.animals import animals_bp
 from blueprints.clinic import clinic_bp
 
+app.register_blueprint(auth_bp)
+app.register_blueprint(animals_bp)
+app.register_blueprint(clinic_bp)
 
 from math import ceil
 
