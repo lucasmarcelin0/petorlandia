@@ -193,6 +193,9 @@
               <li class="nav-item">
                 <a class="nav-link" href="{{ url_for('list_animals') }}">🐾 Animais</a>
               </li>
+              <li class="nav-item">
+                <a class="nav-link" href="{{ url_for('loja') }}">🛍️ Loja</a>
+              </li>
 
 
 
@@ -202,7 +205,7 @@
                     <a class="nav-link" href="{{ url_for('tutores') }}">👥 Tutores</a>
                   </li>
                   <li class="nav-item">
-                    <a class="nav-link" href="{{ url_for('add_animal') }}">➕ Animal</a>
+                    <a class="nav-link" href="{{ url_for('animals.add_animal') }}">➕ Animal</a>
                   </li>
                 {% endif %}
 
@@ -222,19 +225,22 @@
                     {{ current_user.name.split(' ')[0] }}
                   </a>
                   <ul class="dropdown-menu dropdown-menu-end">
+
                     <li><a class="dropdown-item" href="{{ url_for('profile') }}">👤 Meu Perfil</a></li>
+                    <li><a class="dropdown-item" href="{{ url_for('listar_pedidos') }}">📦 Meus Pedidos</a></li>
                     <li><a class="dropdown-item" href="{{ url_for('logout') }}">🚪 Sair</a></li>
+
                   </ul>
                 </li>
 
               {% else %}
               
                 <li class="nav-item">
-                  <a class="nav-link" href="{{ url_for('register') }}">Registrar</a>
+                  <a class="nav-link" href="{{ url_for('auth.register') }}">Registrar</a>
                 </li>
              
                 <li class="nav-item">
-                  <a class="nav-link" href="{{ url_for('login') }}">Entrar</a>
+                  <a class="nav-link" href="{{ url_for('auth.login') }}">Entrar</a>
                 </li>
               {% endif %}
             </ul>

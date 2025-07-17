@@ -1,0 +1,23 @@
+{% extends "layout.html" %}
+{% block main %}
+<h2 class="mb-4">Meus Pedidos</h2>
+{% if orders %}
+<table class="table">
+  <thead>
+    <tr><th>ID</th><th>Data</th><th>Status</th><th>Total</th></tr>
+  </thead>
+  <tbody>
+  {% for order in orders %}
+    <tr>
+      <td>{{ order.id }}</td>
+      <td>{{ order.created_at|datetime_brazil }}</td>
+      <td>{{ order.status }}</td>
+      <td>R$ {{ '%.2f'|format(sum(item.price*item.quantity for item in order.items)) }}</td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<p>Nenhum pedido encontrado.</p>
+{% endif %}
+{% endblock %}

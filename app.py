@@ -1,11 +1,11 @@
 import uuid
 
 
-from flask import current_app
 
 import os
 
 import boto3
+import stripe
 
 from dotenv import load_dotenv
 load_dotenv()
@@ -58,6 +58,7 @@ os.makedirs(instance_path, exist_ok=True)
 # Cria o app Flask
 app = Flask(__name__, instance_path=instance_path)
 app.config.from_object(Config)
+stripe.api_key = app.config.get('STRIPE_SECRET_KEY')
 
 app.config['FRONTEND_URL'] = os.environ.get('FRONTEND_URL', 'http://127.0.0.1:5000')
 
@@ -71,6 +72,10 @@ migrate.init_app(app, db)
 mail.init_app(app)
 login.init_app(app)
 session.init_app(app)
+
+app.register_blueprint(auth_bp)
+app.register_blueprint(animals_bp)
+app.register_blueprint(clinic_bp)
 
 
 
@@ -135,18 +140,21 @@ from flask_session import Session
 from flask_login import LoginManager, login_required, current_user, logout_user
 
 try:
-    from models import Species, Breed, Endereco, db, Racao, TipoRacao, VacinaModelo, Vacina, ExameSolicitado, BlocoExames, ExameModelo, Clinica, ConsultaToken, Consulta, Medicamento, Prescricao, BlocoPrescricao, Veterinario, User, Animal, Message, Transaction, Review, Favorite, AnimalPhoto, Interest
+    from models import Species, Breed, Endereco, db, Racao, TipoRacao, VacinaModelo, Vacina, ExameSolicitado, BlocoExames, ExameModelo, Clinica, ConsultaToken, Consulta, Medicamento, Prescricao, BlocoPrescricao, Veterinario, User, Animal, Message, Transaction, Review, Favorite, AnimalPhoto, Interest, Product, CartItem, Order, OrderItem
 except ImportError:
-    from .models import Species, Breed, Endereco, db, Racao, TipoRacao, VacinaModelo, Vacina, ExameSolicitado, BlocoExames, ExameModelo, Clinica, ConsultaToken, Consulta, Medicamento, Prescricao, BlocoPrescricao, Veterinario, User, Animal, Message, Transaction, Review, Favorite, AnimalPhoto, Interest
+    from .models import Species, Breed, Endereco, db, Racao, TipoRacao, VacinaModelo, Vacina, ExameSolicitado, BlocoExames, ExameModelo, Clinica, ConsultaToken, Consulta, Medicamento, Prescricao, BlocoPrescricao, Veterinario, User, Animal, Message, Transaction, Review, Favorite, AnimalPhoto, Interest, Product, CartItem, Order, OrderItem
                     
 
 from wtforms.fields import SelectField
-from flask import Flask, jsonify, render_template, redirect, url_for, request, session, flash
+from flask import Flask, jsonify, render_template, redirect, url_for, request, session as flask_session, flash
 
 
 import sys
 import os
 from werkzeug.utils import secure_filename
+from blueprints.auth import auth_bp
+from blueprints.animals import animals_bp
+from blueprints.clinic import clinic_bp
 
 
 from math import ceil
@@ -167,30 +175,6 @@ app.config['MAIL_USERNAME'] = 'gpt.assistente.orlandia@gmail.com'
 app.config['MAIL_PASSWORD'] = 'SENHA_DE_APP'  # ← Cole a senha de aplicativo aqui
 app.config['MAIL_DEFAULT_SENDER'] = ('PetOrlândia', 'gpt.assistente.orlandia@gmail.com')
 
-mail = Mail(app)
-
-
-
-sys.path.append(os.path.dirname(os.path.abspath(__file__)))
-
-
-import os
-
-instance_path = os.path.join(os.getcwd(), 'instance')
-os.makedirs(instance_path, exist_ok=True)
-
-app = Flask(__name__, instance_path=instance_path)
-
-
-
-app.config.from_object(Config)
-
- 
-migrate = Migrate(app, db)
-
-db.init_app(app)  # Aqui sim você registra o app corretamente
-mail = Mail(app)  # ✅ ESSA LINHA ESTAVA FALTANDO
-login = LoginManager(app)
 
 
 @login.user_loader
@@ -198,92 +182,6 @@ def load_user(user_id):
     return User.query.get(int(user_id))
 
 
-login.login_view = 'login'
-
-
-app.config["SESSION_PERMANENT"] = False
-app.config["SESSION_TYPE"] = "filesystem"
-Session(app)
-
-
-# Após db.init_app(app)
-migrate = Migrate(app, db)
-
-
-app.config['SERVER_NAME'] = 'orange-space-pancake-j9456jjjv9vcqrxx-5000.app.github.dev'
-
-
-with app.app_context():
-    init_admin(app)      # ⬅️ Primeiro registra o admin e os modelos
-  #  db.create_all()      # ⬅️ Só depois chama o create_all()
-
-
-@login.user_loader
-def load_user(user_id):
-    return User.query.get(int(user_id))
-
-
-from itsdangerous import URLSafeTimedSerializer
-
-
-
-
-s = URLSafeTimedSerializer(app.config['SECRET_KEY'])
-
-@app.route('/reset_password_request', methods=['GET', 'POST'])
-def reset_password_request():
-    form = ResetPasswordRequestForm()
-    if form.validate_on_submit():
-        user = User.query.filter_by(email=form.email.data).first()
-        if user:
-            token = s.dumps(user.email, salt='password-reset-salt')
-            base_url = os.environ.get('FRONTEND_URL', 'http://127.0.0.1:5000')
-            link = f"{base_url}{url_for('reset_password', token=token)}"
-
-            msg = MailMessage(
-                subject='Redefinir sua senha - PetOrlândia',
-                sender=app.config['MAIL_DEFAULT_SENDER'],
-                recipients=[user.email],
-                body=f'Clique no link para redefinir sua senha: {link}',
-                html=f""" 
-                    <!DOCTYPE html>
-                    <html lang="pt-BR">
-                    <head><meta charset="UTF-8"><title>Redefinição de Senha</title></head>
-                    <body style="font-family: Arial; padding: 20px;">
-                        <h2>🐾 PetOrlândia</h2>
-                        <p>Recebemos uma solicitação para redefinir sua senha.</p>
-                        <p><a href="{link}" style="background:#0d6efd;color:white;padding:10px 20px;text-decoration:none;border-radius:5px;">Redefinir Senha</a></p>
-                        <p>Se você não solicitou, ignore este e-mail.</p>
-                        <hr><small>PetOrlândia • Cuidando com amor dos seus melhores amigos</small>
-                    </body>
-                    </html>
-                """
-            )
-            mail.send(msg)
-            flash('Um e-mail foi enviado com instruções para redefinir sua senha.', 'info')
-            return redirect(url_for('login'))
-        flash('E-mail não encontrado.', 'danger')
-    return render_template('reset_password_request.html', form=form)
-
-
-
-@app.route('/reset_password/<token>', methods=['GET', 'POST'])
-def reset_password(token):
-    try:
-        email = s.loads(token, salt='password-reset-salt', max_age=3600)  # 1 hour
-    except:
-        flash('O link de redefinição expirou ou é inválido.', 'danger')
-        return redirect(url_for('reset_password_request'))
-
-    form = ResetPasswordForm()
-    if form.validate_on_submit():
-        user = User.query.filter_by(email=email).first()
-        if user:
-            user.set_password(form.password.data)  # Your User model must have set_password method
-            db.session.commit()
-            flash('Sua senha foi redefinida. Você já pode entrar!', 'success')
-            return redirect(url_for('login'))
-    return render_template('reset_password.html', form=form)
 
 
 
@@ -312,294 +210,6 @@ def index():
     return render_template('index.html')
 
 
-@app.route('/register', methods=['GET', 'POST'])
-def register():
-    form = RegistrationForm()
-
-    if form.validate_on_submit():
-        # Verifica se o e-mail já está em uso
-        existing_user = User.query.filter_by(email=form.email.data).first()
-        if existing_user:
-            flash('Email já está em uso.', 'danger')
-            return render_template('register.html', form=form)
-
-        # Cria o endereço
-        endereco = Endereco(
-            cep=request.form.get('cep'),
-            rua=request.form.get('rua'),
-            numero=request.form.get('numero'),
-            complemento=request.form.get('complemento'),
-            bairro=request.form.get('bairro'),
-            cidade=request.form.get('cidade'),
-            estado=request.form.get('estado')
-        )
-
-        # Upload da foto de perfil para o S3
-        photo_url = None
-        if form.profile_photo.data:
-            file = form.profile_photo.data
-            filename = secure_filename(file.filename)
-            photo_url = upload_to_s3(file, filename, folder="users")
-
-
-        # Cria o usuário com a URL da imagem no S3
-        user = User(
-            name=form.name.data,
-            email=form.email.data,
-            phone=form.phone.data,
-            profile_photo=photo_url,
-            endereco=endereco
-        )
-        user.set_password(form.password.data)
-
-        # Salva no banco
-        db.session.add(endereco)
-        db.session.add(user)
-        db.session.commit()
-
-        flash('Usuário registrado com sucesso!', 'success')
-        return redirect(url_for('index'))
-
-    return render_template('register.html', form=form, endereco=None)
-
-
-
-
-@app.route('/add-animal', methods=['GET', 'POST'])
-@login_required
-def add_animal():
-    form = AnimalForm()
-
-    # Listas para o template
-    species_list = Species.query.order_by(Species.name).all()
-    breed_list = Breed.query.order_by(Breed.name).all()
-
-    # Debug da requisição
-    print("📥 Método da requisição:", request.method)
-    print("📋 Dados recebidos:", request.form)
-
-    if form.validate_on_submit():
-        print("✅ Formulário validado com sucesso.")
-
-        image_url = None
-        if form.image.data:
-            file = form.image.data
-            original_filename = secure_filename(file.filename)
-            filename = f"{uuid.uuid4().hex}_{original_filename}"
-            print("🖼️ Upload de imagem iniciado:", filename)
-            image_url = upload_to_s3(file, filename, folder="animals")
-            print("✅ Upload concluído. URL:", image_url)
-
-        # IDs das listas
-        species_id = request.form.get("species_id", type=int)
-        breed_id = request.form.get("breed_id", type=int)
-        print("🔍 Species ID:", species_id)
-        print("🔍 Breed ID:", breed_id)
-
-        # Criação do animal
-        animal = Animal(
-            name=form.name.data,
-            species_id=species_id,
-            breed_id=breed_id,
-            age=form.age.data,
-            sex=form.sex.data,
-            description=form.description.data,
-            image=image_url,
-            modo=form.modo.data,
-            price=form.price.data if form.modo.data == 'venda' else None,
-            status='disponível',
-            owner=current_user,
-            is_alive=True
-        )
-
-        db.session.add(animal)
-        try:
-            db.session.commit()
-            print("✅ Animal salvo com ID:", animal.id)
-            flash('Animal cadastrado com sucesso!', 'success')
-            return redirect(url_for('index'))
-        except Exception as e:
-            db.session.rollback()
-            print("❌ Erro ao salvar no banco:", str(e))
-            flash('Erro ao salvar o animal.', 'danger')
-
-    else:
-        print("⚠️ Formulário inválido.")
-        print("🧾 Erros do formulário:", form.errors)
-
-    return render_template(
-        'add_animal.html',
-        form=form,
-        species_list=species_list,
-        breed_list=breed_list
-    )
-
-
-@app.route('/login', methods=['GET', 'POST'])
-def login():
-    form = LoginForm()
-    if form.validate_on_submit():
-        user = User.query.filter_by(email=form.email.data).first()
-        if user and user.check_password(form.password.data):
-            login_user(user, remember=form.remember.data)
-            flash('Login realizado com sucesso!', 'success')
-            return redirect(url_for('index'))
-        else:
-            flash('Email ou senha inválidos.', 'danger')
-    return render_template('login.html', form=form)
-
-
-@app.route('/logout')
-@login_required
-def logout():
-    logout_user()
-    flash('Você saiu com sucesso!', 'success')
-    return redirect(url_for('index'))
-
-@app.route('/profile', methods=['GET', 'POST'])
-@login_required
-def profile():
-    # Garante que current_user.endereco exista para pré-preenchimento
-    form = EditProfileForm(obj=current_user)
-
-    if form.validate_on_submit():
-        if not current_user.endereco:
-            current_user.endereco = Endereco()
-
-
-    form = EditProfileForm(obj=current_user)
-
-    if form.validate_on_submit():
-        current_user.name = form.name.data
-        current_user.email = form.email.data
-        current_user.phone = form.phone.data
-
-        # Atualiza ou cria endereço
-        endereco = current_user.endereco
-        endereco.cep = request.form.get("cep")
-        endereco.rua = request.form.get("rua")
-        endereco.numero = request.form.get("numero")
-        endereco.complemento = request.form.get("complemento")
-        endereco.bairro = request.form.get("bairro")
-        endereco.cidade = request.form.get("cidade")
-        endereco.estado = request.form.get("estado")
-
-        db.session.add(endereco)
-
-        # Upload de imagem para S3 (se houver nova)
-        if (
-            form.profile_photo.data and
-            hasattr(form.profile_photo.data, 'filename') and
-            form.profile_photo.data.filename != ''
-        ):
-            file = form.profile_photo.data
-            filename = f"{uuid.uuid4().hex}_{secure_filename(file.filename)}"
-            current_user.profile_photo = upload_to_s3(file, filename, folder="profile_photos")
-
-        db.session.commit()
-        flash('Perfil atualizado com sucesso!', 'success')
-        return redirect(url_for('profile'))
-
-    # Transações recentes
-    transactions = Transaction.query.filter(
-        (Transaction.from_user_id == current_user.id) | (Transaction.to_user_id == current_user.id)
-    ).order_by(Transaction.date.desc()).limit(10).all()
-
-    return render_template(
-        'profile.html',
-        user=current_user,
-        form=form,
-        transactions=transactions
-    )
-
-
-
-
-@app.route('/animals')
-def list_animals():
-    page = request.args.get('page', 1, type=int)
-    per_page = 9
-    modo = request.args.get('modo')
-
-    # Base query: ignora animais removidos
-    query = Animal.query.filter(Animal.removido_em == None)
-
-    # Filtro por modo
-    if modo and modo.lower() != 'todos':
-        query = query.filter_by(modo=modo)
-    else:
-        # Evita mostrar adotados para usuários não autorizados
-        if not current_user.is_authenticated or current_user.worker not in ['veterinario', 'colaborador']:
-            query = query.filter(Animal.modo != 'adotado')
-
-    # Ordenação e paginação
-    query = query.order_by(Animal.date_added.desc())
-    pagination = query.paginate(page=page, per_page=per_page, error_out=False)
-    animals = pagination.items
-
-    return render_template(
-        'animals.html',
-        animals=animals,
-        page=page,
-        total_pages=pagination.pages,
-        modo=modo
-    )
-
-
-
-
-@app.route('/animal/<int:animal_id>/adotar', methods=['POST'])
-@login_required
-def adotar_animal(animal_id):
-    animal = Animal.query.get_or_404(animal_id)
-
-    if animal.status != 'disponível':
-        flash('Este animal já foi adotado ou vendido.', 'danger')
-        return redirect(url_for('list_animals'))
-
-    animal.status = 'adotado'  # ou 'vendido', se for o caso
-    animal.user_id = current_user.id  # <- transfere a posse do animal
-    db.session.commit()
-
-    db.session.commit()
-    flash(f'Você adotou {animal.name} com sucesso!', 'success')
-    return redirect(url_for('list_animals'))
-
-
-@app.route('/animal/<int:animal_id>/editar', methods=['GET', 'POST'])
-@app.route('/editar_animal/<int:animal_id>', methods=['GET', 'POST'])
-@login_required
-def editar_animal(animal_id):
-    animal = Animal.query.get_or_404(animal_id)
-
-    if animal.user_id != current_user.id:
-        flash('Você não tem permissão para editar este animal.', 'danger')
-        return redirect(url_for('profile'))
-
-    form = AnimalForm(obj=animal)
-
-    species_list = Species.query.order_by(Species.name).all()
-    breed_list = Breed.query.order_by(Breed.name).all()
-
-    if form.validate_on_submit():
-        form.populate_obj(animal)  # pega tudo do form automaticamente
-        # Atualiza os relacionamentos manuais
-        species_id = request.form.get('species_id')
-        breed_id = request.form.get('breed_id')
-        if species_id:
-            animal.species_id = int(species_id)
-        if breed_id:
-            animal.breed_id = int(breed_id)
-
-        db.session.commit()
-        flash('Animal atualizado com sucesso!', 'success')
-        return redirect(url_for('profile'))
-
-    return render_template('editar_animal.html',
-                           form=form,
-                           animal=animal,
-                           species_list=species_list,
-                           breed_list=breed_list)
 
 
 @app.route('/mensagem/<int:animal_id>', methods=['GET', 'POST'])
@@ -610,7 +220,7 @@ def enviar_mensagem(animal_id):
 
     if animal.user_id == current_user.id:
         flash("Você não pode enviar mensagem para si mesmo.", "warning")
-        return redirect(url_for('list_animals'))
+        return redirect(url_for('animals.list_animals'))
 
     if form.validate_on_submit():
         msg = Message(
@@ -622,7 +232,7 @@ def enviar_mensagem(animal_id):
         db.session.add(msg)
         db.session.commit()
         flash('Mensagem enviada com sucesso!', 'success')
-        return redirect(url_for('list_animals'))
+        return redirect(url_for('animals.list_animals'))
 
     return render_template('enviar_mensagem.html', form=form, animal=animal)
 
@@ -718,7 +328,7 @@ def deletar_animal(animal_id):
     animal.removido_em = datetime.utcnow()
     db.session.commit()
     flash('Animal marcado como removido. Histórico preservado.', 'success')
-    return redirect(url_for('list_animals'))
+    return redirect(url_for('animals.list_animals'))
 
 
 @app.route('/termo/interesse/<int:animal_id>/<int:user_id>', methods=['GET', 'POST'])
@@ -779,7 +389,7 @@ def termo_transferencia(animal_id, user_id):
 
     if animal.owner.id != current_user.id:
         flash("Você não tem permissão para transferir esse animal.", "danger")
-        return redirect(url_for('profile'))
+        return redirect(url_for('auth.profile'))
 
     if request.method == 'POST':
         # Transfere a tutoria
@@ -826,7 +436,7 @@ def termo_transferencia(animal_id, user_id):
         db.session.commit()
 
         flash(f'Tutoria de {animal.name} transferida para {novo_dono.name}.', 'success')
-        return redirect(url_for('profile'))
+        return redirect(url_for('auth.profile'))
 
     data_atual = datetime.now().strftime('%d/%m/%Y')
     return render_template('termo_transferencia.html', animal=animal, novo_dono=novo_dono)
@@ -839,7 +449,7 @@ def planosaude_animal(animal_id):
 
     if animal.owner != current_user:
         flash("Você não tem permissão para acessar esse animal.", "danger")
-        return redirect(url_for('profile'))
+        return redirect(url_for('auth.profile'))
 
     # Aqui, você pode carregar um formulário ou exibir informações
     return render_template('planosaude_animal.html', animal=animal)
@@ -966,111 +576,6 @@ def consulta_qr():
 
 
 
-@app.route('/consulta/<int:animal_id>')
-@login_required
-def consulta_direct(animal_id):
-    if current_user.worker not in ['veterinario', 'colaborador']:
-        abort(403)
-
-    animal = Animal.query.get_or_404(animal_id)
-    tutor  = animal.owner
-
-    edit_id = request.args.get('c', type=int)
-    edit_mode = False
-
-    if current_user.worker == 'veterinario':
-        if edit_id:
-            consulta = Consulta.query.get_or_404(edit_id)
-            edit_mode = True
-        else:
-            consulta = (Consulta.query
-                        .filter_by(animal_id=animal.id, status='in_progress')
-                        .first())
-            if not consulta:
-                consulta = Consulta(animal_id=animal.id,
-                                    created_by=current_user.id,
-                                    status='in_progress')
-                db.session.add(consulta)
-                db.session.commit()
-    else:
-        consulta = None
-
-    historico = []
-    if current_user.worker == 'veterinario':
-        historico = (Consulta.query
-                    .filter_by(animal_id=animal.id, status='finalizada')
-                    .order_by(Consulta.created_at.desc())
-                    .all())
-
-    tipos_racao = TipoRacao.query.order_by(TipoRacao.marca.asc()).all()
-    marcas_existentes = sorted(set([t.marca for t in tipos_racao if t.marca]))
-    linhas_existentes = sorted(set([t.linha for t in tipos_racao if t.linha]))
-
-    # 🆕 Carregar listas de espécies e raças para o formulário
-    species_list = Species.query.order_by(Species.name).all()
-    breed_list = Breed.query.order_by(Breed.name).all()
-
-    return render_template('consulta_qr.html',
-                           animal=animal,
-                           tutor=tutor,
-                           consulta=consulta,
-                           historico_consultas=historico,
-                           edit_mode=edit_mode,
-                           worker=current_user.worker,
-                           tipos_racao=tipos_racao,
-                           marcas_existentes=marcas_existentes,
-                           linhas_existentes=linhas_existentes,
-                           species_list=species_list,
-                           breed_list=breed_list)
-
-
-
-@app.route('/finalizar_consulta/<int:consulta_id>', methods=['POST'])
-@login_required
-def finalizar_consulta(consulta_id):
-    consulta = Consulta.query.get_or_404(consulta_id)
-    if current_user.worker != 'veterinario':
-        flash('Apenas veterinários podem finalizar consultas.', 'danger')
-        return redirect(url_for('index'))
-
-    consulta.status = 'finalizada'
-    db.session.commit()
-    flash('Consulta finalizada e registrada no histórico!', 'success')
-    return redirect(url_for('consulta_direct', animal_id=consulta.animal_id))
-
-
-@app.route('/consulta/<int:consulta_id>/deletar', methods=['POST'])
-@login_required
-def deletar_consulta(consulta_id):
-    consulta = Consulta.query.get_or_404(consulta_id)
-    animal_id = consulta.animal_id
-    if current_user.worker != 'veterinario':
-        flash('Apenas veterinários podem excluir consultas.', 'danger')
-        return redirect(url_for('index'))
-
-    db.session.delete(consulta)
-    db.session.commit()
-    flash('Consulta excluída!', 'info')
-    return redirect(url_for('consulta_direct', animal_id=animal_id))
-
-
-@app.route('/imprimir_consulta/<int:consulta_id>')
-@login_required
-def imprimir_consulta(consulta_id):
-    consulta = Consulta.query.get_or_404(consulta_id)
-    animal = consulta.animal
-    tutor = animal.owner
-    clinica = current_user.veterinario.clinica if current_user.veterinario else None
-
-    return render_template('imprimir_consulta.html',
-                           consulta=consulta,
-                           animal=animal,
-                           tutor=tutor,
-                           clinica=clinica)
-
-
-
-
 @app.route('/buscar_tutores', methods=['GET'])
 def buscar_tutores():
     query = request.args.get('q', '').strip()
@@ -1163,9 +668,15 @@ def tutores():
         # Data de nascimento
         date_str = request.form.get('tutor_date_of_birth') or request.form.get('date_of_birth')
         if date_str:
-            try:
-                novo.date_of_birth = datetime.strptime(date_str.strip(), '%Y-%m-%d').date()
-            except ValueError:
+            dob_parsed = parse_data_nascimento(date_str.strip())
+            if not dob_parsed:
+                try:
+                    dob_parsed = datetime.strptime(date_str.strip(), '%Y-%m-%d')
+                except ValueError:
+                    dob_parsed = None
+            if dob_parsed:
+                novo.date_of_birth = dob_parsed.date()
+            else:
                 flash('Data de nascimento inválida. Use o formato AAAA-MM-DD.', 'danger')
                 return redirect(url_for('tutores'))
 
@@ -1312,9 +823,15 @@ def update_tutor(user_id):
     # 📅 Data de nascimento
     date_str = request.form.get("date_of_birth")
     if date_str:
-        try:
-            user.date_of_birth = datetime.strptime(date_str, "%Y-%m-%d").date()
-        except ValueError:
+        dob_parsed = parse_data_nascimento(date_str)
+        if not dob_parsed:
+            try:
+                dob_parsed = datetime.strptime(date_str, "%Y-%m-%d")
+            except ValueError:
+                dob_parsed = None
+        if dob_parsed:
+            user.date_of_birth = dob_parsed.date()
+        else:
             flash("Data de nascimento inválida. Use o formato correto.", "danger")
             return redirect(request.referrer or url_for("index"))
 
@@ -1473,9 +990,15 @@ def update_animal(animal_id):
     dob_str = request.form.get('date_of_birth')
     age_input = request.form.get('age')
     if dob_str:
-        try:
-            animal.date_of_birth = datetime.strptime(dob_str, '%Y-%m-%d').date()
-        except ValueError:
+        dob_parsed = parse_data_nascimento(dob_str)
+        if not dob_parsed:
+            try:
+                dob_parsed = datetime.strptime(dob_str, '%Y-%m-%d')
+            except ValueError:
+                dob_parsed = None
+        if dob_parsed:
+            animal.date_of_birth = dob_parsed.date()
+        else:
             flash('Data de nascimento inválida.', 'warning')
     elif age_input:
         try:
@@ -2327,9 +1850,15 @@ def criar_tutor_ajax():
 
     date_str = request.form.get('date_of_birth')
     if date_str:
-        try:
-            novo_tutor.date_of_birth = datetime.strptime(date_str, '%Y-%m-%d').date()
-        except ValueError:
+        dob_parsed = parse_data_nascimento(date_str)
+        if not dob_parsed:
+            try:
+                dob_parsed = datetime.strptime(date_str, '%Y-%m-%d')
+            except ValueError:
+                dob_parsed = None
+        if dob_parsed:
+            novo_tutor.date_of_birth = dob_parsed.date()
+        else:
             return jsonify({'success': False, 'message': 'Data de nascimento inválida.'})
 
     novo_tutor.set_password('123456789')  # Senha padrão
@@ -2358,9 +1887,15 @@ def novo_animal():
         dob_str = request.form.get('date_of_birth')
         dob = None
         if dob_str:
-            try:
-                dob = datetime.strptime(dob_str, '%Y-%m-%d').date()
-            except ValueError:
+            dob_parsed = parse_data_nascimento(dob_str)
+            if not dob_parsed:
+                try:
+                    dob_parsed = datetime.strptime(dob_str, '%Y-%m-%d')
+                except ValueError:
+                    dob_parsed = None
+            if dob_parsed:
+                dob = dob_parsed.date()
+            else:
                 flash('Data de nascimento inválida. Use AAAA‑MM‑DD.', 'warning')
                 return redirect(url_for('ficha_tutor', tutor_id=tutor.id))
 
@@ -2512,6 +2047,26 @@ def arquivar_animal(animal_id):
     return redirect(url_for('ficha_tutor', tutor_id=animal.user_id))
 
 
+# -------------------------------------------------------------
+# Funções utilitárias para o carrinho
+# -------------------------------------------------------------
+def _get_cart():
+    if current_user.is_authenticated:
+        items = CartItem.query.filter_by(user_id=current_user.id).all()
+        return {str(i.product_id): i.quantity for i in items}
+    return flask_session.get('cart', {})
+
+
+def _save_cart(cart):
+    if current_user.is_authenticated:
+        CartItem.query.filter_by(user_id=current_user.id).delete()
+        for pid, qty in cart.items():
+            db.session.add(CartItem(user_id=current_user.id, product_id=int(pid), quantity=qty))
+        db.session.commit()
+    else:
+        flask_session['cart'] = cart
+
+
 
 
 
@@ -2519,9 +2074,109 @@ def arquivar_animal(animal_id):
 
 
 @app.route('/loja')
-@login_required
 def loja():
-    return render_template('loja.html')
+    products = Product.query.all()
+    return render_template('product_list.html', products=products)
+
+
+@app.route('/produto/<int:product_id>')
+def produto_detail(product_id):
+    product = Product.query.get_or_404(product_id)
+    return render_template('product_detail.html', product=product)
+
+
+@app.route('/add_to_cart/<int:product_id>', methods=['POST'])
+def add_to_cart(product_id):
+    product = Product.query.get_or_404(product_id)
+    cart = _get_cart()
+    cart[str(product_id)] = cart.get(str(product_id), 0) + 1
+    _save_cart(cart)
+    flash('Produto adicionado ao carrinho.', 'success')
+    return redirect(url_for('cart'))
+
+
+@app.route('/cart')
+def cart():
+    cart = _get_cart()
+    products = Product.query.filter(Product.id.in_(cart.keys())).all() if cart else []
+    items = []
+    total = 0
+    for p in products:
+        qty = cart.get(str(p.id), 0)
+        total += float(p.price) * qty
+        items.append({'product': p, 'quantity': qty})
+    return render_template('cart.html', cart_items=items, total=total)
+
+
+@app.route('/remove_from_cart/<int:product_id>')
+def remove_from_cart(product_id):
+    cart = _get_cart()
+    cart.pop(str(product_id), None)
+    _save_cart(cart)
+    return redirect(url_for('cart'))
+
+
+@app.route('/pedidos')
+@login_required
+def listar_pedidos():
+    orders = Order.query.filter_by(user_id=current_user.id).order_by(Order.created_at.desc()).all()
+    return render_template('orders.html', orders=orders)
+
+
+@app.route('/checkout', methods=['POST'])
+@login_required
+def checkout():
+    cart = _get_cart()
+    if not cart:
+        flash('Carrinho vazio.', 'warning')
+        return redirect(url_for('loja'))
+    products = Product.query.filter(Product.id.in_(cart.keys())).all()
+    line_items = []
+    for p in products:
+        qty = cart.get(str(p.id), 0)
+        line_items.append({
+            'price_data': {
+                'currency': 'brl',
+                'product_data': {'name': p.name},
+                'unit_amount': int(float(p.price) * 100)
+            },
+            'quantity': qty
+        })
+    checkout_session = stripe.checkout.Session.create(
+        payment_method_types=['card'],
+        line_items=line_items,
+        mode='payment',
+        success_url=url_for('checkout_success', _external=True),
+        cancel_url=url_for('cart', _external=True)
+    )
+    return redirect(checkout_session.url, code=303)
+
+
+@app.route('/checkout/success')
+def checkout_success():
+    cart = _get_cart()
+    if cart:
+        order = Order(user_id=current_user.id, status='paid')
+        db.session.add(order)
+        for pid, qty in cart.items():
+            product = Product.query.get(int(pid))
+            if not product:
+                continue
+            product.stock = product.stock - qty
+            db.session.add(OrderItem(order=order, product_id=product.id, quantity=qty, price=product.price))
+        db.session.commit()
+        try:
+            msg = MailMessage(
+                subject='Confirmação de Pedido - PetOrlândia',
+                recipients=[current_user.email],
+                body=f'Seu pedido #{order.id} foi confirmado.'
+            )
+            mail.send(msg)
+        except Exception as e:
+            current_app.logger.error(f'Erro ao enviar email: {e}')
+    _save_cart({})
+    flash('Pagamento realizado com sucesso!', 'success')
+    return redirect(url_for('loja'))
 
 
 

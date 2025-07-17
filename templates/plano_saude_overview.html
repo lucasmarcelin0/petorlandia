@@ -70,7 +70,7 @@
             {% endfor %}
         </div>
     {% else %}
-        <p class="text-muted mt-3">Você ainda não possui animais cadastrados. <a href="{{ url_for('add_animal') }}">Cadastre um agora!</a></p>
+        <p class="text-muted mt-3">Você ainda não possui animais cadastrados. <a href="{{ url_for('animals.add_animal') }}">Cadastre um agora!</a></p>
     {% endif %}
 </div>
 {% endblock %}

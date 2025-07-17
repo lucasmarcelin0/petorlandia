@@ -14,13 +14,13 @@ try:
     from models import (
         Breed, Species, TipoRacao, ApresentacaoMedicamento, VacinaModelo, Consulta, Veterinario,
         Clinica, Prescricao, Medicamento, db, User, Animal, Message,
-        Transaction, Review, Favorite, AnimalPhoto, UserRole, ExameModelo
+        Transaction, Review, Favorite, AnimalPhoto, UserRole, ExameModelo, Product
     )
 except ImportError:
     from .models import (
         Breed, Species, TipoRacao, ApresentacaoMedicamento, VacinaModelo, Consulta, Veterinario,
         Clinica, Prescricao, Medicamento, db, User, Animal, Message,
-        Transaction, Review, Favorite, AnimalPhoto, UserRole, ExameModelo
+        Transaction, Review, Favorite, AnimalPhoto, UserRole, ExameModelo, Product
     )
 
 # --------------------------------------------------------------------------
@@ -40,7 +40,7 @@ class MyModelView(ModelView):
 
     def inaccessible_callback(self, name, **kwargs):
         flash("Acesso restrito à administração.", "danger")
-        return redirect(url_for('login'))
+        return redirect(url_for('auth.login'))
 
 # --------------------------------------------------------------------------
 # Dashboard (será a página inicial do painel)
@@ -51,7 +51,7 @@ class AdminDashboard(BaseView):
 
     def inaccessible_callback(self, name, **kwargs):
         flash("Acesso restrito à administração.", "danger")
-        return redirect(url_for('login'))
+        return redirect(url_for('auth.login'))
 
     @expose('/')
     @login_required
@@ -134,6 +134,16 @@ class ClinicaAdmin(MyModelView):
         )
     }
 
+
+class ProductAdmin(MyModelView):
+    form_extra_fields = {
+        'image': ImageUploadField(
+            'Imagem',
+            base_path=os.path.join(os.getcwd(), 'static/uploads/products'),
+            url_relative_path='uploads/products/',
+            allowed_extensions=['jpg', 'jpeg', 'png', 'gif']
+        )
+    }
 
 
 class TutorAdminView(MyModelView):
@@ -237,6 +247,7 @@ def init_admin(app):
     admin.add_view(MyModelView(VacinaModelo, db.session))
     admin.add_view(MyModelView(ApresentacaoMedicamento, db.session))
     admin.add_view(MyModelView(TipoRacao, db.session))
+    admin.add_view(ProductAdmin(Product, db.session))
 
     # Link para voltar ao site principal
     admin.add_link(MenuLink(name='🔙 Voltar ao Site', url='/'))

@@ -1,0 +1,30 @@
+{% extends "layout.html" %}
+{% block main %}
+<h2 class="mb-4">Carrinho</h2>
+{% if cart_items %}
+<table class="table">
+  <thead>
+    <tr><th>Produto</th><th>Qtd.</th><th>Subtotal</th><th></th></tr>
+  </thead>
+  <tbody>
+    {% for item in cart_items %}
+    <tr>
+      <td>{{ item.product.name }}</td>
+      <td>{{ item.quantity }}</td>
+      <td>R$ {{ '%.2f'|format(item.product.price * item.quantity) }}</td>
+      <td><a href="{{ url_for('remove_from_cart', product_id=item.product.id) }}" class="btn btn-sm btn-danger">Remover</a></td>
+    </tr>
+    {% endfor %}
+    <tr>
+      <td colspan="2" class="text-end fw-bold">Total</td>
+      <td colspan="2">R$ {{ '%.2f'|format(total) }}</td>
+    </tr>
+  </tbody>
+</table>
+<form action="{{ url_for('checkout') }}" method="post">
+  <button class="btn btn-primary" type="submit">Finalizar compra</button>
+</form>
+{% else %}
+<p>Seu carrinho está vazio.</p>
+{% endif %}
+{% endblock %}
