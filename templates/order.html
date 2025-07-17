@@ -1,0 +1,36 @@
+{% extends 'layout.html' %}
+{% block main %}
+<div class="container py-4">
+  <h2 class="mb-4">📦 Meu Pedido</h2>
+  <div class="card mb-4">
+    <div class="card-body">
+      <form method="POST">
+        {{ form.hidden_tag() }}
+        <div class="row g-2">
+          <div class="col-md-8">
+            {{ form.product.label(class='form-label') }}
+            {{ form.product(class='form-control') }}
+          </div>
+          <div class="col-md-4">
+            {{ form.quantity.label(class='form-label') }}
+            {{ form.quantity(class='form-control') }}
+          </div>
+        </div>
+        {{ form.submit(class='btn btn-primary mt-3') }}
+      </form>
+    </div>
+  </div>
+
+  {% if items %}
+  <ul class="list-group mb-3">
+    {% for item in items %}
+    <li class="list-group-item d-flex justify-content-between align-items-center">
+      {{ item.name }}
+      <span class="badge bg-primary rounded-pill">{{ item.quantity }}</span>
+    </li>
+    {% endfor %}
+  </ul>
+  <div class="alert alert-info">Total de itens: {{ total_quantity }}</div>
+  {% endif %}
+</div>
+{% endblock %}

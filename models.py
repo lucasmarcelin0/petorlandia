@@ -39,6 +39,7 @@ class UserRole(enum.Enum):
     doador = 'doador'
     veterinario = 'veterinario'
     admin = 'admin'
+    delivery = 'delivery'
 
 
 # Usuário
@@ -498,6 +499,35 @@ class Favorite(db.Model):
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
     animal_id = db.Column(db.Integer, db.ForeignKey('animal.id'), nullable=False)
 
+
+# ----------
+# Pedidos e Entregas
+
+class Order(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    status = db.Column(db.String(20), default='open')
+
+    user = db.relationship('User', backref='orders')
+    items = db.relationship('OrderItem', backref='order', cascade='all, delete-orphan')
+
+
+class OrderItem(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    order_id = db.Column(db.Integer, db.ForeignKey('order.id'), nullable=False)
+    name = db.Column(db.String(100), nullable=False)
+    quantity = db.Column(db.Integer, default=1)
+
+
+class DeliveryRequest(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    requested_by_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    summary = db.Column(db.Text)
+    status = db.Column(db.String(20), default='pending')
+
+    requested_by = db.relationship('User')
 
 
 

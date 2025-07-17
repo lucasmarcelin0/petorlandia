@@ -82,3 +82,13 @@ class EditProfileForm(FlaskForm):
 class MessageForm(FlaskForm):
     content = TextAreaField('Mensagem', validators=[DataRequired(), Length(max=1000)])
     submit = SubmitField('Enviar Mensagem')
+
+
+class OrderItemForm(FlaskForm):
+    product = StringField('Produto', validators=[DataRequired()])
+    quantity = DecimalField('Quantidade', places=0, validators=[DataRequired()])
+    submit = SubmitField('Adicionar')
+
+
+class GenerateDeliveryRequestForm(FlaskForm):
+    submit = SubmitField('Gerar Solicitação')

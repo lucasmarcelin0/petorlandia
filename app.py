@@ -110,9 +110,9 @@ import qrcode
 import base64
 
 try:
-    from forms import MessageForm, RegistrationForm, LoginForm, AnimalForm, EditProfileForm, ResetPasswordRequestForm, ResetPasswordForm
+    from forms import MessageForm, RegistrationForm, LoginForm, AnimalForm, EditProfileForm, ResetPasswordRequestForm, ResetPasswordForm, OrderItemForm, GenerateDeliveryRequestForm
 except ImportError:
-    from .forms import MessageForm, RegistrationForm, LoginForm, AnimalForm, EditProfileForm, ResetPasswordRequestForm, ResetPasswordForm
+    from .forms import MessageForm, RegistrationForm, LoginForm, AnimalForm, EditProfileForm, ResetPasswordRequestForm, ResetPasswordForm, OrderItemForm, GenerateDeliveryRequestForm
 
 try:
     from admin import init_admin
@@ -135,9 +135,9 @@ from flask_session import Session
 from flask_login import LoginManager, login_required, current_user, logout_user
 
 try:
-    from models import Species, Breed, Endereco, db, Racao, TipoRacao, VacinaModelo, Vacina, ExameSolicitado, BlocoExames, ExameModelo, Clinica, ConsultaToken, Consulta, Medicamento, Prescricao, BlocoPrescricao, Veterinario, User, Animal, Message, Transaction, Review, Favorite, AnimalPhoto, Interest
+    from models import Species, Breed, Endereco, db, Racao, TipoRacao, VacinaModelo, Vacina, ExameSolicitado, BlocoExames, ExameModelo, Clinica, ConsultaToken, Consulta, Medicamento, Prescricao, BlocoPrescricao, Veterinario, User, Animal, Message, Transaction, Review, Favorite, AnimalPhoto, Interest, Order, OrderItem, DeliveryRequest
 except ImportError:
-    from .models import Species, Breed, Endereco, db, Racao, TipoRacao, VacinaModelo, Vacina, ExameSolicitado, BlocoExames, ExameModelo, Clinica, ConsultaToken, Consulta, Medicamento, Prescricao, BlocoPrescricao, Veterinario, User, Animal, Message, Transaction, Review, Favorite, AnimalPhoto, Interest
+    from .models import Species, Breed, Endereco, db, Racao, TipoRacao, VacinaModelo, Vacina, ExameSolicitado, BlocoExames, ExameModelo, Clinica, ConsultaToken, Consulta, Medicamento, Prescricao, BlocoPrescricao, Veterinario, User, Animal, Message, Transaction, Review, Favorite, AnimalPhoto, Interest, Order, OrderItem, DeliveryRequest
                     
 
 from wtforms.fields import SelectField
@@ -2522,6 +2522,58 @@ def arquivar_animal(animal_id):
 @login_required
 def loja():
     return render_template('loja.html')
+
+
+# ----- Pedidos e Entregas -----
+
+@app.route('/order', methods=['GET', 'POST'])
+@login_required
+def manage_order():
+    order = Order.query.filter_by(user_id=current_user.id, status='open').first()
+    if not order:
+        order = Order(user_id=current_user.id)
+        db.session.add(order)
+        db.session.commit()
+
+    form = OrderItemForm()
+    if form.validate_on_submit():
+        item = OrderItem(order_id=order.id,
+                         name=form.product.data,
+                         quantity=int(form.quantity.data))
+        db.session.add(item)
+        db.session.commit()
+        flash('Item adicionado ao pedido!', 'success')
+        return redirect(url_for('manage_order'))
+
+    items = order.items
+    total_quantity = sum(i.quantity for i in items)
+    return render_template('order.html', form=form, items=items, total_quantity=total_quantity)
+
+
+@app.route('/delivery_requests', methods=['GET', 'POST'])
+@login_required
+def delivery_requests():
+    if current_user.worker != 'delivery':
+        flash('Acesso restrito.', 'danger')
+        return redirect(url_for('index'))
+
+    form = GenerateDeliveryRequestForm()
+    if form.validate_on_submit():
+        orders = Order.query.filter_by(status='open').all()
+        totals = {}
+        for order in orders:
+            for item in order.items:
+                totals[item.name] = totals.get(item.name, 0) + item.quantity
+            order.status = 'requested'
+        summary = '\n'.join(f"{k}: {v}" for k, v in totals.items())
+        req = DeliveryRequest(requested_by_id=current_user.id, summary=summary)
+        db.session.add(req)
+        db.session.commit()
+        flash('Solicitação de entrega gerada!', 'success')
+        return redirect(url_for('delivery_requests'))
+
+    requests_list = DeliveryRequest.query.order_by(DeliveryRequest.created_at.desc()).all()
+    return render_template('delivery_requests.html', form=form, requests=requests_list)
 
 
 
