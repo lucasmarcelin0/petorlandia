@@ -204,6 +204,13 @@
                   <li class="nav-item">
                     <a class="nav-link" href="{{ url_for('add_animal') }}">➕ Animal</a>
                   </li>
+                {% elif current_user.worker == 'delivery' %}
+                  <li class="nav-item">
+                    <a class="nav-link" href="{{ url_for('create_order') }}">📦 Pedidos</a>
+                  </li>
+                  <li class="nav-item">
+                    <a class="nav-link" href="{{ url_for('list_delivery_requests') }}">🚚 Solicitações</a>
+                  </li>
                 {% endif %}
 
                 <li class="nav-item position-relative">
