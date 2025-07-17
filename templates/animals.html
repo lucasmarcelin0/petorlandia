@@ -6,7 +6,7 @@
   <!-- Filtro -->
   <form method="GET" action="{{ url_for('list_animals') }}" class="mb-4">
     <div class="row g-2 justify-content-center">
-      <div class="col-md-4">
+      <div class="col-md-3">
         <select name="modo" class="form-select rounded-pill">
           <option value="todos">Todos os Modos</option>
           <option value="doação" {% if modo == 'doação' %}selected{% endif %}>Adoção</option>
@@ -16,6 +16,33 @@
           <option value="adotado" {% if modo == 'adotado' %}selected{% endif %}>Adotados/Com Tutor</option>
           {% endif %}
         </select>
+      </div>
+      <div class="col-md-3">
+        <select name="species_id" class="form-select rounded-pill">
+          <option value="">Todas as Espécies</option>
+          {% for s in species_list %}
+          <option value="{{ s.id }}" {% if species_id == s.id %}selected{% endif %}>{{ s.name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-md-3">
+        <select name="breed_id" class="form-select rounded-pill">
+          <option value="">Todas as Raças</option>
+          {% for b in breed_list %}
+          <option value="{{ b.id }}" {% if breed_id == b.id %}selected{% endif %}>{{ b.name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+    </div>
+    <div class="row g-2 justify-content-center mt-2">
+      <div class="col-md-2">
+        <input type="number" name="min_age" value="{{ min_age or '' }}" placeholder="Idade mín." class="form-control rounded-pill">
+      </div>
+      <div class="col-md-2">
+        <input type="number" name="max_age" value="{{ max_age or '' }}" placeholder="Idade máx." class="form-control rounded-pill">
+      </div>
+      <div class="col-md-3">
+        <input type="text" name="location" value="{{ location or '' }}" placeholder="Cidade/Estado" class="form-control rounded-pill">
       </div>
       <div class="col-md-2">
         <button type="submit" class="btn btn-outline-primary w-100 rounded-pill">Filtrar</button>

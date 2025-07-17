@@ -150,6 +150,7 @@ from werkzeug.utils import secure_filename
 
 
 from math import ceil
+from sqlalchemy import cast, Integer
 
 try:
     from helpers import calcular_idade, parse_data_nascimento
@@ -521,6 +522,15 @@ def list_animals():
     per_page = 9
     modo = request.args.get('modo')
 
+    species_id = request.args.get('species_id', type=int)
+    breed_id = request.args.get('breed_id', type=int)
+    min_age = request.args.get('min_age', type=int)
+    max_age = request.args.get('max_age', type=int)
+    location = request.args.get('location')
+
+    species_list = Species.query.order_by(Species.name).all()
+    breed_list = Breed.query.order_by(Breed.name).all()
+
     # Base query: ignora animais removidos
     query = Animal.query.filter(Animal.removido_em == None)
 
@@ -532,6 +542,25 @@ def list_animals():
         if not current_user.is_authenticated or current_user.worker not in ['veterinario', 'colaborador']:
             query = query.filter(Animal.modo != 'adotado')
 
+    # Filtros adicionais
+    if species_id:
+        query = query.filter(Animal.species_id == species_id)
+
+    if breed_id:
+        query = query.filter(Animal.breed_id == breed_id)
+
+    if min_age is not None:
+        query = query.filter(cast(Animal.age, Integer) >= min_age)
+
+    if max_age is not None:
+        query = query.filter(cast(Animal.age, Integer) <= max_age)
+
+    if location:
+        query = query.join(User, Animal.owner).outerjoin(Endereco, User.endereco).filter(
+            (Endereco.cidade.ilike(f"%{location}%")) |
+            (Endereco.estado.ilike(f"%{location}%"))
+        )
+
     # Ordenação e paginação
     query = query.order_by(Animal.date_added.desc())
     pagination = query.paginate(page=page, per_page=per_page, error_out=False)
@@ -542,7 +571,14 @@ def list_animals():
         animals=animals,
         page=page,
         total_pages=pagination.pages,
-        modo=modo
+        modo=modo,
+        species_list=species_list,
+        breed_list=breed_list,
+        species_id=species_id,
+        breed_id=breed_id,
+        min_age=min_age,
+        max_age=max_age,
+        location=location
     )
 
 
