@@ -666,9 +666,15 @@ def tutores():
         # Data de nascimento
         date_str = request.form.get('tutor_date_of_birth') or request.form.get('date_of_birth')
         if date_str:
-            try:
-                novo.date_of_birth = datetime.strptime(date_str.strip(), '%Y-%m-%d').date()
-            except ValueError:
+            dob_parsed = parse_data_nascimento(date_str.strip())
+            if not dob_parsed:
+                try:
+                    dob_parsed = datetime.strptime(date_str.strip(), '%Y-%m-%d')
+                except ValueError:
+                    dob_parsed = None
+            if dob_parsed:
+                novo.date_of_birth = dob_parsed.date()
+            else:
                 flash('Data de nascimento inválida. Use o formato AAAA-MM-DD.', 'danger')
                 return redirect(url_for('tutores'))
 
@@ -815,9 +821,15 @@ def update_tutor(user_id):
     # 📅 Data de nascimento
     date_str = request.form.get("date_of_birth")
     if date_str:
-        try:
-            user.date_of_birth = datetime.strptime(date_str, "%Y-%m-%d").date()
-        except ValueError:
+        dob_parsed = parse_data_nascimento(date_str)
+        if not dob_parsed:
+            try:
+                dob_parsed = datetime.strptime(date_str, "%Y-%m-%d")
+            except ValueError:
+                dob_parsed = None
+        if dob_parsed:
+            user.date_of_birth = dob_parsed.date()
+        else:
             flash("Data de nascimento inválida. Use o formato correto.", "danger")
             return redirect(request.referrer or url_for("index"))
 
@@ -976,9 +988,15 @@ def update_animal(animal_id):
     dob_str = request.form.get('date_of_birth')
     age_input = request.form.get('age')
     if dob_str:
-        try:
-            animal.date_of_birth = datetime.strptime(dob_str, '%Y-%m-%d').date()
-        except ValueError:
+        dob_parsed = parse_data_nascimento(dob_str)
+        if not dob_parsed:
+            try:
+                dob_parsed = datetime.strptime(dob_str, '%Y-%m-%d')
+            except ValueError:
+                dob_parsed = None
+        if dob_parsed:
+            animal.date_of_birth = dob_parsed.date()
+        else:
             flash('Data de nascimento inválida.', 'warning')
     elif age_input:
         try:
@@ -1830,9 +1848,15 @@ def criar_tutor_ajax():
 
     date_str = request.form.get('date_of_birth')
     if date_str:
-        try:
-            novo_tutor.date_of_birth = datetime.strptime(date_str, '%Y-%m-%d').date()
-        except ValueError:
+        dob_parsed = parse_data_nascimento(date_str)
+        if not dob_parsed:
+            try:
+                dob_parsed = datetime.strptime(date_str, '%Y-%m-%d')
+            except ValueError:
+                dob_parsed = None
+        if dob_parsed:
+            novo_tutor.date_of_birth = dob_parsed.date()
+        else:
             return jsonify({'success': False, 'message': 'Data de nascimento inválida.'})
 
     novo_tutor.set_password('123456789')  # Senha padrão
@@ -1861,9 +1885,15 @@ def novo_animal():
         dob_str = request.form.get('date_of_birth')
         dob = None
         if dob_str:
-            try:
-                dob = datetime.strptime(dob_str, '%Y-%m-%d').date()
-            except ValueError:
+            dob_parsed = parse_data_nascimento(dob_str)
+            if not dob_parsed:
+                try:
+                    dob_parsed = datetime.strptime(dob_str, '%Y-%m-%d')
+                except ValueError:
+                    dob_parsed = None
+            if dob_parsed:
+                dob = dob_parsed.date()
+            else:
                 flash('Data de nascimento inválida. Use AAAA‑MM‑DD.', 'warning')
                 return redirect(url_for('ficha_tutor', tutor_id=tutor.id))
 
