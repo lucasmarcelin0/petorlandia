@@ -1,0 +1,39 @@
+{% extends "layout.html" %}
+{% block main %}
+<div class="container mt-4">
+  <h2 class="mb-3">📦 Novo Pedido</h2>
+  <form method="POST">
+    {{ form.hidden_tag() }}
+    <div class="row g-2 mb-3">
+      <div class="col-md-6">
+        {{ form.item_name.label(class="form-label") }}
+        {{ form.item_name(class="form-control") }}
+      </div>
+      <div class="col-md-3">
+        {{ form.quantity.label(class="form-label") }}
+        {{ form.quantity(class="form-control") }}
+      </div>
+      <div class="col-md-3 d-flex align-items-end">
+        {{ form.submit(class="btn btn-outline-primary w-100") }}
+      </div>
+    </div>
+  </form>
+
+  {% if order.items %}
+  <h5 class="mt-4">Itens do Pedido</h5>
+  <ul class="list-group mb-3">
+    {% for item in order.items %}
+    <li class="list-group-item d-flex justify-content-between align-items-center">
+      {{ item.item_name }}
+      <span class="badge bg-secondary rounded-pill">{{ item.quantity }}</span>
+    </li>
+    {% endfor %}
+  </ul>
+  <div class="alert alert-info">Quantidade total: {{ total_quantity }}</div>
+  <form action="{{ url_for('request_delivery', order_id=order.id) }}" method="post">
+    {{ delivery_form.hidden_tag() }}
+    {{ delivery_form.submit(class="btn btn-success") }}
+  </form>
+  {% endif %}
+</div>
+{% endblock %}

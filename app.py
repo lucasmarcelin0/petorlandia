@@ -110,9 +110,29 @@ import qrcode
 import base64
 
 try:
-    from forms import MessageForm, RegistrationForm, LoginForm, AnimalForm, EditProfileForm, ResetPasswordRequestForm, ResetPasswordForm
+    from forms import (
+        MessageForm,
+        RegistrationForm,
+        LoginForm,
+        AnimalForm,
+        EditProfileForm,
+        ResetPasswordRequestForm,
+        ResetPasswordForm,
+        OrderItemForm,
+        DeliveryRequestForm,
+    )
 except ImportError:
-    from .forms import MessageForm, RegistrationForm, LoginForm, AnimalForm, EditProfileForm, ResetPasswordRequestForm, ResetPasswordForm
+    from .forms import (
+        MessageForm,
+        RegistrationForm,
+        LoginForm,
+        AnimalForm,
+        EditProfileForm,
+        ResetPasswordRequestForm,
+        ResetPasswordForm,
+        OrderItemForm,
+        DeliveryRequestForm,
+    )
 
 try:
     from admin import init_admin
@@ -135,13 +155,73 @@ from flask_session import Session
 from flask_login import LoginManager, login_required, current_user, logout_user
 
 try:
-    from models import Species, Breed, Endereco, db, Racao, TipoRacao, VacinaModelo, Vacina, ExameSolicitado, BlocoExames, ExameModelo, Clinica, ConsultaToken, Consulta, Medicamento, Prescricao, BlocoPrescricao, Veterinario, User, Animal, Message, Transaction, Review, Favorite, AnimalPhoto, Interest
+    from models import (
+        Species,
+        Breed,
+        Endereco,
+        db,
+        Racao,
+        TipoRacao,
+        VacinaModelo,
+        Vacina,
+        ExameSolicitado,
+        BlocoExames,
+        ExameModelo,
+        Clinica,
+        ConsultaToken,
+        Consulta,
+        Medicamento,
+        Prescricao,
+        BlocoPrescricao,
+        Veterinario,
+        User,
+        Animal,
+        Message,
+        Transaction,
+        Review,
+        Favorite,
+        AnimalPhoto,
+        Interest,
+        Order,
+        OrderItem,
+        DeliveryRequest,
+    )
 except ImportError:
-    from .models import Species, Breed, Endereco, db, Racao, TipoRacao, VacinaModelo, Vacina, ExameSolicitado, BlocoExames, ExameModelo, Clinica, ConsultaToken, Consulta, Medicamento, Prescricao, BlocoPrescricao, Veterinario, User, Animal, Message, Transaction, Review, Favorite, AnimalPhoto, Interest
+    from .models import (
+        Species,
+        Breed,
+        Endereco,
+        db,
+        Racao,
+        TipoRacao,
+        VacinaModelo,
+        Vacina,
+        ExameSolicitado,
+        BlocoExames,
+        ExameModelo,
+        Clinica,
+        ConsultaToken,
+        Consulta,
+        Medicamento,
+        Prescricao,
+        BlocoPrescricao,
+        Veterinario,
+        User,
+        Animal,
+        Message,
+        Transaction,
+        Review,
+        Favorite,
+        AnimalPhoto,
+        Interest,
+        Order,
+        OrderItem,
+        DeliveryRequest,
+    )
                     
 
 from wtforms.fields import SelectField
-from flask import Flask, jsonify, render_template, redirect, url_for, request, session, flash
+from flask import Flask, jsonify, render_template, redirect, url_for, request, session, flash, abort
 
 
 import sys
@@ -2510,6 +2590,70 @@ def arquivar_animal(animal_id):
         flash(f'Erro ao excluir: {str(e)}', 'danger')
 
     return redirect(url_for('ficha_tutor', tutor_id=animal.user_id))
+
+
+@app.route('/orders/new', methods=['GET', 'POST'])
+@login_required
+def create_order():
+    if current_user.worker != 'delivery':
+        abort(403)
+
+    order_id = session.get('current_order')
+    if order_id:
+        order = Order.query.get_or_404(order_id)
+    else:
+        order = Order(user_id=current_user.id)
+        db.session.add(order)
+        db.session.commit()
+        session['current_order'] = order.id
+
+    form = OrderItemForm()
+    delivery_form = DeliveryRequestForm()
+
+    if form.validate_on_submit():
+        item = OrderItem(order_id=order.id,
+                         item_name=form.item_name.data,
+                         quantity=form.quantity.data)
+        db.session.add(item)
+        db.session.commit()
+        flash('Item adicionado ao pedido.', 'success')
+        return redirect(url_for('create_order'))
+
+    total_quantity = sum(i.quantity for i in order.items)
+    return render_template(
+        'create_order.html',
+        form=form,
+        delivery_form=delivery_form,
+        order=order,
+        total_quantity=total_quantity,
+    )
+
+
+@app.route('/orders/<int:order_id>/request_delivery', methods=['POST'])
+@login_required
+def request_delivery(order_id):
+    if current_user.worker != 'delivery':
+        abort(403)
+    order = Order.query.get_or_404(order_id)
+    req = DeliveryRequest(
+        order_id=order.id,
+        requested_by_id=current_user.id,
+        status='pendente',
+    )
+    db.session.add(req)
+    db.session.commit()
+    session.pop('current_order', None)
+    flash('Solicitação de entrega gerada.', 'success')
+    return redirect(url_for('list_delivery_requests'))
+
+
+@app.route('/delivery_requests')
+@login_required
+def list_delivery_requests():
+    if current_user.worker != 'delivery':
+        abort(403)
+    requests = DeliveryRequest.query.order_by(DeliveryRequest.requested_at.desc()).all()
+    return render_template('delivery_requests.html', requests=requests)
 
 
 

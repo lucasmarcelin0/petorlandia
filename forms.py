@@ -1,5 +1,14 @@
 from flask_wtf import FlaskForm
-from wtforms import StringField, TextAreaField, SelectField, PasswordField, SubmitField, BooleanField, DecimalField
+from wtforms import (
+    StringField,
+    TextAreaField,
+    SelectField,
+    PasswordField,
+    SubmitField,
+    BooleanField,
+    DecimalField,
+    IntegerField,
+)
 from wtforms.validators import DataRequired, Email, EqualTo, Length, Optional
 from flask_wtf.file import FileField, FileAllowed
 
@@ -82,3 +91,11 @@ class EditProfileForm(FlaskForm):
 class MessageForm(FlaskForm):
     content = TextAreaField('Mensagem', validators=[DataRequired(), Length(max=1000)])
     submit = SubmitField('Enviar Mensagem')
+
+class OrderItemForm(FlaskForm):
+    item_name = StringField('Item', validators=[DataRequired()])
+    quantity = IntegerField('Quantidade', validators=[DataRequired()])
+    submit = SubmitField('Adicionar')
+
+class DeliveryRequestForm(FlaskForm):
+    submit = SubmitField('Gerar Solicitação')
