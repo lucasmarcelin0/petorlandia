@@ -1,10 +1,16 @@
 from flask import Blueprint, render_template, redirect, url_for, request, flash
 from flask_login import login_required, current_user
 from werkzeug.utils import secure_filename
-from models import Animal, Species, Breed, Message, Interest
-from forms import AnimalForm, MessageForm
-from extensions import db
-from s3_utils import upload_to_s3
+try:
+    from models import Animal, Species, Breed, Message, Interest
+    from forms import AnimalForm, MessageForm
+    from extensions import db
+    from s3_utils import upload_to_s3
+except ImportError:  # pragma: no cover - fallback for package imports
+    from ..models import Animal, Species, Breed, Message, Interest
+    from ..forms import AnimalForm, MessageForm
+    from ..extensions import db
+    from ..s3_utils import upload_to_s3
 import uuid
 
 animals_bp = Blueprint('animals', __name__)

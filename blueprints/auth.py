@@ -1,11 +1,18 @@
 from flask import Blueprint, render_template, redirect, url_for, flash, request
 from flask_login import login_user, login_required, logout_user, current_user
 
-from forms import RegistrationForm, LoginForm, EditProfileForm, ResetPasswordRequestForm, ResetPasswordForm
-from models import User, Endereco, Transaction
-from extensions import db, mail
-from werkzeug.utils import secure_filename
-from s3_utils import upload_to_s3
+try:
+    from forms import RegistrationForm, LoginForm, EditProfileForm, ResetPasswordRequestForm, ResetPasswordForm
+    from models import User, Endereco, Transaction
+    from extensions import db, mail
+    from werkzeug.utils import secure_filename
+    from s3_utils import upload_to_s3
+except ImportError:  # pragma: no cover - fallback for package imports
+    from ..forms import RegistrationForm, LoginForm, EditProfileForm, ResetPasswordRequestForm, ResetPasswordForm
+    from ..models import User, Endereco, Transaction
+    from ..extensions import db, mail
+    from werkzeug.utils import secure_filename
+    from ..s3_utils import upload_to_s3
 from flask_mail import Message as MailMessage
 from itsdangerous import URLSafeTimedSerializer
 import os

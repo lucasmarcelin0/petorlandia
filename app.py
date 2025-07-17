@@ -146,9 +146,14 @@ from flask import Flask, jsonify, render_template, redirect, url_for, request, s
 import sys
 import os
 from werkzeug.utils import secure_filename
-from blueprints.auth import auth_bp
-from blueprints.animals import animals_bp
-from blueprints.clinic import clinic_bp
+try:
+    from blueprints.auth import auth_bp
+    from blueprints.animals import animals_bp
+    from blueprints.clinic import clinic_bp
+except ImportError:  # pragma: no cover - fallback for package imports
+    from .blueprints.auth import auth_bp
+    from .blueprints.animals import animals_bp
+    from .blueprints.clinic import clinic_bp
 
 app.register_blueprint(auth_bp)
 app.register_blueprint(animals_bp)

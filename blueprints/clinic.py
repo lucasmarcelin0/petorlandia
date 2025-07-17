@@ -1,7 +1,11 @@
 from flask import Blueprint, render_template, redirect, url_for, flash, abort, request
 from flask_login import login_required, current_user
-from models import Consulta, Animal, TipoRacao, Species, Breed
-from extensions import db
+try:
+    from models import Consulta, Animal, TipoRacao, Species, Breed
+    from extensions import db
+except ImportError:  # pragma: no cover - fallback for package imports
+    from ..models import Consulta, Animal, TipoRacao, Species, Breed
+    from ..extensions import db
 
 clinic_bp = Blueprint('clinic', __name__)
 
