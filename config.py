@@ -1,5 +1,8 @@
+import os
+
+
 class Config:
-    SECRET_KEY = "dev-key"  # substitua por uma variável segura em produção
+    SECRET_KEY = os.environ.get("SECRET_KEY", "dev-key")
     SQLALCHEMY_DATABASE_URI = (
         "postgresql://u82pgjdcmkbq7v:"
         "p0204cb9289674b66bfcbb9248eaf9d6a71e2dece2722fe22d6bd976c77b411e6"
@@ -16,5 +19,8 @@ class Config:
     MAIL_USERNAME = 'gpt.assistente.orlandia@gmail.com'
     MAIL_PASSWORD = 'toso zrgb uuwx nzkp'  # Use a senha de app, não a senha normal da conta
     MAIL_DEFAULT_SENDER = ('PetOrlândia', 'gpt.assistente.orlandia@gmail.com')
+
+    STRIPE_PUBLIC_KEY = os.environ.get("STRIPE_PUBLIC_KEY")
+    STRIPE_SECRET_KEY = os.environ.get("STRIPE_SECRET_KEY")
 
 

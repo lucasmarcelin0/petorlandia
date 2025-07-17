@@ -193,6 +193,9 @@
               <li class="nav-item">
                 <a class="nav-link" href="{{ url_for('list_animals') }}">🐾 Animais</a>
               </li>
+              <li class="nav-item">
+                <a class="nav-link" href="{{ url_for('loja') }}">🛍️ Loja</a>
+              </li>
 
 
 
@@ -223,6 +226,7 @@
                   </a>
                   <ul class="dropdown-menu dropdown-menu-end">
                     <li><a class="dropdown-item" href="{{ url_for('profile') }}">👤 Meu Perfil</a></li>
+                    <li><a class="dropdown-item" href="{{ url_for('listar_pedidos') }}">📦 Meus Pedidos</a></li>
                     <li><a class="dropdown-item" href="{{ url_for('logout') }}">🚪 Sair</a></li>
                   </ul>
                 </li>

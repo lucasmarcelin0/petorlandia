@@ -14,13 +14,13 @@ try:
     from models import (
         Breed, Species, TipoRacao, ApresentacaoMedicamento, VacinaModelo, Consulta, Veterinario,
         Clinica, Prescricao, Medicamento, db, User, Animal, Message,
-        Transaction, Review, Favorite, AnimalPhoto, UserRole, ExameModelo
+        Transaction, Review, Favorite, AnimalPhoto, UserRole, ExameModelo, Product
     )
 except ImportError:
     from .models import (
         Breed, Species, TipoRacao, ApresentacaoMedicamento, VacinaModelo, Consulta, Veterinario,
         Clinica, Prescricao, Medicamento, db, User, Animal, Message,
-        Transaction, Review, Favorite, AnimalPhoto, UserRole, ExameModelo
+        Transaction, Review, Favorite, AnimalPhoto, UserRole, ExameModelo, Product
     )
 
 # --------------------------------------------------------------------------
@@ -135,6 +135,16 @@ class ClinicaAdmin(MyModelView):
     }
 
 
+class ProductAdmin(MyModelView):
+    form_extra_fields = {
+        'image': ImageUploadField(
+            'Imagem',
+            base_path=os.path.join(os.getcwd(), 'static/uploads/products'),
+            url_relative_path='uploads/products/',
+            allowed_extensions=['jpg', 'jpeg', 'png', 'gif']
+        )
+    }
+
 
 class TutorAdminView(MyModelView):
     """Exemplo de deleção em cascata (caso use tutores)."""
@@ -237,6 +247,7 @@ def init_admin(app):
     admin.add_view(MyModelView(VacinaModelo, db.session))
     admin.add_view(MyModelView(ApresentacaoMedicamento, db.session))
     admin.add_view(MyModelView(TipoRacao, db.session))
+    admin.add_view(ProductAdmin(Product, db.session))
 
     # Link para voltar ao site principal
     admin.add_link(MenuLink(name='🔙 Voltar ao Site', url='/'))

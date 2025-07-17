@@ -6,6 +6,7 @@ from flask import current_app
 import os
 
 import boto3
+import stripe
 
 from dotenv import load_dotenv
 load_dotenv()
@@ -58,6 +59,7 @@ os.makedirs(instance_path, exist_ok=True)
 # Cria o app Flask
 app = Flask(__name__, instance_path=instance_path)
 app.config.from_object(Config)
+stripe.api_key = app.config.get('STRIPE_SECRET_KEY')
 
 app.config['FRONTEND_URL'] = os.environ.get('FRONTEND_URL', 'http://127.0.0.1:5000')
 
@@ -135,13 +137,13 @@ from flask_session import Session
 from flask_login import LoginManager, login_required, current_user, logout_user
 
 try:
-    from models import Species, Breed, Endereco, db, Racao, TipoRacao, VacinaModelo, Vacina, ExameSolicitado, BlocoExames, ExameModelo, Clinica, ConsultaToken, Consulta, Medicamento, Prescricao, BlocoPrescricao, Veterinario, User, Animal, Message, Transaction, Review, Favorite, AnimalPhoto, Interest
+    from models import Species, Breed, Endereco, db, Racao, TipoRacao, VacinaModelo, Vacina, ExameSolicitado, BlocoExames, ExameModelo, Clinica, ConsultaToken, Consulta, Medicamento, Prescricao, BlocoPrescricao, Veterinario, User, Animal, Message, Transaction, Review, Favorite, AnimalPhoto, Interest, Product, CartItem, Order, OrderItem
 except ImportError:
-    from .models import Species, Breed, Endereco, db, Racao, TipoRacao, VacinaModelo, Vacina, ExameSolicitado, BlocoExames, ExameModelo, Clinica, ConsultaToken, Consulta, Medicamento, Prescricao, BlocoPrescricao, Veterinario, User, Animal, Message, Transaction, Review, Favorite, AnimalPhoto, Interest
+    from .models import Species, Breed, Endereco, db, Racao, TipoRacao, VacinaModelo, Vacina, ExameSolicitado, BlocoExames, ExameModelo, Clinica, ConsultaToken, Consulta, Medicamento, Prescricao, BlocoPrescricao, Veterinario, User, Animal, Message, Transaction, Review, Favorite, AnimalPhoto, Interest, Product, CartItem, Order, OrderItem
                     
 
 from wtforms.fields import SelectField
-from flask import Flask, jsonify, render_template, redirect, url_for, request, session, flash
+from flask import Flask, jsonify, render_template, redirect, url_for, request, session as flask_session, flash
 
 
 import sys
@@ -2512,6 +2514,26 @@ def arquivar_animal(animal_id):
     return redirect(url_for('ficha_tutor', tutor_id=animal.user_id))
 
 
+# -------------------------------------------------------------
+# Funções utilitárias para o carrinho
+# -------------------------------------------------------------
+def _get_cart():
+    if current_user.is_authenticated:
+        items = CartItem.query.filter_by(user_id=current_user.id).all()
+        return {str(i.product_id): i.quantity for i in items}
+    return flask_session.get('cart', {})
+
+
+def _save_cart(cart):
+    if current_user.is_authenticated:
+        CartItem.query.filter_by(user_id=current_user.id).delete()
+        for pid, qty in cart.items():
+            db.session.add(CartItem(user_id=current_user.id, product_id=int(pid), quantity=qty))
+        db.session.commit()
+    else:
+        flask_session['cart'] = cart
+
+
 
 
 
@@ -2519,9 +2541,109 @@ def arquivar_animal(animal_id):
 
 
 @app.route('/loja')
-@login_required
 def loja():
-    return render_template('loja.html')
+    products = Product.query.all()
+    return render_template('product_list.html', products=products)
+
+
+@app.route('/produto/<int:product_id>')
+def produto_detail(product_id):
+    product = Product.query.get_or_404(product_id)
+    return render_template('product_detail.html', product=product)
+
+
+@app.route('/add_to_cart/<int:product_id>', methods=['POST'])
+def add_to_cart(product_id):
+    product = Product.query.get_or_404(product_id)
+    cart = _get_cart()
+    cart[str(product_id)] = cart.get(str(product_id), 0) + 1
+    _save_cart(cart)
+    flash('Produto adicionado ao carrinho.', 'success')
+    return redirect(url_for('cart'))
+
+
+@app.route('/cart')
+def cart():
+    cart = _get_cart()
+    products = Product.query.filter(Product.id.in_(cart.keys())).all() if cart else []
+    items = []
+    total = 0
+    for p in products:
+        qty = cart.get(str(p.id), 0)
+        total += float(p.price) * qty
+        items.append({'product': p, 'quantity': qty})
+    return render_template('cart.html', cart_items=items, total=total)
+
+
+@app.route('/remove_from_cart/<int:product_id>')
+def remove_from_cart(product_id):
+    cart = _get_cart()
+    cart.pop(str(product_id), None)
+    _save_cart(cart)
+    return redirect(url_for('cart'))
+
+
+@app.route('/pedidos')
+@login_required
+def listar_pedidos():
+    orders = Order.query.filter_by(user_id=current_user.id).order_by(Order.created_at.desc()).all()
+    return render_template('orders.html', orders=orders)
+
+
+@app.route('/checkout', methods=['POST'])
+@login_required
+def checkout():
+    cart = _get_cart()
+    if not cart:
+        flash('Carrinho vazio.', 'warning')
+        return redirect(url_for('loja'))
+    products = Product.query.filter(Product.id.in_(cart.keys())).all()
+    line_items = []
+    for p in products:
+        qty = cart.get(str(p.id), 0)
+        line_items.append({
+            'price_data': {
+                'currency': 'brl',
+                'product_data': {'name': p.name},
+                'unit_amount': int(float(p.price) * 100)
+            },
+            'quantity': qty
+        })
+    checkout_session = stripe.checkout.Session.create(
+        payment_method_types=['card'],
+        line_items=line_items,
+        mode='payment',
+        success_url=url_for('checkout_success', _external=True),
+        cancel_url=url_for('cart', _external=True)
+    )
+    return redirect(checkout_session.url, code=303)
+
+
+@app.route('/checkout/success')
+def checkout_success():
+    cart = _get_cart()
+    if cart:
+        order = Order(user_id=current_user.id, status='paid')
+        db.session.add(order)
+        for pid, qty in cart.items():
+            product = Product.query.get(int(pid))
+            if not product:
+                continue
+            product.stock = product.stock - qty
+            db.session.add(OrderItem(order=order, product_id=product.id, quantity=qty, price=product.price))
+        db.session.commit()
+        try:
+            msg = MailMessage(
+                subject='Confirmação de Pedido - PetOrlândia',
+                recipients=[current_user.email],
+                body=f'Seu pedido #{order.id} foi confirmado.'
+            )
+            mail.send(msg)
+        except Exception as e:
+            current_app.logger.error(f'Erro ao enviar email: {e}')
+    _save_cart({})
+    flash('Pagamento realizado com sucesso!', 'success')
+    return redirect(url_for('loja'))
 
 
 
