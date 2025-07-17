@@ -1,0 +1,26 @@
+{% extends 'layout.html' %}
+{% block main %}
+<div class="container py-4">
+  <h2 class="mb-4">🚚 Solicitações de Entrega</h2>
+  <form method="POST" class="mb-4">
+    {{ form.hidden_tag() }}
+    {{ form.submit(class='btn btn-success') }}
+  </form>
+  {% if requests %}
+  <div class="list-group">
+    {% for r in requests %}
+    <div class="list-group-item">
+      <div class="d-flex w-100 justify-content-between">
+        <h5 class="mb-1">Solicitação #{{ r.id }}</h5>
+        <small>{{ r.created_at|datetime_brazil }}</small>
+      </div>
+      <pre class="mb-1">{{ r.summary }}</pre>
+      <small>Status: {{ r.status }}</small>
+    </div>
+    {% endfor %}
+  </div>
+  {% else %}
+  <p class="text-muted">Nenhuma solicitação registrada.</p>
+  {% endif %}
+</div>
+{% endblock %}
