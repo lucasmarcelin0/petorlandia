@@ -14,13 +14,15 @@ try:
     from models import (
         Breed, Species, TipoRacao, ApresentacaoMedicamento, VacinaModelo, Consulta, Veterinario,
         Clinica, Prescricao, Medicamento, db, User, Animal, Message,
-        Transaction, Review, Favorite, AnimalPhoto, UserRole, ExameModelo
+        Transaction, Review, Favorite, AnimalPhoto, UserRole, ExameModelo,
+        Product, Order, OrderItem, DeliveryRequest
     )
 except ImportError:
     from .models import (
         Breed, Species, TipoRacao, ApresentacaoMedicamento, VacinaModelo, Consulta, Veterinario,
         Clinica, Prescricao, Medicamento, db, User, Animal, Message,
-        Transaction, Review, Favorite, AnimalPhoto, UserRole, ExameModelo
+        Transaction, Review, Favorite, AnimalPhoto, UserRole, ExameModelo,
+        Product, Order, OrderItem, DeliveryRequest
     )
 
 # --------------------------------------------------------------------------
@@ -237,6 +239,10 @@ def init_admin(app):
     admin.add_view(MyModelView(VacinaModelo, db.session))
     admin.add_view(MyModelView(ApresentacaoMedicamento, db.session))
     admin.add_view(MyModelView(TipoRacao, db.session))
+    admin.add_view(MyModelView(Product, db.session))
+    admin.add_view(MyModelView(Order, db.session))
+    admin.add_view(MyModelView(OrderItem, db.session))
+    admin.add_view(MyModelView(DeliveryRequest, db.session))
 
     # Link para voltar ao site principal
     admin.add_link(MenuLink(name='🔙 Voltar ao Site', url='/'))
