@@ -36,3 +36,9 @@ def test_add_animal_requires_login(app):
     response = client.get('/add-animal')
     assert response.status_code == 302
     assert '/login' in response.headers['Location']
+
+def test_loja_requires_login(app):
+    client = app.test_client()
+    response = client.get('/loja')
+    assert response.status_code == 302
+    assert '/login' in response.headers['Location']
