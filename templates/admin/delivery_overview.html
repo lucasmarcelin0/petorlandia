@@ -1,0 +1,41 @@
+{% extends 'admin/master.html' %}
+{% block body %}
+<div class="container py-4">
+  <h2 class="mb-4">Monitoramento de Entregas</h2>
+  <h4>Produtos</h4>
+  <ul class="list-group mb-4">
+    {% for p in products %}
+    <li class="list-group-item d-flex justify-content-between align-items-center">
+      {{ p.name }}
+      <span class="badge bg-secondary">{{ p.stock }}</span>
+    </li>
+    {% else %}
+    <li class="list-group-item">Nenhum produto cadastrado.</li>
+    {% endfor %}
+  </ul>
+  <h4>Solicitações Abertas</h4>
+  <ul class="list-group mb-3">
+    {% for r in open_requests %}
+    <li class="list-group-item">Pedido #{{ r.order_id }}</li>
+    {% else %}
+    <li class="list-group-item">Nenhuma solicitação.</li>
+    {% endfor %}
+  </ul>
+  <h4>Em Andamento</h4>
+  <ul class="list-group mb-3">
+    {% for r in in_progress %}
+    <li class="list-group-item">Pedido #{{ r.order_id }} por {{ r.worker.name if r.worker }} </li>
+    {% else %}
+    <li class="list-group-item">Nenhum pedido em andamento.</li>
+    {% endfor %}
+  </ul>
+  <h4>Concluídos</h4>
+  <ul class="list-group">
+    {% for r in completed %}
+    <li class="list-group-item">Pedido #{{ r.order_id }}</li>
+    {% else %}
+    <li class="list-group-item">Nenhum concluído.</li>
+    {% endfor %}
+  </ul>
+</div>
+{% endblock %}
