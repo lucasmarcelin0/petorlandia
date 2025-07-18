@@ -137,9 +137,9 @@ except ImportError:
     )
 
 try:
-    from admin import init_admin
+    from admin import init_admin, _is_admin
 except ImportError:
-    from .admin import init_admin
+    from .admin import init_admin, _is_admin
 
 
 from flask_migrate import Migrate, upgrade, migrate, init
@@ -2660,12 +2660,105 @@ def list_delivery_requests():
     return render_template('delivery_requests.html', requests=requests)
 
 
+@app.route('/delivery_requests/<int:req_id>/accept', methods=['POST'])
+@login_required
+def accept_delivery(req_id):
+    if current_user.worker != 'delivery':
+        abort(403)
+    req = DeliveryRequest.query.get_or_404(req_id)
+    if req.status != 'pendente':
+        flash('Solicitação não disponível.', 'warning')
+        return redirect(url_for('list_delivery_requests'))
+    req.status = 'em_andamento'
+    req.worker_id = current_user.id
+    req.accepted_at = datetime.utcnow()
+    db.session.commit()
+    flash('Entrega aceita.', 'success')
+    return redirect(url_for('list_delivery_requests'))
+
+
+@app.route('/delivery_requests/<int:req_id>/complete', methods=['POST'])
+@login_required
+def complete_delivery(req_id):
+    if current_user.worker != 'delivery':
+        abort(403)
+    req = DeliveryRequest.query.get_or_404(req_id)
+    if req.worker_id != current_user.id:
+        abort(403)
+    req.status = 'concluida'
+    req.completed_at = datetime.utcnow()
+    db.session.commit()
+    flash('Entrega concluída.', 'success')
+    return redirect(url_for('worker_history'))
+
+
+@app.route('/delivery_requests/<int:req_id>/cancel', methods=['POST'])
+@login_required
+def cancel_delivery(req_id):
+    if current_user.worker != 'delivery':
+        abort(403)
+    req = DeliveryRequest.query.get_or_404(req_id)
+    if req.worker_id != current_user.id:
+        abort(403)
+    req.status = 'cancelada'
+    req.canceled_at = datetime.utcnow()
+    req.canceled_by_id = current_user.id
+    db.session.commit()
+    flash('Entrega cancelada.', 'info')
+    return redirect(url_for('worker_history'))
+
+
+@app.route('/delivery_requests/<int:req_id>/buyer_cancel', methods=['POST'])
+@login_required
+def buyer_cancel_delivery(req_id):
+    req = DeliveryRequest.query.get_or_404(req_id)
+    if req.requested_by_id != current_user.id:
+        abort(403)
+    if req.status in ['concluida', 'cancelada']:
+        flash('Não é possível cancelar.', 'warning')
+        return redirect(url_for('loja'))
+    req.status = 'cancelada'
+    req.canceled_at = datetime.utcnow()
+    req.canceled_by_id = current_user.id
+    db.session.commit()
+    flash('Solicitação cancelada.', 'info')
+    return redirect(url_for('loja'))
+
+
+@app.route('/worker/history')
+@login_required
+def worker_history():
+    if current_user.worker != 'delivery':
+        abort(403)
+    available = DeliveryRequest.query.filter_by(status='pendente').all()
+    doing = DeliveryRequest.query.filter_by(worker_id=current_user.id, status='em_andamento').all()
+    done = DeliveryRequest.query.filter_by(worker_id=current_user.id, status='concluida').all()
+    canceled = DeliveryRequest.query.filter_by(worker_id=current_user.id, status='cancelada').all()
+    return render_template('worker_history.html', available=available, doing=doing, done=done, canceled=canceled)
+
+
 @app.route('/fluxograma_entregas')
 @login_required
 def fluxograma_entregas():
     if current_user.worker != 'delivery':
         abort(403)
     return render_template('fluxograma_entregas.html')
+
+
+@app.route('/admin/delivery_overview')
+@login_required
+def delivery_overview():
+    if not _is_admin():
+        abort(403)
+    products = Product.query.all()
+    open_requests = DeliveryRequest.query.filter_by(status='pendente').all()
+    in_progress = DeliveryRequest.query.filter_by(status='em_andamento').all()
+    completed = DeliveryRequest.query.filter_by(status='concluida').all()
+    return render_template('admin/delivery_overview.html',
+                           products=products,
+                           open_requests=open_requests,
+                           in_progress=in_progress,
+                           completed=completed)
 
 
 
