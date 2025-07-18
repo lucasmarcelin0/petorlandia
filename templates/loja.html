@@ -1,42 +1,32 @@
 {% extends "layout.html" %}
 {% block main %}
-<div class="container text-center mt-4">
-
-    <h2 class="mb-3">Loja Pet 🛍️</h2>
-    <p class="lead mb-4">Estamos preparando uma experiência incrível para você cuidar ainda melhor do seu companheiro de quatro patas!</p>
-
-    <div class="row justify-content-center g-3 mb-4">
-        <div class="col-md-3">
-            <div class="border rounded-4 p-3 shadow-sm bg-light h-100">
-                🐶 <strong>Rações Premium</strong><br>
-                Alimentos balanceados para todas as fases da vida.
-            </div>
+<div class="container mt-4">
+  <h2 class="mb-4 text-center">Loja Pet 🛍️</h2>
+  <div class="row row-cols-1 row-cols-md-3 g-4">
+    {% for product in products %}
+    <div class="col">
+      <div class="card h-100 shadow-sm">
+        {% if product.image_url %}
+        <img src="{{ product.image_url }}" class="card-img-top" alt="{{ product.name }}">
+        {% endif %}
+        <div class="card-body d-flex flex-column">
+          <h5 class="card-title">{{ product.name }}</h5>
+          <p class="card-text">{{ product.description }}</p>
+          <p class="fw-bold">R$ {{ '%.2f'|format(product.price) }}</p>
+          <form action="{{ url_for('adicionar_carrinho', product_id=product.id) }}" method="post" class="mt-auto">
+            {{ form.hidden_tag() }}
+            {{ form.quantity(class="form-control mb-2", placeholder="Qtd") }}
+            {{ form.submit(class="btn btn-primary w-100") }}
+          </form>
         </div>
-        <div class="col-md-3">
-            <div class="border rounded-4 p-3 shadow-sm bg-light h-100">
-                🧼 <strong>Higiene & Beleza</strong><br>
-                Shampoos, escovas, perfumes e muito mais.
-            </div>
-        </div>
-        <div class="col-md-3">
-            <div class="border rounded-4 p-3 shadow-sm bg-light h-100">
-                🧸 <strong>Brinquedos</strong><br>
-                Para enriquecer o dia e estimular a mente do seu pet.
-            </div>
-        </div>
-        <div class="col-md-3">
-            <div class="border rounded-4 p-3 shadow-sm bg-light h-100">
-                🛏️ <strong>Conforto</strong><br>
-                Camas, casinhas e acessórios para descanso.
-            </div>
-        </div>
+      </div>
     </div>
-
-    <p class="text-muted mb-4">Nosso catálogo será lançado em breve. Fique de olho!</p>
-
-    <button class="btn btn-warning rounded-pill px-4 py-2 disabled">
-        🐾 Quero ser avisado!
-    </button>
-
+    {% else %}
+    <p class="text-center">Nenhum produto cadastrado.</p>
+    {% endfor %}
+  </div>
+  <div class="text-center mt-4">
+    <a href="{{ url_for('ver_carrinho') }}" class="btn btn-success">Ver Carrinho</a>
+  </div>
 </div>
 {% endblock %}

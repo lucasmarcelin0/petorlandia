@@ -97,5 +97,9 @@ class OrderItemForm(FlaskForm):
     quantity = IntegerField('Quantidade', validators=[DataRequired()])
     submit = SubmitField('Adicionar')
 
+class AddToCartForm(FlaskForm):
+    quantity = IntegerField('Quantidade', default=1, validators=[DataRequired()])
+    submit = SubmitField('Adicionar ao Carrinho')
+
 class DeliveryRequestForm(FlaskForm):
     submit = SubmitField('Gerar Solicitação')

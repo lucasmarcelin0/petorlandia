@@ -120,6 +120,7 @@ try:
         ResetPasswordForm,
         OrderItemForm,
         DeliveryRequestForm,
+        AddToCartForm,
     )
 except ImportError:
     from .forms import (
@@ -132,6 +133,7 @@ except ImportError:
         ResetPasswordForm,
         OrderItemForm,
         DeliveryRequestForm,
+        AddToCartForm,
     )
 
 try:
@@ -182,6 +184,7 @@ try:
         Favorite,
         AnimalPhoto,
         Interest,
+        Product,
         Order,
         OrderItem,
         DeliveryRequest,
@@ -214,6 +217,7 @@ except ImportError:
         Favorite,
         AnimalPhoto,
         Interest,
+        Product,
         Order,
         OrderItem,
         DeliveryRequest,
@@ -2656,6 +2660,14 @@ def list_delivery_requests():
     return render_template('delivery_requests.html', requests=requests)
 
 
+@app.route('/fluxograma_entregas')
+@login_required
+def fluxograma_entregas():
+    if current_user.worker != 'delivery':
+        abort(403)
+    return render_template('fluxograma_entregas.html')
+
+
 
 
 
@@ -2665,7 +2677,58 @@ def list_delivery_requests():
 @app.route('/loja')
 @login_required
 def loja():
-    return render_template('loja.html')
+    products = Product.query.all()
+    form = AddToCartForm()
+    return render_template('loja.html', products=products, form=form)
+
+
+@app.route('/carrinho/adicionar/<int:product_id>', methods=['POST'])
+@login_required
+def adicionar_carrinho(product_id):
+    product = Product.query.get_or_404(product_id)
+    form = AddToCartForm()
+    if form.validate_on_submit():
+        order_id = session.get('current_order')
+        if order_id:
+            order = Order.query.get(order_id)
+        else:
+            order = Order(user_id=current_user.id)
+            db.session.add(order)
+            db.session.commit()
+            session['current_order'] = order.id
+
+        item = OrderItem(order_id=order.id,
+                         item_name=product.name,
+                         quantity=form.quantity.data)
+        db.session.add(item)
+        product.stock = product.stock - form.quantity.data
+        db.session.commit()
+        flash('Produto adicionado ao carrinho.', 'success')
+    return redirect(url_for('loja'))
+
+
+@app.route('/carrinho')
+@login_required
+def ver_carrinho():
+    order_id = session.get('current_order')
+    order = Order.query.get(order_id) if order_id else None
+    return render_template('carrinho.html', order=order)
+
+
+@app.route('/checkout', methods=['POST'])
+@login_required
+def checkout():
+    order_id = session.pop('current_order', None)
+    if not order_id:
+        return redirect(url_for('loja'))
+    order = Order.query.get_or_404(order_id)
+    req = DeliveryRequest(order_id=order.id,
+                          requested_by_id=current_user.id,
+                          status='pendente')
+    db.session.add(req)
+    db.session.commit()
+    flash('Pedido realizado com sucesso!', 'success')
+    return redirect(url_for('list_delivery_requests'))
 
 
 
