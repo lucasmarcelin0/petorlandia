@@ -6,8 +6,19 @@
   <ul class="list-group">
     {% for req in requests %}
     <li class="list-group-item d-flex justify-content-between align-items-center">
-      Pedido #{{ req.order_id }} - {{ req.status }}
-      <small class="text-muted">{{ req.requested_at|datetime_brazil }}</small>
+      <div>
+        Pedido #{{ req.order_id }} - {{ req.status }}
+        <small class="text-muted ms-2">{{ req.requested_at|datetime_brazil }}</small>
+      </div>
+      {% if req.status == 'pendente' %}
+      <form action="{{ url_for('accept_delivery', req_id=req.id) }}" method="post">
+        <button class="btn btn-sm btn-primary">Aceitar</button>
+      </form>
+      {% elif req.status == 'em_andamento' and req.worker_id == current_user.id %}
+      <span class="badge bg-info">Em andamento</span>
+      {% else %}
+      <span class="badge bg-secondary">{{ req.status }}</span>
+      {% endif %}
     </li>
     {% endfor %}
   </ul>
