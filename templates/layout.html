@@ -184,6 +184,9 @@
                       📦 Relatório de Rações
                     </a>
                   </li>
+                  <li class="nav-item">
+                    <a class="nav-link" href="{{ url_for('delivery_overview') }}">📈 Entregas</a>
+                  </li>
                 {% endif %}
               </li>
               
@@ -213,6 +216,9 @@
                   </li>
                   <li class="nav-item">
                     <a class="nav-link" href="{{ url_for('list_delivery_requests') }}">🚚 Solicitações</a>
+                  </li>
+                  <li class="nav-item">
+                    <a class="nav-link" href="{{ url_for('worker_history') }}">🕑 Histórico</a>
                   </li>
                   <li class="nav-item">
                     <a class="nav-link" href="{{ url_for('fluxograma_entregas') }}">📄 Fluxograma</a>
