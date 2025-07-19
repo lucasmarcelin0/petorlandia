@@ -4,7 +4,7 @@ from alembic import op
 import sqlalchemy as sa
 
 revision = 'c7e0d6072efa'
-down_revision = 'xxxxxxx'  # substitua pelo valor certo (próximo passo)
+down_revision = None
 branch_labels = None
 depends_on = None
 
