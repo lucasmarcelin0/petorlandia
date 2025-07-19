@@ -6,6 +6,10 @@ from flask import redirect, url_for, flash
 from flask_login import current_user, login_required
 from wtforms import SelectField, DateField
 import os
+import uuid
+from werkzeug.utils import secure_filename
+
+
 
 # --------------------------------------------------------------------------
 # Imports dos modelos
@@ -206,6 +210,26 @@ class BreedAdminView(MyModelView):
     column_filters = ['species']
     column_default_sort = ('name', True)
 
+
+from wtforms import FileField
+
+class ProductAdmin(MyModelView):
+    form_extra_fields = {
+        'image_upload': FileField('Imagem')
+    }
+
+    form_columns = ['name', 'description', 'price', 'stock', 'image_upload']
+
+    def on_model_change(self, form, model, is_created):
+        if form.image_upload.data:
+            file = form.image_upload.data
+            filename = f"{uuid.uuid4().hex}_{secure_filename(file.filename)}"
+            from app import upload_to_s3
+            image_url = upload_to_s3(file, filename, folder="products")
+            model.image_url = image_url
+
+
+
 # --------------------------------------------------------------------------
 # Função de inicialização do painel
 # --------------------------------------------------------------------------
@@ -239,7 +263,8 @@ def init_admin(app):
     admin.add_view(MyModelView(VacinaModelo, db.session))
     admin.add_view(MyModelView(ApresentacaoMedicamento, db.session))
     admin.add_view(MyModelView(TipoRacao, db.session))
-    admin.add_view(MyModelView(Product, db.session))
+    admin.add_view(ProductAdmin(Product, db.session))
+
     admin.add_view(MyModelView(Order, db.session))
     admin.add_view(MyModelView(OrderItem, db.session))
     admin.add_view(MyModelView(DeliveryRequest, db.session))

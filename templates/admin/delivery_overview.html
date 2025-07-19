@@ -1,41 +1,74 @@
-{% extends 'admin/master.html' %}
-{% block body %}
+{% extends 'layout.html' %}
+{% block main %}
 <div class="container py-4">
-  <h2 class="mb-4">Monitoramento de Entregas</h2>
-  <h4>Produtos</h4>
-  <ul class="list-group mb-4">
-    {% for p in products %}
-    <li class="list-group-item d-flex justify-content-between align-items-center">
-      {{ p.name }}
-      <span class="badge bg-secondary">{{ p.stock }}</span>
-    </li>
-    {% else %}
-    <li class="list-group-item">Nenhum produto cadastrado.</li>
-    {% endfor %}
-  </ul>
-  <h4>Solicitações Abertas</h4>
-  <ul class="list-group mb-3">
-    {% for r in open_requests %}
-    <li class="list-group-item">Pedido #{{ r.order_id }}</li>
-    {% else %}
-    <li class="list-group-item">Nenhuma solicitação.</li>
-    {% endfor %}
-  </ul>
-  <h4>Em Andamento</h4>
-  <ul class="list-group mb-3">
-    {% for r in in_progress %}
-    <li class="list-group-item">Pedido #{{ r.order_id }} por {{ r.worker.name if r.worker }} </li>
-    {% else %}
-    <li class="list-group-item">Nenhum pedido em andamento.</li>
-    {% endfor %}
-  </ul>
-  <h4>Concluídos</h4>
-  <ul class="list-group">
-    {% for r in completed %}
-    <li class="list-group-item">Pedido #{{ r.order_id }}</li>
-    {% else %}
-    <li class="list-group-item">Nenhum concluído.</li>
-    {% endfor %}
-  </ul>
+  <h2 class="mb-4 fw-bold">📊 Monitoramento de Entregas</h2>
+
+  <section class="mb-5">
+    <h4 class="mt-4">📦 Produtos</h4>
+    <ul class="list-group">
+      {% for p in products %}
+      <li class="list-group-item d-flex justify-content-between align-items-center">
+        <span>{{ p.name }}</span>
+        <span class="badge bg-secondary">{{ p.stock }}</span>
+      </li>
+      {% else %}
+      <li class="list-group-item">Nenhum produto cadastrado.</li>
+      {% endfor %}
+    </ul>
+  </section>
+
+  <section class="mb-5">
+    <h4 class="mt-4 text-warning">🟡 Solicitações Abertas</h4>
+    <ul class="list-group">
+      {% for r in open_requests %}
+      <li class="list-group-item d-flex justify-content-between align-items-center flex-wrap">
+        <div>
+          <strong>Pedido #{{ r.order_id }}</strong>
+          <span class="badge bg-warning text-dark ms-2">Pendente</span><br>
+          <small class="text-muted">Solicitado em {{ r.requested_at.strftime('%d/%m/%Y %H:%M') }}</small>
+        </div>
+        <a href="{{ url_for('admin_delivery_detail', req_id=r.id) }}" class="btn btn-sm btn-outline-primary mt-2 mt-md-0">Ver detalhes</a>
+      </li>
+      {% else %}
+      <li class="list-group-item">Nenhuma solicitação.</li>
+      {% endfor %}
+    </ul>
+  </section>
+
+  <section class="mb-5">
+    <h4 class="mt-4 text-info">🔵 Em Andamento</h4>
+    <ul class="list-group">
+      {% for r in in_progress %}
+      <li class="list-group-item d-flex justify-content-between align-items-center flex-wrap">
+        <div>
+          <strong>Pedido #{{ r.order_id }}</strong>
+          <span class="badge bg-info text-dark ms-2">Em andamento</span><br>
+          <small class="text-muted">Aceito por {{ r.worker.name if r.worker }} em {{ r.accepted_at.strftime('%d/%m/%Y %H:%M') if r.accepted_at }}</small>
+        </div>
+        <a href="{{ url_for('admin_delivery_detail', req_id=r.id) }}" class="btn btn-sm btn-outline-primary mt-2 mt-md-0">Ver detalhes</a>
+      </li>
+      {% else %}
+      <li class="list-group-item">Nenhum pedido em andamento.</li>
+      {% endfor %}
+    </ul>
+  </section>
+
+  <section class="mb-4">
+    <h4 class="mt-4 text-success">✅ Concluídos</h4>
+    <ul class="list-group">
+      {% for r in completed %}
+      <li class="list-group-item d-flex justify-content-between align-items-center flex-wrap">
+        <div>
+          <strong>Pedido #{{ r.order_id }}</strong>
+          <span class="badge bg-success ms-2">Concluído</span><br>
+          <small class="text-muted">Finalizado em {{ r.completed_at.strftime('%d/%m/%Y %H:%M') if r.completed_at }}</small>
+        </div>
+        <a href="{{ url_for('admin_delivery_detail', req_id=r.id) }}" class="btn btn-sm btn-outline-primary mt-2 mt-md-0">Ver detalhes</a>
+      </li>
+      {% else %}
+      <li class="list-group-item">Nenhum concluído.</li>
+      {% endfor %}
+    </ul>
+  </section>
 </div>
 {% endblock %}

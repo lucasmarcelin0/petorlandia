@@ -35,7 +35,7 @@ def upload_to_s3(file, filename, folder="uploads"):
 
 
 import os
-print("🧪 AWS Key:", os.getenv("AWS_ACCESS_KEY_ID"))
+
 
 
 from flask import Flask
@@ -157,72 +157,9 @@ from flask_session import Session
 from flask_login import LoginManager, login_required, current_user, logout_user
 
 try:
-    from models import (
-        Species,
-        Breed,
-        Endereco,
-        db,
-        Racao,
-        TipoRacao,
-        VacinaModelo,
-        Vacina,
-        ExameSolicitado,
-        BlocoExames,
-        ExameModelo,
-        Clinica,
-        ConsultaToken,
-        Consulta,
-        Medicamento,
-        Prescricao,
-        BlocoPrescricao,
-        Veterinario,
-        User,
-        Animal,
-        Message,
-        Transaction,
-        Review,
-        Favorite,
-        AnimalPhoto,
-        Interest,
-        Product,
-        Order,
-        OrderItem,
-        DeliveryRequest,
-    )
+    from models import *
 except ImportError:
-    from .models import (
-        Species,
-        Breed,
-        Endereco,
-        db,
-        Racao,
-        TipoRacao,
-        VacinaModelo,
-        Vacina,
-        ExameSolicitado,
-        BlocoExames,
-        ExameModelo,
-        Clinica,
-        ConsultaToken,
-        Consulta,
-        Medicamento,
-        Prescricao,
-        BlocoPrescricao,
-        Veterinario,
-        User,
-        Animal,
-        Message,
-        Transaction,
-        Review,
-        Favorite,
-        AnimalPhoto,
-        Interest,
-        Product,
-        Order,
-        OrderItem,
-        DeliveryRequest,
-    )
-                    
+    from .models import *         
 
 from wtforms.fields import SelectField
 from flask import Flask, jsonify, render_template, redirect, url_for, request, session, flash, abort
@@ -2654,10 +2591,12 @@ def request_delivery(order_id):
 @app.route('/delivery_requests')
 @login_required
 def list_delivery_requests():
-    if current_user.worker != 'delivery':
-        abort(403)
-    requests = DeliveryRequest.query.order_by(DeliveryRequest.requested_at.desc()).all()
+    if current_user.worker == 'delivery':
+        requests = DeliveryRequest.query.order_by(DeliveryRequest.requested_at.desc()).all()
+    else:
+        requests = DeliveryRequest.query.filter_by(requested_by_id=current_user.id).order_by(DeliveryRequest.requested_at.desc()).all()
     return render_template('delivery_requests.html', requests=requests)
+
 
 
 @app.route('/delivery_requests/<int:req_id>/accept', methods=['POST'])
@@ -2725,6 +2664,35 @@ def buyer_cancel_delivery(req_id):
     return redirect(url_for('loja'))
 
 
+@app.route('/admin/delivery/<int:req_id>')
+@login_required
+def admin_delivery_detail(req_id):
+    if not _is_admin():
+        abort(403)
+    
+    req = DeliveryRequest.query.get_or_404(req_id)
+    order = Order.query.get_or_404(req.order_id)
+    items = order.items  # Order has one-to-many OrderItem
+    buyer = order.user
+    delivery_worker = req.worker if req.worker_id else None
+
+    # Acessando produtos relacionados e somando valor total
+    total = 0
+    for item in items:
+        if hasattr(item, 'product') and item.product:
+            total += item.quantity * item.product.price
+
+    return render_template('admin/delivery_detail.html',
+                           req=req,
+                           order=order,
+                           items=items,
+                           buyer=buyer,
+                           delivery_worker=delivery_worker,
+                           total=total)
+
+
+
+
 @app.route('/worker/history')
 @login_required
 def worker_history():
@@ -2766,13 +2734,19 @@ def delivery_overview():
 
 
 
-
-@app.route('/loja')
+@app.route("/loja")
 @login_required
 def loja():
-    products = Product.query.all()
+    pagamento_pendente = None
+    payment_id = session.get("last_pending_payment")
+    if payment_id:
+        payment = Payment.query.get(payment_id)
+        if payment and payment.status.name == "PENDING":
+            pagamento_pendente = payment
+
+    produtos = Product.query.all()
     form = AddToCartForm()
-    return render_template('loja.html', products=products, form=form)
+    return render_template("loja.html", products=produtos, pagamento_pendente=pagamento_pendente, form=form)
 
 
 @app.route('/carrinho/adicionar/<int:product_id>', methods=['POST'])
@@ -2789,10 +2763,14 @@ def adicionar_carrinho(product_id):
             db.session.add(order)
             db.session.commit()
             session['current_order'] = order.id
+        
+        item = OrderItem(
+            order_id=order.id,
+            product_id=product.id,  # ESSENCIAL para mostrar valor e outras infos
+            item_name=product.name,
+            quantity=form.quantity.data
+)
 
-        item = OrderItem(order_id=order.id,
-                         item_name=product.name,
-                         quantity=form.quantity.data)
         db.session.add(item)
         product.stock = product.stock - form.quantity.data
         db.session.commit()
@@ -2803,25 +2781,94 @@ def adicionar_carrinho(product_id):
 @app.route('/carrinho')
 @login_required
 def ver_carrinho():
+    # Redireciona para pagamento pendente, se existir
+    payment_id = session.get('last_pending_payment')
+    if payment_id:
+        payment = Payment.query.get(payment_id)
+        if payment and payment.status.name == "PENDING":
+            return redirect(url_for('payment_status', payment_id=payment.id))
+
+    # Caso não haja pagamento pendente, exibe o carrinho normalmente
     order_id = session.get('current_order')
     order = Order.query.get(order_id) if order_id else None
     return render_template('carrinho.html', order=order)
 
 
-@app.route('/checkout', methods=['POST'])
+@app.route("/checkout", methods=["POST"])
 @login_required
 def checkout():
-    order_id = session.pop('current_order', None)
-    if not order_id:
-        return redirect(url_for('loja'))
+    order_id = session.get("current_order")
+    order = Order.query.get(order_id) if order_id else None
+
+    if not order or not order.items:
+        flash("Seu carrinho está vazio.", "warning")
+        return redirect(url_for("ver_carrinho"))
+
+    payment = Payment(
+        user_id=current_user.id,
+        order_id=order.id,
+        method=PaymentMethod.PIX,
+        status=PaymentStatus.PENDING
+    )
+    db.session.add(payment)
+    db.session.commit()
+
+    # Salva pagamento pendente na sessão
+    session['last_pending_payment'] = payment.id
+
+    return redirect(url_for("payment_status", payment_id=payment.id))
+
+
+@app.route('/pagamento/<int:order_id>')
+@login_required
+def pagamento(order_id):
     order = Order.query.get_or_404(order_id)
-    req = DeliveryRequest(order_id=order.id,
+    payment = order.payment
+    return render_template('pagamento.html', order=order, payment=payment)
+
+
+@app.route("/simular_pagamento/<int:payment_id>", methods=["POST"])
+@login_required
+def simular_pagamento(payment_id):
+    payment = Payment.query.get_or_404(payment_id)
+    if payment.user_id != current_user.id:
+        abort(403)
+
+    payment.status = PaymentStatus.COMPLETED
+    db.session.commit()
+
+    # Limpa da sessão
+    session.pop("last_pending_payment", None)
+    flash("Pagamento confirmado!", "success")
+    return redirect(url_for("loja"))
+
+
+
+@app.route('/confirmar_pagamento/<int:payment_id>', methods=['POST'])
+@login_required
+def confirmar_pagamento(payment_id):
+    payment = Payment.query.get_or_404(payment_id)
+    payment.status = 'pago'
+    db.session.commit()
+
+    # Criar solicitação de entrega
+    req = DeliveryRequest(order_id=payment.order_id,
                           requested_by_id=current_user.id,
                           status='pendente')
     db.session.add(req)
     db.session.commit()
-    flash('Pedido realizado com sucesso!', 'success')
+
+    flash('Pagamento confirmado com sucesso!', 'success')
     return redirect(url_for('list_delivery_requests'))
+
+
+
+@app.route('/payment_status/<int:payment_id>')
+@login_required
+def payment_status(payment_id):
+    payment = Payment.query.get_or_404(payment_id)
+    return render_template('payment_status.html', payment=payment)
+
 
 
 

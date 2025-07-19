@@ -1,0 +1,31 @@
+{% extends "layout.html" %}
+{% block main %}
+<div class="container mt-5 bg-light rounded shadow p-4">
+  <h2 class="mb-4 text-center">💳 Status do Pagamento</h2>
+
+  <div class="text-center mb-4">
+    {% if payment.status.name == 'PENDING' %}
+      <span class="badge bg-warning text-dark fs-5"><i class="bi bi-hourglass-split"></i> Aguardando Pagamento</span>
+    {% elif payment.status.name == 'PAID' %}
+      <span class="badge bg-success fs-5"><i class="bi bi-check-circle"></i> Pagamento Confirmado</span>
+    {% else %}
+      <span class="badge bg-secondary fs-5">Status: {{ payment.status.name }}</span>
+    {% endif %}
+  </div>
+
+  <p><strong>Método:</strong> {{ payment.method.name }}</p>
+  <p><strong>ID da Transação:</strong> {{ payment.transaction_id }}</p>
+
+  {% if payment.status.name == 'PENDING' %}
+    <div class="text-center mt-4">
+      <h5>Escaneie o QR Code abaixo com seu app de banco:</h5>
+      <img src="https://api.qrserver.com/v1/create-qr-code/?data=pagamento_pix_{{ payment.transaction_id }}&size=200x200" alt="QR Code Pix" class="img-fluid my-3">
+      <p class="text-muted">Este QR Code é apenas uma simulação.</p>
+    </div>
+  {% endif %}
+
+  <div class="text-center mt-4">
+    <a href="{{ url_for('loja') }}" class="btn btn-outline-primary">Voltar para a loja</a>
+  </div>
+</div>
+{% endblock %}

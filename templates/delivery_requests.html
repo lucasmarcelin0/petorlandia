@@ -1,29 +1,65 @@
 {% extends "layout.html" %}
 {% block main %}
-<div class="container mt-4">
-  <h2 class="mb-4">🚚 Solicitações de Entrega</h2>
+<div class="container mt-5">
+  <div class="d-flex justify-content-between align-items-center mb-4">
+    <h2 class="fw-bold">📦 Solicitações de Entrega</h2>
+    {% if current_user.worker == 'delivery' %}
+    <span class="badge bg-primary">Modo entregador</span>
+    {% else %}
+    <span class="badge bg-success">Meus pedidos</span>
+    {% endif %}
+  </div>
+
   {% if requests %}
-  <ul class="list-group">
+  <div class="list-group shadow-sm">
     {% for req in requests %}
-    <li class="list-group-item d-flex justify-content-between align-items-center">
+    <div class="list-group-item d-flex justify-content-between align-items-center flex-wrap py-3">
       <div>
-        Pedido #{{ req.order_id }} - {{ req.status }}
-        <small class="text-muted ms-2">{{ req.requested_at|datetime_brazil }}</small>
+        <h5 class="mb-1">Pedido #{{ req.order_id }}</h5>
+<small class="text-muted">Solicitado em {{ req.requested_at.strftime('%d/%m/%Y %H:%M') }}</small><br>
+        <span class="badge 
+          {% if req.status == 'pendente' %}bg-warning text-dark
+          {% elif req.status == 'em_andamento' %}bg-info
+          {% elif req.status == 'concluida' %}bg-success
+          {% elif req.status == 'cancelada' %}bg-danger
+          {% else %}bg-secondary
+          {% endif %}
+          mt-2">
+          {{ req.status|capitalize }}
+        </span>
       </div>
-      {% if req.status == 'pendente' %}
-      <form action="{{ url_for('accept_delivery', req_id=req.id) }}" method="post">
-        <button class="btn btn-sm btn-primary">Aceitar</button>
-      </form>
-      {% elif req.status == 'em_andamento' and req.worker_id == current_user.id %}
-      <span class="badge bg-info">Em andamento</span>
-      {% else %}
-      <span class="badge bg-secondary">{{ req.status }}</span>
-      {% endif %}
-    </li>
+
+      <div class="mt-2 mt-md-0">
+        {% if current_user.worker == 'delivery' %}
+          {% if req.status == 'pendente' %}
+          <form action="{{ url_for('accept_delivery', req_id=req.id) }}" method="post" class="d-inline">
+            <button class="btn btn-sm btn-outline-primary">Aceitar</button>
+          </form>
+          {% elif req.status == 'em_andamento' and req.worker_id == current_user.id %}
+          <form action="{{ url_for('complete_delivery', req_id=req.id) }}" method="post" class="d-inline">
+            <button class="btn btn-sm btn-success">Concluir</button>
+          </form>
+          <form action="{{ url_for('cancel_delivery', req_id=req.id) }}" method="post" class="d-inline">
+            <button class="btn btn-sm btn-danger">Cancelar</button>
+          </form>
+          {% elif req.worker_id == current_user.id %}
+          <span class="text-muted">Entrega finalizada</span>
+          {% endif %}
+        {% else %}
+          {% if req.status not in ['concluida', 'cancelada'] %}
+          <form action="{{ url_for('buyer_cancel_delivery', req_id=req.id) }}" method="post">
+            <button class="btn btn-sm btn-outline-danger">Cancelar Pedido</button>
+          </form>
+          {% endif %}
+        {% endif %}
+      </div>
+    </div>
     {% endfor %}
-  </ul>
+  </div>
   {% else %}
-  <p>Nenhuma solicitação.</p>
+  <div class="alert alert-info text-center">
+    Nenhuma solicitação encontrada.
+  </div>
   {% endif %}
 </div>
 {% endblock %}
