@@ -2827,6 +2827,94 @@ def pagamento(order_id):
     return render_template('pagamento.html', order=order, payment=payment)
 
 
+import mercadopago
+
+# Substitua pela sua Access Token real
+sdk = mercadopago.SDK("APP_USR-6670170005169574-071911-23502e25ef4bc98e3e2f9706cd082550-99814908")
+
+@app.route("/criar_pagamento_pix", methods=["POST"])
+def criar_pagamento_pix():
+    data = request.get_json()
+
+    preference_data = {
+        "items": [
+            {
+                "title": data.get("titulo", "Produto Teste"),
+                "quantity": int(data.get("quantidade", 1)),
+                "unit_price": float(data.get("preco", 10.0))
+            }
+        ],
+        "payment_methods": {
+            "excluded_payment_types": [{"id": "credit_card"}],  # aceita só PIX
+            "installments": 1
+        },
+        "payer": {
+            "email": data.get("email", "cliente@email.com")
+        },
+        "notification_url": "https://petorlandia.com.br/notificacoes"
+    }
+
+    preference_response = sdk.preference().create(preference_data)
+    preference = preference_response["response"]
+
+    return jsonify({
+        "id": preference["id"],
+        "init_point": preference["init_point"],
+    })
+
+
+
+
+from flask import request, jsonify
+import mercadopago
+from datetime import datetime
+from models import db, Payment, PaymentMethod, PaymentStatus
+
+@app.route("/notificacoes", methods=["POST"])
+def notificacoes_mercado_pago():
+    data = request.get_json()
+    print("🔔 Notificação recebida:", data)
+
+    if data and data.get("type") == "payment":
+        payment_id = data.get("data", {}).get("id")
+        if payment_id:
+            try:
+                payment_info = sdk.payment().get(payment_id)["response"]
+
+                status = payment_info.get("status", "pending").upper()
+                transaction_id = str(payment_info.get("id"))
+                email = payment_info.get("payer", {}).get("email")
+                method = payment_info.get("payment_method_id", "pix").upper()
+
+                print(f"🧾 Status: {status} | Email: {email}")
+
+                pagamento = Payment.query.filter_by(transaction_id=transaction_id).first()
+                if pagamento:
+                    pagamento.status = PaymentStatus[status] if status in PaymentStatus.__members__ else PaymentStatus.PENDING
+                else:
+                    novo_pagamento = Payment(
+                        order_id=None,
+                        method=PaymentMethod[method] if method in PaymentMethod.__members__ else PaymentMethod.PIX,
+                        status=PaymentStatus[status] if status in PaymentStatus.__members__ else PaymentStatus.PENDING,
+                        transaction_id=transaction_id,
+                        created_at=datetime.utcnow(),
+                        user_id=None
+                    )
+                    db.session.add(novo_pagamento)
+
+                db.session.commit()
+                return jsonify({"status": "salvo"}), 200
+
+            except Exception as e:
+                print("❌ Erro ao processar pagamento:", e)
+                return jsonify({"erro": "falha interna"}), 500
+
+    return jsonify({"status": "ignorado"}), 200
+
+
+
+
+
 @app.route("/simular_pagamento/<int:payment_id>", methods=["POST"])
 @login_required
 def simular_pagamento(payment_id):
