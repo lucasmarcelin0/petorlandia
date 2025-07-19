@@ -1,0 +1,103 @@
+{% extends 'layout.html' %}
+{% block main %}
+<div class="container py-4">
+
+  <!-- ✅ Barra de Resumo -->
+  <div class="alert alert-light shadow-sm border d-flex justify-content-between align-items-center mb-4">
+    <div>
+      <strong>Pedido #{{ req.order_id }}</strong> — 
+      {{ items|length }} item{{ 's' if items|length > 1 else '' }} — 
+      <span class="text-success fw-bold">R$ {{ '%.2f' | format(total) }}</span>
+    </div>
+    <span class="badge 
+      {% if req.status == 'pendente' %} bg-warning text-dark
+      {% elif req.status == 'em_andamento' %} bg-info
+      {% elif req.status == 'concluida' %} bg-success
+      {% elif req.status == 'cancelada' %} bg-danger
+      {% else %} bg-secondary {% endif %}">
+      {{ req.status|capitalize }}
+    </span>
+  </div>
+
+  <!-- 👤 Comprador -->
+  <div class="card mb-4 shadow-sm">
+    <div class="card-body">
+      <h5 class="card-title">🧑‍💼 Comprador</h5>
+      <p class="card-text mb-1">
+        <a href="{{ url_for('ficha_tutor', tutor_id=buyer.id) }}" class="text-decoration-none fw-bold">
+          {{ buyer.name }}
+        </a> (ID: {{ buyer.id }})
+      </p>
+      {% if buyer.email %}<p class="mb-0 text-muted">📧 {{ buyer.email }}</p>{% endif %}
+    </div>
+  </div>
+
+  <!-- 📦 Produtos -->
+  <div class="card mb-4 shadow-sm">
+    <div class="card-body">
+      <h5 class="card-title mb-3">🛍 Produtos Comprados</h5>
+      <div class="row">
+        {% for item in items %}
+        {% if item.product %}
+        <div class="col-md-6 mb-3">
+          <div class="card h-100">
+            <div class="row g-0">
+              <div class="col-4">
+                <img src="{{ item.product.image_url or url_for('static', filename='placeholder.png') }}" class="img-fluid rounded-start" alt="{{ item.product.name }}">
+              </div>
+              <div class="col-8">
+                <div class="card-body py-2 px-3">
+                  <h6 class="card-title mb-1">{{ item.product.name }}</h6>
+                  <p class="card-text mb-0">
+                    Quantidade: {{ item.quantity }}<br>
+                    Preço: R$ {{ '%.2f' | format(item.product.price) }}
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        {% endif %}
+        {% endfor %}
+      </div>
+      <hr>
+      <p class="text-end fw-bold fs-5 text-success mb-0">💰 Total: R$ {{ '%.2f' | format(total) }}</p>
+    </div>
+  </div>
+
+  <!-- 🕒 Linha do Tempo -->
+  <div class="card mb-4 shadow-sm">
+    <div class="card-body">
+      <h5 class="card-title">📅 Linha do Tempo</h5>
+      <ul class="list-group list-group-flush">
+        <li class="list-group-item">🕐 Solicitado em: {{ req.requested_at.strftime('%d/%m/%Y %H:%M') }}</li>
+        {% if req.accepted_at %}
+        <li class="list-group-item">🚚 Aceito em: {{ req.accepted_at.strftime('%d/%m/%Y %H:%M') }}</li>
+        {% endif %}
+        {% if req.completed_at %}
+        <li class="list-group-item">✅ Concluído em: {{ req.completed_at.strftime('%d/%m/%Y %H:%M') }}</li>
+        {% endif %}
+        {% if req.canceled_at %}
+        <li class="list-group-item text-danger">❌ Cancelado em: {{ req.canceled_at.strftime('%d/%m/%Y %H:%M') }}</li>
+        {% endif %}
+      </ul>
+    </div>
+  </div>
+
+  <!-- 🚚 Entregador -->
+  {% if delivery_worker %}
+  <div class="card shadow-sm">
+    <div class="card-body">
+      <h5 class="card-title">🚚 Entregador</h5>
+      <p class="card-text mb-1">
+        <a href="{{ url_for('ficha_tutor', tutor_id=delivery_worker.id) }}" class="text-decoration-none fw-bold">
+          {{ delivery_worker.name }}
+        </a> (ID: {{ delivery_worker.id }})
+      </p>
+      {% if delivery_worker.email %}<p class="mb-0 text-muted">📧 {{ delivery_worker.email }}</p>{% endif %}
+    </div>
+  </div>
+  {% endif %}
+
+</div>
+{% endblock %}

@@ -514,7 +514,7 @@ class Product(db.Model):
 
 class Order(db.Model):
     id = db.Column(db.Integer, primary_key=True)
-    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
     user = db.relationship('User', backref='orders')
@@ -525,6 +525,9 @@ class OrderItem(db.Model):
     order_id = db.Column(db.Integer, db.ForeignKey('order.id'), nullable=False)
     item_name = db.Column(db.String(100), nullable=False)
     quantity = db.Column(db.Integer, nullable=False, default=1)
+
+    product_id = db.Column(db.Integer, db.ForeignKey('product.id'))
+    product = db.relationship('Product')
 
 class DeliveryRequest(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -542,3 +545,35 @@ class DeliveryRequest(db.Model):
     requested_by = db.relationship('User', foreign_keys=[requested_by_id])
     worker = db.relationship('User', foreign_keys=[worker_id])
     canceled_by = db.relationship('User', foreign_keys=[canceled_by_id])
+
+
+
+
+from enum import Enum
+from sqlalchemy import Enum as PgEnum
+
+class PaymentMethod(Enum):
+    PIX = 'PIX'
+    CREDIT_CARD = 'Cartão de Crédito'
+    DEBIT_CARD = 'Cartão de Débito'
+    BOLETO = 'Boleto'
+
+class PaymentStatus(Enum):
+    PENDING = 'Pendente'
+    COMPLETED = 'Concluído'
+    FAILED = 'Falhou'
+
+class Payment(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    order_id = db.Column(db.Integer, db.ForeignKey('order.id'), nullable=False)
+
+    method = db.Column(PgEnum(PaymentMethod, name="paymentmethod", create_type=False), nullable=False)
+    status = db.Column(PgEnum(PaymentStatus, name="paymentstatus", create_type=False), default=PaymentStatus.PENDING)
+
+
+    transaction_id = db.Column(db.String(255))
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    user = db.relationship('User', backref='payments')
+
+    order = db.relationship('Order', backref='payment', uselist=False)
