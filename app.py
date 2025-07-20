@@ -2802,81 +2802,68 @@ def ver_carrinho():
     return render_template('carrinho.html', order=order)
 
 
-@app.route("/checkout", methods=["POST"])
-@login_required
+
+@app.route('/checkout', methods=['POST'])
 def checkout():
-    order_id = session.get("current_order")
-    order = Order.query.get(order_id) if order_id else None
-
-    if not order or not order.items:
-        flash("Seu carrinho está vazio.", "warning")
-        return redirect(url_for("ver_carrinho"))
-
-    # Cria objeto Payment no banco
-    payment = Payment(
-        user_id=current_user.id,
-        order_id=order.id,
-        method=PaymentMethod.PIX,
-        status=PaymentStatus.PENDING
-    )
-    db.session.add(payment)
-    db.session.commit()
-
-    # Monta os itens para a preferência do Mercado Pago
-    items = []
-    for item in order.items:
-        if item.product:
-            items.append({
-                "title": item.product.name,
-                "quantity": int(item.quantity),
-                "unit_price": float(item.product.price)
-            })
-
-    # Monta o objeto da preferência
-    preference_data = {
-        "items": items,
-        "payment_methods": {
-            "excluded_payment_types": [{"id": "credit_card"}],  # Apenas PIX
-            "installments": 1
-        },
-        "payer": {
-            "email": current_user.email
-        },
-        "notification_url": url_for("notificacoes_mercado_pago", _external=True),
-        "external_reference": str(payment.id),
-        "back_urls": {
-            "success": url_for("payment_status", payment_id=payment.id, status='success', _external=True),
-            "failure": url_for("payment_status", payment_id=payment.id, status='failure', _external=True),
-            "pending": url_for("payment_status", payment_id=payment.id, status='pending', _external=True)
-        },
-        "auto_return": "approved"
-    }
-
-    # DEBUG: mostra os dados enviados
-    print("📦 Dados enviados ao Mercado Pago:", preference_data)
-
     try:
+        order_id = session.get("current_order")
+        order = Order.query.get(order_id) if order_id else None
+
+        if not order or not order.items:
+            flash("Seu carrinho está vazio.", "warning")
+            return redirect(url_for("ver_carrinho"))
+
+        cart_items = order.items
+
+        preference_data = {
+            "items": [
+                {
+                    "title": item.name,
+                    "quantity": item.quantity,
+                    "unit_price": float(item.price)
+                } for item in cart_items
+            ],
+            "payer": {
+                "email": current_user.email if current_user.is_authenticated else "sem-email@petorlandia.com.br"
+            },
+            "back_urls": {
+                "success": "https://www.petorlandia.com.br/pagamento_sucesso",
+                "failure": "https://www.petorlandia.com.br/pagamento_erro",
+                "pending": "https://www.petorlandia.com.br/pagamento_pendente"
+            },
+            "notification_url": "https://www.petorlandia.com.br/notificacoes",
+            "external_reference": str(order_id),
+            "auto_return": "approved"
+        }
+
+        print("📦 Dados enviados ao Mercado Pago:", preference_data)
+
         preference_response = sdk.preference().create(preference_data)
-        print("🔎 Resposta do Mercado Pago:", preference_response)
+        preference = preference_response["response"]
+
+        return redirect(preference["init_point"])
+    
     except Exception as e:
-        print("❌ Exceção ao criar preferência:", str(e))
-        flash("Erro ao iniciar pagamento (falha de comunicação).", "danger")
-        return redirect(url_for("ver_carrinho"))
-
-    if preference_response.get("status") != 201:
-        print("⚠️ Status HTTP inesperado:", preference_response.get("status"))
-        print("📩 Corpo completo da resposta:", preference_response)
+        print(f"[ERRO CHECKOUT] {e}")
         flash("Erro ao iniciar pagamento.", "danger")
-        return redirect(url_for("ver_carrinho"))
+        return redirect(url_for('ver_carrinho'))
 
-    preference = preference_response["response"]
-    payment.transaction_id = str(preference["id"])
-    db.session.commit()
 
-    # Armazena para futura checagem do status
-    session['last_pending_payment'] = payment.id
+@app.route("/pagamento_sucesso")
+def pagamento_sucesso():
+    flash("Pagamento aprovado! Obrigado pela compra.", "success")
+    return redirect(url_for("ver_carrinho"))
 
-    return redirect(preference["init_point"])
+@app.route("/pagamento_erro")
+def pagamento_erro():
+    flash("Pagamento recusado ou houve um erro.", "danger")
+    return redirect(url_for("ver_carrinho"))
+
+@app.route("/pagamento_pendente")
+def pagamento_pendente():
+    flash("Pagamento pendente. Aguarde a confirmação.", "warning")
+    return redirect(url_for("ver_carrinho"))
+
 
 
 
