@@ -3,6 +3,10 @@ import uuid
 
 from flask import current_app
 
+import logging
+import hashlib
+import hmac
+
 import os
 
 import boto3
@@ -723,6 +727,12 @@ def inject_unread_count():
         unread = Message.query.filter_by(receiver_id=current_user.id, lida=False).count()
         return dict(unread_messages=unread)
     return dict(unread_messages=0)
+
+
+@app.context_processor
+def inject_mp_public_key():
+    """Disponibiliza a chave pública do Mercado Pago para os templates."""
+    return dict(MERCADOPAGO_PUBLIC_KEY=current_app.config.get("MERCADOPAGO_PUBLIC_KEY"))
 
 
 @app.route('/animal/<int:animal_id>/deletar', methods=['POST'])
@@ -2811,10 +2821,51 @@ def checkout():
     db.session.add(payment)
     db.session.commit()
 
-    # Salva pagamento pendente na sessão
+    items = []
+    for item in order.items:
+        if item.product:
+            items.append({
+                "title": item.product.name,
+                "quantity": int(item.quantity),
+                "unit_price": float(item.product.price)
+            })
+
+    preference_data = {
+        "items": items,
+        "payment_methods": {
+            "excluded_payment_types": [{"id": "credit_card"}],
+            "installments": 1
+        },
+        "payer": {"email": current_user.email},
+        "notification_url": url_for("notificacoes_mercado_pago", _external=True),
+        "external_reference": str(payment.id),
+        "back_urls": {
+            "success": url_for("payment_status", payment_id=payment.id, status='success', _external=True),
+            "failure": url_for("payment_status", payment_id=payment.id, status='failure', _external=True),
+            "pending": url_for("payment_status", payment_id=payment.id, status='pending', _external=True)
+        },
+        "auto_return": "approved"
+    }
+
+    try:
+        preference_response = sdk.preference().create(preference_data)
+    except Exception:
+        current_app.logger.exception("Erro comunicando com Mercado Pago")
+        flash("Não foi possível iniciar o pagamento.", "danger")
+        return redirect(url_for("ver_carrinho"))
+
+    if preference_response.get("status") != 201:
+        current_app.logger.error("Resposta inesperada MP: %s", preference_response)
+        flash("Erro ao iniciar pagamento.", "danger")
+        return redirect(url_for("ver_carrinho"))
+
+    preference = preference_response["response"]
+    payment.transaction_id = str(preference["id"])
+    db.session.commit()
+
     session['last_pending_payment'] = payment.id
 
-    return redirect(url_for("payment_status", payment_id=payment.id))
+    return redirect(preference["init_point"])
 
 
 @app.route('/pagamento/<int:order_id>')
@@ -2827,8 +2878,8 @@ def pagamento(order_id):
 
 import mercadopago
 
-# Substitua pela sua Access Token real
-sdk = mercadopago.SDK("APP_USR-6670170005169574-071911-23502e25ef4bc98e3e2f9706cd082550-99814908")
+# SDK do Mercado Pago configurado com o token definido no arquivo de configuração
+sdk = mercadopago.SDK(app.config.get('MERCADOPAGO_ACCESS_TOKEN'))
 
 @app.route("/criar_pagamento_pix", methods=["POST"])
 def criar_pagamento_pix():
@@ -2864,47 +2915,54 @@ def criar_pagamento_pix():
 
 
 from flask import request, jsonify
-import mercadopago
 from datetime import datetime
-from models import db, Payment, PaymentMethod, PaymentStatus
+from models import db, Payment, PaymentMethod, PaymentStatus, DeliveryRequest
 
 @app.route("/notificacoes", methods=["POST"])
 def notificacoes_mercado_pago():
+    secret = current_app.config.get("MERCADOPAGO_WEBHOOK_SECRET")
+    signature = request.headers.get("X-MP-Signature")
+    if secret:
+        calculated = hmac.new(secret.encode(), request.get_data(), hashlib.sha256).hexdigest()
+        if not hmac.compare_digest(calculated, signature or ""):
+            current_app.logger.warning("Invalid Mercado Pago webhook signature")
+            return jsonify({"error": "invalid signature"}), 400
+
     data = request.get_json()
-    print("🔔 Notificação recebida:", data)
+    current_app.logger.info("🔔 Notificação recebida: %s", data)
 
     if data and data.get("type") == "payment":
-        payment_id = data.get("data", {}).get("id")
-        if payment_id:
+        mp_payment_id = data.get("data", {}).get("id")
+        if mp_payment_id:
             try:
-                payment_info = sdk.payment().get(payment_id)["response"]
+                resp = sdk.payment().get(mp_payment_id)
+                if resp.get("status") != 200:
+                    current_app.logger.error("Erro Mercado Pago: %s", resp)
+                    return jsonify({"error": "api error"}), 500
+                payment_info = resp["response"]
 
-                status = payment_info.get("status", "pending").upper()
-                transaction_id = str(payment_info.get("id"))
-                email = payment_info.get("payer", {}).get("email")
-                method = payment_info.get("payment_method_id", "pix").upper()
-
-                print(f"🧾 Status: {status} | Email: {email}")
-
-                pagamento = Payment.query.filter_by(transaction_id=transaction_id).first()
+                status = payment_info.get("status", "pending")
+                external_ref = payment_info.get("external_reference")
+                pagamento = Payment.query.get(int(external_ref)) if external_ref else None
                 if pagamento:
-                    pagamento.status = PaymentStatus[status] if status in PaymentStatus.__members__ else PaymentStatus.PENDING
-                else:
-                    novo_pagamento = Payment(
-                        order_id=None,
-                        method=PaymentMethod[method] if method in PaymentMethod.__members__ else PaymentMethod.PIX,
-                        status=PaymentStatus[status] if status in PaymentStatus.__members__ else PaymentStatus.PENDING,
-                        transaction_id=transaction_id,
-                        created_at=datetime.utcnow(),
-                        user_id=None
-                    )
-                    db.session.add(novo_pagamento)
-
-                db.session.commit()
-                return jsonify({"status": "salvo"}), 200
-
-            except Exception as e:
-                print("❌ Erro ao processar pagamento:", e)
+                    if pagamento.status == PaymentStatus.COMPLETED:
+                        return jsonify({"status": "already_processed"}), 200
+                    pagamento.transaction_id = str(payment_info.get("id"))
+                    if status == "approved":
+                        pagamento.status = PaymentStatus.COMPLETED
+                        if pagamento.order_id and not DeliveryRequest.query.filter_by(order_id=pagamento.order_id).first():
+                            req = DeliveryRequest(order_id=pagamento.order_id,
+                                                  requested_by_id=pagamento.user_id,
+                                                  status='pendente')
+                            db.session.add(req)
+                    elif status == "rejected":
+                        pagamento.status = PaymentStatus.FAILED
+                    else:
+                        pagamento.status = PaymentStatus.PENDING
+                    db.session.commit()
+                return jsonify({"status": "atualizado"}), 200
+            except Exception:
+                current_app.logger.exception("Erro ao processar pagamento")
                 return jsonify({"erro": "falha interna"}), 500
 
     return jsonify({"status": "ignorado"}), 200
@@ -2953,7 +3011,8 @@ def confirmar_pagamento(payment_id):
 @login_required
 def payment_status(payment_id):
     payment = Payment.query.get_or_404(payment_id)
-    return render_template('payment_status.html', payment=payment)
+    result = request.args.get('status')
+    return render_template('payment_status.html', payment=payment, result=result)
 
 
 
