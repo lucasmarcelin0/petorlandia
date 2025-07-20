@@ -163,7 +163,12 @@ from flask_login import LoginManager, login_required, current_user, logout_user
 try:
     from models import *
 except ImportError:
-    from .models import *         
+    from .models import *
+
+# Reimporta explicitamente o objeto `db` das extensões para evitar
+# possíveis conflitos de importacão.
+from extensions import db as _db
+db = _db
 
 from wtforms.fields import SelectField
 from flask import Flask, jsonify, render_template, redirect, url_for, request, session, flash, abort
@@ -2916,7 +2921,7 @@ def criar_pagamento_pix():
 
 from flask import request, jsonify
 from datetime import datetime
-from models import db, Payment, PaymentMethod, PaymentStatus, DeliveryRequest
+from models import Payment, PaymentMethod, PaymentStatus, DeliveryRequest
 
 @app.route("/notificacoes", methods=["POST"])
 def notificacoes_mercado_pago():
