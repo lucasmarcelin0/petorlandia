@@ -3,6 +3,12 @@
 <div class="container mt-5 bg-light rounded shadow p-4">
   <h2 class="mb-4 text-center">💳 Status do Pagamento</h2>
 
+  {% if result == 'success' %}
+    <div class="alert alert-success text-center">Pagamento realizado com sucesso!</div>
+  {% elif result == 'failure' %}
+    <div class="alert alert-danger text-center">O pagamento foi recusado.</div>
+  {% endif %}
+
   <div class="text-center mb-4">
     {% if payment.status.name == 'PENDING' %}
       <span class="badge bg-warning text-dark fs-5"><i class="bi bi-hourglass-split"></i> Aguardando Pagamento</span>
