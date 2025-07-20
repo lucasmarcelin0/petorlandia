@@ -1,254 +1,221 @@
-import uuid
+"""Main Flask application for PetOrlândia.
 
-
-from flask import current_app
-
-import logging
-import hashlib
-import hmac
+✔ Única instância de Flask e extensões
+✔ Fallback absoluto/relativo para todos os imports locais
+✔ Alias automático para `models` em `sys.modules` para evitar ModuleNotFoundError
+"""
+from __future__ import annotations
 
 import os
+import sys
+import logging
+import importlib
+import uuid
+import hashlib
+import hmac
+import base64
+import secrets
+from io import BytesIO
+from datetime import datetime, timedelta
+from math import ceil
 
-import boto3
+from flask import (
+    Flask,
+    abort,
+    flash,
+    jsonify,
+    redirect,
+    render_template,
+    request,
+    url_for,
+    current_app,
+    session as flask_session,  # sessão real do Flask
+)
+from flask_login import (
+    LoginManager,
+    current_user,
+    login_required,
+    login_user,
+    logout_user,
+)
+from flask_mail import Mail, Message
 
+# Alias para compatibilidade com código legado
+MailMessage = Message
+from flask_migrate import Migrate
+from flask_session import Session as SessionExt  # extensão
+from itsdangerous import URLSafeTimedSerializer
+from dateutil.relativedelta import relativedelta
+import pytz
 from dotenv import load_dotenv
+import boto3
+import qrcode  # noqa: F401
+
+# ---------------------------------------------------------------------------
+# 🔧 Ambiente e caminhos
+# ---------------------------------------------------------------------------
+
 load_dotenv()
+PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))
+if PROJECT_ROOT not in sys.path:
+    sys.path.append(PROJECT_ROOT)
+
+# ---------------------------------------------------------------------------
+# 📦 Imports locais com fallback relativo
+# ---------------------------------------------------------------------------
+
+def _import(name: str):
+    """Importa módulo por nome absoluto; se falhar tenta relativo ao pacote."""
+    try:
+        return importlib.import_module(name)
+    except ModuleNotFoundError:
+        pkg_name = f"{__name__.split('.', 1)[0]}.{name}"
+        return importlib.import_module(pkg_name)
+
+# Config
+Config = _import("config").Config  # type: ignore[attr-defined]
+
+# Extensões únicas
+_ext = _import("extensions")
+
+db, migrate, mail, login, session_ext = (
+    _ext.db,  # type: ignore[attr-defined]
+    _ext.migrate,
+    _ext.mail,
+    _ext.login,
+    _ext.session,
+)
+
+# Outros módulos locais
+init_admin, _is_admin = (
+    _import("admin").init_admin,
+    _import("admin")._is_admin,
+)
+forms = _import("forms")
+# Exporta classes de formulário para o namespace global (compatibilidade com rotas legadas)
+MessageForm = forms.MessageForm  # type: ignore[attr-defined]
+RegistrationForm = forms.RegistrationForm  # type: ignore[attr-defined]
+LoginForm = forms.LoginForm  # type: ignore[attr-defined]
+AnimalForm = forms.AnimalForm  # type: ignore[attr-defined]
+EditProfileForm = forms.EditProfileForm  # type: ignore[attr-defined]
+ResetPasswordRequestForm = forms.ResetPasswordRequestForm  # type: ignore[attr-defined]
+ResetPasswordForm = forms.ResetPasswordForm  # type: ignore[attr-defined]
+OrderItemForm = forms.OrderItemForm  # type: ignore[attr-defined]
+DeliveryRequestForm = forms.DeliveryRequestForm  # type: ignore[attr-defined]
+AddToCartForm = forms.AddToCartForm  # type: ignore[attr-defined]
+
+helpers = _import("helpers")
+models_mod = _import("models")
+
+# Torna possível `import models` em qualquer parte do app
+sys.modules.setdefault("models", models_mod)
+
+# Importa modelos para uso direto (opcional)
+from models import *  # type: ignore  # noqa: F401,F403
+
+# ---------------------------------------------------------------------------
+# ☁️ AWS S3 helper
+# ---------------------------------------------------------------------------
 
 s3 = boto3.client(
     "s3",
     aws_access_key_id=os.getenv("AWS_ACCESS_KEY_ID"),
-    aws_secret_access_key=os.getenv("AWS_SECRET_ACCESS_KEY")
+    aws_secret_access_key=os.getenv("AWS_SECRET_ACCESS_KEY"),
 )
+BUCKET_NAME = os.getenv("S3_BUCKET_NAME")
 
-bucket_name = os.getenv("S3_BUCKET_NAME")
 
-def upload_to_s3(file, filename, folder="uploads"):
+def upload_to_s3(file, filename, folder="uploads") -> str | None:
+    """Faz upload para S3 e devolve a URL; retorna None em caso de erro."""
     try:
         s3_path = f"{folder}/{filename}"
         s3.upload_fileobj(
             file,
-            bucket_name,
+            BUCKET_NAME,
             s3_path,
-            ExtraArgs={"ContentType": file.content_type}
+            ExtraArgs={"ContentType": file.content_type},
         )
-        return f"https://{bucket_name}.s3.amazonaws.com/{s3_path}"
-    except Exception as e:
-        print(f"[ERRO S3] Falha ao enviar para o S3: {e}")
+        return f"https://{BUCKET_NAME}.s3.amazonaws.com/{s3_path}"
+    except Exception as exc:  # noqa: BLE001
+        logging.exception("[ERRO S3] Falha ao enviar para o S3: %s", exc)
         return None
 
+# ---------------------------------------------------------------------------
+# 🕓 Filtro Jinja de data/hora (fuso Brasília)
+# ---------------------------------------------------------------------------
 
+_BR_TZ = pytz.timezone("America/Sao_Paulo")
 
-import os
-
-
-
-from flask import Flask
-
-try:
-    from config import Config
-except ImportError:
-    from .config import Config
-
-
-try:
-    from extensions import db, migrate, mail, login, session
-except ImportError:
-    from .extensions import db, migrate, mail, login, session
-
-# Cria o diretório instance (caso não exista)
-instance_path = os.path.join(os.getcwd(), 'instance')
-os.makedirs(instance_path, exist_ok=True)
-
-# Cria o app Flask
-app = Flask(__name__, instance_path=instance_path)
-app.config.from_object(Config)
-
-app.config['FRONTEND_URL'] = os.environ.get('FRONTEND_URL', 'http://127.0.0.1:5000')
-
-
-print(f"FRONTEND_URL carregado: {app.config['FRONTEND_URL']}")
-
-
-# Inicializa as extensões
-db.init_app(app)
-migrate.init_app(app, db)
-mail.init_app(app)
-login.init_app(app)
-session.init_app(app)
-
-
-
-
-
-from io import BytesIO
-
-
-from datetime import datetime
-import pytz
-
-# Fuso horário de São Paulo
-br_tz = pytz.timezone('America/Sao_Paulo')
-
-# Filtro para converter datetime UTC para o fuso de Brasília
-def format_datetime_brazil(value, format="%d/%m/%Y %H:%M"):
+def format_datetime_brazil(value: datetime | None, fmt: str = "%d/%m/%Y %H:%M") -> str:
     if value is None:
         return ""
     if value.tzinfo is None:
         value = pytz.utc.localize(value)
-    local_dt = value.astimezone(br_tz)
-    return local_dt.strftime(format)
+    return value.astimezone(_BR_TZ).strftime(fmt)
 
-app.jinja_env.filters['datetime_brazil'] = format_datetime_brazil
+# ---------------------------------------------------------------------------
+# 🏗️ Factory da aplicação
+# ---------------------------------------------------------------------------
 
+def create_app() -> Flask:
+    instance_path = os.path.join(PROJECT_ROOT, "instance")
+    os.makedirs(instance_path, exist_ok=True)
 
+    app = Flask(__name__, instance_path=instance_path)
+    app.config.from_object(Config)
 
-
-
-
-
-from flask_login import login_user
-from dateutil.relativedelta import relativedelta
-from datetime import timedelta
-import secrets
-import qrcode
-import base64
-
-try:
-    from forms import (
-        MessageForm,
-        RegistrationForm,
-        LoginForm,
-        AnimalForm,
-        EditProfileForm,
-        ResetPasswordRequestForm,
-        ResetPasswordForm,
-        OrderItemForm,
-        DeliveryRequestForm,
-        AddToCartForm,
-    )
-except ImportError:
-    from .forms import (
-        MessageForm,
-        RegistrationForm,
-        LoginForm,
-        AnimalForm,
-        EditProfileForm,
-        ResetPasswordRequestForm,
-        ResetPasswordForm,
-        OrderItemForm,
-        DeliveryRequestForm,
-        AddToCartForm,
+    # Config extra via env
+    app.config.setdefault("FRONTEND_URL", os.getenv("FRONTEND_URL", "http://127.0.0.1:5000"))
+    app.config.update(
+        MAIL_SERVER="smtp.gmail.com",
+        MAIL_PORT=587,
+        MAIL_USE_TLS=True,
+        MAIL_USERNAME=os.getenv("MAIL_USERNAME"),
+        MAIL_PASSWORD=os.getenv("MAIL_PASSWORD"),
+        MAIL_DEFAULT_SENDER=("PetOrlândia", os.getenv("MAIL_USERNAME")),
+        SESSION_PERMANENT=False,
+        SESSION_TYPE="filesystem",
     )
 
-try:
-    from admin import init_admin, _is_admin
-except ImportError:
-    from .admin import init_admin, _is_admin
+    # Inicialização de extensões
+    db.init_app(app)
+    migrate.init_app(app, db)
+    mail.init_app(app)
+    login.init_app(app)
+    session_ext.init_app(app)
+
+    # Flask‑Login
+    login.login_view = "login"
+
+    # Filtro Jinja
+    app.jinja_env.filters["datetime_brazil"] = format_datetime_brazil
+
+    # Serializer para tokens seguros
+    app.url_serializer = URLSafeTimedSerializer(app.config["SECRET_KEY"])
+
+    # Admin e DB
+    with app.app_context():
+        init_admin(app)
+        db.create_all()
+
+    return app
 
 
-from flask_migrate import Migrate, upgrade, migrate, init
+# Instância WSGI
+app = create_app()
+
+# Alias global da sessão real do Flask (para compatibilidade com rotas herdadas)
+session = flask_session  # noqa: N816  pylint: disable=invalid-name
 
 
-
-
-
-
-
-
-
-from flask_session import Session
-from flask_login import LoginManager, login_required, current_user, logout_user
-
-try:
-    from models import *
-except ImportError:
-    from .models import *
-
-
-from wtforms.fields import SelectField
-from flask import Flask, jsonify, render_template, redirect, url_for, request, session, flash, abort
-
-
-import sys
-import os
-from werkzeug.utils import secure_filename
-
-
-from math import ceil
-
-try:
-    from helpers import calcular_idade, parse_data_nascimento
-except ImportError:
-    from .helpers import calcular_idade, parse_data_nascimento
-
-from flask_mail import Mail, Message as MailMessage
-
-from flask_mail import Mail
-app.config['MAIL_SERVER'] = 'smtp.gmail.com'
-app.config['MAIL_PORT'] = 587
-app.config['MAIL_USE_TLS'] = True
-app.config['MAIL_USE_SSL'] = False
-app.config['MAIL_USERNAME'] = 'gpt.assistente.orlandia@gmail.com'
-app.config['MAIL_PASSWORD'] = 'SENHA_DE_APP'  # ← Cole a senha de aplicativo aqui
-app.config['MAIL_DEFAULT_SENDER'] = ('PetOrlândia', 'gpt.assistente.orlandia@gmail.com')
-
-mail = Mail(app)
-
-
-
-sys.path.append(os.path.dirname(os.path.abspath(__file__)))
-
-
-import os
-
-instance_path = os.path.join(os.getcwd(), 'instance')
-os.makedirs(instance_path, exist_ok=True)
-
-
-
-
-app.config.from_object(Config)
-
- 
-migrate = Migrate(app, db)
-
-mail = Mail(app)  # ✅ ESSA LINHA ESTAVA FALTANDO
-login = LoginManager(app)
+# ---------------------------------------------------------------------------
+# 🔐 Loader de usuário
+# ---------------------------------------------------------------------------
 
 
 @login.user_loader
-def load_user(user_id):
-    return User.query.get(int(user_id))
-
-
-login.login_view = 'login'
-
-
-app.config["SESSION_PERMANENT"] = False
-app.config["SESSION_TYPE"] = "filesystem"
-Session(app)
-
-
-# Após db.init_app(app)
-migrate = Migrate(app, db)
-
-
-app.config['SERVER_NAME'] = 'orange-space-pancake-j9456jjjv9vcqrxx-5000.app.github.dev'
-
-
-with app.app_context():
-    init_admin(app)      # ⬅️ Primeiro registra o admin e os modelos
-  #  db.create_all()      # ⬅️ Só depois chama o create_all()
-
-
-@login.user_loader
-def load_user(user_id):
-    return User.query.get(int(user_id))
-
-
-from itsdangerous import URLSafeTimedSerializer
-
-
+def load_user(user_id: str):
+    return models_mod.User.query.get(int(user_id))  # type: ignore[attr-defined]
 
 
 s = URLSafeTimedSerializer(app.config['SECRET_KEY'])
@@ -2578,6 +2545,25 @@ def create_order():
     )
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+#Delivery routes
+
+
 @app.route('/orders/<int:order_id>/request_delivery', methods=['POST'])
 @login_required
 def request_delivery(order_id):
@@ -2721,6 +2707,10 @@ def fluxograma_entregas():
     return render_template('fluxograma_entregas.html')
 
 
+with app.app_context():
+    db.create_all()
+
+
 @app.route('/admin/delivery_overview')
 @login_required
 def delivery_overview():
@@ -2738,120 +2728,206 @@ def delivery_overview():
 
 
 
+# ========================================================
+#  PAGAMENTO – Mercado Pago (Checkout Pro PIX)
+# ========================================================
+
+import hmac, hashlib, mercadopago
+from decimal   import Decimal
+from functools import cache
+from datetime  import datetime, timedelta
+
+from flask import (
+    render_template, redirect, url_for, flash, session,
+    request, jsonify, abort, current_app
+)
+from flask_login import login_required, current_user
+
+from models import (
+    db, Product, Order, OrderItem,
+    Payment, PaymentMethod, PaymentStatus, DeliveryRequest
+)
+from forms import AddToCartForm
 
 
+# ─────────────────────────────────────────────────────────
+#  SDK (lazy – lê token do config)
+# ─────────────────────────────────────────────────────────
+@cache
+def mp_sdk():
+    return mercadopago.SDK(current_app.config["MERCADOPAGO_ACCESS_TOKEN"])
 
 
+# ─────────────────────────────────────────────────────────
+#  Helpers
+# ─────────────────────────────────────────────────────────
+PENDING_TIMEOUT = timedelta(minutes=20)
+
+def _limpa_pendencia(payment):
+    """
+    Se o pagamento pendente ainda for válido (PENDING, não expirado e
+    com init_point), devolve‑o. Caso contrário zera a chave na sessão.
+    """
+    if not payment:
+        session.pop("last_pending_payment", None)
+        return None
+
+    expirou   = (datetime.utcnow() - payment.created_at) > PENDING_TIMEOUT
+    sem_link  = not getattr(payment, "init_point", None)
+
+    if payment.status != PaymentStatus.PENDING or expirou or sem_link:
+        session.pop("last_pending_payment", None)
+        return None
+    return payment
+
+
+# --------------------------------------------------------
+#  LOJA
+# --------------------------------------------------------
 @app.route("/loja")
 @login_required
 def loja():
-    pagamento_pendente = None
-    payment_id = session.get("last_pending_payment")
-    if payment_id:
-        payment = Payment.query.get(payment_id)
-        if payment and payment.status.name == "PENDING":
-            pagamento_pendente = payment
+    pendente = _limpa_pendencia(
+        Payment.query.get(session.get("last_pending_payment"))
+    )
+    return render_template(
+        "loja.html",
+        products=Product.query.all(),
+        pagamento_pendente=pendente,
+        form=AddToCartForm()
+    )
 
-    produtos = Product.query.all()
-    form = AddToCartForm()
-    return render_template("loja.html", products=produtos, pagamento_pendente=pagamento_pendente, form=form)
 
-
-@app.route('/carrinho/adicionar/<int:product_id>', methods=['POST'])
+# --------------------------------------------------------
+#  ADICIONAR AO CARRINHO
+# --------------------------------------------------------
+@app.route("/carrinho/adicionar/<int:product_id>", methods=["POST"])
 @login_required
 def adicionar_carrinho(product_id):
     product = Product.query.get_or_404(product_id)
-    form = AddToCartForm()
-    if form.validate_on_submit():
-        order_id = session.get('current_order')
-        if order_id:
-            order = Order.query.get(order_id)
-        else:
-            order = Order(user_id=current_user.id)
-            db.session.add(order)
-            db.session.commit()
-            session['current_order'] = order.id
-        
-        item = OrderItem(
-            order_id=order.id,
-            product_id=product.id,  # ESSENCIAL para mostrar valor e outras infos
-            item_name=product.name,
-            quantity=form.quantity.data
-)
+    form    = AddToCartForm()
+    if not form.validate_on_submit():
+        return redirect(url_for("loja"))
 
-        db.session.add(item)
-        product.stock = product.stock - form.quantity.data
+    order = Order.query.get(session.get("current_order")) or Order(user_id=current_user.id)
+    if order.id is None:
+        db.session.add(order)
         db.session.commit()
-        flash('Produto adicionado ao carrinho.', 'success')
-    return redirect(url_for('loja'))
+        session["current_order"] = order.id
+
+    db.session.add(OrderItem(
+        order_id   = order.id,
+        product_id = product.id,
+        item_name  = product.name,
+        unit_price = Decimal(str(product.price or 0)),  # fallback 0
+        quantity   = form.quantity.data
+    ))
+    db.session.commit()
+    flash("Produto adicionado ao carrinho.", "success")
+    return redirect(url_for("loja"))
 
 
-@app.route('/carrinho')
+# --------------------------------------------------------
+#  VER CARRINHO
+# --------------------------------------------------------
+@app.route("/carrinho")
 @login_required
 def ver_carrinho():
-    # Redireciona para pagamento pendente, se existir
-    payment_id = session.get('last_pending_payment')
-    if payment_id:
-        payment = Payment.query.get(payment_id)
-        if payment and payment.status.name == "PENDING":
-            return redirect(url_for('payment_status', payment_id=payment.id))
-
-    # Caso não haja pagamento pendente, exibe o carrinho normalmente
-    order_id = session.get('current_order')
-    order = Order.query.get(order_id) if order_id else None
-    return render_template('carrinho.html', order=order)
+    pend = _limpa_pendencia(
+        Payment.query.get(session.get("last_pending_payment"))
+    )
+    if pend:
+        return redirect(pend.init_point)           # link oficial do MP
+    order = Order.query.get(session.get("current_order") or 0)
+    return render_template("carrinho.html", order=order)
 
 
-
-@app.route('/checkout', methods=['POST'])
+## --------------------------------------------------------
+#  CHECKOUT
+# --------------------------------------------------------
+@app.route("/checkout", methods=["POST"])
+@login_required
 def checkout():
-    try:
-        order_id = session.get("current_order")
-        order = Order.query.get(order_id) if order_id else None
+    # ─── Valida carrinho ─────────────────────────────────
+    order = Order.query.get(session.get("current_order") or 0)
+    if not order or not order.items:
+        flash("Seu carrinho está vazio.", "warning")
+        return redirect(url_for("ver_carrinho"))
 
-        if not order or not order.items:
-            flash("Seu carrinho está vazio.", "warning")
-            return redirect(url_for("ver_carrinho"))
+    # ─── Filtra itens sem unit_price ─────────────────────
+    items_mp = []
+    for i in order.items:
+        if i.unit_price is None:
+            current_app.logger.warning("OrderItem %s sem unit_price – ignorado", i.id)
+            continue
+        items_mp.append({
+            "title":       i.item_name,
+            "quantity":    i.quantity,
+            "unit_price":  float(i.unit_price),
+            "currency_id": "BRL"
+        })
+    if not items_mp:
+        flash("Há itens sem preço válido. Corrija e tente novamente.", "danger")
+        return redirect(url_for("ver_carrinho"))
 
-        cart_items = order.items
+    # ─── Cria registro Payment ───────────────────────────
+    payment = Payment(
+        order_id = order.id,
+        user_id  = current_user.id,
+        method   = PaymentMethod.PIX,
+        status   = PaymentStatus.PENDING
+    )
+    db.session.add(payment)
+    db.session.commit()
+    session["last_pending_payment"] = payment.id
 
-        preference_data = {
-            "items": [
-                {
-                    "title": item.name,
-                    "quantity": item.quantity,
-                    "unit_price": float(item.price)
-                } for item in cart_items
-            ],
-            "payer": {
-                "email": current_user.email if current_user.is_authenticated else "sem-email@petorlandia.com.br"
-            },
-            "back_urls": {
-                "success": "https://www.petorlandia.com.br/pagamento_sucesso",
-                "failure": "https://www.petorlandia.com.br/pagamento_erro",
-                "pending": "https://www.petorlandia.com.br/pagamento_pendente"
-            },
-            "notification_url": "https://www.petorlandia.com.br/notificacoes",
-            "external_reference": str(order_id),
-            "auto_return": "approved"
+    # ─── URLs de retorno ─────────────────────────────────
+    success_url = url_for("pagamento_sucesso",  _external=True)
+    failure_url = url_for("pagamento_erro",     _external=True)
+    pending_url = url_for("pagamento_pendente", _external=True)
+
+    # ─── Monta preferência Mercado Pago ──────────────────
+    pref = {
+        "items": items_mp,
+        "payer": {"email": current_user.email},
+        "external_reference": str(payment.id),
+        "notification_url": url_for("notificacoes_mercado_pago", _external=True),
+        "back_urls": {
+            "success": success_url,
+            "failure": failure_url,
+            "pending": pending_url
+        },
+        "payment_methods": {
+            "default_payment_method_id": "pix",
+            "excluded_payment_types": [{"id": "credit_card"}],
+            "installments": 1
         }
+    }
 
-        print("📦 Dados enviados ao Mercado Pago:", preference_data)
+    # auto_return só se for HTTPS (produção ou ngrok)
+    if success_url.startswith("https://"):
+        pref["auto_return"] = "approved"
 
-        preference_response = sdk.preference().create(preference_data)
-        preference = preference_response["response"]
-
-        return redirect(preference["init_point"])
-    
-    except Exception as e:
-        print(f"[ERRO CHECKOUT] {e}")
+    # ─── Chama API Mercado Pago ───────────────────────────
+    resp = mp_sdk().preference().create(pref)
+    if resp["status"] not in (200, 201):
+        current_app.logger.error("Falha MP: %s", resp)
         flash("Erro ao iniciar pagamento.", "danger")
-        return redirect(url_for('ver_carrinho'))
+        return redirect(url_for("ver_carrinho"))
+
+    # ─── Salva e redireciona para o link real ────────────
+    payment.init_point = resp["response"]["init_point"]
+    db.session.commit()
+    return redirect(payment.init_point)
 
 
+
+# --------------------------------------------------------
+#  RETORNOS MANUAIS (“Voltar”)
+# --------------------------------------------------------
 @app.route("/pagamento_sucesso")
 def pagamento_sucesso():
-    flash("Pagamento aprovado! Obrigado pela compra.", "success")
+    flash("Pagamento em processamento. Você receberá confirmação em instantes.", "info")
     return redirect(url_for("ver_carrinho"))
 
 @app.route("/pagamento_erro")
@@ -2865,109 +2941,65 @@ def pagamento_pendente():
     return redirect(url_for("ver_carrinho"))
 
 
-
-
-@app.route('/pagamento/<int:order_id>')
-@login_required
-def pagamento(order_id):
-    order = Order.query.get_or_404(order_id)
-    payment = order.payment
-    return render_template('pagamento.html', order=order, payment=payment)
-
-
-import mercadopago
-
-# SDK do Mercado Pago configurado com o token definido no arquivo de configuração
-sdk = mercadopago.SDK(app.config.get('MERCADOPAGO_ACCESS_TOKEN'))
-
-@app.route("/criar_pagamento_pix", methods=["POST"])
-def criar_pagamento_pix():
-    data = request.get_json()
-
-    preference_data = {
-        "items": [
-            {
-                "title": data.get("titulo", "Produto Teste"),
-                "quantity": int(data.get("quantidade", 1)),
-                "unit_price": float(data.get("preco", 10.0))
-            }
-        ],
-        "payment_methods": {
-            "excluded_payment_types": [{"id": "credit_card"}],  # aceita só PIX
-            "installments": 1
-        },
-        "payer": {
-            "email": data.get("email", "cliente@email.com")
-        },
-        "notification_url": "https://petorlandia.com.br/notificacoes"
-    }
-
-    preference_response = sdk.preference().create(preference_data)
-    preference = preference_response["response"]
-
-    return jsonify({
-        "id": preference["id"],
-        "init_point": preference["init_point"],
-    })
-
-
-
-
-from flask import request, jsonify
-from datetime import datetime
-from models import Payment, PaymentMethod, PaymentStatus, DeliveryRequest
-
+# --------------------------------------------------------
+#  WEBHOOK (assinatura opcional)
+# --------------------------------------------------------
 @app.route("/notificacoes", methods=["POST"])
 def notificacoes_mercado_pago():
-    secret = current_app.config.get("MERCADOPAGO_WEBHOOK_SECRET")
-    signature = request.headers.get("X-MP-Signature")
+    secret    = current_app.config.get("MERCADOPAGO_WEBHOOK_SECRET") or ""
+    signature = request.headers.get("x-mp-signature", "")
+    data      = request.get_json(silent=True) or {}
+
+    # valida assinatura se secret estiver configurado
     if secret:
-        calculated = hmac.new(secret.encode(), request.get_data(), hashlib.sha256).hexdigest()
-        if not hmac.compare_digest(calculated, signature or ""):
-            current_app.logger.warning("Invalid Mercado Pago webhook signature")
+        base = f'id={data.get("data",{}).get("id")}&topic={data.get("type")}'
+        calc = hmac.new(secret.encode(), base.encode(), hashlib.sha256).hexdigest()
+        if not hmac.compare_digest(calc, signature):
             return jsonify({"error": "invalid signature"}), 400
 
-    data = request.get_json()
-    current_app.logger.info("🔔 Notificação recebida: %s", data)
+    if data.get("type") != "payment":
+        return jsonify({"status": "ignorado"}), 200
 
-    if data and data.get("type") == "payment":
-        mp_payment_id = data.get("data", {}).get("id")
-        if mp_payment_id:
-            try:
-                resp = sdk.payment().get(mp_payment_id)
-                if resp.get("status") != 200:
-                    current_app.logger.error("Erro Mercado Pago: %s", resp)
-                    return jsonify({"error": "api error"}), 500
-                payment_info = resp["response"]
+    mp_id  = data["data"]["id"]
+    resp   = mp_sdk().payment().get(mp_id)
+    info   = resp["response"]
+    status = info["status"]
+    pay_id = int(info["external_reference"])
+    pgto   = Payment.query.get(pay_id)
+    if not pgto:
+        return jsonify({"erro": "sem registro"}), 404
 
-                status = payment_info.get("status", "pending")
-                external_ref = payment_info.get("external_reference")
-                pagamento = Payment.query.get(int(external_ref)) if external_ref else None
-                if pagamento:
-                    if pagamento.status == PaymentStatus.COMPLETED:
-                        return jsonify({"status": "already_processed"}), 200
-                    pagamento.transaction_id = str(payment_info.get("id"))
-                    if status == "approved":
-                        pagamento.status = PaymentStatus.COMPLETED
-                        if pagamento.order_id and not DeliveryRequest.query.filter_by(order_id=pagamento.order_id).first():
-                            req = DeliveryRequest(order_id=pagamento.order_id,
-                                                  requested_by_id=pagamento.user_id,
-                                                  status='pendente')
-                            db.session.add(req)
-                    elif status == "rejected":
-                        pagamento.status = PaymentStatus.FAILED
-                    else:
-                        pagamento.status = PaymentStatus.PENDING
-                    db.session.commit()
-                return jsonify({"status": "atualizado"}), 200
-            except Exception:
-                current_app.logger.exception("Erro ao processar pagamento")
-                return jsonify({"erro": "falha interna"}), 500
+    if status == "approved":
+        pgto.status = PaymentStatus.COMPLETED
+        pgto.transaction_id = mp_id
+        for item in pgto.order.items:
+            item.product.stock -= item.quantity
+        if not DeliveryRequest.query.filter_by(order_id=pgto.order_id).first():
+            db.session.add(DeliveryRequest(
+                order_id=pgto.order_id,
+                requested_by_id=pgto.user_id,
+                status="pendente"
+            ))
+        session.pop("last_pending_payment", None)
+        session.pop("current_order", None)
 
-    return jsonify({"status": "ignorado"}), 200
+    elif status == "rejected":
+        pgto.status = PaymentStatus.FAILED
+    else:
+        pgto.status = PaymentStatus.PENDING
+
+    db.session.commit()
+    return jsonify({"status": status}), 200
 
 
-
+# --------------------------------------------------------
+#  VISUALIZAR STATUS + SIMULAÇÃO
+# --------------------------------------------------------
+@app.route("/payment_status/<int:payment_id>")
+@login_required
+def payment_status(payment_id):
+    payment = Payment.query.get_or_404(payment_id)
+    return render_template("payment_status.html", payment=payment)
 
 
 @app.route("/simular_pagamento/<int:payment_id>", methods=["POST"])
@@ -2976,43 +3008,11 @@ def simular_pagamento(payment_id):
     payment = Payment.query.get_or_404(payment_id)
     if payment.user_id != current_user.id:
         abort(403)
-
     payment.status = PaymentStatus.COMPLETED
     db.session.commit()
-
-    # Limpa da sessão
-    session.pop("last_pending_payment", None)
-    flash("Pagamento confirmado!", "success")
+    session.clear()
+    flash("Pagamento confirmado (simulação)!", "success")
     return redirect(url_for("loja"))
-
-
-
-@app.route('/confirmar_pagamento/<int:payment_id>', methods=['POST'])
-@login_required
-def confirmar_pagamento(payment_id):
-    payment = Payment.query.get_or_404(payment_id)
-    payment.status = 'pago'
-    db.session.commit()
-
-    # Criar solicitação de entrega
-    req = DeliveryRequest(order_id=payment.order_id,
-                          requested_by_id=current_user.id,
-                          status='pendente')
-    db.session.add(req)
-    db.session.commit()
-
-    flash('Pagamento confirmado com sucesso!', 'success')
-    return redirect(url_for('list_delivery_requests'))
-
-
-
-@app.route('/payment_status/<int:payment_id>')
-@login_required
-def payment_status(payment_id):
-    payment = Payment.query.get_or_404(payment_id)
-    result = request.args.get('status')
-    return render_template('payment_status.html', payment=payment, result=result)
-
 
 
 
