@@ -166,8 +166,12 @@ except ImportError:
     from .models import *
 
 # Reimporta explicitamente o objeto `db` das extensões para evitar
-# possíveis conflitos de importacão.
-from extensions import db as _db
+# possíveis conflitos de importação tanto quando o módulo é executado
+# diretamente quanto quando é importado como parte do pacote
+try:
+    from extensions import db as _db
+except ImportError:  # quando importado como pacote
+    from .extensions import db as _db
 db = _db
 
 from wtforms.fields import SelectField
