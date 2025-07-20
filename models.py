@@ -8,7 +8,8 @@ from werkzeug.security import generate_password_hash, check_password_hash
 from datetime import datetime
 import enum
 from sqlalchemy import Enum
-
+from enum import Enum
+from sqlalchemy import Enum as PgEnum
 
 
 
@@ -529,13 +530,17 @@ class Order(db.Model):
         return total
 
 class OrderItem(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    order_id = db.Column(db.Integer, db.ForeignKey('order.id'), nullable=False)
-    item_name = db.Column(db.String(100), nullable=False)
-    quantity = db.Column(db.Integer, nullable=False, default=1)
+    __tablename__ = "order_item"
 
-    product_id = db.Column(db.Integer, db.ForeignKey('product.id'))
-    product = db.relationship('Product')
+    id          = db.Column(db.Integer, primary_key=True)
+    order_id    = db.Column(db.Integer, db.ForeignKey("order.id"), nullable=False)
+    product_id  = db.Column(db.Integer, db.ForeignKey("product.id"), nullable=False)
+    product     = db.relationship("Product")
+
+    item_name   = db.Column(db.String(100), nullable=False)
+    quantity    = db.Column(db.Integer, nullable=False, default=1)
+    unit_price  = db.Column(db.Numeric(10, 2), nullable=True)   # NOVO 👈
+
 
 class DeliveryRequest(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -557,8 +562,7 @@ class DeliveryRequest(db.Model):
 
 
 
-from enum import Enum
-from sqlalchemy import Enum as PgEnum
+
 
 class PaymentMethod(Enum):
     PIX = 'PIX'
@@ -585,3 +589,5 @@ class Payment(db.Model):
     user = db.relationship('User', backref='payments')
 
     order = db.relationship('Order', backref='payment', uselist=False)
+
+    init_point      = db.Column(db.String, nullable=True)   # URL real do Mercado Pago
