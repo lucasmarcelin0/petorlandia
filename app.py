@@ -150,7 +150,6 @@ from flask_migrate import Migrate, upgrade, migrate, init
 
 
 
-from flask_sqlalchemy import SQLAlchemy
 
 
 
@@ -165,10 +164,6 @@ try:
 except ImportError:
     from .models import *
 
-# Reimporta explicitamente o objeto `db` das extensões para evitar
-# possíveis conflitos de importacão.
-from extensions import db as _db
-db = _db
 
 from wtforms.fields import SelectField
 from flask import Flask, jsonify, render_template, redirect, url_for, request, session, flash, abort
@@ -2817,6 +2812,7 @@ def checkout():
         flash("Seu carrinho está vazio.", "warning")
         return redirect(url_for("ver_carrinho"))
 
+    # Cria objeto Payment no banco
     payment = Payment(
         user_id=current_user.id,
         order_id=order.id,
@@ -2826,6 +2822,7 @@ def checkout():
     db.session.add(payment)
     db.session.commit()
 
+    # Monta os itens para a preferência do Mercado Pago
     items = []
     for item in order.items:
         if item.product:
@@ -2835,13 +2832,16 @@ def checkout():
                 "unit_price": float(item.product.price)
             })
 
+    # Monta o objeto da preferência
     preference_data = {
         "items": items,
         "payment_methods": {
-            "excluded_payment_types": [{"id": "credit_card"}],
+            "excluded_payment_types": [{"id": "credit_card"}],  # Apenas PIX
             "installments": 1
         },
-        "payer": {"email": current_user.email},
+        "payer": {
+            "email": current_user.email
+        },
         "notification_url": url_for("notificacoes_mercado_pago", _external=True),
         "external_reference": str(payment.id),
         "back_urls": {
@@ -2852,15 +2852,20 @@ def checkout():
         "auto_return": "approved"
     }
 
+    # DEBUG: mostra os dados enviados
+    print("📦 Dados enviados ao Mercado Pago:", preference_data)
+
     try:
         preference_response = sdk.preference().create(preference_data)
-    except Exception:
-        current_app.logger.exception("Erro comunicando com Mercado Pago")
-        flash("Não foi possível iniciar o pagamento.", "danger")
+        print("🔎 Resposta do Mercado Pago:", preference_response)
+    except Exception as e:
+        print("❌ Exceção ao criar preferência:", str(e))
+        flash("Erro ao iniciar pagamento (falha de comunicação).", "danger")
         return redirect(url_for("ver_carrinho"))
 
     if preference_response.get("status") != 201:
-        current_app.logger.error("Resposta inesperada MP: %s", preference_response)
+        print("⚠️ Status HTTP inesperado:", preference_response.get("status"))
+        print("📩 Corpo completo da resposta:", preference_response)
         flash("Erro ao iniciar pagamento.", "danger")
         return redirect(url_for("ver_carrinho"))
 
@@ -2868,9 +2873,11 @@ def checkout():
     payment.transaction_id = str(preference["id"])
     db.session.commit()
 
+    # Armazena para futura checagem do status
     session['last_pending_payment'] = payment.id
 
     return redirect(preference["init_point"])
+
 
 
 @app.route('/pagamento/<int:order_id>')
