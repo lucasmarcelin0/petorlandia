@@ -2729,7 +2729,7 @@ def delivery_overview():
 
 
 # ========================================================
-#  PAGAMENTO – Mercado Pago (Checkout Pro PIX)
+#  PAGAMENTO – Mercado Pago (Checkout Pro PIX) - CORRECTED
 # ========================================================
 
 import hmac, hashlib, mercadopago
@@ -2747,8 +2747,7 @@ from models import (
     db, Product, Order, OrderItem,
     Payment, PaymentMethod, PaymentStatus, DeliveryRequest
 )
-from forms import AddToCartForm
-
+from forms import AddToCartForm, CheckoutForm  # Added CheckoutForm for CSRF
 
 # ─────────────────────────────────────────────────────────
 #  SDK (lazy – lê token do config)
@@ -2833,28 +2832,45 @@ def adicionar_carrinho(product_id):
 @app.route("/carrinho")
 @login_required
 def ver_carrinho():
+    # Check for completed payments first
+    order_id = session.get("current_order")
+    if order_id:
+        order = Order.query.get(order_id)
+        if order and order.payment and any(p.status == PaymentStatus.COMPLETED for p in order.payment):
+            session.pop("current_order", None)
+            session.pop("last_pending_payment", None)
+            flash("Pedido pago! Aguarde a entrega.", "success")
+            return redirect(url_for("loja"))
+
+    # Existing pending check
     pend = _limpa_pendencia(
         Payment.query.get(session.get("last_pending_payment"))
     )
     if pend:
-        return redirect(pend.init_point)           # link oficial do MP
+        return redirect(pend.init_point)  # link oficial do MP
+        
     order = Order.query.get(session.get("current_order") or 0)
-    return render_template("carrinho.html", order=order)
+    return render_template("carrinho.html", order=order, form=CheckoutForm())  # Added form
 
 
-## --------------------------------------------------------
-#  CHECKOUT
+# --------------------------------------------------------
+#  CHECKOUT (CSRF PROTECTED)
 # --------------------------------------------------------
 @app.route("/checkout", methods=["POST"])
 @login_required
 def checkout():
-    # ─── Valida carrinho ─────────────────────────────────
-    order = Order.query.get(session.get("current_order") or 0)
-    if not order or not order.items:
-        flash("Seu carrinho está vazio.", "warning")
+    form = CheckoutForm()
+    if not form.validate_on_submit():
+        flash("Sessão expirada. Recarregue a página.", "error")
         return redirect(url_for("ver_carrinho"))
 
-    # ─── Filtra itens sem unit_price ─────────────────────
+    # Validate order ownership
+    order = Order.query.get(session.get("current_order") or 0)
+    if not order or order.user_id != current_user.id or not order.items:
+        flash("Carrinho inválido", "error")
+        return redirect(url_for("ver_carrinho"))
+
+    # Filter items without unit_price
     items_mp = []
     for i in order.items:
         if i.unit_price is None:
@@ -2870,7 +2886,7 @@ def checkout():
         flash("Há itens sem preço válido. Corrija e tente novamente.", "danger")
         return redirect(url_for("ver_carrinho"))
 
-    # ─── Cria registro Payment ───────────────────────────
+    # Create Payment record
     payment = Payment(
         order_id = order.id,
         user_id  = current_user.id,
@@ -2881,17 +2897,18 @@ def checkout():
     db.session.commit()
     session["last_pending_payment"] = payment.id
 
-    # ─── URLs de retorno ─────────────────────────────────
-    success_url = url_for("pagamento_sucesso",  _external=True)
-    failure_url = url_for("pagamento_erro",     _external=True)
-    pending_url = url_for("pagamento_pendente", _external=True)
+    # Return URLs - force HTTPS for production
+    force_https = current_app.config.get("FORCE_HTTPS", False)
+    success_url = url_for("pagamento_sucesso",  _external=True, _scheme='https' if force_https else None)
+    failure_url = url_for("pagamento_erro",     _external=True, _scheme='https' if force_https else None)
+    pending_url = url_for("pagamento_pendente", _external=True, _scheme='https' if force_https else None)
 
-    # ─── Monta preferência Mercado Pago ──────────────────
+    # Build Mercado Pago preference
     pref = {
         "items": items_mp,
         "payer": {"email": current_user.email},
         "external_reference": str(payment.id),
-        "notification_url": url_for("notificacoes_mercado_pago", _external=True),
+        "notification_url": url_for("notificacoes_mercado_pago", _external=True, _scheme='https' if force_https else None),
         "back_urls": {
             "success": success_url,
             "failure": failure_url,
@@ -2904,22 +2921,26 @@ def checkout():
         }
     }
 
-    # auto_return só se for HTTPS (produção ou ngrok)
+    # Auto-return only for HTTPS
     if success_url.startswith("https://"):
         pref["auto_return"] = "approved"
 
-    # ─── Chama API Mercado Pago ───────────────────────────
-    resp = mp_sdk().preference().create(pref)
-    if resp["status"] not in (200, 201):
-        current_app.logger.error("Falha MP: %s", resp)
-        flash("Erro ao iniciar pagamento.", "danger")
+    # Call Mercado Pago API
+    try:
+        resp = mp_sdk().preference().create(pref)
+        if resp["status"] not in (200, 201):
+            current_app.logger.error("Falha MP: %s", resp)
+            flash("Erro ao iniciar pagamento.", "danger")
+            return redirect(url_for("ver_carrinho"))
+    except Exception as e:
+        current_app.logger.exception("Erro na API do Mercado Pago")
+        flash("Erro ao conectar com o gateway de pagamento.", "danger")
         return redirect(url_for("ver_carrinho"))
 
-    # ─── Salva e redireciona para o link real ────────────
+    # Save and redirect to payment link
     payment.init_point = resp["response"]["init_point"]
     db.session.commit()
     return redirect(payment.init_point)
-
 
 
 # --------------------------------------------------------
@@ -2942,78 +2963,92 @@ def pagamento_pendente():
 
 
 # --------------------------------------------------------
-#  WEBHOOK (assinatura opcional)
+#  WEBHOOK (SECURE)
 # --------------------------------------------------------
 @app.route("/notificacoes", methods=["POST"])
 def notificacoes_mercado_pago():
-    secret    = current_app.config.get("MERCADOPAGO_WEBHOOK_SECRET") or ""
+    # Validate signature
+    secret = current_app.config.get("MERCADOPAGO_WEBHOOK_SECRET", "")
     signature = request.headers.get("x-mp-signature", "")
-    data      = request.get_json(silent=True) or {}
+    data = request.get_json(silent=True) or {}
 
-    # valida assinatura se secret estiver configurado
     if secret:
         base = f'id={data.get("data",{}).get("id")}&topic={data.get("type")}'
         calc = hmac.new(secret.encode(), base.encode(), hashlib.sha256).hexdigest()
         if not hmac.compare_digest(calc, signature):
+            current_app.logger.warning("Webhook com assinatura inválida")
             return jsonify({"error": "invalid signature"}), 400
 
+    # Only process payment notifications
     if data.get("type") != "payment":
         return jsonify({"status": "ignorado"}), 200
 
-    mp_id  = data["data"]["id"]
-    resp   = mp_sdk().payment().get(mp_id)
-    info   = resp["response"]
-    status = info["status"]
+    # Get payment details
+    mp_id = data["data"]["id"]
+    try:
+        resp = mp_sdk().payment().get(mp_id)
+        if resp["status"] != 200:
+            current_app.logger.error("Falha MP: %s", resp)
+            return jsonify({"error": "payment lookup failed"}), 502
+        info = resp["response"]
+    except Exception as e:
+        current_app.logger.exception("Erro na API do Mercado Pago")
+        return jsonify({"error": "server error"}), 500
+
+    # Status mapping
+    STATUS_MAP = {
+        "approved": PaymentStatus.COMPLETED,
+        "rejected": PaymentStatus.FAILED,
+        "cancelled": PaymentStatus.FAILED,
+        "refunded": PaymentStatus.FAILED,
+        "charged_back": PaymentStatus.FAILED
+    }
+    
+    # Get payment record
     pay_id = int(info["external_reference"])
-    pgto   = Payment.query.get(pay_id)
-    if not pgto:
+    payment = Payment.query.get(pay_id)
+    if not payment:
+        current_app.logger.error("Pagamento não encontrado: %s", pay_id)
         return jsonify({"erro": "sem registro"}), 404
 
-    if status == "approved":
-        pgto.status = PaymentStatus.COMPLETED
-        pgto.transaction_id = mp_id
-        for item in pgto.order.items:
-            item.product.stock -= item.quantity
-        if not DeliveryRequest.query.filter_by(order_id=pgto.order_id).first():
-            db.session.add(DeliveryRequest(
-                order_id=pgto.order_id,
-                requested_by_id=pgto.user_id,
-                status="pendente"
-            ))
-        session.pop("last_pending_payment", None)
-        session.pop("current_order", None)
+    # Update payment status
+    status = info["status"]
+    new_status = STATUS_MAP.get(status, PaymentStatus.PENDING)
+    was_completed = (payment.status == PaymentStatus.COMPLETED)
+    payment.status = new_status
+    payment.transaction_id = mp_id
 
-    elif status == "rejected":
-        pgto.status = PaymentStatus.FAILED
-    else:
-        pgto.status = PaymentStatus.PENDING
+    # Process new completed payments
+    if new_status == PaymentStatus.COMPLETED and not was_completed:
+        # Update stock and create delivery
+        with db.session.begin_nested():
+            for item in payment.order.items:
+                if item.product.stock >= item.quantity:
+                    item.product.stock -= item.quantity
+                else:
+                    current_app.logger.error("Estoque insuficiente para %s", item.product.id)
+            
+            if not DeliveryRequest.query.filter_by(order_id=payment.order_id).first():
+                db.session.add(DeliveryRequest(
+                    order_id=payment.order_id,
+                    requested_by_id=payment.user_id,
+                    status="pendente"
+                ))
 
     db.session.commit()
     return jsonify({"status": status}), 200
 
 
 # --------------------------------------------------------
-#  VISUALIZAR STATUS + SIMULAÇÃO
+#  PAYMENT STATUS VIEW
 # --------------------------------------------------------
 @app.route("/payment_status/<int:payment_id>")
 @login_required
 def payment_status(payment_id):
     payment = Payment.query.get_or_404(payment_id)
-    return render_template("payment_status.html", payment=payment)
-
-
-@app.route("/simular_pagamento/<int:payment_id>", methods=["POST"])
-@login_required
-def simular_pagamento(payment_id):
-    payment = Payment.query.get_or_404(payment_id)
     if payment.user_id != current_user.id:
         abort(403)
-    payment.status = PaymentStatus.COMPLETED
-    db.session.commit()
-    session.clear()
-    flash("Pagamento confirmado (simulação)!", "success")
-    return redirect(url_for("loja"))
-
+    return render_template("payment_status.html", payment=payment)
 
 
 
