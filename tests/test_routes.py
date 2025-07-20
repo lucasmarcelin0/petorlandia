@@ -50,3 +50,61 @@ def test_mp_token_in_config(app):
 
 def test_mp_webhook_secret_in_config(app):
     assert 'MERCADOPAGO_WEBHOOK_SECRET' in app.config
+from models import Animal
+
+
+def test_index_page(app):
+    client = app.test_client()
+    response = client.get('/')
+    assert response.status_code == 200
+
+
+def test_register_page(app):
+    client = app.test_client()
+    response = client.get('/register')
+    assert response.status_code == 200
+
+
+def test_reset_password_request_page(app):
+    client = app.test_client()
+    response = client.get('/reset_password_request')
+    assert response.status_code == 200
+
+
+def test_logout_requires_login(app):
+    client = app.test_client()
+    response = client.get('/logout')
+    assert response.status_code == 302
+    assert '/login' in response.headers['Location']
+
+
+def test_profile_requires_login(app):
+    client = app.test_client()
+    response = client.get('/profile')
+    assert response.status_code == 302
+    assert '/login' in response.headers['Location']
+
+
+def test_animals_page(monkeypatch, app):
+    client = app.test_client()
+
+    class FakePagination:
+        def __init__(self):
+            self.items = []
+            self.pages = 0
+
+    class FakeQuery:
+        def filter(self, *args, **kwargs):
+            return self
+        def filter_by(self, **kwargs):
+            return self
+        def order_by(self, *args, **kwargs):
+            return self
+        def paginate(self, page=None, per_page=None, error_out=True):
+            return FakePagination()
+
+    with app.app_context():
+        monkeypatch.setattr(Animal, 'query', FakeQuery())
+
+    response = client.get('/animals')
+    assert response.status_code == 200
