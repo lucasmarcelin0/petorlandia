@@ -521,6 +521,9 @@ class Order(db.Model):
     user = db.relationship('User', backref='orders')
     items = db.relationship('OrderItem', backref='order', cascade='all, delete-orphan')
 
+
+
+
     def total_value(self):
         """Calcula o valor total do pedido com base nos produtos e quantidades."""
         total = 0.0
