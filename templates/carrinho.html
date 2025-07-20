@@ -16,6 +16,10 @@
     {% endfor %}
   </ul>
 
+  <div class="d-flex justify-content-end mb-3">
+    <strong>Total:&nbsp;R$ {{ '%.2f'|format(order.total_value()) }}</strong>
+  </div>
+
   <form action="{{ url_for('checkout') }}" method="post" class="text-end">
     <button class="btn btn-lg btn-success shadow-sm">
       <i class="bi bi-cash-stack"></i> Finalizar Compra

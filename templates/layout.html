@@ -297,5 +297,12 @@
             }, 3000); // aparece por 3 segundos
         });
     </script>
+
+    {% if MERCADOPAGO_PUBLIC_KEY %}
+    <script src="https://sdk.mercadopago.com/js/v2"></script>
+    <script>
+      const mp = new MercadoPago("{{ MERCADOPAGO_PUBLIC_KEY }}", {locale: 'pt-BR'});
+    </script>
+    {% endif %}
 </body>
 </html>
