@@ -42,3 +42,11 @@ def test_loja_requires_login(app):
     response = client.get('/loja')
     assert response.status_code == 302
     assert '/login' in response.headers['Location']
+
+
+def test_mp_token_in_config(app):
+    assert 'MERCADOPAGO_ACCESS_TOKEN' in app.config
+
+
+def test_mp_webhook_secret_in_config(app):
+    assert 'MERCADOPAGO_WEBHOOK_SECRET' in app.config

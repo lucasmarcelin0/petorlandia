@@ -520,6 +520,14 @@ class Order(db.Model):
     user = db.relationship('User', backref='orders')
     items = db.relationship('OrderItem', backref='order', cascade='all, delete-orphan')
 
+    def total_value(self):
+        """Calcula o valor total do pedido com base nos produtos e quantidades."""
+        total = 0.0
+        for item in self.items:
+            if item.product:
+                total += (item.product.price or 0) * item.quantity
+        return total
+
 class OrderItem(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     order_id = db.Column(db.Integer, db.ForeignKey('order.id'), nullable=False)
