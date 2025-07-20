@@ -2735,10 +2735,14 @@ def fluxograma_entregas():
 def delivery_overview():
     if not _is_admin():
         abort(403)
-    products = Product.query.all()
-    open_requests = DeliveryRequest.query.filter_by(status='pendente').all()
-    in_progress = DeliveryRequest.query.filter_by(status='em_andamento').all()
-    completed = DeliveryRequest.query.filter_by(status='concluida').all()
+    # Garantimos que todas as consultas sejam executadas dentro de um
+    # contexto de aplicação para evitar problemas caso o objeto ``db``
+    # não esteja associado ao app atual.
+    with app.app_context():
+        products = Product.query.all()
+        open_requests = DeliveryRequest.query.filter_by(status='pendente').all()
+        in_progress = DeliveryRequest.query.filter_by(status='em_andamento').all()
+        completed = DeliveryRequest.query.filter_by(status='concluida').all()
     return render_template('admin/delivery_overview.html',
                            products=products,
                            open_requests=open_requests,
