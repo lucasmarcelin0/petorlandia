@@ -200,7 +200,6 @@ import os
 instance_path = os.path.join(os.getcwd(), 'instance')
 os.makedirs(instance_path, exist_ok=True)
 
-app = Flask(__name__, instance_path=instance_path)
 
 
 
@@ -209,7 +208,6 @@ app.config.from_object(Config)
  
 migrate = Migrate(app, db)
 
-db.init_app(app)  # Aqui sim você registra o app corretamente
 mail = Mail(app)  # ✅ ESSA LINHA ESTAVA FALTANDO
 login = LoginManager(app)
 
