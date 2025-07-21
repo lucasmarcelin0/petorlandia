@@ -62,6 +62,8 @@
                                 <li><strong>Raça:</strong> {{ animal.breed }}</li>
                                 <li><strong>Idade:</strong> {{ animal.age }}</li>
                                 <li><strong>Sexo:</strong> {{ animal.sex }}</li>
+                                {% set sub = subscriptions.get(animal.id) %}
+                                <li><strong>Plano:</strong> {{ sub.plan.name if sub else 'Nenhum' }}</li>
                             </ul>
                             <a href="{{ url_for('planosaude_animal', animal_id=animal.id) }}" class="btn btn-outline-success rounded-pill w-100">📋 Ver Plano de Saúde</a>
                         </div>

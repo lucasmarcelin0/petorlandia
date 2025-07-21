@@ -19,14 +19,14 @@ try:
         Breed, Species, TipoRacao, ApresentacaoMedicamento, VacinaModelo, Consulta, Veterinario,
         Clinica, Prescricao, Medicamento, db, User, Animal, Message,
         Transaction, Review, Favorite, AnimalPhoto, UserRole, ExameModelo,
-        Product, Order, OrderItem, DeliveryRequest
+        Product, Order, OrderItem, DeliveryRequest, HealthPlan, HealthSubscription
     )
 except ImportError:
     from .models import (
         Breed, Species, TipoRacao, ApresentacaoMedicamento, VacinaModelo, Consulta, Veterinario,
         Clinica, Prescricao, Medicamento, db, User, Animal, Message,
         Transaction, Review, Favorite, AnimalPhoto, UserRole, ExameModelo,
-        Product, Order, OrderItem, DeliveryRequest
+        Product, Order, OrderItem, DeliveryRequest, HealthPlan, HealthSubscription
     )
 
 # --------------------------------------------------------------------------
@@ -264,6 +264,8 @@ def init_admin(app):
     admin.add_view(MyModelView(ApresentacaoMedicamento, db.session))
     admin.add_view(MyModelView(TipoRacao, db.session))
     admin.add_view(ProductAdmin(Product, db.session))
+    admin.add_view(MyModelView(HealthPlan, db.session))
+    admin.add_view(MyModelView(HealthSubscription, db.session, name='Assinaturas'))
 
     admin.add_view(MyModelView(Order, db.session))
     admin.add_view(MyModelView(OrderItem, db.session))
