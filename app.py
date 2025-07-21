@@ -3068,6 +3068,30 @@ def confirmar_pagamento(payment_id):
 def payment_status(payment_id):
     payment = Payment.query.get_or_404(payment_id)
     result = request.args.get('status')
+
+    # Se o pagamento ainda está pendente ou se o usuário voltou de um redirect
+    # de sucesso, consultamos a API do Mercado Pago para obter o status mais
+    # recente. Isso evita ficar dependente apenas do webhook que pode não ser
+    # entregue em ambientes de desenvolvimento.
+    if payment.status == PaymentStatus.PENDING and payment.transaction_id:
+        try:
+            resp = sdk.payment().get(payment.transaction_id)
+            if resp.get("status") == 200:
+                info = resp["response"]
+                status = info.get("status")
+                if status == "approved":
+                    payment.status = PaymentStatus.COMPLETED
+                    if payment.order_id and not DeliveryRequest.query.filter_by(order_id=payment.order_id).first():
+                        req = DeliveryRequest(order_id=payment.order_id,
+                                              requested_by_id=payment.user_id,
+                                              status='pendente')
+                        db.session.add(req)
+                elif status == "rejected":
+                    payment.status = PaymentStatus.FAILED
+                db.session.commit()
+        except Exception:
+            current_app.logger.exception("Erro verificando status do pagamento")
+
     return render_template('payment_status.html', payment=payment, result=result)
 
 
