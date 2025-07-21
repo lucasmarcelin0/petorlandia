@@ -3009,16 +3009,17 @@ def checkout():
         "unit_price": float(item.product.price)
     } for item in order.items]
 
-    # 4) Preference payload WITHOUT back_urls/auto_return
+    # 4) Preference payload sem informar payer
     preference_data = {
         "items": items,
-        "payer": {"email": current_user.email},
+        # "payer" removido — o MP exibirá um campo para o usuário digitar o e‑mail
         "notification_url": url_for("notificacoes_mercado_pago", _external=True),
         "external_reference": str(payment.id),
         "payment_methods": {
-            "installments": 1    # no exclusions → all methods enabled
+            "installments": 1
         }
     }
+
 
     # 5) Log the exact JSON we’ll send
     current_app.logger.debug(
