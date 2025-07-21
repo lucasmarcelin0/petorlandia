@@ -3061,78 +3061,64 @@ def checkout():
 
 
 # ——— 2) Webhook do Mercado Pago —————————————————————————————————————
-@app.route("/notificacoes", methods=["POST"])
+@app.route("/notificacoes", methods=["POST", "GET"])
 def notificacoes_mercado_pago():
-    secret    = current_app.config.get("MERCADOPAGO_WEBHOOK_SECRET", "")
-    signature = request.headers.get("X-MP-Signature", "")
-
-    if secret:
-        calc = hmac.new(secret.encode(), request.get_data(), hashlib.sha256).hexdigest()
-        if not hmac.compare_digest(calc, signature):
-            current_app.logger.warning("Invalid MP signature")
-            return jsonify({"error": "invalid signature"}), 400
-
-    data = request.get_json() or {}
-    current_app.logger.info("🔔 MP Notification: %s", data)
-
-    if data.get("type") == "payment":
+    if request.method == "GET":
+        mp_id = request.args.get("data.id")
+        tipo = request.args.get("type")
+    else:
+        # Validação HMAC para POST
+        secret = current_app.config.get("MERCADOPAGO_WEBHOOK_SECRET", "")
+        signature = request.headers.get("X-MP-Signature", "")
+        if secret:
+            calc = hmac.new(secret.encode(), request.get_data(), hashlib.sha256).hexdigest()
+            if not hmac.compare_digest(calc, signature):
+                current_app.logger.warning("Invalid MP signature")
+                return jsonify({"error": "invalid signature"}), 400
+        data = request.get_json() or {}
         mp_id = data.get("data", {}).get("id")
-        if mp_id:
-            try:
-                r = sdk.payment().get(mp_id)
-                if r.get("status") != 200:
-                    current_app.logger.error("MP API error: %s", r)
-                    return jsonify({"error":"api error"}), 500
+        tipo = data.get("type")
 
-                info = r["response"]
-                status = info.get("status", "pending")
-                ext_ref = info.get("external_reference")
-                pay = Payment.query.get(int(ext_ref)) if ext_ref else None
+    current_app.logger.info("🔔 MP Notification: type=%s id=%s", tipo, mp_id)
 
-                if pay and pay.status != PaymentStatus.COMPLETED:
-                    pay.transaction_id = str(info["id"])
-                    # Atualiza status
-                    if status == "approved":
-                        pay.status = PaymentStatus.COMPLETED
-                        # CRIA DELIVERY REQUEST AUTOMATICAMENTE
-                        if pay.order_id and not DeliveryRequest.query.filter_by(order_id=pay.order_id).first():
-                            dr = DeliveryRequest(
-                                order_id=pay.order_id,
-                                requested_by_id=pay.user_id,
-                                status='pendente'
-                            )
-                            db.session.add(dr)
-                    elif status == "rejected":
-                        pay.status = PaymentStatus.FAILED
-                    else:
-                        pay.status = PaymentStatus.PENDING
+    if tipo == "payment" and mp_id:
+        try:
+            r = sdk.payment().get(mp_id)
+            if r.get("status") != 200:
+                current_app.logger.error("MP API error: %s", r)
+                return jsonify({"error": "api error"}), 500
 
-                    db.session.commit()
+            info = r["response"]
+            status = info.get("status", "pending")
+            ext_ref = info.get("external_reference")
+            pay = Payment.query.get(int(ext_ref)) if ext_ref else None
 
-                return jsonify({"status":"updated"}), 200
-
-            except Exception:
-                current_app.logger.exception("Erro ao processar webhook MP")
-                return jsonify({"error":"internal failure"}), 500
-
-    return jsonify({"status":"ignored"}), 200
-
-    # Process new completed payments
-    if new_status == PaymentStatus.COMPLETED and not was_completed:
-        # Update stock and create delivery
-        with db.session.begin_nested():
-            for item in payment.order.items:
-                if item.product.stock >= item.quantity:
-                    item.product.stock -= item.quantity
+            if pay and pay.status != PaymentStatus.COMPLETED:
+                pay.transaction_id = str(info["id"])
+                if status == "approved":
+                    pay.status = PaymentStatus.COMPLETED
+                    if pay.order_id and not DeliveryRequest.query.filter_by(order_id=pay.order_id).first():
+                        dr = DeliveryRequest(
+                            order_id=pay.order_id,
+                            requested_by_id=pay.user_id,
+                            status='pendente'
+                        )
+                        db.session.add(dr)
+                elif status == "rejected":
+                    pay.status = PaymentStatus.FAILED
                 else:
-                    current_app.logger.error("Estoque insuficiente para %s", item.product.id)
-            
-            if not DeliveryRequest.query.filter_by(order_id=payment.order_id).first():
-                db.session.add(DeliveryRequest(
-                    order_id=payment.order_id,
-                    requested_by_id=payment.user_id,
-                    status="pendente"
-                ))
+                    pay.status = PaymentStatus.PENDING
+
+                db.session.commit()
+
+            return jsonify({"status": "updated"}), 200
+
+        except Exception:
+            current_app.logger.exception("Erro ao processar webhook MP")
+            return jsonify({"error": "internal failure"}), 500
+
+    return jsonify({"status": "ignored"}), 200
+
 
 # ——— 3) Página de status final —————————————————————————————————————————
 @app.route("/payment_status/<int:payment_id>")
