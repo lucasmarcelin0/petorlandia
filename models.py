@@ -594,3 +594,5 @@ class Payment(db.Model):
     order = db.relationship('Order', backref='payment', uselist=False)
 
     init_point      = db.Column(db.String, nullable=True)   # URL real do Mercado Pago
+
+    mercado_pago_id = db.Column(db.String(64))  # adicione isso!
