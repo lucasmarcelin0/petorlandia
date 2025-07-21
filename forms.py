@@ -103,3 +103,8 @@ class AddToCartForm(FlaskForm):
 
 class DeliveryRequestForm(FlaskForm):
     submit = SubmitField('Gerar Solicitação')
+
+
+class SubscribePlanForm(FlaskForm):
+    plan_id = SelectField('Plano', coerce=int, validators=[DataRequired()])
+    submit = SubmitField('Contratar Plano')
