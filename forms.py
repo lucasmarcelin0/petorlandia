@@ -108,3 +108,15 @@ class DeliveryRequestForm(FlaskForm):
 class SubscribePlanForm(FlaskForm):
     plan_id = SelectField('Plano', coerce=int, validators=[DataRequired()])
     submit = SubmitField('Contratar Plano')
+class CheckoutForm(FlaskForm):
+    """
+    Formulário usado apenas para proteger a rota /checkout com CSRF
+    e, se quiser, capturar informações extras de entrega/pagamento.
+    Adicione campos conforme a necessidade.
+    """
+    # exemplos de campos opcionais:
+    # name   = StringField('Nome',   validators=[DataRequired(), Length(max=120)])
+    # email  = StringField('E‑mail', validators=[DataRequired(), Email()])
+    # phone  = StringField('Telefone (WhatsApp)', validators=[Optional(), Length(max=20)])
+
+    submit = SubmitField('Finalizar Compra')
