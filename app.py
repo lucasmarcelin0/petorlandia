@@ -35,28 +35,97 @@ from itsdangerous import URLSafeTimedSerializer
 
 import boto3
 from dotenv import load_dotenv
+import boto3
+import qrcode  # noqa: F401
+
+# ---------------------------------------------------------------------------
+# 🔧 Ambiente e caminhos
+# ---------------------------------------------------------------------------
+
 load_dotenv()
+PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))
+if PROJECT_ROOT not in sys.path:
+    sys.path.append(PROJECT_ROOT)
+
+# ---------------------------------------------------------------------------
+# 📦 Imports locais com fallback relativo
+# ---------------------------------------------------------------------------
+
+def _import(name: str):
+    """Importa módulo por nome absoluto; se falhar tenta relativo ao pacote."""
+    try:
+        return importlib.import_module(name)
+    except ModuleNotFoundError:
+        pkg_name = f"{__name__.split('.', 1)[0]}.{name}"
+        return importlib.import_module(pkg_name)
+
+# Config
+Config = _import("config").Config  # type: ignore[attr-defined]
+
+# Extensões únicas
+_ext = _import("extensions")
+
+db, migrate, mail, login, session_ext = (
+    _ext.db,  # type: ignore[attr-defined]
+    _ext.migrate,
+    _ext.mail,
+    _ext.login,
+    _ext.session,
+)
+
+# Outros módulos locais
+init_admin, _is_admin = (
+    _import("admin").init_admin,
+    _import("admin")._is_admin,
+)
+forms = _import("forms")
+# Exporta classes de formulário para o namespace global (compatibilidade com rotas legadas)
+MessageForm = forms.MessageForm  # type: ignore[attr-defined]
+RegistrationForm = forms.RegistrationForm  # type: ignore[attr-defined]
+LoginForm = forms.LoginForm  # type: ignore[attr-defined]
+AnimalForm = forms.AnimalForm  # type: ignore[attr-defined]
+EditProfileForm = forms.EditProfileForm  # type: ignore[attr-defined]
+ResetPasswordRequestForm = forms.ResetPasswordRequestForm  # type: ignore[attr-defined]
+ResetPasswordForm = forms.ResetPasswordForm  # type: ignore[attr-defined]
+OrderItemForm = forms.OrderItemForm  # type: ignore[attr-defined]
+DeliveryRequestForm = forms.DeliveryRequestForm  # type: ignore[attr-defined]
+AddToCartForm = forms.AddToCartForm  # type: ignore[attr-defined]
+
+helpers = _import("helpers")
+models_mod = _import("models")
+
+# Torna possível `import models` em qualquer parte do app
+sys.modules.setdefault("models", models_mod)
+
+# Importa modelos para uso direto (opcional)
+from models import *  # type: ignore  # noqa: F401,F403
+
+# ---------------------------------------------------------------------------
+# ☁️ AWS S3 helper
+# ---------------------------------------------------------------------------
 
 # ——— AWS S3 client ———————————————————————————————————————————————————
 s3 = boto3.client(
     "s3",
     aws_access_key_id=os.getenv("AWS_ACCESS_KEY_ID"),
-    aws_secret_access_key=os.getenv("AWS_SECRET_ACCESS_KEY")
+    aws_secret_access_key=os.getenv("AWS_SECRET_ACCESS_KEY"),
 )
-bucket_name = os.getenv("S3_BUCKET_NAME")
+BUCKET_NAME = os.getenv("S3_BUCKET_NAME")
 
-def upload_to_s3(file, filename, folder="uploads"):
+
+def upload_to_s3(file, filename, folder="uploads") -> str | None:
+    """Faz upload para S3 e devolve a URL; retorna None em caso de erro."""
     try:
         s3_path = f"{folder}/{filename}"
         s3.upload_fileobj(
             file,
-            bucket_name,
+            BUCKET_NAME,
             s3_path,
-            ExtraArgs={"ContentType": file.content_type}
+            ExtraArgs={"ContentType": file.content_type},
         )
-        return f"https://{bucket_name}.s3.amazonaws.com/{s3_path}"
-    except Exception as e:
-        print(f"[ERRO S3] Falha ao enviar para o S3: {e}")
+        return f"https://{BUCKET_NAME}.s3.amazonaws.com/{s3_path}"
+    except Exception as exc:  # noqa: BLE001
+        logging.exception("[ERRO S3] Falha ao enviar para o S3: %s", exc)
         return None
 
 # ——— Cria diretório instance ——————————————————————————————————————————————
@@ -2551,6 +2620,25 @@ def create_order():
     )
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+#Delivery routes
+
+
 @app.route('/orders/<int:order_id>/request_delivery', methods=['POST'])
 @login_required
 def request_delivery(order_id):
@@ -2694,6 +2782,10 @@ def fluxograma_entregas():
     return render_template('fluxograma_entregas.html')
 
 
+with app.app_context():
+    db.create_all()
+
+
 @app.route('/admin/delivery_overview')
 @login_required
 def delivery_overview():
@@ -2711,10 +2803,59 @@ def delivery_overview():
 
 
 
+# ========================================================
+#  PAGAMENTO – Mercado Pago (Checkout Pro PIX) - CORRECTED
+# ========================================================
+
+import hmac, hashlib, mercadopago
+from decimal   import Decimal
+from functools import cache
+from datetime  import datetime, timedelta
+
+from flask import (
+    render_template, redirect, url_for, flash, session,
+    request, jsonify, abort, current_app
+)
+from flask_login import login_required, current_user
+
+from models import (
+    db, Product, Order, OrderItem,
+    Payment, PaymentMethod, PaymentStatus, DeliveryRequest
+)
+from forms import AddToCartForm, CheckoutForm  # Added CheckoutForm for CSRF
+
+# ─────────────────────────────────────────────────────────
+#  SDK (lazy – lê token do config)
+# ─────────────────────────────────────────────────────────
+@cache
+def mp_sdk():
+    return mercadopago.SDK(current_app.config["MERCADOPAGO_ACCESS_TOKEN"])
 
 
+# ─────────────────────────────────────────────────────────
+#  Helpers
+# ─────────────────────────────────────────────────────────
+PENDING_TIMEOUT = timedelta(minutes=20)
+
+def _limpa_pendencia(payment):
+    """
+    Se o pagamento pendente ainda for válido (PENDING, não expirado e
+    com init_point), devolve‑o. Caso contrário zera a chave na sessão.
+    """
+    if not payment:
+        session.pop("last_pending_payment", None)
+        return None
+
+    expirou   = (datetime.utcnow() - payment.created_at) > PENDING_TIMEOUT
+    sem_link  = not getattr(payment, "init_point", None)
+
+    if payment.status != PaymentStatus.PENDING or expirou or sem_link:
+        session.pop("last_pending_payment", None)
+        return None
+    return payment
 
 
+<<<<<<< HEAD
 from flask import session, render_template
 from flask_login import login_required
 
@@ -2740,40 +2881,61 @@ def loja():
         form=form
     )
 
+=======
+# --------------------------------------------------------
+#  LOJA
+# --------------------------------------------------------
+@app.route("/loja")
+@login_required
+def loja():
+    pendente = _limpa_pendencia(
+        Payment.query.get(session.get("last_pending_payment"))
+    )
+    return render_template(
+        "loja.html",
+        products=Product.query.all(),
+        pagamento_pendente=pendente,
+        form=AddToCartForm()
+    )
+>>>>>>> heroku/main
 
 
-@app.route('/carrinho/adicionar/<int:product_id>', methods=['POST'])
+# --------------------------------------------------------
+#  ADICIONAR AO CARRINHO
+# --------------------------------------------------------
+@app.route("/carrinho/adicionar/<int:product_id>", methods=["POST"])
 @login_required
 def adicionar_carrinho(product_id):
     product = Product.query.get_or_404(product_id)
-    form = AddToCartForm()
-    if form.validate_on_submit():
-        order_id = session.get('current_order')
-        if order_id:
-            order = Order.query.get(order_id)
-        else:
-            order = Order(user_id=current_user.id)
-            db.session.add(order)
-            db.session.commit()
-            session['current_order'] = order.id
-        
-        item = OrderItem(
-            order_id=order.id,
-            product_id=product.id,  # ESSENCIAL para mostrar valor e outras infos
-            item_name=product.name,
-            quantity=form.quantity.data
-)
+    form    = AddToCartForm()
+    if not form.validate_on_submit():
+        return redirect(url_for("loja"))
 
-        db.session.add(item)
-        product.stock = product.stock - form.quantity.data
+    order = Order.query.get(session.get("current_order")) or Order(user_id=current_user.id)
+    if order.id is None:
+        db.session.add(order)
         db.session.commit()
-        flash('Produto adicionado ao carrinho.', 'success')
-    return redirect(url_for('loja'))
+        session["current_order"] = order.id
+
+    db.session.add(OrderItem(
+        order_id   = order.id,
+        product_id = product.id,
+        item_name  = product.name,
+        unit_price = Decimal(str(product.price or 0)),  # fallback 0
+        quantity   = form.quantity.data
+    ))
+    db.session.commit()
+    flash("Produto adicionado ao carrinho.", "success")
+    return redirect(url_for("loja"))
 
 
-@app.route('/carrinho')
+# --------------------------------------------------------
+#  VER CARRINHO
+# --------------------------------------------------------
+@app.route("/carrinho")
 @login_required
 def ver_carrinho():
+<<<<<<< HEAD
     # Verifica se há um pagamento pendente
     pagamento_pendente = None
     payment_id = session.get('last_pending_payment')
@@ -2785,6 +2947,27 @@ def ver_carrinho():
     # Busca o pedido atual
     order_id = session.get('current_order')
     order = Order.query.get(order_id) if order_id else None
+=======
+    # Check for completed payments first
+    order_id = session.get("current_order")
+    if order_id:
+        order = Order.query.get(order_id)
+        if order and order.payment and any(p.status == PaymentStatus.COMPLETED for p in order.payment):
+            session.pop("current_order", None)
+            session.pop("last_pending_payment", None)
+            flash("Pedido pago! Aguarde a entrega.", "success")
+            return redirect(url_for("loja"))
+
+    # Existing pending check
+    pend = _limpa_pendencia(
+        Payment.query.get(session.get("last_pending_payment"))
+    )
+    if pend:
+        return redirect(pend.init_point)  # link oficial do MP
+        
+    order = Order.query.get(session.get("current_order") or 0)
+    return render_template("carrinho.html", order=order, form=CheckoutForm())  # Added form
+>>>>>>> heroku/main
 
     # Renderiza sempre o carrinho, passando o pagamento pendente (ou None)
     return render_template(
@@ -2827,9 +3010,18 @@ sdk = mercadopago.SDK(app.config['MERCADOPAGO_ACCESS_TOKEN'])
 # Supondo que o SDK já esteja instanciado em `sdk`
 # e que você importou Payment, PaymentMethod, PaymentStatus, Order, etc.
 
+# --------------------------------------------------------
+#  CHECKOUT (CSRF PROTECTED)
+# --------------------------------------------------------
+from flask import request, redirect, url_for, flash, session
+from mercadopago import SDK
+import os
+from decimal import Decimal
+
 @app.route("/checkout", methods=["POST"])
 @login_required
 def checkout():
+<<<<<<< HEAD
     # Força DEBUG no logger
     current_app.logger.setLevel(logging.DEBUG)
 
@@ -2977,8 +3169,174 @@ def notificacoes_mercado_pago():
                 return jsonify({"error":"internal failure"}), 500
 
     return jsonify({"status":"ignored"}), 200
+=======
+    # Configura o SDK com sua chave secreta
+    sdk = SDK(os.getenv("MP_ACCESS_TOKEN"))  # ex: "APP_USR-..."
+
+    # Busca o pedido atual na sessão
+    order_id = session.get("current_order")
+    if not order_id:
+        flash("Carrinho vazio ou pedido não encontrado.", "warning")
+        return redirect(url_for("ver_carrinho"))
+
+    order = Order.query.get(order_id)
+    if not order or not order.items:
+        flash("Pedido inválido ou sem itens.", "warning")
+        return redirect(url_for("ver_carrinho"))
+
+    # Garante que o valor seja decimal
+    total = Decimal(order.total_value())
+
+    # Gera URL de notificação
+    try:
+        notification_url = url_for("notificacoes_mercado_pago", _external=True, _scheme="https")
+    except Exception as e:
+        print(f"❌ Erro ao gerar URL de notificação: {e}")
+        notification_url = "https://www.petorlandia.com.br/notificacoes_mercado_pago"
 
 
+
+    # Gera URL de retorno
+    success_url = url_for("pagamento_sucesso", _external=True, _scheme="https")
+
+    # Dados da preferência
+    preference_data = {
+        "items": [{
+            "title": "Pedido PetOrlândia",
+            "quantity": 1,
+            "unit_price": float(total)
+        }],
+        "notification_url": notification_url,
+        "back_urls": {
+            "success": success_url,
+            "failure": success_url,
+            "pending": success_url
+        },
+        "auto_return": "approved"
+    }
+
+    print("📦 Enviando preferência para Mercado Pago:")
+    print(preference_data)
+
+    try:
+        response = sdk.preference().create(preference_data)
+        if response["status"] == 201:
+            init_point = response["response"]["init_point"]
+            print("✅ Checkout criado:", init_point)
+
+            # Salva ID do pagamento pendente para rastrear
+            payment_id = response["response"].get("id")
+            payment = Payment(order_id=order.id, status="pending", mercado_pago_id=payment_id)
+            db.session.add(payment)
+            db.session.commit()
+
+            session["last_pending_payment"] = payment.id
+            return redirect(init_point)
+        else:
+            print("❌ Falha MP:", response)
+            flash("Erro ao iniciar o pagamento. Tente novamente.", "danger")
+            return redirect(url_for("ver_carrinho"))
+    except Exception as e:
+        print("❌ Erro inesperado no checkout:", e)
+        flash("Erro interno ao criar pagamento.", "danger")
+        return redirect(url_for("ver_carrinho"))
+
+
+
+# --------------------------------------------------------
+#  RETORNOS MANUAIS (“Voltar”)
+# --------------------------------------------------------
+@app.route("/pagamento_sucesso")
+def pagamento_sucesso():
+    flash("Pagamento em processamento. Você receberá confirmação em instantes.", "info")
+    return redirect(url_for("ver_carrinho"))
+
+@app.route("/pagamento_erro")
+def pagamento_erro():
+    flash("Pagamento recusado ou houve um erro.", "danger")
+    return redirect(url_for("ver_carrinho"))
+
+@app.route("/pagamento_pendente")
+def pagamento_pendente():
+    flash("Pagamento pendente. Aguarde a confirmação.", "warning")
+    return redirect(url_for("ver_carrinho"))
+
+
+# --------------------------------------------------------
+#  WEBHOOK (SECURE)
+# --------------------------------------------------------
+@app.route("/notificacoes", methods=["POST"])
+def notificacoes_mercado_pago():
+    # Validate signature
+    secret = current_app.config.get("MERCADOPAGO_WEBHOOK_SECRET", "")
+    signature = request.headers.get("x-mp-signature", "")
+    data = request.get_json(silent=True) or {}
+
+    if secret:
+        base = f'id={data.get("data",{}).get("id")}&topic={data.get("type")}'
+        calc = hmac.new(secret.encode(), base.encode(), hashlib.sha256).hexdigest()
+        if not hmac.compare_digest(calc, signature):
+            current_app.logger.warning("Webhook com assinatura inválida")
+            return jsonify({"error": "invalid signature"}), 400
+
+    # Only process payment notifications
+    if data.get("type") != "payment":
+        return jsonify({"status": "ignorado"}), 200
+
+    # Get payment details
+    mp_id = data["data"]["id"]
+    try:
+        resp = mp_sdk().payment().get(mp_id)
+        if resp["status"] != 200:
+            current_app.logger.error("Falha MP: %s", resp)
+            return jsonify({"error": "payment lookup failed"}), 502
+        info = resp["response"]
+    except Exception as e:
+        current_app.logger.exception("Erro na API do Mercado Pago")
+        return jsonify({"error": "server error"}), 500
+
+    # Status mapping
+    STATUS_MAP = {
+        "approved": PaymentStatus.COMPLETED,
+        "rejected": PaymentStatus.FAILED,
+        "cancelled": PaymentStatus.FAILED,
+        "refunded": PaymentStatus.FAILED,
+        "charged_back": PaymentStatus.FAILED
+    }
+    
+    # Get payment record
+    pay_id = int(info["external_reference"])
+    payment = Payment.query.get(pay_id)
+    if not payment:
+        current_app.logger.error("Pagamento não encontrado: %s", pay_id)
+        return jsonify({"erro": "sem registro"}), 404
+
+    # Update payment status
+    status = info["status"]
+    new_status = STATUS_MAP.get(status, PaymentStatus.PENDING)
+    was_completed = (payment.status == PaymentStatus.COMPLETED)
+    payment.status = new_status
+    payment.transaction_id = mp_id
+>>>>>>> heroku/main
+
+    # Process new completed payments
+    if new_status == PaymentStatus.COMPLETED and not was_completed:
+        # Update stock and create delivery
+        with db.session.begin_nested():
+            for item in payment.order.items:
+                if item.product.stock >= item.quantity:
+                    item.product.stock -= item.quantity
+                else:
+                    current_app.logger.error("Estoque insuficiente para %s", item.product.id)
+            
+            if not DeliveryRequest.query.filter_by(order_id=payment.order_id).first():
+                db.session.add(DeliveryRequest(
+                    order_id=payment.order_id,
+                    requested_by_id=payment.user_id,
+                    status="pendente"
+                ))
+
+<<<<<<< HEAD
 # ——— 3) Página de status final —————————————————————————————————————————
 @app.route("/payment_status/<int:payment_id>")
 @login_required
@@ -3008,6 +3366,22 @@ def payment_status(payment_id):
 
 
 
+=======
+    db.session.commit()
+    return jsonify({"status": status}), 200
+
+
+# --------------------------------------------------------
+#  PAYMENT STATUS VIEW
+# --------------------------------------------------------
+@app.route("/payment_status/<int:payment_id>")
+@login_required
+def payment_status(payment_id):
+    payment = Payment.query.get_or_404(payment_id)
+    if payment.user_id != current_user.id:
+        abort(403)
+    return render_template("payment_status.html", payment=payment)
+>>>>>>> heroku/main
 
 
 
