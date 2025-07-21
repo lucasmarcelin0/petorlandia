@@ -1,25 +1,48 @@
+import os
+import sys
+
+# 1) Garante que o diretório petorlandia/ esteja no path para “import models”
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
 import uuid
-
-
-from flask import current_app
-
 import logging
 import hashlib
 import hmac
+import base64
+import secrets
+import qrcode
+import pytz
 
-import os
+from io import BytesIO
+from math import ceil
+from datetime import datetime, timedelta
+from dateutil.relativedelta import relativedelta
+from werkzeug.utils import secure_filename
+
+from flask import (
+    Flask, current_app, jsonify, render_template, redirect, url_for,
+    request, session, flash, abort, send_file
+)
+from flask_sqlalchemy import SQLAlchemy
+from flask_migrate import Migrate, upgrade, migrate as migrate_func, init as migrate_init
+from flask_login import (
+    LoginManager, login_user, login_required,
+    current_user, logout_user
+)
+from flask_session import Session as FlaskSession
+from flask_mail import Mail, Message as MailMessage
+from itsdangerous import URLSafeTimedSerializer
 
 import boto3
-
 from dotenv import load_dotenv
 load_dotenv()
 
+# ——— AWS S3 client ———————————————————————————————————————————————————
 s3 = boto3.client(
     "s3",
     aws_access_key_id=os.getenv("AWS_ACCESS_KEY_ID"),
     aws_secret_access_key=os.getenv("AWS_SECRET_ACCESS_KEY")
 )
-
 bucket_name = os.getenv("S3_BUCKET_NAME")
 
 def upload_to_s3(file, filename, folder="uploads"):
@@ -36,210 +59,167 @@ def upload_to_s3(file, filename, folder="uploads"):
         print(f"[ERRO S3] Falha ao enviar para o S3: {e}")
         return None
 
-
-
-import os
-
-
-
-from flask import Flask
-
-try:
-    from config import Config
-except ImportError:
-    from .config import Config
-
-
-try:
-    from extensions import db, migrate, mail, login, session
-except ImportError:
-    from .extensions import db, migrate, mail, login, session
-
-# Cria o diretório instance (caso não exista)
+# ——— Cria diretório instance ——————————————————————————————————————————————
 instance_path = os.path.join(os.getcwd(), 'instance')
 os.makedirs(instance_path, exist_ok=True)
 
-# Cria o app Flask
+# ——— Cria app Flask —————————————————————————————————————————————————————
 app = Flask(__name__, instance_path=instance_path)
 
-from datetime import datetime
+# ——— Config ———————————————————————————————————————————————————————
+try:
+    from config import Config
+except ImportError:
+    try:
+        from petorlandia.config import Config
+    except ImportError:
+        from .config import Config
 
+app.config.from_object(Config)
+app.config['FRONTEND_URL']      = os.environ.get('FRONTEND_URL', 'http://127.0.0.1:5000')
+app.config["SESSION_PERMANENT"]  = False
+app.config["SESSION_TYPE"]       = "filesystem"
+
+
+
+
+
+
+# Mail (Gmail App Password)
+from dotenv import load_dotenv
+load_dotenv()
+
+app.config['MAIL_SERVER']        = os.getenv('MAIL_SERVER', 'smtp.gmail.com')
+app.config['MAIL_PORT']          = int(os.getenv('MAIL_PORT', 587))
+app.config['MAIL_USE_TLS']       = os.getenv('MAIL_USE_TLS', 'True') == 'True'
+app.config['MAIL_USE_SSL']       = os.getenv('MAIL_USE_SSL', 'False') == 'True'
+app.config['MAIL_USERNAME']      = os.getenv('MAIL_USERNAME')
+app.config['MAIL_PASSWORD']      = os.getenv('MAIL_PASSWORD')
+app.config['MAIL_DEFAULT_SENDER']= (
+    os.getenv('MAIL_DEFAULT_NAME', 'PetOrlândia'),
+    os.getenv('MAIL_USERNAME')
+)
+
+# ——— Extensões ———————————————————————————————————————————————————————
+try:
+    from extensions import db, migrate as migrate_ext, mail as mail_ext, login as login_ext, session as session_ext
+except ImportError:
+    try:
+        from petorlandia.extensions import db, migrate as migrate_ext, mail as mail_ext, login as login_ext, session as session_ext
+    except ImportError:
+        from .extensions import db, migrate as migrate_ext, mail as mail_ext, login as login_ext, session as session_ext
+
+db.init_app(app)
+migrate_ext.init_app(app, db)
+mail_ext.init_app(app)
+login_ext.init_app(app)
+session_ext.init_app(app)
+
+# flask-session (armazenamento server-side)
+FlaskSession(app)
+
+# Garante binding correto
+login   = login_ext
+mail    = mail_ext
+migrate = migrate_ext
+
+# ——— Jinja Filters —————————————————————————————————————————————————————
 def datetime_brazil(value):
     if isinstance(value, datetime):
         return value.strftime('%d/%m/%Y %H:%M')
     return value
-
 app.jinja_env.filters['datetime_brazil'] = datetime_brazil
 
-
-app.config.from_object(Config)
-
-app.config['FRONTEND_URL'] = os.environ.get('FRONTEND_URL', 'http://127.0.0.1:5000')
-
-
-
-
-
-# Inicializa as extensões
-db.init_app(app)
-migrate.init_app(app, db)
-mail.init_app(app)
-login.init_app(app)
-session.init_app(app)
-
-
-
-
-
-from io import BytesIO
-
-
-from datetime import datetime
-import pytz
-
-# Fuso horário de São Paulo
 br_tz = pytz.timezone('America/Sao_Paulo')
-
-# Filtro para converter datetime UTC para o fuso de Brasília
-def format_datetime_brazil(value, format="%d/%m/%Y %H:%M"):
+def format_datetime_brazil(value, fmt="%d/%m/%Y %H:%M"):
     if value is None:
         return ""
     if value.tzinfo is None:
         value = pytz.utc.localize(value)
-    local_dt = value.astimezone(br_tz)
-    return local_dt.strftime(format)
+    return value.astimezone(br_tz).strftime(fmt)
+app.jinja_env.filters['format_datetime_brazil'] = format_datetime_brazil
 
-app.jinja_env.filters['datetime_brazil'] = format_datetime_brazil
-
-
-
-
-
-
-
-from flask_login import login_user
-from dateutil.relativedelta import relativedelta
-from datetime import timedelta
-import secrets
-import qrcode
-import base64
-
+# ——— Imports do seu código —————————————————————————————————————————————
+# Forms
 try:
     from forms import (
-        MessageForm,
-        RegistrationForm,
-        LoginForm,
-        AnimalForm,
-        EditProfileForm,
-        ResetPasswordRequestForm,
-        ResetPasswordForm,
-        OrderItemForm,
-        DeliveryRequestForm,
-        AddToCartForm,
-        SubscribePlanForm,
+        MessageForm, RegistrationForm, LoginForm, AnimalForm,
+        EditProfileForm, ResetPasswordRequestForm, ResetPasswordForm,
+        OrderItemForm, DeliveryRequestForm, AddToCartForm,
+        SubscribePlanForm
     )
 except ImportError:
-    from .forms import (
-        MessageForm,
-        RegistrationForm,
-        LoginForm,
-        AnimalForm,
-        EditProfileForm,
-        ResetPasswordRequestForm,
-        ResetPasswordForm,
-        OrderItemForm,
-        DeliveryRequestForm,
-        AddToCartForm,
-        SubscribePlanForm,
-    )
+    try:
+        from petorlandia.forms import (
+            MessageForm, RegistrationForm, LoginForm, AnimalForm,
+            EditProfileForm, ResetPasswordRequestForm, ResetPasswordForm,
+            OrderItemForm, DeliveryRequestForm, AddToCartForm,
+            SubscribePlanForm
+        )
+    except ImportError:
+        from .forms import (
+            MessageForm, RegistrationForm, LoginForm, AnimalForm,
+            EditProfileForm, ResetPasswordRequestForm, ResetPasswordForm,
+            OrderItemForm, DeliveryRequestForm, AddToCartForm,
+            SubscribePlanForm
+        )
 
+# Admin
 try:
     from admin import init_admin, _is_admin
 except ImportError:
-    from .admin import init_admin, _is_admin
+    try:
+        from petorlandia.admin import init_admin, _is_admin
+    except ImportError:
+        from .admin import init_admin, _is_admin
 
-
-from flask_migrate import Migrate, upgrade, migrate, init
-
-
-
-from flask_sqlalchemy import SQLAlchemy
-
-
-
-
-
-
-from flask_session import Session
-from flask_login import LoginManager, login_required, current_user, logout_user
-
+# Models genéricos
 try:
     from models import *
 except ImportError:
-    from .models import *
+    try:
+        from petorlandia.models import *
+    except ImportError:
+        from .models import *
 
-# Reimporta explicitamente o objeto `db` das extensões para evitar
-# possíveis conflitos de importação tanto quando o módulo é executado
-# diretamente quanto quando é importado como parte do pacote
-try:
-    from extensions import db as _db
-except ImportError:  # quando importado como pacote
-    from .extensions import db as _db
-db = _db
-
-from wtforms.fields import SelectField
-from flask import Flask, jsonify, render_template, redirect, url_for, request, session, flash, abort
-
-
-import sys
-import os
-from werkzeug.utils import secure_filename
-
-
-from math import ceil
-
+# Helpers
 try:
     from helpers import calcular_idade, parse_data_nascimento
 except ImportError:
-    from .helpers import calcular_idade, parse_data_nascimento
+    try:
+        from petorlandia.helpers import calcular_idade, parse_data_nascimento
+    except ImportError:
+        from .helpers import calcular_idade, parse_data_nascimento
 
-from flask_mail import Mail, Message as MailMessage
-
-
-
-sys.path.append(os.path.dirname(os.path.abspath(__file__)))
-
-
-import os
-
-instance_path = os.path.join(os.getcwd(), 'instance')
-os.makedirs(instance_path, exist_ok=True)
-
-
+# ——— Login —————————————————————————————————————————————————————————————
 @login.user_loader
 def load_user(user_id):
     return User.query.get(int(user_id))
-
-
 login.login_view = 'login'
 
-
-app.config["SESSION_PERMANENT"] = False
-app.config["SESSION_TYPE"] = "filesystem"
-Session(app)
-
-
-# Após db.init_app(app)
-
-app.config['SERVER_NAME'] = 'orange-space-pancake-j9456jjjv9vcqrxx-5000.app.github.dev'
-
-
+# ——— Inicializa admin + create_all ——————————————————————————————————————————
 with app.app_context():
-    init_admin(app)      # ⬅️ Primeiro registra o admin e os modelos
-  #  db.create_all()      # ⬅️ Só depois chama o create_all()
+    init_admin(app)
+    # db.create_all()
+
+# ——— Serializer —————————————————————————————————————————————————————
+serializer = URLSafeTimedSerializer(app.config['SECRET_KEY'])
+
+# ——— Models específicos de pagamento —————————————————————————————————————————
+try:
+    from models import Payment, PaymentMethod, PaymentStatus, DeliveryRequest
+except ImportError:
+    try:
+        from petorlandia.models import Payment, PaymentMethod, PaymentStatus, DeliveryRequest
+    except ImportError:
+        from .models import Payment, PaymentMethod, PaymentStatus, DeliveryRequest
 
 
-from itsdangerous import URLSafeTimedSerializer
+
+
+
+
+
 
 
 
@@ -253,7 +233,7 @@ def reset_password_request():
         user = User.query.filter_by(email=form.email.data).first()
         if user:
             token = s.dumps(user.email, salt='password-reset-salt')
-            base_url = app.config.get('FRONTEND_URL', request.url_root.rstrip('/'))
+            base_url = os.environ.get('FRONTEND_URL', 'http://127.0.0.1:5000')
             link = f"{base_url}{url_for('reset_password', token=token)}"
 
             msg = MailMessage(
@@ -858,94 +838,23 @@ def termo_transferencia(animal_id, user_id):
 @login_required
 def planosaude_animal(animal_id):
     animal = Animal.query.get_or_404(animal_id)
+
     if animal.owner != current_user:
         flash("Você não tem permissão para acessar esse animal.", "danger")
         return redirect(url_for('profile'))
 
-    form = SubscribePlanForm()
-    form.plan_id.choices = [(p.id, f"{p.name} - R$ {p.price:.2f}") for p in HealthPlan.query.all()]
-    active_sub = HealthSubscription.query.filter_by(animal_id=animal.id, active=True).first()
-
-    return render_template('planosaude_animal.html', animal=animal, form=form, subscription=active_sub)
-
-
-@app.route('/animal/<int:animal_id>/contratar_plano', methods=['POST'])
-@login_required
-def contratar_plano(animal_id):
-    animal = Animal.query.get_or_404(animal_id)
-    if animal.owner != current_user:
-        abort(403)
-
-    form = SubscribePlanForm()
-    form.plan_id.choices = [(p.id, p.name) for p in HealthPlan.query.all()]
-    if not form.validate_on_submit():
-        flash('Seleção inválida de plano.', 'danger')
-        return redirect(url_for('planosaude_animal', animal_id=animal.id))
-
-    plan = HealthPlan.query.get_or_404(form.plan_id.data)
-
-    order = Order(user_id=current_user.id)
-    db.session.add(order)
-    db.session.commit()
-
-    item = OrderItem(order_id=order.id, item_name=f'Plano {plan.name}', quantity=1)
-    db.session.add(item)
-    db.session.commit()
-
-    payment = Payment(user_id=current_user.id, order_id=order.id,
-                      method=PaymentMethod.PIX, status=PaymentStatus.PENDING)
-    db.session.add(payment)
-    db.session.commit()
-
-    sub = HealthSubscription(animal_id=animal.id, plan_id=plan.id, user_id=current_user.id,
-                             payment_id=payment.id, active=False)
-    db.session.add(sub)
-    db.session.commit()
-
-    preference_data = {
-        "items": [{"title": f"Plano {plan.name}", "quantity": 1, "unit_price": float(plan.price)}],
-        "payment_methods": {"excluded_payment_types": [{"id": "credit_card"}], "installments": 1},
-        "payer": {"email": current_user.email},
-        "notification_url": url_for("notificacoes_mercado_pago", _external=True),
-        "external_reference": str(payment.id),
-        "back_urls": {
-            "success": url_for("payment_status", payment_id=payment.id, status='success', _external=True),
-            "failure": url_for("payment_status", payment_id=payment.id, status='failure', _external=True),
-            "pending": url_for("payment_status", payment_id=payment.id, status='pending', _external=True)
-        },
-        "auto_return": "approved"
-    }
-
-    try:
-        pref_resp = sdk.preference().create(preference_data)
-    except Exception:
-        current_app.logger.exception('Erro comunicando com Mercado Pago')
-        flash('Não foi possível iniciar o pagamento.', 'danger')
-        return redirect(url_for('planosaude_animal', animal_id=animal.id))
-
-    if pref_resp.get('status') != 201:
-        current_app.logger.error('Resposta inesperada MP: %s', pref_resp)
-        flash('Erro ao iniciar pagamento.', 'danger')
-        return redirect(url_for('planosaude_animal', animal_id=animal.id))
-
-    preference = pref_resp['response']
-    payment.transaction_id = str(preference['id'])
-    db.session.commit()
-
-    session['last_pending_payment'] = payment.id
-    return redirect(preference['init_point'])
+    # Aqui, você pode carregar um formulário ou exibir informações
+    return render_template('planosaude_animal.html', animal=animal)
 
 
 @app.route('/plano-saude')
 @login_required
 def plano_saude_overview():
     animais_do_usuario = Animal.query.filter_by(user_id=current_user.id).filter(Animal.removido_em == None).all()
-    subs = {s.animal_id: s for s in HealthSubscription.query.filter_by(user_id=current_user.id, active=True).all()}
     return render_template(
         'plano_saude_overview.html',
         animais=animais_do_usuario,
-        user=current_user,
-        subscriptions=subs
+        user=current_user  # ← esta linha resolve o erro
     )
 
 
@@ -2790,14 +2699,10 @@ def fluxograma_entregas():
 def delivery_overview():
     if not _is_admin():
         abort(403)
-    # Garantimos que todas as consultas sejam executadas dentro de um
-    # contexto de aplicação para evitar problemas caso o objeto ``db``
-    # não esteja associado ao app atual.
-    with app.app_context():
-        products = Product.query.all()
-        open_requests = DeliveryRequest.query.filter_by(status='pendente').all()
-        in_progress = DeliveryRequest.query.filter_by(status='em_andamento').all()
-        completed = DeliveryRequest.query.filter_by(status='concluida').all()
+    products = Product.query.all()
+    open_requests = DeliveryRequest.query.filter_by(status='pendente').all()
+    in_progress = DeliveryRequest.query.filter_by(status='em_andamento').all()
+    completed = DeliveryRequest.query.filter_by(status='concluida').all()
     return render_template('admin/delivery_overview.html',
                            products=products,
                            open_requests=open_requests,
@@ -2810,50 +2715,30 @@ def delivery_overview():
 
 
 
+from flask import session, render_template
+from flask_login import login_required
+
 @app.route("/loja")
 @login_required
 def loja():
     pagamento_pendente = None
+
+    # usa o session do Flask para recuperar o ID
     payment_id = session.get("last_pending_payment")
     if payment_id:
         payment = Payment.query.get(payment_id)
+        # compara com o enum ou string, conforme seu modelo
         if payment and payment.status.name == "PENDING":
             pagamento_pendente = payment
 
     produtos = Product.query.all()
     form = AddToCartForm()
-    return render_template("loja.html", products=produtos, pagamento_pendente=pagamento_pendente, form=form)
-
-
-
-@app.route('/add_product', methods=['GET', 'POST'])
-@login_required
-def add_product():
-    if request.method == 'POST':
-        name = request.form['name']
-        price = float(request.form['price'])
-        stock = int(request.form['stock'])
-
-        image_url = None
-        if 'image' in request.files and request.files['image'].filename != '':
-            file = request.files['image']
-            filename = f"{uuid.uuid4().hex}_{secure_filename(file.filename)}"
-            image_url = upload_to_s3(file, filename, folder="products")
-
-        product = Product(
-            name=name,
-            price=price,
-            stock=stock,
-            description=request.form.get('description'),
-            image_url=image_url
-        )
-        db.session.add(product)
-        db.session.commit()
-        flash('Produto adicionado com sucesso!', 'success')
-        return redirect(url_for('loja'))
-
-    return render_template('add_product.html')
-
+    return render_template(
+        "loja.html",
+        products=produtos,
+        pagamento_pendente=pagamento_pendente,
+        form=form
+    )
 
 
 
@@ -2889,29 +2774,73 @@ def adicionar_carrinho(product_id):
 @app.route('/carrinho')
 @login_required
 def ver_carrinho():
-    # Redireciona para pagamento pendente, se existir
+    # Verifica se há um pagamento pendente
+    pagamento_pendente = None
     payment_id = session.get('last_pending_payment')
     if payment_id:
-        payment = Payment.query.get(payment_id)
-        if payment and payment.status.name == "PENDING":
-            return redirect(url_for('payment_status', payment_id=payment.id))
+        pagamento = Payment.query.get(payment_id)
+        if pagamento and pagamento.status == PaymentStatus.PENDING:
+            pagamento_pendente = pagamento
 
-    # Caso não haja pagamento pendente, exibe o carrinho normalmente
+    # Busca o pedido atual
     order_id = session.get('current_order')
     order = Order.query.get(order_id) if order_id else None
-    return render_template('carrinho.html', order=order)
 
+    # Renderiza sempre o carrinho, passando o pagamento pendente (ou None)
+    return render_template(
+        'carrinho.html',
+        order=order,
+        pagamento_pendente=pagamento_pendente
+    )
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+#inicio pagamento
+
+
+import json, hmac, hashlib
+from flask import (
+    url_for, session, flash, redirect,
+    current_app, request, jsonify
+)
+from flask_login import login_required, current_user
+import mercadopago
+
+# Inicializa o SDK
+sdk = mercadopago.SDK(app.config['MERCADOPAGO_ACCESS_TOKEN'])
+
+# ——— 1) Inicia o checkout —————————————————————————————————————————————
+# Supondo que o SDK já esteja instanciado em `sdk`
+# e que você importou Payment, PaymentMethod, PaymentStatus, Order, etc.
 
 @app.route("/checkout", methods=["POST"])
 @login_required
 def checkout():
+    # Força DEBUG no logger
+    current_app.logger.setLevel(logging.DEBUG)
+
+    # 1) Recupera o pedido
     order_id = session.get("current_order")
     order = Order.query.get(order_id) if order_id else None
-
     if not order or not order.items:
         flash("Seu carrinho está vazio.", "warning")
         return redirect(url_for("ver_carrinho"))
 
+    # 2) Cria o objeto Payment
     payment = Payment(
         user_id=current_user.id,
         order_id=order.id,
@@ -2921,228 +2850,162 @@ def checkout():
     db.session.add(payment)
     db.session.commit()
 
-    items = []
-    for item in order.items:
-        if item.product:
-            items.append({
-                "title": item.product.name,
-                "quantity": int(item.quantity),
-                "unit_price": float(item.product.price)
-            })
+    # 3) Monta os itens
+    items = [{
+        "title": it.product.name,
+        "quantity": int(it.quantity),
+        "unit_price": float(it.product.price)
+    } for it in order.items]
 
+    # 4) URLs de retorno
+    back_urls = {
+        "success": url_for("payment_status",
+                           payment_id=payment.id,
+                           status="success",
+                           _external=True),
+        "failure": url_for("payment_status",
+                           payment_id=payment.id,
+                           status="failure",
+                           _external=True),
+        "pending": url_for("payment_status",
+                           payment_id=payment.id,
+                           status="pending",
+                           _external=True),
+    }
+
+    # 5) Payload de preferência
     preference_data = {
         "items": items,
+        # **use o e‑mail do comprador sandbox aqui**:
+        "payer": {"email": "TESTUSER1687547425@sandbox.mercadopago.com"},
+        "notification_url": url_for("notificacoes_mercado_pago", _external=True),
+        "external_reference": str(payment.id),
+        "back_urls": back_urls,
+        "auto_return": "approved",
         "payment_methods": {
             "excluded_payment_types": [{"id": "credit_card"}],
             "installments": 1
-        },
-        "payer": {"email": current_user.email},
-        "notification_url": url_for("notificacoes_mercado_pago", _external=True),
-        "external_reference": str(payment.id),
-        "back_urls": {
-            "success": url_for("payment_status", payment_id=payment.id, status='success', _external=True),
-            "failure": url_for("payment_status", payment_id=payment.id, status='failure', _external=True),
-            "pending": url_for("payment_status", payment_id=payment.id, status='pending', _external=True)
-        },
-        "auto_return": "approved"
+        }
     }
 
-    try:
-        preference_response = sdk.preference().create(preference_data)
-    except Exception:
-        current_app.logger.exception("Erro comunicando com Mercado Pago")
-        flash("Não foi possível iniciar o pagamento.", "danger")
-        return redirect(url_for("ver_carrinho"))
+    # 6) DEBUG: imprime o JSON exato
+    current_app.logger.debug(
+        "MP Preference Payload:\n%s",
+        json.dumps(preference_data, indent=2, ensure_ascii=False)
+    )
 
-    if preference_response.get("status") != 201:
-        current_app.logger.error("Resposta inesperada MP: %s", preference_response)
+    # 7) Chama a API
+    resp = sdk.preference().create(preference_data)
+    if resp.get("status") != 201:
+        current_app.logger.error("MP error: %s", resp)
         flash("Erro ao iniciar pagamento.", "danger")
         return redirect(url_for("ver_carrinho"))
 
-    preference = preference_response["response"]
-    payment.transaction_id = str(preference["id"])
+    pref = resp["response"]
+    payment.transaction_id = str(pref["id"])
     db.session.commit()
 
-    session['last_pending_payment'] = payment.id
+    # 8) Guarda na sessão e redireciona
+    session["last_pending_payment"] = payment.id
 
-    return redirect(preference["init_point"])
-
-
-@app.route('/pagamento/<int:order_id>')
-@login_required
-def pagamento(order_id):
-    order = Order.query.get_or_404(order_id)
-    payment = order.payment
-    return render_template('pagamento.html', order=order, payment=payment)
-
-
-import mercadopago
-
-# SDK do Mercado Pago configurado com o token definido no arquivo de configuração
-sdk = mercadopago.SDK(app.config.get('MERCADOPAGO_ACCESS_TOKEN'))
-
-@app.route("/criar_pagamento_pix", methods=["POST"])
-def criar_pagamento_pix():
-    data = request.get_json()
-
-    preference_data = {
-        "items": [
-            {
-                "title": data.get("titulo", "Produto Teste"),
-                "quantity": int(data.get("quantidade", 1)),
-                "unit_price": float(data.get("preco", 10.0))
-            }
-        ],
-        "payment_methods": {
-            "excluded_payment_types": [{"id": "credit_card"}],  # aceita só PIX
-            "installments": 1
-        },
-        "payer": {
-            "email": data.get("email", "cliente@email.com")
-        },
-        "notification_url": "https://petorlandia.com.br/notificacoes"
-    }
-
-    preference_response = sdk.preference().create(preference_data)
-    preference = preference_response["response"]
-
-    return jsonify({
-        "id": preference["id"],
-        "init_point": preference["init_point"],
-    })
+    # ATENÇÃO: para que o Mercado Pago mostre a tela de checkout,
+    # seu app precisa estar em um domínio público ou túnel (ngrok, localtunnel, Heroku).
+    return redirect(pref["init_point"])
 
 
 
 
-from flask import request, jsonify
-from datetime import datetime
-from models import Payment, PaymentMethod, PaymentStatus, DeliveryRequest, HealthSubscription
 
+
+
+
+
+
+# ——— 2) Webhook do Mercado Pago —————————————————————————————————————
 @app.route("/notificacoes", methods=["POST"])
 def notificacoes_mercado_pago():
-    secret = current_app.config.get("MERCADOPAGO_WEBHOOK_SECRET")
-    signature = request.headers.get("X-MP-Signature")
+    secret    = current_app.config.get("MERCADOPAGO_WEBHOOK_SECRET", "")
+    signature = request.headers.get("X-MP-Signature", "")
+
     if secret:
-        calculated = hmac.new(secret.encode(), request.get_data(), hashlib.sha256).hexdigest()
-        if not hmac.compare_digest(calculated, signature or ""):
-            current_app.logger.warning("Invalid Mercado Pago webhook signature")
+        calc = hmac.new(secret.encode(), request.get_data(), hashlib.sha256).hexdigest()
+        if not hmac.compare_digest(calc, signature):
+            current_app.logger.warning("Invalid MP signature")
             return jsonify({"error": "invalid signature"}), 400
 
-    data = request.get_json()
-    current_app.logger.info("🔔 Notificação recebida: %s", data)
+    data = request.get_json() or {}
+    current_app.logger.info("🔔 MP Notification: %s", data)
 
-    if data and data.get("type") == "payment":
-        mp_payment_id = data.get("data", {}).get("id")
-        if mp_payment_id:
+    if data.get("type") == "payment":
+        mp_id = data.get("data", {}).get("id")
+        if mp_id:
             try:
-                resp = sdk.payment().get(mp_payment_id)
-                if resp.get("status") != 200:
-                    current_app.logger.error("Erro Mercado Pago: %s", resp)
-                    return jsonify({"error": "api error"}), 500
-                payment_info = resp["response"]
+                r = sdk.payment().get(mp_id)
+                if r.get("status") != 200:
+                    current_app.logger.error("MP API error: %s", r)
+                    return jsonify({"error":"api error"}), 500
 
-                status = payment_info.get("status", "pending")
-                external_ref = payment_info.get("external_reference")
-                pagamento = Payment.query.get(int(external_ref)) if external_ref else None
-                if pagamento:
-                    if pagamento.status == PaymentStatus.COMPLETED:
-                        return jsonify({"status": "already_processed"}), 200
-                    pagamento.transaction_id = str(payment_info.get("id"))
+                info = r["response"]
+                status = info.get("status", "pending")
+                ext_ref = info.get("external_reference")
+                pay = Payment.query.get(int(ext_ref)) if ext_ref else None
+
+                if pay and pay.status != PaymentStatus.COMPLETED:
+                    pay.transaction_id = str(info["id"])
+                    # Atualiza status
                     if status == "approved":
-                        pagamento.status = PaymentStatus.COMPLETED
-                        if pagamento.order_id and not DeliveryRequest.query.filter_by(order_id=pagamento.order_id).first():
-                            req = DeliveryRequest(order_id=pagamento.order_id,
-                                                  requested_by_id=pagamento.user_id,
-                                                  status='pendente')
-                            db.session.add(req)
-                        for sub in pagamento.subscriptions:
-                            sub.active = True
+                        pay.status = PaymentStatus.COMPLETED
+                        # CRIA DELIVERY REQUEST AUTOMATICAMENTE
+                        if pay.order_id and not DeliveryRequest.query.filter_by(order_id=pay.order_id).first():
+                            dr = DeliveryRequest(
+                                order_id=pay.order_id,
+                                requested_by_id=pay.user_id,
+                                status='pendente'
+                            )
+                            db.session.add(dr)
                     elif status == "rejected":
-                        pagamento.status = PaymentStatus.FAILED
+                        pay.status = PaymentStatus.FAILED
                     else:
-                        pagamento.status = PaymentStatus.PENDING
+                        pay.status = PaymentStatus.PENDING
+
                     db.session.commit()
-                return jsonify({"status": "atualizado"}), 200
+
+                return jsonify({"status":"updated"}), 200
+
             except Exception:
-                current_app.logger.exception("Erro ao processar pagamento")
-                return jsonify({"erro": "falha interna"}), 500
+                current_app.logger.exception("Erro ao processar webhook MP")
+                return jsonify({"error":"internal failure"}), 500
 
-    return jsonify({"status": "ignorado"}), 200
-
-
+    return jsonify({"status":"ignored"}), 200
 
 
-
-@app.route("/simular_pagamento/<int:payment_id>", methods=["POST"])
-@login_required
-def simular_pagamento(payment_id):
-    payment = Payment.query.get_or_404(payment_id)
-    if payment.user_id != current_user.id:
-        abort(403)
-
-    payment.status = PaymentStatus.COMPLETED
-    for sub in payment.subscriptions:
-        sub.active = True
-    db.session.commit()
-
-    # Limpa da sessão
-    session.pop("last_pending_payment", None)
-    flash("Pagamento confirmado!", "success")
-    return redirect(url_for("loja"))
-
-
-
-@app.route('/confirmar_pagamento/<int:payment_id>', methods=['POST'])
-@login_required
-def confirmar_pagamento(payment_id):
-    payment = Payment.query.get_or_404(payment_id)
-    payment.status = 'pago'
-    db.session.commit()
-
-    # Criar solicitação de entrega
-    req = DeliveryRequest(order_id=payment.order_id,
-                          requested_by_id=current_user.id,
-                          status='pendente')
-    db.session.add(req)
-    db.session.commit()
-
-    flash('Pagamento confirmado com sucesso!', 'success')
-    return redirect(url_for('list_delivery_requests'))
-
-
-
-@app.route('/payment_status/<int:payment_id>')
+# ——— 3) Página de status final —————————————————————————————————————————
+@app.route("/payment_status/<int:payment_id>")
 @login_required
 def payment_status(payment_id):
-    payment = Payment.query.get_or_404(payment_id)
-    result = request.args.get('status')
+    pay    = Payment.query.get_or_404(payment_id)
+    result = request.args.get("status", "pending")
+    return render_template("payment_status.html", payment=pay, result=result)
 
 
-    # Se o pagamento ainda está pendente ou se o usuário voltou de um redirect
-    # de sucesso, consultamos a API do Mercado Pago para obter o status mais
-    # recente. Isso evita ficar dependente apenas do webhook que pode não ser
-    # entregue em ambientes de desenvolvimento.
-    if payment.status == PaymentStatus.PENDING and payment.transaction_id:
-        try:
-            resp = sdk.payment().get(payment.transaction_id)
-            if resp.get("status") == 200:
-                info = resp["response"]
-                status = info.get("status")
-                if status == "approved":
-                    payment.status = PaymentStatus.COMPLETED
-                    if payment.order_id and not DeliveryRequest.query.filter_by(order_id=payment.order_id).first():
-                        req = DeliveryRequest(order_id=payment.order_id,
-                                              requested_by_id=payment.user_id,
-                                              status='pendente')
-                        db.session.add(req)
-                elif status == "rejected":
-                    payment.status = PaymentStatus.FAILED
-                db.session.commit()
-        except Exception:
-            current_app.logger.exception("Erro verificando status do pagamento")
+#fim pagamento
 
 
-    return render_template('payment_status.html', payment=payment, result=result)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -3194,15 +3057,3 @@ def teste_endereco():
         return redirect(url_for('teste_endereco'))
 
     return render_template('teste_endereco.html', endereco=endereco)
-
-
-
-
-
-
-
-
-
-
-
-
