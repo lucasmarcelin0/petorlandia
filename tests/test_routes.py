@@ -1,14 +1,20 @@
 import os
+os.environ["SQLALCHEMY_DATABASE_URI"] = "sqlite:///:memory:"
 import sys
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 import pytest
-from app import app as flask_app
-from models import User
+import app as app_module
+from app import app as flask_app, sdk, db
+from models import User, Payment, PaymentStatus, DeliveryRequest, PaymentMethod
 
 @pytest.fixture
 def app():
-    flask_app.config.update(TESTING=True, WTF_CSRF_ENABLED=False)
+    flask_app.config.update(
+        TESTING=True,
+        WTF_CSRF_ENABLED=False,
+        SQLALCHEMY_DATABASE_URI="sqlite:///:memory:"
+    )
     yield flask_app
 
 def test_login_page(app):
@@ -108,3 +114,54 @@ def test_animals_page(monkeypatch, app):
 
     response = client.get('/animals')
     assert response.status_code == 200
+
+
+def test_payment_status_updates_from_api(monkeypatch, app):
+    client = app.test_client()
+
+    class FakePayment:
+        id = 1
+        status = PaymentStatus.PENDING
+        transaction_id = "abc123"
+        order_id = 99
+        user_id = 42
+        method = PaymentMethod.PIX
+
+    class FakePaymentQuery:
+        def get_or_404(self, _):
+            return FakePayment()
+
+    class FakeDRQuery:
+        def filter_by(self, **kw):
+            class R:
+                def first(self_inner):
+                    return None
+            return R()
+
+    with app.app_context():
+        monkeypatch.setattr(Payment, 'query', FakePaymentQuery())
+        monkeypatch.setattr(DeliveryRequest, 'query', FakeDRQuery())
+        monkeypatch.setattr(db.session, 'add', lambda *a, **k: None)
+        monkeypatch.setattr(db.session, 'commit', lambda *a, **k: None)
+        # Substitui o context processor que consulta o banco
+        for idx, fn in enumerate(flask_app.template_context_processors[None]):
+            if fn.__name__ == 'inject_unread_count':
+                flask_app.template_context_processors[None][idx] = lambda: {'unread_messages': 0}
+                break
+
+        # Finge que o usuário está logado
+        import flask_login.utils as login_utils
+        class FakeUser:
+            is_authenticated = True
+            id = 1
+            name = "Tester"
+        monkeypatch.setattr(login_utils, '_get_user', lambda: FakeUser())
+
+        class FakePaymentAPI:
+            def get(self, _):
+                return {"status": 200, "response": {"status": "approved"}}
+
+        monkeypatch.setattr(sdk, 'payment', lambda: FakePaymentAPI())
+
+        response = client.get('/payment_status/1?status=success')
+        assert response.status_code == 200
