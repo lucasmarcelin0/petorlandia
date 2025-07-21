@@ -61,12 +61,23 @@ os.makedirs(instance_path, exist_ok=True)
 
 # Cria o app Flask
 app = Flask(__name__, instance_path=instance_path)
+
+from datetime import datetime
+
+def datetime_brazil(value):
+    if isinstance(value, datetime):
+        return value.strftime('%d/%m/%Y %H:%M')
+    return value
+
+app.jinja_env.filters['datetime_brazil'] = datetime_brazil
+
+
 app.config.from_object(Config)
 
 app.config['FRONTEND_URL'] = os.environ.get('FRONTEND_URL', 'http://127.0.0.1:5000')
 
 
-print(f"FRONTEND_URL carregado: {app.config['FRONTEND_URL']}")
+
 
 
 # Inicializa as extensões
@@ -194,17 +205,6 @@ except ImportError:
 
 from flask_mail import Mail, Message as MailMessage
 
-from flask_mail import Mail
-app.config['MAIL_SERVER'] = 'smtp.gmail.com'
-app.config['MAIL_PORT'] = 587
-app.config['MAIL_USE_TLS'] = True
-app.config['MAIL_USE_SSL'] = False
-app.config['MAIL_USERNAME'] = 'gpt.assistente.orlandia@gmail.com'
-app.config['MAIL_PASSWORD'] = 'SENHA_DE_APP'  # ← Cole a senha de aplicativo aqui
-app.config['MAIL_DEFAULT_SENDER'] = ('PetOrlândia', 'gpt.assistente.orlandia@gmail.com')
-
-mail = Mail(app)
-
 
 
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
@@ -214,17 +214,6 @@ import os
 
 instance_path = os.path.join(os.getcwd(), 'instance')
 os.makedirs(instance_path, exist_ok=True)
-
-
-
-
-app.config.from_object(Config)
-
- 
-migrate = Migrate(app, db)
-
-mail = Mail(app)  # ✅ ESSA LINHA ESTAVA FALTANDO
-login = LoginManager(app)
 
 
 @login.user_loader
@@ -241,8 +230,6 @@ Session(app)
 
 
 # Após db.init_app(app)
-migrate = Migrate(app, db)
-
 
 app.config['SERVER_NAME'] = 'orange-space-pancake-j9456jjjv9vcqrxx-5000.app.github.dev'
 
@@ -250,11 +237,6 @@ app.config['SERVER_NAME'] = 'orange-space-pancake-j9456jjjv9vcqrxx-5000.app.gith
 with app.app_context():
     init_admin(app)      # ⬅️ Primeiro registra o admin e os modelos
   #  db.create_all()      # ⬅️ Só depois chama o create_all()
-
-
-@login.user_loader
-def load_user(user_id):
-    return User.query.get(int(user_id))
 
 
 from itsdangerous import URLSafeTimedSerializer
@@ -271,7 +253,7 @@ def reset_password_request():
         user = User.query.filter_by(email=form.email.data).first()
         if user:
             token = s.dumps(user.email, salt='password-reset-salt')
-            base_url = os.environ.get('FRONTEND_URL', 'http://127.0.0.1:5000')
+            base_url = app.config.get('FRONTEND_URL', request.url_root.rstrip('/'))
             link = f"{base_url}{url_for('reset_password', token=token)}"
 
             msg = MailMessage(
@@ -2843,6 +2825,38 @@ def loja():
     return render_template("loja.html", products=produtos, pagamento_pendente=pagamento_pendente, form=form)
 
 
+
+@app.route('/add_product', methods=['GET', 'POST'])
+@login_required
+def add_product():
+    if request.method == 'POST':
+        name = request.form['name']
+        price = float(request.form['price'])
+        stock = int(request.form['stock'])
+
+        image_url = None
+        if 'image' in request.files and request.files['image'].filename != '':
+            file = request.files['image']
+            filename = f"{uuid.uuid4().hex}_{secure_filename(file.filename)}"
+            image_url = upload_to_s3(file, filename, folder="products")
+
+        product = Product(
+            name=name,
+            price=price,
+            stock=stock,
+            description=request.form.get('description'),
+            image_url=image_url
+        )
+        db.session.add(product)
+        db.session.commit()
+        flash('Produto adicionado com sucesso!', 'success')
+        return redirect(url_for('loja'))
+
+    return render_template('add_product.html')
+
+
+
+
 @app.route('/carrinho/adicionar/<int:product_id>', methods=['POST'])
 @login_required
 def adicionar_carrinho(product_id):
@@ -3102,10 +3116,32 @@ def confirmar_pagamento(payment_id):
 def payment_status(payment_id):
     payment = Payment.query.get_or_404(payment_id)
     result = request.args.get('status')
-    if result == 'success':
-        for sub in payment.subscriptions:
-            sub.active = True
-        db.session.commit()
+
+
+    # Se o pagamento ainda está pendente ou se o usuário voltou de um redirect
+    # de sucesso, consultamos a API do Mercado Pago para obter o status mais
+    # recente. Isso evita ficar dependente apenas do webhook que pode não ser
+    # entregue em ambientes de desenvolvimento.
+    if payment.status == PaymentStatus.PENDING and payment.transaction_id:
+        try:
+            resp = sdk.payment().get(payment.transaction_id)
+            if resp.get("status") == 200:
+                info = resp["response"]
+                status = info.get("status")
+                if status == "approved":
+                    payment.status = PaymentStatus.COMPLETED
+                    if payment.order_id and not DeliveryRequest.query.filter_by(order_id=payment.order_id).first():
+                        req = DeliveryRequest(order_id=payment.order_id,
+                                              requested_by_id=payment.user_id,
+                                              status='pendente')
+                        db.session.add(req)
+                elif status == "rejected":
+                    payment.status = PaymentStatus.FAILED
+                db.session.commit()
+        except Exception:
+            current_app.logger.exception("Erro verificando status do pagamento")
+
+
     return render_template('payment_status.html', payment=payment, result=result)
 
 
@@ -3158,3 +3194,15 @@ def teste_endereco():
         return redirect(url_for('teste_endereco'))
 
     return render_template('teste_endereco.html', endereco=endereco)
+
+
+
+
+
+
+
+
+
+
+
+

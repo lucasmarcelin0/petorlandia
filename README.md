@@ -33,3 +33,8 @@ payment widgets. Never commit your real keys into version control.
 
 After checkout, Mercado Pago will redirect the buyer back to `/payment_status/<id>`
 with a `status` parameter indicating `success` or `failure`.
+
+If for any reason the webhook notification is not delivered, the application now
+checks the payment status directly with Mercado Pago when the buyer visits the
+`/payment_status/<id>` page. When an approved payment is detected a delivery
+request is automatically created for the associated order.
