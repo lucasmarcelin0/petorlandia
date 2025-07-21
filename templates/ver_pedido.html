@@ -1,0 +1,26 @@
+{% extends "layout.html" %}
+
+{% block main %}
+<div class="container mt-4">
+    <h2>Detalhes do Pedido #{{ pedido.id }}</h2>
+    <p><strong>Data:</strong> {{ pedido.created_at.strftime('%d/%m/%Y %H:%M') }}</p>
+    <p><strong>Total:</strong> R$ {{ pedido.total_value() }}</p>
+    
+    <h4>Itens:</h4>
+    <ul>
+        {% for item in pedido.items %}
+        <li>{{ item.item_name }} — {{ item.quantity }}x — R$ {{ item.unit_price }}</li>
+        {% endfor %}
+    </ul>
+
+    {% if pedido.payment %}
+    <h4>Status do Pagamento:</h4>
+{% if pedido.payment %}
+    <p>Status do pagamento: {{ pedido.payment[0].status.value }}</p>
+{% else %}
+    <p>Este pedido ainda não possui pagamento.</p>
+{% endif %}
+
+    {% endif %}
+</div>
+{% endblock %}

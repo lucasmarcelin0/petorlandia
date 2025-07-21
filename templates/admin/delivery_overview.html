@@ -1,74 +1,60 @@
-{% extends 'layout.html' %}
+{% extends "layout.html" %}
 {% block main %}
-<div class="container py-4">
-  <h2 class="mb-4 fw-bold">📊 Monitoramento de Entregas</h2>
+<div class="container my-4">
 
-  <section class="mb-5">
-    <h4 class="mt-4">📦 Produtos</h4>
-    <ul class="list-group">
-      {% for p in products %}
+  <!-- ▸ Bloco de Produtos ------------------------------------------------ -->
+  <h4 class="mb-3">📦 Produtos em estoque</h4>
+  <ul class="list-group shadow-sm mb-5">
+    {% for p in products %}
       <li class="list-group-item d-flex justify-content-between align-items-center">
-        <span>{{ p.name }}</span>
-        <span class="badge bg-secondary">{{ p.stock }}</span>
+        {{ p.name }}
+        <span class="badge bg-secondary rounded-pill">{{ p.stock }}</span>
       </li>
-      {% else %}
-      <li class="list-group-item">Nenhum produto cadastrado.</li>
-      {% endfor %}
-    </ul>
-  </section>
+    {% else %}
+      <li class="list-group-item text-muted">Nenhum produto cadastrado.</li>
+    {% endfor %}
+  </ul>
 
-  <section class="mb-5">
-    <h4 class="mt-4 text-warning">🟡 Solicitações Abertas</h4>
-    <ul class="list-group">
-      {% for r in open_requests %}
-      <li class="list-group-item d-flex justify-content-between align-items-center flex-wrap">
-        <div>
-          <strong>Pedido #{{ r.order_id }}</strong>
-          <span class="badge bg-warning text-dark ms-2">Pendente</span><br>
-          <small class="text-muted">Solicitado em {{ r.requested_at.strftime('%d/%m/%Y %H:%M') }}</small>
-        </div>
-        <a href="{{ url_for('admin_delivery_detail', req_id=r.id) }}" class="btn btn-sm btn-outline-primary mt-2 mt-md-0">Ver detalhes</a>
-      </li>
-      {% else %}
-      <li class="list-group-item">Nenhuma solicitação.</li>
-      {% endfor %}
-    </ul>
-  </section>
+  {% macro lista(reqs, titulo, cls_badge, lbl_badge) %}
+  <h4 class="mt-4 {{ cls_badge }}">{{ titulo }}</h4>
+  <ul class="list-group shadow-sm mb-5">
+    {% for r in reqs %}
+      {% set ord = r.order %}
+      <li class="list-group-item d-flex justify-content-between flex-column flex-md-row align-items-start align-items-md-center">
+        <div class="me-3">
+          <div class="fw-semibold">
+            Pedido #{{ r.order_id }}
+            <span class="badge {{ cls_badge }} ms-2">{{ lbl_badge }}</span>
+          </div>
+          <div class="small text-muted">
+            <div>Cliente: {{ ord.user.name if ord and ord.user else "—" }}</div>
+            <div>Valor: R$ {{ ord.total_value()|round(2) if ord else "—" }}</div>
 
-  <section class="mb-5">
-    <h4 class="mt-4 text-info">🔵 Em Andamento</h4>
-    <ul class="list-group">
-      {% for r in in_progress %}
-      <li class="list-group-item d-flex justify-content-between align-items-center flex-wrap">
-        <div>
-          <strong>Pedido #{{ r.order_id }}</strong>
-          <span class="badge bg-info text-dark ms-2">Em andamento</span><br>
-          <small class="text-muted">Aceito por {{ r.worker.name if r.worker }} em {{ r.accepted_at.strftime('%d/%m/%Y %H:%M') if r.accepted_at }}</small>
+            {% if r.status == "pendente" %}
+              <div>Solicitado em {{ r.requested_at.strftime("%d/%m/%Y %H:%M") }}</div>
+            {% elif r.status == "em_andamento" %}
+              <div>Aceito por {{ r.worker.name if r.worker else "—" }} em {{ r.accepted_at.strftime("%d/%m/%Y %H:%M") if r.accepted_at else "—" }}</div>
+            {% elif r.status == "concluida" %}
+              <div>Concluído em {{ r.completed_at.strftime("%d/%m/%Y %H:%M") if r.completed_at else "—" }}</div>
+            {% endif %}
+          </div>
         </div>
-        <a href="{{ url_for('admin_delivery_detail', req_id=r.id) }}" class="btn btn-sm btn-outline-primary mt-2 mt-md-0">Ver detalhes</a>
-      </li>
-      {% else %}
-      <li class="list-group-item">Nenhum pedido em andamento.</li>
-      {% endfor %}
-    </ul>
-  </section>
 
-  <section class="mb-4">
-    <h4 class="mt-4 text-success">✅ Concluídos</h4>
-    <ul class="list-group">
-      {% for r in completed %}
-      <li class="list-group-item d-flex justify-content-between align-items-center flex-wrap">
-        <div>
-          <strong>Pedido #{{ r.order_id }}</strong>
-          <span class="badge bg-success ms-2">Concluído</span><br>
-          <small class="text-muted">Finalizado em {{ r.completed_at.strftime('%d/%m/%Y %H:%M') if r.completed_at }}</small>
-        </div>
-        <a href="{{ url_for('admin_delivery_detail', req_id=r.id) }}" class="btn btn-sm btn-outline-primary mt-2 mt-md-0">Ver detalhes</a>
+        <a href="{{ url_for('admin_delivery_detail', req_id=r.id) }}"
+           class="btn btn-sm btn-outline-primary mt-2 mt-md-0">
+           Ver detalhes
+        </a>
       </li>
-      {% else %}
-      <li class="list-group-item">Nenhum concluído.</li>
-      {% endfor %}
-    </ul>
-  </section>
+    {% else %}
+      <li class="list-group-item text-muted">Não há registros.</li>
+    {% endfor %}
+  </ul>
+  {% endmacro %}
+
+  <!-- ▸ Listas ----------------------------------------------------------- -->
+  {{ lista(open_requests, "🟡 Solicitações Abertas",   "bg-warning text-dark", "Pendente") }}
+  {{ lista(in_progress,   "🔵 Em Andamento",          "bg-info text-dark",   "Em andamento") }}
+  {{ lista(completed,     "✅ Concluídas",            "bg-success",          "Concluída") }}
+
 </div>
 {% endblock %}

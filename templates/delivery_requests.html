@@ -1,65 +1,103 @@
 {% extends "layout.html" %}
 {% block main %}
-<div class="container mt-5">
-  <div class="d-flex justify-content-between align-items-center mb-4">
-    <h2 class="fw-bold">📦 Solicitações de Entrega</h2>
-    {% if current_user.worker == 'delivery' %}
-    <span class="badge bg-primary">Modo entregador</span>
-    {% else %}
-    <span class="badge bg-success">Meus pedidos</span>
-    {% endif %}
-  </div>
+<div class="container my-4">
 
-  {% if requests %}
-  <div class="list-group shadow-sm">
-    {% for req in requests %}
-    <div class="list-group-item d-flex justify-content-between align-items-center flex-wrap py-3">
-      <div>
-        <h5 class="mb-1">Pedido #{{ req.order_id }}</h5>
-<small class="text-muted">Solicitado em {{ req.requested_at.strftime('%d/%m/%Y %H:%M') }}</small><br>
-        <span class="badge 
-          {% if req.status == 'pendente' %}bg-warning text-dark
-          {% elif req.status == 'em_andamento' %}bg-info
-          {% elif req.status == 'concluida' %}bg-success
-          {% elif req.status == 'cancelada' %}bg-danger
-          {% else %}bg-secondary
-          {% endif %}
-          mt-2">
-          {{ req.status|capitalize }}
-        </span>
-      </div>
-
-      <div class="mt-2 mt-md-0">
-        {% if current_user.worker == 'delivery' %}
-          {% if req.status == 'pendente' %}
-          <form action="{{ url_for('accept_delivery', req_id=req.id) }}" method="post" class="d-inline">
-            <button class="btn btn-sm btn-outline-primary">Aceitar</button>
-          </form>
-          {% elif req.status == 'em_andamento' and req.worker_id == current_user.id %}
-          <form action="{{ url_for('complete_delivery', req_id=req.id) }}" method="post" class="d-inline">
-            <button class="btn btn-sm btn-success">Concluir</button>
-          </form>
-          <form action="{{ url_for('cancel_delivery', req_id=req.id) }}" method="post" class="d-inline">
-            <button class="btn btn-sm btn-danger">Cancelar</button>
-          </form>
-          {% elif req.worker_id == current_user.id %}
-          <span class="text-muted">Entrega finalizada</span>
-          {% endif %}
-        {% else %}
-          {% if req.status not in ['concluida', 'cancelada'] %}
-          <form action="{{ url_for('buyer_cancel_delivery', req_id=req.id) }}" method="post">
-            <button class="btn btn-sm btn-outline-danger">Cancelar Pedido</button>
-          </form>
-          {% endif %}
-        {% endif %}
+  <!-- KPIs -->
+  <div class="row g-3 mb-4 text-center">
+    <div class="col-6 col-lg-2">
+      <div class="card shadow-sm border-0 h-100">
+        <div class="card-body">
+          <h5 class="card-title mb-0">{{ kpis.produtos }}</h5>
+          <small class="text-muted">Produtos</small>
+        </div>
       </div>
     </div>
+    <div class="col-6 col-lg-2">
+      <div class="card shadow-sm border-0 h-100">
+        <div class="card-body">
+          <h5 class="card-title mb-0">{{ kpis.pendentes }}</h5>
+          <small class="text-warning">Pendentes</small>
+        </div>
+      </div>
+    </div>
+    <div class="col-6 col-lg-2">
+      <div class="card shadow-sm border-0 h-100">
+        <div class="card-body">
+          <h5 class="card-title mb-0">{{ kpis.andamento }}</h5>
+          <small class="text-info">Em andamento</small>
+        </div>
+      </div>
+    </div>
+    <div class="col-6 col-lg-2">
+      <div class="card shadow-sm border-0 h-100">
+        <div class="card-body">
+          <h5 class="card-title mb-0">{{ kpis.concluidos }}</h5>
+          <small class="text-success">Concluídos</small>
+        </div>
+      </div>
+    </div>
+    <div class="col-12 col-lg-4">
+      <div class="card shadow-sm border-0 h-100">
+        <div class="card-body">
+          <h5 class="card-title mb-0">R$ {{ kpis.faturado|round(2) }}</h5>
+          <small class="text-muted">Faturado em entregas</small>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Produtos -->
+  <h4 class="mb-3">📦 Produtos em Estoque</h4>
+  <ul class="list-group shadow-sm mb-5">
+    {% for p in products %}
+      <li class="list-group-item d-flex justify-content-between align-items-center">
+        {{ p.name }}
+        <span class="badge bg-secondary rounded-pill">{{ p.stock }}</span>
+      </li>
+    {% else %}
+      <li class="list-group-item text-muted">Nenhum produto cadastrado.</li>
     {% endfor %}
-  </div>
-  {% else %}
-  <div class="alert alert-info text-center">
-    Nenhuma solicitação encontrada.
-  </div>
-  {% endif %}
+  </ul>
+
+  <!-- Helper macro para listar entregas -->
+  {% macro bloco_entregas(lista, titulo, cor_badge, label_badge) %}
+    <h4 class="mt-4 {{ cor_badge }}">{{ titulo }}</h4>
+    <ul class="list-group shadow-sm mb-5">
+      {% for r in lista %}
+        {% set pedido = r.order %}
+        {% set comprador = pedido.user if pedido else None %}
+        <li class="list-group-item d-flex justify-content-between flex-column flex-md-row align-items-start align-items-md-center">
+          <div class="me-3">
+            <div class="fw-semibold">
+              Pedido #{{ r.order_id }}
+              <span class="badge {{ cor_badge }} ms-2">{{ label_badge }}</span>
+            </div>
+            <div class="small text-muted">
+              <div>Cliente: {{ comprador.name if comprador else "—" }}</div>
+              <div>Valor: R$ {{ pedido.total_value()|round(2) if pedido else "—" }}</div>
+              {% if r.status == 'pendente' %}
+                <div>Solicitado em {{ r.requested_at.strftime('%d/%m/%Y %H:%M') }}</div>
+              {% elif r.status == 'em_andamento' %}
+                <div>Aceito por {{ r.worker.name if r.worker else "—" }} em {{ r.accepted_at.strftime('%d/%m/%Y %H:%M') if r.accepted_at else "—" }}</div>
+              {% elif r.status == 'concluida' %}
+                <div>Concluído em {{ r.completed_at.strftime('%d/%m/%Y %H:%M') if r.completed_at else "—" }}</div>
+              {% endif %}
+            </div>
+          </div>
+          <a class="btn btn-sm btn-outline-primary mt-2 mt-md-0"
+             href="{{ url_for('admin_delivery_detail', req_id=r.id) }}">
+             Ver detalhes
+          </a>
+        </li>
+      {% else %}
+        <li class="list-group-item text-muted">Não há registros.</li>
+      {% endfor %}
+    </ul>
+  {% endmacro %}
+
+  {{ bloco_entregas(open_requests,  "🟡 Solicitações Abertas",  "bg-warning text-dark", "Pendente") }}
+  {{ bloco_entregas(in_progress,    "🔵 Em Andamento",          "bg-info text-dark",   "Em andamento") }}
+  {{ bloco_entregas(completed,      "✅ Concluídos",            "bg-success",          "Concluído") }}
+
 </div>
 {% endblock %}

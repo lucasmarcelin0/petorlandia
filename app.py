@@ -2788,20 +2788,51 @@ with app.app_context():
     db.create_all()
 
 
-@app.route('/admin/delivery_overview')
+from sqlalchemy.orm import joinedload
+
+from sqlalchemy.orm import joinedload
+from sqlalchemy import func
+from flask import render_template, abort
+from flask_login import login_required, current_user
+# routes/admin.py  (exemplo)
+
+from sqlalchemy.orm import joinedload
+from flask import render_template, abort
+from flask_login import login_required, current_user
+
+@app.route("/admin/delivery_overview")
 @login_required
 def delivery_overview():
     if not _is_admin():
         abort(403)
-    products = Product.query.all()
-    open_requests = DeliveryRequest.query.filter_by(status='pendente').all()
-    in_progress = DeliveryRequest.query.filter_by(status='em_andamento').all()
-    completed = DeliveryRequest.query.filter_by(status='concluida').all()
-    return render_template('admin/delivery_overview.html',
-                           products=products,
-                           open_requests=open_requests,
-                           in_progress=in_progress,
-                           completed=completed)
+
+    # eager‑loading: DeliveryRequest ➜ Order ➜ User + Items + Product
+    base_q = (
+        DeliveryRequest.query
+        .options(
+            joinedload(DeliveryRequest.order)
+                .joinedload(Order.user),                       # comprador
+            joinedload(DeliveryRequest.order)
+                .joinedload(Order.items)
+                .joinedload(OrderItem.product)                 # itens + produtos
+        )
+        .order_by(DeliveryRequest.id.desc())
+    )
+
+    open_requests = base_q.filter_by(status="pendente").all()
+    in_progress   = base_q.filter_by(status="em_andamento").all()
+    completed     = base_q.filter_by(status="concluida").all()
+
+    # produtos para o bloco de estoque
+    products = Product.query.order_by(Product.name).all()
+
+    return render_template(
+        "admin/delivery_overview.html",
+        products      = products,
+        open_requests = open_requests,
+        in_progress   = in_progress,
+        completed     = completed,
+    )
 
 
 
@@ -3012,13 +3043,17 @@ def checkout():
     # 4) Preference payload sem informar payer
     preference_data = {
         "items": items,
-        # "payer" removido — o MP exibirá um campo para o usuário digitar o e‑mail
-        "notification_url": url_for("notificacoes_mercado_pago", _external=True),
         "external_reference": str(payment.id),
-        "payment_methods": {
-            "installments": 1
-        }
+        "notification_url": url_for("notificacoes_mercado_pago", _external=True),
+        "payment_methods": {"installments": 1},
+        "back_urls": {
+            "success": url_for("payment_status", payment_id=payment.id, _external=True),
+            "failure": url_for("payment_status", payment_id=payment.id, _external=True),
+            "pending": url_for("payment_status", payment_id=payment.id, _external=True),
+        },
+        "auto_return": "approved"
     }
+
 
 
     # 5) Log the exact JSON we’ll send
@@ -3149,7 +3184,23 @@ def notificacoes_mercado_pago():
 def payment_status(payment_id):
     pay    = Payment.query.get_or_404(payment_id)
     result = request.args.get("status", "pending")
+    
+    print("Usuário logado:", current_user.id)
+    print("Dono do pagamento:", pay.user_id)
+    print("Order ID:", pay.order_id)
+
     return render_template("payment_status.html", payment=pay, result=result)
+
+
+@app.route("/ver_pedido/<int:pedido_id>")
+@login_required
+def ver_pedido(pedido_id):
+    pedido = Order.query.get_or_404(pedido_id)
+
+    if pedido.user_id != current_user.id and current_user.role != 'admin':
+        abort(403)
+
+    return render_template("ver_pedido.html", pedido=pedido)
 
 
 #fim pagamento
