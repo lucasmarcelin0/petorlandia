@@ -37,6 +37,8 @@ import boto3
 from dotenv import load_dotenv
 import boto3
 import qrcode  # noqa: F401
+import importlib
+
 
 # ---------------------------------------------------------------------------
 # 🔧 Ambiente e caminhos
@@ -2855,7 +2857,6 @@ def _limpa_pendencia(payment):
     return payment
 
 
-<<<<<<< HEAD
 from flask import session, render_template
 from flask_login import login_required
 
@@ -2881,23 +2882,6 @@ def loja():
         form=form
     )
 
-=======
-# --------------------------------------------------------
-#  LOJA
-# --------------------------------------------------------
-@app.route("/loja")
-@login_required
-def loja():
-    pendente = _limpa_pendencia(
-        Payment.query.get(session.get("last_pending_payment"))
-    )
-    return render_template(
-        "loja.html",
-        products=Product.query.all(),
-        pagamento_pendente=pendente,
-        form=AddToCartForm()
-    )
->>>>>>> heroku/main
 
 
 # --------------------------------------------------------
@@ -2932,11 +2916,15 @@ def adicionar_carrinho(product_id):
 # --------------------------------------------------------
 #  VER CARRINHO
 # --------------------------------------------------------
-@app.route("/carrinho")
+from forms import CheckoutForm
+
+@app.route("/carrinho", methods=["GET", "POST"])
 @login_required
 def ver_carrinho():
-<<<<<<< HEAD
-    # Verifica se há um pagamento pendente
+    # 1) Cria o form
+    form = CheckoutForm()
+
+    # 2) Verifica se há um pagamento pendente
     pagamento_pendente = None
     payment_id = session.get('last_pending_payment')
     if payment_id:
@@ -2944,34 +2932,14 @@ def ver_carrinho():
         if pagamento and pagamento.status == PaymentStatus.PENDING:
             pagamento_pendente = pagamento
 
-    # Busca o pedido atual
+    # 3) Busca o pedido atual
     order_id = session.get('current_order')
     order = Order.query.get(order_id) if order_id else None
-=======
-    # Check for completed payments first
-    order_id = session.get("current_order")
-    if order_id:
-        order = Order.query.get(order_id)
-        if order and order.payment and any(p.status == PaymentStatus.COMPLETED for p in order.payment):
-            session.pop("current_order", None)
-            session.pop("last_pending_payment", None)
-            flash("Pedido pago! Aguarde a entrega.", "success")
-            return redirect(url_for("loja"))
 
-    # Existing pending check
-    pend = _limpa_pendencia(
-        Payment.query.get(session.get("last_pending_payment"))
-    )
-    if pend:
-        return redirect(pend.init_point)  # link oficial do MP
-        
-    order = Order.query.get(session.get("current_order") or 0)
-    return render_template("carrinho.html", order=order, form=CheckoutForm())  # Added form
->>>>>>> heroku/main
-
-    # Renderiza sempre o carrinho, passando o pagamento pendente (ou None)
+    # 4) Renderiza o carrinho passando o form
     return render_template(
         'carrinho.html',
+        form=form,
         order=order,
         pagamento_pendente=pagamento_pendente
     )
@@ -2995,114 +2963,92 @@ def ver_carrinho():
 #inicio pagamento
 
 
-import json, hmac, hashlib
-from flask import (
-    url_for, session, flash, redirect,
-    current_app, request, jsonify
-)
-from flask_login import login_required, current_user
-import mercadopago
-
-# Inicializa o SDK
-sdk = mercadopago.SDK(app.config['MERCADOPAGO_ACCESS_TOKEN'])
-
-# ——— 1) Inicia o checkout —————————————————————————————————————————————
-# Supondo que o SDK já esteja instanciado em `sdk`
-# e que você importou Payment, PaymentMethod, PaymentStatus, Order, etc.
-
 # --------------------------------------------------------
 #  CHECKOUT (CSRF PROTECTED)
 # --------------------------------------------------------
-from flask import request, redirect, url_for, flash, session
-from mercadopago import SDK
 import os
-from decimal import Decimal
+import json
+import logging
+
+from flask import current_app, redirect, url_for, flash, session, request
+from flask_login import login_required, current_user
+from mercadopago import SDK
+
+
+#  — initialize MP SDK once —
+sdk = SDK(os.getenv("MERCADOPAGO_ACCESS_TOKEN"))
+
 
 @app.route("/checkout", methods=["POST"])
 @login_required
 def checkout():
-<<<<<<< HEAD
-    # Força DEBUG no logger
+    # → Verbose logging for debugging
     current_app.logger.setLevel(logging.DEBUG)
 
-    # 1) Recupera o pedido
+    # 1) Load the Order
     order_id = session.get("current_order")
     order = Order.query.get(order_id) if order_id else None
     if not order or not order.items:
         flash("Seu carrinho está vazio.", "warning")
         return redirect(url_for("ver_carrinho"))
 
-    # 2) Cria o objeto Payment
+    # 2) Create a pending Payment record
     payment = Payment(
         user_id=current_user.id,
         order_id=order.id,
-        method=PaymentMethod.PIX,
+        method=PaymentMethod.PIX,       # placeholder, you can keep PIX or add a new enum for MP
         status=PaymentStatus.PENDING
     )
     db.session.add(payment)
     db.session.commit()
 
-    # 3) Monta os itens
+    # 3) Build MPL items list
     items = [{
-        "title": it.product.name,
-        "quantity": int(it.quantity),
-        "unit_price": float(it.product.price)
-    } for it in order.items]
+        "title": item.product.name,
+        "quantity": int(item.quantity),
+        "unit_price": float(item.product.price)
+    } for item in order.items]
 
-    # 4) URLs de retorno
-    back_urls = {
-        "success": url_for("payment_status",
-                           payment_id=payment.id,
-                           status="success",
-                           _external=True),
-        "failure": url_for("payment_status",
-                           payment_id=payment.id,
-                           status="failure",
-                           _external=True),
-        "pending": url_for("payment_status",
-                           payment_id=payment.id,
-                           status="pending",
-                           _external=True),
-    }
-
-    # 5) Payload de preferência
+    # 4) Preference payload WITHOUT back_urls/auto_return
     preference_data = {
         "items": items,
-        # **use o e‑mail do comprador sandbox aqui**:
-        "payer": {"email": "TESTUSER1687547425@sandbox.mercadopago.com"},
+        "payer": {"email": current_user.email},
         "notification_url": url_for("notificacoes_mercado_pago", _external=True),
         "external_reference": str(payment.id),
-        "back_urls": back_urls,
-        "auto_return": "approved",
         "payment_methods": {
-            "excluded_payment_types": [{"id": "credit_card"}],
-            "installments": 1
+            "installments": 1    # no exclusions → all methods enabled
         }
     }
 
-    # 6) DEBUG: imprime o JSON exato
+    # 5) Log the exact JSON we’ll send
     current_app.logger.debug(
         "MP Preference Payload:\n%s",
         json.dumps(preference_data, indent=2, ensure_ascii=False)
     )
 
-    # 7) Chama a API
-    resp = sdk.preference().create(preference_data)
-    if resp.get("status") != 201:
-        current_app.logger.error("MP error: %s", resp)
-        flash("Erro ao iniciar pagamento.", "danger")
+    # 6) Call Mercado Pago
+    try:
+        resp = sdk.preference().create(preference_data)
+    except Exception:
+        current_app.logger.exception("Erro de conexão com Mercado Pago")
+        flash("Não foi possível conectar ao Mercado Pago.", "danger")
         return redirect(url_for("ver_carrinho"))
 
+    # 7) Check for non‑201 status
+    status_code = resp.get("status")
+    if status_code != 201:
+        current_app.logger.error("MP error response (HTTP %s): %s", status_code, resp)
+        flash(f"Erro ao iniciar pagamento (MP {status_code}).", "danger")
+        return redirect(url_for("ver_carrinho"))
+
+    # 8) Save the preference ID and redirect
     pref = resp["response"]
     payment.transaction_id = str(pref["id"])
     db.session.commit()
 
-    # 8) Guarda na sessão e redireciona
     session["last_pending_payment"] = payment.id
-
-    # ATENÇÃO: para que o Mercado Pago mostre a tela de checkout,
-    # seu app precisa estar em um domínio público ou túnel (ngrok, localtunnel, Heroku).
     return redirect(pref["init_point"])
+
 
 
 
@@ -3169,155 +3115,6 @@ def notificacoes_mercado_pago():
                 return jsonify({"error":"internal failure"}), 500
 
     return jsonify({"status":"ignored"}), 200
-=======
-    # Configura o SDK com sua chave secreta
-    sdk = SDK(os.getenv("MP_ACCESS_TOKEN"))  # ex: "APP_USR-..."
-
-    # Busca o pedido atual na sessão
-    order_id = session.get("current_order")
-    if not order_id:
-        flash("Carrinho vazio ou pedido não encontrado.", "warning")
-        return redirect(url_for("ver_carrinho"))
-
-    order = Order.query.get(order_id)
-    if not order or not order.items:
-        flash("Pedido inválido ou sem itens.", "warning")
-        return redirect(url_for("ver_carrinho"))
-
-    # Garante que o valor seja decimal
-    total = Decimal(order.total_value())
-
-    # Gera URL de notificação
-    try:
-        notification_url = url_for("notificacoes_mercado_pago", _external=True, _scheme="https")
-    except Exception as e:
-        print(f"❌ Erro ao gerar URL de notificação: {e}")
-        notification_url = "https://www.petorlandia.com.br/notificacoes_mercado_pago"
-
-
-
-    # Gera URL de retorno
-    success_url = url_for("pagamento_sucesso", _external=True, _scheme="https")
-
-    # Dados da preferência
-    preference_data = {
-        "items": [{
-            "title": "Pedido PetOrlândia",
-            "quantity": 1,
-            "unit_price": float(total)
-        }],
-        "notification_url": notification_url,
-        "back_urls": {
-            "success": success_url,
-            "failure": success_url,
-            "pending": success_url
-        },
-        "auto_return": "approved"
-    }
-
-    print("📦 Enviando preferência para Mercado Pago:")
-    print(preference_data)
-
-    try:
-        response = sdk.preference().create(preference_data)
-        if response["status"] == 201:
-            init_point = response["response"]["init_point"]
-            print("✅ Checkout criado:", init_point)
-
-            # Salva ID do pagamento pendente para rastrear
-            payment_id = response["response"].get("id")
-            payment = Payment(order_id=order.id, status="pending", mercado_pago_id=payment_id)
-            db.session.add(payment)
-            db.session.commit()
-
-            session["last_pending_payment"] = payment.id
-            return redirect(init_point)
-        else:
-            print("❌ Falha MP:", response)
-            flash("Erro ao iniciar o pagamento. Tente novamente.", "danger")
-            return redirect(url_for("ver_carrinho"))
-    except Exception as e:
-        print("❌ Erro inesperado no checkout:", e)
-        flash("Erro interno ao criar pagamento.", "danger")
-        return redirect(url_for("ver_carrinho"))
-
-
-
-# --------------------------------------------------------
-#  RETORNOS MANUAIS (“Voltar”)
-# --------------------------------------------------------
-@app.route("/pagamento_sucesso")
-def pagamento_sucesso():
-    flash("Pagamento em processamento. Você receberá confirmação em instantes.", "info")
-    return redirect(url_for("ver_carrinho"))
-
-@app.route("/pagamento_erro")
-def pagamento_erro():
-    flash("Pagamento recusado ou houve um erro.", "danger")
-    return redirect(url_for("ver_carrinho"))
-
-@app.route("/pagamento_pendente")
-def pagamento_pendente():
-    flash("Pagamento pendente. Aguarde a confirmação.", "warning")
-    return redirect(url_for("ver_carrinho"))
-
-
-# --------------------------------------------------------
-#  WEBHOOK (SECURE)
-# --------------------------------------------------------
-@app.route("/notificacoes", methods=["POST"])
-def notificacoes_mercado_pago():
-    # Validate signature
-    secret = current_app.config.get("MERCADOPAGO_WEBHOOK_SECRET", "")
-    signature = request.headers.get("x-mp-signature", "")
-    data = request.get_json(silent=True) or {}
-
-    if secret:
-        base = f'id={data.get("data",{}).get("id")}&topic={data.get("type")}'
-        calc = hmac.new(secret.encode(), base.encode(), hashlib.sha256).hexdigest()
-        if not hmac.compare_digest(calc, signature):
-            current_app.logger.warning("Webhook com assinatura inválida")
-            return jsonify({"error": "invalid signature"}), 400
-
-    # Only process payment notifications
-    if data.get("type") != "payment":
-        return jsonify({"status": "ignorado"}), 200
-
-    # Get payment details
-    mp_id = data["data"]["id"]
-    try:
-        resp = mp_sdk().payment().get(mp_id)
-        if resp["status"] != 200:
-            current_app.logger.error("Falha MP: %s", resp)
-            return jsonify({"error": "payment lookup failed"}), 502
-        info = resp["response"]
-    except Exception as e:
-        current_app.logger.exception("Erro na API do Mercado Pago")
-        return jsonify({"error": "server error"}), 500
-
-    # Status mapping
-    STATUS_MAP = {
-        "approved": PaymentStatus.COMPLETED,
-        "rejected": PaymentStatus.FAILED,
-        "cancelled": PaymentStatus.FAILED,
-        "refunded": PaymentStatus.FAILED,
-        "charged_back": PaymentStatus.FAILED
-    }
-    
-    # Get payment record
-    pay_id = int(info["external_reference"])
-    payment = Payment.query.get(pay_id)
-    if not payment:
-        current_app.logger.error("Pagamento não encontrado: %s", pay_id)
-        return jsonify({"erro": "sem registro"}), 404
-
-    # Update payment status
-    status = info["status"]
-    new_status = STATUS_MAP.get(status, PaymentStatus.PENDING)
-    was_completed = (payment.status == PaymentStatus.COMPLETED)
-    payment.status = new_status
-    payment.transaction_id = mp_id
->>>>>>> heroku/main
 
     # Process new completed payments
     if new_status == PaymentStatus.COMPLETED and not was_completed:
@@ -3336,7 +3133,6 @@ def notificacoes_mercado_pago():
                     status="pendente"
                 ))
 
-<<<<<<< HEAD
 # ——— 3) Página de status final —————————————————————————————————————————
 @app.route("/payment_status/<int:payment_id>")
 @login_required
@@ -3366,22 +3162,6 @@ def payment_status(payment_id):
 
 
 
-=======
-    db.session.commit()
-    return jsonify({"status": status}), 200
-
-
-# --------------------------------------------------------
-#  PAYMENT STATUS VIEW
-# --------------------------------------------------------
-@app.route("/payment_status/<int:payment_id>")
-@login_required
-def payment_status(payment_id):
-    payment = Payment.query.get_or_404(payment_id)
-    if payment.user_id != current_user.id:
-        abort(403)
-    return render_template("payment_status.html", payment=payment)
->>>>>>> heroku/main
 
 
 
