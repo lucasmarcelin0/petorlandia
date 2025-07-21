@@ -1,37 +1,55 @@
 {% extends "layout.html" %}
+
 {% block main %}
-<div class="container mt-5 bg-light rounded shadow p-4">
-  <h2 class="mb-4 text-center">💳 Status do Pagamento</h2>
-
-  {% if result == 'success' %}
-    <div class="alert alert-success text-center">Pagamento realizado com sucesso!</div>
-  {% elif result == 'failure' %}
-    <div class="alert alert-danger text-center">O pagamento foi recusado.</div>
-  {% endif %}
-
-  <div class="text-center mb-4">
-    {% if payment.status.name == 'PENDING' %}
-      <span class="badge bg-warning text-dark fs-5"><i class="bi bi-hourglass-split"></i> Aguardando Pagamento</span>
-    {% elif payment.status.name == 'PAID' %}
-      <span class="badge bg-success fs-5"><i class="bi bi-check-circle"></i> Pagamento Confirmado</span>
-    {% else %}
-      <span class="badge bg-secondary fs-5">Status: {{ payment.status.name }}</span>
-    {% endif %}
-  </div>
-
-  <p><strong>Método:</strong> {{ payment.method.name }}</p>
-  <p><strong>ID da Transação:</strong> {{ payment.transaction_id }}</p>
-
-  {% if payment.status.name == 'PENDING' %}
-    <div class="text-center mt-4">
-      <h5>Escaneie o QR Code abaixo com seu app de banco:</h5>
-      <img src="https://api.qrserver.com/v1/create-qr-code/?data=pagamento_pix_{{ payment.transaction_id }}&size=200x200" alt="QR Code Pix" class="img-fluid my-3">
-      <p class="text-muted">Este QR Code é apenas uma simulação.</p>
+<div class="container my-5 d-flex justify-content-center">
+  <div class="col-lg-8 bg-white shadow rounded-4 p-5 border position-relative">
+    
+    <div class="text-center mb-4">
+      <h2 class="fw-bold mb-1">💳 Pagamento Recebido</h2>
+      <p class="text-muted">Acompanhe abaixo os detalhes da sua compra</p>
     </div>
-  {% endif %}
 
-  <div class="text-center mt-4">
-    <a href="{{ url_for('loja') }}" class="btn btn-outline-primary">Voltar para a loja</a>
+    {% if result == 'success' %}
+      <div class="alert alert-success text-center fs-5 mb-4">
+        <i class="bi bi-check-circle-fill me-2"></i> Pagamento realizado com sucesso!
+      </div>
+    {% elif result == 'failure' %}
+      <div class="alert alert-danger text-center fs-5 mb-4">
+        <i class="bi bi-x-circle-fill me-2"></i> O pagamento foi recusado.
+      </div>
+    {% endif %}
+
+    <div class="text-center mb-4">
+      {% if payment.status.name == 'PENDING' %}
+        <span class="badge bg-warning text-dark px-4 py-2 fs-6 rounded-pill">
+          <i class="bi bi-hourglass-split me-1"></i> Aguardando pagamento
+        </span>
+      {% elif payment.status.name == 'COMPLETED' %}
+        <span class="badge bg-success px-4 py-2 fs-6 rounded-pill">
+          <i class="bi bi-truck me-1"></i> Pedido confirmado e sendo preparado!
+        </span>
+      {% else %}
+        <span class="badge bg-secondary px-4 py-2 fs-6 rounded-pill">
+          Status: {{ payment.status.name }}
+        </span>
+      {% endif %}
+    </div>
+
+    <div class="mb-3">
+      <p class="mb-1"><strong>Método de Pagamento:</strong> {{ payment.method.name }}</p>
+      <p class="mb-1"><strong>ID da Transação:</strong> {{ payment.transaction_id }}</p>
+    </div>
+
+    <div class="d-flex justify-content-center gap-3 mt-5">
+      {% if payment.order_id %}
+        <a href="{{ url_for('ver_pedido', pedido_id=payment.order_id) }}" class="btn btn-primary">
+          <i class="bi bi-receipt me-1"></i> Acompanhar pedido
+        </a>
+      {% endif %}
+      <a href="{{ url_for('loja') }}" class="btn btn-outline-secondary">
+        <i class="bi bi-shop me-1"></i> Voltar para a loja
+      </a>
+    </div>
   </div>
 </div>
 {% endblock %}
