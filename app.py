@@ -2856,91 +2856,85 @@ def ver_carrinho():
 # --------------------------------------------------------
 #  CHECKOUT (CSRF PROTECTED)
 # --------------------------------------------------------
+from flask import request, redirect, url_for, flash, session
+from mercadopago import SDK
+import os
+from decimal import Decimal
+
 @app.route("/checkout", methods=["POST"])
 @login_required
 def checkout():
-    form = CheckoutForm()
-    if not form.validate_on_submit():
-        flash("Sessão expirada. Recarregue a página.", "error")
+    # Configura o SDK com sua chave secreta
+    sdk = SDK(os.getenv("MP_ACCESS_TOKEN"))  # ex: "APP_USR-..."
+
+    # Busca o pedido atual na sessão
+    order_id = session.get("current_order")
+    if not order_id:
+        flash("Carrinho vazio ou pedido não encontrado.", "warning")
         return redirect(url_for("ver_carrinho"))
 
-    # Validate order ownership
-    order = Order.query.get(session.get("current_order") or 0)
-    if not order or order.user_id != current_user.id or not order.items:
-        flash("Carrinho inválido", "error")
+    order = Order.query.get(order_id)
+    if not order or not order.items:
+        flash("Pedido inválido ou sem itens.", "warning")
         return redirect(url_for("ver_carrinho"))
 
-    # Filter items without unit_price
-    items_mp = []
-    for i in order.items:
-        if i.unit_price is None:
-            current_app.logger.warning("OrderItem %s sem unit_price – ignorado", i.id)
-            continue
-        items_mp.append({
-            "title":       i.item_name,
-            "quantity":    i.quantity,
-            "unit_price":  float(i.unit_price),
-            "currency_id": "BRL"
-        })
-    if not items_mp:
-        flash("Há itens sem preço válido. Corrija e tente novamente.", "danger")
-        return redirect(url_for("ver_carrinho"))
+    # Garante que o valor seja decimal
+    total = Decimal(order.total_value())
 
-    # Create Payment record
-    payment = Payment(
-        order_id = order.id,
-        user_id  = current_user.id,
-        method   = PaymentMethod.PIX,
-        status   = PaymentStatus.PENDING
-    )
-    db.session.add(payment)
-    db.session.commit()
-    session["last_pending_payment"] = payment.id
+    # Gera URL de notificação
+    try:
+        notification_url = url_for("notificacoes_mercado_pago", _external=True, _scheme="https")
+    except Exception as e:
+        print(f"❌ Erro ao gerar URL de notificação: {e}")
+        notification_url = "https://www.petorlandia.com.br/notificacoes_mercado_pago"
 
-    # Return URLs - force HTTPS for production
-    force_https = current_app.config.get("FORCE_HTTPS", False)
-    success_url = url_for("pagamento_sucesso",  _external=True, _scheme='https' if force_https else None)
-    failure_url = url_for("pagamento_erro",     _external=True, _scheme='https' if force_https else None)
-    pending_url = url_for("pagamento_pendente", _external=True, _scheme='https' if force_https else None)
 
-    # Build Mercado Pago preference
-    pref = {
-        "items": items_mp,
-        "payer": {"email": current_user.email},
-        "external_reference": str(payment.id),
-        "notification_url": url_for("notificacoes_mercado_pago", _external=True, _scheme='https' if force_https else None),
+
+    # Gera URL de retorno
+    success_url = url_for("pagamento_sucesso", _external=True, _scheme="https")
+
+    # Dados da preferência
+    preference_data = {
+        "items": [{
+            "title": "Pedido PetOrlândia",
+            "quantity": 1,
+            "unit_price": float(total)
+        }],
+        "notification_url": notification_url,
         "back_urls": {
             "success": success_url,
-            "failure": failure_url,
-            "pending": pending_url
+            "failure": success_url,
+            "pending": success_url
         },
-        "payment_methods": {
-            "default_payment_method_id": "pix",
-            "excluded_payment_types": [{"id": "credit_card"}],
-            "installments": 1
-        }
+        "auto_return": "approved"
     }
 
-    # Auto-return only for HTTPS
-    if success_url.startswith("https://"):
-        pref["auto_return"] = "approved"
+    print("📦 Enviando preferência para Mercado Pago:")
+    print(preference_data)
 
-    # Call Mercado Pago API
     try:
-        resp = mp_sdk().preference().create(pref)
-        if resp["status"] not in (200, 201):
-            current_app.logger.error("Falha MP: %s", resp)
-            flash("Erro ao iniciar pagamento.", "danger")
+        response = sdk.preference().create(preference_data)
+        if response["status"] == 201:
+            init_point = response["response"]["init_point"]
+            print("✅ Checkout criado:", init_point)
+
+            # Salva ID do pagamento pendente para rastrear
+            payment_id = response["response"].get("id")
+            payment = Payment(order_id=order.id, status="pending", mercado_pago_id=payment_id)
+            db.session.add(payment)
+            db.session.commit()
+
+            session["last_pending_payment"] = payment.id
+            return redirect(init_point)
+        else:
+            print("❌ Falha MP:", response)
+            flash("Erro ao iniciar o pagamento. Tente novamente.", "danger")
             return redirect(url_for("ver_carrinho"))
     except Exception as e:
-        current_app.logger.exception("Erro na API do Mercado Pago")
-        flash("Erro ao conectar com o gateway de pagamento.", "danger")
+        print("❌ Erro inesperado no checkout:", e)
+        flash("Erro interno ao criar pagamento.", "danger")
         return redirect(url_for("ver_carrinho"))
 
-    # Save and redirect to payment link
-    payment.init_point = resp["response"]["init_point"]
-    db.session.commit()
-    return redirect(payment.init_point)
 
 
 # --------------------------------------------------------
