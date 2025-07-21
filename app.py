@@ -61,12 +61,23 @@ os.makedirs(instance_path, exist_ok=True)
 
 # Cria o app Flask
 app = Flask(__name__, instance_path=instance_path)
+
+from datetime import datetime
+
+def datetime_brazil(value):
+    if isinstance(value, datetime):
+        return value.strftime('%d/%m/%Y %H:%M')
+    return value
+
+app.jinja_env.filters['datetime_brazil'] = datetime_brazil
+
+
 app.config.from_object(Config)
 
 app.config['FRONTEND_URL'] = os.environ.get('FRONTEND_URL', 'http://127.0.0.1:5000')
 
 
-print(f"FRONTEND_URL carregado: {app.config['FRONTEND_URL']}")
+
 
 
 # Inicializa as extensões
@@ -2770,6 +2781,38 @@ def loja():
     return render_template("loja.html", products=produtos, pagamento_pendente=pagamento_pendente, form=form)
 
 
+
+@app.route('/add_product', methods=['GET', 'POST'])
+@login_required
+def add_product():
+    if request.method == 'POST':
+        name = request.form['name']
+        price = float(request.form['price'])
+        stock = int(request.form['stock'])
+
+        image_url = None
+        if 'image' in request.files and request.files['image'].filename != '':
+            file = request.files['image']
+            filename = f"{uuid.uuid4().hex}_{secure_filename(file.filename)}"
+            image_url = upload_to_s3(file, filename, folder="products")
+
+        product = Product(
+            name=name,
+            price=price,
+            stock=stock,
+            description=request.form.get('description'),
+            image_url=image_url
+        )
+        db.session.add(product)
+        db.session.commit()
+        flash('Produto adicionado com sucesso!', 'success')
+        return redirect(url_for('loja'))
+
+    return render_template('add_product.html')
+
+
+
+
 @app.route('/carrinho/adicionar/<int:product_id>', methods=['POST'])
 @login_required
 def adicionar_carrinho(product_id):
@@ -3077,3 +3120,15 @@ def teste_endereco():
         return redirect(url_for('teste_endereco'))
 
     return render_template('teste_endereco.html', endereco=endereco)
+
+
+
+
+
+
+
+
+
+
+
+
