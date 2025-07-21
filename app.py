@@ -3061,23 +3061,37 @@ def checkout():
 
 
 # ——— 2) Webhook do Mercado Pago —————————————————————————————————————
+
 @app.route("/notificacoes", methods=["POST", "GET"])
 def notificacoes_mercado_pago():
     if request.method == "GET":
         mp_id = request.args.get("data.id")
         tipo = request.args.get("type")
-    else:
-        # Validação HMAC para POST
-        secret = current_app.config.get("MERCADOPAGO_WEBHOOK_SECRET", "")
-        signature = request.headers.get("X-MP-Signature", "")
-        if secret:
-            calc = hmac.new(secret.encode(), request.get_data(), hashlib.sha256).hexdigest()
-            if not hmac.compare_digest(calc, signature):
-                current_app.logger.warning("Invalid MP signature")
-                return jsonify({"error": "invalid signature"}), 400
-        data = request.get_json() or {}
-        mp_id = data.get("data", {}).get("id")
-        tipo = data.get("type")
+        current_app.logger.info("🔔 Webhook GET recebido: type=%s id=%s", tipo, mp_id)
+        return jsonify({"status": "ignored (GET)"}), 200
+
+    # POST — Notificação real
+    # 🔍 Log de headers e corpo cru
+    current_app.logger.debug("🔍 Headers: %s", dict(request.headers))
+    current_app.logger.debug("🔍 Body: %s", request.get_data(as_text=True))
+
+    # Validação HMAC
+    secret = current_app.config.get("MERCADOPAGO_WEBHOOK_SECRET", "")
+    signature = request.headers.get("X-MP-Signature", "")
+    if secret:
+        calc = hmac.new(secret.encode(), request.get_data(), hashlib.sha256).hexdigest()
+        if not hmac.compare_digest(calc, signature):
+            current_app.logger.warning("❌ Assinatura inválida")
+            return jsonify({"error": "invalid signature"}), 400
+
+    data = request.get_json() or {}
+    mp_id = data.get("data", {}).get("id")
+    tipo = data.get("type")
+
+    # Ignora notificações de ambiente de testes
+    if data.get("live_mode") is False:
+        current_app.logger.info("🔕 Ignorado: notificação em modo sandbox")
+        return jsonify({"status": "ignored (sandbox)"}), 200
 
     current_app.logger.info("🔔 MP Notification: type=%s id=%s", tipo, mp_id)
 
@@ -3085,18 +3099,25 @@ def notificacoes_mercado_pago():
         try:
             r = sdk.payment().get(mp_id)
             if r.get("status") != 200:
-                current_app.logger.error("MP API error: %s", r)
+                current_app.logger.error("❌ Erro na API do MP: %s", r)
                 return jsonify({"error": "api error"}), 500
 
             info = r["response"]
             status = info.get("status", "pending")
             ext_ref = info.get("external_reference")
-            pay = Payment.query.get(int(ext_ref)) if ext_ref else None
+
+            try:
+                pay = Payment.query.get(int(ext_ref)) if ext_ref else None
+            except (ValueError, TypeError):
+                current_app.logger.warning("⚠️ Referência externa inválida: %s", ext_ref)
+                pay = None
 
             if pay and pay.status != PaymentStatus.COMPLETED:
                 pay.transaction_id = str(info["id"])
+
                 if status == "approved":
                     pay.status = PaymentStatus.COMPLETED
+
                     if pay.order_id and not DeliveryRequest.query.filter_by(order_id=pay.order_id).first():
                         dr = DeliveryRequest(
                             order_id=pay.order_id,
@@ -3104,6 +3125,7 @@ def notificacoes_mercado_pago():
                             status='pendente'
                         )
                         db.session.add(dr)
+
                 elif status == "rejected":
                     pay.status = PaymentStatus.FAILED
                 else:
@@ -3113,11 +3135,12 @@ def notificacoes_mercado_pago():
 
             return jsonify({"status": "updated"}), 200
 
-        except Exception:
-            current_app.logger.exception("Erro ao processar webhook MP")
-            return jsonify({"error": "internal failure"}), 500
+        except Exception as e:
+            current_app.logger.exception(f"Erro ao processar webhook MP: {e}")
+            return jsonify({"error": "internal failure", "message": str(e)}), 500
 
     return jsonify({"status": "ignored"}), 200
+
 
 
 # ——— 3) Página de status final —————————————————————————————————————————
