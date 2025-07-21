@@ -136,6 +136,7 @@ try:
         OrderItemForm,
         DeliveryRequestForm,
         AddToCartForm,
+        SubscribePlanForm,
     )
 except ImportError:
     from .forms import (
@@ -149,6 +150,7 @@ except ImportError:
         OrderItemForm,
         DeliveryRequestForm,
         AddToCartForm,
+        SubscribePlanForm,
     )
 
 try:
@@ -856,23 +858,94 @@ def termo_transferencia(animal_id, user_id):
 @login_required
 def planosaude_animal(animal_id):
     animal = Animal.query.get_or_404(animal_id)
-
     if animal.owner != current_user:
         flash("Você não tem permissão para acessar esse animal.", "danger")
         return redirect(url_for('profile'))
 
-    # Aqui, você pode carregar um formulário ou exibir informações
-    return render_template('planosaude_animal.html', animal=animal)
+    form = SubscribePlanForm()
+    form.plan_id.choices = [(p.id, f"{p.name} - R$ {p.price:.2f}") for p in HealthPlan.query.all()]
+    active_sub = HealthSubscription.query.filter_by(animal_id=animal.id, active=True).first()
+
+    return render_template('planosaude_animal.html', animal=animal, form=form, subscription=active_sub)
+
+
+@app.route('/animal/<int:animal_id>/contratar_plano', methods=['POST'])
+@login_required
+def contratar_plano(animal_id):
+    animal = Animal.query.get_or_404(animal_id)
+    if animal.owner != current_user:
+        abort(403)
+
+    form = SubscribePlanForm()
+    form.plan_id.choices = [(p.id, p.name) for p in HealthPlan.query.all()]
+    if not form.validate_on_submit():
+        flash('Seleção inválida de plano.', 'danger')
+        return redirect(url_for('planosaude_animal', animal_id=animal.id))
+
+    plan = HealthPlan.query.get_or_404(form.plan_id.data)
+
+    order = Order(user_id=current_user.id)
+    db.session.add(order)
+    db.session.commit()
+
+    item = OrderItem(order_id=order.id, item_name=f'Plano {plan.name}', quantity=1)
+    db.session.add(item)
+    db.session.commit()
+
+    payment = Payment(user_id=current_user.id, order_id=order.id,
+                      method=PaymentMethod.PIX, status=PaymentStatus.PENDING)
+    db.session.add(payment)
+    db.session.commit()
+
+    sub = HealthSubscription(animal_id=animal.id, plan_id=plan.id, user_id=current_user.id,
+                             payment_id=payment.id, active=False)
+    db.session.add(sub)
+    db.session.commit()
+
+    preference_data = {
+        "items": [{"title": f"Plano {plan.name}", "quantity": 1, "unit_price": float(plan.price)}],
+        "payment_methods": {"excluded_payment_types": [{"id": "credit_card"}], "installments": 1},
+        "payer": {"email": current_user.email},
+        "notification_url": url_for("notificacoes_mercado_pago", _external=True),
+        "external_reference": str(payment.id),
+        "back_urls": {
+            "success": url_for("payment_status", payment_id=payment.id, status='success', _external=True),
+            "failure": url_for("payment_status", payment_id=payment.id, status='failure', _external=True),
+            "pending": url_for("payment_status", payment_id=payment.id, status='pending', _external=True)
+        },
+        "auto_return": "approved"
+    }
+
+    try:
+        pref_resp = sdk.preference().create(preference_data)
+    except Exception:
+        current_app.logger.exception('Erro comunicando com Mercado Pago')
+        flash('Não foi possível iniciar o pagamento.', 'danger')
+        return redirect(url_for('planosaude_animal', animal_id=animal.id))
+
+    if pref_resp.get('status') != 201:
+        current_app.logger.error('Resposta inesperada MP: %s', pref_resp)
+        flash('Erro ao iniciar pagamento.', 'danger')
+        return redirect(url_for('planosaude_animal', animal_id=animal.id))
+
+    preference = pref_resp['response']
+    payment.transaction_id = str(preference['id'])
+    db.session.commit()
+
+    session['last_pending_payment'] = payment.id
+    return redirect(preference['init_point'])
 
 
 @app.route('/plano-saude')
 @login_required
 def plano_saude_overview():
     animais_do_usuario = Animal.query.filter_by(user_id=current_user.id).filter(Animal.removido_em == None).all()
+    subs = {s.animal_id: s for s in HealthSubscription.query.filter_by(user_id=current_user.id, active=True).all()}
     return render_template(
         'plano_saude_overview.html',
         animais=animais_do_usuario,
-        user=current_user  # ← esta linha resolve o erro
+        user=current_user,
+        subscriptions=subs
     )
 
 
@@ -2943,7 +3016,7 @@ def criar_pagamento_pix():
 
 from flask import request, jsonify
 from datetime import datetime
-from models import Payment, PaymentMethod, PaymentStatus, DeliveryRequest
+from models import Payment, PaymentMethod, PaymentStatus, DeliveryRequest, HealthSubscription
 
 @app.route("/notificacoes", methods=["POST"])
 def notificacoes_mercado_pago():
@@ -2982,6 +3055,8 @@ def notificacoes_mercado_pago():
                                                   requested_by_id=pagamento.user_id,
                                                   status='pendente')
                             db.session.add(req)
+                        for sub in pagamento.subscriptions:
+                            sub.active = True
                     elif status == "rejected":
                         pagamento.status = PaymentStatus.FAILED
                     else:
@@ -3006,6 +3081,8 @@ def simular_pagamento(payment_id):
         abort(403)
 
     payment.status = PaymentStatus.COMPLETED
+    for sub in payment.subscriptions:
+        sub.active = True
     db.session.commit()
 
     # Limpa da sessão
@@ -3040,6 +3117,7 @@ def payment_status(payment_id):
     payment = Payment.query.get_or_404(payment_id)
     result = request.args.get('status')
 
+
     # Se o pagamento ainda está pendente ou se o usuário voltou de um redirect
     # de sucesso, consultamos a API do Mercado Pago para obter o status mais
     # recente. Isso evita ficar dependente apenas do webhook que pode não ser
@@ -3062,6 +3140,7 @@ def payment_status(payment_id):
                 db.session.commit()
         except Exception:
             current_app.logger.exception("Erro verificando status do pagamento")
+
 
     return render_template('payment_status.html', payment=payment, result=result)
 
