@@ -585,3 +585,35 @@ class Payment(db.Model):
     user = db.relationship('User', backref='payments')
 
     order = db.relationship('Order', backref='payment', uselist=False)
+
+
+# -------------------------- Planos de Saúde ---------------------------
+
+class HealthPlan(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(50), unique=True, nullable=False)
+    description = db.Column(db.Text)
+    price = db.Column(db.Float, nullable=False)
+
+    def __repr__(self):
+        return f"{self.name} (R$ {self.price})"
+
+
+class HealthSubscription(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    animal_id = db.Column(db.Integer, db.ForeignKey('animal.id'), nullable=False)
+    plan_id = db.Column(db.Integer, db.ForeignKey('health_plan.id'), nullable=False)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    payment_id = db.Column(db.Integer, db.ForeignKey('payment.id'))
+
+    active = db.Column(db.Boolean, default=False)
+    start_date = db.Column(db.DateTime, default=datetime.utcnow)
+    end_date = db.Column(db.DateTime, nullable=True)
+
+    animal = db.relationship('Animal', backref=db.backref('health_subscriptions', cascade='all, delete-orphan'))
+    plan = db.relationship('HealthPlan', backref='subscriptions')
+    user = db.relationship('User', backref='health_subscriptions')
+    payment = db.relationship('Payment', backref='subscriptions')
+
+    def __repr__(self):
+        return f"{self.animal.name} – {self.plan.name}"

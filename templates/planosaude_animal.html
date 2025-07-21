@@ -12,44 +12,20 @@
         </div>
     {% endif %}
 
+    {% if subscription %}
+        <div class="alert alert-success">Plano atual: {{ subscription.plan.name }} – ativo</div>
+    {% endif %}
+
     <div class="card shadow-sm rounded-4 mb-5">
         <div class="card-body">
-            <h5 class="card-title">Por que contratar um Plano de Saúde Pet?</h5>
-            <p class="card-text">
-                Assim como os humanos, os animais também merecem acesso a cuidados veterinários de qualidade. Um plano de
-                saúde garante atendimento regular, prevenção de doenças, acompanhamento especializado e economia com
-                despesas inesperadas.
-            </p>
-
-            <h5 class="mt-4">Benefícios do Plano PetOrlândia</h5>
-            <div class="row row-cols-1 row-cols-md-2 g-3 mb-4">
-                <div class="col"><span>🩺 Consultas veterinárias ilimitadas em clínicas credenciadas</span></div>
-                <div class="col"><span>💉 Vacinação anual com calendário controlado</span></div>
-                <div class="col"><span>💊 Descontos em medicamentos e exames laboratoriais</span></div>
-                <div class="col"><span>📋 Check-up completo anual</span></div>
-                <div class="col"><span>🚑 Serviços de emergência 24h</span></div>
-                <div class="col"><span>🏠 Atendimento domiciliar opcional</span></div>
-                <div class="col"><span>🔪 Procedimentos cirúrgicos com cobertura parcial</span></div>
-                <div class="col"><span>🦷 Plano odontológico animal incluso</span></div>
-                <div class="col"><span>📱 Acompanhamento por aplicativo (vacinas, dieta, peso, consultas)</span></div>
-                <div class="col"><span>🛡️ Seguro em caso de perda ou roubo (opcional)</span></div>
-            </div>
-
-            <h5 class="mt-4">Requisitos básicos</h5>
-            <ul>
-                <li>📎 O animal deve estar identificado (microchip ou coleira com nome)</li>
-                <li>💉 Comprovação de vacinações em dia</li>
-                <li>♻️ Status de castração registrado</li>
-            </ul>
-
-            <h5 class="mt-4">Como funciona a contratação?</h5>
-            <p class="card-text">
-                Você deve preencher um formulário com as informações do seu animal, incluindo estado de saúde atual,
-                castração, microchip, entre outros. Nossa equipe avaliará os dados e entrará em contato para concluir a
-                contratação.
-            </p>
-
-            <a href="#" class="btn btn-success mt-3 rounded-pill disabled">📄 Solicitar Plano (em breve)</a>
+            <form method="post" action="{{ url_for('contratar_plano', animal_id=animal.id) }}">
+                {{ form.hidden_tag() }}
+                <div class="mb-3">
+                    {{ form.plan_id.label(class="form-label") }}
+                    {{ form.plan_id(class="form-select") }}
+                </div>
+                {{ form.submit(class="btn btn-success rounded-pill") }}
+            </form>
         </div>
     </div>
 </div>
