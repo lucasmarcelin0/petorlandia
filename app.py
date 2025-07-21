@@ -203,17 +203,6 @@ except ImportError:
 
 from flask_mail import Mail, Message as MailMessage
 
-from flask_mail import Mail
-app.config['MAIL_SERVER'] = 'smtp.gmail.com'
-app.config['MAIL_PORT'] = 587
-app.config['MAIL_USE_TLS'] = True
-app.config['MAIL_USE_SSL'] = False
-app.config['MAIL_USERNAME'] = 'gpt.assistente.orlandia@gmail.com'
-app.config['MAIL_PASSWORD'] = 'SENHA_DE_APP'  # ← Cole a senha de aplicativo aqui
-app.config['MAIL_DEFAULT_SENDER'] = ('PetOrlândia', 'gpt.assistente.orlandia@gmail.com')
-
-mail = Mail(app)
-
 
 
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
@@ -223,17 +212,6 @@ import os
 
 instance_path = os.path.join(os.getcwd(), 'instance')
 os.makedirs(instance_path, exist_ok=True)
-
-
-
-
-app.config.from_object(Config)
-
- 
-migrate = Migrate(app, db)
-
-mail = Mail(app)  # ✅ ESSA LINHA ESTAVA FALTANDO
-login = LoginManager(app)
 
 
 @login.user_loader
@@ -250,8 +228,6 @@ Session(app)
 
 
 # Após db.init_app(app)
-migrate = Migrate(app, db)
-
 
 app.config['SERVER_NAME'] = 'orange-space-pancake-j9456jjjv9vcqrxx-5000.app.github.dev'
 
@@ -259,11 +235,6 @@ app.config['SERVER_NAME'] = 'orange-space-pancake-j9456jjjv9vcqrxx-5000.app.gith
 with app.app_context():
     init_admin(app)      # ⬅️ Primeiro registra o admin e os modelos
   #  db.create_all()      # ⬅️ Só depois chama o create_all()
-
-
-@login.user_loader
-def load_user(user_id):
-    return User.query.get(int(user_id))
 
 
 from itsdangerous import URLSafeTimedSerializer
@@ -280,7 +251,7 @@ def reset_password_request():
         user = User.query.filter_by(email=form.email.data).first()
         if user:
             token = s.dumps(user.email, salt='password-reset-salt')
-            base_url = os.environ.get('FRONTEND_URL', 'http://127.0.0.1:5000')
+            base_url = app.config.get('FRONTEND_URL', request.url_root.rstrip('/'))
             link = f"{base_url}{url_for('reset_password', token=token)}"
 
             msg = MailMessage(
