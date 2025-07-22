@@ -3146,18 +3146,17 @@ def verify_mp_signature(req, secret: str) -> bool:
         return False
 
     ts, sig_mp = m.groups()
-    body_txt = req.get_data(as_text=True)          # texto exato que veio
+    raw_body   = req.get_data()           # ⚠️ bytes!
 
-    # ▶️ mensagem que o Mercado Pago assinou
-    message = f"{ts}.{body_txt}" if ts else body_txt
-    calc = hmac.new(secret.strip().encode(),
-                    message.encode("utf‑8"),
-                    hashlib.sha256).hexdigest()
+    message = ts.encode() + b"." + raw_body if ts else raw_body
+    calc = hmac.new(
+        secret.strip().encode(),          # bytes
+        message,
+        hashlib.sha256
+    ).hexdigest()
 
     if not hmac.compare_digest(calc, sig_mp):
-        current_app.logger.warning(
-            "Invalid signature: calc=%s recv=%s", calc, sig_mp
-        )
+        current_app.logger.warning("Invalid signature: calc=%s recv=%s", calc, sig_mp)
         return False
     return True
 
