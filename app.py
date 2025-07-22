@@ -3306,47 +3306,36 @@ def notificacoes_mercado_pago():
     return jsonify(status="updated"), 200
 
 
-    from apscheduler.schedulers.background import BackgroundScheduler
-    scheduler = BackgroundScheduler()
+# ------------------------------------------------------------------
+# scheduler.py  (ou no final de app.py, logo após criar app/sdk/db)
+# ------------------------------------------------------------------
+from apscheduler.schedulers.background import BackgroundScheduler
+scheduler = BackgroundScheduler()
 
-    @scheduler.scheduled_job("interval", seconds=60)
-    def requery_pending():
-        with app.app_context():
-            pend = PendingWebhook.query.limit(50).all()
-            for p in pend:
-                resp = sdk.payment().get(p.mp_id)
-                if resp.get("status") == 200:
-                    process_payment(resp["response"])         # mesma lógica da view
+def requery_pending():
+    with app.app_context():
+        pend = PendingWebhook.query.limit(50).all()
+        for p in pend:
+            resp = sdk.payment().get(p.mp_id)
+            if resp.get("status") == 200:
+                process_payment(resp["response"])    # mesma lógica da view
+                db.session.delete(p)
+            else:
+                p.attempts += 1
+                if p.attempts > 5:                   # desiste após 5 tentativas
                     db.session.delete(p)
-                else:
-                    p.attempts += 1
-                    if p.attempts > 5:                        # desistir após 5 tent.
-                        db.session.delete(p)
-            db.session.commit()
+        db.session.commit()
 
-    scheduler.start()
+# roda a cada 60 s
+scheduler.add_job(requery_pending, trigger="interval", seconds=60)
+scheduler.start()
 
 
 
-    def requery_payments():
-        with app.app_context():
-            pendentes = PendingWebhook.query.limit(20).all()
-            for p in pendentes:
-                resp = sdk.payment().get(p.mp_id)
-                if resp.get("status") == 200:
-                    process_payment(resp["response"])   # sua lógica
-                    db.session.delete(p)
-                else:
-                    p.attempts += 1
-                    if p.attempts > 5:                  # desiste após 5 tentativas
-                        db.session.delete(p)
-            db.session.commit()
 
-    scheduler = BackgroundScheduler()
-    scheduler.add_job(requery_payments, "interval", seconds=60)
-    scheduler.start()
-
-
+@app.route("/pagamento/sucesso")
+def pagamento_sucesso():
+    return render_template("sucesso.html")
 
 
 
