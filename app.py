@@ -2777,27 +2777,25 @@ from sqlalchemy.orm import joinedload
 @login_required
 def delivery_detail(req_id):
     """
-    Detalhe da entrega:
-      • admin      → vê tudo
-      • entregador → vê apenas se for o responsável
+    Detalhe da entrega.
+      • admin           → tudo
+      • entregador      → se for o responsável
+      • comprador (dono do pedido) → sempre
     """
     req = (DeliveryRequest.query
            .options(
-               joinedload(DeliveryRequest.pickup)            # carrega o PickupLocation
-                   .joinedload(PickupLocation.endereco),     # e o Endereco
-               joinedload(DeliveryRequest.order)
-                   .joinedload(Order.user),
+               joinedload(DeliveryRequest.pickup).joinedload(PickupLocation.endereco),
+               joinedload(DeliveryRequest.order).joinedload(Order.user),
                joinedload(DeliveryRequest.worker)
            )
            .get_or_404(req_id))
 
-    # ------------------ dados auxiliares ------------------
     order  = req.order
     buyer  = order.user
     items  = order.items
     total  = sum(i.quantity * i.product.price for i in items if i.product)
 
-    # ------------------ controle de acesso ----------------
+    # ----------- controle de acesso -----------
     if _is_admin():
         role = "admin"
 
@@ -2806,10 +2804,13 @@ def delivery_detail(req_id):
             abort(403)
         role = "worker"
 
+    elif current_user.id == buyer.id:          # 👈 novo: comprador
+        role = "buyer"
+
     else:
         abort(403)
 
-    # ------------------ render ----------------------------
+    # ----------- render -----------------------
     return render_template(
         "delivery_detail.html",
         req=req,
@@ -2818,8 +2819,9 @@ def delivery_detail(req_id):
         buyer=buyer,
         delivery_worker=req.worker,
         total=total,
-        role=role               # template usa para mostrar/ocultar
+        role=role
     )
+
 
 
 
@@ -3138,50 +3140,33 @@ from flask import current_app as _app
 _SIG_RE = re.compile(r"(?:ts=(\d+),)?v1=([a-f0-9]{64})")
 
 def verify_mp_signature(req, secret: str) -> bool:
-    """
-    Valida X‑Signature do Mercado Pago.
-    Aceita:
-      • Webhook v1 .............  v1=<hash>
-      • Feed v2 (Checkout Pro) .. ts=<epoch>,v1=<hash>
-    """
-    if not secret:                                     # ambiente dev
-        return True                                    # → bypass
+    if not secret:
+        return True            # ambiente dev → bypass
 
     raw_header = req.headers.get("X-Signature", "")
     m = _SIG_RE.search(raw_header)
     if not m:
-        _app.logger.warning("X‑Signature ausente ou mal‑formada: %s", raw_header)
+        _app.logger.warning("X‑Signature mal‑formada: %s", raw_header)
         return False
 
     ts, sig_header = m.groups()
+    raw_body = req.get_data()           # bytes, sem decode
 
-    # ---------- string‑base p/ HMAC ---------------------------------
-    if ts:                                             # Feed v2
-        base = ts + req.path
-        if req.args:
-            base += "?" + urllib.parse.urlencode(sorted(req.args.items()))
-        base += req.get_data(as_text=True)
-    else:                                              # Webhook v1
-        base = req.get_data(as_text=True)
+    # ----- NOVO cálculo --------------------------------------------------
+    if ts:                              # Feed v2
+        msg = ts.encode() + raw_body    # ts + body (SÓ isso)
+    else:                               # Webhook v1
+        msg = raw_body                  # body puro
 
-    calc = hmac.new(secret.encode(), base.encode(), hashlib.sha256).hexdigest()
+    calc = hmac.new(secret.encode(), msg, hashlib.sha256).hexdigest()
+    # ---------------------------------------------------------------------
 
-    # ---------- LOG que vai no chamado ------------------------------
-    _app.logger.debug("MP Webhook body: %s", base[:800])               # corta se quiser
-    _app.logger.debug("MP X‑Signature header: %s", raw_header)
-    _app.logger.debug("MP Calculated HMAC: %s", calc)
+    _app.logger.debug("MP body bytes  : %s", raw_body[:300])
+    _app.logger.debug("MP X‑Signature : %s", raw_header)
+    _app.logger.debug("MP Calculated  : %s", calc)
 
     return hmac.compare_digest(calc, sig_header)
 
-
-def parse_mp_notification(req):
-    """Extrai (tipo, id) da notificação MP."""
-    if req.args.get("topic") == "payment" and req.args.get("id"):
-        return "payment", req.args["id"]
-    data = req.get_json(silent=True) or {}
-    if data.get("type") == "payment":
-        return "payment", data.get("data", {}).get("id")
-    return None, None
 
 
 @app.route("/notificacoes", methods=["POST", "GET"])
@@ -3249,6 +3234,69 @@ def notificacoes_mercado_pago():
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 # ——— 3) Página de status final —————————————————————————————————————————
 # --------------------------------------------------------
 # 3)  /payment_status/<payment_id>   – página pós‑pagamento
@@ -3280,47 +3328,32 @@ def _refresh_mp_status(payment: Payment) -> None:
         payment.status = new_status
         db.session.commit()
 
+
 @app.route("/payment_status/<int:payment_id>")
 @login_required
-def payment_status(payment_id: int):
-    payment: Payment = Payment.query.get_or_404(payment_id)
-    if payment.user_id != current_user.id and current_user.role != "admin":
-        abort(403)
+def payment_status(payment_id):
+    payment = Payment.query.get_or_404(payment_id)
+    result  = request.args.get("status") or payment.status.name.lower()
 
-    _refresh_mp_status(payment)
+    delivery_req = (DeliveryRequest.query
+                    .filter_by(order_id=payment.order_id)
+                    .first())
 
-    # resultado vindo por querystring (?status=success|failure|pending)
-    result = (request.args.get("status") or payment.status.name).lower()
+    # endpoint a usar
+    endpoint = "delivery_detail"  # agora é um só
+
+    # redireciona direto se já aprovado
+    if delivery_req and result in {"success", "completed", "approved", "approved"}:
+        return redirect(url_for(endpoint, req_id=delivery_req.id))
 
     return render_template(
         "payment_status.html",
-        payment=payment,
-        result=result,
+        payment      = payment,
+        result       = result,
+        req_id       = delivery_req.id if delivery_req else None,
+        req_endpoint = endpoint
     )
 
-
-
-
-
-@app.route("/ver_pedido/<int:pedido_id>")
-@login_required
-def ver_pedido(pedido_id: int):
-    pedido = Order.query.get_or_404(pedido_id)
-
-    # autorizado se: dono do pedido  OU  admin  OU  entregador alocado
-    deliverer = (
-        DeliveryRequest.query
-        .filter_by(order_id=pedido.id, worker_id=current_user.id)
-        .first()
-    )
-    if not (
-        current_user.role == "admin"
-        or pedido.user_id == current_user.id
-        or deliverer
-    ):
-        abort(403)
-
-    return render_template("ver_pedido.html", pedido=pedido)
 
 
 #fim pagamento
