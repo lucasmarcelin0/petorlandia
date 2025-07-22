@@ -682,3 +682,29 @@ class HealthSubscription(db.Model):
     def __repr__(self):
         return f"{self.animal.name} – {self.plan.name}"
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+#testing sandbox
+class PendingWebhook(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    mp_id = db.Column(db.BigInteger, unique=True)
+    attempts = db.Column(db.Integer, default=0)
