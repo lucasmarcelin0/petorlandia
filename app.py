@@ -3132,45 +3132,35 @@ import hmac
 import hashlib
 from flask import current_app, request
 
-_SIG_RE = re.compile(r"(?:ts=(\d+),)?v1=([a-f0-9]{64})")
+_SIG_RE = re.compile(r"(?i)(?:ts=(\d+),\s*)?v1=([a-f0-9]{64})")
 
 def verify_mp_signature(req, secret: str) -> bool:
     if not secret:
-        current_app.logger.warning("No webhook secret provided, bypassing signature verification")
-        return True  # Bypass em ambiente de desenvolvimento
+        current_app.logger.warning("Webhook sem chave – bypass")
+        return True
 
     raw_header = req.headers.get("X-Signature", "")
-    match = _SIG_RE.search(raw_header)
-    if not match:
-        current_app.logger.warning("Invalid X-Signature format: %s", raw_header)
+    m = _SIG_RE.search(raw_header)
+    if not m:
+        current_app.logger.warning("X‑Signature mal‑formado: %s", raw_header)
         return False
 
-    ts, sig_header = match.groups()
-    raw_body = req.get_data()  # Corpo em bytes, sem modificação
+    ts, sig_mp = m.groups()
+    body_txt = req.get_data(as_text=True)          # texto exato que veio
 
-    # Log para depuração
-    current_app.logger.debug("MP body bytes: %s", raw_body[:300])
-    current_app.logger.debug("MP X-Signature: %s", raw_header)
+    # ▶️ mensagem que o Mercado Pago assinou
+    message = f"{ts}.{body_txt}" if ts else body_txt
+    calc = hmac.new(secret.strip().encode(),
+                    message.encode("utf‑8"),
+                    hashlib.sha256).hexdigest()
 
-    # Cálculo do HMAC
-    if ts:  # Feed v2
-        message = ts.encode('utf-8') + raw_body
-    else:  # Webhook v1
-        message = raw_body
-
-    calculated = hmac.new(
-        secret.encode('utf-8'),
-        message,
-        hashlib.sha256
-    ).hexdigest()
-
-    current_app.logger.debug("MP Calculated: %s", calculated)
-
-    if not hmac.compare_digest(calculated, sig_header):
-        current_app.logger.warning("Invalid signature: calculated=%s, received=%s", calculated, sig_header)
+    if not hmac.compare_digest(calc, sig_mp):
+        current_app.logger.warning(
+            "Invalid signature: calc=%s recv=%s", calc, sig_mp
+        )
         return False
-
     return True
+
 
 
 def parse_mp_notification(req):
