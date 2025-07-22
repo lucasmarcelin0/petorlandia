@@ -3146,19 +3146,33 @@ def verify_mp_signature(req, secret: str) -> bool:
         return False
 
     ts, sig_mp = m.groups()
-    raw_body   = req.get_data()           # ⚠️ bytes!
 
-    message = ts.encode() + b"." + raw_body if ts else raw_body
+    # ▶️ qual tipo de notificação?
+    is_feed_v2 = bool(ts)
+
+    if is_feed_v2:
+        # -------- Feed v2: manifesto com ID + request‑id + ts --------
+        x_req_id = req.headers.get("X-Request-Id", "")
+        mp_id    = req.args.get("id") or req.args.get("data.id") or ""
+        manifest = f"id:{mp_id};request-id:{x_req_id};ts:{ts};".encode("utf-8")
+        message  = manifest
+    else:
+        # -------- Webhook v1: HMAC sobre o corpo bruto -------------
+        message = req.get_data()      # bytes
+
     calc = hmac.new(
-        secret.strip().encode(),          # bytes
+        secret.strip().encode(),      # bytes
         message,
         hashlib.sha256
     ).hexdigest()
 
     if not hmac.compare_digest(calc, sig_mp):
-        current_app.logger.warning("Invalid signature: calc=%s recv=%s", calc, sig_mp)
+        current_app.logger.warning(
+            "Invalid signature: calc=%s recv=%s", calc, sig_mp
+        )
         return False
     return True
+
 
 
 
