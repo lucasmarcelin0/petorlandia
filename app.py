@@ -3334,7 +3334,7 @@ def notificacoes_mercado_pago():
 # 3)  /payment_status/<payment_id>   – página pós‑pagamento
 #      (versão sem QR‑Code)
 # --------------------------------------------------------
-from flask import render_template, abort, request
+from flask import render_template, abort, request, jsonify
 
 def _refresh_mp_status(payment: Payment) -> None:
     if payment.status != PaymentStatus.PENDING:
@@ -3383,13 +3383,84 @@ def payment_status(payment_id):
         payment      = payment,
         result       = result,
         req_id       = delivery_req.id if delivery_req else None,
-        req_endpoint = endpoint
+        req_endpoint = endpoint,
+        order        = payment.order
     )
+
+
+@app.route("/api/payment_status/<int:payment_id>")
+@login_required
+def api_payment_status(payment_id):
+    payment = Payment.query.get_or_404(payment_id)
+    if payment.user_id != current_user.id:
+        abort(403)
+    return jsonify(status=payment.status.name)
 
 
 
 #fim pagamento
 
+
+from sqlalchemy.orm import joinedload
+
+
+@app.route("/minhas-compras")
+@login_required
+def minhas_compras():
+    page = request.args.get("page", 1, type=int)
+    per_page = 20
+    pagination = (Order.query
+                  .options(joinedload(Order.payment))
+                  .filter_by(user_id=current_user.id)
+                  .order_by(Order.created_at.desc())
+                  .paginate(page=page, per_page=per_page, error_out=False))
+    return render_template(
+        "minhas_compras.html",
+        orders=pagination.items,
+        pagination=pagination,
+        PaymentStatus=PaymentStatus,
+    )
+
+
+@app.route("/api/minhas-compras")
+@login_required
+def api_minhas_compras():
+    orders = (Order.query
+              .options(joinedload(Order.payment))
+              .filter_by(user_id=current_user.id)
+              .order_by(Order.created_at.desc())
+              .all())
+    data = [
+        {
+            "id": o.id,
+            "data": o.created_at.isoformat(),
+            "valor": float(o.total_value()),
+            "status": (o.payment.status.value if o.payment else "Pendente"),
+        }
+        for o in orders
+    ]
+    return jsonify(data)
+
+
+@app.route("/pedido/<int:order_id>")
+@login_required
+def pedido_detail(order_id):
+    order = (Order.query
+             .options(
+                 joinedload(Order.items).joinedload(OrderItem.product),
+                 joinedload(Order.payment),
+                 joinedload(Order.delivery_requests)
+             )
+             .get_or_404(order_id))
+    if order.user_id != current_user.id and not _is_admin():
+        abort(403)
+    delivery = order.delivery_requests[0] if order.delivery_requests else None
+    return render_template(
+        "pedido_detail.html",
+        order=order,
+        delivery=delivery,
+        PaymentStatus=PaymentStatus,
+    )
 
 
 
