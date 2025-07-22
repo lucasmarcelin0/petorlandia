@@ -1,0 +1,53 @@
+{% extends "layout.html" %}
+{% block main %}
+<div class="container py-5">
+  <h2 class="mb-4">Minhas Compras</h2>
+  {% if orders %}
+  <div class="table-responsive">
+    <table class="table align-middle">
+      <thead>
+        <tr>
+          <th>Nº pedido</th>
+          <th>Data</th>
+          <th>Valor</th>
+          <th>Status</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for o in orders %}
+        <tr>
+          <td>{{ o.id }}</td>
+          <td>{{ o.created_at.strftime('%d/%m/%Y') }}</td>
+          <td>R$ {{ '%.2f'|format(o.total_value()) }}</td>
+          <td>
+            <span class="badge{% if o.payment and o.payment.status == PaymentStatus.COMPLETED %} bg-success{% elif not o.payment or o.payment.status == PaymentStatus.PENDING %} bg-warning text-dark{% else %} bg-danger{% endif %}">
+              {{ o.payment.status.value if o.payment else 'Pendente' }}
+            </span>
+          </td>
+          <td>
+            <a href="{{ url_for('pedido_detail', order_id=o.id) }}" class="btn btn-sm btn-outline-primary" aria-label="Ver detalhes do pedido {{ o.id }}">
+              <i class="bi bi-search"></i> Detalhes
+            </a>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <p>Nenhuma compra registrada.</p>
+  {% endif %}
+  {% if pagination.pages > 1 %}
+  <nav aria-label="Paginação" class="mt-4">
+    <ul class="pagination justify-content-center">
+      {% for p in range(1, pagination.pages + 1) %}
+      <li class="page-item{% if p == pagination.page %} active{% endif %}">
+        <a class="page-link" href="{{ url_for('minhas_compras', page=p) }}">{{ p }}</a>
+      </li>
+      {% endfor %}
+    </ul>
+  </nav>
+  {% endif %}
+</div>
+{% endblock %}
