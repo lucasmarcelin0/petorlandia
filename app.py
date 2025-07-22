@@ -3124,60 +3124,88 @@ def checkout():
     return redirect(pref["init_point"])
 
 
-# ------------------------------------------------------------
-# helpers_webhook.py
-# ------------------------------------------------------------
-import re, hmac, hashlib
-from flask import current_app, request
 
+
+
+
+import re
+import hmac
+import hashlib
+from flask import current_app, request, jsonify
+from sqlalchemy.exc import SQLAlchemyError
+
+# Regular expression for parsing X-Signature header
 _SIG_RE = re.compile(r"(?i)(?:ts=(\d+),\s*)?v1=([a-f0-9]{64})")
 
-def _feed_v2_message(req, ts: str, mp_id: str) -> bytes:
-    parts = [f"id:{mp_id}"]
-    x_req = req.headers.get("X-Request-Id") or req.headers.get("x-request-id")
-    if x_req:
-        parts.append(f"request-id:{x_req}")
-    parts.append(f"ts:{ts}")
-    return (";".join(parts) + ";").encode()
-
 def verify_mp_signature(req, secret: str) -> bool:
-    # 0) opcional: ignorar merchant_order
-    if req.args.get("topic") == "merchant_order":
-        return True
-
+    """
+    Verify the signature of a Mercado Pago webhook notification.
+    
+    Args:
+        req: Flask request object
+        secret: Webhook secret key from Mercado Pago
+    
+    Returns:
+        bool: True if signature is valid, False otherwise
+    """
     if not secret:
+        current_app.logger.warning("Webhook sem chave – bypass")
         return True
 
-    m = _SIG_RE.search(req.headers.get("X-Signature", ""))
+    x_signature = req.headers.get("X-Signature", "")
+    m = _SIG_RE.search(x_signature)
     if not m:
+        current_app.logger.warning("X-Signature mal-formado: %s", x_signature)
         return False
 
-    ts, sig_recv = m.groups()
+    ts, sig_mp = m.groups()
+    if not ts or not sig_mp:
+        current_app.logger.warning("Missing ts or v1 in X-Signature")
+        return False
 
-    # qual ID estamos assinando?
-    mp_id = (req.args.get("data.id")           # v1
-             or req.args.get("id")             # v2
-             or "")
+    x_request_id = req.headers.get("x-request-id", "")
+    if not x_request_id:
+        current_app.logger.warning("Missing x-request-id header")
+        return False
 
-    # corpo a assinar
-    if ts:                                     # Feed v2
-        msg = _feed_v2_message(req, ts, mp_id)
-    else:                                      # Webhook v1
-        msg = req.get_data()                   # bytes
+    # Determine ID based on notification type
+    topic = req.args.get("topic")
+    type_ = req.args.get("type")
+    if topic == "payment" or type_ == "payment":
+        data_id = req.args.get("data.id", "")
+    elif topic == "merchant_order":
+        data_id = req.args.get("id", "")
+    else:
+        current_app.logger.warning("Unknown notification type")
+        return False
 
-    sig_calc = hmac.new(
-        secret.strip().encode(), msg, hashlib.sha256
+    if not data_id:
+        current_app.logger.warning("Missing ID in query parameters")
+        return False
+
+    # Construct manifest
+    manifest = f"id:{data_id};request-id:{x_request_id};ts:{ts};"
+
+    # Compute HMAC-SHA256
+    calc = hmac.new(
+        secret.strip().encode(),
+        manifest.encode(),
+        hashlib.sha256
     ).hexdigest()
 
-    return hmac.compare_digest(sig_calc, sig_recv)
+    if not hmac.compare_digest(calc, sig_mp):
+        current_app.logger.warning("Invalid signature: calc=%s recv=%s", calc, sig_mp)
+        return False
+    return True
 
-
-
-# ------------------------------------------------------------
-# rota /notificacoes
-# ------------------------------------------------------------
 @app.route("/notificacoes", methods=["POST", "GET"])
 def notificacoes_mercado_pago():
+    """
+    Handle Mercado Pago webhook notifications for payment updates.
+    
+    Returns:
+        JSON response with status or error message
+    """
     if request.method == "GET":
         return jsonify(status="pong"), 200
 
@@ -3185,94 +3213,82 @@ def notificacoes_mercado_pago():
     if not verify_mp_signature(request, secret):
         return jsonify(error="invalid signature"), 400
 
-    # somente `payment`
+    # Process only payment notifications
     data = request.get_json(silent=True) or {}
-    mp_id = (data.get("data", {}).get("id")        # v1
-             or data.get("resource", "")           # v2
-             .split("/")[-1])
+    mp_id = (data.get("data", {}).get("id") or  # v1
+             data.get("resource", "").split("/")[-1])  # v2
 
     if not mp_id:
         return jsonify(status="ignored"), 200
 
-    # consulta pagamento
-    resp = sdk.payment().get(mp_id)
-    if resp.get("status") == 404:
-        with db.session.begin():
-            PendingWebhook.query.get(mp_id) or db.session.add(
-                PendingWebhook(mp_id=mp_id)
-            )
-        return jsonify(status="retry_later"), 202
-    if resp.get("status") != 200:
-        return jsonify(error="api error"), 500
+    # Query payment details
+    try:
+        resp = sdk.payment().get(mp_id)
+        if resp.get("status") == 404:
+            with db.session.begin():
+                PendingWebhook.query.get(mp_id) or db.session.add(
+                    PendingWebhook(mp_id=mp_id)
+                )
+            return jsonify(status="retry_later"), 202
+        if resp.get("status") != 200:
+            return jsonify(error="api error"), 500
 
-    info   = resp["response"]
-    status = info["status"]
-    extref = info.get("external_reference")
-    if not extref:
-        return jsonify(status="ignored"), 200
+        info = resp["response"]
+        status = info["status"]
+        extref = info.get("external_reference")
+        if not extref:
+            return jsonify(status="ignored"), 200
 
-    status_map = {
-        "approved": PaymentStatus.COMPLETED,
-        "authorized": PaymentStatus.COMPLETED,
-        "pending":  PaymentStatus.PENDING,
-        "in_process": PaymentStatus.PENDING,
-        "in_mediation": PaymentStatus.PENDING,
-        "rejected": PaymentStatus.FAILED,
-        "cancelled": PaymentStatus.FAILED,
-        "refunded": PaymentStatus.FAILED,
-        "expired":  PaymentStatus.FAILED,
-    }
+        # Update database
+        status_map = {
+            "approved": PaymentStatus.COMPLETED,
+            "authorized": PaymentStatus.COMPLETED,
+            "pending": PaymentStatus.PENDING,
+            "in_process": PaymentStatus.PENDING,
+            "in_mediation": PaymentStatus.PENDING,
+            "rejected": PaymentStatus.FAILED,
+            "cancelled": PaymentStatus.FAILED,
+            "refunded": PaymentStatus.FAILED,
+            "expired": PaymentStatus.FAILED,
+        }
 
-    # atualiza banco
-    with db.session.begin():
-        pay = Payment.query.filter_by(external_reference=extref).first()
-        if pay:
-            pay.status = status_map.get(status, PaymentStatus.PENDING)
-            pay.mercado_pago_id = mp_id
-            if pay.status == PaymentStatus.COMPLETED and pay.order_id:
-                DeliveryRequest.query.filter_by(order_id=pay.order_id).first() or \
-                    db.session.add(DeliveryRequest(
-                        order_id=pay.order_id,
-                        requested_by_id=pay.user_id,
-                        status="pendente",
-                    ))
+        try:
+            with db.session.begin():
+                pay = Payment.query.filter_by(external_reference=extref).first()
+                if not pay:
+                    current_app.logger.warning("Payment %s not found for external_reference %s", mp_id, extref)
+                    return jsonify(error="payment not found"), 404
 
-    return jsonify(status="updated"), 200
+                pay.status = status_map.get(status, PaymentStatus.PENDING)
+                pay.mercado_pago_id = mp_id
 
+                if pay.status == PaymentStatus.COMPLETED and pay.order_id:
+                    if not DeliveryRequest.query.filter_by(order_id=pay.order_id).first():
+                        db.session.add(DeliveryRequest(
+                            order_id=pay.order_id,
+                            requested_by_id=pay.user_id,
+                            status="pendente",
+                        ))
 
-# ------------------------------------------------------------
-# Agendador para reconsultar pagamentos 404
-# ------------------------------------------------------------
-from apscheduler.schedulers.background import BackgroundScheduler
-scheduler = BackgroundScheduler()
+        except SQLAlchemyError as e:
+            current_app.logger.exception("DB error: %s", e)
+            return jsonify(error="db failure"), 500
 
-@scheduler.scheduled_job("interval", seconds=60)
-def requery_pending():
-    with app.app_context():
-        for p in PendingWebhook.query.limit(50).all():
-            resp = sdk.payment().get(p.mp_id)
-            if resp.get("status") == 200:
-                notificacoes_mercado_pago()  # reutiliza a própria view
-                db.session.delete(p)
-            else:
-                p.attempts += 1
-                if p.attempts > 5:
-                    db.session.delete(p)
-        db.session.commit()
+        return jsonify(status="updated"), 200
 
-scheduler.start()
+    except Exception as e:
+        current_app.logger.exception("Unexpected error processing notification: %s", e)
+        return jsonify(error="server error"), 500
 
-
-# ------------------------------------------------------------
-# rota simples de sucesso (evita 404)
-# ------------------------------------------------------------
 @app.route("/pagamento/sucesso")
 def pagamento_sucesso():
+    """
+    Handle successful payment redirect.
+    
+    Returns:
+        Rendered success template
+    """
     return render_template("sucesso.html")
-
-
-
-
 
 
 
