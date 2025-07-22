@@ -9,6 +9,14 @@ import os
 import uuid
 from werkzeug.utils import secure_filename
 
+from flask_login import current_user
+
+def _is_admin():
+    return current_user.is_authenticated and current_user.role == "admin"
+
+
+
+
 
 
 # --------------------------------------------------------------------------
@@ -19,15 +27,28 @@ try:
         Breed, Species, TipoRacao, ApresentacaoMedicamento, VacinaModelo, Consulta, Veterinario,
         Clinica, Prescricao, Medicamento, db, User, Animal, Message,
         Transaction, Review, Favorite, AnimalPhoto, UserRole, ExameModelo,
-        Product, Order, OrderItem, DeliveryRequest, HealthPlan, HealthSubscription
+        Product, Order, OrderItem, DeliveryRequest, HealthPlan, HealthSubscription, PickupLocation, Endereco
     )
 except ImportError:
     from .models import (
         Breed, Species, TipoRacao, ApresentacaoMedicamento, VacinaModelo, Consulta, Veterinario,
         Clinica, Prescricao, Medicamento, db, User, Animal, Message,
         Transaction, Review, Favorite, AnimalPhoto, UserRole, ExameModelo,
-        Product, Order, OrderItem, DeliveryRequest, HealthPlan, HealthSubscription
+        Product, Order, OrderItem, DeliveryRequest, HealthPlan, HealthSubscription, PickupLocation, Endereco
     )
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 # --------------------------------------------------------------------------
 # Configurações gerais
@@ -76,6 +97,49 @@ class AdminDashboard(BaseView):
 # --------------------------------------------------------------------------
 # Views específicas
 # --------------------------------------------------------------------------
+
+from wtforms import validators
+
+
+
+# ─── Subform de Endereco ----------------------------------------------------
+class EnderecoInlineForm(ModelView):
+    form_columns = ("rua", "numero", "bairro", "cidade", "estado", "cep")
+    can_delete   = False
+    can_view_details = False
+    can_export   = False
+
+# ─── View de PickupLocation -------------------------------------------------
+class PickupLocationView(ModelView):
+    column_list   = ("id", "nome", "endereco.full", "ativo")
+    column_labels = {"endereco.full": "Endereço"}
+
+    form_columns  = ("nome", "ativo", "endereco")
+
+
+
+    column_searchable_list = ("nome", "endereco.rua", "endereco.cidade")
+    column_filters = ("ativo",)
+
+    form_args = {
+        "nome": dict(validators=[validators.DataRequired(), validators.Length(max=120)])
+    }
+
+    def is_accessible(self):
+        return current_user.is_authenticated and _is_admin()
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 import re
@@ -270,6 +334,7 @@ def init_admin(app):
     admin.add_view(MyModelView(Order, db.session))
     admin.add_view(MyModelView(OrderItem, db.session))
     admin.add_view(MyModelView(DeliveryRequest, db.session))
-
+    # registrar
+    admin.add_view(PickupLocationView(PickupLocation, db.session, name="Pontos de Retirada"))
     # Link para voltar ao site principal
     admin.add_link(MenuLink(name='🔙 Voltar ao Site', url='/'))
