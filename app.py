@@ -3131,30 +3131,46 @@ from sqlalchemy.exc import SQLAlchemyError
 
 _SIG_RE = re.compile(r"(?:ts=(\d+),)?v1=([a-f0-9]{64})")   # ts= opcional
 
+import logging, re, hmac, hashlib, urllib.parse
+from flask import current_app as _app
+
+# regex única para “v1=<hash>” (v1) OU “ts=...,v1=<hash>” (Feed v2)
+_SIG_RE = re.compile(r"(?:ts=(\d+),)?v1=([a-f0-9]{64})")
+
 def verify_mp_signature(req, secret: str) -> bool:
     """
-    Aceita **ambos** os formatos de X‑Signature:
-      • Webhook v1 ............. v1=<hash>
-      • Feed v2 (CheckoutPro) .. ts=<epoch>,v1=<hash>
+    Valida X‑Signature do Mercado Pago.
+    Aceita:
+      • Webhook v1 .............  v1=<hash>
+      • Feed v2 (Checkout Pro) .. ts=<epoch>,v1=<hash>
     """
-    if not secret:
-        return True                      # sem secret (dev) ⇒ bypass
+    if not secret:                                     # ambiente dev
+        return True                                    # → bypass
 
-    m = _SIG_RE.search(req.headers.get("X-Signature", ""))
+    raw_header = req.headers.get("X-Signature", "")
+    m = _SIG_RE.search(raw_header)
     if not m:
+        _app.logger.warning("X‑Signature ausente ou mal‑formada: %s", raw_header)
         return False
 
     ts, sig_header = m.groups()
 
-    if ts:                               # Feed v2
+    # ---------- string‑base p/ HMAC ---------------------------------
+    if ts:                                             # Feed v2
         base = ts + req.path
         if req.args:
             base += "?" + urllib.parse.urlencode(sorted(req.args.items()))
         base += req.get_data(as_text=True)
-    else:                                # Webhook v1
+    else:                                              # Webhook v1
         base = req.get_data(as_text=True)
 
     calc = hmac.new(secret.encode(), base.encode(), hashlib.sha256).hexdigest()
+
+    # ---------- LOG que vai no chamado ------------------------------
+    _app.logger.debug("MP Webhook body: %s", base[:800])               # corta se quiser
+    _app.logger.debug("MP X‑Signature header: %s", raw_header)
+    _app.logger.debug("MP Calculated HMAC: %s", calc)
+
     return hmac.compare_digest(calc, sig_header)
 
 
@@ -3234,25 +3250,74 @@ def notificacoes_mercado_pago():
 
 
 # ——— 3) Página de status final —————————————————————————————————————————
+# --------------------------------------------------------
+# 3)  /payment_status/<payment_id>   – página pós‑pagamento
+#      (versão sem QR‑Code)
+# --------------------------------------------------------
+from flask import render_template, abort, request
+
+def _refresh_mp_status(payment: Payment) -> None:
+    if payment.status != PaymentStatus.PENDING:
+        return
+    resp = sdk.payment().get(payment.mercado_pago_id or payment.transaction_id)
+    if resp.get("status") != 200:
+        current_app.logger.warning("MP lookup falhou: %s", resp)
+        return
+    mp = resp["response"]
+    mapping = {
+        "approved":   PaymentStatus.COMPLETED,
+        "authorized": PaymentStatus.COMPLETED,
+        "pending":    PaymentStatus.PENDING,
+        "in_process": PaymentStatus.PENDING,
+        "in_mediation": PaymentStatus.PENDING,
+        "rejected":   PaymentStatus.FAILED,
+        "cancelled":  PaymentStatus.FAILED,
+        "refunded":   PaymentStatus.FAILED,
+        "expired":    PaymentStatus.FAILED,
+    }
+    new_status = mapping.get(mp["status"], PaymentStatus.PENDING)
+    if new_status != payment.status:
+        payment.status = new_status
+        db.session.commit()
+
 @app.route("/payment_status/<int:payment_id>")
 @login_required
-def payment_status(payment_id):
-    pay    = Payment.query.get_or_404(payment_id)
-    result = request.args.get("status", "pending")
-    
-    print("Usuário logado:", current_user.id)
-    print("Dono do pagamento:", pay.user_id)
-    print("Order ID:", pay.order_id)
+def payment_status(payment_id: int):
+    payment: Payment = Payment.query.get_or_404(payment_id)
+    if payment.user_id != current_user.id and current_user.role != "admin":
+        abort(403)
 
-    return render_template("payment_status.html", payment=pay, result=result)
+    _refresh_mp_status(payment)
+
+    # resultado vindo por querystring (?status=success|failure|pending)
+    result = (request.args.get("status") or payment.status.name).lower()
+
+    return render_template(
+        "payment_status.html",
+        payment=payment,
+        result=result,
+    )
+
+
+
 
 
 @app.route("/ver_pedido/<int:pedido_id>")
 @login_required
-def ver_pedido(pedido_id):
+def ver_pedido(pedido_id: int):
     pedido = Order.query.get_or_404(pedido_id)
 
-    if pedido.user_id != current_user.id and current_user.role != 'admin':
+    # autorizado se: dono do pedido  OU  admin  OU  entregador alocado
+    deliverer = (
+        DeliveryRequest.query
+        .filter_by(order_id=pedido.id, worker_id=current_user.id)
+        .first()
+    )
+    if not (
+        current_user.role == "admin"
+        or pedido.user_id == current_user.id
+        or deliverer
+    ):
         abort(403)
 
     return render_template("ver_pedido.html", pedido=pedido)
