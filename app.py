@@ -3172,14 +3172,6 @@ def verify_mp_signature(req, secret: str) -> bool:
     return hmac.compare_digest(sig_calc, sig_recv)
 
 
-# ------------------------------------------------------------
-# models.py  (tabela auxiliar)
-# ------------------------------------------------------------
-class PendingWebhook(db.Model):
-    id       = db.Column(db.Integer, primary_key=True)
-    mp_id    = db.Column(db.BigInteger, unique=True)
-    attempts = db.Column(db.Integer, default=0)
-
 
 # ------------------------------------------------------------
 # rota /notificacoes
