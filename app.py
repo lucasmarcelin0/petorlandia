@@ -3127,42 +3127,59 @@ def checkout():
 # ──────────────────────────────────────────────────────────────────────────────
 # 2)  /notificacoes  –  Webhook / Feed v2 Mercado Pago
 # ──────────────────────────────────────────────────────────────────────────────
-import re
-import hmac
-import hashlib
+import re, hmac, hashlib
 from flask import current_app, request
 
 _SIG_RE = re.compile(r"(?i)(?:ts=(\d+),\s*)?v1=([a-f0-9]{64})")
 
 def verify_mp_signature(req, secret: str) -> bool:
+    """
+    Valida assinatura de:
+      • Feed v2 ........ topic=merchant_order OR payment (vem com ts= no X‑Signature)
+      • Webhook v1 ..... type=payment (sem ts=, HMAC sobre o corpo)
+
+    Retorna True se a assinatura for válida, False caso contrário.
+    """
     if not secret:
         current_app.logger.warning("Webhook sem chave – bypass")
         return True
 
-    raw_header = req.headers.get("X-Signature", "")
-    m = _SIG_RE.search(raw_header)
+    raw_sig = req.headers.get("X-Signature", "")
+    m = _SIG_RE.search(raw_sig)
     if not m:
-        current_app.logger.warning("X‑Signature mal‑formado: %s", raw_header)
+        current_app.logger.warning("X‑Signature mal‑formado: %s", raw_sig)
         return False
 
     ts, sig_mp = m.groups()
+    # ------------------------------------------------------------------
+    # 1) Identificar tipo e ID da notificação
+    # ------------------------------------------------------------------
+    data_id = None
+    if req.args.get("type") == "payment":                  # Webhook v1
+        data_id = req.args.get("data.id")
+    elif req.args.get("topic") == "merchant_order":        # Feed v2 (MO)
+        data_id = req.args.get("id")
+    elif req.args.get("topic") == "payment":               # Feed v2 (payment)
+        data_id = req.args.get("id")
 
-    # ▶️ qual tipo de notificação?
-    is_feed_v2 = bool(ts)
+    data_id = data_id or ""                                # garante string
 
-    if is_feed_v2:
-        # -------- Feed v2: manifesto com ID + request‑id + ts --------
-        x_req_id = req.headers.get("X-Request-Id", "")
-        mp_id    = req.args.get("id") or req.args.get("data.id") or ""
-        manifest = f"id:{mp_id};request-id:{x_req_id};ts:{ts};".encode("utf-8")
-        message  = manifest
-    else:
-        # -------- Webhook v1: HMAC sobre o corpo bruto -------------
-        message = req.get_data()      # bytes
+    # ------------------------------------------------------------------
+    # 2) Montar a mensagem a ser assinada
+    # ------------------------------------------------------------------
+    if ts:  # Feed v2 – manifesto de cabeçalhos
+        x_request_id = req.headers.get("X-Request-Id", "")
+        manifest = f"id:{data_id};request-id:{x_request_id};ts:{ts};"
+        message = manifest.encode("utf-8")
+    else:   # Webhook v1 – hash sobre o corpo bruto
+        message = req.get_data()                           # bytes
 
+    # ------------------------------------------------------------------
+    # 3) Calcular e comparar HMAC-SHA256
+    # ------------------------------------------------------------------
     calc = hmac.new(
-        secret.strip().encode(),      # bytes
-        message,
+        secret.strip().encode(),       # key
+        message,                       # msg (bytes)
         hashlib.sha256
     ).hexdigest()
 
