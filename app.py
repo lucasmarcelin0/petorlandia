@@ -1,8 +1,19 @@
 import os
 import sys
+import re
+
+
+
 
 # 1) Garante que o diretório petorlandia/ esteja no path para “import models”
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
+# ─── Alias models *before* anything else imports it ──────────────────────
+import importlib
+_models_pkg = importlib.import_module("petorlandia.models")
+sys.modules["models"] = _models_pkg
+
+
 
 import uuid
 import logging
@@ -94,13 +105,9 @@ DeliveryRequestForm = forms.DeliveryRequestForm  # type: ignore[attr-defined]
 AddToCartForm = forms.AddToCartForm  # type: ignore[attr-defined]
 
 helpers = _import("helpers")
-models_mod = _import("models")
 
-# Torna possível `import models` em qualquer parte do app
-sys.modules.setdefault("models", models_mod)
 
-# Importa modelos para uso direto (opcional)
-from models import *  # type: ignore  # noqa: F401,F403
+
 
 # ---------------------------------------------------------------------------
 # ☁️ AWS S3 helper
@@ -186,8 +193,35 @@ mail_ext.init_app(app)
 login_ext.init_app(app)
 session_ext.init_app(app)
 
-# flask-session (armazenamento server-side)
+# ... after all db.init_app, migrate_ext.init_app, etc. …
 FlaskSession(app)
+
+# … after db.init_app(), migrate.init_app(), etc …
+FlaskSession(app)
+
+# ─── Import your models exactly once, with your try/except * ─────────────────
+with app.app_context():
+    # 1) load the real package module
+    import petorlandia.models as _models_pkg
+    # 2) alias it so bare ‘models’ points to the same module
+    import sys
+    sys.modules['models'] = _models_pkg
+
+    # 3) now do your wildcard fallback
+    try:
+        from models import *
+    except ImportError:
+        try:
+            from petorlandia.models import *
+        except ImportError:
+            from .models import *
+
+    # 4) init admin (which may pull in your models)
+    init_admin(app)
+    # db.create_all()   # if you still need it
+
+
+
 
 # Garante binding correto
 login   = login_ext
@@ -244,14 +278,6 @@ except ImportError:
     except ImportError:
         from .admin import init_admin, _is_admin
 
-# Models genéricos
-try:
-    from models import *
-except ImportError:
-    try:
-        from petorlandia.models import *
-    except ImportError:
-        from .models import *
 
 # Helpers
 try:
@@ -268,23 +294,10 @@ def load_user(user_id):
     return User.query.get(int(user_id))
 login.login_view = 'login'
 
-# ——— Inicializa admin + create_all ——————————————————————————————————————————
-with app.app_context():
-    init_admin(app)
-    # db.create_all()
+
 
 # ——— Serializer —————————————————————————————————————————————————————
 serializer = URLSafeTimedSerializer(app.config['SECRET_KEY'])
-
-# ——— Models específicos de pagamento —————————————————————————————————————————
-try:
-    from models import Payment, PaymentMethod, PaymentStatus, DeliveryRequest
-except ImportError:
-    try:
-        from petorlandia.models import Payment, PaymentMethod, PaymentStatus, DeliveryRequest
-    except ImportError:
-        from .models import Payment, PaymentMethod, PaymentStatus, DeliveryRequest
-
 
 
 
@@ -2585,6 +2598,28 @@ def arquivar_animal(animal_id):
     return redirect(url_for('ficha_tutor', tutor_id=animal.user_id))
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 @app.route('/orders/new', methods=['GET', 'POST'])
 @login_required
 def create_order():
@@ -2905,16 +2940,7 @@ def worker_history():
     return render_template('worker_history.html', available=available, doing=doing, done=done, canceled=canceled)
 
 
-@app.route('/fluxograma_entregas')
-@login_required
-def fluxograma_entregas():
-    if current_user.worker != 'delivery':
-        abort(403)
-    return render_template('fluxograma_entregas.html')
 
-
-with app.app_context():
-    db.create_all()
 
 
 from sqlalchemy.orm import joinedload
@@ -2980,10 +3006,6 @@ from flask import (
 )
 from flask_login import login_required, current_user
 
-from models import (
-    db, Product, Order, OrderItem,
-    Payment, PaymentMethod, PaymentStatus, DeliveryRequest
-)
 from forms import AddToCartForm, CheckoutForm  # Added CheckoutForm for CSRF
 
 # ─────────────────────────────────────────────────────────
@@ -3139,6 +3161,7 @@ from mercadopago import SDK
 sdk = SDK(os.getenv("MERCADOPAGO_ACCESS_TOKEN"))
 
 
+
 @app.route("/checkout", methods=["POST"])
 @login_required
 def checkout():
@@ -3224,86 +3247,116 @@ def checkout():
 
 
 
-# ——— 2) Webhook do Mercado Pago —————————————————————————————————————
+
+# ——— 2) Webhook do Mercado Pago ————————————————————————————————————
+
+import hmac, hashlib, urllib.parse
+
+def verify_mp_signature(req, secret: str) -> bool:
+    raw = req.headers.get("X-Signature", "")
+    m = re.search(r"ts=(\d+),v1=([a-f0-9]+)", raw)
+    if not (m and secret):
+        return True          # sem segredo → bypass
+
+    ts, sig_header = m.groups()
+
+    # Para Feed v2 concatene querystring
+    base = ts
+    if req.args:                           # v2
+        base += "?" + urllib.parse.urlencode(sorted(req.args.items()))
+    base += req.get_data(as_text=True)     # body
+
+    calc = hmac.new(secret.encode(), base.encode(), hashlib.sha256).hexdigest()
+    return hmac.compare_digest(calc, sig_header)
+
+
+
+
+
+def parse_mp_notification(req):
+    # Feed v2 → ?topic=payment&id=...
+    if req.args.get("topic") == "payment" and req.args.get("id"):
+        return "payment", req.args["id"]
+
+    data = req.get_json(silent=True) or {}
+    # Webhook v1
+    if data.get("type") == "payment":
+        return "payment", data.get("data", {}).get("id")
+
+    return None, None
+
+
+
 
 @app.route("/notificacoes", methods=["POST", "GET"])
 def notificacoes_mercado_pago():
     if request.method == "GET":
-        mp_id = request.args.get("data.id")
-        tipo = request.args.get("type")
-        current_app.logger.info("🔔 Webhook GET recebido: type=%s id=%s", tipo, mp_id)
-        return jsonify({"status": "ignored (GET)"}), 200
+        # Mantém só para ping do MP
+        return jsonify({"status": "pong"}), 200
 
-    # POST — Notificação real
-    # 🔍 Log de headers e corpo cru
-    current_app.logger.debug("🔍 Headers: %s", dict(request.headers))
-    current_app.logger.debug("🔍 Body: %s", request.get_data(as_text=True))
-
-    # Validação HMAC
     secret = current_app.config.get("MERCADOPAGO_WEBHOOK_SECRET", "")
-    signature = request.headers.get("X-MP-Signature", "")
-    if secret:
-        calc = hmac.new(secret.encode(), request.get_data(), hashlib.sha256).hexdigest()
-        if not hmac.compare_digest(calc, signature):
-            current_app.logger.warning("❌ Assinatura inválida")
-            return jsonify({"error": "invalid signature"}), 400
+    if not verify_mp_signature(request, secret):
+        current_app.logger.warning("❌ Assinatura inválida")
+        return jsonify({"error": "invalid signature"}), 400
 
-    data = request.get_json() or {}
-    mp_id = data.get("data", {}).get("id")
-    tipo = data.get("type")
+    kind, mp_id = parse_mp_notification(request)
+    current_app.logger.info("🔔 MP Notification: %s id=%s", kind, mp_id)
 
-    # Ignora notificações de ambiente de testes
-    if data.get("live_mode") is False:
-        current_app.logger.info("🔕 Ignorado: notificação em modo sandbox")
-        return jsonify({"status": "ignored (sandbox)"}), 200
+    if kind != "payment" or not mp_id:
+        return jsonify({"status": "ignored"}), 200
 
-    current_app.logger.info("🔔 MP Notification: type=%s id=%s", tipo, mp_id)
+    # --------------- PROCESSAR PAGAMENTO ---------------
+    r = sdk.payment().get(mp_id)
+    if r.get("status") != 200:
+        current_app.logger.error("❌ Erro na API do MP: %s", r)
+        return jsonify({"error": "api error"}), 500
 
-    if tipo == "payment" and mp_id:
-        try:
-            r = sdk.payment().get(mp_id)
-            if r.get("status") != 200:
-                current_app.logger.error("❌ Erro na API do MP: %s", r)
-                return jsonify({"error": "api error"}), 500
+    info   = r["response"]
+    status = info["status"]
+    ext    = info.get("external_reference")  # pode ser order_id ou payment_id
 
-            info = r["response"]
-            status = info.get("status", "pending")
-            ext_ref = info.get("external_reference")
+    # 1️⃣ localiza Payment de forma robusta
+    pay = None
+    if ext:
+        pay = Payment.query.filter_by(external_reference=ext).first()
+        if not pay and ext.isdigit():
+            pay = Payment.query.get(int(ext))
 
-            try:
-                pay = Payment.query.get(int(ext_ref)) if ext_ref else None
-            except (ValueError, TypeError):
-                current_app.logger.warning("⚠️ Referência externa inválida: %s", ext_ref)
-                pay = None
+    if not pay:
+        current_app.logger.warning("⚠️ Payment não encontrado. Salvando novo.")
+        pay = Payment(
+            user_id      = info["payer"]["id"],
+            amount       = info["transaction_amount"],
+            external_reference = ext,
+            transaction_id     = mp_id
+        )
+        db.session.add(pay)
 
-            if pay and pay.status != PaymentStatus.COMPLETED:
-                pay.transaction_id = str(info["id"])
+    # 2️⃣ atualiza status
+    mapping = {
+        "approved":  PaymentStatus.COMPLETED,
+        "rejected":  PaymentStatus.FAILED,
+        "in_process": PaymentStatus.PENDING
+    }
+    pay.status = mapping.get(status, PaymentStatus.PENDING)
+    pay.transaction_id = mp_id
+    db.session.flush()  # garante id
 
-                if status == "approved":
-                    pay.status = PaymentStatus.COMPLETED
+    # 3️⃣ gera DeliveryRequest se aprovado e ainda não existir
+    if pay.status == PaymentStatus.COMPLETED and pay.order_id:
+        exists = DeliveryRequest.query.filter_by(order_id=pay.order_id).first()
+        if not exists:
+            dr = DeliveryRequest(
+                order_id        = pay.order_id,
+                requested_by_id = pay.user_id,
+                status          = 'pendente'
+            )
+            db.session.add(dr)
 
-                    if pay.order_id and not DeliveryRequest.query.filter_by(order_id=pay.order_id).first():
-                        dr = DeliveryRequest(
-                            order_id=pay.order_id,
-                            requested_by_id=pay.user_id,
-                            status='pendente'
-                        )
-                        db.session.add(dr)
+    db.session.commit()
+    return jsonify({"status": "updated"}), 200
 
-                elif status == "rejected":
-                    pay.status = PaymentStatus.FAILED
-                else:
-                    pay.status = PaymentStatus.PENDING
 
-                db.session.commit()
-
-            return jsonify({"status": "updated"}), 200
-
-        except Exception as e:
-            current_app.logger.exception(f"Erro ao processar webhook MP: {e}")
-            return jsonify({"error": "internal failure", "message": str(e)}), 500
-
-    return jsonify({"status": "ignored"}), 200
 
 
 
