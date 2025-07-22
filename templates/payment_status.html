@@ -32,11 +32,16 @@
     </dl>
 
     <div class="d-flex justify-content-center gap-3">
-      {% if payment.order_id %}
-          <a href="{{ url_for('ver_pedido', pedido_id=payment.order_id) }}" class="btn btn-primary">
-          <i class="bi bi-receipt me-1"></i> Acompanhar pedido
-        </a>
-      {% endif %}
+
+{% if req_id %}
+  <a href="{{ url_for(req_endpoint, req_id=req_id) }}"
+     class="btn btn-primary">
+     <i class="bi bi-truck me-1"></i> Acompanhar pedido
+  </a>
+{% endif %}
+
+
+
       <a href="{{ url_for('loja') }}" class="btn btn-outline-secondary">
         <i class="bi bi-shop me-1"></i> Voltar à loja
       </a>
@@ -44,3 +49,10 @@
   </div>
 </div>
 {% endblock %}
+
+
+
+
+
+
+

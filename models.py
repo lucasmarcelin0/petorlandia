@@ -615,34 +615,40 @@ class PaymentStatus(Enum):
 class Payment(db.Model):
     __tablename__  = "payment"
     __table_args__ = (
-        db.UniqueConstraint("transaction_id", name="uq_payment_tx"),
+        db.UniqueConstraint("transaction_id",  name="uq_payment_tx"),
         db.UniqueConstraint("external_reference", name="uq_payment_extref"),
     )
 
-    id           = db.Column(db.Integer, primary_key=True)
-    order_id     = db.Column(db.Integer, db.ForeignKey("order.id"), nullable=False)
+    id       = db.Column(db.Integer, primary_key=True)
+    order_id = db.Column(db.Integer, db.ForeignKey("order.id"), nullable=False)
 
-    method       = db.Column(
+    # ✅ fica só esta definição
+    order = db.relationship(
+        "Order",
+        backref=db.backref("payment", uselist=False, cascade="all, delete-orphan"),
+        uselist=False,
+    )
+
+    method = db.Column(
         PgEnum(PaymentMethod, name="paymentmethod", create_type=False),
         nullable=False,
     )
-    status       = db.Column(
+    status = db.Column(
         PgEnum(PaymentStatus, name="paymentstatus", create_type=False),
         default=PaymentStatus.PENDING,
     )
 
-    transaction_id     = db.Column(db.String(255), nullable=True)   # idem Mercado Pago id
-    external_reference = db.Column(db.String(255), nullable=True)   # novo  👈
-    mercado_pago_id    = db.Column(db.String(64))                   # se quiser manter
+    transaction_id     = db.Column(db.String(255))
+    external_reference = db.Column(db.String(255))
+    mercado_pago_id    = db.Column(db.String(64))
 
-    created_at  = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
     user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
     user    = db.relationship("User", backref="payments")
 
-    order   = db.relationship("Order", backref="payment", uselist=False)
+    init_point = db.Column(db.String)
 
-    init_point = db.Column(db.String, nullable=True)  # URL de checkout/PIX etc.
 
 
 # -------------------------- Planos de Saúde ---------------------------
