@@ -3124,115 +3124,66 @@ def checkout():
     return redirect(pref["init_point"])
 
 
-# ──────────────────────────────────────────────────────────────────────────────
-# 2)  /notificacoes  –  Webhook / Feed v2 Mercado Pago
-# ──────────────────────────────────────────────────────────────────────────────
-
-
-def _feed_v2_message(req, ts: str, mp_id: str) -> bytes:
-    parts = [f"id:{mp_id}"]
-    x_req = req.headers.get("x-request-id") or req.headers.get("X-Request-Id")
-    if x_req:
-        parts.append(f"request-id:{x_req}")
-    parts.append(f"ts:{ts}")
-    return (";".join(parts) + ";").encode()          # termina em ";"
-
-
-
-
+# ------------------------------------------------------------
+# helpers_webhook.py
+# ------------------------------------------------------------
 import re, hmac, hashlib
 from flask import current_app, request
 
 _SIG_RE = re.compile(r"(?i)(?:ts=(\d+),\s*)?v1=([a-f0-9]{64})")
 
-def verify_mp_signature(req, secret: str) -> bool:
-    """
-    Valida assinatura de:
-      • Feed v2 ........ topic=merchant_order OR payment (vem com ts= no X‑Signature)
-      • Webhook v1 ..... type=payment (sem ts=, HMAC sobre o corpo)
+def _feed_v2_message(req, ts: str, mp_id: str) -> bytes:
+    parts = [f"id:{mp_id}"]
+    x_req = req.headers.get("X-Request-Id") or req.headers.get("x-request-id")
+    if x_req:
+        parts.append(f"request-id:{x_req}")
+    parts.append(f"ts:{ts}")
+    return (";".join(parts) + ";").encode()
 
-    Retorna True se a assinatura for válida, False caso contrário.
-    """
-    if not secret:
-        current_app.logger.warning("Webhook sem chave – bypass")
+def verify_mp_signature(req, secret: str) -> bool:
+    # 0) opcional: ignorar merchant_order
+    if req.args.get("topic") == "merchant_order":
         return True
 
-    raw_sig = req.headers.get("X-Signature", "")
-    m = _SIG_RE.search(raw_sig)
+    if not secret:
+        return True
+
+    m = _SIG_RE.search(req.headers.get("X-Signature", ""))
     if not m:
-        current_app.logger.warning("X‑Signature mal‑formado: %s", raw_sig)
         return False
 
-    ts, sig_mp = m.groups()
-    # ------------------------------------------------------------------
-    # 1) Identificar tipo e ID da notificação
-    # ------------------------------------------------------------------
-    data_id = None
-    if req.args.get("type") == "payment":                  # Webhook v1
-        data_id = req.args.get("data.id")
-    elif req.args.get("topic") == "merchant_order":        # Feed v2 (MO)
-        data_id = req.args.get("id")
-    elif req.args.get("topic") == "payment":               # Feed v2 (payment)
-        data_id = req.args.get("id")
+    ts, sig_recv = m.groups()
 
-    data_id = data_id or ""                                # garante string
+    # qual ID estamos assinando?
+    mp_id = (req.args.get("data.id")           # v1
+             or req.args.get("id")             # v2
+             or "")
 
-    # ------------------------------------------------------------------
-    # 2) Montar a mensagem a ser assinada
-    # ------------------------------------------------------------------
-    if ts:  # Feed v2 – manifesto de cabeçalhos
-        x_request_id = req.headers.get("X-Request-Id", "")
-        manifest = f"id:{data_id};request-id:{x_request_id};ts:{ts};"
-        message = manifest.encode("utf-8")
-    else:   # Webhook v1 – hash sobre o corpo bruto
-        message = req.get_data()                           # bytes
+    # corpo a assinar
+    if ts:                                     # Feed v2
+        msg = _feed_v2_message(req, ts, mp_id)
+    else:                                      # Webhook v1
+        msg = req.get_data()                   # bytes
 
-    # ------------------------------------------------------------------
-    # 3) Calcular e comparar HMAC-SHA256
-    # ------------------------------------------------------------------
-    calc = hmac.new(
-        secret.strip().encode(),       # key
-        message,                       # msg (bytes)
-        hashlib.sha256
+    sig_calc = hmac.new(
+        secret.strip().encode(), msg, hashlib.sha256
     ).hexdigest()
 
-    if not hmac.compare_digest(calc, sig_mp):
-        current_app.logger.warning(
-            "Invalid signature: calc=%s recv=%s", calc, sig_mp
-        )
-        return False
-    return True
+    return hmac.compare_digest(sig_calc, sig_recv)
 
 
+# ------------------------------------------------------------
+# models.py  (tabela auxiliar)
+# ------------------------------------------------------------
+class PendingWebhook(db.Model):
+    id       = db.Column(db.Integer, primary_key=True)
+    mp_id    = db.Column(db.BigInteger, unique=True)
+    attempts = db.Column(db.Integer, default=0)
 
 
-def parse_mp_notification(req):
-    try:
-        if req.args.get("topic") in ["payment", "merchant_order"]:
-            # Feed v2
-            data = req.get_json()
-            kind = data.get("topic")
-            mp_id = data.get("resource")
-            if kind == "merchant_order" and mp_id.startswith("https://"):
-                mp_id = mp_id.split("/")[-1]  # Extrai ID do merchant_order
-            return kind, mp_id
-        elif req.args.get("type") == "payment":
-            # Webhook v1
-            data = req.get_json()
-            return "payment", data.get("data", {}).get("id")
-        else:
-            return None, None
-    except Exception as e:
-        current_app.logger.error("Error parsing notification: %s", e)
-        return None, None
-
-
-
-
-
-# ─────────────────────────────────────────────────────────────
-# app.py  –  rota /notificacoes
-# ─────────────────────────────────────────────────────────────
+# ------------------------------------------------------------
+# rota /notificacoes
+# ------------------------------------------------------------
 @app.route("/notificacoes", methods=["POST", "GET"])
 def notificacoes_mercado_pago():
     if request.method == "GET":
@@ -3242,26 +3193,24 @@ def notificacoes_mercado_pago():
     if not verify_mp_signature(request, secret):
         return jsonify(error="invalid signature"), 400
 
-    kind, mp_id = parse_mp_notification(request)
-    if kind != "payment" or not mp_id:
+    # somente `payment`
+    data = request.get_json(silent=True) or {}
+    mp_id = (data.get("data", {}).get("id")        # v1
+             or data.get("resource", "")           # v2
+             .split("/")[-1])
+
+    if not mp_id:
         return jsonify(status="ignored"), 200
 
-    # ------------------------------------------------------------------
-    # 1) Consulta o pagamento no Mercado Pago
-    # ------------------------------------------------------------------
+    # consulta pagamento
     resp = sdk.payment().get(mp_id)
-
-    # 🔄 RETRY 404 ------------------------------------------------------
     if resp.get("status") == 404:
         with db.session.begin():
-            if not PendingWebhook.query.get(mp_id):
-                db.session.add(PendingWebhook(mp_id=mp_id))
-        current_app.logger.info("MP 404 – salvo %s para reconsulta", mp_id)
+            PendingWebhook.query.get(mp_id) or db.session.add(
+                PendingWebhook(mp_id=mp_id)
+            )
         return jsonify(status="retry_later"), 202
-    # ------------------------------------------------------------------
-
     if resp.get("status") != 200:
-        current_app.logger.error("API MP error: %s", resp)
         return jsonify(error="api error"), 500
 
     info   = resp["response"]
@@ -3270,69 +3219,61 @@ def notificacoes_mercado_pago():
     if not extref:
         return jsonify(status="ignored"), 200
 
-    # 2) Atualiza o pagamento no banco
-    try:
-        with db.session.begin():
-            pay = Payment.query.filter_by(external_reference=extref).first()
-            if not pay:
-                return jsonify(error="payment not found"), 404
+    status_map = {
+        "approved": PaymentStatus.COMPLETED,
+        "authorized": PaymentStatus.COMPLETED,
+        "pending":  PaymentStatus.PENDING,
+        "in_process": PaymentStatus.PENDING,
+        "in_mediation": PaymentStatus.PENDING,
+        "rejected": PaymentStatus.FAILED,
+        "cancelled": PaymentStatus.FAILED,
+        "refunded": PaymentStatus.FAILED,
+        "expired":  PaymentStatus.FAILED,
+    }
 
-            status_map = {
-                "approved":   PaymentStatus.COMPLETED,
-                "authorized": PaymentStatus.COMPLETED,
-                "pending":    PaymentStatus.PENDING,
-                "in_process": PaymentStatus.PENDING,
-                "in_mediation": PaymentStatus.PENDING,
-                "rejected":   PaymentStatus.FAILED,
-                "cancelled":  PaymentStatus.FAILED,
-                "refunded":   PaymentStatus.FAILED,
-                "expired":    PaymentStatus.FAILED,
-            }
+    # atualiza banco
+    with db.session.begin():
+        pay = Payment.query.filter_by(external_reference=extref).first()
+        if pay:
             pay.status = status_map.get(status, PaymentStatus.PENDING)
             pay.mercado_pago_id = mp_id
-
-            # cria DeliveryRequest se aprovado
             if pay.status == PaymentStatus.COMPLETED and pay.order_id:
-                if not DeliveryRequest.query.filter_by(order_id=pay.order_id).first():
+                DeliveryRequest.query.filter_by(order_id=pay.order_id).first() or \
                     db.session.add(DeliveryRequest(
                         order_id=pay.order_id,
                         requested_by_id=pay.user_id,
                         status="pendente",
                     ))
-    except SQLAlchemyError as e:
-        current_app.logger.exception("DB error: %s", e)
-        return jsonify(error="db failure"), 500
 
     return jsonify(status="updated"), 200
 
 
-# ------------------------------------------------------------------
-# scheduler.py  (ou no final de app.py, logo após criar app/sdk/db)
-# ------------------------------------------------------------------
+# ------------------------------------------------------------
+# Agendador para reconsultar pagamentos 404
+# ------------------------------------------------------------
 from apscheduler.schedulers.background import BackgroundScheduler
 scheduler = BackgroundScheduler()
 
+@scheduler.scheduled_job("interval", seconds=60)
 def requery_pending():
     with app.app_context():
-        pend = PendingWebhook.query.limit(50).all()
-        for p in pend:
+        for p in PendingWebhook.query.limit(50).all():
             resp = sdk.payment().get(p.mp_id)
             if resp.get("status") == 200:
-                process_payment(resp["response"])    # mesma lógica da view
+                notificacoes_mercado_pago()  # reutiliza a própria view
                 db.session.delete(p)
             else:
                 p.attempts += 1
-                if p.attempts > 5:                   # desiste após 5 tentativas
+                if p.attempts > 5:
                     db.session.delete(p)
         db.session.commit()
 
-# roda a cada 60 s
-scheduler.add_job(requery_pending, trigger="interval", seconds=60)
 scheduler.start()
 
 
-
-
+# ------------------------------------------------------------
+# rota simples de sucesso (evita 404)
+# ------------------------------------------------------------
 @app.route("/pagamento/sucesso")
 def pagamento_sucesso():
     return render_template("sucesso.html")
