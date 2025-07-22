@@ -3045,84 +3045,62 @@ def ver_carrinho():
 # --------------------------------------------------------
 #  CHECKOUT (CSRF PROTECTED)
 # --------------------------------------------------------
-import json
-import logging
-
-from flask import current_app, redirect, url_for, flash, session, request
-from flask_login import login_required, current_user
-from mercadopago import SDK
-
-
-
-
-
-
-
-
-
-# --------------------------------------------------------
-# 1)  /checkout   – cria Preference + Payment “pending”
-# --------------------------------------------------------
+# ──────────────────────────────────────────────────────────────────────────────
+# 1)  /checkout  –  cria Preference + Payment “pending”
+# ──────────────────────────────────────────────────────────────────────────────
+import json, logging, os
 from flask import current_app, redirect, url_for, flash, session
 from flask_login import login_required, current_user
 from mercadopago import SDK
-import json, logging, os
 
-sdk = SDK(os.getenv("MERCADOPAGO_ACCESS_TOKEN"))      # inicializa 1x
+sdk = SDK(os.getenv("MERCADOPAGO_ACCESS_TOKEN"))       # inicializa 1×
 
 @app.route("/checkout", methods=["POST"])
 @login_required
 def checkout():
     current_app.logger.setLevel(logging.DEBUG)
 
-    # 1️⃣  carrega o carrinho / pedido
+    # 1️⃣ pedido atual do carrinho
     order_id = session.get("current_order")
     order    = Order.query.get(order_id) if order_id else None
     if not order or not order.items:
         flash("Seu carrinho está vazio.", "warning")
         return redirect(url_for("ver_carrinho"))
 
-    # 2️⃣  cria Payment pendente
+    # 2️⃣ grava Payment PENDING
     payment = Payment(
         user_id=current_user.id,
         order_id=order.id,
-        method=PaymentMethod.PIX,             # ou outro enum se quiser
+        method=PaymentMethod.PIX,          # ou outro enum que prefira
         status=PaymentStatus.PENDING,
     )
     db.session.add(payment)
-    db.session.commit()                       # gera payment.id
+    db.session.commit()                    # gera payment.id
 
-    payment.external_reference = str(payment.id)     # usaremos no webhook
+    payment.external_reference = str(payment.id)
     db.session.commit()
 
-    # 3️⃣  monta items
-    items = [
-        {
-            "title":      it.product.name,
-            "quantity":   int(it.quantity),
-            "unit_price": float(it.product.price),
-        }
-        for it in order.items
-    ]
+    # 3️⃣ itens do Preference
+    items = [{
+        "title":      it.product.name,
+        "quantity":   int(it.quantity),
+        "unit_price": float(it.product.price),
+    } for it in order.items]
 
-    # 4️⃣  payload Preference
+    # 4️⃣ payload Preference
     preference_data = {
         "items": items,
         "external_reference": payment.external_reference,
-        "notification_url": url_for("notificacoes_mercado_pago", _external=True),
-        "payment_methods": {"installments": 1},
-        "back_urls": {
-            s: url_for("payment_status", payment_id=payment.id, _external=True)
-            for s in ("success", "failure", "pending")
-        },
+        "notification_url":   url_for("notificacoes_mercado_pago", _external=True),
+        "payment_methods":    {"installments": 1},
+        "back_urls": {s: url_for("payment_status", payment_id=payment.id, _external=True)
+                      for s in ("success", "failure", "pending")},
         "auto_return": "approved",
     }
-    current_app.logger.debug(
-        "MP Preference Payload:\n%s",
-        json.dumps(preference_data, indent=2, ensure_ascii=False),
-    )
+    current_app.logger.debug("MP Preference Payload:\n%s",
+                             json.dumps(preference_data, indent=2, ensure_ascii=False))
 
-    # 5️⃣  chama Mercado Pago
+    # 5️⃣ cria Preference no Mercado Pago
     try:
         resp = sdk.preference().create(preference_data)
     except Exception:
@@ -3136,7 +3114,7 @@ def checkout():
         return redirect(url_for("ver_carrinho"))
 
     pref = resp["response"]
-    payment.transaction_id = str(pref["id"])    # guardamos o preference_id
+    payment.transaction_id = str(pref["id"])       # preference_id
     payment.init_point     = pref["init_point"]
     db.session.commit()
 
@@ -3144,35 +3122,44 @@ def checkout():
     return redirect(pref["init_point"])
 
 
-
-
-
-
-
-# --------------------------------------------------------
-# 2)  /notificacoes   – webhook Mercado Pago
-# --------------------------------------------------------
+# ──────────────────────────────────────────────────────────────────────────────
+# 2)  /notificacoes  –  Webhook / Feed v2 Mercado Pago
+# ──────────────────────────────────────────────────────────────────────────────
 import re, hmac, hashlib, urllib.parse
 from flask import request, jsonify, current_app
 from sqlalchemy.exc import SQLAlchemyError
 
-# ---- assinatura ------------------------------------------------------
-def verify_mp_signature(req, secret: str) -> bool:
-    m = re.search(r"ts=(\d+),v1=([a-f0-9]{64})", req.headers.get("X-Signature", ""))
-    if not (m and secret):
-        return False
-    ts, sig = m.groups()
+_SIG_RE = re.compile(r"(?:ts=(\d+),)?v1=([a-f0-9]{64})")   # ts= opcional
 
-    base = ts + req.path
-    if req.args:
-        base += "?" + urllib.parse.urlencode(sorted(req.args.items()))
-    base += req.get_data(as_text=True)
+def verify_mp_signature(req, secret: str) -> bool:
+    """
+    Aceita **ambos** os formatos de X‑Signature:
+      • Webhook v1 ............. v1=<hash>
+      • Feed v2 (CheckoutPro) .. ts=<epoch>,v1=<hash>
+    """
+    if not secret:
+        return True                      # sem secret (dev) ⇒ bypass
+
+    m = _SIG_RE.search(req.headers.get("X-Signature", ""))
+    if not m:
+        return False
+
+    ts, sig_header = m.groups()
+
+    if ts:                               # Feed v2
+        base = ts + req.path
+        if req.args:
+            base += "?" + urllib.parse.urlencode(sorted(req.args.items()))
+        base += req.get_data(as_text=True)
+    else:                                # Webhook v1
+        base = req.get_data(as_text=True)
 
     calc = hmac.new(secret.encode(), base.encode(), hashlib.sha256).hexdigest()
-    return hmac.compare_digest(calc, sig)
+    return hmac.compare_digest(calc, sig_header)
 
-# ---- extrai (kind,id) -------------------------------------------------
+
 def parse_mp_notification(req):
+    """Extrai (tipo, id) da notificação MP."""
     if req.args.get("topic") == "payment" and req.args.get("id"):
         return "payment", req.args["id"]
     data = req.get_json(silent=True) or {}
@@ -3180,11 +3167,11 @@ def parse_mp_notification(req):
         return "payment", data.get("data", {}).get("id")
     return None, None
 
-# ---- endpoint ---------------------------------------------------------
+
 @app.route("/notificacoes", methods=["POST", "GET"])
 def notificacoes_mercado_pago():
     if request.method == "GET":
-        return jsonify(status="pong"), 200
+        return jsonify(status="pong"), 200            # health‑check
 
     secret = current_app.config.get("MERCADOPAGO_WEBHOOK_SECRET", "")
     if not verify_mp_signature(request, secret):
@@ -3197,25 +3184,23 @@ def notificacoes_mercado_pago():
     if kind != "payment" or not mp_id:
         return jsonify(status="ignored"), 200
 
-    r = sdk.payment().get(mp_id)
-    if r.get("status") != 200:
-        current_app.logger.error("❌ API MP: %s", r)
+    resp = sdk.payment().get(mp_id)
+    if resp.get("status") != 200:
+        current_app.logger.error("❌ API MP: %s", resp)
         return jsonify(error="api error"), 500
 
-    info   = r["response"]
+    info   = resp["response"]
     status = info["status"]
-    ext    = info.get("external_reference")            # = payment.id salvo
+    extref = info.get("external_reference")           # = payment.id salvo
 
     try:
-        with db.session.begin():                       # atômico / rollback
-            # 1️⃣  localiza Payment
-            pay = Payment.query.filter_by(external_reference=ext).first()
+        with db.session.begin():                      # transação atômica
+            pay = Payment.query.filter_by(external_reference=extref).first()
             if not pay:
-                current_app.logger.warning("Payment %s não encontrado!", ext)
+                current_app.logger.warning("Payment %s não encontrado", extref)
                 return jsonify(error="payment not found"), 404
 
-            # 2️⃣  atualiza status + mp‑id
-            mapping = {
+            status_map = {
                 "approved":     PaymentStatus.COMPLETED,
                 "authorized":   PaymentStatus.COMPLETED,
                 "pending":      PaymentStatus.PENDING,
@@ -3226,19 +3211,17 @@ def notificacoes_mercado_pago():
                 "refunded":     PaymentStatus.FAILED,
                 "expired":      PaymentStatus.FAILED,
             }
-            pay.status          = mapping.get(status, PaymentStatus.PENDING)
-            pay.mercado_pago_id = mp_id           # guarda o “payment_id” real
+            pay.status          = status_map.get(status, PaymentStatus.PENDING)
+            pay.mercado_pago_id = mp_id
 
-            # 3️⃣  cria DeliveryRequest se preciso
+            # cria DeliveryRequest (idempotente)
             if pay.status == PaymentStatus.COMPLETED and pay.order_id:
                 if not DeliveryRequest.query.filter_by(order_id=pay.order_id).first():
-                    db.session.add(
-                        DeliveryRequest(
-                            order_id        = pay.order_id,
-                            requested_by_id = pay.user_id,
-                            status          = "pendente",
-                        )
-                    )
+                    db.session.add(DeliveryRequest(
+                        order_id        = pay.order_id,
+                        requested_by_id = pay.user_id,
+                        status          = "pendente",
+                    ))
 
     except SQLAlchemyError as e:
         current_app.logger.exception("DB error: %s", e)
