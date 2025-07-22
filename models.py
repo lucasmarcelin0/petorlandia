@@ -28,8 +28,26 @@ class Endereco(db.Model):
     def __repr__(self):
         return f"{self.rua}, {self.numero or 's/n'} - {self.bairro}, {self.cidade}/{self.estado} - {self.cep}"
 
+    # relação 1‑para‑1 de volta
+    pickup_location = db.relationship(
+        "PickupLocation",
+        back_populates="endereco",
+        uselist=False
+    )
 
-
+    @property
+    def full(self):
+        """Rua, número, bairro – cidade/UF – CEP."""
+        partes = []
+        if self.rua:
+            partes.append(f"{self.rua}{', ' + self.numero if self.numero else ''}")
+        if self.bairro:
+            partes.append(self.bairro)
+        if self.cidade and self.estado:
+            partes.append(f"{self.cidade}/{self.estado}")
+        if self.cep:
+            partes.append(f"CEP {self.cep}")
+        return " – ".join(partes)
 
 
 class UserRole(enum.Enum):
@@ -561,9 +579,25 @@ class DeliveryRequest(db.Model):
     requested_by = db.relationship('User', foreign_keys=[requested_by_id])
     worker = db.relationship('User', foreign_keys=[worker_id])
     canceled_by = db.relationship('User', foreign_keys=[canceled_by_id])
+    pickup_id   = db.Column(db.Integer, db.ForeignKey('pickup_location.id'))
+    pickup      = db.relationship('PickupLocation')
 
 
 
+class PickupLocation(db.Model):
+    __tablename__ = "pickup_location"
+    id          = db.Column(db.Integer, primary_key=True)
+    nome        = db.Column(db.String(120))           # “Galpão Central”, “Hub Ribeirão”…
+    endereco_id = db.Column(db.Integer, db.ForeignKey('endereco.id'))
+    endereco    = db.relationship('Endereco')
+    ativo       = db.Column(db.Boolean, default=True) # permite desativar pontos
+
+
+    endereco    = db.relationship(
+        "Endereco",
+        back_populates="pickup_location",
+        uselist=False
+    )
 
 
 

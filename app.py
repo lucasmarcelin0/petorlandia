@@ -2639,34 +2639,135 @@ def create_order():
 
 
 #Delivery routes
+ 
 
 
 @app.route('/orders/<int:order_id>/request_delivery', methods=['POST'])
 @login_required
 def request_delivery(order_id):
-    if current_user.worker != 'delivery':
+    if current_user.worker != 'delivery':      # só entregadores podem solicitar
         abort(403)
+
     order = Order.query.get_or_404(order_id)
+
+    # ─── 1. escolher um ponto de retirada ────────────────────────────────
+    # Hoje: pega o primeiro ponto ATIVO
+    pickup = (PickupLocation.query
+              .filter_by(ativo=True)
+              .first())
+
+    if pickup is None:
+        flash('Nenhum ponto de retirada cadastrado/ativo.', 'danger')
+        return redirect(url_for('list_delivery_requests'))
+
+    # ─── 2. criar a DeliveryRequest já com o pickup_id ───────────────────
     req = DeliveryRequest(
-        order_id=order.id,
-        requested_by_id=current_user.id,
-        status='pendente',
+        order_id        = order.id,
+        requested_by_id = current_user.id,
+        status          = 'pendente',
+        pickup          = pickup         # 🔑 chave aqui!
     )
+
     db.session.add(req)
     db.session.commit()
+
     session.pop('current_order', None)
     flash('Solicitação de entrega gerada.', 'success')
     return redirect(url_for('list_delivery_requests'))
 
 
-@app.route('/delivery_requests')
+
+from sqlalchemy.orm import joinedload
+
+from sqlalchemy.orm import joinedload
+from sqlalchemy import func
+
+from sqlalchemy.orm import joinedload
+
+from sqlalchemy.orm import selectinload
+
+@app.route("/delivery_requests")
 @login_required
 def list_delivery_requests():
-    if current_user.worker == 'delivery':
-        requests = DeliveryRequest.query.order_by(DeliveryRequest.requested_at.desc()).all()
+    """
+    •  Entregador → até 3 pendentes (mais antigas primeiro) + as dele
+    •  Cliente    → só pedidos que ele criou
+    """
+    base = (DeliveryRequest.query
+            .order_by(DeliveryRequest.requested_at.asc())   # FIFO
+            .options(
+                selectinload(DeliveryRequest.order)          # evita N+1
+                .selectinload(Order.user)
+            ))
+
+    # -------------------------------------------------------- ENTREGADOR
+    if current_user.worker == "delivery":
+        # total (para o badge)
+        available_total = base.filter_by(status="pendente").count()
+
+        # só as 3 primeiras pendentes
+        available = (base.filter_by(status="pendente")
+                          .limit(3)
+                          .all())
+
+        doing    = (base.filter_by(worker_id=current_user.id,
+                                   status="em_andamento")
+                         .order_by(DeliveryRequest.accepted_at.desc())
+                         .all())
+
+        done     = (base.filter_by(worker_id=current_user.id,
+                                   status="concluida")
+                         .order_by(DeliveryRequest.completed_at.desc())
+                         .all())
+
+        canceled = (base.filter_by(worker_id=current_user.id,
+                                   status="cancelada")
+                         .order_by(DeliveryRequest.canceled_at.desc())
+                         .all())
+    # -------------------------------------------------------- CLIENTE
     else:
-        requests = DeliveryRequest.query.filter_by(requested_by_id=current_user.id).order_by(DeliveryRequest.requested_at.desc()).all()
-    return render_template('delivery_requests.html', requests=requests)
+        base = base.filter_by(requested_by_id=current_user.id)
+
+        available_total = 0
+        available = []                                          # não exibe
+
+        doing    = base.filter_by(status="em_andamento").all()
+        done     = base.filter_by(status="concluida").all()
+        canceled = base.filter_by(status="cancelada").all()
+
+    return render_template(
+        "delivery_requests.html",
+        available=available,
+        doing=doing,
+        done=done,
+        canceled=canceled,
+        available_total=available_total   # novo badge
+    )
+
+
+
+# --- Compatibilidade admin ---------------------------------
+@app.route("/admin/delivery/<int:req_id>")
+@login_required
+def admin_delivery_detail(req_id):
+    # se quiser, mantenha restrição de admin aqui
+    if not _is_admin():
+        abort(403)
+    return redirect(url_for("delivery_detail", req_id=req_id))
+
+# --- Compatibilidade entregador ----------------------------
+@app.route("/worker/delivery/<int:req_id>")
+@login_required
+def worker_delivery_detail(req_id):
+    # garante que o usuário é entregador e dono da entrega
+    if current_user.worker != "delivery":
+        abort(403)
+    req = DeliveryRequest.query.get_or_404(req_id)
+    if req.worker_id and req.worker_id != current_user.id:
+        abort(403)
+    return redirect(url_for("delivery_detail", req_id=req_id))
+
+
 
 
 
@@ -2684,7 +2785,8 @@ def accept_delivery(req_id):
     req.accepted_at = datetime.utcnow()
     db.session.commit()
     flash('Entrega aceita.', 'success')
-    return redirect(url_for('list_delivery_requests'))
+    # ⬇️ redireciona direto ao detalhe unificado
+    return redirect(url_for('delivery_detail', req_id=req.id))
 
 
 @app.route('/delivery_requests/<int:req_id>/complete', methods=['POST'])
@@ -2735,31 +2837,58 @@ def buyer_cancel_delivery(req_id):
     return redirect(url_for('loja'))
 
 
-@app.route('/admin/delivery/<int:req_id>')
+# routes_delivery.py  (ou app.py)
+from sqlalchemy.orm import joinedload
+
+
+@app.route("/delivery/<int:req_id>")
 @login_required
-def admin_delivery_detail(req_id):
-    if not _is_admin():
+def delivery_detail(req_id):
+    """
+    Detalhe da entrega:
+      • admin      → vê tudo
+      • entregador → vê apenas se for o responsável
+    """
+    req = (DeliveryRequest.query
+           .options(
+               joinedload(DeliveryRequest.pickup)            # carrega o PickupLocation
+                   .joinedload(PickupLocation.endereco),     # e o Endereco
+               joinedload(DeliveryRequest.order)
+                   .joinedload(Order.user),
+               joinedload(DeliveryRequest.worker)
+           )
+           .get_or_404(req_id))
+
+    # ------------------ dados auxiliares ------------------
+    order  = req.order
+    buyer  = order.user
+    items  = order.items
+    total  = sum(i.quantity * i.product.price for i in items if i.product)
+
+    # ------------------ controle de acesso ----------------
+    if _is_admin():
+        role = "admin"
+
+    elif current_user.worker == "delivery":
+        if req.worker_id and req.worker_id != current_user.id:
+            abort(403)
+        role = "worker"
+
+    else:
         abort(403)
-    
-    req = DeliveryRequest.query.get_or_404(req_id)
-    order = Order.query.get_or_404(req.order_id)
-    items = order.items  # Order has one-to-many OrderItem
-    buyer = order.user
-    delivery_worker = req.worker if req.worker_id else None
 
-    # Acessando produtos relacionados e somando valor total
-    total = 0
-    for item in items:
-        if hasattr(item, 'product') and item.product:
-            total += item.quantity * item.product.price
+    # ------------------ render ----------------------------
+    return render_template(
+        "delivery_detail.html",
+        req=req,
+        order=order,
+        items=items,
+        buyer=buyer,
+        delivery_worker=req.worker,
+        total=total,
+        role=role               # template usa para mostrar/ocultar
+    )
 
-    return render_template('admin/delivery_detail.html',
-                           req=req,
-                           order=order,
-                           items=items,
-                           buyer=buyer,
-                           delivery_worker=delivery_worker,
-                           total=total)
 
 
 
