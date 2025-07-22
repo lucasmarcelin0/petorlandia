@@ -6,7 +6,8 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')
 import pytest
 import app as app_module
 from app import app as flask_app, sdk, db
-from models import User, Payment, PaymentStatus, DeliveryRequest, PaymentMethod
+from models import User, Payment, PaymentStatus, DeliveryRequest, PaymentMethod, Order
+from datetime import datetime
 
 @pytest.fixture
 def app():
@@ -126,6 +127,7 @@ def test_payment_status_updates_from_api(monkeypatch, app):
         order_id = 99
         user_id = 42
         method = PaymentMethod.PIX
+        order = type('O', (), {'items': [], 'total_value': lambda self: 0})()
 
     class FakePaymentQuery:
         def get_or_404(self, _):
@@ -147,7 +149,6 @@ def test_payment_status_updates_from_api(monkeypatch, app):
         for idx, fn in enumerate(flask_app.template_context_processors[None]):
             if fn.__name__ == 'inject_unread_count':
                 flask_app.template_context_processors[None][idx] = lambda: {'unread_messages': 0}
-                break
 
         # Finge que o usuário está logado
         import flask_login.utils as login_utils
@@ -155,7 +156,9 @@ def test_payment_status_updates_from_api(monkeypatch, app):
             is_authenticated = True
             id = 1
             name = "Tester"
+            email = "u@x.com"
         monkeypatch.setattr(login_utils, '_get_user', lambda: FakeUser())
+        monkeypatch.setattr(app_module, '_is_admin', lambda: False)
 
         class FakePaymentAPI:
             def get(self, _):
@@ -165,3 +168,75 @@ def test_payment_status_updates_from_api(monkeypatch, app):
 
         response = client.get('/payment_status/1?status=success')
         assert response.status_code == 200
+
+
+def test_api_minhas_compras_filters_by_user(monkeypatch, app):
+    client = app.test_client()
+
+    class FakeOrder:
+        id = 1
+        created_at = datetime.utcnow()
+        user_id = 1
+        payment = type('P', (), {'status': PaymentStatus.COMPLETED})
+        items = []
+        def total_value(self):
+            return 10.0
+
+    class FakeQuery:
+        def options(self, *a, **k):
+            return self
+        def filter_by(self, **kw):
+            assert kw.get('user_id') == 1
+            return self
+        def order_by(self, *a, **k):
+            return self
+        def all(self):
+            return [FakeOrder()]
+
+    with app.app_context():
+        monkeypatch.setattr(Order, 'query', FakeQuery())
+        import flask_login.utils as login_utils
+        class FakeUser:
+            is_authenticated = True
+            id = 1
+            email = 'x'
+        monkeypatch.setattr(login_utils, '_get_user', lambda: FakeUser())
+        monkeypatch.setattr(app_module, '_is_admin', lambda: False)
+
+        response = client.get('/api/minhas-compras')
+        assert response.status_code == 200
+        data = response.get_json()
+        assert data[0]['id'] == 1
+
+
+def test_pedido_detail_forbidden(monkeypatch, app):
+    client = app.test_client()
+
+    class FakeOrderObj:
+        id = 2
+        user_id = 2
+        created_at = datetime.utcnow()
+        items = []
+        payment = None
+        delivery_requests = []
+        def total_value(self):
+            return 0
+
+    class FakeQuery:
+        def options(self, *a, **k):
+            return self
+        def get_or_404(self, _):
+            return FakeOrderObj()
+
+    with app.app_context():
+        monkeypatch.setattr(Order, 'query', FakeQuery())
+        import flask_login.utils as login_utils
+        class FakeUser:
+            is_authenticated = True
+            id = 1
+            email = 'x'
+        monkeypatch.setattr(login_utils, '_get_user', lambda: FakeUser())
+        monkeypatch.setattr(app_module, '_is_admin', lambda: False)
+
+        response = client.get('/pedido/2')
+        assert response.status_code == 403
