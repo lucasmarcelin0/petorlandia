@@ -26,6 +26,7 @@ frozenlist==1.7.0
 greenlet==3.2.3
 gunicorn==23.0.0
 idna==3.10
+iniconfig==2.1.0
 itsdangerous==2.2.0
 Jinja2==3.1.5
 jmespath==1.0.1
@@ -36,9 +37,12 @@ msgspec==0.19.0
 multidict==6.5.1
 packaging==25.0
 pillow==10.4.0
+pluggy==1.6.0
 propcache==0.3.2
 psycopg2-binary==2.9.9
+Pygments==2.19.2
 PyJWT==2.10.1
+pytest==8.4.1
 python-dateutil==2.9.0.post0
 python-dotenv==1.1.1
 pytz==2024.2
