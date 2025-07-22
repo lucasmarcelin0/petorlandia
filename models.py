@@ -533,7 +533,7 @@ class Product(db.Model):
 
 class Order(db.Model):
     id = db.Column(db.Integer, primary_key=True)
-    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True, index=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
     user = db.relationship('User', backref='orders')
@@ -636,6 +636,7 @@ class Payment(db.Model):
     status = db.Column(
         PgEnum(PaymentStatus, name="paymentstatus", create_type=False),
         default=PaymentStatus.PENDING,
+        index=True,
     )
 
     transaction_id     = db.Column(db.String(255))
@@ -644,7 +645,7 @@ class Payment(db.Model):
 
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
-    user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
+    user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False, index=True)
     user    = db.relationship("User", backref="payments")
 
     init_point = db.Column(db.String)
