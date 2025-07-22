@@ -3200,12 +3200,6 @@ def verify_mp_signature(req, secret: str) -> bool:
 
 @app.route("/notificacoes", methods=["POST", "GET"])
 def notificacoes_mercado_pago():
-    """
-    Handle Mercado Pago webhook notifications for payment updates.
-    
-    Returns:
-        JSON response with status or error message
-    """
     if request.method == "GET":
         return jsonify(status="pong"), 200
 
@@ -3213,7 +3207,13 @@ def notificacoes_mercado_pago():
     if not verify_mp_signature(request, secret):
         return jsonify(error="invalid signature"), 400
 
-    # Process only payment notifications
+    # Check notification type
+    notification_type = request.args.get("type") or request.args.get("topic")
+    if notification_type != "payment":
+        current_app.logger.info("Ignoring non-payment notification: %s", notification_type)
+        return jsonify(status="ignored"), 200
+
+    # Extract mp_id
     data = request.get_json(silent=True) or {}
     mp_id = (data.get("data", {}).get("id") or  # v1
              data.get("resource", "").split("/")[-1])  # v2
@@ -3221,75 +3221,60 @@ def notificacoes_mercado_pago():
     if not mp_id:
         return jsonify(status="ignored"), 200
 
-    # Query payment details
+    # Query payment
+    resp = sdk.payment().get(mp_id)
+    if resp.get("status") == 404:
+        with db.session.begin():
+            p = PendingWebhook.query.filter_by(mp_id=mp_id).first()
+            if not p:
+                db.session.add(PendingWebhook(mp_id=mp_id))
+        return jsonify(status="retry_later"), 202
+    if resp.get("status") != 200:
+        return jsonify(error="api error"), 500
+
+    # Process payment info
+    info = resp["response"]
+    status = info["status"]
+    extref = info.get("external_reference")
+    if not extref:
+        return jsonify(status="ignored"), 200
+
+    # Update database
+    status_map = {
+        "approved": PaymentStatus.COMPLETED,
+        "authorized": PaymentStatus.COMPLETED,
+        "pending": PaymentStatus.PENDING,
+        "in_process": PaymentStatus.PENDING,
+        "in_mediation": PaymentStatus.PENDING,
+        "rejected": PaymentStatus.FAILED,
+        "cancelled": PaymentStatus.FAILED,
+        "refunded": PaymentStatus.FAILED,
+        "expired": PaymentStatus.FAILED,
+    }
+
     try:
-        resp = sdk.payment().get(mp_id)
-        if resp.get("status") == 404:
-            with db.session.begin():
-                PendingWebhook.query.get(mp_id) or db.session.add(
-                    PendingWebhook(mp_id=mp_id)
-                )
-            return jsonify(status="retry_later"), 202
-        if resp.get("status") != 200:
-            return jsonify(error="api error"), 500
+        with db.session.begin():
+            pay = Payment.query.filter_by(external_reference=extref).first()
+            if not pay:
+                current_app.logger.warning("Payment %s not found for external_reference %s", mp_id, extref)
+                return jsonify(error="payment not found"), 404
 
-        info = resp["response"]
-        status = info["status"]
-        extref = info.get("external_reference")
-        if not extref:
-            return jsonify(status="ignored"), 200
+            pay.status = status_map.get(status, PaymentStatus.PENDING)
+            pay.mercado_pago_id = mp_id
 
-        # Update database
-        status_map = {
-            "approved": PaymentStatus.COMPLETED,
-            "authorized": PaymentStatus.COMPLETED,
-            "pending": PaymentStatus.PENDING,
-            "in_process": PaymentStatus.PENDING,
-            "in_mediation": PaymentStatus.PENDING,
-            "rejected": PaymentStatus.FAILED,
-            "cancelled": PaymentStatus.FAILED,
-            "refunded": PaymentStatus.FAILED,
-            "expired": PaymentStatus.FAILED,
-        }
+            if pay.status == PaymentStatus.COMPLETED and pay.order_id:
+                if not DeliveryRequest.query.filter_by(order_id=pay.order_id).first():
+                    db.session.add(DeliveryRequest(
+                        order_id=pay.order_id,
+                        requested_by_id=pay.user_id,
+                        status="pendente",
+                    ))
 
-        try:
-            with db.session.begin():
-                pay = Payment.query.filter_by(external_reference=extref).first()
-                if not pay:
-                    current_app.logger.warning("Payment %s not found for external_reference %s", mp_id, extref)
-                    return jsonify(error="payment not found"), 404
+    except SQLAlchemyError as e:
+        current_app.logger.exception("DB error: %s", e)
+        return jsonify(error="db failure"), 500
 
-                pay.status = status_map.get(status, PaymentStatus.PENDING)
-                pay.mercado_pago_id = mp_id
-
-                if pay.status == PaymentStatus.COMPLETED and pay.order_id:
-                    if not DeliveryRequest.query.filter_by(order_id=pay.order_id).first():
-                        db.session.add(DeliveryRequest(
-                            order_id=pay.order_id,
-                            requested_by_id=pay.user_id,
-                            status="pendente",
-                        ))
-
-        except SQLAlchemyError as e:
-            current_app.logger.exception("DB error: %s", e)
-            return jsonify(error="db failure"), 500
-
-        return jsonify(status="updated"), 200
-
-    except Exception as e:
-        current_app.logger.exception("Unexpected error processing notification: %s", e)
-        return jsonify(error="server error"), 500
-
-@app.route("/pagamento/sucesso")
-def pagamento_sucesso():
-    """
-    Handle successful payment redirect.
-    
-    Returns:
-        Rendered success template
-    """
-    return render_template("sucesso.html")
-
+    return jsonify(status="updated"), 200
 
 
 
