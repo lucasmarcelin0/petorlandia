@@ -1,303 +1,153 @@
-import os
-import sys
-import re
-
-
-
-
-# 1) Garante que o diretório petorlandia/ esteja no path para “import models”
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-
-# ─── Alias models *before* anything else imports it ──────────────────────
-import importlib
-_models_pkg = importlib.import_module("petorlandia.models")
-sys.modules["models"] = _models_pkg
-
-
-
-import uuid
-import logging
-import hashlib
-import hmac
-import base64
-import secrets
-import qrcode
-import pytz
-
-from io import BytesIO
-from math import ceil
-from datetime import datetime, timedelta
-from dateutil.relativedelta import relativedelta
-from werkzeug.utils import secure_filename
-
-from flask import (
-    Flask, current_app, jsonify, render_template, redirect, url_for,
-    request, session, flash, abort, send_file
-)
-from flask_sqlalchemy import SQLAlchemy
-from flask_migrate import Migrate, upgrade, migrate as migrate_func, init as migrate_init
-from flask_login import (
-    LoginManager, login_user, login_required,
-    current_user, logout_user
-)
-from flask_session import Session as FlaskSession
-from flask_mail import Mail, Message as MailMessage
+# ───────────────────────────  app.py  ───────────────────────────
+import os, sys, pathlib, importlib, logging, uuid, re
+from datetime import datetime
+from dotenv import load_dotenv
+from flask import Flask
 from itsdangerous import URLSafeTimedSerializer
 
-import boto3
-from dotenv import load_dotenv
-import boto3
-import qrcode  # noqa: F401
-import importlib
+# ----------------------------------------------------------------
+# 1)  Alias único para “models”
+# ----------------------------------------------------------------
+PROJECT_ROOT = pathlib.Path(__file__).resolve().parent
+sys.path.insert(0, str(PROJECT_ROOT))
 
-
-# ---------------------------------------------------------------------------
-# 🔧 Ambiente e caminhos
-# ---------------------------------------------------------------------------
-
-load_dotenv()
-PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))
-if PROJECT_ROOT not in sys.path:
-    sys.path.append(PROJECT_ROOT)
-
-# ---------------------------------------------------------------------------
-# 📦 Imports locais com fallback relativo
-# ---------------------------------------------------------------------------
-
-def _import(name: str):
-    """Importa módulo por nome absoluto; se falhar tenta relativo ao pacote."""
-    try:
-        return importlib.import_module(name)
-    except ModuleNotFoundError:
-        pkg_name = f"{__name__.split('.', 1)[0]}.{name}"
-        return importlib.import_module(pkg_name)
-
-# Config
-Config = _import("config").Config  # type: ignore[attr-defined]
-
-# Extensões únicas
-_ext = _import("extensions")
-
-db, migrate, mail, login, session_ext = (
-    _ext.db,  # type: ignore[attr-defined]
-    _ext.migrate,
-    _ext.mail,
-    _ext.login,
-    _ext.session,
-)
-
-# Outros módulos locais
-init_admin, _is_admin = (
-    _import("admin").init_admin,
-    _import("admin")._is_admin,
-)
-forms = _import("forms")
-# Exporta classes de formulário para o namespace global (compatibilidade com rotas legadas)
-MessageForm = forms.MessageForm  # type: ignore[attr-defined]
-RegistrationForm = forms.RegistrationForm  # type: ignore[attr-defined]
-LoginForm = forms.LoginForm  # type: ignore[attr-defined]
-AnimalForm = forms.AnimalForm  # type: ignore[attr-defined]
-EditProfileForm = forms.EditProfileForm  # type: ignore[attr-defined]
-ResetPasswordRequestForm = forms.ResetPasswordRequestForm  # type: ignore[attr-defined]
-ResetPasswordForm = forms.ResetPasswordForm  # type: ignore[attr-defined]
-OrderItemForm = forms.OrderItemForm  # type: ignore[attr-defined]
-DeliveryRequestForm = forms.DeliveryRequestForm  # type: ignore[attr-defined]
-AddToCartForm = forms.AddToCartForm  # type: ignore[attr-defined]
-
-helpers = _import("helpers")
-
-
-
-
-# ---------------------------------------------------------------------------
-# ☁️ AWS S3 helper
-# ---------------------------------------------------------------------------
-
-# ——— AWS S3 client ———————————————————————————————————————————————————
-s3 = boto3.client(
-    "s3",
-    aws_access_key_id=os.getenv("AWS_ACCESS_KEY_ID"),
-    aws_secret_access_key=os.getenv("AWS_SECRET_ACCESS_KEY"),
-)
-BUCKET_NAME = os.getenv("S3_BUCKET_NAME")
-
-
-def upload_to_s3(file, filename, folder="uploads") -> str | None:
-    """Faz upload para S3 e devolve a URL; retorna None em caso de erro."""
-    try:
-        s3_path = f"{folder}/{filename}"
-        s3.upload_fileobj(
-            file,
-            BUCKET_NAME,
-            s3_path,
-            ExtraArgs={"ContentType": file.content_type},
-        )
-        return f"https://{BUCKET_NAME}.s3.amazonaws.com/{s3_path}"
-    except Exception as exc:  # noqa: BLE001
-        logging.exception("[ERRO S3] Falha ao enviar para o S3: %s", exc)
-        return None
-
-# ——— Cria diretório instance ——————————————————————————————————————————————
-instance_path = os.path.join(os.getcwd(), 'instance')
-os.makedirs(instance_path, exist_ok=True)
-
-# ——— Cria app Flask —————————————————————————————————————————————————————
-app = Flask(__name__, instance_path=instance_path)
-
-# ——— Config ———————————————————————————————————————————————————————
 try:
-    from config import Config
-except ImportError:
-    try:
-        from petorlandia.config import Config
-    except ImportError:
-        from .config import Config
+    models_pkg = importlib.import_module("petorlandia.models")
+except ModuleNotFoundError:
+    models_pkg = importlib.import_module("models")
+sys.modules["models"] = models_pkg
 
-app.config.from_object(Config)
-app.config['FRONTEND_URL']      = os.environ.get('FRONTEND_URL', 'http://127.0.0.1:5000')
-app.config["SESSION_PERMANENT"]  = False
-app.config["SESSION_TYPE"]       = "filesystem"
+# 📌 Expose every model name (CamelCase) globally
+globals().update({
+    name: obj
+    for name, obj in models_pkg.__dict__.items()
+    if name[:1].isupper()          # naive check: classes start with capital
+})
 
-
-
-
-
-
-# Mail (Gmail App Password)
-from dotenv import load_dotenv
+# ----------------------------------------------------------------
+# 2)  Flask app + config
+# ----------------------------------------------------------------
 load_dotenv()
 
-app.config['MAIL_SERVER']        = os.getenv('MAIL_SERVER', 'smtp.gmail.com')
-app.config['MAIL_PORT']          = int(os.getenv('MAIL_PORT', 587))
-app.config['MAIL_USE_TLS']       = os.getenv('MAIL_USE_TLS', 'True') == 'True'
-app.config['MAIL_USE_SSL']       = os.getenv('MAIL_USE_SSL', 'False') == 'True'
-app.config['MAIL_USERNAME']      = os.getenv('MAIL_USERNAME')
-app.config['MAIL_PASSWORD']      = os.getenv('MAIL_PASSWORD')
-app.config['MAIL_DEFAULT_SENDER']= (
-    os.getenv('MAIL_DEFAULT_NAME', 'PetOrlândia'),
-    os.getenv('MAIL_USERNAME')
+app = Flask(
+    __name__,
+    instance_path=str(PROJECT_ROOT / "instance"),
+    instance_relative_config=True,
 )
+app.config.from_object("config.Config")
+app.config.setdefault("FRONTEND_URL", "http://127.0.0.1:5000")
+app.config.update(SESSION_PERMANENT=False, SESSION_TYPE="filesystem")
 
-# ——— Extensões ———————————————————————————————————————————————————————
-try:
-    from extensions import db, migrate as migrate_ext, mail as mail_ext, login as login_ext, session as session_ext
-except ImportError:
-    try:
-        from petorlandia.extensions import db, migrate as migrate_ext, mail as mail_ext, login as login_ext, session as session_ext
-    except ImportError:
-        from .extensions import db, migrate as migrate_ext, mail as mail_ext, login as login_ext, session as session_ext
+# ----------------------------------------------------------------
+# 3)  Extensões
+# ----------------------------------------------------------------
+# já existe no topo, logo depois das extensões:
+from extensions import db, migrate, mail, login, session as session_ext
+from flask_login import login_user, logout_user, current_user, login_required
+from flask_mail import Message as MailMessage      #  ←  adicione esta linha
+from werkzeug.utils import secure_filename
 
 db.init_app(app)
-migrate_ext.init_app(app, db)
-mail_ext.init_app(app)
-login_ext.init_app(app)
+migrate.init_app(app, db, compare_type=True)
+mail.init_app(app)
+login.init_app(app)
 session_ext.init_app(app)
 
-# ... after all db.init_app, migrate_ext.init_app, etc. …
-FlaskSession(app)
+# ----------------------------------------------------------------
+# 4)  AWS S3 helper (lazy)
+# ----------------------------------------------------------------
+import boto3
 
-# … after db.init_app(), migrate.init_app(), etc …
-FlaskSession(app)
+AWS_ID, AWS_SECRET = os.getenv("AWS_ACCESS_KEY_ID"), os.getenv("AWS_SECRET_ACCESS_KEY")
+BUCKET = os.getenv("S3_BUCKET_NAME")
 
-# ─── Import your models exactly once, with your try/except * ─────────────────
-with app.app_context():
-    # 1) load the real package module
-    import petorlandia.models as _models_pkg
-    # 2) alias it so bare ‘models’ points to the same module
-    import sys
-    sys.modules['models'] = _models_pkg
+def _s3():
+    return boto3.client("s3", aws_access_key_id=AWS_ID, aws_secret_access_key=AWS_SECRET)
 
-    # 3) now do your wildcard fallback
+def upload_to_s3(file, filename, folder="uploads") -> str | None:
     try:
-        from models import *
-    except ImportError:
-        try:
-            from petorlandia.models import *
-        except ImportError:
-            from .models import *
+        key = f"{folder}/{filename}"
+        _s3().upload_fileobj(file, BUCKET, key, ExtraArgs={"ContentType": file.content_type})
+        return f"https://{BUCKET}.s3.amazonaws.com/{key}"
+    except Exception as exc:                 # noqa: BLE001
+        app.logger.exception("S3 upload failed: %s", exc)
+        return None
 
-    # 4) init admin (which may pull in your models)
-    init_admin(app)
-    # db.create_all()   # if you still need it
+# ----------------------------------------------------------------
+# 5)  Filtros Jinja para data BR
+# ----------------------------------------------------------------
+import pytz
+br_tz = pytz.timezone("America/Sao_Paulo")
 
-
-
-
-# Garante binding correto
-login   = login_ext
-mail    = mail_ext
-migrate = migrate_ext
-
-# ——— Jinja Filters —————————————————————————————————————————————————————
+@app.template_filter("datetime_brazil")
 def datetime_brazil(value):
     if isinstance(value, datetime):
-        return value.strftime('%d/%m/%Y %H:%M')
+        return value.strftime("%d/%m/%Y %H:%M")
     return value
-app.jinja_env.filters['datetime_brazil'] = datetime_brazil
 
-br_tz = pytz.timezone('America/Sao_Paulo')
+@app.template_filter("format_datetime_brazil")
 def format_datetime_brazil(value, fmt="%d/%m/%Y %H:%M"):
     if value is None:
         return ""
     if value.tzinfo is None:
         value = pytz.utc.localize(value)
     return value.astimezone(br_tz).strftime(fmt)
-app.jinja_env.filters['format_datetime_brazil'] = format_datetime_brazil
 
-# ——— Imports do seu código —————————————————————————————————————————————
-# Forms
-try:
-    from forms import (
-        MessageForm, RegistrationForm, LoginForm, AnimalForm,
-        EditProfileForm, ResetPasswordRequestForm, ResetPasswordForm,
-        OrderItemForm, DeliveryRequestForm, AddToCartForm,
-        SubscribePlanForm
-    )
-except ImportError:
-    try:
-        from petorlandia.forms import (
-            MessageForm, RegistrationForm, LoginForm, AnimalForm,
-            EditProfileForm, ResetPasswordRequestForm, ResetPasswordForm,
-            OrderItemForm, DeliveryRequestForm, AddToCartForm,
-            SubscribePlanForm
-        )
-    except ImportError:
-        from .forms import (
-            MessageForm, RegistrationForm, LoginForm, AnimalForm,
-            EditProfileForm, ResetPasswordRequestForm, ResetPasswordForm,
-            OrderItemForm, DeliveryRequestForm, AddToCartForm,
-            SubscribePlanForm
-        )
+# ----------------------------------------------------------------
+# 6)  Forms e helpers
+# ----------------------------------------------------------------
+from forms import (MessageForm, RegistrationForm, LoginForm, AnimalForm,
+                   EditProfileForm, ResetPasswordRequestForm, ResetPasswordForm,
+                   OrderItemForm, DeliveryRequestForm, AddToCartForm, SubscribePlanForm)
+from helpers import calcular_idade, parse_data_nascimento
 
-# Admin
-try:
-    from admin import init_admin, _is_admin
-except ImportError:
-    try:
-        from petorlandia.admin import init_admin, _is_admin
-    except ImportError:
-        from .admin import init_admin, _is_admin
+# ----------------------------------------------------------------
+# 7)  Login & serializer
+# ----------------------------------------------------------------
+from models import User   # noqa: E402  (import depois de alias)
 
-
-# Helpers
-try:
-    from helpers import calcular_idade, parse_data_nascimento
-except ImportError:
-    try:
-        from petorlandia.helpers import calcular_idade, parse_data_nascimento
-    except ImportError:
-        from .helpers import calcular_idade, parse_data_nascimento
-
-# ——— Login —————————————————————————————————————————————————————————————
 @login.user_loader
 def load_user(user_id):
     return User.query.get(int(user_id))
-login.login_view = 'login'
+
+login.login_view = "login"
+serializer = URLSafeTimedSerializer(app.config["SECRET_KEY"])
+
+# ----------------------------------------------------------------
+# 8)  Admin & blueprints
+# ----------------------------------------------------------------
+with app.app_context():
+    from admin import init_admin, _is_admin  # import interno evita loop
+    init_admin(app)
+    # outras blueprints ->  from views import bp as views_bp ; app.register_blueprint(views_bp)
+
+# (rotas podem ser definidas em módulos separados e registrados via blueprint)
+# ────────────────────────────── fim ─────────────────────────────
+@app.context_processor
+def inject_unread_count():
+    if current_user.is_authenticated:
+        unread = (
+            Message.query       # Message is in globals()
+            .filter_by(receiver_id=current_user.id, lida=False)
+            .count()
+        )
+    else:
+        unread = 0
+    return dict(unread_messages=unread)
 
 
 
-# ——— Serializer —————————————————————————————————————————————————————
-serializer = URLSafeTimedSerializer(app.config['SECRET_KEY'])
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -918,28 +768,75 @@ def termo_transferencia(animal_id, user_id):
     return render_template('termo_transferencia.html', animal=animal, novo_dono=novo_dono)
 
 
-@app.route('/animal/<int:animal_id>/planosaude', methods=['GET', 'POST'])
+
+
+@app.route("/plano-saude")
+@login_required
+def plano_saude_overview():
+    # animais ativos do tutor
+    animais_do_usuario = (
+        Animal.query
+        .filter_by(user_id=current_user.id)
+        .filter(Animal.removido_em.is_(None))
+        .all()
+    )
+
+    # assinaturas de plano de saúde do tutor → dict {animal_id: sub}
+    from models import HealthSubscription
+    subs = (
+        HealthSubscription.query
+        .filter_by(user_id=current_user.id, active=True)
+        .all()
+    )
+    subscriptions = {s.animal_id: s for s in subs}
+
+    return render_template(
+        "plano_saude_overview.html",
+        animais=animais_do_usuario,
+        subscriptions=subscriptions,   # ← agora o template encontra
+        user=current_user,
+    )
+
+from forms import SubscribePlanForm   # coloque o import lá no topo
+
+@app.route("/animal/<int:animal_id>/planosaude", methods=["GET", "POST"])
 @login_required
 def planosaude_animal(animal_id):
     animal = Animal.query.get_or_404(animal_id)
 
     if animal.owner != current_user:
         flash("Você não tem permissão para acessar esse animal.", "danger")
-        return redirect(url_for('profile'))
+        return redirect(url_for("profile"))
 
-    # Aqui, você pode carregar um formulário ou exibir informações
-    return render_template('planosaude_animal.html', animal=animal)
+    form = SubscribePlanForm()
 
+    if form.validate_on_submit():
+        # TODO: processar contratação do plano aqui…
+        flash("Plano de saúde contratado!", "success")
+        return redirect(url_for("planosaude_animal", animal_id=animal_id))
 
-@app.route('/plano-saude')
-@login_required
-def plano_saude_overview():
-    animais_do_usuario = Animal.query.filter_by(user_id=current_user.id).filter(Animal.removido_em == None).all()
     return render_template(
-        'plano_saude_overview.html',
-        animais=animais_do_usuario,
-        user=current_user  # ← esta linha resolve o erro
+        "planosaude_animal.html",
+        animal=animal,
+        form=form,        # {{ form.hidden_tag() }} agora existe
     )
+
+
+
+@app.route("/plano-saude/<int:animal_id>/contratar", methods=["POST"])
+@login_required
+def contratar_plano(animal_id):
+    # placeholder: marcar no log ou só redirecionar
+    app.logger.info("Usuário %s quer contratar plano para animal %s",
+                    current_user.id, animal_id)
+    # mensagem flash para confirmar
+    from flask import flash
+    flash("💡 A rota contratar_plano ainda não está implementada.")
+    return redirect(url_for("planosaude_animal", animal_id=animal_id))
+
+
+
+
 
 
 
@@ -3148,7 +3045,6 @@ def ver_carrinho():
 # --------------------------------------------------------
 #  CHECKOUT (CSRF PROTECTED)
 # --------------------------------------------------------
-import os
 import json
 import logging
 
@@ -3157,81 +3053,91 @@ from flask_login import login_required, current_user
 from mercadopago import SDK
 
 
-#  — initialize MP SDK once —
-sdk = SDK(os.getenv("MERCADOPAGO_ACCESS_TOKEN"))
 
 
+
+
+
+
+
+# --------------------------------------------------------
+# 1)  /checkout   – cria Preference + Payment “pending”
+# --------------------------------------------------------
+from flask import current_app, redirect, url_for, flash, session
+from flask_login import login_required, current_user
+from mercadopago import SDK
+import json, logging, os
+
+sdk = SDK(os.getenv("MERCADOPAGO_ACCESS_TOKEN"))      # inicializa 1x
 
 @app.route("/checkout", methods=["POST"])
 @login_required
 def checkout():
-    # → Verbose logging for debugging
     current_app.logger.setLevel(logging.DEBUG)
 
-    # 1) Load the Order
+    # 1️⃣  carrega o carrinho / pedido
     order_id = session.get("current_order")
-    order = Order.query.get(order_id) if order_id else None
+    order    = Order.query.get(order_id) if order_id else None
     if not order or not order.items:
         flash("Seu carrinho está vazio.", "warning")
         return redirect(url_for("ver_carrinho"))
 
-    # 2) Create a pending Payment record
+    # 2️⃣  cria Payment pendente
     payment = Payment(
         user_id=current_user.id,
         order_id=order.id,
-        method=PaymentMethod.PIX,       # placeholder, you can keep PIX or add a new enum for MP
-        status=PaymentStatus.PENDING
+        method=PaymentMethod.PIX,             # ou outro enum se quiser
+        status=PaymentStatus.PENDING,
     )
     db.session.add(payment)
+    db.session.commit()                       # gera payment.id
+
+    payment.external_reference = str(payment.id)     # usaremos no webhook
     db.session.commit()
 
-    # 3) Build MPL items list
-    items = [{
-        "title": item.product.name,
-        "quantity": int(item.quantity),
-        "unit_price": float(item.product.price)
-    } for item in order.items]
+    # 3️⃣  monta items
+    items = [
+        {
+            "title":      it.product.name,
+            "quantity":   int(it.quantity),
+            "unit_price": float(it.product.price),
+        }
+        for it in order.items
+    ]
 
-    # 4) Preference payload sem informar payer
+    # 4️⃣  payload Preference
     preference_data = {
         "items": items,
-        "external_reference": str(payment.id),
+        "external_reference": payment.external_reference,
         "notification_url": url_for("notificacoes_mercado_pago", _external=True),
         "payment_methods": {"installments": 1},
         "back_urls": {
-            "success": url_for("payment_status", payment_id=payment.id, _external=True),
-            "failure": url_for("payment_status", payment_id=payment.id, _external=True),
-            "pending": url_for("payment_status", payment_id=payment.id, _external=True),
+            s: url_for("payment_status", payment_id=payment.id, _external=True)
+            for s in ("success", "failure", "pending")
         },
-        "auto_return": "approved"
+        "auto_return": "approved",
     }
-
-
-
-    # 5) Log the exact JSON we’ll send
     current_app.logger.debug(
         "MP Preference Payload:\n%s",
-        json.dumps(preference_data, indent=2, ensure_ascii=False)
+        json.dumps(preference_data, indent=2, ensure_ascii=False),
     )
 
-    # 6) Call Mercado Pago
+    # 5️⃣  chama Mercado Pago
     try:
         resp = sdk.preference().create(preference_data)
     except Exception:
-        current_app.logger.exception("Erro de conexão com Mercado Pago")
-        flash("Não foi possível conectar ao Mercado Pago.", "danger")
+        current_app.logger.exception("Erro de conexão com Mercado Pago")
+        flash("Falha ao conectar com Mercado Pago.", "danger")
         return redirect(url_for("ver_carrinho"))
 
-    # 7) Check for non‑201 status
-    status_code = resp.get("status")
-    if status_code != 201:
-        current_app.logger.error("MP error response (HTTP %s): %s", status_code, resp)
-        flash(f"Erro ao iniciar pagamento (MP {status_code}).", "danger")
+    if resp.get("status") != 201:
+        current_app.logger.error("MP error (HTTP %s): %s", resp["status"], resp)
+        flash("Erro ao iniciar pagamento.", "danger")
         return redirect(url_for("ver_carrinho"))
 
-    # 8) Save the preference ID and redirect
     pref = resp["response"]
-    payment.transaction_id = str(pref["id"])
+    payment.transaction_id = str(pref["id"])    # guardamos o preference_id
+    payment.init_point     = pref["init_point"]
     db.session.commit()
 
     session["last_pending_payment"] = payment.id
@@ -3243,118 +3149,102 @@ def checkout():
 
 
 
+# --------------------------------------------------------
+# 2)  /notificacoes   – webhook Mercado Pago
+# --------------------------------------------------------
+import re, hmac, hashlib, urllib.parse
+from flask import request, jsonify, current_app
+from sqlalchemy.exc import SQLAlchemyError
 
-
-
-
-
-# ——— 2) Webhook do Mercado Pago ————————————————————————————————————
-
-import hmac, hashlib, urllib.parse
-
+# ---- assinatura ------------------------------------------------------
 def verify_mp_signature(req, secret: str) -> bool:
-    raw = req.headers.get("X-Signature", "")
-    m = re.search(r"ts=(\d+),v1=([a-f0-9]+)", raw)
+    m = re.search(r"ts=(\d+),v1=([a-f0-9]{64})", req.headers.get("X-Signature", ""))
     if not (m and secret):
-        return True          # sem segredo → bypass
+        return False
+    ts, sig = m.groups()
 
-    ts, sig_header = m.groups()
-
-    # Para Feed v2 concatene querystring
-    base = ts
-    if req.args:                           # v2
+    base = ts + req.path
+    if req.args:
         base += "?" + urllib.parse.urlencode(sorted(req.args.items()))
-    base += req.get_data(as_text=True)     # body
+    base += req.get_data(as_text=True)
 
     calc = hmac.new(secret.encode(), base.encode(), hashlib.sha256).hexdigest()
-    return hmac.compare_digest(calc, sig_header)
+    return hmac.compare_digest(calc, sig)
 
-
-
-
-
+# ---- extrai (kind,id) -------------------------------------------------
 def parse_mp_notification(req):
-    # Feed v2 → ?topic=payment&id=...
     if req.args.get("topic") == "payment" and req.args.get("id"):
         return "payment", req.args["id"]
-
     data = req.get_json(silent=True) or {}
-    # Webhook v1
     if data.get("type") == "payment":
         return "payment", data.get("data", {}).get("id")
-
     return None, None
 
-
-
-
+# ---- endpoint ---------------------------------------------------------
 @app.route("/notificacoes", methods=["POST", "GET"])
 def notificacoes_mercado_pago():
     if request.method == "GET":
-        # Mantém só para ping do MP
-        return jsonify({"status": "pong"}), 200
+        return jsonify(status="pong"), 200
 
     secret = current_app.config.get("MERCADOPAGO_WEBHOOK_SECRET", "")
     if not verify_mp_signature(request, secret):
         current_app.logger.warning("❌ Assinatura inválida")
-        return jsonify({"error": "invalid signature"}), 400
+        return jsonify(error="invalid signature"), 400
 
     kind, mp_id = parse_mp_notification(request)
     current_app.logger.info("🔔 MP Notification: %s id=%s", kind, mp_id)
 
     if kind != "payment" or not mp_id:
-        return jsonify({"status": "ignored"}), 200
+        return jsonify(status="ignored"), 200
 
-    # --------------- PROCESSAR PAGAMENTO ---------------
     r = sdk.payment().get(mp_id)
     if r.get("status") != 200:
-        current_app.logger.error("❌ Erro na API do MP: %s", r)
-        return jsonify({"error": "api error"}), 500
+        current_app.logger.error("❌ API MP: %s", r)
+        return jsonify(error="api error"), 500
 
     info   = r["response"]
     status = info["status"]
-    ext    = info.get("external_reference")  # pode ser order_id ou payment_id
+    ext    = info.get("external_reference")            # = payment.id salvo
 
-    # 1️⃣ localiza Payment de forma robusta
-    pay = None
-    if ext:
-        pay = Payment.query.filter_by(external_reference=ext).first()
-        if not pay and ext.isdigit():
-            pay = Payment.query.get(int(ext))
+    try:
+        with db.session.begin():                       # atômico / rollback
+            # 1️⃣  localiza Payment
+            pay = Payment.query.filter_by(external_reference=ext).first()
+            if not pay:
+                current_app.logger.warning("Payment %s não encontrado!", ext)
+                return jsonify(error="payment not found"), 404
 
-    if not pay:
-        current_app.logger.warning("⚠️ Payment não encontrado. Salvando novo.")
-        pay = Payment(
-            user_id      = info["payer"]["id"],
-            amount       = info["transaction_amount"],
-            external_reference = ext,
-            transaction_id     = mp_id
-        )
-        db.session.add(pay)
+            # 2️⃣  atualiza status + mp‑id
+            mapping = {
+                "approved":     PaymentStatus.COMPLETED,
+                "authorized":   PaymentStatus.COMPLETED,
+                "pending":      PaymentStatus.PENDING,
+                "in_process":   PaymentStatus.PENDING,
+                "in_mediation": PaymentStatus.PENDING,
+                "rejected":     PaymentStatus.FAILED,
+                "cancelled":    PaymentStatus.FAILED,
+                "refunded":     PaymentStatus.FAILED,
+                "expired":      PaymentStatus.FAILED,
+            }
+            pay.status          = mapping.get(status, PaymentStatus.PENDING)
+            pay.mercado_pago_id = mp_id           # guarda o “payment_id” real
 
-    # 2️⃣ atualiza status
-    mapping = {
-        "approved":  PaymentStatus.COMPLETED,
-        "rejected":  PaymentStatus.FAILED,
-        "in_process": PaymentStatus.PENDING
-    }
-    pay.status = mapping.get(status, PaymentStatus.PENDING)
-    pay.transaction_id = mp_id
-    db.session.flush()  # garante id
+            # 3️⃣  cria DeliveryRequest se preciso
+            if pay.status == PaymentStatus.COMPLETED and pay.order_id:
+                if not DeliveryRequest.query.filter_by(order_id=pay.order_id).first():
+                    db.session.add(
+                        DeliveryRequest(
+                            order_id        = pay.order_id,
+                            requested_by_id = pay.user_id,
+                            status          = "pendente",
+                        )
+                    )
 
-    # 3️⃣ gera DeliveryRequest se aprovado e ainda não existir
-    if pay.status == PaymentStatus.COMPLETED and pay.order_id:
-        exists = DeliveryRequest.query.filter_by(order_id=pay.order_id).first()
-        if not exists:
-            dr = DeliveryRequest(
-                order_id        = pay.order_id,
-                requested_by_id = pay.user_id,
-                status          = 'pendente'
-            )
-            db.session.add(dr)
+    except SQLAlchemyError as e:
+        current_app.logger.exception("DB error: %s", e)
+        return jsonify(error="db failure"), 500
 
-    db.session.commit()
-    return jsonify({"status": "updated"}), 200
+    return jsonify(status="updated"), 200
 
 
 
@@ -3409,7 +3299,6 @@ def ver_pedido(pedido_id):
 
 
 
-import os
 
 if __name__ == "__main__":
     # Usa a porta 8080 se existir no ambiente (como no Docker), senão usa 5000
