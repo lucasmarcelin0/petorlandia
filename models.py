@@ -650,6 +650,8 @@ class Payment(db.Model):
 
     init_point = db.Column(db.String)
 
+    # NOVO: valor congelado do pagamento
+    amount = db.Column(db.Numeric(10, 2), nullable=True)  # Adicione este campo
 
 
 # -------------------------- Planos de Saúde ---------------------------

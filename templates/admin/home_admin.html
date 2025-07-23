@@ -4,39 +4,156 @@
 <div class="container-fluid">
   <div class="row g-4">
 
-    <!-- Card: Total de Usuários -->
+    <!-- Usuários Registrados -->
     <div class="col-md-4">
-      <div class="card shadow-sm border-0 bg-primary text-white">
-        <div class="card-body">
-          <h6 class="card-title mb-2"><i class="bi bi-people-fill me-2"></i>Usuários Registrados</h6>
-          <h2 class="fw-bold">{{ total_users }}</h2>
-          <p class="mb-0">Tutores, veterinários e administradores</p>
+      <a href="{{ url_for('user.index_view') }}" class="text-decoration-none card-hover">
+        <div class="card shadow-sm border-0 bg-primary text-white">
+          <div class="card-body">
+            <h6 class="card-title mb-2"><i class="bi bi-people-fill me-2"></i>Usuários Registrados</h6>
+            <h2 class="fw-bold">{{ total_users }}</h2>
+            <p class="mb-0">Tutores, veterinários e administradores</p>
+          </div>
         </div>
-      </div>
+      </a>
     </div>
 
-    <!-- Card: Total de Animais -->
+    <!-- Animais Cadastrados -->
     <div class="col-md-4">
-      <div class="card shadow-sm border-0 bg-success text-white">
-        <div class="card-body">
-          <h6 class="card-title mb-2"><i class="bi bi-paw-fill me-2"></i>Animais Cadastrados</h6>
-          <h2 class="fw-bold">{{ total_animals }}</h2>
-          <p class="mb-0">Pets vinculados aos usuários</p>
+      <a href="{{ url_for('animal.index_view') }}" class="text-decoration-none card-hover">
+        <div class="card shadow-sm border-0 bg-success text-white">
+          <div class="card-body">
+            <h6 class="card-title mb-2"><i class="bi bi-paw-fill me-2"></i>Animais Cadastrados</h6>
+            <h2 class="fw-bold">{{ total_animals }}</h2>
+            <p class="mb-0">Pets vinculados aos usuários</p>
+          </div>
         </div>
-      </div>
+      </a>
     </div>
 
-    <!-- Card: Total de Consultas -->
+    <!-- Consultas Registradas -->
     <div class="col-md-4">
-      <div class="card shadow-sm border-0 bg-warning text-dark">
-        <div class="card-body">
-          <h6 class="card-title mb-2"><i class="bi bi-clipboard2-pulse me-2"></i>Consultas Registradas</h6>
-          <h2 class="fw-bold">{{ total_consultas }}</h2>
-          <p class="mb-0">Consultas veterinárias finalizadas</p>
+      <a href="{{ url_for('consulta.index_view') }}" class="text-decoration-none card-hover">
+        <div class="card shadow-sm border-0 bg-warning text-dark">
+          <div class="card-body">
+            <h6 class="card-title mb-2"><i class="bi bi-clipboard2-pulse me-2"></i>Consultas Registradas</h6>
+            <h2 class="fw-bold">{{ total_consultas }}</h2>
+            <p class="mb-0">Consultas veterinárias finalizadas</p>
+          </div>
         </div>
-      </div>
+      </a>
+    </div>
+  </div>
+
+  <div class="row g-4 mt-3">
+
+    <!-- Produtos -->
+    <div class="col-md-3">
+      <a href="{{ url_for('product.index_view') }}" class="text-decoration-none card-hover">
+        <div class="card shadow-sm border-0 bg-info text-white">
+          <div class="card-body">
+            <h6><i class="bi bi-basket-fill me-2"></i>Produtos</h6>
+            <h2>{{ total_products }}</h2>
+            <small>Disponíveis na loja</small>
+          </div>
+        </div>
+      </a>
     </div>
 
+    <!-- Pedidos Concluídos -->
+    <div class="col-md-3">
+      {# 
+        Order: model já registrado. 
+        Exibe todos os pedidos, mas não apenas os concluídos (poderia ser ajustado na view futura).
+        Por padrão, Order.index_view lista todos os pedidos.
+      #}
+      <a href="{{ url_for('order.index_view') }}" class="text-decoration-none card-hover">
+        <div class="card shadow-sm border-0 bg-success text-white">
+          <div class="card-body">
+            <h6><i class="bi bi-check-circle-fill me-2"></i>Pedidos Concluídos</h6>
+            <h2>{{ completed_orders }}</h2>
+            <small>Entregues e pagos</small>
+          </div>
+        </div>
+      </a>
+      {# 
+        MELHORIA: criar uma view customizada de pedidos filtrando apenas "concluídos".
+        Exemplo futuro: url_for('order.completed_view') ou filtro no Admin.
+      #}
+    </div>
+
+    <!-- Entregas Pendentes -->
+    <div class="col-md-3">
+      {# 
+        DeliveryRequest: model já registrado. 
+        A view index mostra todas, mas não só pendentes.
+      #}
+      <a href="{{ url_for('deliveryrequest.index_view') }}" class="text-decoration-none card-hover">
+        <div class="card shadow-sm border-0 bg-danger text-white">
+          <div class="card-body">
+            <h6><i class="bi bi-truck me-2"></i>Entregas Pendentes</h6>
+            <h2>{{ pending_deliveries }}</h2>
+            <small>Para entregar</small>
+          </div>
+        </div>
+      </a>
+      {# 
+        MELHORIA: criar view customizada só para "pendentes", ex: url_for('deliveryrequest.pending_view') 
+      #}
+    </div>
+
+    <!-- Receita Total -->
+    <div class="col-md-3">
+      {# 
+        Payment: model já registrado.
+        A view padrão lista todos os pagamentos.
+      #}
+
+        <div class="card shadow-sm border-0 bg-success text-white">
+          <div class="card-body">
+            <h6><i class="bi bi-currency-dollar me-2"></i>Receita Total</h6>
+            <h2>R$ {{ total_revenue }}</h2>
+            <small>Pedidos pagos</small>
+          </div>
+        </div>
+
+      {# 
+        MELHORIA: criar uma view só para pagamentos concluídos ou dashboard financeiro.
+      #}
+    </div>
+  </div>
+
+  <div class="row g-4 mt-3">
+    <!-- Planos de Saúde Ativos -->
+    <div class="col-md-3">
+
+        <div class="card shadow-sm border-0 bg-primary text-white">
+          <div class="card-body">
+            <h6><i class="bi bi-shield-check me-2"></i>Planos Ativos</h6>
+            <h2>{{ active_health_plans }}</h2>
+            <small>Animais cobertos</small>
+          </div>
+        </div>
+
+      {# 
+        MELHORIA: criar uma view filtrando só planos ativos, ex: url_for('healthsubscription.active_view') 
+      #}
+    </div>
+
+    <!-- Produtos com Estoque Baixo -->
+    <div class="col-md-3">
+
+        <div class="card shadow-sm border-0 bg-danger text-white">
+          <div class="card-body">
+            <h6><i class="bi bi-exclamation-circle me-2"></i>Estoque Baixo</h6>
+            <h2>{{ low_stock_products }}</h2>
+            <small>Abaixo do ideal</small>
+          </div>
+        </div>
+
+      {# 
+        MELHORIA: criar view de produtos com estoque < 5, ex: url_for('product.low_stock_view') 
+      #}
+    </div>
   </div>
 
   <hr class="my-5">
