@@ -2945,6 +2945,12 @@ from flask_login import login_required
 @app.route("/loja")
 @login_required
 def loja():
+    pagamento_pendente = None
+    payment_id = session.get("last_pending_payment")
+    if payment_id:
+        payment = Payment.query.get(payment_id)
+        if payment and payment.status.name == "PENDING":
+            pagamento_pendente = payment
 
     produtos = Product.query.all()
     form = AddToCartForm()
