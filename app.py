@@ -2941,27 +2941,31 @@ def _limpa_pendencia(payment):
 from flask import session, render_template
 from flask_login import login_required
 
+
 @app.route("/loja")
 @login_required
 def loja():
     pagamento_pendente = None
-
-    # usa o session do Flask para recuperar o ID
     payment_id = session.get("last_pending_payment")
     if payment_id:
         payment = Payment.query.get(payment_id)
-        # compara com o enum ou string, conforme seu modelo
         if payment and payment.status.name == "PENDING":
             pagamento_pendente = payment
 
     produtos = Product.query.all()
     form = AddToCartForm()
+
+    # Verifica se há pedidos anteriores
+    has_orders = Order.query.filter_by(user_id=current_user.id).first() is not None
+
     return render_template(
         "loja.html",
         products=produtos,
         pagamento_pendente=pagamento_pendente,
-        form=form
+        form=form,
+        has_orders=has_orders
     )
+
 
 
 
@@ -3448,19 +3452,44 @@ def pedido_detail(order_id):
     order = (Order.query
              .options(
                  joinedload(Order.items).joinedload(OrderItem.product),
+                 joinedload(Order.user),
                  joinedload(Order.payment),
-                 joinedload(Order.delivery_requests)
+                 joinedload(Order.delivery_requests).joinedload(DeliveryRequest.pickup).joinedload(PickupLocation.endereco),
+                 joinedload(Order.delivery_requests).joinedload(DeliveryRequest.worker)
              )
              .get_or_404(order_id))
-    if order.user_id != current_user.id and not _is_admin():
+
+    if not _is_admin() and order.user_id != current_user.id:
         abort(403)
-    delivery = order.delivery_requests[0] if order.delivery_requests else None
+
+    req = order.delivery_requests[0] if order.delivery_requests else None
+    items = order.items
+    buyer = order.user
+    delivery_worker = req.worker if req else None
+    total = sum(i.quantity * i.product.price for i in items if i.product)
+
+    if _is_admin():
+        role = "admin"
+    elif current_user.worker == "delivery":
+        if req and req.worker_id and req.worker_id != current_user.id:
+            abort(403)
+        role = "worker"
+    elif current_user.id == buyer.id:
+        role = "buyer"
+    else:
+        abort(403)
+
     return render_template(
-        "pedido_detail.html",
+        "delivery_detail.html",
+        req=req,
         order=order,
-        delivery=delivery,
-        PaymentStatus=PaymentStatus,
+        items=items,
+        buyer=buyer,
+        delivery_worker=delivery_worker,
+        total=total,
+        role=role
     )
+
 
 
 
