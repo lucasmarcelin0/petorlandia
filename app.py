@@ -2945,12 +2945,6 @@ from flask_login import login_required
 @app.route("/loja")
 @login_required
 def loja():
-    pagamento_pendente = None
-    payment_id = session.get("last_pending_payment")
-    if payment_id:
-        payment = Payment.query.get(payment_id)
-        if payment and payment.status.name == "PENDING":
-            pagamento_pendente = payment
 
     produtos = Product.query.all()
     form = AddToCartForm()
@@ -3416,17 +3410,22 @@ from sqlalchemy.orm import joinedload
 def minhas_compras():
     page = request.args.get("page", 1, type=int)
     per_page = 20
+
     pagination = (Order.query
+                  .join(Order.payment)
                   .options(joinedload(Order.payment))
-                  .filter_by(user_id=current_user.id)
+                  .filter(Order.user_id == current_user.id,
+                          Payment.status == PaymentStatus.COMPLETED)
                   .order_by(Order.created_at.desc())
                   .paginate(page=page, per_page=per_page, error_out=False))
+
     return render_template(
         "minhas_compras.html",
         orders=pagination.items,
         pagination=pagination,
         PaymentStatus=PaymentStatus,
     )
+
 
 
 @app.route("/api/minhas-compras")

@@ -8,6 +8,7 @@ from wtforms import SelectField, DateField
 import os
 import uuid
 from werkzeug.utils import secure_filename
+from sqlalchemy import func
 
 from flask_login import current_user
 
@@ -27,14 +28,14 @@ try:
         Breed, Species, TipoRacao, ApresentacaoMedicamento, VacinaModelo, Consulta, Veterinario,
         Clinica, Prescricao, Medicamento, db, User, Animal, Message,
         Transaction, Review, Favorite, AnimalPhoto, UserRole, ExameModelo,
-        Product, Order, OrderItem, DeliveryRequest, HealthPlan, HealthSubscription, PickupLocation, Endereco
+        Product, Order, OrderItem, DeliveryRequest, HealthPlan, HealthSubscription, PickupLocation, Endereco, Payment, PaymentMethod, PaymentStatus
     )
 except ImportError:
     from .models import (
         Breed, Species, TipoRacao, ApresentacaoMedicamento, VacinaModelo, Consulta, Veterinario,
         Clinica, Prescricao, Medicamento, db, User, Animal, Message,
         Transaction, Review, Favorite, AnimalPhoto, UserRole, ExameModelo,
-        Product, Order, OrderItem, DeliveryRequest, HealthPlan, HealthSubscription, PickupLocation, Endereco
+        Product, Order, OrderItem, DeliveryRequest, HealthPlan, HealthSubscription, PickupLocation, Endereco, Payment, PaymentMethod, PaymentStatus
     )
 
 
@@ -91,7 +92,16 @@ class AdminDashboard(BaseView):
             'admin/home_admin.html',
             total_users=total_users,
             total_animals=total_animals,
-            total_consultas=total_consultas
+            total_consultas=total_consultas,
+            total_orders = Order.query.count(),
+            completed_orders = Order.query.join(DeliveryRequest).filter(DeliveryRequest.status == 'concluida').count(),
+            pending_deliveries = DeliveryRequest.query.filter_by(status='pendente').count(),
+            total_products = Product.query.count(),
+            low_stock_products = Product.query.filter(Product.stock < 5).count(),
+            total_revenue = db.session.query(func.sum(Payment.amount)).filter(Payment.status == PaymentStatus.COMPLETED).scalar() or 0,
+            pending_payments = Payment.query.filter_by(status=PaymentStatus.PENDING).count(),
+            active_health_plans = HealthSubscription.query.filter_by(active=True).count(),
+
         )
 
 # --------------------------------------------------------------------------
