@@ -46,7 +46,16 @@
     <p class="text-end fw-bold">Total: R$ {{ '%.2f'|format(order.total_value()) }}</p>
     {% endif %}
 
-    <div class="d-flex justify-content-center gap-3">
+    <div class="d-flex justify-content-center flex-wrap gap-3">
+
+{% if result in ['failure', 'failed'] %}
+  <form action="{{ url_for('checkout') }}" method="post" class="m-0">
+    {{ form.hidden_tag() }}
+    <button type="submit" class="btn btn-primary">
+      <i class="bi bi-arrow-repeat me-1"></i> Pagar com Mercado Pago
+    </button>
+  </form>
+{% endif %}
 
 {% if req_id %}
   <a href="{{ url_for(req_endpoint, req_id=req_id) }}"

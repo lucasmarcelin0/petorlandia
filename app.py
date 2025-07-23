@@ -3371,6 +3371,8 @@ def payment_status(payment_id):
     payment = Payment.query.get_or_404(payment_id)
     result  = request.args.get("status") or payment.status.name.lower()
 
+    form = CheckoutForm()
+
     delivery_req = (DeliveryRequest.query
                     .filter_by(order_id=payment.order_id)
                     .first())
@@ -3388,7 +3390,8 @@ def payment_status(payment_id):
         result       = result,
         req_id       = delivery_req.id if delivery_req else None,
         req_endpoint = endpoint,
-        order        = payment.order
+        order        = payment.order,
+        form         = form
     )
 
 
