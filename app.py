@@ -3096,9 +3096,6 @@ def ver_carrinho():
 import json, logging, os
 from flask import current_app, redirect, url_for, flash, session
 from flask_login import login_required, current_user
-from mercadopago import SDK
-
-sdk = SDK(os.getenv("MERCADOPAGO_ACCESS_TOKEN"))       # inicializa 1×
 
 @app.route("/checkout", methods=["POST"])
 @login_required
@@ -3147,7 +3144,7 @@ def checkout():
 
     # 5️⃣ cria Preference no Mercado Pago
     try:
-        resp = sdk.preference().create(preference_data)
+        resp = mp_sdk().preference().create(preference_data)
     except Exception:
         current_app.logger.exception("Erro de conexão com Mercado Pago")
         flash("Falha ao conectar com Mercado Pago.", "danger")
@@ -3265,7 +3262,7 @@ def notificacoes_mercado_pago():
         return jsonify(status="ignored"), 200
 
     # Query payment
-    resp = sdk.payment().get(mp_id)
+    resp = mp_sdk().payment().get(mp_id)
     if resp.get("status") == 404:
         with db.session.begin():
             p = PendingWebhook.query.filter_by(mp_id=mp_id).first()
@@ -3382,7 +3379,7 @@ from flask import render_template, abort, request, jsonify
 def _refresh_mp_status(payment: Payment) -> None:
     if payment.status != PaymentStatus.PENDING:
         return
-    resp = sdk.payment().get(payment.mercado_pago_id or payment.transaction_id)
+    resp = mp_sdk().payment().get(payment.mercado_pago_id or payment.transaction_id)
     if resp.get("status") != 200:
         current_app.logger.warning("MP lookup falhou: %s", resp)
         return
