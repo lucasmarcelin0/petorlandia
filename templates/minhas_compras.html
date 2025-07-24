@@ -18,7 +18,7 @@
         {% for o in orders %}
         <tr>
           <td>{{ o.id }}</td>
-          <td>{{ o.created_at.strftime('%d/%m/%Y') }}</td>
+          <td>{{ o.created_at|format_datetime_brazil('%d/%m/%Y') }}</td>
           <td>R$ {{ '%.2f'|format(((o.payment.__dict__.get('amount') if o.payment else None) or o.total_value())) }}</td>
           <td>
             <span class="badge{% if o.payment and o.payment.status == PaymentStatus.COMPLETED %} bg-success{% elif not o.payment or o.payment.status == PaymentStatus.PENDING %} bg-warning text-dark{% else %} bg-danger{% endif %}">

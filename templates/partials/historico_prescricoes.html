@@ -5,7 +5,7 @@
 
     {% for bloco in animal.blocos_prescricao|reverse %}
     <div class="border rounded p-3 mb-3">
-      <h6 class="text-muted">Prescrição feita em {{ bloco.data_criacao.strftime('%d/%m/%Y %H:%M') }}</h6>
+      <h6 class="text-muted">Prescrição feita em {{ bloco.data_criacao|format_datetime_brazil('%d/%m/%Y %H:%M') }}</h6>
 
       <ul class="list-group list-group-flush mb-2">
         {% for item in bloco.prescricoes %}
