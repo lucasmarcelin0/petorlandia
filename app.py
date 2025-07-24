@@ -3119,6 +3119,7 @@ def checkout():
         method=PaymentMethod.PIX,          # ou outro enum que prefira
         status=PaymentStatus.PENDING,
     )
+    payment.amount = Decimal(str(order.total_value()))
     db.session.add(payment)
     db.session.commit()                    # gera payment.id
 
@@ -3410,6 +3411,8 @@ def _refresh_mp_status(payment: Payment) -> None:
 @login_required
 def payment_status(payment_id):
     payment = Payment.query.get_or_404(payment_id)
+    if not hasattr(payment, "amount"):
+        payment.amount = None
     result  = request.args.get("status") or payment.status.name.lower()
 
     form = CheckoutForm()
@@ -3487,7 +3490,7 @@ def api_minhas_compras():
         {
             "id": o.id,
             "data": o.created_at.isoformat(),
-            "valor": float(o.total_value()),
+            "valor": float((getattr(o.payment, "amount", None) if o.payment else None) or o.total_value()),
             "status": (o.payment.status.value if o.payment else "Pendente"),
         }
         for o in orders
