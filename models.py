@@ -523,6 +523,14 @@ class Product(db.Model):
     stock = db.Column(db.Integer, default=0)
     image_url = db.Column(db.String(200))
 
+    # Items de pedido associados ao produto. O cascade facilita remover os
+    # OrderItem relacionados quando o produto é excluído.
+    order_items = db.relationship(
+        "OrderItem",
+        back_populates="product",
+        cascade="all, delete-orphan"
+    )
+
     def __repr__(self):
         return f"{self.name} (R$ {self.price})"
 
@@ -556,7 +564,8 @@ class OrderItem(db.Model):
     id          = db.Column(db.Integer, primary_key=True)
     order_id    = db.Column(db.Integer, db.ForeignKey("order.id"), nullable=False)
     product_id  = db.Column(db.Integer, db.ForeignKey("product.id"), nullable=False)
-    product     = db.relationship("Product")
+    # back_populates permite acesso recíproco a partir de Product.order_items
+    product     = db.relationship("Product", back_populates="order_items")
 
     item_name   = db.Column(db.String(100), nullable=False)
     quantity    = db.Column(db.Integer, nullable=False, default=1)
