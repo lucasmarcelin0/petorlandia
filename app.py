@@ -3419,10 +3419,32 @@ def _refresh_mp_status(payment: Payment) -> None:
 @login_required
 def legacy_pagamento(status):
     extref = request.args.get("external_reference")
-    if not extref:
+    payment = None
+
+    if extref and extref.isdigit():
+        payment = Payment.query.get(int(extref))
+
+    if not payment:
+        mp_id = (request.args.get("collection_id") or
+                 request.args.get("payment_id"))
+        if mp_id:
+            payment = Payment.query.filter(
+                (Payment.mercado_pago_id == mp_id) |
+                (Payment.transaction_id == mp_id)
+            ).first()
+
+    if not payment:
+        pref_id = request.args.get("preference_id")
+        if pref_id:
+            payment = Payment.query.filter_by(transaction_id=pref_id).first()
+
+    if not payment:
         abort(404)
-    mp_status = request.args.get("status") or status
-    return redirect(url_for("payment_status", payment_id=extref, status=mp_status))
+
+    mp_status = (request.args.get("status") or
+                 request.args.get("collection_status") or
+                 status)
+    return redirect(url_for("payment_status", payment_id=payment.id, status=mp_status))
 
 
 @app.route("/payment_status/<int:payment_id>")
