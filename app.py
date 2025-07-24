@@ -2945,6 +2945,18 @@ def _limpa_pendencia(payment):
         return None
     return payment
 
+# Helper to fetch the current order from session and verify ownership
+def _get_current_order():
+    order_id = session.get("current_order")
+    if not order_id:
+        return None
+    order = Order.query.get(order_id)
+    if not order or order.user_id != current_user.id:
+        session.pop("current_order", None)
+        abort(403)
+    return order
+
+
 
 from flask import session, render_template
 from flask_login import login_required
@@ -2988,8 +3000,9 @@ def adicionar_carrinho(product_id):
     if not form.validate_on_submit():
         return redirect(url_for("loja"))
 
-    order = Order.query.get(session.get("current_order")) or Order(user_id=current_user.id)
-    if order.id is None:
+    order = _get_current_order()
+    if not order:
+        order = Order(user_id=current_user.id)
         db.session.add(order)
         db.session.commit()
         session["current_order"] = order.id
@@ -3013,9 +3026,9 @@ def adicionar_carrinho(product_id):
 @login_required
 def aumentar_item_carrinho(item_id):
     """Incrementa a quantidade de um item no carrinho."""
-    order_id = session.get("current_order")
+    order = _get_current_order()
     item = OrderItem.query.get_or_404(item_id)
-    if item.order_id != order_id:
+    if item.order_id != order.id:
         abort(404)
     item.quantity += 1
     db.session.commit()
@@ -3026,9 +3039,9 @@ def aumentar_item_carrinho(item_id):
 @login_required
 def diminuir_item_carrinho(item_id):
     """Diminui a quantidade de um item; remove se chegar a zero."""
-    order_id = session.get("current_order")
+    order = _get_current_order()
     item = OrderItem.query.get_or_404(item_id)
-    if item.order_id != order_id:
+    if item.order_id != order.id:
         abort(404)
     item.quantity -= 1
     if item.quantity <= 0:
@@ -3057,8 +3070,7 @@ def ver_carrinho():
             pagamento_pendente = pagamento
 
     # 3) Busca o pedido atual
-    order_id = session.get('current_order')
-    order = Order.query.get(order_id) if order_id else None
+    order = _get_current_order()
 
     # 4) Renderiza o carrinho passando o form
     return render_template(
@@ -3106,8 +3118,7 @@ def checkout():
     current_app.logger.setLevel(logging.DEBUG)
 
     # 1️⃣ pedido atual do carrinho
-    order_id = session.get("current_order")
-    order    = Order.query.get(order_id) if order_id else None
+    order = _get_current_order()
     if not order or not order.items:
         flash("Seu carrinho está vazio.", "warning")
         return redirect(url_for("ver_carrinho"))
