@@ -28,6 +28,9 @@ export MERCADOPAGO_PUBLIC_KEY="<your public key>"
 export MERCADOPAGO_WEBHOOK_SECRET="<random secret>"
 ```
 
+`MERCADOPAGO_WEBHOOK_SECRET` **must** be set so webhook signatures can be
+verified. When unset, notifications will be rejected.
+
 These credentials are used when generating checkout preferences and embedding
 payment widgets. Never commit your real keys into version control.
 
