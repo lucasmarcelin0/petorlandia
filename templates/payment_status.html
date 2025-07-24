@@ -43,7 +43,7 @@
       </li>
       {% endfor %}
     </ul>
-    <p class="text-end fw-bold">Total: R$ {{ '%.2f'|format(order.total_value()) }}</p>
+    <p class="text-end fw-bold">Total: R$ {{ '%.2f'|format((payment.__dict__.get('amount') or order.total_value())) }}</p>
     {% endif %}
 
     <div class="d-flex justify-content-center flex-wrap gap-3">
