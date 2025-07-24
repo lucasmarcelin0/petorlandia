@@ -2884,6 +2884,7 @@ def delivery_overview():
     open_requests = base_q.filter_by(status="pendente").all()
     in_progress   = base_q.filter_by(status="em_andamento").all()
     completed     = base_q.filter_by(status="concluida").all()
+    canceled      = base_q.filter_by(status="cancelada").all()
 
     # produtos para o bloco de estoque
     products = Product.query.order_by(Product.name).all()
@@ -2894,6 +2895,7 @@ def delivery_overview():
         open_requests = open_requests,
         in_progress   = in_progress,
         completed     = completed,
+        canceled      = canceled,
     )
 
 
