@@ -18,7 +18,7 @@
               <div>
                 <h5 class="card-title">{{ animal.name }}</h5>
                 <p class="mb-1"><strong>Espécie:</strong> {{ animal.species }}</p>
-                <p class="mb-1"><strong>Adicionado em:</strong> {{ animal.date_added.strftime('%d/%m/%Y') }}</p>
+                <p class="mb-1"><strong>Adicionado em:</strong> {{ animal.date_added|format_datetime_brazil('%d/%m/%Y') }}</p>
               </div>
               <div class="d-flex flex-wrap gap-2 mt-3">
                 <a href="{{ url_for('consulta_direct', animal_id=animal.id) }}" class="btn btn-sm btn-outline-primary w-100">🩺 Consulta</a>

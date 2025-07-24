@@ -26,13 +26,13 @@
             {% if ord %}Valor: R$ {{ ((ord.payment.__dict__.get('amount') if ord.payment else None) or ord.total_value()) | round(2) }}<br>{% endif %}
 
             {% if req.status == 'pendente'      %}
-              Solicitado {{ req.requested_at.strftime('%d/%m/%Y %H:%M') }}
+              Solicitado {{ req.requested_at|format_datetime_brazil('%d/%m/%Y %H:%M') }}
             {% elif req.status == 'em_andamento' %}
-              Aceito {{ req.accepted_at.strftime('%d/%m/%Y %H:%M') if req.accepted_at else '' }}
+              Aceito {{ format_datetime_brazil(req.accepted_at, '%d/%m/%Y %H:%M') if req.accepted_at else '' }}
             {% elif req.status == 'concluida'    %}
-              Concluído {{ req.completed_at.strftime('%d/%m/%Y %H:%M') if req.completed_at else '' }}
+              Concluído {{ format_datetime_brazil(req.completed_at, '%d/%m/%Y %H:%M') if req.completed_at else '' }}
             {% elif req.status == 'cancelada'    %}
-              Cancelado {{ req.canceled_at.strftime('%d/%m/%Y %H:%M') if req.canceled_at else '' }}
+              Cancelado {{ format_datetime_brazil(req.canceled_at, '%d/%m/%Y %H:%M') if req.canceled_at else '' }}
             {% endif %}
           </div>
         </div>
