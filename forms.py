@@ -120,3 +120,17 @@ class CheckoutForm(FlaskForm):
     # phone  = StringField('Telefone (WhatsApp)', validators=[Optional(), Length(max=20)])
 
     submit = SubmitField('Finalizar Compra')
+
+
+class ProductUpdateForm(FlaskForm):
+    name = StringField('Nome', validators=[DataRequired()])
+    description = TextAreaField('Descrição')
+    price = DecimalField('Preço', validators=[DataRequired()])
+    stock = IntegerField('Estoque', validators=[DataRequired()])
+    image_upload = FileField('Imagem', validators=[FileAllowed(['jpg', 'jpeg', 'png', 'gif'], 'Apenas imagens!')])
+    submit = SubmitField('Salvar')
+
+
+class ProductPhotoForm(FlaskForm):
+    image = FileField('Foto do Produto', validators=[DataRequired(), FileAllowed(['jpg', 'jpeg', 'png', 'gif'], 'Apenas imagens!')])
+    submit = SubmitField('Adicionar Foto')

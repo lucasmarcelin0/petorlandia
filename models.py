@@ -535,6 +535,15 @@ class Product(db.Model):
         return f"{self.name} (R$ {self.price})"
 
 
+class ProductPhoto(db.Model):
+    """Fotos adicionais para produtos."""
+    id = db.Column(db.Integer, primary_key=True)
+    product_id = db.Column(db.Integer, db.ForeignKey('product.id'), nullable=False)
+    image_url = db.Column(db.String(200))
+
+    product = db.relationship('Product', backref='extra_photos')
+
+
 
 
 
