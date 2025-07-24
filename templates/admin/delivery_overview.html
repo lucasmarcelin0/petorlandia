@@ -47,18 +47,26 @@
              class="btn btn-sm btn-outline-primary">
              Ver detalhes
           </a>
+          {% if r.status != 'pendente' %}
           <form action="{{ url_for('admin_set_delivery_status', req_id=r.id, status='pendente') }}" method="post">
             <button class="btn btn-sm btn-warning" title="Marcar como pendente">Pendente</button>
           </form>
+          {% endif %}
+          {% if r.status != 'em_andamento' %}
           <form action="{{ url_for('admin_set_delivery_status', req_id=r.id, status='em_andamento') }}" method="post">
             <button class="btn btn-sm btn-info text-dark" title="Marcar em andamento">Em andamento</button>
           </form>
+          {% endif %}
+          {% if r.status != 'concluida' %}
           <form action="{{ url_for('admin_set_delivery_status', req_id=r.id, status='concluida') }}" method="post">
             <button class="btn btn-sm btn-success" title="Marcar como concluída">Concluir</button>
           </form>
+          {% endif %}
+          {% if r.status != 'cancelada' %}
           <form action="{{ url_for('admin_set_delivery_status', req_id=r.id, status='cancelada') }}" method="post">
             <button class="btn btn-sm btn-danger" title="Cancelar">Cancelar</button>
           </form>
+          {% endif %}
           <form action="{{ url_for('admin_delete_delivery', req_id=r.id) }}" method="post" onsubmit="return confirm('Excluir pedido?');">
             <button class="btn btn-sm btn-outline-danger" title="Excluir">Excluir</button>
           </form>
