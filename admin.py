@@ -302,6 +302,11 @@ class ProductAdmin(MyModelView):
             image_url = upload_to_s3(file, filename, folder="products")
             model.image_url = image_url
 
+    def on_model_delete(self, model):
+        """Remover itens de pedido antes de excluir o produto."""
+        for item in list(model.order_items):
+            db.session.delete(item)
+
 
 
 # --------------------------------------------------------------------------
