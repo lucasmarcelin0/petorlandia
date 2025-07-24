@@ -323,29 +323,29 @@
                     {% if current_user.is_authenticated and current_user.role == "admin" %}
                         <li class="nav-item">
                             <a class="nav-link text-danger" href="{{ url_for('relatorio_racoes') }}">
-                                <i class="fas fa-box me-1"></i> Relatório de Rações
+                            <i class="fas fa-box me-1 text-warning"></i> Relatório de Rações
                             </a>
                         </li>
                         <li class="nav-item">
                             <a class="nav-link" href="{{ url_for('delivery_overview') }}">
-                                <i class="fas fa-chart-line me-1"></i> Entregas
+                            <i class="fas fa-chart-line me-1 text-primary"></i> Entregas
                             </a>
                         </li>
                     {% endif %}
                     
                     <li class="nav-item">
                         <a class="nav-link" href="{{ url_for('index') }}">
-                            <i class="fas fa-home me-1"></i> Início
+                            <i class="fas fa-home me-1 text-primary"></i> Início
                         </a>
                     </li>
                     <li class="nav-item">
                         <a class="nav-link" href="{{ url_for('list_animals') }}">
-                            <i class="fas fa-paw me-1"></i> Animais
+                            <i class="fas fa-paw me-1 text-success"></i> Animais
                         </a>
                     </li>
                     <li class="nav-item">
                         <a class="nav-link" href="{{ url_for('loja') }}">
-                            <i class="fas fa-shopping-bag me-1"></i> Loja
+                            <i class="fas fa-shopping-bag me-1 text-warning"></i> Loja
                         </a>
                     </li>
 
@@ -353,25 +353,25 @@
                         {% if current_user.worker == 'veterinario' %}
                             <li class="nav-item">
                                 <a class="nav-link" href="{{ url_for('tutores') }}">
-                                    <i class="fas fa-users me-1"></i> Tutores
+                                    <i class="fas fa-users me-1 text-primary"></i> Tutores
                                 </a>
                             </li>
                             <li class="nav-item">
                                 <a class="nav-link" href="{{ url_for('add_animal') }}">
-                                    <i class="fas fa-plus-circle me-1"></i> Animal
+                                    <i class="fas fa-plus-circle me-1 text-success"></i> Animal
                                 </a>
                             </li>
                         {% elif current_user.worker == 'delivery' %}
                             <li class="nav-item">
                                 <a class="nav-link" href="{{ url_for('list_delivery_requests') }}">
-                                    <i class="fas fa-truck me-1"></i> Solicitações
+                                    <i class="fas fa-truck me-1 text-warning"></i> Solicitações
                                 </a>
                             </li>
                         {% endif %}
 
                         <li class="nav-item position-relative">
                             <a class="nav-link" href="{{ url_for('mensagens') }}">
-                                <i class="fas fa-comments me-1"></i> Mensagens
+                                <i class="fas fa-comments me-1 text-info"></i> Mensagens
                                 {% if unread_messages > 0 %}
                                     <span class="badge rounded-pill bg-danger position-absolute top-0 start-100 translate-middle">
                                         {{ unread_messages }}
@@ -382,22 +382,22 @@
 
                         <li class="nav-item dropdown">
                             <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown">
-                                <i class="fas fa-user-circle me-1"></i> {{ current_user.name.split(' ')[0] }}
+                                <i class="fas fa-user-circle me-1 text-primary"></i> {{ current_user.name.split(' ')[0] }}
                             </a>
                             <ul class="dropdown-menu dropdown-menu-end">
-                                <li><a class="dropdown-item" href="{{ url_for('profile') }}"><i class="fas fa-user me-2"></i> Meu Perfil</a></li>
-                                <li><a class="dropdown-item" href="{{ url_for('logout') }}"><i class="fas fa-sign-out-alt me-2"></i> Sair</a></li>
+                                <li><a class="dropdown-item" href="{{ url_for('profile') }}"><i class="fas fa-user me-2 text-primary"></i> Meu Perfil</a></li>
+                                <li><a class="dropdown-item" href="{{ url_for('logout') }}"><i class="fas fa-sign-out-alt me-2 text-danger"></i> Sair</a></li>
                             </ul>
                         </li>
                     {% else %}
                         <li class="nav-item">
                             <a class="nav-link" href="{{ url_for('register') }}">
-                                <i class="fas fa-user-plus me-1"></i> Registrar
+                            <i class="fas fa-user-plus me-1 text-success"></i> Registrar
                             </a>
                         </li>
                         <li class="nav-item">
                             <a class="nav-link" href="{{ url_for('login') }}">
-                                <i class="fas fa-sign-in-alt me-1"></i> Entrar
+                            <i class="fas fa-sign-in-alt me-1 text-primary"></i> Entrar
                             </a>
                         </li>
                     {% endif %}
@@ -424,7 +424,7 @@
 
     <!-- Footer -->
     <footer>
-        &copy; Lucas Marcelino • PetOrlândia 2025 <i class="fas fa-paw"></i>
+        &copy; Lucas Marcelino • PetOrlândia 2025 <i class="fas fa-paw text-primary"></i>
     </footer>
 
     <!-- Script para desaparecer com transição suave -->
