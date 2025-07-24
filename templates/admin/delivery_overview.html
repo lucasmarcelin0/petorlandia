@@ -28,7 +28,7 @@
           </div>
           <div class="small text-muted">
             <div>Cliente: {{ ord.user.name if ord and ord.user else "—" }}</div>
-            <div>Valor: R$ {{ ord.total_value()|round(2) if ord else "—" }}</div>
+            <div>Valor: R$ {{ ((ord.payment.__dict__.get('amount') if ord and ord.payment else None) or (ord.total_value() if ord else 0)) | round(2) if ord else "—" }}</div>
 
             {% if r.status == "pendente" %}
               <div>Solicitado em {{ r.requested_at.strftime("%d/%m/%Y %H:%M") }}</div>

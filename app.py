@@ -3119,6 +3119,7 @@ def checkout():
         method=PaymentMethod.PIX,          # ou outro enum que prefira
         status=PaymentStatus.PENDING,
     )
+    payment.amount = Decimal(str(order.total_value()))
     db.session.add(payment)
     db.session.commit()                    # gera payment.id
 
@@ -3192,8 +3193,10 @@ def verify_mp_signature(req, secret: str) -> bool:
         bool: True if signature is valid, False otherwise
     """
     if not secret:
-        current_app.logger.warning("Webhook sem chave – bypass")
-        return True
+        current_app.logger.warning(
+            "Webhook sem chave – verificacao impossivel"
+        )
+        return False
 
     x_signature = req.headers.get("X-Signature", "")
     m = _SIG_RE.search(x_signature)
@@ -3408,8 +3411,10 @@ def _refresh_mp_status(payment: Payment) -> None:
 @login_required
 def payment_status(payment_id):
     payment = Payment.query.get_or_404(payment_id)
+
     if payment.user_id != current_user.id:
         abort(403)
+
     result  = request.args.get("status") or payment.status.name.lower()
 
     form = CheckoutForm()
@@ -3487,7 +3492,7 @@ def api_minhas_compras():
         {
             "id": o.id,
             "data": o.created_at.isoformat(),
-            "valor": float(o.total_value()),
+            "valor": float((getattr(o.payment, "amount", None) if o.payment else None) or o.total_value()),
             "status": (o.payment.status.value if o.payment else "Pendente"),
         }
         for o in orders

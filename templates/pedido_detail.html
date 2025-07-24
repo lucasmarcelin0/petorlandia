@@ -13,7 +13,7 @@
       </li>
       {% endfor %}
     </ul>
-    <p class="text-end fw-bold mt-3">Total: R$ {{ '%.2f'|format(order.total_value()) }}</p>
+    <p class="text-end fw-bold mt-3">Total: R$ {{ '%.2f'|format(((order.payment.__dict__.get('amount') if order.payment else None) or order.total_value())) }}</p>
   </div>
 
   <div class="card mb-4">
