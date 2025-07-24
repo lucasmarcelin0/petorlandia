@@ -3192,8 +3192,10 @@ def verify_mp_signature(req, secret: str) -> bool:
         bool: True if signature is valid, False otherwise
     """
     if not secret:
-        current_app.logger.warning("Webhook sem chave – bypass")
-        return True
+        current_app.logger.warning(
+            "Webhook sem chave – verificacao impossivel"
+        )
+        return False
 
     x_signature = req.headers.get("X-Signature", "")
     m = _SIG_RE.search(x_signature)
