@@ -36,6 +36,8 @@
               <div>Aceito por {{ r.worker.name if r.worker else "—" }} em {{ r.accepted_at.strftime("%d/%m/%Y %H:%M") if r.accepted_at else "—" }}</div>
             {% elif r.status == "concluida" %}
               <div>Concluído em {{ r.completed_at.strftime("%d/%m/%Y %H:%M") if r.completed_at else "—" }}</div>
+            {% elif r.status == "cancelada" %}
+              <div>Cancelado em {{ r.canceled_at.strftime("%d/%m/%Y %H:%M") if r.canceled_at else "—" }}</div>
             {% endif %}
           </div>
         </div>
@@ -69,6 +71,7 @@
   {{ lista(open_requests, "🟡 Solicitações Abertas",   "bg-warning text-dark", "Pendente") }}
   {{ lista(in_progress,   "🔵 Em Andamento",          "bg-info text-dark",   "Em andamento") }}
   {{ lista(completed,     "✅ Concluídas",            "bg-success",          "Concluída") }}
+  {{ lista(canceled,      "❌ Canceladas",            "bg-danger",           "Cancelada") }}
 
 </div>
 {% endblock %}
