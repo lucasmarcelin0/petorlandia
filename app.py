@@ -3411,8 +3411,10 @@ def _refresh_mp_status(payment: Payment) -> None:
 @login_required
 def payment_status(payment_id):
     payment = Payment.query.get_or_404(payment_id)
-    if not hasattr(payment, "amount"):
-        payment.amount = None
+
+    if payment.user_id != current_user.id:
+        abort(403)
+
     result  = request.args.get("status") or payment.status.name.lower()
 
     form = CheckoutForm()
