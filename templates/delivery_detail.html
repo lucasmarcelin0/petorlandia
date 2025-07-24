@@ -104,15 +104,15 @@
     <div class="card-body">
       <h5 class="card-title">📅 Linha do Tempo</h5>
       <ul class="list-group list-group-flush">
-        <li class="list-group-item">🕐 Solicitado: {{ req.requested_at.strftime('%d/%m/%Y %H:%M') }}</li>
+        <li class="list-group-item">🕐 Solicitado: {{ req.requested_at|format_datetime_brazil('%d/%m/%Y %H:%M') }}</li>
         {% if req.accepted_at %}
-        <li class="list-group-item">🚚 Aceito: {{ req.accepted_at.strftime('%d/%m/%Y %H:%M') }}</li>
+        <li class="list-group-item">🚚 Aceito: {{ req.accepted_at|format_datetime_brazil('%d/%m/%Y %H:%M') }}</li>
         {% endif %}
         {% if req.completed_at %}
-        <li class="list-group-item">✅ Concluído: {{ req.completed_at.strftime('%d/%m/%Y %H:%M') }}</li>
+        <li class="list-group-item">✅ Concluído: {{ req.completed_at|format_datetime_brazil('%d/%m/%Y %H:%M') }}</li>
         {% endif %}
         {% if req.canceled_at %}
-        <li class="list-group-item text-danger">❌ Cancelado: {{ req.canceled_at.strftime('%d/%m/%Y %H:%M') }}</li>
+        <li class="list-group-item text-danger">❌ Cancelado: {{ req.canceled_at|format_datetime_brazil('%d/%m/%Y %H:%M') }}</li>
         {% endif %}
       </ul>
     </div>

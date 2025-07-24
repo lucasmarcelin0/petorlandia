@@ -3,6 +3,7 @@ import os, sys, pathlib, importlib, logging, uuid, re
 
 
 from datetime import datetime
+import pytz
 
 from dotenv import load_dotenv
 from flask import Flask
@@ -47,7 +48,7 @@ app.config.update(SESSION_PERMANENT=False, SESSION_TYPE="filesystem")
 
 @app.template_filter('date_now')
 def date_now(format_string='%Y-%m-%d'):
-    return datetime.now().strftime(format_string)
+    return datetime.now(BR_TZ).strftime(format_string)
 # já existe no topo, logo depois das extensões:
 from extensions import db, migrate, mail, login, session as session_ext
 from flask_login import login_user, logout_user, current_user, login_required
@@ -83,13 +84,14 @@ def upload_to_s3(file, filename, folder="uploads") -> str | None:
 # ----------------------------------------------------------------
 # 5)  Filtros Jinja para data BR
 # ----------------------------------------------------------------
-import pytz
-br_tz = pytz.timezone("America/Sao_Paulo")
+BR_TZ = pytz.timezone("America/Sao_Paulo")
 
 @app.template_filter("datetime_brazil")
 def datetime_brazil(value):
     if isinstance(value, datetime):
-        return value.strftime("%d/%m/%Y %H:%M")
+        if value.tzinfo is None:
+            value = pytz.utc.localize(value)
+        return value.astimezone(BR_TZ).strftime("%d/%m/%Y %H:%M")
     return value
 
 @app.template_filter("format_datetime_brazil")
@@ -98,7 +100,7 @@ def format_datetime_brazil(value, fmt="%d/%m/%Y %H:%M"):
         return ""
     if value.tzinfo is None:
         value = pytz.utc.localize(value)
-    return value.astimezone(br_tz).strftime(fmt)
+    return value.astimezone(BR_TZ).strftime(fmt)
 
 # ----------------------------------------------------------------
 # 6)  Forms e helpers
@@ -700,7 +702,7 @@ def termo_interesse(animal_id, user_id):
 
         return redirect(url_for('conversa', animal_id=animal.id, user_id=animal.user_id))
 
-    data_atual = datetime.now().strftime('%d/%m/%Y')
+    data_atual = datetime.now(BR_TZ).strftime('%d/%m/%Y')
     return render_template('termo_interesse.html', animal=animal, interessado=interessado, data_atual=data_atual)
 
 
@@ -774,7 +776,7 @@ def termo_transferencia(animal_id, user_id):
         flash(f'Tutoria de {animal.name} transferida para {novo_dono.name}.', 'success')
         return redirect(url_for('profile'))
 
-    data_atual = datetime.now().strftime('%d/%m/%Y')
+    data_atual = datetime.now(BR_TZ).strftime('%d/%m/%Y')
     return render_template('termo_transferencia.html', animal=animal, novo_dono=novo_dono)
 
 
@@ -1390,7 +1392,7 @@ def ficha_tutor(tutor_id):
     ).filter_by(user_id=tutor.id).order_by(Animal.name).all()
 
     # Ano atual
-    current_year = datetime.now().year
+    current_year = datetime.now(BR_TZ).year
 
     # Busca todas as espécies e raças
     species_list = Species.query.order_by(Species.name).all()

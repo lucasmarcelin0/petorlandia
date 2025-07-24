@@ -1,7 +1,7 @@
 {% if edit_mode %}
   <div class="alert alert-warning d-flex align-items-center">
     <i class="bi bi-pencil-square me-2"></i>
-    Editando consulta de {{ consulta.created_at.strftime('%d/%m/%Y %H:%M') }}.
+    Editando consulta de {{ consulta.created_at|format_datetime_brazil('%d/%m/%Y %H:%M') }}.
     <a href="{{ url_for('consulta_direct', animal_id=animal.id) }}" class="ms-2">Cancelar edição</a>
   </div>
 {% endif %}

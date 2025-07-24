@@ -173,7 +173,7 @@
         <strong>Observações:</strong>
         {{ racao.observacoes_racao or racao.tipo_racao.observacoes or 'Nenhuma' }}<br>
 
-        <small class="text-muted">Registrado em {{ racao.data_cadastro.strftime('%d/%m/%Y') }}</small>
+        <small class="text-muted">Registrado em {{ racao.data_cadastro|format_datetime_brazil('%d/%m/%Y') }}</small>
 
         <div class="mt-2">
           <button class="btn btn-sm btn-outline-primary me-2" onclick="editarRacao({{ racao.id }})">✏️ Editar</button>
