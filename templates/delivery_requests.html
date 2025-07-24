@@ -23,7 +23,7 @@
 
           <div class="small text-muted">
             {% if ord and ord.user %}Cliente: {{ ord.user.name }}<br>{% endif %}
-            {% if ord %}Valor: R$ {{ ord.total_value()|round(2) }}<br>{% endif %}
+            {% if ord %}Valor: R$ {{ ((ord.payment.__dict__.get('amount') if ord.payment else None) or ord.total_value()) | round(2) }}<br>{% endif %}
 
             {% if req.status == 'pendente'      %}
               Solicitado {{ req.requested_at.strftime('%d/%m/%Y %H:%M') }}
