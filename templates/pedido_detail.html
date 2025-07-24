@@ -20,15 +20,15 @@
     <div class="card-body">
       <h5 class="card-title">Linha do Tempo</h5>
       <ul class="list-group list-group-flush">
-        <li class="list-group-item">Criado em {{ order.created_at.strftime('%d/%m/%Y %H:%M') }}</li>
+        <li class="list-group-item">Criado em {{ order.created_at|format_datetime_brazil('%d/%m/%Y %H:%M') }}</li>
         {% if order.payment and order.payment.status == PaymentStatus.COMPLETED %}
-        <li class="list-group-item">Pago em {{ order.payment.created_at.strftime('%d/%m/%Y %H:%M') }}</li>
+        <li class="list-group-item">Pago em {{ order.payment.created_at|format_datetime_brazil('%d/%m/%Y %H:%M') }}</li>
         {% endif %}
         {% if delivery and delivery.accepted_at %}
-        <li class="list-group-item">Em preparo desde {{ delivery.accepted_at.strftime('%d/%m/%Y %H:%M') }}</li>
+        <li class="list-group-item">Em preparo desde {{ delivery.accepted_at|format_datetime_brazil('%d/%m/%Y %H:%M') }}</li>
         {% endif %}
         {% if delivery and delivery.completed_at %}
-        <li class="list-group-item">Entregue em {{ delivery.completed_at.strftime('%d/%m/%Y %H:%M') }}</li>
+        <li class="list-group-item">Entregue em {{ delivery.completed_at|format_datetime_brazil('%d/%m/%Y %H:%M') }}</li>
         {% endif %}
       </ul>
     </div>

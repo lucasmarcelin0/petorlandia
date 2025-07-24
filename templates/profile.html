@@ -128,7 +128,7 @@
       <ul class="list-group">
         {% for animal in user.animals if animal.removido_em %}
         <li class="list-group-item text-muted">
-          {{ animal.name }} — <small>Removido em {{ animal.removido_em.strftime('%d/%m/%Y') }}</small>
+          {{ animal.name }} — <small>Removido em {{ animal.removido_em|format_datetime_brazil('%d/%m/%Y') }}</small>
         </li>
         {% endfor %}
       </ul>
@@ -144,7 +144,7 @@
       <li class="list-group-item transaction-item {% if loop.index > 3 %}d-none{% endif %}">
         <strong>{{ t.animal.name }}</strong><br>
         Tipo: {{ t.type|capitalize }}<br>
-        Data: {{ t.date.strftime('%d/%m/%Y') }}<br>
+        Data: {{ t.date|format_datetime_brazil('%d/%m/%Y') }}<br>
         {% if t.from_user_id == current_user.id %}
         Para: {{ t.to_user.name }}
         {% else %}
