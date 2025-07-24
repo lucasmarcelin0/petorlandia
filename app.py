@@ -1,6 +1,9 @@
 # ───────────────────────────  app.py  ───────────────────────────
 import os, sys, pathlib, importlib, logging, uuid, re
+
+
 from datetime import datetime
+
 from dotenv import load_dotenv
 from flask import Flask
 from itsdangerous import URLSafeTimedSerializer
@@ -41,6 +44,10 @@ app.config.update(SESSION_PERMANENT=False, SESSION_TYPE="filesystem")
 # ----------------------------------------------------------------
 # 3)  Extensões
 # ----------------------------------------------------------------
+
+@app.template_filter('date_now')
+def date_now(format_string='%Y-%m-%d'):
+    return datetime.now().strftime(format_string)
 # já existe no topo, logo depois das extensões:
 from extensions import db, migrate, mail, login, session as session_ext
 from flask_login import login_user, logout_user, current_user, login_required
@@ -1398,6 +1405,7 @@ def ficha_tutor(tutor_id):
     return render_template(
         'tutor_detail.html',
         tutor=tutor,
+        endereco=tutor.endereco,  # Passa explicitamente o endereço
         animais=animais,
         current_year=current_year,
         species_list=species_list,

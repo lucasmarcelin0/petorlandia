@@ -1,29 +1,41 @@
 <form>
+  <!-- Feedback visual para o usuário -->
+  <div id="feedback-message" class="alert d-none position-fixed" style="top: 20px; right: 20px; z-index: 1000;"></div>
+
   <h5 class="mb-3">Prescrição de Medicamentos</h5>
 
   <!-- Campo com autocomplete -->
   <div class="mb-3 position-relative">
     <label for="nome-medicamento" class="form-label">Nome do Medicamento</label>
     <input type="text" id="nome-medicamento" class="form-control" placeholder="Ex: Dipirona, Doxiciclina...">
-    <ul id="sugestoes-medicamentos" class="list-group position-absolute w-100" style="z-index: 10;"></ul>
+    <ul id="sugestoes-medicamentos" class="list-group position-absolute w-100" style="z-index: 10; max-height: 300px; overflow-y: auto; display: none;"></ul>
   </div>
 
   <!-- Card de informações do medicamento -->
   <div id="info-medicamento" class="card border-success mb-3 d-none">
+    <div class="card-header bg-success text-white">
+      <h5 class="card-title mb-0" id="med-nome-card"></h5>
+    </div>
     <div class="card-body">
-      <h5 class="card-title" id="med-nome-card"></h5>
-      <p><strong>Classificação:</strong> <span id="med-classificacao"></span></p>
-      <p><strong>Via:</strong> <span id="med-via"></span></p>
-      <p><strong>Dosagem Recomendada:</strong> <span id="med-dosagem"></span></p>
-      <p><strong>Duração Recomendada:</strong> <span id="med-duracao"></span></p>
-      <p><strong>Observações:</strong> <span id="med-observacoes"></span></p>
-      <p><strong>Bula:</strong> <a id="med-bula" href="#" target="_blank"></a></p>
+      <div class="row">
+        <div class="col-md-6">
+          <p><strong>Classificação:</strong> <span id="med-classificacao" class="text-muted">–</span></p>
+          <p><strong>Via:</strong> <span id="med-via" class="text-muted">–</span></p>
+        </div>
+        <div class="col-md-6">
+          <p><strong>Dosagem:</strong> <span id="med-dosagem" class="text-muted">–</span></p>
+          <p><strong>Duração:</strong> <span id="med-duracao" class="text-muted">–</span></p>
+        </div>
+      </div>
+      <hr>
+      <p><strong>Observações:</strong> <span id="med-observacoes" class="text-muted">–</span></p>
+      <p><strong>Bula:</strong> <a id="med-bula" href="#" target="_blank" class="text-decoration-none">–</a></p>
     </div>
   </div>
 
   <!-- Alternador de modo -->
   <div class="form-check form-switch mb-3">
-    <input class="form-check-input" type="checkbox" id="modo-personalizado" onchange="alternarModo()">
+    <input class="form-check-input" type="checkbox" id="modo-personalizado">
     <label class="form-check-label" for="modo-personalizado">Usar campo único de prescrição personalizada</label>
   </div>
 
@@ -52,10 +64,15 @@
   </div>
 
   <!-- Botão para adicionar à lista -->
-  <button type="button" class="btn btn-success mb-4" onclick="adicionarMedicamento()">➕ Adicionar Prescrição</button>
+  <button type="button" class="btn btn-success mb-4" id="btn-adicionar">➕ Adicionar Prescrição</button>
 
   <!-- Lista temporária -->
-  <div id="medicamentos-lista" class="mb-4"></div>
+  <div id="medicamentos-lista" class="mb-4">
+    <div class="text-center py-4 text-muted">
+      <i class="bi bi-prescription2 fs-1"></i>
+      <p class="mt-2">Nenhuma prescrição adicionada</p>
+    </div>
+  </div>
 
   <!-- Instruções gerais -->
   <div class="mb-3">
@@ -64,7 +81,7 @@
   </div>
 
   <!-- Botão para finalizar -->
-  <button type="button" class="btn btn-primary mt-2" onclick="finalizarBlocoPrescricoes()">💾 Finalizar Prescrição</button>
+  <button type="button" class="btn btn-primary mt-2" id="btn-finalizar">💾 Finalizar Prescrição</button>
 </form>
 
 <!-- Histórico -->
@@ -76,42 +93,24 @@
   let medicamentoSelecionado = null;
   let prescricoes = [];
 
-  document.addEventListener('DOMContentLoaded', function () {
-    const input = document.getElementById('nome-medicamento');
-    const sugestoes = document.getElementById('sugestoes-medicamentos');
+  // Função para mostrar feedback ao usuário
+  function mostrarFeedback(mensagem, tipo = 'success') {
+    const feedback = document.getElementById('feedback-message');
+    feedback.textContent = mensagem;
+    feedback.className = `alert alert-${tipo} d-block`;
+    setTimeout(() => feedback.classList.add('d-none'), 3000);
+  }
 
-    input.addEventListener('input', function () {
-      const q = this.value.trim();
-      if (q.length < 2) {
-        sugestoes.innerHTML = '';
-        return;
-      }
+  // Debounce para evitar múltiplas requisições
+  function debounce(func, wait) {
+    let timeout;
+    return function(...args) {
+      clearTimeout(timeout);
+      timeout = setTimeout(() => func.apply(this, args), wait);
+    };
+  }
 
-      fetch(`/buscar_medicamentos?q=${encodeURIComponent(q)}`)
-        .then(res => res.json())
-        .then(data => {
-          sugestoes.innerHTML = '';
-          data.forEach(item => {
-            const li = document.createElement('li');
-            li.className = 'list-group-item list-group-item-action';
-            li.textContent = item.nome;
-            li.onclick = () => {
-              medicamentoSelecionado = item;
-              preencherCardMedicamento(medicamentoSelecionado);
-              input.value = item.nome;
-              document.getElementById('dose').value = item.dosagem_recomendada || '';
-              document.getElementById('duracao').value = item.duracao_tratamento || '';
-              sugestoes.innerHTML = '';
-            };
-            sugestoes.appendChild(li);
-          });
-        })
-        .catch(err => console.error("Erro ao buscar medicamentos:", err));
-    });
-  });
-
-  renderPrescricoesTemp();
-
+  // Preencher card de informações do medicamento
   function preencherCardMedicamento(m) {
     document.getElementById('med-nome-card').textContent = m.nome;
     document.getElementById('med-classificacao').textContent = m.classificacao || '–';
@@ -119,45 +118,91 @@
     document.getElementById('med-dosagem').textContent = m.dosagem_recomendada || '–';
     document.getElementById('med-duracao').textContent = m.duracao_tratamento || '–';
     document.getElementById('med-observacoes').textContent = m.observacoes || '–';
-    document.getElementById('med-bula').textContent = m.bula ? 'Ver bula' : '–';
-    document.getElementById('med-bula').href = m.bula || '#';
+    
+    const bulaLink = document.getElementById('med-bula');
+    bulaLink.textContent = m.bula ? 'Ver bula' : '–';
+    bulaLink.href = m.bula || '#';
+    bulaLink.classList.toggle('text-decoration-none', !m.bula);
+    bulaLink.classList.toggle('text-primary', m.bula);
 
-    // Mostrar card de informações
     document.getElementById('info-medicamento').classList.remove('d-none');
   }
 
+  // Alternar entre modos de prescrição
   function alternarModo() {
     const custom = document.getElementById('modo-personalizado').checked;
     document.getElementById('modo-detalhado').classList.toggle('d-none', custom);
     document.getElementById('modo-simplificado').classList.toggle('d-none', !custom);
   }
 
+  // Renderizar lista de prescrições temporárias
   function renderPrescricoesTemp() {
     const lista = document.getElementById('medicamentos-lista');
-    lista.innerHTML = '';
-
-    prescricoes.forEach((p, i) => {
-      const div = document.createElement('div');
-      div.className = 'border p-2 mb-2';
-      div.innerHTML = `
-        💊 <strong>${p.medicamento}</strong><br>
-        <em>${p.texto}</em><br>
-        <button class="btn btn-sm btn-danger mt-1" onclick="removerPrescricao(${i})">🗑️ Remover</button>
+    
+    if (prescricoes.length === 0) {
+      lista.innerHTML = `
+        <div class="text-center py-4 text-muted">
+          <i class="bi bi-prescription2 fs-1"></i>
+          <p class="mt-2">Nenhuma prescrição adicionada</p>
+        </div>
       `;
-      lista.appendChild(div);
-    });
-  }
-
-  function adicionarMedicamento() {
-    const nome = document.getElementById('nome-medicamento').value.trim();
-    const modoPersonalizado = document.getElementById('modo-personalizado').checked;
-
-    if (!nome) {
-      alert('Informe o nome do medicamento.');
       return;
     }
+    
+    lista.innerHTML = prescricoes.map((p, i) => `
+      <div class="card mb-2">
+        <div class="card-body">
+          <div class="d-flex justify-content-between">
+            <div>
+              <h6 class="card-title text-primary">${p.medicamento}</h6>
+              <p class="card-text">${p.texto}</p>
+            </div>
+            <button class="btn btn-sm btn-outline-danger" onclick="removerPrescricao(${i})">
+              <i class="bi bi-trash"></i>
+            </button>
+          </div>
+        </div>
+      </div>
+    `).join('');
+  }
 
+  // Validar campos antes de adicionar
+  function validarCampos() {
+    const nome = document.getElementById('nome-medicamento').value.trim();
+    if (!nome) {
+      mostrarFeedback('Informe o nome do medicamento.', 'danger');
+      return false;
+    }
+    
+    const modoPersonalizado = document.getElementById('modo-personalizado').checked;
+    if (modoPersonalizado) {
+      const texto = document.getElementById('instrucao-unica').value.trim();
+      if (!texto) {
+        mostrarFeedback('Escreva a prescrição personalizada.', 'danger');
+        return false;
+      }
+    } else {
+      const frequencia = document.getElementById('frequencia').value.trim();
+      const dose = document.getElementById('dose').value.trim();
+      const duracao = document.getElementById('duracao').value.trim();
+      
+      if (!frequencia || !dose || !duracao) {
+        mostrarFeedback('Preencha todos os campos obrigatórios.', 'danger');
+        return false;
+      }
+    }
+    
+    return true;
+  }
+
+  // Adicionar medicamento à lista
+  function adicionarMedicamento() {
+    if (!validarCampos()) return;
+
+    const nome = document.getElementById('nome-medicamento').value.trim();
+    const modoPersonalizado = document.getElementById('modo-personalizado').checked;
     const observacoes = document.getElementById('instrucao-unica').value.trim();
+    
     let texto = '';
     let dose = '';
     let frequencia = '';
@@ -165,12 +210,10 @@
 
     if (modoPersonalizado) {
       texto = observacoes;
-      if (!texto) return alert('Escreva a prescrição personalizada.');
     } else {
       frequencia = document.getElementById('frequencia').value.trim();
       dose = document.getElementById('dose').value.trim();
       duracao = document.getElementById('duracao').value.trim();
-      if (!frequencia || !dose || !duracao) return alert('Preencha frequência, dose e duração.');
       texto = `${dose}, ${frequencia}, por ${duracao}`;
     }
 
@@ -184,6 +227,7 @@
     });
 
     renderPrescricoesTemp();
+    mostrarFeedback('Prescrição adicionada com sucesso!');
 
     // Limpar campos
     document.getElementById('nome-medicamento').value = '';
@@ -192,41 +236,131 @@
     document.getElementById('dose').value = '';
     document.getElementById('duracao').value = '';
     document.getElementById('info-medicamento').classList.add('d-none');
+    medicamentoSelecionado = null;
   }
 
+  // Remover prescrição da lista
   function removerPrescricao(i) {
     prescricoes.splice(i, 1);
     renderPrescricoesTemp();
+    mostrarFeedback('Prescrição removida.', 'warning');
   }
 
-  function finalizarBlocoPrescricoes() {
-    const instrucoes = document.getElementById('instrucoes-medicamentos')?.value || '';
-
+  // Finalizar e salvar todas as prescrições
+  async function finalizarBlocoPrescricoes() {
     if (prescricoes.length === 0) {
-      alert('Adicione pelo menos um medicamento.');
+      mostrarFeedback('Adicione pelo menos um medicamento.', 'warning');
       return;
     }
 
-    fetch(`/consulta/{{ consulta.id }}/bloco_prescricao`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        prescricoes,
-        instrucoes_gerais: instrucoes
-      })
-    })
-    .then(res => res.json())
-    .then(data => {
-      if (data.success) {
-        alert('Prescrição salva com sucesso!');
-        location.reload();
-      } else {
-        alert('Erro ao salvar prescrição.');
-      }
-    })
-    .catch(err => {
-      console.error('Erro na requisição:', err);
-      alert('Erro ao salvar prescrição.');
-    });
+    try {
+      const instrucoes = document.getElementById('instrucoes-medicamentos')?.value || '';
+      const response = await fetch(`/consulta/{{ consulta.id }}/bloco_prescricao`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          prescricoes,
+          instrucoes_gerais: instrucoes
+        })
+      });
+
+      const data = await response.json();
+      
+      if (!response.ok) throw new Error(data.message || 'Erro ao salvar prescrição');
+      
+      mostrarFeedback('Prescrição salva com sucesso!', 'success');
+      setTimeout(() => location.reload(), 1500);
+      
+    } catch (err) {
+      console.error('Erro:', err);
+      mostrarFeedback(err.message || 'Erro ao salvar prescrição', 'danger');
+    }
   }
+
+  // Event Listeners
+  document.addEventListener('DOMContentLoaded', function() {
+    const input = document.getElementById('nome-medicamento');
+    const sugestoes = document.getElementById('sugestoes-medicamentos');
+
+    // Busca de medicamentos com debounce
+    input.addEventListener('input', debounce(function() {
+      const q = this.value.trim();
+      if (q.length < 2) {
+        sugestoes.innerHTML = '';
+        sugestoes.style.display = 'none';
+        return;
+      }
+      
+      sugestoes.innerHTML = '<li class="list-group-item text-muted">Buscando...</li>';
+      sugestoes.style.display = 'block';
+      
+      fetch(`/buscar_medicamentos?q=${encodeURIComponent(q)}`)
+        .then(res => {
+          if (!res.ok) throw new Error('Erro na busca');
+          return res.json();
+        })
+        .then(data => {
+          if (data.length === 0) {
+            sugestoes.innerHTML = '<li class="list-group-item text-muted">Nenhum medicamento encontrado</li>';
+            return;
+          }
+          
+          sugestoes.innerHTML = '';
+          data.forEach(item => {
+            const li = document.createElement('li');
+            li.className = 'list-group-item list-group-item-action';
+            li.textContent = item.nome;
+            li.onclick = () => {
+              medicamentoSelecionado = item;
+              preencherCardMedicamento(item);
+              input.value = item.nome;
+              document.getElementById('dose').value = item.dosagem_recomendada || '';
+              document.getElementById('duracao').value = item.duracao_tratamento || '';
+              sugestoes.innerHTML = '';
+              sugestoes.style.display = 'none';
+            };
+            sugestoes.appendChild(li);
+          });
+        })
+        .catch(err => {
+          sugestoes.innerHTML = '<li class="list-group-item text-danger">Erro ao buscar medicamentos</li>';
+          console.error("Erro ao buscar medicamentos:", err);
+        });
+    }, 300));
+
+    // Fechar sugestões ao clicar fora
+    document.addEventListener('click', function(e) {
+      if (e.target !== input) {
+        sugestoes.style.display = 'none';
+      }
+    });
+
+    // Alternador de modo
+    document.getElementById('modo-personalizado').addEventListener('change', alternarModo);
+    
+    // Botões
+    document.getElementById('btn-adicionar').addEventListener('click', adicionarMedicamento);
+    document.getElementById('btn-finalizar').addEventListener('click', finalizarBlocoPrescricoes);
+  });
 </script>
+
+<style>
+  /* Melhorias visuais */
+  #sugestoes-medicamentos {
+    box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+    border-radius: 0.25rem;
+  }
+  
+  #sugestoes-medicamentos .list-group-item:hover {
+    background-color: #f8f9fa;
+    cursor: pointer;
+  }
+  
+  #modo-detalhado, #modo-simplificado {
+    transition: opacity 0.3s ease;
+  }
+  
+  .card-title.text-primary {
+    font-weight: 600;
+  }
+</style>
