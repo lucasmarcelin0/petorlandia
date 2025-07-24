@@ -6,7 +6,16 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')
 import pytest
 import app as app_module
 from app import app as flask_app, sdk, db
-from models import User, Payment, PaymentStatus, DeliveryRequest, PaymentMethod, Order
+from models import (
+    User,
+    Payment,
+    PaymentStatus,
+    DeliveryRequest,
+    PaymentMethod,
+    Order,
+    Product,
+    OrderItem,
+)
 from datetime import datetime
 
 @pytest.fixture
@@ -240,3 +249,36 @@ def test_pedido_detail_forbidden(monkeypatch, app):
 
         response = client.get('/pedido/2')
         assert response.status_code == 403
+
+
+def test_cart_quantity_updates(monkeypatch, app):
+    client = app.test_client()
+
+    with app.app_context():
+        db.create_all()
+        user = User(id=1, name='Tester', email='x')
+        user.set_password('x')
+        product = Product(id=1, name='Prod', price=10.0)
+        db.session.add_all([user, product])
+        db.session.commit()
+
+        import flask_login.utils as login_utils
+        monkeypatch.setattr(login_utils, '_get_user', lambda: user)
+        monkeypatch.setattr(app_module, '_is_admin', lambda: False)
+
+        for idx, fn in enumerate(flask_app.template_context_processors[None]):
+            if fn.__name__ == 'inject_unread_count':
+                flask_app.template_context_processors[None][idx] = lambda: {'unread_messages': 0}
+
+        client.post('/carrinho/adicionar/1', data={'quantity': 1})
+        item = OrderItem.query.first()
+        assert item.quantity == 1
+
+        client.post(f'/carrinho/increase/{item.id}')
+        assert OrderItem.query.get(item.id).quantity == 2
+
+        client.post(f'/carrinho/decrease/{item.id}')
+        assert OrderItem.query.get(item.id).quantity == 1
+
+        client.post(f'/carrinho/decrease/{item.id}')
+        assert OrderItem.query.get(item.id) is None
