@@ -1,14 +1,15 @@
 <form method="POST" action="{{ url_for('update_animal', animal_id=animal.id) }}"
-      enctype="multipart/form-data" onsubmit="return validarCadastroAnimal();">
+      enctype="multipart/form-data" onsubmit="return validarCadastroAnimal();"
+      class="needs-validation" novalidate>
 
   <h5 class="mb-3">🐾 Cadastro do Animal</h5>
 
   <div class="row g-4">
     <!-- Foto e Nome -->
     <div class="col-md-6">
-      <label class="form-label">Foto e Nome do Animal</label>
+      <label for="animal-name" class="form-label">Foto e Nome do Animal</label>
       <div class="d-flex align-items-center gap-3">
-        <label for="animal-image" style="cursor: pointer;">
+        <label for="animal-image" class="cursor-pointer">
           {% if animal.image %}
             <img id="animal-preview" src="{{ animal.image }}" alt="Foto de {{ animal.name }}"
                  class="img-thumbnail border" style="width: 60px; height: 60px; object-fit: cover;">
@@ -19,25 +20,29 @@
           {% endif %}
         </label>
         <input id="animal-image" name="image" type="file" accept="image/*" class="form-control d-none">
-        <input type="text" name="name" class="form-control" placeholder="Nome do animal" value="{{ animal.name or '' }}" required>
+        <input id="animal-name" type="text" name="name" class="form-control" 
+               placeholder="Nome do animal" value="{{ animal.name or '' }}" required
+               minlength="2" maxlength="50">
+        <div class="invalid-feedback">Por favor, insira um nome válido (2-50 caracteres).</div>
       </div>
     </div>
 
     <!-- Espécie -->
     <div class="col-md-6">
-      <label class="form-label">Espécie</label>
-      <select name="species_id" class="form-select">
+      <label for="animal-species" class="form-label">Espécie</label>
+      <select id="animal-species" name="species_id" class="form-select" required>
         <option value="">Selecionar</option>
         {% for s in species_list %}
           <option value="{{ s.id }}" {% if animal.species_id == s.id %}selected{% endif %}>{{ s.name }}</option>
         {% endfor %}
       </select>
+      <div class="invalid-feedback">Por favor, selecione uma espécie.</div>
     </div>
 
     <!-- Raça -->
     <div class="col-md-6">
-      <label class="form-label">Raça</label>
-      <select name="breed_id" class="form-select">
+      <label for="animal-breed" class="form-label">Raça</label>
+      <select id="animal-breed" name="breed_id" class="form-select">
         <option value="">Selecionar</option>
         {% for b in breed_list %}
           <option value="{{ b.id }}" {% if animal.breed_id == b.id %}selected{% endif %}>{{ b.name }}</option>
@@ -47,12 +52,13 @@
 
     <!-- Sexo -->
     <div class="col-md-6">
-      <label class="form-label">Sexo</label>
-      <select name="sex" class="form-select">
+      <label for="animal-sex" class="form-label">Sexo</label>
+      <select id="animal-sex" name="sex" class="form-select" required>
         <option value="">Selecionar</option>
         <option value="M" {% if animal.sex == 'M' %}selected{% endif %}>Macho</option>
         <option value="F" {% if animal.sex == 'F' %}selected{% endif %}>Fêmea</option>
       </select>
+      <div class="invalid-feedback">Por favor, selecione o sexo.</div>
     </div>
 
     <!-- Data de nascimento / idade -->
@@ -64,63 +70,81 @@
 
     <!-- Microchip -->
     <div class="col-md-6">
-      <label class="form-label">Microchip</label>
-      <input type="text" name="microchip_number" class="form-control" value="{{ animal.microchip_number or '' }}">
+      <label for="animal-microchip" class="form-label">Microchip</label>
+      <input id="animal-microchip" type="text" name="microchip_number" class="form-control" 
+             value="{{ animal.microchip_number or '' }}" pattern="[0-9]{15}" 
+             title="Número do microchip deve conter 15 dígitos">
+      <div class="invalid-feedback">Por favor, insira um número de microchip válido (15 dígitos).</div>
     </div>
 
     <!-- Peso -->
     <div class="col-md-6">
-      <label class="form-label">Peso (kg)</label>
-      <input type="number" name="peso" class="form-control" step="0.01" value="{{ animal.peso or '' }}">
+      <label for="animal-peso" class="form-label">Peso (kg)</label>
+      <input id="animal-peso" type="number" name="peso" class="form-control" 
+             step="0.01" min="0.1" max="200" value="{{ animal.peso or '' }}">
+      <div class="invalid-feedback">Por favor, insira um peso válido (0.1-200 kg).</div>
     </div>
 
     <!-- Plano de Saúde -->
     <div class="col-md-6">
-      <label class="form-label">Plano de Saúde</label>
-      <input type="text" name="health_plan" class="form-control" value="{{ animal.health_plan or '' }}">
+      <label for="animal-health-plan" class="form-label">Plano de Saúde</label>
+      <input id="animal-health-plan" type="text" name="health_plan" class="form-control" 
+             value="{{ animal.health_plan or '' }}" maxlength="100">
     </div>
 
     <!-- Descrição -->
     <div class="col-md-12">
-      <label class="form-label">Descrição</label>
-      <textarea name="description" class="form-control" rows="2">{{ animal.description or '' }}</textarea>
+      <label for="animal-description" class="form-label">Descrição</label>
+      <textarea id="animal-description" name="description" class="form-control" 
+                rows="2" maxlength="500">{{ animal.description or '' }}</textarea>
     </div>
 
     <!-- Castrado -->
     <div class="col-md-6">
-      <label class="form-label">Castrado?</label>
-      <select name="neutered" class="form-select">
+      <label for="animal-neutered" class="form-label">Castrado?</label>
+      <select id="animal-neutered" name="neutered" class="form-select" required>
         <option value="">Selecionar</option>
         <option value="1" {% if animal.neutered %}selected{% endif %}>Sim</option>
         <option value="0" {% if animal.neutered == False %}selected{% endif %}>Não</option>
       </select>
+      <div class="invalid-feedback">Por favor, informe se o animal é castrado.</div>
     </div>
   </div>
 
   <div class="mt-4 d-flex justify-content-between">
-    <button type="submit" class="btn btn-success">📂 Salvar</button>
+    <button type="submit" class="btn btn-success">
+      <i class="bi bi-save me-1"></i> Salvar
+    </button>
   </div>
 </form>
 
 <!-- Botão de deletar -->
 <form method="POST" action="{{ url_for('deletar_animal', animal_id=animal.id) }}"
-      onsubmit="return confirm('Deseja mesmo remover este animal?');" class="mt-2">
-  <button type="submit" class="btn btn-outline-danger">🗑️ Remover Animal</button>
+      onsubmit="return confirm('Tem certeza que deseja remover permanentemente este animal? Esta ação não pode ser desfeita.');" 
+      class="mt-2">
+  <button type="submit" class="btn btn-outline-danger">
+    <i class="bi bi-trash me-1"></i> Remover Animal
+  </button>
 </form>
 
 <!-- Scripts -->
 {% block scripts %}
 <script>
   document.addEventListener('DOMContentLoaded', () => {
-    const tutorIdField = document.getElementById('tutor_id');
-    window.validarCadastroAnimal = function () {
-      if (tutorIdField && !tutorIdField.value) {
-        alert('Selecione um tutor antes de salvar o animal.');
-        return false;
-      }
-      return true;
-    };
+    // Validação do formulário
+    const forms = document.querySelectorAll('.needs-validation');
+    
+    Array.from(forms).forEach(form => {
+      form.addEventListener('submit', event => {
+        if (!form.checkValidity()) {
+          event.preventDefault();
+          event.stopPropagation();
+        }
+        form.classList.add('was-validated');
+      }, false);
+    });
 
+    // Preview da imagem
     const fileInput = document.getElementById('animal-image');
     const previewImg = document.getElementById('animal-preview');
     const placeholder = document.getElementById('animal-preview-placeholder');
@@ -128,25 +152,49 @@
     fileInput?.addEventListener('change', (e) => {
       const file = e.target.files[0];
       if (file) {
+        // Validação do tipo e tamanho do arquivo
+        const validTypes = ['image/jpeg', 'image/png', 'image/gif'];
+        const maxSize = 2 * 1024 * 1024; // 2MB
+        
+        if (!validTypes.includes(file.type)) {
+          alert('Por favor, selecione uma imagem no formato JPEG, PNG ou GIF.');
+          return;
+        }
+        
+        if (file.size > maxSize) {
+          alert('A imagem não pode ser maior que 2MB.');
+          return;
+        }
+
         const reader = new FileReader();
         reader.onload = (event) => {
           if (previewImg) {
             previewImg.src = event.target.result;
-          } else {
+          } else if (placeholder) {
             const newImg = document.createElement('img');
             newImg.id = 'animal-preview';
             newImg.src = event.target.result;
             newImg.alt = 'Foto do animal';
-            newImg.className = 'img-thumbnail';
+            newImg.className = 'img-thumbnail border';
             newImg.style.width = '60px';
             newImg.style.height = '60px';
             newImg.style.objectFit = 'cover';
-            placeholder?.replaceWith(newImg);
+            placeholder.replaceWith(newImg);
           }
         };
         reader.readAsDataURL(file);
       }
     });
+
+    // Validação customizada
+    window.validarCadastroAnimal = function () {
+      const tutorIdField = document.getElementById('tutor_id');
+      if (tutorIdField && !tutorIdField.value) {
+        alert('Selecione um tutor antes de salvar o animal.');
+        return false;
+      }
+      return true;
+    };
   });
 </script>
 {% endblock %}

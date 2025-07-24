@@ -1,108 +1,264 @@
-{% set endereco = tutor.endereco if tutor else None %}
-
-
-<div class="card shadow-sm rounded-4 p-4 mb-4 border-0">
-  <h5 class="mb-3 text-primary-emphasis">📍 Endereço</h5>
+<div class="card shadow-sm rounded-4 p-4 mb-4 border-0 bg-light">
+  <h5 class="mb-3 text-primary d-flex align-items-center">
+    <i class="bi bi-geo-alt-fill me-2"></i> Endereço
+  </h5>
+  
   <div class="row g-3">
-
-    <!-- CEP -->
-    <div class="col-md-4">
-      <label for="cep" class="form-label">CEP</label>
-      <input type="text" class="form-control" name="cep" id="cep" value="{{ endereco.cep if endereco else '' }}" maxlength="9" placeholder="00000-000" onblur="buscarCep()">
-      <div id="cep-loading" class="form-text text-muted d-none">
-        <i class="bi bi-arrow-repeat me-1"></i> Buscando informações do CEP...
+    <!-- CEP com máscara e busca automática -->
+    <div class="col-md-3">
+      <label for="cep" class="form-label fw-semibold">
+        CEP <span class="text-danger">*</span>
+        <i class="bi bi-question-circle ms-1" data-bs-toggle="tooltip" title="Digite o CEP para autopreencher o endereço"></i>
+      </label>
+      <div class="input-group">
+        <input type="text" class="form-control" name="cep" id="cep" 
+               value="{{ endereco.cep if endereco else '' }}" 
+               placeholder="00000-000" 
+               data-mask="00000-000"
+               onblur="buscarCep()">
+        <button class="btn btn-outline-secondary" type="button" onclick="buscarCep()">
+          <i class="bi bi-search"></i>
+        </button>
+      </div>
+      <div id="cep-loading" class="form-text text-primary d-none">
+        <span class="spinner-border spinner-border-sm me-1" role="status"></span>
+        Buscando CEP...
       </div>
     </div>
 
     <!-- Rua -->
-    <div class="col-md-8">
-      <label for="rua" class="form-label">Rua <span class="text-danger">*</span></label>
-      <input type="text" class="form-control" name="rua" id="rua" value="{{ endereco.rua if endereco else '' }}">
+    <div class="col-md-7">
+      <label for="rua" class="form-label fw-semibold">Logradouro <span class="text-danger">*</span></label>
+      <input type="text" class="form-control" name="rua" id="rua" 
+             value="{{ endereco.rua if endereco else '' }}"
+             placeholder="Nome da rua, avenida, etc.">
+      <div class="invalid-feedback">Por favor, informe o logradouro</div>
     </div>
 
     <!-- Número -->
-    <div class="col-md-3">
-      <label for="numero" class="form-label">Número</label>
-      <input type="text" class="form-control" name="numero" id="numero" value="{{ endereco.numero if endereco else '' }}">
+    <div class="col-md-2">
+      <label for="numero" class="form-label fw-semibold">Número</label>
+      <input type="text" class="form-control" name="numero" id="numero" 
+             value="{{ endereco.numero if endereco else '' }}"
+             placeholder="Nº">
     </div>
 
     <!-- Complemento -->
-    <div class="col-md-3">
-      <label for="complemento" class="form-label">Complemento</label>
-      <input type="text" class="form-control" name="complemento" id="complemento" value="{{ endereco.complemento if endereco else '' }}">
+    <div class="col-md-4">
+      <label for="complemento" class="form-label fw-semibold">Complemento</label>
+      <input type="text" class="form-control" name="complemento" id="complemento" 
+             value="{{ endereco.complemento if endereco else '' }}"
+             placeholder="Apto, bloco, etc.">
     </div>
 
     <!-- Bairro -->
-    <div class="col-md-3">
-      <label for="bairro" class="form-label">Bairro</label>
-      <input type="text" class="form-control" name="bairro" id="bairro" value="{{ endereco.bairro if endereco else '' }}">
+    <div class="col-md-4">
+      <label for="bairro" class="form-label fw-semibold">Bairro</label>
+      <input type="text" class="form-control" name="bairro" id="bairro" 
+             value="{{ endereco.bairro if endereco else '' }}"
+             placeholder="Nome do bairro">
     </div>
 
     <!-- Cidade -->
     <div class="col-md-3">
-      <label for="cidade" class="form-label">Cidade <span class="text-danger">*</span></label>
-      <input type="text" class="form-control" name="cidade" id="cidade" value="{{ endereco.cidade if endereco else '' }}">
+      <label for="cidade" class="form-label fw-semibold">Cidade <span class="text-danger">*</span></label>
+      <input type="text" class="form-control" name="cidade" id="cidade" 
+             value="{{ endereco.cidade if endereco else '' }}"
+             placeholder="Nome da cidade">
+      <div class="invalid-feedback">Por favor, informe a cidade</div>
     </div>
 
-    <!-- Estado -->
+    <!-- Estado com select -->
     <div class="col-md-2">
-      <label for="estado" class="form-label">UF <span class="text-danger">*</span></label>
-      <input type="text" class="form-control" name="estado" id="estado" value="{{ endereco.estado if endereco else '' }}" maxlength="2" pattern="[A-Z]{2}" title="Use a sigla do estado, como SP ou MG" required>
+      <label for="estado" class="form-label fw-semibold">UF <span class="text-danger">*</span></label>
+      <select class="form-select" name="estado" id="estado" required>
+        <option value="">Selecione</option>
+        <option value="AC" {{ 'selected' if endereco and endereco.estado == 'AC' }}>AC - Acre</option>
+        <option value="AL" {{ 'selected' if endereco and endereco.estado == 'AL' }}>AL - Alagoas</option>
+        <option value="AP" {{ 'selected' if endereco and endereco.estado == 'AP' }}>AP - Amapá</option>
+        <option value="AM" {{ 'selected' if endereco and endereco.estado == 'AM' }}>AM - Amazonas</option>
+        <option value="BA" {{ 'selected' if endereco and endereco.estado == 'BA' }}>BA - Bahia</option>
+        <option value="CE" {{ 'selected' if endereco and endereco.estado == 'CE' }}>CE - Ceará</option>
+        <option value="DF" {{ 'selected' if endereco and endereco.estado == 'DF' }}>DF - Distrito Federal</option>
+        <option value="ES" {{ 'selected' if endereco and endereco.estado == 'ES' }}>ES - Espírito Santo</option>
+        <option value="GO" {{ 'selected' if endereco and endereco.estado == 'GO' }}>GO - Goiás</option>
+        <option value="MA" {{ 'selected' if endereco and endereco.estado == 'MA' }}>MA - Maranhão</option>
+        <option value="MT" {{ 'selected' if endereco and endereco.estado == 'MT' }}>MT - Mato Grosso</option>
+        <option value="MS" {{ 'selected' if endereco and endereco.estado == 'MS' }}>MS - Mato Grosso do Sul</option>
+        <option value="MG" {{ 'selected' if endereco and endereco.estado == 'MG' }}>MG - Minas Gerais</option>
+        <option value="PA" {{ 'selected' if endereco and endereco.estado == 'PA' }}>PA - Pará</option>
+        <option value="PB" {{ 'selected' if endereco and endereco.estado == 'PB' }}>PB - Paraíba</option>
+        <option value="PR" {{ 'selected' if endereco and endereco.estado == 'PR' }}>PR - Paraná</option>
+        <option value="PE" {{ 'selected' if endereco and endereco.estado == 'PE' }}>PE - Pernambuco</option>
+        <option value="PI" {{ 'selected' if endereco and endereco.estado == 'PI' }}>PI - Piauí</option>
+        <option value="RJ" {{ 'selected' if endereco and endereco.estado == 'RJ' }}>RJ - Rio de Janeiro</option>
+        <option value="RN" {{ 'selected' if endereco and endereco.estado == 'RN' }}>RN - Rio Grande do Norte</option>
+        <option value="RS" {{ 'selected' if endereco and endereco.estado == 'RS' }}>RS - Rio Grande do Sul</option>
+        <option value="RO" {{ 'selected' if endereco and endereco.estado == 'RO' }}>RO - Rondônia</option>
+        <option value="RR" {{ 'selected' if endereco and endereco.estado == 'RR' }}>RR - Roraima</option>
+        <option value="SC" {{ 'selected' if endereco and endereco.estado == 'SC' }}>SC - Santa Catarina</option>
+        <option value="SP" {{ 'selected' if endereco and endereco.estado == 'SP' }}>SP - São Paulo</option>
+        <option value="SE" {{ 'selected' if endereco and endereco.estado == 'SE' }}>SE - Sergipe</option>
+        <option value="TO" {{ 'selected' if endereco and endereco.estado == 'TO' }}>TO - Tocantins</option>
+      </select>
+      <div class="invalid-feedback">Selecione o estado</div>
     </div>
+  </div>
+</div>
 
-
+<!-- Toast para mensagens de erro -->
+<div class="position-fixed bottom-0 end-0 p-3" style="z-index: 11">
+  <div id="errorToast" class="toast align-items-center text-white bg-danger border-0" role="alert" aria-live="assertive" aria-atomic="true">
+    <div class="d-flex">
+      <div class="toast-body">
+        <i class="bi bi-exclamation-triangle-fill me-2"></i>
+        Por favor, preencha todos os campos obrigatórios.
+      </div>
+      <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
+    </div>
   </div>
 </div>
 
 <script>
+// Máscara para CEP
+document.addEventListener("DOMContentLoaded", function() {
+  // Inicializa tooltips
+  const tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+  tooltipTriggerList.map(function (tooltipTriggerEl) {
+    return new bootstrap.Tooltip(tooltipTriggerEl);
+  });
+
+  // Máscara para CEP
+  const cepInput = document.getElementById('cep');
+  if (cepInput) {
+    cepInput.addEventListener('input', function(e) {
+      let value = e.target.value.replace(/\D/g, '');
+      if (value.length > 5) {
+        value = value.substring(0,5) + '-' + value.substring(5,8);
+      }
+      e.target.value = value;
+    });
+  }
+});
+
 function buscarCep() {
   const cep = document.getElementById("cep").value.replace(/\D/g, '');
   const loading = document.getElementById("cep-loading");
-  if (cep.length !== 8) return;
+  
+  if (cep.length !== 8) {
+    alert("CEP inválido. Digite 8 números.");
+    return;
+  }
 
   loading.classList.remove("d-none");
-
+  
   fetch(`https://viacep.com.br/ws/${cep}/json/`)
-    .then(res => res.json())
+    .then(res => {
+      if (!res.ok) throw new Error("Erro na requisição");
+      return res.json();
+    })
     .then(data => {
       if (data.erro) {
-        alert("CEP não encontrado.");
-        return;
+        throw new Error("CEP não encontrado");
       }
-
+      
+      // Preenche os campos
       document.getElementById("rua").value = data.logradouro || "";
       document.getElementById("complemento").value = data.complemento || "";
       document.getElementById("bairro").value = data.bairro || "";
       document.getElementById("cidade").value = data.localidade || "";
-      document.getElementById("estado").value = data.uf || "";
+      
+      // Atualiza o select de estado
+      const estadoSelect = document.getElementById("estado");
+      if (estadoSelect && data.uf) {
+        estadoSelect.value = data.uf;
+      }
+      
+      // Foca no número (campo que geralmente não vem no CEP)
+      document.getElementById("numero").focus();
     })
-    .catch(() => alert("Erro ao buscar o CEP."))
+    .catch(error => {
+      console.error("Erro ao buscar CEP:", error);
+      alert(error.message);
+    })
     .finally(() => loading.classList.add("d-none"));
 }
 
-// Validação visual
-document.addEventListener("DOMContentLoaded", function () {
-  document.querySelector("form")?.addEventListener("submit", function (e) {
-    const rua = document.getElementById("rua");
-    const cidade = document.getElementById("cidade");
-    const estado = document.getElementById("estado");
+// Validação melhorada
+document.addEventListener("DOMContentLoaded", function() {
+  const form = document.querySelector("form");
+  if (!form) return;
 
-    [rua, cidade, estado].forEach(field => field.classList.remove("is-invalid"));
+  // Define campos obrigatórios
+  const requiredFields = ['rua', 'cidade', 'estado'];
+  
+  form.addEventListener("submit", function(e) {
+    let isValid = true;
+    
+    requiredFields.forEach(id => {
+      const field = document.getElementById(id);
+      if (!field.value.trim()) {
+        field.classList.add("is-invalid");
+        isValid = false;
+      } else {
+        field.classList.remove("is-invalid");
+      }
+    });
 
-    if (!rua.value || !cidade.value || !estado.value) {
+    if (!isValid) {
       e.preventDefault();
-      [rua, cidade, estado].forEach(field => {
-        if (!field.value) field.classList.add("is-invalid");
+      const firstInvalid = document.querySelector(".is-invalid");
+      if (firstInvalid) firstInvalid.focus();
+      
+      // Toast de erro (substitui o alert)
+      const toast = new bootstrap.Toast(document.getElementById('errorToast'));
+      toast.show();
+    }
+  });
+
+  // Validação em tempo real
+  requiredFields.forEach(id => {
+    const field = document.getElementById(id);
+    if (field) {
+      field.addEventListener('input', function() {
+        if (this.value.trim()) {
+          this.classList.remove("is-invalid");
+        }
       });
-      alert("Por favor, preencha os campos obrigatórios: rua, cidade e estado.");
     }
   });
 });
 </script>
 
 <style>
+/* Estilos para campos inválidos */
 .is-invalid {
-  border-color: #dc3545 !important;
-  box-shadow: 0 0 0 0.2rem rgba(220, 53, 69, 0.25);
+  border-color: #dc3545;
+  background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12' width='12' height='12' fill='none' stroke='%23dc3545'%3e%3ccircle cx='6' cy='6' r='4.5'/%3e%3cpath stroke-linejoin='round' d='M5.8 3.6h.4L6 6.5z'/%3e%3ccircle cx='6' cy='8.2' r='.6' fill='%23dc3545' stroke='none'/%3e%3c/svg%3e");
+  background-repeat: no-repeat;
+  background-position: right calc(0.375em + 0.1875rem) center;
+  background-size: calc(0.75em + 0.375rem) calc(0.75em + 0.375rem);
+  padding-right: calc(1.5em + 0.75rem);
+}
+
+.is-invalid:focus {
+  box-shadow: 0 0 0 0.25rem rgba(220,53,69,.25);
+}
+
+/* Estilo para o card de endereço */
+.card-address {
+  background-color: #f8f9fa;
+  border-left: 4px solid #0d6efd;
+}
+
+/* Tooltip customizado */
+.tooltip-inner {
+  max-width: 300px;
+  padding: 0.5rem 1rem;
+}
+
+/* Melhoria visual para o select */
+.form-select {
+  cursor: pointer;
 }
 </style>

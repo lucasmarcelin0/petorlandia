@@ -1,93 +1,105 @@
 {% if edit_mode %}
-  <div class="alert alert-warning">
-    ✏️ Editando consulta de {{ consulta.created_at.strftime('%d/%m/%Y %H:%M') }}.
-    <a href="{{ url_for('consulta_direct', animal_id=animal.id) }}">Cancelar edição</a>
+  <div class="alert alert-warning d-flex align-items-center">
+    <i class="bi bi-pencil-square me-2"></i>
+    Editando consulta de {{ consulta.created_at.strftime('%d/%m/%Y %H:%M') }}.
+    <a href="{{ url_for('consulta_direct', animal_id=animal.id) }}" class="ms-2">Cancelar edição</a>
   </div>
 {% endif %}
 
-<form method="POST"
-      action="{{ url_for('update_consulta', consulta_id=consulta.id) }}{% if edit_mode %}?edit=1{% endif %}">
+<form method="POST" 
+      action="{{ url_for('update_consulta', consulta_id=consulta.id) }}{% if edit_mode %}?edit=1{% endif %}"
+      class="needs-validation" novalidate>
 
+  <!-- Seção de Queixa Principal -->
   <div class="mb-3">
-    <label class="form-label">Queixa Principal</label>
-    <textarea name="queixa_principal" class="form-control auto-expand" rows="2">{{ consulta.queixa_principal or '' }}</textarea>
+    <label for="queixa-principal" class="form-label fw-bold">
+      <i class="bi bi-clipboard2-pulse"></i> Queixa Principal
+    </label>
+    <textarea id="queixa-principal" name="queixa_principal" 
+              class="form-control auto-expand" rows="2"
+              placeholder="Descreva a queixa principal do animal"
+              required>{{ consulta.queixa_principal or '' }}</textarea>
+    <div class="invalid-feedback">Por favor, informe a queixa principal</div>
   </div>
 
+  <!-- Seção de Histórico Clínico -->
   <div class="mb-3">
-    <label class="form-label">Histórico Clínico</label>
-    <textarea name="historico_clinico" class="form-control auto-expand" rows="3">{{ consulta.historico_clinico or '' }}</textarea>
+    <label for="historico-clinico" class="form-label fw-bold">
+      <i class="bi bi-clock-history"></i> Histórico Clínico
+    </label>
+    <textarea id="historico-clinico" name="historico_clinico" 
+              class="form-control auto-expand" rows="3"
+              placeholder="Registre o histórico clínico do animal">{{ consulta.historico_clinico or '' }}</textarea>
   </div>
 
+  <!-- Seção de Exame Físico -->
   <div class="mb-3">
-    <label class="form-label">Exame Físico</label>
-    <textarea name="exame_fisico" class="form-control auto-expand" rows="3">{{ consulta.exame_fisico or '' }}</textarea>
+    <label for="exame-fisico" class="form-label fw-bold">
+      <i class="bi bi-clipboard2-check"></i> Exame Físico
+    </label>
+    <textarea id="exame-fisico" name="exame_fisico" 
+              class="form-control auto-expand" rows="3"
+              placeholder="Descreva os achados do exame físico">{{ consulta.exame_fisico or '' }}</textarea>
   </div>
 
+  <!-- Seção de Conduta -->
   <div class="mb-3">
-    <label class="form-label">Conduta</label>
-    <textarea name="conduta" class="form-control auto-expand" rows="3">{{ consulta.conduta or '' }}</textarea>
+    <label for="conduta" class="form-label fw-bold">
+      <i class="bi bi-prescription2"></i> Conduta
+    </label>
+    <textarea id="conduta" name="conduta" 
+              class="form-control auto-expand" rows="3"
+              placeholder="Descreva a conduta adotada">{{ consulta.conduta or '' }}</textarea>
   </div>
 
-  <button type="submit" class="btn btn-primary">
+  <div class="d-flex justify-content-between mt-4">
+    <button type="submit" class="btn btn-primary">
+      {% if edit_mode %}
+        <i class="bi bi-save2"></i> Salvar Alterações
+      {% else %}
+        <i class="bi bi-file-earmark-medical"></i> Salvar Consulta
+      {% endif %}
+    </button>
+    
     {% if edit_mode %}
-      💾 Salvar Alterações
-    {% else %}
-      💾 Salvar Consulta
+      <a href="{{ url_for('consulta_direct', animal_id=animal.id) }}" class="btn btn-outline-secondary">
+        <i class="bi bi-x-circle"></i> Cancelar
+      </a>
     {% endif %}
-  </button>
+  </div>
 </form>
 
-
-<input id="campo-medicamento" class="form-control" placeholder="Digite o nome do medicamento">
-<div id="sugestoes" class="list-group position-absolute d-none" style="z-index: 1000;"></div>
-
 <script>
-document.getElementById("campo-medicamento").addEventListener("input", function () {
-  const query = this.value;
-
-  if (query.length < 2) {
-    document.getElementById("sugestoes").classList.add("d-none");
-    return;
+document.addEventListener('DOMContentLoaded', function() {
+  // Função para auto-expand dos textareas
+  function setupAutoExpand() {
+    document.querySelectorAll('textarea.auto-expand').forEach(function(textarea) {
+      function autoResize() {
+        this.style.height = 'auto';
+        this.style.height = (this.scrollHeight) + 'px';
+      }
+      
+      // Aplica no carregamento
+      autoResize.call(textarea);
+      
+      // Adiciona o event listener
+      textarea.addEventListener('input', autoResize);
+    });
   }
 
-  fetch(`/buscar_medicamentos?q=${encodeURIComponent(query)}`)
-    .then(response => response.json())
-    .then(data => {
-      const sugestoes = document.getElementById("sugestoes");
-      sugestoes.innerHTML = "";
-      data.forEach(med => {
-        const item = document.createElement("button");
-        item.type = "button";
-        item.className = "list-group-item list-group-item-action";
-        item.textContent = med.nome;
-        item.onclick = () => {
-          document.getElementById("campo-medicamento").value = med.nome;
-          sugestoes.classList.add("d-none");
-        };
-        sugestoes.appendChild(item);
-      });
-      sugestoes.classList.remove("d-none");
-    });
+  // Validação do formulário
+  const form = document.querySelector('form.needs-validation');
+  if (form) {
+    form.addEventListener('submit', function(event) {
+      if (!form.checkValidity()) {
+        event.preventDefault();
+        event.stopPropagation();
+      }
+      form.classList.add('was-validated');
+    }, false);
+  }
+
+  // Inicializa o auto-expand
+  setupAutoExpand();
 });
-
-
-
-
-
-
-
-
-
-  // Faz todos os textareas com classe "auto-expand" crescerem automaticamente
-  document.querySelectorAll('textarea.auto-expand').forEach(function (textarea) {
-    function autoResize() {
-      this.style.height = 'auto';
-      this.style.height = this.scrollHeight + 'px';
-    }
-    textarea.addEventListener('input', autoResize);
-    // Aplica o resize ao carregar com conteúdo já existente
-    autoResize.call(textarea);
-  });
-
-
 </script>

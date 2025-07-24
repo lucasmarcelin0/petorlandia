@@ -1,124 +1,207 @@
-{% extends 'base_consulta.html' %}
+{% extends 'layout.html' %}
 
 {% block main %}
-
 <div class="container py-4">
-
-  {% if animal %}
-    <h2 class="mb-4">🩺 Consulta de {{ animal.name }}</h2>
-  {% elif tutor %}
-    <h2 class="mb-4">🩺 Novo Atendimento para {{ tutor.name }}</h2>
-  {% else %}
-    <h2 class="mb-4">🩺 Novo Atendimento Veterinário</h2>
-  {% endif %}
-
-<!-- Botões -->
-<div class="mb-4 d-flex flex-wrap gap-2">
-  <button class="btn btn-outline-primary" onclick="toggleSection('tutor-info')">🧑 Tutor</button>
-  <button class="btn btn-outline-primary" onclick="toggleSection('animal-info')">🐾 Animal</button>
-  <button class="btn btn-outline-primary" onclick="toggleSection('racoes')">🍖 Ração</button>
-
-  {% if animal and worker == 'veterinario' %}
-    <button class="btn btn-outline-dark" onclick="toggleSection('consulta-info')">📋 Consulta</button>
-    <button class="btn btn-outline-success" onclick="toggleSection('medicamentos')">💊 Prescrição</button>
-    <button class="btn btn-outline-info" onclick="toggleSection('exames')">🧪 Exames</button>
-    <button class="btn btn-outline-warning" onclick="toggleSection('vacinas')">💉 Vacinas</button>
-
-  {% endif %}
-</div>
-
-  <!-- Seção: Tutor -->
-  <div id="tutor-info" class="card mb-3 d-none">
-    <div class="card-body">
-      {% include 'partials/tutor_form.html' %}
-    </div>
-  </div>
-
-<!-- Seção: Animal -->
-<div id="animal-info" class="card mb-3 d-none">
-  <div class="card-body">
-    {% if animal or tutor %}
-      {% include 'partials/animal_form.html' with context %}
-    {% else %}
-      <p class="text-muted">⚠️ Cadastre um tutor antes de registrar o animal.</p>
-    {% endif %}
-  </div>
-</div>
-
-<!-- Seção: Ração (AGORA FORA do animal-info) -->
-<div id="racoes" class="card mb-3 d-none">
-  <div class="card-body">
+  <!-- Cabeçalho melhorado -->
+  <div class="d-flex justify-content-between align-items-center mb-4">
     {% if animal %}
-      {% include 'partials/food_form.html' with context %}
+      <h2 class="mb-0">🩺 <span class="text-primary">{{ animal.name }}</span> - Prontuário</h2>
+    {% elif tutor %}
+      <h2 class="mb-0">🩺 Novo Atendimento para <span class="text-primary">{{ tutor.name }}</span></h2>
     {% else %}
-      <p class="text-muted">⚠️ Cadastre um tutor e um animal antes de registrar a ração.</p>
+      <h2 class="mb-0">🩺 Novo Atendimento Veterinário</h2>
+    {% endif %}
+    
+    {% if animal %}
+      <div class="animal-photo">
+        {% if animal.photo %}
+          <img src="{{ animal.photo.url }}" alt="{{ animal.name }}" class="rounded-circle" width="50" height="50">
+        {% else %}
+          <div class="no-photo-placeholder rounded-circle bg-light d-flex align-items-center justify-content-center" style="width: 50px; height: 50px;">
+            🐾
+          </div>
+        {% endif %}
+      </div>
     {% endif %}
   </div>
-</div>
 
+<!-- Substitua a seção de abas pelo seguinte código: -->
+<ul class="nav nav-tabs mb-4" id="consultaTabs" role="tablist">
+  <li class="nav-item" role="presentation">
+    <button class="nav-link active" id="tutor-tab" data-bs-toggle="tab" data-bs-target="#tutor-info" type="button">
+      <i class="bi bi-person-fill me-1 text-primary"></i> Tutor
+    </button>
+  </li>
+<li class="nav-item" role="presentation">
+  <button class="nav-link" id="animal-tab" data-bs-toggle="tab" data-bs-target="#animal-info" type="button">
+    <i class="bi bi-heart-pulse-fill me-1 text-danger"></i> Animal
+  </button>
+</li>
+  <li class="nav-item" role="presentation">
+    <button class="nav-link" id="racao-tab" data-bs-toggle="tab" data-bs-target="#racoes" type="button"
+            {% if not animal %}disabled title="Cadastre um animal primeiro"{% endif %}>
+      <i class="bi bi-basket-fill me-1 text-success"></i> Ração
+    </button>
+  </li>
+  
+  {% if animal and worker == 'veterinario' %}
+    <li class="nav-item" role="presentation">
+      <button class="nav-link" id="consulta-tab" data-bs-toggle="tab" data-bs-target="#consulta-info" type="button">
+        <i class="bi bi-clipboard2-pulse-fill me-1 text-info"></i> Consulta
+      </button>
+    </li>
+    <li class="nav-item" role="presentation">
+      <button class="nav-link" id="medicamentos-tab" data-bs-toggle="tab" data-bs-target="#medicamentos" type="button">
+        <i class="bi bi-capsule-pill me-1 text-warning"></i> Medicamentos
+      </button>
+    </li>
+    <li class="nav-item" role="presentation">
+      <button class="nav-link" id="exames-tab" data-bs-toggle="tab" data-bs-target="#exames" type="button">
+        <i class="bi bi-droplet-fill me-1" style="color: #6f42c1;"></i> Exames
+      </button>
+    </li>
+<li class="nav-item" role="presentation">
+  <button class="nav-link" id="vacinas-tab" data-bs-toggle="tab" data-bs-target="#vacinas" type="button">
+    <i class="bi bi-shield-plus me-1" style="color: #20c997;"></i> Vacinas
+  </button>
+  </li>
+  {% endif %}
+</ul>
+
+
+
+
+
+  <!-- Conteúdo das abas -->
+  <div class="tab-content">
+    <div class="tab-pane fade show active" id="tutor-info" role="tabpanel">
+      <div class="card shadow-sm">
+        <div class="card-body">
+          {% include 'partials/tutor_form.html' %}
+        </div>
+      </div>
+    </div>
+
+    <div class="tab-pane fade" id="animal-info" role="tabpanel">
+      <div class="card shadow-sm">
+        <div class="card-body">
+          {% if animal or tutor %}
+            {% include 'partials/animal_form.html' with context %}
+          {% else %}
+            <div class="alert alert-warning">
+              <i class="bi bi-exclamation-triangle-fill me-2"></i>
+              Cadastre um tutor antes de registrar o animal.
+            </div>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+
+    <div class="tab-pane fade" id="racoes" role="tabpanel">
+      <div class="card shadow-sm">
+        <div class="card-body">
+          {% if animal %}
+            {% include 'partials/food_form.html' with context %}
+          {% else %}
+            <div class="alert alert-warning">
+              <i class="bi bi-exclamation-triangle-fill me-2"></i>
+              Cadastre um tutor e um animal antes de registrar a ração.
+            </div>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+
+    {% if animal and worker == 'veterinario' %}
+      <div class="tab-pane fade" id="consulta-info" role="tabpanel">
+        <div class="card shadow-sm">
+          <div class="card-body">
+            {% include 'partials/consulta_form.html' %}
+            {% include 'partials/historico_consultas.html' %}
+          </div>
+        </div>
+      </div>
+
+      <div class="tab-pane fade" id="medicamentos" role="tabpanel">
+        <div class="card shadow-sm">
+          <div class="card-body">
+            {% include 'partials/prescricao_form.html' %}
+          </div>
+        </div>
+      </div>
+
+      <div class="tab-pane fade" id="exames" role="tabpanel">
+        <div class="card shadow-sm">
+          <div class="card-body">
+            {% include 'partials/exames_form.html' %}
+          </div>
+        </div>
+      </div>
+
+      <div class="tab-pane fade" id="vacinas" role="tabpanel">
+        <div class="card shadow-sm">
+          <div class="card-body">
+            {% include 'partials/vacinas_form.html' %}
+          </div>
+        </div>
+      </div>
+    {% endif %}
+  </div>
 
   <!-- Info extra se só houver tutor -->
   {% if tutor and not animal %}
-    <div class="alert alert-info mt-4">
-      🐶 Nenhum animal cadastrado ainda para <strong>{{ tutor.name }}</strong>. Preencha o formulário acima para adicionar.
-    </div>
-  {% endif %}
-
-  <!-- Seções visíveis apenas para veterinários -->
-  {% if animal and worker == 'veterinario' %}
-    <div id="consulta-info" class="card mb-3 d-none">
-      <div class="card-body">
-        {% include 'partials/consulta_form.html' %}
-        {% include 'partials/historico_consultas.html' %}
-      </div>
-    </div>
-
-    <div id="medicamentos" class="card mb-3 d-none">
-      <div class="card-body">
-        {% include 'partials/prescricao_form.html' %}
-      </div>
-    </div>
-
-    <div id="exames" class="card mb-3 d-none">
-      <div class="card-body">
-        {% include 'partials/exames_form.html' %}
-      </div>
-    </div>
-
-    <div id="vacinas" class="card mb-3 d-none">
-      <div class="card-body">
-        {% include 'partials/vacinas_form.html' %}
+    <div class="alert alert-info mt-4 d-flex align-items-center">
+      <i class="bi bi-info-circle-fill me-2 fs-5"></i>
+      <div>
+        Nenhum animal cadastrado ainda para <strong>{{ tutor.name }}</strong>. 
+        <a href="#" class="alert-link" onclick="document.getElementById('animal-tab').click()">
+          Clique aqui para adicionar um animal.
+        </a>
       </div>
     </div>
   {% endif %}
-
 </div>
 
+
+
+<style>
+  /* Cores customizadas para ícones */
+.bi-heart-fill.text-danger { color: #e83e8c !important; } /* Rosa mais vivo para o coração */
+.bi-syringe-fill { color: #20c997 !important; } /* Verde água para vacinas */
+.bi-droplet-fill { color: #6f42c1 !important; } /* Roxo para exames */
+.bi-capsule-pill.text-warning { color: #fd7e14 !important; } /* Laranja para medicamentos */
+
+/* Efeito hover nos ícones */
+.nav-link:hover i {
+  transform: scale(1.1);
+  transition: transform 0.2s ease;
+}
+</style>
+
+
+
+
 <script>
-  function toggleSection(id) {
-    const sections = ['tutor-info', 'animal-info', 'racoes', 'consulta-info', 'medicamentos', 'exames', 'vacinas'];
-    sections.forEach(sec => {
-      const el = document.getElementById(sec);
-      if (el) el.classList.add('d-none');
-    });
-
-    const selected = document.getElementById(id);
-    if (selected) {
-      selected.classList.remove('d-none');
-      localStorage.setItem('abaAtivaConsulta', id);
-
-      if (id === 'medicamentos') {
-        setTimeout(() => ativarAutocomplete(), 100);
-        const medInput = document.getElementById('medicamento');
-        if (medInput) medInput.dispatchEvent(new Event('input'));
-      }
-    }
+document.addEventListener('DOMContentLoaded', function() {
+  // Ativar a aba salva ou a primeira disponível
+  const abaSalva = localStorage.getItem('abaAtivaConsulta');
+  if (abaSalva) {
+    const tab = document.querySelector(`[data-bs-target="#${abaSalva}"]`);
+    if (tab) new bootstrap.Tab(tab).show();
   }
 
-  document.addEventListener('DOMContentLoaded', function () {
-    const abaSalva = localStorage.getItem('abaAtivaConsulta') || 'tutor-info';
-    toggleSection(abaSalva);
+  // Salvar aba ativa quando muda
+  document.getElementById('consultaTabs').addEventListener('shown.bs.tab', function(event) {
+    const target = event.target.getAttribute('data-bs-target').replace('#', '');
+    localStorage.setItem('abaAtivaConsulta', target);
+    
+    // Lógica específica para medicamentos
+    if (target === 'medicamentos') {
+      setTimeout(() => ativarAutocomplete(), 100);
+      const medInput = document.getElementById('medicamento');
+      if (medInput) medInput.dispatchEvent(new Event('input'));
+    }
   });
+});
 </script>
-
 {% endblock %}
