@@ -134,7 +134,7 @@ def test_payment_status_updates_from_api(monkeypatch, app):
         status = PaymentStatus.PENDING
         transaction_id = "abc123"
         order_id = 99
-        user_id = 42
+        user_id = 1
         method = PaymentMethod.PIX
         order = type('O', (), {'items': [], 'total_value': lambda self: 0})()
 
