@@ -103,9 +103,12 @@ def format_datetime_brazil(value, fmt="%d/%m/%Y %H:%M"):
 # ----------------------------------------------------------------
 # 6)  Forms e helpers
 # ----------------------------------------------------------------
-from forms import (MessageForm, RegistrationForm, LoginForm, AnimalForm,
-                   EditProfileForm, ResetPasswordRequestForm, ResetPasswordForm,
-                   OrderItemForm, DeliveryRequestForm, AddToCartForm, SubscribePlanForm)
+from forms import (
+    MessageForm, RegistrationForm, LoginForm, AnimalForm, EditProfileForm,
+    ResetPasswordRequestForm, ResetPasswordForm, OrderItemForm,
+    DeliveryRequestForm, AddToCartForm, SubscribePlanForm,
+    ProductUpdateForm, ProductPhotoForm
+)
 from helpers import calcular_idade, parse_data_nascimento
 
 # ----------------------------------------------------------------
@@ -2984,6 +2987,52 @@ def loja():
         pagamento_pendente=pagamento_pendente,
         form=form,
         has_orders=has_orders
+    )
+
+
+@app.route('/produto/<int:product_id>', methods=['GET', 'POST'])
+@login_required
+def produto_detail(product_id):
+    """Exibe detalhes do produto e permite edições para administradores."""
+    product = Product.query.options(db.joinedload(Product.extra_photos)).get_or_404(product_id)
+
+    update_form = ProductUpdateForm(obj=product, prefix='upd')
+    photo_form = ProductPhotoForm(prefix='photo')
+    cart_form = AddToCartForm(prefix='cart')
+
+    if _is_admin():
+        if update_form.validate_on_submit() and update_form.submit.data:
+            product.name = update_form.name.data
+            product.description = update_form.description.data
+            product.price = float(update_form.price.data or 0)
+            product.stock = update_form.stock.data
+            if update_form.image_upload.data:
+                file = update_form.image_upload.data
+                filename = secure_filename(file.filename)
+                image_url = upload_to_s3(file, filename, folder='products')
+                if image_url:
+                    product.image_url = image_url
+            db.session.commit()
+            flash('Produto atualizado.', 'success')
+            return redirect(url_for('produto_detail', product_id=product.id))
+
+        if photo_form.validate_on_submit() and photo_form.submit.data:
+            file = photo_form.image.data
+            filename = secure_filename(file.filename)
+            image_url = upload_to_s3(file, filename, folder='products')
+            if image_url:
+                db.session.add(ProductPhoto(product_id=product.id, image_url=image_url))
+                db.session.commit()
+                flash('Foto adicionada.', 'success')
+            return redirect(url_for('produto_detail', product_id=product.id))
+
+    return render_template(
+        'product_detail.html',
+        product=product,
+        update_form=update_form,
+        photo_form=photo_form,
+        cart_form=cart_form,
+        is_admin=_is_admin(),
     )
 
 
