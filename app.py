@@ -2908,7 +2908,7 @@ def admin_set_delivery_status(req_id, status):
     if not _is_admin():
         abort(403)
 
-    allowed = ['pendente', 'em_andamento', 'cancelada']
+    allowed = ['pendente', 'em_andamento', 'concluida', 'cancelada']
     if status not in allowed:
         abort(400)
 
@@ -2924,6 +2924,8 @@ def admin_set_delivery_status(req_id, status):
     elif status == 'em_andamento':
         if not req.accepted_at:
             req.accepted_at = now
+    elif status == 'concluida':
+        req.completed_at = now
     elif status == 'cancelada':
         req.canceled_at = now
         req.canceled_by_id = current_user.id
