@@ -2921,14 +2921,26 @@ def admin_set_delivery_status(req_id, status):
         req.accepted_at = None
         req.canceled_at = None
         req.canceled_by_id = None
+        req.completed_at = None
     elif status == 'em_andamento':
         if not req.accepted_at:
             req.accepted_at = now
+
+        req.canceled_at = None
+        req.canceled_by_id = None
+        req.completed_at = None
     elif status == 'concluida':
-        req.completed_at = now
+        if not req.completed_at:
+            req.completed_at = now
+        if not req.accepted_at:
+            req.accepted_at = now
+        req.canceled_at = None
+        req.canceled_by_id = None
+
     elif status == 'cancelada':
         req.canceled_at = now
         req.canceled_by_id = current_user.id
+        req.completed_at = None
 
     db.session.commit()
     flash('Status atualizado.', 'success')
