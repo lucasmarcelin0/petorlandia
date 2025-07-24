@@ -2884,6 +2884,7 @@ def delivery_overview():
     open_requests = base_q.filter_by(status="pendente").all()
     in_progress   = base_q.filter_by(status="em_andamento").all()
     completed     = base_q.filter_by(status="concluida").all()
+    canceled      = base_q.filter_by(status="cancelada").all()
 
     # produtos para o bloco de estoque
     products = Product.query.order_by(Product.name).all()
@@ -2894,7 +2895,52 @@ def delivery_overview():
         open_requests = open_requests,
         in_progress   = in_progress,
         completed     = completed,
+        canceled      = canceled,
     )
+
+
+@app.route('/admin/delivery_requests/<int:req_id>/status/<status>', methods=['POST'])
+@login_required
+def admin_set_delivery_status(req_id, status):
+    if not _is_admin():
+        abort(403)
+
+    allowed = ['pendente', 'em_andamento', 'cancelada']
+    if status not in allowed:
+        abort(400)
+
+    req = DeliveryRequest.query.get_or_404(req_id)
+    now = datetime.utcnow()
+    req.status = status
+
+    if status == 'pendente':
+        req.worker_id = None
+        req.accepted_at = None
+        req.canceled_at = None
+        req.canceled_by_id = None
+    elif status == 'em_andamento':
+        if not req.accepted_at:
+            req.accepted_at = now
+    elif status == 'cancelada':
+        req.canceled_at = now
+        req.canceled_by_id = current_user.id
+
+    db.session.commit()
+    flash('Status atualizado.', 'success')
+    return redirect(url_for('delivery_overview'))
+
+
+@app.route('/admin/delivery_requests/<int:req_id>/delete', methods=['POST'])
+@login_required
+def admin_delete_delivery(req_id):
+    if not _is_admin():
+        abort(403)
+
+    req = DeliveryRequest.query.get_or_404(req_id)
+    db.session.delete(req)
+    db.session.commit()
+    flash('Entrega excluída.', 'info')
+    return redirect(url_for('delivery_overview'))
 
 
 
