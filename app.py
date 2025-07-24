@@ -3415,6 +3415,16 @@ def _refresh_mp_status(payment: Payment) -> None:
         db.session.commit()
 
 
+@app.route("/pagamento/<status>")
+@login_required
+def legacy_pagamento(status):
+    extref = request.args.get("external_reference")
+    if not extref:
+        abort(404)
+    mp_status = request.args.get("status") or status
+    return redirect(url_for("payment_status", payment_id=extref, status=mp_status))
+
+
 @app.route("/payment_status/<int:payment_id>")
 @login_required
 def payment_status(payment_id):
