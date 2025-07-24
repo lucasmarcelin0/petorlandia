@@ -5,7 +5,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')
 
 import pytest
 import app as app_module
-from app import app as flask_app, sdk, db
+from app import app as flask_app, mp_sdk, db
 from models import (
     User,
     Payment,
@@ -173,7 +173,7 @@ def test_payment_status_updates_from_api(monkeypatch, app):
             def get(self, _):
                 return {"status": 200, "response": {"status": "approved"}}
 
-        monkeypatch.setattr(sdk, 'payment', lambda: FakePaymentAPI())
+        monkeypatch.setattr(app_module, 'mp_sdk', lambda: type('O', (), {'payment': lambda: FakePaymentAPI()})())
 
         response = client.get('/payment_status/1?status=success')
         assert response.status_code == 200
