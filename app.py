@@ -2999,6 +2999,37 @@ def adicionar_carrinho(product_id):
 
 
 # --------------------------------------------------------
+#  ATUALIZAR QUANTIDADE DO ITEM DO CARRINHO
+# --------------------------------------------------------
+@app.route("/carrinho/increase/<int:item_id>", methods=["POST"])
+@login_required
+def aumentar_item_carrinho(item_id):
+    """Incrementa a quantidade de um item no carrinho."""
+    order_id = session.get("current_order")
+    item = OrderItem.query.get_or_404(item_id)
+    if item.order_id != order_id:
+        abort(404)
+    item.quantity += 1
+    db.session.commit()
+    return redirect(url_for("ver_carrinho"))
+
+
+@app.route("/carrinho/decrease/<int:item_id>", methods=["POST"])
+@login_required
+def diminuir_item_carrinho(item_id):
+    """Diminui a quantidade de um item; remove se chegar a zero."""
+    order_id = session.get("current_order")
+    item = OrderItem.query.get_or_404(item_id)
+    if item.order_id != order_id:
+        abort(404)
+    item.quantity -= 1
+    if item.quantity <= 0:
+        db.session.delete(item)
+    db.session.commit()
+    return redirect(url_for("ver_carrinho"))
+
+
+# --------------------------------------------------------
 #  VER CARRINHO
 # --------------------------------------------------------
 from forms import CheckoutForm
