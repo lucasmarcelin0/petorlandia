@@ -36,7 +36,12 @@
     </table>
   </div>
   {% else %}
-  <p>Nenhuma compra registrada.</p>
+  <div class="text-center text-muted mt-5">
+    <p class="mt-4 fs-5">Nenhuma compra registrada.</p>
+    <a href="{{ url_for('loja') }}" class="btn btn-outline-primary mt-3">
+      <i class="bi bi-shop-window"></i> Ir para a loja
+    </a>
+  </div>
   {% endif %}
   {% if pagination.pages > 1 %}
   <nav aria-label="Paginação" class="mt-4">
