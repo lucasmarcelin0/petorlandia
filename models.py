@@ -5,7 +5,8 @@ except ImportError:
 
 from flask_login import UserMixin
 from werkzeug.security import generate_password_hash, check_password_hash
-from datetime import datetime
+from datetime import datetime, date
+from dateutil.relativedelta import relativedelta
 import enum
 from sqlalchemy import Enum
 from enum import Enum
@@ -210,6 +211,22 @@ class Animal(db.Model):
         back_populates='animal',
         cascade='all, delete-orphan'
     )
+
+    @property
+    def age_years(self):
+        if self.date_of_birth:
+            return relativedelta(date.today(), self.date_of_birth).years
+        try:
+            return int(self.age.split()[0])
+        except (ValueError, AttributeError, IndexError):
+            return None
+
+    @property
+    def age_display(self):
+        years = self.age_years
+        if years is not None:
+            return f"{years} ano{'s' if years != 1 else ''}"
+        return self.age
 
     def __str__(self):
         return f"{self.name} ({self.species.name if self.species else self.species})"
