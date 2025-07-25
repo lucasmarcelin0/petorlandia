@@ -55,8 +55,8 @@
       <label for="animal-sex" class="form-label">Sexo</label>
       <select id="animal-sex" name="sex" class="form-select" required>
         <option value="">Selecionar</option>
-        <option value="M" {% if animal.sex == 'M' %}selected{% endif %}>Macho</option>
-        <option value="F" {% if animal.sex == 'F' %}selected{% endif %}>Fêmea</option>
+        <option value="Macho" {% if animal.sex == 'Macho' %}selected{% endif %}>Macho</option>
+        <option value="Fêmea" {% if animal.sex == 'Fêmea' %}selected{% endif %}>Fêmea</option>
       </select>
       <div class="invalid-feedback">Por favor, selecione o sexo.</div>
     </div>
