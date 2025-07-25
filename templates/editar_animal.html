@@ -26,7 +26,8 @@
         {% endfor %}
     </select>
 
-    {{ form.age.label(class="mt-2") }} {{ form.age(class="form-control") }}
+    {{ form.age.label(class="mt-2") }} {{ form.age(class="form-control", id="age") }}
+    {{ form.date_of_birth.label(class="mt-2") }} {{ form.date_of_birth(class="form-control", id="date_of_birth") }}
     {{ form.sex.label(class="mt-2") }} {{ form.sex(class="form-select") }}
     {{ form.description.label(class="mt-2") }} {{ form.description(class="form-control") }}
     {{ form.image.label(class="mt-2") }} {{ form.image(class="form-control") }}
@@ -63,5 +64,32 @@
 
     modoSelect.addEventListener("change", togglePriceField);
     document.addEventListener("DOMContentLoaded", togglePriceField);
+
+    function calcularDataNascimentoPorIdade() {
+        const idade = parseInt(document.getElementById('age').value);
+        if (!isNaN(idade)) {
+            const hoje = new Date();
+            const nascimento = new Date();
+            nascimento.setFullYear(hoje.getFullYear() - idade);
+            document.getElementById('date_of_birth').value = nascimento.toISOString().split('T')[0];
+        }
+    }
+
+    function calcularIdadePorDataNascimento() {
+        const dataNascStr = document.getElementById('date_of_birth').value;
+        if (dataNascStr) {
+            const nascimento = new Date(dataNascStr);
+            const hoje = new Date();
+            let idade = hoje.getFullYear() - nascimento.getFullYear();
+            const m = hoje.getMonth() - nascimento.getMonth();
+            if (m < 0 || (m === 0 && hoje.getDate() < nascimento.getDate())) {
+                idade--;
+            }
+            document.getElementById('age').value = idade;
+        }
+    }
+
+    document.getElementById('age').addEventListener('input', calcularDataNascimentoPorIdade);
+    document.getElementById('date_of_birth').addEventListener('change', calcularIdadePorDataNascimento);
 </script>
 {% endblock %}

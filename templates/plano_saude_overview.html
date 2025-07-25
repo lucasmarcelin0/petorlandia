@@ -60,7 +60,7 @@
                             <ul class="list-unstyled small text-start mb-3">
                                 <li><strong>Espécie:</strong> {{ animal.species }}</li>
                                 <li><strong>Raça:</strong> {{ animal.breed }}</li>
-                                <li><strong>Idade:</strong> {{ animal.age }}</li>
+                                <li><strong>Idade:</strong> {{ animal.age_display }}</li>
                                 <li><strong>Sexo:</strong> {{ animal.sex }}</li>
                                 {% set sub = subscriptions.get(animal.id) %}
                                 <li><strong>Plano:</strong> {{ sub.plan.name if sub else 'Nenhum' }}</li>

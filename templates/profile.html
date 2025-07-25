@@ -105,7 +105,7 @@
             <h5 class="card-title">{{ animal.name }}</h5>
             <p class="mb-1"><strong>Espécie:</strong> {{ animal.species }}</p>
             <p class="mb-1"><strong>Raça:</strong> {{ animal.breed }}</p>
-            <p class="mb-1"><strong>Idade:</strong> {{ animal.age }}</p>
+            <p class="mb-1"><strong>Idade:</strong> {{ animal.age_display }}</p>
             <div class="d-flex flex-wrap gap-2 mt-2">
               <a href="{{ url_for('ficha_animal', animal_id=animal.id) }}" class="btn btn-sm btn-outline-dark">📋 Ficha</a>
               <a href="{{ url_for('editar_animal', animal_id=animal.id) }}" class="btn btn-sm btn-outline-secondary">✏️ Editar</a>
