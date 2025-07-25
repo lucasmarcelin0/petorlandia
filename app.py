@@ -3,7 +3,8 @@ import os, sys, pathlib, importlib, logging, uuid, re
 
 
 
-from datetime import datetime, timezone
+from datetime import datetime, timezone, date
+from dateutil.relativedelta import relativedelta
 from zoneinfo import ZoneInfo
 
 
@@ -351,12 +352,21 @@ def add_animal():
         print("🔍 Species ID:", species_id)
         print("🔍 Breed ID:", breed_id)
 
+        dob = form.date_of_birth.data
+        if not dob and form.age.data:
+            try:
+                age_years = int(form.age.data)
+                dob = date.today() - relativedelta(years=age_years)
+            except ValueError:
+                dob = None
+
         # Criação do animal
         animal = Animal(
             name=form.name.data,
             species_id=species_id,
             breed_id=breed_id,
             age=form.age.data,
+            date_of_birth=dob,
             sex=form.sex.data,
             description=form.description.data,
             image=image_url,
@@ -2352,9 +2362,6 @@ def criar_tutor_ajax():
 
 
 # app.py  – dentro da rota /novo_animal
-from datetime import datetime, date
-from dateutil.relativedelta import relativedelta   # já está importado acima
-
 @app.route('/novo_animal', methods=['GET', 'POST'])
 @login_required
 def novo_animal():
@@ -2374,6 +2381,15 @@ def novo_animal():
             except ValueError:
                 flash('Data de nascimento inválida. Use AAAA‑MM‑DD.', 'warning')
                 return redirect(url_for('ficha_tutor', tutor_id=tutor.id))
+        else:
+            age_input = request.form.get('age')
+            if age_input:
+                try:
+                    age_years = int(age_input)
+                    dob = date.today() - relativedelta(years=age_years)
+                except ValueError:
+                    flash('Idade inválida. Deve ser um número inteiro.', 'warning')
+                    return redirect(url_for('ficha_tutor', tutor_id=tutor.id))
 
         peso_str = request.form.get('peso')
         peso = float(peso_str) if peso_str else None

@@ -50,8 +50,16 @@
 
             <div class="mb-3">
                 {{ form.age.label(class="form-label") }}
-                {{ form.age(class="form-control rounded-pill" + (" is-invalid" if form.age.errors else ""), placeholder="Ex: 2 anos") }}
+                {{ form.age(class="form-control rounded-pill" + (" is-invalid" if form.age.errors else ""), id="age", placeholder="Ex: 2") }}
                 {% for error in form.age.errors %}
+                    <div class="invalid-feedback d-block">{{ error }}</div>
+                {% endfor %}
+            </div>
+
+            <div class="mb-3">
+                {{ form.date_of_birth.label(class="form-label") }}
+                {{ form.date_of_birth(class="form-control rounded-pill" + (" is-invalid" if form.date_of_birth.errors else ""), id="date_of_birth") }}
+                {% for error in form.date_of_birth.errors %}
                     <div class="invalid-feedback d-block">{{ error }}</div>
                 {% endfor %}
             </div>
@@ -109,6 +117,8 @@
     document.addEventListener("DOMContentLoaded", function () {
         const modoSelect = document.getElementById("modo");
         const priceField = document.getElementById("price-field");
+        const ageInput = document.getElementById("age");
+        const dobInput = document.getElementById("date_of_birth");
 
         function togglePriceField() {
             if (modoSelect.value === "venda") {
@@ -120,6 +130,33 @@
 
         modoSelect.addEventListener("change", togglePriceField);
         togglePriceField();
+
+        function calcularDataNascimentoPorIdade() {
+            const idade = parseInt(ageInput.value);
+            if (!isNaN(idade)) {
+                const hoje = new Date();
+                const nascimento = new Date();
+                nascimento.setFullYear(hoje.getFullYear() - idade);
+                dobInput.value = nascimento.toISOString().split('T')[0];
+            }
+        }
+
+        function calcularIdadePorDataNascimento() {
+            const dataNascStr = dobInput.value;
+            if (dataNascStr) {
+                const nascimento = new Date(dataNascStr);
+                const hoje = new Date();
+                let idade = hoje.getFullYear() - nascimento.getFullYear();
+                const m = hoje.getMonth() - nascimento.getMonth();
+                if (m < 0 || (m === 0 && hoje.getDate() < nascimento.getDate())) {
+                    idade--;
+                }
+                ageInput.value = idade;
+            }
+        }
+
+        ageInput.addEventListener('input', calcularDataNascimentoPorIdade);
+        dobInput.addEventListener('change', calcularIdadePorDataNascimento);
     });
 </script>
 {% endblock %}
