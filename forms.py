@@ -49,7 +49,8 @@ class RegistrationForm(FlaskForm):
 class LoginForm(FlaskForm):
     email = StringField('Email', validators=[DataRequired(), Email()])
     password = PasswordField('Senha', validators=[DataRequired()])
-    remember = BooleanField('Lembrar de mim')
+    # Deixa marcada por padrao para que o usuario permaneça logado ao fechar o navegador
+    remember = BooleanField('Lembrar de mim', default=True)
     submit = SubmitField('Entrar')
 
 
