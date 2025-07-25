@@ -45,4 +45,9 @@
 {% else %}
     <p>Você ainda não recebeu mensagens.</p>
 {% endif %}
+
+<div class="mt-5 p-3 bg-light rounded text-center">
+    <p class="mb-3">Vamos construir isso juntos! Caso tenha críticas, sugestões ou qualquer problema, fale diretamente com o administrador.</p>
+    <a href="{{ url_for('conversa_admin') }}" class="btn btn-info">Falar com o Admin</a>
+</div>
 {% endblock %}

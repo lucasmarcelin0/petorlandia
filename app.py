@@ -665,6 +665,47 @@ def conversa(animal_id, user_id):
     )
 
 
+@app.route('/conversa_admin', methods=['GET', 'POST'])
+@login_required
+def conversa_admin():
+    """Permite que um usuário converse diretamente com o administrador."""
+    admin_user = User.query.filter_by(role='admin').first()
+    if not admin_user:
+        flash('Administrador não encontrado.', 'danger')
+        return redirect(url_for('mensagens'))
+
+    form = MessageForm()
+
+    mensagens = Message.query.filter(
+        ((Message.sender_id == current_user.id) & (Message.receiver_id == admin_user.id)) |
+        ((Message.sender_id == admin_user.id) & (Message.receiver_id == current_user.id)),
+        Message.animal_id.is_(None)
+    ).order_by(Message.timestamp).all()
+
+    if form.validate_on_submit():
+        nova_msg = Message(
+            sender_id=current_user.id,
+            receiver_id=admin_user.id,
+            content=form.content.data,
+            lida=False
+        )
+        db.session.add(nova_msg)
+        db.session.commit()
+        return redirect(url_for('conversa_admin'))
+
+    for m in mensagens:
+        if m.receiver_id == current_user.id and not m.lida:
+            m.lida = True
+    db.session.commit()
+
+    return render_template(
+        'conversa_admin.html',
+        mensagens=mensagens,
+        form=form,
+        admin=admin_user
+    )
+
+
 @app.context_processor
 def inject_unread_count():
     if current_user.is_authenticated:
