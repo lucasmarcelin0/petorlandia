@@ -68,7 +68,7 @@ class MyModelView(ModelView):
 
     def inaccessible_callback(self, name, **kwargs):
         flash("Acesso restrito à administração.", "danger")
-        return redirect(url_for('login'))
+        return redirect(url_for('login_view'))
 
 # --------------------------------------------------------------------------
 # Dashboard (será a página inicial do painel)
@@ -79,7 +79,7 @@ class AdminDashboard(BaseView):
 
     def inaccessible_callback(self, name, **kwargs):
         flash("Acesso restrito à administração.", "danger")
-        return redirect(url_for('login'))
+        return redirect(url_for('login_view'))
 
     @expose('/')
     @login_required
