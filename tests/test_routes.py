@@ -15,6 +15,8 @@ from models import (
     Order,
     Product,
     OrderItem,
+    Animal,
+    Message,
 )
 from datetime import datetime
 
@@ -350,3 +352,36 @@ def test_admin_messages_requires_login(app):
     response = client.get('/mensagens_admin')
     assert response.status_code == 302
     assert '/login' in response.headers['Location']
+
+
+def test_admin_messages_display(monkeypatch, app):
+    client = app.test_client()
+
+    with app.app_context():
+        db.drop_all()
+        db.create_all()
+
+        admin = User(id=1, name='Admin', email='admin@test', role='admin')
+        admin.set_password('x')
+        user = User(id=2, name='Tester', email='user@test')
+        user.set_password('x')
+        animal = Animal(id=1, name='Dog', user_id=user.id)
+        db.session.add_all([admin, user, animal])
+        db.session.commit()
+
+        msg1 = Message(sender_id=user.id, receiver_id=admin.id, animal_id=animal.id, content='Hi')
+        msg2 = Message(sender_id=admin.id, receiver_id=user.id, content='Update')
+        db.session.add_all([msg1, msg2])
+        db.session.commit()
+
+        import flask_login.utils as login_utils
+        monkeypatch.setattr(login_utils, '_get_user', lambda: admin)
+        monkeypatch.setattr(app_module, '_is_admin', lambda: True)
+
+        for idx, fn in enumerate(flask_app.template_context_processors[None]):
+            if fn.__name__ == 'inject_unread_count':
+                flask_app.template_context_processors[None][idx] = lambda: {'unread_messages': 0}
+
+        response = client.get('/mensagens_admin')
+        assert response.status_code == 200
+        assert b'Tester' in response.data

@@ -691,11 +691,15 @@ def conversa_admin(user_id=None):
     else:
         interlocutor = admin_user
 
-    mensagens = Message.query.filter(
-        ((Message.sender_id == current_user.id) & (Message.receiver_id == interlocutor.id)) |
-        ((Message.sender_id == interlocutor.id) & (Message.receiver_id == current_user.id)),
-        Message.animal_id.is_(None)
-    ).order_by(Message.timestamp).all()
+    mensagens = (
+        Message.query
+        .filter(
+            ((Message.sender_id == current_user.id) & (Message.receiver_id == interlocutor.id)) |
+            ((Message.sender_id == interlocutor.id) & (Message.receiver_id == current_user.id))
+        )
+        .order_by(Message.timestamp)
+        .all()
+    )
 
     if form.validate_on_submit():
         nova_msg = Message(
@@ -733,23 +737,24 @@ def mensagens_admin():
 
     admin_id = current_user.id
 
-    # Busca última mensagem de cada usuário que conversou com o admin
-    subquery = (
-        db.session.query(
-            Message.sender_id,
-            db.func.max(Message.timestamp).label('max_ts')
-        )
-        .filter(Message.receiver_id == admin_id, Message.animal_id.is_(None))
-        .group_by(Message.sender_id)
-        .subquery()
-    )
-
-    mensagens = (
+    all_msgs = (
         Message.query
-        .join(subquery, (Message.sender_id == subquery.c.sender_id) & (Message.timestamp == subquery.c.max_ts))
+        .filter((Message.sender_id == admin_id) | (Message.receiver_id == admin_id))
         .order_by(Message.timestamp.desc())
         .all()
     )
+
+    latest = {}
+    for m in all_msgs:
+        other_id = m.sender_id if m.sender_id != admin_id else m.receiver_id
+        if other_id not in latest:
+            latest[other_id] = m
+    mensagens = list(latest.values())
+
+    for m in mensagens:
+        if m.sender_id == admin_id:
+            m.sender = m.receiver
+            m.sender_id = m.receiver_id
 
     unread = (
         db.session.query(Message.sender_id, db.func.count())
