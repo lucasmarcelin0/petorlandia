@@ -30,7 +30,7 @@
             --danger-color: #e74a3b;
             --warning-color: #f6c23e;
             --dark-color: #5a5c69;
-            --light-color: #f8f9fc;
+            --light-color: #f2f5f9;
             --topbar-height: 70px;
             --transition-speed: 0.3s;
         }
@@ -43,7 +43,7 @@
 
         body {
             font-family: 'Poppins', sans-serif;
-            background-color: var(--light-color);
+            background: linear-gradient(to bottom right, var(--light-color), #ffffff);
             color: #333;
             line-height: 1.6;
             padding-top: var(--topbar-height);
@@ -55,7 +55,7 @@
         /* Navbar Styles */
         .navbar {
             height: var(--topbar-height);
-            background: white;
+            background: var(--light-color);
             box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
             padding: 0 30px;
         }
@@ -239,7 +239,7 @@
         /* Responsive Styles */
         @media (max-width: 992px) {
             .navbar-collapse {
-                background-color: white;
+                background-color: var(--light-color);
                 padding: 20px;
                 border-radius: 0 0 10px 10px;
                 box-shadow: 0 10px 20px rgba(0, 0, 0, 0.1);
@@ -302,7 +302,7 @@
 </script>
 
 <body>
-    <nav class="navbar navbar-expand-lg fixed-top navbar-light bg-white">
+    <nav class="navbar navbar-expand-lg fixed-top navbar-light">
         <div class="container-fluid">
             {% if current_user.is_authenticated and current_user.role == "admin" %}
                 <a href="{{ url_for('painel_admin.index') }}" class="navbar-brand">
