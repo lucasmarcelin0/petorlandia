@@ -8,7 +8,7 @@ from zoneinfo import ZoneInfo
 
 
 from dotenv import load_dotenv
-from flask import Flask
+from flask import Flask, session
 from itsdangerous import URLSafeTimedSerializer
 
 # ----------------------------------------------------------------
@@ -42,7 +42,7 @@ app = Flask(
 )
 app.config.from_object("config.Config")
 app.config.setdefault("FRONTEND_URL", "http://127.0.0.1:5000")
-app.config.update(SESSION_PERMANENT=False, SESSION_TYPE="filesystem")
+app.config.update(SESSION_PERMANENT=True, SESSION_TYPE="filesystem")
 
 # ----------------------------------------------------------------
 # 3)  Extensões
@@ -392,6 +392,8 @@ def login():
         user = User.query.filter_by(email=form.email.data).first()
         if user and user.check_password(form.password.data):
             login_user(user, remember=form.remember.data)
+            if form.remember.data:
+                session.permanent = True
             flash('Login realizado com sucesso!', 'success')
             return redirect(url_for('index'))
         else:
