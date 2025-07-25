@@ -1,0 +1,34 @@
+{% extends "layout.html" %}
+{% block main %}
+<h2>Mensagens dos Usuários</h2>
+
+{% if mensagens %}
+    <ul class="list-group mt-4">
+    {% for msg in mensagens %}
+        <li class="list-group-item d-flex justify-content-between align-items-center">
+            <div class="d-flex align-items-center">
+                {% if msg.sender.profile_photo %}
+                    <img src="{{ msg.sender.profile_photo }}" alt="Foto" class="rounded-circle me-3" style="width:50px;height:50px;object-fit:cover;">
+                {% else %}
+                    <div class="rounded-circle bg-secondary me-3 d-flex justify-content-center align-items-center" style="width:50px;height:50px;color:white;">
+                        {{ msg.sender.name[0] }}
+                    </div>
+                {% endif %}
+                <div>
+                    <strong>{{ msg.sender.name }}</strong><br>
+                    <small class="text-muted">{{ msg.timestamp|format_datetime_brazil('%d/%m/%Y %H:%M') }}</small>
+                </div>
+            </div>
+            <a href="{{ url_for('conversa_admin', user_id=msg.sender.id) }}" class="btn btn-outline-primary btn-sm">
+                Ver Conversa
+                {% if unread_counts.get(msg.sender.id) %}
+                    <span class="badge bg-danger ms-2">{{ unread_counts[msg.sender.id] }}</span>
+                {% endif %}
+            </a>
+        </li>
+    {% endfor %}
+    </ul>
+{% else %}
+    <p>Nenhuma mensagem recebida.</p>
+{% endif %}
+{% endblock %}
