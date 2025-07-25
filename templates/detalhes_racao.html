@@ -33,7 +33,7 @@
           </td>
           <td>{{ r.animal.owner.name }}</td>
           <td>{{ r.animal.owner.phone or "—" }}</td>
-          <td>{{ r.data_cadastro.strftime('%d/%m/%Y') }}</td>
+          <td>{{ r.data_cadastro|format_datetime_brazil('%d/%m/%Y') }}</td>
 
           {# Cálculo da recomendação diária #}
           {% if r.recomendacao_custom %}
