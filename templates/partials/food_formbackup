@@ -64,7 +64,7 @@
         {{ racao.recomendacao_custom or racao.tipo_racao.recomendacao }} g/kg/dia<br>
         <strong>Observações:</strong>
         {{ racao.observacoes_racao or racao.tipo_racao.observacoes or 'Nenhuma' }}<br>
-        <small class="text-muted">Registrado em {{ racao.data_cadastro.strftime('%d/%m/%Y') }}</small>
+        <small class="text-muted">Registrado em {{ racao.data_cadastro|format_datetime_brazil('%d/%m/%Y') }}</small>
       </li>
     {% endfor %}
   </ul>

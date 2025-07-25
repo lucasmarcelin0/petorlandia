@@ -24,7 +24,7 @@
                             {% if msg.animal %}
                                 <small class="text-muted">Sobre o animal: {{ msg.animal.name }}</small><br>
                             {% endif %}
-                            <small class="text-muted">{{ msg.timestamp.strftime('%d/%m/%Y %H:%M') }}</small>
+                            <small class="text-muted">{{ msg.timestamp|format_datetime_brazil('%d/%m/%Y %H:%M') }}</small>
                         </div>
                     </div>
                     {% set unread_count = msg.sender.sent_messages | selectattr("animal_id", "equalto", msg.animal.id)

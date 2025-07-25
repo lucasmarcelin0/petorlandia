@@ -5,7 +5,7 @@
 
   {% if animal.removido_em %}
     <div class="alert alert-warning">
-      Este animal foi removido do sistema em {{ animal.removido_em.strftime('%d/%m/%Y') }}. Histórico preservado.
+      Este animal foi removido do sistema em {{ animal.removido_em|format_datetime_brazil('%d/%m/%Y') }}. Histórico preservado.
     </div>
   {% endif %}
 
@@ -57,7 +57,7 @@
       <div class="card mb-2 shadow-sm">
         <div class="card-body d-flex justify-content-between align-items-center">
           <span class="text-dark">
-            {{ bloco.data_criacao.strftime('%d/%m/%Y') }} — {{ bloco.prescricoes | length }} medicação(ões)
+            {{ bloco.data_criacao|format_datetime_brazil('%d/%m/%Y') }} — {{ bloco.prescricoes | length }} medicação(ões)
           </span>
           {% if current_user.worker == 'veterinario' %}
             <a href="{{ url_for('imprimir_bloco_prescricao', bloco_id=bloco.id) }}"
@@ -77,7 +77,7 @@
       <div class="card mb-2 shadow-sm">
         <div class="card-body d-flex justify-content-between align-items-center">
           <span class="text-dark">
-            {{ bloco.data_criacao.strftime('%d/%m/%Y') }} — {{ bloco.exames | length }} exame(s)
+            {{ bloco.data_criacao|format_datetime_brazil('%d/%m/%Y') }} — {{ bloco.exames | length }} exame(s)
           </span>
           {% if current_user.worker == 'veterinario' %}
             <a href="{{ url_for('imprimir_bloco_exames', bloco_id=bloco.id) }}"
@@ -96,7 +96,7 @@
       <ul class="list-group mb-2">
         {% for c in consultas[:3] %}
         <li class="list-group-item d-flex justify-content-between align-items-center">
-          <span>{{ c.created_at.strftime('%d/%m/%Y') }}</span>
+          <span>{{ c.created_at|format_datetime_brazil('%d/%m/%Y') }}</span>
           <span class="text-muted small">{{ c.veterinario.name }}</span>
         </li>
         {% endfor %}
@@ -116,7 +116,7 @@
     {% for v in animal.vacinas|sort(attribute='data', reverse=True) %}
     <li class="list-group-item d-flex justify-content-between align-items-center">
       <div>
-        <strong>{{ v.nome }}</strong> — {{ v.tipo or "Tipo não informado" }} em {{ v.data.strftime('%d/%m/%Y') if v.data else 'Data não registrada' }}
+        <strong>{{ v.nome }}</strong> — {{ v.tipo or "Tipo não informado" }} em {{ format_datetime_brazil(v.data, '%d/%m/%Y') if v.data else 'Data não registrada' }}
         {% if v.observacoes %}
           <br><em class="text-muted">Obs: {{ v.observacoes }}</em>
         {% endif %}
@@ -196,7 +196,7 @@
     <div>
       Este animal foi marcado como <strong>falecido</strong>.
       {% if animal.falecido_em %}
-        Data do falecimento: {{ animal.falecido_em.strftime('%d/%m/%Y %H:%M') }}
+        Data do falecimento: {{ animal.falecido_em|format_datetime_brazil('%d/%m/%Y %H:%M') }}
       {% endif %}
     </div>
 
