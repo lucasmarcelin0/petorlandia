@@ -8,7 +8,7 @@ from zoneinfo import ZoneInfo
 
 
 from dotenv import load_dotenv
-from flask import Flask, session
+from flask import Flask, session, send_from_directory
 from itsdangerous import URLSafeTimedSerializer
 
 # ----------------------------------------------------------------
@@ -260,6 +260,11 @@ def painel_dashboard():
 @app.route('/')
 def index():
     return render_template('index.html')
+
+
+@app.route('/service-worker.js')
+def service_worker():
+    return send_from_directory(app.static_folder, 'service-worker.js')
 
 
 @app.route('/register', methods=['GET', 'POST'])
@@ -3771,3 +3776,5 @@ def teste_endereco():
         return redirect(url_for('teste_endereco'))
 
     return render_template('teste_endereco.html', endereco=endereco)
+
+
