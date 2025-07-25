@@ -1,4 +1,5 @@
 import os
+from datetime import timedelta
 
 
 class Config:
@@ -9,6 +10,8 @@ class Config:
     )
     SQLALCHEMY_TRACK_MODIFICATIONS = False
     SESSION_TYPE = "filesystem"
+    SESSION_PERMANENT = True
+    PERMANENT_SESSION_LIFETIME = timedelta(days=365)
 
     # Configurações do Flask-Mail (Gmail)
     MAIL_SERVER = 'smtp.gmail.com'
