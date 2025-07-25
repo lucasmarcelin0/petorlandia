@@ -2,8 +2,10 @@
 import os, sys, pathlib, importlib, logging, uuid, re
 
 
-from datetime import datetime
-import pytz
+
+from datetime import datetime, timezone
+from zoneinfo import ZoneInfo
+
 
 from dotenv import load_dotenv
 from flask import Flask
@@ -84,13 +86,17 @@ def upload_to_s3(file, filename, folder="uploads") -> str | None:
 # ----------------------------------------------------------------
 # 5)  Filtros Jinja para data BR
 # ----------------------------------------------------------------
-BR_TZ = pytz.timezone("America/Sao_Paulo")
+
+BR_TZ = ZoneInfo("America/Sao_Paulo")
+
 
 @app.template_filter("datetime_brazil")
 def datetime_brazil(value):
     if isinstance(value, datetime):
         if value.tzinfo is None:
-            value = pytz.utc.localize(value)
+
+            value = value.replace(tzinfo=timezone.utc)
+
         return value.astimezone(BR_TZ).strftime("%d/%m/%Y %H:%M")
     return value
 
@@ -99,7 +105,9 @@ def format_datetime_brazil(value, fmt="%d/%m/%Y %H:%M"):
     if value is None:
         return ""
     if value.tzinfo is None:
-        value = pytz.utc.localize(value)
+
+        value = value.replace(tzinfo=timezone.utc)
+
     return value.astimezone(BR_TZ).strftime(fmt)
 
 # ----------------------------------------------------------------
