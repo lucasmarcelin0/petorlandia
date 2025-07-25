@@ -116,7 +116,7 @@
     {% for v in animal.vacinas|sort(attribute='data', reverse=True) %}
     <li class="list-group-item d-flex justify-content-between align-items-center">
       <div>
-        <strong>{{ v.nome }}</strong> — {{ v.tipo or "Tipo não informado" }} em {{ format_datetime_brazil(v.data, '%d/%m/%Y') if v.data else 'Data não registrada' }}
+        <strong>{{ v.nome }}</strong> — {{ v.tipo or "Tipo não informado" }} em {{ v.data|format_datetime_brazil('%d/%m/%Y') if v.data else 'Data não registrada' }}
         {% if v.observacoes %}
           <br><em class="text-muted">Obs: {{ v.observacoes }}</em>
         {% endif %}
