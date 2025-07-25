@@ -3608,9 +3608,11 @@ def payment_status(payment_id):
     # endpoint a usar
     endpoint = "delivery_detail"  # agora é um só
 
-    # redireciona direto se já aprovado
-    if delivery_req and result in {"success", "completed", "approved", "approved"}:
-        return redirect(url_for(endpoint, req_id=delivery_req.id))
+    # Redireciona para lista de compras quando o pagamento foi concluído
+    if result in {"success", "completed", "approved"}:
+        if delivery_req:
+            return redirect(url_for(endpoint, req_id=delivery_req.id))
+        return redirect(url_for("minhas_compras"))
 
     return render_template(
         "payment_status.html",
