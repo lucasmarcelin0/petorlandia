@@ -343,3 +343,10 @@ def test_product_detail_page(monkeypatch, app):
 
         response = client.get('/produto/1')
         assert response.status_code == 200
+
+
+def test_admin_messages_requires_login(app):
+    client = app.test_client()
+    response = client.get('/mensagens_admin')
+    assert response.status_code == 302
+    assert '/login' in response.headers['Location']
