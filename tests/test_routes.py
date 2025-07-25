@@ -169,14 +169,43 @@ def test_payment_status_updates_from_api(monkeypatch, app):
         monkeypatch.setattr(login_utils, '_get_user', lambda: FakeUser())
         monkeypatch.setattr(app_module, '_is_admin', lambda: False)
 
+        class FakeOrder:
+            id = 1
+            created_at = datetime.utcnow()
+            user_id = 1
+            payment = type('P', (), {'status': PaymentStatus.COMPLETED})()
+            items = []
+            def total_value(self):
+                return 10.0
+
+        class FakeOrderPagination:
+            items = [FakeOrder()]
+            pages = 1
+            page = 1
+
+        class FakeOrderQuery:
+            def join(self, *a, **k):
+                return self
+            def options(self, *a, **k):
+                return self
+            def filter(self, *a, **k):
+                return self
+            def order_by(self, *a, **k):
+                return self
+            def paginate(self, page=1, per_page=20, error_out=False):
+                return FakeOrderPagination()
+
+        monkeypatch.setattr(Order, 'query', FakeOrderQuery())
+
         class FakePaymentAPI:
             def get(self, _):
                 return {"status": 200, "response": {"status": "approved"}}
 
         monkeypatch.setattr(app_module, 'mp_sdk', lambda: type('O', (), {'payment': lambda: FakePaymentAPI()})())
 
-        response = client.get('/payment_status/1?status=success')
+        response = client.get('/payment_status/1?status=success', follow_redirects=True)
         assert response.status_code == 200
+        assert b'Minhas Compras' in response.data
 
 
 def test_api_minhas_compras_filters_by_user(monkeypatch, app):
