@@ -130,7 +130,7 @@ from models import User   # noqa: E402  (import depois de alias)
 def load_user(user_id):
     return User.query.get(int(user_id))
 
-login.login_view = "login"
+login.login_view = "login_view"
 serializer = URLSafeTimedSerializer(app.config["SECRET_KEY"])
 
 # ----------------------------------------------------------------
@@ -211,7 +211,7 @@ def reset_password_request():
             )
             mail.send(msg)
             flash('Um e-mail foi enviado com instruções para redefinir sua senha.', 'info')
-            return redirect(url_for('login'))
+            return redirect(url_for('login_view'))
         flash('E-mail não encontrado.', 'danger')
     return render_template('reset_password_request.html', form=form)
 
@@ -232,7 +232,7 @@ def reset_password(token):
             user.set_password(form.password.data)  # Your User model must have set_password method
             db.session.commit()
             flash('Sua senha foi redefinida. Você já pode entrar!', 'success')
-            return redirect(url_for('login'))
+            return redirect(url_for('login_view'))
     return render_template('reset_password.html', form=form)
 
 
@@ -391,7 +391,7 @@ def add_animal():
 
 
 @app.route('/login', methods=['GET', 'POST'])
-def login():
+def login_view():
     form = LoginForm()
     if form.validate_on_submit():
         user = User.query.filter_by(email=form.email.data).first()
