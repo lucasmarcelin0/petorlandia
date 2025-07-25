@@ -2,8 +2,10 @@
 import os, sys, pathlib, importlib, logging, uuid, re
 
 
+
 from datetime import datetime, timezone
 from zoneinfo import ZoneInfo
+
 
 from dotenv import load_dotenv
 from flask import Flask
@@ -84,13 +86,17 @@ def upload_to_s3(file, filename, folder="uploads") -> str | None:
 # ----------------------------------------------------------------
 # 5)  Filtros Jinja para data BR
 # ----------------------------------------------------------------
+
 BR_TZ = ZoneInfo("America/Sao_Paulo")
+
 
 @app.template_filter("datetime_brazil")
 def datetime_brazil(value):
     if isinstance(value, datetime):
         if value.tzinfo is None:
+
             value = value.replace(tzinfo=timezone.utc)
+
         return value.astimezone(BR_TZ).strftime("%d/%m/%Y %H:%M")
     return value
 
@@ -99,7 +105,9 @@ def format_datetime_brazil(value, fmt="%d/%m/%Y %H:%M"):
     if value is None:
         return ""
     if value.tzinfo is None:
+
         value = value.replace(tzinfo=timezone.utc)
+
     return value.astimezone(BR_TZ).strftime(fmt)
 
 # ----------------------------------------------------------------
@@ -2923,14 +2931,26 @@ def admin_set_delivery_status(req_id, status):
         req.accepted_at = None
         req.canceled_at = None
         req.canceled_by_id = None
+        req.completed_at = None
     elif status == 'em_andamento':
         if not req.accepted_at:
             req.accepted_at = now
+
+        req.canceled_at = None
+        req.canceled_by_id = None
+        req.completed_at = None
     elif status == 'concluida':
-        req.completed_at = now
+        if not req.completed_at:
+            req.completed_at = now
+        if not req.accepted_at:
+            req.accepted_at = now
+        req.canceled_at = None
+        req.canceled_by_id = None
+
     elif status == 'cancelada':
         req.canceled_at = now
         req.canceled_by_id = current_user.id
+        req.completed_at = None
 
     db.session.commit()
     flash('Status atualizado.', 'success')
