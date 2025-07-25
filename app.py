@@ -666,9 +666,16 @@ def conversa(animal_id, user_id):
 
 
 @app.route('/conversa_admin', methods=['GET', 'POST'])
+@app.route('/conversa_admin/<int:user_id>', methods=['GET', 'POST'])
 @login_required
-def conversa_admin():
-    """Permite que um usuário converse diretamente com o administrador."""
+def conversa_admin(user_id=None):
+    """Permite conversar diretamente com o administrador.
+
+    - Usuários comuns acessam ``/conversa_admin`` para falar com o admin.
+    - O administrador acessa ``/conversa_admin/<user_id>`` para responder
+      mensagens de um usuário específico.
+    """
+
     admin_user = User.query.filter_by(role='admin').first()
     if not admin_user:
         flash('Administrador não encontrado.', 'danger')
@@ -676,21 +683,31 @@ def conversa_admin():
 
     form = MessageForm()
 
+    if current_user.role == 'admin':
+        if user_id is None:
+            flash('Selecione um usuário para conversar.', 'warning')
+            return redirect(url_for('mensagens_admin'))
+        interlocutor = User.query.get_or_404(user_id)
+    else:
+        interlocutor = admin_user
+
     mensagens = Message.query.filter(
-        ((Message.sender_id == current_user.id) & (Message.receiver_id == admin_user.id)) |
-        ((Message.sender_id == admin_user.id) & (Message.receiver_id == current_user.id)),
+        ((Message.sender_id == current_user.id) & (Message.receiver_id == interlocutor.id)) |
+        ((Message.sender_id == interlocutor.id) & (Message.receiver_id == current_user.id)),
         Message.animal_id.is_(None)
     ).order_by(Message.timestamp).all()
 
     if form.validate_on_submit():
         nova_msg = Message(
             sender_id=current_user.id,
-            receiver_id=admin_user.id,
+            receiver_id=interlocutor.id,
             content=form.content.data,
             lida=False
         )
         db.session.add(nova_msg)
         db.session.commit()
+        if current_user.role == 'admin':
+            return redirect(url_for('conversa_admin', user_id=interlocutor.id))
         return redirect(url_for('conversa_admin'))
 
     for m in mensagens:
@@ -702,8 +719,47 @@ def conversa_admin():
         'conversa_admin.html',
         mensagens=mensagens,
         form=form,
-        admin=admin_user
+        admin=interlocutor
     )
+
+
+@app.route('/mensagens_admin')
+@login_required
+def mensagens_admin():
+    """Lista as conversas iniciadas pelos usuários com o administrador."""
+    if current_user.role != 'admin':
+        flash('Acesso restrito.', 'danger')
+        return redirect(url_for('index'))
+
+    admin_id = current_user.id
+
+    # Busca última mensagem de cada usuário que conversou com o admin
+    subquery = (
+        db.session.query(
+            Message.sender_id,
+            db.func.max(Message.timestamp).label('max_ts')
+        )
+        .filter(Message.receiver_id == admin_id, Message.animal_id.is_(None))
+        .group_by(Message.sender_id)
+        .subquery()
+    )
+
+    mensagens = (
+        Message.query
+        .join(subquery, (Message.sender_id == subquery.c.sender_id) & (Message.timestamp == subquery.c.max_ts))
+        .order_by(Message.timestamp.desc())
+        .all()
+    )
+
+    unread = (
+        db.session.query(Message.sender_id, db.func.count())
+        .filter_by(receiver_id=admin_id, lida=False)
+        .group_by(Message.sender_id)
+        .all()
+    )
+    unread_counts = {u[0]: u[1] for u in unread}
+
+    return render_template('mensagens_admin.html', mensagens=mensagens, unread_counts=unread_counts)
 
 
 @app.context_processor
