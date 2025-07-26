@@ -319,6 +319,41 @@ def test_cart_quantity_updates(monkeypatch, app):
         assert OrderItem.query.get(item.id) is None
 
 
+def test_cart_decrease_last_item_redirects(monkeypatch, app):
+    client = app.test_client()
+
+    with app.app_context():
+        db.drop_all()
+        db.create_all()
+        user = User(id=1, name='Tester', email='x')
+        user.set_password('x')
+        product = Product(id=1, name='Prod', price=10.0)
+        db.session.add_all([user, product])
+        db.session.commit()
+
+        import flask_login.utils as login_utils
+        monkeypatch.setattr(login_utils, '_get_user', lambda: user)
+        monkeypatch.setattr(app_module, '_is_admin', lambda: False)
+
+        for idx, fn in enumerate(flask_app.template_context_processors[None]):
+            if fn.__name__ == 'inject_unread_count':
+                flask_app.template_context_processors[None][idx] = lambda: {'unread_messages': 0}
+
+        client.post('/carrinho/adicionar/1', data={'quantity': 1})
+        item = OrderItem.query.first()
+
+        resp = client.post(
+            f'/carrinho/decrease/{item.id}',
+            headers={'Accept': 'application/json'}
+        )
+        assert resp.status_code == 200
+        data = resp.get_json()
+        with flask_app.test_request_context():
+            expected_url = url_for('ver_carrinho')
+        assert data['redirect'] == expected_url
+        assert OrderItem.query.get(item.id) is None
+
+
 def test_cart_merges_duplicates(monkeypatch, app):
     client = app.test_client()
 
