@@ -1,0 +1,23 @@
+{% extends "layout.html" %}
+{% block main %}
+<div class="container py-4">
+  <h2 class="text-center mb-4">Confirmar Compra</h2>
+  <ul class="list-group mb-3">
+    {% for item in order.items %}
+    <li class="list-group-item d-flex justify-content-between align-items-center">
+      <span>{{ item.item_name }}</span>
+      <span>{{ item.quantity }} x R$ {{ '%.2f'|format(item.product.price or 0) }}</span>
+    </li>
+    {% endfor %}
+  </ul>
+  <div class="d-flex justify-content-end mb-3">
+    <strong>Total:&nbsp;R$ {{ '%.2f'|format(order.total_value()) }}</strong>
+  </div>
+  <form action="{{ url_for('checkout') }}" method="post" class="text-end">
+    {{ form.hidden_tag() }}
+    <button type="submit" class="btn btn-success">
+      Continuar para Pagamento
+    </button>
+  </form>
+</div>
+{% endblock %}
