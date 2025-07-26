@@ -53,7 +53,7 @@
                 <div class="col">
                     <div class="card h-100 shadow-sm border-0 rounded-4">
                         {% if animal.image %}
-                            <img src="{{ animal.image }}" class="card-img-top rounded-top-4" style="max-height: 200px; object-fit: cover;" alt="Foto de {{ animal.name }}">
+                            <img src="{{ animal.image }}" class="card-img-top rounded-top-4" style="max-height: 200px; object-fit: cover;" loading="lazy" alt="Foto de {{ animal.name }}">
                         {% endif %}
                         <div class="card-body">
                             <h5 class="card-title">{{ animal.name }}</h5>

@@ -7,7 +7,7 @@
     {% if animal.image %}
         <div class="text-center mb-4">
             <img src="{{ animal.image }}" alt="Foto de {{ animal.name }}"
-                 class="rounded-circle shadow-sm"
+                 class="rounded-circle shadow-sm" loading="lazy"
                  style="width: 150px; height: 150px; object-fit: cover;">
         </div>
     {% endif %}
