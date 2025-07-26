@@ -15,82 +15,41 @@ from flask_wtf.file import FileField, FileAllowed
 
 
 class ResetPasswordRequestForm(FlaskForm):
-    email = StringField(
-        'E-mail',
-        validators=[DataRequired(message="Email é obrigatório"), Email()],
-        render_kw={"required": True},
-    )
+    email = StringField('E-mail', validators=[DataRequired(), Email()])
     submit = SubmitField('Solicitar redefinição de senha')
 
 class ResetPasswordForm(FlaskForm):
-    password = PasswordField(
-        'Nova senha',
-        validators=[DataRequired(message="Senha é obrigatória")],
-        render_kw={"required": True},
-    )
-    confirm_password = PasswordField(
-        'Confirme a nova senha',
-        validators=[DataRequired(message="Confirmação de senha é obrigatória"), EqualTo('password')],
-        render_kw={"required": True},
-    )
+    password = PasswordField('Nova senha', validators=[DataRequired()])
+    confirm_password = PasswordField('Confirme a nova senha', validators=[
+        DataRequired(), EqualTo('password')])
     submit = SubmitField('Redefinir senha')
 
 
 
 
-
-
-    name = StringField(
-        'Name',
-        validators=[DataRequired(message="Nome é obrigatório"), Length(min=2, max=120)],
-        render_kw={"required": True},
-    )
-    email = StringField(
-        'Email',
-        validators=[DataRequired(message="Email é obrigatório"), Email()],
-        render_kw={"required": True},
-    )
-    phone = StringField('Phone', validators=[Optional(), Length(min=8, max=20)])
-    address = StringField('Address', validators=[Optional(), Length(max=200)])
-
+class RegistrationForm(FlaskForm):
+    name = StringField('Nome', validators=[DataRequired(), Length(min=2, max=120)])
+    email = StringField('E-mail', validators=[DataRequired(), Email()])
+    phone = StringField('Telefone', validators=[Optional(), Length(min=8, max=20)])
+    address = StringField('Endereço', validators=[Optional(), Length(max=200)])
 
     profile_photo = FileField('Foto de Perfil', validators=[
         Optional(),
         FileAllowed(['jpg', 'jpeg', 'png', 'gif'], 'Apenas imagens!')
     ])
 
-
-    password = PasswordField(
-        'Password',
-        validators=[DataRequired(message="Senha é obrigatória"), Length(min=6)],
-        render_kw={"required": True},
-    )
-    confirm_password = PasswordField(
-        'Confirm Password',
-        validators=[DataRequired(message="Confirmação de senha é obrigatória"), EqualTo('password', message='Passwords must match')],
-        render_kw={"required": True},
-    )
+    password = PasswordField('Senha', validators=[DataRequired(), Length(min=6)])
+    confirm_password = PasswordField('Confirmar Senha', validators=[
+        DataRequired(), EqualTo('password', message='As senhas devem coincidir')
+    ])
     submit = SubmitField('Cadastrar')
 
 
 
 
-
 class LoginForm(FlaskForm):
-
-    email = StringField(
-        'Email',
-        validators=[DataRequired(message="Email é obrigatório"), Email()],
-        render_kw={"required": True},
-    )
-    password = PasswordField(
-        'Senha',
-        validators=[DataRequired(message="Senha é obrigatória")],
-        render_kw={"required": True},
-    )
-
-
-
+    email = StringField('E-mail', validators=[DataRequired(), Email()])
+    password = PasswordField('Senha', validators=[DataRequired()])
     # Deixa marcada por padrao para que o usuario permaneça logado ao fechar o navegador
     remember = BooleanField('Lembrar de mim', default=True)
     submit = SubmitField('Entrar')
