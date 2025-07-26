@@ -3472,6 +3472,8 @@ def adicionar_carrinho(product_id):
     product = Product.query.get_or_404(product_id)
     form = AddToCartForm()
     if not form.validate_on_submit():
+        if 'application/json' in request.headers.get('Accept', ''):
+            return jsonify(success=False, error='invalid form'), 400
         return redirect(url_for("loja"))
 
     order = _get_current_order()
@@ -3499,6 +3501,18 @@ def adicionar_carrinho(product_id):
 
     db.session.commit()
     flash("Produto adicionado ao carrinho.", "success")
+    if 'application/json' in request.headers.get('Accept', ''):
+        total_value = order.total_value()
+        total_qty = sum(i.quantity for i in order.items)
+        return jsonify(
+            message="Produto adicionado ao carrinho.",
+            category="success",
+            item_id=item.id,
+            item_quantity=item.quantity,
+            order_total=total_value,
+            order_total_formatted=f"R$ {total_value:.2f}",
+            order_quantity=total_qty,
+        )
     return redirect(url_for("loja"))
 
 
@@ -3515,6 +3529,19 @@ def aumentar_item_carrinho(item_id):
         abort(404)
     item.quantity += 1
     db.session.commit()
+    flash("Quantidade atualizada", "success")
+    if 'application/json' in request.headers.get('Accept', ''):
+        total_value = order.total_value()
+        total_qty = sum(i.quantity for i in order.items)
+        return jsonify(
+            message="Quantidade atualizada",
+            category="success",
+            item_id=item.id,
+            item_quantity=item.quantity,
+            order_total=total_value,
+            order_total_formatted=f"R$ {total_value:.2f}",
+            order_quantity=total_qty,
+        )
     return redirect(url_for("ver_carrinho"))
 
 
@@ -3530,9 +3557,27 @@ def diminuir_item_carrinho(item_id):
     if item.quantity <= 0:
         db.session.delete(item)
         db.session.commit()
-        flash("Produto removido", "info")
+        message = "Produto removido"
+        category = "info"
+        item_qty = 0
     else:
         db.session.commit()
+        message = "Quantidade atualizada"
+        category = "success"
+        item_qty = item.quantity
+    flash(message, category)
+    if 'application/json' in request.headers.get('Accept', ''):
+        total_value = order.total_value()
+        total_qty = sum(i.quantity for i in order.items)
+        return jsonify(
+            message=message,
+            category=category,
+            item_id=item.id,
+            item_quantity=item_qty,
+            order_total=total_value,
+            order_total_formatted=f"R$ {total_value:.2f}",
+            order_quantity=total_qty,
+        )
     return redirect(url_for("ver_carrinho"))
 
 
