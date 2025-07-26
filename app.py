@@ -697,15 +697,17 @@ def conversa_admin(user_id=None):
             return redirect(url_for('mensagens_admin'))
         interlocutor = User.query.get_or_404(user_id)
         admin_ids = [u.id for u in User.query.filter_by(role='admin').all()]
+        participant_id = interlocutor.id
     else:
         interlocutor = admin_user
         admin_ids = [admin_user.id]
+        participant_id = current_user.id
 
     mensagens = (
         Message.query
         .filter(
-            ((Message.sender_id.in_(admin_ids)) & (Message.receiver_id == interlocutor.id)) |
-            ((Message.sender_id == interlocutor.id) & (Message.receiver_id.in_(admin_ids)))
+            ((Message.sender_id.in_(admin_ids)) & (Message.receiver_id == participant_id)) |
+            ((Message.sender_id == participant_id) & (Message.receiver_id.in_(admin_ids)))
         )
         .order_by(Message.timestamp)
         .all()
