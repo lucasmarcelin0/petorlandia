@@ -3,7 +3,7 @@
 
 <h2>Conversando sobre {{ animal.name }} com {{ outro_usuario.name }}</h2>
 
-<div class="border p-3 mb-3 rounded" style="max-height: 400px; overflow-y: auto;">
+<div id="mensagens-container" class="border p-3 mb-3 rounded" style="max-height: 400px; overflow-y: auto;">
     {% for msg in mensagens %}
         <div class="mb-2 {% if msg.sender_id == current_user.id %}text-end{% endif %}">
             <div class="p-2 rounded {% if msg.sender_id == current_user.id %}bg-info-subtle{% else %}bg-light{% endif %}">
@@ -46,6 +46,15 @@
 
 
 </form>
+
+<script>
+  document.addEventListener('DOMContentLoaded', function() {
+    const container = document.getElementById('mensagens-container');
+    if (container) {
+      container.scrollTop = container.scrollHeight;
+    }
+  });
+</script>
 
 
 
