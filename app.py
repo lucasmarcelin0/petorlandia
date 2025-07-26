@@ -764,11 +764,6 @@ def mensagens_admin():
     mensagens_animais = list(latest_animais.values())
     mensagens_gerais = list(latest_geral.values())
 
-    for m in mensagens_animais + mensagens_gerais:
-        if m.sender_id == admin_id:
-            m.sender = m.receiver
-            m.sender_id = m.receiver_id
-
     unread = (
         db.session.query(Message.sender_id, db.func.count())
         .filter_by(receiver_id=admin_id, lida=False)
