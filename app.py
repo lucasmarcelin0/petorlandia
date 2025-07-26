@@ -3148,6 +3148,52 @@ def buyer_cancel_delivery(req_id):
 
 
 # routes_delivery.py  (ou app.py)
+from sqlalchemy.orm import joinedload
+
+
+@app.route("/delivery/<int:req_id>")
+@login_required
+def delivery_detail(req_id):
+    """Detalhe da entrega para admin, entregador ou comprador."""
+    req = (
+        DeliveryRequest.query
+        .options(
+            joinedload(DeliveryRequest.pickup).joinedload(PickupLocation.endereco),
+            joinedload(DeliveryRequest.order).joinedload(Order.user),
+            joinedload(DeliveryRequest.worker),
+        )
+        .get_or_404(req_id)
+    )
+
+    order = req.order
+    buyer = order.user
+    items = order.items
+    total = sum(i.quantity * i.product.price for i in items if i.product)
+
+    if _is_admin():
+        role = "admin"
+    elif current_user.worker == "delivery":
+        if req.worker_id and req.worker_id != current_user.id:
+            abort(403)
+        role = "worker"
+    elif current_user.id == buyer.id:
+        role = "buyer"
+    else:
+        abort(403)
+
+    return render_template(
+        "delivery_detail.html",
+        req=req,
+        order=order,
+        items=items,
+        buyer=buyer,
+        delivery_worker=req.worker,
+        total=total,
+        role=role,
+    )
+
+
+# routes_delivery.py  (ou app.py)
 
 @app.route("/admin/delivery_overview")
 @login_required
