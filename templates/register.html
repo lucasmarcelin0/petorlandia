@@ -10,7 +10,7 @@
             <!-- Nome -->
             <div class="mb-3">
                 {{ form.name.label(class="form-label") }}
-                {{ form.name(class="form-control rounded-pill") }}
+                {{ form.name(class="form-control rounded-pill w-100", placeholder="Seu nome completo") }}
                 {% for error in form.name.errors %}
                     <div class="text-danger">{{ error }}</div>
                 {% endfor %}
@@ -19,7 +19,7 @@
             <!-- Email -->
             <div class="mb-3">
                 {{ form.email.label(class="form-label") }}
-                {{ form.email(class="form-control rounded-pill") }}
+                {{ form.email(class="form-control rounded-pill w-100", placeholder="email@exemplo.com") }}
                 {% for error in form.email.errors %}
                     <div class="text-danger">{{ error }}</div>
                 {% endfor %}
@@ -28,7 +28,7 @@
             <!-- Telefone -->
             <div class="mb-3">
                 {{ form.phone.label(class="form-label") }}
-                {{ form.phone(class="form-control rounded-pill") }}
+                {{ form.phone(class="form-control rounded-pill w-100", placeholder="(DDD) 99999-9999") }}
                 {% for error in form.phone.errors %}
                     <div class="text-danger">{{ error }}</div>
                 {% endfor %}
@@ -37,7 +37,8 @@
             <!-- Foto de Perfil -->
             <div class="mb-3">
                 {{ form.profile_photo.label(class="form-label") }}
-                {{ form.profile_photo(class="form-control") }}
+                {{ form.profile_photo(class="form-control w-100", id="profile_photo") }}
+                <div class="form-text">Envie uma foto do seu pet</div>
                 {% for error in form.profile_photo.errors %}
                     <div class="text-danger">{{ error }}</div>
                 {% endfor %}
@@ -49,7 +50,15 @@
             <!-- Senha -->
             <div class="mb-3 mt-4">
                 {{ form.password.label(class="form-label") }}
-                {{ form.password(class="form-control rounded-pill") }}
+                <div class="input-group">
+                    {{ form.password(class="form-control rounded-pill", id="password", placeholder="Crie uma senha") }}
+                    <button class="btn btn-outline-secondary" type="button" onclick="togglePassword('password', this)">
+                        <i class="fa fa-eye"></i>
+                    </button>
+                </div>
+                <div class="progress mt-2" style="height: 5px;">
+                    <div id="password-strength" class="progress-bar" role="progressbar" style="width: 0;"></div>
+                </div>
                 {% for error in form.password.errors %}
                     <div class="text-danger">{{ error }}</div>
                 {% endfor %}
@@ -58,7 +67,12 @@
             <!-- Confirmar Senha -->
             <div class="mb-3">
                 {{ form.confirm_password.label(class="form-label") }}
-                {{ form.confirm_password(class="form-control rounded-pill") }}
+                <div class="input-group">
+                    {{ form.confirm_password(class="form-control rounded-pill", id="confirm_password", placeholder="Confirme a senha") }}
+                    <button class="btn btn-outline-secondary" type="button" onclick="togglePassword('confirm_password', this)">
+                        <i class="fa fa-eye"></i>
+                    </button>
+                </div>
                 {% for error in form.confirm_password.errors %}
                     <div class="text-danger">{{ error }}</div>
                 {% endfor %}
@@ -71,4 +85,57 @@
         </form>
     </div>
 </div>
+
+<script>
+function togglePassword(id, btn) {
+    const input = document.getElementById(id);
+    if (!input) return;
+    const icon = btn.querySelector('i');
+    if (input.type === 'password') {
+        input.type = 'text';
+        if (icon) icon.classList.replace('fa-eye', 'fa-eye-slash');
+    } else {
+        input.type = 'password';
+        if (icon) icon.classList.replace('fa-eye-slash', 'fa-eye');
+    }
+}
+
+function evaluateStrength(pwd) {
+    let score = 0;
+    if (pwd.length >= 6) score += 1;
+    if (/[A-Z]/.test(pwd)) score += 1;
+    if (/[0-9]/.test(pwd)) score += 1;
+    if (/[^A-Za-z0-9]/.test(pwd)) score += 1;
+    return (score / 4) * 100;
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+    const pwdInput = document.getElementById('password');
+    const bar = document.getElementById('password-strength');
+    if (pwdInput && bar) {
+        pwdInput.addEventListener('input', () => {
+            const val = pwdInput.value;
+            const width = evaluateStrength(val);
+            bar.style.width = width + '%';
+            bar.classList.remove('bg-success', 'bg-warning', 'bg-danger');
+            if (width > 75) bar.classList.add('bg-success');
+            else if (width > 40) bar.classList.add('bg-warning');
+            else bar.classList.add('bg-danger');
+        });
+    }
+});
+</script>
+
+<style>
+/* Estilo para o campo de envio de foto */
+input[type="file"]::file-selector-button {
+    background-color: var(--secondary-color);
+    border: none;
+    color: #fff;
+    padding: 0.25rem 0.75rem;
+    border-radius: 0.5rem;
+    cursor: pointer;
+}
+</style>
+
 {% endblock %}
