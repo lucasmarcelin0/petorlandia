@@ -48,8 +48,8 @@
         <div class="flex-grow-1">
           <input id="profile_photo" name="profile_photo" type="file" accept="image/*" 
                  class="form-control d-none">
-          <input type="text" name="name" class="form-control" placeholder="Nome completo do tutor" 
-                 value="{{ tutor.name if has_tutor else '' }}" required minlength="3" maxlength="100">
+          <input type="text" name="name" class="form-control" placeholder="Nome completo do tutor"
+                 value="{{ tutor.name|default('', true) if has_tutor else '' }}" required minlength="3" maxlength="100">
           <div class="invalid-feedback">Por favor, insira um nome válido (3-100 caracteres)</div>
         </div>
       </div>
@@ -61,7 +61,7 @@
       <input type="tel" id="tutor-phone" name="phone" class="form-control" 
              placeholder="Apenas números (ex: 99999999999)" 
              pattern="[0-9]{10,11}"
-             value="{{ tutor.phone if has_tutor else '' }}">
+             value="{{ tutor.phone|default('', true) if has_tutor else '' }}">
       <div class="invalid-feedback">Por favor, insira um telefone válido (10 ou 11 dígitos)</div>
     </div>
 
@@ -71,7 +71,7 @@
       <input type="text" id="tutor-cpf" name="cpf" class="form-control" 
              placeholder="Apenas números (ex: 12345678901)" 
              pattern="[0-9]{11}"
-             value="{{ tutor.cpf if has_tutor else '' }}">
+             value="{{ tutor.cpf|default('', true) if has_tutor else '' }}">
       <div class="invalid-feedback">Por favor, insira um CPF válido (11 dígitos)</div>
     </div>
 
@@ -79,7 +79,7 @@
       <label for="tutor-rg" class="form-label">RG</label>
       <input type="text" id="tutor-rg" name="rg" class="form-control" 
              placeholder="00.000.000-0" pattern="[0-9]{2}\.?[0-9]{3}\.?[0-9]{3}-?[0-9]{1}"
-             value="{{ tutor.rg if has_tutor else '' }}">
+             value="{{ tutor.rg|default('', true) if has_tutor else '' }}">
       <div class="invalid-feedback">Por favor, insira um RG válido</div>
     </div>
     
@@ -103,7 +103,7 @@
       <label for="tutor-email" class="form-label">E-mail</label>
       <input type="email" id="tutor-email" name="email" class="form-control" 
              placeholder="exemplo@email.com" required
-             value="{{ tutor.email if has_tutor else '' }}">
+             value="{{ tutor.email|default('', true) if has_tutor else '' }}">
       <div class="invalid-feedback">Por favor, insira um e-mail válido</div>
     </div>
 

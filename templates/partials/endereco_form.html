@@ -11,8 +11,8 @@
         <i class="bi bi-question-circle ms-1" data-bs-toggle="tooltip" title="Digite o CEP para autopreencher o endereço"></i>
       </label>
       <div class="input-group">
-        <input type="text" class="form-control" name="cep" id="cep" 
-               value="{{ endereco.cep if endereco else '' }}" 
+        <input type="text" class="form-control" name="cep" id="cep"
+               value="{{ endereco.cep|default('', true) if endereco else '' }}"
                placeholder="00000-000" 
                data-mask="00000-000"
                onblur="buscarCep()">
@@ -29,8 +29,8 @@
     <!-- Rua -->
     <div class="col-md-7">
       <label for="rua" class="form-label fw-semibold">Logradouro <span class="text-danger">*</span></label>
-      <input type="text" class="form-control" name="rua" id="rua" 
-             value="{{ endereco.rua if endereco else '' }}"
+      <input type="text" class="form-control" name="rua" id="rua"
+             value="{{ endereco.rua|default('', true) if endereco else '' }}"
              placeholder="Nome da rua, avenida, etc.">
       <div class="invalid-feedback">Por favor, informe o logradouro</div>
     </div>
@@ -38,32 +38,32 @@
     <!-- Número -->
     <div class="col-md-2">
       <label for="numero" class="form-label fw-semibold">Número</label>
-      <input type="text" class="form-control" name="numero" id="numero" 
-             value="{{ endereco.numero if endereco else '' }}"
+      <input type="text" class="form-control" name="numero" id="numero"
+             value="{{ endereco.numero|default('', true) if endereco else '' }}"
              placeholder="Nº">
     </div>
 
     <!-- Complemento -->
     <div class="col-md-4">
       <label for="complemento" class="form-label fw-semibold">Complemento</label>
-      <input type="text" class="form-control" name="complemento" id="complemento" 
-             value="{{ endereco.complemento if endereco else '' }}"
+      <input type="text" class="form-control" name="complemento" id="complemento"
+             value="{{ endereco.complemento|default('', true) if endereco else '' }}"
              placeholder="Apto, bloco, etc.">
     </div>
 
     <!-- Bairro -->
     <div class="col-md-4">
       <label for="bairro" class="form-label fw-semibold">Bairro</label>
-      <input type="text" class="form-control" name="bairro" id="bairro" 
-             value="{{ endereco.bairro if endereco else '' }}"
+      <input type="text" class="form-control" name="bairro" id="bairro"
+             value="{{ endereco.bairro|default('', true) if endereco else '' }}"
              placeholder="Nome do bairro">
     </div>
 
     <!-- Cidade -->
     <div class="col-md-3">
       <label for="cidade" class="form-label fw-semibold">Cidade <span class="text-danger">*</span></label>
-      <input type="text" class="form-control" name="cidade" id="cidade" 
-             value="{{ endereco.cidade if endereco else '' }}"
+      <input type="text" class="form-control" name="cidade" id="cidade"
+             value="{{ endereco.cidade|default('', true) if endereco else '' }}"
              placeholder="Nome da cidade">
       <div class="invalid-feedback">Por favor, informe a cidade</div>
     </div>
