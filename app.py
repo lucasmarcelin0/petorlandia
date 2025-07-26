@@ -3578,11 +3578,22 @@ from flask_login import login_required, current_user
 def checkout():
     current_app.logger.setLevel(logging.DEBUG)
 
+    form = CheckoutForm()
+    if not form.validate_on_submit():
+        return redirect(url_for("checkout_confirm"))
+
     # 1️⃣ pedido atual do carrinho
     order = _get_current_order()
     if not order or not order.items:
         flash("Seu carrinho está vazio.", "warning")
         return redirect(url_for("ver_carrinho"))
+
+    if form.shipping_address.data:
+        order.shipping_address = form.shipping_address.data
+    elif current_user.endereco and current_user.endereco.full:
+        order.shipping_address = current_user.endereco.full
+    db.session.add(order)
+    db.session.commit()
 
     # 2️⃣ grava Payment PENDING
     payment = Payment(
