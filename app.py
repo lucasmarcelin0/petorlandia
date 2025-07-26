@@ -3467,6 +3467,12 @@ def ver_carrinho():
 
     selected = session.get("last_address_id")
     available = [c[0] for c in form.address_id.choices]
+    try:
+        selected = int(selected)
+    except (TypeError, ValueError):
+        selected = None
+    if selected not in available:
+        selected = None
     if selected in available:
         form.address_id.data = selected
     elif available:
