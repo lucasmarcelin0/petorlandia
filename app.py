@@ -3543,6 +3543,43 @@ def ver_carrinho():
     )
 
 
+@app.route('/carrinho/salvar_endereco', methods=['POST'])
+@login_required
+def carrinho_salvar_endereco():
+    """Salva um novo endereço informado no carrinho."""
+    form = CheckoutForm()
+    form.address_id.choices = []
+    if not form.validate_on_submit():
+        return redirect(url_for('ver_carrinho'))
+
+    cep = request.form.get('cep')
+    rua = request.form.get('rua')
+    numero = request.form.get('numero')
+    complemento = request.form.get('complemento')
+    bairro = request.form.get('bairro')
+    cidade = request.form.get('cidade')
+    estado = request.form.get('estado')
+
+    if any([rua, cidade, estado, cep]):
+        tmp_addr = Endereco(
+            cep=cep,
+            rua=rua,
+            numero=numero,
+            complemento=complemento,
+            bairro=bairro,
+            cidade=cidade,
+            estado=estado,
+        )
+        address_text = tmp_addr.full
+        db.session.add(SavedAddress(user_id=current_user.id, address=address_text))
+        db.session.commit()
+        flash('Endereço salvo com sucesso.', 'success')
+    else:
+        flash('Preencha os campos obrigatórios do endereço.', 'warning')
+
+    return redirect(url_for('ver_carrinho'))
+
+
 @app.route("/checkout/confirm", methods=["POST"])
 @login_required
 def checkout_confirm():
