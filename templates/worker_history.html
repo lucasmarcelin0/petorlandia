@@ -7,7 +7,7 @@
     {% for r in available %}
     <li class="list-group-item d-flex justify-content-between align-items-center">
       Pedido #{{ r.order_id }}
-      <form action="{{ url_for('accept_delivery', req_id=r.id) }}" method="post">
+      <form action="{{ url_for('accept_delivery', req_id=r.id) }}" method="post" class="js-delivery-form">
         <button class="btn btn-sm btn-primary">Aceitar</button>
       </form>
     </li>
@@ -21,10 +21,10 @@
     <li class="list-group-item d-flex justify-content-between align-items-center">
       Pedido #{{ r.order_id }}
       <div>
-        <form action="{{ url_for('complete_delivery', req_id=r.id) }}" method="post" class="d-inline">
+        <form action="{{ url_for('complete_delivery', req_id=r.id) }}" method="post" class="d-inline js-delivery-form">
           <button class="btn btn-sm btn-success">Concluir</button>
         </form>
-        <form action="{{ url_for('cancel_delivery', req_id=r.id) }}" method="post" class="d-inline ms-2">
+        <form action="{{ url_for('cancel_delivery', req_id=r.id) }}" method="post" class="d-inline ms-2 js-delivery-form">
           <button class="btn btn-sm btn-danger">Cancelar</button>
         </form>
       </div>

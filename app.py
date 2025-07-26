@@ -2943,6 +2943,8 @@ def request_delivery(order_id):
 
     session.pop('current_order', None)
     flash('Solicitação de entrega gerada.', 'success')
+    if 'application/json' in request.headers.get('Accept', ''):
+        return jsonify(message='Solicitação de entrega gerada.', category='success')
     return redirect(url_for('list_delivery_requests'))
 
 
@@ -3015,6 +3017,34 @@ def list_delivery_requests():
     )
 
 
+@app.route("/api/delivery_counts")
+@login_required
+def api_delivery_counts():
+    """Return delivery counts for the current user."""
+    base = DeliveryRequest.query
+    if current_user.worker == "delivery":
+        available_total = base.filter_by(status="pendente").count()
+        doing = base.filter_by(worker_id=current_user.id,
+                              status="em_andamento").count()
+        done = base.filter_by(worker_id=current_user.id,
+                             status="concluida").count()
+        canceled = base.filter_by(worker_id=current_user.id,
+                                 status="cancelada").count()
+    else:
+        base = base.filter_by(requested_by_id=current_user.id)
+        available_total = 0
+        doing = base.filter_by(status="em_andamento").count()
+        done = base.filter_by(status="concluida").count()
+        canceled = base.filter_by(status="cancelada").count()
+
+    return jsonify(
+        available_total=available_total,
+        doing=doing,
+        done=done,
+        canceled=canceled,
+    )
+
+
 
 # --- Compatibilidade admin ---------------------------------
 @app.route("/admin/delivery/<int:req_id>")
@@ -3055,6 +3085,8 @@ def accept_delivery(req_id):
     req.accepted_at = datetime.utcnow()
     db.session.commit()
     flash('Entrega aceita.', 'success')
+    if 'application/json' in request.headers.get('Accept', ''):
+        return jsonify(message='Entrega aceita.', category='success')
     # ⬇️ redireciona direto ao detalhe unificado
     return redirect(url_for('delivery_detail', req_id=req.id))
 
@@ -3071,6 +3103,8 @@ def complete_delivery(req_id):
     req.completed_at = datetime.utcnow()
     db.session.commit()
     flash('Entrega concluída.', 'success')
+    if 'application/json' in request.headers.get('Accept', ''):
+        return jsonify(message='Entrega concluída.', category='success')
     return redirect(url_for('worker_history'))
 
 
@@ -3087,6 +3121,8 @@ def cancel_delivery(req_id):
     req.canceled_by_id = current_user.id
     db.session.commit()
     flash('Entrega cancelada.', 'info')
+    if 'application/json' in request.headers.get('Accept', ''):
+        return jsonify(message='Entrega cancelada.', category='info')
     return redirect(url_for('worker_history'))
 
 
