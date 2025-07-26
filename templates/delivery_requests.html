@@ -40,7 +40,7 @@
         {# -------- Botões só para entregador -------- #}
         {% if current_user.worker == 'delivery' %}
           {% if req.status == 'pendente' %}
-            <form action="{{ url_for('accept_delivery', req_id=req.id) }}" method="post">
+            <form action="{{ url_for('accept_delivery', req_id=req.id) }}" method="post" class="js-delivery-form">
               <button class="btn btn-sm btn-primary">Aceitar</button>
             </form>
 
@@ -50,10 +50,10 @@
                  class="btn btn-sm btn-outline-primary me-2">
                  Detalhes
               </a>
-              <form action="{{ url_for('complete_delivery', req_id=req.id) }}" method="post" class="me-2">
+              <form action="{{ url_for('complete_delivery', req_id=req.id) }}" method="post" class="me-2 js-delivery-form">
                 <button class="btn btn-sm btn-success">Concluir</button>
               </form>
-              <form action="{{ url_for('cancel_delivery', req_id=req.id) }}" method="post">
+              <form action="{{ url_for('cancel_delivery', req_id=req.id) }}" method="post" class="js-delivery-form">
                 <button class="btn btn-sm btn-outline-danger">Cancelar</button>
               </form>
             </div>
