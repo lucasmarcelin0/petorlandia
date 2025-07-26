@@ -13,6 +13,16 @@
   <div class="d-flex justify-content-end mb-3">
     <strong>Total:&nbsp;R$ {{ '%.2f'|format(order.total_value()) }}</strong>
   </div>
+
+  <div class="mb-4">
+    <h5 class="fw-bold">Endereço de Entrega</h5>
+    {% if current_user.endereco and current_user.endereco.full %}
+      <p class="mb-1">{{ current_user.endereco.full }}</p>
+    {% else %}
+      <p class="text-danger mb-1">Nenhum endereço cadastrado.</p>
+      <a href="{{ url_for('profile') }}" class="btn btn-outline-primary btn-sm">Atualizar Endereço</a>
+    {% endif %}
+  </div>
   <form action="{{ url_for('checkout') }}" method="post" class="text-end">
     {{ form.hidden_tag() }}
     <button type="submit" class="btn btn-success">
