@@ -3,7 +3,7 @@
 <head>
     {% block head %}
     {% endblock %}
-    <link rel="icon" type="image/png" href="{{ url_for('static', filename='favicon.png') }}">
+    <link rel="icon" type="image/png" href="{{ url_for('static', filename='pastorgato.png') }}">
 
     <meta charset="UTF-8">
     <title>PetOrlândia 🐶</title>
@@ -279,7 +279,7 @@
             if (Notification.permission === "granted") {
                 new Notification("🐾 PetOrlândia", {
                     body: "{{ message }}",
-                    icon: "{{ url_for('static', filename='favicon.png') }}"
+                    icon: "{{ url_for('static', filename='pastorgato.png') }}"
                 });
             }
         {% endfor %}
@@ -306,12 +306,12 @@
         <div class="container-fluid">
             {% if current_user.is_authenticated and current_user.role == "admin" %}
                 <a href="{{ url_for('painel_admin.index') }}" class="navbar-brand">
-                    <img src="{{ url_for('static', filename='favicon.png') }}" alt="Logo">
+                    <img src="{{ url_for('static', filename='pastorgato.png') }}" alt="Logo">
                     <span>PetOrlândia</span>
                 </a>
             {% else %}
                 <a href="{{ url_for('index') }}" class="navbar-brand">
-                    <img src="{{ url_for('static', filename='favicon.png') }}" alt="Logo">
+                    <img src="{{ url_for('static', filename='pastorgato.png') }}" alt="Logo">
                     <span>PetOrlândia</span>
                 </a>
             {% endif %}
