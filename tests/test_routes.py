@@ -646,6 +646,36 @@ def test_delete_account_removes_saved_addresses(monkeypatch, app):
         assert SavedAddress.query.count() == 0
 
 
+def test_delete_account_removes_messages(monkeypatch, app):
+    client = app.test_client()
+
+    with app.app_context():
+        db.drop_all()
+        db.create_all()
+
+        user = User(id=1, name='Tester', email='x@test')
+        user.set_password('x')
+        other = User(id=2, name='Other', email='o@test')
+        other.set_password('x')
+        msg1 = Message(sender=user, receiver=other, content='hi')
+        msg2 = Message(sender=other, receiver=user, content='hi2')
+        db.session.add_all([user, other, msg1, msg2])
+        db.session.commit()
+
+        import flask_login.utils as login_utils
+        monkeypatch.setattr(login_utils, '_get_user', lambda: user)
+        monkeypatch.setattr(app_module, '_is_admin', lambda: False)
+
+        for idx, fn in enumerate(flask_app.template_context_processors[None]):
+            if fn.__name__ == 'inject_unread_count':
+                flask_app.template_context_processors[None][idx] = lambda: {'unread_messages': 0}
+
+        response = client.post('/delete_account', data={'submit': True}, follow_redirects=True)
+        assert 'Sua conta foi excluída'.encode() in response.data
+        assert User.query.get(user.id) is None
+        assert Message.query.count() == 0
+
+
 def test_salvar_endereco(monkeypatch, app):
     client = app.test_client()
 
