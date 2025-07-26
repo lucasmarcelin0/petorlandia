@@ -32,23 +32,21 @@
   <form action="{{ url_for('checkout') }}" method="post" class="text-end">
     {{ form.hidden_tag() }}
 
-    {% if default_address or saved_addresses %}
     <div class="mb-3 text-start">
       <label class="form-label">Endereço de entrega</label>
-      <select name="address_id" class="form-select mb-2">
+      <select name="address_id" id="addressSelect" class="form-select mb-2">
         {% if default_address %}
         <option value="0">{{ default_address }}</option>
         {% endif %}
         {% for addr in saved_addresses %}
         <option value="{{ addr.id }}">{{ addr.address }}</option>
         {% endfor %}
+        <option value="-1">Novo endereço...</option>
       </select>
     </div>
-    {% endif %}
 
-    <div class="mb-3 text-start">
-      {{ form.shipping_address(class="form-control", rows="2", placeholder="Novo endereço") }}
-      <small class="text-muted">Se informado, será salvo para próximas compras.</small>
+    <div id="new-address-form" class="d-none">
+      {% include 'partials/endereco_form.html' %}
     </div>
 
     <button type="submit" class="btn btn-lg btn-success shadow-sm">
@@ -66,4 +64,20 @@
   </div>
   {% endif %}
 </div>
+<script>
+  const addressSelect = document.getElementById('addressSelect');
+  const newAddr = document.getElementById('new-address-form');
+  function toggleNewAddress() {
+    if (!addressSelect || !newAddr) return;
+    if (addressSelect.value === '-1') {
+      newAddr.classList.remove('d-none');
+    } else {
+      newAddr.classList.add('d-none');
+    }
+  }
+  if (addressSelect) {
+    addressSelect.addEventListener('change', toggleNewAddress);
+    toggleNewAddress();
+  }
+</script>
 {% endblock %}
