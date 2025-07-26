@@ -1081,13 +1081,52 @@ def planosaude_animal(animal_id):
 @app.route("/plano-saude/<int:animal_id>/contratar", methods=["POST"])
 @login_required
 def contratar_plano(animal_id):
-    # placeholder: marcar no log ou só redirecionar
-    app.logger.info("Usuário %s quer contratar plano para animal %s",
-                    current_user.id, animal_id)
-    # mensagem flash para confirmar
-    from flask import flash
-    flash("💡 A rota contratar_plano ainda não está implementada.")
-    return redirect(url_for("planosaude_animal", animal_id=animal_id))
+    """Inicia a assinatura de um plano de saúde via Mercado Pago."""
+    animal = Animal.query.get_or_404(animal_id)
+
+    if animal.owner != current_user:
+        flash("Você não tem permissão para contratar este plano.", "danger")
+        return redirect(url_for("planosaude_animal", animal_id=animal.id))
+
+    form = SubscribePlanForm()
+    if not form.validate_on_submit():
+        flash("Selecione um plano válido.", "danger")
+        return redirect(url_for("planosaude_animal", animal_id=animal.id))
+
+    from models import HealthPlan
+    plan = HealthPlan.query.get_or_404(form.plan_id.data)
+
+    preapproval_data = {
+        "reason": f"{plan.name} - {animal.name}",
+        "back_url": url_for("planosaude_animal", animal_id=animal.id, _external=True),
+        "payer_email": current_user.email,
+        "auto_recurring": {
+            "frequency": 1,
+            "frequency_type": "months",
+            "transaction_amount": float(plan.price),
+            "currency_id": "BRL",
+        },
+    }
+
+    try:
+        resp = mp_sdk().preapproval().create(preapproval_data)
+    except Exception:  # pragma: no cover - network failures
+        app.logger.exception("Erro de conexão com Mercado Pago")
+        flash("Falha ao conectar com Mercado Pago.", "danger")
+        return redirect(url_for("planosaude_animal", animal_id=animal.id))
+
+    if resp.get("status") not in {200, 201}:
+        app.logger.error("MP error (HTTP %s): %s", resp.get("status"), resp)
+        flash("Erro ao iniciar assinatura.", "danger")
+        return redirect(url_for("planosaude_animal", animal_id=animal.id))
+
+    init_point = (resp.get("response", {}).get("init_point") or
+                  resp.get("response", {}).get("sandbox_init_point"))
+    if not init_point:
+        flash("Erro ao iniciar assinatura.", "danger")
+        return redirect(url_for("planosaude_animal", animal_id=animal.id))
+
+    return redirect(init_point)
 
 
 
