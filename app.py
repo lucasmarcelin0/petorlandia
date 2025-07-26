@@ -138,7 +138,8 @@ from forms import (
     MessageForm, RegistrationForm, LoginForm, AnimalForm, EditProfileForm,
     ResetPasswordRequestForm, ResetPasswordForm, OrderItemForm,
     DeliveryRequestForm, AddToCartForm, SubscribePlanForm,
-    ProductUpdateForm, ProductPhotoForm
+    ProductUpdateForm, ProductPhotoForm, ChangePasswordForm,
+    DeleteAccountForm
 )
 from helpers import calcular_idade, parse_data_nascimento
 
@@ -462,6 +463,7 @@ def logout():
 def profile():
     # Garante que current_user.endereco exista para pré-preenchimento
     form = EditProfileForm(obj=current_user)
+    delete_form = DeleteAccountForm()
 
     if form.validate_on_submit():
         if not current_user.endereco:
@@ -510,8 +512,39 @@ def profile():
         'profile.html',
         user=current_user,
         form=form,
+        delete_form=delete_form,
         transactions=transactions
     )
+
+
+@app.route('/change_password', methods=['GET', 'POST'])
+@login_required
+def change_password():
+    form = ChangePasswordForm()
+    if form.validate_on_submit():
+        if not current_user.check_password(form.current_password.data):
+            flash('Senha atual incorreta.', 'danger')
+        else:
+            current_user.set_password(form.new_password.data)
+            db.session.commit()
+            flash('Senha atualizada com sucesso!', 'success')
+            return redirect(url_for('profile'))
+    return render_template('change_password.html', form=form)
+
+
+@app.route('/delete_account', methods=['POST'])
+@login_required
+def delete_account():
+    form = DeleteAccountForm()
+    if form.validate_on_submit():
+        user = current_user
+        logout_user()
+        db.session.delete(user)
+        db.session.commit()
+        flash('Sua conta foi excluída.', 'success')
+        return redirect(url_for('index'))
+    flash('Operação inválida.', 'danger')
+    return redirect(url_for('profile'))
 
 
 

@@ -490,3 +490,69 @@ def test_conversa_admin_shows_message_for_any_admin(monkeypatch, app):
         response = client.get('/conversa_admin/3')
         assert response.status_code == 200
         assert b'hello' in response.data
+
+
+def test_change_password_requires_login(app):
+    client = app.test_client()
+    response = client.get('/change_password')
+    assert response.status_code == 302
+    assert '/login' in response.headers['Location']
+
+
+def test_delete_account_requires_login(app):
+    client = app.test_client()
+    response = client.post('/delete_account')
+    assert response.status_code == 302
+    assert '/login' in response.headers['Location']
+
+
+def test_change_password_updates_user(monkeypatch, app):
+    client = app.test_client()
+
+    with app.app_context():
+        db.drop_all()
+        db.create_all()
+        user = User(id=1, name='Tester', email='x@test')
+        user.set_password('old')
+        db.session.add(user)
+        db.session.commit()
+
+        import flask_login.utils as login_utils
+        monkeypatch.setattr(login_utils, '_get_user', lambda: user)
+        monkeypatch.setattr(app_module, '_is_admin', lambda: False)
+
+        for idx, fn in enumerate(flask_app.template_context_processors[None]):
+            if fn.__name__ == 'inject_unread_count':
+                flask_app.template_context_processors[None][idx] = lambda: {'unread_messages': 0}
+
+        response = client.post('/change_password', data={
+            'current_password': 'old',
+            'new_password': 'newpass',
+            'confirm_password': 'newpass'
+        }, follow_redirects=True)
+        assert b'Senha atualizada com sucesso' in response.data
+        assert user.check_password('newpass')
+
+
+def test_delete_account_removes_user(monkeypatch, app):
+    client = app.test_client()
+
+    with app.app_context():
+        db.drop_all()
+        db.create_all()
+        user = User(id=1, name='Tester', email='x@test')
+        user.set_password('x')
+        db.session.add(user)
+        db.session.commit()
+
+        import flask_login.utils as login_utils
+        monkeypatch.setattr(login_utils, '_get_user', lambda: user)
+        monkeypatch.setattr(app_module, '_is_admin', lambda: False)
+
+        for idx, fn in enumerate(flask_app.template_context_processors[None]):
+            if fn.__name__ == 'inject_unread_count':
+                flask_app.template_context_processors[None][idx] = lambda: {'unread_messages': 0}
+
+        response = client.post('/delete_account', data={'submit': True}, follow_redirects=True)
+        assert 'Sua conta foi excluída'.encode() in response.data
+        assert User.query.get(user.id) is None
