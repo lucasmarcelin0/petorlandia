@@ -20,6 +20,7 @@ from models import (
     Endereco,
     SavedAddress,
 )
+from flask import url_for
 from datetime import datetime
 
 @pytest.fixture
@@ -762,3 +763,35 @@ def test_cart_uses_session_string_address_id(monkeypatch, app):
         html = resp.get_data(as_text=True)
         assert f'value="{saved.id}" selected' in html
         assert 'value="0" selected' not in html
+
+
+def test_accept_delivery_redirects(monkeypatch, app):
+    client = app.test_client()
+
+    with app.app_context():
+        db.drop_all()
+        db.create_all()
+
+        worker = User(id=1, name='Worker', email='w@x.com', worker='delivery')
+        worker.set_password('x')
+        buyer = User(id=2, name='Buyer', email='b@x.com')
+        buyer.set_password('x')
+        order = Order(id=1, user_id=2)
+        req = DeliveryRequest(id=1, order_id=1, requested_by_id=2)
+        db.session.add_all([worker, buyer, order, req])
+        db.session.commit()
+
+        import flask_login.utils as login_utils
+        monkeypatch.setattr(login_utils, '_get_user', lambda: worker)
+        monkeypatch.setattr(app_module, '_is_admin', lambda: False)
+
+        resp = client.post(
+            f'/delivery_requests/{req.id}/accept',
+            headers={'Accept': 'application/json'}
+        )
+        assert resp.status_code == 200
+        data = resp.get_json()
+        assert data['category'] == 'success'
+        with flask_app.test_request_context():
+            expected_url = url_for('worker_delivery_detail', req_id=req.id)
+        assert data['redirect'] == expected_url
