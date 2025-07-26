@@ -38,7 +38,9 @@
       <div class="card shadow-sm h-100">
         <div class="card-body">
           <h6 class="card-title fw-bold mb-2">🏠 Entrega</h6>
-              {% if buyer.endereco and buyer.endereco.full %}
+              {% if order.shipping_address %}
+              <p class="mb-0">📍 {{ order.shipping_address }}</p>
+              {% elif buyer.endereco and buyer.endereco.full %}
               <p class="mb-0">📍 {{ buyer.endereco.full }}</p>
               {% else %}
               <p class="mb-0 text-muted">📍 Endereço não cadastrado.</p>
