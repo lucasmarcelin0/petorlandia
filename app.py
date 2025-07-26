@@ -3304,6 +3304,35 @@ def _get_current_order():
     return order
 
 
+def _setup_checkout_form(form):
+    """Preenche o CheckoutForm com os endereços do usuário."""
+    default_address = None
+    if current_user.endereco and current_user.endereco.full:
+        default_address = current_user.endereco.full
+
+    form.address_id.choices = []
+    if default_address:
+        form.address_id.choices.append((0, default_address))
+    for addr in current_user.saved_addresses:
+        form.address_id.choices.append((addr.id, addr.address))
+    form.address_id.choices.append((-1, 'Novo endereço'))
+
+    selected = session.get("last_address_id")
+    available = [c[0] for c in form.address_id.choices]
+    try:
+        selected = int(selected)
+    except (TypeError, ValueError):
+        selected = None
+    if selected not in available:
+        selected = None
+    if selected in available:
+        form.address_id.data = selected
+    elif available:
+        form.address_id.data = available[0]
+
+    return default_address
+
+
 
 from flask import session, render_template
 from flask_login import login_required
@@ -3465,31 +3494,7 @@ from forms import CheckoutForm
 def ver_carrinho():
     # 1) Cria o form
     form = CheckoutForm()
-
-    # Endereços salvos
-    default_address = None
-    if current_user.endereco and current_user.endereco.full:
-        default_address = current_user.endereco.full
-
-    form.address_id.choices = []
-    if default_address:
-        form.address_id.choices.append((0, default_address))
-    for addr in current_user.saved_addresses:
-        form.address_id.choices.append((addr.id, addr.address))
-    form.address_id.choices.append((-1, 'Novo endereço'))
-
-    selected = session.get("last_address_id")
-    available = [c[0] for c in form.address_id.choices]
-    try:
-        selected = int(selected)
-    except (TypeError, ValueError):
-        selected = None
-    if selected not in available:
-        selected = None
-    if selected in available:
-        form.address_id.data = selected
-    elif available:
-        form.address_id.data = available[0]
+    default_address = _setup_checkout_form(form)
 
     # 2) Verifica se há um pagamento pendente
     pagamento_pendente = None
@@ -3546,6 +3551,7 @@ def carrinho_salvar_endereco():
 def checkout_confirm():
     """Mostra um resumo antes de redirecionar ao pagamento externo."""
     form = CheckoutForm()
+    _setup_checkout_form(form)
     if not form.validate_on_submit():
         return redirect(url_for("ver_carrinho"))
 
@@ -3591,6 +3597,7 @@ def checkout():
     current_app.logger.setLevel(logging.DEBUG)
 
     form = CheckoutForm()
+    _setup_checkout_form(form)
     if not form.validate_on_submit():
         return redirect(url_for("ver_carrinho"))
 
