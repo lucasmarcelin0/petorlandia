@@ -91,6 +91,14 @@
     </form>
   </div>
 
+  <div class="d-flex gap-3 mb-4">
+    <a href="{{ url_for('change_password') }}" class="btn btn-outline-secondary rounded-pill px-4">🔑 Alterar Senha</a>
+    <form method="POST" action="{{ url_for('delete_account') }}" class="d-inline" onsubmit="return confirm('Deseja realmente excluir sua conta? Esta ação não poderá ser desfeita.');">
+      {{ delete_form.hidden_tag() }}
+      <button type="submit" class="btn btn-danger rounded-pill px-4">🗑 Excluir Conta</button>
+    </form>
+  </div>
+
 
   <!-- Meus Animais -->
   <div class="mb-5">
