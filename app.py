@@ -3519,6 +3519,7 @@ def ver_carrinho():
         form.address_id.choices.append((0, default_address))
     for addr in current_user.saved_addresses:
         form.address_id.choices.append((addr.id, addr.address))
+    form.address_id.choices.append((-1, 'Novo endereço'))
 
     # 2) Verifica se há um pagamento pendente
     pagamento_pendente = None
@@ -3602,13 +3603,33 @@ def checkout():
         return redirect(url_for("ver_carrinho"))
 
     address_text = None
-    if form.address_id.data:
+    if form.address_id.data is not None and form.address_id.data >= 0:
         if form.address_id.data == 0 and current_user.endereco and current_user.endereco.full:
             address_text = current_user.endereco.full
         else:
             sa = SavedAddress.query.filter_by(id=form.address_id.data, user_id=current_user.id).first()
             if sa:
                 address_text = sa.address
+    elif form.address_id.data == -1:
+        cep = request.form.get('cep')
+        rua = request.form.get('rua')
+        numero = request.form.get('numero')
+        complemento = request.form.get('complemento')
+        bairro = request.form.get('bairro')
+        cidade = request.form.get('cidade')
+        estado = request.form.get('estado')
+        if any([cep, rua, cidade, estado]):
+            tmp_addr = Endereco(
+                cep=cep,
+                rua=rua,
+                numero=numero,
+                complemento=complemento,
+                bairro=bairro,
+                cidade=cidade,
+                estado=estado
+            )
+            address_text = tmp_addr.full
+            db.session.add(SavedAddress(user_id=current_user.id, address=address_text))
     if not address_text and form.shipping_address.data:
         address_text = form.shipping_address.data
         sa = SavedAddress(user_id=current_user.id, address=address_text)
