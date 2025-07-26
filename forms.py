@@ -28,27 +28,27 @@ class ResetPasswordForm(FlaskForm):
 
 
 class RegistrationForm(FlaskForm):
-    name = StringField('Name', validators=[DataRequired(), Length(min=2, max=120)])
-    email = StringField('Email', validators=[DataRequired(), Email()])
-    phone = StringField('Phone', validators=[Optional(), Length(min=8, max=20)])
-    address = StringField('Address', validators=[Optional(), Length(max=200)])
+    name = StringField('Nome', validators=[DataRequired(), Length(min=2, max=120)])
+    email = StringField('E-mail', validators=[DataRequired(), Email()])
+    phone = StringField('Telefone', validators=[Optional(), Length(min=8, max=20)])
+    address = StringField('Endereço', validators=[Optional(), Length(max=200)])
 
     profile_photo = FileField('Foto de Perfil', validators=[
         Optional(),
         FileAllowed(['jpg', 'jpeg', 'png', 'gif'], 'Apenas imagens!')
     ])
 
-    password = PasswordField('Password', validators=[DataRequired(), Length(min=6)])
-    confirm_password = PasswordField('Confirm Password', validators=[
-        DataRequired(), EqualTo('password', message='Passwords must match')
+    password = PasswordField('Senha', validators=[DataRequired(), Length(min=6)])
+    confirm_password = PasswordField('Confirmar Senha', validators=[
+        DataRequired(), EqualTo('password', message='As senhas devem coincidir')
     ])
-    submit = SubmitField('Register')
+    submit = SubmitField('Cadastrar')
 
 
 
 
 class LoginForm(FlaskForm):
-    email = StringField('Email', validators=[DataRequired(), Email()])
+    email = StringField('E-mail', validators=[DataRequired(), Email()])
     password = PasswordField('Senha', validators=[DataRequired()])
     # Deixa marcada por padrao para que o usuario permaneça logado ao fechar o navegador
     remember = BooleanField('Lembrar de mim', default=True)
@@ -80,7 +80,7 @@ class AnimalForm(FlaskForm):
 
 class EditProfileForm(FlaskForm):
     name = StringField('Nome', validators=[DataRequired(), Length(min=2, max=120)])
-    email = StringField('Email', validators=[DataRequired(), Email()])
+    email = StringField('E-mail', validators=[DataRequired(), Email()])
     phone = StringField('Telefone', validators=[Optional(), Length(max=20)])
     address = StringField('Endereço', validators=[Optional(), Length(max=200)])
     profile_photo = FileField('Foto de Perfil', validators=[
