@@ -29,8 +29,28 @@
     <strong>Total:&nbsp;R$ {{ '%.2f'|format(order.total_value()) }}</strong>
   </div>
 
-  <form action="{{ url_for('checkout_confirm') }}" method="post" class="text-end">
+  <form action="{{ url_for('checkout') }}" method="post" class="text-end">
     {{ form.hidden_tag() }}
+
+    {% if default_address or saved_addresses %}
+    <div class="mb-3 text-start">
+      <label class="form-label">Endereço de entrega</label>
+      <select name="address_id" class="form-select mb-2">
+        {% if default_address %}
+        <option value="0">{{ default_address }}</option>
+        {% endif %}
+        {% for addr in saved_addresses %}
+        <option value="{{ addr.id }}">{{ addr.address }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    {% endif %}
+
+    <div class="mb-3 text-start">
+      {{ form.shipping_address(class="form-control", rows="2", placeholder="Novo endereço") }}
+      <small class="text-muted">Se informado, será salvo para próximas compras.</small>
+    </div>
+
     <button type="submit" class="btn btn-lg btn-success shadow-sm">
       <i class="bi bi-cash-stack"></i> {{ form.submit.label.text }}
     </button>
