@@ -50,12 +50,54 @@
                  class="btn btn-sm btn-outline-primary me-2">
                  Detalhes
               </a>
-              <form action="{{ url_for('complete_delivery', req_id=req.id) }}" method="post" class="me-2">
-                <button class="btn btn-sm btn-success">Concluir</button>
-              </form>
-              <form action="{{ url_for('cancel_delivery', req_id=req.id) }}" method="post">
-                <button class="btn btn-sm btn-outline-danger">Cancelar</button>
-              </form>
+              <button class="btn btn-sm btn-success me-2" data-bs-toggle="modal" data-bs-target="#completeModal{{ req.id }}">Concluir</button>
+              <button class="btn btn-sm btn-outline-danger" data-bs-toggle="modal" data-bs-target="#cancelModal{{ req.id }}">Cancelar</button>
+
+              <!-- Modal Concluir -->
+              <div class="modal fade" id="completeModal{{ req.id }}" tabindex="-1" aria-hidden="true">
+                <div class="modal-dialog">
+                  <div class="modal-content">
+                    <div class="modal-header">
+                      <h5 class="modal-title">Concluir entrega</h5>
+                      <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+                    </div>
+                    <form action="{{ url_for('complete_delivery', req_id=req.id) }}" method="post">
+                      <div class="modal-body">
+                        Tem certeza que deseja concluir esta entrega?
+                      </div>
+                      <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Voltar</button>
+                        <button class="btn btn-success">Concluir</button>
+                      </div>
+                    </form>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Modal Cancelar -->
+              <div class="modal fade" id="cancelModal{{ req.id }}" tabindex="-1" aria-hidden="true">
+                <div class="modal-dialog">
+                  <div class="modal-content">
+                    <div class="modal-header">
+                      <h5 class="modal-title">Cancelar entrega</h5>
+                      <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+                    </div>
+                    <form action="{{ url_for('cancel_delivery', req_id=req.id) }}" method="post">
+                      <div class="modal-body">
+                        <p class="mb-2">Tem certeza que deseja cancelar esta entrega?</p>
+                        <div class="mb-2">
+                          <label class="form-label">Motivo</label>
+                          <textarea name="reason" class="form-control" rows="3"></textarea>
+                        </div>
+                      </div>
+                      <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Voltar</button>
+                        <button class="btn btn-danger">Cancelar</button>
+                      </div>
+                    </form>
+                  </div>
+                </div>
+              </div>
             </div>
           {% endif %}
         {% endif %}

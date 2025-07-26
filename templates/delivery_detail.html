@@ -114,7 +114,7 @@
         <li class="list-group-item">✅ Concluído: {{ req.completed_at|format_datetime_brazil('%d/%m/%Y %H:%M') }}</li>
         {% endif %}
         {% if req.canceled_at %}
-        <li class="list-group-item text-danger">❌ Cancelado: {{ req.canceled_at|format_datetime_brazil('%d/%m/%Y %H:%M') }}</li>
+        <li class="list-group-item text-danger">❌ Cancelado: {{ req.canceled_at|format_datetime_brazil('%d/%m/%Y %H:%M') }}{% if req.cancel_reason %}<br>Motivo: {{ req.cancel_reason }}{% endif %}</li>
         {% endif %}
       </ul>
     </div>

@@ -635,6 +635,7 @@ class DeliveryRequest(db.Model):
     completed_at = db.Column(db.DateTime, nullable=True)
     canceled_at = db.Column(db.DateTime, nullable=True)
     canceled_by_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True)
+    cancel_reason = db.Column(db.String(200), nullable=True)
 
     order = db.relationship('Order', backref='delivery_requests')
     requested_by = db.relationship('User', foreign_keys=[requested_by_id])

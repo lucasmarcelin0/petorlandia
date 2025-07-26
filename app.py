@@ -3085,6 +3085,7 @@ def cancel_delivery(req_id):
     req.status = 'cancelada'
     req.canceled_at = datetime.utcnow()
     req.canceled_by_id = current_user.id
+    req.cancel_reason = request.form.get('reason')
     db.session.commit()
     flash('Entrega cancelada.', 'info')
     return redirect(url_for('worker_history'))
@@ -3102,6 +3103,7 @@ def buyer_cancel_delivery(req_id):
     req.status = 'cancelada'
     req.canceled_at = datetime.utcnow()
     req.canceled_by_id = current_user.id
+    req.cancel_reason = request.form.get('reason')
     db.session.commit()
     flash('Solicitação cancelada.', 'info')
     return redirect(url_for('loja'))
@@ -3248,6 +3250,7 @@ def admin_set_delivery_status(req_id, status):
         req.accepted_at = None
         req.canceled_at = None
         req.canceled_by_id = None
+        req.cancel_reason = None
         req.completed_at = None
     elif status == 'em_andamento':
         if not req.accepted_at:
@@ -3255,6 +3258,7 @@ def admin_set_delivery_status(req_id, status):
 
         req.canceled_at = None
         req.canceled_by_id = None
+        req.cancel_reason = None
         req.completed_at = None
     elif status == 'concluida':
         if not req.completed_at:
@@ -3263,11 +3267,13 @@ def admin_set_delivery_status(req_id, status):
             req.accepted_at = now
         req.canceled_at = None
         req.canceled_by_id = None
+        req.cancel_reason = None
 
     elif status == 'cancelada':
         req.canceled_at = now
         req.canceled_by_id = current_user.id
         req.completed_at = None
+        req.cancel_reason = request.form.get('reason')
 
     db.session.commit()
     flash('Status atualizado.', 'success')
