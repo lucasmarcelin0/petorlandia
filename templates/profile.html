@@ -92,10 +92,14 @@
               <ul class="dropdown-menu dropdown-menu-end">
                 <li><a class="dropdown-item" href="{{ url_for('change_password') }}">🔑 Alterar Senha</a></li>
                 <li>
-                  <form method="POST" action="{{ url_for('delete_account') }}" onsubmit="return confirm('Deseja realmente excluir sua conta? Esta ação não poderá ser desfeita.');">
-                    {{ delete_form.hidden_tag() }}
-                    <button type="submit" class="dropdown-item text-danger">🗑 Excluir Conta</button>
-                  </form>
+                  <button type="submit"
+                          name="submit"
+                          formaction="{{ url_for('delete_account') }}"
+                          formmethod="post"
+                          class="dropdown-item text-danger"
+                          onclick="return confirm('Deseja realmente excluir sua conta? Esta ação não poderá ser desfeita.');">
+                    🗑 Excluir Conta
+                  </button>
                 </li>
               </ul>
             </div>
@@ -103,6 +107,7 @@
         </div>
       </div>
     </form>
+
   </div>
 
 
