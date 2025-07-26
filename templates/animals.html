@@ -1,4 +1,15 @@
 {% extends "layout.html" %}
+{% set ns = namespace(items=[]) %}
+{% for a in animals %}
+  {% set ns.items = ns.items + [{"@type": "Offer", "name": a.name, "description": a.description, "image": a.image}] %}
+{% endfor %}
+{% block head %}
+  {{ super() }}
+  <meta name="description" content="Animais disponíveis para adoção ou venda na PetOrlândia">
+  <script type="application/ld+json">
+    {{ {"@context": "https://schema.org", "@type": "ItemList", "itemListElement": ns.items} | tojson }}
+  </script>
+{% endblock %}
 {% block main %}
 <div class="container mt-4">
   <h2 class="mb-4 text-center">🐾 Animais 🐾</h2>
@@ -60,7 +71,7 @@
       <div class="col">
         <div class="card h-100 shadow-sm border-0 rounded-4 {% if animal.modo == 'perdido' %}border border-danger{% endif %}">
           {% if animal.image %}
-          <img src="{{ animal.image }}" class="card-img-top rounded-top-4" alt="Imagem de {{ animal.name }}">
+          <img src="{{ animal.image }}" class="card-img-top rounded-top-4" loading="lazy" alt="Imagem de {{ animal.name }}">
           {% endif %}
           <div class="card-body">
             <h5 class="card-title d-flex justify-content-between align-items-start">
@@ -149,7 +160,7 @@
               </div>
               <div class="modal-body text-start">
                 {% if animal.image %}
-                <img src="{{ animal.image }}" class="img-fluid rounded mb-3" alt="Imagem de {{ animal.name }}">
+                <img src="{{ animal.image }}" class="img-fluid rounded mb-3" loading="lazy" alt="Imagem de {{ animal.name }}">
                 {% endif %}
                 <p><strong>Espécie:</strong> {{ animal.species }}</p>
                 <p><strong>Raça:</strong> {{ animal.breed }}</p>
