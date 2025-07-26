@@ -21,35 +21,46 @@
 
   {# ========== Endereços (entregador) ========== #}
   {% if role == 'admin' or delivery_worker %}
-  <div class="row mb-4">
-    <div class="col-md-6">
-      <div class="card shadow-sm h-100">
-        <div class="card-body">
-          <h6 class="card-title fw-bold mb-2">📦 Retirada</h6>
-          {% if req.pickup %}
-            {{ req.pickup.nome }} — {{ req.pickup.endereco.full }}
-          {% else %}
-            —               {# aparecerá só se, por algum motivo, não houver pickup ligado #}
-          {% endif %}
+    <div class="row mb-4">
+      <div class="col-md-6">
+        <div class="card shadow-sm h-100">
+          <div class="card-body">
+            <h6 class="card-title fw-bold mb-2">📦 Retirada</h6>
+            {% if req.pickup %}
+              {{ req.pickup.nome }} — {{ req.pickup.endereco.full }}
+            {% else %}
+              —               {# aparecerá só se, por algum motivo, não houver pickup ligado #}
+            {% endif %}
+          </div>
+        </div>
+      </div>
+      <div class="col-md-6 mt-3 mt-md-0">
+        <div class="card shadow-sm h-100">
+          <div class="card-body">
+            <h6 class="card-title fw-bold mb-2">🏠 Entrega</h6>
+                {% if order.shipping_address %}
+                <p class="mb-0">📍 {{ order.shipping_address }}</p>
+                {% elif buyer.endereco and buyer.endereco.full %}
+                <p class="mb-0">📍 {{ buyer.endereco.full }}</p>
+                {% else %}
+                <p class="mb-0 text-muted">📍 Endereço não cadastrado.</p>
+                {% endif %}
+          </div>
         </div>
       </div>
     </div>
-    <div class="col-md-6 mt-3 mt-md-0">
-      <div class="card shadow-sm h-100">
-        <div class="card-body">
-          <h6 class="card-title fw-bold mb-2">🏠 Entrega</h6>
-              {% if order.shipping_address %}
-              <p class="mb-0">📍 {{ order.shipping_address }}</p>
-              {% elif buyer.endereco and buyer.endereco.full %}
-              <p class="mb-0">📍 {{ buyer.endereco.full }}</p>
-              {% else %}
-              <p class="mb-0 text-muted">📍 Endereço não cadastrado.</p>
-              {% endif %}
-        </div>
-      </div>
+    {# ------ Link para rota no Google Maps ------ #}
+    {% set origin = req.pickup.endereco.full if req.pickup else None %}
+    {% set destination = order.shipping_address or (buyer.endereco.full if buyer.endereco and buyer.endereco.full else None) %}
+    {% if origin and destination %}
+    <div class="mb-4">
+      <a class="btn btn-sm btn-outline-primary" target="_blank"
+         href="https://www.google.com/maps/dir/?api=1&origin={{ origin | urlencode }}&destination={{ destination | urlencode }}">
+        Abrir rota no Google Maps
+      </a>
     </div>
-  </div>
-  {% endif %}
+    {% endif %}
+    {% endif %}
 
 {# ========== Comprador ========== #}
 <div class="card mb-4 shadow-sm">
