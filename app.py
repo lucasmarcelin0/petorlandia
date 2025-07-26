@@ -540,6 +540,14 @@ def delete_account():
         # Capture the actual user object before logging out because
         # `current_user` becomes `AnonymousUserMixin` after logout.
         user = current_user._get_current_object()
+
+        # Remove pagamentos vinculados ao usuário antes de excluí-lo
+        for payment in list(user.payments):
+            # Desassocia assinaturas que usam este pagamento
+            for sub in list(payment.subscriptions):
+                sub.payment = None
+            db.session.delete(payment)
+
         logout_user()
         db.session.delete(user)
         db.session.commit()
