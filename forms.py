@@ -178,6 +178,23 @@ class EditProfileForm(FlaskForm):
     submit = SubmitField('Salvar Alterações')
 
 
+class ChangePasswordForm(FlaskForm):
+    current_password = PasswordField('Senha Atual', validators=[DataRequired()])
+    new_password = PasswordField(
+        'Nova Senha',
+        validators=[DataRequired(), Length(min=6)]
+    )
+    confirm_password = PasswordField(
+        'Confirme a Nova Senha',
+        validators=[DataRequired(), EqualTo('new_password')]
+    )
+    submit = SubmitField('Alterar Senha')
+
+
+class DeleteAccountForm(FlaskForm):
+    submit = SubmitField('Excluir Conta')
+
+
 
 class MessageForm(FlaskForm):
     content = TextAreaField('Mensagem', validators=[DataRequired(), Length(max=1000)])
