@@ -3521,6 +3521,13 @@ def ver_carrinho():
         form.address_id.choices.append((addr.id, addr.address))
     form.address_id.choices.append((-1, 'Novo endereço'))
 
+    selected = session.get("last_address_id")
+    available = [c[0] for c in form.address_id.choices]
+    if selected in available:
+        form.address_id.data = selected
+    elif available:
+        form.address_id.data = available[0]
+
     # 2) Verifica se há um pagamento pendente
     pagamento_pendente = None
     payment_id = session.get('last_pending_payment')
@@ -3571,8 +3578,10 @@ def carrinho_salvar_endereco():
             estado=estado,
         )
         address_text = tmp_addr.full
-        db.session.add(SavedAddress(user_id=current_user.id, address=address_text))
+        sa = SavedAddress(user_id=current_user.id, address=address_text)
+        db.session.add(sa)
         db.session.commit()
+        session['last_address_id'] = sa.id
         flash('Endereço salvo com sucesso.', 'success')
     else:
         flash('Preencha os campos obrigatórios do endereço.', 'warning')
@@ -3647,6 +3656,7 @@ def checkout():
             sa = SavedAddress.query.filter_by(id=form.address_id.data, user_id=current_user.id).first()
             if sa:
                 address_text = sa.address
+        session["last_address_id"] = form.address_id.data
     elif form.address_id.data == -1:
         cep = request.form.get('cep')
         rua = request.form.get('rua')
@@ -3666,13 +3676,19 @@ def checkout():
                 estado=estado
             )
             address_text = tmp_addr.full
-            db.session.add(SavedAddress(user_id=current_user.id, address=address_text))
+            sa = SavedAddress(user_id=current_user.id, address=address_text)
+            db.session.add(sa)
+            db.session.flush()
+            session["last_address_id"] = sa.id
     if not address_text and form.shipping_address.data:
         address_text = form.shipping_address.data
         sa = SavedAddress(user_id=current_user.id, address=address_text)
         db.session.add(sa)
+        db.session.flush()
+        session["last_address_id"] = sa.id
     if not address_text and current_user.endereco and current_user.endereco.full:
         address_text = current_user.endereco.full
+        session["last_address_id"] = 0 if address_text else None
 
     order.shipping_address = address_text
     db.session.add(order)
