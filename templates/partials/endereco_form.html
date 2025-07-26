@@ -229,8 +229,15 @@ document.addEventListener("DOMContentLoaded", function() {
 
   // Define campos obrigatórios
   const requiredFields = ['rua', 'cidade', 'estado'];
-  
+
+  const addressSelect = document.getElementById('addressSelect');
+
   form.addEventListener("submit", function(e) {
+    if (addressSelect && addressSelect.value !== '-1') {
+      // usando endereço salvo - não valida campos vazios
+      return;
+    }
+
     let isValid = true;
     
     requiredFields.forEach(id => {
