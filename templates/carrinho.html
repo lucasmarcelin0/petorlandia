@@ -29,6 +29,18 @@
     <strong>Total:&nbsp;R$ {{ '%.2f'|format(order.total_value()) }}</strong>
   </div>
 
+  <div id="new-address-form" class="d-none mb-4">
+    <form action="{{ url_for('carrinho_salvar_endereco') }}" method="post">
+      {{ addr_form.hidden_tag() }}
+      {% include 'partials/endereco_form.html' %}
+      <div class="text-end">
+        <button type="submit" class="btn btn-primary">
+          <i class="bi bi-save"></i> Salvar Endereço
+        </button>
+      </div>
+    </form>
+  </div>
+
   <form action="{{ url_for('checkout_confirm') }}" method="post" class="text-end">
     {{ form.hidden_tag() }}
 
@@ -54,7 +66,6 @@
       </div>
     </div>
 
-  /div>
 
     <button type="submit" class="btn btn-lg btn-success shadow-sm">
       <i class="bi bi-cash-stack"></i> {{ form.submit.label.text }}
