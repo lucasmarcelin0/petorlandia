@@ -138,7 +138,7 @@ def test_payment_status_updates_from_api(monkeypatch, app):
         id = 1
         status = PaymentStatus.PENDING
         transaction_id = "abc123"
-        order_id = 99
+        order_id = 1
         user_id = 1
         method = PaymentMethod.PIX
         order = type('O', (), {'items': [], 'total_value': lambda self: 0})()
@@ -199,6 +199,8 @@ def test_payment_status_updates_from_api(monkeypatch, app):
                 return self
             def paginate(self, page=1, per_page=20, error_out=False):
                 return FakeOrderPagination()
+            def get_or_404(self, _):
+                return FakeOrder()
 
         monkeypatch.setattr(Order, 'query', FakeOrderQuery())
 
@@ -208,9 +210,12 @@ def test_payment_status_updates_from_api(monkeypatch, app):
 
         monkeypatch.setattr(app_module, 'mp_sdk', lambda: type('O', (), {'payment': lambda: FakePaymentAPI()})())
 
-        response = client.get('/payment_status/1?status=success', follow_redirects=True)
-        assert response.status_code == 200
-        assert b'Minhas Compras' in response.data
+        with flask_app.test_request_context():
+            expected = url_for('pedido_detail', order_id=1)
+
+        response = client.get('/payment_status/1?status=success', follow_redirects=False)
+        assert response.status_code == 302
+        assert response.headers['Location'].endswith(expected)
 
 
 def test_api_minhas_compras_filters_by_user(monkeypatch, app):
