@@ -2804,8 +2804,16 @@ def marcar_como_falecido(animal_id):
         animal.is_alive = False
         db.session.commit()
         flash(f'{animal.name} foi marcado como falecido.', 'success')
+        if 'application/json' in request.headers.get('Accept', ''):
+            return jsonify(
+                message=f'{animal.name} foi marcado como falecido.',
+                category='success',
+                redirect=url_for('ficha_animal', animal_id=animal.id)
+            )
     except Exception as e:
         flash(f'Erro ao marcar como falecido: {str(e)}', 'danger')
+        if 'application/json' in request.headers.get('Accept', ''):
+            return jsonify(message=f'Erro ao marcar como falecido: {str(e)}', category='danger'), 400
 
     return redirect(url_for('ficha_animal', animal_id=animal.id))
 
@@ -2823,6 +2831,12 @@ def reverter_falecimento(animal_id):
     animal.falecido_em = None
     db.session.commit()
     flash('Falecimento revertido com sucesso.', 'success')
+    if 'application/json' in request.headers.get('Accept', ''):
+        return jsonify(
+            message='Falecimento revertido com sucesso.',
+            category='success',
+            redirect=url_for('ficha_animal', animal_id=animal.id)
+        )
     return redirect(url_for('ficha_animal', animal_id=animal.id))
 
 
@@ -2842,9 +2856,17 @@ def arquivar_animal(animal_id):
         db.session.delete(animal)
         db.session.commit()
         flash(f'Animal {animal.name} excluído permanentemente.', 'success')
+        if 'application/json' in request.headers.get('Accept', ''):
+            return jsonify(
+                message=f'Animal {animal.name} excluído permanentemente.',
+                category='success',
+                redirect=url_for('ficha_tutor', tutor_id=animal.user_id)
+            )
     except Exception as e:
         db.session.rollback()
         flash(f'Erro ao excluir: {str(e)}', 'danger')
+        if 'application/json' in request.headers.get('Accept', ''):
+            return jsonify(message=f'Erro ao excluir: {str(e)}', category='danger'), 400
 
     return redirect(url_for('ficha_tutor', tutor_id=animal.user_id))
 
