@@ -31,13 +31,13 @@
             <div>Valor: R$ {{ ((ord.payment.__dict__.get('amount') if ord and ord.payment else None) or (ord.total_value() if ord else 0)) | round(2) if ord else "—" }}</div>
 
             {% if r.status == "pendente" %}
-              <div>Solicitado em {{ r.requested_at.strftime("%d/%m/%Y %H:%M") }}</div>
+              <div>Solicitado em {{ r.requested_at|format_datetime_brazil('%d/%m/%Y %H:%M') }}</div>
             {% elif r.status == "em_andamento" %}
-              <div>Aceito por {{ r.worker.name if r.worker else "—" }} em {{ r.accepted_at.strftime("%d/%m/%Y %H:%M") if r.accepted_at else "—" }}</div>
+              <div>Aceito por {{ r.worker.name if r.worker else "—" }} em {{ r.accepted_at|format_datetime_brazil('%d/%m/%Y %H:%M') if r.accepted_at else "—" }}</div>
             {% elif r.status == "concluida" %}
-              <div>Concluído em {{ r.completed_at.strftime("%d/%m/%Y %H:%M") if r.completed_at else "—" }}</div>
+              <div>Concluído em {{ r.completed_at|format_datetime_brazil('%d/%m/%Y %H:%M') if r.completed_at else "—" }}</div>
             {% elif r.status == "cancelada" %}
-              <div>Cancelado em {{ r.canceled_at.strftime("%d/%m/%Y %H:%M") if r.canceled_at else "—" }}</div>
+              <div>Cancelado em {{ r.canceled_at|format_datetime_brazil('%d/%m/%Y %H:%M') if r.canceled_at else "—" }}</div>
             {% endif %}
           </div>
         </div>
