@@ -33,6 +33,11 @@
       Continuar para Pagamento
     </button>
   </form>
+  <div class="mt-3 text-start">
+    <a href="{{ url_for('ver_carrinho') }}" class="btn btn-outline-secondary">
+      <i class="bi bi-arrow-left-circle"></i> Voltar ao carrinho
+    </a>
+  </div>
   <script>
     function toggleAltAddr() {
       document.getElementById('alt-address').classList.toggle('d-none');
