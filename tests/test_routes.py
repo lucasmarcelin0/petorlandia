@@ -619,6 +619,35 @@ def test_salvar_endereco(monkeypatch, app):
         assert SavedAddress.query.count() == 1
 
 
+def test_salvar_endereco_invalid(monkeypatch, app):
+    client = app.test_client()
+
+    with app.app_context():
+        db.drop_all()
+        db.create_all()
+        user = User(id=1, name='Tester', email='x@test')
+        user.set_password('x')
+        db.session.add(user)
+        db.session.commit()
+
+        import flask_login.utils as login_utils
+        monkeypatch.setattr(login_utils, '_get_user', lambda: user)
+        monkeypatch.setattr(app_module, '_is_admin', lambda: False)
+
+        for idx, fn in enumerate(flask_app.template_context_processors[None]):
+            if fn.__name__ == 'inject_unread_count':
+                flask_app.template_context_processors[None][idx] = lambda: {'unread_messages': 0}
+
+        resp = client.post('/carrinho/salvar_endereco', data={
+            'cep': '',
+            'rua': 'Rua Teste',
+            'cidade': 'Cidade',
+            'estado': 'SP'
+        })
+        assert resp.status_code == 302
+        assert SavedAddress.query.count() == 0
+
+
 def test_cart_shows_saved_address_below_default(monkeypatch, app):
     client = app.test_client()
 
