@@ -3658,15 +3658,18 @@ def diminuir_item_carrinho(item_id):
     if 'application/json' in request.headers.get('Accept', ''):
         total_value = order.total_value()
         total_qty = sum(i.quantity for i in order.items)
-        return jsonify(
-            message=message,
-            category=category,
-            item_id=item.id,
-            item_quantity=item_qty,
-            order_total=total_value,
-            order_total_formatted=f"R$ {total_value:.2f}",
-            order_quantity=total_qty,
-        )
+        payload = {
+            "message": message,
+            "category": category,
+            "item_id": item.id,
+            "item_quantity": item_qty,
+            "order_total": total_value,
+            "order_total_formatted": f"R$ {total_value:.2f}",
+            "order_quantity": total_qty,
+        }
+        if total_qty == 0:
+            payload["redirect"] = url_for("ver_carrinho")
+        return jsonify(**payload)
     return redirect(url_for("ver_carrinho"))
 
 
