@@ -16,7 +16,9 @@
 
   <div class="mb-4">
     <h5 class="fw-bold">Endereço de Entrega</h5>
-    {% if current_user.endereco and current_user.endereco.full %}
+    {% if selected_address %}
+      <p class="mb-1">{{ selected_address }}</p>
+    {% elif current_user.endereco and current_user.endereco.full %}
       <p class="mb-1">{{ current_user.endereco.full }}</p>
     {% else %}
       <p class="text-danger mb-1">Nenhum endereço cadastrado.</p>
@@ -28,7 +30,8 @@
     </div>
   </div>
   <form action="{{ url_for('checkout') }}" method="post" class="text-end">
-    {{ form.hidden_tag() }}
+    {{ form.csrf_token }}
+    <input type="hidden" name="address_id" value="{{ form.address_id.data }}">
     <button type="submit" class="btn btn-success">
       Continuar para Pagamento
     </button>
