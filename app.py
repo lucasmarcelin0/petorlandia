@@ -1,11 +1,13 @@
 # ───────────────────────────  app.py  ───────────────────────────
 import os, sys, pathlib, importlib, logging, uuid, re
+from io import BytesIO
 
 
 
 from datetime import datetime, timezone, date
 from dateutil.relativedelta import relativedelta
 from zoneinfo import ZoneInfo
+from PIL import Image
 
 
 from dotenv import load_dotenv
@@ -76,9 +78,25 @@ def _s3():
     return boto3.client("s3", aws_access_key_id=AWS_ID, aws_secret_access_key=AWS_SECRET)
 
 def upload_to_s3(file, filename, folder="uploads") -> str | None:
+    """Compress and upload a file to S3."""
     try:
+        fileobj = file
+        content_type = file.content_type
+
+        if content_type and content_type.startswith("image"):
+            image = Image.open(file.stream)
+            image = image.convert("RGB")
+            image.thumbnail((1280, 1280))
+            buffer = BytesIO()
+            image.save(buffer, format="JPEG", optimize=True, quality=85)
+            buffer.seek(0)
+            fileobj = buffer
+            content_type = "image/jpeg"
+            if not filename.lower().endswith(('.jpg', '.jpeg')):
+                filename += '.jpg'
+
         key = f"{folder}/{filename}"
-        _s3().upload_fileobj(file, BUCKET, key, ExtraArgs={"ContentType": file.content_type})
+        _s3().upload_fileobj(fileobj, BUCKET, key, ExtraArgs={"ContentType": content_type})
         return f"https://{BUCKET}.s3.amazonaws.com/{key}"
     except Exception as exc:                 # noqa: BLE001
         app.logger.exception("S3 upload failed: %s", exc)
