@@ -700,7 +700,7 @@ def conversa_admin(user_id=None):
         participant_id = interlocutor.id
     else:
         interlocutor = admin_user
-        admin_ids = [admin_user.id]
+        admin_ids = [u.id for u in User.query.filter_by(role='admin').all()]
         participant_id = current_user.id
 
     mensagens = (
