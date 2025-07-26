@@ -1089,11 +1089,15 @@ def contratar_plano(animal_id):
         return redirect(url_for("planosaude_animal", animal_id=animal.id))
 
     form = SubscribePlanForm()
+    from models import HealthPlan
+    plans = HealthPlan.query.all()
+    form.plan_id.choices = [
+        (p.id, f"{p.name} - R$ {p.price:.2f}") for p in plans
+    ]
     if not form.validate_on_submit():
         flash("Selecione um plano válido.", "danger")
         return redirect(url_for("planosaude_animal", animal_id=animal.id))
 
-    from models import HealthPlan
     plan = HealthPlan.query.get_or_404(form.plan_id.data)
 
     preapproval_data = {
