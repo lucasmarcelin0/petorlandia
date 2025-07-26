@@ -227,7 +227,8 @@ class CheckoutForm(FlaskForm):
     # email  = StringField('E‑mail', validators=[DataRequired(), Email()])
     # phone  = StringField('Telefone (WhatsApp)', validators=[Optional(), Length(max=20)])
 
-    shipping_address = TextAreaField('Outro Endere\u00e7o', validators=[Optional(), Length(max=200)])
+    address_id = SelectField('Endereço salvo', coerce=int, validators=[Optional()])
+    shipping_address = TextAreaField('Novo Endereço', validators=[Optional(), Length(max=200)])
     submit = SubmitField('Finalizar Compra')
 
 

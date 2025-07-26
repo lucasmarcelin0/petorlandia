@@ -610,6 +610,20 @@ class OrderItem(db.Model):
         return f"{self.product.name if self.product else self.item_name} x{self.quantity}"
 
 
+class SavedAddress(db.Model):
+    """Endereços extras salvos pelo usuário."""
+    __tablename__ = 'saved_address'
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False, index=True)
+    address = db.Column(db.String(200), nullable=False)
+
+    user = db.relationship('User', backref='saved_addresses')
+
+    def __repr__(self):
+        return self.address
+
+
 class DeliveryRequest(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     order_id = db.Column(db.Integer, db.ForeignKey('order.id'), nullable=False)
