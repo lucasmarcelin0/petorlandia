@@ -147,11 +147,19 @@ with app.app_context():
 @app.context_processor
 def inject_unread_count():
     if current_user.is_authenticated:
-        unread = (
-            Message.query       # Message is in globals()
-            .filter_by(receiver_id=current_user.id, lida=False)
-            .count()
-        )
+        if current_user.role == 'admin':
+            admin_ids = [u.id for u in User.query.filter_by(role='admin').all()]
+            unread = (
+                Message.query
+                .filter(Message.receiver_id.in_(admin_ids), Message.lida.is_(False))
+                .count()
+            )
+        else:
+            unread = (
+                Message.query
+                .filter_by(receiver_id=current_user.id, lida=False)
+                .count()
+            )
     else:
         unread = 0
     return dict(unread_messages=unread)
@@ -717,8 +725,12 @@ def conversa_admin(user_id=None):
         return redirect(url_for('conversa_admin'))
 
     for m in mensagens:
-        if m.receiver_id == current_user.id and not m.lida:
-            m.lida = True
+        if current_user.role == 'admin':
+            if m.receiver_id in admin_ids and not m.lida:
+                m.lida = True
+        else:
+            if m.receiver_id == current_user.id and not m.lida:
+                m.lida = True
     db.session.commit()
 
     return render_template(
@@ -785,7 +797,19 @@ def mensagens_admin():
 @app.context_processor
 def inject_unread_count():
     if current_user.is_authenticated:
-        unread = Message.query.filter_by(receiver_id=current_user.id, lida=False).count()
+        if current_user.role == 'admin':
+            admin_ids = [u.id for u in User.query.filter_by(role='admin').all()]
+            unread = (
+                Message.query
+                .filter(Message.receiver_id.in_(admin_ids), Message.lida.is_(False))
+                .count()
+            )
+        else:
+            unread = (
+                Message.query
+                .filter_by(receiver_id=current_user.id, lida=False)
+                .count()
+            )
         return dict(unread_messages=unread)
     return dict(unread_messages=0)
 
