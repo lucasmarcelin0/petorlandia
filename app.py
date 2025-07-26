@@ -1064,6 +1064,7 @@ def planosaude_animal(animal_id):
         animal=animal,
         form=form,        # {{ form.hidden_tag() }} agora existe
         subscription=subscription,
+        plans=plans,
     )
 
 
