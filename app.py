@@ -1048,6 +1048,15 @@ def planosaude_animal(animal_id):
     form.plan_id.choices = [
         (p.id, f"{p.name} - R$ {p.price:.2f}") for p in plans
     ]
+    plans_data = [
+        {
+            "id": p.id,
+            "name": p.name,
+            "description": p.description,
+            "price": p.price,
+        }
+        for p in plans
+    ]
     subscription = (
         HealthSubscription.query
         .filter_by(animal_id=animal.id, user_id=current_user.id, active=True)
@@ -1064,7 +1073,7 @@ def planosaude_animal(animal_id):
         animal=animal,
         form=form,        # {{ form.hidden_tag() }} agora existe
         subscription=subscription,
-        plans=plans,
+        plans=plans_data,
     )
 
 
