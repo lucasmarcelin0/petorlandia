@@ -503,6 +503,39 @@
           }
         });
       });
+
+      document.querySelectorAll('.js-cart-form').forEach(form => {
+        form.addEventListener('submit', async ev => {
+          ev.preventDefault();
+          const resp = await fetch(form.action, {
+            method: form.method,
+            body: new FormData(form),
+            headers: {'Accept': 'application/json'}
+          });
+          if (resp.ok) {
+            const data = await resp.json();
+            const span = form.parentElement.querySelector('span');
+            if (span && data.item_quantity !== undefined) {
+              span.textContent = data.item_quantity;
+            }
+            const totalEl = document.getElementById('cartTotal');
+            if (totalEl && data.order_total_formatted) {
+              totalEl.textContent = 'Total:\u00A0' + data.order_total_formatted;
+            }
+            const toastEl = document.getElementById('actionToast');
+            toastEl.querySelector('.toast-body').textContent = data.message || 'Sucesso';
+            toastEl.classList.remove('bg-danger', 'bg-info', 'bg-success');
+            toastEl.classList.add('bg-' + (data.category || 'success'));
+            new bootstrap.Toast(toastEl).show();
+          } else {
+            const toastEl = document.getElementById('actionToast');
+            toastEl.querySelector('.toast-body').textContent = 'Erro ao processar ação';
+            toastEl.classList.remove('bg-success', 'bg-info');
+            toastEl.classList.add('bg-danger');
+            new bootstrap.Toast(toastEl).show();
+          }
+        });
+      });
     });
   </script>
   <script>
