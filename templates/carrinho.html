@@ -47,6 +47,11 @@
 
     <div id="new-address-form" class="d-none">
       {% include 'partials/endereco_form.html' %}
+      <button type="submit" class="btn btn-outline-primary mt-2"
+              formaction="{{ url_for('carrinho_salvar_endereco') }}"
+              formmethod="post">
+        <i class="bi bi-save"></i> Salvar endereço
+      </button>
     </div>
 
     <button type="submit" class="btn btn-lg btn-success shadow-sm">
