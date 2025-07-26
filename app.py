@@ -3015,6 +3015,34 @@ def list_delivery_requests():
     )
 
 
+@app.route("/api/delivery_counts")
+@login_required
+def api_delivery_counts():
+    """Return delivery counts for the current user."""
+    base = DeliveryRequest.query
+    if current_user.worker == "delivery":
+        available_total = base.filter_by(status="pendente").count()
+        doing = base.filter_by(worker_id=current_user.id,
+                              status="em_andamento").count()
+        done = base.filter_by(worker_id=current_user.id,
+                             status="concluida").count()
+        canceled = base.filter_by(worker_id=current_user.id,
+                                 status="cancelada").count()
+    else:
+        base = base.filter_by(requested_by_id=current_user.id)
+        available_total = 0
+        doing = base.filter_by(status="em_andamento").count()
+        done = base.filter_by(status="concluida").count()
+        canceled = base.filter_by(status="cancelada").count()
+
+    return jsonify(
+        available_total=available_total,
+        doing=doing,
+        done=done,
+        canceled=canceled,
+    )
+
+
 
 # --- Compatibilidade admin ---------------------------------
 @app.route("/admin/delivery/<int:req_id>")
