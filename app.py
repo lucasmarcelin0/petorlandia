@@ -3339,7 +3339,7 @@ from flask import (
 )
 from flask_login import login_required, current_user
 
-from forms import AddToCartForm, CheckoutForm  # Added CheckoutForm for CSRF
+from forms import AddToCartForm, CheckoutForm, CartAddressForm  # Added CheckoutForm for CSRF
 
 # ─────────────────────────────────────────────────────────
 #  SDK (lazy – lê token do config)
@@ -3590,37 +3590,26 @@ def ver_carrinho():
 @login_required
 def carrinho_salvar_endereco():
     """Salva um novo endereço informado no carrinho."""
-    form = CheckoutForm()
-    form.address_id.choices = []
+    form = CartAddressForm()
     if not form.validate_on_submit():
+        flash('Preencha os campos obrigatórios do endereço.', 'warning')
         return redirect(url_for('ver_carrinho'))
 
-    cep = request.form.get('cep')
-    rua = request.form.get('rua')
-    numero = request.form.get('numero')
-    complemento = request.form.get('complemento')
-    bairro = request.form.get('bairro')
-    cidade = request.form.get('cidade')
-    estado = request.form.get('estado')
-
-    if any([rua, cidade, estado, cep]):
-        tmp_addr = Endereco(
-            cep=cep,
-            rua=rua,
-            numero=numero,
-            complemento=complemento,
-            bairro=bairro,
-            cidade=cidade,
-            estado=estado,
-        )
-        address_text = tmp_addr.full
-        sa = SavedAddress(user_id=current_user.id, address=address_text)
-        db.session.add(sa)
-        db.session.commit()
-        session['last_address_id'] = sa.id
-        flash('Endereço salvo com sucesso.', 'success')
-    else:
-        flash('Preencha os campos obrigatórios do endereço.', 'warning')
+    tmp_addr = Endereco(
+        cep=form.cep.data,
+        rua=form.rua.data,
+        numero=form.numero.data,
+        complemento=form.complemento.data,
+        bairro=form.bairro.data,
+        cidade=form.cidade.data,
+        estado=form.estado.data,
+    )
+    address_text = tmp_addr.full
+    sa = SavedAddress(user_id=current_user.id, address=address_text)
+    db.session.add(sa)
+    db.session.commit()
+    session['last_address_id'] = sa.id
+    flash('Endereço salvo com sucesso.', 'success')
 
     return redirect(url_for('ver_carrinho'))
 
