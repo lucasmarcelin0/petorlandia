@@ -744,6 +744,12 @@ def mensagens_admin():
         .all()
     )
 
+    # usuários que enviaram alguma mensagem geral para o admin
+    users_contacted_admin = {
+        m.sender_id for m in all_msgs
+        if m.receiver_id == admin_id and m.animal_id is None
+    }
+
     latest_animais = {}
     latest_geral = {}
     for m in all_msgs:
@@ -752,7 +758,7 @@ def mensagens_admin():
             if other_id not in latest_animais:
                 latest_animais[other_id] = m
         else:
-            if other_id not in latest_geral:
+            if other_id in users_contacted_admin and other_id not in latest_geral:
                 latest_geral[other_id] = m
 
     mensagens_animais = list(latest_animais.values())
