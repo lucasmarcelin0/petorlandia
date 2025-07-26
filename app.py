@@ -744,14 +744,21 @@ def mensagens_admin():
         .all()
     )
 
-    latest = {}
+    latest_animais = {}
+    latest_geral = {}
     for m in all_msgs:
         other_id = m.sender_id if m.sender_id != admin_id else m.receiver_id
-        if other_id not in latest:
-            latest[other_id] = m
-    mensagens = list(latest.values())
+        if m.animal_id:
+            if other_id not in latest_animais:
+                latest_animais[other_id] = m
+        else:
+            if other_id not in latest_geral:
+                latest_geral[other_id] = m
 
-    for m in mensagens:
+    mensagens_animais = list(latest_animais.values())
+    mensagens_gerais = list(latest_geral.values())
+
+    for m in mensagens_animais + mensagens_gerais:
         if m.sender_id == admin_id:
             m.sender = m.receiver
             m.sender_id = m.receiver_id
@@ -764,7 +771,12 @@ def mensagens_admin():
     )
     unread_counts = {u[0]: u[1] for u in unread}
 
-    return render_template('mensagens_admin.html', mensagens=mensagens, unread_counts=unread_counts)
+    return render_template(
+        'mensagens_admin.html',
+        mensagens_animais=mensagens_animais,
+        mensagens_gerais=mensagens_gerais,
+        unread_counts=unread_counts
+    )
 
 
 @app.context_processor
