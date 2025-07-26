@@ -618,7 +618,11 @@ class SavedAddress(db.Model):
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False, index=True)
     address = db.Column(db.String(200), nullable=False)
 
-    user = db.relationship('User', backref='saved_addresses')
+    # Delete saved addresses when the owning user is removed
+    user = db.relationship(
+        'User',
+        backref=db.backref('saved_addresses', cascade='all, delete-orphan')
+    )
 
     def __repr__(self):
         return self.address
