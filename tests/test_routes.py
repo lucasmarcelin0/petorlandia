@@ -731,6 +731,42 @@ def test_checkout_uses_selected_address(monkeypatch, app):
         assert resp.headers['Location'] == 'http://mp'
 
 
+def test_checkout_confirm_renders(monkeypatch, app):
+    client = app.test_client()
+
+    with app.app_context():
+        db.drop_all()
+        db.create_all()
+        user = User(id=1, name='Tester', email='x')
+        user.set_password('x')
+        product = Product(id=1, name='Prod', price=10.0)
+        db.session.add_all([user, product])
+        db.session.commit()
+
+        import flask_login.utils as login_utils
+        monkeypatch.setattr(login_utils, '_get_user', lambda: user)
+        monkeypatch.setattr(app_module, '_is_admin', lambda: False)
+
+        for idx, fn in enumerate(flask_app.template_context_processors[None]):
+            if fn.__name__ == 'inject_unread_count':
+                flask_app.template_context_processors[None][idx] = lambda: {'unread_messages': 0}
+
+        client.post('/carrinho/adicionar/1', data={'quantity': 1})
+
+        class TestCheckoutForm(app_module.CheckoutForm):
+            def __init__(self, *a, **kw):
+                super().__init__(*a, **kw)
+                self.address_id.choices = [(0, 'addr')]
+
+        monkeypatch.setattr(app_module, 'CheckoutForm', TestCheckoutForm)
+
+        resp = client.post('/checkout/confirm', data={'address_id': 0})
+        assert resp.status_code == 200
+        html = resp.get_data(as_text=True)
+        assert 'Confirmar Compra' in html
+        assert 'Prod' in html
+
+
 def test_cart_uses_session_string_address_id(monkeypatch, app):
     client = app.test_client()
 
