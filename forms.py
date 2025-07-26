@@ -209,6 +209,17 @@ class AddToCartForm(FlaskForm):
     quantity = IntegerField('Quantidade', default=1, validators=[DataRequired()])
     submit = SubmitField('Adicionar ao Carrinho')
 
+
+class CartAddressForm(FlaskForm):
+    """Formulário simples para salvar endereços via carrinho."""
+    cep = StringField('CEP', validators=[DataRequired()])
+    rua = StringField('Rua', validators=[DataRequired()])
+    numero = StringField('Número', validators=[Optional()])
+    complemento = StringField('Complemento', validators=[Optional()])
+    bairro = StringField('Bairro', validators=[Optional()])
+    cidade = StringField('Cidade', validators=[DataRequired()])
+    estado = StringField('Estado', validators=[DataRequired()])
+
 class DeliveryRequestForm(FlaskForm):
     submit = SubmitField('Gerar Solicitação')
 
