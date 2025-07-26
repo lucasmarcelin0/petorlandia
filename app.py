@@ -735,25 +735,25 @@ def mensagens_admin():
         flash('Acesso restrito.', 'danger')
         return redirect(url_for('index'))
 
-    admin_id = current_user.id
+    admin_ids = [u.id for u in User.query.filter_by(role='admin').all()]
 
     all_msgs = (
         Message.query
-        .filter((Message.sender_id == admin_id) | (Message.receiver_id == admin_id))
+        .filter((Message.sender_id.in_(admin_ids)) | (Message.receiver_id.in_(admin_ids)))
         .order_by(Message.timestamp.desc())
         .all()
     )
 
-    # usuários que enviaram alguma mensagem geral para o admin
+    # usuários que enviaram alguma mensagem geral para qualquer admin
     users_contacted_admin = {
         m.sender_id for m in all_msgs
-        if m.receiver_id == admin_id and m.animal_id is None
+        if m.receiver_id in admin_ids and m.animal_id is None
     }
 
     latest_animais = {}
     latest_geral = {}
     for m in all_msgs:
-        other_id = m.sender_id if m.sender_id != admin_id else m.receiver_id
+        other_id = m.sender_id if m.sender_id not in admin_ids else m.receiver_id
         if m.animal_id:
             if other_id not in latest_animais:
                 latest_animais[other_id] = m
@@ -766,7 +766,7 @@ def mensagens_admin():
 
     unread = (
         db.session.query(Message.sender_id, db.func.count())
-        .filter_by(receiver_id=admin_id, lida=False)
+        .filter(Message.receiver_id.in_(admin_ids), Message.lida.is_(False))
         .group_by(Message.sender_id)
         .all()
     )
