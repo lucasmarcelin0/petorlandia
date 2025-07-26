@@ -505,5 +505,33 @@
       });
     });
   </script>
+  <script>
+    document.addEventListener('DOMContentLoaded', () => {
+      document.querySelectorAll('.js-admin-delivery-form').forEach(form => {
+        form.addEventListener('submit', async ev => {
+          ev.preventDefault();
+          const li = form.closest('li');
+          const resp = await fetch(form.action, {method: 'POST', headers: {'Accept': 'application/json'}});
+          if (resp.ok) {
+            const data = await resp.json();
+            if (data.deleted || data.status) {
+              li?.remove();
+            }
+            const toastEl = document.getElementById('actionToast');
+            toastEl.querySelector('.toast-body').textContent = data.message || 'Sucesso';
+            toastEl.classList.remove('bg-danger', 'bg-info', 'bg-success');
+            toastEl.classList.add('bg-' + (data.category || 'success'));
+            new bootstrap.Toast(toastEl).show();
+          } else {
+            const toastEl = document.getElementById('actionToast');
+            toastEl.querySelector('.toast-body').textContent = 'Erro ao processar ação';
+            toastEl.classList.remove('bg-success', 'bg-info');
+            toastEl.classList.add('bg-danger');
+            new bootstrap.Toast(toastEl).show();
+          }
+        });
+      });
+    });
+  </script>
 </body>
 </html>
