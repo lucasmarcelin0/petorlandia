@@ -316,6 +316,34 @@ def test_cart_quantity_updates(monkeypatch, app):
         assert OrderItem.query.get(item.id) is None
 
 
+def test_cart_merges_duplicates(monkeypatch, app):
+    client = app.test_client()
+
+    with app.app_context():
+        db.drop_all()
+        db.create_all()
+        user = User(id=1, name='Tester', email='x')
+        user.set_password('x')
+        product = Product(id=1, name='Prod', price=10.0)
+        db.session.add_all([user, product])
+        db.session.commit()
+
+        import flask_login.utils as login_utils
+        monkeypatch.setattr(login_utils, '_get_user', lambda: user)
+        monkeypatch.setattr(app_module, '_is_admin', lambda: False)
+
+        for idx, fn in enumerate(flask_app.template_context_processors[None]):
+            if fn.__name__ == 'inject_unread_count':
+                flask_app.template_context_processors[None][idx] = lambda: {'unread_messages': 0}
+
+        client.post('/carrinho/adicionar/1', data={'quantity': 1})
+        client.post('/carrinho/adicionar/1', data={'quantity': 1})
+
+        assert OrderItem.query.count() == 1
+        item = OrderItem.query.first()
+        assert item.quantity == 2
+
+
 def test_product_detail_requires_login(app):
     client = app.test_client()
     response = client.get('/produto/1')
