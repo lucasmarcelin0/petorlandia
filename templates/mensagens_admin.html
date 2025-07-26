@@ -21,7 +21,7 @@
                     <small class="text-muted">{{ msg.timestamp|format_datetime_brazil('%d/%m/%Y %H:%M') }}</small>
                 </div>
             </div>
-            <a href="{{ url_for('conversa_admin', user_id=other_user.id) }}" class="btn btn-outline-primary btn-sm">
+            <a href="{{ url_for('conversa', animal_id=msg.animal.id, user_id=other_user.id) }}" class="btn btn-outline-primary btn-sm">
                 Ver Conversa
                 {% if unread_counts.get(other_user.id) %}
                     <span class="badge bg-danger ms-2">{{ unread_counts[other_user.id] }}</span>
