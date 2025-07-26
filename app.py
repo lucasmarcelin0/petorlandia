@@ -335,8 +335,14 @@ def add_animal():
     form = AnimalForm()
 
     # Listas para o template
-    species_list = Species.query.order_by(Species.name).all()
-    breed_list = Breed.query.order_by(Breed.name).all()
+    try:
+        species_list = Species.query.order_by(Species.name).all()
+    except Exception:
+        species_list = []
+    try:
+        breed_list = Breed.query.order_by(Breed.name).all()
+    except Exception:
+        breed_list = []
 
     # Debug da requisição
     print("📥 Método da requisição:", request.method)
@@ -495,6 +501,10 @@ def list_animals():
     page = request.args.get('page', 1, type=int)
     per_page = 9
     modo = request.args.get('modo')
+    species_id = request.args.get('species_id', type=int)
+    breed_id = request.args.get('breed_id', type=int)
+    sex = request.args.get('sex')
+    age = request.args.get('age')
 
     # Base query: ignora animais removidos
     query = Animal.query.filter(Animal.removido_em == None)
@@ -507,17 +517,41 @@ def list_animals():
         if not current_user.is_authenticated or current_user.worker not in ['veterinario', 'colaborador']:
             query = query.filter(Animal.modo != 'adotado')
 
+    if species_id:
+        query = query.filter_by(species_id=species_id)
+    if breed_id:
+        query = query.filter_by(breed_id=breed_id)
+    if sex:
+        query = query.filter_by(sex=sex)
+    if age:
+        query = query.filter(Animal.age.ilike(f"{age}%"))
+
     # Ordenação e paginação
     query = query.order_by(Animal.date_added.desc())
     pagination = query.paginate(page=page, per_page=per_page, error_out=False)
     animals = pagination.items
+
+    try:
+        species_list = Species.query.order_by(Species.name).all()
+    except Exception:
+        species_list = []
+    try:
+        breed_list = Breed.query.order_by(Breed.name).all()
+    except Exception:
+        breed_list = []
 
     return render_template(
         'animals.html',
         animals=animals,
         page=page,
         total_pages=pagination.pages,
-        modo=modo
+        modo=modo,
+        species_list=species_list,
+        breed_list=breed_list,
+        species_id=species_id,
+        breed_id=breed_id,
+        sex=sex,
+        age=age
     )
 
 
