@@ -37,12 +37,12 @@
       <input type="text" id="addressSearch" class="form-control mb-2" placeholder="Buscar endereço" onkeyup="filterAddresses()">
       <select name="address_id" id="addressSelect" class="form-select mb-2">
         {% if default_address %}
-        <option value="0">{{ default_address }}</option>
+        <option value="0" {% if form.address_id.data == 0 %}selected{% endif %}>{{ default_address }}</option>
         {% endif %}
         {% for addr in saved_addresses %}
-        <option value="{{ addr.id }}">{{ addr.address }}</option>
+        <option value="{{ addr.id }}" {% if form.address_id.data == addr.id %}selected{% endif %}>{{ addr.address }}</option>
         {% endfor %}
-        <option value="-1">Novo endereço...</option>
+        <option value="-1" {% if form.address_id.data == -1 %}selected{% endif %}>Novo endereço...</option>
       </select>
       <div class="mt-1">
         {% if default_address %}
