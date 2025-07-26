@@ -622,5 +622,29 @@
       });
     });
   </script>
+  <script>
+    document.addEventListener('DOMContentLoaded', () => {
+      document.querySelectorAll('.js-msg-form').forEach(form => {
+        form.addEventListener('submit', async ev => {
+          ev.preventDefault();
+          const api = form.dataset.api || form.action;
+          const formData = new FormData(form);
+          const resp = await fetch(api, { method: 'POST', body: formData, headers: { 'Accept': 'text/html' } });
+          if (resp.ok) {
+            const html = await resp.text();
+            const container = document.getElementById('mensagens-container');
+            if (container) {
+              container.insertAdjacentHTML('beforeend', html);
+              container.scrollTop = container.scrollHeight;
+            }
+            const textarea = form.querySelector('textarea');
+            if (textarea) textarea.value = '';
+          } else {
+            form.submit();
+          }
+        });
+      });
+    });
+  </script>
 </body>
 </html>
