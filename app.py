@@ -3399,7 +3399,7 @@ def produto_detail(product_id):
 @login_required
 def adicionar_carrinho(product_id):
     product = Product.query.get_or_404(product_id)
-    form    = AddToCartForm()
+    form = AddToCartForm()
     if not form.validate_on_submit():
         return redirect(url_for("loja"))
 
@@ -3410,13 +3410,22 @@ def adicionar_carrinho(product_id):
         db.session.commit()
         session["current_order"] = order.id
 
-    db.session.add(OrderItem(
-        order_id   = order.id,
-        product_id = product.id,
-        item_name  = product.name,
-        unit_price = Decimal(str(product.price or 0)),  # fallback 0
-        quantity   = form.quantity.data
-    ))
+    qty = form.quantity.data or 1
+
+    # Verifica se o produto já está no carrinho para somar as quantidades
+    item = OrderItem.query.filter_by(order_id=order.id, product_id=product.id).first()
+    if item:
+        item.quantity += qty
+    else:
+        item = OrderItem(
+            order_id=order.id,
+            product_id=product.id,
+            item_name=product.name,
+            unit_price=Decimal(str(product.price or 0)),
+            quantity=qty,
+        )
+        db.session.add(item)
+
     db.session.commit()
     flash("Produto adicionado ao carrinho.", "success")
     return redirect(url_for("loja"))
@@ -3449,7 +3458,10 @@ def diminuir_item_carrinho(item_id):
     item.quantity -= 1
     if item.quantity <= 0:
         db.session.delete(item)
-    db.session.commit()
+        db.session.commit()
+        flash("Produto removido", "info")
+    else:
+        db.session.commit()
     return redirect(url_for("ver_carrinho"))
 
 
@@ -3482,6 +3494,22 @@ def ver_carrinho():
         order=order,
         pagamento_pendente=pagamento_pendente
     )
+
+
+@app.route("/checkout/confirm", methods=["POST"])
+@login_required
+def checkout_confirm():
+    """Mostra um resumo antes de redirecionar ao pagamento externo."""
+    form = CheckoutForm()
+    if not form.validate_on_submit():
+        return redirect(url_for("ver_carrinho"))
+
+    order = _get_current_order()
+    if not order or not order.items:
+        flash("Seu carrinho está vazio.", "warning")
+        return redirect(url_for("ver_carrinho"))
+
+    return render_template("checkout_confirm.html", form=form, order=order)
 
 
 
