@@ -165,13 +165,13 @@
       <div id="opcoes-falecimento" class="mt-3 d-none">
 
         <!-- Falecido agora -->
-        <form method="POST" action="{{ url_for('marcar_como_falecido', animal_id=animal.id) }}" class="mb-2">
+        <form method="POST" action="{{ url_for('marcar_como_falecido', animal_id=animal.id) }}" class="mb-2 js-animal-status">
           <input type="hidden" name="falecimento_em" value="">
           <button class="btn btn-dark btn-sm" type="submit">✅ Falecido agora</button>
         </form>
 
         <!-- Escolher data -->
-        <form method="POST" action="{{ url_for('marcar_como_falecido', animal_id=animal.id) }}">
+        <form method="POST" action="{{ url_for('marcar_como_falecido', animal_id=animal.id) }}" class="js-animal-status">
           <div class="mb-2">
             <label for="falecimento_em" class="form-label mb-1">Data e hora do falecimento:</label>
             <input type="datetime-local" name="falecimento_em" id="falecimento_em" class="form-control form-control-sm">
@@ -183,7 +183,7 @@
       <!-- Botão: Arquivar definitivamente -->
       <form method="POST" action="{{ url_for('arquivar_animal', animal_id=animal.id) }}"
             onsubmit="return confirm('Tem certeza que deseja excluir este animal permanentemente?');"
-            class="mt-3">
+            class="mt-3 js-animal-status">
         <button class="btn btn-outline-danger btn-sm" type="submit">
           🗑️ Deletar definitivamente
         </button>
@@ -201,14 +201,14 @@
     </div>
 
     {% if current_user.worker == 'veterinario' %}
-      <form method="POST" action="{{ url_for('reverter_falecimento', animal_id=animal.id) }}">
+      <form method="POST" action="{{ url_for('reverter_falecimento', animal_id=animal.id) }}" class="js-animal-status">
         <button class="btn btn-sm btn-outline-success">↩️ Reverter Falecimento</button>
       </form>
 
       <!-- Botão: Arquivar definitivamente -->
       <form method="POST" action="{{ url_for('arquivar_animal', animal_id=animal.id) }}"
             onsubmit="return confirm('Tem certeza que deseja excluir este animal permanentemente?');"
-            class="ms-2">
+            class="ms-2 js-animal-status">
         <button class="btn btn-outline-danger btn-sm" type="submit">
           🗑️ Deletar definitivamente
         </button>
