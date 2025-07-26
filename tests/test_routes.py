@@ -17,6 +17,7 @@ from models import (
     OrderItem,
     Animal,
     Message,
+    Endereco,
     SavedAddress,
 )
 from datetime import datetime
@@ -616,3 +617,35 @@ def test_salvar_endereco(monkeypatch, app):
         })
         assert resp.status_code == 302
         assert SavedAddress.query.count() == 1
+
+
+def test_cart_shows_saved_address_below_default(monkeypatch, app):
+    client = app.test_client()
+
+    with app.app_context():
+        db.drop_all()
+        db.create_all()
+        addr = Endereco(cep='11111-000', rua='Rua Tutor', cidade='Cidade', estado='SP')
+        user = User(id=1, name='Tester', email='x')
+        user.set_password('x')
+        user.endereco = addr
+        product = Product(id=1, name='Prod', price=10.0)
+        saved = SavedAddress(user_id=1, address='Rua Salva – Cidade/SP – CEP 22222-222')
+        db.session.add_all([addr, user, product, saved])
+        db.session.commit()
+
+        import flask_login.utils as login_utils
+        monkeypatch.setattr(login_utils, '_get_user', lambda: user)
+        monkeypatch.setattr(app_module, '_is_admin', lambda: False)
+
+        for idx, fn in enumerate(flask_app.template_context_processors[None]):
+            if fn.__name__ == 'inject_unread_count':
+                flask_app.template_context_processors[None][idx] = lambda: {'unread_messages': 0}
+
+        client.post('/carrinho/adicionar/1', data={'quantity': 1})
+
+        resp = client.get('/carrinho')
+        html = resp.get_data(as_text=True)
+        assert 'Rua Tutor' in html
+        assert 'Rua Salva' in html
+        assert html.index('Rua Salva') > html.index('Rua Tutor')
