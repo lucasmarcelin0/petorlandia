@@ -440,6 +440,15 @@
         &copy; Lucas Marcelino • PetOrlândia 2025 <i class="fas fa-paw text-primary"></i>
     </footer>
 
+    <div class="position-fixed bottom-0 end-0 p-3" style="z-index: 11">
+        <div id="actionToast" class="toast text-white border-0" role="alert" aria-live="assertive" aria-atomic="true">
+            <div class="d-flex">
+                <div class="toast-body"></div>
+                <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
+            </div>
+        </div>
+    </div>
+
     <!-- Script para desaparecer com transição suave -->
     <script>
         document.addEventListener("DOMContentLoaded", () => {
@@ -462,10 +471,35 @@
       const mp = new MercadoPago("{{ MERCADOPAGO_PUBLIC_KEY }}", {locale: 'pt-BR'});
     </script>
     {% endif %}
-    <script>
+  <script>
       if ('serviceWorker' in navigator) {
         navigator.serviceWorker.register('{{ url_for('service_worker') }}');
       }
-    </script>
+  </script>
+
+  <script>
+    document.addEventListener('DOMContentLoaded', () => {
+      document.querySelectorAll('.js-delivery-form').forEach(form => {
+        form.addEventListener('submit', async ev => {
+          ev.preventDefault();
+          const resp = await fetch(form.action, {method: 'POST', headers: {'Accept': 'application/json'}});
+          if (resp.ok) {
+            const data = await resp.json();
+            const toastEl = document.getElementById('actionToast');
+            toastEl.querySelector('.toast-body').textContent = data.message || 'Sucesso';
+            toastEl.classList.remove('bg-danger', 'bg-info', 'bg-success');
+            toastEl.classList.add('bg-' + (data.category || 'success'));
+            new bootstrap.Toast(toastEl).show();
+          } else {
+            const toastEl = document.getElementById('actionToast');
+            toastEl.querySelector('.toast-body').textContent = 'Erro ao processar ação';
+            toastEl.classList.remove('bg-success', 'bg-info');
+            toastEl.classList.add('bg-danger');
+            new bootstrap.Toast(toastEl).show();
+          }
+        });
+      });
+    });
+  </script>
 </body>
 </html>

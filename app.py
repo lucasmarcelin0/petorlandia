@@ -2943,6 +2943,8 @@ def request_delivery(order_id):
 
     session.pop('current_order', None)
     flash('Solicitação de entrega gerada.', 'success')
+    if 'application/json' in request.headers.get('Accept', ''):
+        return jsonify(message='Solicitação de entrega gerada.', category='success')
     return redirect(url_for('list_delivery_requests'))
 
 
@@ -3083,6 +3085,8 @@ def accept_delivery(req_id):
     req.accepted_at = datetime.utcnow()
     db.session.commit()
     flash('Entrega aceita.', 'success')
+    if 'application/json' in request.headers.get('Accept', ''):
+        return jsonify(message='Entrega aceita.', category='success')
     # ⬇️ redireciona direto ao detalhe unificado
     return redirect(url_for('delivery_detail', req_id=req.id))
 
@@ -3099,6 +3103,8 @@ def complete_delivery(req_id):
     req.completed_at = datetime.utcnow()
     db.session.commit()
     flash('Entrega concluída.', 'success')
+    if 'application/json' in request.headers.get('Accept', ''):
+        return jsonify(message='Entrega concluída.', category='success')
     return redirect(url_for('worker_history'))
 
 
@@ -3115,6 +3121,8 @@ def cancel_delivery(req_id):
     req.canceled_by_id = current_user.id
     db.session.commit()
     flash('Entrega cancelada.', 'info')
+    if 'application/json' in request.headers.get('Accept', ''):
+        return jsonify(message='Entrega cancelada.', category='info')
     return redirect(url_for('worker_history'))
 
 
