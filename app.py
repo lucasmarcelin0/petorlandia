@@ -909,6 +909,12 @@ def inject_mp_public_key():
     return dict(MERCADOPAGO_PUBLIC_KEY=current_app.config.get("MERCADOPAGO_PUBLIC_KEY"))
 
 
+@app.context_processor
+def inject_default_pickup_address():
+    """Exposes DEFAULT_PICKUP_ADDRESS config to templates."""
+    return dict(DEFAULT_PICKUP_ADDRESS=current_app.config.get("DEFAULT_PICKUP_ADDRESS"))
+
+
 @app.route('/animal/<int:animal_id>/deletar', methods=['POST'])
 @login_required
 def deletar_animal(animal_id):
@@ -2922,13 +2928,19 @@ def request_delivery(order_id):
 
     # ─── 1. escolher um ponto de retirada ────────────────────────────────
     # Hoje: pega o primeiro ponto ATIVO
-    pickup = (PickupLocation.query
-              .filter_by(ativo=True)
-              .first())
+    pickup = (
+        PickupLocation.query
+        .filter_by(ativo=True)
+        .first()
+    )
 
     if pickup is None:
-        flash('Nenhum ponto de retirada cadastrado/ativo.', 'danger')
-        return redirect(url_for('list_delivery_requests'))
+        default_addr = current_app.config.get("DEFAULT_PICKUP_ADDRESS")
+        if default_addr:
+            flash(f'Usando endereço de retirada padrão: {default_addr}', 'info')
+        else:
+            flash('Nenhum ponto de retirada cadastrado/ativo.', 'danger')
+            return redirect(url_for('list_delivery_requests'))
 
     # ─── 2. criar a DeliveryRequest já com o pickup_id ───────────────────
     req = DeliveryRequest(

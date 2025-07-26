@@ -29,7 +29,7 @@
             {% if req.pickup %}
               {{ req.pickup.nome }} — {{ req.pickup.endereco.full }}
             {% else %}
-              —               {# aparecerá só se, por algum motivo, não houver pickup ligado #}
+              {{ DEFAULT_PICKUP_ADDRESS }}
             {% endif %}
           </div>
         </div>
