@@ -537,7 +537,9 @@ def change_password():
 def delete_account():
     form = DeleteAccountForm()
     if form.validate_on_submit():
-        user = current_user
+        # Capture the actual user object before logging out because
+        # `current_user` becomes `AnonymousUserMixin` after logout.
+        user = current_user._get_current_object()
         logout_user()
         db.session.delete(user)
         db.session.commit()
