@@ -43,6 +43,14 @@
         {% endfor %}
         <option value="-1">Novo endereço...</option>
       </select>
+      <div class="mt-1">
+        {% if default_address %}
+        <p class="mb-1">{{ default_address }}</p>
+        {% endif %}
+        {% for addr in saved_addresses %}
+        <p class="mb-1">{{ addr.address }}</p>
+        {% endfor %}
+      </div>
     </div>
 
     <div id="new-address-form" class="d-none">
