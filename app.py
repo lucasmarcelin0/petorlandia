@@ -2949,15 +2949,6 @@ def request_delivery(order_id):
 
 
 
-from sqlalchemy.orm import joinedload
-
-from sqlalchemy.orm import joinedload
-from sqlalchemy import func
-
-from sqlalchemy.orm import joinedload
-
-from sqlalchemy.orm import selectinload
-
 @app.route("/delivery_requests")
 @login_required
 def list_delivery_requests():
@@ -3105,7 +3096,7 @@ def complete_delivery(req_id):
     flash('Entrega concluída.', 'success')
     if 'application/json' in request.headers.get('Accept', ''):
         return jsonify(message='Entrega concluída.', category='success')
-    return redirect(url_for('worker_history'))
+    return redirect(url_for('list_delivery_requests'))
 
 
 @app.route('/delivery_requests/<int:req_id>/cancel', methods=['POST'])
@@ -3123,7 +3114,7 @@ def cancel_delivery(req_id):
     flash('Entrega cancelada.', 'info')
     if 'application/json' in request.headers.get('Accept', ''):
         return jsonify(message='Entrega cancelada.', category='info')
-    return redirect(url_for('worker_history'))
+    return redirect(url_for('list_delivery_requests'))
 
 
 @app.route('/delivery_requests/<int:req_id>/buyer_cancel', methods=['POST'])
@@ -3144,89 +3135,6 @@ def buyer_cancel_delivery(req_id):
 
 
 # routes_delivery.py  (ou app.py)
-from sqlalchemy.orm import joinedload
-
-
-@app.route("/delivery/<int:req_id>")
-@login_required
-def delivery_detail(req_id):
-    """
-    Detalhe da entrega.
-      • admin           → tudo
-      • entregador      → se for o responsável
-      • comprador (dono do pedido) → sempre
-    """
-    req = (DeliveryRequest.query
-           .options(
-               joinedload(DeliveryRequest.pickup).joinedload(PickupLocation.endereco),
-               joinedload(DeliveryRequest.order).joinedload(Order.user),
-               joinedload(DeliveryRequest.worker)
-           )
-           .get_or_404(req_id))
-
-    order  = req.order
-    buyer  = order.user
-    items  = order.items
-    total  = sum(i.quantity * i.product.price for i in items if i.product)
-
-    # ----------- controle de acesso -----------
-    if _is_admin():
-        role = "admin"
-
-    elif current_user.worker == "delivery":
-        if req.worker_id and req.worker_id != current_user.id:
-            abort(403)
-        role = "worker"
-
-    elif current_user.id == buyer.id:          # 👈 novo: comprador
-        role = "buyer"
-
-    else:
-        abort(403)
-
-    # ----------- render -----------------------
-    return render_template(
-        "delivery_detail.html",
-        req=req,
-        order=order,
-        items=items,
-        buyer=buyer,
-        delivery_worker=req.worker,
-        total=total,
-        role=role
-    )
-
-
-
-
-
-
-@app.route('/worker/history')
-@login_required
-def worker_history():
-    if current_user.worker != 'delivery':
-        abort(403)
-    available = DeliveryRequest.query.filter_by(status='pendente').all()
-    doing = DeliveryRequest.query.filter_by(worker_id=current_user.id, status='em_andamento').all()
-    done = DeliveryRequest.query.filter_by(worker_id=current_user.id, status='concluida').all()
-    canceled = DeliveryRequest.query.filter_by(worker_id=current_user.id, status='cancelada').all()
-    return render_template('worker_history.html', available=available, doing=doing, done=done, canceled=canceled)
-
-
-
-
-
-from sqlalchemy.orm import joinedload
-
-from sqlalchemy.orm import joinedload
-from sqlalchemy import func
-from flask import render_template, abort
-from flask_login import login_required, current_user
-# routes/admin.py  (exemplo)
-
-from sqlalchemy.orm import joinedload
-from flask import render_template, abort
-from flask_login import login_required, current_user
 
 @app.route("/admin/delivery_overview")
 @login_required
