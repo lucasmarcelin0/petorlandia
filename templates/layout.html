@@ -342,17 +342,17 @@
                     {% endif %}
                     
                     <li class="nav-item">
-                        <a class="nav-link" href="{{ url_for('index') }}">
+                        <a class="nav-link" href="{{ url_for('index') }}" data-bs-toggle="tooltip" title="Início">
                             <i class="fas fa-home me-1 text-primary"></i> Início
                         </a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link" href="{{ url_for('list_animals') }}">
+                        <a class="nav-link" href="{{ url_for('list_animals') }}" data-bs-toggle="tooltip" title="Animais">
                             <i class="fas fa-paw me-1 text-success"></i> Animais
                         </a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link" href="{{ url_for('loja') }}">
+                        <a class="nav-link" href="{{ url_for('loja') }}" data-bs-toggle="tooltip" title="Loja">
                             <i class="fas fa-shopping-bag me-1 text-warning"></i> Loja
                         </a>
                     </li>
@@ -360,18 +360,18 @@
                     {% if current_user.is_authenticated %}
                         {% if current_user.worker == 'veterinario' %}
                             <li class="nav-item">
-                                <a class="nav-link" href="{{ url_for('tutores') }}">
+                            <a class="nav-link" href="{{ url_for('tutores') }}" data-bs-toggle="tooltip" title="Tutores">
                                     <i class="fas fa-users me-1 text-primary"></i> Tutores
                                 </a>
                             </li>
                             <li class="nav-item">
-                                <a class="nav-link" href="{{ url_for('add_animal') }}">
+                                <a class="nav-link" href="{{ url_for('add_animal') }}" data-bs-toggle="tooltip" title="Adicionar Animal">
                                     <i class="fas fa-plus-circle me-1 text-success"></i> Animal
                                 </a>
                             </li>
                         {% elif current_user.worker == 'delivery' %}
                             <li class="nav-item">
-                                <a class="nav-link" href="{{ url_for('list_delivery_requests') }}">
+                                <a class="nav-link" href="{{ url_for('list_delivery_requests') }}" data-bs-toggle="tooltip" title="Solicitações">
                                     <i class="fas fa-truck me-1 text-warning"></i> Solicitações
                                 </a>
                             </li>
@@ -379,9 +379,9 @@
 
                         <li class="nav-item position-relative">
                             {% if current_user.role == 'admin' %}
-                                <a class="nav-link" href="{{ url_for('mensagens_admin') }}">
+                                <a class="nav-link" href="{{ url_for('mensagens_admin') }}" data-bs-toggle="tooltip" title="Mensagens">
                             {% else %}
-                                <a class="nav-link" href="{{ url_for('mensagens') }}">
+                                <a class="nav-link" href="{{ url_for('mensagens') }}" data-bs-toggle="tooltip" title="Mensagens">
                             {% endif %}
                                 <i class="fas fa-comments me-1 text-info"></i> Mensagens
                                 {% if unread_messages > 0 %}
@@ -404,12 +404,12 @@
                         </li>
                     {% else %}
                         <li class="nav-item">
-                            <a class="nav-link" href="{{ url_for('register') }}">
+                            <a class="nav-link" href="{{ url_for('register') }}" data-bs-toggle="tooltip" title="Registrar">
                             <i class="fas fa-user-plus me-1 text-success"></i> Registrar
                             </a>
                         </li>
                         <li class="nav-item">
-                            <a class="nav-link" href="{{ url_for('login_view') }}">
+                            <a class="nav-link" href="{{ url_for('login_view') }}" data-bs-toggle="tooltip" title="Entrar">
                             <i class="fas fa-sign-in-alt me-1 text-primary"></i> Entrar
                             </a>
                         </li>

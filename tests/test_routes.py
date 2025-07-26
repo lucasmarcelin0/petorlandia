@@ -55,11 +55,17 @@ def test_add_animal_requires_login(app):
     assert response.status_code == 302
     assert '/login' in response.headers['Location']
 
-def test_loja_requires_login(app):
+def test_loja_accessible_to_guests(app):
     client = app.test_client()
+    with app.app_context():
+        db.drop_all()
+        db.create_all()
+        db.session.add(Product(id=1, name='Prod', description='d', price=10.0))
+        db.session.commit()
+
     response = client.get('/loja')
-    assert response.status_code == 302
-    assert '/login' in response.headers['Location']
+    # Sem login deve exibir a página
+    assert response.status_code == 200
 
 
 def test_mp_token_in_config(app):
@@ -316,11 +322,14 @@ def test_cart_quantity_updates(monkeypatch, app):
         assert OrderItem.query.get(item.id) is None
 
 
-def test_product_detail_requires_login(app):
+def test_product_detail_missing_product_returns_404(app):
     client = app.test_client()
+    with app.app_context():
+        db.drop_all()
+        db.create_all()
+
     response = client.get('/produto/1')
-    assert response.status_code == 302
-    assert '/login' in response.headers['Location']
+    assert response.status_code == 404
 
 
 def test_product_detail_page(monkeypatch, app):

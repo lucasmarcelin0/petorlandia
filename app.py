@@ -3236,20 +3236,22 @@ from flask_login import login_required
 
 
 @app.route("/loja")
-@login_required
 def loja():
     pagamento_pendente = None
-    payment_id = session.get("last_pending_payment")
-    if payment_id:
-        payment = Payment.query.get(payment_id)
-        if payment and payment.status.name == "PENDING":
-            pagamento_pendente = payment
+    if current_user.is_authenticated:
+        payment_id = session.get("last_pending_payment")
+        if payment_id:
+            payment = Payment.query.get(payment_id)
+            if payment and payment.status.name == "PENDING":
+                pagamento_pendente = payment
 
     produtos = Product.query.all()
     form = AddToCartForm()
 
-    # Verifica se há pedidos anteriores
-    has_orders = Order.query.filter_by(user_id=current_user.id).first() is not None
+    # Verifica se há pedidos anteriores apenas se logado
+    has_orders = False
+    if current_user.is_authenticated:
+        has_orders = Order.query.filter_by(user_id=current_user.id).first() is not None
 
     return render_template(
         "loja.html",
@@ -3261,7 +3263,6 @@ def loja():
 
 
 @app.route('/produto/<int:product_id>', methods=['GET', 'POST'])
-@login_required
 def produto_detail(product_id):
     """Exibe detalhes do produto e permite edições para administradores."""
     product = Product.query.options(db.joinedload(Product.extra_photos)).get_or_404(product_id)
