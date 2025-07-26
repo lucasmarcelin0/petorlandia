@@ -623,7 +623,7 @@ def aceitar_interesse(message_id):
 @app.route('/mensagens')
 @login_required
 def mensagens():
-    mensagens_recebidas = current_user.received_messages
+    mensagens_recebidas = [m for m in current_user.received_messages if m.sender is not None]
     return render_template('mensagens.html', mensagens=mensagens_recebidas)
 
 
