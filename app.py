@@ -55,7 +55,7 @@ app.config.update(SESSION_PERMANENT=True, SESSION_TYPE="filesystem")
 def date_now(format_string='%Y-%m-%d'):
     return datetime.now(BR_TZ).strftime(format_string)
 # já existe no topo, logo depois das extensões:
-from extensions import db, migrate, mail, login, session as session_ext
+from extensions import db, migrate, mail, login, session as session_ext, babel
 from flask_login import login_user, logout_user, current_user, login_required
 from flask_mail import Message as MailMessage      #  ←  adicione esta linha
 from werkzeug.utils import secure_filename
@@ -65,6 +65,8 @@ migrate.init_app(app, db, compare_type=True)
 mail.init_app(app)
 login.init_app(app)
 session_ext.init_app(app)
+babel.init_app(app)
+app.config.setdefault("BABEL_DEFAULT_LOCALE", "pt_BR")
 
 # ----------------------------------------------------------------
 # 4)  AWS S3 helper (lazy)

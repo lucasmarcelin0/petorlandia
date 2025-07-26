@@ -551,6 +551,9 @@ class Product(db.Model):
     def __repr__(self):
         return f"{self.name} (R$ {self.price})"
 
+    def __str__(self):
+        return self.__repr__()
+
 
 class ProductPhoto(db.Model):
     """Fotos adicionais para produtos."""
@@ -584,6 +587,11 @@ class Order(db.Model):
                 total += (item.product.price or 0) * item.quantity
         return total
 
+    def __str__(self):
+        nome_usuario = self.user.name if self.user else "Usuário desconhecido"
+        valor = self.total_value()
+        return f"Pedido #{self.id} de {nome_usuario} - R$ {valor:.2f}"
+
 class OrderItem(db.Model):
     __tablename__ = "order_item"
 
@@ -596,6 +604,9 @@ class OrderItem(db.Model):
     item_name   = db.Column(db.String(100), nullable=False)
     quantity    = db.Column(db.Integer, nullable=False, default=1)
     unit_price  = db.Column(db.Numeric(10, 2), nullable=True)   # NOVO 👈
+
+    def __str__(self):
+        return f"{self.product.name if self.product else self.item_name} x{self.quantity}"
 
 
 class DeliveryRequest(db.Model):
@@ -616,6 +627,9 @@ class DeliveryRequest(db.Model):
     canceled_by = db.relationship('User', foreign_keys=[canceled_by_id])
     pickup_id   = db.Column(db.Integer, db.ForeignKey('pickup_location.id'))
     pickup      = db.relationship('PickupLocation')
+
+    def __str__(self):
+        return f"Entrega #{self.id} - Pedido #{self.order_id} ({self.status})"
 
 
 
