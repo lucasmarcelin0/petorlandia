@@ -3090,7 +3090,11 @@ def accept_delivery(req_id):
     db.session.commit()
     flash('Entrega aceita.', 'success')
     if 'application/json' in request.headers.get('Accept', ''):
-        return jsonify(message='Entrega aceita.', category='success')
+        return jsonify(
+            message='Entrega aceita.',
+            category='success',
+            redirect=url_for('worker_delivery_detail', req_id=req.id)
+        )
     # ⬇️ redireciona direto ao detalhe unificado
     return redirect(url_for('delivery_detail', req_id=req.id))
 
