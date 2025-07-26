@@ -38,7 +38,8 @@ class ResetPasswordForm(FlaskForm):
 
 
 
-class RegistrationForm(FlaskForm):
+
+
     name = StringField(
         'Name',
         validators=[DataRequired(message="Nome é obrigatório"), Length(min=2, max=120)],
@@ -52,10 +53,12 @@ class RegistrationForm(FlaskForm):
     phone = StringField('Phone', validators=[Optional(), Length(min=8, max=20)])
     address = StringField('Address', validators=[Optional(), Length(max=200)])
 
+
     profile_photo = FileField('Foto de Perfil', validators=[
         Optional(),
         FileAllowed(['jpg', 'jpeg', 'png', 'gif'], 'Apenas imagens!')
     ])
+
 
     password = PasswordField(
         'Password',
@@ -67,12 +70,14 @@ class RegistrationForm(FlaskForm):
         validators=[DataRequired(message="Confirmação de senha é obrigatória"), EqualTo('password', message='Passwords must match')],
         render_kw={"required": True},
     )
-    submit = SubmitField('Register')
+    submit = SubmitField('Cadastrar')
+
 
 
 
 
 class LoginForm(FlaskForm):
+
     email = StringField(
         'Email',
         validators=[DataRequired(message="Email é obrigatório"), Email()],
@@ -83,6 +88,9 @@ class LoginForm(FlaskForm):
         validators=[DataRequired(message="Senha é obrigatória")],
         render_kw={"required": True},
     )
+
+
+
     # Deixa marcada por padrao para que o usuario permaneça logado ao fechar o navegador
     remember = BooleanField('Lembrar de mim', default=True)
     submit = SubmitField('Entrar')
@@ -113,7 +121,7 @@ class AnimalForm(FlaskForm):
 
 class EditProfileForm(FlaskForm):
     name = StringField('Nome', validators=[DataRequired(), Length(min=2, max=120)])
-    email = StringField('Email', validators=[DataRequired(), Email()])
+    email = StringField('E-mail', validators=[DataRequired(), Email()])
     phone = StringField('Telefone', validators=[Optional(), Length(max=20)])
     address = StringField('Endereço', validators=[Optional(), Length(max=200)])
     profile_photo = FileField('Foto de Perfil', validators=[
