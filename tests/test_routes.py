@@ -385,3 +385,41 @@ def test_admin_messages_display(monkeypatch, app):
         response = client.get('/mensagens_admin')
         assert response.status_code == 200
         assert b'Tester' in response.data
+
+
+def test_admin_messages_show_only_user_initiated_conversations(monkeypatch, app):
+    client = app.test_client()
+
+    with app.app_context():
+        db.drop_all()
+        db.create_all()
+
+        admin = User(id=1, name='Admin', email='admin@test', role='admin')
+        admin.set_password('x')
+        user1 = User(id=2, name='User1', email='u1@test')
+        user1.set_password('x')
+        user2 = User(id=3, name='User2', email='u2@test')
+        user2.set_password('x')
+        db.session.add_all([admin, user1, user2])
+        db.session.commit()
+
+        # user1 enviou mensagem ao admin
+        m1 = Message(sender_id=user1.id, receiver_id=admin.id, content='oi')
+        # admin enviou mensagem para user2 sem resposta
+        m2 = Message(sender_id=admin.id, receiver_id=user2.id, content='hello')
+        db.session.add_all([m1, m2])
+        db.session.commit()
+
+        import flask_login.utils as login_utils
+        monkeypatch.setattr(login_utils, '_get_user', lambda: admin)
+        monkeypatch.setattr(app_module, '_is_admin', lambda: True)
+
+        for idx, fn in enumerate(flask_app.template_context_processors[None]):
+            if fn.__name__ == 'inject_unread_count':
+                flask_app.template_context_processors[None][idx] = lambda: {'unread_messages': 0}
+
+        response = client.get('/mensagens_admin')
+        assert response.status_code == 200
+        data = response.get_data(as_text=True)
+        assert 'User1' in data
+        assert 'User2' not in data
