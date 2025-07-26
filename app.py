@@ -3614,7 +3614,31 @@ def checkout_confirm():
         flash("Seu carrinho está vazio.", "warning")
         return redirect(url_for("ver_carrinho"))
 
-    return render_template("checkout_confirm.html", form=form, order=order)
+    # Determine the address text based on the chosen option
+    selected_address = None
+    if form.address_id.data is not None and form.address_id.data >= 0:
+        if form.address_id.data == 0 and current_user.endereco and current_user.endereco.full:
+            selected_address = current_user.endereco.full
+        else:
+            sa = SavedAddress.query.filter_by(
+                id=form.address_id.data,
+                user_id=current_user.id
+            ).first()
+            if sa:
+                selected_address = sa.address
+
+    if not selected_address and form.shipping_address.data:
+        selected_address = form.shipping_address.data
+
+    if not selected_address and current_user.endereco and current_user.endereco.full:
+        selected_address = current_user.endereco.full
+
+    return render_template(
+        "checkout_confirm.html",
+        form=form,
+        order=order,
+        selected_address=selected_address,
+    )
 
 
 

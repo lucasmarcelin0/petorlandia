@@ -765,6 +765,8 @@ def test_checkout_confirm_renders(monkeypatch, app):
         html = resp.get_data(as_text=True)
         assert 'Confirmar Compra' in html
         assert 'Prod' in html
+        assert 'addr' in html
+        assert 'name="address_id"' in html
 
 
 def test_cart_uses_session_string_address_id(monkeypatch, app):
