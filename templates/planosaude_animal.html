@@ -22,11 +22,35 @@
                 {{ form.hidden_tag() }}
                 <div class="mb-3">
                     {{ form.plan_id.label(class="form-label") }}
-                    {{ form.plan_id(class="form-select") }}
+                    {{ form.plan_id(class="form-select", id="plan_id") }}
                 </div>
+                <div id="plan-info" class="border rounded p-3 bg-light mb-3"></div>
                 {{ form.submit(class="btn btn-success rounded-pill") }}
             </form>
         </div>
     </div>
 </div>
+
+<script>
+  const plans = {{ plans | tojson }};
+  function updatePlanInfo() {
+    const select = document.getElementById('plan_id');
+    const infoDiv = document.getElementById('plan-info');
+    const plan = plans.find(p => p.id == select.value);
+    if (plan) {
+      infoDiv.innerHTML = `<h5 class="fw-semibold">${plan.name}</h5>` +
+                          `<p class="mb-1">${plan.description || ''}</p>` +
+                          `<p class="fw-bold">R$ ${plan.price.toFixed(2)}</p>`;
+    } else {
+      infoDiv.innerHTML = '';
+    }
+  }
+  document.addEventListener('DOMContentLoaded', () => {
+    const select = document.getElementById('plan_id');
+    if (select) {
+      select.addEventListener('change', updatePlanInfo);
+      updatePlanInfo();
+    }
+  });
+</script>
 {% endblock %}
