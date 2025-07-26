@@ -3544,6 +3544,7 @@ from forms import CheckoutForm
 def ver_carrinho():
     # 1) Cria o form
     form = CheckoutForm()
+    addr_form = CartAddressForm()
     default_address = _setup_checkout_form(form)
 
     # 2) Verifica se há um pagamento pendente
@@ -3564,7 +3565,8 @@ def ver_carrinho():
         order=order,
         pagamento_pendente=pagamento_pendente,
         default_address=default_address,
-        saved_addresses=current_user.saved_addresses
+        saved_addresses=current_user.saved_addresses,
+        addr_form=addr_form
     )
 
 
