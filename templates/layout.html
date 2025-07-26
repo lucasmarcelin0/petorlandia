@@ -514,9 +514,17 @@
           });
           if (resp.ok) {
             const data = await resp.json();
+            if (data.redirect) {
+              window.location.href = data.redirect;
+              return;
+            }
             const span = form.parentElement.querySelector('span');
             if (span && data.item_quantity !== undefined) {
               span.textContent = data.item_quantity;
+            }
+            if (data.item_quantity === 0) {
+              const li = form.closest('li');
+              li?.remove();
             }
             const totalEl = document.getElementById('cartTotal');
             if (totalEl && data.order_total_formatted) {
