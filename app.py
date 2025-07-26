@@ -11,7 +11,7 @@ from PIL import Image
 
 
 from dotenv import load_dotenv
-from flask import Flask, session, send_from_directory
+from flask import Flask, session, send_from_directory, abort
 from itsdangerous import URLSafeTimedSerializer
 
 # ----------------------------------------------------------------
@@ -770,6 +770,27 @@ def conversa(animal_id, user_id):
     )
 
 
+@app.route('/api/conversa/<int:animal_id>/<int:user_id>', methods=['POST'])
+@login_required
+def api_conversa_message(animal_id, user_id):
+    """Recebe uma nova mensagem da conversa e retorna o HTML renderizado."""
+    form = MessageForm()
+    Animal.query.get_or_404(animal_id)
+    outro_usuario = User.query.get_or_404(user_id)
+    if form.validate_on_submit():
+        nova_msg = Message(
+            sender_id=current_user.id,
+            receiver_id=outro_usuario.id,
+            animal_id=animal_id,
+            content=form.content.data,
+            lida=False
+        )
+        db.session.add(nova_msg)
+        db.session.commit()
+        return render_template('components/message.html', msg=nova_msg)
+    return '', 400
+
+
 @app.route('/conversa_admin', methods=['GET', 'POST'])
 @app.route('/conversa_admin/<int:user_id>', methods=['GET', 'POST'])
 @login_required
@@ -838,6 +859,36 @@ def conversa_admin(user_id=None):
         form=form,
         admin=interlocutor
     )
+
+
+@app.route('/api/conversa_admin', methods=['POST'])
+@app.route('/api/conversa_admin/<int:user_id>', methods=['POST'])
+@login_required
+def api_conversa_admin_message(user_id=None):
+    """Recebe nova mensagem na conversa com o admin e retorna HTML."""
+    admin_user = User.query.filter_by(role='admin').first()
+    if not admin_user:
+        abort(404)
+
+    if current_user.role == 'admin':
+        if user_id is None:
+            return '', 400
+        interlocutor = User.query.get_or_404(user_id)
+    else:
+        interlocutor = admin_user
+
+    form = MessageForm()
+    if form.validate_on_submit():
+        nova_msg = Message(
+            sender_id=current_user.id,
+            receiver_id=interlocutor.id,
+            content=form.content.data,
+            lida=False,
+        )
+        db.session.add(nova_msg)
+        db.session.commit()
+        return render_template('components/message.html', msg=nova_msg)
+    return '', 400
 
 
 @app.route('/mensagens_admin')
@@ -4078,7 +4129,7 @@ def notificacoes_mercado_pago():
 # 3)  /payment_status/<payment_id>   – página pós‑pagamento
 #      (versão sem QR‑Code)
 # --------------------------------------------------------
-from flask import render_template, abort, request, jsonify
+from flask import render_template, request, jsonify
 
 def _refresh_mp_status(payment: Payment) -> None:
     if payment.status != PaymentStatus.PENDING:
