@@ -46,7 +46,7 @@
 
     <div class="mb-3 text-start">
       <label class="form-label">Endereço de entrega</label>
-      <input type="text" id="addressSearch" class="form-control mb-2" placeholder="Buscar endereço" onkeyup="filterAddresses()">
+
       <select name="address_id" id="addressSelect" class="form-select mb-2">
         {% if default_address %}
         <option value="0" {% if form.address_id.data == 0 %}selected{% endif %}>{{ default_address }}</option>
@@ -56,14 +56,6 @@
         {% endfor %}
         <option value="-1" {% if form.address_id.data == -1 %}selected{% endif %}>Novo endereço...</option>
       </select>
-      <div class="mt-1">
-        {% if default_address %}
-        <p class="mb-1">{{ default_address }}</p>
-        {% endif %}
-        {% for addr in saved_addresses %}
-        <p class="mb-1">{{ addr.address }}</p>
-        {% endfor %}
-      </div>
     </div>
 
 

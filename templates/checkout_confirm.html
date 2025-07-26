@@ -22,10 +22,7 @@
       <p class="text-danger mb-1">Nenhum endereço cadastrado.</p>
       <a href="{{ url_for('profile') }}" class="btn btn-outline-primary btn-sm">Atualizar Endereço</a>
     {% endif %}
-    <div class="form-check mt-2">
-      <input class="form-check-input" type="checkbox" id="addrToggle" onclick="toggleAltAddr()">
-      <label class="form-check-label" for="addrToggle">Usar outro endereço</label>
-    </div>
+
     <div id="alt-address" class="mt-3 d-none">
       {{ form.shipping_address(class="form-control", rows="3", placeholder="Digite o endereço completo") }}
     </div>
