@@ -34,6 +34,7 @@
 
     <div class="mb-3 text-start">
       <label class="form-label">Endereço de entrega</label>
+      <input type="text" id="addressSearch" class="form-control mb-2" placeholder="Buscar endereço" onkeyup="filterAddresses()">
       <select name="address_id" id="addressSelect" class="form-select mb-2">
         {% if default_address %}
         <option value="0">{{ default_address }}</option>
@@ -79,6 +80,7 @@
 </div>
 <script>
   const addressSelect = document.getElementById('addressSelect');
+  const addressSearch = document.getElementById('addressSearch');
   const newAddr = document.getElementById('new-address-form');
   function toggleNewAddress() {
     if (!addressSelect || !newAddr) return;
@@ -87,6 +89,15 @@
     } else {
       newAddr.classList.add('d-none');
     }
+  }
+  function filterAddresses() {
+    if (!addressSearch || !addressSelect) return;
+    const term = addressSearch.value.toLowerCase();
+    Array.from(addressSelect.options).forEach(opt => {
+      if (opt.value === '-1') return;
+      const text = opt.text.toLowerCase();
+      opt.style.display = text.includes(term) ? '' : 'none';
+    });
   }
   if (addressSelect) {
     addressSelect.addEventListener('change', toggleNewAddress);
