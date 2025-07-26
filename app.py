@@ -3280,6 +3280,8 @@ def admin_set_delivery_status(req_id, status):
 
     db.session.commit()
     flash('Status atualizado.', 'success')
+    if 'application/json' in request.headers.get('Accept', ''):
+        return jsonify(message='Status atualizado.', category='success', status=status)
     return redirect(url_for('delivery_overview'))
 
 
@@ -3293,6 +3295,8 @@ def admin_delete_delivery(req_id):
     db.session.delete(req)
     db.session.commit()
     flash('Entrega excluída.', 'info')
+    if 'application/json' in request.headers.get('Accept', ''):
+        return jsonify(message='Entrega excluída.', category='info', deleted=True)
     return redirect(url_for('delivery_overview'))
 
 
