@@ -1043,6 +1043,16 @@ def planosaude_animal(animal_id):
         return redirect(url_for("profile"))
 
     form = SubscribePlanForm()
+    from models import HealthPlan, HealthSubscription
+    plans = HealthPlan.query.all()
+    form.plan_id.choices = [
+        (p.id, f"{p.name} - R$ {p.price:.2f}") for p in plans
+    ]
+    subscription = (
+        HealthSubscription.query
+        .filter_by(animal_id=animal.id, user_id=current_user.id, active=True)
+        .first()
+    )
 
     if form.validate_on_submit():
         # TODO: processar contratação do plano aqui…
@@ -1053,6 +1063,7 @@ def planosaude_animal(animal_id):
         "planosaude_animal.html",
         animal=animal,
         form=form,        # {{ form.hidden_tag() }} agora existe
+        subscription=subscription,
     )
 
 
