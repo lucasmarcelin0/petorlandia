@@ -3509,6 +3509,17 @@ def ver_carrinho():
     # 1) Cria o form
     form = CheckoutForm()
 
+    # Endereços salvos
+    default_address = None
+    if current_user.endereco and current_user.endereco.full:
+        default_address = current_user.endereco.full
+
+    form.address_id.choices = []
+    if default_address:
+        form.address_id.choices.append((0, default_address))
+    for addr in current_user.saved_addresses:
+        form.address_id.choices.append((addr.id, addr.address))
+
     # 2) Verifica se há um pagamento pendente
     pagamento_pendente = None
     payment_id = session.get('last_pending_payment')
@@ -3525,7 +3536,9 @@ def ver_carrinho():
         'carrinho.html',
         form=form,
         order=order,
-        pagamento_pendente=pagamento_pendente
+        pagamento_pendente=pagamento_pendente,
+        default_address=default_address,
+        saved_addresses=current_user.saved_addresses
     )
 
 
@@ -3580,7 +3593,7 @@ def checkout():
 
     form = CheckoutForm()
     if not form.validate_on_submit():
-        return redirect(url_for("checkout_confirm"))
+        return redirect(url_for("ver_carrinho"))
 
     # 1️⃣ pedido atual do carrinho
     order = _get_current_order()
@@ -3588,10 +3601,22 @@ def checkout():
         flash("Seu carrinho está vazio.", "warning")
         return redirect(url_for("ver_carrinho"))
 
-    if form.shipping_address.data:
-        order.shipping_address = form.shipping_address.data
-    elif current_user.endereco and current_user.endereco.full:
-        order.shipping_address = current_user.endereco.full
+    address_text = None
+    if form.address_id.data:
+        if form.address_id.data == 0 and current_user.endereco and current_user.endereco.full:
+            address_text = current_user.endereco.full
+        else:
+            sa = SavedAddress.query.filter_by(id=form.address_id.data, user_id=current_user.id).first()
+            if sa:
+                address_text = sa.address
+    if not address_text and form.shipping_address.data:
+        address_text = form.shipping_address.data
+        sa = SavedAddress(user_id=current_user.id, address=address_text)
+        db.session.add(sa)
+    if not address_text and current_user.endereco and current_user.endereco.full:
+        address_text = current_user.endereco.full
+
+    order.shipping_address = address_text
     db.session.add(order)
     db.session.commit()
 
