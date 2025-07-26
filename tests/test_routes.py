@@ -649,3 +649,53 @@ def test_cart_shows_saved_address_below_default(monkeypatch, app):
         assert 'Rua Tutor' in html
         assert 'Rua Salva' in html
         assert html.index('Rua Salva') > html.index('Rua Tutor')
+
+
+def test_checkout_uses_selected_address(monkeypatch, app):
+    client = app.test_client()
+
+    with app.app_context():
+        db.drop_all()
+        db.create_all()
+        addr = Endereco(cep='11111-000', rua='Rua Tutor', cidade='Cidade', estado='SP')
+        user = User(id=1, name='Tester', email='x')
+        user.set_password('x')
+        user.endereco = addr
+        product = Product(id=1, name='Prod', price=10.0)
+        db.session.add_all([addr, user, product])
+        db.session.commit()
+
+        import flask_login.utils as login_utils
+        monkeypatch.setattr(login_utils, '_get_user', lambda: user)
+        monkeypatch.setattr(app_module, '_is_admin', lambda: False)
+
+        for idx, fn in enumerate(flask_app.template_context_processors[None]):
+            if fn.__name__ == 'inject_unread_count':
+                flask_app.template_context_processors[None][idx] = lambda: {'unread_messages': 0}
+
+        client.post('/carrinho/adicionar/1', data={'quantity': 1})
+
+        class FakePrefService:
+            def create(self, data):
+                return {'status': 201, 'response': {'id': '123', 'init_point': 'http://mp'}}
+
+        class FakeSDK:
+            def preference(self):
+                return FakePrefService()
+
+        monkeypatch.setattr(app_module, 'mp_sdk', lambda: FakeSDK())
+        class TestCheckoutForm(app_module.CheckoutForm):
+            def __init__(self, *a, **kw):
+                super().__init__(*a, **kw)
+                self.address_id.choices = [(0, 'addr')]
+
+        monkeypatch.setattr(app_module, 'CheckoutForm', TestCheckoutForm)
+
+        resp = client.post('/checkout', data={'address_id': 0})
+
+        order = Order.query.first()
+        assert order.shipping_address == user.endereco.full
+        payment = Payment.query.first()
+        assert payment is not None
+        assert resp.status_code == 302
+        assert resp.headers['Location'] == 'http://mp'
