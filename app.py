@@ -3364,7 +3364,7 @@ def _get_current_order():
     return order
 
 
-def _setup_checkout_form(form):
+def _setup_checkout_form(form, preserve_selected=True):
     """Preenche o CheckoutForm com os endereços do usuário."""
     default_address = None
     if current_user.endereco and current_user.endereco.full:
@@ -3377,7 +3377,11 @@ def _setup_checkout_form(form):
         form.address_id.choices.append((addr.id, addr.address))
     form.address_id.choices.append((-1, 'Novo endereço'))
 
-    selected = session.get("last_address_id")
+    if preserve_selected and form.address_id.data is not None:
+        selected = form.address_id.data
+    else:
+        selected = session.get("last_address_id")
+
     available = [c[0] for c in form.address_id.choices]
     try:
         selected = int(selected)
@@ -3385,7 +3389,7 @@ def _setup_checkout_form(form):
         selected = None
     if selected not in available:
         selected = None
-    if selected in available:
+    if selected is not None:
         form.address_id.data = selected
     elif available:
         form.address_id.data = available[0]
@@ -3613,7 +3617,7 @@ def carrinho_salvar_endereco():
 def checkout_confirm():
     """Mostra um resumo antes de redirecionar ao pagamento externo."""
     form = CheckoutForm()
-    _setup_checkout_form(form)
+    _setup_checkout_form(form, preserve_selected=True)
     if not form.validate_on_submit():
         return redirect(url_for("ver_carrinho"))
 
@@ -3683,7 +3687,7 @@ def checkout():
     current_app.logger.setLevel(logging.DEBUG)
 
     form = CheckoutForm()
-    _setup_checkout_form(form)
+    _setup_checkout_form(form, preserve_selected=True)
     if not form.validate_on_submit():
         return redirect(url_for("ver_carrinho"))
 
