@@ -3071,7 +3071,7 @@ def complete_delivery(req_id):
     req.completed_at = datetime.utcnow()
     db.session.commit()
     flash('Entrega concluída.', 'success')
-    return redirect(url_for('worker_history'))
+    return redirect(url_for('list_delivery_requests'))
 
 
 @app.route('/delivery_requests/<int:req_id>/cancel', methods=['POST'])
@@ -3087,7 +3087,7 @@ def cancel_delivery(req_id):
     req.canceled_by_id = current_user.id
     db.session.commit()
     flash('Entrega cancelada.', 'info')
-    return redirect(url_for('worker_history'))
+    return redirect(url_for('list_delivery_requests'))
 
 
 @app.route('/delivery_requests/<int:req_id>/buyer_cancel', methods=['POST'])
@@ -3165,16 +3165,6 @@ def delivery_detail(req_id):
 
 
 
-@app.route('/worker/history')
-@login_required
-def worker_history():
-    if current_user.worker != 'delivery':
-        abort(403)
-    available = DeliveryRequest.query.filter_by(status='pendente').all()
-    doing = DeliveryRequest.query.filter_by(worker_id=current_user.id, status='em_andamento').all()
-    done = DeliveryRequest.query.filter_by(worker_id=current_user.id, status='concluida').all()
-    canceled = DeliveryRequest.query.filter_by(worker_id=current_user.id, status='cancelada').all()
-    return render_template('worker_history.html', available=available, doing=doing, done=done, canceled=canceled)
 
 
 
