@@ -541,6 +541,10 @@ def delete_account():
         # `current_user` becomes `AnonymousUserMixin` after logout.
         user = current_user._get_current_object()
 
+        # Remove mensagens associadas ao usuário antes de excluí-lo
+        for msg in list(user.sent_messages) + list(user.received_messages):
+            db.session.delete(msg)
+
         # Remove pagamentos vinculados ao usuário antes de excluí-lo
         for payment in list(user.payments):
             # Desassocia assinaturas que usam este pagamento
