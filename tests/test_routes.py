@@ -699,3 +699,77 @@ def test_checkout_uses_selected_address(monkeypatch, app):
         assert payment is not None
         assert resp.status_code == 302
         assert resp.headers['Location'] == 'http://mp'
+
+def test_saved_address_persisted_in_session(monkeypatch, app):
+    client = app.test_client()
+
+    with app.app_context():
+        db.drop_all()
+        db.create_all()
+        addr = Endereco(cep='11111-000', rua='Rua Tutor', cidade='Cidade', estado='SP')
+        user = User(id=1, name='Tester', email='x')
+        user.set_password('x')
+        user.endereco = addr
+        product = Product(id=1, name='Prod', price=10.0)
+        db.session.add_all([addr, user, product])
+        db.session.commit()
+
+        import flask_login.utils as login_utils
+        monkeypatch.setattr(login_utils, '_get_user', lambda: user)
+        monkeypatch.setattr(app_module, '_is_admin', lambda: False)
+
+        for idx, fn in enumerate(flask_app.template_context_processors[None]):
+            if fn.__name__ == 'inject_unread_count':
+                flask_app.template_context_processors[None][idx] = lambda: {'unread_messages': 0}
+
+        client.post('/carrinho/adicionar/1', data={'quantity': 1})
+
+        resp = client.post('/carrinho/salvar_endereco', data={
+            'cep': '22222-222',
+            'rua': 'Rua Nova',
+            'numero': '99',
+            'bairro': 'Centro',
+            'cidade': 'Cidade',
+            'estado': 'SP'
+        })
+        assert resp.status_code == 302
+        saved = SavedAddress.query.first()
+        assert saved is not None
+
+        from flask import template_rendered
+        recorded = []
+        def record(sender, template, context, **extra):
+            recorded.append((template, context))
+        template_rendered.connect(record, flask_app)
+        try:
+            resp = client.get('/carrinho')
+        finally:
+            template_rendered.disconnect(record, flask_app)
+        assert resp.status_code == 200
+        assert recorded
+        tmpl, ctx = recorded[0]
+        assert ctx['form'].address_id.data == saved.id
+
+        class FakePrefService:
+            def create(self, data):
+                return {'status': 201, 'response': {'id': '123', 'init_point': 'http://mp'}}
+
+        class FakeSDK:
+            def preference(self):
+                return FakePrefService()
+
+        monkeypatch.setattr(app_module, 'mp_sdk', lambda: FakeSDK())
+        class TestCheckoutForm(app_module.CheckoutForm):
+            def __init__(self, *a, **kw):
+                super().__init__(*a, **kw)
+                self.address_id.choices = [(0, 'addr'), (saved.id, 'saved')]
+
+        monkeypatch.setattr(app_module, 'CheckoutForm', TestCheckoutForm)
+
+        resp = client.post('/checkout', data={'address_id': saved.id})
+        order = Order.query.first()
+        assert order.shipping_address == saved.address
+        payment = Payment.query.first()
+        assert payment is not None
+        assert resp.status_code == 302
+        assert resp.headers['Location'] == 'http://mp'
