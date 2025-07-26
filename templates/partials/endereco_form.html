@@ -3,6 +3,7 @@
     <i class="bi bi-geo-alt-fill me-2"></i> Endereço
   </h5>
   
+  {% set addr_form = form if form is defined and form.cep is defined else None %}
   <div class="row g-3">
     <!-- CEP com máscara e busca automática -->
     <div class="col-md-3">
@@ -11,11 +12,13 @@
         <i class="bi bi-question-circle ms-1" data-bs-toggle="tooltip" title="Digite o CEP para autopreencher o endereço"></i>
       </label>
       <div class="input-group">
-        <input type="text" class="form-control" name="cep" id="cep"
-               value="{{ endereco.cep|default('', true) if endereco else '' }}"
-               placeholder="00000-000" 
-               data-mask="00000-000"
-               onblur="buscarCep()">
+        {% if addr_form %}
+          {{ addr_form.cep(class="form-control", id="cep", placeholder="00000-000", data_mask="00000-000", onblur="buscarCep()") }}
+        {% else %}
+          <input type="text" class="form-control" name="cep" id="cep"
+                 value="{{ endereco.cep|default('', true) if endereco else '' }}"
+                 placeholder="00000-000" data-mask="00000-000" onblur="buscarCep()">
+        {% endif %}
         <button class="btn btn-outline-secondary" type="button" onclick="buscarCep()">
           <i class="bi bi-search"></i>
         </button>
@@ -24,53 +27,87 @@
         <span class="spinner-border spinner-border-sm me-1" role="status"></span>
         Buscando CEP...
       </div>
+      {% if addr_form %}
+        {% for error in addr_form.cep.errors %}
+          <div class="text-danger">{{ error }}</div>
+        {% endfor %}
+      {% endif %}
     </div>
 
     <!-- Rua -->
     <div class="col-md-7">
       <label for="rua" class="form-label fw-semibold">Logradouro <span class="text-danger">*</span></label>
-      <input type="text" class="form-control" name="rua" id="rua"
-             value="{{ endereco.rua|default('', true) if endereco else '' }}"
-             placeholder="Nome da rua, avenida, etc.">
+      {% if addr_form %}
+        {{ addr_form.rua(class="form-control", id="rua", placeholder="Nome da rua, avenida, etc.") }}
+        {% for error in addr_form.rua.errors %}<div class="text-danger">{{ error }}</div>{% endfor %}
+      {% else %}
+        <input type="text" class="form-control" name="rua" id="rua"
+               value="{{ endereco.rua|default('', true) if endereco else '' }}"
+               placeholder="Nome da rua, avenida, etc.">
+      {% endif %}
       <div class="invalid-feedback">Por favor, informe o logradouro</div>
     </div>
 
     <!-- Número -->
     <div class="col-md-2">
       <label for="numero" class="form-label fw-semibold">Número</label>
-      <input type="text" class="form-control" name="numero" id="numero"
-             value="{{ endereco.numero|default('', true) if endereco else '' }}"
-             placeholder="Nº">
+      {% if addr_form %}
+        {{ addr_form.numero(class="form-control", id="numero", placeholder="Nº") }}
+        {% for error in addr_form.numero.errors %}<div class="text-danger">{{ error }}</div>{% endfor %}
+      {% else %}
+        <input type="text" class="form-control" name="numero" id="numero"
+               value="{{ endereco.numero|default('', true) if endereco else '' }}"
+               placeholder="Nº">
+      {% endif %}
     </div>
 
     <!-- Complemento -->
     <div class="col-md-4">
       <label for="complemento" class="form-label fw-semibold">Complemento</label>
-      <input type="text" class="form-control" name="complemento" id="complemento"
-             value="{{ endereco.complemento|default('', true) if endereco else '' }}"
-             placeholder="Apto, bloco, etc.">
+      {% if addr_form %}
+        {{ addr_form.complemento(class="form-control", id="complemento", placeholder="Apto, bloco, etc.") }}
+        {% for error in addr_form.complemento.errors %}<div class="text-danger">{{ error }}</div>{% endfor %}
+      {% else %}
+        <input type="text" class="form-control" name="complemento" id="complemento"
+               value="{{ endereco.complemento|default('', true) if endereco else '' }}"
+               placeholder="Apto, bloco, etc.">
+      {% endif %}
     </div>
 
     <!-- Bairro -->
     <div class="col-md-4">
       <label for="bairro" class="form-label fw-semibold">Bairro</label>
-      <input type="text" class="form-control" name="bairro" id="bairro"
-             value="{{ endereco.bairro|default('', true) if endereco else '' }}"
-             placeholder="Nome do bairro">
+      {% if addr_form %}
+        {{ addr_form.bairro(class="form-control", id="bairro", placeholder="Nome do bairro") }}
+        {% for error in addr_form.bairro.errors %}<div class="text-danger">{{ error }}</div>{% endfor %}
+      {% else %}
+        <input type="text" class="form-control" name="bairro" id="bairro"
+               value="{{ endereco.bairro|default('', true) if endereco else '' }}"
+               placeholder="Nome do bairro">
+      {% endif %}
     </div>
 
     <!-- Cidade -->
     <div class="col-md-3">
       <label for="cidade" class="form-label fw-semibold">Cidade <span class="text-danger">*</span></label>
-      <input type="text" class="form-control" name="cidade" id="cidade"
-             value="{{ endereco.cidade|default('', true) if endereco else '' }}"
-             placeholder="Nome da cidade">
+      {% if addr_form %}
+        {{ addr_form.cidade(class="form-control", id="cidade", placeholder="Nome da cidade") }}
+        {% for error in addr_form.cidade.errors %}<div class="text-danger">{{ error }}</div>{% endfor %}
+      {% else %}
+        <input type="text" class="form-control" name="cidade" id="cidade"
+               value="{{ endereco.cidade|default('', true) if endereco else '' }}"
+               placeholder="Nome da cidade">
+      {% endif %}
       <div class="invalid-feedback">Por favor, informe a cidade</div>
     </div>
 
     <!-- Estado com select -->
     <div class="col-md-2">
       <label for="estado" class="form-label fw-semibold">UF <span class="text-danger">*</span></label>
+      {% if addr_form %}
+        {{ addr_form.estado(class="form-select", id="estado") }}
+        {% for error in addr_form.estado.errors %}<div class="text-danger">{{ error }}</div>{% endfor %}
+      {% else %}
       <select class="form-select" name="estado" id="estado" required>
         <option value="">Selecione</option>
         <option value="AC" {{ 'selected' if endereco and endereco.estado == 'AC' }}>AC - Acre</option>
@@ -101,6 +138,7 @@
         <option value="SE" {{ 'selected' if endereco and endereco.estado == 'SE' }}>SE - Sergipe</option>
         <option value="TO" {{ 'selected' if endereco and endereco.estado == 'TO' }}>TO - Tocantins</option>
       </select>
+      {% endif %}
       <div class="invalid-feedback">Selecione o estado</div>
     </div>
   </div>

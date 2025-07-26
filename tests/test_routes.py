@@ -619,6 +619,35 @@ def test_salvar_endereco(monkeypatch, app):
         assert SavedAddress.query.count() == 1
 
 
+def test_salvar_endereco_invalid(monkeypatch, app):
+    client = app.test_client()
+
+    with app.app_context():
+        db.drop_all()
+        db.create_all()
+        user = User(id=1, name='Tester', email='x@test')
+        user.set_password('x')
+        db.session.add(user)
+        db.session.commit()
+
+        import flask_login.utils as login_utils
+        monkeypatch.setattr(login_utils, '_get_user', lambda: user)
+        monkeypatch.setattr(app_module, '_is_admin', lambda: False)
+
+        for idx, fn in enumerate(flask_app.template_context_processors[None]):
+            if fn.__name__ == 'inject_unread_count':
+                flask_app.template_context_processors[None][idx] = lambda: {'unread_messages': 0}
+
+        resp = client.post('/carrinho/salvar_endereco', data={
+            'cep': '',
+            'rua': 'Rua Teste',
+            'cidade': 'Cidade',
+            'estado': 'SP'
+        })
+        assert resp.status_code == 302
+        assert SavedAddress.query.count() == 0
+
+
 def test_cart_shows_saved_address_below_default(monkeypatch, app):
     client = app.test_client()
 
@@ -699,3 +728,37 @@ def test_checkout_uses_selected_address(monkeypatch, app):
         assert payment is not None
         assert resp.status_code == 302
         assert resp.headers['Location'] == 'http://mp'
+
+
+def test_cart_uses_session_string_address_id(monkeypatch, app):
+    client = app.test_client()
+
+    with app.app_context():
+        db.drop_all()
+        db.create_all()
+        addr = Endereco(cep='11111-000', rua='Rua Tutor', cidade='Cidade', estado='SP')
+        user = User(id=1, name='Tester', email='x')
+        user.set_password('x')
+        user.endereco = addr
+        saved = SavedAddress(id=42, user_id=1, address='Rua Salva – Cidade/SP – CEP 22222-222')
+        product = Product(id=1, name='Prod', price=10.0)
+        db.session.add_all([addr, user, saved, product])
+        db.session.commit()
+
+        import flask_login.utils as login_utils
+        monkeypatch.setattr(login_utils, '_get_user', lambda: user)
+        monkeypatch.setattr(app_module, '_is_admin', lambda: False)
+
+        for idx, fn in enumerate(flask_app.template_context_processors[None]):
+            if fn.__name__ == 'inject_unread_count':
+                flask_app.template_context_processors[None][idx] = lambda: {'unread_messages': 0}
+
+        with client.session_transaction() as sess:
+            sess['last_address_id'] = str(saved.id)
+
+        client.post('/carrinho/adicionar/1', data={'quantity': 1})
+
+        resp = client.get('/carrinho')
+        html = resp.get_data(as_text=True)
+        assert f'value="{saved.id}" selected' in html
+        assert 'value="0" selected' not in html

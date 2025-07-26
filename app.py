@@ -2949,15 +2949,6 @@ def request_delivery(order_id):
 
 
 
-from sqlalchemy.orm import joinedload
-
-from sqlalchemy.orm import joinedload
-from sqlalchemy import func
-
-from sqlalchemy.orm import joinedload
-
-from sqlalchemy.orm import selectinload
-
 @app.route("/delivery_requests")
 @login_required
 def list_delivery_requests():
@@ -3105,7 +3096,7 @@ def complete_delivery(req_id):
     flash('Entrega concluída.', 'success')
     if 'application/json' in request.headers.get('Accept', ''):
         return jsonify(message='Entrega concluída.', category='success')
-    return redirect(url_for('worker_history'))
+    return redirect(url_for('list_delivery_requests'))
 
 
 @app.route('/delivery_requests/<int:req_id>/cancel', methods=['POST'])
@@ -3123,7 +3114,7 @@ def cancel_delivery(req_id):
     flash('Entrega cancelada.', 'info')
     if 'application/json' in request.headers.get('Accept', ''):
         return jsonify(message='Entrega cancelada.', category='info')
-    return redirect(url_for('worker_history'))
+    return redirect(url_for('list_delivery_requests'))
 
 
 @app.route('/delivery_requests/<int:req_id>/buyer_cancel', methods=['POST'])
@@ -3144,89 +3135,6 @@ def buyer_cancel_delivery(req_id):
 
 
 # routes_delivery.py  (ou app.py)
-from sqlalchemy.orm import joinedload
-
-
-@app.route("/delivery/<int:req_id>")
-@login_required
-def delivery_detail(req_id):
-    """
-    Detalhe da entrega.
-      • admin           → tudo
-      • entregador      → se for o responsável
-      • comprador (dono do pedido) → sempre
-    """
-    req = (DeliveryRequest.query
-           .options(
-               joinedload(DeliveryRequest.pickup).joinedload(PickupLocation.endereco),
-               joinedload(DeliveryRequest.order).joinedload(Order.user),
-               joinedload(DeliveryRequest.worker)
-           )
-           .get_or_404(req_id))
-
-    order  = req.order
-    buyer  = order.user
-    items  = order.items
-    total  = sum(i.quantity * i.product.price for i in items if i.product)
-
-    # ----------- controle de acesso -----------
-    if _is_admin():
-        role = "admin"
-
-    elif current_user.worker == "delivery":
-        if req.worker_id and req.worker_id != current_user.id:
-            abort(403)
-        role = "worker"
-
-    elif current_user.id == buyer.id:          # 👈 novo: comprador
-        role = "buyer"
-
-    else:
-        abort(403)
-
-    # ----------- render -----------------------
-    return render_template(
-        "delivery_detail.html",
-        req=req,
-        order=order,
-        items=items,
-        buyer=buyer,
-        delivery_worker=req.worker,
-        total=total,
-        role=role
-    )
-
-
-
-
-
-
-@app.route('/worker/history')
-@login_required
-def worker_history():
-    if current_user.worker != 'delivery':
-        abort(403)
-    available = DeliveryRequest.query.filter_by(status='pendente').all()
-    doing = DeliveryRequest.query.filter_by(worker_id=current_user.id, status='em_andamento').all()
-    done = DeliveryRequest.query.filter_by(worker_id=current_user.id, status='concluida').all()
-    canceled = DeliveryRequest.query.filter_by(worker_id=current_user.id, status='cancelada').all()
-    return render_template('worker_history.html', available=available, doing=doing, done=done, canceled=canceled)
-
-
-
-
-
-from sqlalchemy.orm import joinedload
-
-from sqlalchemy.orm import joinedload
-from sqlalchemy import func
-from flask import render_template, abort
-from flask_login import login_required, current_user
-# routes/admin.py  (exemplo)
-
-from sqlalchemy.orm import joinedload
-from flask import render_template, abort
-from flask_login import login_required, current_user
 
 @app.route("/admin/delivery_overview")
 @login_required
@@ -3339,7 +3247,7 @@ from flask import (
 )
 from flask_login import login_required, current_user
 
-from forms import AddToCartForm, CheckoutForm  # Added CheckoutForm for CSRF
+from forms import AddToCartForm, CheckoutForm, CartAddressForm  # Added CheckoutForm for CSRF
 
 # ─────────────────────────────────────────────────────────
 #  SDK (lazy – lê token do config)
@@ -3559,6 +3467,12 @@ def ver_carrinho():
 
     selected = session.get("last_address_id")
     available = [c[0] for c in form.address_id.choices]
+    try:
+        selected = int(selected)
+    except (TypeError, ValueError):
+        selected = None
+    if selected not in available:
+        selected = None
     if selected in available:
         form.address_id.data = selected
     elif available:
@@ -3590,37 +3504,26 @@ def ver_carrinho():
 @login_required
 def carrinho_salvar_endereco():
     """Salva um novo endereço informado no carrinho."""
-    form = CheckoutForm()
-    form.address_id.choices = []
+    form = CartAddressForm()
     if not form.validate_on_submit():
+        flash('Preencha os campos obrigatórios do endereço.', 'warning')
         return redirect(url_for('ver_carrinho'))
 
-    cep = request.form.get('cep')
-    rua = request.form.get('rua')
-    numero = request.form.get('numero')
-    complemento = request.form.get('complemento')
-    bairro = request.form.get('bairro')
-    cidade = request.form.get('cidade')
-    estado = request.form.get('estado')
-
-    if any([rua, cidade, estado, cep]):
-        tmp_addr = Endereco(
-            cep=cep,
-            rua=rua,
-            numero=numero,
-            complemento=complemento,
-            bairro=bairro,
-            cidade=cidade,
-            estado=estado,
-        )
-        address_text = tmp_addr.full
-        sa = SavedAddress(user_id=current_user.id, address=address_text)
-        db.session.add(sa)
-        db.session.commit()
-        session['last_address_id'] = sa.id
-        flash('Endereço salvo com sucesso.', 'success')
-    else:
-        flash('Preencha os campos obrigatórios do endereço.', 'warning')
+    tmp_addr = Endereco(
+        cep=form.cep.data,
+        rua=form.rua.data,
+        numero=form.numero.data,
+        complemento=form.complemento.data,
+        bairro=form.bairro.data,
+        cidade=form.cidade.data,
+        estado=form.estado.data,
+    )
+    address_text = tmp_addr.full
+    sa = SavedAddress(user_id=current_user.id, address=address_text)
+    db.session.add(sa)
+    db.session.commit()
+    session['last_address_id'] = sa.id
+    flash('Endereço salvo com sucesso.', 'success')
 
     return redirect(url_for('ver_carrinho'))
 
