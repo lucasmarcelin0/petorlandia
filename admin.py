@@ -168,7 +168,7 @@ class UserAdminView(MyModelView):
             f'<a href="{url_for("ficha_tutor", tutor_id=m.id)}">{m.name}</a>'
         ),
         'phone': lambda v, c, m, p: Markup(
-            f'<a href="https://wa.me/55{re.sub(r"\\D", "", m.phone)}" target="_blank">{m.phone}</a>'
+            f'<a href="https://wa.me/55{re.sub("[^0-9]", "", m.phone)}" target="_blank">{m.phone}</a>'
         ) if m.phone else '—',
         'added_by': lambda v, c, m, p: m.added_by.name if m.added_by else '—'
     }
