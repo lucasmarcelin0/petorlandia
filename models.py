@@ -86,7 +86,12 @@ class User(UserMixin, db.Model):
     date_of_birth = db.Column(db.Date, nullable=True)          # Armazenado como data
     worker = db.Column(db.String(50), nullable=True)
     # dentro da classe User
-    veterinario = db.relationship('Veterinario', back_populates='user', uselist=False)
+    veterinario = db.relationship(
+        'Veterinario',
+        back_populates='user',
+        uselist=False,
+        cascade='all, delete-orphan',
+    )
 
 
 
@@ -103,14 +108,42 @@ class User(UserMixin, db.Model):
 
 
     # Correção dos campos:
-    sent_messages = db.relationship('Message', foreign_keys='Message.sender_id', back_populates='sender', lazy=True)
-    received_messages = db.relationship('Message', foreign_keys='Message.receiver_id', back_populates='receiver', lazy=True)
+    sent_messages = db.relationship(
+        'Message',
+        foreign_keys='Message.sender_id',
+        back_populates='sender',
+        cascade='all, delete-orphan',
+        lazy=True,
+    )
+    received_messages = db.relationship(
+        'Message',
+        foreign_keys='Message.receiver_id',
+        back_populates='receiver',
+        cascade='all, delete-orphan',
+        lazy=True,
+    )
 
-    given_reviews = db.relationship('Review', foreign_keys='Review.reviewer_id', backref='reviewer', lazy=True)
-    received_reviews = db.relationship('Review', foreign_keys='Review.reviewed_user_id', backref='reviewed', lazy=True)
-    favorites = db.relationship('Favorite', backref='user', lazy=True)
+    given_reviews = db.relationship(
+        'Review',
+        foreign_keys='Review.reviewer_id',
+        backref=db.backref('reviewer'),
+        cascade='all, delete-orphan',
+        lazy=True,
+    )
+    received_reviews = db.relationship(
+        'Review',
+        foreign_keys='Review.reviewed_user_id',
+        backref=db.backref('reviewed'),
+        cascade='all, delete-orphan',
+        lazy=True,
+    )
+    favorites = db.relationship('Favorite', backref=db.backref('user'), cascade='all, delete-orphan', lazy=True)
 
-    added_by_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True)  # 🆕
+    added_by_id = db.Column(
+        db.Integer,
+        db.ForeignKey('user.id', ondelete='SET NULL'),
+        nullable=True,
+    )  # 🆕
     added_by = db.relationship('User', remote_side=[id], backref='users_added')  # 🆕
 
 
@@ -148,11 +181,18 @@ class VeterinarianAccess(db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
     animal_id = db.Column(db.Integer, db.ForeignKey('animal.id'), nullable=False)
-    vet_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    vet_id = db.Column(
+        db.Integer,
+        db.ForeignKey('user.id', ondelete='CASCADE'),
+        nullable=False,
+    )
     date_granted = db.Column(db.DateTime, default=datetime.utcnow)
 
     animal = db.relationship('Animal', backref='vet_accesses')
-    veterinarian = db.relationship('User', backref='authorized_animals')
+    veterinarian = db.relationship(
+        'User',
+        backref=db.backref('authorized_animals', cascade='all, delete-orphan')
+    )
 
 
 
@@ -178,7 +218,11 @@ class Animal(db.Model):
     price = db.Column(db.Float, nullable=True)
     vacinas = db.relationship('Vacina', backref='animal', cascade='all, delete-orphan')
 
-    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    user_id = db.Column(
+        db.Integer,
+        db.ForeignKey('user.id', ondelete='CASCADE'),
+        nullable=False,
+    )
 
     photos = db.relationship('AnimalPhoto', backref='animal', cascade='all, delete-orphan', lazy=True)
     transactions = db.relationship('Transaction', backref='animal', cascade='all, delete-orphan', lazy=True)
@@ -190,7 +234,11 @@ class Animal(db.Model):
 
     removido_em = db.Column(db.DateTime, nullable=True)
 
-    added_by_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True)
+    added_by_id = db.Column(
+        db.Integer,
+        db.ForeignKey('user.id', ondelete='SET NULL'),
+        nullable=True,
+    )
     added_by = db.relationship('User', foreign_keys=[added_by_id])
 
     clinica_id = db.Column(db.Integer, db.ForeignKey('clinica.id'), nullable=True)
@@ -256,14 +304,30 @@ class Transaction(db.Model):
     __table_args__ = {'extend_existing': True}
     id = db.Column(db.Integer, primary_key=True)
     animal_id = db.Column(db.Integer, db.ForeignKey('animal.id'), nullable=False)
-    from_user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
-    to_user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    from_user_id = db.Column(
+        db.Integer,
+        db.ForeignKey('user.id', ondelete='CASCADE'),
+        nullable=False,
+    )
+    to_user_id = db.Column(
+        db.Integer,
+        db.ForeignKey('user.id', ondelete='CASCADE'),
+        nullable=False,
+    )
     type = db.Column(db.String(20))  # adoção, doação, venda, compra
     date = db.Column(db.DateTime, default=datetime.utcnow)
     status = db.Column(db.String(20))  # pendente, concluída, cancelada
 
-    from_user = db.relationship('User', foreign_keys=[from_user_id], backref='transacoes_enviadas')
-    to_user = db.relationship('User', foreign_keys=[to_user_id], backref='transacoes_recebidas')
+    from_user = db.relationship(
+        'User',
+        foreign_keys=[from_user_id],
+        backref=db.backref('transacoes_enviadas', cascade='all, delete-orphan'),
+    )
+    to_user = db.relationship(
+        'User',
+        foreign_keys=[to_user_id],
+        backref=db.backref('transacoes_recebidas', cascade='all, delete-orphan'),
+    )
 
 
 
@@ -271,8 +335,16 @@ class Message(db.Model):
     __table_args__ = {'extend_existing': True}
     id = db.Column(db.Integer, primary_key=True)
 
-    sender_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
-    receiver_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    sender_id = db.Column(
+        db.Integer,
+        db.ForeignKey('user.id', ondelete='CASCADE'),
+        nullable=False,
+    )
+    receiver_id = db.Column(
+        db.Integer,
+        db.ForeignKey('user.id', ondelete='CASCADE'),
+        nullable=False,
+    )
     animal_id = db.Column(db.Integer, db.ForeignKey('animal.id'), nullable=True)
 
     content = db.Column(db.Text, nullable=False)
@@ -296,10 +368,17 @@ class Interest(db.Model):
     __table_args__ = {'extend_existing': True}
     id = db.Column(db.Integer, primary_key=True)
     animal_id = db.Column(db.Integer, db.ForeignKey('animal.id'), nullable=False)
-    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    user_id = db.Column(
+        db.Integer,
+        db.ForeignKey('user.id', ondelete='CASCADE'),
+        nullable=False,
+    )
     timestamp = db.Column(db.DateTime, default=datetime.utcnow)
 
-    user = db.relationship('User', backref='interesses')
+    user = db.relationship(
+        'User',
+        backref=db.backref('interesses', cascade='all, delete-orphan')
+    )
     animal = db.relationship('Animal', backref=db.backref('interesses', cascade='all, delete-orphan'))
 
 
@@ -308,7 +387,11 @@ class ConsultaToken(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     token = db.Column(db.String(64), unique=True, nullable=False)
     animal_id = db.Column(db.Integer, db.ForeignKey('animal.id'), nullable=False)
-    tutor_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    tutor_id = db.Column(
+        db.Integer,
+        db.ForeignKey('user.id', ondelete='CASCADE'),
+        nullable=False,
+    )
     expires_at = db.Column(db.DateTime, nullable=False)
     used = db.Column(db.Boolean, default=False)
 
@@ -319,7 +402,11 @@ class Consulta(db.Model):
     id = db.Column(db.Integer, primary_key=True)
 
     animal_id = db.Column(db.Integer, db.ForeignKey('animal.id'), nullable=False)
-    created_by = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)  # veterinário
+    created_by = db.Column(
+        db.Integer,
+        db.ForeignKey('user.id', ondelete='CASCADE'),
+        nullable=False,
+    )  # veterinário
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
     # Campos principais da consulta
@@ -335,7 +422,11 @@ class Consulta(db.Model):
 
     # Relacionamentos (se quiser acessar animal ou vet diretamente)
     animal = db.relationship('Animal', backref=db.backref('consultas', cascade='all, delete-orphan'))
-    veterinario = db.relationship('User', backref='consultas', foreign_keys=[created_by])
+    veterinario = db.relationship(
+        'User',
+        foreign_keys=[created_by],
+        backref=db.backref('consultas', cascade='all, delete-orphan'),
+    )
 
 
 
@@ -391,7 +482,11 @@ class Clinica(db.Model):
 
 class Veterinario(db.Model):
     id = db.Column(db.Integer, primary_key=True)
-    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    user_id = db.Column(
+        db.Integer,
+        db.ForeignKey('user.id', ondelete='CASCADE'),
+        nullable=False,
+    )
     crmv = db.Column(db.String(20), nullable=False)
     clinica_id = db.Column(db.Integer, db.ForeignKey('clinica.id'))
 
@@ -508,8 +603,16 @@ class Racao(db.Model):
 class Review(db.Model):
     __table_args__ = {'extend_existing': True}
     id = db.Column(db.Integer, primary_key=True)
-    reviewer_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
-    reviewed_user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    reviewer_id = db.Column(
+        db.Integer,
+        db.ForeignKey('user.id', ondelete='CASCADE'),
+        nullable=False,
+    )
+    reviewed_user_id = db.Column(
+        db.Integer,
+        db.ForeignKey('user.id', ondelete='CASCADE'),
+        nullable=False,
+    )
     rating = db.Column(db.Integer, nullable=False)  # 1 a 5
     comment = db.Column(db.Text)
     date = db.Column(db.DateTime, default=datetime.utcnow)
@@ -528,7 +631,11 @@ class AnimalPhoto(db.Model):
 class Favorite(db.Model):
     __table_args__ = {'extend_existing': True}
     id = db.Column(db.Integer, primary_key=True)
-    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    user_id = db.Column(
+        db.Integer,
+        db.ForeignKey('user.id', ondelete='CASCADE'),
+        nullable=False,
+    )
     animal_id = db.Column(db.Integer, db.ForeignKey('animal.id'), nullable=False)
 
 # Loja virtual
@@ -570,11 +677,19 @@ class ProductPhoto(db.Model):
 
 class Order(db.Model):
     id = db.Column(db.Integer, primary_key=True)
-    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True, index=True)
+    user_id = db.Column(
+        db.Integer,
+        db.ForeignKey('user.id', ondelete='SET NULL'),
+        nullable=True,
+        index=True,
+    )
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     shipping_address = db.Column(db.String(200))
 
-    user = db.relationship('User', backref='orders')
+    user = db.relationship(
+        'User',
+        backref=db.backref('orders', cascade='all, delete-orphan')
+    )
     items = db.relationship('OrderItem', backref='order', cascade='all, delete-orphan')
 
 
@@ -615,7 +730,12 @@ class SavedAddress(db.Model):
     __tablename__ = 'saved_address'
 
     id = db.Column(db.Integer, primary_key=True)
-    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False, index=True)
+    user_id = db.Column(
+        db.Integer,
+        db.ForeignKey('user.id', ondelete='CASCADE'),
+        nullable=False,
+        index=True,
+    )
     address = db.Column(db.String(200), nullable=False)
 
     # Delete saved addresses when the owning user is removed
@@ -631,17 +751,33 @@ class SavedAddress(db.Model):
 class DeliveryRequest(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     order_id = db.Column(db.Integer, db.ForeignKey('order.id'), nullable=False)
-    requested_by_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    requested_by_id = db.Column(
+        db.Integer,
+        db.ForeignKey('user.id', ondelete='CASCADE'),
+        nullable=False,
+    )
     requested_at = db.Column(db.DateTime, default=datetime.utcnow)
     status = db.Column(db.String(20), default='pendente')
-    worker_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True)
+    worker_id = db.Column(
+        db.Integer,
+        db.ForeignKey('user.id', ondelete='SET NULL'),
+        nullable=True,
+    )
     accepted_at = db.Column(db.DateTime, nullable=True)
     completed_at = db.Column(db.DateTime, nullable=True)
     canceled_at = db.Column(db.DateTime, nullable=True)
-    canceled_by_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True)
+    canceled_by_id = db.Column(
+        db.Integer,
+        db.ForeignKey('user.id', ondelete='SET NULL'),
+        nullable=True,
+    )
 
     order = db.relationship('Order', backref='delivery_requests')
-    requested_by = db.relationship('User', foreign_keys=[requested_by_id])
+    requested_by = db.relationship(
+        'User',
+        foreign_keys=[requested_by_id],
+        backref=db.backref('delivery_requests_made', cascade='all, delete-orphan'),
+    )
     worker = db.relationship('User', foreign_keys=[worker_id])
     canceled_by = db.relationship('User', foreign_keys=[canceled_by_id])
     pickup_id   = db.Column(db.Integer, db.ForeignKey('pickup_location.id'))
@@ -714,7 +850,10 @@ class Payment(db.Model):
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
     user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False, index=True)
-    user    = db.relationship("User", backref="payments")
+    user    = db.relationship(
+        "User",
+        backref=db.backref("payments", cascade="all, delete-orphan"),
+    )
 
     init_point = db.Column(db.String)
 
@@ -738,7 +877,11 @@ class HealthSubscription(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     animal_id = db.Column(db.Integer, db.ForeignKey('animal.id'), nullable=False)
     plan_id = db.Column(db.Integer, db.ForeignKey('health_plan.id'), nullable=False)
-    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    user_id = db.Column(
+        db.Integer,
+        db.ForeignKey('user.id', ondelete='CASCADE'),
+        nullable=False,
+    )
     payment_id = db.Column(db.Integer, db.ForeignKey('payment.id'))
 
     active = db.Column(db.Boolean, default=False)
@@ -747,7 +890,10 @@ class HealthSubscription(db.Model):
 
     animal = db.relationship('Animal', backref=db.backref('health_subscriptions', cascade='all, delete-orphan'))
     plan = db.relationship('HealthPlan', backref='subscriptions')
-    user = db.relationship('User', backref='health_subscriptions')
+    user = db.relationship(
+        'User',
+        backref=db.backref('health_subscriptions', cascade='all, delete-orphan')
+    )
     payment = db.relationship('Payment', backref='subscriptions')
 
     def __repr__(self):
