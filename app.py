@@ -2960,6 +2960,7 @@ def request_delivery(order_id):
     return redirect(url_for('list_delivery_requests'))
 
 
+from sqlalchemy.orm import selectinload
 
 @app.route("/delivery_requests")
 @login_required
