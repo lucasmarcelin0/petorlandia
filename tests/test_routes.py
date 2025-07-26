@@ -457,3 +457,36 @@ def test_admin_messages_include_messages_to_any_admin(monkeypatch, app):
         assert response.status_code == 200
         data = response.get_data(as_text=True)
         assert 'User' in data
+
+
+def test_conversa_admin_shows_message_for_any_admin(monkeypatch, app):
+    client = app.test_client()
+
+    with app.app_context():
+        db.drop_all()
+        db.create_all()
+
+        admin1 = User(id=1, name='Admin1', email='a1@test', role='admin')
+        admin1.set_password('x')
+        admin2 = User(id=2, name='Admin2', email='a2@test', role='admin')
+        admin2.set_password('x')
+        user = User(id=3, name='User', email='u@test')
+        user.set_password('x')
+        db.session.add_all([admin1, admin2, user])
+        db.session.commit()
+
+        msg = Message(sender_id=user.id, receiver_id=admin1.id, content='hello')
+        db.session.add(msg)
+        db.session.commit()
+
+        import flask_login.utils as login_utils
+        monkeypatch.setattr(login_utils, '_get_user', lambda: admin2)
+        monkeypatch.setattr(app_module, '_is_admin', lambda: True)
+
+        for idx, fn in enumerate(flask_app.template_context_processors[None]):
+            if fn.__name__ == 'inject_unread_count':
+                flask_app.template_context_processors[None][idx] = lambda: {'unread_messages': 0}
+
+        response = client.get('/conversa_admin/3')
+        assert response.status_code == 200
+        assert b'hello' in response.data
