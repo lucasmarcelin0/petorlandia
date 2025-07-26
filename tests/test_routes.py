@@ -795,7 +795,50 @@ def test_checkout_confirm_renders(monkeypatch, app):
         assert 'Confirmar Compra' in html
         assert 'Prod' in html
         assert 'addr' in html
-        assert 'name="address_id"' in html
+    assert 'name="address_id"' in html
+
+
+def test_checkout_confirm_uses_posted_address(monkeypatch, app):
+    client = app.test_client()
+
+    with app.app_context():
+        db.drop_all()
+        db.create_all()
+        addr1 = Endereco(cep='11111-000', rua='Rua1', cidade='Cidade', estado='SP')
+        addr2 = Endereco(cep='22222-000', rua='Rua2', cidade='Cidade', estado='SP')
+        user = User(id=1, name='Tester', email='x')
+        user.set_password('x')
+        user.endereco = addr1
+        saved = SavedAddress(id=42, user_id=1, address=addr2.full)
+        product = Product(id=1, name='Prod', price=10.0)
+        db.session.add_all([addr1, addr2, user, saved, product])
+        db.session.commit()
+
+        import flask_login.utils as login_utils
+        monkeypatch.setattr(login_utils, '_get_user', lambda: user)
+        monkeypatch.setattr(app_module, '_is_admin', lambda: False)
+
+        for idx, fn in enumerate(flask_app.template_context_processors[None]):
+            if fn.__name__ == 'inject_unread_count':
+                flask_app.template_context_processors[None][idx] = lambda: {'unread_messages': 0}
+
+        with client.session_transaction() as sess:
+            sess['last_address_id'] = str(saved.id)
+
+        client.post('/carrinho/adicionar/1', data={'quantity': 1})
+
+        class TestCheckoutForm(app_module.CheckoutForm):
+            def __init__(self, *a, **kw):
+                super().__init__(*a, **kw)
+                self.address_id.choices = [(0, addr1.full), (saved.id, saved.address)]
+
+        monkeypatch.setattr(app_module, 'CheckoutForm', TestCheckoutForm)
+
+        resp = client.post('/checkout/confirm', data={'address_id': 0})
+        assert resp.status_code == 200
+        html = resp.get_data(as_text=True)
+        assert addr1.full in html
+        assert 'name="address_id" value="0"' in html
 
 
 def test_cart_uses_session_string_address_id(monkeypatch, app):
