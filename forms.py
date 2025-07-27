@@ -248,6 +248,7 @@ class ProductUpdateForm(FlaskForm):
     description = TextAreaField('Descrição')
     price = DecimalField('Preço', validators=[DataRequired()])
     stock = IntegerField('Estoque', validators=[DataRequired()])
+    mp_category_id = StringField('Categoria MP', validators=[Optional(), Length(max=50)])
     image_upload = FileField('Imagem', validators=[FileAllowed(['jpg', 'jpeg', 'png', 'gif'], 'Apenas imagens!')])
     submit = SubmitField('Salvar')
 
