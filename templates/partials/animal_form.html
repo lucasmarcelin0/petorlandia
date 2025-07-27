@@ -1,6 +1,6 @@
 <form method="POST" action="{{ url_for('update_animal', animal_id=animal.id) }}"
       enctype="multipart/form-data" onsubmit="return validarCadastroAnimal();"
-      class="needs-validation" novalidate>
+      class="needs-validation" novalidate data-sync="true">
 
   <h5 class="mb-3">🐾 Cadastro do Animal</h5>
 

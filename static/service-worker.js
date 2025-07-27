@@ -4,6 +4,7 @@ const CACHE_NAME = 'petorlandia-cache-v3';
 // pre-caching them. Only static assets are cached up-front.
 const urlsToCache = [
   '/static/pastorgato.png'
+  ,'/static/offline.js'
 ];
 
 // Install the service worker and take control immediately
