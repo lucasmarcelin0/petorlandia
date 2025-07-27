@@ -141,7 +141,7 @@ from forms import (
     ProductUpdateForm, ProductPhotoForm, ChangePasswordForm,
     DeleteAccountForm
 )
-from helpers import calcular_idade, parse_data_nascimento
+from helpers import calcular_idade, parse_data_nascimento, digits_only
 
 # ----------------------------------------------------------------
 # 7)  Login & serializer
@@ -3918,6 +3918,13 @@ def checkout():
             "email": current_user.email,
         },
     }
+    # Envia identificação do comprador se disponível
+    cpf_digits = digits_only(current_user.cpf)
+    if cpf_digits:
+        preference_data["payer"]["identification"] = {
+            "type": "CPF",
+            "number": cpf_digits,
+        }
     current_app.logger.debug("MP Preference Payload:\n%s",
                              json.dumps(preference_data, indent=2, ensure_ascii=False))
 
