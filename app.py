@@ -4190,12 +4190,15 @@ def legacy_pagamento(status):
         if pref_id:
             payment = Payment.query.filter_by(transaction_id=pref_id).first()
 
-    if not payment:
-        abort(404)
-
     mp_status = (request.args.get("status") or
                  request.args.get("collection_status") or
                  status)
+
+    if not payment:
+        if mp_status in {"success", "completed", "approved", "sucesso"}:
+            return render_template("sucesso.html")
+        abort(404)
+
     return redirect(url_for("payment_status", payment_id=payment.id, status=mp_status))
 
 
