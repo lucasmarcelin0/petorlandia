@@ -7,6 +7,7 @@ from functools import wraps
 from datetime import date
 
 from datetime import datetime
+import re
 
 def parse_data_nascimento(data_str):
     """
@@ -17,6 +18,13 @@ def parse_data_nascimento(data_str):
         return datetime.strptime(data_str, '%d/%m/%Y')
     except (ValueError, TypeError):
         return None
+
+
+def digits_only(value: str | None) -> str:
+    """Return only numeric characters from the given string."""
+    if not value:
+        return ""
+    return re.sub(r"\D+", "", value)
 
 
 def calcular_idade(data_nasc):

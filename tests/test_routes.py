@@ -793,6 +793,7 @@ def test_cart_shows_saved_address_below_default(monkeypatch, app):
         addr = Endereco(cep='11111-000', rua='Rua Tutor', cidade='Cidade', estado='SP')
         user = User(id=1, name='Tester', email='x')
         user.set_password('x')
+        user.cpf = '12345678901'
         user.endereco = addr
         product = Product(id=1, name='Prod', price=10.0)
         saved = SavedAddress(user_id=1, address='Rua Salva – Cidade/SP – CEP 22222-222')
@@ -825,6 +826,7 @@ def test_checkout_uses_selected_address(monkeypatch, app):
         addr = Endereco(cep='11111-000', rua='Rua Tutor', cidade='Cidade', estado='SP')
         user = User(id=1, name='Tester', email='x')
         user.set_password('x')
+        user.cpf = '12345678901'
         user.endereco = addr
         product = Product(id=1, name='Prod', price=10.0)
         db.session.add_all([addr, user, product])
@@ -875,6 +877,7 @@ def test_checkout_sends_external_reference(monkeypatch, app):
         addr = Endereco(cep='11111-000', rua='Rua Tutor', cidade='Cidade', estado='SP')
         user = User(id=1, name='Tester', email='x')
         user.set_password('x')
+        user.cpf = '12345678901'
         user.endereco = addr
         product = Product(id=1, name='Prod', price=10.0, description='Prod desc')
         db.session.add_all([addr, user, product])
@@ -914,6 +917,9 @@ def test_checkout_sends_external_reference(monkeypatch, app):
         assert payload['external_reference'] == str(payment.id)
         assert payload['payer']['first_name'] == 'Tester'
         assert payload['payer']['last_name'] == ''
+        assert payload['payer']['identification']['type'] == 'CPF'
+        assert payload['payer']['identification']['number'] == '12345678901'
+        assert payload['payer']['address']['street_name'] == user.endereco.full
         assert payload['items'][0]['id'] == '1'
         assert payload['items'][0]['description'] == 'Prod desc'
         assert payload['items'][0]['category_id'] == 'others'
