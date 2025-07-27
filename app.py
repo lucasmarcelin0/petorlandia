@@ -3900,6 +3900,9 @@ def checkout():
 
     # 4️⃣ payload Preference
     name_parts = current_user.name.split(None, 1)
+    phone_digits = re.sub(r"\D", "", current_user.phone or "")
+    if phone_digits.startswith("55"):
+        phone_digits = phone_digits[2:]
     preference_data = {
         "items": items,
         "external_reference": payment.external_reference,
@@ -3916,6 +3919,7 @@ def checkout():
             "first_name": name_parts[0] if name_parts else "",
             "last_name": name_parts[1] if len(name_parts) > 1 else "",
             "email": current_user.email,
+            **({"phone": {"area_code": phone_digits[:2], "number": phone_digits[2:]}} if phone_digits else {}),
         },
     }
     current_app.logger.debug("MP Preference Payload:\n%s",
