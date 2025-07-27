@@ -166,6 +166,7 @@
         navigator.serviceWorker.register('{{ url_for('service_worker') }}');
       }
     </script>
+    <script src="{{ url_for('static', filename='offline.js') }}"></script>
 
 </body>
 </html>
