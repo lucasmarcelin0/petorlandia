@@ -1932,7 +1932,7 @@ def salvar_racao(animal_id):
     if current_user.worker != 'veterinario':
         return jsonify({'success': False, 'error': 'Permissão negada.'}), 403
 
-    data = request.get_json()
+    data = request.get_json(silent=True) or {}
 
     try:
         # ✅ SUPORTE AO FORMATO NOVO: tipo_racao_id direto
@@ -1999,7 +1999,7 @@ def criar_tipo_racao():
     if current_user.worker != 'veterinario':
         return jsonify({'success': False, 'error': 'Permissão negada.'}), 403
 
-    data = request.get_json()
+    data = request.get_json(silent=True) or {}
     marca = data.get('marca', '').strip()
     linha = data.get('linha', '').strip()
     recomendacao = data.get('recomendacao')
@@ -2056,7 +2056,7 @@ def editar_racao(racao_id):
     if current_user.worker != 'veterinario':
         return jsonify({'success': False, 'error': 'Permissão negada.'}), 403
 
-    data = request.get_json()
+    data = request.get_json(silent=True) or {}
     racao.recomendacao_custom = data.get('recomendacao_custom') or None
     racao.observacoes_racao = data.get('observacoes_racao') or ''
     racao.preco_pago = data.get('preco_pago') or None
@@ -2172,7 +2172,7 @@ from datetime import datetime
 
 @app.route("/animal/<int:animal_id>/vacinas", methods=["POST"])
 def salvar_vacinas(animal_id):
-    data = request.get_json()
+    data = request.get_json(silent=True) or {}
 
     if not data or "vacinas" not in data:
         return jsonify({"success": False, "error": "Dados incompletos"}), 400
@@ -2218,7 +2218,7 @@ def deletar_vacina(vacina_id):
 
 @app.route("/vacina/<int:vacina_id>/editar", methods=["POST"])
 def editar_vacina(vacina_id):
-    data = request.get_json()
+    data = request.get_json(silent=True) or {}
 
     if not data:
         return jsonify({"success": False, "error": "Dados ausentes"}), 400
@@ -2398,7 +2398,7 @@ def buscar_apresentacoes():
 @login_required
 def salvar_prescricoes_lote(consulta_id):
     consulta = Consulta.query.get_or_404(consulta_id)
-    data = request.get_json()
+    data = request.get_json(silent=True) or {}
     novas_prescricoes = data.get('prescricoes', [])
 
     for item in novas_prescricoes:
@@ -2426,7 +2426,7 @@ def salvar_bloco_prescricao(consulta_id):
     if current_user.worker != 'veterinario':
         return jsonify({'success': False, 'message': 'Apenas veterinários podem prescrever.'}), 403
 
-    dados = request.get_json()
+    dados = request.get_json(silent=True) or {}
     lista_prescricoes = dados.get('prescricoes')
     instrucoes = dados.get('instrucoes_gerais')  # 🟢 AQUI você precisa pegar o campo
 
@@ -2490,7 +2490,7 @@ def atualizar_bloco_prescricao(bloco_id):
     if current_user.worker != 'veterinario':
         return jsonify({'success': False, 'message': 'Apenas veterinários podem editar.'}), 403
 
-    data = request.get_json()
+    data = request.get_json(silent=True) or {}
     novos_medicamentos = data.get('medicamentos', [])
 
     # Limpa os medicamentos atuais do bloco
@@ -2544,7 +2544,7 @@ def imprimir_bloco_prescricao(bloco_id):
 @app.route('/animal/<int:animal_id>/bloco_exames', methods=['POST'])
 @login_required
 def salvar_bloco_exames(animal_id):
-    data = request.get_json()
+    data = request.get_json(silent=True) or {}
     exames_data = data.get('exames', [])
     observacoes_gerais = data.get('observacoes_gerais', '')
 
@@ -2619,7 +2619,7 @@ def editar_bloco_exames(bloco_id):
 @login_required
 def editar_exame(exame_id):
     exame = ExameSolicitado.query.get_or_404(exame_id)
-    data = request.get_json()
+    data = request.get_json(silent=True) or {}
 
     exame.nome = data.get('nome', exame.nome)
     exame.justificativa = data.get('justificativa', exame.justificativa)
@@ -2635,7 +2635,7 @@ def editar_exame(exame_id):
 @login_required
 def atualizar_bloco_exames(bloco_id):
     bloco = BlocoExames.query.get_or_404(bloco_id)
-    dados = request.get_json()
+    dados = request.get_json(silent=True) or {}
 
     bloco.observacoes_gerais = dados.get('observacoes_gerais', '')
 
