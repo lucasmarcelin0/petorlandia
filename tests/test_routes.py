@@ -858,6 +858,53 @@ def test_checkout_uses_selected_address(monkeypatch, app):
         assert resp.headers['Location'] == 'http://mp'
 
 
+def test_checkout_sends_external_reference(monkeypatch, app):
+    client = app.test_client()
+
+    with app.app_context():
+        db.drop_all()
+        db.create_all()
+        addr = Endereco(cep='11111-000', rua='Rua Tutor', cidade='Cidade', estado='SP')
+        user = User(id=1, name='Tester', email='x')
+        user.set_password('x')
+        user.endereco = addr
+        product = Product(id=1, name='Prod', price=10.0)
+        db.session.add_all([addr, user, product])
+        db.session.commit()
+
+        import flask_login.utils as login_utils
+        monkeypatch.setattr(login_utils, '_get_user', lambda: user)
+        monkeypatch.setattr(app_module, '_is_admin', lambda: False)
+
+        for idx, fn in enumerate(flask_app.template_context_processors[None]):
+            if fn.__name__ == 'inject_unread_count':
+                flask_app.template_context_processors[None][idx] = lambda: {'unread_messages': 0}
+
+        client.post('/carrinho/adicionar/1', data={'quantity': 1})
+
+        captured = {}
+        class FakePrefService:
+            def create(self, data):
+                captured['payload'] = data
+                return {'status': 201, 'response': {'id': '123', 'init_point': 'http://mp'}}
+
+        class FakeSDK:
+            def preference(self):
+                return FakePrefService()
+
+        monkeypatch.setattr(app_module, 'mp_sdk', lambda: FakeSDK())
+        class TestCheckoutForm(app_module.CheckoutForm):
+            def __init__(self, *a, **kw):
+                super().__init__(*a, **kw)
+                self.address_id.choices = [(0, 'addr')]
+
+        monkeypatch.setattr(app_module, 'CheckoutForm', TestCheckoutForm)
+
+        resp = client.post('/checkout', data={'address_id': 0})
+        payment = Payment.query.first()
+        assert captured['payload']['external_reference'] == str(payment.id)
+
+
 def test_checkout_confirm_renders(monkeypatch, app):
     client = app.test_client()
 
