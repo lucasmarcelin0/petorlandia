@@ -3524,6 +3524,7 @@ def produto_detail(product_id):
             product.description = update_form.description.data
             product.price = float(update_form.price.data or 0)
             product.stock = update_form.stock.data
+            product.mp_category_id = (update_form.mp_category_id.data or "others").strip()
             if update_form.image_upload.data:
                 file = update_form.image_upload.data
                 filename = secure_filename(file.filename)
@@ -3891,7 +3892,7 @@ def checkout():
             "id":          str(it.product.id),
             "title":       it.product.name,
             "description": it.product.description or it.product.name,
-            "category_id": "others",
+            "category_id": it.product.mp_category_id or "others",
             "quantity":    int(it.quantity),
             "unit_price":  float(it.product.price),
         }

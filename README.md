@@ -57,3 +57,9 @@ request is automatically created for the associated order.
 When creating a payment preference the application now includes the
 `external_reference` field with the ID of the pending payment. This allows
 each Mercado Pago `payment_id` to be correlated with your own records.
+
+Products now have an optional `mp_category_id` column that stores the
+Mercado Pago category for that item. Checkout payloads populate
+`items.category_id` from this field, defaulting to `"others"` when unset.
+Providing accurate categories can improve fraud analysis and payment
+approval rates.
