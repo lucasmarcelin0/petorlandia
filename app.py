@@ -3905,6 +3905,8 @@ def checkout():
         "external_reference": payment.external_reference,
         "notification_url":   url_for("notificacoes_mercado_pago", _external=True),
         "payment_methods":    {"installments": 1},
+        "statement_descriptor": current_app.config.get("MERCADOPAGO_STATEMENT_DESCRIPTOR"),
+        "binary_mode": current_app.config.get("MERCADOPAGO_BINARY_MODE", False),
         "back_urls": {
             s: url_for("payment_status", payment_id=payment.id, _external=True)
             for s in ("success", "failure", "pending")
@@ -3913,6 +3915,7 @@ def checkout():
         "payer": {
             "first_name": name_parts[0] if name_parts else "",
             "last_name": name_parts[1] if len(name_parts) > 1 else "",
+            "email": current_user.email,
         },
     }
     current_app.logger.debug("MP Preference Payload:\n%s",
