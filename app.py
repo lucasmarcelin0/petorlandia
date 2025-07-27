@@ -3881,8 +3881,7 @@ def checkout():
     )
     payment.amount = Decimal(str(order.total_value()))
     db.session.add(payment)
-    db.session.commit()                    # gera payment.id
-
+    db.session.flush()                     # gera payment.id sem fechar a transação
     payment.external_reference = str(payment.id)
     db.session.commit()
 
