@@ -3899,7 +3899,15 @@ def checkout():
     ]
 
     # 4️⃣ payload Preference
-    name_parts = current_user.name.split(None, 1)
+    # Separa o nome em partes para extrair primeiro e último nome
+    parts = current_user.name.split()
+    first_name = parts[0] if parts else ""
+    if len(parts) > 1:
+        last_name = parts[-1]
+    else:
+        # Quando o usuário cadastrou apenas um nome, repetimos para evitar
+        # enviar campo vazio ao Mercado Pago e melhorar a aprovação
+        last_name = first_name
     preference_data = {
         "items": items,
         "external_reference": payment.external_reference,
@@ -3913,8 +3921,8 @@ def checkout():
         },
         "auto_return": "approved",
         "payer": {
-            "first_name": name_parts[0] if name_parts else "",
-            "last_name": name_parts[1] if len(name_parts) > 1 else "",
+            "first_name": first_name,
+            "last_name": last_name,
             "email": current_user.email,
         },
     }
