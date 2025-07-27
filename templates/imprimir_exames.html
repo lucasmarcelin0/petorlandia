@@ -199,6 +199,12 @@
     Telefone: {{ clinica.telefone }} – Email: {{ clinica.email }} – CNPJ: {{ clinica.cnpj }}
   </footer>
 
+  <script>
+    window.addEventListener('afterprint', function(){
+      window.location.href = 'https://assinador.iti.br/assinatura/index.xhtml';
+    });
+  </script>
+
 </body>
 
 </html>
