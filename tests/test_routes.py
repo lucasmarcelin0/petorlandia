@@ -304,7 +304,7 @@ def test_cart_quantity_updates(monkeypatch, app):
     with app.app_context():
         db.drop_all()
         db.create_all()
-        user = User(id=1, name='Tester', email='x')
+        user = User(id=1, name='Tester', email='x', phone='11 99999-9999')
         user.set_password('x')
         product = Product(id=1, name='Prod', price=10.0)
         db.session.add_all([user, product])
@@ -873,7 +873,7 @@ def test_checkout_sends_external_reference(monkeypatch, app):
         db.drop_all()
         db.create_all()
         addr = Endereco(cep='11111-000', rua='Rua Tutor', cidade='Cidade', estado='SP')
-        user = User(id=1, name='Tester', email='x')
+        user = User(id=1, name='Tester', email='x', phone='11 99999-9999')
         user.set_password('x')
         user.endereco = addr
         product = Product(id=1, name='Prod', price=10.0, description='Prod desc')
@@ -914,6 +914,8 @@ def test_checkout_sends_external_reference(monkeypatch, app):
         assert payload['external_reference'] == str(payment.id)
         assert payload['payer']['first_name'] == 'Tester'
         assert payload['payer']['last_name'] == ''
+        assert payload['payer']['address']['street_name'] == user.endereco.full
+        assert payload['payer']['phone'] == {'area_code': '11', 'number': '999999999'}
         assert payload['items'][0]['id'] == '1'
         assert payload['items'][0]['description'] == 'Prod desc'
         assert payload['items'][0]['category_id'] == 'others'
