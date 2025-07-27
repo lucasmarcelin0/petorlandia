@@ -200,8 +200,10 @@
   </footer>
 
   <script>
-    window.addEventListener('afterprint', function(){
-      window.location.href = 'https://assinador.iti.br/assinatura/index.xhtml';
+  window.addEventListener('afterprint', function(){
+      if (confirm('Abrir página de assinatura agora?')) {
+          window.location.href = 'https://assinador.iti.br/assinatura/index.xhtml';
+      }
     });
   </script>
 
