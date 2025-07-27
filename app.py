@@ -3927,10 +3927,15 @@ def checkout():
 
 
     # 4️⃣ payload Preference
-    name_parts = current_user.name.split(None, 1)
+
+    # Separa o nome em partes para extrair primeiro e último nome
+    parts = current_user.name.split()
+    first_name = parts[0] if parts else ""
+    last_name = parts[-1] if len(parts) > 1 else first_name
     payer_info = {
-        "first_name": name_parts[0] if name_parts else "",
-        "last_name": name_parts[1] if len(name_parts) > 1 else "",
+        "first_name": first_name,
+        "last_name": last_name,
+
         "email": current_user.email,
     }
     if order.shipping_address:
