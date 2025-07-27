@@ -3887,6 +3887,8 @@ def checkout():
     db.session.commit()
 
     # 3️⃣ itens do Preference
+    # O Mercado Pago recomenda enviar um código no campo
+    # ``items.id`` para agilizar a verificação antifraude.
     items = [
         {
             "id":          str(it.product.id),
@@ -3901,6 +3903,17 @@ def checkout():
 
     # 4️⃣ payload Preference
     name_parts = current_user.name.split(None, 1)
+    payer_info = {
+        "first_name": name_parts[0] if name_parts else "",
+        "last_name": name_parts[1] if len(name_parts) > 1 else "",
+        "email": current_user.email,
+    }
+    if order.shipping_address:
+        payer_info["address"] = {"street_name": order.shipping_address}
+        m = re.search(r"CEP\s*(\d{5}-?\d{3})", order.shipping_address)
+        if m:
+            payer_info["address"]["zip_code"] = m.group(1)
+
     preference_data = {
         "items": items,
         "external_reference": payment.external_reference,
@@ -3913,11 +3926,7 @@ def checkout():
             for s in ("success", "failure", "pending")
         },
         "auto_return": "approved",
-        "payer": {
-            "first_name": name_parts[0] if name_parts else "",
-            "last_name": name_parts[1] if len(name_parts) > 1 else "",
-            "email": current_user.email,
-        },
+        "payer": payer_info,
     }
     current_app.logger.debug("MP Preference Payload:\n%s",
                              json.dumps(preference_data, indent=2, ensure_ascii=False))

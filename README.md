@@ -61,5 +61,7 @@ each Mercado Pago `payment_id` to be correlated with your own records.
 Products now have an optional `mp_category_id` column that stores the
 Mercado Pago category for that item. Checkout payloads populate
 `items.category_id` from this field, defaulting to `"others"` when unset.
-Providing accurate categories can improve fraud analysis and payment
-approval rates.
+Mercado Pago also recommends sending a unique identifier for each product
+in the `items.id` field of the preference payload. The checkout process
+already does this by using the product's ID, which helps improve
+fraud analysis and payment approval rates.
