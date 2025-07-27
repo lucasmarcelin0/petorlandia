@@ -646,6 +646,7 @@ class Product(db.Model):
     price = db.Column(db.Float, nullable=False)
     stock = db.Column(db.Integer, default=0)
     image_url = db.Column(db.String(200))
+    mp_category_id = db.Column(db.String(50), default="others")
 
     # Items de pedido associados ao produto. O cascade facilita remover os
     # OrderItem relacionados quando o produto é excluído.
