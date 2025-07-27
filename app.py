@@ -3899,7 +3899,6 @@ def checkout():
     ]
 
     # 4️⃣ payload Preference
-    name_parts = current_user.name.split(None, 1)
     preference_data = {
         "items": items,
         "external_reference": payment.external_reference,
@@ -3913,8 +3912,8 @@ def checkout():
         },
         "auto_return": "approved",
         "payer": {
-            "first_name": name_parts[0] if name_parts else "",
-            "last_name": name_parts[1] if len(name_parts) > 1 else "",
+            "first_name": current_user.first_name,
+            "last_name": current_user.last_name,
             "email": current_user.email,
         },
     }

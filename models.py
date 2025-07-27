@@ -159,6 +159,16 @@ class User(UserMixin, db.Model):
     def added_by_display(self):
         return self.added_by.name if self.added_by else "N/A"
 
+    @property
+    def first_name(self):
+        parts = self.name.split(None, 1) if self.name else []
+        return parts[0] if parts else ""
+
+    @property
+    def last_name(self):
+        parts = self.name.split(None, 1) if self.name else []
+        return parts[1] if len(parts) > 1 else ""
+
     def set_password(self, password):
         self.password_hash = generate_password_hash(password)
 
