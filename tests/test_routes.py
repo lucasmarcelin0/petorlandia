@@ -71,6 +71,14 @@ def test_mp_token_in_config(app):
 
 def test_mp_webhook_secret_in_config(app):
     assert 'MERCADOPAGO_WEBHOOK_SECRET' in app.config
+
+
+def test_mp_statement_descriptor_in_config(app):
+    assert 'MERCADOPAGO_STATEMENT_DESCRIPTOR' in app.config
+
+
+def test_mp_binary_mode_in_config(app):
+    assert 'MERCADOPAGO_BINARY_MODE' in app.config
 from models import Animal
 
 

@@ -36,6 +36,8 @@ application:
 export MERCADOPAGO_ACCESS_TOKEN="<your access token>"
 export MERCADOPAGO_PUBLIC_KEY="<your public key>"
 export MERCADOPAGO_WEBHOOK_SECRET="<random secret>"
+export MERCADOPAGO_STATEMENT_DESCRIPTOR="PETORLANDIA"
+export MERCADOPAGO_BINARY_MODE=0
 ```
 
 `MERCADOPAGO_WEBHOOK_SECRET` **must** be set so webhook signatures can be
