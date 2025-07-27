@@ -3886,21 +3886,34 @@ def checkout():
     db.session.commit()
 
     # 3️⃣ itens do Preference
-    items = [{
-        "title":      it.product.name,
-        "quantity":   int(it.quantity),
-        "unit_price": float(it.product.price),
-    } for it in order.items]
+    items = [
+        {
+            "id":          str(it.product.id),
+            "title":       it.product.name,
+            "description": it.product.description or it.product.name,
+            "category_id": "others",
+            "quantity":    int(it.quantity),
+            "unit_price":  float(it.product.price),
+        }
+        for it in order.items
+    ]
 
     # 4️⃣ payload Preference
+    name_parts = current_user.name.split(None, 1)
     preference_data = {
         "items": items,
         "external_reference": payment.external_reference,
         "notification_url":   url_for("notificacoes_mercado_pago", _external=True),
         "payment_methods":    {"installments": 1},
-        "back_urls": {s: url_for("payment_status", payment_id=payment.id, _external=True)
-                      for s in ("success", "failure", "pending")},
+        "back_urls": {
+            s: url_for("payment_status", payment_id=payment.id, _external=True)
+            for s in ("success", "failure", "pending")
+        },
         "auto_return": "approved",
+        "payer": {
+            "first_name": name_parts[0] if name_parts else "",
+            "last_name": name_parts[1] if len(name_parts) > 1 else "",
+        },
     }
     current_app.logger.debug("MP Preference Payload:\n%s",
                              json.dumps(preference_data, indent=2, ensure_ascii=False))

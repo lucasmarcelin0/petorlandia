@@ -868,7 +868,7 @@ def test_checkout_sends_external_reference(monkeypatch, app):
         user = User(id=1, name='Tester', email='x')
         user.set_password('x')
         user.endereco = addr
-        product = Product(id=1, name='Prod', price=10.0)
+        product = Product(id=1, name='Prod', price=10.0, description='Prod desc')
         db.session.add_all([addr, user, product])
         db.session.commit()
 
@@ -902,7 +902,13 @@ def test_checkout_sends_external_reference(monkeypatch, app):
 
         resp = client.post('/checkout', data={'address_id': 0})
         payment = Payment.query.first()
-        assert captured['payload']['external_reference'] == str(payment.id)
+        payload = captured['payload']
+        assert payload['external_reference'] == str(payment.id)
+        assert payload['payer']['first_name'] == 'Tester'
+        assert payload['payer']['last_name'] == ''
+        assert payload['items'][0]['id'] == '1'
+        assert payload['items'][0]['description'] == 'Prod desc'
+        assert payload['items'][0]['category_id'] == 'others'
 
 
 def test_checkout_confirm_renders(monkeypatch, app):
