@@ -3433,6 +3433,29 @@ def _limpa_pendencia(payment):
         return None
     return payment
 
+
+def _mp_item_payload(it):
+    """Return a Mercado Pago item dict with description."""
+    if it.product:
+        description = it.product.description or it.product.name
+        return {
+            "id": str(it.product.id),
+            "title": it.product.name,
+            "description": description,
+            "category_id": "others",
+            "quantity": int(it.quantity),
+            "unit_price": float(it.product.price),
+        }
+    # Fallback in case product record was removed
+    return {
+        "id": str(it.id),
+        "title": it.item_name,
+        "description": it.item_name,
+        "category_id": "others",
+        "quantity": int(it.quantity),
+        "unit_price": float(it.unit_price or 0),
+    }
+
 # Helper to fetch the current order from session and verify ownership
 def _get_current_order():
     order_id = session.get("current_order")
@@ -3524,6 +3547,7 @@ def produto_detail(product_id):
             product.description = update_form.description.data
             product.price = float(update_form.price.data or 0)
             product.stock = update_form.stock.data
+            product.mp_category_id = (update_form.mp_category_id.data or "others").strip()
             if update_form.image_upload.data:
                 file = update_form.image_upload.data
                 filename = secure_filename(file.filename)
@@ -3888,19 +3912,22 @@ def checkout():
     # 3️⃣ itens do Preference
     # O Mercado Pago recomenda enviar um código no campo
     # ``items.id`` para agilizar a verificação antifraude.
+
     items = [
         {
             "id":          str(it.product.id),
             "title":       it.product.name,
             "description": it.product.description or it.product.name,
-            "category_id": "others",
+            "category_id": it.product.mp_category_id or "others",
             "quantity":    int(it.quantity),
             "unit_price":  float(it.product.price),
         }
         for it in order.items
     ]
 
+
     # 4️⃣ payload Preference
+
     # Separa o nome em partes para extrair primeiro e último nome
     parts = current_user.name.split()
     first_name = parts[0] if parts else ""
@@ -3908,6 +3935,7 @@ def checkout():
     payer_info = {
         "first_name": first_name,
         "last_name": last_name,
+
         "email": current_user.email,
     }
     if order.shipping_address:
@@ -3915,6 +3943,7 @@ def checkout():
         m = re.search(r"CEP\s*(\d{5}-?\d{3})", order.shipping_address)
         if m:
             payer_info["address"]["zip_code"] = m.group(1)
+
     preference_data = {
         "items": items,
         "external_reference": payment.external_reference,
