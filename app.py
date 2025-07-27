@@ -3433,6 +3433,29 @@ def _limpa_pendencia(payment):
         return None
     return payment
 
+
+def _mp_item_payload(it):
+    """Return a Mercado Pago item dict with description."""
+    if it.product:
+        description = it.product.description or it.product.name
+        return {
+            "id": str(it.product.id),
+            "title": it.product.name,
+            "description": description,
+            "category_id": "others",
+            "quantity": int(it.quantity),
+            "unit_price": float(it.product.price),
+        }
+    # Fallback in case product record was removed
+    return {
+        "id": str(it.id),
+        "title": it.item_name,
+        "description": it.item_name,
+        "category_id": "others",
+        "quantity": int(it.quantity),
+        "unit_price": float(it.unit_price or 0),
+    }
+
 # Helper to fetch the current order from session and verify ownership
 def _get_current_order():
     order_id = session.get("current_order")
@@ -3886,17 +3909,9 @@ def checkout():
     db.session.commit()
 
     # 3️⃣ itens do Preference
-    items = [
-        {
-            "id":          str(it.product.id),
-            "title":       it.product.name,
-            "description": it.product.description or it.product.name,
-            "category_id": "others",
-            "quantity":    int(it.quantity),
-            "unit_price":  float(it.product.price),
-        }
-        for it in order.items
-    ]
+    # O Mercado Pago recomenda enviar um código no campo
+    # ``items.id`` para agilizar a verificação antifraude.
+    items = [_mp_item_payload(it) for it in order.items]
 
     # 4️⃣ payload Preference
     name_parts = current_user.name.split(None, 1)
