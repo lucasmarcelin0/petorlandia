@@ -10,9 +10,8 @@ import uuid
 from werkzeug.utils import secure_filename
 from sqlalchemy import func
 
-from flask_login import current_user
-
 def _is_admin():
+    """Return True if the current user has the admin role."""
     return current_user.is_authenticated and current_user.role == "admin"
 
 
@@ -54,10 +53,6 @@ except ImportError:
 # --------------------------------------------------------------------------
 # Configurações gerais
 # --------------------------------------------------------------------------
-ADMIN_EMAIL = "lukemarki3@gmail.com"
-
-def _is_admin():
-    return current_user.is_authenticated and current_user.email == ADMIN_EMAIL
 
 # --------------------------------------------------------------------------
 # Base para todas as views protegidas
