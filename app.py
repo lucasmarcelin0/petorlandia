@@ -3886,6 +3886,8 @@ def checkout():
     db.session.commit()
 
     # 3️⃣ itens do Preference
+    # O Mercado Pago recomenda enviar um código no campo
+    # ``items.id`` para agilizar a verificação antifraude.
     items = [
         {
             "id":          str(it.product.id),
