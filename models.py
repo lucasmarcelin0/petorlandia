@@ -399,6 +399,9 @@ class ConsultaToken(db.Model):
 
 
 class Consulta(db.Model):
+    __table_args__ = (
+        db.Index('ix_consulta_animal_status', 'animal_id', 'status'),
+    )
     id = db.Column(db.Integer, primary_key=True)
 
     animal_id = db.Column(db.Integer, db.ForeignKey('animal.id'), nullable=False)
