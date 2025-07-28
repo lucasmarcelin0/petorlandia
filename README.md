@@ -22,6 +22,20 @@ When using a remote PostgreSQL database (e.g., on Heroku or AWS RDS) make sure
 the `SQLALCHEMY_DATABASE_URI` includes `sslmode=require` so the connection uses
 TLS.
 
+## Local Development
+
+By default the application enforces HTTPS using Flask‑Talisman. When running
+with the built-in development server there is no TLS support, so you should
+disable the redirect and use an SQLite database:
+
+```bash
+cp .env.example .env
+echo "SQLALCHEMY_DATABASE_URI=sqlite:///instance/dev.db" >> .env
+echo "FORCE_HTTPS=0" >> .env
+echo "SESSION_COOKIE_SECURE=0" >> .env
+flask run
+```
+
 ## Offline Usage
 
 PetOrlândia can operate with limited connectivity thanks to a small service worker

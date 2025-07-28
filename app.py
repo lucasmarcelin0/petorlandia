@@ -77,7 +77,12 @@ babel.init_app(app)
 
 @app.before_request
 def _update_talisman_force_https():
-    talisman.force_https = not app.testing
+    force_env = os.getenv("FORCE_HTTPS")
+    if force_env is None:
+        force = not os.getenv("FLASK_RUN_FROM_CLI")
+    else:
+        force = force_env.lower() not in ("0", "false", "no")
+    talisman.force_https = not app.testing and force
 
 talisman.init_app(app)
 app.config.setdefault("BABEL_DEFAULT_LOCALE", "pt_BR")
