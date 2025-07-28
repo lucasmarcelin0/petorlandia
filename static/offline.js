@@ -1,6 +1,17 @@
 (function(){
   const KEY = 'offline-queue';
 
+  // Abort fetch requests if no response within given timeout (ms)
+  async function fetchWithTimeout(url, opts={}, timeout=8000){
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), timeout);
+    try {
+      return await fetch(url, {...opts, signal: ctrl.signal});
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
   function loadQueue(){
     try { return JSON.parse(localStorage.getItem(KEY)) || []; }
     catch(e){ return []; }
@@ -24,7 +35,7 @@
         body = item.body.text;
       }
       try {
-        const resp = await fetch(item.url, {method:item.method, headers:item.headers, body});
+        const resp = await fetchWithTimeout(item.url, {method:item.method, headers:item.headers, body});
         if(!resp.ok) throw new Error('fail');
         q.shift();
       } catch(err){
@@ -47,7 +58,7 @@
     }
     if(navigator.onLine){
       try {
-        const resp = await fetch(url, opts);
+        const resp = await fetchWithTimeout(url, opts);
         if(resp.ok) return resp;
       } catch(e){ /* fallthrough */ }
     }
