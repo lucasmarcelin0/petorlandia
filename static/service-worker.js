@@ -4,7 +4,6 @@ const CACHE_NAME = 'petorlandia-cache-v4';
 // pre-caching them. Only static assets are cached up-front.
 const urlsToCache = [
   '/static/pastorgato.png'
-  ,'/static/offline.js'
   ,'/static/bootstrap.min.css'
   ,'/static/bootstrap.bundle.min.js'
 ];

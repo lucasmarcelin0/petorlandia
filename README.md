@@ -16,16 +16,6 @@ This project is a Flask application for managing pets. The repository now includ
 
 The tests run without needing external services or a database connection.
 
-## Offline Usage
-
-PetOrlândia can operate with limited connectivity thanks to a small service worker
-and an offline queue. Forms marked with `data-sync="true"` will save their data
-locally whenever the network is unavailable. Once the device goes back online the
-queued requests are automatically sent to the server.
-
-The file `static/offline.js` implements this behaviour and is cached by the
-service worker.
-
 ## Mercado Pago
 
 To enable payment integration you must provide credentials from your Mercado

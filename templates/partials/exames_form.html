@@ -159,15 +159,20 @@
 
     const obsGerais = document.getElementById('observacoes-exames')?.value || '';
 
-    const resp = await fetchOrQueue(`/animal/{{ animal.id }}/bloco_exames`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
-      body: JSON.stringify({
-        exames: exames,
-        observacoes_gerais: obsGerais
-      })
-    });
-    if (resp) {
+    let resp;
+    try {
+      resp = await fetch(`/animal/{{ animal.id }}/bloco_exames`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+        body: JSON.stringify({
+          exames: exames,
+          observacoes_gerais: obsGerais
+        })
+      });
+    } catch (e) {
+      resp = null;
+    }
+    if (resp && resp.ok) {
       const data = await resp.json();
       if (data.success) {
         mostrarFeedback('Solicitação de exames salva com sucesso!');
@@ -180,7 +185,7 @@
         mostrarFeedback('Erro ao salvar exames.', 'danger');
       }
     } else {
-      mostrarFeedback('Solicitação salva offline e será enviada quando possível.', 'info');
+      mostrarFeedback('Erro ao salvar exames.', 'danger');
     }
   }
 </script>
