@@ -267,8 +267,10 @@
       if (response) {
         const data = await response.json();
         if (!response.ok) throw new Error(data.message || 'Erro ao salvar prescrição');
+        document.getElementById('historico-prescricoes').innerHTML = data.historico_html;
         mostrarFeedback('Prescrição salva com sucesso!', 'success');
-        setTimeout(() => location.reload(), 1500);
+        prescricoes = [];
+        renderPrescricoesTemp();
       } else {
         mostrarFeedback('Prescrição salva offline. Sincronizaremos em breve.', 'info');
       }

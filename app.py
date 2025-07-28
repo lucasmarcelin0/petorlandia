@@ -1927,7 +1927,7 @@ def update_consulta(consulta_id):
     # Se estiver editando uma consulta antiga
     if request.args.get('edit') == '1':
         db.session.commit()
-        flash('Consulta atualizada com sucesso!', 'success')
+        msg = 'Consulta atualizada com sucesso!'
 
     else:
         # Salva, finaliza e cria nova automaticamente
@@ -1941,9 +1941,19 @@ def update_consulta(consulta_id):
         )
         db.session.add(nova)
         db.session.commit()
+        msg = 'Consulta salva e movida para o histórico!'
 
-        flash('Consulta salva e movida para o histórico!', 'success')
+    if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+        historico = (Consulta.query
+                     .filter_by(animal_id=consulta.animal_id, status='finalizada')
+                     .order_by(Consulta.created_at.desc())
+                     .all())
+        historico_html = render_template('partials/historico_consultas.html',
+                                         historico_consultas=historico,
+                                         animal=consulta.animal)
+        return jsonify({'success': True, 'message': msg, 'historico_html': historico_html})
 
+    flash(msg, 'success')
     return redirect(url_for('consulta_direct', animal_id=consulta.animal_id))
 
 
@@ -2009,7 +2019,9 @@ def salvar_racao(animal_id):
             return jsonify({'success': False, 'error': 'Formato de dados inválido.'}), 400
 
         db.session.commit()
-        return jsonify({'success': True})
+
+        historico_html = render_template('partials/historico_racoes.html', animal=animal)
+        return jsonify({'success': True, 'historico_html': historico_html})
 
     except Exception as e:
         db.session.rollback()
@@ -2088,7 +2100,8 @@ def editar_racao(racao_id):
 
     try:
         db.session.commit()
-        return jsonify({'success': True})
+        historico_html = render_template('partials/historico_racoes.html', animal=racao.animal)
+        return jsonify({'success': True, 'historico_html': historico_html})
     except Exception as e:
         db.session.rollback()
         print(f"Erro ao editar ração: {e}")
@@ -2105,9 +2118,11 @@ def excluir_racao(racao_id):
         return jsonify({'success': False, 'error': 'Permissão negada.'}), 403
 
     try:
+        animal = racao.animal
         db.session.delete(racao)
         db.session.commit()
-        return jsonify({'success': True})
+        historico_html = render_template('partials/historico_racoes.html', animal=animal)
+        return jsonify({'success': True, 'historico_html': historico_html})
     except Exception as e:
         db.session.rollback()
         print(f"Erro ao excluir ração: {e}")
@@ -2215,12 +2230,20 @@ def salvar_vacinas(animal_id):
             db.session.add(vacina)
 
         db.session.commit()
-        return jsonify({"success": True})
+        animal = Animal.query.get_or_404(animal_id)
+        historico_html = render_template('partials/historico_vacinas.html', animal=animal)
+        return jsonify({"success": True, "historico_html": historico_html})
 
     except Exception as e:
         print("Erro ao salvar vacinas:", e)
         return jsonify({"success": False, "error": "Erro técnico ao salvar vacinas"}), 500
 
+
+@app.route('/animal/<int:animal_id>/historico_vacinas')
+@login_required
+def obter_historico_vacinas(animal_id):
+    animal = Animal.query.get_or_404(animal_id)
+    return render_template('partials/historico_vacinas.html', animal=animal)
 
 
 
@@ -2233,8 +2256,14 @@ def imprimir_vacinas(animal_id):
 @app.route("/vacina/<int:vacina_id>/deletar", methods=["POST"])
 def deletar_vacina(vacina_id):
     vacina = Vacina.query.get_or_404(vacina_id)
+    animal = vacina.animal
     db.session.delete(vacina)
     db.session.commit()
+
+    if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+        historico_html = render_template('partials/historico_vacinas.html', animal=animal)
+        return jsonify({"success": True, "historico_html": historico_html})
+
     return redirect(request.referrer or url_for("index"))
 
 
@@ -2258,7 +2287,9 @@ def editar_vacina(vacina_id):
             vacina.data = datetime.strptime(data["data"], "%Y-%m-%d").date()
 
         db.session.commit()
-        return jsonify({"success": True})
+        animal = vacina.animal
+        historico_html = render_template('partials/historico_vacinas.html', animal=animal)
+        return jsonify({"success": True, "historico_html": historico_html})
 
     except Exception as e:
         print("Erro ao editar vacina:", e)
@@ -2475,7 +2506,9 @@ def salvar_bloco_prescricao(consulta_id):
         db.session.add(nova)
 
     db.session.commit()
-    return jsonify({'success': True, 'message': 'Prescrições salvas com sucesso!'})
+    historico_html = render_template('partials/historico_prescricoes.html', animal=consulta.animal)
+    return jsonify({'success': True, 'message': 'Prescrições salvas com sucesso!',
+                    'historico_html': historico_html})
 
 
 @app.route('/bloco_prescricao/<int:bloco_id>/deletar', methods=['POST'])
@@ -2585,7 +2618,17 @@ def salvar_bloco_exames(animal_id):
         db.session.add(exame_modelo)
 
     db.session.commit()
-    return jsonify({'success': True})
+
+    animal = Animal.query.get_or_404(animal_id)
+    historico_html = render_template('partials/historico_exames_simple.html', animal=animal)
+    return jsonify({'success': True, 'historico_html': historico_html})
+
+
+@app.route('/animal/<int:animal_id>/historico_exames')
+@login_required
+def obter_historico_exames(animal_id):
+    animal = Animal.query.get_or_404(animal_id)
+    return render_template('partials/historico_exames_simple.html', animal=animal)
 
 
 
@@ -2618,12 +2661,16 @@ def deletar_bloco_exames(bloco_id):
         flash('Apenas veterinários podem excluir blocos de exames.', 'danger')
         return redirect(request.referrer or url_for('index'))
 
-    animal_id = bloco.animal_id
+    animal = bloco.animal
     db.session.delete(bloco)
     db.session.commit()
 
+    if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+        historico_html = render_template('partials/historico_exames_simple.html', animal=animal)
+        return jsonify({'success': True, 'historico_html': historico_html})
+
     flash('Bloco de exames excluído com sucesso!', 'info')
-    return redirect(url_for('consulta_direct', animal_id=animal_id))
+    return redirect(url_for('consulta_direct', animal_id=animal.id))
 
 
 
@@ -2696,7 +2743,9 @@ def atualizar_bloco_exames(bloco_id):
             db.session.delete(ex)
 
     db.session.commit()
-    return jsonify(success=True)
+    animal = bloco.animal
+    historico_html = render_template('partials/historico_exames_simple.html', animal=animal)
+    return jsonify(success=True, historico_html=historico_html)
 
 
 

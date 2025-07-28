@@ -157,8 +157,10 @@
       if (resp) {
         const data = await resp.json();
         if (data.success) {
+          document.getElementById('historico-vacinas').innerHTML = data.historico_html;
           alert('Vacinas registradas com sucesso!');
-          location.reload();
+          vacinas = [];
+          renderVacinasTemp();
         } else {
           alert('Erro ao salvar vacinas.');
         }

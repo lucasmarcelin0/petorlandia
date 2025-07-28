@@ -1,0 +1,37 @@
+<h5>📋 Histórico de Rações</h5>
+{% if animal.racoes %}
+  <ul class="list-group">
+    {% for racao in animal.racoes %}
+      <li class="list-group-item">
+        <strong>Marca:</strong> {{ racao.tipo_racao.marca }}<br>
+        <strong>Linha:</strong> {{ racao.tipo_racao.linha or 'Não informada' }}<br>
+
+        <strong>Recomendação:</strong>
+        {% if racao.recomendacao_custom %}
+          {{ racao.recomendacao_custom }} g/dia<br>
+        {% elif animal.peso and racao.tipo_racao.recomendacao %}
+          {{ (animal.peso * racao.tipo_racao.recomendacao)|round(1) }} g/dia<br>
+        {% else %}
+          Não informado<br>
+        {% endif %}
+
+        <strong>Preço pago:</strong> R$ {{ racao.preco_pago or 'Não informado' }}<br>
+
+        <strong>Peso do pacote:</strong>
+        {{ racao.tipo_racao.peso_pacote_kg or 'Não informado' }} kg<br>
+
+        <strong>Observações:</strong>
+        {{ racao.observacoes_racao or racao.tipo_racao.observacoes or 'Nenhuma' }}<br>
+
+        <small class="text-muted">Registrado em {{ racao.data_cadastro|format_datetime_brazil('%d/%m/%Y') }}</small>
+
+        <div class="mt-2">
+          <button class="btn btn-sm btn-outline-primary me-2" onclick="editarRacao({{ racao.id }})">✏️ Editar</button>
+          <button class="btn btn-sm btn-outline-danger" onclick="excluirRacao({{ racao.id }})">🗑️ Excluir</button>
+        </div>
+      </li>
+    {% endfor %}
+  </ul>
+{% else %}
+  <p class="text-muted">Nenhuma ração cadastrada ainda para este animal.</p>
+{% endif %}

@@ -30,9 +30,9 @@
   <button type="button" class="btn btn-primary mt-2" onclick="finalizarBlocoExames()">💾 Finalizar Solicitação</button>
 </form>
 
-<!-- Histórico de prescrições -->
-<div id="historico-prescricoes" class="mt-5">
-  {% include 'partials/historico_exames.html' %}
+<!-- Histórico de Exames -->
+<div id="historico-exames" class="mt-5">
+  {% include 'partials/historico_exames_simple.html' %}
 </div>
 
 
@@ -163,8 +163,10 @@
     if (resp) {
       const data = await resp.json();
       if (data.success) {
+        document.getElementById('historico-exames').innerHTML = data.historico_html;
         alert('Solicitação de exames salva com sucesso!');
-        location.reload();
+        exames = [];
+        renderExamesTemp();
       } else {
         alert('Erro ao salvar exames.');
       }

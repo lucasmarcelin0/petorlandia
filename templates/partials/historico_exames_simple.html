@@ -1,0 +1,28 @@
+<h5>📋 Histórico de Exames</h5>
+{% if animal.blocos_exames %}
+  {% for bloco in animal.blocos_exames|reverse %}
+  <div class="border p-3 mb-3 bg-light rounded">
+    <div class="d-flex justify-content-between align-items-center mb-2">
+      <div>
+        <strong>Solicitado em {{ bloco.data_criacao|format_datetime_brazil('%d/%m/%Y %H:%M') }}</strong>
+      </div>
+      <div class="d-flex gap-2">
+        <form method="POST" action="{{ url_for('deletar_bloco_exames', bloco_id=bloco.id) }}" onsubmit="return confirm('Excluir este bloco de exames?');">
+          <button type="submit" class="btn btn-danger btn-sm">🗑️ Excluir</button>
+        </form>
+        <a href="{{ url_for('imprimir_bloco_exames', bloco_id=bloco.id) }}" class="btn btn-outline-secondary btn-sm">🖨️ Imprimir</a>
+      </div>
+    </div>
+    <ul class="list-group list-group-flush mb-2">
+      {% for ex in bloco.exames %}
+      <li class="list-group-item">🧪 <strong>{{ ex.nome }}</strong><br><em>{{ ex.justificativa }}</em></li>
+      {% endfor %}
+    </ul>
+    {% if bloco.observacoes_gerais %}
+    <div><em>{{ bloco.observacoes_gerais }}</em></div>
+    {% endif %}
+  </div>
+  {% endfor %}
+{% else %}
+  <p class="text-muted">Nenhum exame registrado ainda para este animal.</p>
+{% endif %}

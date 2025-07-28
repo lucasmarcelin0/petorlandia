@@ -8,7 +8,7 @@
 
 <form method="POST"
       action="{{ url_for('update_consulta', consulta_id=consulta.id) }}{% if edit_mode %}?edit=1{% endif %}"
-      class="needs-validation" novalidate data-sync="true">
+      class="needs-validation" novalidate>
 
   <!-- Seção de Queixa Principal -->
   <div class="mb-3">
@@ -90,12 +90,31 @@ document.addEventListener('DOMContentLoaded', function() {
   // Validação do formulário
   const form = document.querySelector('form.needs-validation');
   if (form) {
-    form.addEventListener('submit', function(event) {
+    form.addEventListener('submit', async function(event) {
+      event.preventDefault();
+
       if (!form.checkValidity()) {
-        event.preventDefault();
         event.stopPropagation();
+        form.classList.add('was-validated');
+        return;
       }
-      form.classList.add('was-validated');
+
+      const formData = new FormData(form);
+      const response = await fetch(form.action, {
+        method: 'POST',
+        body: formData,
+        headers: { 'X-Requested-With': 'XMLHttpRequest' }
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        document.getElementById('historico-consultas').innerHTML = data.historico_html;
+        alert(data.message);
+        form.reset();
+        form.classList.remove('was-validated');
+      } else {
+        alert('Erro ao salvar consulta');
+      }
     }, false);
   }
 
