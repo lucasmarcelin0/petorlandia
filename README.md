@@ -47,7 +47,8 @@ These credentials are used when generating checkout preferences and embedding
 payment widgets. Never commit your real keys into version control.
 
 After checkout, Mercado Pago will redirect the buyer back to `/payment_status/<id>`
-with a `status` parameter indicating `success` or `failure`.
+with a `status` parameter indicating `success` or `failure`. This page no
+longer requires authentication so buyers are always redirected correctly.
 
 If for any reason the webhook notification is not delivered, the application now
 checks the payment status directly with Mercado Pago when the buyer visits the
@@ -70,11 +71,26 @@ in the `items.id` field of the preference payload. The checkout process
 already does this by using the product's ID, which helps improve the
 approval rate of transactions.
 
+The example script in `test.py` now includes this `id` field so you can
+see how the payload should look.
+
 
 
 
 To improve the approval rate, every item sent to Mercado Pago now also
 includes a `description` taken from our product database.
+
+It is also recommended to provide a valid `category_id` for each item. The
+application stores this identifier in the `Product.mp_category_id` field and the
+example script in `test.py` sends the value "others" by default. Update it with
+the category that best represents your product to further reduce the chance of
+fraud detection issues.
+
+Mercado Pago also suggests sending additional buyer information to improve
+security checks. Whenever available the application now includes the buyer's
+address, phone number and CPF in the `payer` object of the preference payload.
+Providing these fields can help reduce fraud rejections and increase approval
+rates.
 
 
 
