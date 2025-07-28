@@ -22,6 +22,10 @@ When using a remote PostgreSQL database (e.g., on Heroku or AWS RDS) make sure
 the `SQLALCHEMY_DATABASE_URI` includes `sslmode=require` so the connection uses
 TLS.
 
+Heroku may still provide a `DATABASE_URL` starting with `postgres://`. The
+application now automatically converts this to `postgresql://` so SQLAlchemy can
+load the correct dialect.
+
 ## Local Development
 
 By default the application enforces HTTPS using Flask‑Talisman. When running
