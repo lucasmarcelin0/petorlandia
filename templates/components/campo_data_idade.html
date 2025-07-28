@@ -1,9 +1,13 @@
 <div class="row g-3 data-idade" data-prefixo="{{ prefixo }}">
   <div class="col-md-4">
     <label class="form-label">Data de Nascimento</label>
+    <input type="hidden"
+           name="{{ nome_data or 'date_of_birth' }}"
+           id="{{ prefixo }}_dob_iso"
+           value="{{ valor_data_iso or '' }}"
+           data-dob-iso>
     <input
       type="text"
-      name="{{ nome_data or 'date_of_birth' }}"
       class="form-control"
       id="{{ prefixo }}_dob"
       value="{{ valor_data or '' }}"
@@ -30,6 +34,7 @@
 
     const dobInput = wrapper.querySelector('[data-dob]');
     const ageInput = wrapper.querySelector('[data-age]');
+    const hiddenInput = wrapper.querySelector('[data-dob-iso]');
     if (!dobInput || !ageInput) return;
 
     // Máscara de input dd/mm/yyyy
@@ -46,6 +51,7 @@
       onReady: function () {
         const parsed = parseData(dobInput.value);
         if (parsed) atualizarIdade(parsed);
+        if (parsed && hiddenInput) hiddenInput.value = parsed.toISOString().split('T')[0];
       },
 
       onChange: function (selectedDates) {
@@ -61,6 +67,7 @@
       const m = hoje.getMonth() - dataNascimento.getMonth();
       if (m < 0 || (m === 0 && hoje.getDate() < dataNascimento.getDate())) idade--;
       ageInput.value = idade;
+      if (hiddenInput) hiddenInput.value = dataNascimento.toISOString().split('T')[0];
     }
 
     // Quando o usuário digita a idade
@@ -70,13 +77,17 @@
         const hoje = new Date();
         const estimada = new Date(hoje.getFullYear() - idade, hoje.getMonth(), hoje.getDate());
         fp.setDate(estimada, true);
+        if (hiddenInput) hiddenInput.value = estimada.toISOString().split('T')[0];
       }
     });
 
     // Quando o usuário termina de digitar a data
     dobInput.addEventListener("blur", () => {
       const parsed = parseData(dobInput.value);
-      if (parsed) fp.setDate(parsed, true);
+      if (parsed) {
+        fp.setDate(parsed, true);
+        if (hiddenInput) hiddenInput.value = parsed.toISOString().split('T')[0];
+      }
     });
 
     function parseData(str) {
