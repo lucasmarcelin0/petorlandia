@@ -84,7 +84,12 @@ def _update_talisman_force_https():
         force = force_env.lower() not in ("0", "false", "no")
     talisman.force_https = not app.testing and force
 
-talisman.init_app(app)
+if os.getenv("FLASK_RUN_FROM_CLI"):
+    # Disable the default CSP when running via `flask run` so inline styles
+    # and CDN assets work during development.
+    talisman.init_app(app, content_security_policy=None)
+else:
+    talisman.init_app(app)
 app.config.setdefault("BABEL_DEFAULT_LOCALE", "pt_BR")
 
 # ----------------------------------------------------------------
