@@ -22,7 +22,8 @@
 <!-- 👤 Formulário de Tutor - Aprimorado com validação e organização -->
 <form id="tutor-form" method="POST" enctype="multipart/form-data"
       {% if has_tutor %}action="{{ url_for('update_tutor', user_id=tutor.id) }}"{% endif %}
-      class="needs-validation" novalidate data-sync="true">
+      class="needs-validation" novalidate
+      onsubmit="this.querySelector('button[type=submit]').disabled = true;">
   
   <h5 class="mb-4 d-flex align-items-center gap-2">
     <i class="bi bi-person-fill"></i> Cadastro do Tutor
