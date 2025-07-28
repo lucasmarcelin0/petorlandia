@@ -1321,7 +1321,7 @@ def editar_ficha_animal(animal_id):
 @login_required
 def generate_qr(animal_id):
     animal = Animal.query.get_or_404(animal_id)
-    if current_user.id != animal.tutor_id:
+    if current_user.id != animal.user_id:
         flash('Você não tem permissão para gerar o QR code deste animal.', 'danger')
         return redirect(url_for('ficha_animal', animal_id=animal_id))
 
@@ -1360,7 +1360,7 @@ def consulta_qr():
     idade = calcular_idade(animal.date_of_birth) if animal.date_of_birth else ''
 
     # Lógica adicional
-    tutor = animal.tutor
+    tutor = animal.owner
     consulta = Consulta.query.filter_by(animal_id=animal.id).order_by(Consulta.id.desc()).first()
 
     return render_template('consulta_qr.html',
