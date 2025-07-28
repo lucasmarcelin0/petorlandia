@@ -125,11 +125,17 @@ def datetime_brazil(value):
 def format_datetime_brazil(value, fmt="%d/%m/%Y %H:%M"):
     if value is None:
         return ""
-    if value.tzinfo is None:
 
-        value = value.replace(tzinfo=timezone.utc)
+    if isinstance(value, datetime):
+        if value.tzinfo is None:
+            value = value.replace(tzinfo=timezone.utc)
+        value = value.astimezone(BR_TZ)
+        return value.strftime(fmt)
 
-    return value.astimezone(BR_TZ).strftime(fmt)
+    if isinstance(value, date):
+        return value.strftime(fmt)
+
+    return value
 
 # ----------------------------------------------------------------
 # 6)  Forms e helpers
