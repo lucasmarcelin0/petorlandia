@@ -83,5 +83,11 @@ example script in `test.py` sends the value "others" by default. Update it with
 the category that best represents your product to further reduce the chance of
 fraud detection issues.
 
+Mercado Pago also suggests sending additional buyer information to improve
+security checks. Whenever available the application now includes the buyer's
+address, phone number and CPF in the `payer` object of the preference payload.
+Providing these fields can help reduce fraud rejections and increase approval
+rates.
+
 
 

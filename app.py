@@ -3944,6 +3944,22 @@ def checkout():
 
         "email": current_user.email,
     }
+    if current_user.phone:
+        digits = re.sub(r"\D", "", current_user.phone)
+        if digits.startswith("55") and len(digits) > 11:
+            digits = digits[2:]
+        if len(digits) >= 10:
+            payer_info["phone"] = {
+                "area_code": digits[:2],
+                "number": digits[2:],
+            }
+        else:
+            payer_info["phone"] = {"number": digits}
+    if current_user.cpf:
+        payer_info["identification"] = {
+            "type": "CPF",
+            "number": re.sub(r"\D", "", current_user.cpf),
+        }
     if order.shipping_address:
         payer_info["address"] = {"street_name": order.shipping_address}
         m = re.search(r"CEP\s*(\d{5}-?\d{3})", order.shipping_address)
