@@ -77,5 +77,11 @@ approval rate of transactions.
 To improve the approval rate, every item sent to Mercado Pago now also
 includes a `description` taken from our product database.
 
+It is also recommended to provide a valid `category_id` for each item. The
+application stores this identifier in the `Product.mp_category_id` field and the
+example script in `test.py` sends the value "others" by default. Update it with
+the category that best represents your product to further reduce the chance of
+fraud detection issues.
+
 
 

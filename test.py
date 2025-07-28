@@ -14,6 +14,7 @@ preference_data = {
     "items": [
         {
             "title": "Ração Premium 10 kg",
+            "category_id": "others",
             "quantity": 1,
             "unit_price": 149.90
         }
