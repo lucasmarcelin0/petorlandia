@@ -991,8 +991,7 @@ def deletar_animal(animal_id):
 
     animal.removido_em = datetime.utcnow()
     db.session.commit()
-    flash('Animal marcado como removido. Histórico preservado.', 'success')
-    return redirect(url_for('list_animals'))
+    return jsonify({"success": True})
 
 
 @app.route('/termo/interesse/<int:animal_id>/<int:user_id>', methods=['GET', 'POST'])
@@ -1435,8 +1434,7 @@ def deletar_consulta(consulta_id):
 
     db.session.delete(consulta)
     db.session.commit()
-    flash('Consulta excluída!', 'info')
-    return redirect(url_for('consulta_direct', animal_id=animal_id))
+    return jsonify({"success": True, "animal_id": animal_id})
 
 
 @app.route('/imprimir_consulta/<int:consulta_id>')
@@ -1633,13 +1631,11 @@ def deletar_tutor(tutor_id):
 
         db.session.delete(tutor)
         db.session.commit()
-        flash('Tutor e todos os seus dados foram excluídos com sucesso.', 'success')
+        return jsonify({"success": True})
 
     except Exception as e:
         db.session.rollback()
-        flash(f'Erro ao excluir tutor: {str(e)}', 'danger')
-
-    return redirect(url_for('tutores'))
+        return jsonify({"success": False, "error": str(e)}), 500
 
 
 
@@ -2218,7 +2214,7 @@ def deletar_vacina(vacina_id):
     vacina = Vacina.query.get_or_404(vacina_id)
     db.session.delete(vacina)
     db.session.commit()
-    return redirect(request.referrer or url_for("index"))
+    return jsonify({"success": True})
 
 
 
@@ -2291,6 +2287,7 @@ from flask import request, jsonify
 @login_required
 def deletar_prescricao(prescricao_id):
     prescricao = Prescricao.query.get_or_404(prescricao_id)
+    consulta = prescricao.consulta
     consulta_id = prescricao.consulta_id
 
     if current_user.worker != 'veterinario':
@@ -2299,8 +2296,7 @@ def deletar_prescricao(prescricao_id):
 
     db.session.delete(prescricao)
     db.session.commit()
-    flash('Prescrição removida com sucesso!', 'info')
-    return redirect(url_for('consulta_qr', animal_id=consulta.animal_id))
+    return jsonify({"success": True, "animal_id": consulta.animal_id})
 
 
 @app.route('/importar_medicamentos')
@@ -2466,7 +2462,7 @@ def salvar_bloco_prescricao(consulta_id):
 def historico_prescricoes_view(consulta_id):
     consulta = Consulta.query.get_or_404(consulta_id)
     animal = consulta.animal
-    return render_template('partials/historico_prescricoes.html', animal=animal)
+    return render_template('partials/historico_prescricoes.html', animal=animal, consulta=consulta)
 
 
 @app.route('/bloco_prescricao/<int:bloco_id>/deletar', methods=['POST'])
@@ -2481,8 +2477,7 @@ def deletar_bloco_prescricao(bloco_id):
     animal_id = bloco.animal_id
     db.session.delete(bloco)
     db.session.commit()
-    flash('Bloco de prescrição excluído com sucesso!', 'info')
-    return redirect(url_for('consulta_direct', animal_id=animal_id))
+    return jsonify({"success": True, "animal_id": animal_id})
 
 
 @app.route('/bloco_prescricao/<int:bloco_id>/editar', methods=['GET'])
@@ -2613,8 +2608,7 @@ def deletar_bloco_exames(bloco_id):
     db.session.delete(bloco)
     db.session.commit()
 
-    flash('Bloco de exames excluído com sucesso!', 'info')
-    return redirect(url_for('consulta_direct', animal_id=animal_id))
+    return jsonify({"success": True, "animal_id": animal_id})
 
 
 

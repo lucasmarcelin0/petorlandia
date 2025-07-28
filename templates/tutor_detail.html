@@ -10,8 +10,10 @@
     <div class="card-body position-relative">
       <!-- Botão de excluir tutor no topo direito -->
       <form method="POST" action="{{ url_for('deletar_tutor', tutor_id=tutor.id) }}"
+            data-sync="true" data-no-reload="true" data-remove-target=".card"
             onsubmit="return confirm('Tem certeza que deseja excluir este tutor e todos os seus dados permanentemente?');"
             class="position-absolute top-0 end-0 m-2">
+        {{ csrf_token() }}
         <button type="submit" class="btn btn-sm btn-danger" title="Excluir Tutor">
           ❌
         </button>
@@ -31,6 +33,7 @@
 
 
       <form action="{{ url_for('update_tutor', user_id=tutor.id) }}" method="POST" enctype="multipart/form-data" class="row g-3">
+        {{ csrf_token() }}
         <div class="col-md-6">
           <label class="form-label">Nome</label>
           <input name="name" class="form-control" value="{{ tutor.name }}" required>
@@ -129,7 +132,11 @@
             <button type="button" class="btn btn-outline-warning btn-sm" data-bs-toggle="modal" data-bs-target="#modalEditarAnimal{{ a.id }}">
               ✏️ Editar
             </button>
-            <form action="{{ url_for('deletar_animal', animal_id=a.id) }}" method="POST" onsubmit="return confirm('Tem certeza que deseja remover este animal?')" style="display:inline;">
+
+            <form action="{{ url_for('deletar_animal', animal_id=a.id) }}" method="POST"
+                  data-sync="true" data-no-reload="true" data-remove-closest="li"
+                  onsubmit="return confirm('Tem certeza que deseja remover este animal?')" style="display:inline;">
+
               <button type="submit" class="btn btn-outline-danger btn-sm">
                 🗑️ Remover
               </button>
@@ -159,7 +166,11 @@
           {% for r in removidos %}
           <li class="list-group-item d-flex justify-content-between align-items-center">
             <span><strong>{{ r.name }}</strong> — {{ r.species }} / {{ r.breed }}</span>
-            <form action="{{ url_for('deletar_animal', animal_id=r.id) }}" method="POST" onsubmit="return confirm('Excluir permanentemente {{ r.name }}?')">
+
+            <form action="{{ url_for('deletar_animal', animal_id=r.id) }}" method="POST"
+                  data-sync="true" data-no-reload="true" data-remove-closest="li"
+                  onsubmit="return confirm('Excluir permanentemente {{ r.name }}?')">
+
               <button type="submit" class="btn btn-sm btn-danger">❌ Excluir Definitivamente</button>
             </form>
           </li>
@@ -178,6 +189,7 @@
   <div class="modal-dialog modal-lg modal-dialog-scrollable">
     <div class="modal-content">
       <form action="{{ url_for('update_animal', animal_id=a.id) }}" method="POST" enctype="multipart/form-data">
+        {{ csrf_token() }}
         <div class="modal-header">
           <h5 class="modal-title">✏️ Editar {{ a.name }}</h5>
           <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
@@ -297,6 +309,7 @@
         <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
       </div>
       <form action="{{ url_for('novo_animal') }}" method="POST" enctype="multipart/form-data">
+        {{ csrf_token() }}
         <div class="modal-body">
           <input type="hidden" name="tutor_id" value="{{ tutor.id }}">
 
@@ -337,10 +350,10 @@
               <label class="form-label">Data de Nascimento</label>
               <input id="animal_dob" name="date_of_birth" type="text" class="form-control">
             </div>
-            <div class="col-md-3">
-              <label class="form-label">Idade</label>
-              <input id="animal_age" type="number" class="form-control" min="0">
-            </div>
+              <div class="col-md-3">
+                <label class="form-label">Idade</label>
+                <input id="animal_age" name="age" type="number" class="form-control" min="0">
+              </div>
             <div class="col-md-3">
               <label class="form-label">Microchip</label>
               <input name="microchip_number" class="form-control">

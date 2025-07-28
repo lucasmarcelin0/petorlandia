@@ -98,6 +98,21 @@
       });
 
       renderVacinasTemp();
+
+      const pend = JSON.parse(localStorage.getItem('pending_vacinas_{{ animal.id }}') || '[]');
+      if (pend.length) {
+        const ul = document.querySelector('#historico-vacinas ul.list-group');
+        if(ul){
+          pend.forEach(block => {
+            block.vacinas.forEach(v => {
+              const li = document.createElement('li');
+              li.className = 'list-group-item text-muted';
+              li.innerHTML = `<strong>${v.nome}</strong> — ${v.tipo} em ${v.data}<span class="badge bg-secondary ms-2">Pendente</span>`;
+              ul.prepend(li);
+            });
+          });
+        }
+      }
     });
 
     function adicionarVacina() {
@@ -171,6 +186,20 @@
         }
       } else {
         alert('Vacinas salvas offline e serão enviadas quando possível.');
+        const pending = JSON.parse(localStorage.getItem('pending_vacinas_{{ animal.id }}') || '[]');
+        pending.push({vacinas, observacoes: obs, data: new Date().toISOString().slice(0,10)});
+        localStorage.setItem('pending_vacinas_{{ animal.id }}', JSON.stringify(pending));
+        const htmlList = document.querySelector('#historico-vacinas ul.list-group');
+        if (htmlList) {
+          vacinas.forEach(v => {
+            const li = document.createElement('li');
+            li.className = 'list-group-item text-muted';
+            li.innerHTML = `<strong>${v.nome}</strong>${v.tipo? ' — '+v.tipo:''} em ${v.data}<span class="badge bg-secondary ms-2">Pendente</span>`;
+            htmlList.prepend(li);
+          });
+        }
+        vacinas = [];
+        renderVacinasTemp();
       }
     }
   </script>
