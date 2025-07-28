@@ -72,6 +72,7 @@
 
   <div class="no-print" style="margin-bottom: 1em;">
     <button onclick="window.print()">🖨️ Imprimir</button>
+    <button onclick="abrirAssinatura()" style="margin-left: 5px;">🔏 Assinar</button>
     <a href="{{ url_for('consulta_direct', animal_id=animal.id) }}" style="margin-left: 15px;">← Voltar</a>
   </div>
 
@@ -131,11 +132,11 @@
   </footer>
   {% endif %}
   <script>
-  window.addEventListener('afterprint', function(){
+    function abrirAssinatura() {
       if (confirm('Abrir página de assinatura agora?')) {
-          window.location.href = 'https://assinador.iti.br/assinatura/index.xhtml';
+        window.open('https://assinador.iti.br/assinatura/index.xhtml', '_blank');
       }
-  });
+    }
   </script>
 </body>
 </html>
