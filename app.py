@@ -1928,7 +1928,8 @@ def update_consulta(consulta_id):
     # Se estiver editando uma consulta antiga
     if request.args.get('edit') == '1':
         db.session.commit()
-        flash('Consulta atualizada com sucesso!', 'success')
+        message = 'Consulta atualizada com sucesso!'
+        flash(message, 'success')
 
     else:
         # Salva, finaliza e cria nova automaticamente
@@ -1943,7 +1944,22 @@ def update_consulta(consulta_id):
         db.session.add(nova)
         db.session.commit()
 
-        flash('Consulta salva e movida para o histórico!', 'success')
+        message = 'Consulta salva e movida para o histórico!'
+        flash(message, 'success')
+
+    if 'application/json' in request.headers.get('Accept', ''):
+        historico = (
+            Consulta.query
+            .filter_by(animal_id=consulta.animal_id, status='finalizada')
+            .order_by(Consulta.created_at.desc())
+            .all()
+        )
+        html = render_template(
+            'partials/historico_consultas.html',
+            animal=consulta.animal,
+            historico_consultas=historico,
+        )
+        return jsonify(success=True, message=message, html=html)
 
     return redirect(url_for('consulta_direct', animal_id=consulta.animal_id))
 

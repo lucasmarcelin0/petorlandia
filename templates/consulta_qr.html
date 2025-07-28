@@ -117,7 +117,9 @@
         <div class="card shadow-sm">
           <div class="card-body">
             {% include 'partials/consulta_form.html' %}
-            {% include 'partials/historico_consultas.html' %}
+            <div id="historico-consultas">
+              {% include 'partials/historico_consultas.html' %}
+            </div>
           </div>
         </div>
       </div>
@@ -202,6 +204,24 @@ document.addEventListener('DOMContentLoaded', function() {
       if (medInput) medInput.dispatchEvent(new Event('input'));
     }
   });
+});
+
+document.addEventListener('form-sync-success', function(ev) {
+  const {form, data} = ev.detail || {};
+  if (form && form.id === 'consulta-form') {
+    ev.preventDefault();
+    if (data && data.html) {
+      const container = document.getElementById('historico-consultas');
+      if (container) container.innerHTML = data.html;
+    }
+    const toastEl = document.getElementById('actionToast');
+    if (toastEl) {
+      toastEl.querySelector('.toast-body').textContent = (data && data.message) || 'Consulta salva com sucesso!';
+      toastEl.classList.remove('bg-danger', 'bg-info', 'bg-success');
+      toastEl.classList.add('bg-success');
+      bootstrap.Toast.getOrCreateInstance(toastEl).show();
+    }
+  }
 });
 
 </script>
