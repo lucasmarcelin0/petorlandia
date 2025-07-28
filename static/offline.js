@@ -67,8 +67,13 @@
     const data = new FormData(form);
     const resp = await window.fetchOrQueue(form.action, {method: form.method || 'POST', headers: {'Accept': 'application/json'}, body: data});
     if (resp) {
-      try { await resp.json(); } catch(e) {}
-      location.reload();
+      let json = null;
+      try { json = await resp.json(); } catch(e) {}
+      const evt = new CustomEvent('form-sync-success', {detail: {form, data: json}, cancelable: true});
+      document.dispatchEvent(evt);
+      if (!evt.defaultPrevented) {
+        location.reload();
+      }
     } else {
       alert('Ação salva offline e será sincronizada quando possível.');
     }
