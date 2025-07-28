@@ -16,6 +16,9 @@ This project is a Flask application for managing pets. The repository now includ
 
 The tests run without needing external services or a database connection.
 
+Copy `.env.example` to `.env` and fill in your credentials before running the
+application. These files are ignored by Git so your secrets remain private.
+
 ## Offline Usage
 
 PetOrlândia can operate with limited connectivity thanks to a small service worker
