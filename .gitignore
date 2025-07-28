@@ -1,2 +1,68 @@
+# ========================
+# Python Cache & Bytecode
+# ========================
 __pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.pyd
+*.pdb
+*.egg-info/
+*.egg
+*.manifest
+*.spec
+
+# ========================
+# Virtual Environment
+# ========================
+venv/
+.env/
+.env.*            # Any env variants (e.g., .env.development)
+.env.local
+*.env             # Just in case there are named .env files
+
+# ========================
+# Flask Session / Instance
+# ========================
+instance/
 flask_session/
+*.sqlite
+*.db
+*.sqlite3
+
+# ========================
+# Logs & Temporary Files
+# ========================
+*.log
+*.pid
+*.seed
+*.bak
+*.swp
+*.tmp
+
+# ========================
+# Heroku & Deployment
+# ========================
+/.heroku
+.heroku/*
+/build
+/dist
+*.tar.gz
+
+# ========================
+# Node / Frontend (if used)
+# ========================
+node_modules/
+package-lock.json
+npm-debug.log
+yarn-error.log
+
+# ========================
+# IDE / Editor Files
+# ========================
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+.DS_Store
+Thumbs.db
