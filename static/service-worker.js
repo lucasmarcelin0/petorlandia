@@ -1,10 +1,12 @@
 // Bump the cache name to force old caches to be cleared after updates
-const CACHE_NAME = 'petorlandia-cache-v3';
+const CACHE_NAME = 'petorlandia-cache-v4';
 // Pages like the home page change based on login state, so we avoid
 // pre-caching them. Only static assets are cached up-front.
 const urlsToCache = [
   '/static/pastorgato.png'
   ,'/static/offline.js'
+  ,'/static/bootstrap.min.css'
+  ,'/static/bootstrap.bundle.min.js'
 ];
 
 // Install the service worker and take control immediately
