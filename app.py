@@ -2232,7 +2232,12 @@ def salvar_vacinas(animal_id):
             db.session.add(vacina)
 
         db.session.commit()
-        return jsonify({"success": True})
+        animal = Animal.query.get_or_404(animal_id)
+        historico_html = render_template(
+            'partials/historico_vacinas.html',
+            animal=animal
+        )
+        return jsonify({"success": True, "html": historico_html})
 
     except Exception as e:
         print("Erro ao salvar vacinas:", e)
@@ -2492,7 +2497,15 @@ def salvar_bloco_prescricao(consulta_id):
         db.session.add(nova)
 
     db.session.commit()
-    return jsonify({'success': True, 'message': 'Prescrições salvas com sucesso!'})
+    historico_html = render_template(
+        'partials/historico_prescricoes.html',
+        animal=consulta.animal
+    )
+    return jsonify({
+        'success': True,
+        'message': 'Prescrições salvas com sucesso!',
+        'html': historico_html
+    })
 
 
 @app.route('/bloco_prescricao/<int:bloco_id>/deletar', methods=['POST'])
@@ -2602,7 +2615,12 @@ def salvar_bloco_exames(animal_id):
         db.session.add(exame_modelo)
 
     db.session.commit()
-    return jsonify({'success': True})
+    animal = Animal.query.get_or_404(animal_id)
+    historico_html = render_template(
+        'partials/historico_exames.html',
+        animal=animal
+    )
+    return jsonify({'success': True, 'html': historico_html})
 
 
 

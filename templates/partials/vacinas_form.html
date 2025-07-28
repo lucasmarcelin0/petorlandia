@@ -1,4 +1,5 @@
 <form>
+    <div id="feedback-vacinas" class="alert d-none position-fixed" style="top: 20px; right: 20px; z-index: 1000;"></div>
     <h5 class="mb-3">💉 Registro de Vacinas</h5>
 
     <!-- Campo com autocomplete -->
@@ -49,6 +50,12 @@
 
   <script>
     let vacinas = [];
+    function mostrarFeedback(msg, tipo = 'success') {
+      const fb = document.getElementById('feedback-vacinas');
+      fb.textContent = msg;
+      fb.className = `alert alert-${tipo} d-block`;
+      setTimeout(() => fb.classList.add('d-none'), 3000);
+    }
 
     document.addEventListener('DOMContentLoaded', () => {
       const input = document.getElementById('nome-vacina');
@@ -142,13 +149,13 @@
       const obs = document.getElementById('observacoes-vacinas').value.trim();
 
       if (vacinas.length === 0) {
-        alert('Adicione pelo menos uma vacina.');
+        mostrarFeedback('Adicione pelo menos uma vacina.', 'warning');
         return;
       }
 
       const resp = await fetchOrQueue(`/animal/{{ animal.id }}/vacinas`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
         body: JSON.stringify({
           vacinas,
           observacoes_gerais: obs
@@ -157,13 +164,17 @@
       if (resp) {
         const data = await resp.json();
         if (data.success) {
-          alert('Vacinas registradas com sucesso!');
-          location.reload();
+          mostrarFeedback('Vacinas registradas com sucesso!');
+          if (data.html) {
+            document.getElementById('historico-vacinas').innerHTML = data.html;
+          }
+          vacinas = [];
+          renderVacinasTemp();
         } else {
-          alert('Erro ao salvar vacinas.');
+          mostrarFeedback('Erro ao salvar vacinas.', 'danger');
         }
       } else {
-        alert('Vacinas salvas offline e serão enviadas quando possível.');
+        mostrarFeedback('Vacinas salvas offline e serão enviadas quando possível.', 'info');
       }
     }
   </script>
