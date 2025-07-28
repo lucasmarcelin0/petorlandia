@@ -224,6 +224,14 @@ class ClinicaAdmin(MyModelView):
             if image_url:
                 model.logotipo = image_url
 
+    def on_form_prefill(self, form, id):
+        obj = self.get_one(id)
+        if obj and obj.logotipo:
+            form.logotipo_upload.description = Markup(
+                f'<img src="{obj.logotipo}" alt="Logotipo atual" '
+                f'style="max-height:150px;margin-top:10px;">'
+            )
+
 
 
 class TutorAdminView(MyModelView):
