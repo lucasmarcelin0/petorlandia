@@ -5,6 +5,12 @@ from datetime import timedelta
 class Config:
     SECRET_KEY = os.environ.get("SECRET_KEY", "dev-key")
     SQLALCHEMY_DATABASE_URI = os.environ.get("SQLALCHEMY_DATABASE_URI")
+
+    # Ensure SSL is used when connecting to PostgreSQL if no sslmode is provided
+    if SQLALCHEMY_DATABASE_URI and SQLALCHEMY_DATABASE_URI.startswith("postgresql"):
+        if "sslmode=" not in SQLALCHEMY_DATABASE_URI:
+            separator = "&" if "?" in SQLALCHEMY_DATABASE_URI else "?"
+            SQLALCHEMY_DATABASE_URI += f"{separator}sslmode=require"
     SQLALCHEMY_TRACK_MODIFICATIONS = False
     SESSION_TYPE = "filesystem"
     SESSION_PERMANENT = True

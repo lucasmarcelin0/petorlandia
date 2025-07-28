@@ -18,6 +18,9 @@ The tests run without needing external services or a database connection.
 
 Copy `.env.example` to `.env` and fill in your credentials before running the
 application. These files are ignored by Git so your secrets remain private.
+When using a remote PostgreSQL database (e.g., on Heroku or AWS RDS) make sure
+the `SQLALCHEMY_DATABASE_URI` includes `sslmode=require` so the connection uses
+TLS.
 
 ## Offline Usage
 

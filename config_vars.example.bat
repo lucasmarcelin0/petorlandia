@@ -23,7 +23,8 @@ heroku config:set MAIL_DEFAULT_SENDER_EMAIL="your-email@example.com"
 
 rem ===== Flask App Settings =====
 heroku config:set SECRET_KEY="change-me"
-heroku config:set SQLALCHEMY_DATABASE_URI="postgresql://user:password@host:5432/dbname"
+rem Use sslmode=require for remote PostgreSQL databases
+heroku config:set SQLALCHEMY_DATABASE_URI="postgresql://user:password@host:5432/dbname?sslmode=require"
 
 rem ===== Default Pickup Address =====
 heroku config:set DEFAULT_PICKUP_ADDRESS="Rua nove 990 - orlandia"
