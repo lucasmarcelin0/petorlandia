@@ -20,6 +20,7 @@ venv/
 .env.*            # Any env variants (e.g., .env.development)
 .env.local
 *.env             # Just in case there are named .env files
+.config_vars.bat
 
 # ========================
 # Flask Session / Instance
