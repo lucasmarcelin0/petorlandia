@@ -3929,15 +3929,37 @@ def checkout():
     # 4️⃣ payload Preference
 
     # Separa o nome em partes para extrair primeiro e último nome
-    parts = current_user.name.split()
-    first_name = parts[0] if parts else ""
-    last_name = parts[-1] if len(parts) > 1 else first_name
+    name = (current_user.name or "").strip()
+    parts = name.split()
+    if parts:
+        first_name = parts[0]
+        last_name = " ".join(parts[1:]) if len(parts) > 1 else first_name
+    else:
+        # Quando o usuário não tem um nome salvo, usa o prefixo do e‑mail
+        first_name = current_user.email.split("@")[0]
+        last_name = first_name
     payer_info = {
         "first_name": first_name,
         "last_name": last_name,
 
         "email": current_user.email,
     }
+    if current_user.phone:
+        digits = re.sub(r"\D", "", current_user.phone)
+        if digits.startswith("55") and len(digits) > 11:
+            digits = digits[2:]
+        if len(digits) >= 10:
+            payer_info["phone"] = {
+                "area_code": digits[:2],
+                "number": digits[2:],
+            }
+        else:
+            payer_info["phone"] = {"number": digits}
+    if current_user.cpf:
+        payer_info["identification"] = {
+            "type": "CPF",
+            "number": re.sub(r"\D", "", current_user.cpf),
+        }
     if order.shipping_address:
         payer_info["address"] = {"street_name": order.shipping_address}
         m = re.search(r"CEP\s*(\d{5}-?\d{3})", order.shipping_address)
@@ -4223,7 +4245,6 @@ def _refresh_mp_status(payment: Payment) -> None:
 
 
 @app.route("/pagamento/<status>")
-@login_required
 def legacy_pagamento(status):
     extref = request.args.get("external_reference")
     payment = None
@@ -4258,11 +4279,10 @@ def legacy_pagamento(status):
 
 
 @app.route("/payment_status/<int:payment_id>")
-@login_required
 def payment_status(payment_id):
     payment = Payment.query.get_or_404(payment_id)
 
-    if payment.user_id != current_user.id:
+    if current_user.is_authenticated and payment.user_id != current_user.id:
         abort(403)
 
     result  = request.args.get("status") or payment.status.name.lower()
@@ -4283,22 +4303,25 @@ def payment_status(payment_id):
         # Caso ainda não exista DeliveryRequest, mostra o pedido diretamente
         return redirect(url_for("pedido_detail", order_id=payment.order_id))
 
+    order = payment.order if (
+        current_user.is_authenticated and payment.user_id == current_user.id
+    ) else None
+
     return render_template(
         "payment_status.html",
         payment      = payment,
         result       = result,
         req_id       = delivery_req.id if delivery_req else None,
         req_endpoint = endpoint,
-        order        = payment.order,
+        order        = order,
         form         = form
     )
 
 
 @app.route("/api/payment_status/<int:payment_id>")
-@login_required
 def api_payment_status(payment_id):
     payment = Payment.query.get_or_404(payment_id)
-    if payment.user_id != current_user.id:
+    if current_user.is_authenticated and payment.user_id != current_user.id:
         abort(403)
     return jsonify(status=payment.status.name)
 
