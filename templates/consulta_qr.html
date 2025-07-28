@@ -203,5 +203,36 @@ document.addEventListener('DOMContentLoaded', function() {
     }
   });
 });
+
 </script>
+
+
+<style>
+/* Ensure dropdown appears above consulta content */
+.dropdown-menu {
+  position: absolute !important;
+  z-index: 3000 !important;
+}
+.nav-item.dropdown {
+  position: relative !important;
+}
+</style>
+
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+  // Rebind dropdown after all tab JS is attached
+  const dropdownTriggers = document.querySelectorAll('.dropdown-toggle[data-bs-toggle="dropdown"]');
+  dropdownTriggers.forEach(trigger => {
+    bootstrap.Dropdown.getOrCreateInstance(trigger); // Ensures instance exists
+    trigger.addEventListener('click', function (e) {
+      e.preventDefault(); // Let Bootstrap handle toggle
+      e.stopImmediatePropagation(); // Prevent tab handlers from swallowing event
+      bootstrap.Dropdown.getOrCreateInstance(trigger).toggle();
+    });
+  });
+});
+</script>
+
+
+
 {% endblock %}
