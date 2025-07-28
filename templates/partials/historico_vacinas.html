@@ -21,6 +21,7 @@
 
         <div class="mt-2 d-flex gap-2">
           <form method="POST" action="{{ url_for('deletar_vacina', vacina_id=vacina.id) }}"
+                data-sync="true" data-no-reload="true" data-remove-closest="li"
                 onsubmit="return confirm('Deseja mesmo remover esta vacina?')">
             <button class="btn btn-sm btn-danger">🗑️ Remover</button>
           </form>
@@ -93,4 +94,34 @@ function salvarEdicaoVacina(id) {
     alert("Erro na requisição.");
   });
 }
+
+const PENDING_KEY = 'pending_vacinas_{{ animal.id }}';
+
+function loadPendingVacinas(){
+  try { return JSON.parse(localStorage.getItem(PENDING_KEY)) || []; } catch(e){ return []; }
+}
+
+function renderPendingVacinas(){
+  const pend = loadPendingVacinas();
+  if(!pend.length) return;
+  const ul = document.querySelector('#historico-vacinas ul.list-group');
+  if(!ul) return;
+  pend.forEach(v => {
+    const li = document.createElement('li');
+    li.className = 'list-group-item text-muted';
+    li.innerHTML = `<strong>${v.nome}</strong>${v.tipo? ' — '+v.tipo:''}${v.data? ' em '+v.data:''}${v.observacoes? '<br><em>'+v.observacoes+'</em>':''} <span class="badge bg-secondary ms-2">Pendente</span>`;
+    ul.prepend(li);
+  });
+}
+
+document.addEventListener('DOMContentLoaded', renderPendingVacinas);
+
+document.addEventListener('queueSynced', async () => {
+  const resp = await fetch(`/animal/{{ animal.id }}/historico_vacinas`);
+  if(resp.ok){
+    const html = await resp.text();
+    document.getElementById('historico-vacinas').innerHTML = html;
+  }
+  localStorage.removeItem(PENDING_KEY);
+});
 </script>

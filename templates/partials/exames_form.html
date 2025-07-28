@@ -72,6 +72,27 @@
   });
 
   renderExamesTemp(); // Inicializa a lista se já houver dados
+
+  const pend = JSON.parse(localStorage.getItem('pending_exames_{{ animal.id }}') || '[]');
+  if(pend.length){
+    const container = document.getElementById('historico-exames');
+    if(container){
+      pend.forEach(b => {
+        const div = document.createElement('div');
+        div.className = 'border p-3 mb-4 bg-light rounded text-muted';
+        let items = '<ul class="list-group list-group-flush">';
+        b.exames.forEach(e => {
+          items += `<li class="list-group-item">🧪 <strong>${e.nome}</strong><br><em>${e.justificativa}</em></li>`;
+        });
+        items += '</ul>';
+        if(b.observacoes_gerais){
+          items += `<div class="mt-3"><strong>Observações:</strong><br><em>${b.observacoes_gerais}</em></div>`;
+        }
+        div.innerHTML = `<strong>Bloco de exames pendente</strong>${items}<span class="badge bg-secondary">Pendente</span>`;
+        container.prepend(div);
+      });
+    }
+  }
   });
 
   function adicionarExame() {
@@ -177,6 +198,26 @@
       }
     } else {
       alert('Solicitação salva offline e será enviada quando possível.');
+      const pending = JSON.parse(localStorage.getItem('pending_exames_{{ animal.id }}') || '[]');
+      pending.push({exames, observacoes_gerais: obsGerais});
+      localStorage.setItem('pending_exames_{{ animal.id }}', JSON.stringify(pending));
+      const container = document.getElementById('historico-exames');
+      if (container) {
+        const div = document.createElement('div');
+        div.className = 'border p-3 mb-4 bg-light rounded text-muted';
+        let items = '<ul class="list-group list-group-flush">';
+        exames.forEach(e => {
+          items += `<li class="list-group-item">🧪 <strong>${e.nome}</strong><br><em>${e.justificativa}</em></li>`;
+        });
+        items += '</ul>';
+        if(obsGerais){
+          items += `<div class="mt-3"><strong>Observações:</strong><br><em>${obsGerais}</em></div>`;
+        }
+        div.innerHTML = `<strong>Bloco de exames pendente</strong>${items}<span class="badge bg-secondary">Pendente</span>`;
+        container.prepend(div);
+      }
+      exames = [];
+      renderExamesTemp();
     }
   }
 </script>

@@ -4,7 +4,7 @@
     <h5 class="card-title">📜 Histórico de Prescrições</h5>
 
     {% for bloco in animal.blocos_prescricao|reverse %}
-    <div class="border rounded p-3 mb-3">
+    <div class="border rounded p-3 mb-3" id="bloco-prescricao-{{ bloco.id }}">
       <h6 class="text-muted">Prescrição feita em {{ bloco.data_criacao|format_datetime_brazil('%d/%m/%Y %H:%M') }}</h6>
 
       <ul class="list-group list-group-flush mb-2">
@@ -28,6 +28,7 @@
         <form method="POST"
               action="{{ url_for('deletar_bloco_prescricao', bloco_id=bloco.id) }}"
               class="d-inline"
+              data-sync="true" data-no-reload="true" data-remove-target="#bloco-prescricao-{{ bloco.id }}"
               onsubmit="return confirm('Deseja mesmo excluir este bloco de prescrições?');">
           <button class="btn btn-danger btn-sm">🗑 Excluir</button>
         </form>
@@ -49,3 +50,40 @@
 {% else %}
 <p class="text-muted">Nenhuma prescrição registrada ainda para esta consulta.</p>
 {% endif %}
+
+<script>
+const PRESC_KEY = 'pending_prescricoes_{{ animal.id }}';
+
+function loadPendingPrescricoes(){
+  try { return JSON.parse(localStorage.getItem(PRESC_KEY)) || []; } catch(e){ return []; }
+}
+
+function renderPendingPrescricoes(){
+  const pend = loadPendingPrescricoes();
+  if(!pend.length) return;
+  const container = document.querySelector('#historico-prescricoes .card-body');
+  if(!container) return;
+  pend.forEach(b => {
+    const div = document.createElement('div');
+    div.className = 'border rounded p-3 mb-3 text-muted';
+    let items = '<ul class="list-group list-group-flush mb-2">';
+    b.prescricoes.forEach(p => {
+      items += `<li class="list-group-item"><strong>${p.medicamento}</strong></li>`;
+    });
+    items += '</ul>';
+    div.innerHTML = `<h6 class="text-muted">Prescrição pendente</h6>${items}<span class="badge bg-secondary">Pendente</span>`;
+    container.prepend(div);
+  });
+}
+
+document.addEventListener('DOMContentLoaded', renderPendingPrescricoes);
+
+document.addEventListener('queueSynced', async () => {
+  const resp = await fetch(`/consulta/{{ consulta.id }}/historico_prescricoes`);
+  if(resp.ok){
+    const html = await resp.text();
+    document.getElementById('historico-prescricoes').innerHTML = html;
+  }
+  localStorage.removeItem(PRESC_KEY);
+});
+</script>
