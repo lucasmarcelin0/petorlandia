@@ -1,6 +1,7 @@
 # ───────────────────────────  app.py  ───────────────────────────
 import os, sys, pathlib, importlib, logging, uuid, re
 from io import BytesIO
+from concurrent.futures import ThreadPoolExecutor
 
 
 
@@ -59,6 +60,7 @@ from extensions import db, migrate, mail, login, session as session_ext, babel
 from flask_login import login_user, logout_user, current_user, login_required
 from flask_mail import Message as MailMessage      #  ←  adicione esta linha
 from werkzeug.utils import secure_filename
+from werkzeug.datastructures import FileStorage
 
 db.init_app(app)
 migrate.init_app(app, db, compare_type=True)
@@ -103,6 +105,23 @@ def upload_to_s3(file, filename, folder="uploads") -> str | None:
     except Exception as exc:                 # noqa: BLE001
         app.logger.exception("S3 upload failed: %s", exc)
         return None
+
+# ------------------------ Background S3 upload -------------------------
+executor = ThreadPoolExecutor(max_workers=2)
+
+def upload_profile_photo_async(user_id, data, content_type, filename):
+    """Upload profile photo in a background thread and update the user."""
+    def _task():
+        file_storage = FileStorage(stream=BytesIO(data), filename=filename, content_type=content_type)
+        image_url = upload_to_s3(file_storage, filename, folder="tutors")
+        if image_url:
+            with app.app_context():
+                user = User.query.get(user_id)
+                if user:
+                    user.profile_photo = image_url
+                    db.session.commit()
+
+    executor.submit(_task)
 
 # ----------------------------------------------------------------
 # 5)  Filtros Jinja para data BR
@@ -1738,8 +1757,8 @@ def update_tutor(user_id):
     if 'profile_photo' in request.files and request.files['profile_photo'].filename != '':
         file = request.files['profile_photo']
         filename = f"{uuid.uuid4().hex}_{secure_filename(file.filename)}"
-        image_url = upload_to_s3(file, filename, folder="tutors")
-        user.profile_photo = image_url
+        data = file.read()
+        upload_profile_photo_async(user.id, data, file.content_type, filename)
 
     # 📍 Endereço
     cep         = request.form.get('cep') or None
