@@ -50,9 +50,11 @@ service worker.
 
 Este projeto utiliza o [Flask‑Talisman](https://github.com/GoogleCloudPlatform/flask-talisman)
 para definir cabeçalhos HTTP importantes como HSTS e Content‑Security‑Policy.
+
 No modo de desenvolvimento a política de segurança de conteúdo (CSP) é
 desativada para permitir estilos inline e recursos hospedados em CDNs. Em
 produção você pode configurar o `Talisman` para aplicar uma CSP mais restrita.
+
 Todas as requisições são redirecionadas para HTTPS em ambientes de produção.
 
 ## Mercado Pago
