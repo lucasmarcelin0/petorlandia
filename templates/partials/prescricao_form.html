@@ -279,6 +279,23 @@
         document.getElementById('instrucoes-medicamentos').value = '';
       } else {
         mostrarFeedback('Prescrição salva offline. Sincronizaremos em breve.', 'info');
+        const pending = JSON.parse(localStorage.getItem('pending_prescricoes_{{ animal.id }}') || '[]');
+        pending.push({prescricoes, instrucoes});
+        localStorage.setItem('pending_prescricoes_{{ animal.id }}', JSON.stringify(pending));
+        const container = document.querySelector('#historico-prescricoes .card-body');
+        if (container) {
+          const div = document.createElement('div');
+          div.className = 'border rounded p-3 mb-3 text-muted';
+          let items = '<ul class="list-group list-group-flush mb-2">';
+          prescricoes.forEach(p => {
+            items += `<li class="list-group-item"><strong>${p.medicamento}</strong></li>`;
+          });
+          items += '</ul>';
+          div.innerHTML = `<h6 class="text-muted">Prescrição pendente</h6>${items}<span class="badge bg-secondary">Pendente</span>`;
+          container.prepend(div);
+        }
+        prescricoes = [];
+        renderPrescricoesTemp();
       }
 
     } catch (err) {
@@ -351,6 +368,25 @@
     // Botões
     document.getElementById('btn-adicionar').addEventListener('click', adicionarMedicamento);
     document.getElementById('btn-finalizar').addEventListener('click', finalizarBlocoPrescricoes);
+
+    // render pendentes
+    const pend = JSON.parse(localStorage.getItem('pending_prescricoes_{{ animal.id }}') || '[]');
+    if (pend.length) {
+      const container = document.querySelector('#historico-prescricoes .card-body');
+      if (container) {
+        pend.forEach(b => {
+          const div = document.createElement('div');
+          div.className = 'border rounded p-3 mb-3 text-muted';
+          let items = '<ul class="list-group list-group-flush mb-2">';
+          b.prescricoes.forEach(p => {
+            items += `<li class="list-group-item"><strong>${p.medicamento}</strong></li>`;
+          });
+          items += '</ul>';
+          div.innerHTML = `<h6 class="text-muted">Prescrição pendente</h6>${items}<span class="badge bg-secondary">Pendente</span>`;
+          container.prepend(div);
+        });
+      }
+    }
   });
 </script>
 
