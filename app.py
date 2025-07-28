@@ -658,8 +658,24 @@ def editar_animal(animal_id):
     breed_list = Breed.query.order_by(Breed.name).all()
 
     if form.validate_on_submit():
-        form.populate_obj(animal)  # pega tudo do form automaticamente
-        # Atualiza os relacionamentos manuais
+        animal.name = form.name.data
+        animal.age = form.age.data
+        animal.sex = form.sex.data
+        animal.description = form.description.data
+        animal.modo = form.modo.data
+        animal.price = form.price.data if form.modo.data == 'venda' else None
+
+        # Data de nascimento calculada a partir da idade se necessário
+        dob = form.date_of_birth.data
+        if not dob and form.age.data:
+            try:
+                age_years = int(form.age.data)
+                dob = date.today() - relativedelta(years=age_years)
+            except ValueError:
+                dob = None
+        animal.date_of_birth = dob
+
+        # Relacionamentos
         species_id = request.form.get('species_id')
         breed_id = request.form.get('breed_id')
         if species_id:
@@ -667,7 +683,7 @@ def editar_animal(animal_id):
         if breed_id:
             animal.breed_id = int(breed_id)
 
-        # Se uma nova imagem foi enviada faça o upload para o S3
+        # Upload da nova imagem, se fornecida
         if form.image.data and getattr(form.image.data, 'filename', ''):
             file = form.image.data
             filename = f"{uuid.uuid4().hex}_{secure_filename(file.filename)}"
