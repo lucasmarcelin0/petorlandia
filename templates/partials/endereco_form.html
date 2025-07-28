@@ -224,7 +224,33 @@ function buscarCep() {
 
 // Validação melhorada
 document.addEventListener("DOMContentLoaded", function() {
-  const form = document.querySelector("form");
+  document.addEventListener("DOMContentLoaded", function() {
+  const addressContainer = document.currentScript.closest(".card"); 
+  const form = addressContainer.closest("form"); // find the form wrapping this address partial
+  if (!form) return;
+
+  form.addEventListener("submit", function(e) {
+    const requiredFields = ['rua', 'cidade', 'estado'];
+    let isValid = true;
+    
+    requiredFields.forEach(id => {
+      const field = form.querySelector(`#${id}`);
+      if (field && !field.value.trim()) {
+        field.classList.add("is-invalid");
+        isValid = false;
+      } else if (field) {
+        field.classList.remove("is-invalid");
+      }
+    });
+
+    if (!isValid) {
+      e.preventDefault();
+      const toast = new bootstrap.Toast(document.getElementById('errorToast'));
+      toast.show();
+    }
+  });
+});
+
   if (!form) return;
 
   // Define campos obrigatórios
@@ -307,3 +333,35 @@ document.addEventListener("DOMContentLoaded", function() {
   cursor: pointer;
 }
 </style>
+
+<script>
+document.addEventListener("DOMContentLoaded", function() {
+  const addressCard = document.currentScript.closest(".card");
+  const form = addressCard.closest("form");
+  if (!form) return;
+
+  const requiredFields = ['rua', 'cidade', 'estado'];
+  const addressSelect = form.querySelector('#addressSelect');
+
+  form.addEventListener("submit", function(e) {
+    if (addressSelect && addressSelect.value !== '-1') return;
+
+    let isValid = true;
+    requiredFields.forEach(id => {
+      const field = form.querySelector(`#${id}`);
+      if (field && !field.value.trim()) {
+        field.classList.add("is-invalid");
+        isValid = false;
+      } else if (field) {
+        field.classList.remove("is-invalid");
+      }
+    });
+
+    if (!isValid) {
+      e.preventDefault(); // stop submit if invalid
+      const toast = new bootstrap.Toast(document.getElementById('errorToast'));
+      toast.show();
+    }
+  });
+});
+</script>
