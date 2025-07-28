@@ -12,4 +12,7 @@ mail = Mail()
 login = LoginManager()
 session = Session()
 babel = Babel()
-talisman = Talisman()
+# Allow inline styles and external resources by disabling the default
+# Content-Security-Policy. Production deployments can override this
+# using a custom configuration if stricter policies are desired.
+talisman = Talisman(content_security_policy=None)
