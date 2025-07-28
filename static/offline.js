@@ -12,6 +12,7 @@
   async function sendQueued(){
     if(!navigator.onLine) return;
     const q = loadQueue();
+    let processed = false;
     while(q.length){
       const item = q[0];
       let body;
@@ -27,11 +28,15 @@
         const resp = await fetch(item.url, {method:item.method, headers:item.headers, body});
         if(!resp.ok) throw new Error('fail');
         q.shift();
+        processed = true;
       } catch(err){
         break;
       }
     }
     saveQueue(q);
+    if(processed){
+      document.dispatchEvent(new CustomEvent('queueSynced'));
+    }
   }
 
   window.fetchOrQueue = async function(url, opts={}){
@@ -72,12 +77,22 @@
       headers: {'Accept': 'application/json'},
       body: data
     });
+
+    const removeTarget = form.dataset.removeTarget ?
+                          document.querySelector(form.dataset.removeTarget) : null;
+    const removeClosest = form.dataset.removeClosest ?
+                          form.closest(form.dataset.removeClosest) : null;
+
     if (resp) {
       try { await resp.json(); } catch(e) {}
+      if (removeTarget) removeTarget.remove();
+      else if (removeClosest) removeClosest.remove();
       if (!form.hasAttribute('data-no-reload')) {
         location.reload();
       }
     } else {
+      if (removeTarget) removeTarget.remove();
+      else if (removeClosest) removeClosest.remove();
       alert('Ação salva offline e será sincronizada quando possível.');
     }
   });

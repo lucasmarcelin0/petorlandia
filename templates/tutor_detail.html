@@ -10,6 +10,7 @@
     <div class="card-body position-relative">
       <!-- Botão de excluir tutor no topo direito -->
       <form method="POST" action="{{ url_for('deletar_tutor', tutor_id=tutor.id) }}"
+            data-sync="true" data-no-reload="true" data-remove-target=".card"
             onsubmit="return confirm('Tem certeza que deseja excluir este tutor e todos os seus dados permanentemente?');"
             class="position-absolute top-0 end-0 m-2">
         <button type="submit" class="btn btn-sm btn-danger" title="Excluir Tutor">
@@ -129,7 +130,9 @@
             <button type="button" class="btn btn-outline-warning btn-sm" data-bs-toggle="modal" data-bs-target="#modalEditarAnimal{{ a.id }}">
               ✏️ Editar
             </button>
-            <form action="{{ url_for('deletar_animal', animal_id=a.id) }}" method="POST" onsubmit="return confirm('Tem certeza que deseja remover este animal?')" style="display:inline;">
+            <form action="{{ url_for('deletar_animal', animal_id=a.id) }}" method="POST"
+                  data-sync="true" data-no-reload="true" data-remove-closest="li"
+                  onsubmit="return confirm('Tem certeza que deseja remover este animal?')" style="display:inline;">
               <button type="submit" class="btn btn-outline-danger btn-sm">
                 🗑️ Remover
               </button>
@@ -159,7 +162,9 @@
           {% for r in removidos %}
           <li class="list-group-item d-flex justify-content-between align-items-center">
             <span><strong>{{ r.name }}</strong> — {{ r.species }} / {{ r.breed }}</span>
-            <form action="{{ url_for('deletar_animal', animal_id=r.id) }}" method="POST" onsubmit="return confirm('Excluir permanentemente {{ r.name }}?')">
+            <form action="{{ url_for('deletar_animal', animal_id=r.id) }}" method="POST"
+                  data-sync="true" data-no-reload="true" data-remove-closest="li"
+                  onsubmit="return confirm('Excluir permanentemente {{ r.name }}?')">
               <button type="submit" class="btn btn-sm btn-danger">❌ Excluir Definitivamente</button>
             </form>
           </li>

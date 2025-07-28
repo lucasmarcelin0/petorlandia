@@ -11,7 +11,9 @@
         <strong>Exames solicitados em {{ bloco.data_criacao|format_datetime_brazil('%d/%m/%Y %H:%M') }}</strong>
       </div>
       <div class="d-flex gap-2">
-        <form method="POST" action="{{ url_for('deletar_bloco_exames', bloco_id=bloco.id) }}" onsubmit="return confirm('Deseja realmente excluir este bloco de exames?');">
+        <form method="POST" action="{{ url_for('deletar_bloco_exames', bloco_id=bloco.id) }}"
+              data-sync="true" data-no-reload="true" data-remove-target="#bloco-{{ bloco.id }}"
+              onsubmit="return confirm('Deseja realmente excluir este bloco de exames?');">
           <button type="submit" class="btn btn-danger btn-sm">
             <i class="bi bi-trash"></i> Excluir
           </button>
@@ -231,5 +233,43 @@ function salvarBlocoExames(blocoId, consultaId) {
     alert('Erro na requisição.');
   });
 }
+
+const EXAMES_KEY = 'pending_exames_{{ animal.id }}';
+
+function loadPendingExames(){
+  try { return JSON.parse(localStorage.getItem(EXAMES_KEY)) || []; } catch(e){ return []; }
+}
+
+function renderPendingExames(){
+  const pend = loadPendingExames();
+  if(!pend.length) return;
+  const container = document.querySelector('#historico-exames');
+  if(!container) return;
+  pend.forEach(b => {
+    const div = document.createElement('div');
+    div.className = 'border p-3 mb-4 bg-light rounded text-muted';
+    let items = '<ul class="list-group list-group-flush">';
+    b.exames.forEach(e => {
+      items += `<li class="list-group-item">🧪 <strong>${e.nome}</strong><br><em>${e.justificativa}</em></li>`;
+    });
+    items += '</ul>';
+    if(b.observacoes_gerais){
+      items += `<div class="mt-3"><strong>Observações:</strong><br><em>${b.observacoes_gerais}</em></div>`;
+    }
+    div.innerHTML = `<strong>Bloco de exames pendente</strong>${items}<span class="badge bg-secondary">Pendente</span>`;
+    container.prepend(div);
+  });
+}
+
+document.addEventListener('DOMContentLoaded', renderPendingExames);
+
+document.addEventListener('queueSynced', async () => {
+  const resp = await fetch(`/consulta/{{ consulta.id }}/historico_exames`);
+  if(resp.ok){
+    const html = await resp.text();
+    document.getElementById('historico-exames').innerHTML = html;
+  }
+  localStorage.removeItem(EXAMES_KEY);
+});
 </script>
 {% endblock %}
