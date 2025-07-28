@@ -6,6 +6,14 @@ class Config:
     SECRET_KEY = os.environ.get("SECRET_KEY", "dev-key")
     SQLALCHEMY_DATABASE_URI = os.environ.get("SQLALCHEMY_DATABASE_URI")
 
+    # Heroku historically provides the DATABASE_URL with a "postgres://" prefix
+    # which SQLAlchemy does not recognise. Convert it to "postgresql://" if
+    # necessary so the correct dialect plugin is loaded.
+    if SQLALCHEMY_DATABASE_URI and SQLALCHEMY_DATABASE_URI.startswith("postgres://"):
+        SQLALCHEMY_DATABASE_URI = SQLALCHEMY_DATABASE_URI.replace(
+            "postgres://", "postgresql://", 1
+        )
+
     # Ensure SSL is used when connecting to PostgreSQL if no sslmode is provided
     if SQLALCHEMY_DATABASE_URI and SQLALCHEMY_DATABASE_URI.startswith("postgresql"):
         if "sslmode=" not in SQLALCHEMY_DATABASE_URI:
