@@ -3933,7 +3933,7 @@ def checkout():
     parts = name.split()
     if parts:
         first_name = parts[0]
-        last_name = parts[-1] if len(parts) > 1 else first_name
+        last_name = " ".join(parts[1:]) if len(parts) > 1 else first_name
     else:
         # Quando o usuário não tem um nome salvo, usa o prefixo do e‑mail
         first_name = current_user.email.split("@")[0]
