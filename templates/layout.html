@@ -489,8 +489,8 @@
       document.querySelectorAll('.js-delivery-form').forEach(form => {
         form.addEventListener('submit', async ev => {
           ev.preventDefault();
-          const resp = await fetch(form.action, {method: 'POST', headers: {'Accept': 'application/json'}});
-          if (resp.ok) {
+          const resp = await fetchOrQueue(form.action, {method: 'POST', headers: {'Accept': 'application/json'}});
+          if (resp && resp.ok) {
             const data = await resp.json();
             if (data.redirect) {
               window.location.href = data.redirect;
@@ -501,12 +501,14 @@
             toastEl.classList.remove('bg-danger', 'bg-info', 'bg-success');
             toastEl.classList.add('bg-' + (data.category || 'success'));
             new bootstrap.Toast(toastEl).show();
-          } else {
+          } else if (resp) {
             const toastEl = document.getElementById('actionToast');
             toastEl.querySelector('.toast-body').textContent = 'Erro ao processar ação';
             toastEl.classList.remove('bg-success', 'bg-info');
             toastEl.classList.add('bg-danger');
             new bootstrap.Toast(toastEl).show();
+          } else {
+            alert('Ação salva offline e será sincronizada quando possível.');
           }
         });
       });
@@ -514,12 +516,12 @@
       document.querySelectorAll('.js-cart-form').forEach(form => {
         form.addEventListener('submit', async ev => {
           ev.preventDefault();
-          const resp = await fetch(form.action, {
+          const resp = await fetchOrQueue(form.action, {
             method: form.method,
             body: new FormData(form),
             headers: {'Accept': 'application/json'}
           });
-          if (resp.ok) {
+          if (resp && resp.ok) {
             const data = await resp.json();
             if (data.redirect) {
               window.location.href = data.redirect;
@@ -542,12 +544,14 @@
             toastEl.classList.remove('bg-danger', 'bg-info', 'bg-success');
             toastEl.classList.add('bg-' + (data.category || 'success'));
             new bootstrap.Toast(toastEl).show();
-          } else {
+          } else if (resp) {
             const toastEl = document.getElementById('actionToast');
             toastEl.querySelector('.toast-body').textContent = 'Erro ao processar ação';
             toastEl.classList.remove('bg-success', 'bg-info');
             toastEl.classList.add('bg-danger');
             new bootstrap.Toast(toastEl).show();
+          } else {
+            alert('Ação salva offline e será sincronizada quando possível.');
           }
         });
       });
@@ -559,8 +563,8 @@
         form.addEventListener('submit', async ev => {
           ev.preventDefault();
           const li = form.closest('li');
-          const resp = await fetch(form.action, {method: 'POST', headers: {'Accept': 'application/json'}});
-          if (resp.ok) {
+          const resp = await fetchOrQueue(form.action, {method: 'POST', headers: {'Accept': 'application/json'}});
+          if (resp && resp.ok) {
             const data = await resp.json();
             if (data.deleted || data.status) {
               li?.remove();
@@ -570,12 +574,14 @@
             toastEl.classList.remove('bg-danger', 'bg-info', 'bg-success');
             toastEl.classList.add('bg-' + (data.category || 'success'));
             new bootstrap.Toast(toastEl).show();
-          } else {
+          } else if (resp) {
             const toastEl = document.getElementById('actionToast');
             toastEl.querySelector('.toast-body').textContent = 'Erro ao processar ação';
             toastEl.classList.remove('bg-success', 'bg-info');
             toastEl.classList.add('bg-danger');
             new bootstrap.Toast(toastEl).show();
+          } else {
+            alert('Ação salva offline e será sincronizada quando possível.');
           }
         });
       });
@@ -586,12 +592,12 @@
       document.querySelectorAll('.js-animal-status').forEach(form => {
         form.addEventListener('submit', async ev => {
           ev.preventDefault();
-          const resp = await fetch(form.action, {
+          const resp = await fetchOrQueue(form.action, {
             method: 'POST',
             headers: {'Accept': 'application/json'},
             body: new FormData(form)
           });
-          if (resp.ok) {
+          if (resp && resp.ok) {
             const data = await resp.json();
             if (data.redirect) {
               window.location.href = data.redirect;
@@ -602,12 +608,14 @@
             toastEl.classList.remove('bg-danger', 'bg-info', 'bg-success');
             toastEl.classList.add('bg-' + (data.category || 'success'));
             new bootstrap.Toast(toastEl).show();
-          } else {
+          } else if (resp) {
             const toastEl = document.getElementById('actionToast');
             toastEl.querySelector('.toast-body').textContent = 'Erro ao processar ação';
             toastEl.classList.remove('bg-success', 'bg-info');
             toastEl.classList.add('bg-danger');
             new bootstrap.Toast(toastEl).show();
+          } else {
+            alert('Ação salva offline e será sincronizada quando possível.');
           }
         });
       });
@@ -620,8 +628,8 @@
           ev.preventDefault();
           const api = form.dataset.api || form.action;
           const formData = new FormData(form);
-          const resp = await fetch(api, { method: 'POST', body: formData, headers: { 'Accept': 'text/html' } });
-          if (resp.ok) {
+          const resp = await fetchOrQueue(api, { method: 'POST', body: formData, headers: { 'Accept': 'text/html' } });
+          if (resp && resp.ok) {
             const html = await resp.text();
             const container = document.getElementById('mensagens-container');
             if (container) {
@@ -630,8 +638,10 @@
             }
             const textarea = form.querySelector('textarea');
             if (textarea) textarea.value = '';
-          } else {
+          } else if (resp) {
             form.submit();
+          } else {
+            alert('Mensagem salva offline e será sincronizada quando possível.');
           }
         });
       });
@@ -644,8 +654,8 @@
           ev.preventDefault();
           const api = form.dataset.api || form.action;
           const formData = new FormData(form);
-          const resp = await fetch(api, { method: 'POST', body: formData, headers: { 'Accept': 'text/html' } });
-          if (resp.ok) {
+          const resp = await fetchOrQueue(api, { method: 'POST', body: formData, headers: { 'Accept': 'text/html' } });
+          if (resp && resp.ok) {
             const html = await resp.text();
             const container = document.getElementById('mensagens-container');
             if (container) {
@@ -654,8 +664,10 @@
             }
             const textarea = form.querySelector('textarea');
             if (textarea) textarea.value = '';
-          } else {
+          } else if (resp) {
             form.submit();
+          } else {
+            alert('Mensagem salva offline e será sincronizada quando possível.');
           }
         });
       });
