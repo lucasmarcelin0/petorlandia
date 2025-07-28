@@ -2,7 +2,7 @@
   const KEY = 'offline-queue';
 
   // Abort fetch requests if no response within given timeout (ms)
-  async function fetchWithTimeout(url, opts={}, timeout=8000){
+  async function fetchWithTimeout(url, opts={}, timeout=2000){
     const ctrl = new AbortController();
     const timer = setTimeout(() => ctrl.abort(), timeout);
     try {
