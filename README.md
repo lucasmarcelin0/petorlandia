@@ -71,6 +71,9 @@ in the `items.id` field of the preference payload. The checkout process
 already does this by using the product's ID, which helps improve the
 approval rate of transactions.
 
+The example script in `test.py` now includes this `id` field so you can
+see how the payload should look.
+
 
 
 
