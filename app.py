@@ -382,11 +382,11 @@ def add_animal():
 
     # Listas para o template
     try:
-        species_list = Species.query.order_by(Species.name).all()
+        species_list = list_species()
     except Exception:
         species_list = []
     try:
-        breed_list = Breed.query.order_by(Breed.name).all()
+        breed_list = list_breeds()
     except Exception:
         breed_list = []
 
@@ -624,11 +624,11 @@ def list_animals():
     animals = pagination.items
 
     try:
-        species_list = Species.query.order_by(Species.name).all()
+        species_list = list_species()
     except Exception:
         species_list = []
     try:
-        breed_list = Breed.query.order_by(Breed.name).all()
+        breed_list = list_breeds()
     except Exception:
         breed_list = []
 
@@ -677,8 +677,8 @@ def editar_animal(animal_id):
 
     form = AnimalForm(obj=animal)
 
-    species_list = Species.query.order_by(Species.name).all()
-    breed_list = Breed.query.order_by(Breed.name).all()
+    species_list = list_species()
+    breed_list = list_breeds()
 
     if form.validate_on_submit():
         animal.name = form.name.data
@@ -1432,18 +1432,21 @@ def consulta_direct(animal_id):
 
     historico = []
     if current_user.worker == 'veterinario':
-        historico = (Consulta.query
-                    .filter_by(animal_id=animal.id, status='finalizada')
-                    .order_by(Consulta.created_at.desc())
-                    .all())
+        historico = (
+            Consulta.query
+            .filter_by(animal_id=animal.id, status='finalizada')
+            .order_by(Consulta.created_at.desc())
+            .limit(10)
+            .all()
+        )
 
-    tipos_racao = TipoRacao.query.order_by(TipoRacao.marca.asc()).all()
+    tipos_racao = list_rations()
     marcas_existentes = sorted(set([t.marca for t in tipos_racao if t.marca]))
     linhas_existentes = sorted(set([t.linha for t in tipos_racao if t.linha]))
 
     # 🆕 Carregar listas de espécies e raças para o formulário
-    species_list = Species.query.order_by(Species.name).all()
-    breed_list = Breed.query.order_by(Breed.name).all()
+    species_list = list_species()
+    breed_list = list_breeds()
 
     return render_template('consulta_qr.html',
                            animal=animal,
@@ -1835,7 +1838,7 @@ def ficha_tutor(tutor_id):
     current_year = datetime.now(BR_TZ).year
 
     # Busca todas as espécies e raças
-    species_list = Species.query.order_by(Species.name).all()
+    species_list = list_species()
     breeds = Breed.query.options(joinedload(Breed.species)).all()
 
     # Mapeia raças por species_id (como string, para uso seguro no JS)
@@ -2912,8 +2915,8 @@ def novo_animal():
     animais_adicionados = pagination.items
 
     # Lista de espécies e raças para os <select> do formulário
-    species_list = Species.query.order_by(Species.name).all()
-    breed_list = Breed.query.order_by(Breed.name).all()
+    species_list = list_species()
+    breed_list = list_breeds()
 
     return render_template(
         'novo_animal.html',
@@ -3493,6 +3496,22 @@ from forms import AddToCartForm, CheckoutForm, CartAddressForm  # Added Checkout
 @cache
 def mp_sdk():
     return mercadopago.SDK(current_app.config["MERCADOPAGO_ACCESS_TOKEN"])
+
+
+# Caches for frequently requested lists
+@cache
+def list_species():
+    return Species.query.order_by(Species.name).all()
+
+
+@cache
+def list_breeds():
+    return Breed.query.order_by(Breed.name).all()
+
+
+@cache
+def list_rations():
+    return TipoRacao.query.order_by(TipoRacao.marca.asc()).all()
 
 
 # ─────────────────────────────────────────────────────────
