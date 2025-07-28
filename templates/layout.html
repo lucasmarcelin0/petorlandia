@@ -271,6 +271,12 @@
             color: #000;
             box-shadow: 0 6px 12px rgba(255, 193, 7, 0.2);
         }
+
+        /* Ensure long modals remain usable */
+        .modal-dialog-scrollable .modal-body {
+            max-height: 70vh;
+            overflow-y: auto;
+        }
     </style>
 </head>
 
