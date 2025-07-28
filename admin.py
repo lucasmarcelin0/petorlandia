@@ -1,10 +1,9 @@
 from flask_admin import Admin, BaseView, expose
 from flask_admin.contrib.sqla import ModelView
 from flask_admin.menu import MenuLink
-from flask_admin.form import ImageUploadField
 from flask import redirect, url_for, flash
 from flask_login import current_user, login_required
-from wtforms import SelectField, DateField
+from wtforms import SelectField, DateField, FileField
 import os
 import uuid
 from werkzeug.utils import secure_filename
@@ -201,13 +200,21 @@ class VeterinarioAdmin(MyModelView):
 
 class ClinicaAdmin(MyModelView):
     form_extra_fields = {
-        'logotipo': ImageUploadField(
-            'Logotipo',
-            base_path=os.path.join(os.getcwd(), 'static/uploads/clinicas'),
-            url_relative_path='uploads/clinicas/',
-            allowed_extensions=['jpg', 'jpeg', 'png', 'gif']
-        )
+        'logotipo_upload': FileField('Logotipo')
     }
+
+    form_columns = [
+        'nome', 'cnpj', 'endereco', 'telefone', 'email', 'logotipo_upload'
+    ]
+
+    def on_model_change(self, form, model, is_created):
+        if form.logotipo_upload.data:
+            file = form.logotipo_upload.data
+            filename = f"{uuid.uuid4().hex}_{secure_filename(file.filename)}"
+            from app import upload_to_s3
+            image_url = upload_to_s3(file, filename, folder="clinicas")
+            if image_url:
+                model.logotipo = image_url
 
 
 
@@ -280,7 +287,6 @@ class BreedAdminView(MyModelView):
     column_default_sort = ('name', True)
 
 
-from wtforms import FileField
 
 class ProductAdmin(MyModelView):
     form_extra_fields = {

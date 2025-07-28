@@ -115,11 +115,13 @@
   </div>
 
   {% if clinica.logotipo %}
-  <div class="header">
-    <img src="{{ url_for('static', filename='uploads/clinicas/' + clinica.logotipo) }}" alt="Logotipo da clínica">
-    <div class="clinica-nome">{{ clinica.nome }}</div>
-    <img src="{{ url_for('static', filename='uploads/clinicas/' + clinica.logotipo) }}" alt="Logotipo da clínica">
-  </div>
+    {% set logo_src = clinica.logotipo if clinica.logotipo.startswith('http')
+                       else url_for('static', filename='uploads/clinicas/' + clinica.logotipo) %}
+    <div class="header">
+      <img src="{{ logo_src }}" alt="Logotipo da clínica">
+      <div class="clinica-nome">{{ clinica.nome }}</div>
+      <img src="{{ logo_src }}" alt="Logotipo da clínica">
+    </div>
   {% endif %}
 
   <h2>Solicitação de Exames</h2>
