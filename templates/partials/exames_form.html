@@ -30,8 +30,8 @@
   <button type="button" class="btn btn-primary mt-2" onclick="finalizarBlocoExames()">💾 Finalizar Solicitação</button>
 </form>
 
-<!-- Histórico de prescrições -->
-<div id="historico-prescricoes" class="mt-5">
+<!-- Histórico de exames -->
+<div id="historico-exames" class="mt-5">
   {% include 'partials/historico_exames.html' %}
 </div>
 
@@ -164,7 +164,14 @@
       const data = await resp.json();
       if (data.success) {
         alert('Solicitação de exames salva com sucesso!');
-        location.reload();
+        const htmlResp = await fetch(`/consulta/{{ consulta.id }}/historico_exames`);
+        if (htmlResp.ok) {
+          const html = await htmlResp.text();
+          document.getElementById('historico-exames').innerHTML = html;
+        }
+        exames = [];
+        renderExamesTemp();
+        document.getElementById('observacoes-exames').value = '';
       } else {
         alert('Erro ao salvar exames.');
       }
