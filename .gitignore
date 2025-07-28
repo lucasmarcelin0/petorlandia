@@ -20,6 +20,8 @@ venv/
 .env.*            # Any env variants (e.g., .env.development)
 .env.local
 *.env             # Just in case there are named .env files
+.env
+config_vars.bat
 .config_vars.bat
 
 # ========================
