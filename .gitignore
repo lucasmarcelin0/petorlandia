@@ -1,2 +1,7 @@
 __pycache__/
 flask_session/
+venv/
+.venv/
+.pytest_cache/
+.coverage
+.env

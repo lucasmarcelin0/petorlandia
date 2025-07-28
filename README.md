@@ -9,12 +9,18 @@ This project is a Flask application for managing pets. The repository now includ
    pip install -r requirements.txt
    ```
 
-2. Execute the tests with `pytest`:
+2. Execute the tests:
    ```bash
    pytest
    ```
 
-The tests run without needing external services or a database connection.
+   Generate a coverage report with:
+   ```bash
+   pytest --cov
+   ```
+
+The tests run without needing external services or a database connection and
+are automatically executed on GitHub Actions for every push and pull request.
 
 ## Offline Usage
 
