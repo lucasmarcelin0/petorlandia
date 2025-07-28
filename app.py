@@ -3465,6 +3465,10 @@ def _get_current_order():
     if not order or order.user_id != current_user.id:
         session.pop("current_order", None)
         abort(403)
+    # Se o pedido já possui um pagamento concluído não deve ser reutilizado
+    if order.payment and order.payment.status == PaymentStatus.COMPLETED:
+        session.pop("current_order", None)
+        return None
     return order
 
 
@@ -4298,6 +4302,8 @@ def payment_status(payment_id):
 
     # Redireciona ao detalhe do pedido quando o pagamento foi concluído
     if result in {"success", "completed", "approved"}:
+        # Compra concluída; limpa o pedido atual da sessão
+        session.pop("current_order", None)
         if delivery_req:
             return redirect(url_for(endpoint, req_id=delivery_req.id))
         # Caso ainda não exista DeliveryRequest, mostra o pedido diretamente
