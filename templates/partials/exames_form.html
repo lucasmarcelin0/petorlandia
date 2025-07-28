@@ -31,8 +31,8 @@
   <button type="button" class="btn btn-primary mt-2" onclick="finalizarBlocoExames()">💾 Finalizar Solicitação</button>
 </form>
 
-<!-- Histórico de prescrições -->
-<div id="historico-prescricoes" class="mt-5">
+<!-- Histórico de exames -->
+<div id="historico-exames" class="mt-5">
   {% include 'partials/historico_exames.html' %}
 </div>
 
@@ -172,7 +172,7 @@
       if (data.success) {
         mostrarFeedback('Solicitação de exames salva com sucesso!');
         if (data.html) {
-          document.getElementById('historico-prescricoes').innerHTML = data.html;
+          document.getElementById('historico-exames').innerHTML = data.html;
         }
         exames = [];
         renderExamesTemp();
