@@ -3929,9 +3929,15 @@ def checkout():
     # 4️⃣ payload Preference
 
     # Separa o nome em partes para extrair primeiro e último nome
-    parts = current_user.name.split()
-    first_name = parts[0] if parts else ""
-    last_name = parts[-1] if len(parts) > 1 else first_name
+    name = (current_user.name or "").strip()
+    parts = name.split()
+    if parts:
+        first_name = parts[0]
+        last_name = parts[-1] if len(parts) > 1 else first_name
+    else:
+        # Quando o usuário não tem um nome salvo, usa o prefixo do e‑mail
+        first_name = current_user.email.split("@")[0]
+        last_name = first_name
     payer_info = {
         "first_name": first_name,
         "last_name": last_name,
