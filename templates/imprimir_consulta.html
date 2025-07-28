@@ -72,7 +72,9 @@
 
   <div class="no-print" style="margin-bottom: 1em;">
     <button onclick="window.print()">🖨️ Imprimir</button>
-    <a href="{{ url_for('consulta_direct', animal_id=animal.id) }}" style="margin-left: 15px;">← Voltar</a>
+    <button onclick="abrirAssinatura()" style="margin-left: 5px;">🔏 Assinar</button>
+        <a href="{{ url_for('consulta_direct', animal_id=animal.id) }}"
+       style="margin-left: 15px;">← Voltar</a>
   </div>
 
   {% if clinica and clinica.logotipo %}
@@ -130,12 +132,13 @@
     {% if clinica.cnpj %}CNPJ: {{ clinica.cnpj }}{% endif %}
   </footer>
   {% endif %}
-  <script>
-  window.addEventListener('afterprint', function(){
-      if (confirm('Abrir página de assinatura agora?')) {
-          window.location.href = 'https://assinador.iti.br/assinatura/index.xhtml';
-      }
-  });
+<script>
+  function abrirAssinatura() {
+    if (confirm('Abrir página de assinatura agora?')) {
+      window.open('https://assinador.iti.br/assinatura/index.xhtml', '_blank');
+    }
+  }
+</script>
   </script>
 </body>
 </html>
