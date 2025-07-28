@@ -32,6 +32,11 @@ preference_data = {
     "payment_methods": {
         "installments": 1,                        # 1 parcela (à vista)
         # "default_payment_method_id": "pix"      # força PIX se quiser
+    },
+    "payer": {
+        "first_name": "Fulano",
+        "last_name": "da Silva",
+        "email": "comprador@example.com",
     }
 }
 

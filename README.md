@@ -92,5 +92,10 @@ address, phone number and CPF in the `payer` object of the preference payload.
 Providing these fields can help reduce fraud rejections and increase approval
 rates.
 
+The buyer's first and last name are also sent in the `payer` object. If the
+profile has no name saved the application falls back to the email prefix. The
+example script in `test.py` shows how to provide these `payer.first_name` and
+`payer.last_name` values manually.
+
 
 
