@@ -13,6 +13,7 @@ sdk = mercadopago.SDK(ACCESS_TOKEN)
 preference_data = {
     "items": [
         {
+            "id": "1",  # unique product code
             "title": "Ração Premium 10 kg",
             "description": "Ração para cães sabor carne",  # added description
             "category_id": "others",
