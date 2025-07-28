@@ -1,4 +1,5 @@
 <form>
+  <div id="feedback-exames" class="alert d-none position-fixed" style="top: 20px; right: 20px; z-index: 1000;"></div>
   <h5 class="mb-3">Solicitação de Exames</h5>
 
   <!-- Campo com autocomplete -->
@@ -42,6 +43,12 @@
 
 <script>
   let exames = [];
+  function mostrarFeedback(msg, tipo = 'success') {
+    const fb = document.getElementById('feedback-exames');
+    fb.textContent = msg;
+    fb.className = `alert alert-${tipo} d-block`;
+    setTimeout(() => fb.classList.add('d-none'), 3000);
+  }
 
   document.addEventListener('DOMContentLoaded', function () {
     const inputExame = document.getElementById('nome-exame');
@@ -146,7 +153,7 @@
 
   async function finalizarBlocoExames() {
     if (exames.length === 0) {
-      alert('Adicione pelo menos um exame antes de finalizar.');
+      mostrarFeedback('Adicione pelo menos um exame antes de finalizar.', 'warning');
       return;
     }
 
@@ -154,7 +161,7 @@
 
     const resp = await fetchOrQueue(`/animal/{{ animal.id }}/bloco_exames`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
       body: JSON.stringify({
         exames: exames,
         observacoes_gerais: obsGerais
@@ -163,13 +170,17 @@
     if (resp) {
       const data = await resp.json();
       if (data.success) {
-        alert('Solicitação de exames salva com sucesso!');
-        location.reload();
+        mostrarFeedback('Solicitação de exames salva com sucesso!');
+        if (data.html) {
+          document.getElementById('historico-prescricoes').innerHTML = data.html;
+        }
+        exames = [];
+        renderExamesTemp();
       } else {
-        alert('Erro ao salvar exames.');
+        mostrarFeedback('Erro ao salvar exames.', 'danger');
       }
     } else {
-      alert('Solicitação salva offline e será enviada quando possível.');
+      mostrarFeedback('Solicitação salva offline e será enviada quando possível.', 'info');
     }
   }
 </script>
