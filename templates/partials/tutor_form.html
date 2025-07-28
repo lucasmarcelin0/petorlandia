@@ -77,10 +77,10 @@
 
         <div class="col-md-6">
       <label for="tutor-rg" class="form-label">RG</label>
-      <input type="text" id="tutor-rg" name="rg" class="form-control" 
-             placeholder="00.000.000-0" pattern="[0-9]{2}\.?[0-9]{3}\.?[0-9]{3}-?[0-9]{1}"
+      <input type="text" id="tutor-rg" name="rg" class="form-control"
+             placeholder="Documento de identidade" pattern="[A-Za-z0-9]+"
              value="{{ tutor.rg|default('', true) if has_tutor else '' }}">
-      <div class="invalid-feedback">Por favor, insira um RG válido</div>
+      <div class="invalid-feedback">Por favor, insira um RG válido (apenas letras ou números)</div>
     </div>
     
     <!-- Data de nascimento + Idade - Com cálculo automático -->
@@ -167,7 +167,7 @@
     });
     
     document.getElementById('tutor-rg')?.addEventListener('input', function(e) {
-      this.value = this.value.replace(/\D/g, '');
+      this.value = this.value.replace(/[^0-9A-Za-z]/g, '');
     });
 
     // Cálculo de idade
