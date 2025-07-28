@@ -636,8 +636,6 @@ def adotar_animal(animal_id):
     animal.status = 'adotado'  # ou 'vendido', se for o caso
     animal.user_id = current_user.id  # <- transfere a posse do animal
     db.session.commit()
-
-    db.session.commit()
     flash(f'Você adotou {animal.name} com sucesso!', 'success')
     return redirect(url_for('list_animals'))
 
@@ -783,9 +781,12 @@ def conversa(animal_id, user_id):
         db.session.commit()
         return redirect(url_for('conversa', animal_id=animal.id, user_id=outro_usuario.id))
 
+    updated = False
     for m in mensagens:
         if m.receiver_id == current_user.id and not m.lida:
             m.lida = True
+            updated = True
+    if updated:
         db.session.commit()
 
     return render_template(
