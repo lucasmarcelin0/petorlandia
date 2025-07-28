@@ -178,6 +178,16 @@
   transform: scale(1.1);
   transition: transform 0.2s ease;
 }
+
+/* Destaque temporário para a aba salva */
+.nav-link.tab-saved-highlight {
+  animation: tabHighlight 2s ease-in-out;
+}
+
+@keyframes tabHighlight {
+  from { background-color: #d1e7dd; }
+  to { background-color: transparent; }
+}
 </style>
 
 
@@ -191,6 +201,35 @@ document.addEventListener('DOMContentLoaded', function() {
     const tab = document.querySelector(`[data-bs-target="#${abaSalva}"]`);
     if (tab) new bootstrap.Tab(tab).show();
   }
+
+  // Exibe destaque se a aba foi salva anteriormente (após recarregar)
+  const highlight = localStorage.getItem('tabSavedHighlight');
+  if (highlight) {
+    const link = document.querySelector(`[data-bs-target="#${highlight}"]`);
+    if (link) {
+      link.classList.add('tab-saved-highlight');
+      setTimeout(() => link.classList.remove('tab-saved-highlight'), 2000);
+    }
+    localStorage.removeItem('tabSavedHighlight');
+  }
+
+  // Adiciona spinners e guarda aba corrente ao enviar formulário
+  document.querySelectorAll('.tab-pane form[data-sync]').forEach(form => {
+    form.addEventListener('submit', () => {
+      const pane = form.closest('.tab-pane');
+      if (pane && pane.id) {
+        localStorage.setItem('tabSavedHighlight', pane.id);
+      }
+      const btn = form.querySelector('button[type="submit"]');
+      if (btn && !btn.querySelector('.spinner-border')) {
+        btn.disabled = true;
+        const sp = document.createElement('span');
+        sp.className = 'spinner-border spinner-border-sm ms-2';
+        sp.setAttribute('role', 'status');
+        btn.appendChild(sp);
+      }
+    });
+  });
 
   // Salvar aba ativa quando muda
   document.getElementById('consultaTabs').addEventListener('shown.bs.tab', function(event) {
@@ -208,7 +247,24 @@ document.addEventListener('DOMContentLoaded', function() {
 
 document.addEventListener('form-sync-success', function(ev) {
   const {form, data} = ev.detail || {};
-  if (form && form.id === 'consulta-form') {
+  if (!form) return;
+
+  // Remove spinner e reativa botão
+  const btn = form.querySelector('button[type="submit"]');
+  btn?.querySelector('.spinner-border')?.remove();
+  if (btn) btn.disabled = false;
+
+  // Destaca a aba relacionada
+  const pane = form.closest('.tab-pane');
+  if (pane && pane.id) {
+    const link = document.querySelector(`[data-bs-target="#${pane.id}"]`);
+    if (link) {
+      link.classList.add('tab-saved-highlight');
+      setTimeout(() => link.classList.remove('tab-saved-highlight'), 2000);
+    }
+  }
+
+  if (form.id === 'consulta-form') {
     ev.preventDefault();
     if (data && data.html) {
       const container = document.getElementById('historico-consultas');
