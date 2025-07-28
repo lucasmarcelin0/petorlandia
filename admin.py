@@ -207,6 +207,14 @@ class ClinicaAdmin(MyModelView):
         'nome', 'cnpj', 'endereco', 'telefone', 'email', 'logotipo_upload'
     ]
 
+    column_list = ['nome', 'cnpj', 'logotipo']
+
+    column_formatters = {
+        'logotipo': lambda v, c, m, p: Markup(
+            f'<img src="{m.logotipo}" width="100">'
+        ) if m.logotipo else ''
+    }
+
     def on_model_change(self, form, model, is_created):
         if form.logotipo_upload.data:
             file = form.logotipo_upload.data
