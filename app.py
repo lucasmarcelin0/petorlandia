@@ -1735,71 +1735,40 @@ def update_tutor(user_id):
         flash('Apenas veterinários ou colaboradores podem editar dados do tutor.', 'danger')
         return redirect(request.referrer or url_for('index'))
 
-    # 🧪 Debug: imprime o formulário recebido
-    print("📥 FORM DATA RECEBIDA:")
-    for campo in ["cep", "rua", "numero", "complemento", "bairro", "cidade", "estado"]:
-        print(f"→ {campo}: {request.form.get(campo)}")
-
-    # 📋 Dados básicos
-    user.name = request.form.get("name") or user.name
-    user.email = request.form.get("email") or user.email
-    user.phone = request.form.get("phone") or user.phone
-    user.cpf = request.form.get("cpf") or user.cpf
-    user.rg = request.form.get("rg") or user.rg
+    # 📋 Campos básicos
+    for field in ['name', 'email', 'phone', 'cpf', 'rg']:
+        value = request.form.get(field)
+        if value:
+            setattr(user, field, value)
 
     # 📅 Data de nascimento
-    date_str = request.form.get("date_of_birth")
+    date_str = request.form.get('date_of_birth')
     if date_str:
         try:
-            user.date_of_birth = datetime.strptime(date_str, "%Y-%m-%d").date()
+            user.date_of_birth = datetime.strptime(date_str, '%Y-%m-%d').date()
         except ValueError:
-            flash("Data de nascimento inválida. Use o formato correto.", "danger")
-            return redirect(request.referrer or url_for("index"))
+            flash('Data de nascimento inválida. Use o formato correto.', 'danger')
+            return redirect(request.referrer or url_for('index'))
 
     # 📸 Foto de perfil
-    if 'profile_photo' in request.files and request.files['profile_photo'].filename != '':
-        file = request.files['profile_photo']
-        filename = f"{uuid.uuid4().hex}_{secure_filename(file.filename)}"
-        data = file.read()
-        upload_profile_photo_async(user.id, data, file.content_type, filename)
+    photo = request.files.get('profile_photo')
+    if photo and photo.filename:
+        filename = f"{uuid.uuid4().hex}_{secure_filename(photo.filename)}"
+        upload_profile_photo_async(user.id, photo.read(), photo.content_type, filename)
 
     # 📍 Endereço
-    cep         = request.form.get('cep') or None
-    rua         = request.form.get('rua') or None
-    numero      = request.form.get('numero') or None
-    complemento = request.form.get('complemento') or None
-    bairro      = request.form.get('bairro') or None
-    cidade      = request.form.get('cidade') or None
-    estado      = request.form.get('estado') or None
-
-    campos_obrigatorios = [cep, rua, numero, bairro, cidade, estado]
-
-    if all(campos_obrigatorios):
-        if user.endereco:
-            endereco = user.endereco
-        else:
-            endereco = Endereco()
-            db.session.add(endereco)
-
-        # Primeiro preenche os dados
-        endereco.cep = cep
-        endereco.rua = rua
-        endereco.numero = numero
-        endereco.complemento = complemento
-        endereco.bairro = bairro
-        endereco.cidade = cidade
-        endereco.estado = estado
-
-        # Só depois faz flush para pegar o ID
+    addr_fields = {k: request.form.get(k) or None for k in ['cep', 'rua', 'numero', 'complemento', 'bairro', 'cidade', 'estado']}
+    if all(addr_fields.values()):
+        endereco = user.endereco or Endereco()
+        for k, v in addr_fields.items():
+            setattr(endereco, k, v)
         if not user.endereco_id:
+            db.session.add(endereco)
             db.session.flush()
             user.endereco_id = endereco.id
-
-    elif any([cep, rua, numero, bairro, cidade, estado]):
+    elif any(addr_fields.values()):
         flash('Por favor, preencha todos os campos obrigatórios do endereço.', 'warning')
         return redirect(request.referrer or url_for('index'))
-    else:
-        print("📭 Nenhum campo de endereço preenchido. Endereço não será criado.")
 
     # 💾 Commit final
     try:
