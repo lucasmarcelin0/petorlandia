@@ -175,7 +175,7 @@
 <!-- =========================  MODAIS DE EDIÇÃO  ========================= -->
 {% for a in animais %}
 <div class="modal fade" id="modalEditarAnimal{{ a.id }}" tabindex="-1" aria-hidden="true">
-  <div class="modal-dialog modal-lg modal-dialog-scrollable">
+<div class="modal-dialog modal-lg modal-dialog-scrollable modal-dialog-centered">
     <div class="modal-content">
       <form action="{{ url_for('update_animal', animal_id=a.id) }}" method="POST" enctype="multipart/form-data">
         <div class="modal-header">
@@ -290,7 +290,7 @@
 
 <!-- =========================  MODAL: NOVO ANIMAL  ========================= -->
 <div class="modal fade" id="modalNovoAnimal" tabindex="-1" aria-hidden="true">
-  <div class="modal-dialog modal-lg modal-dialog-scrollable">
+  <div class="modal-dialog modal-lg modal-dialog-scrollable modal-dialog-centered">
     <div class="modal-content">
       <div class="modal-header">
         <h5 class="modal-title">➕ Novo Animal para {{ tutor.name }}</h5>
