@@ -71,6 +71,14 @@ def test_mp_token_in_config(app):
 
 def test_mp_webhook_secret_in_config(app):
     assert 'MERCADOPAGO_WEBHOOK_SECRET' in app.config
+
+
+def test_mp_statement_descriptor_in_config(app):
+    assert 'MERCADOPAGO_STATEMENT_DESCRIPTOR' in app.config
+
+
+def test_mp_binary_mode_in_config(app):
+    assert 'MERCADOPAGO_BINARY_MODE' in app.config
 from models import Animal
 
 
@@ -905,7 +913,10 @@ def test_checkout_sends_external_reference(monkeypatch, app):
         payload = captured['payload']
         assert payload['external_reference'] == str(payment.id)
         assert payload['payer']['first_name'] == 'Tester'
-        assert payload['payer']['last_name'] == ''
+
+        assert payload['payer']['last_name'] == 'Tester'
+
+        assert payload['payer']['address']['street_name'] == user.endereco.full
         assert payload['items'][0]['id'] == '1'
         assert payload['items'][0]['description'] == 'Prod desc'
         assert payload['items'][0]['category_id'] == 'others'
