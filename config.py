@@ -12,6 +12,9 @@ class Config:
     SESSION_TYPE = "filesystem"
     SESSION_PERMANENT = True
     PERMANENT_SESSION_LIFETIME = timedelta(days=365)
+    # Habilite cookies seguros em producao
+    SESSION_COOKIE_SECURE = bool(int(os.environ.get("SESSION_COOKIE_SECURE", "1")))
+    SESSION_COOKIE_HTTPONLY = bool(int(os.environ.get("SESSION_COOKIE_HTTPONLY", "1")))
 
     # Configurações do Flask-Mail (Gmail)
     MAIL_SERVER = 'smtp.gmail.com'
