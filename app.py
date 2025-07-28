@@ -1768,8 +1768,13 @@ def update_tutor(user_id):
         upload_profile_photo_async(user.id, photo.read(), photo.content_type, filename)
 
     # 📍 Endereço
-    addr_fields = {k: request.form.get(k) or None for k in ['cep', 'rua', 'numero', 'complemento', 'bairro', 'cidade', 'estado']}
-    if all(addr_fields.values()):
+    addr_fields = {
+        k: request.form.get(k) or None
+        for k in ['cep', 'rua', 'numero', 'complemento', 'bairro', 'cidade', 'estado']
+    }
+    required_fields = ['cep', 'rua', 'cidade', 'estado']
+
+    if all(addr_fields.get(f) for f in required_fields):
         endereco = user.endereco or Endereco()
         for k, v in addr_fields.items():
             setattr(endereco, k, v)
@@ -1778,7 +1783,7 @@ def update_tutor(user_id):
             db.session.flush()
             user.endereco_id = endereco.id
     elif any(addr_fields.values()):
-        flash('Por favor, preencha todos os campos obrigatórios do endereço.', 'warning')
+        flash('Por favor, informe CEP, rua, cidade e estado.', 'warning')
         return redirect(request.referrer or url_for('index'))
 
     # 💾 Commit final
