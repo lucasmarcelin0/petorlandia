@@ -1217,3 +1217,57 @@ def test_accept_delivery_redirects(monkeypatch, app):
         with flask_app.test_request_context():
             expected_url = url_for('worker_delivery_detail', req_id=req.id)
         assert data['redirect'] == expected_url
+
+
+def test_painel_requires_login(app):
+    client = app.test_client()
+    resp = client.get('/painel')
+    assert resp.status_code == 302
+    assert '/login' in resp.headers['Location']
+
+
+def test_painel_requires_admin(monkeypatch, app):
+    client = app.test_client()
+
+    with app.app_context():
+        db.drop_all()
+        db.create_all()
+        user = User(id=1, name='User', email='u@test')
+        user.set_password('x')
+        db.session.add(user)
+        db.session.commit()
+
+        import flask_login.utils as login_utils
+        monkeypatch.setattr(login_utils, '_get_user', lambda: user)
+        monkeypatch.setattr(app_module, '_is_admin', lambda: False)
+
+        for idx, fn in enumerate(flask_app.template_context_processors[None]):
+            if fn.__name__ == 'inject_unread_count':
+                flask_app.template_context_processors[None][idx] = lambda: {'unread_messages': 0}
+
+        resp = client.get('/painel')
+        assert resp.status_code == 403
+
+
+def test_painel_admin_access(monkeypatch, app):
+    client = app.test_client()
+
+    with app.app_context():
+        db.drop_all()
+        db.create_all()
+        admin = User(id=1, name='Admin', email='a@test', role='admin')
+        admin.set_password('x')
+        db.session.add(admin)
+        db.session.commit()
+
+        import flask_login.utils as login_utils
+        monkeypatch.setattr(login_utils, '_get_user', lambda: admin)
+        monkeypatch.setattr(app_module, '_is_admin', lambda: True)
+
+        for idx, fn in enumerate(flask_app.template_context_processors[None]):
+            if fn.__name__ == 'inject_unread_count':
+                flask_app.template_context_processors[None][idx] = lambda: {'unread_messages': 0}
+
+        resp = client.get('/painel')
+        assert resp.status_code == 200
+
