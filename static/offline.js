@@ -54,6 +54,7 @@
     const q = loadQueue();
     q.push({url, method, headers, body:bodyData});
     saveQueue(q);
+    sendQueued();
     return null;
   };
 
@@ -63,6 +64,7 @@
   document.addEventListener('submit', async ev => {
     const form = ev.target;
     if (!form.matches('form[data-sync]')) return;
+    if (ev.defaultPrevented) return;
     ev.preventDefault();
     const data = new FormData(form);
     const resp = await window.fetchOrQueue(form.action, {
