@@ -47,7 +47,8 @@ These credentials are used when generating checkout preferences and embedding
 payment widgets. Never commit your real keys into version control.
 
 After checkout, Mercado Pago will redirect the buyer back to `/payment_status/<id>`
-with a `status` parameter indicating `success` or `failure`.
+with a `status` parameter indicating `success` or `failure`. This page no
+longer requires authentication so buyers are always redirected correctly.
 
 If for any reason the webhook notification is not delivered, the application now
 checks the payment status directly with Mercado Pago when the buyer visits the
