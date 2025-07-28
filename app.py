@@ -1702,9 +1702,9 @@ def buscar_animais():
 def update_tutor(user_id):
     user = User.query.get_or_404(user_id)
 
-    # 🔐 Permissão: somente veterinários
-    if current_user.worker != 'veterinario':
-        flash('Apenas veterinários podem editar dados do tutor.', 'danger')
+    # 🔐 Permissão: veterinários ou colaboradores
+    if current_user.worker not in ['veterinario', 'colaborador']:
+        flash('Apenas veterinários ou colaboradores podem editar dados do tutor.', 'danger')
         return redirect(request.referrer or url_for('index'))
 
     # 🧪 Debug: imprime o formulário recebido
