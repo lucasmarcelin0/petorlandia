@@ -26,6 +26,12 @@ queued requests are automatically sent to the server.
 The file `static/offline.js` implements this behaviour and is cached by the
 service worker.
 
+## Segurança
+
+Este projeto utiliza o [Flask‑Talisman](https://github.com/GoogleCloudPlatform/flask-talisman) para
+definir cabeçalhos HTTP importantes como HSTS e Content‑Security‑Policy. Todas as
+requisições são redirecionadas para HTTPS em ambientes de produção.
+
 ## Mercado Pago
 
 To enable payment integration you must provide credentials from your Mercado
