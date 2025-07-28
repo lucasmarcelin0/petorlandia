@@ -4223,7 +4223,6 @@ def _refresh_mp_status(payment: Payment) -> None:
 
 
 @app.route("/pagamento/<status>")
-@login_required
 def legacy_pagamento(status):
     extref = request.args.get("external_reference")
     payment = None
@@ -4258,11 +4257,10 @@ def legacy_pagamento(status):
 
 
 @app.route("/payment_status/<int:payment_id>")
-@login_required
 def payment_status(payment_id):
     payment = Payment.query.get_or_404(payment_id)
 
-    if payment.user_id != current_user.id:
+    if current_user.is_authenticated and payment.user_id != current_user.id:
         abort(403)
 
     result  = request.args.get("status") or payment.status.name.lower()
@@ -4283,22 +4281,25 @@ def payment_status(payment_id):
         # Caso ainda não exista DeliveryRequest, mostra o pedido diretamente
         return redirect(url_for("pedido_detail", order_id=payment.order_id))
 
+    order = payment.order if (
+        current_user.is_authenticated and payment.user_id == current_user.id
+    ) else None
+
     return render_template(
         "payment_status.html",
         payment      = payment,
         result       = result,
         req_id       = delivery_req.id if delivery_req else None,
         req_endpoint = endpoint,
-        order        = payment.order,
+        order        = order,
         form         = form
     )
 
 
 @app.route("/api/payment_status/<int:payment_id>")
-@login_required
 def api_payment_status(payment_id):
     payment = Payment.query.get_or_404(payment_id)
-    if payment.user_id != current_user.id:
+    if current_user.is_authenticated and payment.user_id != current_user.id:
         abort(403)
     return jsonify(status=payment.status.name)
 
