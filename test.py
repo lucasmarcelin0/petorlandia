@@ -14,6 +14,7 @@ preference_data = {
     "items": [
         {
             "title": "Ração Premium 10 kg",
+            "description": "Ração para cães sabor carne",  # added description
             "category_id": "others",
             "quantity": 1,
             "unit_price": 149.90
