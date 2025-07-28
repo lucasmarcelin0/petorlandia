@@ -1217,3 +1217,32 @@ def test_accept_delivery_redirects(monkeypatch, app):
         with flask_app.test_request_context():
             expected_url = url_for('worker_delivery_detail', req_id=req.id)
         assert data['redirect'] == expected_url
+
+
+def test_update_tutor_duplicate_cpf(monkeypatch, app):
+    client = app.test_client()
+
+    with app.app_context():
+        db.drop_all()
+        db.create_all()
+
+        vet = User(id=10, name='Vet', email='vet@test', worker='veterinario')
+        vet.set_password('x')
+        tutor1 = User(id=1, name='Tutor1', email='t1@test', cpf='11111111111')
+        tutor1.set_password('x')
+        tutor2 = User(id=2, name='Tutor2', email='t2@test', cpf='22222222222')
+        tutor2.set_password('x')
+        db.session.add_all([vet, tutor1, tutor2])
+        db.session.commit()
+
+        import flask_login.utils as login_utils
+        monkeypatch.setattr(login_utils, '_get_user', lambda: vet)
+        monkeypatch.setattr(app_module, '_is_admin', lambda: False)
+
+        for idx, fn in enumerate(flask_app.template_context_processors[None]):
+            if fn.__name__ == 'inject_unread_count':
+                flask_app.template_context_processors[None][idx] = lambda: {'unread_messages': 0}
+
+        resp = client.post(f'/update_tutor/{tutor1.id}', data={'cpf': '22222222222'}, follow_redirects=True)
+        assert b'CPF j\xc3\xa1 cadastrado' in resp.data
+        assert User.query.get(tutor1.id).cpf == '11111111111'

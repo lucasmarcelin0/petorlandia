@@ -1735,11 +1735,22 @@ def update_tutor(user_id):
         flash('Apenas veterinários ou colaboradores podem editar dados do tutor.', 'danger')
         return redirect(request.referrer or url_for('index'))
 
-    # 📋 Campos básicos
-    for field in ['name', 'email', 'phone', 'cpf', 'rg']:
+    # 📋 Campos básicos (exceto CPF)
+    for field in ['name', 'email', 'phone', 'rg']:
         value = request.form.get(field)
         if value:
             setattr(user, field, value)
+
+    # CPF precisa ser único
+    cpf_val = request.form.get('cpf')
+    if cpf_val:
+        cpf_val = cpf_val.strip()
+        if cpf_val != (user.cpf or ''):
+            existing = User.query.filter(User.cpf == cpf_val, User.id != user.id).first()
+            if existing:
+                flash('CPF já cadastrado para outro tutor.', 'danger')
+                return redirect(request.referrer or url_for('index'))
+        user.cpf = cpf_val
 
     # 📅 Data de nascimento
     date_str = request.form.get('date_of_birth')
