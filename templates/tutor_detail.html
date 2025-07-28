@@ -12,6 +12,7 @@
       <form method="POST" action="{{ url_for('deletar_tutor', tutor_id=tutor.id) }}"
             onsubmit="return confirm('Tem certeza que deseja excluir este tutor e todos os seus dados permanentemente?');"
             class="position-absolute top-0 end-0 m-2">
+        {{ csrf_token() }}
         <button type="submit" class="btn btn-sm btn-danger" title="Excluir Tutor">
           ❌
         </button>
@@ -31,6 +32,7 @@
 
 
       <form action="{{ url_for('update_tutor', user_id=tutor.id) }}" method="POST" enctype="multipart/form-data" class="row g-3">
+        {{ csrf_token() }}
         <div class="col-md-6">
           <label class="form-label">Nome</label>
           <input name="name" class="form-control" value="{{ tutor.name }}" required>
@@ -130,6 +132,7 @@
               ✏️ Editar
             </button>
             <form action="{{ url_for('deletar_animal', animal_id=a.id) }}" method="POST" onsubmit="return confirm('Tem certeza que deseja remover este animal?')" style="display:inline;">
+              {{ csrf_token() }}
               <button type="submit" class="btn btn-outline-danger btn-sm">
                 🗑️ Remover
               </button>
@@ -160,6 +163,7 @@
           <li class="list-group-item d-flex justify-content-between align-items-center">
             <span><strong>{{ r.name }}</strong> — {{ r.species }} / {{ r.breed }}</span>
             <form action="{{ url_for('deletar_animal', animal_id=r.id) }}" method="POST" onsubmit="return confirm('Excluir permanentemente {{ r.name }}?')">
+              {{ csrf_token() }}
               <button type="submit" class="btn btn-sm btn-danger">❌ Excluir Definitivamente</button>
             </form>
           </li>
@@ -178,6 +182,7 @@
   <div class="modal-dialog modal-lg modal-dialog-scrollable">
     <div class="modal-content">
       <form action="{{ url_for('update_animal', animal_id=a.id) }}" method="POST" enctype="multipart/form-data">
+        {{ csrf_token() }}
         <div class="modal-header">
           <h5 class="modal-title">✏️ Editar {{ a.name }}</h5>
           <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
@@ -297,6 +302,7 @@
         <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
       </div>
       <form action="{{ url_for('novo_animal') }}" method="POST" enctype="multipart/form-data">
+        {{ csrf_token() }}
         <div class="modal-body">
           <input type="hidden" name="tutor_id" value="{{ tutor.id }}">
 

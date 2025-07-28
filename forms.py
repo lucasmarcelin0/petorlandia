@@ -36,36 +36,6 @@ class ResetPasswordForm(FlaskForm):
     submit = SubmitField('Redefinir senha')
 
 
-class RegistrationForm(FlaskForm):
-    name = StringField(
-        'Name',
-        validators=[DataRequired(message="Nome é obrigatório"), Length(min=2, max=120)],
-        render_kw={"required": True},
-    )
-    email = StringField(
-        'Email',
-        validators=[DataRequired(message="Email é obrigatório"), Email()],
-        render_kw={"required": True},
-    )
-    phone = StringField('Phone', validators=[Optional(), Length(min=8, max=20)])
-    address = StringField('Address', validators=[Optional(), Length(max=200)])
-    profile_photo = FileField('Foto de Perfil', validators=[
-        Optional(),
-        FileAllowed(['jpg', 'jpeg', 'png', 'gif'], 'Apenas imagens!')
-    ])
-    password = PasswordField(
-        'Password',
-        validators=[DataRequired(message="Senha é obrigatória"), Length(min=6)],
-        render_kw={"required": True},
-    )
-    confirm_password = PasswordField(
-        'Confirm Password',
-        validators=[DataRequired(message="Confirmação de senha é obrigatória"), EqualTo('password', message='Passwords must match')],
-        render_kw={"required": True},
-    )
-    submit = SubmitField('Cadastrar')
-
-
 
 
 
@@ -103,20 +73,6 @@ class RegistrationForm(FlaskForm):
         render_kw={"required": True},
     )
 
-    submit = SubmitField('Cadastrar')
-
-
-
-    password = PasswordField(
-        'Password',
-        validators=[DataRequired(message="Senha é obrigatória"), Length(min=6)],
-        render_kw={"required": True},
-    )
-    confirm_password = PasswordField(
-        'Confirm Password',
-        validators=[DataRequired(message="Confirmação de senha é obrigatória"), EqualTo('password', message='Passwords must match')],
-        render_kw={"required": True},
-    )
     submit = SubmitField('Cadastrar')
 
 
