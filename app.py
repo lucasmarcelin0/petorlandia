@@ -3464,7 +3464,7 @@ def _get_current_order():
     order = Order.query.get(order_id)
     if not order or order.user_id != current_user.id:
         session.pop("current_order", None)
-        abort(403)
+        return None
     return order
 
 
