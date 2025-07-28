@@ -2198,6 +2198,13 @@ def salvar_vacinas(animal_id):
         return jsonify({"success": False, "error": "Erro técnico ao salvar vacinas"}), 500
 
 
+@app.route('/animal/<int:animal_id>/historico_vacinas')
+@login_required
+def historico_vacinas_view(animal_id):
+    animal = Animal.query.get_or_404(animal_id)
+    return render_template('partials/historico_vacinas.html', animal=animal)
+
+
 
 
 @app.route("/animal/<int:animal_id>/vacinas/imprimir")
@@ -2454,6 +2461,14 @@ def salvar_bloco_prescricao(consulta_id):
     return jsonify({'success': True, 'message': 'Prescrições salvas com sucesso!'})
 
 
+@app.route('/consulta/<int:consulta_id>/historico_prescricoes')
+@login_required
+def historico_prescricoes_view(consulta_id):
+    consulta = Consulta.query.get_or_404(consulta_id)
+    animal = consulta.animal
+    return render_template('partials/historico_prescricoes.html', animal=animal)
+
+
 @app.route('/bloco_prescricao/<int:bloco_id>/deletar', methods=['POST'])
 @login_required
 def deletar_bloco_prescricao(bloco_id):
@@ -2673,6 +2688,14 @@ def atualizar_bloco_exames(bloco_id):
 
     db.session.commit()
     return jsonify(success=True)
+
+
+@app.route('/consulta/<int:consulta_id>/historico_exames')
+@login_required
+def historico_exames_view(consulta_id):
+    consulta = Consulta.query.get_or_404(consulta_id)
+    animal = consulta.animal
+    return render_template('partials/historico_exames.html', animal=animal)
 
 
 

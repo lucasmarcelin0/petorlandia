@@ -268,7 +268,15 @@
         const data = await response.json();
         if (!response.ok) throw new Error(data.message || 'Erro ao salvar prescrição');
         mostrarFeedback('Prescrição salva com sucesso!', 'success');
-        setTimeout(() => location.reload(), 1500);
+
+        const htmlResp = await fetch(`/consulta/{{ consulta.id }}/historico_prescricoes`);
+        if (htmlResp.ok) {
+          const html = await htmlResp.text();
+          document.getElementById('historico-prescricoes').innerHTML = html;
+        }
+        prescricoes = [];
+        renderPrescricoesTemp();
+        document.getElementById('instrucoes-medicamentos').value = '';
       } else {
         mostrarFeedback('Prescrição salva offline. Sincronizaremos em breve.', 'info');
       }

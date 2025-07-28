@@ -158,7 +158,14 @@
         const data = await resp.json();
         if (data.success) {
           alert('Vacinas registradas com sucesso!');
-          location.reload();
+          const htmlResp = await fetch(`/animal/{{ animal.id }}/historico_vacinas`);
+          if (htmlResp.ok) {
+            const html = await htmlResp.text();
+            document.getElementById('historico-vacinas').innerHTML = html;
+          }
+          vacinas = [];
+          renderVacinasTemp();
+          document.getElementById('observacoes-vacinas').value = '';
         } else {
           alert('Erro ao salvar vacinas.');
         }

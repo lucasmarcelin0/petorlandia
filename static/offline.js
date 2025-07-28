@@ -65,10 +65,16 @@
     if (!form.matches('form[data-sync]')) return;
     ev.preventDefault();
     const data = new FormData(form);
-    const resp = await window.fetchOrQueue(form.action, {method: form.method || 'POST', headers: {'Accept': 'application/json'}, body: data});
+    const resp = await window.fetchOrQueue(form.action, {
+      method: form.method || 'POST',
+      headers: {'Accept': 'application/json'},
+      body: data
+    });
     if (resp) {
       try { await resp.json(); } catch(e) {}
-      location.reload();
+      if (!form.hasAttribute('data-no-reload')) {
+        location.reload();
+      }
     } else {
       alert('Ação salva offline e será sincronizada quando possível.');
     }
