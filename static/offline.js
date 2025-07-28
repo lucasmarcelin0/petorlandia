@@ -63,6 +63,12 @@
   document.addEventListener('submit', async ev => {
     const form = ev.target;
     if (!form.matches('form[data-sync]')) return;
+    if (!form.checkValidity()) {
+      ev.preventDefault();
+      ev.stopPropagation();
+      form.classList.add('was-validated');
+      return;
+    }
     ev.preventDefault();
     const data = new FormData(form);
     const resp = await window.fetchOrQueue(form.action, {method: form.method || 'POST', headers: {'Accept': 'application/json'}, body: data});
