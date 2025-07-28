@@ -1,5 +1,5 @@
 <!-- templates/partials/animal_register_form.html -->
-<form method="POST" action="{{ url_for('novo_animal') }}" onsubmit="return validarTutor();" data-sync="true">
+<form method="POST" action="{{ url_for('novo_animal') }}" onsubmit="return validarTutor();">
     <h5 class="mb-3">🐾 Cadastro do Animal</h5>
 
     {% if not tutor %}

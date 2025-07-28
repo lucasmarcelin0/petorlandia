@@ -255,7 +255,7 @@
 
     try {
       const instrucoes = document.getElementById('instrucoes-medicamentos')?.value || '';
-      const response = await fetchOrQueue(`/consulta/{{ consulta.id }}/bloco_prescricao`, {
+      const response = await fetch(`/consulta/{{ consulta.id }}/bloco_prescricao`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
         body: JSON.stringify({
@@ -264,9 +264,9 @@
         })
       });
 
-      if (response) {
+      if (response.ok) {
         const data = await response.json();
-        if (!response.ok || !data.success) throw new Error(data.message || 'Erro ao salvar prescrição');
+        if (!data.success) throw new Error(data.message || 'Erro ao salvar prescrição');
         mostrarFeedback('Prescrição salva com sucesso!', 'success');
         if (data.html) {
           document.getElementById('historico-prescricoes').innerHTML = data.html;
@@ -274,7 +274,7 @@
         prescricoes = [];
         renderPrescricoesTemp();
       } else {
-        mostrarFeedback('Prescrição salva offline. Sincronizaremos em breve.', 'info');
+        throw new Error('Erro ao salvar prescrição');
       }
 
     } catch (err) {

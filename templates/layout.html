@@ -482,14 +482,18 @@
         navigator.serviceWorker.register('{{ url_for('service_worker') }}');
       }
   </script>
-  <script src="{{ url_for('static', filename='offline.js') }}"></script>
 
   <script>
     document.addEventListener('DOMContentLoaded', () => {
       document.querySelectorAll('.js-delivery-form').forEach(form => {
         form.addEventListener('submit', async ev => {
           ev.preventDefault();
-          const resp = await fetchOrQueue(form.action, {method: 'POST', headers: {'Accept': 'application/json'}});
+          let resp;
+          try {
+            resp = await fetch(form.action, {method: 'POST', headers: {'Accept': 'application/json'}});
+          } catch (e) {
+            resp = null;
+          }
           if (resp && resp.ok) {
             const data = await resp.json();
             if (data.redirect) {
@@ -507,8 +511,6 @@
             toastEl.classList.remove('bg-success', 'bg-info');
             toastEl.classList.add('bg-danger');
             new bootstrap.Toast(toastEl).show();
-          } else {
-            alert('Ação salva offline e será sincronizada quando possível.');
           }
         });
       });
@@ -516,11 +518,16 @@
       document.querySelectorAll('.js-cart-form').forEach(form => {
         form.addEventListener('submit', async ev => {
           ev.preventDefault();
-          const resp = await fetchOrQueue(form.action, {
-            method: form.method,
-            body: new FormData(form),
-            headers: {'Accept': 'application/json'}
-          });
+          let resp;
+          try {
+            resp = await fetch(form.action, {
+              method: form.method,
+              body: new FormData(form),
+              headers: {'Accept': 'application/json'}
+            });
+          } catch (e) {
+            resp = null;
+          }
           if (resp && resp.ok) {
             const data = await resp.json();
             if (data.redirect) {
@@ -550,8 +557,6 @@
             toastEl.classList.remove('bg-success', 'bg-info');
             toastEl.classList.add('bg-danger');
             new bootstrap.Toast(toastEl).show();
-          } else {
-            alert('Ação salva offline e será sincronizada quando possível.');
           }
         });
       });
@@ -563,7 +568,12 @@
         form.addEventListener('submit', async ev => {
           ev.preventDefault();
           const li = form.closest('li');
-          const resp = await fetchOrQueue(form.action, {method: 'POST', headers: {'Accept': 'application/json'}});
+          let resp;
+          try {
+            resp = await fetch(form.action, {method: 'POST', headers: {'Accept': 'application/json'}});
+          } catch (e) {
+            resp = null;
+          }
           if (resp && resp.ok) {
             const data = await resp.json();
             if (data.deleted || data.status) {
@@ -580,8 +590,6 @@
             toastEl.classList.remove('bg-success', 'bg-info');
             toastEl.classList.add('bg-danger');
             new bootstrap.Toast(toastEl).show();
-          } else {
-            alert('Ação salva offline e será sincronizada quando possível.');
           }
         });
       });
@@ -592,11 +600,16 @@
       document.querySelectorAll('.js-animal-status').forEach(form => {
         form.addEventListener('submit', async ev => {
           ev.preventDefault();
-          const resp = await fetchOrQueue(form.action, {
-            method: 'POST',
-            headers: {'Accept': 'application/json'},
-            body: new FormData(form)
-          });
+          let resp;
+          try {
+            resp = await fetch(form.action, {
+              method: 'POST',
+              headers: {'Accept': 'application/json'},
+              body: new FormData(form)
+            });
+          } catch (e) {
+            resp = null;
+          }
           if (resp && resp.ok) {
             const data = await resp.json();
             if (data.redirect) {
@@ -614,8 +627,6 @@
             toastEl.classList.remove('bg-success', 'bg-info');
             toastEl.classList.add('bg-danger');
             new bootstrap.Toast(toastEl).show();
-          } else {
-            alert('Ação salva offline e será sincronizada quando possível.');
           }
         });
       });
@@ -628,7 +639,12 @@
           ev.preventDefault();
           const api = form.dataset.api || form.action;
           const formData = new FormData(form);
-          const resp = await fetchOrQueue(api, { method: 'POST', body: formData, headers: { 'Accept': 'text/html' } });
+          let resp;
+          try {
+            resp = await fetch(api, { method: 'POST', body: formData, headers: { 'Accept': 'text/html' } });
+          } catch (e) {
+            resp = null;
+          }
           if (resp && resp.ok) {
             const html = await resp.text();
             const container = document.getElementById('mensagens-container');
@@ -640,8 +656,6 @@
             if (textarea) textarea.value = '';
           } else if (resp) {
             form.submit();
-          } else {
-            alert('Mensagem salva offline e será sincronizada quando possível.');
           }
         });
       });
@@ -654,7 +668,12 @@
           ev.preventDefault();
           const api = form.dataset.api || form.action;
           const formData = new FormData(form);
-          const resp = await fetchOrQueue(api, { method: 'POST', body: formData, headers: { 'Accept': 'text/html' } });
+          let resp;
+          try {
+            resp = await fetch(api, { method: 'POST', body: formData, headers: { 'Accept': 'text/html' } });
+          } catch (e) {
+            resp = null;
+          }
           if (resp && resp.ok) {
             const html = await resp.text();
             const container = document.getElementById('mensagens-container');
@@ -666,8 +685,6 @@
             if (textarea) textarea.value = '';
           } else if (resp) {
             form.submit();
-          } else {
-            alert('Mensagem salva offline e será sincronizada quando possível.');
           }
         });
       });
