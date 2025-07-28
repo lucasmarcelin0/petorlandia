@@ -679,7 +679,24 @@ def editar_animal(animal_id):
     breed_list = Breed.query.order_by(Breed.name).all()
 
     if form.validate_on_submit():
+        old_image = animal.image
         form.populate_obj(animal)  # pega tudo do form automaticamente
+
+        # Restaura imagem antiga se nenhum novo arquivo foi enviado
+        animal.image = old_image
+
+        # Upload de nova imagem se fornecida
+        if (
+            form.image.data and
+            hasattr(form.image.data, 'filename') and
+            form.image.data.filename != ''
+        ):
+            file = form.image.data
+            filename = f"{uuid.uuid4().hex}_{secure_filename(file.filename)}"
+            image_url = upload_to_s3(file, filename, folder="animals")
+            if image_url:
+                animal.image = image_url
+
         # Atualiza os relacionamentos manuais
         species_id = request.form.get('species_id')
         breed_id = request.form.get('breed_id')
