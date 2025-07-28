@@ -667,6 +667,14 @@ def editar_animal(animal_id):
         if breed_id:
             animal.breed_id = int(breed_id)
 
+        # Se uma nova imagem foi enviada faça o upload para o S3
+        if form.image.data and getattr(form.image.data, 'filename', ''):
+            file = form.image.data
+            filename = f"{uuid.uuid4().hex}_{secure_filename(file.filename)}"
+            image_url = upload_to_s3(file, filename, folder="animals")
+            if image_url:
+                animal.image = image_url
+
         db.session.commit()
         flash('Animal atualizado com sucesso!', 'success')
         return redirect(url_for('profile'))
