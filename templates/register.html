@@ -38,7 +38,7 @@
             <!-- Foto de Perfil -->
             <div class="mb-3">
                 {{ form.profile_photo.label(class="form-label") }}
-                {{ photo_cropper(form.profile_photo, form.photo_rotation, form.photo_zoom, form.photo_offset_x, form.photo_offset_y, '', 120, 'profile_photo') }}
+                {{ photo_cropper(form.profile_photo, form.photo_rotation, form.photo_zoom, form.photo_offset_x, form.photo_offset_y, '', 120, 'profile_photo', 'user') }}
                 {% for error in form.profile_photo.errors %}
                     <div class="text-danger">{{ error }}</div>
                 {% endfor %}
