@@ -12,6 +12,7 @@
 
         <!-- Foto -->
         <div class="col-md-4 text-center">
+
           {% if current_user.profile_photo %}
             <div id="photo-container" class="img-thumbnail shadow-sm mb-2 position-relative overflow-hidden" style="width: 240px; height: 240px; border-radius: 1rem;">
               <img id="profile-photo-img" src="{{ current_user.profile_photo }}" style="width:100%; height:100%; object-fit: cover; transform: translate({{ current_user.photo_offset_x or 0 }}px, {{ current_user.photo_offset_y or 0 }}px) rotate({{ current_user.photo_rotation or 0 }}deg) scale({{ current_user.photo_zoom or 1 }});" alt="Foto de {{ current_user.name }}">
@@ -25,6 +26,7 @@
           <div id="campo-upload-foto" class="mt-2 d-none">
             {{ photo_cropper(form.profile_photo, form.photo_rotation, form.photo_zoom, form.photo_offset_x, form.photo_offset_y, current_user.profile_photo, 240, 'profile_photo') }}
           </div>
+
         </div>
 
         <!-- Informações -->
@@ -213,7 +215,6 @@ function toggleAll() {
     }
   }
 }
-
 
 
   function mostrarTodasTransacoes() {

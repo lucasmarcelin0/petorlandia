@@ -1,3 +1,4 @@
+
 {% macro photo_cropper(file_field, rot_field, zoom_field, offset_x_field, offset_y_field, image_url='', size=240, id=None) %}
 {% set id = id or file_field.id %}
 <div class="photo-cropper text-center">
@@ -75,3 +76,4 @@
   });
 </script>
 {% endmacro %}
+
