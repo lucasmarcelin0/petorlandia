@@ -227,6 +227,11 @@ document.addEventListener('DOMContentLoaded', function() {
         sp.className = 'spinner-border spinner-border-sm ms-2';
         sp.setAttribute('role', 'status');
         btn.appendChild(sp);
+        // Fallback: remove spinner after 3 seconds if no response
+        btn.spinnerTimer = setTimeout(() => {
+          btn.querySelector('.spinner-border')?.remove();
+          btn.disabled = false;
+        }, 3000);
       }
     });
   });
@@ -250,8 +255,12 @@ document.addEventListener('form-sync-success', function(ev) {
   if (!form) return;
 
   const btn = form.querySelector('button[type="submit"]');
-  btn?.querySelector('.spinner-border')?.remove();
-  if (btn) btn.disabled = false;
+  if (btn) {
+    clearTimeout(btn.spinnerTimer);
+    btn.spinnerTimer = null;
+    btn.querySelector('.spinner-border')?.remove();
+    btn.disabled = false;
+  }
 
   const success = !(data && data.success === false) && (!response || response.ok);
 
