@@ -64,7 +64,7 @@
         </div>
         <div class="col-md-8">
           <label class="form-label">Foto do Tutor</label>
-          {{ photo_cropper(tutor_form.profile_photo, tutor_form.photo_rotation, tutor_form.photo_zoom, tutor_form.photo_offset_x, tutor_form.photo_offset_y, tutor.profile_photo, 150, 'profile_photo') }}
+          {{ photo_cropper(tutor_form.profile_photo, tutor_form.photo_rotation, tutor_form.photo_zoom, tutor_form.photo_offset_x, tutor_form.photo_offset_y, tutor.profile_photo, 150, 'profile_photo', 'user') }}
         </div>
 
 
@@ -189,7 +189,7 @@
           <div class="row g-3">
 
             <div class="col-12 text-center">
-              {{ photo_cropper(animal_forms[a.id].image, animal_forms[a.id].photo_rotation, animal_forms[a.id].photo_zoom, animal_forms[a.id].photo_offset_x, animal_forms[a.id].photo_offset_y, a.image, 150, 'animal-image-' ~ a.id) }}
+              {{ photo_cropper(animal_forms[a.id].image, animal_forms[a.id].photo_rotation, animal_forms[a.id].photo_zoom, animal_forms[a.id].photo_offset_x, animal_forms[a.id].photo_offset_y, a.image, 150, 'animal-image-' ~ a.id, 'animal') }}
             </div>
 
             <div class="col-md-6">
@@ -348,7 +348,7 @@
             </div>
             <div class="col-md-6">
               <label class="form-label">Foto do Animal</label>
-              {{ photo_cropper(new_animal_form.image, new_animal_form.photo_rotation, new_animal_form.photo_zoom, new_animal_form.photo_offset_x, new_animal_form.photo_offset_y, '', 150, 'new-animal-image') }}
+              {{ photo_cropper(new_animal_form.image, new_animal_form.photo_rotation, new_animal_form.photo_zoom, new_animal_form.photo_offset_x, new_animal_form.photo_offset_y, '', 150, 'new-animal-image', 'animal') }}
             </div>
             <div class="col-12">
               <label class="form-label">Descrição</label>

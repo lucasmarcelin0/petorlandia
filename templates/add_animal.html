@@ -99,7 +99,7 @@
 
             <div class="mb-3">
                 {{ form.image.label(class="form-label") }}
-                {{ photo_cropper(form.image, form.photo_rotation, form.photo_zoom, form.photo_offset_x, form.photo_offset_y, '', 150, 'animal_image') }}
+                {{ photo_cropper(form.image, form.photo_rotation, form.photo_zoom, form.photo_offset_x, form.photo_offset_y, '', 150, 'animal_image', 'animal') }}
                 {% for error in form.image.errors %}
                     <div class="invalid-feedback d-block">{{ error }}</div>
                 {% endfor %}

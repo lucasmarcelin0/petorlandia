@@ -10,7 +10,7 @@
     <div class="col-md-6">
       <label for="animal-name" class="form-label">Foto e Nome do Animal</label>
         <div class="d-flex align-items-center gap-3">
-          {{ photo_cropper(form.image, form.photo_rotation, form.photo_zoom, form.photo_offset_x, form.photo_offset_y, animal.image, 60, 'animal-image') }}
+          {{ photo_cropper(form.image, form.photo_rotation, form.photo_zoom, form.photo_offset_x, form.photo_offset_y, animal.image, 60, 'animal-image', 'animal') }}
           <input id="animal-name" type="text" name="name" class="form-control"
                  placeholder="Nome do animal" value="{{ animal.name or '' }}" required
                  minlength="2" maxlength="50">
