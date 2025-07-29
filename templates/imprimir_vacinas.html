@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+  <meta charset="UTF-8">
+  <title>Vacinas de {{ animal.name }}</title>
+  <style>
+    body {
+      font-family: 'Arial', sans-serif;
+      margin: 2cm;
+      color: #000;
+      font-size: 12pt;
+    }
+    h2 {
+      text-align: center;
+      font-size: 16pt;
+      margin-bottom: 1em;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+    th, td {
+      border: 1px solid #000;
+      padding: 6px;
+      text-align: left;
+    }
+    .no-print {
+      margin-bottom: 1em;
+    }
+    @media print {
+      .no-print { display: none !important; }
+    }
+  </style>
+</head>
+<body>
+  <div class="no-print">
+    <button onclick="window.print()">🖨️ Imprimir</button>
+    <button onclick="abrirAssinatura()" style="margin-left:5px;">🔏 Assinar</button>
+    <button onclick="abrirDrive()" style="margin-left:5px;">📂 Abrir no Drive</button>
+    <a href="{{ url_for('consulta_direct', animal_id=animal.id) }}" style="margin-left:15px;">← Voltar</a>
+  </div>
+
+  <h2>Carteirinha de Vacinação</h2>
+  <table>
+    <thead>
+      <tr>
+        <th>Vacina</th>
+        <th>Tipo</th>
+        <th>Data</th>
+        <th>Observações</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for vacina in animal.vacinas|sort(attribute='data', reverse=True) %}
+      <tr>
+        <td>{{ vacina.nome }}</td>
+        <td>{{ vacina.tipo or '—' }}</td>
+        <td>{{ vacina.data.strftime('%d/%m/%Y') if vacina.data else '—' }}</td>
+        <td>{{ vacina.observacoes or '—' }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+<script>
+  function abrirAssinatura() {
+    if (confirm('Abrir página de assinatura agora?')) {
+      window.open('https://assinador.iti.br/assinatura/index.xhtml', '_blank');
+    }
+  }
+
+  function abrirDrive() {
+    const driveUrl = 'https://drive.google.com/viewerng/viewer?embedded=1&url=' +
+      encodeURIComponent(window.location.href);
+    window.open(driveUrl, '_blank');
+  }
+</script>
+</body>
+</html>
