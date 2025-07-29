@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <title>Painel Administrativo - PetOrlândia</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   
   <!-- Google Fonts -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -48,6 +48,10 @@
       overflow-x: hidden;
       display: flex;
       flex-direction: column;
+      padding-top: env(safe-area-inset-top);
+      padding-bottom: env(safe-area-inset-bottom);
+      padding-left: env(safe-area-inset-left);
+      padding-right: env(safe-area-inset-right);
     }
 
     /* Sidebar Styles */
@@ -58,7 +62,10 @@
       width: var(--sidebar-width);
       height: 100vh;
       background: linear-gradient(180deg, var(--primary-color) 0%, #224abe 100%);
-      padding-top: var(--topbar-height);
+      padding-top: calc(var(--topbar-height) + env(safe-area-inset-top));
+      padding-bottom: env(safe-area-inset-bottom);
+      padding-left: env(safe-area-inset-left);
+      padding-right: env(safe-area-inset-right);
       z-index: 1000;
       transition: all var(--transition-speed) ease;
       box-shadow: 4px 0 10px rgba(0, 0, 0, 0.1);

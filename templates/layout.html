@@ -7,7 +7,7 @@
 
     <meta charset="UTF-8">
     <title>PetOrlândia 🐶</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
     <link rel="manifest" href="{{ url_for('static', filename='manifest.json') }}">
     <meta name="theme-color" content="#4e73df">
 
@@ -46,7 +46,10 @@
             background: linear-gradient(to bottom right, var(--light-color), #ffffff);
             color: #333;
             line-height: 1.6;
-            padding-top: var(--topbar-height);
+            padding-top: calc(var(--topbar-height) + env(safe-area-inset-top));
+            padding-bottom: env(safe-area-inset-bottom);
+            padding-left: env(safe-area-inset-left);
+            padding-right: env(safe-area-inset-right);
             min-height: 100vh;
             display: flex;
             flex-direction: column;
