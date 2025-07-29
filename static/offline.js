@@ -59,7 +59,8 @@
     if(navigator.onLine){
       try {
         const resp = await fetchWithTimeout(url, opts);
-        if(resp.ok) return resp;
+        // Retorna a resposta mesmo que contenha erro de validação
+        if (resp) return resp;
       } catch(e){ /* fallthrough */ }
     }
     const q = loadQueue();
@@ -86,7 +87,7 @@
     if (resp) {
       let json = null;
       try { json = await resp.json(); } catch(e) {}
-      const evt = new CustomEvent('form-sync-success', {detail: {form, data: json}, cancelable: true});
+      const evt = new CustomEvent('form-sync-success', {detail: {form, data: json, response: resp}, cancelable: true});
       document.dispatchEvent(evt);
       if (!evt.defaultPrevented) {
         location.reload();
