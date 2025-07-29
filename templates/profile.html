@@ -11,8 +11,33 @@
 
         <!-- Foto -->
         <div class="col-md-4 text-center">
-          {% from "components/photo_cropper.html" import photo_cropper %}
-          {{ photo_cropper(form.profile_photo, form.photo_rotation, form.photo_zoom, form.photo_offset_x, form.photo_offset_y, current_user.profile_photo, "profile_photo", 240) }}
+          {% if current_user.profile_photo %}
+            <div id="photo-container" class="img-thumbnail shadow-sm mb-2 position-relative overflow-hidden" style="width: 240px; height: 240px; border-radius: 1rem;">
+              <img id="profile-photo-img" src="{{ current_user.profile_photo }}" style="width:100%; height:100%; object-fit: cover; cursor: move; transform: translate({{ current_user.photo_offset_x or 0 }}px, {{ current_user.photo_offset_y or 0 }}px) rotate({{ current_user.photo_rotation or 0 }}deg) scale({{ current_user.photo_zoom or 1 }});" alt="Foto de {{ current_user.name }}">
+            </div>
+          {% else %}
+            <div class="bg-light border d-flex align-items-center justify-content-center mb-2" style="width: 240px; height: 240px; border-radius: 1rem; font-size: 1.2rem; color: #555;">
+              Sem Foto
+            </div>
+          {% endif %}
+
+          <div id="campo-upload-foto" class="mt-2 d-none">
+            {{ form.profile_photo(class="form-control form-control-sm", id="profile_photo") }}
+            <div class="d-flex justify-content-center gap-2 my-2">
+              <button type="button" id="rotate-left" class="btn btn-outline-secondary btn-sm" title="Girar 90° à esquerda">
+                <i class="fas fa-undo"></i>
+              </button>
+              <button type="button" id="rotate-right" class="btn btn-outline-secondary btn-sm" title="Girar 90° à direita">
+                <i class="fas fa-redo"></i>
+              </button>
+              <button type="button" id="zoom-out" class="btn btn-outline-secondary btn-sm" title="Diminuir zoom">-</button>
+              <button type="button" id="zoom-in" class="btn btn-outline-secondary btn-sm" title="Aumentar zoom">+</button>
+            </div>
+            {{ form.photo_rotation(class="d-none", id="photo_rotation") }}
+            {{ form.photo_zoom(class="d-none", id="photo_zoom") }}
+            {{ form.photo_offset_x(class="d-none", id="photo_offset_x") }}
+            {{ form.photo_offset_y(class="d-none", id="photo_offset_y") }}
+          </div>
         </div>
 
         <!-- Informações -->
@@ -201,6 +226,90 @@ function toggleAll() {
     }
   }
 }
+
+document.addEventListener('DOMContentLoaded', function () {
+  const img = document.getElementById('profile-photo-img');
+  const fileInput = document.getElementById('profile_photo');
+  const rotField = document.getElementById('photo_rotation');
+  const zoomField = document.getElementById('photo_zoom');
+  const offsetXField = document.getElementById('photo_offset_x');
+  const offsetYField = document.getElementById('photo_offset_y');
+  const rotateLeft = document.getElementById('rotate-left');
+  const rotateRight = document.getElementById('rotate-right');
+  const zoomIn = document.getElementById('zoom-in');
+  const zoomOut = document.getElementById('zoom-out');
+
+  let rotation = parseInt(rotField.value || 0, 10);
+  let zoom = parseFloat(zoomField.value || 1);
+  let offsetX = parseFloat(offsetXField.value || 0);
+  let offsetY = parseFloat(offsetYField.value || 0);
+
+  function update() {
+    if (img) {
+      img.style.transform = `translate(${offsetX}px, ${offsetY}px) rotate(${rotation}deg) scale(${zoom})`;
+    }
+    rotField.value = rotation;
+    zoomField.value = zoom.toFixed(2);
+    offsetXField.value = Math.round(offsetX);
+    offsetYField.value = Math.round(offsetY);
+  }
+
+  if (fileInput) {
+    fileInput.addEventListener('change', (e) => {
+      const file = e.target.files[0];
+      if (file) {
+        const reader = new FileReader();
+        reader.onload = ev => {
+          if (img) img.src = ev.target.result;
+        };
+        reader.readAsDataURL(file);
+      }
+    });
+  }
+
+  if (rotateLeft) rotateLeft.addEventListener('click', () => { rotation = (rotation - 90 + 360) % 360; update(); });
+  if (rotateRight) rotateRight.addEventListener('click', () => { rotation = (rotation + 90) % 360; update(); });
+  if (zoomIn) zoomIn.addEventListener('click', () => { zoom = Math.min(zoom + 0.25, 3); update(); });
+  if (zoomOut) zoomOut.addEventListener('click', () => { zoom = Math.max(zoom - 0.25, 0.5); update(); });
+
+  // arrastar para ajustar o corte da foto
+  let dragging = false;
+  let startX, startY;
+
+  if (img) {
+    img.addEventListener('mousedown', (e) => {
+      dragging = true;
+      startX = e.clientX - offsetX;
+      startY = e.clientY - offsetY;
+    });
+    document.addEventListener('mousemove', (e) => {
+      if (dragging) {
+        offsetX = e.clientX - startX;
+        offsetY = e.clientY - startY;
+        update();
+      }
+    });
+    document.addEventListener('mouseup', () => { dragging = false; });
+
+    img.addEventListener('touchstart', (e) => {
+      dragging = true;
+      const t = e.touches[0];
+      startX = t.clientX - offsetX;
+      startY = t.clientY - offsetY;
+    });
+    document.addEventListener('touchmove', (e) => {
+      if (dragging) {
+        const t = e.touches[0];
+        offsetX = t.clientX - startX;
+        offsetY = t.clientY - startY;
+        update();
+      }
+    });
+    document.addEventListener('touchend', () => { dragging = false; });
+  }
+
+  update();
+});
 
 
   function mostrarTodasTransacoes() {
