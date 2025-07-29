@@ -53,6 +53,10 @@ class RegistrationForm(FlaskForm):
         Optional(),
         FileAllowed(['jpg', 'jpeg', 'png', 'gif'], 'Apenas imagens!')
     ])
+    photo_rotation = IntegerField('Rotação', default=0, validators=[Optional()])
+    photo_zoom = DecimalField('Zoom', places=2, default=1.0, validators=[Optional()])
+    photo_offset_x = DecimalField('Offset X', places=0, default=0, validators=[Optional()])
+    photo_offset_y = DecimalField('Offset Y', places=0, default=0, validators=[Optional()])
     password = PasswordField(
         'Password',
         validators=[DataRequired(message="Senha é obrigatória"), Length(min=6)],
@@ -88,6 +92,10 @@ class RegistrationForm(FlaskForm):
         Optional(),
         FileAllowed(['jpg', 'jpeg', 'png', 'gif'], 'Apenas imagens!')
     ])
+    photo_rotation = IntegerField('Rotação', default=0, validators=[Optional()])
+    photo_zoom = DecimalField('Zoom', places=2, default=1.0, validators=[Optional()])
+    photo_offset_x = DecimalField('Offset X', places=0, default=0, validators=[Optional()])
+    photo_offset_y = DecimalField('Offset Y', places=0, default=0, validators=[Optional()])
 
     password = PasswordField(
         'Senha',
@@ -154,6 +162,10 @@ class AnimalForm(FlaskForm):
     Optional(),
     FileAllowed(['jpg', 'jpeg', 'png', 'gif'], 'Somente imagens!')
 ])
+    photo_rotation = IntegerField('Rotação', default=0, validators=[Optional()])
+    photo_zoom = DecimalField('Zoom', places=2, default=1.0, validators=[Optional()])
+    photo_offset_x = DecimalField('Offset X', places=0, default=0, validators=[Optional()])
+    photo_offset_y = DecimalField('Offset Y', places=0, default=0, validators=[Optional()])
     price = DecimalField('Preço (R$)', places=2, validators=[Optional()])
 
     modo = SelectField('Modo de Disponibilidade', choices=[
