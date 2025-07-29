@@ -3499,12 +3499,20 @@ def mp_sdk():
 # Caches for frequently requested lists
 @cache
 def list_species():
-    return Species.query.order_by(Species.name).all()
+    """Return a lightweight list of species as dictionaries."""
+    return [
+        {"id": sp.id, "name": sp.name}
+        for sp in Species.query.order_by(Species.name).all()
+    ]
 
 
 @cache
 def list_breeds():
-    return Breed.query.order_by(Breed.name).all()
+    """Return a lightweight list of breeds as dictionaries."""
+    return [
+        {"id": br.id, "name": br.name, "species_id": br.species_id}
+        for br in Breed.query.order_by(Breed.name).all()
+    ]
 
 
 @cache
