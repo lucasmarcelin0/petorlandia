@@ -12,8 +12,8 @@
         <!-- Foto -->
         <div class="col-md-4 text-center">
           {% if current_user.profile_photo %}
-            <img src="{{ current_user.profile_photo }}" class="img-thumbnail shadow-sm mb-2"
-                 style="width: 240px; height: 240px; object-fit: cover; border-radius: 1rem;"
+            <img id="profile-photo-img" src="{{ current_user.profile_photo }}" class="img-thumbnail shadow-sm mb-2"
+                 style="width: 240px; height: 240px; object-fit: cover; border-radius: 1rem; transform: rotate({{ current_user.photo_rotation or 0 }}deg) scale({{ current_user.photo_zoom or 1 }});"
                  alt="Foto de {{ current_user.name }}">
           {% else %}
             <div class="bg-light border d-flex align-items-center justify-content-center mb-2"
@@ -24,6 +24,8 @@
 
           <div id="campo-upload-foto" class="mt-2 d-none">
             {{ form.profile_photo(class="form-control form-control-sm") }}
+            {{ form.photo_rotation(class="form-select form-select-sm mt-2") }}
+            {{ form.photo_zoom(class="form-select form-select-sm mt-2") }}
           </div>
         </div>
 
@@ -213,6 +215,19 @@ function toggleAll() {
     }
   }
 }
+
+document.addEventListener('DOMContentLoaded', function () {
+  const rot = document.getElementById('photo_rotation');
+  const zoom = document.getElementById('photo_zoom');
+  const img = document.getElementById('profile-photo-img');
+  function update() {
+    if (img && rot && zoom) {
+      img.style.transform = `rotate(${rot.value}deg) scale(${zoom.value})`;
+    }
+  }
+  if (rot) rot.addEventListener('input', update);
+  if (zoom) zoom.addEventListener('input', update);
+});
 
 
   function mostrarTodasTransacoes() {

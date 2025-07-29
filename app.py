@@ -501,6 +501,8 @@ def profile():
         current_user.name = form.name.data
         current_user.email = form.email.data
         current_user.phone = form.phone.data
+        current_user.photo_rotation = form.photo_rotation.data
+        current_user.photo_zoom = form.photo_zoom.data
 
         # Atualiza ou cria endereço
         endereco = current_user.endereco
