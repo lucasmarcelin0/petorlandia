@@ -1,4 +1,3 @@
-
 {% macro photo_cropper(file_field, rot_field, zoom_field, offset_x_field, offset_y_field, image_url='', size=240, id=None, placeholder_type='user') %}
 {% set id = id or file_field.id %}
 {% if placeholder_type == 'animal' %}
@@ -7,24 +6,49 @@
   {% set placeholder_url = url_for('static', filename='default_user.png') %}
 {% endif %}
 <div class="photo-cropper text-center">
-  <div id="{{ id }}-container" class="img-thumbnail shadow-sm mb-2 position-relative overflow-hidden" style="width: {{ size }}px; height: {{ size }}px; border-radius: 1rem;">
-    <img id="{{ id }}-img" src="{{ image_url if image_url else placeholder_url }}" style="width:100%; height:100%; object-fit: cover; cursor: move; {% if not image_url %}opacity:0.6;{% endif %} transform: translate({{ offset_x_field.data or 0 }}px, {{ offset_y_field.data or 0 }}px) rotate({{ rot_field.data or 0 }}deg) scale({{ zoom_field.data or 1 }});" alt="Imagem">
+  <div id="{{ id }}-container" class="img-thumbnail shadow-sm mb-3 position-relative overflow-hidden" style="width: {{ size }}px; height: {{ size }}px; border-radius: 1rem; background-color: #f8f9fa;">
+    <img id="{{ id }}-img" src="{{ image_url if image_url else placeholder_url }}" style="width:100%; height:100%; object-fit: cover; cursor: grab; transition: transform 0.2s ease; {% if not image_url %}opacity:0.5;{% endif %} transform: translate({{ offset_x_field.data or 0 }}px, {{ offset_y_field.data or 0 }}px) rotate({{ rot_field.data or 0 }}deg) scale({{ zoom_field.data or 1 }});" alt="Imagem">
+    {% if not image_url %}
+    <div class="position-absolute top-50 start-50 translate-middle text-center" style="pointer-events: none;">
+      <i class="fas fa-camera fa-3x text-secondary"></i>
+      <p class="mt-2 text-secondary fw-light">Adicionar foto</p>
+    </div>
+    {% endif %}
   </div>
-  {{ file_field(class='form-control form-control-sm', id=id, accept='image/*') }}
-  <div id="{{ id }}-controls" class="d-flex justify-content-center gap-2 my-2{% if not image_url %} d-none{% endif %}">
-    <button type="button" id="{{ id }}-rotate-left" class="btn btn-outline-secondary btn-sm" title="Girar 90° à esquerda"><i class="fas fa-undo"></i></button>
-    <button type="button" id="{{ id }}-rotate-right" class="btn btn-outline-secondary btn-sm" title="Girar 90° à direita"><i class="fas fa-redo"></i></button>
-    <button type="button" id="{{ id }}-zoom-out" class="btn btn-outline-secondary btn-sm" title="Diminuir zoom">-</button>
-    <button type="button" id="{{ id }}-zoom-in" class="btn btn-outline-secondary btn-sm" title="Aumentar zoom">+</button>
+  
+  {{ file_field(class='d-none', id=id, accept='image/*') }}
+  <button type="button" class="btn btn-primary btn-sm mb-3" onclick="document.getElementById('{{ id }}').click()">
+    <i class="fas fa-upload me-1"></i> Escolher imagem
+  </button>
+  
+  <div id="{{ id }}-controls" class="d-flex flex-wrap justify-content-center gap-2 my-2{% if not image_url %} d-none{% endif %}">
+    <button type="button" id="{{ id }}-rotate-left" class="btn btn-light btn-sm border" title="Girar 90° à esquerda">
+      <i class="fas fa-undo"></i>
+    </button>
+    <button type="button" id="{{ id }}-rotate-right" class="btn btn-light btn-sm border" title="Girar 90° à direita">
+      <i class="fas fa-redo"></i>
+    </button>
+    <button type="button" id="{{ id }}-zoom-out" class="btn btn-light btn-sm border" title="Diminuir zoom">
+      <i class="fas fa-search-minus"></i>
+    </button>
+    <button type="button" id="{{ id }}-zoom-in" class="btn btn-light btn-sm border" title="Aumentar zoom">
+      <i class="fas fa-search-plus"></i>
+    </button>
+    <button type="button" id="{{ id }}-reset" class="btn btn-light btn-sm border" title="Redefinir">
+      <i class="fas fa-sync-alt"></i>
+    </button>
   </div>
+  
   {{ rot_field(class='d-none', id=id + '-rotation') }}
   {{ zoom_field(class='d-none', id=id + '-zoom') }}
   {{ offset_x_field(class='d-none', id=id + '-offset_x') }}
   {{ offset_y_field(class='d-none', id=id + '-offset_y') }}
 </div>
+
 <script>
   document.addEventListener('DOMContentLoaded', function () {
     const img = document.getElementById('{{ id }}-img');
+    const container = document.getElementById('{{ id }}-container');
     const fileInput = document.getElementById('{{ id }}');
     const controls = document.getElementById('{{ id }}-controls');
     const rotField = document.getElementById('{{ id }}-rotation');
@@ -35,6 +59,7 @@
     const rotateRight = document.getElementById('{{ id }}-rotate-right');
     const zoomIn = document.getElementById('{{ id }}-zoom-in');
     const zoomOut = document.getElementById('{{ id }}-zoom-out');
+    const resetBtn = document.getElementById('{{ id }}-reset');
 
     let rotation = parseInt(rotField.value || 0, 10);
     let zoom = parseFloat(zoomField.value || 1);
@@ -43,7 +68,6 @@
 
     function update() {
       if (img) {
-        img.style.display = 'block';
         img.style.transform = `translate(${offsetX}px, ${offsetY}px) rotate(${rotation}deg) scale(${zoom})`;
       }
       rotField.value = rotation;
@@ -53,7 +77,10 @@
     }
 
     function showControls() {
-      controls?.classList.remove('d-none');
+      if (controls) {
+        controls.classList.remove('d-none');
+        container.querySelector('.position-absolute')?.remove();
+      }
     }
 
     if (fileInput) {
@@ -64,6 +91,7 @@
           reader.onload = ev => {
             if (img) {
               img.src = ev.target.result;
+              img.style.opacity = '1';
               rotation = 0;
               zoom = 1;
               offsetX = 0;
@@ -77,23 +105,72 @@
       });
     }
 
+    // Button event listeners
     rotateLeft?.addEventListener('click', () => { rotation = (rotation - 90 + 360) % 360; update(); });
     rotateRight?.addEventListener('click', () => { rotation = (rotation + 90) % 360; update(); });
     zoomIn?.addEventListener('click', () => { zoom = Math.min(zoom + 0.25, 3); update(); });
     zoomOut?.addEventListener('click', () => { zoom = Math.max(zoom - 0.25, 0.5); update(); });
+    resetBtn?.addEventListener('click', () => { 
+      rotation = 0; 
+      zoom = 1; 
+      offsetX = 0; 
+      offsetY = 0; 
+      update(); 
+    });
 
+    // Drag functionality
     let dragging = false, startX, startY;
     if (img) {
-      img.addEventListener('mousedown', (e) => { dragging = true; startX = e.clientX - offsetX; startY = e.clientY - offsetY; });
-      document.addEventListener('mousemove', (e) => { if (dragging) { offsetX = e.clientX - startX; offsetY = e.clientY - startY; update(); }});
-      document.addEventListener('mouseup', () => { dragging = false; });
-      img.addEventListener('touchstart', (e) => { dragging = true; const t = e.touches[0]; startX = t.clientX - offsetX; startY = t.clientY - offsetY; });
-      document.addEventListener('touchmove', (e) => { if (dragging) { const t = e.touches[0]; offsetX = t.clientX - startX; offsetY = t.clientY - startY; update(); }});
-      document.addEventListener('touchend', () => { dragging = false; });
+      img.addEventListener('mousedown', (e) => { 
+        dragging = true; 
+        img.style.cursor = 'grabbing';
+        startX = e.clientX - offsetX; 
+        startY = e.clientY - offsetY; 
+        e.preventDefault();
+      });
+      
+      document.addEventListener('mousemove', (e) => { 
+        if (dragging) { 
+          offsetX = e.clientX - startX; 
+          offsetY = e.clientY - startY; 
+          update(); 
+        }
+      });
+      
+      document.addEventListener('mouseup', () => { 
+        dragging = false; 
+        img.style.cursor = 'grab';
+      });
+      
+      img.addEventListener('touchstart', (e) => { 
+        dragging = true; 
+        const t = e.touches[0]; 
+        startX = t.clientX - offsetX; 
+        startY = t.clientY - offsetY; 
+        e.preventDefault();
+      });
+      
+      document.addEventListener('touchmove', (e) => { 
+        if (dragging) { 
+          const t = e.touches[0]; 
+          offsetX = t.clientX - startX; 
+          offsetY = t.clientY - startY; 
+          update(); 
+        }
+      });
+      
+      document.addEventListener('touchend', () => { 
+        dragging = false; 
+      });
     }
+
+    // Container click to trigger file input
+    container?.addEventListener('click', (e) => {
+      if (!img.src.includes('default_') && !img.src.includes('default_user')) return;
+      fileInput.click();
+    });
 
     update();
   });
 </script>
 {% endmacro %}
-
