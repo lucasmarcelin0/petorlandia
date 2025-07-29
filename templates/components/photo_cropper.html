@@ -1,0 +1,77 @@
+{% macro photo_cropper(file_field, rot_field, zoom_field, offset_x_field, offset_y_field, image_url='', size=240, id=None) %}
+{% set id = id or file_field.id %}
+<div class="photo-cropper text-center">
+  <div id="{{ id }}-container" class="img-thumbnail shadow-sm mb-2 position-relative overflow-hidden" style="width: {{ size }}px; height: {{ size }}px; border-radius: 1rem;">
+    <img id="{{ id }}-img" src="{{ image_url }}" style="width:100%; height:100%; object-fit: cover; cursor: move; {% if not image_url %}display:none;{% endif %} transform: translate({{ offset_x_field.data or 0 }}px, {{ offset_y_field.data or 0 }}px) rotate({{ rot_field.data or 0 }}deg) scale({{ zoom_field.data or 1 }});" alt="Imagem">
+  </div>
+  {{ file_field(class='form-control form-control-sm', id=id, accept='image/*') }}
+  <div class="d-flex justify-content-center gap-2 my-2">
+    <button type="button" id="{{ id }}-rotate-left" class="btn btn-outline-secondary btn-sm" title="Girar 90° à esquerda"><i class="fas fa-undo"></i></button>
+    <button type="button" id="{{ id }}-rotate-right" class="btn btn-outline-secondary btn-sm" title="Girar 90° à direita"><i class="fas fa-redo"></i></button>
+    <button type="button" id="{{ id }}-zoom-out" class="btn btn-outline-secondary btn-sm" title="Diminuir zoom">-</button>
+    <button type="button" id="{{ id }}-zoom-in" class="btn btn-outline-secondary btn-sm" title="Aumentar zoom">+</button>
+  </div>
+  {{ rot_field(class='d-none', id=id + '-rotation') }}
+  {{ zoom_field(class='d-none', id=id + '-zoom') }}
+  {{ offset_x_field(class='d-none', id=id + '-offset_x') }}
+  {{ offset_y_field(class='d-none', id=id + '-offset_y') }}
+</div>
+<script>
+  document.addEventListener('DOMContentLoaded', function () {
+    const img = document.getElementById('{{ id }}-img');
+    const fileInput = document.getElementById('{{ id }}');
+    const rotField = document.getElementById('{{ id }}-rotation');
+    const zoomField = document.getElementById('{{ id }}-zoom');
+    const offsetXField = document.getElementById('{{ id }}-offset_x');
+    const offsetYField = document.getElementById('{{ id }}-offset_y');
+    const rotateLeft = document.getElementById('{{ id }}-rotate-left');
+    const rotateRight = document.getElementById('{{ id }}-rotate-right');
+    const zoomIn = document.getElementById('{{ id }}-zoom-in');
+    const zoomOut = document.getElementById('{{ id }}-zoom-out');
+
+    let rotation = parseInt(rotField.value || 0, 10);
+    let zoom = parseFloat(zoomField.value || 1);
+    let offsetX = parseFloat(offsetXField.value || 0);
+    let offsetY = parseFloat(offsetYField.value || 0);
+
+    function update() {
+      if (img) {
+        img.style.display = 'block';
+        img.style.transform = `translate(${offsetX}px, ${offsetY}px) rotate(${rotation}deg) scale(${zoom})`;
+      }
+      rotField.value = rotation;
+      zoomField.value = zoom.toFixed(2);
+      offsetXField.value = Math.round(offsetX);
+      offsetYField.value = Math.round(offsetY);
+    }
+
+    if (fileInput) {
+      fileInput.addEventListener('change', (e) => {
+        const file = e.target.files[0];
+        if (file) {
+          const reader = new FileReader();
+          reader.onload = ev => { if (img) { img.src = ev.target.result; update(); } };
+          reader.readAsDataURL(file);
+        }
+      });
+    }
+
+    rotateLeft?.addEventListener('click', () => { rotation = (rotation - 90 + 360) % 360; update(); });
+    rotateRight?.addEventListener('click', () => { rotation = (rotation + 90) % 360; update(); });
+    zoomIn?.addEventListener('click', () => { zoom = Math.min(zoom + 0.25, 3); update(); });
+    zoomOut?.addEventListener('click', () => { zoom = Math.max(zoom - 0.25, 0.5); update(); });
+
+    let dragging = false, startX, startY;
+    if (img) {
+      img.addEventListener('mousedown', (e) => { dragging = true; startX = e.clientX - offsetX; startY = e.clientY - offsetY; });
+      document.addEventListener('mousemove', (e) => { if (dragging) { offsetX = e.clientX - startX; offsetY = e.clientY - startY; update(); }});
+      document.addEventListener('mouseup', () => { dragging = false; });
+      img.addEventListener('touchstart', (e) => { dragging = true; const t = e.touches[0]; startX = t.clientX - offsetX; startY = t.clientY - offsetY; });
+      document.addEventListener('touchmove', (e) => { if (dragging) { const t = e.touches[0]; offsetX = t.clientX - startX; offsetY = t.clientY - startY; update(); }});
+      document.addEventListener('touchend', () => { dragging = false; });
+    }
+
+    update();
+  });
+</script>
+{% endmacro %}

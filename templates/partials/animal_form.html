@@ -1,3 +1,4 @@
+{% from 'components/photo_cropper.html' import photo_cropper %}
 <form method="POST" action="{{ url_for('update_animal', animal_id=animal.id) }}"
       enctype="multipart/form-data" onsubmit="return validarCadastroAnimal();"
       class="needs-validation" novalidate data-sync="true">
@@ -8,23 +9,13 @@
     <!-- Foto e Nome -->
     <div class="col-md-6">
       <label for="animal-name" class="form-label">Foto e Nome do Animal</label>
-      <div class="d-flex align-items-center gap-3">
-        <label for="animal-image" class="cursor-pointer">
-          {% if animal.image %}
-            <img id="animal-preview" src="{{ animal.image }}" alt="Foto de {{ animal.name }}"
-                 class="img-thumbnail border" style="width: 60px; height: 60px; object-fit: cover;">
-          {% else %}
-            <div id="animal-preview-placeholder"
-                 class="bg-light border rounded-circle d-flex align-items-center justify-content-center"
-                 style="width: 60px; height: 60px; font-size: 28px;">🐾</div>
-          {% endif %}
-        </label>
-        <input id="animal-image" name="image" type="file" accept="image/*" class="form-control d-none">
-        <input id="animal-name" type="text" name="name" class="form-control" 
-               placeholder="Nome do animal" value="{{ animal.name or '' }}" required
-               minlength="2" maxlength="50">
-        <div class="invalid-feedback">Por favor, insira um nome válido (2-50 caracteres).</div>
-      </div>
+        <div class="d-flex align-items-center gap-3">
+          {{ photo_cropper(form.image, form.photo_rotation, form.photo_zoom, form.photo_offset_x, form.photo_offset_y, animal.image, 60, 'animal-image') }}
+          <input id="animal-name" type="text" name="name" class="form-control"
+                 placeholder="Nome do animal" value="{{ animal.name or '' }}" required
+                 minlength="2" maxlength="50">
+          <div class="invalid-feedback">Por favor, insira um nome válido (2-50 caracteres).</div>
+        </div>
     </div>
 
     <!-- Espécie -->
@@ -145,47 +136,6 @@
       }, false);
     });
 
-    // Preview da imagem
-    const fileInput = document.getElementById('animal-image');
-    const previewImg = document.getElementById('animal-preview');
-    const placeholder = document.getElementById('animal-preview-placeholder');
-
-    fileInput?.addEventListener('change', (e) => {
-      const file = e.target.files[0];
-      if (file) {
-        // Validação do tipo e tamanho do arquivo
-        const validTypes = ['image/jpeg', 'image/png', 'image/gif'];
-        const maxSize = 2 * 1024 * 1024; // 2MB
-        
-        if (!validTypes.includes(file.type)) {
-          alert('Por favor, selecione uma imagem no formato JPEG, PNG ou GIF.');
-          return;
-        }
-        
-        if (file.size > maxSize) {
-          alert('A imagem não pode ser maior que 2MB.');
-          return;
-        }
-
-        const reader = new FileReader();
-        reader.onload = (event) => {
-          if (previewImg) {
-            previewImg.src = event.target.result;
-          } else if (placeholder) {
-            const newImg = document.createElement('img');
-            newImg.id = 'animal-preview';
-            newImg.src = event.target.result;
-            newImg.alt = 'Foto do animal';
-            newImg.className = 'img-thumbnail border';
-            newImg.style.width = '60px';
-            newImg.style.height = '60px';
-            newImg.style.objectFit = 'cover';
-            placeholder.replaceWith(newImg);
-          }
-        };
-        reader.readAsDataURL(file);
-      }
-    });
 
     // Validação customizada
     window.validarCadastroAnimal = function () {

@@ -1,4 +1,5 @@
 {% extends "layout.html" %}
+{% from 'components/photo_cropper.html' import photo_cropper %}
 
 {% block main %}
 <div class="container d-flex justify-content-center align-items-center mt-5">
@@ -98,8 +99,7 @@
 
             <div class="mb-3">
                 {{ form.image.label(class="form-label") }}
-                {{ form.image(class="form-control rounded-pill" + (" is-invalid" if form.image.errors else ""), id="animal_image", accept="image/*") }}
-                <img id="animal-preview" class="mt-2 rounded d-none" style="width: 150px; height: 150px; object-fit: cover;">
+                {{ photo_cropper(form.image, form.photo_rotation, form.photo_zoom, form.photo_offset_x, form.photo_offset_y, '', 150, 'animal_image') }}
                 {% for error in form.image.errors %}
                     <div class="invalid-feedback d-block">{{ error }}</div>
                 {% endfor %}
@@ -159,19 +159,6 @@
         ageInput.addEventListener('input', calcularDataNascimentoPorIdade);
         dobInput.addEventListener('change', calcularIdadePorDataNascimento);
 
-        const imageInput = document.getElementById('animal_image');
-        const preview = document.getElementById('animal-preview');
-        imageInput?.addEventListener('change', (e) => {
-            const file = e.target.files[0];
-            if (file && preview) {
-                const reader = new FileReader();
-                reader.onload = (ev) => {
-                    preview.src = ev.target.result;
-                    preview.classList.remove('d-none');
-                };
-                reader.readAsDataURL(file);
-            }
-        });
     });
 </script>
 {% endblock %}

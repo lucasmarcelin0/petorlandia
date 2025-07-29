@@ -1,4 +1,5 @@
 {% extends "layout.html" %}
+{% from 'components/photo_cropper.html' import photo_cropper %}
 
 {% block main %}
 <div class="container d-flex justify-content-center align-items-center mt-5">
@@ -37,9 +38,7 @@
             <!-- Foto de Perfil -->
             <div class="mb-3">
                 {{ form.profile_photo.label(class="form-label") }}
-                {{ form.profile_photo(class="form-control w-100", id="profile_photo", accept="image/*") }}
-                <img id="profile-preview" class="mt-2 rounded-circle d-none" style="width: 120px; height: 120px; object-fit: cover;">
-                <div class="form-text">Envie uma foto do seu pet</div>
+                {{ photo_cropper(form.profile_photo, form.photo_rotation, form.photo_zoom, form.photo_offset_x, form.photo_offset_y, '', 120, 'profile_photo') }}
                 {% for error in form.profile_photo.errors %}
                     <div class="text-danger">{{ error }}</div>
                 {% endfor %}
@@ -125,19 +124,6 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    const fileInput = document.getElementById('profile_photo');
-    const preview = document.getElementById('profile-preview');
-    fileInput?.addEventListener('change', (e) => {
-        const file = e.target.files[0];
-        if (file && preview) {
-            const reader = new FileReader();
-            reader.onload = (ev) => {
-                preview.src = ev.target.result;
-                preview.classList.remove('d-none');
-            };
-            reader.readAsDataURL(file);
-        }
-    });
 });
 </script>
 

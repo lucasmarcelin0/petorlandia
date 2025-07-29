@@ -430,6 +430,10 @@ def add_animal():
             sex=form.sex.data,
             description=form.description.data,
             image=image_url,
+            photo_rotation=form.photo_rotation.data,
+            photo_zoom=form.photo_zoom.data,
+            photo_offset_x=form.photo_offset_x.data,
+            photo_offset_y=form.photo_offset_y.data,
             modo=form.modo.data,
             price=form.price.data if form.modo.data == 'venda' else None,
             status='disponível',
@@ -1919,6 +1923,11 @@ def update_animal(animal_id):
         filename = f"{uuid.uuid4().hex}_{original_filename}"
         image_url = upload_to_s3(image_file, filename, folder="animals")
         animal.image = image_url
+
+    animal.photo_rotation = form.photo_rotation.data
+    animal.photo_zoom = form.photo_zoom.data
+    animal.photo_offset_x = form.photo_offset_x.data
+    animal.photo_offset_y = form.photo_offset_y.data
 
     db.session.commit()
     flash('Dados do animal atualizados com sucesso!', 'success')

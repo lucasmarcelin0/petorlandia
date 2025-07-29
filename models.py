@@ -216,6 +216,10 @@ class Animal(db.Model):
     description = db.Column(db.Text)
     status = db.Column(db.String(20))
     image = db.Column(db.String(200))
+    photo_rotation = db.Column(db.Integer, default=0)
+    photo_zoom = db.Column(db.Float, default=1.0)
+    photo_offset_x = db.Column(db.Float, default=0.0)
+    photo_offset_y = db.Column(db.Float, default=0.0)
     date_added = db.Column(db.DateTime, default=datetime.utcnow)
 
     modo = db.Column(db.String(20), default='doação')
