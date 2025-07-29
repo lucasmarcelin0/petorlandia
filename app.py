@@ -651,7 +651,8 @@ def list_animals():
         species_id=species_id,
         breed_id=breed_id,
         sex=sex,
-        age=age
+        age=age,
+        is_admin=_is_admin()
     )
 
 
