@@ -1,4 +1,5 @@
 {% set has_tutor = tutor is defined and tutor %}
+{% from 'components/photo_cropper.html' import photo_cropper %}
 
 <!-- 🔍 Busca de Tutor - Melhorado com acessibilidade e feedback visual -->
 <div class="mb-4 position-relative" id="tutor-search-box" {% if has_tutor %}style="display:none;"{% endif %}>
@@ -30,29 +31,16 @@
   </h5>
 
   <div class="row g-3">
-    <!-- Foto + Nome - Melhorado com preview e validação -->
+    <!-- Foto + Nome -->
     <div class="col-md-6">
       <label class="form-label">Foto e Nome</label>
       <div class="d-flex align-items-center gap-3">
-        <label for="profile_photo" class="cursor-pointer mb-0">
-          {% if tutor.profile_photo %}
-            <img id="tutor-preview" src="{{ tutor.profile_photo }}" alt="Foto de {{ tutor.name }}" 
-                 class="img-thumbnail rounded-circle" style="width: 60px; height: 60px; object-fit: cover;">
-          {% else %}
-            <div id="tutor-preview-placeholder" 
-                 class="rounded-circle bg-light d-flex align-items-center justify-content-center border" 
-                 style="width: 60px; height: 60px; font-size: 26px;">
-              <i class="bi bi-person"></i>
-            </div>
-          {% endif %}
-        </label>
-        <div class="flex-grow-1">
-          <input id="profile_photo" name="profile_photo" type="file" accept="image/*" 
-                 class="form-control d-none">
-          <input type="text" name="name" class="form-control" placeholder="Nome completo do tutor"
-                 value="{{ tutor.name|default('', true) if has_tutor else '' }}" required minlength="3" maxlength="100">
-          <div class="invalid-feedback">Por favor, insira um nome válido (3-100 caracteres)</div>
-        </div>
+        {{ photo_cropper(tutor_form.profile_photo, tutor_form.photo_rotation, tutor_form.photo_zoom,
+                         tutor_form.photo_offset_x, tutor_form.photo_offset_y,
+                         tutor.profile_photo if has_tutor else '', 60, 'profile_photo') }}
+        <input type="text" name="name" class="form-control" placeholder="Nome completo do tutor"
+               value="{{ tutor.name|default('', true) if has_tutor else '' }}" required minlength="3" maxlength="100">
+        <div class="invalid-feedback">Por favor, insira um nome válido (3-100 caracteres)</div>
       </div>
     </div>
 
@@ -195,43 +183,7 @@
     document.getElementById('tutor-date-of-birth')?.addEventListener('change', calcularIdadeTutor);
 
     // Preview da imagem
-    document.getElementById('profile_photo')?.addEventListener('change', function(event) {
-      const file = event.target.files[0];
-      const preview = document.getElementById('tutor-preview');
-      const placeholder = document.getElementById('tutor-preview-placeholder');
-      
-      if (file) {
-        // Validação da imagem (2MB máximo, tipos permitidos)
-        const validTypes = ['image/jpeg', 'image/png', 'image/webp'];
-        const maxSize = 2 * 1024 * 1024; // 2MB
-        
-        if (!validTypes.includes(file.type)) {
-          alert('Por favor, selecione uma imagem no formato JPEG, PNG ou WEBP.');
-          return;
-        }
-        
-        if (file.size > maxSize) {
-          alert('A imagem não pode ser maior que 2MB.');
-          return;
-        }
 
-        const reader = new FileReader();
-        reader.onload = function(e) {
-          if (preview) {
-            preview.src = e.target.result;
-          } else {
-            const newImg = document.createElement('img');
-            newImg.id = 'tutor-preview';
-            newImg.src = e.target.result;
-            newImg.alt = 'Foto do tutor';
-            newImg.className = 'img-thumbnail rounded-circle';
-            newImg.style = 'width: 60px; height: 60px; object-fit: cover;';
-            placeholder.replaceWith(newImg);
-          }
-        };
-        reader.readAsDataURL(file);
-      }
-    });
 
     // Formatação da informação "Adicionado por"
     const createdInfo = document.getElementById('created-info');

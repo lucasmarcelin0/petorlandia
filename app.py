@@ -1398,12 +1398,14 @@ def consulta_qr():
     # Lógica adicional
     tutor = animal.owner
     consulta = Consulta.query.filter_by(animal_id=animal.id).order_by(Consulta.id.desc()).first()
+    tutor_form = EditProfileForm(obj=tutor)
 
     return render_template('consulta_qr.html',
                            tutor=tutor,
                            animal=animal,
                            consulta=consulta,
-                           animal_idade=idade)
+                           animal_idade=idade,
+                           tutor_form=tutor_form)
 
 
 
@@ -1460,6 +1462,7 @@ def consulta_direct(animal_id):
     breed_list = list_breeds()
 
     form = AnimalForm(obj=animal)
+    tutor_form = EditProfileForm(obj=tutor)
 
     return render_template('consulta_qr.html',
                            animal=animal,
@@ -1473,7 +1476,8 @@ def consulta_direct(animal_id):
                            linhas_existentes=linhas_existentes,
                            species_list=species_list,
                            breed_list=breed_list,
-                           form=form)
+                           form=form,
+                           tutor_form=tutor_form)
 
 
 
@@ -2812,7 +2816,8 @@ def novo_atendimento():
         flash('Apenas veterinários podem acessar esta página.', 'danger')
         return redirect(url_for('index'))
 
-    return render_template('novo_atendimento.html')
+    tutor_form = EditProfileForm()
+    return render_template('novo_atendimento.html', tutor_form=tutor_form)
 
 
 @app.route('/criar_tutor_ajax', methods=['POST'])
