@@ -1,4 +1,5 @@
 {% extends "layout.html" %}
+{% from 'components/photo_cropper.html' import photo_cropper %}
 
 {% block main %}
 <h2>Editar Animal</h2>
@@ -30,7 +31,8 @@
     {{ form.date_of_birth.label(class="mt-2") }} {{ form.date_of_birth(class="form-control", id="date_of_birth") }}
     {{ form.sex.label(class="mt-2") }} {{ form.sex(class="form-select") }}
     {{ form.description.label(class="mt-2") }} {{ form.description(class="form-control") }}
-    {{ form.image.label(class="mt-2") }} {{ form.image(class="form-control") }}
+    {{ form.image.label(class="mt-2") }}
+    {{ photo_cropper(form.image, form.photo_rotation, form.photo_zoom, form.photo_offset_x, form.photo_offset_y, animal.image, 150, 'animal_image') }}
 
     <div class="mb-3 mt-2">
         {{ form.modo.label(class="form-label") }}
