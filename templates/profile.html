@@ -12,12 +12,11 @@
         <!-- Foto -->
         <div class="col-md-4 text-center">
           {% if current_user.profile_photo %}
-            <img id="profile-photo-img" src="{{ current_user.profile_photo }}" class="img-thumbnail shadow-sm mb-2"
-                 style="width: 240px; height: 240px; object-fit: cover; border-radius: 1rem; transform: rotate({{ current_user.photo_rotation or 0 }}deg) scale({{ current_user.photo_zoom or 1 }});"
-                 alt="Foto de {{ current_user.name }}">
+            <div id="photo-container" class="img-thumbnail shadow-sm mb-2 position-relative overflow-hidden" style="width: 240px; height: 240px; border-radius: 1rem;">
+              <img id="profile-photo-img" src="{{ current_user.profile_photo }}" style="width:100%; height:100%; object-fit: cover; cursor: move; transform: translate({{ current_user.photo_offset_x or 0 }}px, {{ current_user.photo_offset_y or 0 }}px) rotate({{ current_user.photo_rotation or 0 }}deg) scale({{ current_user.photo_zoom or 1 }});" alt="Foto de {{ current_user.name }}">
+            </div>
           {% else %}
-            <div class="bg-light border d-flex align-items-center justify-content-center mb-2"
-                 style="width: 240px; height: 240px; border-radius: 1rem; font-size: 1.2rem; color: #555;">
+            <div class="bg-light border d-flex align-items-center justify-content-center mb-2" style="width: 240px; height: 240px; border-radius: 1rem; font-size: 1.2rem; color: #555;">
               Sem Foto
             </div>
           {% endif %}
@@ -36,6 +35,8 @@
             </div>
             {{ form.photo_rotation(class="d-none", id="photo_rotation") }}
             {{ form.photo_zoom(class="d-none", id="photo_zoom") }}
+            {{ form.photo_offset_x(class="d-none", id="photo_offset_x") }}
+            {{ form.photo_offset_y(class="d-none", id="photo_offset_y") }}
           </div>
         </div>
 
@@ -231,6 +232,8 @@ document.addEventListener('DOMContentLoaded', function () {
   const fileInput = document.getElementById('profile_photo');
   const rotField = document.getElementById('photo_rotation');
   const zoomField = document.getElementById('photo_zoom');
+  const offsetXField = document.getElementById('photo_offset_x');
+  const offsetYField = document.getElementById('photo_offset_y');
   const rotateLeft = document.getElementById('rotate-left');
   const rotateRight = document.getElementById('rotate-right');
   const zoomIn = document.getElementById('zoom-in');
@@ -238,13 +241,17 @@ document.addEventListener('DOMContentLoaded', function () {
 
   let rotation = parseInt(rotField.value || 0, 10);
   let zoom = parseFloat(zoomField.value || 1);
+  let offsetX = parseFloat(offsetXField.value || 0);
+  let offsetY = parseFloat(offsetYField.value || 0);
 
   function update() {
     if (img) {
-      img.style.transform = `rotate(${rotation}deg) scale(${zoom})`;
+      img.style.transform = `translate(${offsetX}px, ${offsetY}px) rotate(${rotation}deg) scale(${zoom})`;
     }
     rotField.value = rotation;
     zoomField.value = zoom.toFixed(2);
+    offsetXField.value = Math.round(offsetX);
+    offsetYField.value = Math.round(offsetY);
   }
 
   if (fileInput) {
@@ -264,6 +271,42 @@ document.addEventListener('DOMContentLoaded', function () {
   if (rotateRight) rotateRight.addEventListener('click', () => { rotation = (rotation + 90) % 360; update(); });
   if (zoomIn) zoomIn.addEventListener('click', () => { zoom = Math.min(zoom + 0.25, 3); update(); });
   if (zoomOut) zoomOut.addEventListener('click', () => { zoom = Math.max(zoom - 0.25, 0.5); update(); });
+
+  // arrastar para ajustar o corte da foto
+  let dragging = false;
+  let startX, startY;
+
+  if (img) {
+    img.addEventListener('mousedown', (e) => {
+      dragging = true;
+      startX = e.clientX - offsetX;
+      startY = e.clientY - offsetY;
+    });
+    document.addEventListener('mousemove', (e) => {
+      if (dragging) {
+        offsetX = e.clientX - startX;
+        offsetY = e.clientY - startY;
+        update();
+      }
+    });
+    document.addEventListener('mouseup', () => { dragging = false; });
+
+    img.addEventListener('touchstart', (e) => {
+      dragging = true;
+      const t = e.touches[0];
+      startX = t.clientX - offsetX;
+      startY = t.clientY - offsetY;
+    });
+    document.addEventListener('touchmove', (e) => {
+      if (dragging) {
+        const t = e.touches[0];
+        offsetX = t.clientX - startX;
+        offsetY = t.clientY - startY;
+        update();
+      }
+    });
+    document.addEventListener('touchend', () => { dragging = false; });
+  }
 
   update();
 });

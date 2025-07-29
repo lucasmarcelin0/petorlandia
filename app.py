@@ -503,6 +503,8 @@ def profile():
         current_user.phone = form.phone.data
         current_user.photo_rotation = form.photo_rotation.data
         current_user.photo_zoom = form.photo_zoom.data
+        current_user.photo_offset_x = form.photo_offset_x.data
+        current_user.photo_offset_y = form.photo_offset_y.data
 
         # Atualiza ou cria endereço
         endereco = current_user.endereco

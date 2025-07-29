@@ -177,6 +177,8 @@ class EditProfileForm(FlaskForm):
 ])
     photo_rotation = IntegerField('Rotação', default=0, validators=[Optional()])
     photo_zoom = DecimalField('Zoom', places=2, default=1.0, validators=[Optional()])
+    photo_offset_x = DecimalField('Offset X', places=0, default=0, validators=[Optional()])
+    photo_offset_y = DecimalField('Offset Y', places=0, default=0, validators=[Optional()])
     submit = SubmitField('Salvar Alterações')
 
 

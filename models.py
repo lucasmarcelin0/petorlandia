@@ -81,6 +81,8 @@ class User(UserMixin, db.Model):
     profile_photo = db.Column(db.String(200))
     photo_rotation = db.Column(db.Integer, default=0)
     photo_zoom = db.Column(db.Float, default=1.0)
+    photo_offset_x = db.Column(db.Float, default=0.0)
+    photo_offset_y = db.Column(db.Float, default=0.0)
 
     # 🆕 Novos campos adicionados:
     cpf = db.Column(db.String(14), unique=True, nullable=True)  # Ex: 123.456.789-00
