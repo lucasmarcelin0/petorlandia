@@ -688,6 +688,9 @@ def editar_animal(animal_id):
     species_list = list_species()
     breed_list = list_breeds()
 
+
+
+
     if form.validate_on_submit():
         animal.name = form.name.data
         animal.age = form.age.data
@@ -1456,6 +1459,8 @@ def consulta_direct(animal_id):
     species_list = list_species()
     breed_list = list_breeds()
 
+    form = AnimalForm(obj=animal)
+
     return render_template('consulta_qr.html',
                            animal=animal,
                            tutor=tutor,
@@ -1467,7 +1472,8 @@ def consulta_direct(animal_id):
                            marcas_existentes=marcas_existentes,
                            linhas_existentes=linhas_existentes,
                            species_list=species_list,
-                           breed_list=breed_list)
+                           breed_list=breed_list,
+                           form=form)
 
 
 
