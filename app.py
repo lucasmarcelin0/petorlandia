@@ -1783,7 +1783,10 @@ def update_tutor(user_id):
     photo = request.files.get('profile_photo')
     if photo and photo.filename:
         filename = f"{uuid.uuid4().hex}_{secure_filename(photo.filename)}"
-        upload_profile_photo_async(user.id, photo.read(), photo.content_type, filename)
+        # Upload sincronamente para garantir a atualização imediata
+        image_url = upload_to_s3(photo, filename, folder="tutors")
+        if image_url:
+            user.profile_photo = image_url
 
     # Controles de corte da foto
     try:
