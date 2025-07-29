@@ -175,6 +175,18 @@ class EditProfileForm(FlaskForm):
     Optional(),
     FileAllowed(['jpg', 'jpeg', 'png', 'gif'], 'Somente imagens!')
 ])
+    photo_rotation = SelectField(
+        'Rotação',
+        choices=[(0, '0°'), (90, '90°'), (180, '180°'), (270, '270°')],
+        coerce=int,
+        default=0,
+    )
+    photo_zoom = SelectField(
+        'Zoom',
+        choices=[(1.0, '100%'), (1.25, '125%'), (1.5, '150%'), (1.75, '175%'), (2.0, '200%')],
+        coerce=float,
+        default=1.0,
+    )
     submit = SubmitField('Salvar Alterações')
 
 
