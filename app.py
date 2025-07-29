@@ -1775,6 +1775,24 @@ def update_tutor(user_id):
         filename = f"{uuid.uuid4().hex}_{secure_filename(photo.filename)}"
         upload_profile_photo_async(user.id, photo.read(), photo.content_type, filename)
 
+    # Controles de corte da foto
+    try:
+        user.photo_rotation = int(request.form.get('photo_rotation', user.photo_rotation or 0))
+    except ValueError:
+        pass
+    try:
+        user.photo_zoom = float(request.form.get('photo_zoom', user.photo_zoom or 1.0))
+    except ValueError:
+        pass
+    try:
+        user.photo_offset_x = float(request.form.get('photo_offset_x', user.photo_offset_x or 0))
+    except ValueError:
+        pass
+    try:
+        user.photo_offset_y = float(request.form.get('photo_offset_y', user.photo_offset_y or 0))
+    except ValueError:
+        pass
+
     # 📍 Endereço
     addr_fields = {
         k: request.form.get(k) or None
@@ -1830,6 +1848,11 @@ def ficha_tutor(tutor_id):
     # Ano atual
     current_year = datetime.now(BR_TZ).year
 
+    # Formulários para usar o photo_cropper no template
+    tutor_form = EditProfileForm(obj=tutor)
+    animal_forms = {a.id: AnimalForm(obj=a) for a in animais}
+    new_animal_form = AnimalForm()
+
     # Busca todas as espécies e raças
     species_list = list_species()
     breeds = Breed.query.options(joinedload(Breed.species)).all()
@@ -1850,7 +1873,10 @@ def ficha_tutor(tutor_id):
         animais=animais,
         current_year=current_year,
         species_list=species_list,
-        breed_map=breed_map
+        breed_map=breed_map,
+        tutor_form=tutor_form,
+        animal_forms=animal_forms,
+        new_animal_form=new_animal_form
     )
 
 
@@ -1924,10 +1950,22 @@ def update_animal(animal_id):
         image_url = upload_to_s3(image_file, filename, folder="animals")
         animal.image = image_url
 
-    animal.photo_rotation = form.photo_rotation.data
-    animal.photo_zoom = form.photo_zoom.data
-    animal.photo_offset_x = form.photo_offset_x.data
-    animal.photo_offset_y = form.photo_offset_y.data
+    try:
+        animal.photo_rotation = int(request.form.get('photo_rotation', animal.photo_rotation or 0))
+    except ValueError:
+        pass
+    try:
+        animal.photo_zoom = float(request.form.get('photo_zoom', animal.photo_zoom or 1.0))
+    except ValueError:
+        pass
+    try:
+        animal.photo_offset_x = float(request.form.get('photo_offset_x', animal.photo_offset_x or 0))
+    except ValueError:
+        pass
+    try:
+        animal.photo_offset_y = float(request.form.get('photo_offset_y', animal.photo_offset_y or 0))
+    except ValueError:
+        pass
 
     db.session.commit()
     flash('Dados do animal atualizados com sucesso!', 'success')
