@@ -19,16 +19,19 @@
           {% endif %}
         </div>
 
-        <div class="mt-2 d-flex gap-2">
-          <form method="POST" action="{{ url_for('deletar_vacina', vacina_id=vacina.id) }}"
-                onsubmit="return confirm('Deseja mesmo remover esta vacina?')">
-            <button class="btn btn-sm btn-danger">🗑️ Remover</button>
-          </form>
+      <div class="mt-2 d-flex gap-2">
+        <form method="POST" action="{{ url_for('deletar_vacina', vacina_id=vacina.id) }}"
+              onsubmit="return confirm('Deseja mesmo remover esta vacina?')">
+          <button class="btn btn-sm btn-danger">🗑️ Remover</button>
+        </form>
 
-          <button class="btn btn-sm btn-outline-primary" onclick="editarVacina({{ vacina.id }})">
-            ✏️ Editar
-          </button>
-        </div>
+        <button class="btn btn-sm btn-outline-primary" onclick="editarVacina({{ vacina.id }})">
+          ✏️ Editar
+        </button>
+        <a href="{{ url_for('imprimir_vacinas', animal_id=animal.id) }}" class="btn btn-sm btn-outline-dark" target="_blank">
+          🖨️ Imprimir
+        </a>
+      </div>
       </li>
       {% endfor %}
     </ul>
