@@ -2103,6 +2103,12 @@ def salvar_racao(animal_id):
             return jsonify({'success': False, 'error': 'Formato de dados inválido.'}), 400
 
         db.session.commit()
+        # Limpa o cache caso um novo tipo tenha sido criado acima
+        try:
+            list_rations.cache_clear()
+        except Exception:
+            pass
+
         return jsonify({'success': True})
 
     except Exception as e:
@@ -2142,6 +2148,11 @@ def criar_tipo_racao():
         )
         db.session.add(nova_racao)
         db.session.commit()
+        # Limpa o cache para que novas rações apareçam imediatamente
+        try:
+            list_rations.cache_clear()
+        except Exception:
+            pass
 
         return jsonify({'success': True, 'id': nova_racao.id})
 
