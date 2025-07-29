@@ -23,9 +23,19 @@
           {% endif %}
 
           <div id="campo-upload-foto" class="mt-2 d-none">
-            {{ form.profile_photo(class="form-control form-control-sm") }}
-            {{ form.photo_rotation(class="form-select form-select-sm mt-2") }}
-            {{ form.photo_zoom(class="form-select form-select-sm mt-2") }}
+            {{ form.profile_photo(class="form-control form-control-sm", id="profile_photo") }}
+            <div class="d-flex justify-content-center gap-2 my-2">
+              <button type="button" id="rotate-left" class="btn btn-outline-secondary btn-sm" title="Girar 90° à esquerda">
+                <i class="fas fa-undo"></i>
+              </button>
+              <button type="button" id="rotate-right" class="btn btn-outline-secondary btn-sm" title="Girar 90° à direita">
+                <i class="fas fa-redo"></i>
+              </button>
+              <button type="button" id="zoom-out" class="btn btn-outline-secondary btn-sm" title="Diminuir zoom">-</button>
+              <button type="button" id="zoom-in" class="btn btn-outline-secondary btn-sm" title="Aumentar zoom">+</button>
+            </div>
+            {{ form.photo_rotation(class="d-none", id="photo_rotation") }}
+            {{ form.photo_zoom(class="d-none", id="photo_zoom") }}
           </div>
         </div>
 
@@ -217,16 +227,45 @@ function toggleAll() {
 }
 
 document.addEventListener('DOMContentLoaded', function () {
-  const rot = document.getElementById('photo_rotation');
-  const zoom = document.getElementById('photo_zoom');
   const img = document.getElementById('profile-photo-img');
+  const fileInput = document.getElementById('profile_photo');
+  const rotField = document.getElementById('photo_rotation');
+  const zoomField = document.getElementById('photo_zoom');
+  const rotateLeft = document.getElementById('rotate-left');
+  const rotateRight = document.getElementById('rotate-right');
+  const zoomIn = document.getElementById('zoom-in');
+  const zoomOut = document.getElementById('zoom-out');
+
+  let rotation = parseInt(rotField.value || 0, 10);
+  let zoom = parseFloat(zoomField.value || 1);
+
   function update() {
-    if (img && rot && zoom) {
-      img.style.transform = `rotate(${rot.value}deg) scale(${zoom.value})`;
+    if (img) {
+      img.style.transform = `rotate(${rotation}deg) scale(${zoom})`;
     }
+    rotField.value = rotation;
+    zoomField.value = zoom.toFixed(2);
   }
-  if (rot) rot.addEventListener('input', update);
-  if (zoom) zoom.addEventListener('input', update);
+
+  if (fileInput) {
+    fileInput.addEventListener('change', (e) => {
+      const file = e.target.files[0];
+      if (file) {
+        const reader = new FileReader();
+        reader.onload = ev => {
+          if (img) img.src = ev.target.result;
+        };
+        reader.readAsDataURL(file);
+      }
+    });
+  }
+
+  if (rotateLeft) rotateLeft.addEventListener('click', () => { rotation = (rotation - 90 + 360) % 360; update(); });
+  if (rotateRight) rotateRight.addEventListener('click', () => { rotation = (rotation + 90) % 360; update(); });
+  if (zoomIn) zoomIn.addEventListener('click', () => { zoom = Math.min(zoom + 0.25, 3); update(); });
+  if (zoomOut) zoomOut.addEventListener('click', () => { zoom = Math.max(zoom - 0.25, 0.5); update(); });
+
+  update();
 });
 
 
