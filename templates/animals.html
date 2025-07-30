@@ -70,15 +70,7 @@
         {# renderiza normalmente #}
       <div class="col">
         <div class="card h-100 shadow-sm border-0 rounded-4 position-relative {% if animal.modo == 'perdido' %}border border-danger{% endif %}">
-          {% if is_admin %}
-          <form method="POST" action="{{ url_for('deletar_animal', animal_id=animal.id) }}"
-                onsubmit="return confirm('Excluir permanentemente este animal?');"
-                class="position-absolute top-0 end-0 m-2">
-            <button type="submit" class="btn btn-sm btn-danger" title="Excluir">
-              ❌
-            </button>
-          </form>
-          {% endif %}
+
           {% if animal.image %}
           <img src="{{ animal.image }}" class="card-img-top rounded-top-4" style="height: 200px; object-fit: cover;" loading="lazy" alt="Imagem de {{ animal.name }}">
           {% endif %}
@@ -154,6 +146,15 @@
                 ✏️ Editar
               </a>
               {% endif %}
+                        {% if is_admin %}
+          <form method="POST" action="{{ url_for('deletar_animal', animal_id=animal.id) }}"
+                onsubmit="return confirm('Excluir permanentemente este animal?');"
+                class="btn btn-outline-secondary btn-sm rounded-pill">
+            <button type="submit" title="Excluir">
+              ❌
+            </button>
+          </form>
+          {% endif %}
             </div>
           </div>
         </div>
