@@ -154,6 +154,18 @@
                 ✏️ Editar
               </a>
               {% endif %}
+
+              {% if is_admin %}
+              <form method="post" action="{{ url_for('update_animal_modo', animal_id=animal.id) }}"
+                    class="d-inline">
+                <select name="modo" class="form-select form-select-sm rounded-pill w-auto"
+                        onchange="this.form.submit()">
+                  {% for m in ['doação', 'venda', 'adotado', 'perdido'] %}
+                  <option value="{{ m }}" {% if animal.modo == m %}selected{% endif %}>{{ m|capitalize }}</option>
+                  {% endfor %}
+                </select>
+              </form>
+              {% endif %}
             </div>
           </div>
         </div>

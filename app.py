@@ -1057,6 +1057,24 @@ def deletar_animal(animal_id):
     return redirect(url_for('list_animals'))
 
 
+@app.route('/animal/<int:animal_id>/update_modo', methods=['POST'])
+@login_required
+def update_animal_modo(animal_id):
+    if not _is_admin():
+        abort(403)
+    animal = Animal.query.get_or_404(animal_id)
+    modo = request.form.get('modo')
+    if modo not in ['doação', 'venda', 'adotado', 'perdido']:
+        flash('Modo inválido.', 'danger')
+        return redirect(request.referrer or url_for('list_animals'))
+    animal.modo = modo
+    if modo != 'venda':
+        animal.price = None
+    db.session.commit()
+    flash('Modo do animal atualizado!', 'success')
+    return redirect(request.referrer or url_for('list_animals'))
+
+
 @app.route('/termo/interesse/<int:animal_id>/<int:user_id>', methods=['GET', 'POST'])
 @login_required
 def termo_interesse(animal_id, user_id):

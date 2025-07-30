@@ -1284,3 +1284,58 @@ def test_update_tutor_profile_photo(monkeypatch, app):
         )
         assert resp.status_code == 200
         assert User.query.get(tutor.id).profile_photo == 'http://img'
+
+
+def test_update_animal_modo_requires_admin(monkeypatch, app):
+    client = app.test_client()
+
+    with app.app_context():
+        db.drop_all()
+        db.create_all()
+
+        user = User(id=1, name='User', email='u@test')
+        user.set_password('x')
+        animal = Animal(id=1, name='Dog', user_id=user.id, modo='doação')
+        db.session.add_all([user, animal])
+        db.session.commit()
+
+        import flask_login.utils as login_utils
+        monkeypatch.setattr(login_utils, '_get_user', lambda: user)
+        monkeypatch.setattr(app_module, '_is_admin', lambda: False)
+
+        for idx, fn in enumerate(flask_app.template_context_processors[None]):
+            if fn.__name__ == 'inject_unread_count':
+                flask_app.template_context_processors[None][idx] = lambda: {'unread_messages': 0}
+
+        resp = client.post(f'/animal/{animal.id}/update_modo', data={'modo': 'perdido'})
+        assert resp.status_code == 403
+
+
+def test_update_animal_modo_changes_value(monkeypatch, app):
+    client = app.test_client()
+
+    with app.app_context():
+        db.drop_all()
+        db.create_all()
+
+        admin = User(id=1, name='Admin', email='admin@test', role='admin')
+        admin.set_password('x')
+        animal = Animal(id=1, name='Dog', user_id=admin.id, modo='doação')
+        db.session.add_all([admin, animal])
+        db.session.commit()
+
+        import flask_login.utils as login_utils
+        monkeypatch.setattr(login_utils, '_get_user', lambda: admin)
+        monkeypatch.setattr(app_module, '_is_admin', lambda: True)
+
+        for idx, fn in enumerate(flask_app.template_context_processors[None]):
+            if fn.__name__ == 'inject_unread_count':
+                flask_app.template_context_processors[None][idx] = lambda: {'unread_messages': 0}
+
+        resp = client.post(
+            f'/animal/{animal.id}/update_modo',
+            data={'modo': 'perdido'},
+            follow_redirects=True
+        )
+        assert resp.status_code == 200
+        assert Animal.query.get(animal.id).modo == 'perdido'
