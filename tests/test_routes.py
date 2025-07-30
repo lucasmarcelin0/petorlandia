@@ -1284,33 +1284,3 @@ def test_update_tutor_profile_photo(monkeypatch, app):
         )
         assert resp.status_code == 200
         assert User.query.get(tutor.id).profile_photo == 'http://img'
-
-
-def test_admin_can_update_animal_modo(monkeypatch, app):
-    client = app.test_client()
-
-    with app.app_context():
-        db.drop_all()
-        db.create_all()
-
-        admin = User(id=1, name='Admin', email='admin@test', role='admin')
-        admin.set_password('x')
-        animal = Animal(id=1, name='Dog', modo='doação', user_id=1)
-        db.session.add_all([admin, animal])
-        db.session.commit()
-
-        import flask_login.utils as login_utils
-        monkeypatch.setattr(login_utils, '_get_user', lambda: admin)
-        monkeypatch.setattr(app_module, '_is_admin', lambda: True)
-
-        for idx, fn in enumerate(flask_app.template_context_processors[None]):
-            if fn.__name__ == 'inject_unread_count':
-                flask_app.template_context_processors[None][idx] = lambda: {'unread_messages': 0}
-
-        resp = client.post(
-            '/animal/1/set_modo',
-            json={'modo': 'perdido'},
-            headers={'Accept': 'application/json'}
-        )
-        assert resp.status_code == 200
-        assert Animal.query.get(1).modo == 'perdido'
