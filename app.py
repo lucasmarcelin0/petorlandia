@@ -3454,10 +3454,33 @@ def delivery_overview():
         .order_by(DeliveryRequest.id.desc())
     )
 
-    open_requests = base_q.filter_by(status="pendente").all()
-    in_progress   = base_q.filter_by(status="em_andamento").all()
-    completed     = base_q.filter_by(status="concluida").all()
-    canceled      = base_q.filter_by(status="cancelada").all()
+    per_page = 10
+    open_page = request.args.get('open_page', 1, type=int)
+    progress_page = request.args.get('progress_page', 1, type=int)
+    completed_page = request.args.get('completed_page', 1, type=int)
+    canceled_page = request.args.get('canceled_page', 1, type=int)
+
+    open_pagination = (
+        base_q.filter_by(status="pendente")
+              .paginate(page=open_page, per_page=per_page, error_out=False)
+    )
+    progress_pagination = (
+        base_q.filter_by(status="em_andamento")
+              .paginate(page=progress_page, per_page=per_page, error_out=False)
+    )
+    completed_pagination = (
+        base_q.filter_by(status="concluida")
+              .paginate(page=completed_page, per_page=per_page, error_out=False)
+    )
+    canceled_pagination = (
+        base_q.filter_by(status="cancelada")
+              .paginate(page=canceled_page, per_page=per_page, error_out=False)
+    )
+
+    open_requests = open_pagination.items
+    in_progress   = progress_pagination.items
+    completed     = completed_pagination.items
+    canceled      = canceled_pagination.items
 
     # produtos para o bloco de estoque
     products = Product.query.order_by(Product.name).all()
@@ -3469,6 +3492,14 @@ def delivery_overview():
         in_progress   = in_progress,
         completed     = completed,
         canceled      = canceled,
+        open_pagination = open_pagination,
+        progress_pagination = progress_pagination,
+        completed_pagination = completed_pagination,
+        canceled_pagination = canceled_pagination,
+        open_page = open_page,
+        progress_page = progress_page,
+        completed_page = completed_page,
+        canceled_page = canceled_page,
     )
 
 
