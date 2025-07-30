@@ -70,6 +70,18 @@
         {# renderiza normalmente #}
       <div class="col">
         <div class="card h-100 shadow-sm border-0 rounded-4 position-relative {% if animal.modo == 'perdido' %}border border-danger{% endif %}">
+          {% if is_admin %}
+          <div class="position-absolute top-0 end-0 m-2 dropdown">
+            <button class="btn btn-sm btn-outline-secondary dropdown-toggle" data-bs-toggle="dropdown" aria-expanded="false">⚙</button>
+            <ul class="dropdown-menu">
+              <li><a class="dropdown-item change-modo" href="#" data-animal-id="{{ animal.id }}" data-modo="doação">Doação</a></li>
+              <li><a class="dropdown-item change-modo" href="#" data-animal-id="{{ animal.id }}" data-modo="venda">Venda</a></li>
+              <li><a class="dropdown-item change-modo" href="#" data-animal-id="{{ animal.id }}" data-modo="vendido">Vendido</a></li>
+              <li><a class="dropdown-item change-modo" href="#" data-animal-id="{{ animal.id }}" data-modo="adotado">Adotado</a></li>
+              <li><a class="dropdown-item change-modo" href="#" data-animal-id="{{ animal.id }}" data-modo="perdido">Perdido</a></li>
+            </ul>
+          </div>
+          {% endif %}
 
           {% if animal.image %}
           <img src="{{ animal.image }}" class="card-img-top rounded-top-4" style="height: 200px; object-fit: cover;" loading="lazy" alt="Imagem de {{ animal.name }}">
@@ -246,6 +258,22 @@
     if (!form) return;
     form.querySelectorAll('select,input').forEach(el => {
       el.addEventListener('change', () => form.submit());
+    });
+
+    document.querySelectorAll('.change-modo').forEach(el => {
+      el.addEventListener('click', evt => {
+        evt.preventDefault();
+        fetch(`/animal/${el.dataset.animalId}/set_modo`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json'
+          },
+          body: JSON.stringify({modo: el.dataset.modo})
+        }).then(res => {
+          if (res.ok) window.location.reload();
+        });
+      });
     });
   });
 </script>
