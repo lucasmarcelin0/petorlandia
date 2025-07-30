@@ -15,7 +15,7 @@
     {% endfor %}
   </ul>
 
-  {% macro lista(reqs, titulo, cls_badge, lbl_badge) %}
+{% macro lista(reqs, pagination, page_var, titulo, cls_badge, lbl_badge, open_page, progress_page, completed_page, canceled_page) %}
   <h4 class="mt-4 {{ cls_badge }}">{{ titulo }}</h4>
   <ul class="list-group shadow-sm mb-4">
     {% for r in reqs %}
@@ -86,21 +86,31 @@
       <li class="list-group-item text-muted">Não há registros.</li>
     {% endfor %}
   </ul>
-  {% endmacro %}
-
-  <!-- ▸ Listas ----------------------------------------------------------- -->
+  {% if pagination and pagination.has_next %}
+  <div class="text-center mb-4">
+    <a class="btn btn-sm btn-outline-secondary"
+       href="{{ url_for('delivery_overview',
+                        open_page=(pagination.next_num if page_var=='open_page' else open_page),
+                        progress_page=(pagination.next_num if page_var=='progress_page' else progress_page),
+                        completed_page=(pagination.next_num if page_var=='completed_page' else completed_page),
+                        canceled_page=(pagination.next_num if page_var=='canceled_page' else canceled_page) ) }}">
+      Mostrar mais
+    </a>
+  </div>
+  {% endif %}
+{% endmacro %}  <!-- ▸ Listas ----------------------------------------------------------- -->
   <div class="row row-cols-1 row-cols-md-4 g-4">
     <div class="col">
-      {{ lista(open_requests, "🟡 Solicitações Abertas",   "bg-warning text-dark", "Pendente") }}
+      {{ lista(open_requests, open_pagination, 'open_page', "🟡 Solicitações Abertas",   "bg-warning text-dark", "Pendente", open_page, progress_page, completed_page, canceled_page) }}
     </div>
     <div class="col">
-      {{ lista(in_progress,   "🔵 Em Andamento",          "bg-info text-dark",   "Em andamento") }}
+      {{ lista(in_progress, progress_pagination, 'progress_page', "🔵 Em Andamento",          "bg-info text-dark", "Em andamento", open_page, progress_page, completed_page, canceled_page) }}
     </div>
     <div class="col">
-      {{ lista(completed,     "✅ Concluídas",            "bg-success",          "Concluída") }}
+      {{ lista(completed, completed_pagination, 'completed_page', "✅ Concluídas",            "bg-success", "Concluída", open_page, progress_page, completed_page, canceled_page) }}
     </div>
     <div class="col">
-      {{ lista(canceled,      "❌ Canceladas",            "bg-danger",           "Cancelada") }}
+      {{ lista(canceled, canceled_pagination, 'canceled_page', "❌ Canceladas",            "bg-danger", "Cancelada", open_page, progress_page, completed_page, canceled_page) }}
     </div>
   </div>
 
