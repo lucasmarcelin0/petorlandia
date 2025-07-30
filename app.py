@@ -12,7 +12,7 @@ from PIL import Image
 
 
 from dotenv import load_dotenv
-from flask import Flask, session, send_from_directory, abort, request, jsonify
+from flask import Flask, session, send_from_directory, abort
 from itsdangerous import URLSafeTimedSerializer
 
 # ----------------------------------------------------------------
@@ -1054,30 +1054,6 @@ def deletar_animal(animal_id):
     animal.removido_em = datetime.utcnow()
     db.session.commit()
     flash('Animal marcado como removido. Histórico preservado.', 'success')
-    return redirect(url_for('list_animals'))
-
-
-@app.route('/animal/<int:animal_id>/set_modo', methods=['POST'])
-@login_required
-def set_animal_modo(animal_id):
-    """Allows admins to update the animal availability mode."""
-    if not _is_admin():
-        abort(403)
-
-    animal = Animal.query.get_or_404(animal_id)
-    new_modo = (request.json.get('modo') if request.is_json
-                else request.form.get('modo'))
-
-    allowed = {'doação', 'venda', 'vendido', 'adotado', 'perdido'}
-    if new_modo not in allowed:
-        abort(400)
-
-    animal.modo = new_modo
-    db.session.commit()
-
-    if 'application/json' in request.headers.get('Accept', ''):
-        return jsonify(message='Modo atualizado', modo=animal.modo)
-
     return redirect(url_for('list_animals'))
 
 
