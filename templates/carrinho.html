@@ -8,7 +8,11 @@
     {% for item in order.items %}
     <li class="list-group-item d-flex justify-content-between align-items-center">
       <div>
-        <h6 class="mb-0 fw-bold">{{ item.item_name }}</h6>
+        <h6 class="mb-0 fw-bold">
+          <a href="{{ url_for('produto_detail', product_id=item.product_id) }}">
+            {{ item.item_name }}
+          </a>
+        </h6>
       </div>
       <div class="d-flex align-items-center">
         <form action="{{ url_for('diminuir_item_carrinho', item_id=item.id) }}" method="post" class="me-2 js-cart-form">
