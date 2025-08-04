@@ -448,6 +448,21 @@
     <footer>
         &copy; Lucas Marcelino • PetOrlândia 2025 <i class="fas fa-paw text-primary"></i>
     </footer>
+    <div class="modal fade" id="confirmModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Confirmação</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+                </div>
+                <div class="modal-body"></div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="button" class="btn btn-primary" id="confirmModalOk">Confirmar</button>
+                </div>
+            </div>
+        </div>
+    </div>
 
     <div class="position-fixed bottom-0 end-0 p-3" style="z-index: 11">
         <div id="actionToast" class="toast text-white border-0" role="alert" aria-live="assertive" aria-atomic="true">
@@ -471,6 +486,45 @@
                     }, 600); // tempo igual ao CSS
                 });
             }, 3000); // aparece por 3 segundos
+        });
+    </script>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const flashMessages = {{ flash_messages|tojson }};
+            flashMessages.forEach(([category, message], idx) => {
+                setTimeout(() => {
+                    const toastEl = document.getElementById('actionToast');
+                    toastEl.querySelector('.toast-body').textContent = message;
+                    toastEl.classList.remove('bg-danger', 'bg-info', 'bg-success');
+                    toastEl.classList.add('bg-' + (category || 'success'));
+                    new bootstrap.Toast(toastEl).show();
+                }, idx * 1000);
+            });
+
+            const confirmModalEl = document.getElementById('confirmModal');
+            const confirmModal = new bootstrap.Modal(confirmModalEl);
+            const confirmBtn = document.getElementById('confirmModalOk');
+            let confirmTarget = null;
+
+            document.querySelectorAll('form.js-confirm').forEach(form => {
+                form.addEventListener('submit', ev => {
+                    if (form.dataset.confirmed) { return; }
+                    ev.preventDefault();
+                    confirmTarget = form;
+                    const msg = form.dataset.message || 'Tem certeza?';
+                    confirmModalEl.querySelector('.modal-body').textContent = msg;
+                    confirmModal.show();
+                });
+            });
+
+            confirmBtn.addEventListener('click', () => {
+                if (confirmTarget) {
+                    confirmTarget.dataset.confirmed = 'true';
+                    confirmTarget.submit();
+                }
+                confirmModal.hide();
+            });
         });
     </script>
 
