@@ -4,6 +4,7 @@ from flask_admin.menu import MenuLink
 from flask import redirect, url_for, flash
 from flask_login import current_user, login_required
 from wtforms import SelectField, DateField, FileField
+from markupsafe import Markup
 import os
 import uuid
 from werkzeug.utils import secure_filename
@@ -149,8 +150,12 @@ class PickupLocationView(ModelView):
 import re
 
 class UserAdminView(MyModelView):
+    form_extra_fields = {
+        'profile_photo_upload': FileField('Foto de perfil')
+    }
+
     column_list = (
-        'name', 'email', 'role', 'worker',
+        'profile_photo', 'name', 'email', 'role', 'worker',
         'cpf', 'rg', 'date_of_birth',
         'phone', 'address', 'clinica', 'added_by'
     )
@@ -164,6 +169,9 @@ class UserAdminView(MyModelView):
         'phone': lambda v, c, m, p: Markup(
             f'<a href="https://wa.me/55{re.sub("[^0-9]", "", m.phone)}" target="_blank">{m.phone}</a>'
         ) if m.phone else '—',
+        'profile_photo': lambda v, c, m, p: Markup(
+            f'<img src="{m.profile_photo}" width="100">'
+        ) if m.profile_photo else '',
         'added_by': lambda v, c, m, p: m.added_by.name if m.added_by else '—'
     }
 
@@ -171,9 +179,26 @@ class UserAdminView(MyModelView):
     form_args = {'role': {'choices': [(r.name, r.value) for r in UserRole]}}
     form_columns = (
         'name', 'email', 'password_hash', 'role', 'worker',
-        'cpf', 'rg', 'date_of_birth', 'phone', 'address', 'clinica'
+        'cpf', 'rg', 'date_of_birth', 'phone', 'address', 'clinica', 'profile_photo_upload'
     )
     column_details_list = column_list
+
+    def on_model_change(self, form, model, is_created):
+        if form.profile_photo_upload.data:
+            file = form.profile_photo_upload.data
+            filename = f"{uuid.uuid4().hex}_{secure_filename(file.filename)}"
+            from app import upload_to_s3
+            image_url = upload_to_s3(file, filename, folder="profile_photos")
+            if image_url:
+                model.profile_photo = image_url
+
+    def on_form_prefill(self, form, id):
+        obj = self.get_one(id)
+        if obj and obj.profile_photo:
+            form.profile_photo_upload.description = Markup(
+                f'<img src="{obj.profile_photo}" alt="Foto atual" '
+                f'style="max-height:150px;margin-top:10px;">'
+            )
 
 
 
@@ -243,12 +268,15 @@ class TutorAdminView(MyModelView):
             db.session.delete(animal)
 
 
-from markupsafe import Markup
 from flask import url_for
 
 class AnimalAdminView(MyModelView):
+    form_extra_fields = {
+        'image_upload': FileField('Imagem')
+    }
+
     column_list = (
-        'name', 'species.name', 'breed.name', 'age', 'peso',
+        'image', 'name', 'species.name', 'breed.name', 'age', 'peso',
         'date_of_birth', 'sex', 'status', 'clinica',
         'added_by'
     )
@@ -264,11 +292,31 @@ class AnimalAdminView(MyModelView):
 
     form_columns = (
         'name', 'species', 'breed', 'age', 'peso', 'date_of_birth',
-        'sex', 'status', 'clinica', 'added_by'
+        'sex', 'status', 'clinica', 'added_by', 'image_upload'
     )
+
+    def on_model_change(self, form, model, is_created):
+        if form.image_upload.data:
+            file = form.image_upload.data
+            filename = f"{uuid.uuid4().hex}_{secure_filename(file.filename)}"
+            from app import upload_to_s3
+            image_url = upload_to_s3(file, filename, folder="animals")
+            if image_url:
+                model.image = image_url
+
+    def on_form_prefill(self, form, id):
+        obj = self.get_one(id)
+        if obj and obj.image:
+            form.image_upload.description = Markup(
+                f'<img src="{obj.image}" alt="Imagem atual" '
+                f'style="max-height:150px;margin-top:10px;">'
+            )
 
 
     column_formatters = {
+        'image': lambda v, c, m, p: Markup(
+            f'<img src="{m.image}" width="100">'
+        ) if m.image else '',
         'name': lambda v, c, m, p: Markup(
             f'<a href="{url_for("consulta_direct", animal_id=m.id)}" target="_blank">{m.name}</a>'
         ),
@@ -311,6 +359,13 @@ class ProductAdmin(MyModelView):
 
     form_columns = ['name', 'description', 'price', 'stock', 'image_upload']
 
+    column_list = ['image_url', 'name', 'price', 'stock']
+    column_formatters = {
+        'image_url': lambda v, c, m, p: Markup(
+            f'<img src="{m.image_url}" width="100">'
+        ) if m.image_url else ''
+    }
+
     def on_model_change(self, form, model, is_created):
         if form.image_upload.data:
             file = form.image_upload.data
@@ -318,6 +373,14 @@ class ProductAdmin(MyModelView):
             from app import upload_to_s3
             image_url = upload_to_s3(file, filename, folder="products")
             model.image_url = image_url
+
+    def on_form_prefill(self, form, id):
+        obj = self.get_one(id)
+        if obj and obj.image_url:
+            form.image_upload.description = Markup(
+                f'<img src="{obj.image_url}" alt="Imagem atual" '
+                f'style="max-height:150px;margin-top:10px;">'
+            )
 
     def on_model_delete(self, model):
         """Remover itens de pedido antes de excluir o produto."""
