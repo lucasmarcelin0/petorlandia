@@ -43,8 +43,8 @@ if response["status"] == 201:
     pref = response["response"]
     print("✅ Preference criada!")
     print("pref_id:", pref["id"])
-    print("Checkout PROD:", pref["init_point"])
-    print("Checkout SANDBOX:", pref["sandbox_init_point"])
+    print("Pagamento PROD:", pref["init_point"])
+    print("Pagamento SANDBOX:", pref["sandbox_init_point"])
 else:
     print("❌ Erro HTTP", response["status"])
     pprint(response)

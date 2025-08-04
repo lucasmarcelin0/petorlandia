@@ -59,7 +59,7 @@
 
             <div class="mb-3">
                 {{ form.date_of_birth.label(class="form-label") }}
-                {{ form.date_of_birth(class="form-control rounded-pill" + (" is-invalid" if form.date_of_birth.errors else ""), id="date_of_birth") }}
+                {{ form.date_of_birth(class="form-control rounded-pill" + (" is-invalid" if form.date_of_birth.errors else ""), id="date_of_birth", lang="pt-BR", placeholder="dd/mm/aaaa") }}
                 {% for error in form.date_of_birth.errors %}
                     <div class="invalid-feedback d-block">{{ error }}</div>
                 {% endfor %}
