@@ -9,7 +9,7 @@
     <li class="list-group-item d-flex justify-content-between align-items-center">
       <div>
         <h6 class="mb-0 fw-bold">
-          <a href="{{ url_for('produto_detail', product_id=item.product_id) }}">
+          <a href="{{ url_for('produto_detail', product_id=item.product_id) }}" class="cart-item-link">
             {{ item.item_name }}
           </a>
         </h6>
@@ -79,8 +79,22 @@
       <i class="bi bi-arrow-left-circle"></i> Voltar à loja
     </a>
   </div>
-  {% endif %}
+{% endif %}
 </div>
+
+<style>
+  .cart-item-link {
+    text-decoration: none;
+    color: var(--bs-dark);
+    transition: color 0.2s;
+  }
+
+  .cart-item-link:hover {
+    color: var(--bs-primary);
+    text-decoration: underline;
+  }
+</style>
+
 <script>
   const addressSelect = document.getElementById('addressSelect');
   const addressSearch = document.getElementById('addressSearch');
