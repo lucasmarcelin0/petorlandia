@@ -3747,7 +3747,7 @@ def produto_detail(product_id):
 
     update_form = ProductUpdateForm(obj=product, prefix='upd')
     photo_form = ProductPhotoForm(prefix='photo')
-    cart_form = AddToCartForm(prefix='cart')
+    form = AddToCartForm()
 
     if _is_admin():
         if update_form.validate_on_submit() and update_form.submit.data:
@@ -3781,7 +3781,7 @@ def produto_detail(product_id):
         product=product,
         update_form=update_form,
         photo_form=photo_form,
-        cart_form=cart_form,
+        form=form,
         is_admin=_is_admin(),
     )
 
