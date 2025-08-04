@@ -58,6 +58,9 @@ except ImportError:
 # Base para todas as views protegidas
 # --------------------------------------------------------------------------
 class MyModelView(ModelView):
+    # Ordena objetos mais recentes primeiro por padrão
+    column_default_sort = ('id', True)
+
     def is_accessible(self):
         return _is_admin()
 
@@ -157,10 +160,16 @@ class UserAdminView(MyModelView):
     column_list = (
         'profile_photo', 'name', 'email', 'role', 'worker',
         'cpf', 'rg', 'date_of_birth',
-        'phone', 'address', 'clinica', 'added_by'
+        'phone', 'address', 'clinica', 'added_by', 'created_at'
     )
 
-    column_labels = {'added_by': 'Adicionado por'}
+    column_labels = {'added_by': 'Adicionado por', 'created_at': 'Registrado em'}
+
+    column_searchable_list = ('name', 'email')
+    column_filters = ('role', 'created_at', 'clinica')
+    column_sortable_list = ('name', 'email', 'created_at')
+
+    column_default_sort = ('created_at', True)
 
     column_formatters = {
         'name': lambda v, c, m, p: Markup(
@@ -277,7 +286,7 @@ class AnimalAdminView(MyModelView):
 
     column_list = (
         'image', 'name', 'species.name', 'breed.name', 'age', 'peso',
-        'date_of_birth', 'sex', 'status', 'clinica',
+        'date_of_birth', 'sex', 'status', 'clinica', 'date_added',
         'added_by'
     )
 
@@ -287,7 +296,8 @@ class AnimalAdminView(MyModelView):
         'breed.name': 'Raça',
         'date_of_birth': 'Nascimento',
         'peso': 'Peso (kg)',
-        'added_by': 'Criado por'
+        'added_by': 'Criado por',
+        'date_added': 'Registrado em'
     }
 
     form_columns = (
@@ -328,9 +338,10 @@ class AnimalAdminView(MyModelView):
 
     # 🔧 Atualizado para apontar para atributos relacionados
     column_searchable_list = ('name', 'breed.name', 'species.name')
-    column_filters = ('species.name', 'breed.name', 'sex', 'status', 'clinica')
+    column_filters = ('species.name', 'breed.name', 'sex', 'status', 'clinica', 'date_added')
 
-    column_default_sort = ('name', True)
+    column_sortable_list = ('name', 'date_added')
+    column_default_sort = ('date_added', True)
 
 
 class SpeciesAdminView(MyModelView):
@@ -360,6 +371,8 @@ class ProductAdmin(MyModelView):
     form_columns = ['name', 'description', 'price', 'stock', 'image_upload']
 
     column_list = ['image_url', 'name', 'price', 'stock']
+    column_searchable_list = ('name',)
+    column_sortable_list = ('name', 'price', 'stock', 'id')
     column_formatters = {
         'image_url': lambda v, c, m, p: Markup(
             f'<img src="{m.image_url}" width="100">'
