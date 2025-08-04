@@ -15,8 +15,8 @@
       <p>{{ product.description }}</p>
       <p class="h4 text-success">R$ {{ '%.2f'|format(product.price)|replace('.', ',') }}</p>
       <form action="{{ url_for('adicionar_carrinho', product_id=product.id) }}" method="post" class="d-flex align-items-center gap-2 js-cart-form">
-        {{ cart_form.hidden_tag() }}
-        {{ cart_form.quantity(class="form-control w-auto", min="1") }}
+        {{ form.hidden_tag() }}
+        {{ form.quantity(class="form-control w-auto", min="1") }}
         <button type="submit" class="btn btn-primary">Adicionar ao Carrinho</button>
       </form>
     </div>
