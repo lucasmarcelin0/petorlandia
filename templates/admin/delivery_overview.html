@@ -123,5 +123,39 @@
     </a>
   </div>
 
+  <div class="mt-4">
+    <h4>Mapa dos entregadores</h4>
+    <div id="workersMap" style="height: 400px;"></div>
+  </div>
+
+  <link
+    rel="stylesheet"
+    href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+    integrity="sha256-sA+e2yz1G+u/ehabSGvtQvE4H14R/2uOeGjn5ERm2y8="
+    crossorigin=""
+  />
+  <script
+    src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+    integrity="sha256-o9N1jG8CjNd8Pr+X/4A9Hd4RJpcJnSMr3vzYW3LFyf0="
+    crossorigin=""
+  ></script>
+  <script>
+    document.addEventListener('DOMContentLoaded', () => {
+      const locations = {{ worker_locations|tojson }};
+      if (!locations.length) {
+        const el = document.getElementById('workersMap');
+        if (el) el.style.display = 'none';
+        return;
+      }
+      const map = L.map('workersMap');
+      const coords = locations.map(l => [l.lat, l.lng]);
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '&copy; OpenStreetMap contributors'
+      }).addTo(map);
+      coords.forEach(c => L.marker(c).addTo(map));
+      map.fitBounds(coords, { padding: [20, 20] });
+    });
+  </script>
+
 </div>
 {% endblock %}
