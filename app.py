@@ -3205,12 +3205,15 @@ def list_delivery_requests():
     •  Entregador → até 3 pendentes (mais antigas primeiro) + as dele
     •  Cliente    → só pedidos que ele criou
     """
-    base = (DeliveryRequest.query
-            .order_by(DeliveryRequest.requested_at.asc())   # FIFO
-            .options(
-                selectinload(DeliveryRequest.order)          # evita N+1
-                .selectinload(Order.user)
-            ))
+    base = (
+        DeliveryRequest.query
+        .filter_by(archived=False)
+        .order_by(DeliveryRequest.requested_at.asc())   # FIFO
+        .options(
+            selectinload(DeliveryRequest.order)          # evita N+1
+            .selectinload(Order.user)
+        )
+    )
 
     # -------------------------------------------------------- ENTREGADOR
     if current_user.worker == "delivery":
@@ -3261,7 +3264,7 @@ def list_delivery_requests():
 @login_required
 def api_delivery_counts():
     """Return delivery counts for the current user."""
-    base = DeliveryRequest.query
+    base = DeliveryRequest.query.filter_by(archived=False)
     if current_user.worker == "delivery":
         available_total = base.filter_by(status="pendente").count()
         doing = base.filter_by(worker_id=current_user.id,
