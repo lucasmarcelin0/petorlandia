@@ -1484,6 +1484,8 @@ def test_archive_and_unarchive_delivery(monkeypatch, app):
 
         resp = client.get('/admin/delivery_archive')
         assert b'Pedido #1' in resp.data
+        assert b'Voltar' in resp.data
+        assert b'href="/admin/delivery_overview"' in resp.data
 
         client.post('/admin/delivery_requests/1/unarchive')
         assert DeliveryRequest.query.get(1).archived is False
