@@ -259,6 +259,12 @@ class CheckoutForm(FlaskForm):
     submit = SubmitField('Finalizar Compra')
 
 
+class EditAddressForm(FlaskForm):
+    """Formulário simples para atualizar o endereço de entrega de um pedido."""
+    shipping_address = TextAreaField('Endereço', validators=[DataRequired(), Length(max=200)])
+    submit = SubmitField('Salvar')
+
+
 class ProductUpdateForm(FlaskForm):
     name = StringField('Nome', validators=[DataRequired()])
     description = TextAreaField('Descrição')

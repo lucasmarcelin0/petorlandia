@@ -3912,7 +3912,7 @@ def diminuir_item_carrinho(item_id):
 # --------------------------------------------------------
 #  VER CARRINHO
 # --------------------------------------------------------
-from forms import CheckoutForm
+from forms import CheckoutForm, EditAddressForm
 
 @app.route("/carrinho", methods=["GET", "POST"])
 @login_required
@@ -4486,6 +4486,26 @@ def legacy_pagamento(status):
     return redirect(url_for("payment_status", payment_id=payment.id, status=mp_status))
 
 
+@app.route("/order/<int:order_id>/edit_address", methods=["GET", "POST"])
+@login_required
+def edit_order_address(order_id):
+    order = Order.query.get_or_404(order_id)
+    if order.user_id != current_user.id:
+        abort(403)
+
+    form = EditAddressForm(obj=order)
+    if form.validate_on_submit():
+        order.shipping_address = form.shipping_address.data
+        db.session.commit()
+        flash("Endereço atualizado.", "success")
+        if order.payment:
+            return redirect(url_for("payment_status", payment_id=order.payment.id))
+        return redirect(url_for("loja"))
+
+    payment_id = order.payment.id if order.payment else None
+    return render_template("edit_address.html", form=form, payment_id=payment_id)
+
+
 @app.route("/payment_status/<int:payment_id>")
 def payment_status(payment_id):
     payment = Payment.query.get_or_404(payment_id)
@@ -4504,27 +4524,32 @@ def payment_status(payment_id):
     # endpoint a usar
     endpoint = "delivery_detail"  # agora é um só
 
-    # Redireciona ao detalhe do pedido quando o pagamento foi concluído
+    # Limpa o pedido da sessão quando o pagamento foi concluído
     if result in {"success", "completed", "approved"}:
-        # Compra concluída; limpa o pedido atual da sessão
         session.pop("current_order", None)
-        if delivery_req:
-            return redirect(url_for(endpoint, req_id=delivery_req.id))
-        # Caso ainda não exista DeliveryRequest, mostra o pedido diretamente
-        return redirect(url_for("pedido_detail", order_id=payment.order_id))
 
     order = payment.order if (
         current_user.is_authenticated and payment.user_id == current_user.id
     ) else None
 
+    delivery_estimate = None
+    if order and order.created_at:
+        delivery_estimate = order.created_at + timedelta(days=5)
+
+    cancel_url = url_for('buyer_cancel_delivery', req_id=delivery_req.id) if delivery_req else None
+    edit_address_url = url_for('edit_order_address', order_id=payment.order_id) if order else None
+
     return render_template(
         "payment_status.html",
-        payment      = payment,
-        result       = result,
-        req_id       = delivery_req.id if delivery_req else None,
-        req_endpoint = endpoint,
-        order        = order,
-        form         = form
+        payment          = payment,
+        result           = result,
+        req_id           = delivery_req.id if delivery_req else None,
+        req_endpoint     = endpoint,
+        order            = order,
+        form             = form,
+        delivery_estimate= delivery_estimate,
+        cancel_url       = cancel_url,
+        edit_address_url = edit_address_url,
     )
 
 
