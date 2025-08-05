@@ -1382,15 +1382,42 @@ def test_accept_delivery_redirects(monkeypatch, app):
         monkeypatch.setattr(app_module, '_is_admin', lambda: False)
 
         resp = client.post(
-            f'/delivery_requests/{req.id}/accept',
+            f'/delivery_requests/{req.id}/accept?lat=1.2&lng=3.4',
             headers={'Accept': 'application/json'}
         )
         assert resp.status_code == 200
+        db_req = DeliveryRequest.query.get(req.id)
+        assert db_req.worker_latitude == 1.2
+        assert db_req.worker_longitude == 3.4
+
+
+def test_accept_delivery_requires_location(monkeypatch, app):
+    client = app.test_client()
+
+    with app.app_context():
+        db.drop_all()
+        db.create_all()
+
+        worker = User(id=1, name='Worker', email='w@x.com', worker='delivery')
+        worker.set_password('x')
+        buyer = User(id=2, name='Buyer', email='b@x.com')
+        buyer.set_password('x')
+        order = Order(id=1, user_id=2)
+        req = DeliveryRequest(id=1, order_id=1, requested_by_id=2)
+        db.session.add_all([worker, buyer, order, req])
+        db.session.commit()
+
+        import flask_login.utils as login_utils
+        monkeypatch.setattr(login_utils, '_get_user', lambda: worker)
+        monkeypatch.setattr(app_module, '_is_admin', lambda: False)
+
+        resp = client.post(
+            f'/delivery_requests/{req.id}/accept',
+            headers={'Accept': 'application/json'}
+        )
+        assert resp.status_code == 400
         data = resp.get_json()
-        assert data['category'] == 'success'
-        with flask_app.test_request_context():
-            expected_url = url_for('worker_delivery_detail', req_id=req.id)
-        assert data['redirect'] == expected_url
+        assert data['category'] == 'danger'
 
 
 def test_update_tutor_duplicate_cpf(monkeypatch, app):
