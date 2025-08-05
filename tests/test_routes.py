@@ -1487,3 +1487,37 @@ def test_archive_and_unarchive_delivery(monkeypatch, app):
 
         client.post('/admin/delivery_requests/1/unarchive')
         assert DeliveryRequest.query.get(1).archived is False
+
+
+def test_delivery_requests_hide_archived(monkeypatch, app):
+    client = app.test_client()
+    with app.app_context():
+        db.drop_all()
+        db.create_all()
+        user = User(id=1, name='Buyer', email='b@b')
+        user.set_password('x')
+        order1 = Order(id=1, user_id=1, created_at=datetime.utcnow())
+        order2 = Order(id=2, user_id=1, created_at=datetime.utcnow())
+        db.session.add_all([user, order1, order2])
+        dr1 = DeliveryRequest(id=1, order_id=1, requested_by_id=1, status='em_andamento')
+        dr2 = DeliveryRequest(id=2, order_id=2, requested_by_id=1, status='em_andamento', archived=True)
+        db.session.add_all([dr1, dr2])
+        db.session.commit()
+
+        import flask_login.utils as login_utils
+        monkeypatch.setattr(login_utils, '_get_user', lambda: user)
+        monkeypatch.setattr(app_module, '_is_admin', lambda: False)
+
+        for idx, fn in enumerate(flask_app.template_context_processors[None]):
+            if fn.__name__ == 'inject_unread_count':
+                flask_app.template_context_processors[None][idx] = lambda: {'unread_messages': 0}
+
+        resp = client.get('/delivery_requests')
+        html = resp.get_data(as_text=True)
+        assert 'Pedido\xa0#1' in html
+        assert 'Pedido\xa0#2' not in html
+
+        resp = client.get('/delivery_archive')
+        html = resp.get_data(as_text=True)
+        assert 'Pedido #2' in html
+        assert 'Pedido #1' not in html
