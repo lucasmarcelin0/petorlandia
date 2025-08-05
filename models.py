@@ -783,6 +783,7 @@ class DeliveryRequest(db.Model):
         db.ForeignKey('user.id', ondelete='SET NULL'),
         nullable=True,
     )
+    archived = db.Column(db.Boolean, default=False, nullable=False)
 
     order = db.relationship('Order', backref='delivery_requests')
     requested_by = db.relationship(

@@ -80,6 +80,9 @@
           <form action="{{ url_for('admin_delete_delivery', req_id=r.id) }}" method="post" onsubmit="return confirm('Excluir pedido?');" class="js-admin-delivery-form">
             <button class="btn btn-sm btn-outline-danger" title="Excluir">Excluir</button>
           </form>
+          <form action="{{ url_for('admin_archive_delivery', req_id=r.id) }}" method="post" class="js-admin-delivery-form">
+            <button class="btn btn-sm btn-outline-secondary" title="Arquivar">Arquivar</button>
+          </form>
         </div>
       </li>
     {% else %}
