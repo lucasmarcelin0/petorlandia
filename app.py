@@ -4536,7 +4536,11 @@ def payment_status(payment_id):
     if order and order.created_at:
         delivery_estimate = order.created_at + timedelta(days=5)
 
-    cancel_url = url_for('buyer_cancel_delivery', req_id=delivery_req.id) if delivery_req else None
+    cancel_url = (
+        url_for('buyer_cancel_delivery', req_id=delivery_req.id)
+        if delivery_req and delivery_req.status not in ['cancelada', 'concluida']
+        else None
+    )
     edit_address_url = url_for('edit_order_address', order_id=payment.order_id) if order else None
 
     return render_template(
@@ -4646,7 +4650,11 @@ def pedido_detail(order_id):
 
     form = CheckoutForm()
     edit_address_url = url_for("edit_order_address", order_id=order.id)
-    cancel_url = url_for("buyer_cancel_delivery", req_id=req.id) if req else None
+    cancel_url = (
+        url_for("buyer_cancel_delivery", req_id=req.id)
+        if req and req.status not in ['cancelada', 'concluida']
+        else None
+    )
 
     return render_template(
         "delivery_detail.html",
