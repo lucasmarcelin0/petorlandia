@@ -144,9 +144,6 @@
 
   {% if role == 'buyer' %}
   <div class="d-flex justify-content-center gap-3 mt-4">
-    <a href="{{ edit_address_url }}" class="btn btn-outline-primary">
-      <i class="bi bi-pencil me-1"></i> Editar endereço
-    </a>
     {% if cancel_url %}
     <form action="{{ cancel_url }}" method="post" class="m-0">
       {{ form.hidden_tag() }}
