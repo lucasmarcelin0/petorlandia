@@ -775,6 +775,8 @@ class DeliveryRequest(db.Model):
         db.ForeignKey('user.id', ondelete='SET NULL'),
         nullable=True,
     )
+    worker_latitude = db.Column(db.Float, nullable=True)
+    worker_longitude = db.Column(db.Float, nullable=True)
     accepted_at = db.Column(db.DateTime, nullable=True)
     completed_at = db.Column(db.DateTime, nullable=True)
     canceled_at = db.Column(db.DateTime, nullable=True)

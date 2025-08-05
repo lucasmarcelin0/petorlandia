@@ -40,7 +40,7 @@
         {# -------- Botões só para entregador -------- #}
         {% if current_user.worker == 'delivery' %}
           {% if req.status == 'pendente' %}
-            <form action="{{ url_for('accept_delivery', req_id=req.id) }}" method="post" class="js-delivery-form">
+            <form action="{{ url_for('accept_delivery', req_id=req.id) }}" method="post" class="js-delivery-form" data-requires-location="true">
               <button class="btn btn-sm btn-primary">Aceitar</button>
             </form>
 

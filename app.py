@@ -3321,9 +3321,19 @@ def accept_delivery(req_id):
     if req.status != 'pendente':
         flash('Solicitação não disponível.', 'warning')
         return redirect(url_for('list_delivery_requests'))
+    lat = request.args.get('lat', type=float)
+    lng = request.args.get('lng', type=float)
+    if lat is None or lng is None:
+        msg = 'Localização necessária.'
+        if 'application/json' in request.headers.get('Accept', ''):
+            return jsonify(message=msg, category='danger'), 400
+        flash(msg, 'danger')
+        return redirect(url_for('list_delivery_requests'))
     req.status = 'em_andamento'
     req.worker_id = current_user.id
     req.accepted_at = datetime.utcnow()
+    req.worker_latitude = lat
+    req.worker_longitude = lng
     db.session.commit()
     flash('Entrega aceita.', 'success')
     if 'application/json' in request.headers.get('Accept', ''):
