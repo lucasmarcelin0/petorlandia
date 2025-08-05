@@ -3443,7 +3443,7 @@ def delivery_overview():
 
     # eager‑loading: DeliveryRequest ➜ Order ➜ User + Items + Product
     base_q = (
-        DeliveryRequest.query
+        DeliveryRequest.query.filter_by(archived=False)
         .options(
             joinedload(DeliveryRequest.order)
                 .joinedload(Order.user),                       # comprador
@@ -3563,6 +3563,56 @@ def admin_delete_delivery(req_id):
     if 'application/json' in request.headers.get('Accept', ''):
         return jsonify(message='Entrega excluída.', category='info', deleted=True)
     return redirect(url_for('delivery_overview'))
+
+
+@app.route('/admin/delivery_requests/<int:req_id>/archive', methods=['POST'])
+@login_required
+def admin_archive_delivery(req_id):
+    if not _is_admin():
+        abort(403)
+    req = DeliveryRequest.query.get_or_404(req_id)
+    req.archived = True
+    db.session.commit()
+    flash('Entrega arquivada.', 'success')
+    if 'application/json' in request.headers.get('Accept', ''):
+        return jsonify(message='Entrega arquivada.', category='success', archived=True)
+    return redirect(url_for('delivery_overview'))
+
+
+@app.route('/admin/delivery_requests/<int:req_id>/unarchive', methods=['POST'])
+@login_required
+def admin_unarchive_delivery(req_id):
+    if not _is_admin():
+        abort(403)
+    req = DeliveryRequest.query.get_or_404(req_id)
+    req.archived = False
+    db.session.commit()
+    flash('Entrega desarquivada.', 'success')
+    if 'application/json' in request.headers.get('Accept', ''):
+        return jsonify(message='Entrega desarquivada.', category='success', archived=False)
+    return redirect(url_for('delivery_archive'))
+
+
+@app.route('/admin/delivery_archive')
+@login_required
+def delivery_archive():
+    if not _is_admin():
+        abort(403)
+
+    reqs = (
+        DeliveryRequest.query.filter_by(archived=True)
+        .options(
+            joinedload(DeliveryRequest.order)
+                .joinedload(Order.user),
+            joinedload(DeliveryRequest.order)
+                .joinedload(Order.items)
+                .joinedload(OrderItem.product)
+        )
+        .order_by(DeliveryRequest.id.desc())
+        .all()
+    )
+
+    return render_template('admin/delivery_archive.html', requests=reqs)
 
 
 

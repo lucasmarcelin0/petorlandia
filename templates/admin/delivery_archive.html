@@ -1,0 +1,28 @@
+{% extends "layout.html" %}
+{% block main %}
+<div class="container my-4">
+  <h4 class="mb-3">📁 Entregas Arquivadas</h4>
+  <ul class="list-group shadow-sm mb-4">
+    {% for r in requests %}
+      {% set ord = r.order %}
+      <li class="list-group-item d-flex justify-content-between flex-column flex-md-row align-items-start align-items-md-center">
+        <div class="me-3">
+          <div class="fw-semibold">Pedido #{{ r.order_id }}</div>
+          <div class="small text-muted">
+            <div>Status: {{ r.status }}</div>
+            <div>Cliente: {{ ord.user.name if ord and ord.user else "—" }}</div>
+          </div>
+        </div>
+        <div class="d-flex flex-wrap gap-1 mt-2 mt-md-0">
+          <a href="{{ url_for('admin_delivery_detail', req_id=r.id) }}" class="btn btn-sm btn-outline-primary">Ver detalhes</a>
+          <form action="{{ url_for('admin_unarchive_delivery', req_id=r.id) }}" method="post" class="js-admin-delivery-form">
+            <button class="btn btn-sm btn-outline-secondary" title="Desarquivar">Desarquivar</button>
+          </form>
+        </div>
+      </li>
+    {% else %}
+      <li class="list-group-item text-muted">Não há registros.</li>
+    {% endfor %}
+  </ul>
+</div>
+{% endblock %}

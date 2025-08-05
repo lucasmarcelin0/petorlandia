@@ -1457,3 +1457,33 @@ def test_update_tutor_profile_photo(monkeypatch, app):
         )
         assert resp.status_code == 200
         assert User.query.get(tutor.id).profile_photo == 'http://img'
+
+
+def test_archive_and_unarchive_delivery(monkeypatch, app):
+    client = app.test_client()
+    with app.app_context():
+        db.drop_all()
+        db.create_all()
+        admin = User(id=1, name='Admin', email='a@a', password_hash='x', role='admin')
+        db.session.add(admin)
+        order = Order(id=1, user_id=1, created_at=datetime.utcnow())
+        db.session.add(order)
+        req = DeliveryRequest(id=1, order_id=1, requested_by_id=1)
+        db.session.add(req)
+        db.session.commit()
+
+        import flask_login.utils as login_utils
+        monkeypatch.setattr(login_utils, '_get_user', lambda: admin)
+        monkeypatch.setattr(app_module, '_is_admin', lambda: True)
+
+        client.post('/admin/delivery_requests/1/archive')
+        assert DeliveryRequest.query.get(1).archived is True
+
+        resp = client.get('/admin/delivery_overview')
+        assert b'Pedido #1' not in resp.data
+
+        resp = client.get('/admin/delivery_archive')
+        assert b'Pedido #1' in resp.data
+
+        client.post('/admin/delivery_requests/1/unarchive')
+        assert DeliveryRequest.query.get(1).archived is False
