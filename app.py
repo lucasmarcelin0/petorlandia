@@ -3526,6 +3526,20 @@ def delivery_overview():
     )
 
 
+@app.route('/admin/worker_locations')
+@login_required
+def admin_worker_locations():
+    if not _is_admin():
+        abort(403)
+    in_progress = DeliveryRequest.query.filter_by(status='em_andamento').all()
+    locations = [
+        {"id": r.id, "lat": r.worker_latitude, "lng": r.worker_longitude}
+        for r in in_progress
+        if r.worker_latitude is not None and r.worker_longitude is not None
+    ]
+    return jsonify(locations)
+
+
 @app.route('/admin/delivery_requests/<int:req_id>/status/<status>', methods=['POST'])
 @login_required
 def admin_set_delivery_status(req_id, status):

@@ -1580,3 +1580,54 @@ def test_delivery_overview_shows_worker_map(monkeypatch, app):
         assert b'id="workersMap"' in resp.data
         assert b'1.2' in resp.data
         assert b'3.4' in resp.data
+
+
+def test_admin_worker_locations_requires_admin(monkeypatch, app):
+    client = app.test_client()
+
+    with app.app_context():
+        db.drop_all()
+        db.create_all()
+
+        user = User(id=1, name='User', email='u@x.com')
+        user.set_password('x')
+        db.session.add(user)
+        db.session.commit()
+
+        import flask_login.utils as login_utils
+        monkeypatch.setattr(login_utils, '_get_user', lambda: user)
+        monkeypatch.setattr(app_module, '_is_admin', lambda: False)
+
+        resp = client.get('/admin/worker_locations')
+        assert resp.status_code == 403
+
+
+def test_admin_worker_locations_returns_data(monkeypatch, app):
+    client = app.test_client()
+
+    with app.app_context():
+        db.drop_all()
+        db.create_all()
+
+        admin = User(id=1, name='Admin', email='a@a', password_hash='x', role='admin')
+        db.session.add(admin)
+        order = Order(id=1, user_id=1, created_at=datetime.utcnow())
+        db.session.add(order)
+        req = DeliveryRequest(
+            id=1,
+            order_id=1,
+            requested_by_id=1,
+            status='em_andamento',
+            worker_latitude=1.2,
+            worker_longitude=3.4,
+        )
+        db.session.add(req)
+        db.session.commit()
+
+        import flask_login.utils as login_utils
+        monkeypatch.setattr(login_utils, '_get_user', lambda: admin)
+        monkeypatch.setattr(app_module, '_is_admin', lambda: True)
+
+        resp = client.get('/admin/worker_locations')
+        assert resp.status_code == 200
+        assert resp.json == [{'id': 1, 'lat': 1.2, 'lng': 3.4}]
