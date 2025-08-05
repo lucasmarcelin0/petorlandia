@@ -4644,6 +4644,10 @@ def pedido_detail(order_id):
     else:
         abort(403)
 
+    form = CheckoutForm()
+    edit_address_url = url_for("edit_order_address", order_id=order.id)
+    cancel_url = url_for("buyer_cancel_delivery", req_id=req.id) if req else None
+
     return render_template(
         "delivery_detail.html",
         req=req,
@@ -4652,7 +4656,10 @@ def pedido_detail(order_id):
         buyer=buyer,
         delivery_worker=delivery_worker,
         total=total,
-        role=role
+        role=role,
+        form=form,
+        edit_address_url=edit_address_url,
+        cancel_url=cancel_url,
     )
 
 
