@@ -1580,3 +1580,53 @@ def test_delivery_overview_shows_worker_map(monkeypatch, app):
         assert b'id="workersMap"' in resp.data
         assert b'1.2' in resp.data
         assert b'3.4' in resp.data
+
+def test_update_delivery_location(monkeypatch, app):
+    client = app.test_client()
+    with app.app_context():
+        db.drop_all()
+        db.create_all()
+        worker = User(id=1, name='Worker', email='w@x.com', worker='delivery')
+        worker.set_password('x')
+        buyer = User(id=2, name='Buyer', email='b@x.com')
+        buyer.set_password('x')
+        order = Order(id=1, user_id=2)
+        req = DeliveryRequest(id=1, order_id=1, requested_by_id=2,
+                               status='em_andamento', worker_id=1)
+        db.session.add_all([worker, buyer, order, req])
+        db.session.commit()
+
+        import flask_login.utils as login_utils
+        monkeypatch.setattr(login_utils, '_get_user', lambda: worker)
+
+        resp = client.post(f'/delivery_requests/{req.id}/location', json={'lat': 5.6, 'lng': 7.8})
+        assert resp.status_code == 200
+        db_req = DeliveryRequest.query.get(req.id)
+        assert db_req.worker_latitude == 5.6
+        assert db_req.worker_longitude == 7.8
+
+
+def test_admin_delivery_locations_endpoint(monkeypatch, app):
+    client = app.test_client()
+    with app.app_context():
+        db.drop_all()
+        db.create_all()
+        admin = User(id=1, name='Admin', email='a@x.com', role='admin')
+        admin.set_password('x')
+        worker = User(id=2, name='Worker', email='w@x.com', worker='delivery')
+        worker.set_password('x')
+        order = Order(id=1, user_id=1)
+        req = DeliveryRequest(id=1, order_id=1, requested_by_id=1,
+                               status='em_andamento', worker_id=2,
+                               worker_latitude=1.1, worker_longitude=2.2)
+        db.session.add_all([admin, worker, order, req])
+        db.session.commit()
+
+        import flask_login.utils as login_utils
+        monkeypatch.setattr(login_utils, '_get_user', lambda: admin)
+        monkeypatch.setattr(app_module, '_is_admin', lambda: True)
+
+        resp = client.get('/admin/delivery_locations')
+        assert resp.status_code == 200
+        data = resp.get_json()
+        assert data == [{'id': req.id, 'lat': 1.1, 'lng': 2.2}]

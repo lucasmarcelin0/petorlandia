@@ -3346,6 +3346,26 @@ def accept_delivery(req_id):
     return redirect(url_for('delivery_detail', req_id=req.id))
 
 
+@app.route('/delivery_requests/<int:req_id>/location', methods=['POST'])
+@login_required
+def update_delivery_location(req_id):
+    """Atualiza a localização do entregador durante a entrega."""
+    if current_user.worker != 'delivery':
+        abort(403)
+    req = DeliveryRequest.query.get_or_404(req_id)
+    if req.worker_id != current_user.id or req.status != 'em_andamento':
+        abort(403)
+    data = request.get_json(silent=True) or {}
+    lat = data.get('lat') or request.form.get('lat', type=float) or request.args.get('lat', type=float)
+    lng = data.get('lng') or request.form.get('lng', type=float) or request.args.get('lng', type=float)
+    if lat is None or lng is None:
+        return jsonify(message='Localização necessária.', category='danger'), 400
+    req.worker_latitude = float(lat)
+    req.worker_longitude = float(lng)
+    db.session.commit()
+    return jsonify(message='Localização atualizada.', category='success')
+
+
 @app.route('/delivery_requests/<int:req_id>/complete', methods=['POST'])
 @login_required
 def complete_delivery(req_id):
@@ -3524,6 +3544,24 @@ def delivery_overview():
         canceled_page = canceled_page,
         worker_locations = worker_locations,
     )
+
+
+@app.route('/admin/delivery_locations')
+@login_required
+def admin_delivery_locations():
+    if not _is_admin():
+        abort(403)
+    in_progress = DeliveryRequest.query.filter_by(status='em_andamento').all()
+    data = [
+        {
+            "id": r.id,
+            "lat": r.worker_latitude,
+            "lng": r.worker_longitude,
+        }
+        for r in in_progress
+        if r.worker_latitude is not None and r.worker_longitude is not None
+    ]
+    return jsonify(data)
 
 
 @app.route('/admin/delivery_requests/<int:req_id>/status/<status>', methods=['POST'])
