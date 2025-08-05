@@ -1,4 +1,15 @@
 {% extends "layout.html" %}
+
+{% block head %}
+  {{ super() }}
+  <link
+    rel="stylesheet"
+    href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+    integrity="sha256-sA+e2yz1G+u/ehabSGvtQvE4H14R/2uOeGjn5ERm2y8="
+    crossorigin=""
+  />
+{% endblock %}
+
 {% block main %}
 <div class="container my-4">
 
@@ -128,12 +139,6 @@
     <div id="workersMap" style="height: 400px;"></div>
   </div>
 
-  <link
-    rel="stylesheet"
-    href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
-    integrity="sha256-sA+e2yz1G+u/ehabSGvtQvE4H14R/2uOeGjn5ERm2y8="
-    crossorigin=""
-  />
   <script
     src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
     integrity="sha256-o9N1jG8CjNd8Pr+X/4A9Hd4RJpcJnSMr3vzYW3LFyf0="
