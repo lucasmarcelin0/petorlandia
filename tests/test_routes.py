@@ -150,7 +150,11 @@ def test_payment_status_updates_from_api(monkeypatch, app):
         order_id = 1
         user_id = 1
         method = PaymentMethod.PIX
-        order = type('O', (), {'items': [], 'total_value': lambda self: 0})()
+        order = type('O', (), {
+            'items': [],
+            'total_value': lambda self: 0,
+            'created_at': datetime.utcnow()
+        })()
 
     class FakePaymentQuery:
         def get_or_404(self, _):
@@ -219,12 +223,11 @@ def test_payment_status_updates_from_api(monkeypatch, app):
 
         monkeypatch.setattr(app_module, 'mp_sdk', lambda: type('O', (), {'payment': lambda: FakePaymentAPI()})())
 
-        with flask_app.test_request_context():
-            expected = url_for('pedido_detail', order_id=1)
-
         response = client.get('/payment_status/1?status=success', follow_redirects=False)
-        assert response.status_code == 302
-        assert response.headers['Location'].endswith(expected)
+        assert response.status_code == 200
+        html = response.get_data(as_text=True)
+        assert 'Resumo do Pedido' in html
+        assert 'Previsão de entrega' in html
 
 
 def test_api_minhas_compras_filters_by_user(monkeypatch, app):
