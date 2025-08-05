@@ -472,6 +472,31 @@ def test_delivery_requests_show_canceled_status(monkeypatch, app):
         assert 'Cancelado' in html
 
 
+def test_archived_delivery_not_listed(monkeypatch, app):
+    client = app.test_client()
+
+    with app.app_context():
+        db.drop_all()
+        db.create_all()
+        user = User(id=1, name='Buyer', email='b@b', password_hash='x', role='buyer')
+        db.session.add(user)
+        order1 = Order(id=1, user_id=1, created_at=datetime.utcnow())
+        order2 = Order(id=2, user_id=1, created_at=datetime.utcnow())
+        db.session.add_all([order1, order2])
+        req1 = DeliveryRequest(id=1, order_id=1, requested_by_id=1, status='concluida', archived=True)
+        req2 = DeliveryRequest(id=2, order_id=2, requested_by_id=1, status='concluida')
+        db.session.add_all([req1, req2])
+        db.session.commit()
+
+        import flask_login.utils as login_utils
+        monkeypatch.setattr(login_utils, '_get_user', lambda: user)
+
+        response = client.get('/delivery_requests')
+        html = response.get_data(as_text=True)
+        assert 'Pedido\xa0#1' not in html
+        assert 'Pedido\xa0#2' in html
+
+
 def test_cart_quantity_updates(monkeypatch, app):
     client = app.test_client()
 
