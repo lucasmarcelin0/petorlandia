@@ -3496,6 +3496,17 @@ def delivery_overview():
     # produtos para o bloco de estoque
     products = Product.query.order_by(Product.name).all()
 
+    # localizações atuais dos entregadores em andamento
+    worker_locations = [
+        {
+            "id": r.id,
+            "lat": r.worker_latitude,
+            "lng": r.worker_longitude,
+        }
+        for r in in_progress
+        if r.worker_latitude is not None and r.worker_longitude is not None
+    ]
+
     return render_template(
         "admin/delivery_overview.html",
         products      = products,
@@ -3511,6 +3522,7 @@ def delivery_overview():
         progress_page = progress_page,
         completed_page = completed_page,
         canceled_page = canceled_page,
+        worker_locations = worker_locations,
     )
 
 
