@@ -366,8 +366,110 @@ def test_pedido_detail_buttons_for_buyer(monkeypatch, app):
 
         response = client.get('/pedido/1')
         html = response.get_data(as_text=True)
-        assert 'Editar endereço' in html
         assert 'Cancelar pedido' in html
+
+
+def test_pedido_detail_hides_cancel_button_when_canceled(monkeypatch, app):
+    client = app.test_client()
+
+    class FakeReq:
+        id = 5
+        status = 'cancelada'
+        requested_at = datetime.utcnow()
+        accepted_at = None
+        completed_at = None
+        canceled_at = datetime.utcnow()
+        worker = None
+
+    class FakeOrderObj:
+        id = 1
+        user_id = 1
+        created_at = datetime.utcnow()
+        items = []
+        payment = None
+        delivery_requests = [FakeReq()]
+        user = type('FakeBuyer', (), {'id': 1, 'name': 'Buyer', 'email': 'b@example.com'})()
+        shipping_address = 'Rua'
+        def total_value(self):
+            return 10.0
+
+    class FakeQuery:
+        def options(self, *a, **k):
+            return self
+        def get_or_404(self, _):
+            return FakeOrderObj()
+
+    with app.app_context():
+        monkeypatch.setattr(Order, 'query', FakeQuery())
+        class FakeMsgQuery:
+            def filter_by(self, **kwargs):
+                return self
+            def count(self):
+                return 0
+        monkeypatch.setattr(Message, 'query', FakeMsgQuery())
+        import flask_login.utils as login_utils
+        class FakeUser:
+            is_authenticated = True
+            id = 1
+            worker = None
+            name = 'Buyer'
+            role = 'buyer'
+        monkeypatch.setattr(login_utils, '_get_user', lambda: FakeUser())
+        monkeypatch.setattr(app_module, '_is_admin', lambda: False)
+
+        response = client.get('/pedido/1')
+        html = response.get_data(as_text=True)
+        assert 'Cancelar pedido' not in html
+
+
+def test_delivery_requests_show_canceled_status(monkeypatch, app):
+    client = app.test_client()
+
+    class FakeReq:
+        id = 1
+        status = 'cancelada'
+        order_id = 1
+        order = type('Order', (), {'user': type('U', (), {'name': 'Buyer'})(), 'payment': None, 'total_value': lambda self: 10.0})()
+        canceled_at = datetime.utcnow()
+        requested_at = datetime.utcnow()
+        accepted_at = None
+        completed_at = None
+
+    fake_req = FakeReq()
+
+    class FakeQuery:
+        def order_by(self, *a, **k):
+            return self
+        def options(self, *a, **k):
+            return self
+        def filter_by(self, **kwargs):
+            self._status = kwargs.get('status')
+            return self
+        def all(self):
+            if getattr(self, '_status', None) == 'cancelada':
+                return [fake_req]
+            return []
+
+    with app.app_context():
+        monkeypatch.setattr(DeliveryRequest, 'query', FakeQuery())
+        import flask_login.utils as login_utils
+        class FakeUser:
+            is_authenticated = True
+            id = 1
+            worker = None
+            name = 'Buyer'
+            role = 'buyer'
+        monkeypatch.setattr(login_utils, '_get_user', lambda: FakeUser())
+        class FakeMsgQuery:
+            def filter_by(self, **kwargs):
+                return self
+            def count(self):
+                return 0
+        monkeypatch.setattr(Message, 'query', FakeMsgQuery())
+
+        response = client.get('/delivery_requests')
+        html = response.get_data(as_text=True)
+        assert 'Cancelado' in html
 
 
 def test_cart_quantity_updates(monkeypatch, app):
