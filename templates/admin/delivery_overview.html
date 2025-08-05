@@ -144,23 +144,71 @@
     integrity="sha256-o9N1jG8CjNd8Pr+X/4A9Hd4RJpcJnSMr3vzYW3LFyf0="
     crossorigin=""
   ></script>
-  <script>
+    <script>
     document.addEventListener('DOMContentLoaded', () => {
-      const locations = {{ worker_locations|tojson }};
-      if (!locations.length) {
-        const el = document.getElementById('workersMap');
-        if (el) el.style.display = 'none';
-        return;
+      const mapEl = document.getElementById('workersMap');
+      let map;
+      const markers = new Map();
+
+      function ensureMap() {
+        if (!map) {
+          map = L.map('workersMap');
+          L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '&copy; OpenStreetMap contributors'
+          }).addTo(map);
+        }
       }
-      const map = L.map('workersMap');
-      const coords = locations.map(l => [l.lat, l.lng]);
-      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        attribution: '&copy; OpenStreetMap contributors'
-      }).addTo(map);
-      coords.forEach(c => L.marker(c).addTo(map));
-      map.fitBounds(coords, { padding: [20, 20] });
+
+      function updateMarkers(locations) {
+        ensureMap();
+        const ids = new Set();
+        locations.forEach(loc => {
+          ids.add(loc.id);
+          const latLng = [loc.lat, loc.lng];
+          if (markers.has(loc.id)) {
+            markers.get(loc.id).setLatLng(latLng);
+          } else {
+            markers.set(loc.id, L.marker(latLng).addTo(map));
+          }
+        });
+        markers.forEach((marker, id) => {
+          if (!ids.has(id)) {
+            map.removeLayer(marker);
+            markers.delete(id);
+          }
+        });
+        if (markers.size) {
+          const latLngs = Array.from(markers.values()).map(m => m.getLatLng());
+          map.fitBounds(latLngs, { padding: [20, 20] });
+        }
+      }
+
+      async function fetchLocations() {
+        try {
+          const resp = await fetch('{{ url_for("admin_worker_locations") }}');
+          if (!resp.ok) return;
+          const data = await resp.json();
+          if (!data.length) {
+            mapEl.style.display = 'none';
+            return;
+          }
+          mapEl.style.display = 'block';
+          updateMarkers(data);
+        } catch (e) {
+          console.error(e);
+        }
+      }
+
+      const initial = {{ worker_locations|tojson }};
+      if (initial.length) {
+        updateMarkers(initial);
+      } else {
+        mapEl.style.display = 'none';
+      }
+
+      setInterval(fetchLocations, 10000);
     });
-  </script>
+    </script>
 
 </div>
 {% endblock %}
