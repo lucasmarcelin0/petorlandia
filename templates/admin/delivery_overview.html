@@ -147,18 +147,44 @@
   <script>
     document.addEventListener('DOMContentLoaded', () => {
       const locations = {{ worker_locations|tojson }};
+      const mapEl = document.getElementById('workersMap');
       if (!locations.length) {
-        const el = document.getElementById('workersMap');
-        if (el) el.style.display = 'none';
+        if (mapEl) mapEl.style.display = 'none';
         return;
       }
       const map = L.map('workersMap');
-      const coords = locations.map(l => [l.lat, l.lng]);
       L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
         attribution: '&copy; OpenStreetMap contributors'
       }).addTo(map);
-      coords.forEach(c => L.marker(c).addTo(map));
-      map.fitBounds(coords, { padding: [20, 20] });
+      const markers = {};
+      locations.forEach(l => {
+        markers[l.id] = L.marker([l.lat, l.lng]).addTo(map);
+      });
+      const fit = () => {
+        const pts = Object.values(markers).map(m => m.getLatLng());
+        if (pts.length) map.fitBounds(pts, { padding: [20, 20] });
+      };
+      fit();
+
+      async function refresh() {
+        try {
+          const resp = await fetch('{{ url_for('admin_delivery_locations') }}');
+          const data = await resp.json();
+          data.forEach(loc => {
+            const pos = [loc.lat, loc.lng];
+            if (markers[loc.id]) {
+              markers[loc.id].setLatLng(pos);
+            } else {
+              markers[loc.id] = L.marker(pos).addTo(map);
+            }
+          });
+          fit();
+        } catch (err) {
+          console.error(err);
+        }
+      }
+
+      setInterval(refresh, 5000);
     });
   </script>
 

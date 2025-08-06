@@ -156,4 +156,20 @@
   {% endif %}
 
 </div>
+{% if role == 'worker' %}
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+  if (!('geolocation' in navigator)) return;
+  const send = pos => {
+    fetch('{{ url_for('update_delivery_location', req_id=req.id) }}', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json', 'Accept': 'application/json'},
+      body: JSON.stringify({lat: pos.coords.latitude, lng: pos.coords.longitude})
+    });
+  };
+  const err = err => console.error(err);
+  navigator.geolocation.watchPosition(send, err, {enableHighAccuracy: true});
+});
+</script>
+{% endif %}
 {% endblock %}
