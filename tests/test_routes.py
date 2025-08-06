@@ -1558,7 +1558,9 @@ def test_delivery_overview_shows_worker_map(monkeypatch, app):
         db.drop_all()
         db.create_all()
         admin = User(id=1, name='Admin', email='a@a', password_hash='x', role='admin')
-        db.session.add(admin)
+        worker = User(id=2, name='Worker', email='w@x.com', worker='delivery')
+        worker.set_password('x')
+        db.session.add_all([admin, worker])
         order = Order(id=1, user_id=1, created_at=datetime.utcnow())
         db.session.add(order)
         req = DeliveryRequest(
@@ -1566,6 +1568,7 @@ def test_delivery_overview_shows_worker_map(monkeypatch, app):
             order_id=1,
             requested_by_id=1,
             status='em_andamento',
+            worker_id=2,
             worker_latitude=1.2,
             worker_longitude=3.4,
         )
@@ -1580,6 +1583,38 @@ def test_delivery_overview_shows_worker_map(monkeypatch, app):
         assert b'id="workersMap"' in resp.data
         assert b'1.2' in resp.data
         assert b'3.4' in resp.data
+
+
+def test_delivery_overview_shows_last_known_location(monkeypatch, app):
+    client = app.test_client()
+    with app.app_context():
+        db.drop_all()
+        db.create_all()
+        admin = User(id=1, name='Admin', email='a@a', password_hash='x', role='admin')
+        worker = User(id=2, name='Worker', email='w@x.com', worker='delivery')
+        worker.set_password('x')
+        db.session.add_all([admin, worker])
+        order = Order(id=1, user_id=1, created_at=datetime.utcnow())
+        db.session.add(order)
+        req = DeliveryRequest(
+            id=1,
+            order_id=1,
+            requested_by_id=1,
+            status='concluida',
+            worker_id=2,
+            worker_latitude=9.9,
+            worker_longitude=8.8,
+        )
+        db.session.add(req)
+        db.session.commit()
+
+        import flask_login.utils as login_utils
+        monkeypatch.setattr(login_utils, '_get_user', lambda: admin)
+        monkeypatch.setattr(app_module, '_is_admin', lambda: True)
+
+        resp = client.get('/admin/delivery_overview')
+        assert b'9.9' in resp.data
+        assert b'8.8' in resp.data
 
 def test_update_delivery_location(monkeypatch, app):
     client = app.test_client()

@@ -165,15 +165,25 @@
         try {
           const resp = await fetch('{{ url_for('admin_delivery_locations') }}');
           const data = await resp.json();
-          data.forEach(loc => {
-            const pos = [loc.lat, loc.lng];
-            if (markers[loc.id]) {
-              markers[loc.id].setLatLng(pos);
-            } else {
-              markers[loc.id] = L.marker(pos).addTo(map);
-            }
-          });
-          fit();
+          if (data.length) {
+            const seen = new Set();
+            data.forEach(loc => {
+              const pos = [loc.lat, loc.lng];
+              if (markers[loc.id]) {
+                markers[loc.id].setLatLng(pos);
+              } else {
+                markers[loc.id] = L.marker(pos).addTo(map);
+              }
+              seen.add(String(loc.id));
+            });
+            Object.keys(markers).forEach(id => {
+              if (!seen.has(id)) {
+                map.removeLayer(markers[id]);
+                delete markers[id];
+              }
+            });
+            fit();
+          }
         } catch (err) {
           console.error(err);
         }
