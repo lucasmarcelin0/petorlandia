@@ -146,10 +146,7 @@
   ></script>
   <script>
     document.addEventListener('DOMContentLoaded', () => {
-      // Ensure the JSON is inserted without escaping so Leaflet receives
-      // valid coordinates. If the data is escaped the script breaks and the
-      // map never renders.
-      const locations = {{ worker_locations|tojson|safe }};
+      const locations = {{ worker_locations|tojson }};
       const map = L.map('workersMap').setView([0, 0], 2);
       L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
         attribution: '&copy; OpenStreetMap contributors'
