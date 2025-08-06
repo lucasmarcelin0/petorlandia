@@ -2,12 +2,6 @@
 
 {% block head %}
   {{ super() }}
-  <link
-    rel="stylesheet"
-    href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
-    integrity="sha256-sA+e2yz1G+u/ehabSGvtQvE4H14R/2uOeGjn5ERm2y8="
-    crossorigin=""
-  />
 {% endblock %}
 
 {% block main %}
@@ -133,51 +127,6 @@
       <i class="fas fa-archive me-1"></i> Arquivadas: pedidos arquivados
     </a>
   </div>
-
-  <div class="mt-4">
-    <h4>Mapa dos entregadores</h4>
-    <div id="workersMap" style="height: 400px;"></div>
-  </div>
-
-  <script
-    src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
-    integrity="sha256-o9N1jG8CjNd8Pr+X/4A9Hd4RJpcJnSMr3vzYW3LFyf0="
-    crossorigin=""
-  ></script>
-  <script>
-    document.addEventListener('DOMContentLoaded', () => {
-      const locations = {{ worker_locations|tojson }};
-      const map = L.map('workersMap').setView([0, 0], 2);
-      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        attribution: '&copy; OpenStreetMap contributors'
-      }).addTo(map);
-      const markers = {};
-      locations.forEach(l => {
-        markers[l.id] = L.marker([l.lat, l.lng]).addTo(map);
-      });
-      const fit = () => {
-        const pts = Object.values(markers).map(m => m.getLatLng());
-        if (pts.length) map.fitBounds(pts, { padding: [20, 20] });
-      };
-      fit();
-
-      const evt = new EventSource('{{ url_for('admin_delivery_locations_stream') }}');
-      evt.onmessage = (e) => {
-        try {
-          const loc = JSON.parse(e.data);
-          const pos = [loc.lat, loc.lng];
-          if (markers[loc.id]) {
-            markers[loc.id].setLatLng(pos);
-          } else {
-            markers[loc.id] = L.marker(pos).addTo(map);
-          }
-          fit();
-        } catch (err) {
-          console.error(err);
-        }
-      };
-    });
-  </script>
 
 </div>
 {% endblock %}

@@ -547,17 +547,7 @@
       document.querySelectorAll('.js-delivery-form').forEach(form => {
         form.addEventListener('submit', async ev => {
           ev.preventDefault();
-          let url = form.action;
-          if (form.dataset.requiresLocation === 'true') {
-            try {
-              const pos = await new Promise((resolve, reject) => navigator.geolocation.getCurrentPosition(resolve, reject));
-              const { latitude, longitude } = pos.coords;
-              url += (url.includes('?') ? '&' : '?') + `lat=${latitude}&lng=${longitude}`;
-            } catch (err) {
-              alert('É necessário permitir acesso à localização para aceitar a entrega.');
-              return;
-            }
-          }
+          const url = form.action;
           const resp = await fetchOrQueue(url, {method: 'POST', headers: {'Accept': 'application/json'}});
           if (resp && resp.ok) {
             const data = await resp.json();

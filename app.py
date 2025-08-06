@@ -12,10 +12,9 @@ from PIL import Image
 
 
 from dotenv import load_dotenv
-from flask import Flask, session, send_from_directory, abort, Response, stream_with_context
+from flask import Flask, session, send_from_directory, abort
 from itsdangerous import URLSafeTimedSerializer
 import json
-import queue
 
 # ----------------------------------------------------------------
 # 1)  Alias único para “models”
@@ -71,18 +70,6 @@ login.init_app(app)
 session_ext.init_app(app)
 babel.init_app(app)
 app.config.setdefault("BABEL_DEFAULT_LOCALE", "pt_BR")
-
-# ----------------------------------------------------------------
-# 3.1) Admin delivery location stream helpers
-# ----------------------------------------------------------------
-_location_subscribers: set[queue.Queue] = set()
-
-
-def _notify_admin_location(worker_id: int, lat: float, lng: float) -> None:
-    """Send an updated worker location to all subscribed admin clients."""
-    data = json.dumps({"id": worker_id, "lat": lat, "lng": lng})
-    for q in list(_location_subscribers):
-        q.put(data)
 
 # ----------------------------------------------------------------
 # 4)  AWS S3 helper (lazy)
@@ -3335,27 +3322,10 @@ def accept_delivery(req_id):
     if req.status != 'pendente':
         flash('Solicitação não disponível.', 'warning')
         return redirect(url_for('list_delivery_requests'))
-    lat = request.args.get('lat', type=float)
-    lng = request.args.get('lng', type=float)
-    if lat is None or lng is None:
-        msg = 'Localização necessária.'
-        if 'application/json' in request.headers.get('Accept', ''):
-            return jsonify(message=msg, category='danger'), 400
-        flash(msg, 'danger')
-        return redirect(url_for('list_delivery_requests'))
     req.status = 'em_andamento'
     req.worker_id = current_user.id
     req.accepted_at = datetime.utcnow()
-    req.worker_latitude = lat
-    req.worker_longitude = lng
-    if current_user.endereco:
-        current_user.endereco.latitude = lat
-        current_user.endereco.longitude = lng
-    else:
-        current_user.endereco = Endereco(cep="00000-000", latitude=lat, longitude=lng)
-        db.session.add(current_user.endereco)
     db.session.commit()
-    _notify_admin_location(current_user.id, req.worker_latitude, req.worker_longitude)
     flash('Entrega aceita.', 'success')
     if 'application/json' in request.headers.get('Accept', ''):
         return jsonify(
@@ -3367,35 +3337,6 @@ def accept_delivery(req_id):
     return redirect(url_for('delivery_detail', req_id=req.id))
 
 
-@app.route('/delivery_requests/<int:req_id>/location', methods=['POST'])
-@login_required
-def update_delivery_location(req_id):
-    """Atualiza a localização do entregador durante a entrega."""
-    if current_user.worker != 'delivery':
-        abort(403)
-    req = DeliveryRequest.query.get_or_404(req_id)
-    if req.worker_id != current_user.id or req.status != 'em_andamento':
-        abort(403)
-    data = request.get_json(silent=True) or {}
-    lat = data.get('lat') or request.form.get('lat', type=float) or request.args.get('lat', type=float)
-    lng = data.get('lng') or request.form.get('lng', type=float) or request.args.get('lng', type=float)
-    if lat is None or lng is None:
-        return jsonify(message='Localização necessária.', category='danger'), 400
-    req.worker_latitude = float(lat)
-    req.worker_longitude = float(lng)
-    if current_user.endereco:
-        current_user.endereco.latitude = float(lat)
-        current_user.endereco.longitude = float(lng)
-    else:
-        current_user.endereco = Endereco(
-            cep="00000-000",
-            latitude=float(lat),
-            longitude=float(lng),
-        )
-        db.session.add(current_user.endereco)
-    db.session.commit()
-    _notify_admin_location(current_user.id, req.worker_latitude, req.worker_longitude)
-    return jsonify(message='Localização atualizada.', category='success')
 
 
 @app.route('/delivery_requests/<int:req_id>/complete', methods=['POST'])
@@ -3548,18 +3489,6 @@ def delivery_overview():
     # produtos para o bloco de estoque
     products = Product.query.order_by(Product.name).all()
 
-    # localizações atuais dos entregadores
-    workers = User.query.filter(User.worker == "delivery").all()
-    worker_locations = [
-        {
-            "id": w.id,
-            "lat": w.endereco.latitude,
-            "lng": w.endereco.longitude,
-        }
-        for w in workers
-        if w.endereco and w.endereco.latitude is not None and w.endereco.longitude is not None
-    ]
-
     return render_template(
         "admin/delivery_overview.html",
         products      = products,
@@ -3575,45 +3504,7 @@ def delivery_overview():
         progress_page = progress_page,
         completed_page = completed_page,
         canceled_page = canceled_page,
-        worker_locations = worker_locations,
     )
-
-
-@app.route('/admin/delivery_locations')
-@login_required
-def admin_delivery_locations():
-    if not _is_admin():
-        abort(403)
-    workers = User.query.filter(User.worker == "delivery").all()
-    data = [
-        {
-            "id": w.id,
-            "lat": w.endereco.latitude,
-            "lng": w.endereco.longitude,
-        }
-        for w in workers
-        if w.endereco and w.endereco.latitude is not None and w.endereco.longitude is not None
-    ]
-    return jsonify(data)
-
-
-@app.route('/admin/delivery_locations/stream')
-@login_required
-def admin_delivery_locations_stream():
-    if not _is_admin():
-        abort(403)
-
-    def event_stream():
-        q: queue.Queue[str] = queue.Queue()
-        _location_subscribers.add(q)
-        try:
-            while True:
-                data = q.get()
-                yield f"data: {data}\n\n"
-        finally:
-            _location_subscribers.discard(q)
-
-    return Response(stream_with_context(event_stream()), mimetype='text/event-stream')
 
 
 @app.route('/admin/delivery_requests/<int:req_id>/status/<status>', methods=['POST'])
