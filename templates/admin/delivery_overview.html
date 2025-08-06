@@ -147,12 +147,7 @@
   <script>
     document.addEventListener('DOMContentLoaded', () => {
       const locations = {{ worker_locations|tojson }};
-      const mapEl = document.getElementById('workersMap');
-      if (!locations.length) {
-        if (mapEl) mapEl.style.display = 'none';
-        return;
-      }
-      const map = L.map('workersMap');
+      const map = L.map('workersMap').setView([0, 0], 2);
       L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
         attribution: '&copy; OpenStreetMap contributors'
       }).addTo(map);
