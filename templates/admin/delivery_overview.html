@@ -161,25 +161,21 @@
       };
       fit();
 
-      async function refresh() {
+      const evt = new EventSource('{{ url_for('admin_delivery_locations_stream') }}');
+      evt.onmessage = (e) => {
         try {
-          const resp = await fetch('{{ url_for('admin_delivery_locations') }}');
-          const data = await resp.json();
-          data.forEach(loc => {
-            const pos = [loc.lat, loc.lng];
-            if (markers[loc.id]) {
-              markers[loc.id].setLatLng(pos);
-            } else {
-              markers[loc.id] = L.marker(pos).addTo(map);
-            }
-          });
+          const loc = JSON.parse(e.data);
+          const pos = [loc.lat, loc.lng];
+          if (markers[loc.id]) {
+            markers[loc.id].setLatLng(pos);
+          } else {
+            markers[loc.id] = L.marker(pos).addTo(map);
+          }
           fit();
         } catch (err) {
           console.error(err);
         }
-      }
-
-      setInterval(refresh, 5000);
+      };
     });
   </script>
 

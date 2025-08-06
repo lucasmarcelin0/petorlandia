@@ -12,8 +12,10 @@ from PIL import Image
 
 
 from dotenv import load_dotenv
-from flask import Flask, session, send_from_directory, abort
+from flask import Flask, session, send_from_directory, abort, Response, stream_with_context
 from itsdangerous import URLSafeTimedSerializer
+import json
+import queue
 
 # ----------------------------------------------------------------
 # 1)  Alias único para “models”
@@ -69,6 +71,18 @@ login.init_app(app)
 session_ext.init_app(app)
 babel.init_app(app)
 app.config.setdefault("BABEL_DEFAULT_LOCALE", "pt_BR")
+
+# ----------------------------------------------------------------
+# 3.1) Admin delivery location stream helpers
+# ----------------------------------------------------------------
+_location_subscribers: set[queue.Queue] = set()
+
+
+def _notify_admin_location(req_id: int, lat: float, lng: float) -> None:
+    """Send an updated location to all subscribed admin clients."""
+    data = json.dumps({"id": req_id, "lat": lat, "lng": lng})
+    for q in list(_location_subscribers):
+        q.put(data)
 
 # ----------------------------------------------------------------
 # 4)  AWS S3 helper (lazy)
@@ -3335,6 +3349,7 @@ def accept_delivery(req_id):
     req.worker_latitude = lat
     req.worker_longitude = lng
     db.session.commit()
+    _notify_admin_location(req.id, req.worker_latitude, req.worker_longitude)
     flash('Entrega aceita.', 'success')
     if 'application/json' in request.headers.get('Accept', ''):
         return jsonify(
@@ -3363,6 +3378,7 @@ def update_delivery_location(req_id):
     req.worker_latitude = float(lat)
     req.worker_longitude = float(lng)
     db.session.commit()
+    _notify_admin_location(req.id, req.worker_latitude, req.worker_longitude)
     return jsonify(message='Localização atualizada.', category='success')
 
 
@@ -3562,6 +3578,25 @@ def admin_delivery_locations():
         if r.worker_latitude is not None and r.worker_longitude is not None
     ]
     return jsonify(data)
+
+
+@app.route('/admin/delivery_locations/stream')
+@login_required
+def admin_delivery_locations_stream():
+    if not _is_admin():
+        abort(403)
+
+    def event_stream():
+        q: queue.Queue[str] = queue.Queue()
+        _location_subscribers.add(q)
+        try:
+            while True:
+                data = q.get()
+                yield f"data: {data}\n\n"
+        finally:
+            _location_subscribers.discard(q)
+
+    return Response(stream_with_context(event_stream()), mimetype='text/event-stream')
 
 
 @app.route('/admin/delivery_requests/<int:req_id>/status/<status>', methods=['POST'])
