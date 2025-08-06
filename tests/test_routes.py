@@ -1602,6 +1602,42 @@ def test_update_delivery_location(monkeypatch, app):
         assert db_worker.endereco.longitude == 7.8
 
 
+def test_worker_without_address_gets_location_on_overview(monkeypatch, app):
+    client = app.test_client()
+    with app.app_context():
+        db.drop_all()
+        db.create_all()
+        admin = User(id=1, name='Admin', email='a@a', role='admin')
+        admin.set_password('x')
+        worker = User(id=2, name='Worker', email='w@x.com', worker='delivery')
+        worker.set_password('x')
+        order = Order(id=1, user_id=1)
+        req = DeliveryRequest(
+            id=1,
+            order_id=1,
+            requested_by_id=1,
+            status='em_andamento',
+            worker_id=2,
+        )
+        db.session.add_all([admin, worker, order, req])
+        db.session.commit()
+
+        import flask_login.utils as login_utils
+        monkeypatch.setattr(login_utils, '_get_user', lambda: worker)
+        resp = client.post('/delivery_requests/1/location', json={'lat': 10.0, 'lng': 20.0})
+        assert resp.status_code == 200
+        db_worker = User.query.get(worker.id)
+        assert db_worker.endereco is not None
+        assert db_worker.endereco.latitude == 10.0
+        assert db_worker.endereco.longitude == 20.0
+
+        monkeypatch.setattr(login_utils, '_get_user', lambda: admin)
+        monkeypatch.setattr(app_module, '_is_admin', lambda: True)
+        resp = client.get('/admin/delivery_overview')
+        assert resp.status_code == 200
+        assert b'10.0' in resp.data and b'20.0' in resp.data
+
+
 def test_admin_delivery_locations_endpoint(monkeypatch, app):
     client = app.test_client()
     with app.app_context():

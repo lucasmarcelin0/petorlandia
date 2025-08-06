@@ -3351,6 +3351,9 @@ def accept_delivery(req_id):
     if current_user.endereco:
         current_user.endereco.latitude = lat
         current_user.endereco.longitude = lng
+    else:
+        current_user.endereco = Endereco(cep="00000-000", latitude=lat, longitude=lng)
+        db.session.add(current_user.endereco)
     db.session.commit()
     _notify_admin_location(current_user.id, req.worker_latitude, req.worker_longitude)
     flash('Entrega aceita.', 'success')
@@ -3383,6 +3386,13 @@ def update_delivery_location(req_id):
     if current_user.endereco:
         current_user.endereco.latitude = float(lat)
         current_user.endereco.longitude = float(lng)
+    else:
+        current_user.endereco = Endereco(
+            cep="00000-000",
+            latitude=float(lat),
+            longitude=float(lng),
+        )
+        db.session.add(current_user.endereco)
     db.session.commit()
     _notify_admin_location(current_user.id, req.worker_latitude, req.worker_longitude)
     return jsonify(message='Localização atualizada.', category='success')
