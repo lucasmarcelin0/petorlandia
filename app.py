@@ -3516,29 +3516,16 @@ def delivery_overview():
     # produtos para o bloco de estoque
     products = Product.query.order_by(Product.name).all()
 
-    # localizações mais recentes conhecidas de cada entregador
-    loc_rows = (
-        DeliveryRequest.query
-        .filter(
-            DeliveryRequest.worker_latitude.is_not(None),
-            DeliveryRequest.worker_longitude.is_not(None)
-        )
-        .order_by(DeliveryRequest.id.desc())
-        .all()
-    )
-
-    seen_workers = set()
-    worker_locations = []
-    for r in loc_rows:
-        key = r.worker_id or f"req-{r.id}"
-        if key in seen_workers:
-            continue
-        worker_locations.append({
+    # localizações atuais dos entregadores em andamento
+    worker_locations = [
+        {
             "id": r.id,
             "lat": r.worker_latitude,
             "lng": r.worker_longitude,
-        })
-        seen_workers.add(key)
+        }
+        for r in in_progress
+        if r.worker_latitude is not None and r.worker_longitude is not None
+    ]
 
     return render_template(
         "admin/delivery_overview.html",
