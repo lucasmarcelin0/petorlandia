@@ -78,9 +78,9 @@ app.config.setdefault("BABEL_DEFAULT_LOCALE", "pt_BR")
 _location_subscribers: set[queue.Queue] = set()
 
 
-def _notify_admin_location(req_id: int, lat: float, lng: float) -> None:
-    """Send an updated location to all subscribed admin clients."""
-    data = json.dumps({"id": req_id, "lat": lat, "lng": lng})
+def _notify_admin_location(worker_id: int, lat: float, lng: float) -> None:
+    """Send an updated worker location to all subscribed admin clients."""
+    data = json.dumps({"id": worker_id, "lat": lat, "lng": lng})
     for q in list(_location_subscribers):
         q.put(data)
 
@@ -3348,8 +3348,11 @@ def accept_delivery(req_id):
     req.accepted_at = datetime.utcnow()
     req.worker_latitude = lat
     req.worker_longitude = lng
+    if current_user.endereco:
+        current_user.endereco.latitude = lat
+        current_user.endereco.longitude = lng
     db.session.commit()
-    _notify_admin_location(req.id, req.worker_latitude, req.worker_longitude)
+    _notify_admin_location(current_user.id, req.worker_latitude, req.worker_longitude)
     flash('Entrega aceita.', 'success')
     if 'application/json' in request.headers.get('Accept', ''):
         return jsonify(
@@ -3377,8 +3380,11 @@ def update_delivery_location(req_id):
         return jsonify(message='Localização necessária.', category='danger'), 400
     req.worker_latitude = float(lat)
     req.worker_longitude = float(lng)
+    if current_user.endereco:
+        current_user.endereco.latitude = float(lat)
+        current_user.endereco.longitude = float(lng)
     db.session.commit()
-    _notify_admin_location(req.id, req.worker_latitude, req.worker_longitude)
+    _notify_admin_location(current_user.id, req.worker_latitude, req.worker_longitude)
     return jsonify(message='Localização atualizada.', category='success')
 
 
@@ -3532,15 +3538,16 @@ def delivery_overview():
     # produtos para o bloco de estoque
     products = Product.query.order_by(Product.name).all()
 
-    # localizações atuais dos entregadores em andamento
+    # localizações atuais dos entregadores
+    workers = User.query.filter(User.worker == "delivery").all()
     worker_locations = [
         {
-            "id": r.id,
-            "lat": r.worker_latitude,
-            "lng": r.worker_longitude,
+            "id": w.id,
+            "lat": w.endereco.latitude,
+            "lng": w.endereco.longitude,
         }
-        for r in in_progress
-        if r.worker_latitude is not None and r.worker_longitude is not None
+        for w in workers
+        if w.endereco and w.endereco.latitude is not None and w.endereco.longitude is not None
     ]
 
     return render_template(
@@ -3567,15 +3574,15 @@ def delivery_overview():
 def admin_delivery_locations():
     if not _is_admin():
         abort(403)
-    in_progress = DeliveryRequest.query.filter_by(status='em_andamento').all()
+    workers = User.query.filter(User.worker == "delivery").all()
     data = [
         {
-            "id": r.id,
-            "lat": r.worker_latitude,
-            "lng": r.worker_longitude,
+            "id": w.id,
+            "lat": w.endereco.latitude,
+            "lng": w.endereco.longitude,
         }
-        for r in in_progress
-        if r.worker_latitude is not None and r.worker_longitude is not None
+        for w in workers
+        if w.endereco and w.endereco.latitude is not None and w.endereco.longitude is not None
     ]
     return jsonify(data)
 
