@@ -77,7 +77,7 @@
   }
 
   function enviarWhatsApp() {
-    const numero = "{{ ''.join(ch for ch in animal.owner.phone if ch.isdigit()) if animal.owner.phone else '' }}";
+    const numero = "{{ animal.owner.phone | digits_only }}";
     if (!numero) {
       alert('Número de telefone do tutor não informado.');
       return;

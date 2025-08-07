@@ -210,7 +210,7 @@
   }
 
   function enviarWhatsApp() {
-    const numero = "{{ ''.join(ch for ch in bloco.animal.owner.phone if ch.isdigit()) if bloco.animal.owner.phone else '' }}";
+    const numero = "{{ bloco.animal.owner.phone | digits_only }}";
     if (!numero) {
       alert('Número de telefone do tutor não informado.');
       return;

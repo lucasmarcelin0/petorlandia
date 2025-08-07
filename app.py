@@ -157,6 +157,11 @@ def format_datetime_brazil(value, fmt="%d/%m/%Y %H:%M"):
 
     return value
 
+@app.template_filter("digits_only")
+def digits_only(value):
+    """Return only the digits from a string."""
+    return "".join(filter(str.isdigit, value)) if value else ""
+
 # ----------------------------------------------------------------
 # 6)  Forms e helpers
 # ----------------------------------------------------------------
