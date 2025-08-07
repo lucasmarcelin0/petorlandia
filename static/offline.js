@@ -93,8 +93,6 @@
       if (!evt.defaultPrevented) {
         location.reload();
       }
-    } else {
-      alert('Ação salva offline e será sincronizada quando possível.');
     }
   });
 })();
