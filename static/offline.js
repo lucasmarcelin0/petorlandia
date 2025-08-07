@@ -76,12 +76,24 @@
     if (ev.defaultPrevented) return;
     const form = ev.target;
     if (!form.matches('form[data-sync]')) return;
+
+    // Mensagem de confirmação para formulários de histórico
+    if (form.classList.contains('delete-history-form')) {
+      const msg = form.dataset.confirm || 'Excluir este registro?';
+      if (!window.confirm(msg)) {
+        ev.preventDefault();
+        ev.stopPropagation();
+        return;
+      }
+    }
+
     if (!form.checkValidity()) {
       ev.preventDefault();
       ev.stopPropagation();
       form.classList.add('was-validated');
       return;
     }
+
     ev.preventDefault();
     const data = new FormData(form);
     const resp = await window.fetchOrQueue(form.action, {method: form.method || 'POST', headers: {'Accept': 'application/json'}, body: data});
@@ -92,6 +104,22 @@
       document.dispatchEvent(evt);
       if (!evt.defaultPrevented) {
         location.reload();
+      }
+    }
+  });
+
+  // Atualiza automaticamente o contêiner do histórico após exclusões
+  document.addEventListener('form-sync-success', ev => {
+    const detail = ev.detail || {};
+    const form = detail.form;
+    const data = detail.data;
+    if (!form || !form.classList.contains('delete-history-form')) return;
+
+    ev.preventDefault();
+    if (data && data.html && form.dataset.target) {
+      const container = document.getElementById(form.dataset.target);
+      if (container) {
+        container.innerHTML = data.html;
       }
     }
   });

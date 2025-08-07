@@ -315,20 +315,6 @@ document.addEventListener('DOMContentLoaded', function() {
     }
   });
 
-  ['historico-consultas','historico-prescricoes','historico-exames','historico-vacinas'].forEach(id => {
-    const container = document.getElementById(id);
-    if (container) {
-      container.addEventListener('submit', function(e) {
-        const form = e.target;
-        if (form.classList.contains('delete-history-form')) {
-          const msg = form.dataset.confirm || 'Excluir este registro?';
-          if (!confirm(msg)) {
-            e.preventDefault();
-          }
-        }
-      });
-    }
-  });
 });
 
 
