@@ -194,26 +194,10 @@
 
 
 <script>
-document.addEventListener('DOMContentLoaded', function() {
-  // Ativar a aba salva ou a primeira disponível
-  const abaSalva = localStorage.getItem('abaAtivaConsulta');
-  if (abaSalva) {
-    const tab = document.querySelector(`[data-bs-target="#${abaSalva}"]`);
-    if (tab) new bootstrap.Tab(tab).show();
-  }
-
-  // Exibe destaque se a aba foi salva anteriormente (após recarregar)
-  const highlight = localStorage.getItem('tabSavedHighlight');
-  if (highlight) {
-    const link = document.querySelector(`[data-bs-target="#${highlight}"]`);
-    if (link) {
-      link.classList.add('tab-saved-highlight');
-      setTimeout(() => link.classList.remove('tab-saved-highlight'), 2000);
-    }
-    localStorage.removeItem('tabSavedHighlight');
-  }
-
-  document.querySelectorAll('.tab-pane form[data-sync]').forEach(form => {
+function bindSyncForms(root) {
+  root.querySelectorAll('.tab-pane form[data-sync]').forEach(form => {
+    if (form.dataset.syncBound) return;
+    form.dataset.syncBound = '1';
     form.addEventListener('submit', async ev => {
       ev.preventDefault();
 
@@ -260,8 +244,12 @@ document.addEventListener('DOMContentLoaded', function() {
 
       if (ok && data) {
         if (form.dataset.target && data.html) {
-          const container = document.querySelector(form.dataset.target);
-          if (container) container.innerHTML = data.html;
+          const sel = form.dataset.target;
+          const container = sel.startsWith('#') ? document.querySelector(sel) : document.getElementById(sel);
+          if (container) {
+            container.innerHTML = data.html;
+            bindSyncForms(container);
+          }
         }
         if (data.tutor_name) {
           const el = document.getElementById('tutor-name');
@@ -291,6 +279,28 @@ document.addEventListener('DOMContentLoaded', function() {
       }
     });
   });
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+  // Ativar a aba salva ou a primeira disponível
+  const abaSalva = localStorage.getItem('abaAtivaConsulta');
+  if (abaSalva) {
+    const tab = document.querySelector(`[data-bs-target="#${abaSalva}"]`);
+    if (tab) new bootstrap.Tab(tab).show();
+  }
+
+  // Exibe destaque se a aba foi salva anteriormente (após recarregar)
+  const highlight = localStorage.getItem('tabSavedHighlight');
+  if (highlight) {
+    const link = document.querySelector(`[data-bs-target="#${highlight}"]`);
+    if (link) {
+      link.classList.add('tab-saved-highlight');
+      setTimeout(() => link.classList.remove('tab-saved-highlight'), 2000);
+    }
+    localStorage.removeItem('tabSavedHighlight');
+  }
+
+  bindSyncForms(document);
 
   // Salvar aba ativa quando muda
   document.getElementById('consultaTabs').addEventListener('shown.bs.tab', function(event) {
@@ -349,7 +359,10 @@ document.addEventListener('form-sync-success', function(ev) {
     ev.preventDefault();
     if (data && data.html && form.dataset.target) {
       const container = document.getElementById(form.dataset.target);
-      if (container) container.innerHTML = data.html;
+      if (container) {
+        container.innerHTML = data.html;
+        bindSyncForms(container);
+      }
     }
     const toastEl = document.getElementById('actionToast');
     if (toastEl) {
@@ -366,7 +379,10 @@ document.addEventListener('form-sync-success', function(ev) {
     ev.preventDefault();
     if (data && data.html) {
       const container = document.getElementById('historico-consultas');
-      if (container) container.innerHTML = data.html;
+      if (container) {
+        container.innerHTML = data.html;
+        bindSyncForms(container);
+      }
     }
     const toastEl = document.getElementById('actionToast');
     if (toastEl) {
