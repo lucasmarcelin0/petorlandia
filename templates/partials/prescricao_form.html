@@ -273,7 +273,11 @@
         if (!response.ok || !data.success) throw new Error(data.message || 'Erro ao salvar prescrição');
         mostrarFeedback('Prescrição salva com sucesso!', 'success');
         if (data.html) {
-          document.getElementById('historico-prescricoes').innerHTML = data.html;
+          const container = document.getElementById('historico-prescricoes');
+          container.innerHTML = data.html;
+          if (typeof bindSyncForms === 'function') {
+            bindSyncForms(container);
+          }
         }
         prescricoes = [];
         renderPrescricoesTemp();
