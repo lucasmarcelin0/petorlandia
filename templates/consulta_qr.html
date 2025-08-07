@@ -25,46 +25,51 @@
     {% endif %}
   </div>
 
-<!-- Substitua a seção de abas pelo seguinte código: -->
-<ul class="nav nav-tabs mb-4" id="consultaTabs" role="tablist">
+<ul class="nav nav-tabs mb-4 rounded shadow-sm bg-white" id="consultaTabs" role="tablist">
   <li class="nav-item" role="presentation">
-    <button class="nav-link active" id="tutor-tab" data-bs-toggle="tab" data-bs-target="#tutor-info" type="button">
-      <i class="bi bi-person-fill me-1 text-primary"></i> Tutor
+    <button class="nav-link active d-flex align-items-center gap-2" id="tutor-tab" data-bs-toggle="tab" data-bs-target="#tutor-info" type="button" role="tab">
+      <span class="icon-circle bg-primary text-white"><i class="bi bi-person-fill"></i></span>
+      <span class="fw-semibold">Tutor</span>
     </button>
   </li>
-<li class="nav-item" role="presentation">
-  <button class="nav-link" id="animal-tab" data-bs-toggle="tab" data-bs-target="#animal-info" type="button">
-    <i class="bi bi-heart-pulse-fill me-1 text-danger"></i> Animal
-  </button>
-</li>
   <li class="nav-item" role="presentation">
-    <button class="nav-link" id="racao-tab" data-bs-toggle="tab" data-bs-target="#racoes" type="button"
-            {% if not animal %}disabled title="Cadastre um animal primeiro"{% endif %}>
-      <i class="bi bi-basket-fill me-1 text-success"></i> Ração
+    <button class="nav-link d-flex align-items-center gap-2" id="animal-tab" data-bs-toggle="tab" data-bs-target="#animal-info" type="button" role="tab">
+      <span class="icon-circle bg-danger text-white"><i class="bi bi-heart-pulse-fill"></i></span>
+      <span class="fw-semibold">Animal</span>
     </button>
   </li>
-  
+  <li class="nav-item" role="presentation">
+    <button class="nav-link d-flex align-items-center gap-2" id="racao-tab" data-bs-toggle="tab" data-bs-target="#racoes" type="button" role="tab" {% if not animal %}disabled title="Cadastre um animal primeiro"{% endif %}>
+      <span class="icon-circle bg-success text-white"><i class="bi bi-basket-fill"></i></span>
+      <span class="fw-semibold">Ração</span>
+    </button>
+  </li>
+
   {% if animal and worker == 'veterinario' %}
     <li class="nav-item" role="presentation">
-      <button class="nav-link" id="consulta-tab" data-bs-toggle="tab" data-bs-target="#consulta-info" type="button">
-        <i class="bi bi-clipboard2-pulse-fill me-1 text-info"></i> Consulta
+      <button class="nav-link d-flex align-items-center gap-2" id="consulta-tab" data-bs-toggle="tab" data-bs-target="#consulta-info" type="button" role="tab">
+        <span class="icon-circle bg-info text-white"><i class="bi bi-clipboard2-pulse-fill"></i></span>
+        <span class="fw-semibold">Consulta</span>
       </button>
     </li>
     <li class="nav-item" role="presentation">
-      <button class="nav-link" id="medicamentos-tab" data-bs-toggle="tab" data-bs-target="#medicamentos" type="button">
-        <i class="bi bi-capsule-pill me-1 text-warning"></i> Medicamentos
+      <button class="nav-link d-flex align-items-center gap-2" id="medicamentos-tab" data-bs-toggle="tab" data-bs-target="#medicamentos" type="button" role="tab">
+        <span class="icon-circle bg-warning text-dark"><i class="bi bi-capsule-pill"></i></span>
+        <span class="fw-semibold">Medicamentos</span>
       </button>
     </li>
     <li class="nav-item" role="presentation">
-      <button class="nav-link" id="exames-tab" data-bs-toggle="tab" data-bs-target="#exames" type="button">
-        <i class="bi bi-droplet-fill me-1" style="color: #6f42c1;"></i> Exames
+      <button class="nav-link d-flex align-items-center gap-2" id="exames-tab" data-bs-toggle="tab" data-bs-target="#exames" type="button" role="tab">
+        <span class="icon-circle" style="background-color: #6f42c1; color: #fff;"><i class="bi bi-droplet-fill"></i></span>
+        <span class="fw-semibold">Exames</span>
       </button>
     </li>
-<li class="nav-item" role="presentation">
-  <button class="nav-link" id="vacinas-tab" data-bs-toggle="tab" data-bs-target="#vacinas" type="button">
-    <i class="bi bi-shield-plus me-1" style="color: #20c997;"></i> Vacinas
-  </button>
-  </li>
+    <li class="nav-item" role="presentation">
+      <button class="nav-link d-flex align-items-center gap-2" id="vacinas-tab" data-bs-toggle="tab" data-bs-target="#vacinas" type="button" role="tab">
+        <span class="icon-circle" style="background-color: #20c997; color: #fff;"><i class="bi bi-shield-plus"></i></span>
+        <span class="fw-semibold">Vacinas</span>
+      </button>
+    </li>
   {% endif %}
 </ul>
 
@@ -167,27 +172,41 @@
 
 
 <style>
-  /* Cores customizadas para ícones */
-.bi-heart-fill.text-danger { color: #e83e8c !important; } /* Rosa mais vivo para o coração */
-.bi-syringe-fill { color: #20c997 !important; } /* Verde água para vacinas */
-.bi-droplet-fill { color: #6f42c1 !important; } /* Roxo para exames */
-.bi-capsule-pill.text-warning { color: #fd7e14 !important; } /* Laranja para medicamentos */
+  .icon-circle {
+    width: 1.75rem;
+    height: 1.75rem;
+    border-radius: 50%;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1rem;
+  }
 
-/* Efeito hover nos ícones */
-.nav-link:hover i {
-  transform: scale(1.1);
-  transition: transform 0.2s ease;
-}
+  .nav-tabs .nav-link {
+    transition: background-color 0.2s ease, color 0.2s ease;
+  }
 
-/* Destaque temporário para a aba salva */
-.nav-link.tab-saved-highlight {
-  animation: tabHighlight 2s ease-in-out;
-}
+  .nav-tabs .nav-link:hover:not(.disabled) {
+    background-color: #f8f9fa;
+  }
 
-@keyframes tabHighlight {
-  from { background-color: #d1e7dd; }
-  to { background-color: transparent; }
-}
+  .nav-tabs .nav-link.active {
+    font-weight: 600;
+  }
+
+  .nav-link:hover .icon-circle {
+    transform: scale(1.1);
+    transition: transform 0.2s ease;
+  }
+
+  .nav-link.tab-saved-highlight {
+    animation: tabHighlight 2s ease-in-out;
+  }
+
+  @keyframes tabHighlight {
+    from { background-color: #d1e7dd; }
+    to { background-color: transparent; }
+  }
 </style>
 
 
