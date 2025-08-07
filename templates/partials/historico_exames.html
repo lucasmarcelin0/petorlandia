@@ -11,7 +11,9 @@
         <strong>Exames solicitados em {{ bloco.data_criacao|format_datetime_brazil('%d/%m/%Y %H:%M') }}</strong>
       </div>
       <div class="d-flex gap-2">
-        <form method="POST" action="{{ url_for('deletar_bloco_exames', bloco_id=bloco.id) }}" onsubmit="return confirm('Deseja realmente excluir este bloco de exames?');">
+        <form method="POST" action="{{ url_for('deletar_bloco_exames', bloco_id=bloco.id) }}"
+              class="delete-history-form" data-sync data-target="historico-exames"
+              data-confirm="Deseja realmente excluir este bloco de exames?">
           <button type="submit" class="btn btn-danger btn-sm">
             <i class="bi bi-trash"></i> Excluir
           </button>
