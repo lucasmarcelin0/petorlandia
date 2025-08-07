@@ -38,7 +38,7 @@
   <div class="mb-4">
     <label class="form-label fw-bold">Código de Rastreio</label>
     <div class="input-group">
-      <input type="text" class="form-control" value="{{ delivery.tracking_code }}" readonly id="trackInput">
+      <input type="text" class="form-control" value="{{ delivery.tracking_code or '' }}" readonly id="trackInput">
       <button class="btn btn-outline-secondary" type="button" onclick="navigator.clipboard.writeText(document.getElementById('trackInput').value)">
         <i class="bi bi-clipboard"></i>
       </button>

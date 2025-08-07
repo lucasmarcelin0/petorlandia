@@ -31,7 +31,7 @@
   </div>
   <form action="{{ url_for('checkout') }}" method="post" class="text-end">
     {{ form.csrf_token }}
-    <input type="hidden" name="address_id" value="{{ form.address_id.data }}">
+    <input type="hidden" name="address_id" value="{{ '' if form.address_id.data is none else form.address_id.data }}">
     <button type="submit" class="btn btn-success">
       Continuar para Pagamento
     </button>

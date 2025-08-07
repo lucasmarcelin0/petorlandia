@@ -35,11 +35,11 @@
         {{ tutor_form.hidden_tag() }}
         <div class="col-md-6">
           <label class="form-label">Nome</label>
-          <input name="name" class="form-control" value="{{ tutor.name }}" required>
+          <input name="name" class="form-control" value="{{ tutor.name or '' }}" required>
         </div>
         <div class="col-md-6">
           <label class="form-label">E‑mail</label>
-          <input name="email" type="email" class="form-control" value="{{ tutor.email }}" required>
+          <input name="email" type="email" class="form-control" value="{{ tutor.email or '' }}" required>
         </div>
         <div class="col-md-6">
           <label class="form-label">Telefone</label>
@@ -194,7 +194,7 @@
 
             <div class="col-md-6">
               <label class="form-label">Nome</label>
-              <input name="name" class="form-control" value="{{ a.name }}" required>
+              <input name="name" class="form-control" value="{{ a.name or '' }}" required>
             </div>
 
 
@@ -236,19 +236,19 @@
             </div>
             <div class="col-md-3">
               <label class="form-label">Microchip</label>
-              <input name="microchip_number" class="form-control" value="{{ a.microchip_number }}">
+              <input name="microchip_number" class="form-control" value="{{ a.microchip_number or '' }}">
             </div>
             <div class="col-md-3">
               <label class="form-label">Peso (kg)</label>
-              <input name="peso" type="number" step="0.01" class="form-control" value="{{ a.peso }}">
+              <input name="peso" type="number" step="0.01" class="form-control" value="{{ '' if a.peso is none else a.peso }}">
             </div>
             <div class="col-md-6">
               <label class="form-label">Plano de Saúde</label>
-              <input name="health_plan" class="form-control" value="{{ a.health_plan }}">
+              <input name="health_plan" class="form-control" value="{{ a.health_plan or '' }}">
             </div>
             <div class="col-12">
               <label class="form-label">Descrição</label>
-              <textarea name="description" class="form-control">{{ a.description }}</textarea>
+              <textarea name="description" class="form-control">{{ a.description or '' }}</textarea>
             </div>
             <div class="col-12">
               <label class="form-label">Castrado?</label>
