@@ -1755,9 +1755,14 @@ def buscar_animais():
 def update_tutor(user_id):
     user = User.query.get_or_404(user_id)
 
+    wants_json = 'application/json' in request.headers.get('Accept', '')
+
     # 🔐 Permissão: veterinários ou colaboradores
     if current_user.worker not in ['veterinario', 'colaborador']:
-        flash('Apenas veterinários ou colaboradores podem editar dados do tutor.', 'danger')
+        message = 'Apenas veterinários ou colaboradores podem editar dados do tutor.'
+        if wants_json:
+            return jsonify(success=False, message=message), 403
+        flash(message, 'danger')
         return redirect(request.referrer or url_for('index'))
 
     # 📋 Campos básicos (exceto CPF)
@@ -1773,7 +1778,10 @@ def update_tutor(user_id):
         if cpf_val != (user.cpf or ''):
             existing = User.query.filter(User.cpf == cpf_val, User.id != user.id).first()
             if existing:
-                flash('CPF já cadastrado para outro tutor.', 'danger')
+                message = 'CPF já cadastrado para outro tutor.'
+                if wants_json:
+                    return jsonify(success=False, message=message), 400
+                flash(message, 'danger')
                 return redirect(request.referrer or url_for('index'))
         user.cpf = cpf_val
 
@@ -1783,7 +1791,10 @@ def update_tutor(user_id):
         try:
             user.date_of_birth = datetime.strptime(date_str, '%Y-%m-%d').date()
         except ValueError:
-            flash('Data de nascimento inválida. Use o formato correto.', 'danger')
+            message = 'Data de nascimento inválida. Use o formato correto.'
+            if wants_json:
+                return jsonify(success=False, message=message), 400
+            flash(message, 'danger')
             return redirect(request.referrer or url_for('index'))
 
     # 📸 Foto de perfil
@@ -1829,18 +1840,28 @@ def update_tutor(user_id):
             db.session.flush()
             user.endereco_id = endereco.id
     elif any(addr_fields.values()):
-        flash('Por favor, informe CEP, rua, cidade e estado.', 'warning')
+        message = 'Por favor, informe CEP, rua, cidade e estado.'
+        if wants_json:
+            return jsonify(success=False, message=message), 400
+        flash(message, 'warning')
         return redirect(request.referrer or url_for('index'))
 
     # 💾 Commit final
     try:
         db.session.commit()
-        flash('Dados do tutor atualizados com sucesso!', 'success')
     except Exception as e:
         db.session.rollback()
         print(f"❌ ERRO ao salvar tutor: {e}")
-        flash(f'Ocorreu um erro ao salvar: {str(e)}', 'danger')
+        message = f'Ocorreu um erro ao salvar: {str(e)}'
+        if wants_json:
+            return jsonify(success=False, message=message), 500
+        flash(message, 'danger')
+        return redirect(request.referrer or url_for('index'))
 
+    message = 'Dados do tutor atualizados com sucesso!'
+    if wants_json:
+        return jsonify(success=True, message=message, tutor_name=user.name)
+    flash(message, 'success')
     return redirect(request.referrer or url_for('index'))
 
 
@@ -1909,8 +1930,13 @@ def ficha_tutor(tutor_id):
 def update_animal(animal_id):
     animal = Animal.query.get_or_404(animal_id)
 
+    wants_json = 'application/json' in request.headers.get('Accept', '')
+
     if current_user.worker != 'veterinario':
-        flash('Apenas veterinários podem editar dados do animal.', 'danger')
+        message = 'Apenas veterinários podem editar dados do animal.'
+        if wants_json:
+            return jsonify(success=False, message=message), 403
+        flash(message, 'danger')
         return redirect(request.referrer or url_for('index'))
 
     # Campos básicos
@@ -1987,8 +2013,20 @@ def update_animal(animal_id):
     except ValueError:
         pass
 
-    db.session.commit()
-    flash('Dados do animal atualizados com sucesso!', 'success')
+    try:
+        db.session.commit()
+    except Exception as e:
+        db.session.rollback()
+        message = f'Ocorreu um erro ao salvar: {str(e)}'
+        if wants_json:
+            return jsonify(success=False, message=message), 500
+        flash(message, 'danger')
+        return redirect(request.referrer or url_for('index'))
+
+    message = 'Dados do animal atualizados com sucesso!'
+    if wants_json:
+        return jsonify(success=True, message=message, animal_name=animal.name)
+    flash(message, 'success')
     return redirect(request.referrer or url_for('index'))
 
 
