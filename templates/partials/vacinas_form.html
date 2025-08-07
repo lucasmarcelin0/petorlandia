@@ -178,7 +178,9 @@
           mostrarFeedback('Erro ao salvar vacinas.', 'danger');
         }
       } else {
-        mostrarFeedback('Vacinas salvas offline e serão enviadas quando possível.', 'info');
+        // Offline: registra localmente sem exibir aviso
+        vacinas = [];
+        renderVacinasTemp();
       }
 
       btn.disabled = false;
