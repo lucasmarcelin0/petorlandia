@@ -28,7 +28,7 @@
   </div>
 
   <!-- Botão para finalizar -->
-  <button type="button" class="btn btn-primary mt-2" onclick="finalizarBlocoExames()">💾 Finalizar Solicitação</button>
+  <button type="button" class="btn btn-primary mt-2" id="btn-finalizar-exames" onclick="finalizarBlocoExames()">💾 Finalizar Solicitação</button>
 </form>
 
 <!-- Histórico de exames -->
@@ -157,6 +157,11 @@
       return;
     }
 
+    const btn = document.getElementById('btn-finalizar-exames');
+    const originalHTML = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2" role="status"></span>Salvando...';
+
     const obsGerais = document.getElementById('observacoes-exames')?.value || '';
 
     const resp = await fetchOrQueue(`/animal/{{ animal.id }}/bloco_exames`, {
@@ -182,6 +187,9 @@
     } else {
       mostrarFeedback('Solicitação salva offline e será enviada quando possível.', 'info');
     }
+
+    btn.disabled = false;
+    btn.innerHTML = originalHTML;
   }
 </script>
 

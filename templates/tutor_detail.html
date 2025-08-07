@@ -31,7 +31,7 @@
       </div>
 
 
-      <form action="{{ url_for('update_tutor', user_id=tutor.id) }}" method="POST" enctype="multipart/form-data" class="row g-3">
+      <form id="tutor-form" action="{{ url_for('update_tutor', user_id=tutor.id) }}" method="POST" enctype="multipart/form-data" class="row g-3" data-sync>
         {{ tutor_form.hidden_tag() }}
         <div class="col-md-6">
           <label class="form-label">Nome</label>
@@ -95,7 +95,7 @@
 <div class="card">
   <div class="card-body">
     <div class="d-flex justify-content-between align-items-center mb-3">
-      <h3 class="card-title mb-0">🐾 Animais de {{ tutor.name.split(' ')[0] }}</h3>
+      <h3 class="card-title mb-0" id="animais-heading">🐾 Animais de {{ tutor.name.split(' ')[0] }}</h3>
       <button class="btn btn-outline-primary" data-bs-toggle="modal" data-bs-target="#modalNovoAnimal">
         ➕ Novo Animal
       </button>
@@ -112,15 +112,15 @@
       </thead>
       <tbody>
         {% for a in animais if not a.removido_em %}
-        <tr>
+        <tr id="animal-row-{{ a.id }}">
           <td>
             {% if a.image %}
               <img src="{{ a.image }}" alt="Foto de {{ a.name }}" class="rounded-circle me-2" style="width: 32px; height: 32px; object-fit: cover;">
             {% endif %}
-            {{ a.name }}
+            <span class="animal-name">{{ a.name }}</span>
           </td>
-          <td>{{ a.species }} / {{ a.breed }}</td>
-          <td>{{ a.sex or '—' }}</td>
+          <td class="animal-species">{{ a.species }} / {{ a.breed }}</td>
+          <td class="animal-sex">{{ a.sex or '—' }}</td>
           <td class="d-flex gap-2 flex-wrap">
             <a href="{{ url_for('consulta_direct', animal_id=a.id) }}" class="btn btn-outline-success btn-sm">
               🩺 Consulta
@@ -179,7 +179,7 @@
 <div class="modal fade" id="modalEditarAnimal{{ a.id }}" tabindex="-1" aria-hidden="true">
 <div class="modal-dialog modal-lg modal-dialog-scrollable modal-dialog-centered">
     <div class="modal-content">
-      <form action="{{ url_for('update_animal', animal_id=a.id) }}" method="POST" enctype="multipart/form-data">
+      <form id="animal-form-{{ a.id }}" action="{{ url_for('update_animal', animal_id=a.id) }}" method="POST" enctype="multipart/form-data" data-sync class="animal-update-form" data-animal-id="{{ a.id }}">
         {{ animal_forms[a.id].hidden_tag() }}
         <div class="modal-header">
           <h5 class="modal-title">✏️ Editar {{ a.name }}</h5>
@@ -504,6 +504,79 @@
     return new Date(today.getFullYear() - age, today.getMonth(), today.getDate());
   }
 
+</script>
+
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+  document.querySelectorAll('form[data-sync]').forEach(form => {
+    form.addEventListener('submit', () => {
+      const btn = form.querySelector('button[type="submit"]');
+      if (btn && !btn.querySelector('.spinner-border')) {
+        const sp = document.createElement('span');
+        sp.className = 'spinner-border spinner-border-sm ms-2';
+        sp.setAttribute('role', 'status');
+        btn.appendChild(sp);
+        btn.disabled = true;
+      }
+    });
+  });
+});
+
+document.addEventListener('form-sync-success', function(ev) {
+  const {form, data} = ev.detail || {};
+  if (!form) return;
+
+  const btn = form.querySelector('button[type="submit"]');
+  if (btn) {
+    btn.querySelector('.spinner-border')?.remove();
+    btn.disabled = false;
+  }
+
+  const toastEl = document.getElementById('actionToast');
+  if (toastEl) {
+    const success = !(data && data.success === false);
+    const msg = (data && (data.message || data.error)) || (success ? 'Dados salvos!' : 'Erro ao salvar');
+    toastEl.querySelector('.toast-body').textContent = msg;
+    toastEl.classList.remove('bg-danger', 'bg-info', 'bg-success');
+    toastEl.classList.add(success ? 'bg-success' : 'bg-danger');
+    bootstrap.Toast.getOrCreateInstance(toastEl).show();
+  }
+
+  if (form.id === 'tutor-form') {
+    ev.preventDefault();
+    if (data && data.tutor_name) {
+      const heading = document.getElementById('animais-heading');
+      if (heading) {
+        heading.textContent = `🐾 Animais de ${data.tutor_name.split(' ')[0]}`;
+      }
+    }
+  } else if (form.classList.contains('animal-update-form')) {
+    ev.preventDefault();
+    const id = form.dataset.animalId;
+    if (id) {
+      const row = document.getElementById(`animal-row-${id}`);
+      if (row) {
+        const nameCell = row.querySelector('.animal-name');
+        const speciesCell = row.querySelector('.animal-species');
+        const sexCell = row.querySelector('.animal-sex');
+        if (nameCell && data && data.animal_name) nameCell.textContent = data.animal_name;
+        if (speciesCell) {
+          const speciesSel = form.querySelector('select[name="species_id"]');
+          const breedSel = form.querySelector('select[name="breed_id"]');
+          const speciesText = speciesSel ? speciesSel.options[speciesSel.selectedIndex].textContent : '';
+          const breedText = breedSel ? breedSel.options[breedSel.selectedIndex].textContent : '';
+          speciesCell.textContent = `${speciesText} / ${breedText}`;
+        }
+        if (sexCell) {
+          const sexSel = form.querySelector('select[name="sex"]');
+          sexCell.textContent = sexSel ? (sexSel.value || '—') : '—';
+        }
+      }
+    }
+    const modal = bootstrap.Modal.getInstance(form.closest('.modal'));
+    modal?.hide();
+  }
+});
 </script>
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
