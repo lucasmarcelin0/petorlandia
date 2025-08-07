@@ -112,7 +112,6 @@
 <div class="no-print" style="margin-bottom: 1em;">
   <button onclick="window.print()">🖨️ Imprimir</button>
   <button onclick="abrirAssinatura()" style="margin-left: 5px;">🔏 Assinar</button>
-  <button onclick="abrirDrive()" style="margin-left: 5px;">📂 Abrir no Drive</button>
   <button onclick="enviarWhatsApp()" style="margin-left: 5px;">📱 WhatsApp</button>
   <a href="{{ url_for('consulta_direct', animal_id=animal.id) }}"
        style="margin-left: 15px;">← Voltar</a>
@@ -201,12 +200,6 @@
     if (confirm('Abrir página de assinatura agora?')) {
       window.open('https://assinador.iti.br/assinatura/index.xhtml', '_blank');
     }
-  }
-
-  function abrirDrive() {
-    const driveUrl = 'https://drive.google.com/viewerng/viewer?embedded=1&url=' +
-      encodeURIComponent(window.location.href);
-    window.open(driveUrl, '_blank');
   }
 
   function enviarWhatsApp() {
