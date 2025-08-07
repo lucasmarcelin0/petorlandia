@@ -73,6 +73,7 @@
   document.addEventListener('DOMContentLoaded', sendQueued);
 
   document.addEventListener('submit', async ev => {
+    if (ev.defaultPrevented) return;
     const form = ev.target;
     if (!form.matches('form[data-sync]')) return;
     if (!form.checkValidity()) {
