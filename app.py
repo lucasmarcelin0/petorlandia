@@ -12,7 +12,7 @@ from PIL import Image
 
 
 from dotenv import load_dotenv
-from flask import Flask, session, send_from_directory, abort
+from flask import Flask, session, send_from_directory, abort, request, jsonify, flash, render_template
 from itsdangerous import URLSafeTimedSerializer
 import json
 
@@ -1508,11 +1508,24 @@ def deletar_consulta(consulta_id):
     consulta = Consulta.query.get_or_404(consulta_id)
     animal_id = consulta.animal_id
     if current_user.worker != 'veterinario':
+        if request.accept_mimetypes.accept_json:
+            return jsonify(success=False,
+                           message='Apenas veterinários podem excluir consultas.'), 403
         flash('Apenas veterinários podem excluir consultas.', 'danger')
         return redirect(url_for('index'))
 
     db.session.delete(consulta)
     db.session.commit()
+
+    if request.accept_mimetypes.accept_json:
+        animal = Animal.query.get_or_404(animal_id)
+        historico_html = render_template(
+            'partials/historico_consultas.html',
+            animal=animal,
+            historico_consultas=animal.consultas
+        )
+        return jsonify(success=True, html=historico_html)
+
     flash('Consulta excluída!', 'info')
     return redirect(url_for('consulta_direct', animal_id=animal_id))
 
@@ -2348,11 +2361,28 @@ def imprimir_vacinas(animal_id):
 
 
 @app.route("/vacina/<int:vacina_id>/deletar", methods=["POST"])
+@login_required
 def deletar_vacina(vacina_id):
     vacina = Vacina.query.get_or_404(vacina_id)
+    animal_id = vacina.animal_id
+
+    if current_user.worker != 'veterinario':
+        if request.accept_mimetypes.accept_json:
+            return jsonify(success=False,
+                           message='Apenas veterinários podem excluir vacinas.'), 403
+        flash('Apenas veterinários podem excluir vacinas.', 'danger')
+        return redirect(request.referrer or url_for('index'))
+
     db.session.delete(vacina)
     db.session.commit()
-    return redirect(request.referrer or url_for("index"))
+
+    if request.accept_mimetypes.accept_json:
+        animal = Animal.query.get_or_404(animal_id)
+        historico_html = render_template('partials/historico_vacinas.html',
+                                         animal=animal)
+        return jsonify(success=True, html=historico_html)
+
+    return redirect(url_for("consulta_direct", animal_id=animal_id))
 
 
 
@@ -2607,14 +2637,23 @@ def salvar_bloco_prescricao(consulta_id):
 @login_required
 def deletar_bloco_prescricao(bloco_id):
     bloco = BlocoPrescricao.query.get_or_404(bloco_id)
-
     if current_user.worker != 'veterinario':
+        if request.accept_mimetypes.accept_json:
+            return jsonify(success=False,
+                           message='Apenas veterinários podem excluir prescrições.'), 403
         flash('Apenas veterinários podem excluir prescrições.', 'danger')
         return redirect(request.referrer or url_for('index'))
 
     animal_id = bloco.animal_id
     db.session.delete(bloco)
     db.session.commit()
+
+    if request.accept_mimetypes.accept_json:
+        animal = Animal.query.get_or_404(animal_id)
+        historico_html = render_template('partials/historico_prescricoes.html',
+                                         animal=animal)
+        return jsonify(success=True, html=historico_html)
+
     flash('Bloco de prescrição excluído com sucesso!', 'info')
     return redirect(url_for('consulta_direct', animal_id=animal_id))
 
@@ -2743,14 +2782,22 @@ def imprimir_bloco_exames(bloco_id):
 @login_required
 def deletar_bloco_exames(bloco_id):
     bloco = BlocoExames.query.get_or_404(bloco_id)
-
     if current_user.worker != 'veterinario':
+        if request.accept_mimetypes.accept_json:
+            return jsonify(success=False,
+                           message='Apenas veterinários podem excluir blocos de exames.'), 403
         flash('Apenas veterinários podem excluir blocos de exames.', 'danger')
         return redirect(request.referrer or url_for('index'))
 
     animal_id = bloco.animal_id
     db.session.delete(bloco)
     db.session.commit()
+
+    if request.accept_mimetypes.accept_json:
+        animal = Animal.query.get_or_404(animal_id)
+        historico_html = render_template('partials/historico_exames.html',
+                                         animal=animal)
+        return jsonify(success=True, html=historico_html)
 
     flash('Bloco de exames excluído com sucesso!', 'info')
     return redirect(url_for('consulta_direct', animal_id=animal_id))

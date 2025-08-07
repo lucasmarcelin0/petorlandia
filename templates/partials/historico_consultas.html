@@ -21,8 +21,8 @@
       </tr>
     </thead>
     <tbody>
-      {% for c in historico_consultas %}
-      <tr>
+        {% for c in historico_consultas %}
+        <tr id="consulta-{{ c.id }}">
         <td class="text-nowrap">{{ c.created_at|format_datetime_brazil('%d/%m/%Y %H:%M') }}</td>
         <td class="break-word-cell">{{ c.queixa_principal or '—' }}</td>
         <td class="break-word-cell">{{ c.historico_clinico or '—' }}</td>
@@ -34,8 +34,8 @@
           <a href="{{ url_for('imprimir_consulta', consulta_id=c.id) }}"
              class="btn btn-outline-dark btn-sm">🖨️ Imprimir</a>
           <form action="{{ url_for('deletar_consulta', consulta_id=c.id) }}"
-                method="POST" class="d-inline"
-                onsubmit="return confirm('Excluir esta consulta?');">
+                method="POST" class="d-inline delete-history-form" data-sync
+                data-target="historico-consultas" data-confirm="Excluir esta consulta?">
             <button class="btn btn-outline-danger btn-sm">🗑️</button>
           </form>
         </td>

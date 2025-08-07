@@ -248,6 +248,21 @@ document.addEventListener('DOMContentLoaded', function() {
       if (medInput) medInput.dispatchEvent(new Event('input'));
     }
   });
+
+  ['historico-consultas','historico-prescricoes','historico-exames','historico-vacinas'].forEach(id => {
+    const container = document.getElementById(id);
+    if (container) {
+      container.addEventListener('submit', function(e) {
+        const form = e.target;
+        if (form.classList.contains('delete-history-form')) {
+          const msg = form.dataset.confirm || 'Excluir este registro?';
+          if (!confirm(msg)) {
+            e.preventDefault();
+          }
+        }
+      });
+    }
+  });
 });
 
 document.addEventListener('form-sync-success', function(ev) {
@@ -271,6 +286,23 @@ document.addEventListener('form-sync-success', function(ev) {
       link.classList.add('tab-saved-highlight');
       setTimeout(() => link.classList.remove('tab-saved-highlight'), 2000);
     }
+  }
+
+  if (form.classList.contains('delete-history-form')) {
+    ev.preventDefault();
+    if (data && data.html && form.dataset.target) {
+      const container = document.getElementById(form.dataset.target);
+      if (container) container.innerHTML = data.html;
+    }
+    const toastEl = document.getElementById('actionToast');
+    if (toastEl) {
+      const msg = (data && (data.message || data.error)) || (success ? 'Item removido!' : 'Erro ao remover item');
+      toastEl.querySelector('.toast-body').textContent = msg;
+      toastEl.classList.remove('bg-danger', 'bg-info', 'bg-success');
+      toastEl.classList.add(success ? 'bg-info' : 'bg-danger');
+      bootstrap.Toast.getOrCreateInstance(toastEl).show();
+    }
+    return;
   }
 
   if (form.id === 'consulta-form') {

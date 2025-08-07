@@ -27,8 +27,9 @@
       <div class="d-flex flex-wrap gap-2">
         <form method="POST"
               action="{{ url_for('deletar_bloco_prescricao', bloco_id=bloco.id) }}"
-              class="d-inline"
-              onsubmit="return confirm('Deseja mesmo excluir este bloco de prescrições?');">
+              class="d-inline delete-history-form" data-sync
+              data-target="historico-prescricoes"
+              data-confirm="Deseja mesmo excluir este bloco de prescrições?">
           <button class="btn btn-danger btn-sm">🗑 Excluir</button>
         </form>
 
