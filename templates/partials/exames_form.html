@@ -177,7 +177,11 @@
       if (data.success) {
         mostrarFeedback('Solicitação de exames salva com sucesso!');
         if (data.html) {
-          document.getElementById('historico-exames').innerHTML = data.html;
+          const container = document.getElementById('historico-exames');
+          container.innerHTML = data.html;
+          if (typeof bindSyncForms === 'function') {
+            bindSyncForms(container);
+          }
         }
         exames = [];
         renderExamesTemp();
