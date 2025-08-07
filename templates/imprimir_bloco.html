@@ -112,7 +112,7 @@
 <div class="no-print" style="margin-bottom: 1em;">
   <button onclick="window.print()">🖨️ Imprimir</button>
   <button onclick="abrirAssinatura()" style="margin-left: 5px;">🔏 Assinar</button>
-  <button onclick="enviarWhatsApp()" style="margin-left: 5px;">📱 WhatsApp</button>
+  <button onclick="enviarWhatsApp()" id="btn-whatsapp" style="margin-left: 5px;">📱 WhatsApp</button>
   <a href="{{ url_for('consulta_direct', animal_id=animal.id) }}"
        style="margin-left: 15px;">← Voltar</a>
 </div>
@@ -196,6 +196,12 @@
 </footer>
 
 <script>
+  const numeroWhatsApp = "{{ bloco.animal.owner.phone | digits_only if bloco.animal.owner and bloco.animal.owner.phone else '' }}";
+  const btnWhats = document.getElementById('btn-whatsapp');
+  if (!numeroWhatsApp && btnWhats) {
+    btnWhats.style.display = 'none';
+  }
+
   function abrirAssinatura() {
     if (confirm('Abrir página de assinatura agora?')) {
       window.open('https://assinador.iti.br/assinatura/index.xhtml', '_blank');
@@ -203,13 +209,21 @@
   }
 
   function enviarWhatsApp() {
-    const numero = "{{ bloco.animal.owner.phone | digits_only }}";
-    if (!numero) {
+    if (!numeroWhatsApp) {
       alert('Número de telefone do tutor não informado.');
       return;
     }
-    const mensagem = encodeURIComponent('Segue a prescrição do(a) ' + '{{ bloco.animal.name }}' + ': ' + window.location.href);
-    window.open(`https://api.whatsapp.com/send?phone=${numero}&text=${mensagem}`, '_blank');
+    const mensagem = encodeURIComponent('Olá {{ bloco.animal.owner.name }}! Segue o link da prescrição de {{ bloco.animal.name }}: ' + window.location.href + ' Qualquer dúvida, estamos à disposição. Equipe PetOrlândia.');
+    const url = `https://api.whatsapp.com/send?phone=${numeroWhatsApp}&text=${mensagem}`;
+    try {
+      const wpp = window.open(url, '_blank');
+      if (!wpp) {
+        alert('Não foi possível abrir o WhatsApp. Verifique o bloqueador de pop-ups.');
+      }
+    } catch (err) {
+      console.error('Erro ao abrir WhatsApp:', err);
+      alert('Ocorreu um erro ao abrir o WhatsApp. Tente novamente.');
+    }
   }
 </script>
 
