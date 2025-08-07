@@ -45,9 +45,9 @@
 
     <div class="info-box">
       <strong>Clínica</strong><br>
-      {{ clinica.nome }}<br>
-      CRMV: {{ clinica.crmv or '—' }}<br>
-      Telefone: {{ clinica.telefone or '—' }}
+      {{ clinica.nome if clinica else '—' }}<br>
+      CRMV: {{ current_user.veterinario.crmv if current_user.veterinario else '—' }}<br>
+      Telefone: {{ clinica.telefone if clinica and clinica.telefone else '—' }}
     </div>
   </div>
 
@@ -90,7 +90,9 @@
 
   <footer>
     Documento válido apenas com carimbo e assinatura do médico veterinário responsável.<br>
-    {{ clinica.nome }} • {{ clinica.endereco }} • {{ clinica.telefone }} • {{ clinica.email }}
+    {% if clinica %}
+      {{ clinica.nome }} • {{ clinica.endereco or '—' }} • {{ clinica.telefone or '—' }} • {{ clinica.email or '—' }}
+    {% endif %}
   </footer>
 </div>
 
@@ -112,7 +114,7 @@
       alert('Número de telefone do responsável não informado.');
       return;
     }
-    const mensagem = encodeURIComponent(`Olá {{ animal.owner.name }}! Segue a carteira de vacinação de {{ animal.name }}:\n\n${window.location.href}\n\nQualquer dúvida, estamos à disposição.\nAtenciosamente,\nEquipe {{ clinica.nome }}`);
+    const mensagem = encodeURIComponent(`Olá {{ animal.owner.name }}! Segue a carteira de vacinação de {{ animal.name }}:\n\n${window.location.href}\n\nQualquer dúvida, estamos à disposição.\nAtenciosamente,\nEquipe {{ clinica.nome if clinica else '' }}`);
     const url = `https://api.whatsapp.com/send?phone=${numeroWhatsApp}&text=${mensagem}`;
     try {
       const wpp = window.open(url, '_blank');
