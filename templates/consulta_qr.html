@@ -1,32 +1,28 @@
 {% extends 'layout.html' %}
 
-{% block head %}
-{{ super() }}
-<link rel="stylesheet" href="{{ url_for('static', filename='consulta_qr.css') }}">
-{% endblock %}
-
 {% block main %}
-<div class="container py-4 consulta-qr-page">
-  <div class="consulta-hero mb-4">
+<div class="container py-4">
+  <!-- Cabeçalho melhorado -->
+  <div class="d-flex justify-content-between align-items-center mb-4">
     {% if animal %}
-      {% if animal.photo %}
-        <img src="{{ animal.photo.url }}" alt="{{ animal.name }}" class="animal-photo rounded-circle">
-      {% else %}
-        <div class="animal-photo rounded-circle bg-light d-flex align-items-center justify-content-center">🐾</div>
-      {% endif %}
-    {% endif %}
-
-    <img src="{{ url_for('static', filename='logo_pet.png') }}" alt="Logo PetOrlândia" class="consulta-logo mb-2">
-
-    {% if animal %}
-      <h2 class="mb-1">Prontuário de <span class="text-primary" id="animal-name">{{ animal.name }}</span></h2>
+      <h2 class="mb-0">🩺 <span class="text-primary" id="animal-name">{{ animal.name }}</span> - Prontuário</h2>
     {% elif tutor %}
-      <h2 class="mb-1">Novo Atendimento para <span class="text-primary" id="tutor-name">{{ tutor.name }}</span></h2>
+      <h2 class="mb-0">🩺 Novo Atendimento para <span class="text-primary" id="tutor-name">{{ tutor.name }}</span></h2>
     {% else %}
-      <h2 class="mb-1">Novo Atendimento Veterinário</h2>
+      <h2 class="mb-0">🩺 Novo Atendimento Veterinário</h2>
     {% endif %}
-
-    <p class="text-muted mb-0">Cuidando com carinho do seu melhor amigo</p>
+    
+    {% if animal %}
+      <div class="animal-photo">
+        {% if animal.photo %}
+          <img src="{{ animal.photo.url }}" alt="{{ animal.name }}" class="rounded-circle" width="50" height="50">
+        {% else %}
+          <div class="no-photo-placeholder rounded-circle bg-light d-flex align-items-center justify-content-center" style="width: 50px; height: 50px;">
+            🐾
+          </div>
+        {% endif %}
+      </div>
+    {% endif %}
   </div>
 
 <!-- Substitua a seção de abas pelo seguinte código: -->
