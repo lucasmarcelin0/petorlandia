@@ -189,7 +189,9 @@
         mostrarFeedback('Erro ao salvar exames.', 'danger');
       }
     } else {
-      mostrarFeedback('Solicitação salva offline e será enviada quando possível.', 'info');
+      // Offline: mantém exames na fila sem mostrar notificação
+      exames = [];
+      renderExamesTemp();
     }
 
     btn.disabled = false;

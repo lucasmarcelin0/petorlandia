@@ -282,7 +282,9 @@
         prescricoes = [];
         renderPrescricoesTemp();
       } else {
-        mostrarFeedback('Prescrição salva offline. Sincronizaremos em breve.', 'info');
+        // Offline: ação armazenada para sincronização futura sem exibir pop-up
+        prescricoes = [];
+        renderPrescricoesTemp();
       }
 
     } catch (err) {
