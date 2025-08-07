@@ -1,6 +1,3 @@
-{% extends 'base_consulta.html' %}
-
-{% block main %}
 <div class="container py-4">
   <h2 class="mb-4">📋 Histórico e Edição de Exames</h2>
 
@@ -77,9 +74,7 @@
   </div>
   {% endfor %}
 </div>
-{% endblock %}
 
-{% block scripts %}
 <style>
 @keyframes fadeIn {
   from { opacity: 0; transform: scale(0.95); }
@@ -219,7 +214,11 @@ function salvarBlocoExames(blocoId, consultaId) {
     if (res.ok && data.success) {
       alert('Bloco de exames salvo!');
       if (data.html) {
-        document.getElementById('historico-exames').innerHTML = data.html;
+        const container = document.getElementById('historico-exames');
+        container.innerHTML = data.html;
+        if (typeof bindSyncForms === 'function') {
+          bindSyncForms(container);
+        }
       }
     } else {
       const msg = data && data.message ? data.message : 'Erro ao salvar.';
@@ -232,4 +231,3 @@ function salvarBlocoExames(blocoId, consultaId) {
   });
 }
 </script>
-{% endblock %}
