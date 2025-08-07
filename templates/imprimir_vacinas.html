@@ -3,18 +3,8 @@
 <head>
   <meta charset="UTF-8">
   <title>Vacinas de {{ animal.name }}</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='print.css') }}">
   <style>
-    body {
-      font-family: 'Arial', sans-serif;
-      margin: 2cm;
-      color: #000;
-      font-size: 12pt;
-    }
-    h2 {
-      text-align: center;
-      font-size: 16pt;
-      margin-bottom: 1em;
-    }
     table {
       width: 100%;
       border-collapse: collapse;
@@ -27,9 +17,6 @@
     .no-print {
       margin-bottom: 1em;
     }
-    @media print {
-      .no-print { display: none !important; }
-    }
   </style>
 </head>
 <body>
@@ -39,28 +26,29 @@
     <button onclick="enviarWhatsApp()" id="btn-whatsapp" style="margin-left:5px;">📱 WhatsApp</button>
     <a href="{{ url_for('consulta_direct', animal_id=animal.id) }}" style="margin-left:15px;">← Voltar</a>
   </div>
-
-  <h2>Carteirinha de Vacinação</h2>
-  <table>
-    <thead>
-      <tr>
-        <th>Vacina</th>
-        <th>Tipo</th>
-        <th>Data</th>
-        <th>Observações</th>
-      </tr>
-    </thead>
-    <tbody>
-      {% for vacina in animal.vacinas|sort(attribute='data', reverse=True) %}
-      <tr>
-        <td>{{ vacina.nome }}</td>
-        <td>{{ vacina.tipo or '—' }}</td>
-        <td>{{ vacina.data.strftime('%d/%m/%Y') if vacina.data else '—' }}</td>
-        <td>{{ vacina.observacoes or '—' }}</td>
-      </tr>
-      {% endfor %}
-    </tbody>
-  </table>
+  <div class="document">
+    <h2>Carteirinha de Vacinação</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>Vacina</th>
+          <th>Tipo</th>
+          <th>Data</th>
+          <th>Observações</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for vacina in animal.vacinas|sort(attribute='data', reverse=True) %}
+        <tr>
+          <td>{{ vacina.nome }}</td>
+          <td>{{ vacina.tipo or '—' }}</td>
+          <td>{{ vacina.data.strftime('%d/%m/%Y') if vacina.data else '—' }}</td>
+          <td>{{ vacina.observacoes or '—' }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
 
 <script>
   const numeroWhatsApp = "{{ animal.owner.phone | digits_only if animal.owner and animal.owner.phone else '' }}";
