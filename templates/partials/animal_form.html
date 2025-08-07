@@ -1,7 +1,7 @@
 {% from 'components/photo_cropper.html' import photo_cropper %}
 <form method="POST" action="{{ url_for('update_animal', animal_id=animal.id) }}"
-      enctype="multipart/form-data" onsubmit="return validarCadastroAnimal();"
-      class="needs-validation" novalidate data-sync="true">
+      enctype="multipart/form-data"
+      class="needs-validation" novalidate data-sync data-validate="validarCadastroAnimal">
 
   <h5 class="mb-3">🐾 Cadastro do Animal</h5>
 

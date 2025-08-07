@@ -5,9 +5,9 @@
   <!-- Cabeçalho melhorado -->
   <div class="d-flex justify-content-between align-items-center mb-4">
     {% if animal %}
-      <h2 class="mb-0">🩺 <span class="text-primary">{{ animal.name }}</span> - Prontuário</h2>
+      <h2 class="mb-0">🩺 <span class="text-primary" id="animal-name">{{ animal.name }}</span> - Prontuário</h2>
     {% elif tutor %}
-      <h2 class="mb-0">🩺 Novo Atendimento para <span class="text-primary">{{ tutor.name }}</span></h2>
+      <h2 class="mb-0">🩺 Novo Atendimento para <span class="text-primary" id="tutor-name">{{ tutor.name }}</span></h2>
     {% else %}
       <h2 class="mb-0">🩺 Novo Atendimento Veterinário</h2>
     {% endif %}
@@ -213,13 +213,25 @@ document.addEventListener('DOMContentLoaded', function() {
     localStorage.removeItem('tabSavedHighlight');
   }
 
-  // Adiciona spinners e guarda aba corrente ao enviar formulário
   document.querySelectorAll('.tab-pane form[data-sync]').forEach(form => {
-    form.addEventListener('submit', () => {
+    form.addEventListener('submit', async ev => {
+      ev.preventDefault();
+
+      if (!form.checkValidity()) {
+        form.classList.add('was-validated');
+        return;
+      }
+
+      const validateFn = form.dataset.validate && window[form.dataset.validate];
+      if (validateFn && typeof validateFn === 'function' && !validateFn(form)) {
+        return;
+      }
+
       const pane = form.closest('.tab-pane');
       if (pane && pane.id) {
         localStorage.setItem('tabSavedHighlight', pane.id);
       }
+
       const btn = form.querySelector('button[type="submit"]');
       if (btn && !btn.querySelector('.spinner-border')) {
         btn.disabled = true;
@@ -227,11 +239,55 @@ document.addEventListener('DOMContentLoaded', function() {
         sp.className = 'spinner-border spinner-border-sm ms-2';
         sp.setAttribute('role', 'status');
         btn.appendChild(sp);
-        // Fallback: remove spinner after 3 seconds if no response
-        btn.spinnerTimer = setTimeout(() => {
-          btn.querySelector('.spinner-border')?.remove();
-          btn.disabled = false;
-        }, 3000);
+      }
+
+      let data = null;
+      let ok = false;
+      try {
+        const resp = await fetch(form.action, {
+          method: 'POST',
+          headers: {'Accept': 'application/json'},
+          body: new FormData(form)
+        });
+        ok = resp.ok;
+        try { data = await resp.json(); } catch(e) {}
+      } catch(err) {}
+
+      if (btn) {
+        btn.querySelector('.spinner-border')?.remove();
+        btn.disabled = false;
+      }
+
+      if (ok && data) {
+        if (form.dataset.target && data.html) {
+          const container = document.querySelector(form.dataset.target);
+          if (container) container.innerHTML = data.html;
+        }
+        if (data.tutor_name) {
+          const el = document.getElementById('tutor-name');
+          if (el) el.textContent = data.tutor_name;
+        }
+        if (data.animal_name) {
+          const el = document.getElementById('animal-name');
+          if (el) el.textContent = data.animal_name;
+        }
+      }
+
+      const toastEl = document.getElementById('actionToast');
+      if (toastEl) {
+        const msg = (data && (data.message || data.error)) || (ok ? 'Salvo com sucesso!' : 'Falha ao salvar');
+        toastEl.querySelector('.toast-body').textContent = msg;
+        toastEl.classList.remove('bg-danger', 'bg-info', 'bg-success');
+        toastEl.classList.add(ok ? 'bg-success' : 'bg-danger');
+        bootstrap.Toast.getOrCreateInstance(toastEl).show();
+      }
+
+      if (ok && pane && pane.id) {
+        const link = document.querySelector(`[data-bs-target="#${pane.id}"]`);
+        if (link) {
+          link.classList.add('tab-saved-highlight');
+          setTimeout(() => link.classList.remove('tab-saved-highlight'), 2000);
+        }
       }
     });
   });
@@ -240,7 +296,7 @@ document.addEventListener('DOMContentLoaded', function() {
   document.getElementById('consultaTabs').addEventListener('shown.bs.tab', function(event) {
     const target = event.target.getAttribute('data-bs-target').replace('#', '');
     localStorage.setItem('abaAtivaConsulta', target);
-    
+
     // Lógica específica para medicamentos
     if (target === 'medicamentos') {
       setTimeout(() => ativarAutocomplete(), 100);
@@ -264,6 +320,7 @@ document.addEventListener('DOMContentLoaded', function() {
     }
   });
 });
+
 
 document.addEventListener('form-sync-success', function(ev) {
   const {form, data, response} = ev.detail || {};

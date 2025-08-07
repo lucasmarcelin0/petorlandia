@@ -1,0 +1,68 @@
+body {
+  font-family: 'Times New Roman', serif;
+  margin: 2cm;
+  color: #000;
+  font-size: 12pt;
+  line-height: 1.5;
+  background: #fff;
+}
+
+.document {
+  border: 2px solid #444;
+  padding: 20px 30px;
+}
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1em;
+}
+
+.header img {
+  max-height: 80px;
+}
+
+.clinica-nome {
+  text-align: center;
+  font-size: 18pt;
+  font-weight: bold;
+}
+
+h2 {
+  text-align: center;
+  font-size: 16pt;
+  margin: 0 0 20px;
+  border-bottom: 2px solid #000;
+  padding-bottom: 8px;
+}
+
+.section-title {
+  font-weight: bold;
+  margin-top: 1.2em;
+  margin-bottom: 0.4em;
+}
+
+.assinatura {
+  margin-top: 60px;
+  text-align: center;
+}
+
+.assinatura span {
+  display: block;
+  margin-top: 5px;
+}
+
+footer {
+  margin-top: 60px;
+  font-size: 10pt;
+  text-align: center;
+  border-top: 1px solid #aaa;
+  padding-top: 10px;
+}
+
+@media print {
+  .no-print {
+    display: none !important;
+  }
+}

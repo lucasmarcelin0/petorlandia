@@ -3,40 +3,8 @@
 <head>
   <meta charset="UTF-8">
   <title>Exames de {{ animal.name }}</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='print.css') }}">
   <style>
-    body {
-      font-family: 'Arial', sans-serif;
-      margin: 2cm;
-      color: #000;
-      font-size: 12pt;
-    }
-
-    .header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      margin-bottom: 0.5em;
-    }
-
-    .header img {
-      max-height: 80px;
-    }
-
-    .clinica-nome {
-      text-align: center;
-      font-size: 18pt;
-      font-weight: bold;
-      margin-bottom: 0;
-    }
-
-    h2 {
-      text-align: center;
-      font-size: 16pt;
-      margin: 0 0 20px;
-      border-bottom: 2px solid #000;
-      padding-bottom: 8px;
-    }
-
     .top-info {
       display: flex;
       justify-content: space-between;
@@ -50,12 +18,6 @@
       padding: 10px;
       font-size: 11pt;
       line-height: 1.4;
-    }
-
-    .section-title {
-      font-weight: bold;
-      margin-top: 1.2em;
-      margin-bottom: 0.5em;
     }
 
     .exames {
@@ -78,30 +40,6 @@
     .exame-item strong {
       font-size: 13pt;
     }
-
-    footer {
-      margin-top: 60px;
-      font-size: 10pt;
-      text-align: center;
-      border-top: 1px solid #aaa;
-      padding-top: 10px;
-    }
-
-    .assinatura {
-      margin-top: 60px;
-      text-align: center;
-    }
-
-    .assinatura span {
-      display: block;
-      margin-top: 5px;
-    }
-
-    @media print {
-      .no-print {
-        display: none !important;
-      }
-    }
   </style>
 
 </head>
@@ -116,92 +54,94 @@
        style="margin-left: 15px;">← Voltar</a>
   </div>
 
-  {% if clinica.logotipo %}
-    {% set logo_src = clinica.logotipo if clinica.logotipo.startswith('http')
-                       else url_for('static', filename='uploads/clinicas/' + clinica.logotipo) %}
-    <div class="header">
-      <img src="{{ logo_src }}" alt="Logotipo da clínica">
-      <div class="clinica-nome">{{ clinica.nome }}</div>
-      <img src="{{ logo_src }}" alt="Logotipo da clínica">
+  <div class="document">
+    {% if clinica.logotipo %}
+      {% set logo_src = clinica.logotipo if clinica.logotipo.startswith('http')
+                         else url_for('static', filename='uploads/clinicas/' + clinica.logotipo) %}
+      <div class="header">
+        <img src="{{ logo_src }}" alt="Logotipo da clínica">
+        <div class="clinica-nome">{{ clinica.nome }}</div>
+        <img src="{{ logo_src }}" alt="Logotipo da clínica">
+      </div>
+    {% endif %}
+
+    <h2>Solicitação de Exames</h2>
+
+    <div class="top-info">
+      {% if current_user.name or (current_user.veterinario and current_user.veterinario.crmv) %}
+        <div class="info-box">
+          <strong>Veterinário:</strong><br>
+          {% if current_user.name %}
+            {{ current_user.name }}<br>
+          {% endif %}
+          {% if current_user.veterinario and current_user.veterinario.crmv %}
+            CRMV: {{ current_user.veterinario.crmv }}
+          {% endif %}
+        </div>
+      {% endif %}
+
+      {% if animal.name or animal.species or animal.breed or animal.sex or animal.microchip_number %}
+        <div class="info-box">
+          <strong>Animal:</strong><br>
+          {% if animal.name %}
+            Nome: {{ animal.name }}<br>
+          {% endif %}
+          {% if animal.species %}
+            Espécie: {{ animal.species }}<br>
+          {% endif %}
+          {% if animal.breed %}
+            Raça: {{ animal.breed }}<br>
+          {% endif %}
+          {% if animal.sex %}
+            Sexo: {{ animal.sex }}<br>
+          {% endif %}
+          {% if animal.microchip_number %}
+            Microchip: {{ animal.microchip_number }}
+          {% endif %}
+        </div>
+      {% endif %}
+
+      {% if tutor.name or tutor.cpf or tutor.address %}
+        <div class="info-box">
+          <strong>Tutor:</strong><br>
+          {% if tutor.name %}
+            Nome: {{ tutor.name }}<br>
+          {% endif %}
+          {% if tutor.cpf %}
+            CPF: {{ tutor.cpf }}<br>
+          {% endif %}
+          {% if tutor.address %}
+            Endereço: {{ tutor.address }}
+          {% endif %}
+        </div>
+      {% endif %}
     </div>
-  {% endif %}
 
-  <h2>Solicitação de Exames</h2>
+    <div class="section-title">Exames Solicitados:</div>
+    <div class="exames">
+      {% for exame in bloco.exames %}
+        <div class="exame-item">
+          🧪 <strong>{{ exame.nome }}</strong><br>
+          <em>{{ exame.justificativa }}</em>
+        </div>
+      {% endfor %}
+    </div>
 
-  <div class="top-info">
-    {% if current_user.name or (current_user.veterinario and current_user.veterinario.crmv) %}
-      <div class="info-box">
-        <strong>Veterinário:</strong><br>
-        {% if current_user.name %}
-          {{ current_user.name }}<br>
-        {% endif %}
-        {% if current_user.veterinario and current_user.veterinario.crmv %}
-          CRMV: {{ current_user.veterinario.crmv }}
-        {% endif %}
-      </div>
+    {% if bloco.observacoes_gerais %}
+      <div class="section-title">Observações Gerais:</div>
+      <p>{{ bloco.observacoes_gerais }}</p>
     {% endif %}
 
-    {% if animal.name or animal.species or animal.breed or animal.sex or animal.microchip_number %}
-      <div class="info-box">
-        <strong>Animal:</strong><br>
-        {% if animal.name %}
-          Nome: {{ animal.name }}<br>
-        {% endif %}
-        {% if animal.species %}
-          Espécie: {{ animal.species }}<br>
-        {% endif %}
-        {% if animal.breed %}
-          Raça: {{ animal.breed }}<br>
-        {% endif %}
-        {% if animal.sex %}
-          Sexo: {{ animal.sex }}<br>
-        {% endif %}
-        {% if animal.microchip_number %}
-          Microchip: {{ animal.microchip_number }}
-        {% endif %}
-      </div>
-    {% endif %}
+    <div class="assinatura">
+      ___________________________________________<br>
+      <span>{{ current_user.name }}<br>CRMV: {{ current_user.veterinario.crmv if current_user.veterinario else '—' }}</span>
+    </div>
 
-    {% if tutor.name or tutor.cpf or tutor.address %}
-      <div class="info-box">
-        <strong>Tutor:</strong><br>
-        {% if tutor.name %}
-          Nome: {{ tutor.name }}<br>
-        {% endif %}
-        {% if tutor.cpf %}
-          CPF: {{ tutor.cpf }}<br>
-        {% endif %}
-        {% if tutor.address %}
-          Endereço: {{ tutor.address }}
-        {% endif %}
-      </div>
-    {% endif %}
+    <footer>
+      {{ clinica.nome }} – {{ clinica.endereco }}<br>
+      Telefone: {{ clinica.telefone }} – Email: {{ clinica.email }} – CNPJ: {{ clinica.cnpj }}
+    </footer>
   </div>
-
-  <div class="section-title">Exames Solicitados:</div>
-  <div class="exames">
-    {% for exame in bloco.exames %}
-      <div class="exame-item">
-        🧪 <strong>{{ exame.nome }}</strong><br>
-        <em>{{ exame.justificativa }}</em>
-      </div>
-    {% endfor %}
-  </div>
-
-  {% if bloco.observacoes_gerais %}
-    <div class="section-title">Observações Gerais:</div>
-    <p>{{ bloco.observacoes_gerais }}</p>
-  {% endif %}
-
-  <div class="assinatura">
-    ___________________________________________<br>
-    <span>{{ current_user.name }}<br>CRMV: {{ current_user.veterinario.crmv if current_user.veterinario else '—' }}</span>
-  </div>
-
-  <footer>
-    {{ clinica.nome }} – {{ clinica.endereco }}<br>
-    Telefone: {{ clinica.telefone }} – Email: {{ clinica.email }} – CNPJ: {{ clinica.cnpj }}
-  </footer>
 
 <script>
   const numeroWhatsApp = "{{ tutor.phone | digits_only if tutor and tutor.phone else '' }}";
