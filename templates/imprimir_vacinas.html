@@ -2,53 +2,97 @@
 <html lang="pt-br">
 <head>
   <meta charset="UTF-8">
-  <title>Vacinas de {{ animal.name }}</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Carteira de Vacinação de {{ animal.name }}</title>
   <link rel="stylesheet" href="{{ url_for('static', filename='print.css') }}">
-  <style>
-    table {
-      width: 100%;
-      border-collapse: collapse;
-    }
-    th, td {
-      border: 1px solid #000;
-      padding: 6px;
-      text-align: left;
-    }
-    .no-print {
-      margin-bottom: 1em;
-    }
-  </style>
 </head>
 <body>
-  <div class="no-print">
-    <button onclick="window.print()">🖨️ Imprimir</button>
-    <button onclick="abrirAssinatura()" style="margin-left:5px;">🔏 Assinar</button>
-    <button onclick="enviarWhatsApp()" id="btn-whatsapp" style="margin-left:5px;">📱 WhatsApp</button>
-    <a href="{{ url_for('consulta_direct', animal_id=animal.id) }}" style="margin-left:15px;">← Voltar</a>
+<div class="no-print">
+  <button onclick="window.print()">🖨️ Imprimir</button>
+  <button onclick="abrirAssinatura()">🔏 Assinar</button>
+  <button onclick="enviarWhatsApp()" id="btn-whatsapp">📱 WhatsApp</button>
+  <a href="{{ url_for('consulta_direct', animal_id=animal.id) }}">← Voltar</a>
+</div>
+
+<div class="document">
+  {% if clinica and clinica.logotipo %}
+    {% set logo_src = clinica.logotipo if clinica.logotipo.startswith('http')
+                     else url_for('static', filename='uploads/clinicas/' + clinica.logotipo) %}
+    <div class="header">
+      <img src="{{ logo_src }}" alt="Logotipo da clínica">
+      <div class="clinica-nome">{{ clinica.nome }}</div>
+      <img src="{{ logo_src }}" alt="Logotipo da clínica">
+    </div>
+  {% endif %}
+
+  <h2>Carteira de Vacinação</h2>
+
+  <div class="top-info">
+    <div class="info-box">
+      <strong>Paciente</strong><br>
+      Nome: {{ animal.name }}<br>
+      Espécie: {{ animal.species }}<br>
+      Raça: {{ animal.breed or '—' }}<br>
+      Nascimento: {{ animal.birth_date.strftime('%d/%m/%Y') if animal.birth_date else '—' }}
+    </div>
+
+    <div class="info-box">
+      <strong>Responsável</strong><br>
+      Nome: {{ animal.owner.name }}<br>
+      CPF: {{ animal.owner.cpf or '—' }}<br>
+      Telefone: {{ animal.owner.phone or '—' }}
+    </div>
+
+    <div class="info-box">
+      <strong>Clínica</strong><br>
+      {{ clinica.nome }}<br>
+      CRMV: {{ clinica.crmv or '—' }}<br>
+      Telefone: {{ clinica.telefone or '—' }}
+    </div>
   </div>
-  <div class="document">
-    <h2>Carteirinha de Vacinação</h2>
-    <table>
-      <thead>
-        <tr>
-          <th>Vacina</th>
-          <th>Tipo</th>
-          <th>Data</th>
-          <th>Observações</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for vacina in animal.vacinas|sort(attribute='data', reverse=True) %}
-        <tr>
-          <td>{{ vacina.nome }}</td>
-          <td>{{ vacina.tipo or '—' }}</td>
-          <td>{{ vacina.data.strftime('%d/%m/%Y') if vacina.data else '—' }}</td>
-          <td>{{ vacina.observacoes or '—' }}</td>
-        </tr>
-        {% endfor %}
-      </tbody>
-    </table>
+
+  <table>
+    <thead>
+      <tr>
+        <th>Data</th>
+        <th>Vacina</th>
+        <th>Tipo/Doença</th>
+        <th>Lote</th>
+        <th>Veterinário</th>
+        <th>Próxima Dose</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for vacina in animal.vacinas|sort(attribute='data', reverse=True) %}
+      <tr>
+        <td>{{ vacina.data.strftime('%d/%m/%Y') if vacina.data else '—' }}</td>
+        <td>{{ vacina.nome }}</td>
+        <td>{{ vacina.tipo or '—' }}</td>
+        <td>{{ vacina.lote or '—' }}</td>
+        <td>{{ vacina.veterinario or '—' }}</td>
+        <td>{{ vacina.proxima_dose.strftime('%d/%m/%Y') if vacina.proxima_dose else '—' }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  <div class="assinaturas">
+    <div>
+      ___________________________________________<br>
+      <span>Responsável pela Aplicação</span>
+      <span>CRMV: _________________________</span>
+    </div>
+    <div>
+      ___________________________________________<br>
+      <span>Responsável pelo Animal</span>
+    </div>
   </div>
+
+  <footer>
+    Documento válido apenas com carimbo e assinatura do médico veterinário responsável.<br>
+    {{ clinica.nome }} • {{ clinica.endereco }} • {{ clinica.telefone }} • {{ clinica.email }}
+  </footer>
+</div>
 
 <script>
   const numeroWhatsApp = "{{ animal.owner.phone | digits_only if animal.owner and animal.owner.phone else '' }}";
@@ -58,17 +102,17 @@
   }
 
   function abrirAssinatura() {
-    if (confirm('Abrir página de assinatura agora?')) {
+    if (confirm('Abrir página de assinatura digital?')) {
       window.open('https://assinador.iti.br/assinatura/index.xhtml', '_blank');
     }
   }
 
   function enviarWhatsApp() {
     if (!numeroWhatsApp) {
-      alert('Número de telefone do tutor não informado.');
+      alert('Número de telefone do responsável não informado.');
       return;
     }
-    const mensagem = encodeURIComponent('Olá {{ animal.owner.name }}! Segue o link da carteirinha de vacinação de {{ animal.name }}: ' + window.location.href + ' Qualquer dúvida, estamos à disposição. Equipe PetOrlândia.');
+    const mensagem = encodeURIComponent(`Olá {{ animal.owner.name }}! Segue a carteira de vacinação de {{ animal.name }}:\n\n${window.location.href}\n\nQualquer dúvida, estamos à disposição.\nAtenciosamente,\nEquipe {{ clinica.nome }}`);
     const url = `https://api.whatsapp.com/send?phone=${numeroWhatsApp}&text=${mensagem}`;
     try {
       const wpp = window.open(url, '_blank');

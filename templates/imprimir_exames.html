@@ -2,146 +2,112 @@
 <html lang="pt-br">
 <head>
   <meta charset="UTF-8">
-  <title>Exames de {{ animal.name }}</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Exames de {{ animal.name }} | {{ clinica.nome }}</title>
   <link rel="stylesheet" href="{{ url_for('static', filename='print.css') }}">
-  <style>
-    .top-info {
-      display: flex;
-      justify-content: space-between;
-      gap: 20px;
-      margin-bottom: 20px;
-    }
-
-    .info-box {
-      flex: 1;
-      border: 1px solid #000;
-      padding: 10px;
-      font-size: 11pt;
-      line-height: 1.4;
-    }
-
-    .exames {
-      border: 1px dashed #666;
-      padding: 15px;
-      background-color: #fdfdfd;
-      font-size: 12pt;
-      line-height: 1.6;
-      margin-bottom: 1.5em;
-    }
-
-    .exame-item {
-      margin-bottom: 12px;
-    }
-
-    .exame-item:last-child {
-      margin-bottom: 0;
-    }
-
-    .exame-item strong {
-      font-size: 13pt;
-    }
-  </style>
-
 </head>
 <body>
 
-  <!-- Botões -->
-  <div class="no-print" style="margin-bottom: 1em;">
-    <button onclick="window.print()">🖨️ Imprimir</button>
-    <button onclick="abrirAssinatura()" style="margin-left: 5px;">🔏 Assinar</button>
-    <button onclick="enviarWhatsApp()" id="btn-whatsapp" style="margin-left: 5px;">📱 WhatsApp</button>
-    <a href="{{ url_for('consulta_direct', animal_id=animal.id) }}"
-       style="margin-left: 15px;">← Voltar</a>
-  </div>
+<div class="no-print">
+  <button onclick="window.print()">🖨️ Imprimir</button>
+  <button onclick="abrirAssinatura()">🔏 Assinar</button>
+  <button onclick="enviarWhatsApp()" id="btn-whatsapp">📱 WhatsApp</button>
+  <a href="{{ url_for('consulta_direct', animal_id=animal.id) }}">← Voltar</a>
+</div>
 
-  <div class="document">
-    {% if clinica.logotipo %}
-      {% set logo_src = clinica.logotipo if clinica.logotipo.startswith('http')
-                         else url_for('static', filename='uploads/clinicas/' + clinica.logotipo) %}
-      <div class="header">
-        <img src="{{ logo_src }}" alt="Logotipo da clínica">
-        <div class="clinica-nome">{{ clinica.nome }}</div>
-        <img src="{{ logo_src }}" alt="Logotipo da clínica">
+<div class="document">
+  {% if clinica.logotipo %}
+    {% set logo_src = clinica.logotipo if clinica.logotipo.startswith('http')
+                     else url_for('static', filename='uploads/clinicas/' + clinica.logotipo) %}
+    <div class="header">
+      <img src="{{ logo_src }}" alt="Logotipo da clínica">
+      <div class="clinica-nome">{{ clinica.nome }}</div>
+      <img src="{{ logo_src }}" alt="Logotipo da clínica">
+    </div>
+  {% endif %}
+
+  <h2>Requisicao de Exames Complementares</h2>
+
+  <div class="top-info">
+    {% if current_user.name or (current_user.veterinario and current_user.veterinario.crmv) %}
+      <div class="info-box">
+        <strong>Médico Veterinário</strong><br>
+        {% if current_user.name %}
+          {{ current_user.name }}<br>
+        {% endif %}
+        {% if current_user.veterinario and current_user.veterinario.crmv %}
+          CRMV: {{ current_user.veterinario.crmv }}
+        {% endif %}
       </div>
     {% endif %}
 
-    <h2>Solicitação de Exames</h2>
-
-    <div class="top-info">
-      {% if current_user.name or (current_user.veterinario and current_user.veterinario.crmv) %}
-        <div class="info-box">
-          <strong>Veterinário:</strong><br>
-          {% if current_user.name %}
-            {{ current_user.name }}<br>
-          {% endif %}
-          {% if current_user.veterinario and current_user.veterinario.crmv %}
-            CRMV: {{ current_user.veterinario.crmv }}
-          {% endif %}
-        </div>
-      {% endif %}
-
-      {% if animal.name or animal.species or animal.breed or animal.sex or animal.microchip_number %}
-        <div class="info-box">
-          <strong>Animal:</strong><br>
-          {% if animal.name %}
-            Nome: {{ animal.name }}<br>
-          {% endif %}
-          {% if animal.species %}
-            Espécie: {{ animal.species }}<br>
-          {% endif %}
-          {% if animal.breed %}
-            Raça: {{ animal.breed }}<br>
-          {% endif %}
-          {% if animal.sex %}
-            Sexo: {{ animal.sex }}<br>
-          {% endif %}
-          {% if animal.microchip_number %}
-            Microchip: {{ animal.microchip_number }}
-          {% endif %}
-        </div>
-      {% endif %}
-
-      {% if tutor.name or tutor.cpf or tutor.address %}
-        <div class="info-box">
-          <strong>Tutor:</strong><br>
-          {% if tutor.name %}
-            Nome: {{ tutor.name }}<br>
-          {% endif %}
-          {% if tutor.cpf %}
-            CPF: {{ tutor.cpf }}<br>
-          {% endif %}
-          {% if tutor.address %}
-            Endereço: {{ tutor.address }}
-          {% endif %}
-        </div>
-      {% endif %}
-    </div>
-
-    <div class="section-title">Exames Solicitados:</div>
-    <div class="exames">
-      {% for exame in bloco.exames %}
-        <div class="exame-item">
-          🧪 <strong>{{ exame.nome }}</strong><br>
-          <em>{{ exame.justificativa }}</em>
-        </div>
-      {% endfor %}
-    </div>
-
-    {% if bloco.observacoes_gerais %}
-      <div class="section-title">Observações Gerais:</div>
-      <p>{{ bloco.observacoes_gerais }}</p>
+    {% if animal.name or animal.species or animal.breed or animal.sex or animal.microchip_number %}
+      <div class="info-box">
+        <strong>Paciente</strong><br>
+        {% if animal.name %}
+          Nome: {{ animal.name }}<br>
+        {% endif %}
+        {% if animal.species %}
+          Espécie: {{ animal.species }}<br>
+        {% endif %}
+        {% if animal.breed %}
+          Raça: {{ animal.breed }}<br>
+        {% endif %}
+        {% if animal.sex %}
+          Sexo: {{ animal.sex }}<br>
+        {% endif %}
+        {% if animal.microchip_number %}
+          Microchip: {{ animal.microchip_number }}
+        {% endif %}
+      </div>
     {% endif %}
 
-    <div class="assinatura">
-      ___________________________________________<br>
-      <span>{{ current_user.name }}<br>CRMV: {{ current_user.veterinario.crmv if current_user.veterinario else '—' }}</span>
-    </div>
-
-    <footer>
-      {{ clinica.nome }} – {{ clinica.endereco }}<br>
-      Telefone: {{ clinica.telefone }} – Email: {{ clinica.email }} – CNPJ: {{ clinica.cnpj }}
-    </footer>
+    {% if tutor.name or tutor.cpf or tutor.address %}
+      <div class="info-box">
+        <strong>Responsável</strong><br>
+        {% if tutor.name %}
+          Nome: {{ tutor.name }}<br>
+        {% endif %}
+        {% if tutor.cpf %}
+          CPF: {{ tutor.cpf }}<br>
+        {% endif %}
+        {% if tutor.address %}
+          Endereço: {{ tutor.address }}
+        {% endif %}
+      </div>
+    {% endif %}
   </div>
+
+  <div class="section-title">Exames Solicitados</div>
+  <div class="exames">
+    {% for exame in bloco.exames %}
+      <div class="exame-item">
+        <strong>{{ exame.nome }}</strong><br>
+        <em style="color: #555;">{{ exame.justificativa }}</em>
+      </div>
+    {% endfor %}
+  </div>
+
+  {% if bloco.observacoes_gerais %}
+    <div class="section-title">Observações</div>
+    <div style="background-color: #f9f9f9; padding: 15px; border-radius: 4px; line-height: 1.6;">
+      {{ bloco.observacoes_gerais }}
+    </div>
+  {% endif %}
+
+  <div class="assinatura">
+    ___________________________________________<br>
+    <span>{{ current_user.name }}</span>
+    <span>CRMV: {{ current_user.veterinario.crmv if current_user.veterinario else '—' }}</span>
+  </div>
+
+  <footer>
+    {{ clinica.nome }} – {{ clinica.endereco }}<br>
+    {% if clinica.telefone %}Telefone: {{ clinica.telefone }} • {% endif %}
+    {% if clinica.email %}Email: {{ clinica.email }} • {% endif %}
+    {% if clinica.cnpj %}CNPJ: {{ clinica.cnpj }}{% endif %}
+  </footer>
+</div>
 
 <script>
   const numeroWhatsApp = "{{ tutor.phone | digits_only if tutor and tutor.phone else '' }}";
@@ -151,17 +117,17 @@
   }
 
   function abrirAssinatura() {
-    if (confirm('Abrir página de assinatura agora?')) {
+    if (confirm('Abrir página de assinatura digital?')) {
       window.open('https://assinador.iti.br/assinatura/index.xhtml', '_blank');
     }
   }
 
   function enviarWhatsApp() {
     if (!numeroWhatsApp) {
-      alert('Número de telefone do tutor não informado.');
+      alert('Número de telefone do responsável não informado.');
       return;
     }
-    const mensagem = encodeURIComponent('Olá {{ tutor.name }}! Segue a solicitação de exames de {{ animal.name }}: ' + window.location.href + ' Qualquer dúvida, estamos à disposição. Equipe PetOrlândia.');
+    const mensagem = encodeURIComponent(`Olá {{ tutor.name }}! Segue a requisição de exames para {{ animal.name }}:\n\n${window.location.href}\n\nQualquer dúvida, estamos à disposição.\nAtenciosamente,\nEquipe {{ clinica.nome }}`);
     const url = `https://api.whatsapp.com/send?phone=${numeroWhatsApp}&text=${mensagem}`;
     try {
       const wpp = window.open(url, '_blank');
@@ -174,7 +140,5 @@
     }
   }
 </script>
-
 </body>
-
 </html>

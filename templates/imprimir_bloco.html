@@ -2,74 +2,25 @@
 <html lang="pt-br">
 <head>
   <meta charset="UTF-8">
-  <title>Receita de {{ bloco.animal.name }}</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Receita de {{ bloco.animal.name }} | {{ clinica.nome }}</title>
   <link rel="stylesheet" href="{{ url_for('static', filename='print.css') }}">
-  <style>
-    .assinaturas {
-      display: flex;
-      justify-content: space-between;
-      margin-top: 80px;
-      gap: 40px;
-    }
-
-    .assinaturas > div {
-      flex: 1;
-      text-align: center;
-    }
-
-    .top-info {
-      display: flex;
-      justify-content: space-between;
-      gap: 20px;
-      margin-bottom: 20px;
-    }
-
-    .info-box {
-      flex: 1;
-      border: 1px solid #000;
-      padding: 10px;
-      font-size: 11pt;
-      line-height: 1.4;
-    }
-
-    .prescricao {
-      border: 1px dashed #666;
-      padding: 15px;
-      background-color: #fdfdfd;
-      font-size: 12pt;
-      line-height: 1.6;
-      margin-bottom: 1.5em;
-    }
-
-    .prescricao-item {
-      margin-bottom: 12px;
-    }
-
-    .prescricao-item:last-child {
-      margin-bottom: 0;
-    }
-
-    .prescricao-item strong {
-      font-size: 13pt;
-    }
-  </style>
 </head>
 <body>
 
-<!-- Botões -->
-<div class="no-print" style="margin-bottom: 1em;">
+<!-- Botões de Ação -->
+<div class="no-print">
   <button onclick="window.print()">🖨️ Imprimir</button>
-  <button onclick="abrirAssinatura()" style="margin-left: 5px;">🔏 Assinar</button>
-  <button onclick="enviarWhatsApp()" id="btn-whatsapp" style="margin-left: 5px;">📱 WhatsApp</button>
-  <a href="{{ url_for('consulta_direct', animal_id=animal.id) }}"
-       style="margin-left: 15px;">← Voltar</a>
+  <button onclick="abrirAssinatura()">🔏 Assinar</button>
+  <button onclick="enviarWhatsApp()" id="btn-whatsapp">📱 WhatsApp</button>
+  <a href="{{ url_for('consulta_direct', animal_id=animal.id) }}">← Voltar</a>
 </div>
 
 <div class="document">
   <!-- Cabeçalho com logo -->
   {% if clinica.logotipo %}
     {% set logo_src = clinica.logotipo if clinica.logotipo.startswith('http')
-                       else url_for('static', filename='uploads/clinicas/' + clinica.logotipo) %}
+                     else url_for('static', filename='uploads/clinicas/' + clinica.logotipo) %}
     <div class="header">
       <img src="{{ logo_src }}" alt="Logotipo da clínica">
       <div class="clinica-nome">{{ clinica.nome }}</div>
@@ -82,13 +33,13 @@
   <!-- Informações -->
   <div class="top-info">
     <div class="info-box">
-      <strong>Veterinário:</strong><br>
+      <strong>Veterinário Responsável</strong><br>
       {{ current_user.name }}<br>
       CRMV: {{ current_user.veterinario.crmv if current_user.veterinario else '—' }}
     </div>
 
     <div class="info-box">
-      <strong>Animal:</strong><br>
+      <strong>Paciente Animal</strong><br>
       Nome: {{ bloco.animal.name }}<br>
       Espécie: {{ bloco.animal.species }}<br>
       {% if bloco.animal.breed %}Raça: {{ bloco.animal.breed }}<br>{% endif %}
@@ -98,7 +49,7 @@
     </div>
 
     <div class="info-box">
-      <strong>Tutor:</strong><br>
+      <strong>Responsável Legal</strong><br>
       Nome: {{ bloco.animal.owner.name }}<br>
       {% if bloco.animal.owner.cpf %}CPF: {{ bloco.animal.owner.cpf }}<br>{% endif %}
       {% if bloco.animal.owner.address %}Endereço: {{ bloco.animal.owner.address }}{% endif %}
@@ -106,41 +57,44 @@
   </div>
 
   <!-- Prescrições -->
-  <div class="section-title">Prescrição:</div>
+  <div class="section-title">Prescrição Médico-Veterinária</div>
   <div class="prescricao">
     {% for item in bloco.prescricoes %}
       <div class="prescricao-item">
-        <strong>• {{ item.medicamento }}</strong>
-        —
-        {% if item.dosagem or item.frequencia or item.duracao %}
-          {{ item.dosagem or '' }}{{ ', ' if item.dosagem and item.frequencia }}{{ item.frequencia or '' }}{{ ', por ' + item.duracao if item.duracao else '' }}
-        {% elif item.observacoes %}
-          {{ item.observacoes }}
-        {% endif %}
+        <strong>{{ item.medicamento }}</strong><br>
+        <span style="color: #555;">
+          {% if item.dosagem or item.frequencia or item.duracao %}
+            {{ item.dosagem or '' }}{{ ', ' if item.dosagem and item.frequencia }}{{ item.frequencia or '' }}{{ ', por ' + item.duracao if item.duracao else '' }}
+          {% elif item.observacoes %}
+            {{ item.observacoes }}
+          {% endif %}
+        </span>
       </div>
     {% endfor %}
   </div>
 
   <!-- Instruções Gerais -->
   {% if bloco.instrucoes_gerais %}
-    <div class="section-title">Instruções Gerais:</div>
-    <p>{{ bloco.instrucoes_gerais }}</p>
+    <div class="section-title">Orientações e Cuidados</div>
+    <div style="background-color: #f9f9f9; padding: 15px; border-radius: 4px; line-height: 1.6;">
+      {{ bloco.instrucoes_gerais }}
+    </div>
   {% endif %}
 
   <!-- Assinatura -->
   <div class="assinaturas">
     <div>
       ___________________________________________<br>
-      {{ current_user.name }}<br>
-      CRMV: {{ current_user.veterinario.crmv if current_user.veterinario else '—' }}
+      <span>{{ current_user.name }}</span>
+      <span>CRMV: {{ current_user.veterinario.crmv if current_user.veterinario else '—' }}</span>
     </div>
   </div>
 
   <!-- Rodapé -->
   <footer>
     {{ clinica.nome }} – {{ clinica.endereco }}<br>
-    {% if clinica.telefone %}Telefone: {{ clinica.telefone }} – {% endif %}
-    {% if clinica.email %}Email: {{ clinica.email }} – {% endif %}
+    {% if clinica.telefone %}Telefone: {{ clinica.telefone }} • {% endif %}
+    {% if clinica.email %}Email: {{ clinica.email }} • {% endif %}
     {% if clinica.cnpj %}CNPJ: {{ clinica.cnpj }}{% endif %}
   </footer>
 </div>
@@ -153,17 +107,17 @@
   }
 
   function abrirAssinatura() {
-    if (confirm('Abrir página de assinatura agora?')) {
+    if (confirm('Abrir página de assinatura digital?')) {
       window.open('https://assinador.iti.br/assinatura/index.xhtml', '_blank');
     }
   }
 
   function enviarWhatsApp() {
     if (!numeroWhatsApp) {
-      alert('Número de telefone do tutor não informado.');
+      alert('Número de telefone do responsável não informado.');
       return;
     }
-    const mensagem = encodeURIComponent('Olá {{ bloco.animal.owner.name }}! Segue o link da prescrição de {{ bloco.animal.name }}: ' + window.location.href + ' Qualquer dúvida, estamos à disposição. Equipe PetOrlândia.');
+    const mensagem = encodeURIComponent(`Olá {{ bloco.animal.owner.name }}! Segue a receita veterinária de {{ bloco.animal.name }}:\n\n${window.location.href}\n\nQualquer dúvida, estamos à disposição.\nAtenciosamente,\nEquipe {{ clinica.nome }}`);
     const url = `https://api.whatsapp.com/send?phone=${numeroWhatsApp}&text=${mensagem}`;
     try {
       const wpp = window.open(url, '_blank');
