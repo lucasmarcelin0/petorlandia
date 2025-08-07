@@ -73,7 +73,7 @@
     <div class="col-md-6">
       <label for="animal-peso" class="form-label">Peso (kg)</label>
       <input id="animal-peso" type="number" name="peso" class="form-control" 
-             step="0.01" min="0.1" max="200" value="{{ animal.peso or '' }}">
+             step="0.01" min="0.1" max="200" value="{{ '' if animal.peso is none else animal.peso }}">
       <div class="invalid-feedback">Por favor, insira um peso válido (0.1-200 kg).</div>
     </div>
 
