@@ -2826,7 +2826,12 @@ def atualizar_bloco_exames(bloco_id):
             db.session.delete(ex)
 
     db.session.commit()
-    return jsonify(success=True)
+
+    historico_html = render_template(
+        'partials/historico_exames.html',
+        animal=bloco.animal
+    )
+    return jsonify(success=True, html=historico_html)
 
 
 

@@ -209,21 +209,19 @@ function salvarBlocoExames(blocoId, consultaId) {
 
   fetch(`/bloco_exames/${blocoId}/atualizar`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
     body: JSON.stringify({ exames, observacoes_gerais })
   })
   .then(async res => {
-    if (res.ok) {
-      const data = await res.json();
-      if (data.success) {
-        alert('Bloco de exames salvo!');
-        location.reload();
-      } else {
-        alert('Erro ao salvar.');
+    const data = await res.json();
+    if (res.ok && data.success) {
+      alert('Bloco de exames salvo!');
+      if (data.html) {
+        document.getElementById('historico-exames').innerHTML = data.html;
       }
     } else {
-      const errorMessage = await res.text();
-      alert(errorMessage || 'Erro desconhecido ao salvar.');
+      const msg = data && data.message ? data.message : 'Erro ao salvar.';
+      alert(msg);
     }
   })
   .catch(err => {
