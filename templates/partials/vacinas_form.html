@@ -40,7 +40,7 @@
     </div>
 
     <!-- Finalizar -->
-    <button type="button" class="btn btn-primary mt-2" onclick="finalizarBlocoVacinas()">💾 Finalizar Aplicações</button>
+    <button type="button" class="btn btn-primary mt-2" id="btn-finalizar-vacinas" onclick="finalizarBlocoVacinas()">💾 Finalizar Aplicações</button>
   </form>
 
   <!-- Histórico -->
@@ -152,6 +152,10 @@
         mostrarFeedback('Adicione pelo menos uma vacina.', 'warning');
         return;
       }
+      const btn = document.getElementById('btn-finalizar-vacinas');
+      const originalHTML = btn.innerHTML;
+      btn.disabled = true;
+      btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2" role="status"></span>Salvando...';
 
       const resp = await fetchOrQueue(`/animal/{{ animal.id }}/vacinas`, {
         method: 'POST',
@@ -176,5 +180,8 @@
       } else {
         mostrarFeedback('Vacinas salvas offline e serão enviadas quando possível.', 'info');
       }
+
+      btn.disabled = false;
+      btn.innerHTML = originalHTML;
     }
   </script>

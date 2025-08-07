@@ -252,6 +252,10 @@
       mostrarFeedback('Adicione pelo menos um medicamento.', 'warning');
       return;
     }
+    const btn = document.getElementById('btn-finalizar');
+    const originalHTML = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2" role="status"></span>Salvando...';
 
     try {
       const instrucoes = document.getElementById('instrucoes-medicamentos')?.value || '';
@@ -280,6 +284,9 @@
     } catch (err) {
       console.error('Erro:', err);
       mostrarFeedback(err.message || 'Erro ao salvar prescrição', 'danger');
+    } finally {
+      btn.disabled = false;
+      btn.innerHTML = originalHTML;
     }
   }
 
