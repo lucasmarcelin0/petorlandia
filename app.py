@@ -2395,7 +2395,14 @@ def salvar_vacinas(animal_id):
 @app.route("/animal/<int:animal_id>/vacinas/imprimir")
 def imprimir_vacinas(animal_id):
     animal = Animal.query.get_or_404(animal_id)
-    return render_template("imprimir_vacinas.html", animal=animal)
+    clinica = None
+    if current_user.is_authenticated:
+        vet = getattr(current_user, "veterinario", None)
+        if vet and vet.clinica:
+            clinica = vet.clinica
+    if not clinica:
+        clinica = getattr(animal, "clinica", None) or Clinica.query.first()
+    return render_template("imprimir_vacinas.html", animal=animal, clinica=clinica)
 
 
 @app.route("/vacina/<int:vacina_id>/deletar", methods=["POST"])
