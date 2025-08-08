@@ -1,50 +1,59 @@
 {% extends 'layout.html' %}
 
 {% block main %}
+<!-- No seu template base (head) -->
+<link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" rel="stylesheet">
+
 <div class="container py-4">
   <!-- Cabeçalho minimalista -->
   <div class="d-flex justify-content-between align-items-center mb-4 border-bottom pb-3">
     <div>
       {% if animal %}
-        <h2 class="h4 mb-0 text-dark" id="animal-name">{{ animal.name }}</h2>
+        <h2 class="h4 mb-0 text-dark fw-bold" id="animal-name">
+          <i class="fa-solid fa-paw text-primary me-2"></i>{{ animal.name }}
+        </h2>
         <small class="text-muted">Prontuário</small>
       {% elif tutor %}
-        <h2 class="h4 mb-0 text-dark">Novo Atendimento</h2>
+        <h2 class="h4 mb-0 text-dark fw-bold">
+          <i class="fa-solid fa-user text-primary me-2"></i>Novo Atendimento
+        </h2>
         <small class="text-muted" id="tutor-name">{{ tutor.name }}</small>
       {% else %}
-        <h2 class="h4 mb-0 text-dark">Novo Atendimento Veterinário</h2>
+        <h2 class="h4 mb-0 text-dark fw-bold">
+          <i class="fa-solid fa-hospital-user text-primary me-2"></i>Novo Atendimento Veterinário
+        </h2>
       {% endif %}
     </div>
 
     {% if animal %}
-      <div class="animal-photo">
+      <div class="animal-photo shadow-sm rounded-circle border border-2 border-primary">
         {% if animal.photo %}
-          <img src="{{ animal.photo.url }}" alt="{{ animal.name }}" class="rounded-circle border" width="48" height="48">
+          <img src="{{ animal.photo.url }}" alt="{{ animal.name }}" class="rounded-circle" width="56" height="56">
         {% else %}
-          <div class="no-photo-placeholder rounded-circle bg-light d-flex align-items-center justify-content-center border" style="width: 48px; height: 48px;">
-            <i class="bi bi-camera text-muted"></i>
+          <div class="no-photo-placeholder rounded-circle bg-light d-flex align-items-center justify-content-center" style="width: 56px; height: 56px;">
+            <i class="fa-solid fa-camera text-muted"></i>
           </div>
         {% endif %}
       </div>
     {% endif %}
   </div>
 
-<ul class="nav nav-tabs mb-4 rounded shadow-sm bg-white" id="consultaTabs" role="tablist">
+<ul class="nav nav-tabs mb-4 rounded shadow-sm bg-white pet-nav" id="consultaTabs" role="tablist">
   <li class="nav-item" role="presentation">
     <button class="nav-link active d-flex align-items-center gap-2" id="tutor-tab" data-bs-toggle="tab" data-bs-target="#tutor-info" type="button" role="tab">
-      <span class="icon-circle bg-primary text-white"><i class="bi bi-person-fill"></i></span>
+      <span class="icon-circle bg-primary text-white"><i class="fa-solid fa-user"></i></span>
       <span class="fw-semibold">Tutor</span>
     </button>
   </li>
   <li class="nav-item" role="presentation">
     <button class="nav-link d-flex align-items-center gap-2" id="animal-tab" data-bs-toggle="tab" data-bs-target="#animal-info" type="button" role="tab">
-      <span class="icon-circle bg-danger text-white"><i class="bi bi-heart-pulse-fill"></i></span>
+      <span class="icon-circle bg-danger text-white"><i class="fa-solid fa-dog"></i></span>
       <span class="fw-semibold">Animal</span>
     </button>
   </li>
   <li class="nav-item" role="presentation">
     <button class="nav-link d-flex align-items-center gap-2" id="racao-tab" data-bs-toggle="tab" data-bs-target="#racoes" type="button" role="tab" {% if not animal %}disabled title="Cadastre um animal primeiro"{% endif %}>
-      <span class="icon-circle bg-success text-white"><i class="bi bi-basket-fill"></i></span>
+      <span class="icon-circle bg-success text-white"><i class="fa-solid fa-bowl-food"></i></span>
       <span class="fw-semibold">Ração</span>
     </button>
   </li>
@@ -52,164 +61,176 @@
   {% if animal and worker == 'veterinario' %}
     <li class="nav-item" role="presentation">
       <button class="nav-link d-flex align-items-center gap-2" id="consulta-tab" data-bs-toggle="tab" data-bs-target="#consulta-info" type="button" role="tab">
-        <span class="icon-circle bg-info text-white"><i class="bi bi-clipboard2-pulse-fill"></i></span>
+        <span class="icon-circle bg-info text-white"><i class="fa-solid fa-stethoscope"></i></span>
         <span class="fw-semibold">Consulta</span>
       </button>
     </li>
     <li class="nav-item" role="presentation">
       <button class="nav-link d-flex align-items-center gap-2" id="medicamentos-tab" data-bs-toggle="tab" data-bs-target="#medicamentos" type="button" role="tab">
-        <span class="icon-circle bg-warning text-dark"><i class="bi bi-capsule-pill"></i></span>
+        <span class="icon-circle bg-warning text-dark"><i class="fa-solid fa-pills"></i></span>
         <span class="fw-semibold">Medicamentos</span>
       </button>
     </li>
     <li class="nav-item" role="presentation">
       <button class="nav-link d-flex align-items-center gap-2" id="exames-tab" data-bs-toggle="tab" data-bs-target="#exames" type="button" role="tab">
-        <span class="icon-circle" style="background-color: #6f42c1; color: #fff;"><i class="bi bi-droplet-fill"></i></span>
+        <span class="icon-circle" style="background-color: #6f42c1; color: #fff;"><i class="fa-solid fa-x-ray"></i></span>
         <span class="fw-semibold">Exames</span>
       </button>
     </li>
     <li class="nav-item" role="presentation">
       <button class="nav-link d-flex align-items-center gap-2" id="vacinas-tab" data-bs-toggle="tab" data-bs-target="#vacinas" type="button" role="tab">
-        <span class="icon-circle" style="background-color: #20c997; color: #fff;"><i class="bi bi-shield-plus"></i></span>
+        <span class="icon-circle" style="background-color: #20c997; color: #fff;"><i class="fa-solid fa-syringe"></i></span>
         <span class="fw-semibold">Vacinas</span>
       </button>
     </li>
   {% endif %}
 </ul>
 
-
-
-
-
-  <!-- Conteúdo das abas -->
-  <div class="tab-content">
-    <div class="tab-pane fade show active" id="tutor-info" role="tabpanel">
-      <div class="card shadow-sm">
-        <div class="card-body">
-          {% include 'partials/tutor_form.html' with context %}
-        </div>
+<!-- Conteúdo das abas -->
+<div class="tab-content">
+  <div class="tab-pane fade show active" id="tutor-info" role="tabpanel">
+    <div class="card shadow-sm">
+      <div class="card-body">
+        {% include 'partials/tutor_form.html' with context %}
       </div>
     </div>
-
-    <div class="tab-pane fade" id="animal-info" role="tabpanel">
-      <div class="card shadow-sm">
-        <div class="card-body">
-          {% if animal or tutor %}
-            {% include 'partials/animal_form.html' with context %}
-          {% else %}
-            <div class="alert alert-warning">
-              <i class="bi bi-exclamation-triangle-fill me-2"></i>
-              Cadastre um tutor antes de registrar o animal.
-            </div>
-          {% endif %}
-        </div>
-      </div>
-    </div>
-
-    <div class="tab-pane fade" id="racoes" role="tabpanel">
-      <div class="card shadow-sm">
-        <div class="card-body">
-          {% if animal %}
-            {% include 'partials/food_form.html' with context %}
-          {% else %}
-            <div class="alert alert-warning">
-              <i class="bi bi-exclamation-triangle-fill me-2"></i>
-              Cadastre um tutor e um animal antes de registrar a ração.
-            </div>
-          {% endif %}
-        </div>
-      </div>
-    </div>
-
-    {% if animal and worker == 'veterinario' %}
-      <div class="tab-pane fade" id="consulta-info" role="tabpanel">
-        <div class="card shadow-sm">
-          <div class="card-body">
-            {% include 'partials/consulta_form.html' %}
-            <div id="historico-consultas">
-              {% include 'partials/historico_consultas.html' %}
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div class="tab-pane fade" id="medicamentos" role="tabpanel">
-        <div class="card shadow-sm">
-          <div class="card-body">
-            {% include 'partials/prescricao_form.html' %}
-          </div>
-        </div>
-      </div>
-
-      <div class="tab-pane fade" id="exames" role="tabpanel">
-        <div class="card shadow-sm">
-          <div class="card-body">
-            {% include 'partials/exames_form.html' %}
-          </div>
-        </div>
-      </div>
-
-      <div class="tab-pane fade" id="vacinas" role="tabpanel">
-        <div class="card shadow-sm">
-          <div class="card-body">
-            {% include 'partials/vacinas_form.html' %}
-          </div>
-        </div>
-      </div>
-    {% endif %}
   </div>
 
-  <!-- Info extra se só houver tutor -->
-  {% if tutor and not animal %}
-    <div class="alert alert-info mt-4 d-flex align-items-center">
-      <i class="bi bi-info-circle-fill me-2 fs-5"></i>
-      <div>
-        Nenhum animal cadastrado ainda para <strong>{{ tutor.name }}</strong>. 
-        <a href="#" class="alert-link" onclick="document.getElementById('animal-tab').click()">
-          Clique aqui para adicionar um animal.
-        </a>
+  <div class="tab-pane fade" id="animal-info" role="tabpanel">
+    <div class="card shadow-sm">
+      <div class="card-body">
+        {% if animal or tutor %}
+          {% include 'partials/animal_form.html' with context %}
+        {% else %}
+          <div class="alert alert-warning">
+            <i class="fa-solid fa-triangle-exclamation me-2"></i>
+            Cadastre um tutor antes de registrar o animal.
+          </div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  <div class="tab-pane fade" id="racoes" role="tabpanel">
+    <div class="card shadow-sm">
+      <div class="card-body">
+        {% if animal %}
+          {% include 'partials/food_form.html' with context %}
+        {% else %}
+          <div class="alert alert-warning">
+            <i class="fa-solid fa-triangle-exclamation me-2"></i>
+            Cadastre um tutor e um animal antes de registrar a ração.
+          </div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  {% if animal and worker == 'veterinario' %}
+    <div class="tab-pane fade" id="consulta-info" role="tabpanel">
+      <div class="card shadow-sm">
+        <div class="card-body">
+          {% include 'partials/consulta_form.html' %}
+          <div id="historico-consultas">
+            {% include 'partials/historico_consultas.html' %}
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="tab-pane fade" id="medicamentos" role="tabpanel">
+      <div class="card shadow-sm">
+        <div class="card-body">
+          {% include 'partials/prescricao_form.html' %}
+        </div>
+      </div>
+    </div>
+
+    <div class="tab-pane fade" id="exames" role="tabpanel">
+      <div class="card shadow-sm">
+        <div class="card-body">
+          {% include 'partials/exames_form.html' %}
+        </div>
+      </div>
+    </div>
+
+    <div class="tab-pane fade" id="vacinas" role="tabpanel">
+      <div class="card shadow-sm">
+        <div class="card-body">
+          {% include 'partials/vacinas_form.html' %}
+        </div>
       </div>
     </div>
   {% endif %}
 </div>
 
-
+<!-- Info extra se só houver tutor -->
+{% if tutor and not animal %}
+  <div class="alert alert-info mt-4 d-flex align-items-center">
+    <i class="fa-solid fa-circle-info me-2 fs-5"></i>
+    <div>
+      Nenhum animal cadastrado ainda para <strong>{{ tutor.name }}</strong>. 
+      <a href="#" class="alert-link" onclick="document.getElementById('animal-tab').click()">
+        Clique aqui para adicionar um animal.
+      </a>
+    </div>
+  </div>
+{% endif %}
 
 <style>
   .icon-circle {
-    width: 1.75rem;
-    height: 1.75rem;
+    width: 2rem;
+    height: 2rem;
     border-radius: 50%;
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    font-size: 1rem;
-  }
-
-  .nav-tabs .nav-link {
-    transition: background-color 0.2s ease, color 0.2s ease;
-  }
-
-  .nav-tabs .nav-link:hover:not(.disabled) {
-    background-color: #f8f9fa;
-  }
-
-  .nav-tabs .nav-link.active {
-    font-weight: 600;
+    font-size: 1.1rem;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.15);
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
   }
 
   .nav-link:hover .icon-circle {
-    transform: scale(1.1);
-    transition: transform 0.2s ease;
+    transform: scale(1.15);
+    box-shadow: 0 3px 8px rgba(0,0,0,0.25);
   }
 
-  .nav-link.tab-saved-highlight {
-    animation: tabHighlight 2s ease-in-out;
+  .pet-nav .nav-link {
+    border-radius: 8px 8px 0 0;
+    padding: 0.6rem 1rem;
+    background-color: #fff;
+    border: none;
+    transition: background-color 0.25s ease, color 0.25s ease;
   }
 
-  @keyframes tabHighlight {
-    from { background-color: #d1e7dd; }
-    to { background-color: transparent; }
+  .pet-nav .nav-link.active {
+    background: linear-gradient(90deg, #ffecd2, #fcb69f);
+    border-bottom: 3px solid #ff9800;
+    font-weight: 600;
+    color: #000;
+  }
+
+  .pet-nav .nav-link:not(.active):hover {
+    background-color: #f8f9fa;
+  }
+
+  .card.shadow-sm {
+    border-radius: 12px;
+    border: none;
+    box-shadow: 0 3px 12px rgba(0,0,0,0.08);
+  }
+
+  .card-body {
+    padding: 1.25rem;
+  }
+
+  .alert {
+    border-radius: 10px;
+    padding: 0.85rem 1.1rem;
+  }
+
+  .alert i {
+    font-size: 1.3rem;
   }
 </style>
 
