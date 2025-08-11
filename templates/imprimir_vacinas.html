@@ -63,7 +63,7 @@
       </tr>
     </thead>
     <tbody>
-      {% for vacina in animal.vacinas|sort(attribute='data', reverse=True) %}
+      {% for vacina in animal.vacinas_ordenadas %}
       <tr>
         <td>{{ vacina.data.strftime('%d/%m/%Y') if vacina.data else '—' }}</td>
         <td>{{ vacina.nome }}</td>
