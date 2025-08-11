@@ -1597,7 +1597,14 @@ def clinic_hours(clinica_id):
 @app.route('/admin/clinica/<int:clinica_id>/horarios', methods=['GET', 'POST'])
 @login_required
 def edit_clinic_hours(clinica_id):
-    if not _is_admin():
+    if not (
+        _is_admin()
+        or (
+            current_user.worker == 'veterinario'
+            and getattr(current_user, 'veterinario', None)
+            and current_user.veterinario.clinica_id == clinica_id
+        )
+    ):
         abort(403)
     clinica = Clinica.query.get_or_404(clinica_id)
     form = ClinicHoursForm()
@@ -1635,7 +1642,14 @@ def vet_schedule(veterinario_id):
 @app.route('/admin/veterinario/<int:veterinario_id>/agenda', methods=['GET', 'POST'])
 @login_required
 def edit_vet_schedule(veterinario_id):
-    if not _is_admin():
+    if not (
+        _is_admin()
+        or (
+            current_user.worker == 'veterinario'
+            and getattr(current_user, 'veterinario', None)
+            and current_user.veterinario.id == veterinario_id
+        )
+    ):
         abort(403)
     veterinario = Veterinario.query.get_or_404(veterinario_id)
     form = VetScheduleForm()
