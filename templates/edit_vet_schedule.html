@@ -1,0 +1,36 @@
+{% extends "layout.html" %}
+
+{% block main %}
+<div class="container mt-4">
+  <h2>Editar Agenda – {{ veterinario.user.name }}</h2>
+  <form method="post" class="mb-4">
+    {{ form.hidden_tag() }}
+    <div class="mb-3">
+      {{ form.veterinario_id.label }}
+      {{ form.veterinario_id(class="form-select") }}
+    </div>
+    <div class="mb-3">
+      {{ form.dia_semana.label }}
+      {{ form.dia_semana(class="form-select") }}
+    </div>
+    <div class="mb-3">
+      {{ form.hora_inicio.label }}
+      {{ form.hora_inicio(class="form-control") }}
+    </div>
+    <div class="mb-3">
+      {{ form.hora_fim.label }}
+      {{ form.hora_fim(class="form-control") }}
+    </div>
+    {{ form.submit(class="btn btn-primary") }}
+  </form>
+
+  <h3>Horários Cadastrados</h3>
+  <ul class="list-unstyled">
+    {% for h in horarios %}
+      <li>{{ h.dia_semana }}: {{ h.hora_inicio.strftime('%H:%M') }} - {{ h.hora_fim.strftime('%H:%M') }}</li>
+    {% else %}
+      <li>Nenhum horário cadastrado.</li>
+    {% endfor %}
+  </ul>
+</div>
+{% endblock %}
