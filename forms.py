@@ -10,6 +10,7 @@ from wtforms import (
     DecimalField,
     IntegerField,
     DateField,
+    DateTimeField,
     TimeField,
 )
 from wtforms.validators import DataRequired, Email, EqualTo, Length, Optional
@@ -212,6 +213,15 @@ class ChangePasswordForm(FlaskForm):
 class DeleteAccountForm(FlaskForm):
     submit = SubmitField('Excluir Conta')
 
+class AppointmentForm(FlaskForm):
+    veterinario_id = SelectField('Veterinário', coerce=int, validators=[DataRequired()])
+    scheduled_at = DateTimeField('Data e Hora', format='%Y-%m-%d %H:%M', validators=[DataRequired()])
+    description = TextAreaField('Descrição', validators=[Optional()])
+    submit = SubmitField('Agendar')
+
+
+class AppointmentDeleteForm(FlaskForm):
+    submit = SubmitField('Excluir')
 
 
 class MessageForm(FlaskForm):

@@ -170,7 +170,8 @@ from forms import (
     ResetPasswordRequestForm, ResetPasswordForm, OrderItemForm,
     DeliveryRequestForm, AddToCartForm, SubscribePlanForm,
     ProductUpdateForm, ProductPhotoForm, ChangePasswordForm,
-    DeleteAccountForm, ClinicHoursForm, VetScheduleForm
+    DeleteAccountForm, ClinicHoursForm, VetScheduleForm,
+    AppointmentForm, AppointmentDeleteForm
 )
 from helpers import calcular_idade, parse_data_nascimento
 
@@ -4977,6 +4978,61 @@ def pedido_detail(order_id):
 
 
 
+
+@app.route('/appointments/new', methods=['GET', 'POST'])
+@login_required
+def schedule_appointment():
+    form = AppointmentForm()
+    form.veterinario_id.choices = [
+        (v.id, v.user.name) for v in Veterinario.query.order_by(Veterinario.id).all()
+    ]
+    if form.validate_on_submit():
+        appt = Appointment(
+            tutor_id=current_user.id,
+            veterinario_id=form.veterinario_id.data,
+            scheduled_at=form.scheduled_at.data,
+            description=form.description.data,
+        )
+        db.session.add(appt)
+        db.session.commit()
+        flash('Agendamento criado com sucesso.', 'success')
+        return redirect(url_for('list_appointments'))
+    return render_template('schedule_appointment.html', form=form)
+
+
+@app.route('/appointments')
+@login_required
+def list_appointments():
+    appointments = (
+        Appointment.query
+        .filter_by(tutor_id=current_user.id)
+        .order_by(Appointment.scheduled_at)
+        .all()
+    )
+    return render_template('appointments.html', appointments=appointments)
+
+
+@app.route('/appointments/manage')
+@login_required
+def manage_appointments():
+    if current_user.role != 'admin' and current_user.worker != 'veterinario':
+        flash('Acesso restrito.', 'danger')
+        return redirect(url_for('index'))
+    appointments = Appointment.query.order_by(Appointment.scheduled_at).all()
+    delete_form = AppointmentDeleteForm()
+    return render_template('appointments_admin.html', appointments=appointments, delete_form=delete_form)
+
+
+@app.route('/appointments/<int:appointment_id>/delete', methods=['POST'])
+@login_required
+def delete_appointment(appointment_id):
+    appointment = Appointment.query.get_or_404(appointment_id)
+    if current_user.role != 'admin' and current_user.worker != 'veterinario':
+        abort(403)
+    db.session.delete(appointment)
+    db.session.commit()
+    flash('Agendamento removido.', 'success')
+    return redirect(request.referrer or url_for('manage_appointments'))
 
 
 if __name__ == "__main__":
