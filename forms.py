@@ -329,6 +329,14 @@ class VetScheduleForm(FlaskForm):
     submit = SubmitField('Salvar')
 
 
+class AppointmentForm(FlaskForm):
+    animal_id = SelectField('Animal', coerce=int, validators=[DataRequired()])
+    veterinario_id = SelectField('Veterinário', coerce=int, validators=[DataRequired()])
+    date = DateField('Data', validators=[DataRequired()])
+    time = TimeField('Hora', validators=[DataRequired()])
+    submit = SubmitField('Agendar')
+
+
 class VetSpecialtyForm(FlaskForm):
     specialties = SelectMultipleField('Especialidades', coerce=int)
     submit = SubmitField('Salvar')

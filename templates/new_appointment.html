@@ -1,0 +1,28 @@
+{% extends "layout.html" %}
+
+{% block main %}
+<div class="container mt-4">
+  <h2>Novo Agendamento</h2>
+  <form method="POST">
+    {{ form.hidden_tag() }}
+    <div class="mb-3">
+      {{ form.animal_id.label(class="form-label") }}
+      {{ form.animal_id(class="form-select") }}
+    </div>
+    <div class="mb-3">
+      {{ form.veterinario_id.label(class="form-label") }}
+      {{ form.veterinario_id(class="form-select") }}
+    </div>
+    <div class="mb-3">
+      {{ form.date.label(class="form-label") }}
+      {{ form.date(class="form-control", type="date") }}
+    </div>
+    <div class="mb-3">
+      {{ form.time.label(class="form-label") }}
+      {{ form.time(class="form-control", type="time") }}
+    </div>
+    {{ form.submit(class="btn btn-primary") }}
+  </form>
+</div>
+{% endblock %}
+

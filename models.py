@@ -552,6 +552,17 @@ class VetSchedule(db.Model):
     veterinario = db.relationship('Veterinario', backref='horarios')
 
 
+class Appointment(db.Model):
+    """Simple appointment linking an animal to a veterinarian."""
+    id = db.Column(db.Integer, primary_key=True)
+    animal_id = db.Column(db.Integer, db.ForeignKey('animal.id'), nullable=False)
+    veterinario_id = db.Column(db.Integer, db.ForeignKey('veterinario.id'), nullable=False)
+    scheduled_at = db.Column(db.DateTime, nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    animal = db.relationship('Animal', backref=db.backref('appointments', cascade='all, delete-orphan'))
+    veterinario = db.relationship('Veterinario', backref=db.backref('appointments', cascade='all, delete-orphan'))
+
 
 class Medicamento(db.Model):
     id = db.Column(db.Integer, primary_key=True)
