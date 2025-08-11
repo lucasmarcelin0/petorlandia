@@ -134,7 +134,12 @@
   <h3>Agendamentos</h3>
   <table class="table">
     <thead>
-      <tr><th>Data</th><th>Animal</th><th>Veterinário</th></tr>
+      <tr>
+        <th>Data</th>
+        <th>Animal</th>
+        <th>Veterinário</th>
+        <th>Ações</th>
+      </tr>
     </thead>
     <tbody>
       {% for a in appointments %}
@@ -142,9 +147,18 @@
           <td>{{ a.scheduled_at|format_datetime_brazil }}</td>
           <td>{{ a.animal.name }}</td>
           <td>{{ a.veterinario.user.name }}</td>
+          <td>
+            <div class="btn-group">
+              <a href="{{ url_for('ficha_animal', animal_id=a.animal_id) }}" class="btn btn-sm btn-outline-primary">📋 Ficha Animal</a>
+              <a href="{{ url_for('ficha_tutor', tutor_id=a.tutor_id) }}" class="btn btn-sm btn-outline-secondary">👤 Ficha Tutor</a>
+              {% if current_user.worker in ['veterinario', 'colaborador'] %}
+              <a href="{{ url_for('consulta_direct', animal_id=a.animal_id) }}" class="btn btn-sm btn-outline-success">🩺 Iniciar Consulta</a>
+              {% endif %}
+            </div>
+          </td>
         </tr>
       {% else %}
-        <tr><td colspan="3">Nenhum agendamento encontrado.</td></tr>
+        <tr><td colspan="4">Nenhum agendamento encontrado.</td></tr>
       {% endfor %}
     </tbody>
   </table>
