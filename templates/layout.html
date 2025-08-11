@@ -387,11 +387,6 @@
                 <ul class="navbar-nav align-items-center gap-2">
                     {% if current_user.is_authenticated and current_user.role == "admin" %}
                         <li class="nav-item">
-                            <a class="nav-link text-danger" href="{{ url_for('relatorio_racoes') }}">
-                            <i class="fas fa-box me-1 text-warning"></i> Relatório de Rações
-                            </a>
-                        </li>
-                        <li class="nav-item">
                             <a class="nav-link" href="{{ url_for('delivery_overview') }}">
                             <i class="fas fa-chart-line me-1 text-primary"></i> Entregas
                             </a>
