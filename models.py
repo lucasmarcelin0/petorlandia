@@ -8,7 +8,7 @@ from werkzeug.security import generate_password_hash, check_password_hash
 from datetime import datetime, date
 from dateutil.relativedelta import relativedelta
 import enum
-from sqlalchemy import Enum
+from sqlalchemy import Enum, event
 from enum import Enum
 from sqlalchemy import Enum as PgEnum
 
@@ -564,6 +564,63 @@ class Appointment(db.Model):
     tutor = db.relationship('User', backref='appointments', foreign_keys=[tutor_id])
     veterinario = db.relationship('Veterinario', backref='appointments')
 
+
+
+class Appointment(db.Model):
+    __tablename__ = 'appointment'
+
+    id = db.Column(db.Integer, primary_key=True)
+    animal_id = db.Column(db.Integer, db.ForeignKey('animal.id'), nullable=False)
+    tutor_id = db.Column(
+        db.Integer,
+        db.ForeignKey('user.id', ondelete='CASCADE'),
+        nullable=False,
+    )
+    veterinario_id = db.Column(db.Integer, db.ForeignKey('veterinario.id'), nullable=False)
+    scheduled_at = db.Column(db.DateTime, nullable=False)
+    status = db.Column(db.String(20), nullable=False, default='scheduled')
+    consulta_id = db.Column(db.Integer, db.ForeignKey('consulta.id'), nullable=True)
+
+    animal = db.relationship(
+        'Animal',
+        backref=db.backref('appointments', cascade='all, delete-orphan'),
+    )
+    tutor = db.relationship(
+        'User',
+        foreign_keys=[tutor_id],
+        backref=db.backref('appointments', cascade='all, delete-orphan'),
+    )
+    veterinario = db.relationship(
+        'Veterinario',
+        backref=db.backref('appointments', cascade='all, delete-orphan'),
+    )
+    consulta = db.relationship(
+        'Consulta',
+        backref=db.backref('appointment', uselist=False),
+        uselist=False,
+    )
+
+    @classmethod
+    def has_active_subscription(cls, animal_id, tutor_id):
+        from models import HealthSubscription
+
+        return (
+            HealthSubscription.query
+            .filter_by(animal_id=animal_id, user_id=tutor_id, active=True)
+            .first()
+            is not None
+        )
+
+    @staticmethod
+    def _validate_subscription(mapper, connection, target):
+        if not type(target).has_active_subscription(target.animal_id, target.tutor_id):
+            raise ValueError(
+                'Animal does not have an active health subscription for this tutor.'
+            )
+
+
+event.listen(Appointment, 'before_insert', Appointment._validate_subscription)
+event.listen(Appointment, 'before_update', Appointment._validate_subscription)
 
 class Medicamento(db.Model):
     id = db.Column(db.Integer, primary_key=True)
