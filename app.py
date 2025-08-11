@@ -1613,13 +1613,14 @@ def edit_clinic_hours(clinica_id):
     if request.method == 'GET':
         form.clinica_id.data = clinica.id
     if form.validate_on_submit():
-        horario = ClinicHours(
-            clinica_id=form.clinica_id.data,
-            dia_semana=form.dia_semana.data,
-            hora_abertura=form.hora_abertura.data,
-            hora_fechamento=form.hora_fechamento.data,
-        )
-        db.session.add(horario)
+        for dia in form.dias_semana.data:
+            horario = ClinicHours(
+                clinica_id=form.clinica_id.data,
+                dia_semana=dia,
+                hora_abertura=form.hora_abertura.data,
+                hora_fechamento=form.hora_fechamento.data,
+            )
+            db.session.add(horario)
         db.session.commit()
         flash('Horário salvo com sucesso.', 'success')
         return redirect(url_for('clinic_detail', clinica_id=clinica.id))
@@ -1658,13 +1659,14 @@ def edit_vet_schedule(veterinario_id):
     if request.method == 'GET':
         form.veterinario_id.data = veterinario.id
     if form.validate_on_submit():
-        horario = VetSchedule(
-            veterinario_id=form.veterinario_id.data,
-            dia_semana=form.dia_semana.data,
-            hora_inicio=form.hora_inicio.data,
-            hora_fim=form.hora_fim.data,
-        )
-        db.session.add(horario)
+        for dia in form.dias_semana.data:
+            horario = VetSchedule(
+                veterinario_id=form.veterinario_id.data,
+                dia_semana=dia,
+                hora_inicio=form.hora_inicio.data,
+                hora_fim=form.hora_fim.data,
+            )
+            db.session.add(horario)
         db.session.commit()
         flash('Horário salvo com sucesso.', 'success')
         return redirect(url_for('vet_detail', veterinario_id=veterinario.id))

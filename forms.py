@@ -278,8 +278,8 @@ class ClinicHoursForm(FlaskForm):
         validators=[DataRequired()],
         render_kw={"class": "form-select"},
     )
-    dia_semana = SelectField(
-        'Dia da Semana',
+    dias_semana = SelectMultipleField(
+        'Dias da Semana',
         choices=[
             ('Segunda', 'Segunda'),
             ('Terça', 'Terça'),
@@ -290,7 +290,7 @@ class ClinicHoursForm(FlaskForm):
             ('Domingo', 'Domingo'),
         ],
         validators=[DataRequired()],
-        render_kw={"class": "form-select"},
+        render_kw={"class": "form-select", "multiple": True},
     )
     hora_abertura = TimeField(
         'Hora de Abertura',
@@ -312,8 +312,8 @@ class VetScheduleForm(FlaskForm):
         validators=[DataRequired()],
         render_kw={"class": "form-select"},
     )
-    dia_semana = SelectField(
-        'Dia da Semana',
+    dias_semana = SelectMultipleField(
+        'Dias da Semana',
         choices=[
             ('Segunda', 'Segunda'),
             ('Terça', 'Terça'),
@@ -324,7 +324,7 @@ class VetScheduleForm(FlaskForm):
             ('Domingo', 'Domingo'),
         ],
         validators=[DataRequired()],
-        render_kw={"class": "form-select"},
+        render_kw={"class": "form-select", "multiple": True},
     )
     hora_inicio = TimeField(
         'Hora de Início',
