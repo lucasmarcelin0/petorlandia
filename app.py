@@ -12,7 +12,7 @@ from PIL import Image
 
 
 from dotenv import load_dotenv
-from flask import Flask, session, send_from_directory, abort, request, jsonify, flash, render_template
+from flask import Flask, session, send_from_directory, abort, request, jsonify, flash, render_template, redirect, url_for
 from itsdangerous import URLSafeTimedSerializer
 import json
 
@@ -170,7 +170,7 @@ from forms import (
     ResetPasswordRequestForm, ResetPasswordForm, OrderItemForm,
     DeliveryRequestForm, AddToCartForm, SubscribePlanForm,
     ProductUpdateForm, ProductPhotoForm, ChangePasswordForm,
-    DeleteAccountForm
+    DeleteAccountForm, ClinicHoursForm
 )
 from helpers import calcular_idade, parse_data_nascimento
 
@@ -1574,6 +1574,38 @@ def buscar_tutores():
     ]
 
     return jsonify(resultados)
+
+
+@app.route('/clinica/<int:clinica_id>/horarios')
+def clinic_hours(clinica_id):
+    clinica = Clinica.query.get_or_404(clinica_id)
+    horarios = ClinicHours.query.filter_by(clinica_id=clinica_id).all()
+    return render_template('clinic_hours.html', clinica=clinica, horarios=horarios)
+
+
+@app.route('/admin/clinica/<int:clinica_id>/horarios', methods=['GET', 'POST'])
+@login_required
+def edit_clinic_hours(clinica_id):
+    if not _is_admin():
+        abort(403)
+    clinica = Clinica.query.get_or_404(clinica_id)
+    form = ClinicHoursForm()
+    form.clinica_id.choices = [(c.id, c.nome) for c in Clinica.query.all()]
+    if request.method == 'GET':
+        form.clinica_id.data = clinica.id
+    if form.validate_on_submit():
+        horario = ClinicHours(
+            clinica_id=form.clinica_id.data,
+            dia_semana=form.dia_semana.data,
+            hora_abertura=form.hora_abertura.data,
+            hora_fechamento=form.hora_fechamento.data,
+        )
+        db.session.add(horario)
+        db.session.commit()
+        flash('Horário salvo com sucesso.', 'success')
+        return redirect(url_for('clinic_hours', clinica_id=clinica.id))
+    horarios = ClinicHours.query.filter_by(clinica_id=clinica.id).all()
+    return render_template('edit_clinic_hours.html', form=form, clinica=clinica, horarios=horarios)
 
 
 @app.route('/tutor/<int:tutor_id>')

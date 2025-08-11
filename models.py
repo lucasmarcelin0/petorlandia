@@ -493,6 +493,17 @@ class Clinica(db.Model):
     def __str__(self):
         return f'{self.nome} ({self.cnpj})'
 
+
+class ClinicHours(db.Model):
+    __tablename__ = 'clinic_hours'
+    id = db.Column(db.Integer, primary_key=True)
+    clinica_id = db.Column(db.Integer, db.ForeignKey('clinica.id'), nullable=False)
+    dia_semana = db.Column(db.String(20), nullable=False)
+    hora_abertura = db.Column(db.Time, nullable=False)
+    hora_fechamento = db.Column(db.Time, nullable=False)
+
+    clinica = db.relationship('Clinica', backref='horarios')
+
 class Veterinario(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(
