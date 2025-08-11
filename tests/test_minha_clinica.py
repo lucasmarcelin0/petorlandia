@@ -14,7 +14,7 @@ def app():
     yield flask_app
 
 
-def test_minha_clinica_redirects(monkeypatch, app):
+def test_minha_clinica_page(monkeypatch, app):
     client = app.test_client()
     with app.app_context():
         db.create_all()
@@ -28,5 +28,5 @@ def test_minha_clinica_redirects(monkeypatch, app):
         monkeypatch.setattr(login_utils, '_get_user', lambda: user)
 
         resp = client.get('/minha-clinica')
-        assert resp.status_code == 302
-        assert f"/clinica/{clinica.id}" in resp.headers['Location']
+        assert resp.status_code == 200
+        assert f"/clinica/{clinica.id}" in resp.get_data(as_text=True)
