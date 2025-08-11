@@ -4,7 +4,7 @@
     <h5 class="card-title">💉 Histórico de Vacinas</h5>
 
     <ul class="list-group list-group-flush mb-2">
-      {% for vacina in animal.vacinas|sort(attribute='data', reverse=True) %}
+      {% for vacina in animal.vacinas_ordenadas %}
       <li class="list-group-item" data-vacina-id="{{ vacina.id }}">
         <div class="vacina-info">
           <strong class="vacina-nome">{{ vacina.nome }}</strong>

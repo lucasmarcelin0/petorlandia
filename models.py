@@ -228,6 +228,10 @@ class Animal(db.Model):
     price = db.Column(db.Float, nullable=True)
     vacinas = db.relationship('Vacina', backref='animal', cascade='all, delete-orphan')
 
+    @property
+    def vacinas_ordenadas(self):
+        return sorted(self.vacinas, key=lambda v: v.data or date.min, reverse=True)
+
     user_id = db.Column(
         db.Integer,
         db.ForeignKey('user.id', ondelete='CASCADE'),
