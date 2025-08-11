@@ -1517,6 +1517,23 @@ def test_archive_and_unarchive_delivery(monkeypatch, app):
         assert DeliveryRequest.query.get(1).archived is False
 
 
+def test_delivery_overview_shows_relatorio_racoes_link(monkeypatch, app):
+    client = app.test_client()
+    with app.app_context():
+        db.drop_all()
+        db.create_all()
+        admin = User(id=1, name='Admin', email='a@a', password_hash='x', role='admin')
+        db.session.add(admin)
+        db.session.commit()
+
+        import flask_login.utils as login_utils
+        monkeypatch.setattr(login_utils, '_get_user', lambda: admin)
+        monkeypatch.setattr(app_module, '_is_admin', lambda: True)
+
+        resp = client.get('/admin/delivery_overview')
+        assert b'href="/relatorio/racoes"' in resp.data
+
+
 def test_delivery_requests_hide_archived(monkeypatch, app):
     client = app.test_client()
     with app.app_context():
