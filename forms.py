@@ -3,6 +3,7 @@ from wtforms import (
     StringField,
     TextAreaField,
     SelectField,
+    SelectMultipleField,
     PasswordField,
     SubmitField,
     BooleanField,
@@ -297,6 +298,11 @@ class VetScheduleForm(FlaskForm):
     )
     hora_inicio = TimeField('Hora de Início', validators=[DataRequired()])
     hora_fim = TimeField('Hora de Fim', validators=[DataRequired()])
+    submit = SubmitField('Salvar')
+
+
+class VetSpecialtyForm(FlaskForm):
+    specialties = SelectMultipleField('Especialidades', coerce=int)
     submit = SubmitField('Salvar')
 
 

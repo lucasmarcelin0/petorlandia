@@ -1569,7 +1569,12 @@ def buscar_tutores():
     )}.values()
 
     resultados = [
-        {'id': tutor.id, 'name': tutor.name, 'email': tutor.email}
+        {
+            'id': tutor.id,
+            'name': tutor.name,
+            'email': tutor.email,
+            'specialties': ', '.join(s.nome for s in tutor.veterinario.specialties) if getattr(tutor, 'veterinario', None) else ''
+        }
         for tutor in todos
     ]
 
@@ -1638,6 +1643,24 @@ def edit_vet_schedule(veterinario_id):
         return redirect(url_for('vet_schedule', veterinario_id=veterinario.id))
     horarios = VetSchedule.query.filter_by(veterinario_id=veterinario.id).all()
     return render_template('edit_vet_schedule.html', form=form, veterinario=veterinario, horarios=horarios)
+
+
+@app.route('/admin/veterinario/<int:veterinario_id>/especialidades', methods=['GET', 'POST'])
+@login_required
+def edit_vet_specialties(veterinario_id):
+    if current_user.worker not in ['veterinario', 'colaborador']:
+        flash('Apenas veterinários ou colaboradores podem acessar esta página.', 'danger')
+        return redirect(url_for('index'))
+    veterinario = Veterinario.query.get_or_404(veterinario_id)
+    form = VetSpecialtyForm()
+    form.specialties.choices = [(s.id, s.nome) for s in Specialty.query.order_by(Specialty.nome).all()]
+    if form.validate_on_submit():
+        veterinario.specialties = Specialty.query.filter(Specialty.id.in_(form.specialties.data)).all()
+        db.session.commit()
+        flash('Especialidades atualizadas com sucesso.', 'success')
+        return redirect(url_for('ficha_tutor', tutor_id=veterinario.user_id))
+    form.specialties.data = [s.id for s in veterinario.specialties]
+    return render_template('edit_vet_specialties.html', form=form, veterinario=veterinario)
 
 
 @app.route('/tutor/<int:tutor_id>')

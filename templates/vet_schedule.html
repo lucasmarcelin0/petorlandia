@@ -3,6 +3,9 @@
 {% block main %}
 <div class="container mt-4">
   <h2>Agenda – {{ veterinario.user.name }}</h2>
+  {% if veterinario.specialties %}
+  <p><strong>Especialidades:</strong> {{ veterinario.specialty_list }}</p>
+  {% endif %}
   <ul class="list-unstyled">
     {% for h in horarios %}
       <li>{{ h.dia_semana }}: {{ h.hora_inicio.strftime('%H:%M') }} - {{ h.hora_fim.strftime('%H:%M') }}</li>

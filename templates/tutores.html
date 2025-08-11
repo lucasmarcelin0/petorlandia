@@ -99,7 +99,11 @@
       data.forEach(t => {
         const li = document.createElement('li');
         li.className = 'list-group-item list-group-item-action';
-        li.textContent = `${t.name} (${t.email})`;
+        let texto = `${t.name} (${t.email})`;
+        if (t.specialties) {
+          texto += ` – ${t.specialties}`;
+        }
+        li.textContent = texto;
         li.onclick = () => window.location = `/ficha_tutor/${t.id}`;
         listaTutor.appendChild(li);
       });

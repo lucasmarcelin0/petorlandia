@@ -504,6 +504,22 @@ class ClinicHours(db.Model):
 
     clinica = db.relationship('Clinica', backref='horarios')
 
+# Associação many-to-many entre veterinário e especialidade
+veterinario_especialidade = db.Table(
+    'veterinario_especialidade',
+    db.Column('veterinario_id', db.Integer, db.ForeignKey('veterinario.id'), primary_key=True),
+    db.Column('specialty_id', db.Integer, db.ForeignKey('specialty.id'), primary_key=True)
+)
+
+
+class Specialty(db.Model):
+    __tablename__ = 'specialty'
+    id = db.Column(db.Integer, primary_key=True)
+    nome = db.Column(db.String(120), unique=True, nullable=False)
+
+    def __str__(self):
+        return self.nome
+
 class Veterinario(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(
@@ -515,6 +531,11 @@ class Veterinario(db.Model):
     clinica_id = db.Column(db.Integer, db.ForeignKey('clinica.id'))
 
     user = db.relationship('User', back_populates='veterinario', uselist=False)
+    specialties = db.relationship('Specialty', secondary='veterinario_especialidade', backref='veterinarios')
+
+    @property
+    def specialty_list(self):
+        return ", ".join(s.nome for s in self.specialties)
 
     def __str__(self):
         return f"{self.user.name} (CRMV: {self.crmv})"

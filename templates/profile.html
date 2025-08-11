@@ -54,6 +54,19 @@
           {{ field_row('Email', form.email, 'email', current_user.email) }}
           {{ field_row('Telefone', form.phone, 'phone', current_user.phone) }}
 
+          {% if current_user.veterinario %}
+          <div class="mb-3">
+            <label class="form-label">Especialidades</label>
+            <div class="d-flex flex-wrap gap-2">
+              {% for esp in current_user.veterinario.specialties %}
+                <span class="badge bg-secondary">{{ esp.nome }}</span>
+              {% else %}
+                <span class="text-muted">---</span>
+              {% endfor %}
+            </div>
+          </div>
+          {% endif %}
+
           <!-- Endereço -->
           {% set tutor = current_user %}
           {% set endereco = tutor.endereco if tutor and tutor.endereco else None %}
