@@ -145,7 +145,7 @@
 
     if (isEdit) {
       title.textContent = 'Editar Horário';
-      form.action = `/admin/veterinario/{{ veterinario.id }}/agenda/${data.id}/edit`;
+      form.action = `/appointments/{{ veterinario.id }}/schedule/${data.id}/edit`;
       select.multiple = false;
       [...select.options].forEach(opt => opt.selected = opt.value === data.dia);
       horaInicio.value = data.horaInicio;
@@ -154,7 +154,7 @@
       intervaloFim.value = data.intervaloFim;
     } else {
       title.textContent = 'Adicionar Horário';
-      form.action = `/admin/veterinario/{{ veterinario.id }}/agenda`;
+      form.action = `{{ url_for('appointments') }}`;
       select.multiple = true;
     }
     container.classList.remove('d-none');
