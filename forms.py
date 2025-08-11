@@ -262,7 +262,12 @@ class CheckoutForm(FlaskForm):
 
 
 class ClinicHoursForm(FlaskForm):
-    clinica_id = SelectField('Clínica', coerce=int, validators=[DataRequired()])
+    clinica_id = SelectField(
+        'Clínica',
+        coerce=int,
+        validators=[DataRequired()],
+        render_kw={"class": "form-select"},
+    )
     dia_semana = SelectField(
         'Dia da Semana',
         choices=[
@@ -275,14 +280,28 @@ class ClinicHoursForm(FlaskForm):
             ('Domingo', 'Domingo'),
         ],
         validators=[DataRequired()],
+        render_kw={"class": "form-select"},
     )
-    hora_abertura = TimeField('Hora de Abertura', validators=[DataRequired()])
-    hora_fechamento = TimeField('Hora de Fechamento', validators=[DataRequired()])
+    hora_abertura = TimeField(
+        'Hora de Abertura',
+        validators=[DataRequired()],
+        render_kw={"class": "form-control", "type": "time"},
+    )
+    hora_fechamento = TimeField(
+        'Hora de Fechamento',
+        validators=[DataRequired()],
+        render_kw={"class": "form-control", "type": "time"},
+    )
     submit = SubmitField('Salvar')
 
 
 class VetScheduleForm(FlaskForm):
-    veterinario_id = SelectField('Veterinário', coerce=int, validators=[DataRequired()])
+    veterinario_id = SelectField(
+        'Veterinário',
+        coerce=int,
+        validators=[DataRequired()],
+        render_kw={"class": "form-select"},
+    )
     dia_semana = SelectField(
         'Dia da Semana',
         choices=[
@@ -295,9 +314,18 @@ class VetScheduleForm(FlaskForm):
             ('Domingo', 'Domingo'),
         ],
         validators=[DataRequired()],
+        render_kw={"class": "form-select"},
     )
-    hora_inicio = TimeField('Hora de Início', validators=[DataRequired()])
-    hora_fim = TimeField('Hora de Fim', validators=[DataRequired()])
+    hora_inicio = TimeField(
+        'Hora de Início',
+        validators=[DataRequired()],
+        render_kw={"class": "form-control", "type": "time"},
+    )
+    hora_fim = TimeField(
+        'Hora de Fim',
+        validators=[DataRequired()],
+        render_kw={"class": "form-control", "type": "time"},
+    )
     submit = SubmitField('Salvar')
 
 
