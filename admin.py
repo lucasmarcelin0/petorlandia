@@ -274,8 +274,22 @@ class ClinicHoursAdmin(MyModelView):
 
 
 class VetScheduleAdmin(MyModelView):
-    column_list = ['veterinario', 'dia_semana', 'hora_inicio', 'hora_fim']
-    form_columns = ['veterinario', 'dia_semana', 'hora_inicio', 'hora_fim']
+    column_list = [
+        'veterinario',
+        'dia_semana',
+        'hora_inicio',
+        'hora_fim',
+        'intervalo_inicio',
+        'intervalo_fim',
+    ]
+    form_columns = [
+        'veterinario',
+        'dia_semana',
+        'hora_inicio',
+        'hora_fim',
+        'intervalo_inicio',
+        'intervalo_fim',
+    ]
 
 
 class TutorAdminView(MyModelView):

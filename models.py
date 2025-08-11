@@ -548,6 +548,8 @@ class VetSchedule(db.Model):
     dia_semana = db.Column(db.String(20), nullable=False)
     hora_inicio = db.Column(db.Time, nullable=False)
     hora_fim = db.Column(db.Time, nullable=False)
+    intervalo_inicio = db.Column(db.Time, nullable=True)
+    intervalo_fim = db.Column(db.Time, nullable=True)
 
     veterinario = db.relationship('Veterinario', backref='horarios')
 

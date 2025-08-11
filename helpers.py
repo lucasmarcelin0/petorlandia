@@ -93,7 +93,16 @@ def is_slot_available(veterinario_id, scheduled_at):
         return False
 
     time = scheduled_at.time()
-    if not any(s.hora_inicio <= time < s.hora_fim for s in schedules):
+    available = any(
+        s.hora_inicio <= time < s.hora_fim
+        and not (
+            s.intervalo_inicio
+            and s.intervalo_fim
+            and s.intervalo_inicio <= time < s.intervalo_fim
+        )
+        for s in schedules
+    )
+    if not available:
         return False
 
     conflict = (

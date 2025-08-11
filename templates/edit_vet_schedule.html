@@ -2,7 +2,7 @@
 
 {% block main %}
 <div class="container mt-4">
-  <h2>Editar Agenda – {{ veterinario.user.name }}</h2>
+  <h2>{{ 'Editar Horário' if edit_mode else 'Editar Agenda' }} – {{ veterinario.user.name }}</h2>
   <form method="post" class="mb-4">
     {{ form.hidden_tag() }}
     <div class="mb-3">
@@ -11,13 +11,17 @@
     </div>
     <div class="mb-3">
       {{ form.dias_semana.label }}
-      {{ form.dias_semana(class="form-select", multiple=True, size=7) }}
-      <div class="mt-2">
-        <button type="button" class="btn btn-sm btn-outline-secondary" onclick="selectDays('all')">Todos</button>
-        <button type="button" class="btn btn-sm btn-outline-secondary" onclick="selectDays('weekday')">Dias Úteis</button>
-        <button type="button" class="btn btn-sm btn-outline-secondary" onclick="selectDays('weekend')">Fins de Semana</button>
-        <button type="button" class="btn btn-sm btn-outline-secondary" onclick="selectDays('clear')">Limpar</button>
-      </div>
+      {% if edit_mode %}
+        {{ form.dias_semana(class="form-select", size=7) }}
+      {% else %}
+        {{ form.dias_semana(class="form-select", multiple=True, size=7) }}
+        <div class="mt-2">
+          <button type="button" class="btn btn-sm btn-outline-secondary" onclick="selectDays('all')">Todos</button>
+          <button type="button" class="btn btn-sm btn-outline-secondary" onclick="selectDays('weekday')">Dias Úteis</button>
+          <button type="button" class="btn btn-sm btn-outline-secondary" onclick="selectDays('weekend')">Fins de Semana</button>
+          <button type="button" class="btn btn-sm btn-outline-secondary" onclick="selectDays('clear')">Limpar</button>
+        </div>
+      {% endif %}
     </div>
     <div class="mb-3">
       {{ form.hora_inicio.label }}
@@ -27,13 +31,31 @@
       {{ form.hora_fim.label }}
       {{ form.hora_fim(class="form-control") }}
     </div>
+    <div class="mb-3">
+      {{ form.intervalo_inicio.label }}
+      {{ form.intervalo_inicio(class="form-control") }}
+    </div>
+    <div class="mb-3">
+      {{ form.intervalo_fim.label }}
+      {{ form.intervalo_fim(class="form-control") }}
+    </div>
     {{ form.submit(class="btn btn-primary") }}
   </form>
 
   <h3>Horários Cadastrados</h3>
   <ul class="list-unstyled">
     {% for h in horarios %}
-      <li>{{ h.dia_semana }}: {{ h.hora_inicio.strftime('%H:%M') }} - {{ h.hora_fim.strftime('%H:%M') }}</li>
+      <li>
+        {{ h.dia_semana }}: {{ h.hora_inicio.strftime('%H:%M') }} - {{ h.hora_fim.strftime('%H:%M') }}
+        {% if h.intervalo_inicio and h.intervalo_fim %}
+          (Intervalo: {{ h.intervalo_inicio.strftime('%H:%M') }} - {{ h.intervalo_fim.strftime('%H:%M') }})
+        {% endif %}
+        <a href="{{ url_for('edit_vet_schedule_slot', veterinario_id=veterinario.id, horario_id=h.id) }}" class="btn btn-sm btn-outline-primary ms-2">Editar</a>
+        <form method="post" action="{{ url_for('delete_vet_schedule', veterinario_id=veterinario.id, horario_id=h.id) }}" class="d-inline">
+          {{ csrf_token() }}
+          <button type="submit" class="btn btn-sm btn-outline-danger ms-2" onclick="return confirm('Excluir este horário?');">Excluir</button>
+        </form>
+      </li>
     {% else %}
       <li>Nenhum horário cadastrado.</li>
     {% endfor %}
