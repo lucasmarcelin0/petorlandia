@@ -6,16 +6,24 @@
   <form method="POST">
     {{ form.hidden_tag() }}
     <div class="mb-3">
+      {{ form.animal_id.label(class="form-label") }}
+      {{ form.animal_id(class="form-select") }}
+    </div>
+    <div class="mb-3">
       {{ form.veterinario_id.label(class="form-label") }}
       {{ form.veterinario_id(class="form-select") }}
     </div>
     <div class="mb-3">
-      {{ form.scheduled_at.label(class="form-label") }}
-      {{ form.scheduled_at(class="form-control", placeholder="YYYY-MM-DD HH:MM") }}
+      {{ form.date.label(class="form-label") }}
+      {{ form.date(class="form-control", type="date") }}
     </div>
     <div class="mb-3">
-      {{ form.description.label(class="form-label") }}
-      {{ form.description(class="form-control", rows=3) }}
+      {{ form.time.label(class="form-label") }}
+      {{ form.time(class="form-control", type="time") }}
+    </div>
+    <div class="mb-3">
+      {{ form.reason.label(class="form-label") }}
+      {{ form.reason(class="form-control", rows=3) }}
     </div>
     {{ form.submit(class="btn btn-primary") }}
   </form>
