@@ -554,20 +554,6 @@ class VetSchedule(db.Model):
 
 class Appointment(db.Model):
     __tablename__ = 'appointment'
-    id = db.Column(db.Integer, primary_key=True)
-    tutor_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
-    veterinario_id = db.Column(db.Integer, db.ForeignKey('veterinario.id'), nullable=False)
-    scheduled_at = db.Column(db.DateTime, nullable=False)
-    description = db.Column(db.Text)
-    status = db.Column(db.String(20), default='pendente')
-
-    tutor = db.relationship('User', backref='appointments', foreign_keys=[tutor_id])
-    veterinario = db.relationship('Veterinario', backref='appointments')
-
-
-
-class Appointment(db.Model):
-    __tablename__ = 'appointment'
 
     id = db.Column(db.Integer, primary_key=True)
     animal_id = db.Column(db.Integer, db.ForeignKey('animal.id'), nullable=False)
