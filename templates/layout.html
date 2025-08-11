@@ -404,19 +404,13 @@
                         </a>
                     </li>
                         {% if current_user.is_authenticated %}
-                        {% if current_user.worker == 'veterinario' %}
-                            <li class="nav-item">
-                                <a class="nav-link" href="{{ url_for('tutores') }}">
-                                    <i class="fas fa-users me-1 text-primary"></i> Tutores
-                                </a>
-                            </li>
-                        {% elif current_user.worker == 'delivery' %}
-                            <li class="nav-item">
-                                <a class="nav-link" href="{{ url_for('list_delivery_requests') }}">
-                                    <i class="fas fa-truck me-1 text-warning"></i> Solicitações
-                                </a>
-                            </li>
-                        {% endif %}
+                            {% if current_user.worker == 'delivery' %}
+                                <li class="nav-item">
+                                    <a class="nav-link" href="{{ url_for('list_delivery_requests') }}">
+                                        <i class="fas fa-truck me-1 text-warning"></i> Solicitações
+                                    </a>
+                                </li>
+                            {% endif %}
 
                         <li class="nav-item position-relative">
                             {% if current_user.role == 'admin' %}
