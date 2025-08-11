@@ -61,10 +61,14 @@
 
         /* Navbar Styles */
         .navbar {
-            height: var(--topbar-height);
+            min-height: var(--topbar-height);
             background: var(--light-color);
             box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
             padding: 0 30px;
+        }
+
+        .navbar-nav {
+            flex-wrap: wrap;
         }
 
         .navbar-brand {
@@ -344,6 +348,19 @@
         popoverTriggerList.forEach(function (el) {
             new bootstrap.Popover(el);
         });
+    });
+</script>
+
+<script>
+    document.addEventListener("DOMContentLoaded", () => {
+        const navbar = document.querySelector('.navbar');
+        const updateNavbarHeight = () => {
+            if (navbar) {
+                document.documentElement.style.setProperty('--topbar-height', navbar.offsetHeight + 'px');
+            }
+        };
+        updateNavbarHeight();
+        window.addEventListener('resize', updateNavbarHeight);
     });
 </script>
 
