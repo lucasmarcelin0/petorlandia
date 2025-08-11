@@ -1693,14 +1693,25 @@ def vet_detail(veterinario_id):
 @app.route('/admin/veterinario/<int:veterinario_id>/especialidades', methods=['GET', 'POST'])
 @login_required
 def edit_vet_specialties(veterinario_id):
-    if current_user.worker not in ['veterinario', 'colaborador']:
-        flash('Apenas veterinários ou colaboradores podem acessar esta página.', 'danger')
+    # Apenas o próprio veterinário ou um administrador pode alterar especialidades
+    is_owner = (
+        current_user.worker == 'veterinario'
+        and current_user.veterinario
+        and current_user.veterinario.id == veterinario_id
+    )
+    if not (_is_admin() or is_owner):
+        flash('Apenas o próprio veterinário ou um administrador pode acessar esta página.', 'danger')
         return redirect(url_for('index'))
+
     veterinario = Veterinario.query.get_or_404(veterinario_id)
     form = VetSpecialtyForm()
-    form.specialties.choices = [(s.id, s.nome) for s in Specialty.query.order_by(Specialty.nome).all()]
+    form.specialties.choices = [
+        (s.id, s.nome) for s in Specialty.query.order_by(Specialty.nome).all()
+    ]
     if form.validate_on_submit():
-        veterinario.specialties = Specialty.query.filter(Specialty.id.in_(form.specialties.data)).all()
+        veterinario.specialties = Specialty.query.filter(
+            Specialty.id.in_(form.specialties.data)
+        ).all()
         db.session.commit()
         flash('Especialidades atualizadas com sucesso.', 'success')
         return redirect(url_for('ficha_tutor', tutor_id=veterinario.user_id))
