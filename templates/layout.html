@@ -348,11 +348,6 @@
                             <i class="fas fa-chart-line me-1 text-primary"></i> Entregas
                             </a>
                         </li>
-                        <li class="nav-item">
-                            <a class="nav-link" href="{{ url_for('manage_appointments') }}">
-                            <i class="fas fa-calendar-check me-1 text-primary"></i> Consultas
-                            </a>
-                        </li>
                     {% endif %}
                     
                     <li class="nav-item">
@@ -377,6 +372,13 @@
                     </li>
 
                     {% if current_user.is_authenticated %}
+                        {% if current_user.worker == 'veterinario' or current_user.role == 'admin' %}
+                            <li class="nav-item">
+                                <a class="nav-link" href="{{ url_for('manage_appointments') }}">
+                                    <i class="fas fa-calendar-check me-1 text-primary"></i> Consultas
+                                </a>
+                            </li>
+                        {% endif %}
                         {% if current_user.worker == 'veterinario' %}
                             <li class="nav-item">
                                 <a class="nav-link" href="{{ url_for('tutores') }}">
@@ -386,11 +388,6 @@
                             <li class="nav-item">
                                 <a class="nav-link" href="{{ url_for('add_animal') }}">
                                     <i class="fas fa-plus-circle me-1 text-success"></i> Meu novo Animal
-                                </a>
-                            </li>
-                            <li class="nav-item">
-                                <a class="nav-link" href="{{ url_for('manage_appointments') }}">
-                                    <i class="fas fa-calendar-check me-1 text-primary"></i> Consultas
                                 </a>
                             </li>
                         {% elif current_user.worker == 'delivery' %}
