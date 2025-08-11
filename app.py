@@ -4984,23 +4984,11 @@ def pedido_detail(order_id):
 @app.route('/appointments/new', methods=['GET', 'POST'])
 @login_required
 def schedule_appointment():
-    form = AppointmentForm()
-
-    animals = (
-        Animal.query
-        .join(HealthSubscription)
-        .filter(
-            HealthSubscription.user_id == current_user.id,
-            HealthSubscription.active == True,  # noqa: E712
-        )
-        .all()
+    is_vet = current_user.worker == 'veterinario'
+    form = AppointmentForm(
+        tutor=current_user if not is_vet else None,
+        is_veterinario=is_vet,
     )
-    form.animal_id.choices = [(a.id, a.name) for a in animals]
-
-    form.veterinario_id.choices = [
-        (v.id, v.user.name if v.user else str(v.id))
-        for v in Veterinario.query.order_by(Veterinario.id).all()
-    ]
 
     if form.validate_on_submit():
         scheduled_at = datetime.combine(form.date.data, form.time.data)
@@ -5009,9 +4997,12 @@ def schedule_appointment():
             flash('Horário indisponível para o veterinário selecionado.', 'danger')
             return render_template('schedule_appointment.html', form=form)
 
+        animal = Animal.query.get_or_404(form.animal_id.data)
+        tutor_id = current_user.id if not is_vet else animal.user_id
+
         appt = Appointment(
-            animal_id=form.animal_id.data,
-            tutor_id=current_user.id,
+            animal_id=animal.id,
+            tutor_id=tutor_id,
             veterinario_id=form.veterinario_id.data,
             scheduled_at=scheduled_at,
         )
