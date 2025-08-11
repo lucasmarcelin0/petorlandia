@@ -400,32 +400,15 @@ class AppointmentForm(FlaskForm):
 
     def __init__(self, tutor=None, is_veterinario=False, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        from models import Animal, HealthSubscription, Veterinario
+        from models import Animal, Veterinario
 
         if is_veterinario:
-            animals = (
-                Animal.query
-                .join(HealthSubscription)
-                .filter(HealthSubscription.active == True)
-                .all()
-            )
+            animals = Animal.query.all()
         elif tutor is not None:
-            animals = (
-                Animal.query
-                .join(HealthSubscription)
-                .filter(
-                    HealthSubscription.user_id == tutor.id,
-                    HealthSubscription.active == True,
-                )
-                .all()
-            )
+            animals = Animal.query.filter_by(user_id=tutor.id).all()
         else:
-            animals = (
-                Animal.query
-                .join(HealthSubscription)
-                .filter(HealthSubscription.active == True)
-                .all()
-            )
+            animals = Animal.query.all()
+
         self.animal_id.choices = [(a.id, a.name) for a in animals]
 
         veterinarios = Veterinario.query.all()
