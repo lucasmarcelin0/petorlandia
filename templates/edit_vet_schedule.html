@@ -113,7 +113,7 @@
         <span>{{ appt.scheduled_at.strftime('%d/%m/%Y %H:%M') }} - {{ appt.animal.name }} ({{ appt.tutor.name }})</span>
         <div class="btn-group">
           <a href="{{ url_for('ficha_animal', animal_id=appt.animal_id) }}" class="btn btn-sm btn-outline-primary">📋 Ficha Animal</a>
-          <a href="{{ url_for('tutor_detail', tutor_id=appt.tutor_id) }}" class="btn btn-sm btn-outline-secondary">👤 Ficha Tutor</a>
+          <a href="{{ url_for('ficha_tutor', tutor_id=appt.tutor_id) }}" class="btn btn-sm btn-outline-secondary">👤 Ficha Tutor</a>
           <a href="{{ url_for('consulta_direct', animal_id=appt.animal_id) }}" class="btn btn-sm btn-outline-success">🩺 Iniciar Consulta</a>
         </div>
       </li>
