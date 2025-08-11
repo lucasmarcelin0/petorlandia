@@ -271,6 +271,15 @@ class CheckoutForm(FlaskForm):
     submit = SubmitField('Finalizar Compra')
 
 
+class ClinicForm(FlaskForm):
+    nome = StringField('Nome', validators=[DataRequired()])
+    cnpj = StringField('CNPJ', validators=[Optional()])
+    endereco = StringField('Endereço', validators=[Optional()])
+    telefone = StringField('Telefone', validators=[Optional()])
+    email = StringField('Email', validators=[Optional(), Email()])
+    submit = SubmitField('Salvar')
+
+
 class ClinicHoursForm(FlaskForm):
     clinica_id = SelectField(
         'Clínica',

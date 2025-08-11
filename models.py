@@ -155,7 +155,7 @@ class User(UserMixin, db.Model):
 
 
     clinica_id = db.Column(db.Integer, db.ForeignKey('clinica.id'), nullable=True)
-    clinica = db.relationship('Clinica', backref='usuarios')
+    clinica = db.relationship('Clinica', backref='usuarios', foreign_keys=[clinica_id])
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
 
@@ -486,6 +486,9 @@ class Clinica(db.Model):
     telefone = db.Column(db.String(20))
     email = db.Column(db.String(120))
     logotipo = db.Column(db.String(200))  # caminho para imagem do logo
+
+    owner_id = db.Column(db.Integer, db.ForeignKey('user.id'))
+    owner = db.relationship('User', backref=db.backref('clinicas', foreign_keys='Clinica.owner_id'), foreign_keys=[owner_id])
 
     veterinarios = db.relationship('Veterinario', backref='clinica', lazy=True)
 

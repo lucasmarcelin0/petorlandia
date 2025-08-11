@@ -7,6 +7,36 @@
   {% if clinica.telefone %}<p><strong>Telefone:</strong> {{ clinica.telefone }}</p>{% endif %}
   {% if clinica.email %}<p><strong>Email:</strong> {{ clinica.email }}</p>{% endif %}
 
+  {% if pode_editar %}
+  <button class="btn btn-secondary mt-3" onclick="toggleEditInfo()">Editar Informações</button>
+  <div id="edit-info" class="mt-4" style="display: none;">
+    <form method="post" class="mb-4">
+      {{ clinic_form.hidden_tag() }}
+      <div class="mb-3">
+        {{ clinic_form.nome.label }}
+        {{ clinic_form.nome(class="form-control") }}
+      </div>
+      <div class="mb-3">
+        {{ clinic_form.cnpj.label }}
+        {{ clinic_form.cnpj(class="form-control") }}
+      </div>
+      <div class="mb-3">
+        {{ clinic_form.endereco.label }}
+        {{ clinic_form.endereco(class="form-control") }}
+      </div>
+      <div class="mb-3">
+        {{ clinic_form.telefone.label }}
+        {{ clinic_form.telefone(class="form-control") }}
+      </div>
+      <div class="mb-3">
+        {{ clinic_form.email.label }}
+        {{ clinic_form.email(class="form-control") }}
+      </div>
+      {{ clinic_form.submit(class="btn btn-primary") }}
+    </form>
+  </div>
+  {% endif %}
+
   <h3>Horários de Atendimento</h3>
   <table class="table">
     <thead>
@@ -34,7 +64,7 @@
   </table>
 
   {% if pode_editar %}
-  <button class="btn btn-secondary mt-3" onclick="toggleEdit()">Editar Horários</button>
+  <button class="btn btn-secondary mt-3" onclick="toggleEditHours()">Editar Horários</button>
   <div id="edit-hours" class="mt-4" style="display: none;">
     <form method="post" class="mb-4">
       {{ form.hidden_tag() }}
@@ -66,7 +96,11 @@
   {% endif %}
 </div>
 <script>
-function toggleEdit() {
+function toggleEditInfo() {
+  const section = document.getElementById('edit-info');
+  section.style.display = section.style.display === 'none' ? 'block' : 'none';
+}
+function toggleEditHours() {
   const section = document.getElementById('edit-hours');
   section.style.display = section.style.display === 'none' ? 'block' : 'none';
 }
