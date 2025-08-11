@@ -1628,16 +1628,7 @@ def clinic_detail(clinica_id):
         db.session.commit()
         flash('Horário salvo com sucesso.', 'success')
         return redirect(url_for('clinic_detail', clinica_id=clinica.id))
-    horarios = (
-        db.session.query(
-            ClinicHours.dia_semana,
-            func.min(ClinicHours.hora_abertura).label('hora_abertura'),
-            func.max(ClinicHours.hora_fechamento).label('hora_fechamento'),
-        )
-        .filter(ClinicHours.clinica_id == clinica_id)
-        .group_by(ClinicHours.dia_semana)
-        .all()
-    )
+    horarios = ClinicHours.query.filter_by(clinica_id=clinica_id).all()
     return render_template(
         'clinic_detail.html',
         clinica=clinica,
@@ -1645,6 +1636,24 @@ def clinic_detail(clinica_id):
         form=form,
         pode_editar=pode_editar,
     )
+
+
+@app.route('/clinica/<int:clinica_id>/horario/<int:horario_id>/delete', methods=['POST'])
+@login_required
+def delete_clinic_hour(clinica_id, horario_id):
+    clinica = Clinica.query.get_or_404(clinica_id)
+    pode_editar = _is_admin() or (
+        current_user.worker == 'veterinario'
+        and getattr(current_user, 'veterinario', None)
+        and current_user.veterinario.clinica_id == clinica_id
+    )
+    if not pode_editar:
+        abort(403)
+    horario = ClinicHours.query.filter_by(id=horario_id, clinica_id=clinica_id).first_or_404()
+    db.session.delete(horario)
+    db.session.commit()
+    flash('Horário removido com sucesso.', 'success')
+    return redirect(url_for('clinic_detail', clinica_id=clinica_id))
 
 
 @app.route('/veterinarios')
