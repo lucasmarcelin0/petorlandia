@@ -52,7 +52,7 @@
         {% endif %}
         <a href="{{ url_for('edit_vet_schedule_slot', veterinario_id=veterinario.id, horario_id=h.id) }}" class="btn btn-sm btn-outline-primary ms-2">Editar</a>
         <form method="post" action="{{ url_for('delete_vet_schedule', veterinario_id=veterinario.id, horario_id=h.id) }}" class="d-inline">
-          {{ csrf_token() }}
+          {{ form.csrf_token }}
           <button type="submit" class="btn btn-sm btn-outline-danger ms-2" onclick="return confirm('Excluir este horário?');">Excluir</button>
         </form>
       </li>
