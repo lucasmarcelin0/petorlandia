@@ -336,6 +336,16 @@ class VetScheduleForm(FlaskForm):
         validators=[DataRequired()],
         render_kw={"class": "form-control", "type": "time"},
     )
+    intervalo_inicio = TimeField(
+        'Início do Intervalo',
+        validators=[Optional()],
+        render_kw={"class": "form-control", "type": "time"},
+    )
+    intervalo_fim = TimeField(
+        'Fim do Intervalo',
+        validators=[Optional()],
+        render_kw={"class": "form-control", "type": "time"},
+    )
     submit = SubmitField('Salvar')
 
 
