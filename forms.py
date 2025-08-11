@@ -277,6 +277,7 @@ class ClinicForm(FlaskForm):
     endereco = StringField('Endereço', validators=[Optional()])
     telefone = StringField('Telefone', validators=[Optional()])
     email = StringField('Email', validators=[Optional(), Email()])
+    logotipo = FileField('Imagem da Clínica', validators=[FileAllowed(['jpg', 'jpeg', 'png', 'gif'], 'Apenas imagens!')])
     submit = SubmitField('Salvar')
 
 
