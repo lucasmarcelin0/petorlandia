@@ -239,10 +239,10 @@ class ClinicaAdmin(MyModelView):
     }
 
     form_columns = [
-        'nome', 'cnpj', 'endereco', 'telefone', 'email', 'logotipo_upload'
+        'nome', 'cnpj', 'endereco', 'telefone', 'email', 'logotipo_upload', 'owner'
     ]
 
-    column_list = ['nome', 'cnpj', 'logotipo']
+    column_list = ['nome', 'cnpj', 'logotipo', 'owner']
 
     column_formatters = {
         'logotipo': lambda v, c, m, p: Markup(

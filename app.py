@@ -171,7 +171,7 @@ from forms import (
     ResetPasswordRequestForm, ResetPasswordForm, OrderItemForm,
     DeliveryRequestForm, AddToCartForm, SubscribePlanForm,
     ProductUpdateForm, ProductPhotoForm, ChangePasswordForm,
-    DeleteAccountForm, ClinicHoursForm, VetScheduleForm,
+    DeleteAccountForm, ClinicForm, ClinicHoursForm, VetScheduleForm,
     AppointmentForm, AppointmentDeleteForm
 )
 from helpers import calcular_idade, parse_data_nascimento, is_slot_available
@@ -1592,10 +1592,11 @@ def clinicas():
 @app.route('/clinica/<int:clinica_id>', methods=['GET', 'POST'])
 def clinic_detail(clinica_id):
     clinica = Clinica.query.get_or_404(clinica_id)
-    form = ClinicHoursForm()
-    form.clinica_id.choices = [(c.id, c.nome) for c in Clinica.query.all()]
+    hours_form = ClinicHoursForm()
+    clinic_form = ClinicForm(obj=clinica)
+    hours_form.clinica_id.choices = [(c.id, c.nome) for c in Clinica.query.all()]
     if request.method == 'GET':
-        form.clinica_id.data = clinica.id
+        hours_form.clinica_id.data = clinica.id
     pode_editar = current_user.is_authenticated and (
         _is_admin()
         or (
@@ -1603,26 +1604,34 @@ def clinic_detail(clinica_id):
             and getattr(current_user, 'veterinario', None)
             and current_user.veterinario.clinica_id == clinica_id
         )
+        or current_user.id == clinica.owner_id
     )
-    if form.validate_on_submit():
+    if clinic_form.submit.data and clinic_form.validate_on_submit():
         if not pode_editar:
             abort(403)
-        for dia in form.dias_semana.data:
+        clinic_form.populate_obj(clinica)
+        db.session.commit()
+        flash('Clínica atualizada com sucesso.', 'success')
+        return redirect(url_for('clinic_detail', clinica_id=clinica.id))
+    if hours_form.submit.data and hours_form.validate_on_submit():
+        if not pode_editar:
+            abort(403)
+        for dia in hours_form.dias_semana.data:
             existentes = ClinicHours.query.filter_by(
-                clinica_id=form.clinica_id.data, dia_semana=dia
+                clinica_id=hours_form.clinica_id.data, dia_semana=dia
             ).all()
             if existentes:
-                existentes[0].hora_abertura = form.hora_abertura.data
-                existentes[0].hora_fechamento = form.hora_fechamento.data
+                existentes[0].hora_abertura = hours_form.hora_abertura.data
+                existentes[0].hora_fechamento = hours_form.hora_fechamento.data
                 for extra in existentes[1:]:
                     db.session.delete(extra)
             else:
                 db.session.add(
                     ClinicHours(
-                        clinica_id=form.clinica_id.data,
+                        clinica_id=hours_form.clinica_id.data,
                         dia_semana=dia,
-                        hora_abertura=form.hora_abertura.data,
-                        hora_fechamento=form.hora_fechamento.data,
+                        hora_abertura=hours_form.hora_abertura.data,
+                        hora_fechamento=hours_form.hora_fechamento.data,
                     )
                 )
         db.session.commit()
@@ -1633,7 +1642,8 @@ def clinic_detail(clinica_id):
         'clinic_detail.html',
         clinica=clinica,
         horarios=horarios,
-        form=form,
+        form=hours_form,
+        clinic_form=clinic_form,
         pode_editar=pode_editar,
     )
 
@@ -1646,7 +1656,7 @@ def delete_clinic_hour(clinica_id, horario_id):
         current_user.worker == 'veterinario'
         and getattr(current_user, 'veterinario', None)
         and current_user.veterinario.clinica_id == clinica_id
-    )
+    ) or current_user.id == clinica.owner_id
     if not pode_editar:
         abort(403)
     horario = ClinicHours.query.filter_by(id=horario_id, clinica_id=clinica_id).first_or_404()
