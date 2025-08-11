@@ -1,0 +1,23 @@
+{% extends "layout.html" %}
+
+{% block main %}
+<div class="container mt-4">
+  <h2>Agendar Consulta</h2>
+  <form method="POST">
+    {{ form.hidden_tag() }}
+    <div class="mb-3">
+      {{ form.veterinario_id.label(class="form-label") }}
+      {{ form.veterinario_id(class="form-select") }}
+    </div>
+    <div class="mb-3">
+      {{ form.scheduled_at.label(class="form-label") }}
+      {{ form.scheduled_at(class="form-control", placeholder="YYYY-MM-DD HH:MM") }}
+    </div>
+    <div class="mb-3">
+      {{ form.description.label(class="form-label") }}
+      {{ form.description(class="form-control", rows=3) }}
+    </div>
+    {{ form.submit(class="btn btn-primary") }}
+  </form>
+</div>
+{% endblock %}
