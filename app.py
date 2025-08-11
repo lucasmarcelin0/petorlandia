@@ -170,7 +170,7 @@ from forms import (
     ResetPasswordRequestForm, ResetPasswordForm, OrderItemForm,
     DeliveryRequestForm, AddToCartForm, SubscribePlanForm,
     ProductUpdateForm, ProductPhotoForm, ChangePasswordForm,
-    DeleteAccountForm
+    DeleteAccountForm, VeterinarioSpecialtyForm
 )
 from helpers import calcular_idade, parse_data_nascimento
 
@@ -1859,6 +1859,18 @@ def update_tutor(user_id):
         flash(message, 'warning')
         return redirect(request.referrer or url_for('index'))
 
+    if user.worker == 'veterinario':
+        crmv_val = request.form.get('crmv')
+        vet = user.veterinario or Veterinario(user=user)
+        if crmv_val:
+            vet.crmv = crmv_val
+        specialty_ids = request.form.getlist('specialties')
+        if specialty_ids:
+            vet.specialties = Specialty.query.filter(Specialty.id.in_(specialty_ids)).all()
+        else:
+            vet.specialties = []
+        db.session.add(vet)
+
     # 💾 Commit final
     try:
         db.session.commit()
@@ -1907,6 +1919,11 @@ def ficha_tutor(tutor_id):
     animal_forms = {a.id: AnimalForm(obj=a) for a in animais}
     new_animal_form = AnimalForm()
 
+    vet_form = VeterinarioSpecialtyForm(obj=tutor.veterinario)
+    vet_form.specialties.choices = [(s.id, s.nome) for s in Specialty.query.order_by(Specialty.nome).all()]
+    if tutor.veterinario:
+        vet_form.specialties.data = [s.id for s in tutor.veterinario.specialties]
+
     # Busca todas as espécies e raças
     species_list = list_species()
     breeds = Breed.query.options(joinedload(Breed.species)).all()
@@ -1930,7 +1947,8 @@ def ficha_tutor(tutor_id):
         breed_map=breed_map,
         tutor_form=tutor_form,
         animal_forms=animal_forms,
-        new_animal_form=new_animal_form
+        new_animal_form=new_animal_form,
+        vet_form=vet_form
     )
 
 

@@ -3,6 +3,7 @@ from wtforms import (
     StringField,
     TextAreaField,
     SelectField,
+    SelectMultipleField,
     PasswordField,
     SubmitField,
     BooleanField,
@@ -209,6 +210,12 @@ class ChangePasswordForm(FlaskForm):
 
 class DeleteAccountForm(FlaskForm):
     submit = SubmitField('Excluir Conta')
+
+
+class VeterinarioSpecialtyForm(FlaskForm):
+    crmv = StringField('CRMV', validators=[Optional(), Length(max=20)])
+    specialties = SelectMultipleField('Especialidades', coerce=int, validators=[Optional()])
+    submit = SubmitField('Salvar')
 
 
 

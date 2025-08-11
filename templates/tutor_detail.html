@@ -33,6 +33,7 @@
 
       <form id="tutor-form" action="{{ url_for('update_tutor', user_id=tutor.id) }}" method="POST" enctype="multipart/form-data" class="row g-3" data-sync>
         {{ tutor_form.hidden_tag() }}
+        {{ vet_form.hidden_tag() }}
         <div class="col-md-6">
           <label class="form-label">Nome</label>
           <input name="name" class="form-control" value="{{ tutor.name or '' }}" required>
@@ -54,6 +55,16 @@
           <label class="form-label">RG</label>
           <input name="rg" class="form-control" value="{{ tutor.rg or '' }}">
         </div>
+        {% if tutor.worker == 'veterinario' %}
+        <div class="col-md-4">
+          {{ vet_form.crmv.label(class='form-label') }}
+          {{ vet_form.crmv(class='form-control') }}
+        </div>
+        <div class="col-md-8">
+          <label class="form-label">Especialidades</label>
+          {{ vet_form.specialties(class='form-select', multiple=True) }}
+        </div>
+        {% endif %}
         <div class="col-md-4">
           <label class="form-label">Data de Nascimento</label>
           <input id="tutor_dob" name="date_of_birth" class="form-control" value="{{ tutor.date_of_birth.strftime('%Y-%m-%d') if tutor.date_of_birth else '' }}">
