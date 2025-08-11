@@ -462,6 +462,10 @@
                             <ul class="dropdown-menu dropdown-menu-end">
                                 <li><a class="dropdown-item" href="{{ url_for('profile') }}"><i class="fas fa-user me-2 text-primary"></i> Meu Perfil</a></li>
                                 <li><a class="dropdown-item" href="{{ url_for('minhas_compras') }}"><i class="fas fa-box me-2 text-warning"></i> Minhas Compras</a></li>
+                                {% if current_user.worker == 'veterinario' and current_user.veterinario %}
+                                <li><a class="dropdown-item" href="{{ url_for('clinic_detail', clinica_id=current_user.veterinario.clinica_id) }}"><i class="fas fa-clinic-medical me-2 text-info"></i> Minha Clínica</a></li>
+                                {% endif %}
+                
                                 <li><a class="dropdown-item" href="{{ url_for('logout') }}"><i class="fas fa-sign-out-alt me-2 text-danger"></i> Sair</a></li>
                             </ul>
                         </li>
