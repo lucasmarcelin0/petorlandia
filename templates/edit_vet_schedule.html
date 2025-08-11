@@ -105,6 +105,17 @@
       <li>Nenhum horário cadastrado.</li>
     {% endfor %}
   </ul>
+
+  <h3>Consultas Agendadas</h3>
+  <ul class="list-group">
+    {% for appt in appointments %}
+      <li class="list-group-item">
+        {{ appt.scheduled_at.strftime('%d/%m/%Y %H:%M') }} - {{ appt.animal.name }} ({{ appt.tutor.name }})
+      </li>
+    {% else %}
+      <li class="list-group-item">Nenhuma consulta agendada.</li>
+    {% endfor %}
+  </ul>
 </div>
 <script>
   function selectDays(mode) {
