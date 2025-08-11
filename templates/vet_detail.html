@@ -1,0 +1,28 @@
+{% extends "layout.html" %}
+
+{% block main %}
+<div class="container mt-4">
+  <h2>{{ veterinario.user.name }}</h2>
+  <p><strong>CRMV:</strong> {{ veterinario.crmv }}</p>
+  {% if veterinario.clinica %}<p><strong>Clínica:</strong> {{ veterinario.clinica.nome }}</p>{% endif %}
+  {% if veterinario.specialties %}<p><strong>Especialidades:</strong> {{ veterinario.specialty_list }}</p>{% endif %}
+
+  <h3>Agenda</h3>
+  <table class="table">
+    <thead>
+      <tr><th>Dia</th><th>Início</th><th>Fim</th></tr>
+    </thead>
+    <tbody>
+      {% for h in horarios %}
+        <tr>
+          <td>{{ h.dia_semana }}</td>
+          <td>{{ h.hora_inicio.strftime('%H:%M') }}</td>
+          <td>{{ h.hora_fim.strftime('%H:%M') }}</td>
+        </tr>
+      {% else %}
+        <tr><td colspan="3">Nenhum horário cadastrado.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

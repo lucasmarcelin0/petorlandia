@@ -1,0 +1,28 @@
+{% extends "layout.html" %}
+
+{% block main %}
+<div class="container mt-4">
+  <h2>{{ clinica.nome }}</h2>
+  {% if clinica.endereco %}<p><strong>Endereço:</strong> {{ clinica.endereco }}</p>{% endif %}
+  {% if clinica.telefone %}<p><strong>Telefone:</strong> {{ clinica.telefone }}</p>{% endif %}
+  {% if clinica.email %}<p><strong>Email:</strong> {{ clinica.email }}</p>{% endif %}
+
+  <h3>Horários de Atendimento</h3>
+  <table class="table">
+    <thead>
+      <tr><th>Dia</th><th>Abre</th><th>Fecha</th></tr>
+    </thead>
+    <tbody>
+      {% for h in horarios %}
+        <tr>
+          <td>{{ h.dia_semana }}</td>
+          <td>{{ h.hora_abertura.strftime('%H:%M') }}</td>
+          <td>{{ h.hora_fechamento.strftime('%H:%M') }}</td>
+        </tr>
+      {% else %}
+        <tr><td colspan="3">Nenhum horário cadastrado.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}
