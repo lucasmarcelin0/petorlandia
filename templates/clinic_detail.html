@@ -3,6 +3,9 @@
 {% block main %}
 <div class="container mt-4">
   <h2>{{ clinica.nome }}</h2>
+  {% if clinica.logotipo %}
+  <img src="{{ clinica.logotipo }}" alt="Imagem da Clínica" class="img-fluid mb-3" style="max-height: 200px;">
+  {% endif %}
   {% if clinica.endereco %}<p><strong>Endereço:</strong> {{ clinica.endereco }}</p>{% endif %}
   {% if clinica.telefone %}<p><strong>Telefone:</strong> {{ clinica.telefone }}</p>{% endif %}
   {% if clinica.email %}<p><strong>Email:</strong> {{ clinica.email }}</p>{% endif %}
@@ -10,7 +13,7 @@
   {% if pode_editar %}
   <button class="btn btn-secondary mt-3" onclick="toggleEditInfo()">Editar Informações</button>
   <div id="edit-info" class="mt-4" style="display: none;">
-    <form method="post" class="mb-4">
+    <form method="post" class="mb-4" enctype="multipart/form-data">
       {{ clinic_form.hidden_tag() }}
       <div class="mb-3">
         {{ clinic_form.nome.label }}
@@ -31,6 +34,11 @@
       <div class="mb-3">
         {{ clinic_form.email.label }}
         {{ clinic_form.email(class="form-control") }}
+      </div>
+      <div class="mb-3">
+        {{ clinic_form.logotipo.label }}
+        {{ clinic_form.logotipo(class="form-control", onchange="previewLogo(this)") }}
+        <img id="logo-preview" src="{{ clinica.logotipo }}" class="img-fluid mt-2" style="max-height:150px; {% if not clinica.logotipo %}display:none;{% endif %}">
       </div>
       {{ clinic_form.submit(class="btn btn-primary") }}
     </form>
@@ -113,6 +121,18 @@ function selectDays(mode) {
     else if (mode === 'weekday') opt.selected = weekdays.includes(opt.value);
     else if (mode === 'weekend') opt.selected = weekend.includes(opt.value);
     else if (mode === 'clear') opt.selected = false;
+  }
+}
+
+function previewLogo(input) {
+  const preview = document.getElementById('logo-preview');
+  const file = input.files[0];
+  if (file) {
+    preview.src = URL.createObjectURL(file);
+    preview.style.display = 'block';
+  } else {
+    preview.src = '';
+    preview.style.display = 'none';
   }
 }
 </script>

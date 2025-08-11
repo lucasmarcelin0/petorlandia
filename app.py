@@ -1609,7 +1609,16 @@ def clinic_detail(clinica_id):
     if clinic_form.submit.data and clinic_form.validate_on_submit():
         if not pode_editar:
             abort(403)
+        original_logo = clinica.logotipo
         clinic_form.populate_obj(clinica)
+        file = clinic_form.logotipo.data
+        if file and getattr(file, 'filename', ''):
+            filename = f"{uuid.uuid4().hex}_{secure_filename(file.filename)}"
+            image_url = upload_to_s3(file, filename, folder="clinicas")
+            if image_url:
+                clinica.logotipo = image_url
+        else:
+            clinica.logotipo = original_logo
         db.session.commit()
         flash('Clínica atualizada com sucesso.', 'success')
         return redirect(url_for('clinic_detail', clinica_id=clinica.id))
