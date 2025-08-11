@@ -170,9 +170,9 @@ from forms import (
     ResetPasswordRequestForm, ResetPasswordForm, OrderItemForm,
     DeliveryRequestForm, AddToCartForm, SubscribePlanForm,
     ProductUpdateForm, ProductPhotoForm, ChangePasswordForm,
-    DeleteAccountForm, ClinicHoursForm, VetScheduleForm
+    DeleteAccountForm, ClinicHoursForm, VetScheduleForm, AppointmentForm
 )
-from helpers import calcular_idade, parse_data_nascimento
+from helpers import calcular_idade, parse_data_nascimento, is_slot_available
 
 # ----------------------------------------------------------------
 # 7)  Login & serializer
@@ -1661,6 +1661,47 @@ def edit_vet_specialties(veterinario_id):
         return redirect(url_for('ficha_tutor', tutor_id=veterinario.user_id))
     form.specialties.data = [s.id for s in veterinario.specialties]
     return render_template('edit_vet_specialties.html', form=form, veterinario=veterinario)
+
+
+@app.route('/appointments/new', methods=['GET', 'POST'])
+@login_required
+def new_appointment():
+    form = AppointmentForm()
+    animals = (
+        Animal.query.join(HealthSubscription)
+        .filter(
+            HealthSubscription.user_id == current_user.id,
+            HealthSubscription.active.is_(True),
+        )
+        .all()
+    )
+    form.animal_id.choices = [(a.id, a.name) for a in animals]
+    form.veterinario_id.choices = [
+        (v.id, v.user.name) for v in Veterinario.query.all()
+    ]
+
+    if form.validate_on_submit():
+        when = datetime.combine(form.date.data, form.time.data)
+        if not is_slot_available(form.veterinario_id.data, when):
+            flash('Horário indisponível. Escolha outro horário.', 'danger')
+        else:
+            appointment = Appointment(
+                animal_id=form.animal_id.data,
+                veterinario_id=form.veterinario_id.data,
+                scheduled_at=when,
+            )
+            db.session.add(appointment)
+            db.session.commit()
+            return redirect(url_for('appointment_confirmation', appointment_id=appointment.id))
+
+    return render_template('new_appointment.html', form=form)
+
+
+@app.route('/appointments/<int:appointment_id>/confirmacao')
+@login_required
+def appointment_confirmation(appointment_id):
+    appointment = Appointment.query.get_or_404(appointment_id)
+    return render_template('appointment_confirmation.html', appointment=appointment)
 
 
 @app.route('/tutor/<int:tutor_id>')
