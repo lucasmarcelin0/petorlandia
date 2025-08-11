@@ -15,6 +15,7 @@ from dotenv import load_dotenv
 from flask import Flask, session, send_from_directory, abort, request, jsonify, flash, render_template, redirect, url_for
 from itsdangerous import URLSafeTimedSerializer
 import json
+from sqlalchemy import func
 
 # ----------------------------------------------------------------
 # 1)  Alias único para “models”
@@ -1591,7 +1592,16 @@ def clinicas():
 @app.route('/clinica/<int:clinica_id>')
 def clinic_detail(clinica_id):
     clinica = Clinica.query.get_or_404(clinica_id)
-    horarios = ClinicHours.query.filter_by(clinica_id=clinica_id).all()
+    horarios = (
+        db.session.query(
+            ClinicHours.dia_semana,
+            func.min(ClinicHours.hora_abertura).label('hora_abertura'),
+            func.max(ClinicHours.hora_fechamento).label('hora_fechamento'),
+        )
+        .filter(ClinicHours.clinica_id == clinica_id)
+        .group_by(ClinicHours.dia_semana)
+        .all()
+    )
     return render_template('clinic_detail.html', clinica=clinica, horarios=horarios)
 
 
@@ -1614,17 +1624,36 @@ def edit_clinic_hours(clinica_id):
         form.clinica_id.data = clinica.id
     if form.validate_on_submit():
         for dia in form.dias_semana.data:
-            horario = ClinicHours(
-                clinica_id=form.clinica_id.data,
-                dia_semana=dia,
-                hora_abertura=form.hora_abertura.data,
-                hora_fechamento=form.hora_fechamento.data,
-            )
-            db.session.add(horario)
+            existentes = ClinicHours.query.filter_by(
+                clinica_id=form.clinica_id.data, dia_semana=dia
+            ).all()
+            if existentes:
+                existentes[0].hora_abertura = form.hora_abertura.data
+                existentes[0].hora_fechamento = form.hora_fechamento.data
+                for extra in existentes[1:]:
+                    db.session.delete(extra)
+            else:
+                db.session.add(
+                    ClinicHours(
+                        clinica_id=form.clinica_id.data,
+                        dia_semana=dia,
+                        hora_abertura=form.hora_abertura.data,
+                        hora_fechamento=form.hora_fechamento.data,
+                    )
+                )
         db.session.commit()
         flash('Horário salvo com sucesso.', 'success')
         return redirect(url_for('clinic_detail', clinica_id=clinica.id))
-    horarios = ClinicHours.query.filter_by(clinica_id=clinica.id).all()
+    horarios = (
+        db.session.query(
+            ClinicHours.dia_semana,
+            func.min(ClinicHours.hora_abertura).label('hora_abertura'),
+            func.max(ClinicHours.hora_fechamento).label('hora_fechamento'),
+        )
+        .filter(ClinicHours.clinica_id == clinica.id)
+        .group_by(ClinicHours.dia_semana)
+        .all()
+    )
     return render_template('edit_clinic_hours.html', form=form, clinica=clinica, horarios=horarios)
 
 
@@ -2397,7 +2426,7 @@ def excluir_racao(racao_id):
 
 
 from sqlalchemy.orm import aliased
-from sqlalchemy import func, desc
+from sqlalchemy import desc
 
 from collections import defaultdict
 
