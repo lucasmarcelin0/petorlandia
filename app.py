@@ -5124,12 +5124,20 @@ def appointment_confirmation(appointment_id):
 @app.route('/appointments')
 @login_required
 def list_appointments():
-    appointments = (
-        Appointment.query
-        .filter_by(tutor_id=current_user.id)
-        .order_by(Appointment.scheduled_at)
-        .all()
-    )
+    if current_user.worker == 'veterinario' and getattr(current_user, 'veterinario', None):
+        appointments = (
+            Appointment.query
+            .filter_by(veterinario_id=current_user.veterinario.id)
+            .order_by(Appointment.scheduled_at)
+            .all()
+        )
+    else:
+        appointments = (
+            Appointment.query
+            .filter_by(tutor_id=current_user.id)
+            .order_by(Appointment.scheduled_at)
+            .all()
+        )
     return render_template('appointments.html', appointments=appointments)
 
 
