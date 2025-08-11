@@ -27,14 +27,14 @@ try:
         Breed, Species, TipoRacao, ApresentacaoMedicamento, VacinaModelo, Consulta, Veterinario,
         Clinica, Prescricao, Medicamento, db, User, Animal, Message,
         Transaction, Review, Favorite, AnimalPhoto, UserRole, ExameModelo,
-        Product, Order, OrderItem, DeliveryRequest, HealthPlan, HealthSubscription, PickupLocation, Endereco, Payment, PaymentMethod, PaymentStatus
+        Product, Order, OrderItem, DeliveryRequest, HealthPlan, HealthSubscription, PickupLocation, Endereco, Payment, PaymentMethod, PaymentStatus, VetSchedule
     )
 except ImportError:
     from .models import (
         Breed, Species, TipoRacao, ApresentacaoMedicamento, VacinaModelo, Consulta, Veterinario,
         Clinica, Prescricao, Medicamento, db, User, Animal, Message,
         Transaction, Review, Favorite, AnimalPhoto, UserRole, ExameModelo,
-        Product, Order, OrderItem, DeliveryRequest, HealthPlan, HealthSubscription, PickupLocation, Endereco, Payment, PaymentMethod, PaymentStatus
+        Product, Order, OrderItem, DeliveryRequest, HealthPlan, HealthSubscription, PickupLocation, Endereco, Payment, PaymentMethod, PaymentStatus, VetSchedule
     )
 
 
@@ -231,6 +231,11 @@ class EnderecoAdmin(MyModelView):
 class VeterinarioAdmin(MyModelView):
     form_columns = ['user', 'crmv', 'clinica']
     column_list = ['id', 'user', 'crmv', 'clinica']
+
+
+class VetScheduleAdmin(MyModelView):
+    column_list = ['veterinario', 'dia_semana', 'hora_inicio', 'hora_fim']
+    form_columns = ['veterinario', 'dia_semana', 'hora_inicio', 'hora_fim']
 
 class ClinicaAdmin(MyModelView):
     form_extra_fields = {
@@ -430,6 +435,7 @@ def init_admin(app):
     admin.add_view(MyModelView(Prescricao, db.session))
     admin.add_view(ClinicaAdmin(Clinica, db.session))
     admin.add_view(VeterinarioAdmin(Veterinario, db.session))
+    admin.add_view(VetScheduleAdmin(VetSchedule, db.session, name='Agendas'))
     admin.add_view(MyModelView(ExameModelo, db.session))
     admin.add_view(MyModelView(Consulta, db.session))
     admin.add_view(MyModelView(VacinaModelo, db.session))

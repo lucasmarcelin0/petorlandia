@@ -1,0 +1,38 @@
+{% extends 'layout.html' %}
+{% block main %}
+<div class="container py-4">
+  <h2 class="mb-4">Minha Agenda</h2>
+  <form method="POST" class="row g-3 mb-4" data-sync>
+    {{ form.hidden_tag() }}
+    <div class="col-md-4">
+      {{ form.dia_semana.label(class="form-label") }}
+      {{ form.dia_semana(class="form-select") }}
+    </div>
+    <div class="col-md-4">
+      {{ form.hora_inicio.label(class="form-label") }}
+      {{ form.hora_inicio(class="form-control") }}
+    </div>
+    <div class="col-md-4">
+      {{ form.hora_fim.label(class="form-label") }}
+      {{ form.hora_fim(class="form-control") }}
+    </div>
+    <div class="col-12 d-grid">
+      {{ form.submit(class="btn btn-primary") }}
+    </div>
+  </form>
+
+  <h3 class="mb-3">Horários cadastrados</h3>
+  <ul class="list-group">
+    {% for s in schedules %}
+    <li class="list-group-item d-flex justify-content-between align-items-center">
+      {{ s.dia_semana }}: {{ s.hora_inicio.strftime('%H:%M') }} - {{ s.hora_fim.strftime('%H:%M') }}
+      <form method="POST" action="{{ url_for('apagar_horario', schedule_id=s.id) }}">
+        <button class="btn btn-sm btn-danger">Excluir</button>
+      </form>
+    </li>
+    {% else %}
+    <li class="list-group-item text-muted">Nenhum horário cadastrado.</li>
+    {% endfor %}
+  </ul>
+</div>
+{% endblock %}

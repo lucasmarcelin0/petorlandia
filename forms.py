@@ -9,6 +9,7 @@ from wtforms import (
     DecimalField,
     IntegerField,
     DateField,
+    TimeField,
 )
 from wtforms.validators import DataRequired, Email, EqualTo, Length, Optional
 from flask_wtf.file import FileField, FileAllowed
@@ -278,3 +279,22 @@ class ProductUpdateForm(FlaskForm):
 class ProductPhotoForm(FlaskForm):
     image = FileField('Foto do Produto', validators=[DataRequired(), FileAllowed(['jpg', 'jpeg', 'png', 'gif'], 'Apenas imagens!')])
     submit = SubmitField('Adicionar Foto')
+
+
+class VetScheduleForm(FlaskForm):
+    dia_semana = SelectField(
+        'Dia da Semana',
+        choices=[
+            ('Segunda', 'Segunda'),
+            ('Terça', 'Terça'),
+            ('Quarta', 'Quarta'),
+            ('Quinta', 'Quinta'),
+            ('Sexta', 'Sexta'),
+            ('Sábado', 'Sábado'),
+            ('Domingo', 'Domingo')
+        ],
+        validators=[DataRequired()]
+    )
+    hora_inicio = TimeField('Hora de Início', validators=[DataRequired()])
+    hora_fim = TimeField('Hora de Fim', validators=[DataRequired()])
+    submit = SubmitField('Salvar')
