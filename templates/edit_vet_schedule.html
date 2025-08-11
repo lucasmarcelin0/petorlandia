@@ -1,0 +1,181 @@
+{% extends "layout.html" %}
+
+{% block main %}
+<div class="container mt-4">
+  <h2>Agenda – {{ veterinario.user.name }}</h2>
+
+  <button class="btn btn-primary mb-3" onclick="showScheduleForm(false)">Adicionar Horário</button>
+  <button class="btn btn-secondary mb-3 ms-2" onclick="toggleAppointmentForm()">Agendar Consulta</button>
+
+  <div id="schedule-form-container" class="card mb-4 d-none">
+    <div class="card-body">
+      <h5 id="schedule-form-title" class="card-title">Adicionar Horário</h5>
+      <form method="post" id="schedule-form">
+        {{ schedule_form.hidden_tag() }}
+        <div class="mb-3">
+          {{ schedule_form.veterinario_id.label }}
+          {{ schedule_form.veterinario_id(class="form-select") }}
+        </div>
+        <div class="mb-3">
+          {{ schedule_form.dias_semana.label }}
+          {{ schedule_form.dias_semana(class="form-select", multiple=True, size=7) }}
+          <div class="mt-2">
+            <button type="button" class="btn btn-sm btn-outline-secondary" onclick="selectDays('all')">Todos</button>
+            <button type="button" class="btn btn-sm btn-outline-secondary" onclick="selectDays('weekday')">Dias Úteis</button>
+            <button type="button" class="btn btn-sm btn-outline-secondary" onclick="selectDays('weekend')">Fins de Semana</button>
+            <button type="button" class="btn btn-sm btn-outline-secondary" onclick="selectDays('clear')">Limpar</button>
+          </div>
+        </div>
+        <div class="mb-3">
+          {{ schedule_form.hora_inicio.label }}
+          {{ schedule_form.hora_inicio(class="form-control") }}
+        </div>
+        <div class="mb-3">
+          {{ schedule_form.hora_fim.label }}
+          {{ schedule_form.hora_fim(class="form-control") }}
+        </div>
+        <div class="mb-3">
+          {{ schedule_form.intervalo_inicio.label }}
+          {{ schedule_form.intervalo_inicio(class="form-control") }}
+        </div>
+        <div class="mb-3">
+          {{ schedule_form.intervalo_fim.label }}
+          {{ schedule_form.intervalo_fim(class="form-control") }}
+        </div>
+        {{ schedule_form.submit(class="btn btn-primary") }}
+        <button type="button" class="btn btn-secondary ms-2" onclick="hideForm('schedule-form-container')">Cancelar</button>
+      </form>
+    </div>
+  </div>
+
+  <div id="appointment-form-container" class="card mb-4 d-none">
+    <div class="card-body">
+      <h5 class="card-title">Agendar Consulta</h5>
+      <form method="post">
+        {{ appointment_form.hidden_tag() }}
+        <div class="mb-3">
+          {{ appointment_form.animal_id.label(class="form-label") }}
+          {{ appointment_form.animal_id(class="form-select") }}
+        </div>
+        <div class="mb-3 d-none">
+          {{ appointment_form.veterinario_id.label(class="form-label") }}
+          {{ appointment_form.veterinario_id(class="form-select") }}
+        </div>
+        <div class="mb-3">
+          {{ appointment_form.date.label(class="form-label") }}
+          {{ appointment_form.date(class="form-control", type="date") }}
+        </div>
+        <div class="mb-3">
+          {{ appointment_form.time.label(class="form-label") }}
+          {{ appointment_form.time(class="form-control", type="time") }}
+        </div>
+        <div class="mb-3">
+          {{ appointment_form.reason.label(class="form-label") }}
+          {{ appointment_form.reason(class="form-control", rows=3) }}
+        </div>
+        {{ appointment_form.submit(class="btn btn-primary") }}
+        <button type="button" class="btn btn-secondary ms-2" onclick="hideForm('appointment-form-container')">Cancelar</button>
+      </form>
+    </div>
+  </div>
+
+  <h3>Horários Cadastrados</h3>
+  <ul class="list-unstyled">
+    {% for h in horarios %}
+      <li>
+        {{ h.dia_semana }}: {{ h.hora_inicio.strftime('%H:%M') }} - {{ h.hora_fim.strftime('%H:%M') }}
+        {% if h.intervalo_inicio and h.intervalo_fim %}
+          (Intervalo: {{ h.intervalo_inicio.strftime('%H:%M') }} - {{ h.intervalo_fim.strftime('%H:%M') }})
+        {% endif %}
+        <button type="button" class="btn btn-sm btn-outline-primary ms-2 edit-btn"
+                data-id="{{ h.id }}"
+                data-dia="{{ h.dia_semana }}"
+                data-hora-inicio="{{ h.hora_inicio.strftime('%H:%M') }}"
+                data-hora-fim="{{ h.hora_fim.strftime('%H:%M') }}"
+                data-intervalo-inicio="{{ h.intervalo_inicio.strftime('%H:%M') if h.intervalo_inicio else '' }}"
+                data-intervalo-fim="{{ h.intervalo_fim.strftime('%H:%M') if h.intervalo_fim else '' }}">
+          Editar
+        </button>
+        <form method="post" action="{{ url_for('delete_vet_schedule', veterinario_id=veterinario.id, horario_id=h.id) }}" class="d-inline">
+          {{ schedule_form.csrf_token }}
+          <button type="submit" class="btn btn-sm btn-outline-danger ms-2" onclick="return confirm('Excluir este horário?');">Excluir</button>
+        </form>
+      </li>
+    {% else %}
+      <li>Nenhum horário cadastrado.</li>
+    {% endfor %}
+  </ul>
+
+  <h3>Consultas Agendadas</h3>
+  <ul class="list-group">
+    {% for appt in appointments %}
+      <li class="list-group-item">
+        {{ appt.scheduled_at.strftime('%d/%m/%Y %H:%M') }} - {{ appt.animal.name }} ({{ appt.tutor.name }})
+      </li>
+    {% else %}
+      <li class="list-group-item">Nenhuma consulta agendada.</li>
+    {% endfor %}
+  </ul>
+</div>
+<script>
+  function selectDays(mode) {
+    const select = document.getElementById('schedule-dias_semana');
+    const weekdays = ['Segunda','Terça','Quarta','Quinta','Sexta'];
+    const weekend = ['Sábado','Domingo'];
+    for (const opt of select.options) {
+      if (mode === 'all') opt.selected = true;
+      else if (mode === 'weekday') opt.selected = weekdays.includes(opt.value);
+      else if (mode === 'weekend') opt.selected = weekend.includes(opt.value);
+      else if (mode === 'clear') opt.selected = false;
+    }
+  }
+
+  function showScheduleForm(isEdit, data) {
+    const container = document.getElementById('schedule-form-container');
+    const title = document.getElementById('schedule-form-title');
+    const form = document.getElementById('schedule-form');
+    const select = document.getElementById('schedule-dias_semana');
+    const horaInicio = document.getElementById('schedule-hora_inicio');
+    const horaFim = document.getElementById('schedule-hora_fim');
+    const intervaloInicio = document.getElementById('schedule-intervalo_inicio');
+    const intervaloFim = document.getElementById('schedule-intervalo_fim');
+
+    form.reset();
+    document.getElementById('schedule-veterinario_id').value = '{{ veterinario.id }}';
+
+    if (isEdit) {
+      title.textContent = 'Editar Horário';
+      form.action = `/admin/veterinario/{{ veterinario.id }}/agenda/${data.id}/edit`;
+      select.multiple = false;
+      [...select.options].forEach(opt => opt.selected = opt.value === data.dia);
+      horaInicio.value = data.horaInicio;
+      horaFim.value = data.horaFim;
+      intervaloInicio.value = data.intervaloInicio;
+      intervaloFim.value = data.intervaloFim;
+    } else {
+      title.textContent = 'Adicionar Horário';
+      form.action = `/admin/veterinario/{{ veterinario.id }}/agenda`;
+      select.multiple = true;
+    }
+    container.classList.remove('d-none');
+  }
+
+  function editSchedule(data) {
+    showScheduleForm(true, data);
+  }
+
+  document.querySelectorAll('.edit-btn').forEach(btn => {
+    btn.addEventListener('click', function() {
+      editSchedule(this.dataset);
+    });
+  });
+
+  function toggleAppointmentForm() {
+    document.getElementById('appointment-form-container').classList.toggle('d-none');
+  }
+
+  function hideForm(id) {
+    document.getElementById(id).classList.add('d-none');
+  }
+</script>
+{% endblock %}

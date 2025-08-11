@@ -1,0 +1,119 @@
+{% extends "layout.html" %}
+
+{% block main %}
+<div class="container mt-4">
+  <h2>{{ clinica.nome }}</h2>
+  {% if clinica.endereco %}<p><strong>Endereço:</strong> {{ clinica.endereco }}</p>{% endif %}
+  {% if clinica.telefone %}<p><strong>Telefone:</strong> {{ clinica.telefone }}</p>{% endif %}
+  {% if clinica.email %}<p><strong>Email:</strong> {{ clinica.email }}</p>{% endif %}
+
+  {% if pode_editar %}
+  <button class="btn btn-secondary mt-3" onclick="toggleEditInfo()">Editar Informações</button>
+  <div id="edit-info" class="mt-4" style="display: none;">
+    <form method="post" class="mb-4">
+      {{ clinic_form.hidden_tag() }}
+      <div class="mb-3">
+        {{ clinic_form.nome.label }}
+        {{ clinic_form.nome(class="form-control") }}
+      </div>
+      <div class="mb-3">
+        {{ clinic_form.cnpj.label }}
+        {{ clinic_form.cnpj(class="form-control") }}
+      </div>
+      <div class="mb-3">
+        {{ clinic_form.endereco.label }}
+        {{ clinic_form.endereco(class="form-control") }}
+      </div>
+      <div class="mb-3">
+        {{ clinic_form.telefone.label }}
+        {{ clinic_form.telefone(class="form-control") }}
+      </div>
+      <div class="mb-3">
+        {{ clinic_form.email.label }}
+        {{ clinic_form.email(class="form-control") }}
+      </div>
+      {{ clinic_form.submit(class="btn btn-primary") }}
+    </form>
+  </div>
+  {% endif %}
+
+  <h3>Horários de Atendimento</h3>
+  <table class="table">
+    <thead>
+      <tr><th>Dia</th><th>Abre</th><th>Fecha</th>{% if pode_editar %}<th>Ações</th>{% endif %}</tr>
+    </thead>
+    <tbody>
+      {% for h in horarios %}
+        <tr>
+          <td>{{ h.dia_semana }}</td>
+          <td>{{ h.hora_abertura.strftime('%H:%M') }}</td>
+          <td>{{ h.hora_fechamento.strftime('%H:%M') }}</td>
+          {% if pode_editar %}
+          <td>
+            <form method="post" action="{{ url_for('delete_clinic_hour', clinica_id=clinica.id, horario_id=h.id) }}" class="d-inline">
+              {{ form.csrf_token }}
+              <button type="submit" class="btn btn-sm btn-outline-danger" onclick="return confirm('Excluir este horário?');">Excluir</button>
+            </form>
+          </td>
+          {% endif %}
+        </tr>
+      {% else %}
+        <tr><td colspan="{% if pode_editar %}4{% else %}3{% endif %}">Nenhum horário cadastrado.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  {% if pode_editar %}
+  <button class="btn btn-secondary mt-3" onclick="toggleEditHours()">Editar Horários</button>
+  <div id="edit-hours" class="mt-4" style="display: none;">
+    <form method="post" class="mb-4">
+      {{ form.hidden_tag() }}
+      <div class="mb-3">
+        {{ form.clinica_id.label }}
+        {{ form.clinica_id(class="form-select") }}
+      </div>
+      <div class="mb-3">
+        {{ form.dias_semana.label }}
+        {{ form.dias_semana(class="form-select", multiple=True, size=7) }}
+        <div class="mt-2">
+          <button type="button" class="btn btn-sm btn-outline-secondary" onclick="selectDays('all')">Todos</button>
+          <button type="button" class="btn btn-sm btn-outline-secondary" onclick="selectDays('weekday')">Dias Úteis</button>
+          <button type="button" class="btn btn-sm btn-outline-secondary" onclick="selectDays('weekend')">Fins de Semana</button>
+          <button type="button" class="btn btn-sm btn-outline-secondary" onclick="selectDays('clear')">Limpar</button>
+        </div>
+      </div>
+      <div class="mb-3">
+        {{ form.hora_abertura.label }}
+        {{ form.hora_abertura(class="form-control") }}
+      </div>
+      <div class="mb-3">
+        {{ form.hora_fechamento.label }}
+        {{ form.hora_fechamento(class="form-control") }}
+      </div>
+      {{ form.submit(class="btn btn-primary") }}
+    </form>
+  </div>
+  {% endif %}
+</div>
+<script>
+function toggleEditInfo() {
+  const section = document.getElementById('edit-info');
+  section.style.display = section.style.display === 'none' ? 'block' : 'none';
+}
+function toggleEditHours() {
+  const section = document.getElementById('edit-hours');
+  section.style.display = section.style.display === 'none' ? 'block' : 'none';
+}
+function selectDays(mode) {
+  const select = document.getElementById('dias_semana');
+  const weekdays = ['Segunda','Terça','Quarta','Quinta','Sexta'];
+  const weekend = ['Sábado','Domingo'];
+  for (const opt of select.options) {
+    if (mode === 'all') opt.selected = true;
+    else if (mode === 'weekday') opt.selected = weekdays.includes(opt.value);
+    else if (mode === 'weekend') opt.selected = weekend.includes(opt.value);
+    else if (mode === 'clear') opt.selected = false;
+  }
+}
+</script>
+{% endblock %}

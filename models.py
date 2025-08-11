@@ -8,7 +8,7 @@ from werkzeug.security import generate_password_hash, check_password_hash
 from datetime import datetime, date
 from dateutil.relativedelta import relativedelta
 import enum
-from sqlalchemy import Enum
+from sqlalchemy import Enum, event
 from enum import Enum
 from sqlalchemy import Enum as PgEnum
 
@@ -155,7 +155,7 @@ class User(UserMixin, db.Model):
 
 
     clinica_id = db.Column(db.Integer, db.ForeignKey('clinica.id'), nullable=True)
-    clinica = db.relationship('Clinica', backref='usuarios')
+    clinica = db.relationship('Clinica', backref='usuarios', foreign_keys=[clinica_id])
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
 
@@ -487,11 +487,41 @@ class Clinica(db.Model):
     email = db.Column(db.String(120))
     logotipo = db.Column(db.String(200))  # caminho para imagem do logo
 
+    owner_id = db.Column(db.Integer, db.ForeignKey('user.id'))
+    owner = db.relationship('User', backref=db.backref('clinicas', foreign_keys='Clinica.owner_id'), foreign_keys=[owner_id])
+
     veterinarios = db.relationship('Veterinario', backref='clinica', lazy=True)
 
 
     def __str__(self):
         return f'{self.nome} ({self.cnpj})'
+
+
+class ClinicHours(db.Model):
+    __tablename__ = 'clinic_hours'
+    id = db.Column(db.Integer, primary_key=True)
+    clinica_id = db.Column(db.Integer, db.ForeignKey('clinica.id'), nullable=False)
+    dia_semana = db.Column(db.String(20), nullable=False)
+    hora_abertura = db.Column(db.Time, nullable=False)
+    hora_fechamento = db.Column(db.Time, nullable=False)
+
+    clinica = db.relationship('Clinica', backref='horarios')
+
+# Associação many-to-many entre veterinário e especialidade
+veterinario_especialidade = db.Table(
+    'veterinario_especialidade',
+    db.Column('veterinario_id', db.Integer, db.ForeignKey('veterinario.id'), primary_key=True),
+    db.Column('specialty_id', db.Integer, db.ForeignKey('specialty.id'), primary_key=True)
+)
+
+
+class Specialty(db.Model):
+    __tablename__ = 'specialty'
+    id = db.Column(db.Integer, primary_key=True)
+    nome = db.Column(db.String(120), unique=True, nullable=False)
+
+    def __str__(self):
+        return self.nome
 
 class Veterinario(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -504,11 +534,84 @@ class Veterinario(db.Model):
     clinica_id = db.Column(db.Integer, db.ForeignKey('clinica.id'))
 
     user = db.relationship('User', back_populates='veterinario', uselist=False)
+    specialties = db.relationship('Specialty', secondary='veterinario_especialidade', backref='veterinarios')
+
+    @property
+    def specialty_list(self):
+        return ", ".join(s.nome for s in self.specialties)
 
     def __str__(self):
         return f"{self.user.name} (CRMV: {self.crmv})"
 
 
+class VetSchedule(db.Model):
+    __tablename__ = 'vet_schedule'
+    id = db.Column(db.Integer, primary_key=True)
+    veterinario_id = db.Column(db.Integer, db.ForeignKey('veterinario.id'), nullable=False)
+    dia_semana = db.Column(db.String(20), nullable=False)
+    hora_inicio = db.Column(db.Time, nullable=False)
+    hora_fim = db.Column(db.Time, nullable=False)
+    intervalo_inicio = db.Column(db.Time, nullable=True)
+    intervalo_fim = db.Column(db.Time, nullable=True)
+
+    veterinario = db.relationship('Veterinario', backref='horarios')
+
+
+class Appointment(db.Model):
+    __tablename__ = 'appointment'
+
+    id = db.Column(db.Integer, primary_key=True)
+    animal_id = db.Column(db.Integer, db.ForeignKey('animal.id'), nullable=False)
+    tutor_id = db.Column(
+        db.Integer,
+        db.ForeignKey('user.id', ondelete='CASCADE'),
+        nullable=False,
+    )
+    veterinario_id = db.Column(db.Integer, db.ForeignKey('veterinario.id'), nullable=False)
+    scheduled_at = db.Column(db.DateTime, nullable=False)
+    status = db.Column(db.String(20), nullable=False, default='scheduled')
+    consulta_id = db.Column(db.Integer, db.ForeignKey('consulta.id'), nullable=True)
+
+    animal = db.relationship(
+        'Animal',
+        backref=db.backref('appointments', cascade='all, delete-orphan'),
+    )
+    tutor = db.relationship(
+        'User',
+        foreign_keys=[tutor_id],
+        backref=db.backref('appointments', cascade='all, delete-orphan'),
+    )
+    veterinario = db.relationship(
+        'Veterinario',
+        backref=db.backref('appointments', cascade='all, delete-orphan'),
+    )
+    consulta = db.relationship(
+        'Consulta',
+        backref=db.backref('appointment', uselist=False),
+        uselist=False,
+    )
+
+    @classmethod
+    def has_active_subscription(cls, animal_id, tutor_id):
+        from models import HealthSubscription
+
+        return (
+            HealthSubscription.query
+            .filter_by(animal_id=animal_id, user_id=tutor_id, active=True)
+            .first()
+            is not None
+        )
+
+    @staticmethod
+    def _validate_subscription(mapper, connection, target):
+        if not type(target).has_active_subscription(target.animal_id, target.tutor_id):
+            raise ValueError(
+                'Animal does not have an active health subscription for this tutor.'
+            )
+
+
+event.listen(Appointment, 'before_insert', Appointment._validate_subscription)
+event.listen(Appointment, 'before_update', Appointment._validate_subscription)
 
 class Medicamento(db.Model):
     id = db.Column(db.Integer, primary_key=True)

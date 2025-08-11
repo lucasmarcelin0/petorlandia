@@ -66,6 +66,19 @@
           <label class="form-label">Foto do Tutor</label>
           {{ photo_cropper(tutor_form.profile_photo, tutor_form.photo_rotation, tutor_form.photo_zoom, tutor_form.photo_offset_x, tutor_form.photo_offset_y, tutor.profile_photo, 150, 'profile_photo', 'user') }}
         </div>
+        {% if tutor.worker|lower == 'veterinario' and tutor.veterinario %}
+        <div class="col-12">
+          <label class="form-label">Especialidades</label>
+          <div class="d-flex flex-wrap gap-2">
+            {% for esp in tutor.veterinario.specialties %}
+              <span class="badge bg-secondary">{{ esp.nome }}</span>
+            {% else %}
+              <span class="text-muted">Nenhuma</span>
+            {% endfor %}
+          </div>
+          <a href="{{ url_for('edit_vet_specialties', veterinario_id=tutor.veterinario.id) }}" class="btn btn-sm btn-outline-primary mt-2">Editar Especialidades</a>
+        </div>
+        {% endif %}
 
 
         <!-- ======================== Endereço ======================== -->

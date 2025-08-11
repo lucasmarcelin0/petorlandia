@@ -1,0 +1,27 @@
+{% extends "layout.html" %}
+
+{% block main %}
+<div class="container mt-4">
+  <h2>Meus Agendamentos</h2>
+  <a href="{{ url_for('schedule_appointment') }}" class="btn btn-primary mb-3">
+    <i class="fas fa-plus me-1"></i> Novo Agendamento
+  </a>
+  <ul class="list-group">
+    {% for appt in appointments %}
+      <li class="list-group-item d-flex justify-content-between align-items-center">
+        <span>
+          {{ appt.scheduled_at.strftime('%d/%m/%Y %H:%M') }} - {{ appt.veterinario.user.name }}
+          {% if appt.animal %} - {{ appt.animal.name }}{% endif %}
+        </span>
+        {% if current_user.worker in ['veterinario', 'colaborador'] %}
+        <a href="{{ url_for('consulta_direct', animal_id=appt.animal_id) }}" class="btn btn-sm btn-outline-success">
+          🩺 Iniciar Consulta
+        </a>
+        {% endif %}
+      </li>
+    {% else %}
+      <li class="list-group-item">Nenhum agendamento encontrado.</li>
+    {% endfor %}
+  </ul>
+</div>
+{% endblock %}

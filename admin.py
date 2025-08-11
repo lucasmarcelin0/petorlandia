@@ -24,15 +24,15 @@ def _is_admin():
 # --------------------------------------------------------------------------
 try:
     from models import (
-        Breed, Species, TipoRacao, ApresentacaoMedicamento, VacinaModelo, Consulta, Veterinario,
-        Clinica, Prescricao, Medicamento, db, User, Animal, Message,
+        Breed, Species, TipoRacao, ApresentacaoMedicamento, VacinaModelo, Consulta, Veterinario, Specialty,
+        Clinica, ClinicHours, VetSchedule, Prescricao, Medicamento, db, User, Animal, Message,
         Transaction, Review, Favorite, AnimalPhoto, UserRole, ExameModelo,
         Product, Order, OrderItem, DeliveryRequest, HealthPlan, HealthSubscription, PickupLocation, Endereco, Payment, PaymentMethod, PaymentStatus
     )
 except ImportError:
     from .models import (
-        Breed, Species, TipoRacao, ApresentacaoMedicamento, VacinaModelo, Consulta, Veterinario,
-        Clinica, Prescricao, Medicamento, db, User, Animal, Message,
+        Breed, Species, TipoRacao, ApresentacaoMedicamento, VacinaModelo, Consulta, Veterinario, Specialty,
+        Clinica, ClinicHours, VetSchedule, Prescricao, Medicamento, db, User, Animal, Message,
         Transaction, Review, Favorite, AnimalPhoto, UserRole, ExameModelo,
         Product, Order, OrderItem, DeliveryRequest, HealthPlan, HealthSubscription, PickupLocation, Endereco, Payment, PaymentMethod, PaymentStatus
     )
@@ -229,8 +229,9 @@ class EnderecoAdmin(MyModelView):
 
 
 class VeterinarioAdmin(MyModelView):
-    form_columns = ['user', 'crmv', 'clinica']
-    column_list = ['id', 'user', 'crmv', 'clinica']
+    form_columns = ['user', 'crmv', 'clinica', 'specialties']
+    column_list = ['id', 'user', 'crmv', 'clinica', 'specialty_list']
+    column_labels = {'specialty_list': 'Especialidades'}
 
 class ClinicaAdmin(MyModelView):
     form_extra_fields = {
@@ -238,10 +239,10 @@ class ClinicaAdmin(MyModelView):
     }
 
     form_columns = [
-        'nome', 'cnpj', 'endereco', 'telefone', 'email', 'logotipo_upload'
+        'nome', 'cnpj', 'endereco', 'telefone', 'email', 'logotipo_upload', 'owner'
     ]
 
-    column_list = ['nome', 'cnpj', 'logotipo']
+    column_list = ['nome', 'cnpj', 'logotipo', 'owner']
 
     column_formatters = {
         'logotipo': lambda v, c, m, p: Markup(
@@ -266,6 +267,29 @@ class ClinicaAdmin(MyModelView):
                 f'style="max-height:150px;margin-top:10px;">'
             )
 
+
+class ClinicHoursAdmin(MyModelView):
+    column_list = ['clinica', 'dia_semana', 'hora_abertura', 'hora_fechamento']
+    form_columns = ['clinica', 'dia_semana', 'hora_abertura', 'hora_fechamento']
+
+
+class VetScheduleAdmin(MyModelView):
+    column_list = [
+        'veterinario',
+        'dia_semana',
+        'hora_inicio',
+        'hora_fim',
+        'intervalo_inicio',
+        'intervalo_fim',
+    ]
+    form_columns = [
+        'veterinario',
+        'dia_semana',
+        'hora_inicio',
+        'hora_fim',
+        'intervalo_inicio',
+        'intervalo_fim',
+    ]
 
 
 class TutorAdminView(MyModelView):
@@ -429,7 +453,10 @@ def init_admin(app):
     admin.add_view(MyModelView(Medicamento, db.session))
     admin.add_view(MyModelView(Prescricao, db.session))
     admin.add_view(ClinicaAdmin(Clinica, db.session))
+    admin.add_view(ClinicHoursAdmin(ClinicHours, db.session, name='Horários da Clínica'))
+    admin.add_view(VetScheduleAdmin(VetSchedule, db.session, name='Agenda do Veterinário'))
     admin.add_view(VeterinarioAdmin(Veterinario, db.session))
+    admin.add_view(MyModelView(Specialty, db.session, name='Especialidades'))
     admin.add_view(MyModelView(ExameModelo, db.session))
     admin.add_view(MyModelView(Consulta, db.session))
     admin.add_view(MyModelView(VacinaModelo, db.session))

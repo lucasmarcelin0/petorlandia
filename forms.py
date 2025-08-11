@@ -3,12 +3,15 @@ from wtforms import (
     StringField,
     TextAreaField,
     SelectField,
+    SelectMultipleField,
     PasswordField,
     SubmitField,
     BooleanField,
     DecimalField,
     IntegerField,
     DateField,
+    DateTimeField,
+    TimeField,
 )
 from wtforms.validators import DataRequired, Email, EqualTo, Length, Optional
 from flask_wtf.file import FileField, FileAllowed
@@ -210,6 +213,15 @@ class ChangePasswordForm(FlaskForm):
 class DeleteAccountForm(FlaskForm):
     submit = SubmitField('Excluir Conta')
 
+class AppointmentForm(FlaskForm):
+    veterinario_id = SelectField('Veterinário', coerce=int, validators=[DataRequired()])
+    scheduled_at = DateTimeField('Data e Hora', format='%Y-%m-%d %H:%M', validators=[DataRequired()])
+    description = TextAreaField('Descrição', validators=[Optional()])
+    submit = SubmitField('Agendar')
+
+
+class AppointmentDeleteForm(FlaskForm):
+    submit = SubmitField('Excluir')
 
 
 class MessageForm(FlaskForm):
@@ -259,6 +271,98 @@ class CheckoutForm(FlaskForm):
     submit = SubmitField('Finalizar Compra')
 
 
+class ClinicForm(FlaskForm):
+    nome = StringField('Nome', validators=[DataRequired()])
+    cnpj = StringField('CNPJ', validators=[Optional()])
+    endereco = StringField('Endereço', validators=[Optional()])
+    telefone = StringField('Telefone', validators=[Optional()])
+    email = StringField('Email', validators=[Optional(), Email()])
+    submit = SubmitField('Salvar')
+
+
+class ClinicHoursForm(FlaskForm):
+    clinica_id = SelectField(
+        'Clínica',
+        coerce=int,
+        validators=[DataRequired()],
+        render_kw={"class": "form-select"},
+    )
+    dias_semana = SelectMultipleField(
+        'Dias da Semana',
+        choices=[
+            ('Segunda', 'Segunda'),
+            ('Terça', 'Terça'),
+            ('Quarta', 'Quarta'),
+            ('Quinta', 'Quinta'),
+            ('Sexta', 'Sexta'),
+            ('Sábado', 'Sábado'),
+            ('Domingo', 'Domingo'),
+        ],
+        validators=[DataRequired()],
+        render_kw={"class": "form-select", "multiple": True},
+    )
+    hora_abertura = TimeField(
+        'Hora de Abertura',
+        validators=[DataRequired()],
+        render_kw={"class": "form-control", "type": "time"},
+    )
+    hora_fechamento = TimeField(
+        'Hora de Fechamento',
+        validators=[DataRequired()],
+        render_kw={"class": "form-control", "type": "time"},
+    )
+    submit = SubmitField('Salvar')
+
+
+class VetScheduleForm(FlaskForm):
+    veterinario_id = SelectField(
+        'Veterinário',
+        coerce=int,
+        validators=[DataRequired()],
+        render_kw={"class": "form-select"},
+    )
+    dias_semana = SelectMultipleField(
+        'Dias da Semana',
+        choices=[
+            ('Segunda', 'Segunda'),
+            ('Terça', 'Terça'),
+            ('Quarta', 'Quarta'),
+            ('Quinta', 'Quinta'),
+            ('Sexta', 'Sexta'),
+            ('Sábado', 'Sábado'),
+            ('Domingo', 'Domingo'),
+        ],
+        validators=[DataRequired()],
+        render_kw={"class": "form-select", "multiple": True},
+    )
+    hora_inicio = TimeField(
+        'Hora de Início',
+        validators=[DataRequired()],
+        render_kw={"class": "form-control", "type": "time"},
+    )
+    hora_fim = TimeField(
+        'Hora de Fim',
+        validators=[DataRequired()],
+        render_kw={"class": "form-control", "type": "time"},
+    )
+    intervalo_inicio = TimeField(
+        'Início do Intervalo',
+        validators=[Optional()],
+        render_kw={"class": "form-control", "type": "time"},
+    )
+    intervalo_fim = TimeField(
+        'Fim do Intervalo',
+        validators=[Optional()],
+        render_kw={"class": "form-control", "type": "time"},
+    )
+    submit = SubmitField('Salvar')
+
+
+class VetSpecialtyForm(FlaskForm):
+    specialties = SelectMultipleField('Especialidades', coerce=int)
+    submit = SubmitField('Salvar')
+
+
 class EditAddressForm(FlaskForm):
     """Formulário simples para atualizar o endereço de entrega de um pedido."""
     shipping_address = TextAreaField('Endereço', validators=[DataRequired(), Length(max=200)])
@@ -278,3 +382,56 @@ class ProductUpdateForm(FlaskForm):
 class ProductPhotoForm(FlaskForm):
     image = FileField('Foto do Produto', validators=[DataRequired(), FileAllowed(['jpg', 'jpeg', 'png', 'gif'], 'Apenas imagens!')])
     submit = SubmitField('Adicionar Foto')
+
+
+class AppointmentForm(FlaskForm):
+    """Formulário para agendamento de consultas."""
+
+    animal_id = SelectField(
+        'Animal',
+        coerce=int,
+        validators=[DataRequired()],
+    )
+
+    veterinario_id = SelectField(
+        'Veterinário',
+        coerce=int,
+        validators=[DataRequired()],
+    )
+
+    date = DateField(
+        'Data',
+        validators=[DataRequired()],
+        format='%Y-%m-%d',
+    )
+
+    time = TimeField(
+        'Horário',
+        validators=[DataRequired()],
+    )
+
+    reason = TextAreaField(
+        'Motivo',
+        validators=[Optional(), Length(max=500)],
+    )
+
+    submit = SubmitField('Agendar')
+
+    def __init__(self, tutor=None, is_veterinario=False, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        from models import Animal, Veterinario
+
+        if is_veterinario:
+            animals = Animal.query.all()
+        elif tutor is not None:
+            animals = Animal.query.filter_by(user_id=tutor.id).all()
+        else:
+            animals = Animal.query.all()
+
+        self.animal_id.choices = [(a.id, a.name) for a in animals]
+
+        veterinarios = Veterinario.query.all()
+        self.veterinario_id.choices = [
+            (v.id, v.user.name if v.user else str(v.id)) for v in veterinarios
+        ]
+
