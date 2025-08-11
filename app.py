@@ -170,7 +170,7 @@ from forms import (
     ResetPasswordRequestForm, ResetPasswordForm, OrderItemForm,
     DeliveryRequestForm, AddToCartForm, SubscribePlanForm,
     ProductUpdateForm, ProductPhotoForm, ChangePasswordForm,
-    DeleteAccountForm
+    DeleteAccountForm, VetScheduleForm
 )
 from helpers import calcular_idade, parse_data_nascimento
 
@@ -4909,5 +4909,47 @@ def teste_endereco():
         return redirect(url_for('teste_endereco'))
 
     return render_template('teste_endereco.html', endereco=endereco)
+
+
+@app.route('/minha_agenda', methods=['GET', 'POST'])
+@login_required
+def minha_agenda():
+    if current_user.worker != 'veterinario':
+        flash('Apenas veterinários podem acessar esta página.', 'danger')
+        return redirect(url_for('index'))
+
+    form = VetScheduleForm()
+    if form.validate_on_submit():
+        schedule = VetSchedule(
+            veterinario=current_user.veterinario,
+            dia_semana=form.dia_semana.data,
+            hora_inicio=form.hora_inicio.data,
+            hora_fim=form.hora_fim.data,
+        )
+        db.session.add(schedule)
+        db.session.commit()
+        flash('Horário adicionado com sucesso!', 'success')
+        return redirect(url_for('minha_agenda'))
+
+    schedules = current_user.veterinario.schedules if current_user.veterinario else []
+    return render_template('minha_agenda.html', form=form, schedules=schedules)
+
+
+@app.post('/minha_agenda/<int:schedule_id>/delete')
+@login_required
+def apagar_horario(schedule_id):
+    schedule = VetSchedule.query.get_or_404(schedule_id)
+    if schedule.veterinario.user_id != current_user.id:
+        abort(403)
+    db.session.delete(schedule)
+    db.session.commit()
+    flash('Horário removido!', 'success')
+    return redirect(url_for('minha_agenda'))
+
+
+@app.route('/veterinarios')
+def listar_veterinarios():
+    veterinarios = Veterinario.query.all()
+    return render_template('veterinarios.html', veterinarios=veterinarios)
 
 

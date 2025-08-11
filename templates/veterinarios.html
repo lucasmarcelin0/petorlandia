@@ -1,0 +1,24 @@
+{% extends 'layout.html' %}
+{% block main %}
+<div class="container py-4">
+  <h2 class="mb-4">Veterinários</h2>
+  {% for vet in veterinarios %}
+  <div class="card mb-3">
+    <div class="card-body">
+      <h5 class="card-title">{{ vet.user.name }} - CRMV: {{ vet.crmv }}</h5>
+      {% if vet.schedules %}
+      <ul class="mb-0">
+        {% for s in vet.schedules %}
+        <li>{{ s.dia_semana }}: {{ s.hora_inicio.strftime('%H:%M') }} - {{ s.hora_fim.strftime('%H:%M') }}</li>
+        {% endfor %}
+      </ul>
+      {% else %}
+      <p class="mb-0 text-muted">Sem horários cadastrados.</p>
+      {% endif %}
+    </div>
+  </div>
+  {% else %}
+  <p class="text-muted">Nenhum veterinário cadastrado.</p>
+  {% endfor %}
+</div>
+{% endblock %}
