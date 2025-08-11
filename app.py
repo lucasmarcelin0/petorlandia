@@ -172,7 +172,7 @@ from forms import (
     DeliveryRequestForm, AddToCartForm, SubscribePlanForm,
     ProductUpdateForm, ProductPhotoForm, ChangePasswordForm,
     DeleteAccountForm, ClinicForm, ClinicHoursForm, VetScheduleForm,
-    AppointmentForm, AppointmentDeleteForm
+    VetSpecialtyForm, AppointmentForm, AppointmentDeleteForm
 )
 from helpers import calcular_idade, parse_data_nascimento, is_slot_available
 
