@@ -363,3 +363,55 @@ class ProductUpdateForm(FlaskForm):
 class ProductPhotoForm(FlaskForm):
     image = FileField('Foto do Produto', validators=[DataRequired(), FileAllowed(['jpg', 'jpeg', 'png', 'gif'], 'Apenas imagens!')])
     submit = SubmitField('Adicionar Foto')
+
+
+class AppointmentForm(FlaskForm):
+    """Formulário para agendamento de consultas."""
+
+    animal_id = SelectField(
+        'Animal',
+        coerce=int,
+        validators=[DataRequired()],
+    )
+
+    veterinario_id = SelectField(
+        'Veterinário',
+        coerce=int,
+        validators=[DataRequired()],
+    )
+
+    date = DateField(
+        'Data',
+        validators=[DataRequired()],
+        format='%Y-%m-%d',
+    )
+
+    time = TimeField(
+        'Horário',
+        validators=[DataRequired()],
+    )
+
+    reason = TextAreaField(
+        'Motivo',
+        validators=[Optional(), Length(max=500)],
+    )
+
+    submit = SubmitField('Agendar')
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        from models import Animal, HealthSubscription, Veterinario
+
+        animals = (
+            Animal.query
+            .join(HealthSubscription)
+            .filter(HealthSubscription.active == True)
+            .all()
+        )
+        self.animal_id.choices = [(a.id, a.name) for a in animals]
+
+        veterinarios = Veterinario.query.all()
+        self.veterinario_id.choices = [
+            (v.id, v.user.name if v.user else str(v.id)) for v in veterinarios
+        ]
+
