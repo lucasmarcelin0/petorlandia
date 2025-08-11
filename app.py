@@ -2575,7 +2575,14 @@ def salvar_vacinas(animal_id):
 
     try:
         for v in data["vacinas"]:
-            data_formatada = datetime.strptime(v.get("data"), "%Y-%m-%d").date() if v.get("data") else None
+            data_str = v.get("data")
+            if data_str:
+                try:
+                    data_formatada = datetime.strptime(data_str, "%Y-%m-%d").date()
+                except ValueError:
+                    data_formatada = None
+            else:
+                data_formatada = None
 
             vacina = Vacina(
                 animal_id=animal_id,
@@ -2655,8 +2662,12 @@ def editar_vacina(vacina_id):
         vacina.tipo = data.get("tipo", vacina.tipo)
         vacina.observacoes = data.get("observacoes", vacina.observacoes)
 
-        if data.get("data"):
-            vacina.data = datetime.strptime(data["data"], "%Y-%m-%d").date()
+        data_str = data.get("data")
+        if data_str:
+            try:
+                vacina.data = datetime.strptime(data_str, "%Y-%m-%d").date()
+            except ValueError:
+                vacina.data = None
 
         db.session.commit()
         return jsonify({"success": True})
