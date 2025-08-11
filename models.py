@@ -520,6 +520,17 @@ class Veterinario(db.Model):
         return f"{self.user.name} (CRMV: {self.crmv})"
 
 
+class VetSchedule(db.Model):
+    __tablename__ = 'vet_schedule'
+    id = db.Column(db.Integer, primary_key=True)
+    veterinario_id = db.Column(db.Integer, db.ForeignKey('veterinario.id'), nullable=False)
+    dia_semana = db.Column(db.String(20), nullable=False)
+    hora_inicio = db.Column(db.Time, nullable=False)
+    hora_fim = db.Column(db.Time, nullable=False)
+
+    veterinario = db.relationship('Veterinario', backref='horarios')
+
+
 
 class Medicamento(db.Model):
     id = db.Column(db.Integer, primary_key=True)

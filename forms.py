@@ -280,6 +280,26 @@ class ClinicHoursForm(FlaskForm):
     submit = SubmitField('Salvar')
 
 
+class VetScheduleForm(FlaskForm):
+    veterinario_id = SelectField('Veterinário', coerce=int, validators=[DataRequired()])
+    dia_semana = SelectField(
+        'Dia da Semana',
+        choices=[
+            ('Segunda', 'Segunda'),
+            ('Terça', 'Terça'),
+            ('Quarta', 'Quarta'),
+            ('Quinta', 'Quinta'),
+            ('Sexta', 'Sexta'),
+            ('Sábado', 'Sábado'),
+            ('Domingo', 'Domingo'),
+        ],
+        validators=[DataRequired()],
+    )
+    hora_inicio = TimeField('Hora de Início', validators=[DataRequired()])
+    hora_fim = TimeField('Hora de Fim', validators=[DataRequired()])
+    submit = SubmitField('Salvar')
+
+
 class EditAddressForm(FlaskForm):
     """Formulário simples para atualizar o endereço de entrega de um pedido."""
     shipping_address = TextAreaField('Endereço', validators=[DataRequired(), Length(max=200)])

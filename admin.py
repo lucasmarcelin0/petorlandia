@@ -25,14 +25,14 @@ def _is_admin():
 try:
     from models import (
         Breed, Species, TipoRacao, ApresentacaoMedicamento, VacinaModelo, Consulta, Veterinario,
-        Clinica, ClinicHours, Prescricao, Medicamento, db, User, Animal, Message,
+        Clinica, ClinicHours, VetSchedule, Prescricao, Medicamento, db, User, Animal, Message,
         Transaction, Review, Favorite, AnimalPhoto, UserRole, ExameModelo,
         Product, Order, OrderItem, DeliveryRequest, HealthPlan, HealthSubscription, PickupLocation, Endereco, Payment, PaymentMethod, PaymentStatus
     )
 except ImportError:
     from .models import (
         Breed, Species, TipoRacao, ApresentacaoMedicamento, VacinaModelo, Consulta, Veterinario,
-        Clinica, ClinicHours, Prescricao, Medicamento, db, User, Animal, Message,
+        Clinica, ClinicHours, VetSchedule, Prescricao, Medicamento, db, User, Animal, Message,
         Transaction, Review, Favorite, AnimalPhoto, UserRole, ExameModelo,
         Product, Order, OrderItem, DeliveryRequest, HealthPlan, HealthSubscription, PickupLocation, Endereco, Payment, PaymentMethod, PaymentStatus
     )
@@ -272,6 +272,11 @@ class ClinicHoursAdmin(MyModelView):
     form_columns = ['clinica', 'dia_semana', 'hora_abertura', 'hora_fechamento']
 
 
+class VetScheduleAdmin(MyModelView):
+    column_list = ['veterinario', 'dia_semana', 'hora_inicio', 'hora_fim']
+    form_columns = ['veterinario', 'dia_semana', 'hora_inicio', 'hora_fim']
+
+
 class TutorAdminView(MyModelView):
     """Exemplo de deleção em cascata (caso use tutores)."""
     def on_model_delete(self, model):
@@ -434,6 +439,7 @@ def init_admin(app):
     admin.add_view(MyModelView(Prescricao, db.session))
     admin.add_view(ClinicaAdmin(Clinica, db.session))
     admin.add_view(ClinicHoursAdmin(ClinicHours, db.session, name='Horários da Clínica'))
+    admin.add_view(VetScheduleAdmin(VetSchedule, db.session, name='Agenda do Veterinário'))
     admin.add_view(VeterinarioAdmin(Veterinario, db.session))
     admin.add_view(MyModelView(ExameModelo, db.session))
     admin.add_view(MyModelView(Consulta, db.session))

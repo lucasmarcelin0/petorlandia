@@ -170,7 +170,7 @@ from forms import (
     ResetPasswordRequestForm, ResetPasswordForm, OrderItemForm,
     DeliveryRequestForm, AddToCartForm, SubscribePlanForm,
     ProductUpdateForm, ProductPhotoForm, ChangePasswordForm,
-    DeleteAccountForm, ClinicHoursForm
+    DeleteAccountForm, ClinicHoursForm, VetScheduleForm
 )
 from helpers import calcular_idade, parse_data_nascimento
 
@@ -1606,6 +1606,38 @@ def edit_clinic_hours(clinica_id):
         return redirect(url_for('clinic_hours', clinica_id=clinica.id))
     horarios = ClinicHours.query.filter_by(clinica_id=clinica.id).all()
     return render_template('edit_clinic_hours.html', form=form, clinica=clinica, horarios=horarios)
+
+
+@app.route('/veterinario/<int:veterinario_id>/agenda')
+def vet_schedule(veterinario_id):
+    veterinario = Veterinario.query.get_or_404(veterinario_id)
+    horarios = VetSchedule.query.filter_by(veterinario_id=veterinario_id).all()
+    return render_template('vet_schedule.html', veterinario=veterinario, horarios=horarios)
+
+
+@app.route('/admin/veterinario/<int:veterinario_id>/agenda', methods=['GET', 'POST'])
+@login_required
+def edit_vet_schedule(veterinario_id):
+    if not _is_admin():
+        abort(403)
+    veterinario = Veterinario.query.get_or_404(veterinario_id)
+    form = VetScheduleForm()
+    form.veterinario_id.choices = [(v.id, v.user.name) for v in Veterinario.query.all()]
+    if request.method == 'GET':
+        form.veterinario_id.data = veterinario.id
+    if form.validate_on_submit():
+        horario = VetSchedule(
+            veterinario_id=form.veterinario_id.data,
+            dia_semana=form.dia_semana.data,
+            hora_inicio=form.hora_inicio.data,
+            hora_fim=form.hora_fim.data,
+        )
+        db.session.add(horario)
+        db.session.commit()
+        flash('Horário salvo com sucesso.', 'success')
+        return redirect(url_for('vet_schedule', veterinario_id=veterinario.id))
+    horarios = VetSchedule.query.filter_by(veterinario_id=veterinario.id).all()
+    return render_template('edit_vet_schedule.html', form=form, veterinario=veterinario, horarios=horarios)
 
 
 @app.route('/tutor/<int:tutor_id>')
