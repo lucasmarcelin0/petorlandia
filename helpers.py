@@ -66,3 +66,40 @@ def login_required(f):
         return f(*args, **kwargs)
 
     return decorated_function
+
+def is_slot_available(veterinario_id, scheduled_at):
+    """Return True if the veterinarian has the slot available.
+
+    A slot is available when it falls inside the veterinarian's schedule
+    (``VetSchedule``) for the corresponding weekday and there is no
+    existing ``Appointment`` at the exact datetime.
+    """
+    from models import VetSchedule, Appointment
+
+    weekday_map = {
+        0: 'Segunda',
+        1: 'Terça',
+        2: 'Quarta',
+        3: 'Quinta',
+        4: 'Sexta',
+        5: 'Sábado',
+        6: 'Domingo',
+    }
+    dia = weekday_map[scheduled_at.weekday()]
+    schedules = VetSchedule.query.filter_by(
+        veterinario_id=veterinario_id, dia_semana=dia
+    ).all()
+    if not schedules:
+        return False
+
+    time = scheduled_at.time()
+    if not any(s.hora_inicio <= time < s.hora_fim for s in schedules):
+        return False
+
+    conflict = (
+        Appointment.query
+        .filter_by(veterinario_id=veterinario_id, scheduled_at=scheduled_at)
+        .first()
+    )
+    return conflict is None
+
