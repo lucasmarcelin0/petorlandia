@@ -93,7 +93,7 @@
                 </a>
 
                 {% if current_user.worker == 'veterinario' and current_user.veterinario %}
-                <a href="{{ url_for('edit_clinic_hours', clinica_id=current_user.veterinario.clinica_id) }}"
+                <a href="{{ url_for('clinic_detail', clinica_id=current_user.veterinario.clinica_id) }}"
                    class="btn btn-outline-info rounded-pill shadow-sm px-4 py-2"
                    data-bs-toggle="tooltip" title="Gerencie as informações da sua clínica.">
                     🏥 Clínica

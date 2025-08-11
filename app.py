@@ -1589,40 +1589,24 @@ def clinicas():
     return render_template('clinicas.html', clinicas=clinicas)
 
 
-@app.route('/clinica/<int:clinica_id>')
+@app.route('/clinica/<int:clinica_id>', methods=['GET', 'POST'])
 def clinic_detail(clinica_id):
     clinica = Clinica.query.get_or_404(clinica_id)
-    horarios = (
-        db.session.query(
-            ClinicHours.dia_semana,
-            func.min(ClinicHours.hora_abertura).label('hora_abertura'),
-            func.max(ClinicHours.hora_fechamento).label('hora_fechamento'),
-        )
-        .filter(ClinicHours.clinica_id == clinica_id)
-        .group_by(ClinicHours.dia_semana)
-        .all()
-    )
-    return render_template('clinic_detail.html', clinica=clinica, horarios=horarios)
-
-
-@app.route('/admin/clinica/<int:clinica_id>/horarios', methods=['GET', 'POST'])
-@login_required
-def edit_clinic_hours(clinica_id):
-    if not (
+    form = ClinicHoursForm()
+    form.clinica_id.choices = [(c.id, c.nome) for c in Clinica.query.all()]
+    if request.method == 'GET':
+        form.clinica_id.data = clinica.id
+    pode_editar = current_user.is_authenticated and (
         _is_admin()
         or (
             current_user.worker == 'veterinario'
             and getattr(current_user, 'veterinario', None)
             and current_user.veterinario.clinica_id == clinica_id
         )
-    ):
-        abort(403)
-    clinica = Clinica.query.get_or_404(clinica_id)
-    form = ClinicHoursForm()
-    form.clinica_id.choices = [(c.id, c.nome) for c in Clinica.query.all()]
-    if request.method == 'GET':
-        form.clinica_id.data = clinica.id
+    )
     if form.validate_on_submit():
+        if not pode_editar:
+            abort(403)
         for dia in form.dias_semana.data:
             existentes = ClinicHours.query.filter_by(
                 clinica_id=form.clinica_id.data, dia_semana=dia
@@ -1650,11 +1634,17 @@ def edit_clinic_hours(clinica_id):
             func.min(ClinicHours.hora_abertura).label('hora_abertura'),
             func.max(ClinicHours.hora_fechamento).label('hora_fechamento'),
         )
-        .filter(ClinicHours.clinica_id == clinica.id)
+        .filter(ClinicHours.clinica_id == clinica_id)
         .group_by(ClinicHours.dia_semana)
         .all()
     )
-    return render_template('edit_clinic_hours.html', form=form, clinica=clinica, horarios=horarios)
+    return render_template(
+        'clinic_detail.html',
+        clinica=clinica,
+        horarios=horarios,
+        form=form,
+        pode_editar=pode_editar,
+    )
 
 
 @app.route('/veterinarios')

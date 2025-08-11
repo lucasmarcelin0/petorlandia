@@ -24,5 +24,54 @@
       {% endfor %}
     </tbody>
   </table>
+
+  {% if pode_editar %}
+  <button class="btn btn-secondary mt-3" onclick="toggleEdit()">Editar Horários</button>
+  <div id="edit-hours" class="mt-4" style="display: none;">
+    <form method="post" class="mb-4">
+      {{ form.hidden_tag() }}
+      <div class="mb-3">
+        {{ form.clinica_id.label }}
+        {{ form.clinica_id(class="form-select") }}
+      </div>
+      <div class="mb-3">
+        {{ form.dias_semana.label }}
+        {{ form.dias_semana(class="form-select", multiple=True, size=7) }}
+        <div class="mt-2">
+          <button type="button" class="btn btn-sm btn-outline-secondary" onclick="selectDays('all')">Todos</button>
+          <button type="button" class="btn btn-sm btn-outline-secondary" onclick="selectDays('weekday')">Dias Úteis</button>
+          <button type="button" class="btn btn-sm btn-outline-secondary" onclick="selectDays('weekend')">Fins de Semana</button>
+          <button type="button" class="btn btn-sm btn-outline-secondary" onclick="selectDays('clear')">Limpar</button>
+        </div>
+      </div>
+      <div class="mb-3">
+        {{ form.hora_abertura.label }}
+        {{ form.hora_abertura(class="form-control") }}
+      </div>
+      <div class="mb-3">
+        {{ form.hora_fechamento.label }}
+        {{ form.hora_fechamento(class="form-control") }}
+      </div>
+      {{ form.submit(class="btn btn-primary") }}
+    </form>
+  </div>
+  {% endif %}
 </div>
+<script>
+function toggleEdit() {
+  const section = document.getElementById('edit-hours');
+  section.style.display = section.style.display === 'none' ? 'block' : 'none';
+}
+function selectDays(mode) {
+  const select = document.getElementById('dias_semana');
+  const weekdays = ['Segunda','Terça','Quarta','Quinta','Sexta'];
+  const weekend = ['Sábado','Domingo'];
+  for (const opt of select.options) {
+    if (mode === 'all') opt.selected = true;
+    else if (mode === 'weekday') opt.selected = weekdays.includes(opt.value);
+    else if (mode === 'weekend') opt.selected = weekend.includes(opt.value);
+    else if (mode === 'clear') opt.selected = false;
+  }
+}
+</script>
 {% endblock %}
