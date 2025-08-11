@@ -4999,41 +4999,6 @@ def pedido_detail(order_id):
 
 
 
-@app.route('/appointments/new', methods=['GET', 'POST'])
-@login_required
-def schedule_appointment():
-    is_vet = current_user.worker == 'veterinario'
-    form = AppointmentForm(
-        tutor=current_user if not is_vet else None,
-        is_veterinario=is_vet,
-    )
-
-    if form.validate_on_submit():
-        scheduled_at = datetime.combine(form.date.data, form.time.data)
-
-        if not is_slot_available(form.veterinario_id.data, scheduled_at):
-            flash('Horário indisponível para o veterinário selecionado.', 'danger')
-            return render_template('schedule_appointment.html', form=form)
-
-        animal = Animal.query.get_or_404(form.animal_id.data)
-        tutor_id = current_user.id if not is_vet else animal.user_id
-
-        if not Appointment.has_active_subscription(animal.id, tutor_id):
-            flash('O animal não possui uma assinatura de plano de saúde ativa.', 'danger')
-            return render_template('schedule_appointment.html', form=form)
-
-        appt = Appointment(
-            animal_id=animal.id,
-            tutor_id=tutor_id,
-            veterinario_id=form.veterinario_id.data,
-            scheduled_at=scheduled_at,
-        )
-        db.session.add(appt)
-        db.session.commit()
-        flash('Agendamento criado com sucesso.', 'success')
-        return redirect(url_for('appointment_confirmation', appointment_id=appt.id))
-
-    return render_template('schedule_appointment.html', form=form)
 
 
 @app.route('/appointments/<int:appointment_id>/confirmation')
@@ -5123,12 +5088,39 @@ def appointments():
                 appointments = (
                     Appointment.query.order_by(Appointment.scheduled_at).all()
                 )
+                form = None
             else:
+                form = AppointmentForm(tutor=current_user)
+                if form.validate_on_submit():
+                    scheduled_at = datetime.combine(form.date.data, form.time.data)
+                    if not is_slot_available(form.veterinario_id.data, scheduled_at):
+                        flash('Horário indisponível para o veterinário selecionado.', 'danger')
+                    else:
+                        animal = Animal.query.get_or_404(form.animal_id.data)
+                        tutor_id = current_user.id
+                        if not Appointment.has_active_subscription(animal.id, tutor_id):
+                            flash('O animal não possui uma assinatura de plano de saúde ativa.', 'danger')
+                        else:
+                            appt = Appointment(
+                                animal_id=animal.id,
+                                tutor_id=tutor_id,
+                                veterinario_id=form.veterinario_id.data,
+                                scheduled_at=scheduled_at,
+                            )
+                            db.session.add(appt)
+                            db.session.commit()
+                            flash('Agendamento criado com sucesso.', 'success')
+                            return redirect(url_for('appointment_confirmation', appointment_id=appt.id))
                 appointments = (
                     Appointment.query.filter_by(tutor_id=current_user.id)
                     .order_by(Appointment.scheduled_at)
                     .all()
                 )
+                if request.method == 'GET' and request.args.get('animal_id'):
+                    try:
+                        form.animal_id.data = int(request.args.get('animal_id'))
+                    except (TypeError, ValueError):
+                        pass
         else:
             appointments = (
                 Appointment.query.filter(
@@ -5137,7 +5129,8 @@ def appointments():
                 .order_by(Appointment.scheduled_at)
                 .all()
             )
-        return render_template('appointments.html', appointments=appointments)
+            form = None
+        return render_template('appointments.html', appointments=appointments, form=form)
 
 
 @app.route('/appointments/<int:veterinario_id>/schedule/<int:horario_id>/edit', methods=['POST'])

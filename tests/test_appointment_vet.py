@@ -72,16 +72,21 @@ def test_veterinarian_can_schedule_for_other_users_animal(client, monkeypatch):
         'role': 'adotante',
         'name': 'Vet',
         'is_authenticated': True,
+        'veterinario': type('V', (), {
+            'id': vet_id,
+            'user': type('WU', (), {'name': 'Vet'})()
+        })()
     })()
     login(monkeypatch, fake_vet)
     resp = client.post(
-        '/appointments/new',
+        '/appointments',
         data={
-            'animal_id': animal_id,
-            'veterinario_id': vet_id,
-            'date': '2024-05-01',
-            'time': '10:00',
-            'reason': 'Checkup',
+            'appointment-animal_id': animal_id,
+            'appointment-veterinario_id': vet_id,
+            'appointment-date': '2024-05-01',
+            'appointment-time': '10:00',
+            'appointment-reason': 'Checkup',
+            'appointment-submit': True,
         },
     )
     assert resp.status_code == 302
