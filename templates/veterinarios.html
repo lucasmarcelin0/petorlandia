@@ -5,7 +5,7 @@
   <h2>Veterinários</h2>
   <ul class="list-unstyled">
     {% for v in veterinarios %}
-      <li><a href="{{ url_for('vet_schedule', veterinario_id=v.id) }}">{{ v.user.name }}</a></li>
+      <li><a href="{{ url_for('vet_detail', veterinario_id=v.id) }}">{{ v.user.name }}</a></li>
     {% else %}
       <li>Nenhum veterinário cadastrado.</li>
     {% endfor %}

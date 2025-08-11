@@ -1588,11 +1588,11 @@ def clinicas():
     return render_template('clinicas.html', clinicas=clinicas)
 
 
-@app.route('/clinica/<int:clinica_id>/horarios')
-def clinic_hours(clinica_id):
+@app.route('/clinica/<int:clinica_id>')
+def clinic_detail(clinica_id):
     clinica = Clinica.query.get_or_404(clinica_id)
     horarios = ClinicHours.query.filter_by(clinica_id=clinica_id).all()
-    return render_template('clinic_hours.html', clinica=clinica, horarios=horarios)
+    return render_template('clinic_detail.html', clinica=clinica, horarios=horarios)
 
 
 @app.route('/admin/clinica/<int:clinica_id>/horarios', methods=['GET', 'POST'])
@@ -1622,7 +1622,7 @@ def edit_clinic_hours(clinica_id):
         db.session.add(horario)
         db.session.commit()
         flash('Horário salvo com sucesso.', 'success')
-        return redirect(url_for('clinic_hours', clinica_id=clinica.id))
+        return redirect(url_for('clinic_detail', clinica_id=clinica.id))
     horarios = ClinicHours.query.filter_by(clinica_id=clinica.id).all()
     return render_template('edit_clinic_hours.html', form=form, clinica=clinica, horarios=horarios)
 
@@ -1633,11 +1633,11 @@ def veterinarios():
     return render_template('veterinarios.html', veterinarios=veterinarios)
 
 
-@app.route('/veterinario/<int:veterinario_id>/agenda')
-def vet_schedule(veterinario_id):
+@app.route('/veterinario/<int:veterinario_id>')
+def vet_detail(veterinario_id):
     veterinario = Veterinario.query.get_or_404(veterinario_id)
     horarios = VetSchedule.query.filter_by(veterinario_id=veterinario_id).all()
-    return render_template('vet_schedule.html', veterinario=veterinario, horarios=horarios)
+    return render_template('vet_detail.html', veterinario=veterinario, horarios=horarios)
 
 
 @app.route('/admin/veterinario/<int:veterinario_id>/agenda', methods=['GET', 'POST'])
@@ -1667,7 +1667,7 @@ def edit_vet_schedule(veterinario_id):
         db.session.add(horario)
         db.session.commit()
         flash('Horário salvo com sucesso.', 'success')
-        return redirect(url_for('vet_schedule', veterinario_id=veterinario.id))
+        return redirect(url_for('vet_detail', veterinario_id=veterinario.id))
     horarios = VetSchedule.query.filter_by(veterinario_id=veterinario.id).all()
     return render_template('edit_vet_schedule.html', form=form, veterinario=veterinario, horarios=horarios)
 
