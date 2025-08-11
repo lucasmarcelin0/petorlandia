@@ -171,8 +171,8 @@ from forms import (
     ResetPasswordRequestForm, ResetPasswordForm, OrderItemForm,
     DeliveryRequestForm, AddToCartForm, SubscribePlanForm,
     ProductUpdateForm, ProductPhotoForm, ChangePasswordForm,
-    DeleteAccountForm, ClinicForm, ClinicHoursForm, VetScheduleForm,
-    VetSpecialtyForm, AppointmentForm, AppointmentDeleteForm
+    DeleteAccountForm, ClinicForm, ClinicHoursForm, ClinicAddVeterinarianForm,
+    VetScheduleForm, VetSpecialtyForm, AppointmentForm, AppointmentDeleteForm
 )
 from helpers import calcular_idade, parse_data_nascimento, is_slot_available
 
@@ -1594,7 +1594,12 @@ def clinic_detail(clinica_id):
     clinica = Clinica.query.get_or_404(clinica_id)
     hours_form = ClinicHoursForm()
     clinic_form = ClinicForm(obj=clinica)
+    vets_form = ClinicAddVeterinarianForm()
     hours_form.clinica_id.choices = [(c.id, c.nome) for c in Clinica.query.all()]
+    vets_form.veterinario_id.choices = [
+        (v.id, v.user.name)
+        for v in Veterinario.query.filter_by(clinica_id=None).all()
+    ]
     if request.method == 'GET':
         hours_form.clinica_id.data = clinica.id
     pode_editar = current_user.is_authenticated and (
@@ -1622,6 +1627,14 @@ def clinic_detail(clinica_id):
         db.session.commit()
         flash('Clínica atualizada com sucesso.', 'success')
         return redirect(url_for('clinic_detail', clinica_id=clinica.id))
+    if vets_form.submit.data and vets_form.validate_on_submit():
+        if not pode_editar:
+            abort(403)
+        vet = Veterinario.query.get_or_404(vets_form.veterinario_id.data)
+        vet.clinica_id = clinica.id
+        db.session.commit()
+        flash('Veterinário adicionado com sucesso.', 'success')
+        return redirect(url_for('clinic_detail', clinica_id=clinica.id))
     if hours_form.submit.data and hours_form.validate_on_submit():
         if not pode_editar:
             abort(403)
@@ -1647,12 +1660,22 @@ def clinic_detail(clinica_id):
         flash('Horário salvo com sucesso.', 'success')
         return redirect(url_for('clinic_detail', clinica_id=clinica.id))
     horarios = ClinicHours.query.filter_by(clinica_id=clinica_id).all()
+    veterinarios = Veterinario.query.filter_by(clinica_id=clinica_id).all()
+    appointments = (
+        Appointment.query.join(Veterinario)
+        .filter(Veterinario.clinica_id == clinica_id)
+        .order_by(Appointment.scheduled_at)
+        .all()
+    )
     return render_template(
         'clinic_detail.html',
         clinica=clinica,
         horarios=horarios,
         form=hours_form,
         clinic_form=clinic_form,
+        vets_form=vets_form,
+        veterinarios=veterinarios,
+        appointments=appointments,
         pode_editar=pode_editar,
     )
 

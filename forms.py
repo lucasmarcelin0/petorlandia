@@ -319,6 +319,16 @@ class ClinicHoursForm(FlaskForm):
     submit = SubmitField('Salvar')
 
 
+class ClinicAddVeterinarianForm(FlaskForm):
+    veterinario_id = SelectField(
+        'Veterinário',
+        coerce=int,
+        validators=[DataRequired()],
+        render_kw={"class": "form-select"},
+    )
+    submit = SubmitField('Adicionar')
+
+
 class VetScheduleForm(FlaskForm):
     veterinario_id = SelectField(
         'Veterinário',
