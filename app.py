@@ -1743,12 +1743,20 @@ def edit_vet_schedule(veterinario_id):
     horarios = VetSchedule.query.filter_by(
         veterinario_id=veterinario.id
     ).all()
+
+    appointments = (
+        Appointment.query.filter_by(veterinario_id=veterinario.id)
+        .order_by(Appointment.scheduled_at)
+        .all()
+    )
+
     return render_template(
         'edit_vet_schedule.html',
         schedule_form=schedule_form,
         appointment_form=appointment_form,
         veterinario=veterinario,
         horarios=horarios,
+        appointments=appointments,
     )
 
 
