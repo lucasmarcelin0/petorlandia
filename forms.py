@@ -9,6 +9,7 @@ from wtforms import (
     DecimalField,
     IntegerField,
     DateField,
+    TimeField,
 )
 from wtforms.validators import DataRequired, Email, EqualTo, Length, Optional
 from flask_wtf.file import FileField, FileAllowed
@@ -257,6 +258,26 @@ class CheckoutForm(FlaskForm):
     address_id = SelectField('Endereço salvo', choices=[], coerce=int, validators=[Optional()])
     shipping_address = TextAreaField('Novo Endereço', validators=[Optional(), Length(max=200)])
     submit = SubmitField('Finalizar Compra')
+
+
+class ClinicHoursForm(FlaskForm):
+    clinica_id = SelectField('Clínica', coerce=int, validators=[DataRequired()])
+    dia_semana = SelectField(
+        'Dia da Semana',
+        choices=[
+            ('Segunda', 'Segunda'),
+            ('Terça', 'Terça'),
+            ('Quarta', 'Quarta'),
+            ('Quinta', 'Quinta'),
+            ('Sexta', 'Sexta'),
+            ('Sábado', 'Sábado'),
+            ('Domingo', 'Domingo'),
+        ],
+        validators=[DataRequired()],
+    )
+    hora_abertura = TimeField('Hora de Abertura', validators=[DataRequired()])
+    hora_fechamento = TimeField('Hora de Fechamento', validators=[DataRequired()])
+    submit = SubmitField('Salvar')
 
 
 class EditAddressForm(FlaskForm):

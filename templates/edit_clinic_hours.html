@@ -1,0 +1,36 @@
+{% extends "layout.html" %}
+
+{% block main %}
+<div class="container mt-4">
+  <h2>Editar Horários – {{ clinica.nome }}</h2>
+  <form method="post" class="mb-4">
+    {{ form.hidden_tag() }}
+    <div class="mb-3">
+      {{ form.clinica_id.label }}
+      {{ form.clinica_id(class="form-select") }}
+    </div>
+    <div class="mb-3">
+      {{ form.dia_semana.label }}
+      {{ form.dia_semana(class="form-select") }}
+    </div>
+    <div class="mb-3">
+      {{ form.hora_abertura.label }}
+      {{ form.hora_abertura(class="form-control") }}
+    </div>
+    <div class="mb-3">
+      {{ form.hora_fechamento.label }}
+      {{ form.hora_fechamento(class="form-control") }}
+    </div>
+    {{ form.submit(class="btn btn-primary") }}
+  </form>
+
+  <h3>Horários Cadastrados</h3>
+  <ul class="list-unstyled">
+    {% for h in horarios %}
+      <li>{{ h.dia_semana }}: {{ h.hora_abertura.strftime('%H:%M') }} - {{ h.hora_fechamento.strftime('%H:%M') }}</li>
+    {% else %}
+      <li>Nenhum horário cadastrado.</li>
+    {% endfor %}
+  </ul>
+</div>
+{% endblock %}

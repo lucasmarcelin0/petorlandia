@@ -25,14 +25,14 @@ def _is_admin():
 try:
     from models import (
         Breed, Species, TipoRacao, ApresentacaoMedicamento, VacinaModelo, Consulta, Veterinario,
-        Clinica, Prescricao, Medicamento, db, User, Animal, Message,
+        Clinica, ClinicHours, Prescricao, Medicamento, db, User, Animal, Message,
         Transaction, Review, Favorite, AnimalPhoto, UserRole, ExameModelo,
         Product, Order, OrderItem, DeliveryRequest, HealthPlan, HealthSubscription, PickupLocation, Endereco, Payment, PaymentMethod, PaymentStatus
     )
 except ImportError:
     from .models import (
         Breed, Species, TipoRacao, ApresentacaoMedicamento, VacinaModelo, Consulta, Veterinario,
-        Clinica, Prescricao, Medicamento, db, User, Animal, Message,
+        Clinica, ClinicHours, Prescricao, Medicamento, db, User, Animal, Message,
         Transaction, Review, Favorite, AnimalPhoto, UserRole, ExameModelo,
         Product, Order, OrderItem, DeliveryRequest, HealthPlan, HealthSubscription, PickupLocation, Endereco, Payment, PaymentMethod, PaymentStatus
     )
@@ -267,6 +267,10 @@ class ClinicaAdmin(MyModelView):
             )
 
 
+class ClinicHoursAdmin(MyModelView):
+    column_list = ['clinica', 'dia_semana', 'hora_abertura', 'hora_fechamento']
+    form_columns = ['clinica', 'dia_semana', 'hora_abertura', 'hora_fechamento']
+
 
 class TutorAdminView(MyModelView):
     """Exemplo de deleção em cascata (caso use tutores)."""
@@ -429,6 +433,7 @@ def init_admin(app):
     admin.add_view(MyModelView(Medicamento, db.session))
     admin.add_view(MyModelView(Prescricao, db.session))
     admin.add_view(ClinicaAdmin(Clinica, db.session))
+    admin.add_view(ClinicHoursAdmin(ClinicHours, db.session, name='Horários da Clínica'))
     admin.add_view(VeterinarioAdmin(Veterinario, db.session))
     admin.add_view(MyModelView(ExameModelo, db.session))
     admin.add_view(MyModelView(Consulta, db.session))
