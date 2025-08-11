@@ -493,6 +493,23 @@ class Clinica(db.Model):
     def __str__(self):
         return f'{self.nome} ({self.cnpj})'
 
+
+# Associação Many-to-Many entre veterinários e especialidades
+veterinario_especialidade = db.Table(
+    'veterinario_especialidade',
+    db.Column('veterinario_id', db.Integer, db.ForeignKey('veterinario.id'), primary_key=True),
+    db.Column('specialty_id', db.Integer, db.ForeignKey('specialty.id'), primary_key=True)
+)
+
+
+class Specialty(db.Model):
+    __tablename__ = 'specialty'
+    id = db.Column(db.Integer, primary_key=True)
+    nome = db.Column(db.String(100), nullable=False, unique=True)
+
+    def __str__(self):
+        return self.nome
+
 class Veterinario(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(
@@ -504,6 +521,7 @@ class Veterinario(db.Model):
     clinica_id = db.Column(db.Integer, db.ForeignKey('clinica.id'))
 
     user = db.relationship('User', back_populates='veterinario', uselist=False)
+    specialties = db.relationship('Specialty', secondary='veterinario_especialidade', backref='veterinarios')
 
     def __str__(self):
         return f"{self.user.name} (CRMV: {self.crmv})"
