@@ -1592,14 +1592,14 @@ def clinicas():
 @app.route('/minha-clinica')
 @login_required
 def minha_clinica():
-    clinica = None
+    clinica_id = None
     if current_user.worker == 'veterinario' and getattr(current_user, 'veterinario', None):
-        clinica = current_user.veterinario.clinica
-    elif current_user.clinica:
-        clinica = current_user.clinica
-    if not clinica:
+        clinica_id = current_user.veterinario.clinica_id
+    elif current_user.clinica_id:
+        clinica_id = current_user.clinica_id
+    if not clinica_id:
         abort(404)
-    return render_template('minha_clinica.html', clinica=clinica)
+    return redirect(url_for('clinic_detail', clinica_id=clinica_id))
 
 
 @app.route('/clinica/<int:clinica_id>', methods=['GET', 'POST'])
