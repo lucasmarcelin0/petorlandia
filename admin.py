@@ -24,14 +24,14 @@ def _is_admin():
 # --------------------------------------------------------------------------
 try:
     from models import (
-        Breed, Species, TipoRacao, ApresentacaoMedicamento, VacinaModelo, Consulta, Veterinario,
+        Breed, Species, TipoRacao, ApresentacaoMedicamento, VacinaModelo, Consulta, Veterinario, Specialty,
         Clinica, ClinicHours, VetSchedule, Prescricao, Medicamento, db, User, Animal, Message,
         Transaction, Review, Favorite, AnimalPhoto, UserRole, ExameModelo,
         Product, Order, OrderItem, DeliveryRequest, HealthPlan, HealthSubscription, PickupLocation, Endereco, Payment, PaymentMethod, PaymentStatus
     )
 except ImportError:
     from .models import (
-        Breed, Species, TipoRacao, ApresentacaoMedicamento, VacinaModelo, Consulta, Veterinario,
+        Breed, Species, TipoRacao, ApresentacaoMedicamento, VacinaModelo, Consulta, Veterinario, Specialty,
         Clinica, ClinicHours, VetSchedule, Prescricao, Medicamento, db, User, Animal, Message,
         Transaction, Review, Favorite, AnimalPhoto, UserRole, ExameModelo,
         Product, Order, OrderItem, DeliveryRequest, HealthPlan, HealthSubscription, PickupLocation, Endereco, Payment, PaymentMethod, PaymentStatus
@@ -229,8 +229,9 @@ class EnderecoAdmin(MyModelView):
 
 
 class VeterinarioAdmin(MyModelView):
-    form_columns = ['user', 'crmv', 'clinica']
-    column_list = ['id', 'user', 'crmv', 'clinica']
+    form_columns = ['user', 'crmv', 'clinica', 'specialties']
+    column_list = ['id', 'user', 'crmv', 'clinica', 'specialty_list']
+    column_labels = {'specialty_list': 'Especialidades'}
 
 class ClinicaAdmin(MyModelView):
     form_extra_fields = {
@@ -441,6 +442,7 @@ def init_admin(app):
     admin.add_view(ClinicHoursAdmin(ClinicHours, db.session, name='Horários da Clínica'))
     admin.add_view(VetScheduleAdmin(VetSchedule, db.session, name='Agenda do Veterinário'))
     admin.add_view(VeterinarioAdmin(Veterinario, db.session))
+    admin.add_view(MyModelView(Specialty, db.session, name='Especialidades'))
     admin.add_view(MyModelView(ExameModelo, db.session))
     admin.add_view(MyModelView(Consulta, db.session))
     admin.add_view(MyModelView(VacinaModelo, db.session))
