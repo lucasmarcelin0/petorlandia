@@ -1581,6 +1581,12 @@ def buscar_tutores():
     return jsonify(resultados)
 
 
+@app.route('/clinicas')
+def clinicas():
+    clinicas = Clinica.query.all()
+    return render_template('clinicas.html', clinicas=clinicas)
+
+
 @app.route('/clinica/<int:clinica_id>/horarios')
 def clinic_hours(clinica_id):
     clinica = Clinica.query.get_or_404(clinica_id)
@@ -1611,6 +1617,12 @@ def edit_clinic_hours(clinica_id):
         return redirect(url_for('clinic_hours', clinica_id=clinica.id))
     horarios = ClinicHours.query.filter_by(clinica_id=clinica.id).all()
     return render_template('edit_clinic_hours.html', form=form, clinica=clinica, horarios=horarios)
+
+
+@app.route('/veterinarios')
+def veterinarios():
+    veterinarios = Veterinario.query.all()
+    return render_template('veterinarios.html', veterinarios=veterinarios)
 
 
 @app.route('/veterinario/<int:veterinario_id>/agenda')

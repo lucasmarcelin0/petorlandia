@@ -1,0 +1,14 @@
+{% extends "layout.html" %}
+
+{% block main %}
+<div class="container mt-4">
+  <h2>Clínicas</h2>
+  <ul class="list-unstyled">
+    {% for c in clinicas %}
+      <li><a href="{{ url_for('clinic_hours', clinica_id=c.id) }}">{{ c.nome }}</a></li>
+    {% else %}
+      <li>Nenhuma clínica cadastrada.</li>
+    {% endfor %}
+  </ul>
+</div>
+{% endblock %}
