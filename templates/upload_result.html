@@ -1,9 +1,10 @@
-<!DOCTYPE html>
-<html>
-<head><title>Resultado do Upload</title></head>
-<body>
-    <h1>Upload feito com sucesso!</h1>
-    <img src="{{ image_url }}" alt="Imagem enviada" width="300">
-    <p><a href="{{ image_url }}" target="_blank">Abrir imagem</a></p>
-</body>
-</html>
+{% extends "layout.html" %}
+
+{% block main %}
+<div class="container py-4">
+  <h1 class="mb-3">Upload feito com sucesso!</h1>
+  <img src="{{ image_url }}" alt="Imagem enviada" class="img-fluid" style="max-width:300px;">
+  <p class="mt-3"><a href="{{ image_url }}" target="_blank">Abrir imagem</a></p>
+</div>
+{% endblock %}
+
