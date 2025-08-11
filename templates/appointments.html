@@ -43,11 +43,13 @@
           {{ appt.scheduled_at.strftime('%d/%m/%Y %H:%M') }} - {{ appt.veterinario.user.name }}
           {% if appt.animal %} - {{ appt.animal.name }}{% endif %}
         </span>
-        {% if current_user.worker in ['veterinario', 'colaborador'] %}
-        <a href="{{ url_for('consulta_direct', animal_id=appt.animal_id) }}" class="btn btn-sm btn-outline-success">
-          🩺 Iniciar Consulta
-        </a>
-        {% endif %}
+        <div class="btn-group">
+          <a href="{{ url_for('ficha_animal', animal_id=appt.animal_id) }}" class="btn btn-sm btn-outline-primary">📋 Ficha Animal</a>
+          <a href="{{ url_for('tutor_detail', tutor_id=appt.tutor_id) }}" class="btn btn-sm btn-outline-secondary">👤 Ficha Tutor</a>
+          {% if current_user.worker in ['veterinario', 'colaborador'] %}
+          <a href="{{ url_for('consulta_direct', animal_id=appt.animal_id) }}" class="btn btn-sm btn-outline-success">🩺 Iniciar Consulta</a>
+          {% endif %}
+        </div>
       </li>
     {% else %}
       <li class="list-group-item">Nenhum agendamento encontrado.</li>

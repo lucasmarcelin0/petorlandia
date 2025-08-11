@@ -109,8 +109,13 @@
   <h3>Consultas Agendadas</h3>
   <ul class="list-group">
     {% for appt in appointments %}
-      <li class="list-group-item">
-        {{ appt.scheduled_at.strftime('%d/%m/%Y %H:%M') }} - {{ appt.animal.name }} ({{ appt.tutor.name }})
+      <li class="list-group-item d-flex justify-content-between align-items-center">
+        <span>{{ appt.scheduled_at.strftime('%d/%m/%Y %H:%M') }} - {{ appt.animal.name }} ({{ appt.tutor.name }})</span>
+        <div class="btn-group">
+          <a href="{{ url_for('ficha_animal', animal_id=appt.animal_id) }}" class="btn btn-sm btn-outline-primary">📋 Ficha Animal</a>
+          <a href="{{ url_for('tutor_detail', tutor_id=appt.tutor_id) }}" class="btn btn-sm btn-outline-secondary">👤 Ficha Tutor</a>
+          <a href="{{ url_for('consulta_direct', animal_id=appt.animal_id) }}" class="btn btn-sm btn-outline-success">🩺 Iniciar Consulta</a>
+        </div>
       </li>
     {% else %}
       <li class="list-group-item">Nenhuma consulta agendada.</li>
