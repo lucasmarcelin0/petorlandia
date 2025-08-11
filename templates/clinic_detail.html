@@ -10,7 +10,7 @@
   <h3>Horários de Atendimento</h3>
   <table class="table">
     <thead>
-      <tr><th>Dia</th><th>Abre</th><th>Fecha</th></tr>
+      <tr><th>Dia</th><th>Abre</th><th>Fecha</th>{% if pode_editar %}<th>Ações</th>{% endif %}</tr>
     </thead>
     <tbody>
       {% for h in horarios %}
@@ -18,9 +18,17 @@
           <td>{{ h.dia_semana }}</td>
           <td>{{ h.hora_abertura.strftime('%H:%M') }}</td>
           <td>{{ h.hora_fechamento.strftime('%H:%M') }}</td>
+          {% if pode_editar %}
+          <td>
+            <form method="post" action="{{ url_for('delete_clinic_hour', clinica_id=clinica.id, horario_id=h.id) }}" class="d-inline">
+              {{ form.csrf_token }}
+              <button type="submit" class="btn btn-sm btn-outline-danger" onclick="return confirm('Excluir este horário?');">Excluir</button>
+            </form>
+          </td>
+          {% endif %}
         </tr>
       {% else %}
-        <tr><td colspan="3">Nenhum horário cadastrado.</td></tr>
+        <tr><td colspan="{% if pode_editar %}4{% else %}3{% endif %}">Nenhum horário cadastrado.</td></tr>
       {% endfor %}
     </tbody>
   </table>
