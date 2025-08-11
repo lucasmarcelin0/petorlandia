@@ -22,9 +22,9 @@
     {% set logo_src = clinica.logotipo if clinica.logotipo.startswith('http')
                      else url_for('static', filename='uploads/clinicas/' + clinica.logotipo) %}
     <div class="header">
-      <img src="{{ logo_src }}" alt="Logotipo da clínica">
+      <img src="{{ logo_src }}" alt="Logotipo da clínica" style="transform: translate({{ clinica.photo_offset_x or 0 }}px, {{ clinica.photo_offset_y or 0 }}px) rotate({{ clinica.photo_rotation or 0 }}deg) scale({{ clinica.photo_zoom or 1 }}); object-fit: cover;">
       <div class="clinica-nome">{{ clinica.nome }}</div>
-      <img src="{{ logo_src }}" alt="Logotipo da clínica">
+      <img src="{{ logo_src }}" alt="Logotipo da clínica" style="transform: translate({{ clinica.photo_offset_x or 0 }}px, {{ clinica.photo_offset_y or 0 }}px) rotate({{ clinica.photo_rotation or 0 }}deg) scale({{ clinica.photo_zoom or 1 }}); object-fit: cover;">
     </div>
   {% endif %}
 

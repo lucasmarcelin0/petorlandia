@@ -1,10 +1,11 @@
 {% extends "layout.html" %}
+{% from 'components/photo_cropper.html' import photo_cropper %}
 
 {% block main %}
 <div class="container mt-4">
   <h2>{{ clinica.nome }}</h2>
   {% if clinica.logotipo %}
-  <img src="{{ clinica.logotipo }}" alt="Imagem da Clínica" class="img-fluid mb-3" style="max-height: 200px;">
+  <img src="{{ clinica.logotipo }}" alt="Imagem da Clínica" class="img-fluid mb-3" style="max-height: 200px; object-fit: cover; transform: translate({{ clinica.photo_offset_x or 0 }}px, {{ clinica.photo_offset_y or 0 }}px) rotate({{ clinica.photo_rotation or 0 }}deg) scale({{ clinica.photo_zoom or 1 }});">
   {% endif %}
   {% if clinica.endereco %}<p><strong>Endereço:</strong> {{ clinica.endereco }}</p>{% endif %}
   {% if clinica.telefone %}<p><strong>Telefone:</strong> {{ clinica.telefone }}</p>{% endif %}
@@ -37,8 +38,7 @@
       </div>
       <div class="mb-3">
         {{ clinic_form.logotipo.label }}
-        {{ clinic_form.logotipo(class="form-control", onchange="previewLogo(this)") }}
-        <img id="logo-preview" src="{{ clinica.logotipo }}" class="img-fluid mt-2" style="max-height:150px; {% if not clinica.logotipo %}display:none;{% endif %}">
+        {{ photo_cropper(clinic_form.logotipo, clinic_form.photo_rotation, clinic_form.photo_zoom, clinic_form.photo_offset_x, clinic_form.photo_offset_y, clinica.logotipo, 150, 'clinic_logo', 'user') }}
       </div>
       {{ clinic_form.submit(class="btn btn-primary") }}
     </form>
@@ -124,16 +124,5 @@ function selectDays(mode) {
   }
 }
 
-function previewLogo(input) {
-  const preview = document.getElementById('logo-preview');
-  const file = input.files[0];
-  if (file) {
-    preview.src = URL.createObjectURL(file);
-    preview.style.display = 'block';
-  } else {
-    preview.src = '';
-    preview.style.display = 'none';
-  }
-}
 </script>
 {% endblock %}

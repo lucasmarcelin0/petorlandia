@@ -490,6 +490,10 @@ class Clinica(db.Model):
     telefone = db.Column(db.String(20))
     email = db.Column(db.String(120))
     logotipo = db.Column(db.String(200))  # caminho para imagem do logo
+    photo_rotation = db.Column(db.Integer, default=0)
+    photo_zoom = db.Column(db.Float, default=1.0)
+    photo_offset_x = db.Column(db.Float, default=0.0)
+    photo_offset_y = db.Column(db.Float, default=0.0)
 
     owner_id = db.Column(db.Integer, db.ForeignKey('user.id'))
     owner = db.relationship('User', backref=db.backref('clinicas', foreign_keys='Clinica.owner_id'), foreign_keys=[owner_id])
