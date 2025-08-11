@@ -1679,144 +1679,6 @@ def vet_detail(veterinario_id):
     return render_template('vet_detail.html', veterinario=veterinario, horarios=horarios)
 
 
-@app.route('/admin/veterinario/<int:veterinario_id>/agenda', methods=['GET', 'POST'])
-@login_required
-def edit_vet_schedule(veterinario_id):
-    if not (
-        _is_admin()
-        or (
-            current_user.worker == 'veterinario'
-            and getattr(current_user, 'veterinario', None)
-            and current_user.veterinario.id == veterinario_id
-        )
-    ):
-        abort(403)
-    veterinario = Veterinario.query.get_or_404(veterinario_id)
-
-    schedule_form = VetScheduleForm(prefix='schedule')
-    appointment_form = AppointmentForm(is_veterinario=True, prefix='appointment')
-
-    schedule_form.veterinario_id.choices = [
-        (v.id, v.user.name) for v in Veterinario.query.all()
-    ]
-    appointment_form.veterinario_id.choices = [
-        (veterinario.id, veterinario.user.name)
-    ]
-
-    if request.method == 'GET':
-        schedule_form.veterinario_id.data = veterinario.id
-        appointment_form.veterinario_id.data = veterinario.id
-
-    if schedule_form.submit.data and schedule_form.validate_on_submit():
-        for dia in schedule_form.dias_semana.data:
-            horario = VetSchedule(
-                veterinario_id=schedule_form.veterinario_id.data,
-                dia_semana=dia,
-                hora_inicio=schedule_form.hora_inicio.data,
-                hora_fim=schedule_form.hora_fim.data,
-                intervalo_inicio=schedule_form.intervalo_inicio.data,
-                intervalo_fim=schedule_form.intervalo_fim.data,
-            )
-            db.session.add(horario)
-        db.session.commit()
-        flash('Horário salvo com sucesso.', 'success')
-        return redirect(url_for('edit_vet_schedule', veterinario_id=veterinario.id))
-
-    if appointment_form.submit.data and appointment_form.validate_on_submit():
-        scheduled_at = datetime.combine(
-            appointment_form.date.data, appointment_form.time.data
-        )
-        if not is_slot_available(
-            appointment_form.veterinario_id.data, scheduled_at
-        ):
-            flash('Horário indisponível para o veterinário selecionado.', 'danger')
-        else:
-            animal = Animal.query.get_or_404(appointment_form.animal_id.data)
-            tutor_id = animal.user_id
-            if not Appointment.has_active_subscription(animal.id, tutor_id):
-                flash(
-                    'O animal não possui uma assinatura de plano de saúde ativa.',
-                    'danger',
-                )
-            else:
-                appt = Appointment(
-                    animal_id=animal.id,
-                    tutor_id=tutor_id,
-                    veterinario_id=appointment_form.veterinario_id.data,
-                    scheduled_at=scheduled_at,
-                )
-                db.session.add(appt)
-                db.session.commit()
-                flash('Agendamento criado com sucesso.', 'success')
-        return redirect(url_for('edit_vet_schedule', veterinario_id=veterinario.id))
-
-    horarios = VetSchedule.query.filter_by(
-        veterinario_id=veterinario.id
-    ).all()
-
-    appointments = (
-        Appointment.query.filter_by(veterinario_id=veterinario.id)
-        .order_by(Appointment.scheduled_at)
-        .all()
-    )
-
-    return render_template(
-        'edit_vet_schedule.html',
-        schedule_form=schedule_form,
-        appointment_form=appointment_form,
-        veterinario=veterinario,
-        horarios=horarios,
-        appointments=appointments,
-    )
-
-
-@app.route('/admin/veterinario/<int:veterinario_id>/agenda/<int:horario_id>/edit', methods=['POST'])
-@login_required
-def edit_vet_schedule_slot(veterinario_id, horario_id):
-    if not (
-        _is_admin()
-        or (
-            current_user.worker == 'veterinario'
-            and getattr(current_user, 'veterinario', None)
-            and current_user.veterinario.id == veterinario_id
-        )
-    ):
-        abort(403)
-    veterinario = Veterinario.query.get_or_404(veterinario_id)
-    horario = VetSchedule.query.get_or_404(horario_id)
-    form = VetScheduleForm(prefix='schedule')
-    form.veterinario_id.choices = [
-        (v.id, v.user.name) for v in Veterinario.query.all()
-    ]
-    if form.validate_on_submit():
-        horario.veterinario_id = form.veterinario_id.data
-        horario.dia_semana = form.dias_semana.data[0]
-        horario.hora_inicio = form.hora_inicio.data
-        horario.hora_fim = form.hora_fim.data
-        horario.intervalo_inicio = form.intervalo_inicio.data
-        horario.intervalo_fim = form.intervalo_fim.data
-        db.session.commit()
-        flash('Horário atualizado com sucesso.', 'success')
-    return redirect(url_for('edit_vet_schedule', veterinario_id=veterinario.id))
-
-
-@app.route('/admin/veterinario/<int:veterinario_id>/agenda/<int:horario_id>/delete', methods=['POST'])
-@login_required
-def delete_vet_schedule(veterinario_id, horario_id):
-    if not (
-        _is_admin()
-        or (
-            current_user.worker == 'veterinario'
-            and getattr(current_user, 'veterinario', None)
-            and current_user.veterinario.id == veterinario_id
-        )
-    ):
-        abort(403)
-    horario = VetSchedule.query.get_or_404(horario_id)
-    db.session.delete(horario)
-    db.session.commit()
-    flash('Horário removido com sucesso.', 'success')
-    return redirect(url_for('edit_vet_schedule', veterinario_id=veterinario_id))
 
 
 @app.route('/admin/veterinario/<int:veterinario_id>/especialidades', methods=['GET', 'POST'])
@@ -5183,24 +5045,148 @@ def appointment_confirmation(appointment_id):
     return render_template('appointment_confirmation.html', appointment=appointment)
 
 
-@app.route('/appointments')
-@login_required
-def list_appointments():
-    if current_user.worker == 'veterinario' and getattr(current_user, 'veterinario', None):
+@app.route('/appointments', methods=['GET', 'POST'])
+def appointments():
+    if current_user.is_authenticated and (current_user.worker == 'veterinario'):
+        veterinario = current_user.veterinario
+        schedule_form = VetScheduleForm(prefix='schedule')
+        appointment_form = AppointmentForm(is_veterinario=True, prefix='appointment')
+        schedule_form.veterinario_id.choices = [
+            (v.id, v.user.name) for v in Veterinario.query.all()
+        ]
+        appointment_form.veterinario_id.choices = [
+            (veterinario.id, veterinario.user.name)
+        ]
+        if request.method == 'GET':
+            schedule_form.veterinario_id.data = veterinario.id
+            appointment_form.veterinario_id.data = veterinario.id
+        if schedule_form.submit.data and schedule_form.validate_on_submit():
+            for dia in schedule_form.dias_semana.data:
+                horario = VetSchedule(
+                    veterinario_id=schedule_form.veterinario_id.data,
+                    dia_semana=dia,
+                    hora_inicio=schedule_form.hora_inicio.data,
+                    hora_fim=schedule_form.hora_fim.data,
+                    intervalo_inicio=schedule_form.intervalo_inicio.data,
+                    intervalo_fim=schedule_form.intervalo_fim.data,
+                )
+                db.session.add(horario)
+            db.session.commit()
+            flash('Horário salvo com sucesso.', 'success')
+            return redirect(url_for('appointments'))
+        if appointment_form.submit.data and appointment_form.validate_on_submit():
+            scheduled_at = datetime.combine(
+                appointment_form.date.data, appointment_form.time.data
+            )
+            if not is_slot_available(
+                appointment_form.veterinario_id.data, scheduled_at
+            ):
+                flash('Horário indisponível para o veterinário selecionado.', 'danger')
+            else:
+                animal = Animal.query.get_or_404(appointment_form.animal_id.data)
+                tutor_id = animal.user_id
+                if not Appointment.has_active_subscription(animal.id, tutor_id):
+                    flash(
+                        'O animal não possui uma assinatura de plano de saúde ativa.',
+                        'danger',
+                    )
+                else:
+                    appt = Appointment(
+                        animal_id=animal.id,
+                        tutor_id=tutor_id,
+                        veterinario_id=appointment_form.veterinario_id.data,
+                        scheduled_at=scheduled_at,
+                    )
+                    db.session.add(appt)
+                    db.session.commit()
+                    flash('Agendamento criado com sucesso.', 'success')
+            return redirect(url_for('appointments'))
+        horarios = VetSchedule.query.filter_by(
+            veterinario_id=veterinario.id
+        ).all()
         appointments = (
-            Appointment.query
-            .filter_by(veterinario_id=current_user.veterinario.id)
+            Appointment.query.filter_by(veterinario_id=veterinario.id)
             .order_by(Appointment.scheduled_at)
             .all()
+        )
+        return render_template(
+            'edit_vet_schedule.html',
+            schedule_form=schedule_form,
+            appointment_form=appointment_form,
+            veterinario=veterinario,
+            horarios=horarios,
+            appointments=appointments,
         )
     else:
-        appointments = (
-            Appointment.query
-            .filter_by(tutor_id=current_user.id)
-            .order_by(Appointment.scheduled_at)
-            .all()
+        if current_user.is_authenticated:
+            if current_user.worker in ['veterinario', 'colaborador']:
+                appointments = (
+                    Appointment.query.order_by(Appointment.scheduled_at).all()
+                )
+            else:
+                appointments = (
+                    Appointment.query.filter_by(tutor_id=current_user.id)
+                    .order_by(Appointment.scheduled_at)
+                    .all()
+                )
+        else:
+            appointments = (
+                Appointment.query.filter(
+                    Appointment.scheduled_at >= datetime.utcnow()
+                )
+                .order_by(Appointment.scheduled_at)
+                .all()
+            )
+        return render_template('appointments.html', appointments=appointments)
+
+
+@app.route('/appointments/<int:veterinario_id>/schedule/<int:horario_id>/edit', methods=['POST'])
+@login_required
+def edit_vet_schedule_slot(veterinario_id, horario_id):
+    if not (
+        _is_admin()
+        or (
+            current_user.worker == 'veterinario'
+            and getattr(current_user, 'veterinario', None)
+            and current_user.veterinario.id == veterinario_id
         )
-    return render_template('appointments.html', appointments=appointments)
+    ):
+        abort(403)
+    veterinario = Veterinario.query.get_or_404(veterinario_id)
+    horario = VetSchedule.query.get_or_404(horario_id)
+    form = VetScheduleForm(prefix='schedule')
+    form.veterinario_id.choices = [
+        (v.id, v.user.name) for v in Veterinario.query.all()
+    ]
+    if form.validate_on_submit():
+        horario.veterinario_id = form.veterinario_id.data
+        horario.dia_semana = form.dias_semana.data[0]
+        horario.hora_inicio = form.hora_inicio.data
+        horario.hora_fim = form.hora_fim.data
+        horario.intervalo_inicio = form.intervalo_inicio.data
+        horario.intervalo_fim = form.intervalo_fim.data
+        db.session.commit()
+        flash('Horário atualizado com sucesso.', 'success')
+    return redirect(url_for('appointments'))
+
+
+@app.route('/appointments/<int:veterinario_id>/schedule/<int:horario_id>/delete', methods=['POST'])
+@login_required
+def delete_vet_schedule(veterinario_id, horario_id):
+    if not (
+        _is_admin()
+        or (
+            current_user.worker == 'veterinario'
+            and getattr(current_user, 'veterinario', None)
+            and current_user.veterinario.id == veterinario_id
+        )
+    ):
+        abort(403)
+    horario = VetSchedule.query.get_or_404(horario_id)
+    db.session.delete(horario)
+    db.session.commit()
+    flash('Horário removido com sucesso.', 'success')
+    return redirect(url_for('appointments'))
 
 
 @app.route('/appointments/manage')

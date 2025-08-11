@@ -4,6 +4,6 @@
 <div class="container mt-4">
   <h2>Consulta agendada!</h2>
   <p>Sua consulta foi marcada para {{ appointment.scheduled_at|datetime_brazil }} com o veterinário {{ appointment.veterinario.user.name if appointment.veterinario and appointment.veterinario.user else appointment.veterinario_id }}.</p>
-  <a href="{{ url_for('list_appointments') }}" class="btn btn-primary">Ver agendamentos</a>
+  <a href="{{ url_for('appointments') }}" class="btn btn-primary">Ver agendamentos</a>
 </div>
 {% endblock %}
