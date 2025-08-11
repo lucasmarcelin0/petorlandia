@@ -72,10 +72,10 @@
   </table>
 
   {% if pode_editar %}
-  <button class="btn btn-secondary mt-3" onclick="toggleEditHours()">Editar Horários</button>
-  <div id="edit-hours" class="mt-4" style="display: none;">
-    <form method="post" class="mb-4">
-      {{ form.hidden_tag() }}
+    <button class="btn btn-secondary mt-3" onclick="toggleEditHours()">Editar Horários</button>
+    <div id="edit-hours" class="mt-4" style="display: none;">
+      <form method="post" class="mb-4">
+        {{ form.hidden_tag() }}
       <div class="mb-3">
         {{ form.clinica_id.label }}
         {{ form.clinica_id(class="form-select") }}
@@ -102,6 +102,52 @@
     </form>
   </div>
   {% endif %}
+
+  <h3>Veterinários</h3>
+  <ul class="list-unstyled">
+    {% for v in veterinarios %}
+      <li>
+        {{ v.user.name }} (CRMV: {{ v.crmv }})
+        <ul class="ms-3">
+          {% for h in v.horarios %}
+            <li>{{ h.dia_semana }}: {{ h.hora_inicio.strftime('%H:%M') }} - {{ h.hora_fim.strftime('%H:%M') }}</li>
+          {% else %}
+            <li>Sem horários cadastrados.</li>
+          {% endfor %}
+        </ul>
+      </li>
+    {% else %}
+      <li>Nenhum veterinário associado.</li>
+    {% endfor %}
+  </ul>
+  {% if pode_editar and vets_form.veterinario_id.choices %}
+  <form method="post" class="mb-4">
+    {{ vets_form.hidden_tag() }}
+    <div class="mb-3">
+      {{ vets_form.veterinario_id.label }}
+      {{ vets_form.veterinario_id(class="form-select") }}
+    </div>
+    {{ vets_form.submit(class="btn btn-primary") }}
+  </form>
+  {% endif %}
+
+  <h3>Agendamentos</h3>
+  <table class="table">
+    <thead>
+      <tr><th>Data</th><th>Animal</th><th>Veterinário</th></tr>
+    </thead>
+    <tbody>
+      {% for a in appointments %}
+        <tr>
+          <td>{{ a.scheduled_at|format_datetime_brazil }}</td>
+          <td>{{ a.animal.name }}</td>
+          <td>{{ a.veterinario.user.name }}</td>
+        </tr>
+      {% else %}
+        <tr><td colspan="3">Nenhum agendamento encontrado.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
 </div>
 <script>
 function toggleEditInfo() {
