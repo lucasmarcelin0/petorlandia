@@ -5029,6 +5029,10 @@ def schedule_appointment():
         animal = Animal.query.get_or_404(form.animal_id.data)
         tutor_id = current_user.id if not is_vet else animal.user_id
 
+        if not Appointment.has_active_subscription(animal.id, tutor_id):
+            flash('O animal não possui uma assinatura de plano de saúde ativa.', 'danger')
+            return render_template('schedule_appointment.html', form=form)
+
         appt = Appointment(
             animal_id=animal.id,
             tutor_id=tutor_id,
