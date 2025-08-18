@@ -1402,7 +1402,7 @@ def consulta_qr():
 
     # Aqui você já deve ter carregado o animal
     animal = Animal.query.get_or_404(animal_id)
-    idade = calcular_idade(animal.date_of_birth) if animal.date_of_birth else ''
+    idade = calcular_idade(animal.date_of_birth) if animal.date_of_birth else animal.age
 
     # Lógica adicional
     tutor = animal.owner
@@ -1473,6 +1473,8 @@ def consulta_direct(animal_id):
     form = AnimalForm(obj=animal)
     tutor_form = EditProfileForm(obj=tutor)
 
+    idade = calcular_idade(animal.date_of_birth) if animal.date_of_birth else animal.age
+
     return render_template('consulta_qr.html',
                            animal=animal,
                            tutor=tutor,
@@ -1486,7 +1488,8 @@ def consulta_direct(animal_id):
                            species_list=species_list,
                            breed_list=breed_list,
                            form=form,
-                           tutor_form=tutor_form)
+                           tutor_form=tutor_form,
+                           animal_idade=idade)
 
 
 
@@ -2179,6 +2182,8 @@ def update_animal(animal_id):
             animal.date_of_birth = date.today() - relativedelta(years=age_years)
         except ValueError:
             flash('Idade inválida. Deve ser um número inteiro.', 'warning')
+
+    animal.age = None
 
     # Upload de imagem
     if 'image' in request.files and request.files['image'].filename != '':
