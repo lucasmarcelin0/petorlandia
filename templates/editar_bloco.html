@@ -13,11 +13,13 @@
     </div>
 
     <button class="btn btn-outline-primary mb-3" onclick="adicionarMedicamento()">➕ Adicionar Medicamento</button>
-    <button class="btn btn-success" onclick="salvarEdicaoBloco({{ bloco.id }})">💾 Salvar alterações</button>
+    <button class="btn btn-success mb-3" onclick="salvarEdicaoBloco({{ bloco.id }})">💾 Salvar alterações</button>
+    <button class="btn btn-secondary mb-3" onclick="history.back()">↩️ Cancelar</button>
   </div>
 </div>
 
 <script>
+const ANIMAL_ID = {{ bloco.animal_id }};
 let medicamentos = [
   {% for p in bloco.prescricoes %}
     {
@@ -25,10 +27,21 @@ let medicamentos = [
       dosagem: "{{ p.dosagem|escape }}",
       frequencia: "{{ p.frequencia|escape }}",
       duracao: "{{ p.duracao|escape }}",
-      observacoes: `{{ p.observacoes|default('', true)|escape }}`
+      observacoes: `{{ p.observacoes|default('', true)|escape }}`,
+      modoLivre: false,
+      textoLivre: ''
     },
   {% endfor %}
 ];
+
+// Converte prescrições antigas que usavam "observações" como texto livre
+medicamentos.forEach(m => {
+  if (!m.medicamento && !m.dosagem && !m.frequencia && !m.duracao && m.observacoes) {
+    m.modoLivre = true;
+    m.textoLivre = m.observacoes;
+    m.observacoes = '';
+  }
+});
 
 
 function renderListaEdicao() {
@@ -36,33 +49,44 @@ function renderListaEdicao() {
   container.innerHTML = '';
   medicamentos.forEach((m, i) => {
     const card = document.createElement('div');
-    card.className = 'card mb-2';
+    card.className = 'card mb-3';
     card.innerHTML = `
+      <div class="card-header d-flex justify-content-between align-items-center">
+        <span><strong>Medicamento ${i + 1}</strong></span>
+        <button class="btn btn-outline-danger btn-sm" onclick="removerMedicamento(${i})"><i class="fa fa-trash"></i></button>
+      </div>
       <div class="card-body">
-        <div class="form-group mb-2 position-relative">
-          <label>Medicamento</label>
-          <input class="form-control medicamento-input" data-index="${i}" value="${m.medicamento}" onchange="medicamentos[${i}].medicamento = this.value">
-          <ul class="list-group position-absolute w-100 mt-1 sugestoes" style="z-index:10;"></ul>
+        <div class="form-check form-switch mb-3">
+          <input class="form-check-input" type="checkbox" id="modoLivre-${i}" ${m.modoLivre ? 'checked' : ''} onchange="toggleModoLivre(${i}, this.checked)">
+          <label class="form-check-label" for="modoLivre-${i}">Texto livre</label>
         </div>
-        <div class="form-row mb-2">
-          <div class="col">
-            <label>Dosagem</label>
-            <input class="form-control" value="${m.dosagem}" onchange="medicamentos[${i}].dosagem = this.value">
+        ${m.modoLivre ? `
+          <div class="form-group">
+            <label>Prescrição</label>
+            <textarea class="form-control" rows="3" placeholder="Digite a prescrição completa" onchange="medicamentos[${i}].textoLivre = this.value">${m.textoLivre}</textarea>
           </div>
-          <div class="col">
-            <label>Frequência</label>
-            <input class="form-control" value="${m.frequencia}" onchange="medicamentos[${i}].frequencia = this.value">
+        ` : `
+          <div class="form-group mb-3 position-relative">
+            <label>Medicamento</label>
+            <input class="form-control medicamento-input" placeholder="Nome do medicamento" data-index="${i}" value="${m.medicamento}" onchange="medicamentos[${i}].medicamento = this.value">
+            <small class="form-text text-muted">Digite para buscar sugestões.</small>
+            <ul class="list-group position-absolute w-100 mt-1 sugestoes" style="z-index:10;"></ul>
           </div>
-          <div class="col">
-            <label>Duração</label>
-            <input class="form-control" value="${m.duracao}" onchange="medicamentos[${i}].duracao = this.value">
+          <div class="row g-2 mb-3">
+            <div class="col-md-4">
+              <label>Dosagem</label>
+              <input class="form-control" placeholder="Ex: 5mg/kg" value="${m.dosagem}" onchange="medicamentos[${i}].dosagem = this.value">
+            </div>
+            <div class="col-md-4">
+              <label>Frequência</label>
+              <input class="form-control" placeholder="Ex: 2x ao dia" value="${m.frequencia}" onchange="medicamentos[${i}].frequencia = this.value">
+            </div>
+            <div class="col-md-4">
+              <label>Duração</label>
+              <input class="form-control" placeholder="Ex: 7 dias" value="${m.duracao}" onchange="medicamentos[${i}].duracao = this.value">
+            </div>
           </div>
-        </div>
-        <div class="form-group">
-          <label>Observações</label>
-          <textarea class="form-control" rows="2" onchange="medicamentos[${i}].observacoes = this.value">${m.observacoes}</textarea>
-        </div>
-        <button class="btn btn-danger btn-sm mt-2" onclick="removerMedicamento(${i})">🗑 Remover</button>
+        `}
       </div>
     `;
     container.appendChild(card);
@@ -71,27 +95,56 @@ function renderListaEdicao() {
 }
 
 function adicionarMedicamento() {
-  medicamentos.push({ medicamento: '', dosagem: '', frequencia: '', duracao: '', observacoes: '' });
+  medicamentos.push({ medicamento: '', dosagem: '', frequencia: '', duracao: '', observacoes: '', modoLivre: false, textoLivre: '' });
   renderListaEdicao();
 }
 
 function removerMedicamento(index) {
+  if (!confirm('Remover este medicamento?')) return;
   medicamentos.splice(index, 1);
   renderListaEdicao();
 }
 
+function toggleModoLivre(index, checked) {
+  medicamentos[index].modoLivre = checked;
+  renderListaEdicao();
+}
+
+function validarMedicamentos() {
+  for (let i = 0; i < medicamentos.length; i++) {
+    const m = medicamentos[i];
+    if (m.modoLivre) {
+      if (!m.textoLivre || !m.textoLivre.trim()) {
+        return `O texto do medicamento ${i + 1} está vazio.`;
+      }
+    } else {
+      if (!m.medicamento || !m.medicamento.trim()) {
+        return `O nome do medicamento ${i + 1} está vazio.`;
+      }
+    }
+  }
+  return null;
+}
+
 function salvarEdicaoBloco(bloco_id) {
+  const erro = validarMedicamentos();
+  if (erro) {
+    alert(erro);
+    return;
+  }
   const instrucoesGerais = document.getElementById('instrucoes-gerais').value;
+  const payload = medicamentos.map(m => m.modoLivre ? { medicamento: '', dosagem: '', frequencia: '', duracao: '', observacoes: m.textoLivre } : m);
   fetch(`/bloco_prescricao/${bloco_id}/atualizar`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ medicamentos, instrucoes_gerais: instrucoesGerais })
+    body: JSON.stringify({ medicamentos: payload, instrucoes_gerais: instrucoesGerais })
   })
   .then(res => res.json())
   .then(data => {
     if (data.success) {
       alert('Bloco atualizado com sucesso!');
-      window.location.href = document.referrer || '/';
+      localStorage.setItem('abaAtivaConsulta', 'medicamentos');
+      window.location.href = `/consulta/${ANIMAL_ID}`;
     } else {
       alert('Erro ao atualizar bloco.');
     }
