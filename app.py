@@ -2667,6 +2667,15 @@ def criar_prescricao(consulta_id):
     duracao = request.form.get('duracao')
     observacoes = request.form.get('observacoes')
 
+    # Se houver campos estruturados (dose, frequência ou duração),
+    # ignoramos o campo de texto livre para evitar salvar ambos
+    if dosagem or frequencia or duracao:
+        observacoes = None
+    # Caso contrário, se apenas o texto livre foi preenchido, os
+    # campos estruturados não devem ser persistidos
+    elif observacoes:
+        dosagem = frequencia = duracao = None
+
     if not medicamento:
         flash('É necessário informar o nome do medicamento.', 'warning')
         return redirect(request.referrer)
@@ -2850,14 +2859,26 @@ def salvar_bloco_prescricao(consulta_id):
     db.session.flush()  # Garante o ID do bloco
 
     for item in lista_prescricoes:
+        dosagem = item.get('dosagem')
+        frequencia = item.get('frequencia')
+        duracao = item.get('duracao')
+        observacoes = item.get('observacoes')
+
+        # Se qualquer campo estruturado estiver presente, descartamos o texto livre
+        if dosagem or frequencia or duracao:
+            observacoes = None
+        # Caso contrário, usamos apenas o texto livre e ignoramos os outros
+        elif observacoes:
+            dosagem = frequencia = duracao = None
+
         nova = Prescricao(
             animal_id=consulta.animal_id,
             bloco_id=bloco.id,
             medicamento=item.get('medicamento'),
-            dosagem=item.get('dosagem'),
-            frequencia=item.get('frequencia'),
-            duracao=item.get('duracao'),
-            observacoes=item.get('observacoes')
+            dosagem=dosagem,
+            frequencia=frequencia,
+            duracao=duracao,
+            observacoes=observacoes
         )
         db.session.add(nova)
 
