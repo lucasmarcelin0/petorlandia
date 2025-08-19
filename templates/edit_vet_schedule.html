@@ -4,7 +4,7 @@
 <div class="container mt-4">
   <h2>Agenda – {{ veterinario.user.name }}</h2>
 
-  <button class="btn btn-primary mb-3" onclick="showScheduleForm(false)">Adicionar Horário</button>
+  <button class="btn btn-primary mb-3" onclick="toggleScheduleForm()">Adicionar Horário</button>
   <button class="btn btn-secondary mb-3 ms-2" onclick="toggleAppointmentForm()">Agendar Consulta</button>
 
   <div id="schedule-form-container" class="card mb-4 d-none">
@@ -132,6 +132,15 @@
       else if (mode === 'weekday') opt.selected = weekdays.includes(opt.value);
       else if (mode === 'weekend') opt.selected = weekend.includes(opt.value);
       else if (mode === 'clear') opt.selected = false;
+    }
+  }
+
+  function toggleScheduleForm() {
+    const container = document.getElementById('schedule-form-container');
+    if (container.classList.contains('d-none')) {
+      showScheduleForm(false);
+    } else {
+      hideForm('schedule-form-container');
     }
   }
 
