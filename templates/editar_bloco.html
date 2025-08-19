@@ -63,27 +63,27 @@ function renderListaEdicao() {
         ${m.modoLivre ? `
           <div class="form-group">
             <label>Prescrição</label>
-            <textarea class="form-control" rows="3" placeholder="Digite a prescrição completa" onchange="medicamentos[${i}].textoLivre = this.value">${m.textoLivre}</textarea>
+            <textarea class="form-control" rows="3" placeholder="Digite a prescrição completa" oninput="medicamentos[${i}].textoLivre = this.value">${m.textoLivre}</textarea>
           </div>
         ` : `
           <div class="form-group mb-3 position-relative">
             <label>Medicamento</label>
-            <input class="form-control medicamento-input" placeholder="Nome do medicamento" data-index="${i}" value="${m.medicamento}" onchange="medicamentos[${i}].medicamento = this.value">
+            <input class="form-control medicamento-input" placeholder="Nome do medicamento" data-index="${i}" value="${m.medicamento}" oninput="medicamentos[${i}].medicamento = this.value">
             <small class="form-text text-muted">Digite para buscar sugestões.</small>
             <ul class="list-group position-absolute w-100 mt-1 sugestoes" style="z-index:10;"></ul>
           </div>
           <div class="row g-2 mb-3">
             <div class="col-md-4">
               <label>Dosagem</label>
-              <input class="form-control" placeholder="Ex: 5mg/kg" value="${m.dosagem}" onchange="medicamentos[${i}].dosagem = this.value">
+              <input class="form-control" placeholder="Ex: 5mg/kg" value="${m.dosagem}" oninput="medicamentos[${i}].dosagem = this.value">
             </div>
             <div class="col-md-4">
               <label>Frequência</label>
-              <input class="form-control" placeholder="Ex: 2x ao dia" value="${m.frequencia}" onchange="medicamentos[${i}].frequencia = this.value">
+              <input class="form-control" placeholder="Ex: 2x ao dia" value="${m.frequencia}" oninput="medicamentos[${i}].frequencia = this.value">
             </div>
             <div class="col-md-4">
               <label>Duração</label>
-              <input class="form-control" placeholder="Ex: 7 dias" value="${m.duracao}" onchange="medicamentos[${i}].duracao = this.value">
+              <input class="form-control" placeholder="Ex: 7 dias" value="${m.duracao}" oninput="medicamentos[${i}].duracao = this.value">
             </div>
           </div>
 
@@ -115,6 +115,9 @@ function validarMedicamentos() {
   for (let i = 0; i < medicamentos.length; i++) {
     const m = medicamentos[i];
     if (m.modoLivre) {
+      if (!m.medicamento || !m.medicamento.trim()) {
+        return `O nome do medicamento ${i + 1} está vazio.`;
+      }
       if (!m.textoLivre || !m.textoLivre.trim()) {
         return `O texto do medicamento ${i + 1} está vazio.`;
       }
@@ -134,7 +137,7 @@ function salvarEdicaoBloco(bloco_id) {
     return;
   }
   const instrucoesGerais = document.getElementById('instrucoes-gerais').value;
-  const payload = medicamentos.map(m => m.modoLivre ? { medicamento: '', dosagem: '', frequencia: '', duracao: '', observacoes: m.textoLivre } : m);
+  const payload = medicamentos.map(m => m.modoLivre ? { medicamento: m.medicamento, dosagem: '', frequencia: '', duracao: '', observacoes: m.textoLivre } : m);
 
   fetch(`/bloco_prescricao/${bloco_id}/atualizar`, {
     method: 'POST',
