@@ -2949,14 +2949,26 @@ def atualizar_bloco_prescricao(bloco_id):
 
     # Adiciona os novos medicamentos ao bloco
     for item in novos_medicamentos:
+        dosagem = item.get('dosagem')
+        frequencia = item.get('frequencia')
+        duracao = item.get('duracao')
+        observacoes = item.get('observacoes')
+
+        # Se qualquer campo estruturado estiver presente, descartamos o texto livre
+        if dosagem or frequencia or duracao:
+            observacoes = None
+        # Caso contrário, usamos apenas o texto livre e ignoramos os outros
+        elif observacoes:
+            dosagem = frequencia = duracao = None
+
         nova = Prescricao(
             animal_id=bloco.animal_id,
             bloco_id=bloco.id,
             medicamento=item.get('medicamento'),
-            dosagem=item.get('dosagem'),
-            frequencia=item.get('frequencia'),
-            duracao=item.get('duracao'),
-            observacoes=item.get('observacoes')
+            dosagem=dosagem,
+            frequencia=frequencia,
+            duracao=duracao,
+            observacoes=observacoes
         )
         db.session.add(nova)
 
