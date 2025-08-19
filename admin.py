@@ -427,6 +427,14 @@ class ProductAdmin(MyModelView):
 
 
 # --------------------------------------------------------------------------
+# Exame Modelo Admin
+# --------------------------------------------------------------------------
+class ExameModeloAdminView(MyModelView):
+    column_searchable_list = ('nome', 'justificativa')
+    form_columns = ('nome', 'justificativa')
+
+
+# --------------------------------------------------------------------------
 # Função de inicialização do painel
 # --------------------------------------------------------------------------
 def init_admin(app):
@@ -457,7 +465,7 @@ def init_admin(app):
     admin.add_view(VetScheduleAdmin(VetSchedule, db.session, name='Agenda do Veterinário'))
     admin.add_view(VeterinarioAdmin(Veterinario, db.session))
     admin.add_view(MyModelView(Specialty, db.session, name='Especialidades'))
-    admin.add_view(MyModelView(ExameModelo, db.session))
+    admin.add_view(ExameModeloAdminView(ExameModelo, db.session))
     admin.add_view(MyModelView(Consulta, db.session))
     admin.add_view(MyModelView(VacinaModelo, db.session))
     admin.add_view(MyModelView(ApresentacaoMedicamento, db.session))

@@ -86,6 +86,7 @@ function renderListaEdicao() {
               <input class="form-control" placeholder="Ex: 7 dias" value="${m.duracao}" onchange="medicamentos[${i}].duracao = this.value">
             </div>
           </div>
+
         `}
       </div>
     `;
@@ -134,6 +135,7 @@ function salvarEdicaoBloco(bloco_id) {
   }
   const instrucoesGerais = document.getElementById('instrucoes-gerais').value;
   const payload = medicamentos.map(m => m.modoLivre ? { medicamento: '', dosagem: '', frequencia: '', duracao: '', observacoes: m.textoLivre } : m);
+
   fetch(`/bloco_prescricao/${bloco_id}/atualizar`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
