@@ -19,6 +19,7 @@
 </div>
 
 <script>
+const ANIMAL_ID = {{ bloco.animal_id }};
 let medicamentos = [
   {% for p in bloco.prescricoes %}
     {
@@ -32,6 +33,15 @@ let medicamentos = [
     },
   {% endfor %}
 ];
+
+// Converte prescrições antigas que usavam "observações" como texto livre
+medicamentos.forEach(m => {
+  if (!m.medicamento && !m.dosagem && !m.frequencia && !m.duracao && m.observacoes) {
+    m.modoLivre = true;
+    m.textoLivre = m.observacoes;
+    m.observacoes = '';
+  }
+});
 
 
 function renderListaEdicao() {
@@ -76,10 +86,7 @@ function renderListaEdicao() {
               <input class="form-control" placeholder="Ex: 7 dias" value="${m.duracao}" onchange="medicamentos[${i}].duracao = this.value">
             </div>
           </div>
-          <div class="form-group">
-            <label>Observações</label>
-            <textarea class="form-control" rows="2" placeholder="Instruções adicionais" onchange="medicamentos[${i}].observacoes = this.value">${m.observacoes}</textarea>
-          </div>
+
         `}
       </div>
     `;
@@ -127,7 +134,8 @@ function salvarEdicaoBloco(bloco_id) {
     return;
   }
   const instrucoesGerais = document.getElementById('instrucoes-gerais').value;
-  const payload = medicamentos.map(m => m.modoLivre ? { medicamento: m.textoLivre, dosagem: '', frequencia: '', duracao: '', observacoes: '' } : m);
+  const payload = medicamentos.map(m => m.modoLivre ? { medicamento: '', dosagem: '', frequencia: '', duracao: '', observacoes: m.textoLivre } : m);
+
   fetch(`/bloco_prescricao/${bloco_id}/atualizar`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -137,7 +145,8 @@ function salvarEdicaoBloco(bloco_id) {
   .then(data => {
     if (data.success) {
       alert('Bloco atualizado com sucesso!');
-      window.location.href = document.referrer || '/';
+      localStorage.setItem('abaAtivaConsulta', 'medicamentos');
+      window.location.href = `/consulta/${ANIMAL_ID}`;
     } else {
       alert('Erro ao atualizar bloco.');
     }
