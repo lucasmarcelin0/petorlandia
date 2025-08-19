@@ -71,6 +71,7 @@
             li.textContent = item.nome;
             li.onclick = () => {
               inputExame.value = item.nome;
+              document.getElementById('justificativa-exame').value = item.justificativa || '';
               sugestoes.innerHTML = '';
             };
             sugestoes.appendChild(li);
