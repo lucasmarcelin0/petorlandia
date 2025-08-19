@@ -2920,6 +2920,7 @@ def atualizar_bloco_prescricao(bloco_id):
 
     data = request.get_json(silent=True) or {}
     novos_medicamentos = data.get('medicamentos', [])
+    instrucoes = data.get('instrucoes_gerais')
 
     # Limpa os medicamentos atuais do bloco
     for p in bloco.prescricoes:
@@ -2938,6 +2939,7 @@ def atualizar_bloco_prescricao(bloco_id):
         )
         db.session.add(nova)
 
+    bloco.instrucoes_gerais = instrucoes
     db.session.commit()
     return jsonify({'success': True})
 
