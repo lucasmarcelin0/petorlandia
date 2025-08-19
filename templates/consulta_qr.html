@@ -1,9 +1,14 @@
 {% extends 'layout.html' %}
 
-{% block main %}
-<!-- No seu template base (head) -->
-<link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" rel="stylesheet">
+{% block head %}
+  {{ super() }}
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+  <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+  <script src="https://cdn.jsdelivr.net/npm/flatpickr/dist/l10n/pt.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/inputmask@5.0.8/dist/inputmask.min.js"></script>
+{% endblock %}
 
+{% block main %}
 <div class="container py-4">
   <!-- Cabeçalho minimalista -->
   <div class="d-flex justify-content-between align-items-center mb-4 border-bottom pb-3">
