@@ -3005,7 +3005,10 @@ def salvar_bloco_exames(animal_id):
 def buscar_exames():
     q = request.args.get('q', '').lower()
     exames = ExameModelo.query.filter(ExameModelo.nome.ilike(f'%{q}%')).all()
-    return jsonify([{'id': e.id, 'nome': e.nome} for e in exames])
+    return jsonify([
+        {'id': e.id, 'nome': e.nome, 'justificativa': e.justificativa}
+        for e in exames
+    ])
 
 
 @app.route('/imprimir_bloco_exames/<int:bloco_id>')

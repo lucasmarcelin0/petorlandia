@@ -653,6 +653,7 @@ class ApresentacaoMedicamento(db.Model):
 class ExameModelo(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     nome = db.Column(db.String(120), nullable=False)  # ex: Hemograma, Raio-X...
+    justificativa = db.Column(db.Text)
 
 class BlocoExames(db.Model):
     id = db.Column(db.Integer, primary_key=True)

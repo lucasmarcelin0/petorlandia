@@ -103,6 +103,8 @@ function sugerirExames(input) {
         li.textContent = item.nome;
         li.onclick = () => {
           input.value = item.nome;
+          const card = input.closest('.card-body');
+          card.querySelector('.exame-justificativa').value = item.justificativa || '';
           lista.innerHTML = '';
         };
         lista.appendChild(li);
