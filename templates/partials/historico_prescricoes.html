@@ -23,6 +23,12 @@
         {% endfor %}
       </ul>
 
+      {% if bloco.instrucoes_gerais %}
+      <div class="alert alert-secondary py-2" role="alert">
+        <strong>Orientações e Cuidados:</strong> {{ bloco.instrucoes_gerais }}
+      </div>
+      {% endif %}
+
       <!-- Botões de ação -->
       <div class="d-flex flex-wrap gap-2">
         <form method="POST"
