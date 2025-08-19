@@ -201,14 +201,15 @@
 
     const nome = document.getElementById('nome-medicamento').value.trim();
     const modoPersonalizado = document.getElementById('modo-personalizado').checked;
-    const observacoes = document.getElementById('instrucao-unica').value.trim();
-    
+
+    let observacoes = '';
     let texto = '';
     let dose = '';
     let frequencia = '';
     let duracao = '';
 
     if (modoPersonalizado) {
+      observacoes = document.getElementById('instrucao-unica').value.trim();
       texto = observacoes;
     } else {
       frequencia = document.getElementById('frequencia').value.trim();
