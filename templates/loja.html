@@ -32,7 +32,7 @@
   <div class="row row-cols-1 row-cols-md-2 row-cols-lg-3 g-4">
     {% for product in products %}
     <div class="col">
-      <div class="card h-100 border-0 shadow-sm overflow-hidden product-card">
+      <div class="card h-100 border-0 overflow-hidden product-card">
         <!-- Product Image -->
         <a href="{{ url_for('produto_detail', product_id=product.id) }}" class="position-relative overflow-hidden d-block" style="height: 220px;">
           {% if product.image_url %}
@@ -50,9 +50,15 @@
               <i class="bi bi-image text-muted fs-1"></i>
             </div>
           {% endif %}
+          {% if product.stock is not none and product.stock < 5 %}
+          <div class="product-badge position-absolute top-0 end-0 bg-warning text-dark p-2 small">
+            <i class="bi bi-exclamation-triangle"></i> Estoque baixo
+          </div>
+          {% else %}
           <div class="product-badge position-absolute top-0 end-0 bg-danger text-white p-2 small">
             <i class="bi bi-tag"></i> Novo
           </div>
+          {% endif %}
         </a>
         
         <!-- Product Info -->
@@ -61,12 +67,12 @@
           <p class="card-text text-muted small flex-grow-1">
             {{ product.description|truncate(100) }}
           </p>
-          
-          <div class="d-flex justify-content-between align-items-center mt-3">
-            <span class="h5 text-success fw-bold mb-0">
+
+          <div class="d-flex justify-content-between align-items-center mt-3 gap-3">
+            <span class="h5 text-success fw-bold mb-0 product-price">
               R$ {{ '%.2f'|format(product.price)|replace('.', ',') }}
             </span>
-            
+
             <form action="{{ url_for('adicionar_carrinho', product_id=product.id) }}"
                   method="post" class="ms-2 js-cart-form">
               {{ form.hidden_tag() }}
@@ -123,13 +129,19 @@
   .product-card {
     transition: all 0.3s ease;
     border-radius: 12px;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.08);
   }
-  
+
   .product-card:hover {
     transform: translateY(-5px);
-    box-shadow: 0 10px 20px rgba(0,0,0,0.1);
+    box-shadow: 0 10px 20px rgba(0,0,0,0.12);
   }
-  
+
+  .product-price {
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+
   .product-badge {
     border-bottom-left-radius: 8px;
   }
