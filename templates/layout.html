@@ -56,8 +56,6 @@
             background: linear-gradient(to bottom right, var(--light-color), #ffffff);
             color: #333;
             line-height: 1.6;
-            overflow-wrap: anywhere;
-            word-break: break-word;
             padding-top: calc(var(--topbar-height) + env(safe-area-inset-top));
             padding-bottom: env(safe-area-inset-bottom);
             padding-left: env(safe-area-inset-left);
@@ -76,6 +74,8 @@
 
         p {
             margin-bottom: 1rem;
+            overflow-wrap: anywhere;
+            word-break: break-word;
         }
 
         /* Navbar Styles */
