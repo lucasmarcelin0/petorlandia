@@ -88,6 +88,12 @@
         <span class="fw-semibold">Vacinas</span>
       </button>
     </li>
+    <li class="nav-item" role="presentation">
+      <button class="nav-link d-flex align-items-center gap-2" id="orcamento-tab" data-bs-toggle="tab" data-bs-target="#orcamento" type="button" role="tab">
+        <span class="icon-circle bg-secondary text-white"><i class="fa-solid fa-file-invoice-dollar"></i></span>
+        <span class="fw-semibold">Orçamento</span>
+      </button>
+    </li>
   {% endif %}
 </ul>
 
@@ -163,6 +169,13 @@
       <div class="card shadow-sm">
         <div class="card-body">
           {% include 'partials/vacinas_form.html' %}
+        </div>
+      </div>
+    </div>
+    <div class="tab-pane fade" id="orcamento" role="tabpanel">
+      <div class="card shadow-sm">
+        <div class="card-body">
+          {% include 'partials/orcamento_form.html' %}
         </div>
       </div>
     </div>
