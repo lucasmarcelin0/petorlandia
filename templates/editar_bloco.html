@@ -23,10 +23,10 @@ const ANIMAL_ID = {{ bloco.animal_id }};
 let medicamentos = [
   {% for p in bloco.prescricoes %}
     {
-      medicamento: "{{ p.medicamento|escape }}",
-      dosagem: "{{ p.dosagem|escape }}",
-      frequencia: "{{ p.frequencia|escape }}",
-      duracao: "{{ p.duracao|escape }}",
+      medicamento: "{{ p.medicamento|default('', true)|escape }}",
+      dosagem: "{{ p.dosagem|default('', true)|escape }}",
+      frequencia: "{{ p.frequencia|default('', true)|escape }}",
+      duracao: "{{ p.duracao|default('', true)|escape }}",
       observacoes: `{{ p.observacoes|default('', true)|escape }}`,
       modoLivre: false,
       textoLivre: ''
@@ -36,7 +36,7 @@ let medicamentos = [
 
 // Converte prescrições antigas que usavam "observações" como texto livre
 medicamentos.forEach(m => {
-  if (!m.medicamento && !m.dosagem && !m.frequencia && !m.duracao && m.observacoes) {
+  if (!m.dosagem && !m.frequencia && !m.duracao && m.observacoes) {
     m.modoLivre = true;
     m.textoLivre = m.observacoes;
     m.observacoes = '';
