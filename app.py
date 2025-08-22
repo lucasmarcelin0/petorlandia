@@ -5304,6 +5304,35 @@ def delete_appointment(appointment_id):
     return redirect(request.referrer or url_for('manage_appointments'))
 
 
+@app.route('/consulta/<int:consulta_id>/orcamento_item', methods=['POST'])
+@login_required
+def adicionar_orcamento_item(consulta_id):
+    consulta = Consulta.query.get_or_404(consulta_id)
+    if current_user.worker != 'veterinario':
+        return jsonify({'success': False, 'message': 'Apenas veterinários podem adicionar itens.'}), 403
+    data = request.get_json(silent=True) or {}
+    descricao = data.get('descricao')
+    valor = data.get('valor')
+    if not descricao or valor is None:
+        return jsonify({'success': False, 'message': 'Dados incompletos.'}), 400
+    item = OrcamentoItem(consulta_id=consulta.id, descricao=descricao, valor=valor)
+    db.session.add(item)
+    db.session.commit()
+    return jsonify({'id': item.id, 'descricao': item.descricao, 'valor': float(item.valor), 'total': float(consulta.total_orcamento)}), 201
+
+
+@app.route('/consulta/orcamento_item/<int:item_id>', methods=['DELETE'])
+@login_required
+def deletar_orcamento_item(item_id):
+    item = OrcamentoItem.query.get_or_404(item_id)
+    if current_user.worker != 'veterinario':
+        return jsonify({'success': False, 'message': 'Apenas veterinários podem remover itens.'}), 403
+    consulta = item.consulta
+    db.session.delete(item)
+    db.session.commit()
+    return jsonify({'total': float(consulta.total_orcamento)}), 200
+
+
 if __name__ == "__main__":
     # Usa a porta 8080 se existir no ambiente (como no Docker), senão usa 5000
     port = int(os.environ.get("PORT", 5000))
