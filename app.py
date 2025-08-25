@@ -1337,6 +1337,39 @@ def ficha_animal(animal_id):
         blocos_exames=blocos_exames,
         vacinas=vacinas
     )
+@app.route('/animal/<int:animal_id>/documentos', methods=['POST'])
+@login_required
+def upload_document(animal_id):
+    animal = Animal.query.get_or_404(animal_id)
+    if current_user.worker != 'veterinario':
+        flash('Apenas veterinários podem enviar documentos.', 'danger')
+        return redirect(url_for('ficha_animal', animal_id=animal.id))
+
+    file = request.files.get('documento')
+    if not file or file.filename == '':
+        flash('Nenhum arquivo enviado.', 'danger')
+        return redirect(url_for('ficha_animal', animal_id=animal.id))
+
+    filename = f"{uuid.uuid4().hex}_{secure_filename(file.filename)}"
+    file_url = upload_to_s3(file, filename, folder='documentos')
+    if not file_url:
+        flash('Falha ao enviar arquivo.', 'danger')
+        return redirect(url_for('ficha_animal', animal_id=animal.id))
+
+    documento = AnimalDocumento(
+        animal_id=animal.id,
+        veterinario_id=current_user.id,
+        filename=file.filename,
+        file_url=file_url,
+        descricao=request.form.get('descricao')
+    )
+    db.session.add(documento)
+    db.session.commit()
+
+    flash('Documento enviado com sucesso!', 'success')
+    return redirect(url_for('ficha_animal', animal_id=animal.id))
+
+
 
 
 
