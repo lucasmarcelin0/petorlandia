@@ -89,15 +89,15 @@
       </button>
     </li>
     <li class="nav-item" role="presentation">
-      <button class="nav-link d-flex align-items-center gap-2" id="orcamento-tab" data-bs-toggle="tab" data-bs-target="#orcamento" type="button" role="tab">
-        <span class="icon-circle bg-secondary text-white"><i class="fa-solid fa-file-invoice-dollar"></i></span>
-        <span class="fw-semibold">Orçamento</span>
+      <button class="nav-link d-flex align-items-center gap-2" id="documentos-tab" data-bs-toggle="tab" data-bs-target="#documentos" type="button" role="tab">
+        <span class="icon-circle" style="background-color: #e83e8c; color: #fff;"><i class="fa-solid fa-file"></i></span>
+        <span class="fw-semibold">Documentos</span>
       </button>
     </li>
     <li class="nav-item" role="presentation">
-      <button class="nav-link d-flex align-items-center gap-2" id="documentos-tab" data-bs-toggle="tab" data-bs-target="#documentos" type="button" role="tab">
-        <span class="icon-circle bg-dark text-white"><i class="fa-solid fa-file"></i></span>
-        <span class="fw-semibold">Documentos</span>
+      <button class="nav-link d-flex align-items-center gap-2" id="orcamento-tab" data-bs-toggle="tab" data-bs-target="#orcamento" type="button" role="tab">
+        <span class="icon-circle" style="background-color: #fd7e14; color: #fff;"><i class="fa-solid fa-file-invoice-dollar"></i></span>
+        <span class="fw-semibold">Orçamento</span>
       </button>
     </li>
   {% endif %}
@@ -178,17 +178,17 @@
         </div>
       </div>
     </div>
-    <div class="tab-pane fade" id="orcamento" role="tabpanel">
-      <div class="card shadow-sm">
-        <div class="card-body">
-          {% include 'partials/orcamento_form.html' %}
-        </div>
-      </div>
-    </div>
     <div class="tab-pane fade" id="documentos" role="tabpanel">
       <div class="card shadow-sm">
         <div class="card-body">
           {% include 'partials/documentos.html' %}
+        </div>
+      </div>
+    </div>
+    <div class="tab-pane fade" id="orcamento" role="tabpanel">
+      <div class="card shadow-sm">
+        <div class="card-body">
+          {% include 'partials/orcamento_form.html' %}
         </div>
       </div>
     </div>
