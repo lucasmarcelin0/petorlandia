@@ -10,16 +10,16 @@
       Os melhores produtos para o seu pet com entrega rápida e atendimento especializado!
     </p>
     
-    <div class="d-flex flex-wrap justify-content-center gap-3 mt-4">
+    <div class="d-flex flex-column flex-sm-row justify-content-center gap-3 mt-4">
       {% if has_orders %}
-      <a href="{{ url_for('minhas_compras') }}" 
-         class="btn btn-outline-primary d-flex align-items-center">
+      <a href="{{ url_for('minhas_compras') }}"
+         class="btn btn-outline-primary btn-lg d-flex align-items-center w-100 w-sm-auto">
         <i class="bi bi-box-seam me-2"></i> Minhas Compras
       </a>
       {% endif %}
-      
-      <a href="{{ url_for('ver_carrinho') }}" 
-         class="btn btn-success d-flex align-items-center position-relative">
+
+      <a href="{{ url_for('ver_carrinho') }}"
+         class="btn btn-success btn-lg d-flex align-items-center position-relative w-100 w-sm-auto">
         <i class="bi bi-cart3 me-2"></i> Ver Carrinho
         {% if cart_count and cart_count > 0 %}
         <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger">
@@ -113,7 +113,7 @@
                 </div>
                 <button type="submit" class="btn add-to-cart-btn d-flex align-items-center gap-2 shadow-sm flex-grow-1 js-add-to-cart">
                   <i class="bi bi-cart-plus fs-5"></i>
-                  <span class="fw-semibold d-none d-sm-inline">Adicionar +</span>
+                  <span class="fw-semibold">Adicionar +</span>
                 </button>
               </div>
             </form>
