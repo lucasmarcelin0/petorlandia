@@ -1370,6 +1370,36 @@ def upload_document(animal_id):
     return redirect(url_for('ficha_animal', animal_id=animal.id))
 
 
+@app.route('/animal/<int:animal_id>/documentos/<int:doc_id>/delete', methods=['POST'])
+@login_required
+def delete_document(animal_id, doc_id):
+    documento = AnimalDocumento.query.filter_by(id=doc_id, animal_id=animal_id).first_or_404()
+
+    if not (
+        current_user.role == 'admin'
+        or (
+            current_user.worker == 'veterinario'
+            and current_user.id == documento.veterinario_id
+        )
+    ):
+        flash('Você não tem permissão para excluir este documento.', 'danger')
+        return redirect(url_for('ficha_animal', animal_id=animal_id))
+
+    prefix = f"https://{BUCKET}.s3.amazonaws.com/"
+    if documento.file_url and documento.file_url.startswith(prefix):
+        key = documento.file_url[len(prefix):]
+        try:
+            _s3().delete_object(Bucket=BUCKET, Key=key)
+        except Exception as exc:  # noqa: BLE001
+            app.logger.exception('Falha ao remover arquivo do S3: %s', exc)
+
+    db.session.delete(documento)
+    db.session.commit()
+
+    flash('Documento excluído com sucesso!', 'success')
+    return redirect(url_for('ficha_animal', animal_id=animal_id))
+
+
 
 
 
