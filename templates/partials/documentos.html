@@ -1,0 +1,32 @@
+<h5 class="mb-3">Documentos</h5>
+{% if animal.documentos %}
+  <ul class="list-group mb-3">
+    {% for d in animal.documentos %}
+      <li class="list-group-item d-flex justify-content-between align-items-center">
+        <span>{{ d.filename }}</span>
+        <div>
+          <a href="{{ d.file_url }}" target="_blank" class="btn btn-sm btn-outline-primary">Abrir</a>
+          {% if current_user.role == 'admin' or (current_user.worker == 'veterinario' and current_user.id == d.veterinario_id) %}
+          <form action="{{ url_for('delete_document', animal_id=animal.id, doc_id=d.id) }}" method="post" class="d-inline">
+            <button class="btn btn-sm btn-outline-danger" onclick="return confirm('Excluir documento?')">Excluir</button>
+          </form>
+          {% endif %}
+        </div>
+      </li>
+    {% endfor %}
+  </ul>
+{% else %}
+  <p class="text-muted">Nenhum documento enviado.</p>
+{% endif %}
+
+{% if current_user.worker == 'veterinario' %}
+<form action="{{ url_for('upload_document', animal_id=animal.id) }}" method="post" enctype="multipart/form-data" class="mt-2">
+  <div class="mb-2">
+    <input type="file" name="documento" class="form-control form-control-sm" required>
+  </div>
+  <div class="mb-2">
+    <input type="text" name="descricao" class="form-control form-control-sm" placeholder="Descrição (opcional)">
+  </div>
+  <button class="btn btn-sm btn-outline-success">📤 Enviar</button>
+</form>
+{% endif %}
