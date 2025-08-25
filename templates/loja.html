@@ -31,25 +31,25 @@
   </div>
 
   <!-- Search & Filter Section (Nova adição) -->
-  <div class="row mb-4 mb-lg-5">
+  <form method="get" class="row mb-4 mb-lg-5">
     <div class="col-12 col-md-6 mb-3 mb-md-0">
       <div class="input-group">
         <span class="input-group-text bg-transparent border-end-0">
           <i class="bi bi-search text-muted"></i>
         </span>
-        <input type="text" class="form-control border-start-0 js-search-input" placeholder="Buscar produtos..." aria-label="Buscar produtos">
+        <input type="text" name="q" value="{{ search_term }}" class="form-control border-start-0" placeholder="Buscar produtos..." aria-label="Buscar produtos">
       </div>
     </div>
     <div class="col-12 col-md-6">
-      <select class="form-select js-filter-select" aria-label="Filtrar produtos">
-        <option selected value="all">Todos os produtos</option>
-        <option value="lowStock">Estoque baixo</option>
-        <option value="new">Novos produtos</option>
-        <option value="priceLow">Preço: menor para maior</option>
-        <option value="priceHigh">Preço: maior para menor</option>
+      <select class="form-select" name="filter" aria-label="Filtrar produtos" onchange="this.form.submit()">
+        <option value="all" {% if selected_filter=='all' %}selected{% endif %}>Todos os produtos</option>
+        <option value="lowStock" {% if selected_filter=='lowStock' %}selected{% endif %}>Estoque baixo</option>
+        <option value="new" {% if selected_filter=='new' %}selected{% endif %}>Novos produtos</option>
+        <option value="priceLow" {% if selected_filter=='priceLow' %}selected{% endif %}>Preço: menor para maior</option>
+        <option value="priceHigh" {% if selected_filter=='priceHigh' %}selected{% endif %}>Preço: maior para menor</option>
       </select>
     </div>
-  </div>
+  </form>
 
   <!-- Products Grid -->
   {% if products %}
@@ -379,35 +379,6 @@
       // this.closest('form').submit();
     });
   });
-  
-  // Funcionalidade de busca (simulada)
-  const searchInput = document.querySelector('.js-search-input');
-  if (searchInput) {
-    searchInput.addEventListener('input', function() {
-      const searchTerm = this.value.toLowerCase();
-      const productCards = document.querySelectorAll('.product-card');
-      
-      productCards.forEach(card => {
-        const productName = card.querySelector('.card-title').textContent.toLowerCase();
-        const productDescription = card.querySelector('.product-description').textContent.toLowerCase();
-        
-        if (productName.includes(searchTerm) || productDescription.includes(searchTerm)) {
-          card.parentElement.style.display = '';
-        } else {
-          card.parentElement.style.display = 'none';
-        }
-      });
-    });
-  }
-  
-  // Funcionalidade de filtro (simulada)
-  const filterSelect = document.querySelector('.js-filter-select');
-  if (filterSelect) {
-    filterSelect.addEventListener('change', function() {
-      // Em uma implementação real, isso recarregaria os produtos
-      // ou faria uma requisição AJAX para o servidor
-      console.log('Filtro selecionado:', this.value);
-    });
-  }
+
 </script>
 {% endblock %}

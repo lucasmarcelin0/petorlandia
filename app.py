@@ -15,7 +15,7 @@ from dotenv import load_dotenv
 from flask import Flask, session, send_from_directory, abort, request, jsonify, flash, render_template, redirect, url_for
 from itsdangerous import URLSafeTimedSerializer
 import json
-from sqlalchemy import func
+from sqlalchemy import func, or_
 
 # ----------------------------------------------------------------
 # 1)  Alias único para “models”
@@ -4149,7 +4149,7 @@ def _setup_checkout_form(form, preserve_selected=True):
 
 
 
-from flask import session, render_template
+from flask import session, render_template, request
 from flask_login import login_required
 
 
@@ -4163,7 +4163,26 @@ def loja():
         if payment and payment.status.name == "PENDING":
             pagamento_pendente = payment
 
-    produtos = Product.query.all()
+    search_term = request.args.get("q", "").strip()
+    filtro = request.args.get("filter", "all")
+
+    query = Product.query
+    if search_term:
+        like = f"%{search_term}%"
+        query = query.filter(or_(Product.name.ilike(like), Product.description.ilike(like)))
+
+    if filtro == "lowStock":
+        query = query.filter(Product.stock < 5)
+    elif filtro == "new":
+        query = query.order_by(Product.id.desc())
+    elif filtro == "priceLow":
+        query = query.order_by(Product.price.asc())
+    elif filtro == "priceHigh":
+        query = query.order_by(Product.price.desc())
+    else:
+        query = query.order_by(Product.name)
+
+    produtos = query.all()
     form = AddToCartForm()
 
     # Verifica se há pedidos anteriores
@@ -4174,7 +4193,9 @@ def loja():
         products=produtos,
         pagamento_pendente=pagamento_pendente,
         form=form,
-        has_orders=has_orders
+        has_orders=has_orders,
+        selected_filter=filtro,
+        search_term=search_term,
     )
 
 
