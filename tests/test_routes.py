@@ -24,6 +24,8 @@ from models import (
 )
 from flask import url_for
 from datetime import datetime
+from types import SimpleNamespace
+from urllib.parse import quote
 
 @pytest.fixture
 def app():
@@ -1656,6 +1658,21 @@ def test_delete_document_by_veterinarian(app, monkeypatch):
     assert resp.status_code == 200
     with app.app_context():
         assert AnimalDocumento.query.get(doc_id) is None
+
+
+def test_documentos_whatsapp_button_rendered(app):
+    with app.app_context():
+        with flask_app.test_request_context():
+            template = flask_app.jinja_env.get_template('partials/documentos.html')
+            tutor = SimpleNamespace(name='Fulano', phone='+55 (11) 98765-4321')
+            doc = SimpleNamespace(id=1, veterinario_id=1, filename='doc.pdf', file_url='http://example.com/doc.pdf')
+            animal = SimpleNamespace(id=1, documentos=[doc])
+            current_user = SimpleNamespace(role='admin', worker='veterinario', id=1)
+            rendered = template.render(animal=animal, tutor=tutor, current_user=current_user)
+            phone_digits = ''.join(filter(str.isdigit, tutor.phone))
+            expected_text = quote(f'Olá {tutor.name}! Segue o documento: {doc.file_url}', safe='/')
+            expected_url = f'https://api.whatsapp.com/send?phone={phone_digits}&text={expected_text}'
+            assert expected_url in rendered
 
 
 def test_delete_document_by_admin(app, monkeypatch):
