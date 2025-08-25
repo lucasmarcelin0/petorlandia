@@ -1341,20 +1341,21 @@ def ficha_animal(animal_id):
 @login_required
 def upload_document(animal_id):
     animal = Animal.query.get_or_404(animal_id)
+    next_url = request.form.get('next') or url_for('ficha_animal', animal_id=animal.id)
     if current_user.worker != 'veterinario':
         flash('Apenas veterinários podem enviar documentos.', 'danger')
-        return redirect(url_for('ficha_animal', animal_id=animal.id))
+        return redirect(next_url)
 
     file = request.files.get('documento')
     if not file or file.filename == '':
         flash('Nenhum arquivo enviado.', 'danger')
-        return redirect(url_for('ficha_animal', animal_id=animal.id))
+        return redirect(next_url)
 
     filename = f"{uuid.uuid4().hex}_{secure_filename(file.filename)}"
     file_url = upload_to_s3(file, filename, folder='documentos')
     if not file_url:
         flash('Falha ao enviar arquivo.', 'danger')
-        return redirect(url_for('ficha_animal', animal_id=animal.id))
+        return redirect(next_url)
 
     documento = AnimalDocumento(
         animal_id=animal.id,
@@ -1367,7 +1368,7 @@ def upload_document(animal_id):
     db.session.commit()
 
     flash('Documento enviado com sucesso!', 'success')
-    return redirect(url_for('ficha_animal', animal_id=animal.id))
+    return redirect(next_url)
 
 
 

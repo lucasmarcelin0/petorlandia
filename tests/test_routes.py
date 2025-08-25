@@ -1598,3 +1598,25 @@ def test_upload_document(monkeypatch, app):
     assert resp.status_code == 200
     with app.app_context():
         assert AnimalDocumento.query.filter_by(animal_id=animal_id).count() == 1
+
+
+def test_consulta_page_shows_documentos_tab(monkeypatch, app):
+    client = app.test_client()
+    with app.app_context():
+        db.drop_all()
+        db.create_all()
+        tutor = User(id=1, name='Tutor', email='t@t')
+        tutor.set_password('x')
+        vet = User(id=2, name='Vet', email='v@v', worker='veterinario')
+        vet.set_password('x')
+        animal = Animal(id=1, name='Dog', user_id=tutor.id)
+        db.session.add_all([tutor, vet, animal])
+        db.session.commit()
+        animal_id = animal.id
+        vet_id = vet.id
+
+    import flask_login.utils as login_utils
+    monkeypatch.setattr(login_utils, '_get_user', lambda: User.query.get(vet_id))
+
+    resp = client.get(f'/consulta/{animal_id}')
+    assert b'id="documentos-tab"' in resp.data
