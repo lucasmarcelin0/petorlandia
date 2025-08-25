@@ -12,7 +12,20 @@ from PIL import Image
 
 
 from dotenv import load_dotenv
-from flask import Flask, session, send_from_directory, abort, request, jsonify, flash, render_template, redirect, url_for
+from flask import (
+    Flask,
+    session,
+    send_from_directory,
+    abort,
+    request,
+    jsonify,
+    flash,
+    render_template,
+    redirect,
+    url_for,
+    current_app,
+)
+from twilio.rest import Client
 from itsdangerous import URLSafeTimedSerializer
 import json
 from sqlalchemy import func, or_
@@ -1115,6 +1128,20 @@ def formatar_telefone(telefone: str) -> str:
         return f"+55{telefone}"
 
 
+def enviar_mensagem_whatsapp(texto: str, numero: str) -> None:
+    """Envia uma mensagem de WhatsApp usando a API do Twilio."""
+
+    account_sid = os.getenv("TWILIO_ACCOUNT_SID")
+    auth_token = os.getenv("TWILIO_AUTH_TOKEN")
+    from_number = os.getenv("TWILIO_WHATSAPP_FROM")
+
+    if not all([account_sid, auth_token, from_number]):
+        raise RuntimeError("Credenciais do Twilio não configuradas")
+
+    client = Client(account_sid, auth_token)
+    client.messages.create(body=texto, from_=from_number, to=numero)
+
+
 @app.route('/termo/transferencia/<int:animal_id>/<int:user_id>', methods=['GET', 'POST'])
 @login_required
 def termo_transferencia(animal_id, user_id):
@@ -1126,50 +1153,51 @@ def termo_transferencia(animal_id, user_id):
         return redirect(url_for('profile'))
 
     if request.method == 'POST':
-        # Transfere a tutoria
-        animal.user_id = novo_dono.id
-        animal.status = 'indisponível'
-        animal.modo = 'adotado'
+        try:
+            # Transfere a tutoria
+            animal.user_id = novo_dono.id
+            animal.status = 'indisponível'
+            animal.modo = 'adotado'
 
-        # Cria a transação
-        transacao = Transaction(
-            animal_id=animal.id,
-            from_user_id=current_user.id,
-            to_user_id=novo_dono.id,
-            type='adoção' if animal.modo == 'doação' else 'venda',
-            status='concluída',
-            date=datetime.utcnow()
-        )
-        db.session.add(transacao)
+            # Cria a transação
+            transacao = Transaction(
+                animal_id=animal.id,
+                from_user_id=current_user.id,
+                to_user_id=novo_dono.id,
+                type='adoção' if animal.modo == 'doação' else 'venda',
+                status='concluída',
+                date=datetime.utcnow()
+            )
+            db.session.add(transacao)
 
-        # Envia uma mensagem interna para o novo tutor
-        msg = Message(
-            sender_id=current_user.id,
-            receiver_id=novo_dono.id,
-            animal_id=animal.id,
-            content=f"Parabéns! Você agora é o tutor de {animal.name}. 🐾",
-            lida=False
-        )
-        db.session.add(msg)
+            # Envia uma mensagem interna para o novo tutor
+            msg = Message(
+                sender_id=current_user.id,
+                receiver_id=novo_dono.id,
+                animal_id=animal.id,
+                content=f"Parabéns! Você agora é o tutor de {animal.name}. 🐾",
+                lida=False
+            )
+            db.session.add(msg)
 
-        # WhatsApp para o novo tutor
-        if novo_dono.phone:
-            numero_formatado = f"whatsapp:{formatar_telefone(novo_dono.phone)}"
+            db.session.commit()
+        except Exception:
+            db.session.rollback()
+            current_app.logger.exception("Erro ao transferir tutoria")
+            flash('Ocorreu um erro ao transferir a tutoria.', 'danger')
+        else:
+            flash(f'Tutoria de {animal.name} transferida para {novo_dono.name}.', 'success')
 
-            texto_wpp = f"Parabéns, {novo_dono.name}! Agora você é o tutor de {animal.name} pelo PetOrlândia. 🐶🐱"
-            # Antes de chamar o envio
-            print("=== Tentando enviar WhatsApp ===")
-            print(f"Telefone formatado: {numero_formatado}")
-            print(f"Texto: {texto_wpp}")
+            # WhatsApp para o novo tutor
+            if novo_dono.phone:
+                numero_formatado = f"whatsapp:{formatar_telefone(novo_dono.phone)}"
+                texto_wpp = f"Parabéns, {novo_dono.name}! Agora você é o tutor de {animal.name} pelo PetOrlândia. 🐶🐱"
 
-            try:
-                enviar_mensagem_whatsapp(texto_wpp, numero_formatado)
-            except Exception as e:
-                print(f"Erro ao enviar WhatsApp: {e}")
+                try:
+                    enviar_mensagem_whatsapp(texto_wpp, numero_formatado)
+                except Exception as e:
+                    current_app.logger.error("Erro ao enviar WhatsApp: %s", e)
 
-        db.session.commit()
-
-        flash(f'Tutoria de {animal.name} transferida para {novo_dono.name}.', 'success')
         return redirect(url_for('profile'))
 
     data_atual = datetime.now(BR_TZ).strftime('%d/%m/%Y')
