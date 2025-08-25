@@ -1598,3 +1598,75 @@ def test_upload_document(monkeypatch, app):
     assert resp.status_code == 200
     with app.app_context():
         assert AnimalDocumento.query.filter_by(animal_id=animal_id).count() == 1
+
+
+def test_delete_document_by_veterinarian(app, monkeypatch):
+    with app.app_context():
+        db.drop_all()
+        db.create_all()
+        tutor = User(id=1, name='Tutor', email='t@t')
+        tutor.set_password('x')
+        vet = User(id=2, name='Vet', email='v@v', worker='veterinario')
+        vet.set_password('x')
+        animal = Animal(id=1, name='Dog', user_id=tutor.id)
+        doc = AnimalDocumento(id=1, animal_id=animal.id, veterinario_id=vet.id, filename='res.pdf', file_url='http://doc')
+        db.session.add_all([tutor, vet, animal, doc])
+        db.session.commit()
+        animal_id = animal.id
+        doc_id = doc.id
+        vet_id = vet.id
+
+    import flask_login.utils as login_utils
+    monkeypatch.setattr(login_utils, '_get_user', lambda: User.query.get(vet_id))
+
+    class DummyS3:
+        def delete_object(self, *a, **k):
+            pass
+
+    monkeypatch.setattr(app_module, '_s3', lambda: DummyS3())
+
+    client = app.test_client()
+    resp = client.post(
+        f'/animal/{animal_id}/documentos/{doc_id}/delete',
+        follow_redirects=True,
+    )
+    assert resp.status_code == 200
+    with app.app_context():
+        assert AnimalDocumento.query.get(doc_id) is None
+
+
+def test_delete_document_by_admin(app, monkeypatch):
+    with app.app_context():
+        db.drop_all()
+        db.create_all()
+        tutor = User(id=1, name='Tutor', email='t@t')
+        tutor.set_password('x')
+        vet = User(id=2, name='Vet', email='v@v', worker='veterinario')
+        vet.set_password('x')
+        admin = User(id=3, name='Admin', email='a@a', role='admin')
+        admin.set_password('x')
+        animal = Animal(id=1, name='Dog', user_id=tutor.id)
+        doc = AnimalDocumento(id=1, animal_id=animal.id, veterinario_id=vet.id, filename='res.pdf', file_url='http://doc')
+        db.session.add_all([tutor, vet, admin, animal, doc])
+        db.session.commit()
+        animal_id = animal.id
+        doc_id = doc.id
+        admin_id = admin.id
+
+    import flask_login.utils as login_utils
+    monkeypatch.setattr(login_utils, '_get_user', lambda: User.query.get(admin_id))
+
+    class DummyS3:
+        def delete_object(self, *a, **k):
+            pass
+
+    monkeypatch.setattr(app_module, '_s3', lambda: DummyS3())
+
+    client = app.test_client()
+    resp = client.post(
+        f'/animal/{animal_id}/documentos/{doc_id}/delete',
+        follow_redirects=True,
+    )
+    assert resp.status_code == 200
+    with app.app_context():
+        assert AnimalDocumento.query.get(doc_id) is None
