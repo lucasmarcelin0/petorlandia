@@ -1343,18 +1343,18 @@ def upload_document(animal_id):
     animal = Animal.query.get_or_404(animal_id)
     if current_user.worker != 'veterinario':
         flash('Apenas veterinários podem enviar documentos.', 'danger')
-        return redirect(url_for('ficha_animal', animal_id=animal.id))
+        return redirect(request.referrer or url_for('ficha_animal', animal_id=animal.id))
 
     file = request.files.get('documento')
     if not file or file.filename == '':
         flash('Nenhum arquivo enviado.', 'danger')
-        return redirect(url_for('ficha_animal', animal_id=animal.id))
+        return redirect(request.referrer or url_for('ficha_animal', animal_id=animal.id))
 
     filename = f"{uuid.uuid4().hex}_{secure_filename(file.filename)}"
     file_url = upload_to_s3(file, filename, folder='documentos')
     if not file_url:
         flash('Falha ao enviar arquivo.', 'danger')
-        return redirect(url_for('ficha_animal', animal_id=animal.id))
+        return redirect(request.referrer or url_for('ficha_animal', animal_id=animal.id))
 
     documento = AnimalDocumento(
         animal_id=animal.id,
@@ -1367,7 +1367,7 @@ def upload_document(animal_id):
     db.session.commit()
 
     flash('Documento enviado com sucesso!', 'success')
-    return redirect(url_for('ficha_animal', animal_id=animal.id))
+    return redirect(request.referrer or url_for('ficha_animal', animal_id=animal.id))
 
 
 @app.route('/animal/<int:animal_id>/documentos/<int:doc_id>/delete', methods=['POST'])
@@ -1383,7 +1383,7 @@ def delete_document(animal_id, doc_id):
         )
     ):
         flash('Você não tem permissão para excluir este documento.', 'danger')
-        return redirect(url_for('ficha_animal', animal_id=animal_id))
+        return redirect(request.referrer or url_for('ficha_animal', animal_id=animal_id))
 
     prefix = f"https://{BUCKET}.s3.amazonaws.com/"
     if documento.file_url and documento.file_url.startswith(prefix):
@@ -1397,7 +1397,7 @@ def delete_document(animal_id, doc_id):
     db.session.commit()
 
     flash('Documento excluído com sucesso!', 'success')
-    return redirect(url_for('ficha_animal', animal_id=animal_id))
+    return redirect(request.referrer or url_for('ficha_animal', animal_id=animal_id))
 
 
 

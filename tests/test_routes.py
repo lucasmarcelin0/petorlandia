@@ -1600,6 +1600,35 @@ def test_upload_document(monkeypatch, app):
         assert AnimalDocumento.query.filter_by(animal_id=animal_id).count() == 1
 
 
+def test_upload_document_redirects_to_referrer(app, monkeypatch):
+    client = app.test_client()
+    with app.app_context():
+        db.drop_all()
+        db.create_all()
+        tutor = User(id=1, name='Tutor', email='t@t')
+        tutor.set_password('x')
+        vet = User(id=2, name='Vet', email='v@v', worker='veterinario')
+        vet.set_password('x')
+        animal = Animal(id=1, name='Dog', user_id=tutor.id)
+        db.session.add_all([tutor, vet, animal])
+        db.session.commit()
+        animal_id = animal.id
+        vet_id = vet.id
+
+    import flask_login.utils as login_utils
+    monkeypatch.setattr(login_utils, '_get_user', lambda: User.query.get(vet_id))
+    monkeypatch.setattr(app_module, 'upload_to_s3', lambda *a, **k: 'http://doc')
+
+    resp = client.post(
+        f'/animal/{animal_id}/documentos',
+        data={'documento': (BytesIO(b'data'), 'resultado.pdf')},
+        content_type='multipart/form-data',
+        headers={'Referer': f'/consulta/{animal_id}'},
+    )
+    assert resp.status_code == 302
+    assert resp.headers['Location'].endswith(f'/consulta/{animal_id}')
+
+
 def test_consulta_page_shows_documentos_tab(app, monkeypatch):
     client = app.test_client()
     with app.app_context():
