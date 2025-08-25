@@ -709,6 +709,19 @@ class Vacina(db.Model):
     criada_em = db.Column(db.DateTime, default=datetime.utcnow)
 
 
+class AnimalDocumento(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    animal_id = db.Column(db.Integer, db.ForeignKey('animal.id'), nullable=False)
+    veterinario_id = db.Column(db.Integer, db.ForeignKey('user.id', ondelete='CASCADE'), nullable=False)
+    filename = db.Column(db.String(255), nullable=False)
+    file_url = db.Column(db.String(500), nullable=False)
+    descricao = db.Column(db.Text, nullable=True)
+    uploaded_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    animal = db.relationship('Animal', backref=db.backref('documentos', cascade='all, delete-orphan'))
+    veterinario = db.relationship('User')
+
+
 class TipoRacao(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     marca = db.Column(db.String(100), nullable=False)

@@ -125,10 +125,36 @@
     </li>
     {% endfor %}
   </ul>
-{% else %}
+  {% else %}
   <p class="text-muted">Nenhuma vacina registrada.</p>
-{% endif %}
+  {% endif %}
 
+  <!-- DOCUMENTOS -->
+  <h6 class="mt-4 text-muted">📁 Documentos</h6>
+  {% if animal.documentos %}
+    <ul class="list-group mb-2">
+      {% for d in animal.documentos %}
+      <li class="list-group-item d-flex justify-content-between align-items-center">
+        <span>{{ d.filename }}</span>
+        <a href="{{ d.file_url }}" target="_blank" class="btn btn-sm btn-outline-primary">Abrir</a>
+      </li>
+      {% endfor %}
+    </ul>
+  {% else %}
+    <p class="text-muted">Nenhum documento enviado.</p>
+  {% endif %}
+
+  {% if current_user.worker == 'veterinario' %}
+  <form action="{{ url_for('upload_document', animal_id=animal.id) }}" method="post" enctype="multipart/form-data" class="mt-2">
+    <div class="mb-2">
+      <input type="file" name="documento" class="form-control form-control-sm" required>
+    </div>
+    <div class="mb-2">
+      <input type="text" name="descricao" class="form-control form-control-sm" placeholder="Descrição (opcional)">
+    </div>
+    <button class="btn btn-sm btn-outline-success">📤 Enviar</button>
+  </form>
+  {% endif %}
 
   </div>
 
