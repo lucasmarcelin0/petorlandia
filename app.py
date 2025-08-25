@@ -1500,12 +1500,17 @@ def consulta_qr():
     consulta = Consulta.query.filter_by(animal_id=animal.id).order_by(Consulta.id.desc()).first()
     tutor_form = EditProfileForm(obj=tutor)
 
-    return render_template('consulta_qr.html',
-                           tutor=tutor,
-                           animal=animal,
-                           consulta=consulta,
-                           animal_idade=idade,
-                           tutor_form=tutor_form)
+    servicos = ServicoClinica.query.order_by(ServicoClinica.descricao).all()
+
+    return render_template(
+        'consulta_qr.html',
+        tutor=tutor,
+        animal=animal,
+        consulta=consulta,
+        animal_idade=idade,
+        tutor_form=tutor_form,
+        servicos=servicos,
+    )
 
 
 
@@ -1566,21 +1571,26 @@ def consulta_direct(animal_id):
 
     idade = calcular_idade(animal.date_of_birth) if animal.date_of_birth else animal.age
 
-    return render_template('consulta_qr.html',
-                           animal=animal,
-                           tutor=tutor,
-                           consulta=consulta,
-                           historico_consultas=historico,
-                           edit_mode=edit_mode,
-                           worker=current_user.worker,
-                           tipos_racao=tipos_racao,
-                           marcas_existentes=marcas_existentes,
-                           linhas_existentes=linhas_existentes,
-                           species_list=species_list,
-                           breed_list=breed_list,
-                           form=form,
-                           tutor_form=tutor_form,
-                           animal_idade=idade)
+    servicos = ServicoClinica.query.order_by(ServicoClinica.descricao).all()
+
+    return render_template(
+        'consulta_qr.html',
+        animal=animal,
+        tutor=tutor,
+        consulta=consulta,
+        historico_consultas=historico,
+        edit_mode=edit_mode,
+        worker=current_user.worker,
+        tipos_racao=tipos_racao,
+        marcas_existentes=marcas_existentes,
+        linhas_existentes=linhas_existentes,
+        species_list=species_list,
+        breed_list=breed_list,
+        form=form,
+        tutor_form=tutor_form,
+        animal_idade=idade,
+        servicos=servicos,
+    )
 
 
 
@@ -5416,10 +5426,9 @@ def delete_appointment(appointment_id):
     return redirect(request.referrer or url_for('manage_appointments'))
 
 
-@app.route('/consulta/<int:consulta_id>/orcamento_item', methods=['POST'])
+@app.route('/servico', methods=['POST'])
 @login_required
-def adicionar_orcamento_item(consulta_id):
-    consulta = Consulta.query.get_or_404(consulta_id)
+def criar_servico_clinica():
     if current_user.worker != 'veterinario':
         return jsonify({'success': False, 'message': 'Apenas veterinários podem adicionar itens.'}), 403
     data = request.get_json(silent=True) or {}
@@ -5427,7 +5436,41 @@ def adicionar_orcamento_item(consulta_id):
     valor = data.get('valor')
     if not descricao or valor is None:
         return jsonify({'success': False, 'message': 'Dados incompletos.'}), 400
-    item = OrcamentoItem(consulta_id=consulta.id, descricao=descricao, valor=valor)
+    servico = ServicoClinica(descricao=descricao, valor=valor)
+    db.session.add(servico)
+    db.session.commit()
+    return jsonify({'id': servico.id, 'descricao': servico.descricao, 'valor': float(servico.valor)}), 201
+
+
+@app.route('/consulta/<int:consulta_id>/orcamento_item', methods=['POST'])
+@login_required
+def adicionar_orcamento_item(consulta_id):
+    consulta = Consulta.query.get_or_404(consulta_id)
+    if current_user.worker != 'veterinario':
+        return jsonify({'success': False, 'message': 'Apenas veterinários podem adicionar itens.'}), 403
+    data = request.get_json(silent=True) or {}
+    servico_id = data.get('servico_id')
+    descricao = data.get('descricao')
+    valor = data.get('valor')
+
+    servico = None
+    if servico_id:
+        servico = ServicoClinica.query.get(servico_id)
+        if not servico:
+            return jsonify({'success': False, 'message': 'Item não encontrado.'}), 404
+        descricao = servico.descricao
+        if valor is None:
+            valor = servico.valor
+
+    if not descricao or valor is None:
+        return jsonify({'success': False, 'message': 'Dados incompletos.'}), 400
+
+    item = OrcamentoItem(
+        consulta_id=consulta.id,
+        descricao=descricao,
+        valor=valor,
+        servico_id=servico.id if servico else None,
+    )
     db.session.add(item)
     db.session.commit()
     return jsonify({'id': item.id, 'descricao': item.descricao, 'valor': float(item.valor), 'total': float(consulta.total_orcamento)}), 201

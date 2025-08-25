@@ -450,16 +450,26 @@ class Consulta(db.Model):
         return sum(item.valor for item in self.orcamento_items)
 
 
+class ServicoClinica(db.Model):
+    __tablename__ = 'servico_clinica'
+
+    id = db.Column(db.Integer, primary_key=True)
+    descricao = db.Column(db.String(120), nullable=False)
+    valor = db.Column(db.Numeric(10, 2), nullable=False)
+
+
 class OrcamentoItem(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     consulta_id = db.Column(db.Integer, db.ForeignKey('consulta.id'), nullable=False)
     descricao = db.Column(db.String(120), nullable=False)
     valor = db.Column(db.Numeric(10, 2), nullable=False)
+    servico_id = db.Column(db.Integer, db.ForeignKey('servico_clinica.id'))
 
     consulta = db.relationship(
         'Consulta',
         backref=db.backref('orcamento_items', cascade='all, delete-orphan')
     )
+    servico = db.relationship('ServicoClinica')
 
 
 
