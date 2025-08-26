@@ -187,7 +187,12 @@ from forms import (
     DeleteAccountForm, ClinicForm, ClinicHoursForm, ClinicAddVeterinarianForm,
     VetScheduleForm, VetSpecialtyForm, AppointmentForm, AppointmentDeleteForm
 )
-from helpers import calcular_idade, parse_data_nascimento, is_slot_available
+from helpers import (
+    calcular_idade,
+    parse_data_nascimento,
+    is_slot_available,
+    clinicas_do_usuario,
+)
 
 # ----------------------------------------------------------------
 # 7)  Login & serializer
@@ -1713,30 +1718,25 @@ def buscar_tutores():
 
 @app.route('/clinicas')
 def clinicas():
-    clinicas = Clinica.query.all()
+    clinicas = clinicas_do_usuario().all()
     return render_template('clinicas.html', clinicas=clinicas)
 
 
 @app.route('/minha-clinica')
 @login_required
 def minha_clinica():
-    clinica_id = None
-    if current_user.worker == 'veterinario' and getattr(current_user, 'veterinario', None):
-        clinica_id = current_user.veterinario.clinica_id
-    elif current_user.clinica_id:
-        clinica_id = current_user.clinica_id
-    if not clinica_id:
+    clinica = clinicas_do_usuario().first()
+    if not clinica:
         abort(404)
-    return redirect(url_for('clinic_detail', clinica_id=clinica_id))
+    return redirect(url_for('clinic_detail', clinica_id=clinica.id))
 
 
 @app.route('/clinica/<int:clinica_id>', methods=['GET', 'POST'])
 def clinic_detail(clinica_id):
-    clinica = Clinica.query.get_or_404(clinica_id)
+    clinica = clinicas_do_usuario().filter_by(id=clinica_id).first_or_404()
     hours_form = ClinicHoursForm()
     clinic_form = ClinicForm(obj=clinica)
     vets_form = ClinicAddVeterinarianForm()
-    hours_form.clinica_id.choices = [(c.id, c.nome) for c in Clinica.query.all()]
     vets_form.veterinario_id.choices = [
         (v.id, v.user.name)
         for v in Veterinario.query.filter_by(clinica_id=None).all()

@@ -318,6 +318,14 @@ class ClinicHoursForm(FlaskForm):
     )
     submit = SubmitField('Salvar')
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        from helpers import clinicas_do_usuario
+
+        self.clinica_id.choices = [
+            (c.id, c.nome) for c in clinicas_do_usuario().all()
+        ]
+
 
 class ClinicAddVeterinarianForm(FlaskForm):
     veterinario_id = SelectField(
