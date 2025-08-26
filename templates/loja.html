@@ -31,22 +31,18 @@
   </div>
 
   <!-- Search & Filter Section (Nova adição) -->
-  <form method="get" class="row mb-4 mb-lg-5 align-items-stretch">
-    <div class="col-9 col-md-6 mb-3 mb-md-0 d-flex">
+  <form method="get" class="row mb-4 mb-lg-5 align-items-stretch g-2">
+    <div class="col-12 col-md-6 d-flex">
       <div class="input-group flex-grow-1">
-        <span class="input-group-text bg-transparent border-end-0">
-          <i class="bi bi-search text-muted"></i>
-        </span>
-        <input type="text" name="q" value="{{ search_term }}" class="form-control border-start-0" placeholder="Buscar produtos..." aria-label="Buscar produtos">
+        <input type="text" name="q" value="{{ search_term }}" class="form-control js-search-input" placeholder="Buscar produtos..." aria-label="Buscar produtos">
+        <button class="btn btn-primary btn-sm" type="submit" aria-label="Pesquisar">
+          <i class="bi bi-search"></i>
+        </button>
       </div>
-      <button class="btn btn-primary ms-2" type="submit">
-        <i class="bi bi-search d-inline d-md-none"></i>
-        <span class="d-none d-md-inline">Pesquisar</span>
-      </button>
     </div>
-    <div class="col-3 col-md-6 d-flex">
+    <div class="col-12 col-md-6 d-flex">
       <div class="dropdown w-100 d-md-none">
-        <button class="btn btn-outline-secondary w-100 h-100 dropdown-toggle" type="button" id="filterDropdown" data-bs-toggle="dropdown" aria-expanded="false">
+        <button class="btn btn-outline-secondary w-100 dropdown-toggle" type="button" id="filterDropdown" data-bs-toggle="dropdown" aria-expanded="false">
           Filtrar
         </button>
         <ul class="dropdown-menu w-100" aria-labelledby="filterDropdown">
@@ -166,9 +162,9 @@
 
   <!-- Floating Cart Button (Mobile Only) -->
   <div class="d-lg-none fixed-bottom p-3">
-    <a href="{{ url_for('ver_carrinho') }}" 
+    <a href="{{ url_for('ver_carrinho') }}"
        class="btn btn-success btn-lg w-100 shadow-lg d-flex justify-content-center align-items-center position-relative">
-      <i class="bi bi-cart3 me-2"></i> Ver Carrinho 
+      <i class="bi bi-cart3 me-2"></i> Ver Carrinho
       {% if cart_count and cart_count > 0 %}
       <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger">
         {{ cart_count }}
@@ -178,6 +174,7 @@
   </div>
 </div>
 
+<script src="{{ url_for('static', filename='loja_search.js') }}"></script>
 <style>
   /* Custom Styles */
   :root {
