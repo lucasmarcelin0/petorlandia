@@ -1,6 +1,7 @@
 import requests
 
 from flask import redirect, render_template, session
+from flask_login import current_user
 from functools import wraps
 
 
@@ -111,4 +112,23 @@ def is_slot_available(veterinario_id, scheduled_at):
         .first()
     )
     return conflict is None
+
+
+def clinicas_do_usuario():
+    """Retorna query de ``Clinica`` filtrada pelo usuário atual."""
+    from models import Clinica
+
+    if not current_user.is_authenticated:
+        return Clinica.query.filter(False)
+
+    if current_user.role == "admin":
+        return Clinica.query
+
+    if current_user.worker == "veterinario" and getattr(current_user, "veterinario", None):
+        return Clinica.query.filter_by(id=current_user.veterinario.clinica_id)
+
+    if current_user.clinica_id:
+        return Clinica.query.filter_by(id=current_user.clinica_id)
+
+    return Clinica.query.filter_by(owner_id=current_user.id)
 
