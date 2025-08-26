@@ -13,7 +13,7 @@ def app():
     yield flask_app
 
 
-def test_imprimir_vacinas_no_login(app):
+def test_imprimir_vacinas_requer_clinica(app):
     with app.app_context():
         db.create_all()
         owner = User(name="Tutor", email="tutor@example.com", password_hash="x")
@@ -23,6 +23,8 @@ def test_imprimir_vacinas_no_login(app):
         db.session.commit()
         client = app.test_client()
         resp = client.get(f"/animal/{animal.id}/vacinas/imprimir")
+        assert resp.status_code == 400
+        resp = client.get(f"/animal/{animal.id}/vacinas/imprimir?clinica_id={clinica.id}")
         assert resp.status_code == 200
         assert b"Rex" in resp.data
         assert b"Pet Clinic" in resp.data
