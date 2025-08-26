@@ -456,6 +456,8 @@ class ServicoClinica(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     descricao = db.Column(db.String(120), nullable=False)
     valor = db.Column(db.Numeric(10, 2), nullable=False)
+    clinica_id = db.Column(db.Integer, db.ForeignKey('clinica.id'), nullable=True)
+    clinica = db.relationship('Clinica', backref='servicos')
 
 
 class OrcamentoItem(db.Model):

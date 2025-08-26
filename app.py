@@ -1499,8 +1499,20 @@ def consulta_qr():
     tutor = animal.owner
     consulta = Consulta.query.filter_by(animal_id=animal.id).order_by(Consulta.id.desc()).first()
     tutor_form = EditProfileForm(obj=tutor)
+    clinica_id = None
+    if current_user.worker == 'veterinario' and getattr(current_user, 'veterinario', None):
+        clinica_id = current_user.veterinario.clinica_id
+    elif current_user.clinica_id:
+        clinica_id = current_user.clinica_id
 
-    servicos = ServicoClinica.query.order_by(ServicoClinica.descricao).all()
+    servicos = []
+    if clinica_id:
+        servicos = (
+            ServicoClinica.query
+            .filter_by(clinica_id=clinica_id)
+            .order_by(ServicoClinica.descricao)
+            .all()
+        )
 
     return render_template(
         'consulta_qr.html',
@@ -1570,8 +1582,20 @@ def consulta_direct(animal_id):
     tutor_form = EditProfileForm(obj=tutor)
 
     idade = calcular_idade(animal.date_of_birth) if animal.date_of_birth else animal.age
+    clinica_id = None
+    if current_user.worker == 'veterinario' and getattr(current_user, 'veterinario', None):
+        clinica_id = current_user.veterinario.clinica_id
+    elif current_user.clinica_id:
+        clinica_id = current_user.clinica_id
 
-    servicos = ServicoClinica.query.order_by(ServicoClinica.descricao).all()
+    servicos = []
+    if clinica_id:
+        servicos = (
+            ServicoClinica.query
+            .filter_by(clinica_id=clinica_id)
+            .order_by(ServicoClinica.descricao)
+            .all()
+        )
 
     return render_template(
         'consulta_qr.html',
@@ -5436,7 +5460,12 @@ def criar_servico_clinica():
     valor = data.get('valor')
     if not descricao or valor is None:
         return jsonify({'success': False, 'message': 'Dados incompletos.'}), 400
-    servico = ServicoClinica(descricao=descricao, valor=valor)
+    clinica_id = None
+    if getattr(current_user, 'veterinario', None):
+        clinica_id = current_user.veterinario.clinica_id
+    elif current_user.clinica_id:
+        clinica_id = current_user.clinica_id
+    servico = ServicoClinica(descricao=descricao, valor=valor, clinica_id=clinica_id)
     db.session.add(servico)
     db.session.commit()
     return jsonify({'id': servico.id, 'descricao': servico.descricao, 'valor': float(servico.valor)}), 201
