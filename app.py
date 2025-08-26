@@ -2717,7 +2717,13 @@ def imprimir_vacinas(animal_id):
         if vet and vet.clinica:
             clinica = vet.clinica
     if not clinica:
-        clinica = getattr(animal, "clinica", None) or Clinica.query.first()
+        clinica = getattr(animal, "clinica", None)
+    if not clinica:
+        clinica_id = request.args.get("clinica_id", type=int)
+        if clinica_id:
+            clinica = Clinica.query.get_or_404(clinica_id)
+    if not clinica:
+        abort(400, description="É necessário informar uma clínica.")
     return render_template("imprimir_vacinas.html", animal=animal, clinica=clinica)
 
 
@@ -3175,8 +3181,18 @@ def imprimir_bloco_exames(bloco_id):
     bloco = BlocoExames.query.get_or_404(bloco_id)
     animal = bloco.animal
     tutor = animal.owner
-
-    clinica = current_user.veterinario.clinica if current_user.veterinario else Clinica.query.first()
+    clinica = None
+    vet = getattr(current_user, 'veterinario', None)
+    if vet and vet.clinica:
+        clinica = vet.clinica
+    if not clinica:
+        clinica = getattr(animal, 'clinica', None)
+    if not clinica:
+        clinica_id = request.args.get('clinica_id', type=int)
+        if clinica_id:
+            clinica = Clinica.query.get_or_404(clinica_id)
+    if not clinica:
+        abort(400, description="É necessário informar uma clínica.")
 
     return render_template('imprimir_exames.html', bloco=bloco, animal=animal, tutor=tutor, clinica=clinica)
 
