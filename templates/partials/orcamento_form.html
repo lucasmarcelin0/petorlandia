@@ -63,6 +63,9 @@
   </tfoot>
 </table>
 <div class="text-end mt-3">
+  <a href="{{ url_for('imprimir_orcamento', consulta_id=consulta.id) }}" class="btn btn-outline-dark me-2" target="_blank">
+    🖨️ Imprimir
+  </a>
   <a href="{{ url_for('pagar_orcamento', consulta_id=consulta.id) }}" class="btn btn-primary">
     <i class="fa-solid fa-money-bill-wave me-1"></i> Pagar orçamento
   </a>

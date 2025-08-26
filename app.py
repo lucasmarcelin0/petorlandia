@@ -5442,6 +5442,21 @@ def criar_servico_clinica():
     return jsonify({'id': servico.id, 'descricao': servico.descricao, 'valor': float(servico.valor)}), 201
 
 
+@app.route('/imprimir_orcamento/<int:consulta_id>')
+@login_required
+def imprimir_orcamento(consulta_id):
+    consulta = Consulta.query.get_or_404(consulta_id)
+    animal = consulta.animal
+    tutor = animal.owner
+    clinica = current_user.veterinario.clinica if current_user.veterinario else None
+    return render_template(
+        'imprimir_orcamento.html',
+        consulta=consulta,
+        animal=animal,
+        tutor=tutor,
+        clinica=clinica
+    )
+
 @app.route('/consulta/<int:consulta_id>/pagar_orcamento')
 @login_required
 def pagar_orcamento(consulta_id):
