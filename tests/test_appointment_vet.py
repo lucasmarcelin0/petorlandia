@@ -15,6 +15,7 @@ from models import (
     HealthPlan,
     HealthSubscription,
     VetSchedule,
+    Clinica,
 )
 from forms import AppointmentForm
 
@@ -40,18 +41,19 @@ def login(monkeypatch, user):
 
 def test_veterinarian_can_schedule_for_other_users_animal(client, monkeypatch):
     with flask_app.app_context():
+        clinic = Clinica(id=1, nome='Clinica')
         tutor = User(id=1, name='Tutor', email='tutor@test')
         tutor.set_password('x')
         vet_user = User(id=2, name='Vet', email='vet@test', worker='veterinario')
         vet_user.set_password('x')
-        animal = Animal(id=1, name='Rex', user_id=tutor.id)
+        animal = Animal(id=1, name='Rex', user_id=tutor.id, clinica_id=clinic.id)
         plan = HealthPlan(id=1, name='Basic', price=10.0)
-        db.session.add_all([tutor, vet_user, animal, plan])
+        db.session.add_all([clinic, tutor, vet_user, animal, plan])
         db.session.commit()
         sub = HealthSubscription(
             animal_id=animal.id, plan_id=plan.id, user_id=tutor.id, active=True
         )
-        vet = Veterinario(id=1, user_id=vet_user.id, crmv='123')
+        vet = Veterinario(id=1, user_id=vet_user.id, crmv='123', clinica_id=clinic.id)
         schedule = VetSchedule(
             id=1,
             veterinario_id=1,
@@ -65,6 +67,7 @@ def test_veterinarian_can_schedule_for_other_users_animal(client, monkeypatch):
         vet_id = vet.id
         tutor_id = tutor.id
         vet_user_id = vet_user.id
+        clinic_id = clinic.id
 
     fake_vet = type('U', (), {
         'id': vet_user_id,
@@ -74,7 +77,8 @@ def test_veterinarian_can_schedule_for_other_users_animal(client, monkeypatch):
         'is_authenticated': True,
         'veterinario': type('V', (), {
             'id': vet_id,
-            'user': type('WU', (), {'name': 'Vet'})()
+            'user': type('WU', (), {'name': 'Vet'})(),
+            'clinica_id': clinic_id,
         })()
     })()
     login(monkeypatch, fake_vet)
@@ -95,6 +99,7 @@ def test_veterinarian_can_schedule_for_other_users_animal(client, monkeypatch):
         assert appt.tutor_id == tutor_id
         assert appt.animal_id == animal_id
         assert appt.veterinario_id == vet_id
+        assert appt.clinica_id == clinic_id
 
 
 def test_tutor_sees_only_their_animals_in_form(client):

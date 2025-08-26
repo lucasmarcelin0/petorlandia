@@ -605,6 +605,7 @@ class Appointment(db.Model):
     scheduled_at = db.Column(db.DateTime, nullable=False)
     status = db.Column(db.String(20), nullable=False, default='scheduled')
     consulta_id = db.Column(db.Integer, db.ForeignKey('consulta.id'), nullable=True)
+    clinica_id = db.Column(db.Integer, db.ForeignKey('clinica.id'), nullable=True)
 
     animal = db.relationship(
         'Animal',
@@ -619,6 +620,7 @@ class Appointment(db.Model):
         'Veterinario',
         backref=db.backref('appointments', cascade='all, delete-orphan'),
     )
+    clinica = db.relationship('Clinica', backref=db.backref('appointments', cascade='all, delete-orphan'))
     consulta = db.relationship(
         'Consulta',
         backref=db.backref('appointment', uselist=False),
@@ -643,9 +645,23 @@ class Appointment(db.Model):
                 'Animal does not have an active health subscription for this tutor.'
             )
 
+    @staticmethod
+    def _set_clinica(mapper, connection, target):
+        """Populate clinica_id from veterinarian or animal if not set."""
+        if target.veterinario_id:
+            vet = Veterinario.query.get(target.veterinario_id)
+            if vet and vet.clinica_id:
+                target.clinica_id = vet.clinica_id
+        if not target.clinica_id and target.animal_id:
+            animal = Animal.query.get(target.animal_id)
+            if animal and animal.clinica_id:
+                target.clinica_id = animal.clinica_id
+
 
 event.listen(Appointment, 'before_insert', Appointment._validate_subscription)
 event.listen(Appointment, 'before_update', Appointment._validate_subscription)
+event.listen(Appointment, 'before_insert', Appointment._set_clinica)
+event.listen(Appointment, 'before_update', Appointment._set_clinica)
 
 class Medicamento(db.Model):
     id = db.Column(db.Integer, primary_key=True)

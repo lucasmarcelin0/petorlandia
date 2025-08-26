@@ -1779,8 +1779,8 @@ def clinic_detail(clinica_id):
     horarios = ClinicHours.query.filter_by(clinica_id=clinica_id).all()
     veterinarios = Veterinario.query.filter_by(clinica_id=clinica_id).all()
     appointments = (
-        Appointment.query.join(Veterinario)
-        .filter(Veterinario.clinica_id == clinica_id)
+        Appointment.query
+        .filter_by(clinica_id=clinica_id)
         .order_by(Appointment.scheduled_at)
         .all()
     )
@@ -5282,6 +5282,7 @@ def appointments():
                         tutor_id=tutor_id,
                         veterinario_id=appointment_form.veterinario_id.data,
                         scheduled_at=scheduled_at,
+                        clinica_id=veterinario.clinica_id or animal.clinica_id,
                     )
                     db.session.add(appt)
                     db.session.commit()
@@ -5307,7 +5308,10 @@ def appointments():
         if current_user.is_authenticated:
             if current_user.worker in ['veterinario', 'colaborador']:
                 appointments = (
-                    Appointment.query.order_by(Appointment.scheduled_at).all()
+                    Appointment.query
+                    .filter_by(clinica_id=current_user.clinica_id)
+                    .order_by(Appointment.scheduled_at)
+                    .all()
                 )
                 form = None
             else:
@@ -5327,6 +5331,7 @@ def appointments():
                                 tutor_id=tutor_id,
                                 veterinario_id=form.veterinario_id.data,
                                 scheduled_at=scheduled_at,
+                                clinica_id=animal.clinica_id,
                             )
                             db.session.add(appt)
                             db.session.commit()
@@ -5409,7 +5414,10 @@ def manage_appointments():
     if current_user.role != 'admin' and current_user.worker != 'veterinario':
         flash('Acesso restrito.', 'danger')
         return redirect(url_for('index'))
-    appointments = Appointment.query.order_by(Appointment.scheduled_at).all()
+    query = Appointment.query.order_by(Appointment.scheduled_at)
+    if current_user.role != 'admin' and current_user.worker == 'veterinario':
+        query = query.filter_by(clinica_id=current_user.veterinario.clinica_id)
+    appointments = query.all()
     delete_form = AppointmentDeleteForm()
     return render_template('appointments_admin.html', appointments=appointments, delete_form=delete_form)
 
@@ -5418,8 +5426,11 @@ def manage_appointments():
 @login_required
 def delete_appointment(appointment_id):
     appointment = Appointment.query.get_or_404(appointment_id)
-    if current_user.role != 'admin' and current_user.worker != 'veterinario':
-        abort(403)
+    if current_user.role != 'admin':
+        if current_user.worker != 'veterinario':
+            abort(403)
+        if appointment.clinica_id != current_user.veterinario.clinica_id:
+            abort(403)
     db.session.delete(appointment)
     db.session.commit()
     flash('Agendamento removido.', 'success')
