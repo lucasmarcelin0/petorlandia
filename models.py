@@ -285,10 +285,18 @@ class Animal(db.Model):
 
     @property
     def age_display(self):
-        years = self.age_years
-        if years is not None:
-            return f"{years} ano{'s' if years != 1 else ''}"
-        return self.age
+        if self.date_of_birth:
+            delta = relativedelta(date.today(), self.date_of_birth)
+            if delta.years > 0:
+                return f"{delta.years} ano{'s' if delta.years != 1 else ''}"
+            return f"{delta.months} mes{'es' if delta.months != 1 else ''}"
+        if self.age:
+            try:
+                years = int(self.age.split()[0])
+                return f"{years} ano{'s' if years != 1 else ''}"
+            except (ValueError, AttributeError, IndexError):
+                return self.age
+        return None
 
     def __str__(self):
         return f"{self.name} ({self.species.name if self.species else self.species})"
