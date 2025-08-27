@@ -101,5 +101,15 @@ document.addEventListener('DOMContentLoaded', function() {
 
   // Inicializa o auto-expand
   setupAutoExpand();
+
+  // Reaplica auto-expand ao exibir a aba de consulta
+  const tabs = document.getElementById('consultaTabs');
+  if (tabs) {
+    tabs.addEventListener('shown.bs.tab', function(event) {
+      if (event.target.getAttribute('data-bs-target') === '#consulta-info') {
+        setupAutoExpand();
+      }
+    });
+  }
 });
 </script>
