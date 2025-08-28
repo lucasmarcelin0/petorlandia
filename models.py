@@ -8,7 +8,7 @@ from werkzeug.security import generate_password_hash, check_password_hash
 from datetime import datetime, date
 from dateutil.relativedelta import relativedelta
 import enum
-from sqlalchemy import Enum, event
+from sqlalchemy import Enum, event, or_
 from enum import Enum
 from sqlalchemy import Enum as PgEnum
 
@@ -201,6 +201,25 @@ class VeterinarianAccess(db.Model):
     )
 
 
+class ClinicAnimalAccess(db.Model):
+    __table_args__ = {'extend_existing': True}
+
+    id = db.Column(db.Integer, primary_key=True)
+    animal_id = db.Column(db.Integer, db.ForeignKey('animal.id'), nullable=False)
+    clinic_id = db.Column(
+        db.Integer,
+        db.ForeignKey('clinica.id', ondelete='CASCADE'),
+        nullable=False,
+    )
+    date_granted = db.Column(db.DateTime, default=datetime.utcnow)
+
+    animal = db.relationship('Animal', backref='clinic_accesses')
+    clinic = db.relationship(
+        'Clinica',
+        backref=db.backref('authorized_animals', cascade='all, delete-orphan')
+    )
+
+
 
 # Animal
 class Animal(db.Model):
@@ -300,6 +319,37 @@ class Animal(db.Model):
 
     def __str__(self):
         return f"{self.name} ({self.species.name if self.species else self.species})"
+
+    @staticmethod
+    def visible_to(user):
+        """Return a query with animals visible to the given user."""
+        from sqlalchemy import select
+
+        if getattr(user, 'role', None) == 'admin':
+            return Animal.query
+
+        filters = []
+        if user.clinica_id:
+            clinic_id = user.clinica_id
+            filters.append(Animal.clinica_id == clinic_id)
+            filters.append(
+                Animal.id.in_(
+                    select(ClinicAnimalAccess.animal_id).where(
+                        ClinicAnimalAccess.clinic_id == clinic_id
+                    )
+                )
+            )
+
+        filters.append(Animal.user_id == user.id)
+        filters.append(
+            Animal.id.in_(
+                select(VeterinarianAccess.animal_id).where(
+                    VeterinarianAccess.vet_id == user.id
+                )
+            )
+        )
+
+        return Animal.query.filter(or_(*filters))
 
     
 
