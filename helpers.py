@@ -8,6 +8,7 @@ from functools import wraps
 from datetime import date
 from datetime import datetime
 from dateutil.relativedelta import relativedelta
+from sqlalchemy import case
 
 def parse_data_nascimento(data_str):
     """
@@ -129,7 +130,19 @@ def clinicas_do_usuario():
         return Clinica.query.filter(False)
 
     if current_user.role == "admin":
-        return Clinica.query
+        query = Clinica.query
+        default_id = None
+        if getattr(current_user, "veterinario", None) and current_user.veterinario.clinica_id:
+            default_id = current_user.veterinario.clinica_id
+        elif current_user.clinica_id:
+            default_id = current_user.clinica_id
+        elif getattr(current_user, "clinicas", []):
+            default_id = current_user.clinicas[0].id
+        if default_id:
+            query = query.order_by(
+                case((Clinica.id == default_id, 0), else_=1)
+            )
+        return query
 
     if getattr(current_user, "veterinario", None) and current_user.veterinario.clinica_id:
         return Clinica.query.filter_by(id=current_user.veterinario.clinica_id)
