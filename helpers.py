@@ -6,8 +6,8 @@ from functools import wraps
 
 
 from datetime import date
-
 from datetime import datetime
+from dateutil.relativedelta import relativedelta
 
 def parse_data_nascimento(data_str):
     """
@@ -21,11 +21,18 @@ def parse_data_nascimento(data_str):
 
 
 def calcular_idade(data_nasc):
-    """Calcula idade com base na data de nascimento."""
+    """Calcula idade com base na data de nascimento.
+
+    Retorna a idade em anos quando for igual ou superior a 1 ano, ou
+    em meses caso seja menor que isso. Quando ``data_nasc`` não é
+    informado, retorna uma string vazia.
+    """
     hoje = date.today()
     if data_nasc:
-        idade = hoje.year - data_nasc.year - ((hoje.month, hoje.day) < (data_nasc.month, data_nasc.day))
-        return idade
+        delta = relativedelta(hoje, data_nasc)
+        if delta.years > 0:
+            return delta.years
+        return delta.months
     return ''
 
 
