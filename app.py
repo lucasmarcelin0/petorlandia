@@ -1772,8 +1772,12 @@ def minha_clinica():
 
 
 @app.route('/clinica/<int:clinica_id>', methods=['GET', 'POST'])
+@login_required
 def clinic_detail(clinica_id):
-    clinica = clinicas_do_usuario().filter_by(id=clinica_id).first_or_404()
+    if _is_admin():
+        clinica = Clinica.query.get_or_404(clinica_id)
+    else:
+        clinica = clinicas_do_usuario().filter_by(id=clinica_id).first_or_404()
     hours_form = ClinicHoursForm()
     clinic_form = ClinicForm(obj=clinica)
     vets_form = ClinicAddVeterinarianForm()
