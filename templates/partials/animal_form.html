@@ -58,6 +58,7 @@
     {% set valor_data = animal.date_of_birth.strftime('%d/%m/%Y') if animal.date_of_birth else '' %}
     {% set valor_data_iso = animal.date_of_birth.strftime('%Y-%m-%d') if animal.date_of_birth else '' %}
     {% set valor_idade = animal_idade if animal_idade else '' %}
+    {% set valor_unidade = animal_idade_unidade if animal_idade_unidade else '' %}
     {% include 'components/campo_data_idade.html' %}
 
     <!-- Microchip -->
