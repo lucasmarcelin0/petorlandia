@@ -194,6 +194,41 @@ from helpers import (
     clinicas_do_usuario,
 )
 
+
+def current_user_clinic_id():
+    """Return the clinic ID associated with the current user, if any."""
+    if not current_user.is_authenticated:
+        return None
+    if current_user.worker == 'veterinario' and getattr(current_user, 'veterinario', None):
+        return current_user.veterinario.clinica_id
+    return current_user.clinica_id
+
+
+def ensure_clinic_access(clinica_id):
+    """Abort with 404 if the current user cannot access the given clinic."""
+    if not clinica_id:
+        return
+    if not current_user.is_authenticated:
+        abort(404)
+    if current_user.role == 'admin':
+        return
+    if current_user_clinic_id() != clinica_id:
+        abort(404)
+
+
+def get_animal_or_404(animal_id):
+    """Return animal if accessible to current user, otherwise 404."""
+    animal = Animal.query.get_or_404(animal_id)
+    ensure_clinic_access(animal.clinica_id)
+    return animal
+
+
+def get_consulta_or_404(consulta_id):
+    """Return consulta if accessible to current user, otherwise 404."""
+    consulta = Consulta.query.get_or_404(consulta_id)
+    ensure_clinic_access(consulta.animal.clinica_id if consulta.animal else None)
+    return consulta
+
 # ----------------------------------------------------------------
 # 7)  Login & serializer
 # ----------------------------------------------------------------
@@ -687,7 +722,7 @@ def list_animals():
 @app.route('/animal/<int:animal_id>/adotar', methods=['POST'])
 @login_required
 def adotar_animal(animal_id):
-    animal = Animal.query.get_or_404(animal_id)
+    animal = get_animal_or_404(animal_id)
 
     if animal.status != 'disponível':
         flash('Este animal já foi adotado ou vendido.', 'danger')
@@ -704,7 +739,7 @@ def adotar_animal(animal_id):
 @app.route('/editar_animal/<int:animal_id>', methods=['GET', 'POST'])
 @login_required
 def editar_animal(animal_id):
-    animal = Animal.query.get_or_404(animal_id)
+    animal = get_animal_or_404(animal_id)
 
     if animal.user_id != current_user.id:
         flash('Você não tem permissão para editar este animal.', 'danger')
@@ -766,7 +801,7 @@ def editar_animal(animal_id):
 @app.route('/mensagem/<int:animal_id>', methods=['GET', 'POST'])
 @login_required
 def enviar_mensagem(animal_id):
-    animal = Animal.query.get_or_404(animal_id)
+    animal = get_animal_or_404(animal_id)
     form = MessageForm()
 
     if animal.user_id == current_user.id:
@@ -816,7 +851,7 @@ def mensagens():
 @app.route('/conversa/<int:animal_id>/<int:user_id>', methods=['GET', 'POST'])
 @login_required
 def conversa(animal_id, user_id):
-    animal = Animal.query.get_or_404(animal_id)
+    animal = get_animal_or_404(animal_id)
     outro_usuario = User.query.get_or_404(user_id)
     interesse_existente = Interest.query.filter_by(
         user_id=outro_usuario.id, animal_id=animal.id).first()
@@ -867,7 +902,7 @@ def conversa(animal_id, user_id):
 def api_conversa_message(animal_id, user_id):
     """Recebe uma nova mensagem da conversa e retorna o HTML renderizado."""
     form = MessageForm()
-    Animal.query.get_or_404(animal_id)
+    get_animal_or_404(animal_id)
     outro_usuario = User.query.get_or_404(user_id)
     if form.validate_on_submit():
         nova_msg = Message(
@@ -1071,7 +1106,7 @@ def inject_default_pickup_address():
 @app.route('/animal/<int:animal_id>/deletar', methods=['POST'])
 @login_required
 def deletar_animal(animal_id):
-    animal = Animal.query.get_or_404(animal_id)
+    animal = get_animal_or_404(animal_id)
 
     if animal.removido_em:
         flash('Animal já foi removido anteriormente.', 'warning')
@@ -1086,7 +1121,7 @@ def deletar_animal(animal_id):
 @app.route('/termo/interesse/<int:animal_id>/<int:user_id>', methods=['GET', 'POST'])
 @login_required
 def termo_interesse(animal_id, user_id):
-    animal = Animal.query.get_or_404(animal_id)
+    animal = get_animal_or_404(animal_id)
     interessado = User.query.get_or_404(user_id)
 
     if request.method == 'POST':
@@ -1150,7 +1185,7 @@ def enviar_mensagem_whatsapp(texto: str, numero: str) -> None:
 @app.route('/termo/transferencia/<int:animal_id>/<int:user_id>', methods=['GET', 'POST'])
 @login_required
 def termo_transferencia(animal_id, user_id):
-    animal = Animal.query.get_or_404(animal_id)
+    animal = get_animal_or_404(animal_id)
     novo_dono = User.query.get_or_404(user_id)
 
     if animal.owner.id != current_user.id:
@@ -1243,7 +1278,7 @@ from forms import SubscribePlanForm   # coloque o import lá no topo
 @app.route("/animal/<int:animal_id>/planosaude", methods=["GET", "POST"])
 @login_required
 def planosaude_animal(animal_id):
-    animal = Animal.query.get_or_404(animal_id)
+    animal = get_animal_or_404(animal_id)
 
     if animal.owner != current_user:
         flash("Você não tem permissão para acessar esse animal.", "danger")
@@ -1289,7 +1324,7 @@ def planosaude_animal(animal_id):
 @login_required
 def contratar_plano(animal_id):
     """Inicia a assinatura de um plano de saúde via Mercado Pago."""
-    animal = Animal.query.get_or_404(animal_id)
+    animal = get_animal_or_404(animal_id)
 
     if animal.owner != current_user:
         flash("Você não tem permissão para contratar este plano.", "danger")
@@ -1349,7 +1384,7 @@ def contratar_plano(animal_id):
 @app.route('/animal/<int:animal_id>/ficha')
 @login_required
 def ficha_animal(animal_id):
-    animal = Animal.query.get_or_404(animal_id)
+    animal = get_animal_or_404(animal_id)
     tutor = animal.owner
 
     consultas = (Consulta.query
@@ -1373,7 +1408,7 @@ def ficha_animal(animal_id):
 @app.route('/animal/<int:animal_id>/documentos', methods=['POST'])
 @login_required
 def upload_document(animal_id):
-    animal = Animal.query.get_or_404(animal_id)
+    animal = get_animal_or_404(animal_id)
     if current_user.worker != 'veterinario':
         flash('Apenas veterinários podem enviar documentos.', 'danger')
         return redirect(request.referrer or url_for('ficha_animal', animal_id=animal.id))
@@ -1440,7 +1475,7 @@ def delete_document(animal_id, doc_id):
 @app.route('/animal/<int:animal_id>/editar_ficha', methods=['GET', 'POST'])
 @login_required
 def editar_ficha_animal(animal_id):
-    animal = Animal.query.get_or_404(animal_id)
+    animal = get_animal_or_404(animal_id)
 
     # Dados fictícios para fins de edição simples (substituir por formulário real depois)
     if request.method == 'POST':
@@ -1461,7 +1496,7 @@ def editar_ficha_animal(animal_id):
 @app.route('/generate_qr/<int:animal_id>')
 @login_required
 def generate_qr(animal_id):
-    animal = Animal.query.get_or_404(animal_id)
+    animal = get_animal_or_404(animal_id)
     if current_user.id != animal.user_id:
         flash('Você não tem permissão para gerar o QR code deste animal.', 'danger')
         return redirect(url_for('ficha_animal', animal_id=animal_id))
@@ -1497,7 +1532,7 @@ def consulta_qr():
     token = request.args.get('token')  # se estiver usando QR com token
 
     # Aqui você já deve ter carregado o animal
-    animal = Animal.query.get_or_404(animal_id)
+    animal = get_animal_or_404(animal_id)
 
     # Idade e unidade (anos/meses)
     idade = ''
@@ -1563,7 +1598,7 @@ def consulta_direct(animal_id):
     if current_user.worker not in ['veterinario', 'colaborador']:
         abort(403)
 
-    animal = Animal.query.get_or_404(animal_id)
+    animal = get_animal_or_404(animal_id)
     tutor  = animal.owner
 
     edit_id = request.args.get('c', type=int)
@@ -1571,7 +1606,7 @@ def consulta_direct(animal_id):
 
     if current_user.worker == 'veterinario':
         if edit_id:
-            consulta = Consulta.query.get_or_404(edit_id)
+            consulta = get_consulta_or_404(edit_id)
             edit_mode = True
         else:
             consulta = (Consulta.query
@@ -1666,7 +1701,7 @@ def consulta_direct(animal_id):
 @app.route('/finalizar_consulta/<int:consulta_id>', methods=['POST'])
 @login_required
 def finalizar_consulta(consulta_id):
-    consulta = Consulta.query.get_or_404(consulta_id)
+    consulta = get_consulta_or_404(consulta_id)
     if current_user.worker != 'veterinario':
         flash('Apenas veterinários podem finalizar consultas.', 'danger')
         return redirect(url_for('index'))
@@ -1680,7 +1715,7 @@ def finalizar_consulta(consulta_id):
 @app.route('/consulta/<int:consulta_id>/deletar', methods=['POST'])
 @login_required
 def deletar_consulta(consulta_id):
-    consulta = Consulta.query.get_or_404(consulta_id)
+    consulta = get_consulta_or_404(consulta_id)
     animal_id = consulta.animal_id
     if current_user.worker != 'veterinario':
         if request.accept_mimetypes.accept_json:
@@ -1693,7 +1728,7 @@ def deletar_consulta(consulta_id):
     db.session.commit()
 
     if request.accept_mimetypes.accept_json:
-        animal = Animal.query.get_or_404(animal_id)
+        animal = get_animal_or_404(animal_id)
         historico_html = render_template(
             'partials/historico_consultas.html',
             animal=animal,
@@ -1708,7 +1743,7 @@ def deletar_consulta(consulta_id):
 @app.route('/imprimir_consulta/<int:consulta_id>')
 @login_required
 def imprimir_consulta(consulta_id):
-    consulta = Consulta.query.get_or_404(consulta_id)
+    consulta = get_consulta_or_404(consulta_id)
     animal = consulta.animal
     tutor = animal.owner
     clinica = current_user.veterinario.clinica if current_user.veterinario else None
@@ -2292,7 +2327,7 @@ def ficha_tutor(tutor_id):
 @app.route('/update_animal/<int:animal_id>', methods=['POST'])
 @login_required
 def update_animal(animal_id):
-    animal = Animal.query.get_or_404(animal_id)
+    animal = get_animal_or_404(animal_id)
 
     wants_json = 'application/json' in request.headers.get('Accept', '')
 
@@ -2401,7 +2436,7 @@ def update_animal(animal_id):
 @app.route('/update_consulta/<int:consulta_id>', methods=['POST'])
 @login_required
 def update_consulta(consulta_id):
-    consulta = Consulta.query.get_or_404(consulta_id)
+    consulta = get_consulta_or_404(consulta_id)
 
     if current_user.worker != 'veterinario':
         flash('Apenas veterinários podem editar a consulta.', 'danger')
@@ -2455,7 +2490,7 @@ def update_consulta(consulta_id):
 @app.route('/animal/<int:animal_id>/racoes', methods=['POST'])
 @login_required
 def salvar_racao(animal_id):
-    animal = Animal.query.get_or_404(animal_id)
+    animal = get_animal_or_404(animal_id)
 
     # Verifica se o usuário pode editar esse animal
     if current_user.worker != 'veterinario':
@@ -2670,7 +2705,7 @@ def relatorio_racoes():
 @app.route("/historico_animal/<int:animal_id>")
 @login_required
 def historico_animal(animal_id):
-    animal = Animal.query.get_or_404(animal_id)
+    animal = get_animal_or_404(animal_id)
     racoes = Racao.query.filter_by(animal_id=animal.id).order_by(Racao.data_cadastro.desc()).all()
     return render_template("historico_racoes.html", animal=animal, racoes=racoes)
 
@@ -2738,7 +2773,7 @@ def salvar_vacinas(animal_id):
             db.session.add(vacina)
 
         db.session.commit()
-        animal = Animal.query.get_or_404(animal_id)
+        animal = get_animal_or_404(animal_id)
         historico_html = render_template(
             'partials/historico_vacinas.html',
             animal=animal
@@ -2754,7 +2789,7 @@ def salvar_vacinas(animal_id):
 
 @app.route("/animal/<int:animal_id>/vacinas/imprimir")
 def imprimir_vacinas(animal_id):
-    animal = Animal.query.get_or_404(animal_id)
+    animal = get_animal_or_404(animal_id)
     clinica = None
     if current_user.is_authenticated:
         vet = getattr(current_user, "veterinario", None)
@@ -2788,7 +2823,7 @@ def deletar_vacina(vacina_id):
     db.session.commit()
 
     if request.accept_mimetypes.accept_json:
-        animal = Animal.query.get_or_404(animal_id)
+        animal = get_animal_or_404(animal_id)
         historico_html = render_template('partials/historico_vacinas.html',
                                          animal=animal)
         return jsonify(success=True, html=historico_html)
@@ -2830,7 +2865,7 @@ def editar_vacina(vacina_id):
 @app.route('/consulta/<int:consulta_id>/prescricao', methods=['POST'])
 @login_required
 def criar_prescricao(consulta_id):
-    consulta = Consulta.query.get_or_404(consulta_id)
+    consulta = get_consulta_or_404(consulta_id)
 
     if current_user.worker != 'veterinario':
         flash('Apenas veterinários podem adicionar prescrições.', 'danger')
@@ -2992,7 +3027,7 @@ def buscar_apresentacoes():
 @app.route('/consulta/<int:consulta_id>/prescricao/lote', methods=['POST'])
 @login_required
 def salvar_prescricoes_lote(consulta_id):
-    consulta = Consulta.query.get_or_404(consulta_id)
+    consulta = get_consulta_or_404(consulta_id)
     data = request.get_json(silent=True) or {}
     novas_prescricoes = data.get('prescricoes', [])
 
@@ -3016,7 +3051,7 @@ def salvar_prescricoes_lote(consulta_id):
 @app.route('/consulta/<int:consulta_id>/bloco_prescricao', methods=['POST'])
 @login_required
 def salvar_bloco_prescricao(consulta_id):
-    consulta = Consulta.query.get_or_404(consulta_id)
+    consulta = get_consulta_or_404(consulta_id)
 
     if current_user.worker != 'veterinario':
         return jsonify({'success': False, 'message': 'Apenas veterinários podem prescrever.'}), 403
@@ -3085,7 +3120,7 @@ def deletar_bloco_prescricao(bloco_id):
     db.session.commit()
 
     if request.accept_mimetypes.accept_json:
-        animal = Animal.query.get_or_404(animal_id)
+        animal = get_animal_or_404(animal_id)
         historico_html = render_template('partials/historico_prescricoes.html',
                                          animal=animal)
         return jsonify(success=True, html=historico_html)
@@ -3199,7 +3234,7 @@ def salvar_bloco_exames(animal_id):
         db.session.add(exame_modelo)
 
     db.session.commit()
-    animal = Animal.query.get_or_404(animal_id)
+    animal = get_animal_or_404(animal_id)
     historico_html = render_template(
         'partials/historico_exames.html',
         animal=animal
@@ -3257,7 +3292,7 @@ def deletar_bloco_exames(bloco_id):
     db.session.commit()
 
     if request.accept_mimetypes.accept_json:
-        animal = Animal.query.get_or_404(animal_id)
+        animal = get_animal_or_404(animal_id)
         historico_html = render_template('partials/historico_exames.html',
                                          animal=animal)
         return jsonify(success=True, html=historico_html)
@@ -3516,7 +3551,7 @@ def novo_animal():
 @app.route('/animal/<int:animal_id>/marcar_falecido', methods=['POST'])
 @login_required
 def marcar_como_falecido(animal_id):
-    animal = Animal.query.get_or_404(animal_id)
+    animal = get_animal_or_404(animal_id)
 
     if current_user.worker != 'veterinario':
         flash('Apenas veterinários podem realizar essa ação.', 'danger')
@@ -3551,7 +3586,7 @@ def reverter_falecimento(animal_id):
     if current_user.worker != 'veterinario':
         abort(403)
 
-    animal = Animal.query.get_or_404(animal_id)
+    animal = get_animal_or_404(animal_id)
     animal.is_alive = True
     animal.falecido_em = None
     db.session.commit()
@@ -3571,7 +3606,7 @@ def reverter_falecimento(animal_id):
 @app.route('/animal/<int:animal_id>/arquivar', methods=['POST'])
 @login_required
 def arquivar_animal(animal_id):
-    animal = Animal.query.get_or_404(animal_id)
+    animal = get_animal_or_404(animal_id)
 
     if current_user.worker != 'veterinario':
         flash('Apenas veterinários podem excluir animais definitivamente.', 'danger')
@@ -5353,7 +5388,7 @@ def appointments():
             ):
                 flash('Horário indisponível para o veterinário selecionado.', 'danger')
             else:
-                animal = Animal.query.get_or_404(appointment_form.animal_id.data)
+                animal = get_animal_or_404(appointment_form.animal_id.data)
                 tutor_id = animal.user_id
                 if not Appointment.has_active_subscription(animal.id, tutor_id):
                     flash(
@@ -5405,7 +5440,7 @@ def appointments():
                     if not is_slot_available(form.veterinario_id.data, scheduled_at):
                         flash('Horário indisponível para o veterinário selecionado.', 'danger')
                     else:
-                        animal = Animal.query.get_or_404(form.animal_id.data)
+                        animal = get_animal_or_404(form.animal_id.data)
                         tutor_id = current_user.id
                         if not Appointment.has_active_subscription(animal.id, tutor_id):
                             flash('O animal não possui uma assinatura de plano de saúde ativa.', 'danger')
@@ -5545,7 +5580,7 @@ def criar_servico_clinica():
 @app.route('/imprimir_orcamento/<int:consulta_id>')
 @login_required
 def imprimir_orcamento(consulta_id):
-    consulta = Consulta.query.get_or_404(consulta_id)
+    consulta = get_consulta_or_404(consulta_id)
     animal = consulta.animal
     tutor = animal.owner
     clinica = current_user.veterinario.clinica if current_user.veterinario else None
@@ -5560,7 +5595,7 @@ def imprimir_orcamento(consulta_id):
 @app.route('/consulta/<int:consulta_id>/pagar_orcamento')
 @login_required
 def pagar_orcamento(consulta_id):
-    consulta = Consulta.query.get_or_404(consulta_id)
+    consulta = get_consulta_or_404(consulta_id)
     if not consulta.orcamento_items:
         flash('Nenhum item no orçamento.', 'warning')
         return redirect(url_for('consulta_direct', animal_id=consulta.animal_id))
@@ -5606,7 +5641,7 @@ def pagar_orcamento(consulta_id):
 @app.route('/consulta/<int:consulta_id>/orcamento_item', methods=['POST'])
 @login_required
 def adicionar_orcamento_item(consulta_id):
-    consulta = Consulta.query.get_or_404(consulta_id)
+    consulta = get_consulta_or_404(consulta_id)
     if current_user.worker != 'veterinario':
         return jsonify({'success': False, 'message': 'Apenas veterinários podem adicionar itens.'}), 403
     data = request.get_json(silent=True) or {}
@@ -5644,6 +5679,7 @@ def deletar_orcamento_item(item_id):
     if current_user.worker != 'veterinario':
         return jsonify({'success': False, 'message': 'Apenas veterinários podem remover itens.'}), 403
     consulta = item.consulta
+    ensure_clinic_access(consulta.animal.clinica_id if consulta.animal else None)
     db.session.delete(item)
     db.session.commit()
     return jsonify({'total': float(consulta.total_orcamento)}), 200
