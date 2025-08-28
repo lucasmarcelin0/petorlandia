@@ -1774,10 +1774,20 @@ def minha_clinica():
 @app.route('/clinica/<int:clinica_id>', methods=['GET', 'POST'])
 @login_required
 def clinic_detail(clinica_id):
-    if _is_admin():
-        clinica = Clinica.query.get_or_404(clinica_id)
-    else:
-        clinica = clinicas_do_usuario().filter_by(id=clinica_id).first_or_404()
+    """Exibe os detalhes de uma clínica específica.
+
+    Antes a função buscava a clínica diretamente através de ``clinicas_do_usuario``
+    e, em cenários de filtro vazio, poderia acabar retornando a primeira clínica
+    disponível ao usuário em vez da solicitada na URL. Para evitar que dados de
+    outra clínica sejam exibidos, primeiro buscamos a clínica pelo *id* informado
+    e, em seguida, validamos se o usuário possui acesso a ela.
+    """
+
+    clinica = Clinica.query.get_or_404(clinica_id)
+    if not _is_admin():
+        # Verifica se a clínica pertence ao conjunto de clínicas acessíveis
+        if not clinicas_do_usuario().filter_by(id=clinica_id).first():
+            abort(404)
     hours_form = ClinicHoursForm()
     clinic_form = ClinicForm(obj=clinica)
     vets_form = ClinicAddVeterinarianForm()

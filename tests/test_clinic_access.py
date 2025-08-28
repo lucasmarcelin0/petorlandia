@@ -37,12 +37,30 @@ def test_user_cannot_access_other_clinic(monkeypatch, app):
 def test_admin_can_access_any_clinic(monkeypatch, app):
     client = app.test_client()
     with app.app_context():
+        db.drop_all()
         db.create_all()
         c1 = Clinica(nome="Clinic One")
         c2 = Clinica(nome="Clinic Two")
-        admin = User(name="Admin", email="admin@example.com", password_hash="x", role="admin")
+        admin = User(name="Admin", email="admin2@example.com", password_hash="x", role="admin")
         db.session.add_all([c1, c2, admin])
         db.session.commit()
         login(monkeypatch, admin)
         resp = client.get(f"/clinica/{c2.id}")
         assert resp.status_code == 200
+
+
+def test_clinic_detail_shows_requested_clinic(monkeypatch, app):
+    """A rota deve exibir os dados da clínica indicada na URL."""
+    client = app.test_client()
+    with app.app_context():
+        db.drop_all()
+        db.create_all()
+        c1 = Clinica(nome="Clinic One")
+        c2 = Clinica(nome="Clinic Two")
+        admin = User(name="Admin", email="admin3@example.com", password_hash="x", role="admin")
+        db.session.add_all([c1, c2, admin])
+        db.session.commit()
+        login(monkeypatch, admin)
+        resp = client.get(f"/clinica/{c2.id}")
+        assert resp.status_code == 200
+        assert b"<h2>Clinic Two</h2>" in resp.data
