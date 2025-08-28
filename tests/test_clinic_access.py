@@ -34,6 +34,21 @@ def test_user_cannot_access_other_clinic(monkeypatch, app):
         assert resp.status_code == 404
 
 
+def test_user_sees_own_clinic(monkeypatch, app):
+    client = app.test_client()
+    with app.app_context():
+        db.create_all()
+        c1 = Clinica(nome="Clinic One")
+        user = User(name="User", email="user3@example.com", password_hash="x")
+        vet = Veterinario(user=user, crmv="123", clinica=c1)
+        db.session.add_all([c1, user, vet])
+        db.session.commit()
+        login(monkeypatch, user)
+        resp = client.get(f"/clinica/{c1.id}")
+        assert resp.status_code == 200
+        assert b"Clinic One" in resp.data
+
+
 def test_admin_can_access_any_clinic(monkeypatch, app):
     client = app.test_client()
     with app.app_context():
