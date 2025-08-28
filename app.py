@@ -1498,7 +1498,27 @@ def consulta_qr():
 
     # Aqui você já deve ter carregado o animal
     animal = Animal.query.get_or_404(animal_id)
-    idade = calcular_idade(animal.date_of_birth) if animal.date_of_birth else animal.age
+
+    # Idade e unidade (anos/meses)
+    idade = ''
+    idade_unidade = ''
+    if animal.date_of_birth:
+        delta = relativedelta(date.today(), animal.date_of_birth)
+        if delta.years > 0:
+            idade = delta.years
+            idade_unidade = 'ano' if delta.years == 1 else 'anos'
+        else:
+            idade = delta.months
+            idade_unidade = 'mês' if delta.months == 1 else 'meses'
+    elif animal.age:
+        partes = str(animal.age).split()
+        try:
+            idade = int(partes[0])
+        except (ValueError, IndexError):
+            idade = ''
+        if len(partes) > 1:
+            idade_unidade = partes[1]
+
 
     # Lógica adicional
     tutor = animal.owner
@@ -1525,6 +1545,7 @@ def consulta_qr():
         animal=animal,
         consulta=consulta,
         animal_idade=idade,
+        animal_idade_unidade=idade_unidade,
         tutor_form=tutor_form,
         servicos=servicos,
     )
@@ -1586,7 +1607,25 @@ def consulta_direct(animal_id):
     form = AnimalForm(obj=animal)
     tutor_form = EditProfileForm(obj=tutor)
 
-    idade = calcular_idade(animal.date_of_birth) if animal.date_of_birth else animal.age
+    # Idade e unidade (anos/meses)
+    idade = ''
+    idade_unidade = ''
+    if animal.date_of_birth:
+        delta = relativedelta(date.today(), animal.date_of_birth)
+        if delta.years > 0:
+            idade = delta.years
+            idade_unidade = 'ano' if delta.years == 1 else 'anos'
+        else:
+            idade = delta.months
+            idade_unidade = 'mês' if delta.months == 1 else 'meses'
+    elif animal.age:
+        partes = str(animal.age).split()
+        try:
+            idade = int(partes[0])
+        except (ValueError, IndexError):
+            idade = ''
+        if len(partes) > 1:
+            idade_unidade = partes[1]
     clinica_id = None
     if current_user.worker == 'veterinario' and getattr(current_user, 'veterinario', None):
         clinica_id = current_user.veterinario.clinica_id
@@ -1618,6 +1657,7 @@ def consulta_direct(animal_id):
         form=form,
         tutor_form=tutor_form,
         animal_idade=idade,
+        animal_idade_unidade=idade_unidade,
         servicos=servicos,
     )
 

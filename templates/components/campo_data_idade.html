@@ -16,14 +16,17 @@
   </div>
   <div class="col-md-2">
     <label class="form-label">Idade</label>
-    <input
-      type="number"
-      min="0"
-      class="form-control"
-      id="{{ prefixo }}_age"
-      value="{{ valor_idade or '' }}"
-      data-age
-    >
+    <div class="input-group">
+      <input
+        type="number"
+        min="0"
+        class="form-control"
+        id="{{ prefixo }}_age"
+        value="{{ valor_idade or '' }}"
+        data-age
+      >
+      <span class="input-group-text" id="{{ prefixo }}_age_unit" data-age-unit>{{ valor_unidade or '' }}</span>
+    </div>
   </div>
 </div>
 
@@ -34,6 +37,7 @@
 
     const dobInput = wrapper.querySelector('[data-dob]');
     const ageInput = wrapper.querySelector('[data-age]');
+    const ageUnit = wrapper.querySelector('[data-age-unit]');
     const hiddenInput = wrapper.querySelector('[data-dob-iso]');
     if (!dobInput || !ageInput) return;
 
@@ -73,6 +77,13 @@
         meses += 12;
       }
       ageInput.value = anos > 0 ? anos : meses;
+      if (ageUnit) {
+        if (anos > 0) {
+          ageUnit.textContent = anos === 1 ? 'ano' : 'anos';
+        } else {
+          ageUnit.textContent = meses === 1 ? 'mês' : 'meses';
+        }
+      }
       if (hiddenInput) hiddenInput.value = dataNascimento.toISOString().split('T')[0];
     }
 
@@ -84,6 +95,7 @@
         const estimada = new Date(hoje.getFullYear() - idade, hoje.getMonth(), hoje.getDate());
         fp.setDate(estimada, true);
         if (hiddenInput) hiddenInput.value = estimada.toISOString().split('T')[0];
+        if (ageUnit) ageUnit.textContent = 'anos';
       }
     });
 
