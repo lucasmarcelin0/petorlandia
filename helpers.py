@@ -131,7 +131,7 @@ def clinicas_do_usuario():
     if current_user.role == "admin":
         return Clinica.query
 
-    if current_user.worker == "veterinario" and getattr(current_user, "veterinario", None):
+    if getattr(current_user, "veterinario", None) and current_user.veterinario.clinica_id:
         return Clinica.query.filter_by(id=current_user.veterinario.clinica_id)
 
     if current_user.clinica_id:
