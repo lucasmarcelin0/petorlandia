@@ -687,6 +687,20 @@ def list_animals():
     if age:
         query = query.filter(Animal.age.ilike(f"{age}%"))
 
+    # Veterinários só podem ver animais perdidos, à venda ou para adoção,
+    # ou então animais cadastrados pela própria clínica
+    if current_user.is_authenticated and current_user.worker == 'veterinario':
+        allowed = ['perdido', 'venda', 'doação']
+        if current_user.clinica_id:
+            query = query.filter(
+                or_(
+                    Animal.modo.in_(allowed),
+                    Animal.clinica_id == current_user.clinica_id
+                )
+            )
+        else:
+            query = query.filter(Animal.modo.in_(allowed))
+
     # Ordenação e paginação
     query = query.order_by(Animal.date_added.desc())
     pagination = query.paginate(page=page, per_page=per_page, error_out=False)
