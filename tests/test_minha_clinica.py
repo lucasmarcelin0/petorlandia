@@ -19,7 +19,7 @@ def test_minha_clinica_redirects(monkeypatch, app):
     with app.app_context():
         db.create_all()
         clinica = Clinica(nome="Pet Clinic")
-        user = User(name="Vet", email="vet@example.com", password_hash="x", worker="veterinario")
+        user = User(name="Vet", email="vet@example.com", password_hash="x")
         vet = Veterinario(user=user, crmv="123", clinica=clinica)
         db.session.add_all([clinica, user, vet])
         db.session.commit()
@@ -30,3 +30,20 @@ def test_minha_clinica_redirects(monkeypatch, app):
         resp = client.get('/minha-clinica')
         assert resp.status_code == 302
         assert f"/clinica/{clinica.id}" in resp.headers['Location']
+
+
+def test_layout_shows_minha_clinica_for_veterinario(monkeypatch, app):
+    client = app.test_client()
+    with app.app_context():
+        db.create_all()
+        clinica = Clinica(nome="Pet Clinic")
+        user = User(name="Vet", email="vet2@example.com", password_hash="x")
+        vet = Veterinario(user=user, crmv="123", clinica=clinica)
+        db.session.add_all([clinica, user, vet])
+        db.session.commit()
+
+        import flask_login.utils as login_utils
+        monkeypatch.setattr(login_utils, '_get_user', lambda: user)
+
+        resp = client.get('/')
+        assert b'Minha Cl\xc3\xadnica' in resp.data
