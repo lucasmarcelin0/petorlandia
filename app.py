@@ -1812,7 +1812,16 @@ def clinic_detail(clinica_id):
     if _is_admin():
         clinica = Clinica.query.get_or_404(clinica_id)
     else:
-        clinica = clinicas_do_usuario().filter_by(id=clinica_id).first_or_404()
+        # Para usuários não administradores, garantimos que a clínica
+        # consultada pertence ao conjunto de clínicas acessíveis ao
+        # usuário atual. O uso de ``filter`` com ``Clinica.id`` evita
+        # possíveis ambiguidades de ``filter_by`` e assegura que o
+        # ``clinica_id`` da URL seja respeitado corretamente.
+        clinica = (
+            clinicas_do_usuario()
+            .filter(Clinica.id == clinica_id)
+            .first_or_404()
+        )
     hours_form = ClinicHoursForm()
     clinic_form = ClinicForm(obj=clinica)
     vets_form = ClinicAddVeterinarianForm()
