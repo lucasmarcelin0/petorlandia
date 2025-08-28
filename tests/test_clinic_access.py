@@ -80,6 +80,23 @@ def test_vet_cannot_access_other_clinic_consulta(monkeypatch, app):
         assert resp.status_code == 404
 
 
+def test_colaborador_cannot_access_other_clinic_consulta(monkeypatch, app):
+    client = app.test_client()
+    with app.app_context():
+        db.create_all()
+        c1 = Clinica(nome="Clinic One")
+        c2 = Clinica(nome="Clinic Two")
+        tutor = User(name="Tutor", email="tutor3@example.com", password_hash="x")
+        animal = Animal(name="Rex", owner=tutor, clinica=c2)
+        colaborador = User(name="Colab", email="colab@example.com", password_hash="x",
+                           worker="colaborador", clinica=c1)
+        db.session.add_all([c1, c2, tutor, animal, colaborador])
+        db.session.commit()
+        login(monkeypatch, colaborador)
+        resp = client.get(f"/consulta/{animal.id}")
+        assert resp.status_code == 404
+
+
 def test_admin_can_access_any_consulta(monkeypatch, app):
     client = app.test_client()
     with app.app_context():
