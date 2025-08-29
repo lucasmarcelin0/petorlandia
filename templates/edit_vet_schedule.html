@@ -273,7 +273,7 @@
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'X-CSRFToken': '{{ csrf_token() }}'
+        'X-CSRFToken': '{{ csrf_token() if csrf_token is defined else '' }}'
       },
       body: JSON.stringify({
         date: date,
