@@ -78,7 +78,7 @@
         {# pula esse animal #}
       {% else %}
         {# renderiza normalmente #}
-      <div class="col">
+      <div class="col" id="animal-card-{{ animal.id }}">
         <div class="card h-100 shadow-sm border-0 rounded-4 position-relative {% if animal.modo == 'perdido' %}border border-danger{% endif %}">
 
           {% if animal.image %}
@@ -156,13 +156,11 @@
                 ✏️ Editar
               </a>
               {% endif %}
-                        {% if is_admin %}
+          {% if is_admin %}
           <form method="POST" action="{{ url_for('deletar_animal', animal_id=animal.id) }}"
-                onsubmit="return confirm('Excluir permanentemente este animal?');"
-                class="btn btn-outline-secondary btn-sm rounded-pill">
-            <button type="submit" title="Excluir">
-              ❌
-            </button>
+                class="btn btn-outline-secondary btn-sm rounded-pill delete-animal-form"
+                data-animal-id="{{ animal.id }}">
+            <button type="submit" title="Excluir">❌</button>
           </form>
           {% endif %}
             </div>
@@ -253,9 +251,28 @@
 <script>
   document.addEventListener('DOMContentLoaded', () => {
     const form = document.getElementById('filterForm');
-    if (!form) return;
-    form.querySelectorAll('select,input').forEach(el => {
-      el.addEventListener('change', () => form.submit());
+    if (form) {
+      form.querySelectorAll('select,input').forEach(el => {
+        el.addEventListener('change', () => form.submit());
+      });
+    }
+
+    document.querySelectorAll('.delete-animal-form').forEach(f => {
+      f.addEventListener('submit', async e => {
+        e.preventDefault();
+        if (!confirm('Excluir permanentemente este animal?')) return;
+        const resp = await fetch(f.action, {
+          method: 'POST',
+          headers: { 'Accept': 'application/json' }
+        });
+        if (resp.ok) {
+          const card = document.getElementById(`animal-card-${f.dataset.animalId}`);
+          if (card) card.remove();
+        } else {
+          const data = await resp.json().catch(() => ({}));
+          alert(data.message || 'Erro ao excluir animal.');
+        }
+      });
     });
   });
 </script>
