@@ -11,6 +11,39 @@
   {% if clinica.telefone %}<p><strong>Telefone:</strong> {{ clinica.telefone }}</p>{% endif %}
   {% if clinica.email %}<p><strong>Email:</strong> {{ clinica.email }}</p>{% endif %}
 
+  <ul class="nav nav-tabs mb-4 rounded shadow-sm bg-white pet-nav">
+    <li class="nav-item" role="presentation">
+      <a class="nav-link d-flex align-items-center gap-2" href="#veterinarios">
+        <span class="icon-circle bg-primary text-white"><i class="fa-solid fa-users"></i></span>
+        <span class="fw-semibold">Funcionários</span>
+      </a>
+    </li>
+    <li class="nav-item" role="presentation">
+      <a class="nav-link d-flex align-items-center gap-2" href="#agendamentos">
+        <span class="icon-circle bg-success text-white"><i class="fa-solid fa-calendar"></i></span>
+        <span class="fw-semibold">Agenda</span>
+      </a>
+    </li>
+    <li class="nav-item" role="presentation">
+      <a class="nav-link d-flex align-items-center gap-2" href="{{ url_for('list_animals') }}">
+        <span class="icon-circle bg-danger text-white"><i class="fa-solid fa-paw"></i></span>
+        <span class="fw-semibold">Animais</span>
+      </a>
+    </li>
+    <li class="nav-item" role="presentation">
+      <a class="nav-link d-flex align-items-center gap-2" href="{{ url_for('tutores') }}">
+        <span class="icon-circle bg-info text-white"><i class="fa-solid fa-user"></i></span>
+        <span class="fw-semibold">Tutores</span>
+      </a>
+    </li>
+    <li class="nav-item" role="presentation">
+      <a class="nav-link d-flex align-items-center gap-2" href="{{ url_for('loja') }}">
+        <span class="icon-circle bg-warning text-dark"><i class="fa-solid fa-boxes"></i></span>
+        <span class="fw-semibold">Estoque</span>
+      </a>
+    </li>
+  </ul>
+
   {% if pode_editar %}
   <button class="btn btn-secondary mt-3" onclick="toggleEditInfo()">Editar Informações</button>
   <div id="edit-info" class="mt-4" style="display: none;">
@@ -103,7 +136,7 @@
   </div>
   {% endif %}
 
-  <h3>Veterinários</h3>
+  <h3 id="veterinarios">Veterinários</h3>
   <ul class="list-unstyled">
     {% for v in veterinarios %}
       <li>
@@ -172,7 +205,7 @@
   </form>
   {% endif %}
 
-  <h3>Agendamentos</h3>
+  <h3 id="agendamentos">Agendamentos</h3>
   <div id="clinic-calendar" class="mb-4"></div>
   <table class="table">
     <thead>
