@@ -145,6 +145,20 @@ class User(UserMixin, db.Model):
     )
     favorites = db.relationship('Favorite', backref=db.backref('user'), cascade='all, delete-orphan', lazy=True)
 
+    eventos_responsavel = db.relationship(
+        'AgendaEvento',
+        back_populates='responsavel',
+        foreign_keys='AgendaEvento.responsavel_id',
+        cascade='all, delete-orphan',
+        lazy=True,
+    )
+    eventos_colaborador = db.relationship(
+        'AgendaEvento',
+        secondary='evento_colaboradores',
+        back_populates='colaboradores',
+        lazy=True,
+    )
+
     added_by_id = db.Column(
         db.Integer,
         db.ForeignKey('user.id', ondelete='SET NULL'),
@@ -537,6 +551,12 @@ class Clinica(db.Model):
     owner = db.relationship('User', backref=db.backref('clinicas', foreign_keys='Clinica.owner_id'), foreign_keys=[owner_id])
 
     veterinarios = db.relationship('Veterinario', backref='clinica', lazy=True)
+    eventos = db.relationship(
+        'AgendaEvento',
+        back_populates='clinica',
+        cascade='all, delete-orphan',
+        lazy=True,
+    )
 
 
     def __str__(self):
@@ -674,6 +694,32 @@ event.listen(Appointment, 'before_insert', Appointment._validate_subscription)
 event.listen(Appointment, 'before_update', Appointment._validate_subscription)
 event.listen(Appointment, 'before_insert', Appointment._set_clinica)
 event.listen(Appointment, 'before_update', Appointment._set_clinica)
+
+# Associação many-to-many entre eventos e colaboradores
+EventoColaboradores = db.Table(
+    'evento_colaboradores',
+    db.Column('evento_id', db.Integer, db.ForeignKey('agenda_evento.id'), primary_key=True),
+    db.Column('user_id', db.Integer, db.ForeignKey('user.id'), primary_key=True)
+)
+
+
+class AgendaEvento(db.Model):
+    __tablename__ = 'agenda_evento'
+
+    id = db.Column(db.Integer, primary_key=True)
+    titulo = db.Column(db.String(120), nullable=False)
+    inicio = db.Column(db.DateTime, nullable=False)
+    fim = db.Column(db.DateTime, nullable=False)
+    descricao = db.Column(db.Text, nullable=True)
+    responsavel_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    clinica_id = db.Column(db.Integer, db.ForeignKey('clinica.id'), nullable=True)
+
+    responsavel = db.relationship('User', back_populates='eventos_responsavel', foreign_keys=[responsavel_id])
+    clinica = db.relationship('Clinica', back_populates='eventos')
+    colaboradores = db.relationship('User', secondary=EventoColaboradores, back_populates='eventos_colaborador')
+
+    def __repr__(self):
+        return f'<AgendaEvento {self.titulo}>'
 
 class Medicamento(db.Model):
     id = db.Column(db.Integer, primary_key=True)
