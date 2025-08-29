@@ -2094,10 +2094,28 @@ def tutores():
     # — GET com paginação —
     page = request.args.get('page', 1, type=int)
     if current_user.clinica_id:
-        pagination = User.query \
-            .filter(User.clinica_id == current_user.clinica_id) \
-            .order_by(User.created_at.desc()) \
+        last_appt = (
+            db.session.query(
+                Appointment.tutor_id,
+                func.max(Appointment.scheduled_at).label('last_at')
+            )
+            .filter(Appointment.clinica_id == current_user.clinica_id)
+            .group_by(Appointment.tutor_id)
+            .subquery()
+        )
+
+        pagination = (
+            User.query
+            .outerjoin(last_appt, User.id == last_appt.c.tutor_id)
+            .filter(
+                or_(
+                    User.clinica_id == current_user.clinica_id,
+                    last_appt.c.last_at != None
+                )
+            )
+            .order_by(func.coalesce(last_appt.c.last_at, User.created_at).desc())
             .paginate(page=page, per_page=9)
+        )
         tutores_adicionados = pagination.items
     else:
         pagination = None
@@ -3541,17 +3559,37 @@ def novo_animal():
     # GET: lista de animais adicionados para exibição
     page = request.args.get('page', 1, type=int)
     if current_user.clinica_id:
-        pagination = Animal.query \
-            .filter_by(clinica_id=current_user.clinica_id) \
-            .filter(Animal.removido_em == None) \
-            .order_by(Animal.date_added.desc()) \
+        last_appt = (
+            db.session.query(
+                Appointment.animal_id,
+                func.max(Appointment.scheduled_at).label('last_at')
+            )
+            .filter(Appointment.clinica_id == current_user.clinica_id)
+            .group_by(Appointment.animal_id)
+            .subquery()
+        )
+
+        pagination = (
+            Animal.query
+            .outerjoin(last_appt, Animal.id == last_appt.c.animal_id)
+            .filter(Animal.removido_em == None)
+            .filter(
+                or_(
+                    Animal.clinica_id == current_user.clinica_id,
+                    last_appt.c.last_at != None
+                )
+            )
+            .order_by(func.coalesce(last_appt.c.last_at, Animal.date_added).desc())
             .paginate(page=page, per_page=9)
+        )
     else:
-        pagination = Animal.query \
-            .filter_by(added_by_id=current_user.id) \
-            .filter(Animal.removido_em == None) \
-            .order_by(Animal.date_added.desc()) \
+        pagination = (
+            Animal.query
+            .filter_by(added_by_id=current_user.id)
+            .filter(Animal.removido_em == None)
+            .order_by(Animal.date_added.desc())
             .paginate(page=page, per_page=9)
+        )
 
     animais_adicionados = pagination.items
 
