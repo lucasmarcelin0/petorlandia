@@ -132,6 +132,7 @@
   {% endif %}
 
   <h3>Agendamentos</h3>
+  <div id="clinic-calendar" class="mb-4"></div>
   <table class="table">
     <thead>
       <tr>
@@ -163,6 +164,36 @@
     </tbody>
   </table>
 </div>
+
+<!-- Modais da agenda -->
+<div class="modal fade" id="eventModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Editar Evento</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+      </div>
+      <div class="modal-body">
+        <p>Formulário de edição aqui.</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="modal fade" id="newEventModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Novo Evento</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+      </div>
+      <div class="modal-body">
+        <p>Formulário de criação aqui.</p>
+      </div>
+    </div>
+  </div>
+</div>
+
 <script>
 function toggleEditInfo() {
   const section = document.getElementById('edit-info');
@@ -184,5 +215,32 @@ function selectDays(mode) {
   }
 }
 
+</script>
+{% endblock %}
+
+{% block scripts %}
+{{ super() }}
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.8/main.min.css">
+<script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.8/main.min.js"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+  var calendarEl = document.getElementById('clinic-calendar');
+  if (calendarEl) {
+    var calendar = new FullCalendar.Calendar(calendarEl, {
+      initialView: 'dayGridMonth',
+      selectable: true,
+      events: '/api/events',
+      eventClick: function(info) {
+        var modal = new bootstrap.Modal(document.getElementById('eventModal'));
+        modal.show();
+      },
+      select: function(info) {
+        var modal = new bootstrap.Modal(document.getElementById('newEventModal'));
+        modal.show();
+      }
+    });
+    calendar.render();
+  }
+});
 </script>
 {% endblock %}
