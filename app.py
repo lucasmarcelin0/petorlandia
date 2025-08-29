@@ -185,7 +185,7 @@ from forms import (
     DeliveryRequestForm, AddToCartForm, SubscribePlanForm,
     ProductUpdateForm, ProductPhotoForm, ChangePasswordForm,
     DeleteAccountForm, ClinicForm, ClinicHoursForm, ClinicAddVeterinarianForm,
-    VetScheduleForm, VetSpecialtyForm, AppointmentForm, AppointmentDeleteForm
+    ClinicStaffPermissionForm, VetScheduleForm, VetSpecialtyForm, AppointmentForm, AppointmentDeleteForm
 )
 from helpers import (
     calcular_idade,
@@ -1957,6 +1957,51 @@ def clinic_detail(clinica_id):
         appointments=appointments,
         pode_editar=pode_editar,
     )
+
+
+@app.route('/clinica/<int:clinica_id>/dashboard')
+@login_required
+def clinic_dashboard(clinica_id):
+    clinic = Clinica.query.get_or_404(clinica_id)
+    if current_user.id == clinic.owner_id:
+        staff = ClinicStaff(
+            clinic_id=clinic.id,
+            user_id=current_user.id,
+            can_manage_clients=True,
+            can_manage_animals=True,
+            can_manage_staff=True,
+            can_manage_schedule=True,
+            can_manage_inventory=True,
+        )
+    else:
+        staff = ClinicStaff.query.filter_by(clinic_id=clinic.id, user_id=current_user.id).first()
+        if not staff:
+            abort(403)
+    return render_template('clinic_dashboard.html', clinic=clinic, staff=staff)
+
+
+@app.route('/clinica/<int:clinica_id>/funcionario/<int:user_id>/permissoes', methods=['GET', 'POST'])
+@login_required
+def clinic_staff_permissions(clinica_id, user_id):
+    clinic = Clinica.query.get_or_404(clinica_id)
+    if current_user.id != clinic.owner_id:
+        abort(403)
+    staff = ClinicStaff.query.filter_by(clinic_id=clinic.id, user_id=user_id).first()
+    if not staff:
+        staff = ClinicStaff(clinic_id=clinic.id, user_id=user_id)
+    form = ClinicStaffPermissionForm(obj=staff)
+    if form.validate_on_submit():
+        form.populate_obj(staff)
+        staff.user_id = user_id
+        db.session.add(staff)
+        user = User.query.get(user_id)
+        if user:
+            user.clinica_id = clinic.id
+            db.session.add(user)
+        db.session.commit()
+        flash('Permissões atualizadas', 'success')
+        return redirect(url_for('clinic_dashboard', clinica_id=clinic.id))
+    return render_template('clinic_staff_permissions.html', form=form, clinic=clinic)
 
 
 @app.route('/clinica/<int:clinica_id>/horario/<int:horario_id>/delete', methods=['POST'])
