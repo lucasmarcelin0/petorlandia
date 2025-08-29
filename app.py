@@ -5585,6 +5585,48 @@ def manage_appointments():
     return render_template('appointments_admin.html', appointments=appointments, delete_form=delete_form)
 
 
+@app.route('/appointments/<int:appointment_id>/edit', methods=['GET', 'POST'])
+@login_required
+def edit_appointment(appointment_id):
+    appointment = Appointment.query.get_or_404(appointment_id)
+    if current_user.worker in ['veterinario', 'colaborador']:
+        if current_user.worker == 'veterinario':
+            user_clinic = current_user.veterinario.clinica_id
+        else:
+            user_clinic = current_user.clinica_id
+        if appointment.clinica_id != user_clinic:
+            abort(403)
+    elif current_user.role != 'admin' and appointment.tutor_id != current_user.id:
+        abort(403)
+
+    if request.method == 'POST':
+        data = request.get_json(silent=True) or {}
+        date_str = data.get('date')
+        time_str = data.get('time')
+        vet_id = data.get('veterinario_id')
+        if not date_str or not time_str or not vet_id:
+            return jsonify({'success': False, 'message': 'Dados incompletos.'}), 400
+        try:
+            scheduled_at = datetime.combine(
+                datetime.strptime(date_str, '%Y-%m-%d').date(),
+                datetime.strptime(time_str, '%H:%M').time(),
+            )
+            vet_id = int(vet_id)
+        except (ValueError, TypeError):
+            return jsonify({'success': False, 'message': 'Dados inválidos.'}), 400
+        if not is_slot_available(vet_id, scheduled_at) and not (
+            vet_id == appointment.veterinario_id and scheduled_at == appointment.scheduled_at
+        ):
+            return jsonify({'success': False, 'message': 'Horário indisponível.'}), 400
+        appointment.veterinario_id = vet_id
+        appointment.scheduled_at = scheduled_at
+        db.session.commit()
+        return jsonify({'success': True})
+
+    veterinarios = Veterinario.query.all()
+    return render_template('edit_appointment.html', appointment=appointment, veterinarios=veterinarios)
+
+
 @app.route('/appointments/<int:appointment_id>/delete', methods=['POST'])
 @login_required
 def delete_appointment(appointment_id):
