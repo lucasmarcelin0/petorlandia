@@ -129,6 +129,7 @@ document.addEventListener('DOMContentLoaded', function() {
   function applySort() {
     const value = sortSelect.value;
     const visible = cards.filter(card => card.style.display !== 'none');
+    const hidden = cards.filter(card => card.style.display === 'none');
     visible.sort((a, b) => {
       switch (value) {
         case 'name_desc':
@@ -147,6 +148,7 @@ document.addEventListener('DOMContentLoaded', function() {
       }
     });
     visible.forEach(card => container.appendChild(card));
+    hidden.forEach(card => container.appendChild(card));
   }
 
   filterInput.addEventListener('input', () => { applyFilter(); applySort(); });
