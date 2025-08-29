@@ -80,26 +80,35 @@
   </div>
 
   <h3>Horários Cadastrados</h3>
+  <button class="btn btn-sm btn-outline-secondary mb-2" onclick="toggleScheduleEdit()">Editar horários</button>
   <ul class="list-unstyled">
-    {% for h in horarios %}
+    {% for dia, itens in horarios|sort(attribute='dia_semana')|groupby('dia_semana') %}
       <li>
-        {{ h.dia_semana }}: {{ h.hora_inicio.strftime('%H:%M') }} - {{ h.hora_fim.strftime('%H:%M') }}
-        {% if h.intervalo_inicio and h.intervalo_fim %}
-          (Intervalo: {{ h.intervalo_inicio.strftime('%H:%M') }} - {{ h.intervalo_fim.strftime('%H:%M') }})
-        {% endif %}
-        <button type="button" class="btn btn-sm btn-outline-primary ms-2 edit-btn"
-                data-id="{{ h.id }}"
-                data-dia="{{ h.dia_semana }}"
-                data-hora-inicio="{{ h.hora_inicio.strftime('%H:%M') }}"
-                data-hora-fim="{{ h.hora_fim.strftime('%H:%M') }}"
-                data-intervalo-inicio="{{ h.intervalo_inicio.strftime('%H:%M') if h.intervalo_inicio else '' }}"
-                data-intervalo-fim="{{ h.intervalo_fim.strftime('%H:%M') if h.intervalo_fim else '' }}">
-          Editar
-        </button>
-        <form method="post" action="{{ url_for('delete_vet_schedule', veterinario_id=veterinario.id, horario_id=h.id) }}" class="d-inline">
-          {{ schedule_form.csrf_token }}
-          <button type="submit" class="btn btn-sm btn-outline-danger ms-2" onclick="return confirm('Excluir este horário?');">Excluir</button>
-        </form>
+        <strong>{{ dia }}:</strong>
+        {% for h in itens %}
+          <div class="d-inline-block me-2">
+            {{ h.hora_inicio.strftime('%H:%M') }} - {{ h.hora_fim.strftime('%H:%M') }}
+            {% if h.intervalo_inicio and h.intervalo_fim %}
+              (Intervalo: {{ h.intervalo_inicio.strftime('%H:%M') }} - {{ h.intervalo_fim.strftime('%H:%M') }})
+            {% endif %}
+            <span class="schedule-actions d-none">
+              <button type="button" class="btn btn-sm btn-outline-primary ms-2 edit-btn"
+                      data-id="{{ h.id }}"
+                      data-dia="{{ h.dia_semana }}"
+                      data-hora-inicio="{{ h.hora_inicio.strftime('%H:%M') }}"
+                      data-hora-fim="{{ h.hora_fim.strftime('%H:%M') }}"
+                      data-intervalo-inicio="{{ h.intervalo_inicio.strftime('%H:%M') if h.intervalo_inicio else '' }}"
+                      data-intervalo-fim="{{ h.intervalo_fim.strftime('%H:%M') if h.intervalo_fim else '' }}">
+                Editar
+              </button>
+              <form method="post" action="{{ url_for('delete_vet_schedule', veterinario_id=veterinario.id, horario_id=h.id) }}" class="d-inline">
+                {{ schedule_form.csrf_token }}
+                <button type="submit" class="btn btn-sm btn-outline-danger ms-2" onclick="return confirm('Excluir este horário?');">Excluir</button>
+              </form>
+            </span>
+          </div>
+          {% if not loop.last %}|{% endif %}
+        {% endfor %}
       </li>
     {% else %}
       <li>Nenhum horário cadastrado.</li>
@@ -257,6 +266,12 @@
 
   function toggleAppointmentForm() {
     document.getElementById('appointment-form-container').classList.toggle('d-none');
+  }
+
+  function toggleScheduleEdit() {
+    document.querySelectorAll('.schedule-actions').forEach(el => {
+      el.classList.toggle('d-none');
+    });
   }
 
   function hideForm(id) {
