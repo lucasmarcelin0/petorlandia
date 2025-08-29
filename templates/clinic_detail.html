@@ -3,13 +3,7 @@
 
 {% block main %}
 <div class="container mt-4">
-  <h2>{{ clinica.nome }}</h2>
-  {% if clinica.logotipo %}
-  <img src="{{ clinica.logotipo }}" alt="Imagem da Clínica" class="img-fluid mb-3" style="max-height: 200px; object-fit: cover; transform: translate({{ clinica.photo_offset_x or 0 }}px, {{ clinica.photo_offset_y or 0 }}px) rotate({{ clinica.photo_rotation or 0 }}deg) scale({{ clinica.photo_zoom or 1 }});">
-  {% endif %}
-  {% if clinica.endereco %}<p><strong>Endereço:</strong> {{ clinica.endereco }}</p>{% endif %}
-  {% if clinica.telefone %}<p><strong>Telefone:</strong> {{ clinica.telefone }}</p>{% endif %}
-  {% if clinica.email %}<p><strong>Email:</strong> {{ clinica.email }}</p>{% endif %}
+  {% include 'partials/clinic_info.html' %}
 
   <ul class="nav nav-tabs mb-4 rounded shadow-sm bg-white pet-nav" id="clinicTabs" role="tablist">
     <li class="nav-item" role="presentation">
@@ -44,42 +38,8 @@
     </li>
   </ul>
 
-  <div class="tab-content">
-    <div class="tab-pane fade show active" id="veterinarios" role="tabpanel">
-      {% if pode_editar %}
-      <button class="btn btn-secondary mt-3" onclick="toggleEditInfo()">Editar Informações</button>
-      <div id="edit-info" class="mt-4" style="display: none;">
-        <form method="post" class="mb-4" enctype="multipart/form-data">
-          {{ clinic_form.hidden_tag() }}
-          <div class="mb-3">
-            {{ clinic_form.nome.label }}
-            {{ clinic_form.nome(class="form-control") }}
-          </div>
-          <div class="mb-3">
-            {{ clinic_form.cnpj.label }}
-            {{ clinic_form.cnpj(class="form-control") }}
-          </div>
-          <div class="mb-3">
-            {{ clinic_form.endereco.label }}
-            {{ clinic_form.endereco(class="form-control") }}
-          </div>
-          <div class="mb-3">
-            {{ clinic_form.telefone.label }}
-            {{ clinic_form.telefone(class="form-control") }}
-          </div>
-          <div class="mb-3">
-            {{ clinic_form.email.label }}
-            {{ clinic_form.email(class="form-control") }}
-          </div>
-          <div class="mb-3">
-            {{ clinic_form.logotipo.label }}
-            {{ photo_cropper(clinic_form.logotipo, clinic_form.photo_rotation, clinic_form.photo_zoom, clinic_form.photo_offset_x, clinic_form.photo_offset_y, clinica.logotipo, 150, 'clinic_logo', 'user') }}
-          </div>
-          {{ clinic_form.submit(class="btn btn-primary") }}
-        </form>
-      </div>
-      {% endif %}
-
+    <div class="tab-content">
+      <div class="tab-pane fade show active" id="veterinarios" role="tabpanel">
         <h3 class="mt-4">Funcionários</h3>
         <ul class="list-unstyled">
           {% for v in veterinarios %}
