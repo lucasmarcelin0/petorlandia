@@ -9,7 +9,7 @@ import pytest
 
 from app import app as flask_app, db
 from models import User, Veterinario, VetSchedule
-from helpers import is_slot_available
+from helpers import is_slot_available, has_schedule_conflict
 
 
 @pytest.fixture
@@ -42,4 +42,25 @@ def test_interval_blocks_slot(app_context):
 
     assert is_slot_available(vet.id, datetime(2024, 5, 1, 11, 0)) is True
     assert is_slot_available(vet.id, datetime(2024, 5, 1, 12, 30)) is False
+
+
+def test_has_schedule_conflict(app_context):
+    user = User(name="Vet", email="vet2@test", worker="veterinario")
+    user.set_password("x")
+    db.session.add(user)
+    db.session.commit()
+    vet = Veterinario(user_id=user.id, crmv="456")
+    db.session.add(vet)
+    db.session.commit()
+    schedule = VetSchedule(
+        veterinario_id=vet.id,
+        dia_semana="Quarta",
+        hora_inicio=time(9, 0),
+        hora_fim=time(12, 0),
+    )
+    db.session.add(schedule)
+    db.session.commit()
+
+    assert has_schedule_conflict(vet.id, "Quarta", time(11, 0), time(13, 0)) is True
+    assert has_schedule_conflict(vet.id, "Quarta", time(12, 0), time(13, 0)) is False
 

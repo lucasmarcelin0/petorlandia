@@ -192,6 +192,7 @@ from helpers import (
     parse_data_nascimento,
     is_slot_available,
     clinicas_do_usuario,
+    has_schedule_conflict,
 )
 
 
@@ -1821,10 +1822,29 @@ def clinicas():
 @app.route('/minha-clinica')
 @login_required
 def minha_clinica():
-    clinica = clinicas_do_usuario().first()
-    if not clinica:
+    clinicas = clinicas_do_usuario().all()
+    if not clinicas:
         abort(404)
-    return redirect(url_for('clinic_detail', clinica_id=clinica.id))
+    if len(clinicas) == 1:
+        return redirect(url_for('clinic_detail', clinica_id=clinicas[0].id))
+
+    if current_user.role == 'admin' and current_user.clinica_id:
+        for c in clinicas:
+            if c.id == current_user.clinica_id:
+                return redirect(url_for('clinic_detail', clinica_id=c.id))
+
+    stats = []
+    from models import Appointment  # import here to avoid circular
+    now = datetime.utcnow()
+    for c in clinicas:
+        vets = len(c.veterinarios)
+        appts = (
+            Appointment.query
+            .filter(Appointment.clinica_id == c.id, Appointment.scheduled_at >= now)
+            .count()
+        )
+        stats.append({"clinica": c, "vets": vets, "appts": appts})
+    return render_template('my_clinics.html', clinics=stats)
 
 
 @app.route('/clinica/<int:clinica_id>', methods=['GET', 'POST'])
@@ -5503,7 +5523,16 @@ def appointments():
             schedule_form.veterinario_id.data = veterinario.id
             appointment_form.veterinario_id.data = veterinario.id
         if schedule_form.submit.data and schedule_form.validate_on_submit():
+            added = False
             for dia in schedule_form.dias_semana.data:
+                if has_schedule_conflict(
+                    schedule_form.veterinario_id.data,
+                    dia,
+                    schedule_form.hora_inicio.data,
+                    schedule_form.hora_fim.data,
+                ):
+                    flash(f'Horário em {dia} conflita com um existente.', 'danger')
+                    continue
                 horario = VetSchedule(
                     veterinario_id=schedule_form.veterinario_id.data,
                     dia_semana=dia,
@@ -5513,8 +5542,10 @@ def appointments():
                     intervalo_fim=schedule_form.intervalo_fim.data,
                 )
                 db.session.add(horario)
-            db.session.commit()
-            flash('Horário salvo com sucesso.', 'success')
+                added = True
+            if added:
+                db.session.commit()
+                flash('Horário salvo com sucesso.', 'success')
             return redirect(url_for('appointments'))
         if appointment_form.submit.data and appointment_form.validate_on_submit():
             scheduled_at = datetime.combine(
@@ -5552,6 +5583,15 @@ def appointments():
             .order_by(Appointment.scheduled_at)
             .all()
         )
+        colegas = (
+            Veterinario.query.filter_by(clinica_id=veterinario.clinica_id)
+            .filter(Veterinario.id != veterinario.id)
+            .all()
+        )
+        colleague_schedules = []
+        for col in colegas:
+            hs = VetSchedule.query.filter_by(veterinario_id=col.id).all()
+            colleague_schedules.append({"veterinario": col, "horarios": hs})
         return render_template(
             'edit_vet_schedule.html',
             schedule_form=schedule_form,
@@ -5559,6 +5599,7 @@ def appointments():
             veterinario=veterinario,
             horarios=horarios,
             appointments=appointments,
+            colleague_schedules=colleague_schedules,
         )
     else:
         if current_user.worker in ['colaborador', 'admin']:

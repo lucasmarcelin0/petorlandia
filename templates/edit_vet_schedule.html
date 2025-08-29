@@ -122,6 +122,20 @@
       <li class="list-group-item">Nenhuma consulta agendada.</li>
     {% endfor %}
   </ul>
+
+  {% if colleague_schedules %}
+  <h3 class="mt-4">Agendas da Equipe</h3>
+  {% for item in colleague_schedules %}
+    <h5>{{ item.veterinario.user.name }}</h5>
+    <ul class="list-unstyled">
+      {% for h in item.horarios %}
+        <li>{{ h.dia_semana }}: {{ h.hora_inicio.strftime('%H:%M') }} - {{ h.hora_fim.strftime('%H:%M') }}</li>
+      {% else %}
+        <li>Sem horários cadastrados.</li>
+      {% endfor %}
+    </ul>
+  {% endfor %}
+  {% endif %}
 </div>
 <script>
   function selectDays(mode) {
