@@ -1,0 +1,40 @@
+<table class="table">
+  <thead>
+    <tr>
+      <th>Hora</th>
+      <th>Animal</th>
+      <th>Veterinário</th>
+      <th>Ações</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% if appointments_grouped %}
+      {% for day, items in appointments_grouped %}
+        <tr class="table-light">
+          <th colspan="4">{{ day|format_datetime_brazil('%d/%m/%Y') }}</th>
+        </tr>
+        {% for appt in items %}
+          <tr>
+            <td>{{ appt.scheduled_at|format_datetime_brazil('%H:%M') }}</td>
+            <td>{{ appt.animal.name }}</td>
+            <td>{{ appt.veterinario.user.name }}</td>
+            <td>
+              <div class="btn-group">
+                <a href="{{ url_for('ficha_animal', animal_id=appt.animal_id) }}" class="btn btn-sm btn-outline-primary">📋 Ficha Animal</a>
+                <a href="{{ url_for('ficha_tutor', tutor_id=appt.tutor_id) }}" class="btn btn-sm btn-outline-secondary">👤 Ficha Tutor</a>
+                {% if current_user.worker in ['veterinario', 'colaborador'] %}
+                <a href="{{ url_for('consulta_direct', animal_id=appt.animal_id) }}" class="btn btn-sm btn-outline-success">🩺 Iniciar Consulta</a>
+                {% endif %}
+                {% if current_user.role == 'admin' or current_user.worker in ['veterinario', 'colaborador'] or current_user.id == appt.tutor_id %}
+                <a href="{{ url_for('edit_appointment', appointment_id=appt.id) }}" class="btn btn-sm btn-outline-warning">✏️ Editar</a>
+                {% endif %}
+              </div>
+            </td>
+          </tr>
+        {% endfor %}
+      {% endfor %}
+    {% else %}
+      <tr><td colspan="4">Nenhum agendamento encontrado.</td></tr>
+    {% endif %}
+  </tbody>
+</table>
