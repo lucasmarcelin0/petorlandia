@@ -1911,6 +1911,34 @@ def clinic_detail(clinica_id):
         return redirect(url_for('clinic_detail', clinica_id=clinica.id))
     horarios = ClinicHours.query.filter_by(clinica_id=clinica_id).all()
     veterinarios = Veterinario.query.filter_by(clinica_id=clinica_id).all()
+
+    vet_schedule_forms = {}
+    for v in veterinarios:
+        form = VetScheduleForm(prefix=f"schedule_{v.id}")
+        form.veterinario_id.choices = [(v.id, v.user.name)]
+        if request.method == 'GET':
+            form.veterinario_id.data = v.id
+        vet_schedule_forms[v.id] = form
+
+    for v in veterinarios:
+        form = vet_schedule_forms[v.id]
+        if form.submit.data and form.validate_on_submit():
+            if not pode_editar:
+                abort(403)
+            for dia in form.dias_semana.data:
+                db.session.add(
+                    VetSchedule(
+                        veterinario_id=form.veterinario_id.data,
+                        dia_semana=dia,
+                        hora_inicio=form.hora_inicio.data,
+                        hora_fim=form.hora_fim.data,
+                        intervalo_inicio=form.intervalo_inicio.data,
+                        intervalo_fim=form.intervalo_fim.data,
+                    )
+                )
+            db.session.commit()
+            flash('Horário do funcionário salvo com sucesso.', 'success')
+            return redirect(url_for('clinic_detail', clinica_id=clinica.id))
     appointments = (
         Appointment.query
         .filter_by(clinica_id=clinica_id)
@@ -1925,6 +1953,7 @@ def clinic_detail(clinica_id):
         clinic_form=clinic_form,
         vets_form=vets_form,
         veterinarios=veterinarios,
+        vet_schedule_forms=vet_schedule_forms,
         appointments=appointments,
         pode_editar=pode_editar,
     )
@@ -1942,6 +1971,37 @@ def delete_clinic_hour(clinica_id, horario_id):
     if not pode_editar:
         abort(403)
     horario = ClinicHours.query.filter_by(id=horario_id, clinica_id=clinica_id).first_or_404()
+    db.session.delete(horario)
+    db.session.commit()
+    flash('Horário removido com sucesso.', 'success')
+    return redirect(url_for('clinic_detail', clinica_id=clinica_id))
+
+
+@app.route('/clinica/<int:clinica_id>/veterinario/<int:veterinario_id>/remove', methods=['POST'])
+@login_required
+def remove_veterinario(clinica_id, veterinario_id):
+    clinica = Clinica.query.get_or_404(clinica_id)
+    if not (_is_admin() or current_user.id == clinica.owner_id):
+        abort(403)
+    vet = Veterinario.query.filter_by(id=veterinario_id, clinica_id=clinica_id).first_or_404()
+    vet.clinica_id = None
+    db.session.commit()
+    flash('Funcionário removido com sucesso.', 'success')
+    return redirect(url_for('clinic_detail', clinica_id=clinica_id))
+
+
+@app.route(
+    '/clinica/<int:clinica_id>/veterinario/<int:veterinario_id>/schedule/<int:horario_id>/delete',
+    methods=['POST'],
+)
+@login_required
+def delete_vet_schedule_clinic(clinica_id, veterinario_id, horario_id):
+    clinica = Clinica.query.get_or_404(clinica_id)
+    if not (_is_admin() or current_user.id == clinica.owner_id):
+        abort(403)
+    horario = VetSchedule.query.get_or_404(horario_id)
+    if horario.veterinario_id != veterinario_id or horario.veterinario.clinica_id != clinica_id:
+        abort(404)
     db.session.delete(horario)
     db.session.commit()
     flash('Horário removido com sucesso.', 'success')
