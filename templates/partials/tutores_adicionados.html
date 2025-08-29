@@ -9,10 +9,25 @@
       </div>
       {% endif %}
     </div>
-    <div class="row g-3">
+    <div class="row mb-3">
+      <div class="col-md-8">
+        <input type="text" id="tutor-filter" class="form-control" placeholder="Buscar por nome, CPF, telefone...">
+      </div>
+      <div class="col-md-4">
+        <select id="tutor-sort" class="form-select">
+          <option value="name_asc">Nome (A-Z)</option>
+          <option value="name_desc">Nome (Z-A)</option>
+          <option value="date_desc">Data (recentes)</option>
+          <option value="date_asc">Data (antigos)</option>
+          <option value="age_desc">Idade (maior)</option>
+          <option value="age_asc">Idade (menor)</option>
+        </select>
+      </div>
+    </div>
+    <div id="tutor-cards" class="row g-3">
       {% if tutores_adicionados %}
         {% for tutor in tutores_adicionados %}
-        <div class="col-md-6 d-flex">
+        <div class="col-md-6 d-flex" data-name="{{ tutor.name|lower }}" data-date="{{ tutor.created_at.isoformat() if tutor.created_at else '' }}" data-cpf="{{ tutor.cpf or '' }}" data-phone="{{ tutor.phone or '' }}" {% if tutor.date_of_birth %}data-dob="{{ tutor.date_of_birth.isoformat() }}"{% endif %}>
 <div class="card shadow-sm rounded-4 h-100 flex-fill position-relative">
   {% if tutor.worker|lower == 'veterinario' %}
     <span class="badge bg-success position-absolute top-0 end-0 m-2">Veterinário</span>
@@ -87,3 +102,55 @@
     {% endif %}
   </div>
 </div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+  const filterInput = document.getElementById('tutor-filter');
+  const sortSelect = document.getElementById('tutor-sort');
+  const container = document.getElementById('tutor-cards');
+  const cards = Array.from(container.querySelectorAll('[data-name]'));
+
+  function getAge(card) {
+    if (!card.dataset.dob) return 0;
+    const diff = Date.now() - new Date(card.dataset.dob).getTime();
+    return Math.floor(diff / (365.25 * 24 * 60 * 60 * 1000));
+    }
+
+  function applyFilter() {
+    const term = filterInput.value.toLowerCase();
+    cards.forEach(card => {
+      const text = card.textContent.toLowerCase();
+      const cpf = (card.dataset.cpf || '').toLowerCase();
+      const phone = (card.dataset.phone || '').toLowerCase();
+      card.style.display = (text.includes(term) || cpf.includes(term) || phone.includes(term)) ? '' : 'none';
+    });
+  }
+
+  function applySort() {
+    const value = sortSelect.value;
+    const visible = cards.filter(card => card.style.display !== 'none');
+    visible.sort((a, b) => {
+      switch (value) {
+        case 'name_desc':
+          return b.dataset.name.localeCompare(a.dataset.name);
+        case 'date_asc':
+          return new Date(a.dataset.date) - new Date(b.dataset.date);
+        case 'date_desc':
+          return new Date(b.dataset.date) - new Date(a.dataset.date);
+        case 'age_asc':
+          return getAge(a) - getAge(b);
+        case 'age_desc':
+          return getAge(b) - getAge(a);
+        case 'name_asc':
+        default:
+          return a.dataset.name.localeCompare(b.dataset.name);
+      }
+    });
+    visible.forEach(card => container.appendChild(card));
+  }
+
+  filterInput.addEventListener('input', () => { applyFilter(); applySort(); });
+  sortSelect.addEventListener('change', applySort);
+  applySort();
+});
+</script>
