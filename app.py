@@ -28,7 +28,7 @@ from flask import (
 from twilio.rest import Client
 from itsdangerous import URLSafeTimedSerializer
 import json
-from sqlalchemy import func, or_
+from sqlalchemy import func, or_, exists
 
 # ----------------------------------------------------------------
 # 1)  Alias único para “models”
@@ -2235,19 +2235,27 @@ def tutores():
     scope = request.args.get('scope', 'all')
     clinic_id = current_user_clinic_id()
     if scope == 'mine':
-        query = User.query.filter(User.created_at != None)  # base query
+        query = User.query.filter(User.created_at != None)
         if clinic_id:
-            pagination = (
-                query.filter(User.clinica_id == clinic_id)
-                .order_by(User.created_at.desc())
-                .paginate(page=page, per_page=9)
+            query = query.filter(User.clinica_id == clinic_id)
+        consultas_exist = (
+            db.session.query(Consulta.id)
+            .join(Animal, Consulta.animal_id == Animal.id)
+            .filter(
+                Consulta.created_by == current_user.id,
+                Animal.user_id == User.id,
             )
-        else:
-            pagination = (
-                query.filter_by(added_by_id=current_user.id)
-                .order_by(User.created_at.desc())
-                .paginate(page=page, per_page=9)
+        )
+        pagination = (
+            query.filter(
+                or_(
+                    User.added_by_id == current_user.id,
+                    consultas_exist.exists(),
+                )
             )
+            .order_by(User.created_at.desc())
+            .paginate(page=page, per_page=9)
+        )
         tutores_adicionados = pagination.items
     elif clinic_id:
         last_appt = (
@@ -3726,17 +3734,24 @@ def novo_animal():
     if scope == 'mine':
         query = Animal.query.filter(Animal.removido_em == None)
         if clinic_id:
-            pagination = (
-                query.filter(Animal.clinica_id == clinic_id)
-                .order_by(Animal.date_added.desc())
-                .paginate(page=page, per_page=9)
+            query = query.filter(Animal.clinica_id == clinic_id)
+        consultas_exist = (
+            db.session.query(Consulta.id)
+            .filter(
+                Consulta.animal_id == Animal.id,
+                Consulta.created_by == current_user.id,
             )
-        else:
-            pagination = (
-                query.filter_by(added_by_id=current_user.id)
-                .order_by(Animal.date_added.desc())
-                .paginate(page=page, per_page=9)
+        )
+        pagination = (
+            query.filter(
+                or_(
+                    Animal.added_by_id == current_user.id,
+                    consultas_exist.exists(),
+                )
             )
+            .order_by(Animal.date_added.desc())
+            .paginate(page=page, per_page=9)
+        )
     elif clinic_id:
         last_appt = (
             db.session.query(
