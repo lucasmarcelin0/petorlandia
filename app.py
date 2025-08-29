@@ -5759,6 +5759,75 @@ def deletar_orcamento_item(item_id):
     return jsonify({'total': float(consulta.total_orcamento)}), 200
 
 
+@app.route('/agenda')
+@login_required
+def agenda():
+    """Renderiza a agenda com FullCalendar."""
+    return render_template('agenda.html')
+
+
+@app.route('/api/events', methods=['GET', 'POST'])
+@login_required
+def api_events():
+    """Lista ou cria eventos da agenda."""
+    if request.method == 'GET':
+        eventos = Event.query.all()
+        return jsonify([
+            {
+                'id': e.id,
+                'title': e.title,
+                'start': e.start.isoformat(),
+                'end': e.end.isoformat() if e.end else None,
+            }
+            for e in eventos
+        ])
+
+    if current_user.worker not in ['veterinario', 'colaborador', 'admin']:
+        abort(403)
+
+    data = request.get_json() or {}
+    titulo = data.get('title')
+    inicio = data.get('start')
+    fim = data.get('end')
+    if not titulo or not inicio:
+        return jsonify({'error': 'Dados inválidos'}), 400
+    evento = Event(
+        title=titulo,
+        start=datetime.fromisoformat(inicio),
+        end=datetime.fromisoformat(fim) if fim else None,
+    )
+    db.session.add(evento)
+    db.session.commit()
+    return jsonify({'id': evento.id}), 201
+
+
+@app.route('/api/events/<int:event_id>', methods=['PUT', 'DELETE'])
+@login_required
+def api_event_detail(event_id):
+    """Edita ou exclui um evento."""
+    evento = Event.query.get_or_404(event_id)
+    if current_user.worker not in ['veterinario', 'colaborador', 'admin']:
+        abort(403)
+
+    if request.method == 'DELETE':
+        db.session.delete(evento)
+        db.session.commit()
+        return '', 204
+
+    data = request.get_json() or {}
+    titulo = data.get('title')
+    inicio = data.get('start')
+    fim = data.get('end')
+    if titulo is not None:
+        evento.title = titulo
+    if inicio is not None:
+        evento.start = datetime.fromisoformat(inicio)
+    if fim is not None:
+        evento.end = datetime.fromisoformat(fim) if fim else None
+    db.session.commit()
+    return jsonify({'id': evento.id})
+
+
 if __name__ == "__main__":
     # Usa a porta 8080 se existir no ambiente (como no Docker), senão usa 5000
     port = int(os.environ.get("PORT", 5000))
