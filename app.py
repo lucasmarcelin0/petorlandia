@@ -2022,6 +2022,33 @@ def clinic_dashboard(clinica_id):
     return render_template('clinic_dashboard.html', clinic=clinic, staff=staff)
 
 
+@app.route('/clinica/<int:clinica_id>/funcionarios', methods=['GET', 'POST'])
+@login_required
+def clinic_staff(clinica_id):
+    clinic = Clinica.query.get_or_404(clinica_id)
+    if current_user.id != clinic.owner_id:
+        abort(403)
+    if request.method == 'POST':
+        email = request.form.get('email')
+        user = User.query.filter_by(email=email).first()
+        if not user:
+            flash('Usuário não encontrado', 'danger')
+        else:
+            staff = ClinicStaff.query.filter_by(clinic_id=clinic.id, user_id=user.id).first()
+            if staff:
+                flash('Funcionário já está na clínica', 'warning')
+            else:
+                staff = ClinicStaff(clinic_id=clinic.id, user_id=user.id)
+                db.session.add(staff)
+                user.clinica_id = clinic.id
+                db.session.add(user)
+                db.session.commit()
+                flash('Funcionário adicionado. Defina as permissões.', 'success')
+                return redirect(url_for('clinic_staff_permissions', clinica_id=clinic.id, user_id=user.id))
+    staff_members = ClinicStaff.query.filter_by(clinic_id=clinic.id).all()
+    return render_template('clinic_staff_list.html', clinic=clinic, staff_members=staff_members)
+
+
 @app.route('/clinica/<int:clinica_id>/funcionario/<int:user_id>/permissoes', methods=['GET', 'POST'])
 @login_required
 def clinic_staff_permissions(clinica_id, user_id):
