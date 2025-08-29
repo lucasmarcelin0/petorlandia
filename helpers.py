@@ -7,6 +7,7 @@ from functools import wraps
 
 from datetime import date
 from datetime import datetime
+from itertools import groupby
 from dateutil.relativedelta import relativedelta
 from sqlalchemy import case
 
@@ -179,4 +180,16 @@ def has_schedule_conflict(veterinario_id, dia_semana, hora_inicio, hora_fim, exc
         if not (hora_fim <= existente.hora_inicio or hora_inicio >= existente.hora_fim):
             return True
     return False
+
+
+def group_appointments_by_day(appointments):
+    """Group appointments by date.
+
+    Returns a list of tuples ``(date, [appointments])`` ordered by day.
+    """
+    sorted_appts = sorted(appointments, key=lambda a: a.scheduled_at)
+    return [
+        (day, list(items))
+        for day, items in groupby(sorted_appts, key=lambda a: a.scheduled_at.date())
+    ]
 

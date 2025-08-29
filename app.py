@@ -193,6 +193,7 @@ from helpers import (
     is_slot_available,
     clinicas_do_usuario,
     has_schedule_conflict,
+    group_appointments_by_day,
 )
 
 
@@ -1963,6 +1964,7 @@ def clinic_detail(clinica_id):
         .order_by(Appointment.scheduled_at)
         .all()
     )
+    appointments_grouped = group_appointments_by_day(appointments)
     return render_template(
         'clinic_detail.html',
         clinica=clinica,
@@ -1973,6 +1975,7 @@ def clinic_detail(clinica_id):
         veterinarios=veterinarios,
         vet_schedule_forms=vet_schedule_forms,
         appointments=appointments,
+        appointments_grouped=appointments_grouped,
         pode_editar=pode_editar,
     )
 
@@ -5719,7 +5722,13 @@ def appointments():
                 .all()
             )
             form = None
-        return render_template('appointments.html', appointments=appointments, form=form)
+        appointments_grouped = group_appointments_by_day(appointments)
+        return render_template(
+            'appointments.html',
+            appointments=appointments,
+            appointments_grouped=appointments_grouped,
+            form=form,
+        )
 
 
 @app.route('/appointments/<int:veterinario_id>/schedule/<int:horario_id>/edit', methods=['POST'])
