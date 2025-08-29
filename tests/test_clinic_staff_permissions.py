@@ -22,6 +22,7 @@ def login(monkeypatch, user):
 def test_dashboard_tabs_respect_permissions(monkeypatch, app):
     client = app.test_client()
     with app.app_context():
+        db.drop_all()
         db.create_all()
         clinic = Clinica(nome="Clinic")
         owner = User(name="Owner", email="o@example.com", password_hash="x")
@@ -38,3 +39,26 @@ def test_dashboard_tabs_respect_permissions(monkeypatch, app):
         resp = client.get(f"/clinica/{clinic.id}/dashboard")
         assert b"Clientes" in resp.data
         assert b"Animais" not in resp.data
+
+
+def test_owner_can_add_staff(monkeypatch, app):
+    client = app.test_client()
+    with app.app_context():
+        db.drop_all()
+        db.create_all()
+        clinic = Clinica(nome="Clinic")
+        owner = User(name="Owner", email="o@example.com", password_hash="x")
+        staff_user = User(name="Staff", email="s@example.com", password_hash="y")
+        db.session.add_all([clinic, owner, staff_user])
+        db.session.commit()
+        clinic.owner_id = owner.id
+        db.session.commit()
+        login(monkeypatch, owner)
+        resp = client.post(
+            f"/clinica/{clinic.id}/funcionarios",
+            data={"email": "s@example.com"},
+            follow_redirects=True,
+        )
+        assert b"Permiss\xc3\xb5es do Funcion\xc3\xa1rio" in resp.data
+        staff = ClinicStaff.query.filter_by(clinic_id=clinic.id, user_id=staff_user.id).first()
+        assert staff is not None
