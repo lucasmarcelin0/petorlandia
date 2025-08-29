@@ -219,14 +219,13 @@ def ensure_clinic_access(clinica_id):
 def get_animal_or_404(animal_id):
     """Return animal if accessible to current user, otherwise 404."""
     animal = Animal.query.get_or_404(animal_id)
-    ensure_clinic_access(animal.clinica_id)
     return animal
 
 
 def get_consulta_or_404(consulta_id):
     """Return consulta if accessible to current user, otherwise 404."""
     consulta = Consulta.query.get_or_404(consulta_id)
-    ensure_clinic_access(consulta.animal.clinica_id if consulta.animal else None)
+    ensure_clinic_access(consulta.clinica_id)
     return consulta
 
 # ----------------------------------------------------------------
@@ -1401,10 +1400,16 @@ def ficha_animal(animal_id):
     animal = get_animal_or_404(animal_id)
     tutor = animal.owner
 
-    consultas = (Consulta.query
-                 .filter_by(animal_id=animal.id, status='finalizada')
-                 .order_by(Consulta.created_at.desc())
-                 .all())
+    consultas = (
+        Consulta.query
+        .filter_by(
+            animal_id=animal.id,
+            status='finalizada',
+            clinica_id=current_user_clinic_id(),
+        )
+        .order_by(Consulta.created_at.desc())
+        .all()
+    )
 
     blocos_prescricao = BlocoPrescricao.query.filter_by(animal_id=animal.id).all()
     blocos_exames = BlocoExames.query.filter_by(animal_id=animal.id).all()
@@ -1547,6 +1552,7 @@ def consulta_qr():
 
     # Aqui você já deve ter carregado o animal
     animal = get_animal_or_404(animal_id)
+    clinica_id = current_user_clinic_id()
 
     # Idade e unidade (anos/meses)
     idade = ''
@@ -1571,13 +1577,13 @@ def consulta_qr():
 
     # Lógica adicional
     tutor = animal.owner
-    consulta = Consulta.query.filter_by(animal_id=animal.id).order_by(Consulta.id.desc()).first()
+    consulta = (
+        Consulta.query
+        .filter_by(animal_id=animal.id, clinica_id=clinica_id)
+        .order_by(Consulta.id.desc())
+        .first()
+    )
     tutor_form = EditProfileForm(obj=tutor)
-    clinica_id = None
-    if current_user.worker == 'veterinario' and getattr(current_user, 'veterinario', None):
-        clinica_id = current_user.veterinario.clinica_id
-    elif current_user.clinica_id:
-        clinica_id = current_user.clinica_id
 
     servicos = []
     if clinica_id:
@@ -1613,7 +1619,8 @@ def consulta_direct(animal_id):
         abort(403)
 
     animal = get_animal_or_404(animal_id)
-    tutor  = animal.owner
+    tutor = animal.owner
+    clinica_id = current_user_clinic_id()
 
     edit_id = request.args.get('c', type=int)
     edit_mode = False
@@ -1623,13 +1630,18 @@ def consulta_direct(animal_id):
             consulta = get_consulta_or_404(edit_id)
             edit_mode = True
         else:
-            consulta = (Consulta.query
-                        .filter_by(animal_id=animal.id, status='in_progress')
-                        .first())
+            consulta = (
+                Consulta.query
+                .filter_by(animal_id=animal.id, status='in_progress', clinica_id=clinica_id)
+                .first()
+            )
             if not consulta:
-                consulta = Consulta(animal_id=animal.id,
-                                    created_by=current_user.id,
-                                    status='in_progress')
+                consulta = Consulta(
+                    animal_id=animal.id,
+                    created_by=current_user.id,
+                    clinica_id=clinica_id,
+                    status='in_progress'
+                )
                 db.session.add(consulta)
                 db.session.commit()
     else:
@@ -1639,7 +1651,7 @@ def consulta_direct(animal_id):
     if current_user.worker == 'veterinario':
         historico = (
             Consulta.query
-            .filter_by(animal_id=animal.id, status='finalizada')
+            .filter_by(animal_id=animal.id, status='finalizada', clinica_id=clinica_id)
             .order_by(Consulta.created_at.desc())
             .limit(10)
             .all()
@@ -1675,11 +1687,6 @@ def consulta_direct(animal_id):
             idade = ''
         if len(partes) > 1:
             idade_unidade = partes[1]
-    clinica_id = None
-    if current_user.worker == 'veterinario' and getattr(current_user, 'veterinario', None):
-        clinica_id = current_user.veterinario.clinica_id
-    elif current_user.clinica_id:
-        clinica_id = current_user.clinica_id
 
     servicos = []
     if clinica_id:
@@ -2503,6 +2510,7 @@ def update_consulta(consulta_id):
         nova = Consulta(
             animal_id=consulta.animal_id,
             created_by=current_user.id,
+            clinica_id=consulta.clinica_id,
             status='in_progress'
         )
         db.session.add(nova)
@@ -2514,7 +2522,11 @@ def update_consulta(consulta_id):
     if 'application/json' in request.headers.get('Accept', ''):
         historico = (
             Consulta.query
-            .filter_by(animal_id=consulta.animal_id, status='finalizada')
+            .filter_by(
+                animal_id=consulta.animal_id,
+                status='finalizada',
+                clinica_id=consulta.clinica_id,
+            )
             .order_by(Consulta.created_at.desc())
             .all()
         )
@@ -3548,6 +3560,7 @@ def novo_animal():
         consulta = Consulta(
             animal_id=animal.id,
             created_by=current_user.id,
+            clinica_id=current_user_clinic_id(),
             status='in_progress'
         )
         db.session.add(consulta)
@@ -5740,7 +5753,7 @@ def deletar_orcamento_item(item_id):
     if current_user.worker != 'veterinario':
         return jsonify({'success': False, 'message': 'Apenas veterinários podem remover itens.'}), 403
     consulta = item.consulta
-    ensure_clinic_access(consulta.animal.clinica_id if consulta.animal else None)
+    ensure_clinic_access(consulta.clinica_id)
     db.session.delete(item)
     db.session.commit()
     return jsonify({'total': float(consulta.total_orcamento)}), 200

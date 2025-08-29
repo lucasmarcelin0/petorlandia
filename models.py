@@ -432,6 +432,7 @@ class Consulta(db.Model):
         db.ForeignKey('user.id', ondelete='CASCADE'),
         nullable=False,
     )  # veterinário
+    clinica_id = db.Column(db.Integer, db.ForeignKey('clinica.id'), nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
     # Campos principais da consulta
@@ -452,6 +453,7 @@ class Consulta(db.Model):
         foreign_keys=[created_by],
         backref=db.backref('consultas', cascade='all, delete-orphan'),
     )
+    clinica = db.relationship('Clinica', backref=db.backref('consultas', cascade='all, delete-orphan'))
 
     @property
     def total_orcamento(self):
