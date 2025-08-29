@@ -5804,7 +5804,15 @@ def edit_appointment(appointment_id):
             user_clinic = current_user.veterinario.clinica_id
         else:
             user_clinic = current_user.clinica_id
-        if appointment.clinica_id != user_clinic:
+
+        # Some legacy appointments might not have `clinica_id` stored.
+        # In that case, fall back to the clinic of the assigned veterinarian
+        # to validate access instead of denying with a 403.
+        appointment_clinic = appointment.clinica_id
+        if appointment_clinic is None and appointment.veterinario:
+            appointment_clinic = appointment.veterinario.clinica_id
+
+        if appointment_clinic != user_clinic:
             abort(403)
     elif current_user.role != 'admin' and appointment.tutor_id != current_user.id:
         abort(403)
