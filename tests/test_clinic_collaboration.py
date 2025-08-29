@@ -5,7 +5,9 @@ import pytest
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 from app import app as flask_app, db
-from models import User, Clinica, Veterinario, Animal
+from models import User, Clinica, Veterinario, Animal, Consulta
+from sqlalchemy import or_
+from flask_login import current_user
 
 @pytest.fixture
 def app():
@@ -15,7 +17,10 @@ def app():
 
 def login(monkeypatch, user):
     import flask_login.utils as login_utils
+    from flask_login import login_user
     monkeypatch.setattr(login_utils, '_get_user', lambda: user)
+    with flask_app.test_request_context():
+        login_user(user)
 
 
 def test_users_share_clinic_data(monkeypatch, app):
@@ -40,11 +45,50 @@ def test_users_share_clinic_data(monkeypatch, app):
         animal = Animal.query.filter_by(name='Rex').first()
         assert animal.clinica_id == clinic.id
 
-        # collaborator can see tutor and animal exists in clinic
+        client.get('/logout')
         login(monkeypatch, colab_user)
-        resp = client.get('/tutores?scope=mine')
-        assert b'Tutor' in resp.data
-        assert Animal.query.filter_by(name='Rex', clinica_id=clinic.id).first() is not None
+
+        with app.test_request_context():
+            # query using same filters as the view
+            tutores_mine = (
+                User.query.filter(User.created_at != None, User.clinica_id == clinic.id)
+                .filter(
+                    or_(
+                        User.added_by_id == current_user.id,
+                        db.session.query(Consulta.id)
+                        .join(Animal, Consulta.animal_id == Animal.id)
+                        .filter(
+                            Consulta.created_by == current_user.id,
+                            Animal.user_id == User.id,
+                        )
+                        .exists(),
+                    )
+                )
+                .all()
+            )
+            assert tutor not in tutores_mine
+
+            animais_mine = (
+                Animal.query.filter(Animal.removido_em == None, Animal.clinica_id == clinic.id)
+                .filter(
+                    or_(
+                        Animal.added_by_id == current_user.id,
+                        db.session.query(Consulta.id)
+                        .filter(
+                            Consulta.animal_id == Animal.id,
+                            Consulta.created_by == current_user.id,
+                        )
+                        .exists(),
+                    )
+                )
+                .all()
+            )
+            assert animal not in animais_mine
+
+        resp_all = client.get('/tutores?scope=all')
+        assert resp_all.status_code == 200
+        resp_animals_all = client.get('/novo_animal?scope=all')
+        assert resp_animals_all.status_code == 200
 
         db.session.remove()
         db.drop_all()

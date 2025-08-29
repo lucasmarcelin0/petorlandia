@@ -13,6 +13,7 @@ def app():
 def test_owner_manage_employees(monkeypatch, app):
     client = app.test_client()
     with app.app_context():
+        db.drop_all()
         db.create_all()
         owner = User(name="Owner", email="owner@example.com", password_hash="x")
         clinica = Clinica(nome="Clinica", owner=owner)
@@ -59,6 +60,7 @@ def test_owner_manage_employees(monkeypatch, app):
 def test_schedule_grouped_by_day(monkeypatch, app):
     client = app.test_client()
     with app.app_context():
+        db.drop_all()
         db.create_all()
         owner = User(name="Owner2", email="owner2@example.com", password_hash="x")
         clinica = Clinica(nome="Clinica2", owner=owner)
