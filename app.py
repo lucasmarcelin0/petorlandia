@@ -1127,13 +1127,19 @@ def deletar_animal(animal_id):
     animal = get_animal_or_404(animal_id)
 
     if animal.removido_em:
-        flash('Animal já foi removido anteriormente.', 'warning')
-        return redirect(url_for('ficha_animal', animal_id=animal.id))
+        message = 'Animal já foi removido anteriormente.'
+        if 'application/json' in request.headers.get('Accept', ''):
+            return jsonify(message=message, category='warning'), 400
+        flash(message, 'warning')
+        return redirect(request.referrer or url_for('ficha_animal', animal_id=animal.id))
 
     animal.removido_em = datetime.utcnow()
     db.session.commit()
-    flash('Animal marcado como removido. Histórico preservado.', 'success')
-    return redirect(url_for('list_animals'))
+    message = 'Animal marcado como removido. Histórico preservado.'
+    if 'application/json' in request.headers.get('Accept', ''):
+        return jsonify(message=message, category='success', deleted=True)
+    flash(message, 'success')
+    return redirect(request.referrer or url_for('list_animals'))
 
 
 @app.route('/termo/interesse/<int:animal_id>/<int:user_id>', methods=['GET', 'POST'])
