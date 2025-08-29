@@ -194,6 +194,7 @@ from helpers import (
     clinicas_do_usuario,
     has_schedule_conflict,
     group_appointments_by_day,
+    group_vet_schedules_by_day,
 )
 
 
@@ -1965,6 +1966,10 @@ def clinic_detail(clinica_id):
         .all()
     )
     appointments_grouped = group_appointments_by_day(appointments)
+    grouped_vet_schedules = {
+        v.id: group_vet_schedules_by_day(v.horarios)
+        for v in veterinarios
+    }
     return render_template(
         'clinic_detail.html',
         clinica=clinica,
@@ -1976,6 +1981,7 @@ def clinic_detail(clinica_id):
         vet_schedule_forms=vet_schedule_forms,
         appointments=appointments,
         appointments_grouped=appointments_grouped,
+        grouped_vet_schedules=grouped_vet_schedules,
         pode_editar=pode_editar,
     )
 

@@ -193,3 +193,21 @@ def group_appointments_by_day(appointments):
         for day, items in groupby(sorted_appts, key=lambda a: a.scheduled_at.date())
     ]
 
+
+def group_vet_schedules_by_day(schedules):
+    """Group veterinarian schedules by weekday.
+
+    Returns a dict mapping each weekday to a list of formatted time ranges.
+    The weekdays are ordered from Monday to Sunday and the time ranges are
+    ordered by start time.
+    """
+    day_order = ['Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado', 'Domingo']
+    sorted_scheds = sorted(schedules, key=lambda s: (day_order.index(s.dia_semana), s.hora_inicio))
+    return {
+        dia: [
+            f"{s.hora_inicio.strftime('%H:%M')} - {s.hora_fim.strftime('%H:%M')}"
+            for s in items
+        ]
+        for dia, items in groupby(sorted_scheds, key=lambda s: s.dia_semana)
+    }
+
