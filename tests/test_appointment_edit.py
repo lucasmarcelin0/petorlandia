@@ -74,7 +74,8 @@ def test_vet_can_edit_appointment_date_time_and_vet(client, monkeypatch):
     resp = client.post(f'/appointments/{appt_id}/edit', json={
         'date': '2024-05-02',
         'time': '11:30',
-        'veterinario_id': 2
+        'veterinario_id': 2,
+        'notes': 'Trazer exames'
     })
     assert resp.status_code == 200
     assert resp.get_json()['success'] is True
@@ -82,3 +83,4 @@ def test_vet_can_edit_appointment_date_time_and_vet(client, monkeypatch):
         appt = Appointment.query.get(appt_id)
         assert appt.veterinario_id == 2
         assert appt.scheduled_at == datetime(2024,5,2,11,30)
+        assert appt.notes == 'Trazer exames'

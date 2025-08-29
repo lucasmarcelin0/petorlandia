@@ -5664,6 +5664,7 @@ def edit_appointment(appointment_id):
         date_str = data.get('date')
         time_str = data.get('time')
         vet_id = data.get('veterinario_id')
+        notes = data.get('notes')
         if not date_str or not time_str or not vet_id:
             return jsonify({'success': False, 'message': 'Dados incompletos.'}), 400
         try:
@@ -5680,6 +5681,8 @@ def edit_appointment(appointment_id):
             return jsonify({'success': False, 'message': 'Horário indisponível.'}), 400
         appointment.veterinario_id = vet_id
         appointment.scheduled_at = scheduled_at
+        if notes is not None:
+            appointment.notes = notes
         db.session.commit()
         return jsonify({'success': True})
 
