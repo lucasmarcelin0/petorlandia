@@ -2225,7 +2225,25 @@ def tutores():
 
     # — GET com paginação —
     page = request.args.get('page', 1, type=int)
-    if current_user.clinica_id:
+    scope = request.args.get('scope', 'all')
+    if scope == 'mine':
+        query = User.query
+        if current_user.clinica_id:
+            query = query.filter(User.clinica_id == current_user.clinica_id)
+        conditions = [User.added_by_id == current_user.id]
+        if current_user.veterinario:
+            conditions.append(
+                User.appointments.any(
+                    Appointment.veterinario_id == current_user.veterinario.id
+                )
+            )
+        pagination = (
+            query.filter(or_(*conditions))
+            .order_by(User.created_at.desc())
+            .paginate(page=page, per_page=9)
+        )
+        tutores_adicionados = pagination.items
+    elif current_user.clinica_id:
         last_appt = (
             db.session.query(
                 Appointment.tutor_id,
@@ -2256,7 +2274,8 @@ def tutores():
     return render_template(
         'tutores.html',
         tutores_adicionados=tutores_adicionados,
-        pagination=pagination
+        pagination=pagination,
+        scope=scope
     )
 
 
@@ -3696,7 +3715,24 @@ def novo_animal():
 
     # GET: lista de animais adicionados para exibição
     page = request.args.get('page', 1, type=int)
-    if current_user.clinica_id:
+    scope = request.args.get('scope', 'all')
+    if scope == 'mine':
+        query = Animal.query.filter(Animal.removido_em == None)
+        if current_user.clinica_id:
+            query = query.filter(Animal.clinica_id == current_user.clinica_id)
+        conditions = [Animal.added_by_id == current_user.id]
+        if current_user.veterinario:
+            conditions.append(
+                Animal.appointments.any(
+                    Appointment.veterinario_id == current_user.veterinario.id
+                )
+            )
+        pagination = (
+            query.filter(or_(*conditions))
+            .order_by(Animal.date_added.desc())
+            .paginate(page=page, per_page=9)
+        )
+    elif current_user.clinica_id:
         last_appt = (
             db.session.query(
                 Appointment.animal_id,
@@ -3740,7 +3776,8 @@ def novo_animal():
         animais_adicionados=animais_adicionados,
         pagination=pagination,
         species_list=species_list,
-        breed_list=breed_list
+        breed_list=breed_list,
+        scope=scope
     )
 
 
