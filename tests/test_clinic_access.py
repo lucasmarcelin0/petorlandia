@@ -5,7 +5,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')
 
 import pytest
 from app import app as flask_app, db
-from models import User, Clinica, Veterinario, Animal
+from models import User, Clinica, Veterinario, Animal, Consulta
 
 
 @pytest.fixture
@@ -63,7 +63,7 @@ def test_admin_can_access_any_clinic(monkeypatch, app):
         assert resp.status_code == 200
 
 
-def test_vet_cannot_access_other_clinic_consulta(monkeypatch, app):
+def test_vet_can_access_other_clinic_consulta(monkeypatch, app):
     client = app.test_client()
     with app.app_context():
         db.create_all()
@@ -73,14 +73,24 @@ def test_vet_cannot_access_other_clinic_consulta(monkeypatch, app):
         animal = Animal(name="Rex", owner=tutor, clinica=c2)
         user = User(name="User", email="user2@example.com", password_hash="x", worker="veterinario")
         vet = Veterinario(user=user, crmv="123", clinica=c1)
-        db.session.add_all([c1, c2, tutor, animal, user, vet])
+        other_user = User(name="OtherVet", email="other@example.com", password_hash="z", worker="veterinario")
+        vet2 = Veterinario(user=other_user, crmv="999", clinica=c2)
+        db.session.add_all([c1, c2, tutor, animal, user, vet, other_user, vet2])
+        db.session.commit()
+        consulta_c2 = Consulta(animal_id=animal.id, created_by=other_user.id, clinica_id=c2.id,
+                               queixa_principal="dados c2", status='in_progress')
+        db.session.add(consulta_c2)
         db.session.commit()
         login(monkeypatch, user)
         resp = client.get(f"/consulta/{animal.id}")
-        assert resp.status_code == 404
+        assert resp.status_code == 200
+        consulta_c1 = Consulta.query.filter_by(animal_id=animal.id, clinica_id=c1.id).first()
+        assert consulta_c1 is not None
+        assert consulta_c1.id != consulta_c2.id
+        assert consulta_c1.queixa_principal is None
 
 
-def test_colaborador_cannot_access_other_clinic_consulta(monkeypatch, app):
+def test_colaborador_can_access_other_clinic_consulta(monkeypatch, app):
     client = app.test_client()
     with app.app_context():
         db.create_all()
@@ -94,7 +104,7 @@ def test_colaborador_cannot_access_other_clinic_consulta(monkeypatch, app):
         db.session.commit()
         login(monkeypatch, colaborador)
         resp = client.get(f"/consulta/{animal.id}")
-        assert resp.status_code == 404
+        assert resp.status_code == 200
 
 
 def test_admin_can_access_any_consulta(monkeypatch, app):
