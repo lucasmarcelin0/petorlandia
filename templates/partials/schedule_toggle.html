@@ -1,0 +1,95 @@
+<div class="card mb-4">
+  <div class="card-header d-flex justify-content-center">
+    <div class="btn-group" id="agenda-toggle">
+      <button class="btn btn-outline-primary active" data-source="user">Minha Agenda</button>
+      {% if clinic_id %}
+      <button class="btn btn-outline-primary" data-source="clinic">Agenda da Clínica</button>
+      {% endif %}
+    </div>
+  </div>
+  <div class="card-body p-0">
+    <div id="shared-calendar"></div>
+  </div>
+</div>
+
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.8/main.min.css">
+<script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.8/main.min.js"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+  const calendarEl = document.getElementById('shared-calendar');
+  const toggle = document.getElementById('agenda-toggle');
+  let source = 'user';
+
+  function eventUrl() {
+    if (source === 'clinic') {
+      return '/api/clinic_events/{{ clinic_id }}';
+    }
+    return '/api/events';
+  }
+
+  const calendar = new FullCalendar.Calendar(calendarEl, {
+    initialView: 'dayGridMonth',
+    selectable: true,
+    editable: true,
+    events: eventUrl(),
+    eventClick: function(info) {
+      if (confirm('Remover este evento?')) {
+        fetch('/api/events/' + info.event.id, {
+          method: 'DELETE',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': '{{ csrf_token() if csrf_token is defined else '' }}'
+          }
+        }).then(function(response) {
+          if (!response.ok) throw new Error('Erro ao remover evento');
+          calendar.refetchEvents();
+        }).catch(function(error) { console.error(error); });
+      }
+    },
+    select: function(info) {
+      const data = { title: 'Novo Evento', start: info.startStr, end: info.endStr };
+      fetch('/api/events', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-CSRFToken': '{{ csrf_token() if csrf_token is defined else '' }}'
+        },
+        body: JSON.stringify(data)
+      }).then(function(response) {
+        if (!response.ok) throw new Error('Erro ao criar evento');
+        return response.json();
+      }).then(function() {
+        calendar.refetchEvents();
+      }).catch(function(error) { console.error(error); });
+    },
+    eventDrop: function(info) {
+      const data = { start: info.event.startStr, end: info.event.endStr };
+      fetch('/api/events/' + info.event.id, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-CSRFToken': '{{ csrf_token() if csrf_token is defined else '' }}'
+        },
+        body: JSON.stringify(data)
+      }).then(function(response) {
+        if (!response.ok) throw new Error('Erro ao atualizar evento');
+        calendar.refetchEvents();
+      }).catch(function(error) { console.error(error); });
+    }
+  });
+
+  calendar.render();
+
+  if (toggle) {
+    toggle.querySelectorAll('button').forEach(function(btn) {
+      btn.addEventListener('click', function() {
+        toggle.querySelectorAll('button').forEach(b => b.classList.remove('active'));
+        this.classList.add('active');
+        source = this.dataset.source;
+        calendar.setOption('events', eventUrl());
+        calendar.refetchEvents();
+      });
+    });
+  }
+});
+</script>
