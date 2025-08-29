@@ -668,6 +668,7 @@ def list_animals():
     breed_id = request.args.get('breed_id', type=int)
     sex = request.args.get('sex')
     age = request.args.get('age')
+    show_all = _is_admin() and request.args.get('show_all') == '1'
 
     # Base query: ignora animais removidos
     query = Animal.query.filter(Animal.removido_em == None)
@@ -676,8 +677,8 @@ def list_animals():
     if modo and modo.lower() != 'todos':
         query = query.filter_by(modo=modo)
     else:
-        # Evita mostrar adotados para usuários não autorizados
-        if not current_user.is_authenticated or current_user.worker not in ['veterinario', 'colaborador']:
+        # Evita mostrar adotados para usuários não autorizados, exceto quando o admin opta por ver todos
+        if not show_all and (not current_user.is_authenticated or current_user.worker not in ['veterinario', 'colaborador']):
             query = query.filter(Animal.modo != 'adotado')
 
     if species_id:
@@ -691,7 +692,7 @@ def list_animals():
 
     # Veterinários só podem ver animais perdidos, à venda ou para adoção,
     # ou então animais cadastrados pela própria clínica
-    if current_user.is_authenticated and current_user.worker == 'veterinario':
+    if current_user.is_authenticated and current_user.worker == 'veterinario' and not show_all:
         allowed = ['perdido', 'venda', 'doação']
         if current_user.clinica_id:
             query = query.filter(
@@ -729,7 +730,8 @@ def list_animals():
         breed_id=breed_id,
         sex=sex,
         age=age,
-        is_admin=_is_admin()
+        is_admin=_is_admin(),
+        show_all=show_all
     )
 
 

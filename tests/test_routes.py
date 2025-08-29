@@ -143,6 +143,39 @@ def test_animals_page(monkeypatch, app):
     assert response.status_code == 200
 
 
+def test_admin_toggle_all_animals(monkeypatch, app):
+    client = app.test_client()
+
+    with app.app_context():
+        db.drop_all()
+        db.create_all()
+
+        admin = User(id=1, name='Admin', email='admin@test', role='admin')
+        admin.set_password('x')
+        tutor = User(id=2, name='Tutor', email='tutor@test')
+        tutor.set_password('x')
+        adopted = Animal(id=1, name='Adopted', modo='adotado', user_id=tutor.id)
+        available = Animal(id=2, name='Available', modo='doação', user_id=tutor.id)
+        db.session.add_all([admin, tutor, adopted, available])
+        db.session.commit()
+
+        import flask_login.utils as login_utils
+        monkeypatch.setattr(login_utils, '_get_user', lambda: admin)
+        monkeypatch.setattr(app_module, '_is_admin', lambda: True)
+
+        for idx, fn in enumerate(flask_app.template_context_processors[None]):
+            if fn.__name__ == 'inject_unread_count':
+                flask_app.template_context_processors[None][idx] = lambda: {'unread_messages': 0}
+
+        resp1 = client.get('/animals')
+        assert resp1.status_code == 200
+        assert b'Adopted' not in resp1.data
+
+        resp2 = client.get('/animals?show_all=1')
+        assert resp2.status_code == 200
+        assert b'Adopted' in resp2.data
+
+
 def test_payment_status_updates_from_api(monkeypatch, app):
     client = app.test_client()
 
