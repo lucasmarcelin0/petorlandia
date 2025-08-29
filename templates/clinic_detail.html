@@ -11,18 +11,18 @@
   {% if clinica.telefone %}<p><strong>Telefone:</strong> {{ clinica.telefone }}</p>{% endif %}
   {% if clinica.email %}<p><strong>Email:</strong> {{ clinica.email }}</p>{% endif %}
 
-  <ul class="nav nav-tabs mb-4 rounded shadow-sm bg-white pet-nav">
+  <ul class="nav nav-tabs mb-4 rounded shadow-sm bg-white pet-nav" id="clinicTabs" role="tablist">
     <li class="nav-item" role="presentation">
-      <a class="nav-link d-flex align-items-center gap-2" href="#veterinarios">
+      <button class="nav-link active d-flex align-items-center gap-2" id="veterinarios-tab" data-bs-toggle="tab" data-bs-target="#veterinarios" type="button" role="tab">
         <span class="icon-circle bg-primary text-white"><i class="fa-solid fa-users"></i></span>
         <span class="fw-semibold">Funcionários</span>
-      </a>
+      </button>
     </li>
     <li class="nav-item" role="presentation">
-      <a class="nav-link d-flex align-items-center gap-2" href="#agendamentos">
+      <button class="nav-link d-flex align-items-center gap-2" id="agendamentos-tab" data-bs-toggle="tab" data-bs-target="#agendamentos" type="button" role="tab">
         <span class="icon-circle bg-success text-white"><i class="fa-solid fa-calendar"></i></span>
         <span class="fw-semibold">Agenda</span>
-      </a>
+      </button>
     </li>
     <li class="nav-item" role="presentation">
       <a class="nav-link d-flex align-items-center gap-2" href="{{ url_for('list_animals') }}">
@@ -44,199 +44,205 @@
     </li>
   </ul>
 
-  {% if pode_editar %}
-  <button class="btn btn-secondary mt-3" onclick="toggleEditInfo()">Editar Informações</button>
-  <div id="edit-info" class="mt-4" style="display: none;">
-    <form method="post" class="mb-4" enctype="multipart/form-data">
-      {{ clinic_form.hidden_tag() }}
-      <div class="mb-3">
-        {{ clinic_form.nome.label }}
-        {{ clinic_form.nome(class="form-control") }}
+  <div class="tab-content">
+    <div class="tab-pane fade show active" id="veterinarios" role="tabpanel">
+      {% if pode_editar %}
+      <button class="btn btn-secondary mt-3" onclick="toggleEditInfo()">Editar Informações</button>
+      <div id="edit-info" class="mt-4" style="display: none;">
+        <form method="post" class="mb-4" enctype="multipart/form-data">
+          {{ clinic_form.hidden_tag() }}
+          <div class="mb-3">
+            {{ clinic_form.nome.label }}
+            {{ clinic_form.nome(class="form-control") }}
+          </div>
+          <div class="mb-3">
+            {{ clinic_form.cnpj.label }}
+            {{ clinic_form.cnpj(class="form-control") }}
+          </div>
+          <div class="mb-3">
+            {{ clinic_form.endereco.label }}
+            {{ clinic_form.endereco(class="form-control") }}
+          </div>
+          <div class="mb-3">
+            {{ clinic_form.telefone.label }}
+            {{ clinic_form.telefone(class="form-control") }}
+          </div>
+          <div class="mb-3">
+            {{ clinic_form.email.label }}
+            {{ clinic_form.email(class="form-control") }}
+          </div>
+          <div class="mb-3">
+            {{ clinic_form.logotipo.label }}
+            {{ photo_cropper(clinic_form.logotipo, clinic_form.photo_rotation, clinic_form.photo_zoom, clinic_form.photo_offset_x, clinic_form.photo_offset_y, clinica.logotipo, 150, 'clinic_logo', 'user') }}
+          </div>
+          {{ clinic_form.submit(class="btn btn-primary") }}
+        </form>
       </div>
-      <div class="mb-3">
-        {{ clinic_form.cnpj.label }}
-        {{ clinic_form.cnpj(class="form-control") }}
-      </div>
-      <div class="mb-3">
-        {{ clinic_form.endereco.label }}
-        {{ clinic_form.endereco(class="form-control") }}
-      </div>
-      <div class="mb-3">
-        {{ clinic_form.telefone.label }}
-        {{ clinic_form.telefone(class="form-control") }}
-      </div>
-      <div class="mb-3">
-        {{ clinic_form.email.label }}
-        {{ clinic_form.email(class="form-control") }}
-      </div>
-      <div class="mb-3">
-        {{ clinic_form.logotipo.label }}
-        {{ photo_cropper(clinic_form.logotipo, clinic_form.photo_rotation, clinic_form.photo_zoom, clinic_form.photo_offset_x, clinic_form.photo_offset_y, clinica.logotipo, 150, 'clinic_logo', 'user') }}
-      </div>
-      {{ clinic_form.submit(class="btn btn-primary") }}
-    </form>
-  </div>
-  {% endif %}
+      {% endif %}
 
-  <h3>Horários de Atendimento</h3>
-  <table class="table">
-    <thead>
-      <tr><th>Dia</th><th>Abre</th><th>Fecha</th>{% if pode_editar %}<th>Ações</th>{% endif %}</tr>
-    </thead>
-    <tbody>
-      {% for h in horarios %}
-        <tr>
-          <td>{{ h.dia_semana }}</td>
-          <td>{{ h.hora_abertura.strftime('%H:%M') }}</td>
-          <td>{{ h.hora_fechamento.strftime('%H:%M') }}</td>
-          {% if pode_editar %}
-          <td>
-            <form method="post" action="{{ url_for('delete_clinic_hour', clinica_id=clinica.id, horario_id=h.id) }}" class="d-inline">
-              {{ form.csrf_token }}
-              <button type="submit" class="btn btn-sm btn-outline-danger" onclick="return confirm('Excluir este horário?');">Excluir</button>
+      <h3 class="mt-4">Veterinários</h3>
+      <ul class="list-unstyled">
+        {% for v in veterinarios %}
+          <li>
+            {{ v.user.name }} (CRMV: {{ v.crmv }})
+            {% if pode_editar %}
+            <form method="post" action="{{ url_for('remove_veterinario', clinica_id=clinica.id, veterinario_id=v.id) }}" class="d-inline">
+              {{ vet_schedule_forms[v.id].csrf_token }}
+              <button type="submit" class="btn btn-sm btn-outline-danger ms-2">Remover</button>
             </form>
-          </td>
-          {% endif %}
-        </tr>
-      {% else %}
-        <tr><td colspan="{% if pode_editar %}4{% else %}3{% endif %}">Nenhum horário cadastrado.</td></tr>
-      {% endfor %}
-    </tbody>
-  </table>
-
-  {% if pode_editar %}
-    <button class="btn btn-secondary mt-3" onclick="toggleEditHours()">Editar Horários</button>
-    <div id="edit-hours" class="mt-4" style="display: none;">
+            {% endif %}
+            <ul class="ms-3">
+              {% for h in v.horarios %}
+                <li>
+                  {{ h.dia_semana }}: {{ h.hora_inicio.strftime('%H:%M') }} - {{ h.hora_fim.strftime('%H:%M') }}
+                  {% if pode_editar %}
+                  <form method="post" action="{{ url_for('delete_vet_schedule_clinic', clinica_id=clinica.id, veterinario_id=v.id, horario_id=h.id) }}" class="d-inline">
+                    {{ vet_schedule_forms[v.id].csrf_token }}
+                    <button type="submit" class="btn btn-sm btn-outline-danger ms-2">Excluir</button>
+                  </form>
+                  {% endif %}
+                </li>
+              {% else %}
+                <li>Sem horários cadastrados.</li>
+              {% endfor %}
+            </ul>
+            {% if pode_editar %}
+            <form method="post" class="ms-3 mb-3">
+              {{ vet_schedule_forms[v.id].hidden_tag() }}
+              <div style="display:none;">{{ vet_schedule_forms[v.id].veterinario_id() }}</div>
+              <div class="mb-2">
+                {{ vet_schedule_forms[v.id].dias_semana.label }}
+                {{ vet_schedule_forms[v.id].dias_semana(class="form-select", multiple=True, size=7) }}
+              </div>
+              <div class="mb-2">
+                {{ vet_schedule_forms[v.id].hora_inicio.label }}
+                {{ vet_schedule_forms[v.id].hora_inicio(class="form-control") }}
+              </div>
+              <div class="mb-2">
+                {{ vet_schedule_forms[v.id].hora_fim.label }}
+                {{ vet_schedule_forms[v.id].hora_fim(class="form-control") }}
+              </div>
+              <div class="mb-2">
+                {{ vet_schedule_forms[v.id].intervalo_inicio.label }}
+                {{ vet_schedule_forms[v.id].intervalo_inicio(class="form-control") }}
+              </div>
+              <div class="mb-2">
+                {{ vet_schedule_forms[v.id].intervalo_fim.label }}
+                {{ vet_schedule_forms[v.id].intervalo_fim(class="form-control") }}
+              </div>
+              {{ vet_schedule_forms[v.id].submit(class="btn btn-primary btn-sm") }}
+            </form>
+            {% endif %}
+          </li>
+        {% else %}
+          <li>Nenhum veterinário associado.</li>
+        {% endfor %}
+      </ul>
+      {% if pode_editar and vets_form.veterinario_id.choices %}
       <form method="post" class="mb-4">
-        {{ form.hidden_tag() }}
-      <div class="mb-3">
-        {{ form.clinica_id.label }}
-        {{ form.clinica_id(class="form-select") }}
-      </div>
-      <div class="mb-3">
-        {{ form.dias_semana.label }}
-        {{ form.dias_semana(class="form-select", multiple=True, size=7) }}
-        <div class="mt-2">
-          <button type="button" class="btn btn-sm btn-outline-secondary" onclick="selectDays('all')">Todos</button>
-          <button type="button" class="btn btn-sm btn-outline-secondary" onclick="selectDays('weekday')">Dias Úteis</button>
-          <button type="button" class="btn btn-sm btn-outline-secondary" onclick="selectDays('weekend')">Fins de Semana</button>
-          <button type="button" class="btn btn-sm btn-outline-secondary" onclick="selectDays('clear')">Limpar</button>
+        {{ vets_form.hidden_tag() }}
+        <div class="mb-3">
+          {{ vets_form.veterinario_id.label }}
+          {{ vets_form.veterinario_id(class="form-select") }}
         </div>
-      </div>
-      <div class="mb-3">
-        {{ form.hora_abertura.label }}
-        {{ form.hora_abertura(class="form-control") }}
-      </div>
-      <div class="mb-3">
-        {{ form.hora_fechamento.label }}
-        {{ form.hora_fechamento(class="form-control") }}
-      </div>
-      {{ form.submit(class="btn btn-primary") }}
-    </form>
-  </div>
-  {% endif %}
-
-  <h3 id="veterinarios">Veterinários</h3>
-  <ul class="list-unstyled">
-    {% for v in veterinarios %}
-      <li>
-        {{ v.user.name }} (CRMV: {{ v.crmv }})
-        {% if pode_editar %}
-        <form method="post" action="{{ url_for('remove_veterinario', clinica_id=clinica.id, veterinario_id=v.id) }}" class="d-inline">
-          {{ vet_schedule_forms[v.id].csrf_token }}
-          <button type="submit" class="btn btn-sm btn-outline-danger ms-2">Remover</button>
-        </form>
-        {% endif %}
-        <ul class="ms-3">
-          {% for h in v.horarios %}
-            <li>
-              {{ h.dia_semana }}: {{ h.hora_inicio.strftime('%H:%M') }} - {{ h.hora_fim.strftime('%H:%M') }}
-              {% if pode_editar %}
-              <form method="post" action="{{ url_for('delete_vet_schedule_clinic', clinica_id=clinica.id, veterinario_id=v.id, horario_id=h.id) }}" class="d-inline">
-                {{ vet_schedule_forms[v.id].csrf_token }}
-                <button type="submit" class="btn btn-sm btn-outline-danger ms-2">Excluir</button>
-              </form>
-              {% endif %}
-            </li>
-          {% else %}
-            <li>Sem horários cadastrados.</li>
-          {% endfor %}
-        </ul>
-        {% if pode_editar %}
-        <form method="post" class="ms-3 mb-3">
-          {{ vet_schedule_forms[v.id].hidden_tag() }}
-          <div style="display:none;">{{ vet_schedule_forms[v.id].veterinario_id() }}</div>
-          <div class="mb-2">
-            {{ vet_schedule_forms[v.id].dias_semana.label }}
-            {{ vet_schedule_forms[v.id].dias_semana(class="form-select", multiple=True, size=7) }}
-          </div>
-          <div class="mb-2">
-            {{ vet_schedule_forms[v.id].hora_inicio.label }}
-            {{ vet_schedule_forms[v.id].hora_inicio(class="form-control") }}
-          </div>
-          <div class="mb-2">
-            {{ vet_schedule_forms[v.id].hora_fim.label }}
-            {{ vet_schedule_forms[v.id].hora_fim(class="form-control") }}
-          </div>
-          <div class="mb-2">
-            {{ vet_schedule_forms[v.id].intervalo_inicio.label }}
-            {{ vet_schedule_forms[v.id].intervalo_inicio(class="form-control") }}
-          </div>
-          <div class="mb-2">
-            {{ vet_schedule_forms[v.id].intervalo_fim.label }}
-            {{ vet_schedule_forms[v.id].intervalo_fim(class="form-control") }}
-          </div>
-          {{ vet_schedule_forms[v.id].submit(class="btn btn-primary btn-sm") }}
-        </form>
-        {% endif %}
-      </li>
-    {% else %}
-      <li>Nenhum veterinário associado.</li>
-    {% endfor %}
-  </ul>
-  {% if pode_editar and vets_form.veterinario_id.choices %}
-  <form method="post" class="mb-4">
-    {{ vets_form.hidden_tag() }}
-    <div class="mb-3">
-      {{ vets_form.veterinario_id.label }}
-      {{ vets_form.veterinario_id(class="form-select") }}
+        {{ vets_form.submit(class="btn btn-primary") }}
+      </form>
+      {% endif %}
     </div>
-    {{ vets_form.submit(class="btn btn-primary") }}
-  </form>
-  {% endif %}
 
-  <h3 id="agendamentos">Agendamentos</h3>
-  <div id="clinic-calendar" class="mb-4"></div>
-  <table class="table">
-    <thead>
-      <tr>
-        <th>Data</th>
-        <th>Animal</th>
-        <th>Veterinário</th>
-        <th>Ações</th>
-      </tr>
-    </thead>
-    <tbody>
-      {% for a in appointments %}
-        <tr>
-          <td>{{ a.scheduled_at|format_datetime_brazil }}</td>
-          <td>{{ a.animal.name }}</td>
-          <td>{{ a.veterinario.user.name }}</td>
-          <td>
-            <div class="btn-group">
-              <a href="{{ url_for('ficha_animal', animal_id=a.animal_id) }}" class="btn btn-sm btn-outline-primary">📋 Ficha Animal</a>
-              <a href="{{ url_for('ficha_tutor', tutor_id=a.tutor_id) }}" class="btn btn-sm btn-outline-secondary">👤 Ficha Tutor</a>
-              {% if current_user.worker in ['veterinario', 'colaborador'] %}
-              <a href="{{ url_for('consulta_direct', animal_id=a.animal_id) }}" class="btn btn-sm btn-outline-success">🩺 Iniciar Consulta</a>
+    <div class="tab-pane fade" id="agendamentos" role="tabpanel">
+      <h3>Horários de Atendimento</h3>
+      <table class="table">
+        <thead>
+          <tr><th>Dia</th><th>Abre</th><th>Fecha</th>{% if pode_editar %}<th>Ações</th>{% endif %}</tr>
+        </thead>
+        <tbody>
+          {% for h in horarios %}
+            <tr>
+              <td>{{ h.dia_semana }}</td>
+              <td>{{ h.hora_abertura.strftime('%H:%M') }}</td>
+              <td>{{ h.hora_fechamento.strftime('%H:%M') }}</td>
+              {% if pode_editar %}
+              <td>
+                <form method="post" action="{{ url_for('delete_clinic_hour', clinica_id=clinica.id, horario_id=h.id) }}" class="d-inline">
+                  {{ form.csrf_token }}
+                  <button type="submit" class="btn btn-sm btn-outline-danger" onclick="return confirm('Excluir este horário?');">Excluir</button>
+                </form>
+              </td>
               {% endif %}
+            </tr>
+          {% else %}
+            <tr><td colspan="{% if pode_editar %}4{% else %}3{% endif %}">Nenhum horário cadastrado.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+
+      {% if pode_editar %}
+        <button class="btn btn-secondary mt-3" onclick="toggleEditHours()">Editar Horários</button>
+        <div id="edit-hours" class="mt-4" style="display: none;">
+          <form method="post" class="mb-4">
+            {{ form.hidden_tag() }}
+          <div class="mb-3">
+            {{ form.clinica_id.label }}
+            {{ form.clinica_id(class="form-select") }}
+          </div>
+          <div class="mb-3">
+            {{ form.dias_semana.label }}
+            {{ form.dias_semana(class="form-select", multiple=True, size=7) }}
+            <div class="mt-2">
+              <button type="button" class="btn btn-sm btn-outline-secondary" onclick="selectDays('all')">Todos</button>
+              <button type="button" class="btn btn-sm btn-outline-secondary" onclick="selectDays('weekday')">Dias Úteis</button>
+              <button type="button" class="btn btn-sm btn-outline-secondary" onclick="selectDays('weekend')">Fins de Semana</button>
+              <button type="button" class="btn btn-sm btn-outline-secondary" onclick="selectDays('clear')">Limpar</button>
             </div>
-          </td>
-        </tr>
-      {% else %}
-        <tr><td colspan="4">Nenhum agendamento encontrado.</td></tr>
-      {% endfor %}
-    </tbody>
-  </table>
+          </div>
+          <div class="mb-3">
+            {{ form.hora_abertura.label }}
+            {{ form.hora_abertura(class="form-control") }}
+          </div>
+          <div class="mb-3">
+            {{ form.hora_fechamento.label }}
+            {{ form.hora_fechamento(class="form-control") }}
+          </div>
+          {{ form.submit(class="btn btn-primary") }}
+        </form>
+      </div>
+      {% endif %}
+
+      <h3 class="mt-4">Agendamentos</h3>
+      <div id="clinic-calendar" class="mb-4"></div>
+      <table class="table">
+        <thead>
+          <tr>
+            <th>Data</th>
+            <th>Animal</th>
+            <th>Veterinário</th>
+            <th>Ações</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for a in appointments %}
+            <tr>
+              <td>{{ a.scheduled_at|format_datetime_brazil }}</td>
+              <td>{{ a.animal.name }}</td>
+              <td>{{ a.veterinario.user.name }}</td>
+              <td>
+                <div class="btn-group">
+                  <a href="{{ url_for('ficha_animal', animal_id=a.animal_id) }}" class="btn btn-sm btn-outline-primary">📋 Ficha Animal</a>
+                  <a href="{{ url_for('ficha_tutor', tutor_id=a.tutor_id) }}" class="btn btn-sm btn-outline-secondary">👤 Ficha Tutor</a>
+                  {% if current_user.worker in ['veterinario', 'colaborador'] %}
+                  <a href="{{ url_for('consulta_direct', animal_id=a.animal_id) }}" class="btn btn-sm btn-outline-success">🩺 Iniciar Consulta</a>
+                  {% endif %}
+                </div>
+              </td>
+            </tr>
+          {% else %}
+            <tr><td colspan="4">Nenhum agendamento encontrado.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
 </div>
 
 <!-- Modais da agenda -->
