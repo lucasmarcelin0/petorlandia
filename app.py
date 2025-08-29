@@ -1959,6 +1959,18 @@ def clinic_detail(clinica_id):
             db.session.commit()
             flash('Horário do funcionário salvo com sucesso.', 'success')
             return redirect(url_for('clinic_detail', clinica_id=clinica.id))
+    animais_adicionados = (
+        Animal.query
+        .filter_by(clinica_id=clinica_id)
+        .filter(Animal.removido_em == None)
+        .all()
+    )
+    tutores_adicionados = (
+        User.query
+        .filter_by(clinica_id=clinica_id)
+        .filter(or_(User.worker != 'veterinario', User.worker == None))
+        .all()
+    )
     appointments = (
         Appointment.query
         .filter_by(clinica_id=clinica_id)
@@ -1983,6 +1995,9 @@ def clinic_detail(clinica_id):
         appointments_grouped=appointments_grouped,
         grouped_vet_schedules=grouped_vet_schedules,
         pode_editar=pode_editar,
+        animais_adicionados=animais_adicionados,
+        tutores_adicionados=tutores_adicionados,
+        pagination=None,
     )
 
 

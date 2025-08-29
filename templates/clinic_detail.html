@@ -25,16 +25,16 @@
       </button>
     </li>
     <li class="nav-item" role="presentation">
-      <a class="nav-link d-flex align-items-center gap-2" href="{{ url_for('list_animals') }}">
+      <button class="nav-link d-flex align-items-center gap-2" id="animais-tab" data-bs-toggle="tab" data-bs-target="#animais" type="button" role="tab">
         <span class="icon-circle bg-danger text-white"><i class="fa-solid fa-paw"></i></span>
         <span class="fw-semibold">Animais</span>
-      </a>
+      </button>
     </li>
     <li class="nav-item" role="presentation">
-      <a class="nav-link d-flex align-items-center gap-2" href="{{ url_for('tutores') }}">
+      <button class="nav-link d-flex align-items-center gap-2" id="tutores-tab" data-bs-toggle="tab" data-bs-target="#tutores" type="button" role="tab">
         <span class="icon-circle bg-info text-white"><i class="fa-solid fa-user"></i></span>
         <span class="fw-semibold">Tutores</span>
-      </a>
+      </button>
     </li>
     <li class="nav-item" role="presentation">
       <a class="nav-link d-flex align-items-center gap-2" href="{{ url_for('loja') }}">
@@ -258,6 +258,12 @@
         </tbody>
       </table>
 
+    </div>
+    <div class="tab-pane fade" id="animais" role="tabpanel">
+      {% include 'partials/animais_adicionados.html' %}
+    </div>
+    <div class="tab-pane fade" id="tutores" role="tabpanel">
+      {% include 'partials/tutores_adicionados.html' %}
     </div>
   </div>
 </div>
