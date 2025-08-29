@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <link href="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.8/main.min.css" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.8/main.min.js"></script>
+  <script>
+    document.addEventListener('DOMContentLoaded', function() {
+      var calendarEl = document.getElementById('calendar');
+      var calendar = new FullCalendar.Calendar(calendarEl, {
+        initialView: 'dayGridMonth',
+        editable: true,
+        selectable: true,
+        events: '/api/events',
+        select: function(info) {
+          var title = prompt('Título do evento:');
+          if (title) {
+            fetch('/api/events', {
+              method: 'POST',
+              headers: {'Content-Type': 'application/json'},
+              body: JSON.stringify({title: title, start: info.startStr, end: info.endStr})
+            }).then(function(){ calendar.refetchEvents(); });
+          }
+          calendar.unselect();
+        },
+        eventDrop: updateEvent,
+        eventResize: updateEvent,
+        eventClick: function(info) {
+          if (confirm('Excluir evento?')) {
+            fetch('/api/events/' + info.event.id, {method: 'DELETE'})
+              .then(function(){ calendar.refetchEvents(); });
+          }
+        }
+      });
+      function updateEvent(info) {
+        fetch('/api/events/' + info.event.id, {
+          method: 'PUT',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({
+            title: info.event.title,
+            start: info.event.start.toISOString(),
+            end: info.event.end ? info.event.end.toISOString() : null
+          })
+        }).then(function(){ calendar.refetchEvents(); });
+      }
+      calendar.render();
+    });
+  </script>
+</head>
+<body>
+  <div id="calendar"></div>
+</body>
+</html>

@@ -675,6 +675,17 @@ event.listen(Appointment, 'before_update', Appointment._validate_subscription)
 event.listen(Appointment, 'before_insert', Appointment._set_clinica)
 event.listen(Appointment, 'before_update', Appointment._set_clinica)
 
+
+class Event(db.Model):
+    """Simple calendar event for agenda."""
+
+    id = db.Column(db.Integer, primary_key=True)
+    title = db.Column(db.String(200), nullable=False)
+    start = db.Column(db.DateTime, nullable=False)
+    end = db.Column(db.DateTime, nullable=True)
+
+
+
 class Medicamento(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     nome = db.Column(db.String(100), nullable=False)
