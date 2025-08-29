@@ -9,6 +9,11 @@ class Config:
         "postgresql://u82pgjdcmkbq7v:p0204cb9289674b66bfcbb9248eaf9d6a71e2dece2722fe22d6bd976c77b411e6@c2hbg00ac72j9d.cluster-czrs8kj4isg7.us-east-1.rds.amazonaws.com:5432/d2nnmcuqa8ljli",
     )
     SQLALCHEMY_TRACK_MODIFICATIONS = False
+    # Evita erros "server closed the connection unexpectedly" ao testar conexões do pool
+    SQLALCHEMY_ENGINE_OPTIONS = {
+        "pool_pre_ping": True,
+        "pool_recycle": 300,
+    }
     SESSION_TYPE = "filesystem"
     SESSION_PERMANENT = True
     PERMANENT_SESSION_LIFETIME = timedelta(days=365)
