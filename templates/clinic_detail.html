@@ -223,8 +223,41 @@
       {% endif %}
 
       <h3 class="mt-4">Agendamentos</h3>
-      <div id="clinic-calendar" class="mb-4"></div>
-      {% include 'partials/appointments_table.html' %}
+
+      {% with clinic_id = clinica.id %}
+        {% include 'partials/schedule_toggle.html' %}
+      {% endwith %}
+      <table class="table">
+        <thead>
+          <tr>
+            <th>Data</th>
+            <th>Animal</th>
+            <th>Veterinário</th>
+            <th>Ações</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for a in appointments %}
+            <tr>
+              <td>{{ a.scheduled_at|format_datetime_brazil }}</td>
+              <td>{{ a.animal.name }}</td>
+              <td>{{ a.veterinario.user.name }}</td>
+              <td>
+                <div class="btn-group">
+                  <a href="{{ url_for('ficha_animal', animal_id=a.animal_id) }}" class="btn btn-sm btn-outline-primary">📋 Ficha Animal</a>
+                  <a href="{{ url_for('ficha_tutor', tutor_id=a.tutor_id) }}" class="btn btn-sm btn-outline-secondary">👤 Ficha Tutor</a>
+                  {% if current_user.worker in ['veterinario', 'colaborador'] %}
+                  <a href="{{ url_for('consulta_direct', animal_id=a.animal_id) }}" class="btn btn-sm btn-outline-success">🩺 Iniciar Consulta</a>
+                  {% endif %}
+                </div>
+              </td>
+            </tr>
+          {% else %}
+            <tr><td colspan="4">Nenhum agendamento encontrado.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+
     </div>
   </div>
 </div>
@@ -294,84 +327,4 @@
 
 {% block scripts %}
 {{ super() }}
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.8/main.min.css">
-<script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.8/main.min.js"></script>
-<script>
-document.addEventListener('DOMContentLoaded', function() {
-  var calendarEl = document.getElementById('clinic-calendar');
-  if (calendarEl) {
-    var calendar = new FullCalendar.Calendar(calendarEl, {
-      initialView: 'dayGridMonth',
-      selectable: true,
-      editable: true,
-      events: '/api/events',
-      eventClick: function(info) {
-        if (confirm('Remover este evento?')) {
-          fetch('/api/events/' + info.event.id, {
-            method: 'DELETE',
-            headers: {
-              'Content-Type': 'application/json',
-              'X-CSRFToken': '{{ csrf_token() if csrf_token is defined else '' }}'
-            }
-          })
-          .then(function(response) {
-            if (!response.ok) throw new Error('Erro ao remover evento');
-            calendar.refetchEvents();
-          })
-          .catch(function(error) {
-            console.error(error);
-          });
-        }
-      },
-      select: function(info) {
-        var eventData = {
-          title: 'Novo Evento',
-          start: info.startStr,
-          end: info.endStr
-        };
-        fetch('/api/events', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'X-CSRFToken': '{{ csrf_token() if csrf_token is defined else '' }}'
-          },
-          body: JSON.stringify(eventData)
-        })
-        .then(function(response) {
-          if (!response.ok) throw new Error('Erro ao criar evento');
-          return response.json();
-        })
-        .then(function(data) {
-          calendar.refetchEvents();
-        })
-        .catch(function(error) {
-          console.error(error);
-        });
-      },
-      eventDrop: function(info) {
-        var updatedData = {
-          start: info.event.startStr,
-          end: info.event.endStr
-        };
-        fetch('/api/events/' + info.event.id, {
-          method: 'PUT',
-          headers: {
-            'Content-Type': 'application/json',
-            'X-CSRFToken': '{{ csrf_token() if csrf_token is defined else '' }}'
-          },
-          body: JSON.stringify(updatedData)
-        })
-        .then(function(response) {
-          if (!response.ok) throw new Error('Erro ao atualizar evento');
-          calendar.refetchEvents();
-        })
-        .catch(function(error) {
-          console.error(error);
-        });
-      }
-    });
-    calendar.render();
-  }
-});
-</script>
 {% endblock %}
