@@ -109,19 +109,70 @@
   <h3>Consultas Agendadas</h3>
   <ul class="list-group">
     {% for appt in appointments %}
-      <li class="list-group-item d-flex justify-content-between align-items-center">
-        <span>{{ appt.scheduled_at.strftime('%d/%m/%Y %H:%M') }} - {{ appt.animal.name }} ({{ appt.tutor.name }})</span>
-        <div class="btn-group">
-          <a href="{{ url_for('ficha_animal', animal_id=appt.animal_id) }}" class="btn btn-sm btn-outline-primary">📋 Ficha Animal</a>
-          <a href="{{ url_for('ficha_tutor', tutor_id=appt.tutor_id) }}" class="btn btn-sm btn-outline-secondary">👤 Ficha Tutor</a>
-          <a href="{{ url_for('consulta_direct', animal_id=appt.animal_id) }}" class="btn btn-sm btn-outline-success">🩺 Iniciar Consulta</a>
-          <a href="{{ url_for('edit_appointment', appointment_id=appt.id) }}" class="btn btn-sm btn-outline-warning">✏️ Editar</a>
-        </div>
+      <li class="list-group-item appointment-item"
+          data-id="{{ appt.id }}"
+          data-date="{{ appt.scheduled_at.strftime('%Y-%m-%d') }}"
+          data-time="{{ appt.scheduled_at.strftime('%H:%M') }}"
+          data-vet="{{ appt.veterinario.user.name }}"
+          data-tutor="{{ appt.tutor.name }}"
+          data-tutor-id="{{ appt.tutor_id }}"
+          data-animal="{{ appt.animal.name }}"
+          data-animal-id="{{ appt.animal_id }}"
+          data-animal-url="{{ url_for('ficha_animal', animal_id=appt.animal_id) }}"
+          data-tutor-url="{{ url_for('ficha_tutor', tutor_id=appt.tutor_id) }}"
+          data-consulta-url="{{ url_for('consulta_direct', animal_id=appt.animal_id) }}"
+          data-notes="{{ appt.notes or '' }}">
+        {{ appt.scheduled_at.strftime('%d/%m/%Y %H:%M') }} - {{ appt.animal.name }} ({{ appt.tutor.name }})
       </li>
     {% else %}
       <li class="list-group-item">Nenhuma consulta agendada.</li>
     {% endfor %}
   </ul>
+
+  <!-- Modal de detalhes da consulta -->
+  <div class="modal fade" id="appointmentModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title">Detalhes da Consulta</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+        </div>
+        <div class="modal-body">
+          <input type="hidden" id="modal-appt-id">
+          <div class="mb-3">
+            <label class="form-label">Veterinário</label>
+            <input type="text" class="form-control" id="modal-vet" readonly>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Tutor</label>
+            <input type="text" class="form-control" id="modal-tutor" readonly>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Animal</label>
+            <input type="text" class="form-control" id="modal-animal" readonly>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Data</label>
+            <input type="date" class="form-control" id="modal-date">
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Hora</label>
+            <input type="time" class="form-control" id="modal-time">
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Comentários</label>
+            <textarea class="form-control" id="modal-notes" rows="3"></textarea>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <a id="modal-animal-link" class="btn btn-outline-primary" target="_blank">📋 Ficha Animal</a>
+          <a id="modal-tutor-link" class="btn btn-outline-secondary" target="_blank">👤 Ficha Tutor</a>
+          <a id="modal-consulta-link" class="btn btn-outline-success" target="_blank">🩺 Iniciar Consulta</a>
+          <button type="button" class="btn btn-primary" id="modal-save-btn">Salvar</button>
+        </div>
+      </div>
+    </div>
+  </div>
 </div>
 <script>
   function selectDays(mode) {
@@ -192,5 +243,49 @@
   function hideForm(id) {
     document.getElementById(id).classList.add('d-none');
   }
+
+  // Modal de detalhes das consultas
+  document.querySelectorAll('.appointment-item').forEach(item => {
+    item.addEventListener('click', function() {
+      document.getElementById('modal-appt-id').value = this.dataset.id;
+      document.getElementById('modal-vet').value = this.dataset.vet;
+      document.getElementById('modal-tutor').value = this.dataset.tutor;
+      document.getElementById('modal-animal').value = this.dataset.animal;
+      document.getElementById('modal-date').value = this.dataset.date;
+      document.getElementById('modal-time').value = this.dataset.time;
+      document.getElementById('modal-notes').value = this.dataset.notes || '';
+      document.getElementById('modal-animal-link').href = this.dataset.animalUrl;
+      document.getElementById('modal-tutor-link').href = this.dataset.tutorUrl;
+      document.getElementById('modal-consulta-link').href = this.dataset.consultaUrl;
+      const modal = new bootstrap.Modal(document.getElementById('appointmentModal'));
+      modal.show();
+    });
+  });
+
+  document.getElementById('modal-save-btn').addEventListener('click', function() {
+    const id = document.getElementById('modal-appt-id').value;
+    const date = document.getElementById('modal-date').value;
+    const time = document.getElementById('modal-time').value;
+    const notes = document.getElementById('modal-notes').value;
+    fetch(`/appointments/${id}/edit`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-CSRFToken': '{{ csrf_token() }}'
+      },
+      body: JSON.stringify({
+        date: date,
+        time: time,
+        veterinario_id: '{{ veterinario.id }}',
+        notes: notes
+      })
+    }).then(r => r.json()).then(data => {
+      if (data.success) {
+        location.reload();
+      } else {
+        alert(data.message || 'Erro ao salvar');
+      }
+    }).catch(() => alert('Erro ao salvar'));
+  });
 </script>
 {% endblock %}
