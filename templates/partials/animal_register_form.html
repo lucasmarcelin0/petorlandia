@@ -1,5 +1,5 @@
 <!-- templates/partials/animal_register_form.html -->
-<form method="POST" action="{{ url_for('novo_animal') }}" onsubmit="return validarTutor();" data-sync="true">
+<form method="POST" action="{{ url_for('novo_animal') }}" onsubmit="return handleSubmit(this);" data-sync="true">
     <h5 class="mb-3">🐾 Cadastro do Animal</h5>
 
     {% if not tutor %}
@@ -124,6 +124,18 @@
         return false;
       }
       {% endif %}
+      return true;
+    }
+
+    function handleSubmit(form) {
+      if (!validarTutor()) {
+        return false;
+      }
+      const submitBtn = form.querySelector('button[type="submit"]');
+      if (submitBtn) {
+        submitBtn.disabled = true;
+        submitBtn.textContent = 'Salvando...';
+      }
       return true;
     }
 
