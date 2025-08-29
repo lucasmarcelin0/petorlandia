@@ -1,0 +1,22 @@
+{% extends "layout.html" %}
+{% block main %}
+<div class="container mt-4">
+  <h2>Minhas Clínicas</h2>
+  <div class="row">
+    {% for item in clinics %}
+    <div class="col-md-4">
+      <div class="card mb-3">
+        <div class="card-body">
+          <h5 class="card-title">{{ item.clinica.nome }}</h5>
+          <p class="card-text">
+            Veterinários: {{ item.vets }}<br>
+            Próximas consultas: {{ item.appts }}
+          </p>
+          <a href="{{ url_for('clinic_detail', clinica_id=item.clinica.id) }}" class="btn btn-primary">Acessar</a>
+        </div>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+</div>
+{% endblock %}

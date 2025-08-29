@@ -129,6 +129,7 @@
     {% endfor %}
   </ul>
 
+
   {% if colleagues %}
   <h3>Agendas dos Colegas</h3>
   {% for col in colleagues %}
@@ -144,6 +145,7 @@
     </ul>
   {% endfor %}
   {% endif %}
+
 
   <!-- Modal de detalhes da consulta -->
   <div class="modal fade" id="appointmentModal" tabindex="-1" aria-hidden="true">
@@ -189,6 +191,7 @@
       </div>
     </div>
   </div>
+
 </div>
 <script>
   function selectDays(mode) {
@@ -287,7 +290,7 @@
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'X-CSRFToken': '{{ csrf_token() }}'
+        'X-CSRFToken': '{{ csrf_token() if csrf_token is defined else '' }}'
       },
       body: JSON.stringify({
         date: date,

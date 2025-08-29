@@ -337,6 +337,15 @@ class ClinicAddVeterinarianForm(FlaskForm):
     submit = SubmitField('Adicionar')
 
 
+class ClinicStaffPermissionForm(FlaskForm):
+    can_manage_clients = BooleanField('Clientes')
+    can_manage_animals = BooleanField('Animais')
+    can_manage_staff = BooleanField('Funcionários')
+    can_manage_schedule = BooleanField('Agenda')
+    can_manage_inventory = BooleanField('Estoque')
+    submit = SubmitField('Salvar')
+
+
 class VetScheduleForm(FlaskForm):
     veterinario_id = SelectField(
         'Veterinário',
