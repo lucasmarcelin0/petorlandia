@@ -1403,16 +1403,18 @@ def ficha_animal(animal_id):
     animal = get_animal_or_404(animal_id)
     tutor = animal.owner
 
-    consultas = (
-        Consulta.query
-        .filter_by(
-            animal_id=animal.id,
-            status='finalizada',
-            clinica_id=current_user_clinic_id(),
-        )
-        .order_by(Consulta.created_at.desc())
-        .all()
+    consultas_query = Consulta.query.filter_by(
+        animal_id=animal.id,
+        status='finalizada',
     )
+    if (
+        current_user.role != 'admin'
+        and current_user.worker in ['veterinario', 'colaborador']
+    ):
+        consultas_query = consultas_query.filter_by(
+            clinica_id=current_user_clinic_id()
+        )
+    consultas = consultas_query.order_by(Consulta.created_at.desc()).all()
 
     blocos_prescricao = BlocoPrescricao.query.filter_by(animal_id=animal.id).all()
     blocos_exames = BlocoExames.query.filter_by(animal_id=animal.id).all()
