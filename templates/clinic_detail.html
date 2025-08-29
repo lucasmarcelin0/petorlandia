@@ -91,8 +91,8 @@
                 {% endif %}
               </div>
               <ul class="ms-3 mt-2">
-                {% for h in v.horarios %}
-                  <li>{{ h.dia_semana }}: {{ h.hora_inicio.strftime('%H:%M') }} - {{ h.hora_fim.strftime('%H:%M') }}</li>
+                {% for dia, horarios in grouped_vet_schedules.get(v.id, {}).items() %}
+                  <li>{{ dia }}: {{ ', '.join(horarios) }}</li>
                 {% else %}
                   <li>Sem horários cadastrados.</li>
                 {% endfor %}

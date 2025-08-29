@@ -1,4 +1,5 @@
 import pytest
+from datetime import time
 from app import app as flask_app, db
 from models import User, Clinica, Veterinario, VetSchedule
 
@@ -53,3 +54,26 @@ def test_owner_manage_employees(monkeypatch, app):
         )
         assert resp.status_code == 200
         assert vet.clinica_id is None
+
+
+def test_schedule_grouped_by_day(monkeypatch, app):
+    client = app.test_client()
+    with app.app_context():
+        db.create_all()
+        owner = User(name="Owner2", email="owner2@example.com", password_hash="x")
+        clinica = Clinica(nome="Clinica2", owner=owner)
+        vet_user = User(name="Vet2", email="vet2@example.com", password_hash="x")
+        vet = Veterinario(user=vet_user, crmv="123", clinica=clinica)
+        s1 = VetSchedule(veterinario=vet, dia_semana="Segunda", hora_inicio=time(9), hora_fim=time(10))
+        s2 = VetSchedule(veterinario=vet, dia_semana="Segunda", hora_inicio=time(10), hora_fim=time(11))
+        db.session.add_all([owner, clinica, vet_user, vet, s1, s2])
+        db.session.commit()
+
+        import flask_login.utils as login_utils
+        monkeypatch.setattr(login_utils, '_get_user', lambda: owner)
+
+        resp = client.get(f'/clinica/{clinica.id}')
+        assert resp.status_code == 200
+        data = resp.data.decode()
+        assert data.count("<li>Segunda:") == 1
+        assert "Segunda: 09:00 - 10:00, 10:00 - 11:00" in data
