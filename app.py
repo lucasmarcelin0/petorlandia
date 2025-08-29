@@ -1825,26 +1825,24 @@ def minha_clinica():
     clinicas = clinicas_do_usuario().all()
     if not clinicas:
         abort(404)
+
+    if _is_admin() and current_user.clinica_id:
+        return redirect(url_for('clinic_detail', clinica_id=current_user.clinica_id))
     if len(clinicas) == 1:
         return redirect(url_for('clinic_detail', clinica_id=clinicas[0].id))
-
-    if current_user.role == 'admin' and current_user.clinica_id:
-        for c in clinicas:
-            if c.id == current_user.clinica_id:
-                return redirect(url_for('clinic_detail', clinica_id=c.id))
-
-    stats = []
-    from models import Appointment  # import here to avoid circular
-    now = datetime.utcnow()
+    overview = []
     for c in clinicas:
-        vets = len(c.veterinarios)
-        appts = (
-            Appointment.query
-            .filter(Appointment.clinica_id == c.id, Appointment.scheduled_at >= now)
-            .count()
+        staff = c.veterinarios
+        upcoming = (
+            Appointment.query.filter_by(clinica_id=c.id)
+            .filter(Appointment.scheduled_at >= datetime.utcnow())
+            .order_by(Appointment.scheduled_at)
+            .limit(5)
+            .all()
         )
-        stats.append({"clinica": c, "vets": vets, "appts": appts})
-    return render_template('my_clinics.html', clinics=stats)
+        overview.append({'clinic': c, 'staff': staff, 'appointments': upcoming})
+    return render_template('multi_clinic_dashboard.html', clinics=overview)
+
 
 
 @app.route('/clinica/<int:clinica_id>', methods=['GET', 'POST'])
@@ -5568,7 +5566,18 @@ def appointments():
             schedule_form.veterinario_id.data = veterinario.id
             appointment_form.veterinario_id.data = veterinario.id
         if schedule_form.submit.data and schedule_form.validate_on_submit():
-            added = False
+
+            vet_id = schedule_form.veterinario_id.data
+            for dia in schedule_form.dias_semana.data:
+                if has_schedule_conflict(
+                    vet_id,
+                    dia,
+                    schedule_form.hora_inicio.data,
+                    schedule_form.hora_fim.data,
+                ):
+                    flash(f'Conflito de horário em {dia}.', 'danger')
+                    return redirect(url_for('appointments'))
+
             for dia in schedule_form.dias_semana.data:
                 if has_schedule_conflict(
                     schedule_form.veterinario_id.data,
@@ -5579,7 +5588,7 @@ def appointments():
                     flash(f'Horário em {dia} conflita com um existente.', 'danger')
                     continue
                 horario = VetSchedule(
-                    veterinario_id=schedule_form.veterinario_id.data,
+                    veterinario_id=vet_id,
                     dia_semana=dia,
                     hora_inicio=schedule_form.hora_inicio.data,
                     hora_fim=schedule_form.hora_fim.data,
@@ -5628,15 +5637,23 @@ def appointments():
             .order_by(Appointment.scheduled_at)
             .all()
         )
-        colegas = (
+
+        colleagues = (
+
             Veterinario.query.filter_by(clinica_id=veterinario.clinica_id)
             .filter(Veterinario.id != veterinario.id)
             .all()
         )
-        colleague_schedules = []
-        for col in colegas:
-            hs = VetSchedule.query.filter_by(veterinario_id=col.id).all()
-            colleague_schedules.append({"veterinario": col, "horarios": hs})
+
+        colleague_appointments = {
+            v.id: (
+                Appointment.query.filter_by(veterinario_id=v.id)
+                .order_by(Appointment.scheduled_at)
+                .all()
+            )
+            for v in colleagues
+        }
+
         return render_template(
             'edit_vet_schedule.html',
             schedule_form=schedule_form,
@@ -5644,7 +5661,10 @@ def appointments():
             veterinario=veterinario,
             horarios=horarios,
             appointments=appointments,
-            colleague_schedules=colleague_schedules,
+
+            colleagues=colleagues,
+            colleague_appointments=colleague_appointments,
+
         )
     else:
         if current_user.worker in ['colaborador', 'admin']:
@@ -5684,14 +5704,21 @@ def edit_vet_schedule_slot(veterinario_id, horario_id):
         (v.id, v.user.name) for v in Veterinario.query.all()
     ]
     if form.validate_on_submit():
-        horario.veterinario_id = form.veterinario_id.data
-        horario.dia_semana = form.dias_semana.data[0]
-        horario.hora_inicio = form.hora_inicio.data
-        horario.hora_fim = form.hora_fim.data
-        horario.intervalo_inicio = form.intervalo_inicio.data
-        horario.intervalo_fim = form.intervalo_fim.data
-        db.session.commit()
-        flash('Horário atualizado com sucesso.', 'success')
+        novo_vet = form.veterinario_id.data
+        dia = form.dias_semana.data[0]
+        inicio = form.hora_inicio.data
+        fim = form.hora_fim.data
+        if has_schedule_conflict(novo_vet, dia, inicio, fim, exclude_id=horario.id):
+            flash('Conflito de horário.', 'danger')
+        else:
+            horario.veterinario_id = novo_vet
+            horario.dia_semana = dia
+            horario.hora_inicio = inicio
+            horario.hora_fim = fim
+            horario.intervalo_inicio = form.intervalo_inicio.data
+            horario.intervalo_fim = form.intervalo_fim.data
+            db.session.commit()
+            flash('Horário atualizado com sucesso.', 'success')
     return redirect(url_for('appointments'))
 
 

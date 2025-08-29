@@ -165,3 +165,18 @@ def clinicas_do_usuario():
 
     return Clinica.query.filter_by(owner_id=current_user.id)
 
+
+def has_schedule_conflict(veterinario_id, dia_semana, hora_inicio, hora_fim, exclude_id=None):
+    """Verifica se já existe horário que conflita para o veterinário."""
+    from models import VetSchedule
+
+    query = VetSchedule.query.filter_by(
+        veterinario_id=veterinario_id, dia_semana=dia_semana
+    )
+    if exclude_id is not None:
+        query = query.filter(VetSchedule.id != exclude_id)
+    for existente in query.all():
+        if not (hora_fim <= existente.hora_inicio or hora_inicio >= existente.hora_fim):
+            return True
+    return False
+

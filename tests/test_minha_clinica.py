@@ -32,6 +32,29 @@ def test_minha_clinica_redirects(monkeypatch, app):
         assert f"/clinica/{clinica.id}" in resp.headers['Location']
 
 
+def test_minha_clinica_shows_dashboard_for_multiple_clinics(monkeypatch, app):
+    client = app.test_client()
+    with app.app_context():
+        db.create_all()
+        user = User(name="Owner", email="o@example.com", password_hash="x")
+        c1 = Clinica(nome="C1", owner=user)
+        c2 = Clinica(nome="C2", owner=user)
+        v1_user = User(name="V1", email="v1@example.com", password_hash="x")
+        v2_user = User(name="V2", email="v2@example.com", password_hash="x")
+        v1 = Veterinario(user=v1_user, crmv="1", clinica=c1)
+        v2 = Veterinario(user=v2_user, crmv="2", clinica=c2)
+        db.session.add_all([user, c1, c2, v1_user, v1, v2_user, v2])
+        db.session.commit()
+
+        import flask_login.utils as login_utils
+        monkeypatch.setattr(login_utils, '_get_user', lambda: user)
+
+        resp = client.get('/minha-clinica')
+        assert resp.status_code == 200
+        assert b'C1' in resp.data and b'C2' in resp.data
+        assert b'V1' in resp.data and b'V2' in resp.data
+
+
 def test_layout_shows_minha_clinica_for_veterinario(monkeypatch, app):
     client = app.test_client()
     with app.app_context():

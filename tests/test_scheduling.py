@@ -8,8 +8,10 @@ import pytest
 from flask_login import login_required, current_user
 import flask_login.utils as login_utils
 
-from app import app as flask_app
-from models import HealthSubscription, VetSchedule
+from datetime import time
+from app import app as flask_app, db
+from models import HealthSubscription, VetSchedule, User, Veterinario
+from helpers import has_schedule_conflict
 
 
 @flask_app.route('/schedule/<int:slot_id>', methods=['POST'])
@@ -103,3 +105,22 @@ def test_conflict_when_slot_booked(client, monkeypatch):
         monkeypatch.setattr(VetSchedule, 'query', SlotQuery())
     resp = client.post('/schedule/1')
     assert resp.status_code == 409
+
+
+def test_has_schedule_conflict(monkeypatch):
+    with flask_app.app_context():
+        db.create_all()
+        user = User(name="Vet", email="v@example.com", password_hash="x", worker='veterinario')
+        vet = Veterinario(user=user, crmv="1")
+        db.session.add_all([user, vet])
+        db.session.commit()
+        slot = VetSchedule(
+            veterinario_id=vet.id,
+            dia_semana="Segunda",
+            hora_inicio=time(9, 0),
+            hora_fim=time(12, 0),
+        )
+        db.session.add(slot)
+        db.session.commit()
+        assert has_schedule_conflict(vet.id, "Segunda", time(11, 0), time(13, 0)) is True
+        assert has_schedule_conflict(vet.id, "Segunda", time(12, 0), time(14, 0)) is False
