@@ -227,6 +227,7 @@
       {% with clinic_id = clinica.id %}
         {% include 'partials/schedule_toggle.html' %}
       {% endwith %}
+      <a href="{{ url_for('appointments') }}" class="btn btn-primary mb-3">Novo Agendamento</a>
       <table class="table">
         <thead>
           <tr>
@@ -248,6 +249,9 @@
                   <a href="{{ url_for('ficha_tutor', tutor_id=a.tutor_id) }}" class="btn btn-sm btn-outline-secondary">👤 Ficha Tutor</a>
                   {% if current_user.worker in ['veterinario', 'colaborador'] %}
                   <a href="{{ url_for('consulta_direct', animal_id=a.animal_id) }}" class="btn btn-sm btn-outline-success">🩺 Iniciar Consulta</a>
+                  {% endif %}
+                  {% if current_user.role == 'admin' or current_user.worker in ['veterinario', 'colaborador'] or current_user.id == a.tutor_id %}
+                  <a href="{{ url_for('edit_appointment', appointment_id=a.id) }}" class="btn btn-sm btn-outline-warning">✏️ Editar</a>
                   {% endif %}
                 </div>
               </td>
