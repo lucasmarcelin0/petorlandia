@@ -206,6 +206,23 @@
         {% include 'partials/schedule_toggle.html' %}
       {% endwith %}
       <a href="{{ url_for('appointments') }}" class="btn btn-primary mb-3">Novo Agendamento</a>
+      <form method="get" class="row g-2 mb-3">
+        <div class="col-auto">
+          <label for="start" class="form-label">Início</label>
+          <input type="date" id="start" name="start" class="form-control" value="{{ start }}">
+        </div>
+        <div class="col-auto">
+          <label for="end" class="form-label">Fim</label>
+          <input type="date" id="end" name="end" class="form-control" value="{{ end }}">
+        </div>
+        <div class="col-auto align-self-end">
+          <button type="submit" class="btn btn-primary">Filtrar</button>
+        </div>
+        <div class="col-auto align-self-end">
+          <a href="{{ url_for('clinic_detail', clinica_id=clinica.id, start=today_str, end=today_str) }}" class="btn btn-outline-secondary">Hoje</a>
+          <a href="{{ url_for('clinic_detail', clinica_id=clinica.id, start=today_str, end=next7_str) }}" class="btn btn-outline-secondary">Próximos 7 dias</a>
+        </div>
+      </form>
       <table class="table">
         <thead>
           <tr>
@@ -217,7 +234,7 @@
         </thead>
         <tbody>
           {% for a in appointments %}
-            <tr>
+            <tr class="{% if a.scheduled_at < now %}table-secondary{% else %}table-success{% endif %}">
               <td>{{ a.scheduled_at|format_datetime_brazil }}</td>
               <td>{{ a.animal.name }}</td>
               <td>{{ a.veterinario.user.name }}</td>

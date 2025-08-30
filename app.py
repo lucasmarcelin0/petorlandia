@@ -5,7 +5,7 @@ from concurrent.futures import ThreadPoolExecutor
 
 
 
-from datetime import datetime, timezone, date
+from datetime import datetime, timezone, date, timedelta
 from dateutil.relativedelta import relativedelta
 from zoneinfo import ZoneInfo
 from PIL import Image
@@ -1836,6 +1836,8 @@ def clinicas():
 def minha_clinica():
     clinicas = clinicas_do_usuario().all()
     if not clinicas:
+        if getattr(current_user, 'veterinario', None):
+            abort(404)
         form = ClinicForm()
         if form.validate_on_submit():
             clinica = Clinica(
@@ -2016,17 +2018,39 @@ def clinic_detail(clinica_id):
         .filter(or_(User.worker != 'veterinario', User.worker == None))
         .all()
     )
-    appointments = (
-        Appointment.query
-        .filter_by(clinica_id=clinica_id)
-        .order_by(Appointment.scheduled_at)
-        .all()
-    )
+
+    start_str = request.args.get('start')
+    end_str = request.args.get('end')
+    start_dt = None
+    end_dt = None
+    if start_str:
+        try:
+            start_dt = datetime.strptime(start_str, "%Y-%m-%d")
+        except ValueError:
+            start_dt = None
+    if end_str:
+        try:
+            end_dt = datetime.strptime(end_str, "%Y-%m-%d") + timedelta(days=1)
+        except ValueError:
+            end_dt = None
+
+    appointments_query = Appointment.query.filter_by(clinica_id=clinica_id)
+    if start_dt:
+        appointments_query = appointments_query.filter(Appointment.scheduled_at >= start_dt)
+    if end_dt:
+        appointments_query = appointments_query.filter(Appointment.scheduled_at < end_dt)
+
+    appointments = appointments_query.order_by(Appointment.scheduled_at).all()
     appointments_grouped = group_appointments_by_day(appointments)
     grouped_vet_schedules = {
         v.id: group_vet_schedules_by_day(v.horarios)
         for v in veterinarios
     }
+    today = date.today()
+    today_str = today.strftime('%Y-%m-%d')
+    next7_str = (today + timedelta(days=7)).strftime('%Y-%m-%d')
+    now_dt = datetime.utcnow()
+
     return render_template(
         'clinic_detail.html',
         clinica=clinica,
@@ -2043,6 +2067,11 @@ def clinic_detail(clinica_id):
         animais_adicionados=animais_adicionados,
         tutores_adicionados=tutores_adicionados,
         pagination=None,
+        start=start_str,
+        end=end_str,
+        today_str=today_str,
+        next7_str=next7_str,
+        now=now_dt,
     )
 
 
