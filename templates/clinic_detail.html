@@ -59,9 +59,29 @@
           <a href="{{ url_for('clinic_staff', clinica_id=clinica.id) }}" class="btn btn-sm btn-outline-secondary">Gerenciar Funcionários</a>
           {% endif %}
         </div>
-        <ul class="list-unstyled">
+        <div class="row mt-3 mb-3">
+          <div class="col-md-4">
+            <input type="text" id="staff-filter" class="form-control" placeholder="Buscar por nome, CRMV...">
+          </div>
+          <div class="col-md-4">
+            <select id="staff-sort" class="form-select">
+              <option value="name_asc">Nome (A-Z)</option>
+              <option value="name_desc">Nome (Z-A)</option>
+              <option value="role_asc">Função (A-Z)</option>
+              <option value="role_desc">Função (Z-A)</option>
+            </select>
+          </div>
+          <div class="col-md-4">
+            <select id="staff-role" class="form-select">
+              <option value="">Todas as funções</option>
+              <option value="veterinario">Veterinário</option>
+              <option value="colaborador">Colaborador</option>
+            </select>
+          </div>
+        </div>
+        <ul id="staff-list" class="list-unstyled">
           {% for v in veterinarios %}
-            <li class="border rounded p-3 mb-3">
+            <li class="border rounded p-3 mb-3" data-name="{{ v.user.name|lower }}" data-role="{{ v.user.worker or '' }}">
               <div class="d-flex justify-content-between align-items-center">
                 <div><strong>{{ v.user.name }}</strong> (CRMV: {{ v.crmv }})</div>
                 {% if pode_editar %}
@@ -312,6 +332,51 @@
     else if (mode === 'clear') opt.selected = false;
   }
 }
+
+document.addEventListener('DOMContentLoaded', function() {
+  const filterInput = document.getElementById('staff-filter');
+  const sortSelect = document.getElementById('staff-sort');
+  const roleSelect = document.getElementById('staff-role');
+  const list = document.getElementById('staff-list');
+  if (!filterInput || !sortSelect || !list) return;
+  const items = Array.from(list.querySelectorAll('li[data-name]'));
+
+  function applyFilter() {
+    const term = filterInput.value.toLowerCase();
+    const role = roleSelect ? roleSelect.value : '';
+    items.forEach(item => {
+      const text = item.textContent.toLowerCase();
+      const matchesRole = !role || item.dataset.role === role;
+      item.style.display = (text.includes(term) && matchesRole) ? '' : 'none';
+    });
+  }
+
+  function applySort() {
+    const value = sortSelect.value;
+    const visible = items.filter(item => item.style.display !== 'none');
+    const hidden = items.filter(item => item.style.display === 'none');
+    visible.sort((a, b) => {
+      switch (value) {
+        case 'name_desc':
+          return b.dataset.name.localeCompare(a.dataset.name);
+        case 'role_asc':
+          return (a.dataset.role || '').localeCompare(b.dataset.role || '');
+        case 'role_desc':
+          return (b.dataset.role || '').localeCompare(a.dataset.role || '');
+        case 'name_asc':
+        default:
+          return a.dataset.name.localeCompare(b.dataset.name);
+      }
+    });
+    visible.forEach(item => list.appendChild(item));
+    hidden.forEach(item => list.appendChild(item));
+  }
+
+  filterInput.addEventListener('input', () => { applyFilter(); applySort(); });
+  sortSelect.addEventListener('change', applySort);
+  if (roleSelect) roleSelect.addEventListener('change', () => { applyFilter(); applySort(); });
+  applySort();
+});
 
 </script>
 {% endblock %}
