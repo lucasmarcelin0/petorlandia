@@ -1912,6 +1912,14 @@ def clinic_detail(clinica_id):
             abort(403)
         vet = Veterinario.query.get_or_404(vets_form.veterinario_id.data)
         vet.clinica_id = clinica.id
+        if vet.user:
+            # Ensure the user is linked as clinic staff so permissions can be managed
+            vet.user.clinica_id = clinica.id
+            staff = ClinicStaff.query.filter_by(
+                clinic_id=clinica.id, user_id=vet.user.id
+            ).first()
+            if not staff:
+                db.session.add(ClinicStaff(clinic_id=clinica.id, user_id=vet.user.id))
         db.session.commit()
         flash('Veterinário adicionado com sucesso.', 'success')
         return redirect(url_for('clinic_detail', clinica_id=clinica.id))
@@ -2109,6 +2117,12 @@ def remove_veterinario(clinica_id, veterinario_id):
         abort(403)
     vet = Veterinario.query.filter_by(id=veterinario_id, clinica_id=clinica_id).first_or_404()
     vet.clinica_id = None
+    if vet.user:
+        # Remove clinic association and staff permissions for this user
+        vet.user.clinica_id = None
+        ClinicStaff.query.filter_by(
+            clinic_id=clinica_id, user_id=vet.user.id
+        ).delete()
     db.session.commit()
     flash('Funcionário removido com sucesso.', 'success')
     return redirect(url_for('clinic_detail', clinica_id=clinica_id))
