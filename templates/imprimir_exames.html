@@ -16,27 +16,13 @@
 </div>
 
 <div class="document">
-  {% if clinica and clinica.logotipo %}
-    {% set logo_path = clinica.logotipo %}
-    {% if logo_path.startswith('http') %}
-      {% set logo_src = logo_path %}
-    {% elif logo_path.startswith('static/') %}
-      {% set logo_src = url_for('static', filename=logo_path[7:]) %}
-    {% elif logo_path.startswith('/uploads/clinicas/') %}
-      {% set logo_src = url_for('static', filename=logo_path.lstrip('/')) %}
-    {% elif logo_path.startswith('uploads/clinicas/') %}
-      {% set logo_src = url_for('static', filename=logo_path) %}
-    {% else %}
-      {% set logo_src = url_for('static', filename='uploads/clinicas/' + logo_path) %}
-    {% endif %}
+  {% if clinica.logotipo %}
+    {% set logo_src = clinica.logotipo if clinica.logotipo.startswith('http')
+                     else url_for('static', filename='uploads/clinicas/' + clinica.logotipo) %}
     <div class="header">
       <img src="{{ logo_src }}" alt="Logotipo da clínica" style="transform: translate({{ clinica.photo_offset_x or 0 }}px, {{ clinica.photo_offset_y or 0 }}px) rotate({{ clinica.photo_rotation or 0 }}deg) scale({{ clinica.photo_zoom or 1 }}); object-fit: cover;">
       <div class="clinica-nome">{{ clinica.nome }}</div>
-      <img src="{{ logo_src }}" alt="" style="visibility: hidden; transform: translate({{ clinica.photo_offset_x or 0 }}px, {{ clinica.photo_offset_y or 0 }}px) rotate({{ clinica.photo_rotation or 0 }}deg) scale({{ clinica.photo_zoom or 1 }}); object-fit: cover;">
-    </div>
-  {% elif clinica %}
-    <div class="header">
-      <div class="clinica-nome">{{ clinica.nome }}</div>
+      <img src="{{ logo_src }}" alt="Logotipo da clínica" style="transform: translate({{ clinica.photo_offset_x or 0 }}px, {{ clinica.photo_offset_y or 0 }}px) rotate({{ clinica.photo_rotation or 0 }}deg) scale({{ clinica.photo_zoom or 1 }}); object-fit: cover;">
     </div>
   {% endif %}
 
@@ -102,12 +88,12 @@
     {% endfor %}
   </div>
 
-    {% if bloco.observacoes_gerais %}
-      <div class="section-title">Observações</div>
-      <div style="background-color: #f9f9f9; padding: 15px; border-radius: 4px; line-height: 1.6; white-space: pre-wrap; word-break: break-word;">
-        {{ bloco.observacoes_gerais }}
-      </div>
-    {% endif %}
+  {% if bloco.observacoes_gerais %}
+    <div class="section-title">Observações</div>
+    <div style="background-color: #f9f9f9; padding: 15px; border-radius: 4px; line-height: 1.6;">
+      {{ bloco.observacoes_gerais }}
+    </div>
+  {% endif %}
 
   <div class="assinatura">
     ___________________________________________<br>
