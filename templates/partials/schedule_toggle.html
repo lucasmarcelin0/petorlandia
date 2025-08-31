@@ -1,6 +1,9 @@
+{% set calendar_id = calendar_id|default('shared-calendar') %}
+{% set toggle_id = toggle_id|default('agenda-toggle') %}
+
 <div class="card mb-4">
   <div class="card-header d-flex justify-content-center">
-    <div class="btn-group" id="agenda-toggle">
+    <div class="btn-group" id="{{ toggle_id }}">
       <button class="btn btn-outline-primary active" data-source="user">Minha Agenda</button>
       {% if clinic_id %}
       <button class="btn btn-outline-primary" data-source="clinic">Agenda da Clínica</button>
@@ -8,16 +11,18 @@
     </div>
   </div>
   <div class="card-body p-0">
-    <div id="shared-calendar"></div>
+    <div id="{{ calendar_id }}"></div>
   </div>
 </div>
 
+{% if include_assets|default(True) %}
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.8/main.min.css">
 <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.8/main.min.js"></script>
+{% endif %}
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-  const calendarEl = document.getElementById('shared-calendar');
-  const toggle = document.getElementById('agenda-toggle');
+  const calendarEl = document.getElementById('{{ calendar_id }}');
+  const toggle = document.getElementById('{{ toggle_id }}');
   let source = 'user';
 
   function eventUrl() {
@@ -94,3 +99,4 @@ document.addEventListener('DOMContentLoaded', function() {
   }
 });
 </script>
+
