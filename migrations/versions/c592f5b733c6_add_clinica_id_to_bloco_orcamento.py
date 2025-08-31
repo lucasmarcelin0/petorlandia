@@ -22,6 +22,13 @@ def upgrade():
             'UPDATE bloco_orcamento bo SET clinica_id = a.clinica_id FROM animal a WHERE bo.animal_id = a.id'
         )
     )
+    # Ensure existing rows have a clinic even when the animal has none
+    op.execute(
+        sa.text(
+            'UPDATE bloco_orcamento bo SET clinica_id = (SELECT id FROM clinica ORDER BY id LIMIT 1) '
+            'WHERE bo.clinica_id IS NULL'
+        )
+    )
     op.alter_column('bloco_orcamento', 'clinica_id', nullable=False)
 
 def downgrade():
