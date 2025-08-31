@@ -767,6 +767,53 @@
       });
     });
   </script>
-{% block scripts %}{% endblock %}
+  <script>
+    document.addEventListener('DOMContentLoaded', () => {
+      document.querySelectorAll('.js-staff-form').forEach(form => {
+        form.addEventListener('submit', async ev => {
+          ev.preventDefault();
+          const resp = await fetchOrQueue(form.action, {
+            method: 'POST',
+            headers: {'Accept': 'application/json'},
+            body: new FormData(form)
+          });
+          if (resp && resp.ok) {
+            const data = await resp.json();
+            if (data.redirect) {
+              window.location.href = data.redirect;
+              return;
+            }
+            if (data.html) {
+              const target = form.dataset.target;
+              if (target) {
+                const el = document.querySelector(target);
+                if (el) {
+                  el.innerHTML = data.html;
+                }
+              }
+            }
+            if (data.message) {
+              const toastEl = document.getElementById('actionToast');
+              toastEl.querySelector('.toast-body').textContent = data.message;
+              toastEl.classList.remove('bg-danger', 'bg-info', 'bg-success');
+              toastEl.classList.add('bg-' + (data.category || 'success'));
+              new bootstrap.Toast(toastEl).show();
+            }
+          } else if (resp) {
+            let data = {};
+            try { data = await resp.json(); } catch(e) {}
+            const toastEl = document.getElementById('actionToast');
+            toastEl.querySelector('.toast-body').textContent = data.message || 'Erro ao processar ação';
+            toastEl.classList.remove('bg-success', 'bg-info');
+            toastEl.classList.add('bg-danger');
+            new bootstrap.Toast(toastEl).show();
+          } else {
+            form.submit();
+          }
+        });
+      });
+    });
+  </script>
+  {% block scripts %}{% endblock %}
 </body>
 </html>
