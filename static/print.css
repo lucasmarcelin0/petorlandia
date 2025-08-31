@@ -101,6 +101,8 @@ footer {
   line-height: 1.5;
   border-radius: 4px;
   background-color: #f9f9f9;
+  white-space: pre-wrap;
+  overflow-wrap: break-word;
 }
 
 .info-box strong {
@@ -115,6 +117,8 @@ footer {
   line-height: 1.6;
   margin-bottom: 1.8em;
   border-radius: 4px;
+  white-space: pre-wrap;
+  overflow-wrap: break-word;
 }
 
 .prescricao-item, .exame-item {
