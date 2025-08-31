@@ -211,7 +211,46 @@
     </div>
 
     <div class="tab-pane fade" id="agendamentos" role="tabpanel">
-      <h3>Horários de Atendimento</h3>
+      <h3>Agendamentos</h3>
+      <div class="d-flex justify-content-between align-items-center mb-3">
+        <div class="btn-group" id="view-toggle">
+          <button class="btn btn-outline-secondary active" data-view="calendar">Calendário</button>
+          <button class="btn btn-outline-secondary" data-view="list">Lista</button>
+          <button class="btn btn-outline-secondary" data-view="timeline">Cronograma</button>
+        </div>
+        <a href="{{ url_for('appointments') }}" class="btn btn-primary">Novo Agendamento</a>
+      </div>
+
+      <div id="calendar-container">
+        {% with clinic_id = clinica.id %}
+          {% include 'partials/schedule_toggle.html' %}
+        {% endwith %}
+      </div>
+
+      <div id="list-container" class="d-none">
+        <form id="appointment-filter-form" method="get" action="{{ url_for('clinic_detail', clinica_id=clinica.id) }}" class="row g-2 mb-3">
+          <div class="col-auto">
+            <label for="start" class="form-label">Início</label>
+            <input type="date" id="start" name="start" class="form-control" value="{{ start }}">
+          </div>
+          <div class="col-auto">
+            <label for="end" class="form-label">Fim</label>
+            <input type="date" id="end" name="end" class="form-control" value="{{ end }}">
+          </div>
+          <div class="col-auto align-self-end">
+            <button type="submit" class="btn btn-primary">Filtrar</button>
+          </div>
+          <div class="col-auto align-self-end">
+            <a href="{{ url_for('clinic_detail', clinica_id=clinica.id, start=today_str, end=today_str) }}" class="btn btn-outline-secondary">Hoje</a>
+            <a href="{{ url_for('clinic_detail', clinica_id=clinica.id, start=today_str, end=next7_str) }}" class="btn btn-outline-secondary">Próximos 7 dias</a>
+          </div>
+        </form>
+        <div id="appointments-table-container">
+          {% include 'partials/appointments_table.html' %}
+        </div>
+      </div>
+
+      <h3 class="mt-4">Horários de Atendimento</h3>
       <table class="table">
         <thead>
           <tr><th>Dia</th><th>Abre</th><th>Fecha</th>{% if pode_editar %}<th>Ações</th>{% endif %}</tr>
@@ -268,33 +307,6 @@
         </form>
       </div>
       {% endif %}
-
-      <h3 class="mt-4">Agendamentos</h3>
-
-      {% with clinic_id = clinica.id %}
-        {% include 'partials/schedule_toggle.html' %}
-      {% endwith %}
-      <a href="{{ url_for('appointments') }}" class="btn btn-primary mb-3">Novo Agendamento</a>
-      <form id="appointment-filter-form" method="get" action="{{ url_for('clinic_detail', clinica_id=clinica.id) }}" class="row g-2 mb-3">
-        <div class="col-auto">
-          <label for="start" class="form-label">Início</label>
-          <input type="date" id="start" name="start" class="form-control" value="{{ start }}">
-        </div>
-        <div class="col-auto">
-          <label for="end" class="form-label">Fim</label>
-          <input type="date" id="end" name="end" class="form-control" value="{{ end }}">
-        </div>
-        <div class="col-auto align-self-end">
-          <button type="submit" class="btn btn-primary">Filtrar</button>
-        </div>
-        <div class="col-auto align-self-end">
-          <a href="{{ url_for('clinic_detail', clinica_id=clinica.id, start=today_str, end=today_str) }}" class="btn btn-outline-secondary">Hoje</a>
-          <a href="{{ url_for('clinic_detail', clinica_id=clinica.id, start=today_str, end=next7_str) }}" class="btn btn-outline-secondary">Próximos 7 dias</a>
-        </div>
-      </form>
-      <div id="appointments-table-container">
-        {% include 'partials/appointments_table.html' %}
-      </div>
 
     </div>
     <div class="tab-pane fade" id="animais" role="tabpanel">
@@ -477,6 +489,33 @@ document.addEventListener('DOMContentLoaded', function() {
       const endInput = document.getElementById('end');
       if (u.searchParams.get('start')) startInput.value = u.searchParams.get('start');
       if (u.searchParams.get('end')) endInput.value = u.searchParams.get('end');
+    });
+  });
+});
+
+document.addEventListener('DOMContentLoaded', function() {
+  const toggle = document.getElementById('view-toggle');
+  const list = document.getElementById('list-container');
+  const calendar = document.getElementById('calendar-container');
+  if (!toggle || !list || !calendar) return;
+
+  toggle.querySelectorAll('button').forEach(btn => {
+    btn.addEventListener('click', function() {
+      toggle.querySelectorAll('button').forEach(b => b.classList.remove('active'));
+      this.classList.add('active');
+      const view = this.dataset.view;
+      if (view === 'list') {
+        list.classList.remove('d-none');
+        calendar.classList.add('d-none');
+      } else {
+        list.classList.add('d-none');
+        calendar.classList.remove('d-none');
+        if (window.sharedCalendar) {
+          const mode = view === 'timeline' ? 'timeGridWeek' : 'dayGridMonth';
+          window.sharedCalendar.changeView(mode);
+          window.sharedCalendar.render();
+        }
+      }
     });
   });
 });
