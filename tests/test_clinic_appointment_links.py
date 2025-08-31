@@ -51,7 +51,7 @@ def test_clinic_page_has_list_button_and_edit_link(client, monkeypatch):
             animal_id=animal.id,
             tutor_id=tutor.id,
             veterinario_id=vet.id,
-            scheduled_at=datetime(2024, 1, 1, 10, 0),
+            scheduled_at=datetime(2024, 1, 1, 13, 0),
             clinica_id=clinic.id,
         )
         db.session.add(appt)

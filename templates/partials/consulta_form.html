@@ -69,7 +69,12 @@
   </div>
 </form>
 
-{% if appointment_form %}
+{% if consulta.appointment %}
+<div class="alert alert-info mt-4">
+  <i class="bi bi-calendar-event"></i>
+  Retorno marcado para {{ consulta.appointment.scheduled_at|format_datetime_brazil('%d/%m/%Y %H:%M') }}.
+</div>
+{% elif appointment_form %}
 <hr class="my-4">
 <h5>Agendar Retorno</h5>
 <form method="POST" action="{{ url_for('agendar_retorno', consulta_id=consulta.id) }}" class="row g-3">

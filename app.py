@@ -1874,7 +1874,13 @@ def agendar_retorno(consulta_id):
         (consulta.veterinario.veterinario.id, consulta.veterinario.name)
     ]
     if form.validate_on_submit():
-        scheduled_at = datetime.combine(form.date.data, form.time.data)
+        scheduled_at_local = datetime.combine(form.date.data, form.time.data)
+        scheduled_at = (
+            scheduled_at_local
+            .replace(tzinfo=BR_TZ)
+            .astimezone(timezone.utc)
+            .replace(tzinfo=None)
+        )
         appt = Appointment(
             consulta_id=consulta.id,
             animal_id=consulta.animal_id,
@@ -6308,11 +6314,11 @@ def appointments():
                 flash('Horário salvo com sucesso.', 'success')
             return redirect(url_for('appointments'))
         if appointment_form.submit.data and appointment_form.validate_on_submit():
-            scheduled_at = datetime.combine(
+            scheduled_at_local = datetime.combine(
                 appointment_form.date.data, appointment_form.time.data
             )
             if not is_slot_available(
-                appointment_form.veterinario_id.data, scheduled_at
+                appointment_form.veterinario_id.data, scheduled_at_local
             ):
                 flash('Horário indisponível para o veterinário selecionado.', 'danger')
             else:
@@ -6324,6 +6330,12 @@ def appointments():
                         'danger',
                     )
                 else:
+                    scheduled_at = (
+                        scheduled_at_local
+                        .replace(tzinfo=BR_TZ)
+                        .astimezone(timezone.utc)
+                        .replace(tzinfo=None)
+                    )
                     appt = Appointment(
                         animal_id=animal.id,
                         tutor_id=tutor_id,
@@ -6501,19 +6513,30 @@ def edit_appointment(appointment_id):
         if not date_str or not time_str or not vet_id:
             return jsonify({'success': False, 'message': 'Dados incompletos.'}), 400
         try:
-            scheduled_at = datetime.combine(
+            scheduled_at_local = datetime.combine(
                 datetime.strptime(date_str, '%Y-%m-%d').date(),
                 datetime.strptime(time_str, '%H:%M').time(),
             )
             vet_id = int(vet_id)
         except (ValueError, TypeError):
             return jsonify({'success': False, 'message': 'Dados inválidos.'}), 400
-        if not is_slot_available(vet_id, scheduled_at) and not (
-            vet_id == appointment.veterinario_id and scheduled_at == appointment.scheduled_at
+        existing_local = (
+            appointment.scheduled_at
+            .replace(tzinfo=timezone.utc)
+            .astimezone(BR_TZ)
+            .replace(tzinfo=None)
+        )
+        if not is_slot_available(vet_id, scheduled_at_local) and not (
+            vet_id == appointment.veterinario_id and scheduled_at_local == existing_local
         ):
             return jsonify({'success': False, 'message': 'Horário indisponível.'}), 400
         appointment.veterinario_id = vet_id
-        appointment.scheduled_at = scheduled_at
+        appointment.scheduled_at = (
+            scheduled_at_local
+            .replace(tzinfo=BR_TZ)
+            .astimezone(timezone.utc)
+            .replace(tzinfo=None)
+        )
         if notes is not None:
             appointment.notes = notes
         db.session.commit()
