@@ -298,9 +298,11 @@
 
     </div>
     <div class="tab-pane fade" id="animais" role="tabpanel">
+      {% set pagination = animais_pagination %}
       {% include 'partials/animais_adicionados.html' %}
     </div>
     <div class="tab-pane fade" id="tutores" role="tabpanel">
+      {% set pagination = tutores_pagination %}
       {% include 'partials/tutores_adicionados.html' %}
     </div>
     <div class="tab-pane fade" id="orcamento" role="tabpanel">
