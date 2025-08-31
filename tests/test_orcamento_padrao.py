@@ -5,7 +5,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')
 
 import pytest
 from app import app as flask_app, db
-from models import User, Animal, Consulta
+from models import User, Animal, Consulta, Clinica, Veterinario, Orcamento
 
 
 @pytest.fixture
@@ -21,13 +21,16 @@ def test_adiciona_item_padrao_no_orcamento(app):
         vet.set_password('x')
         tutor = User(name='Tutor', email='tutor@x.com')
         tutor.set_password('y')
+        clinica = Clinica(nome='Clinica X', owner=vet)
+        vet_v = Veterinario(user=vet, crmv='123', clinica=clinica)
         animal = Animal(name='Rex', owner=tutor)
-        db.session.add_all([vet, tutor, animal])
+        db.session.add_all([vet, tutor, clinica, vet_v, animal])
         db.session.commit()
-        consulta = Consulta(animal_id=animal.id, created_by=vet.id, status='in_progress')
+        consulta = Consulta(animal_id=animal.id, created_by=vet.id, clinica_id=clinica.id, status='in_progress')
         db.session.add(consulta)
         db.session.commit()
         consulta_id = consulta.id
+        clinica_id = clinica.id
 
     client = app.test_client()
     with client:
@@ -40,3 +43,9 @@ def test_adiciona_item_padrao_no_orcamento(app):
         data = resp.get_json()
         assert data['descricao'] == 'Consulta'
         assert data['valor'] == 50.0
+
+    with app.app_context():
+        orcamento = Orcamento.query.filter_by(clinica_id=clinica_id, consulta_id=consulta_id).first()
+        assert orcamento is not None
+        assert len(orcamento.items) == 1
+        assert orcamento.items[0].descricao == 'Consulta'

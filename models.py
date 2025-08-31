@@ -477,10 +477,12 @@ class Consulta(db.Model):
 class Orcamento(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     clinica_id = db.Column(db.Integer, db.ForeignKey('clinica.id'), nullable=False)
+    consulta_id = db.Column(db.Integer, db.ForeignKey('consulta.id'), nullable=True)
     descricao = db.Column(db.String(200), nullable=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
     clinica = db.relationship('Clinica', backref=db.backref('orcamentos', cascade='all, delete-orphan'))
+    consulta = db.relationship('Consulta', backref=db.backref('orcamento', uselist=False))
 
     @property
     def total(self):
@@ -605,6 +607,17 @@ class ClinicStaff(db.Model):
 
     clinic = db.relationship('Clinica', backref='staff_members')
     user = db.relationship('User', backref='clinic_roles')
+
+# Itens de estoque específicos por clínica
+class ClinicInventoryItem(db.Model):
+    __tablename__ = 'clinic_inventory_item'
+    id = db.Column(db.Integer, primary_key=True)
+    clinica_id = db.Column(db.Integer, db.ForeignKey('clinica.id'), nullable=False)
+    name = db.Column(db.String(120), nullable=False)
+    quantity = db.Column(db.Integer, default=0)
+    unit = db.Column(db.String(50))
+
+    clinica = db.relationship('Clinica', backref='inventory_items')
 
 # Associação many-to-many entre veterinário e especialidade
 veterinario_especialidade = db.Table(

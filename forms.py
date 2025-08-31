@@ -13,7 +13,7 @@ from wtforms import (
     DateTimeField,
     TimeField,
 )
-from wtforms.validators import DataRequired, Email, EqualTo, Length, Optional
+from wtforms.validators import DataRequired, Email, EqualTo, Length, Optional, NumberRange
 from flask_wtf.file import FileField, FileAllowed
 
 
@@ -350,6 +350,13 @@ class ClinicStaffPermissionForm(FlaskForm):
     can_manage_schedule = BooleanField('Agenda')
     can_manage_inventory = BooleanField('Estoque')
     submit = SubmitField('Salvar')
+
+
+class InventoryItemForm(FlaskForm):
+    name = StringField('Nome do item', validators=[DataRequired()])
+    quantity = IntegerField('Quantidade', validators=[DataRequired(), NumberRange(min=0)])
+    unit = StringField('Unidade', validators=[Optional(), Length(max=50)])
+    submit = SubmitField('Adicionar')
 
 
 class VetScheduleForm(FlaskForm):
