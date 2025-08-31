@@ -196,6 +196,7 @@ from helpers import (
     has_schedule_conflict,
     group_appointments_by_day,
     group_vet_schedules_by_day,
+    appointments_to_events,
 )
 
 
@@ -6391,6 +6392,35 @@ def delete_appointment(appointment_id):
     db.session.commit()
     flash('Agendamento removido.', 'success')
     return redirect(request.referrer or url_for('manage_appointments'))
+
+
+@app.route('/api/my_appointments')
+@login_required
+def api_my_appointments():
+    """Return the current user's appointments as calendar events."""
+    if current_user.worker == 'veterinario' and getattr(current_user, 'veterinario', None):
+        appts = Appointment.query.filter_by(
+            veterinario_id=current_user.veterinario.id
+        ).order_by(Appointment.scheduled_at).all()
+    else:
+        appts = Appointment.query.filter_by(
+            tutor_id=current_user.id
+        ).order_by(Appointment.scheduled_at).all()
+    return jsonify(appointments_to_events(appts))
+
+
+@app.route('/api/clinic_appointments/<int:clinica_id>')
+@login_required
+def api_clinic_appointments(clinica_id):
+    """Return appointments for a clinic as calendar events."""
+    ensure_clinic_access(clinica_id)
+    appts = (
+        Appointment.query
+        .filter_by(clinica_id=clinica_id)
+        .order_by(Appointment.scheduled_at)
+        .all()
+    )
+    return jsonify(appointments_to_events(appts))
 
 
 @app.route('/servico', methods=['POST'])
