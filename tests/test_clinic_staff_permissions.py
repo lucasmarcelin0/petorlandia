@@ -5,7 +5,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')
 
 import pytest
 from app import app as flask_app, db
-from models import User, Clinica, ClinicStaff
+from models import User, Clinica, ClinicStaff, Veterinario
 
 
 @pytest.fixture
@@ -107,3 +107,24 @@ def test_add_staff_forbidden_json(monkeypatch, app):
         )
         assert resp.status_code == 403
         assert resp.json['success'] is False
+
+
+def test_veterinarian_added_as_staff_appears(monkeypatch, app):
+    client = app.test_client()
+    with app.app_context():
+        db.drop_all()
+        db.create_all()
+        clinic = Clinica(nome="Clinic")
+        owner = User(name="Owner", email="o@example.com", password_hash="x")
+        vet_user = User(name="Vet", email="v@example.com", password_hash="y", worker='veterinario')
+        vet = Veterinario(user=vet_user, crmv='123')
+        db.session.add_all([clinic, owner, vet_user, vet])
+        db.session.commit()
+        clinic.owner_id = owner.id
+        db.session.add(clinic)
+        db.session.commit()
+        login(monkeypatch, owner)
+        client.post(f"/clinica/{clinic.id}/funcionarios", data={"email": "v@example.com"})
+        assert vet.clinica_id == clinic.id
+        resp = client.get(f"/clinica/{clinic.id}")
+        assert b"Vet" in resp.data
