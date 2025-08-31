@@ -4368,7 +4368,15 @@ def novo_animal():
         db.session.add(consulta)
         db.session.commit()
 
-        if request.accept_mimetypes.accept_json:
+        # Retorna conteúdo em JSON apenas quando o cliente realmente
+        # priorizar "application/json" ou quando for uma requisição AJAX.
+        prefers_json = (
+            request.accept_mimetypes['application/json'] >
+            request.accept_mimetypes['text/html']
+        )
+        is_ajax = request.headers.get('X-Requested-With') == 'XMLHttpRequest'
+
+        if prefers_json or is_ajax:
             scope = request.args.get('scope', 'all')
             page = request.args.get('page', 1, type=int)
             animais_adicionados, pagination = fetch_animais(scope, page)
@@ -4378,7 +4386,11 @@ def novo_animal():
                 pagination=pagination,
                 scope=scope
             )
-            return jsonify(message='Animal cadastrado com sucesso!', category='success', html=html)
+            return jsonify(
+                message='Animal cadastrado com sucesso!',
+                category='success',
+                html=html
+            )
 
         flash('Animal cadastrado com sucesso!', 'success')
         return redirect(url_for('consulta_direct', animal_id=animal.id))
