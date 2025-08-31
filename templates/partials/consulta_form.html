@@ -88,6 +88,28 @@
       </div>
     </div>
   </div>
+  <form id="edit-return-form" class="row g-3 mt-3 d-none" data-appointment-id="{{ consulta.appointment.id }}">
+    <div class="col-md-6">
+      {{ appointment_form.veterinario_id.label(class='form-label') }}
+      {{ appointment_form.veterinario_id(class='form-select', value=consulta.appointment.veterinario_id) }}
+    </div>
+    <div class="col-md-3">
+      {{ appointment_form.date.label(class='form-label') }}
+      {{ appointment_form.date(class='form-control', type='date', value=consulta.appointment.scheduled_at|format_datetime_brazil('%Y-%m-%d')) }}
+    </div>
+    <div class="col-md-3">
+      {{ appointment_form.time.label(class='form-label') }}
+      {{ appointment_form.time(class='form-control', type='time', value=consulta.appointment.scheduled_at|format_datetime_brazil('%H:%M')) }}
+    </div>
+    <div class="col-12">
+      {{ appointment_form.reason.label(class='form-label') }}
+      {{ appointment_form.reason(class='form-control', rows=3, value=consulta.appointment.notes or '') }}
+    </div>
+    <div class="col-12 d-flex gap-2">
+      <button type="submit" class="btn btn-primary">Salvar</button>
+      <button type="button" class="btn btn-outline-secondary cancelar-retorno">Cancelar</button>
+    </div>
+  </form>
 {% elif appointment_form %}
   <hr class="my-4">
   <h5>Agendar Retorno</h5>
@@ -113,42 +135,6 @@
   </form>
 {% endif %}
 </div>
-
-{% if consulta.appointment %}
-<div class="modal fade" id="editReturnModal" tabindex="-1" aria-hidden="true">
-  <div class="modal-dialog">
-    <div class="modal-content">
-      <form id="edit-return-form" class="needs-validation" novalidate>
-        <div class="modal-header">
-          <h5 class="modal-title">Editar Retorno</h5>
-          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-        </div>
-        <div class="modal-body">
-          <div class="mb-3">
-            {{ appointment_form.veterinario_id.label(class='form-label') }}
-            {{ appointment_form.veterinario_id(class='form-select', value=consulta.appointment.veterinario_id) }}
-          </div>
-          <div class="mb-3">
-            {{ appointment_form.date.label(class='form-label') }}
-            {{ appointment_form.date(class='form-control', type='date', value=consulta.appointment.scheduled_at|format_datetime_brazil('%Y-%m-%d')) }}
-          </div>
-          <div class="mb-3">
-            {{ appointment_form.time.label(class='form-label') }}
-            {{ appointment_form.time(class='form-control', type='time', value=consulta.appointment.scheduled_at|format_datetime_brazil('%H:%M')) }}
-          </div>
-          <div class="mb-3">
-            {{ appointment_form.reason.label(class='form-label') }}
-            {{ appointment_form.reason(class='form-control', rows=3, value=consulta.appointment.notes or '') }}
-          </div>
-        </div>
-        <div class="modal-footer">
-          <button type="submit" class="btn btn-primary">Salvar</button>
-        </div>
-      </form>
-    </div>
-  </div>
-</div>
-{% endif %}
 
 <script>
 document.addEventListener('DOMContentLoaded', function() {
@@ -195,49 +181,46 @@ document.addEventListener('DOMContentLoaded', function() {
 
   // --- Retorno edit/delete handlers ---
   const retornoContainer = document.getElementById('retorno-container');
-  const editModalEl = document.getElementById('editReturnModal');
-  const editForm = document.getElementById('edit-return-form');
-  let currentAppointmentId = null;
-
-  if (retornoContainer && editModalEl && editForm) {
-    const editModal = new bootstrap.Modal(editModalEl);
-
+  if (retornoContainer) {
     document.addEventListener('click', function(event) {
       const card = event.target.closest('#retorno-card');
       if (card && !event.target.closest('form') && !event.target.classList.contains('start-return-link')) {
         event.preventDefault();
-        currentAppointmentId = card.dataset.appointmentId;
-        editModal.show();
+        toggleEditForm(true);
       }
       if (event.target.closest('.editar-retorno')) {
         event.preventDefault();
-        const cardEl = event.target.closest('#retorno-card');
-        if (cardEl) currentAppointmentId = cardEl.dataset.appointmentId;
-        editModal.show();
+        toggleEditForm(true);
+      }
+      if (event.target.closest('.cancelar-retorno')) {
+        event.preventDefault();
+        toggleEditForm(false);
       }
     });
 
-    editForm.addEventListener('submit', async function(event) {
-      event.preventDefault();
-      const formData = new FormData(editForm);
-      const payload = {
-        veterinario_id: formData.get('veterinario_id'),
-        date: formData.get('date'),
-        time: formData.get('time'),
-        notes: formData.get('reason')
-      };
-      const resp = await fetch(`/appointments/${currentAppointmentId}/edit`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-CSRFToken': '{{ csrf_token() if csrf_token is defined else '' }}',
-          'Accept': 'application/json'
-        },
-        body: JSON.stringify(payload)
-      });
-      if (resp && resp.ok) {
-        editModal.hide();
-        await atualizarRetorno();
+    document.addEventListener('submit', async function(event) {
+      if (event.target && event.target.id === 'edit-return-form') {
+        event.preventDefault();
+        const formEl = event.target;
+        const formData = new FormData(formEl);
+        const payload = {
+          veterinario_id: formData.get('veterinario_id'),
+          date: formData.get('date'),
+          time: formData.get('time'),
+          notes: formData.get('reason')
+        };
+        const resp = await fetch(`/appointments/${formEl.dataset.appointmentId}/edit`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': '{{ csrf_token() if csrf_token is defined else '' }}',
+            'Accept': 'application/json'
+          },
+          body: JSON.stringify(payload)
+        });
+        if (resp && resp.ok) {
+          await atualizarRetorno();
+        }
       }
     });
 
@@ -248,6 +231,20 @@ document.addEventListener('DOMContentLoaded', function() {
         await atualizarRetorno();
       }
     });
+
+    function toggleEditForm(show) {
+      const cardEl = retornoContainer.querySelector('#retorno-card');
+      const formEl = retornoContainer.querySelector('#edit-return-form');
+      if (cardEl && formEl) {
+        if (show) {
+          cardEl.classList.add('d-none');
+          formEl.classList.remove('d-none');
+        } else {
+          formEl.classList.add('d-none');
+          cardEl.classList.remove('d-none');
+        }
+      }
+    }
 
     async function atualizarRetorno() {
       const resp = await fetch(window.location.href);
