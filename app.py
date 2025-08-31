@@ -1781,6 +1781,23 @@ def consulta_direct(animal_id):
     form = AnimalForm(obj=animal)
     tutor_form = EditProfileForm(obj=tutor)
 
+    appointment_form = None
+    if consulta:
+        appointment_form = AppointmentForm()
+        appointment_form.animal_id.choices = [(animal.id, animal.name)]
+        appointment_form.animal_id.data = animal.id
+        vet_obj = None
+        if consulta.veterinario and getattr(consulta.veterinario, "veterinario", None):
+            vet_obj = consulta.veterinario.veterinario
+        if vet_obj:
+            appointment_form.veterinario_id.choices = [(
+                vet_obj.id,
+                consulta.veterinario.name,
+            )]
+            appointment_form.veterinario_id.data = vet_obj.id
+
+    show_retorno_modal = request.args.get('agendar_retorno')
+
     # Idade e unidade (anos/meses)
     idade = ''
     idade_unidade = ''
@@ -1828,6 +1845,8 @@ def consulta_direct(animal_id):
         animal_idade=idade,
         animal_idade_unidade=idade_unidade,
         servicos=servicos,
+        appointment_form=appointment_form,
+        show_retorno_modal=show_retorno_modal,
     )
 
 
@@ -1842,7 +1861,38 @@ def finalizar_consulta(consulta_id):
 
     consulta.status = 'finalizada'
     db.session.commit()
-    flash('Consulta finalizada e registrada no histórico!', 'success')
+    flash('Consulta finalizada e registrada no histórico! Agende o retorno.', 'success')
+    return redirect(
+        url_for('consulta_direct', animal_id=consulta.animal_id, agendar_retorno=1)
+    )
+
+
+@app.route('/agendar_retorno/<int:consulta_id>', methods=['POST'])
+@login_required
+def agendar_retorno(consulta_id):
+    consulta = get_consulta_or_404(consulta_id)
+    if current_user.worker != 'veterinario':
+        abort(403)
+    form = AppointmentForm()
+    form.animal_id.choices = [(consulta.animal.id, consulta.animal.name)]
+    form.veterinario_id.choices = [
+        (consulta.veterinario.veterinario.id, consulta.veterinario.name)
+    ]
+    if form.validate_on_submit():
+        scheduled_at = datetime.combine(form.date.data, form.time.data)
+        appt = Appointment(
+            consulta_id=consulta.id,
+            animal_id=consulta.animal_id,
+            tutor_id=consulta.animal.owner.id,
+            veterinario_id=consulta.veterinario.veterinario.id,
+            scheduled_at=scheduled_at,
+            notes=form.reason.data,
+        )
+        db.session.add(appt)
+        db.session.commit()
+        flash('Retorno agendado com sucesso.', 'success')
+    else:
+        flash('Erro ao agendar retorno.', 'danger')
     return redirect(url_for('consulta_direct', animal_id=consulta.animal_id))
 
 
