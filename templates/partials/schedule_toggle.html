@@ -32,12 +32,17 @@ document.addEventListener('DOMContentLoaded', function() {
     return '/api/my_appointments';
   }
 
+  function addEvents() {
+    calendar.removeAllEventSources();
+    calendar.addEventSource(eventUrl());
+  }
+
   const calendar = new FullCalendar.Calendar(calendarEl, {
     initialView: 'dayGridMonth',
-    events: eventUrl(),
   });
 
   window.sharedCalendar = calendar;
+  addEvents();
   calendar.render();
 
   if (toggle) {
@@ -46,8 +51,7 @@ document.addEventListener('DOMContentLoaded', function() {
         toggle.querySelectorAll('button').forEach(b => b.classList.remove('active'));
         this.classList.add('active');
         source = this.dataset.source;
-        calendar.setOption('events', eventUrl());
-        calendar.refetchEvents();
+        addEvents();
       });
     });
   }

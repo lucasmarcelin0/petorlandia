@@ -73,3 +73,38 @@ def test_clinic_appointments_returns_events(client, monkeypatch):
     data = resp.get_json()
     assert len(data) == 1
     assert data[0]['id'] == appt_id
+
+
+def test_my_appointments_returns_clinic_events_for_collaborator(client, monkeypatch):
+    with flask_app.app_context():
+        tutor_id, vet_user_id, clinic_id, appt_id, start_iso = create_basic_appointment()
+    fake_colab = type('U', (), {
+        'id': 3,
+        'worker': 'colaborador',
+        'role': 'adotante',
+        'clinica_id': clinic_id,
+        'is_authenticated': True,
+    })()
+    login(monkeypatch, fake_colab)
+    resp = client.get('/api/my_appointments')
+    assert resp.status_code == 200
+    data = resp.get_json()
+    assert len(data) == 1
+    assert data[0]['id'] == appt_id
+
+
+def test_my_appointments_returns_all_for_admin(client, monkeypatch):
+    with flask_app.app_context():
+        tutor_id, vet_user_id, clinic_id, appt_id, start_iso = create_basic_appointment()
+    fake_admin = type('U', (), {
+        'id': 99,
+        'worker': None,
+        'role': 'admin',
+        'is_authenticated': True,
+    })()
+    login(monkeypatch, fake_admin)
+    resp = client.get('/api/my_appointments')
+    assert resp.status_code == 200
+    data = resp.get_json()
+    assert len(data) == 1
+    assert data[0]['id'] == appt_id
