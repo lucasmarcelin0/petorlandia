@@ -14,9 +14,15 @@
       <tr>
         <td>{{ o.descricao }}</td>
         <td>
+          {% if o.consulta %}
+          <a href="{{ url_for('consulta_direct', animal_id=o.consulta.animal_id, c=o.consulta.id) }}#orcamento" class="btn btn-sm btn-outline-secondary">Ver/Editar</a>
+          <a href="mailto:{{ o.consulta.animal.owner.email }}?subject=Orçamento&body={{ url_for('imprimir_orcamento', consulta_id=o.consulta.id, _external=True)|urlencode }}" class="btn btn-sm btn-outline-primary">E-mail</a>
+          <a href="https://api.whatsapp.com/send?phone={{ o.consulta.animal.owner.phone }}&text={{ ('Olá ' ~ o.consulta.animal.owner.name ~ '! Segue o orçamento para ' ~ o.consulta.animal.name ~ ': ' ~ url_for('imprimir_orcamento', consulta_id=o.consulta.id, _external=True))|urlencode }}" target="_blank" class="btn btn-sm btn-outline-success">WhatsApp</a>
+          {% else %}
           <a href="{{ url_for('editar_orcamento', orcamento_id=o.id) }}" class="btn btn-sm btn-outline-secondary">Ver/Editar</a>
           <a href="mailto:?subject=Orçamento&body={{ url_for('editar_orcamento', orcamento_id=o.id, _external=True) }}" class="btn btn-sm btn-outline-primary">E-mail</a>
           <a href="https://api.whatsapp.com/send?text={{ url_for('editar_orcamento', orcamento_id=o.id, _external=True)|urlencode }}" target="_blank" class="btn btn-sm btn-outline-success">WhatsApp</a>
+          {% endif %}
         </td>
       </tr>
       {% else %}
