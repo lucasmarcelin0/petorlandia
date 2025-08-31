@@ -27,6 +27,7 @@ from flask import (
 )
 from twilio.rest import Client
 from itsdangerous import URLSafeTimedSerializer
+from jinja2 import TemplateNotFound
 import json
 from sqlalchemy import func, or_, exists
 
@@ -1322,6 +1323,26 @@ def termo_transferencia(animal_id, user_id):
     return render_template('termo_transferencia.html', animal=animal, novo_dono=novo_dono)
 
 
+
+
+@app.route('/termo/<int:animal_id>/<tipo>')
+@login_required
+def gerar_termo(animal_id, tipo):
+    """Gera um termo específico para um animal."""
+    animal = get_animal_or_404(animal_id)
+    tutor = animal.owner
+    veterinario = current_user.veterinario
+    template_name = f'termos/{tipo}.html'
+    try:
+        return render_template(
+            template_name,
+            animal=animal,
+            tutor=tutor,
+            veterinario=veterinario,
+            tipo=tipo,
+        )
+    except TemplateNotFound:
+        abort(404)
 
 
 @app.route("/plano-saude")
