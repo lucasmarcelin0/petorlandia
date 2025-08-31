@@ -6034,6 +6034,11 @@ def appointments():
             )
             form = None
         appointments_grouped = group_appointments_by_day(appointments)
+        if request.headers.get('Accept') == 'text/html':
+            return render_template(
+                'partials/appointments_table.html',
+                appointments_grouped=appointments_grouped,
+            )
         return render_template(
             'appointments.html',
             appointments=appointments,
@@ -6138,30 +6143,67 @@ def edit_appointment(appointment_id):
         abort(403)
 
     if request.method == 'POST':
-        data = request.get_json(silent=True) or {}
-        date_str = data.get('date')
-        time_str = data.get('time')
-        vet_id = data.get('veterinario_id')
-        notes = data.get('notes')
-        if not date_str or not time_str or not vet_id:
-            return jsonify({'success': False, 'message': 'Dados incompletos.'}), 400
+        errors = {}
+        if request.is_json:
+            data = request.get_json() or {}
+            date_str = data.get('date')
+            time_str = data.get('time')
+            vet_id = data.get('veterinario_id')
+            notes = data.get('notes')
+        else:
+            date_str = request.form.get('date')
+            time_str = request.form.get('time')
+            vet_id = request.form.get('veterinario_id')
+            notes = request.form.get('notes')
+        if not date_str:
+            errors.setdefault('date', []).append('Campo obrigatório.')
+        if not time_str:
+            errors.setdefault('time', []).append('Campo obrigatório.')
+        if not vet_id:
+            errors.setdefault('veterinario_id', []).append('Campo obrigatório.')
+        scheduled_at = None
         try:
-            scheduled_at = datetime.combine(
-                datetime.strptime(date_str, '%Y-%m-%d').date(),
-                datetime.strptime(time_str, '%H:%M').time(),
-            )
-            vet_id = int(vet_id)
+            if date_str and time_str:
+                scheduled_at = datetime.combine(
+                    datetime.strptime(date_str, '%Y-%m-%d').date(),
+                    datetime.strptime(time_str, '%H:%M').time(),
+                )
+            if vet_id:
+                vet_id = int(vet_id)
         except (ValueError, TypeError):
-            return jsonify({'success': False, 'message': 'Dados inválidos.'}), 400
-        if not is_slot_available(vet_id, scheduled_at) and not (
+            errors.setdefault('date', []).append('Dados inválidos.')
+        if not errors and not is_slot_available(vet_id, scheduled_at) and not (
             vet_id == appointment.veterinario_id and scheduled_at == appointment.scheduled_at
         ):
-            return jsonify({'success': False, 'message': 'Horário indisponível.'}), 400
+            errors.setdefault('time', []).append('Horário indisponível.')
+        if errors:
+            if request.headers.get('Accept') == 'text/html':
+                return jsonify({'errors': errors}), 400
+            return jsonify({'success': False, 'errors': errors}), 400
         appointment.veterinario_id = vet_id
         appointment.scheduled_at = scheduled_at
         if notes is not None:
             appointment.notes = notes
         db.session.commit()
+        if request.headers.get('Accept') == 'text/html':
+            if current_user.worker in ['colaborador', 'admin', 'veterinario']:
+                clinic_id = appointment.clinica_id or getattr(current_user, 'clinica_id', None)
+                appointments = (
+                    Appointment.query.filter_by(clinica_id=clinic_id)
+                    .order_by(Appointment.scheduled_at)
+                    .all()
+                )
+            else:
+                appointments = (
+                    Appointment.query.filter_by(tutor_id=current_user.id)
+                    .order_by(Appointment.scheduled_at)
+                    .all()
+                )
+            appointments_grouped = group_appointments_by_day(appointments)
+            return render_template(
+                'partials/appointments_table.html',
+                appointments_grouped=appointments_grouped,
+            )
         return jsonify({'success': True})
 
     veterinarios = Veterinario.query.all()
