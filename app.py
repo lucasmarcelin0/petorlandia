@@ -6575,6 +6575,12 @@ def edit_appointment(appointment_id):
         return jsonify({'success': True})
 
     veterinarios = Veterinario.query.all()
+    if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+        return render_template(
+            'partials/edit_appointment_form.html',
+            appointment=appointment,
+            veterinarios=veterinarios,
+        )
     return render_template('edit_appointment.html', appointment=appointment, veterinarios=veterinarios)
 
 
