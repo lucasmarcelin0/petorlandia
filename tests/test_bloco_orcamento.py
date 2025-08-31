@@ -5,7 +5,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')
 
 import pytest
 from app import app as flask_app, db
-from models import User, Animal, Consulta, OrcamentoItem, BlocoOrcamento
+from models import User, Animal, Consulta, OrcamentoItem, BlocoOrcamento, Clinica, Veterinario
 
 
 @pytest.fixture
@@ -18,14 +18,16 @@ def test_salvar_bloco_orcamento(app):
     with app.app_context():
         db.drop_all()
         db.create_all()
+        clinica = Clinica(nome='Clinica 1')
         vet = User(name='Vet', email='vet@example.com', worker='veterinario', role='admin')
         vet.set_password('x')
+        vet_v = Veterinario(user=vet, crmv='123', clinica=clinica)
         tutor = User(name='Tutor', email='tutor@example.com')
         tutor.set_password('y')
-        animal = Animal(name='Rex', owner=tutor)
-        db.session.add_all([vet, tutor, animal])
+        animal = Animal(name='Rex', owner=tutor, clinica=clinica)
+        db.session.add_all([clinica, vet, vet_v, tutor, animal])
         db.session.commit()
-        consulta = Consulta(animal=animal, created_by=vet.id, status='in_progress')
+        consulta = Consulta(animal=animal, created_by=vet.id, status='in_progress', clinica_id=clinica.id)
         item1 = OrcamentoItem(consulta=consulta, descricao='Consulta', valor=50)
         item2 = OrcamentoItem(consulta=consulta, descricao='Exame', valor=30)
         db.session.add_all([consulta, item1, item2])

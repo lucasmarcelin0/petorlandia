@@ -122,3 +122,45 @@ def test_admin_can_access_any_consulta(monkeypatch, app):
         login(monkeypatch, admin)
         resp = client.get(f"/consulta/{animal.id}")
         assert resp.status_code == 200
+
+
+def test_orcamento_history_is_isolated(monkeypatch, app):
+    client = app.test_client()
+    with app.app_context():
+        db.create_all()
+        c1 = Clinica(nome="Clinic One")
+        c2 = Clinica(nome="Clinic Two")
+        tutor = User(name="Tutor", email="t4@example.com", password_hash="x")
+        animal = Animal(name="Rex", owner=tutor, clinica=c1)
+        vet1_user = User(name="Vet1", email="v1@example.com", password_hash="x", worker="veterinario")
+        vet2_user = User(name="Vet2", email="v2@example.com", password_hash="y", worker="veterinario")
+        vet1 = Veterinario(user=vet1_user, crmv="111", clinica=c1)
+        vet2 = Veterinario(user=vet2_user, crmv="222", clinica=c2)
+        db.session.add_all([c1, c2, tutor, animal, vet1_user, vet2_user, vet1, vet2])
+        db.session.commit()
+        consulta = Consulta(animal_id=animal.id, created_by=vet1_user.id, clinica_id=c1.id, status='in_progress')
+        db.session.add(consulta)
+        db.session.commit()
+        consulta_id = consulta.id
+        animal_id = animal.id
+        vet1_id = vet1_user.id
+        vet2_id = vet2_user.id
+
+    import flask_login.utils as login_utils
+    monkeypatch.setattr(login_utils, '_get_user', lambda: User.query.get(vet1_id))
+    resp = client.post(
+        f"/consulta/{consulta_id}/orcamento_item",
+        json={"descricao": "Consulta", "valor": 50},
+    )
+    assert resp.status_code == 201
+    resp = client.post(
+        f"/consulta/{consulta_id}/bloco_orcamento",
+        headers={"Accept": "application/json"},
+    )
+    assert resp.status_code == 200
+
+    monkeypatch.setattr(login_utils, '_get_user', lambda: User.query.get(vet2_id))
+    resp = client.get(f"/consulta/{animal_id}")
+    assert resp.status_code == 200
+    assert b"Nenhum or\xc3\xa7amento registrado ainda." in resp.data
+    assert b"R$ 50.00" not in resp.data
