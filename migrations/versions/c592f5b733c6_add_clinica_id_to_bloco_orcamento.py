@@ -16,19 +16,38 @@ depends_on = None
 
 def upgrade():
     op.add_column('bloco_orcamento', sa.Column('clinica_id', sa.Integer(), nullable=True))
-    op.create_foreign_key('fk_bloco_orcamento_clinica_id', 'bloco_orcamento', 'clinica', ['clinica_id'], ['id'])
-    op.execute(
+    op.create_foreign_key(
+        'fk_bloco_orcamento_clinica_id',
+        'bloco_orcamento',
+        'clinica',
+        ['clinica_id'],
+        ['id'],
+    )
+
+    conn = op.get_bind()
+
+    # Fill in clinic from related animal when available
+    conn.execute(
         sa.text(
-            'UPDATE bloco_orcamento bo SET clinica_id = a.clinica_id FROM animal a WHERE bo.animal_id = a.id'
+            'UPDATE bloco_orcamento bo SET clinica_id = a.clinica_id '
+            'FROM animal a WHERE bo.animal_id = a.id'
         )
     )
-    # Ensure existing rows have a clinic even when the animal has none
-    op.execute(
-        sa.text(
-            'UPDATE bloco_orcamento bo SET clinica_id = (SELECT id FROM clinica ORDER BY id LIMIT 1) '
-            'WHERE bo.clinica_id IS NULL'
-        )
+
+    # If any rows are still missing a clinic, use an existing one or create a default
+    result = conn.execute(sa.text('SELECT id FROM clinica ORDER BY id LIMIT 1')).fetchone()
+    if result is None:
+        clinic_id = conn.execute(
+            sa.text("INSERT INTO clinica (nome) VALUES ('Clinica Padrão') RETURNING id")
+        ).scalar()
+    else:
+        clinic_id = result[0]
+
+    conn.execute(
+        sa.text('UPDATE bloco_orcamento SET clinica_id = :clinic_id WHERE clinica_id IS NULL'),
+        {'clinic_id': clinic_id},
     )
+
     op.alter_column('bloco_orcamento', 'clinica_id', nullable=False)
 
 def downgrade():
