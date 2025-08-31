@@ -741,6 +741,42 @@
   </script>
   <script>
     document.addEventListener('DOMContentLoaded', () => {
+      document.querySelectorAll('.js-auth-form').forEach(form => {
+        form.addEventListener('submit', async ev => {
+          ev.preventDefault();
+          form.querySelectorAll('.text-danger').forEach(el => el.remove());
+          const resp = await fetch(form.action, {
+            method: form.method || 'POST',
+            body: new FormData(form),
+            headers: { 'Accept': 'application/json' }
+          });
+          if (resp && resp.ok) {
+            const data = await resp.json().catch(() => null);
+            if (data && data.redirect) {
+              window.location = data.redirect;
+              return;
+            }
+            window.location.reload();
+          } else if (resp) {
+            const data = await resp.json().catch(() => null);
+            if (data && data.errors) {
+              for (const [field, messages] of Object.entries(data.errors)) {
+                const input = form.querySelector(`[name="${field}"]`);
+                if (input) {
+                  const div = document.createElement('div');
+                  div.className = 'text-danger';
+                  div.textContent = messages.join(', ');
+                  input.insertAdjacentElement('afterend', div);
+                }
+              }
+            }
+          }
+        });
+      });
+    });
+  </script>
+  <script>
+    document.addEventListener('DOMContentLoaded', () => {
       document.querySelectorAll('.js-msg-form').forEach(form => {
         form.addEventListener('submit', async ev => {
           ev.preventDefault();

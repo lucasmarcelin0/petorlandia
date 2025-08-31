@@ -329,9 +329,15 @@ def reset_password_request():
                 """
             )
             mail.send(msg)
+            if request.accept_mimetypes['application/json'] > request.accept_mimetypes['text/html']:
+                return jsonify({'success': True, 'redirect': url_for('login_view')})
             flash('Um e-mail foi enviado com instruções para redefinir sua senha.', 'info')
             return redirect(url_for('login_view'))
+        if request.accept_mimetypes['application/json'] > request.accept_mimetypes['text/html']:
+            return jsonify({'success': False, 'errors': {'email': ['E-mail não encontrado.']}}), 400
         flash('E-mail não encontrado.', 'danger')
+    elif request.method == 'POST' and request.accept_mimetypes['application/json'] > request.accept_mimetypes['text/html']:
+        return jsonify({'success': False, 'errors': form.errors}), 400
     return render_template('reset_password_request.html', form=form)
 
 
@@ -394,8 +400,10 @@ def register():
         # Verifica se o e-mail já está em uso
         existing_user = User.query.filter_by(email=form.email.data).first()
         if existing_user:
+            if request.accept_mimetypes['application/json'] > request.accept_mimetypes['text/html']:
+                return jsonify({'success': False, 'errors': {'email': ['Email já está em uso.']}}), 400
             flash('Email já está em uso.', 'danger')
-            return render_template('register.html', form=form)
+            return render_template('register.html', form=form, endereco=None)
 
         # Cria o endereço
         endereco = Endereco(
@@ -431,8 +439,13 @@ def register():
         db.session.add(user)
         db.session.commit()
 
+        if request.accept_mimetypes['application/json'] > request.accept_mimetypes['text/html']:
+            return jsonify({'success': True, 'redirect': url_for('index')})
         flash('Usuário registrado com sucesso!', 'success')
         return redirect(url_for('index'))
+
+    if request.method == 'POST' and request.accept_mimetypes['application/json'] > request.accept_mimetypes['text/html']:
+        return jsonify({'success': False, 'errors': form.errors}), 400
 
     return render_template('register.html', form=form, endereco=None)
 
@@ -537,10 +550,16 @@ def login_view():
             login_user(user, remember=form.remember.data)
             if form.remember.data:
                 session.permanent = True
+            if request.accept_mimetypes['application/json'] > request.accept_mimetypes['text/html']:
+                return jsonify({'success': True, 'redirect': url_for('index')})
             flash('Login realizado com sucesso!', 'success')
             return redirect(url_for('index'))
         else:
+            if request.accept_mimetypes['application/json'] > request.accept_mimetypes['text/html']:
+                return jsonify({'success': False, 'errors': {'email': ['Email ou senha inválidos.']}}), 400
             flash('Email ou senha inválidos.', 'danger')
+    elif request.method == 'POST' and request.accept_mimetypes['application/json'] > request.accept_mimetypes['text/html']:
+        return jsonify({'success': False, 'errors': form.errors}), 400
     return render_template('login.html', form=form)
 
 
@@ -620,12 +639,18 @@ def change_password():
     form = ChangePasswordForm()
     if form.validate_on_submit():
         if not current_user.check_password(form.current_password.data):
+            if request.accept_mimetypes['application/json'] > request.accept_mimetypes['text/html']:
+                return jsonify({'success': False, 'errors': {'current_password': ['Senha atual incorreta.']}}), 400
             flash('Senha atual incorreta.', 'danger')
         else:
             current_user.set_password(form.new_password.data)
             db.session.commit()
+            if request.accept_mimetypes['application/json'] > request.accept_mimetypes['text/html']:
+                return jsonify({'success': True, 'redirect': url_for('profile')})
             flash('Senha atualizada com sucesso!', 'success')
             return redirect(url_for('profile'))
+    elif request.method == 'POST' and request.accept_mimetypes['application/json'] > request.accept_mimetypes['text/html']:
+        return jsonify({'success': False, 'errors': form.errors}), 400
     return render_template('change_password.html', form=form)
 
 
