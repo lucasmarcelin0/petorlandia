@@ -50,18 +50,21 @@ def test_veterinarian_can_schedule_for_other_users_animal(client, monkeypatch):
         plan = HealthPlan(id=1, name='Basic', price=10.0)
         db.session.add_all([clinic, tutor, vet_user, animal, plan])
         db.session.commit()
+        # ``Veterinario`` is created automatically by the listener
+        vet = vet_user.veterinario
+        vet.crmv = '123'
+        vet.clinica_id = clinic.id
         sub = HealthSubscription(
             animal_id=animal.id, plan_id=plan.id, user_id=tutor.id, active=True
         )
-        vet = Veterinario(id=1, user_id=vet_user.id, crmv='123', clinica_id=clinic.id)
         schedule = VetSchedule(
             id=1,
-            veterinario_id=1,
+            veterinario_id=vet.id,
             dia_semana='Quarta',
             hora_inicio=time(9, 0),
             hora_fim=time(17, 0),
         )
-        db.session.add_all([sub, vet, schedule])
+        db.session.add_all([sub, schedule])
         db.session.commit()
         animal_id = animal.id
         vet_id = vet.id
