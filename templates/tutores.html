@@ -20,7 +20,7 @@
     <div class="card-body">
       <h5 class="card-title mb-3">➕ Cadastrar Novo Tutor</h5>
 
-      <form id="novo-tutor-form" method="POST">
+      <form id="novo-tutor-form" method="POST" action="{{ url_for('tutores') }}" class="js-tutor-form" data-sync="true">
         <div class="row">
           <div class="mb-3 col-md-6">
             <label class="form-label">Nome</label>
@@ -62,14 +62,16 @@
             {% include "partials/endereco_form.html" %}
           </div>
 
-        <button class="btn btn-primary btn-lg">💾 Salvar e abrir ficha</button>
+        <button class="btn btn-primary btn-lg" data-original="💾 Salvar e abrir ficha">💾 Salvar e abrir ficha</button>
       </form>
     </div>
   </div>
 
 </div>
 
+<div id="tutores-adicionados">
 {% include 'partials/tutores_adicionados.html' %}
+</div>
 
 
 

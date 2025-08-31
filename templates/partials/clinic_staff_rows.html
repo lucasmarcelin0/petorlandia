@@ -1,0 +1,11 @@
+{% for s in staff_members %}
+<tr>
+  <td>{{ s.user.name }}</td>
+  <td>{{ s.user.email }}</td>
+  <td>
+    <a href="{{ url_for('clinic_staff_permissions', clinica_id=clinic.id, user_id=s.user.id) }}" class="btn btn-sm btn-outline-primary">Permissões</a>
+  </td>
+</tr>
+{% else %}
+<tr><td colspan="3">Nenhum funcionário.</td></tr>
+{% endfor %}

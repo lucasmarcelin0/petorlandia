@@ -72,6 +72,15 @@
   window.addEventListener('online', sendQueued);
   document.addEventListener('DOMContentLoaded', sendQueued);
 
+  function showToast(message, category='success'){
+    const toastEl = document.getElementById('actionToast');
+    if(!toastEl) return;
+    toastEl.querySelector('.toast-body').textContent = message;
+    toastEl.classList.remove('bg-danger','bg-info','bg-success');
+    toastEl.classList.add('bg-' + category);
+    bootstrap.Toast.getOrCreateInstance(toastEl).show();
+  }
+
   document.addEventListener('submit', async ev => {
     if (ev.defaultPrevented) return;
     const form = ev.target;
@@ -104,6 +113,41 @@
       document.dispatchEvent(evt);
       if (!evt.defaultPrevented) {
         location.reload();
+      }
+    }
+  });
+
+  document.addEventListener('form-sync-success', ev => {
+    const detail = ev.detail || {};
+    const form = detail.form;
+    const data = detail.data || {};
+    if(!form) return;
+
+    if(form.classList.contains('js-tutor-form')){
+      ev.preventDefault();
+      if(data.html){
+        const cont=document.getElementById('tutores-adicionados');
+        if(cont) cont.innerHTML=data.html;
+      }
+      showToast(data.message || 'Tutor criado com sucesso', data.category || 'success');
+      form.reset();
+      const btn=form.querySelector('button[type="submit"]');
+      if(btn && btn.dataset.original){
+        btn.disabled=false;
+        btn.innerHTML=btn.dataset.original;
+      }
+    } else if(form.classList.contains('js-animal-form')){
+      ev.preventDefault();
+      if(data.html){
+        const cont=document.getElementById('animais-adicionados');
+        if(cont) cont.innerHTML=data.html;
+      }
+      showToast(data.message || 'Animal cadastrado com sucesso', data.category || 'success');
+      form.reset();
+      const btn=form.querySelector('button[type="submit"]');
+      if(btn && btn.dataset.original){
+        btn.disabled=false;
+        btn.innerHTML=btn.dataset.original;
       }
     }
   });

@@ -337,6 +337,12 @@ class ClinicAddVeterinarianForm(FlaskForm):
     submit = SubmitField('Adicionar')
 
 
+class ClinicAddStaffForm(FlaskForm):
+    """Simple form to add an existing user as clinic staff."""
+    email = StringField('Email do usuário', validators=[DataRequired(), Email()])
+    submit = SubmitField('Adicionar')
+
+
 class ClinicStaffPermissionForm(FlaskForm):
     can_manage_clients = BooleanField('Clientes')
     can_manage_animals = BooleanField('Animais')

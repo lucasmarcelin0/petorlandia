@@ -185,7 +185,7 @@ from forms import (
     DeliveryRequestForm, AddToCartForm, SubscribePlanForm,
     ProductUpdateForm, ProductPhotoForm, ChangePasswordForm,
     DeleteAccountForm, ClinicForm, ClinicHoursForm, ClinicAddVeterinarianForm,
-    ClinicStaffPermissionForm, VetScheduleForm, VetSpecialtyForm, AppointmentForm, AppointmentDeleteForm,
+    ClinicAddStaffForm, ClinicStaffPermissionForm, VetScheduleForm, VetSpecialtyForm, AppointmentForm, AppointmentDeleteForm,
     OrcamentoForm
 )
 from helpers import (
@@ -329,9 +329,15 @@ def reset_password_request():
                 """
             )
             mail.send(msg)
+            if request.accept_mimetypes['application/json'] > request.accept_mimetypes['text/html']:
+                return jsonify({'success': True, 'redirect': url_for('login_view')})
             flash('Um e-mail foi enviado com instruções para redefinir sua senha.', 'info')
             return redirect(url_for('login_view'))
+        if request.accept_mimetypes['application/json'] > request.accept_mimetypes['text/html']:
+            return jsonify({'success': False, 'errors': {'email': ['E-mail não encontrado.']}}), 400
         flash('E-mail não encontrado.', 'danger')
+    elif request.method == 'POST' and request.accept_mimetypes['application/json'] > request.accept_mimetypes['text/html']:
+        return jsonify({'success': False, 'errors': form.errors}), 400
     return render_template('reset_password_request.html', form=form)
 
 
@@ -394,8 +400,10 @@ def register():
         # Verifica se o e-mail já está em uso
         existing_user = User.query.filter_by(email=form.email.data).first()
         if existing_user:
+            if request.accept_mimetypes['application/json'] > request.accept_mimetypes['text/html']:
+                return jsonify({'success': False, 'errors': {'email': ['Email já está em uso.']}}), 400
             flash('Email já está em uso.', 'danger')
-            return render_template('register.html', form=form)
+            return render_template('register.html', form=form, endereco=None)
 
         # Cria o endereço
         endereco = Endereco(
@@ -431,8 +439,13 @@ def register():
         db.session.add(user)
         db.session.commit()
 
+        if request.accept_mimetypes['application/json'] > request.accept_mimetypes['text/html']:
+            return jsonify({'success': True, 'redirect': url_for('index')})
         flash('Usuário registrado com sucesso!', 'success')
         return redirect(url_for('index'))
+
+    if request.method == 'POST' and request.accept_mimetypes['application/json'] > request.accept_mimetypes['text/html']:
+        return jsonify({'success': False, 'errors': form.errors}), 400
 
     return render_template('register.html', form=form, endereco=None)
 
@@ -537,10 +550,16 @@ def login_view():
             login_user(user, remember=form.remember.data)
             if form.remember.data:
                 session.permanent = True
+            if request.accept_mimetypes['application/json'] > request.accept_mimetypes['text/html']:
+                return jsonify({'success': True, 'redirect': url_for('index')})
             flash('Login realizado com sucesso!', 'success')
             return redirect(url_for('index'))
         else:
+            if request.accept_mimetypes['application/json'] > request.accept_mimetypes['text/html']:
+                return jsonify({'success': False, 'errors': {'email': ['Email ou senha inválidos.']}}), 400
             flash('Email ou senha inválidos.', 'danger')
+    elif request.method == 'POST' and request.accept_mimetypes['application/json'] > request.accept_mimetypes['text/html']:
+        return jsonify({'success': False, 'errors': form.errors}), 400
     return render_template('login.html', form=form)
 
 
@@ -620,12 +639,18 @@ def change_password():
     form = ChangePasswordForm()
     if form.validate_on_submit():
         if not current_user.check_password(form.current_password.data):
+            if request.accept_mimetypes['application/json'] > request.accept_mimetypes['text/html']:
+                return jsonify({'success': False, 'errors': {'current_password': ['Senha atual incorreta.']}}), 400
             flash('Senha atual incorreta.', 'danger')
         else:
             current_user.set_password(form.new_password.data)
             db.session.commit()
+            if request.accept_mimetypes['application/json'] > request.accept_mimetypes['text/html']:
+                return jsonify({'success': True, 'redirect': url_for('profile')})
             flash('Senha atualizada com sucesso!', 'success')
             return redirect(url_for('profile'))
+    elif request.method == 'POST' and request.accept_mimetypes['application/json'] > request.accept_mimetypes['text/html']:
+        return jsonify({'success': False, 'errors': form.errors}), 400
     return render_template('change_password.html', form=form)
 
 
@@ -1906,6 +1931,7 @@ def clinic_detail(clinica_id):
     hours_form = ClinicHoursForm()
     clinic_form = ClinicForm(obj=clinica)
     vets_form = ClinicAddVeterinarianForm()
+    staff_form = ClinicAddStaffForm()
     vets_form.veterinario_id.choices = [
         (v.id, v.user.name)
         for v in Veterinario.query.filter_by(clinica_id=None).all()
@@ -1921,6 +1947,25 @@ def clinic_detail(clinica_id):
         )
         or current_user.id == clinica.owner_id
     )
+    if staff_form.submit.data and staff_form.validate_on_submit():
+        if not (_is_admin() or current_user.id == clinica.owner_id):
+            abort(403)
+        user = User.query.filter_by(email=staff_form.email.data).first()
+        if not user:
+            flash('Usuário não encontrado', 'danger')
+        else:
+            staff = ClinicStaff.query.filter_by(clinic_id=clinica.id, user_id=user.id).first()
+            if staff:
+                flash('Funcionário já está na clínica', 'warning')
+            else:
+                staff = ClinicStaff(clinic_id=clinica.id, user_id=user.id)
+                db.session.add(staff)
+                user.clinica_id = clinica.id
+                db.session.add(user)
+                db.session.commit()
+                flash('Funcionário adicionado. Defina as permissões.', 'success')
+                return redirect(url_for('clinic_detail', clinica_id=clinica.id) + '#veterinarios')
+
     if clinic_form.submit.data and clinic_form.validate_on_submit():
         if not pode_editar:
             abort(403)
@@ -1979,6 +2024,24 @@ def clinic_detail(clinica_id):
         return redirect(url_for('clinic_detail', clinica_id=clinica.id))
     horarios = ClinicHours.query.filter_by(clinica_id=clinica_id).all()
     veterinarios = Veterinario.query.filter_by(clinica_id=clinica_id).all()
+    staff_members = ClinicStaff.query.filter_by(clinic_id=clinica.id).all()
+
+    staff_permission_forms = {}
+    for s in staff_members:
+        form = ClinicStaffPermissionForm(prefix=f"perm_{s.user.id}", obj=s)
+        staff_permission_forms[s.user.id] = form
+
+    for s in staff_members:
+        form = staff_permission_forms[s.user.id]
+        if form.submit.data and form.validate_on_submit():
+            if not (_is_admin() or current_user.id == clinica.owner_id):
+                abort(403)
+            form.populate_obj(s)
+            s.user_id = s.user.id
+            db.session.add(s)
+            db.session.commit()
+            flash('Permissões atualizadas', 'success')
+            return redirect(url_for('clinic_detail', clinica_id=clinica.id) + '#veterinarios')
 
     vet_schedule_forms = {}
     for v in veterinarios:
@@ -2043,6 +2106,13 @@ def clinic_detail(clinica_id):
 
     appointments = appointments_query.order_by(Appointment.scheduled_at).all()
     appointments_grouped = group_appointments_by_day(appointments)
+
+    if request.headers.get("X-Requested-With") == "XMLHttpRequest":
+        return render_template(
+            "partials/appointments_table.html",
+            appointments_grouped=appointments_grouped,
+        )
+
     grouped_vet_schedules = {
         v.id: group_vet_schedules_by_day(v.horarios)
         for v in veterinarios
@@ -2063,6 +2133,9 @@ def clinic_detail(clinica_id):
         vets_form=vets_form,
         veterinarios=veterinarios,
         vet_schedule_forms=vet_schedule_forms,
+        staff_members=staff_members,
+        staff_form=staff_form,
+        staff_permission_forms=staff_permission_forms,
         appointments=appointments,
         appointments_grouped=appointments_grouped,
         grouped_vet_schedules=grouped_vet_schedules,
@@ -2120,6 +2193,58 @@ def orcamentos(clinica_id):
     return render_template('orcamentos.html', clinica=clinica, orcamentos=lista)
 
 
+@app.route('/dashboard/orcamentos')
+@login_required
+def dashboard_orcamentos():
+    from collections import defaultdict
+    from models import Consulta, Orcamento, Payment, PaymentStatus
+
+    consultas = Consulta.query.filter(Consulta.orcamento_items.any()).all()
+    dados_consultas = []
+    for consulta in consultas:
+        pagamento = Payment.query.filter_by(
+            external_reference=f'consulta-{consulta.id}',
+            status=PaymentStatus.COMPLETED,
+        ).first()
+        dados_consultas.append(
+            {
+                'cliente': consulta.animal.owner.name if consulta.animal and consulta.animal.owner else 'N/A',
+                'animal': consulta.animal.name if consulta.animal else 'N/A',
+                'total': float(consulta.total_orcamento),
+                'status': 'Pago' if pagamento else 'Pendente',
+            }
+        )
+
+    total_por_cliente = defaultdict(lambda: {'total': 0, 'pagos': 0, 'pendentes': 0})
+    total_por_animal = defaultdict(lambda: {'total': 0, 'pagos': 0, 'pendentes': 0})
+    for d in dados_consultas:
+        tc = total_por_cliente[d['cliente']]
+        tc['total'] += d['total']
+        if d['status'] == 'Pago':
+            tc['pagos'] += d['total']
+        else:
+            tc['pendentes'] += d['total']
+        ta = total_por_animal[d['animal']]
+        ta['total'] += d['total']
+        if d['status'] == 'Pago':
+            ta['pagos'] += d['total']
+        else:
+            ta['pendentes'] += d['total']
+
+    orcamentos = Orcamento.query.all()
+    dados_orcamentos = [
+        {'descricao': o.descricao, 'total': float(o.total)} for o in orcamentos
+    ]
+
+    return render_template(
+        'dashboard_orcamentos.html',
+        consultas=dados_consultas,
+        clientes=total_por_cliente,
+        animais=total_por_animal,
+        orcamentos=dados_orcamentos,
+    )
+
+
 @app.route('/clinica/<int:clinica_id>/dashboard')
 @login_required
 def clinic_dashboard(clinica_id):
@@ -2146,15 +2271,21 @@ def clinic_dashboard(clinica_id):
 def clinic_staff(clinica_id):
     clinic = Clinica.query.get_or_404(clinica_id)
     if current_user.id != clinic.owner_id:
+        if request.accept_mimetypes.accept_json:
+            return jsonify(success=False, message='Sem permissão'), 403
         abort(403)
     if request.method == 'POST':
         email = request.form.get('email')
         user = User.query.filter_by(email=email).first()
         if not user:
+            if request.accept_mimetypes.accept_json:
+                return jsonify(success=False, message='Usuário não encontrado'), 404
             flash('Usuário não encontrado', 'danger')
         else:
             staff = ClinicStaff.query.filter_by(clinic_id=clinic.id, user_id=user.id).first()
             if staff:
+                if request.accept_mimetypes.accept_json:
+                    return jsonify(success=False, message='Funcionário já está na clínica'), 400
                 flash('Funcionário já está na clínica', 'warning')
             else:
                 staff = ClinicStaff(clinic_id=clinic.id, user_id=user.id)
@@ -2162,9 +2293,16 @@ def clinic_staff(clinica_id):
                 user.clinica_id = clinic.id
                 db.session.add(user)
                 db.session.commit()
+                if request.accept_mimetypes.accept_json:
+                    staff_members = ClinicStaff.query.filter_by(clinic_id=clinic.id).all()
+                    html = render_template('partials/clinic_staff_rows.html', clinic=clinic, staff_members=staff_members)
+                    return jsonify(success=True, html=html, message='Funcionário adicionado', category='success')
                 flash('Funcionário adicionado. Defina as permissões.', 'success')
                 return redirect(url_for('clinic_staff_permissions', clinica_id=clinic.id, user_id=user.id))
     staff_members = ClinicStaff.query.filter_by(clinic_id=clinic.id).all()
+    if request.accept_mimetypes.accept_json:
+        html = render_template('partials/clinic_staff_rows.html', clinic=clinic, staff_members=staff_members)
+        return jsonify(success=True, html=html)
     return render_template('clinic_staff_list.html', clinic=clinic, staff_members=staff_members)
 
 
@@ -2173,7 +2311,14 @@ def clinic_staff(clinica_id):
 def clinic_staff_permissions(clinica_id, user_id):
     clinic = Clinica.query.get_or_404(clinica_id)
     if current_user.id != clinic.owner_id:
+        if request.accept_mimetypes.accept_json:
+            return jsonify(success=False, message='Sem permissão'), 403
         abort(403)
+    user = User.query.get(user_id)
+    if not user:
+        if request.accept_mimetypes.accept_json:
+            return jsonify(success=False, message='Usuário não encontrado'), 404
+        abort(404)
     staff = ClinicStaff.query.filter_by(clinic_id=clinic.id, user_id=user_id).first()
     if not staff:
         staff = ClinicStaff(clinic_id=clinic.id, user_id=user_id)
@@ -2182,13 +2327,17 @@ def clinic_staff_permissions(clinica_id, user_id):
         form.populate_obj(staff)
         staff.user_id = user_id
         db.session.add(staff)
-        user = User.query.get(user_id)
-        if user:
-            user.clinica_id = clinic.id
-            db.session.add(user)
+        user.clinica_id = clinic.id
+        db.session.add(user)
         db.session.commit()
+        if request.accept_mimetypes.accept_json:
+            html = render_template('partials/clinic_staff_permissions_form.html', form=form, clinic=clinic)
+            return jsonify(success=True, html=html, message='Permissões atualizadas', category='success')
         flash('Permissões atualizadas', 'success')
         return redirect(url_for('clinic_dashboard', clinica_id=clinic.id))
+    if request.accept_mimetypes.accept_json:
+        html = render_template('partials/clinic_staff_permissions_form.html', form=form, clinic=clinic)
+        return jsonify(success=True, html=html)
     return render_template('clinic_staff_permissions.html', form=form, clinic=clinic)
 
 
@@ -2323,6 +2472,58 @@ def tutores():
         flash('Apenas veterinários ou colaboradores podem acessar esta página.', 'danger')
         return redirect(url_for('index'))
 
+    def fetch_tutores(scope, page):
+        clinic_id = current_user_clinic_id()
+        if scope == 'mine':
+            query = User.query.filter(User.created_at != None)
+            if clinic_id:
+                query = query.filter(User.clinica_id == clinic_id)
+            consultas_exist = (
+                db.session.query(Consulta.id)
+                .join(Animal, Consulta.animal_id == Animal.id)
+                .filter(
+                    Consulta.created_by == current_user.id,
+                    Animal.user_id == User.id,
+                )
+            )
+            pagination = (
+                query.filter(
+                    or_(
+                        User.added_by_id == current_user.id,
+                        consultas_exist.exists(),
+                    )
+                )
+                .order_by(User.created_at.desc())
+                .paginate(page=page, per_page=9)
+            )
+            return pagination.items, pagination
+        elif clinic_id:
+            last_appt = (
+                db.session.query(
+                    Appointment.tutor_id,
+                    func.max(Appointment.scheduled_at).label('last_at')
+                )
+                .filter(Appointment.clinica_id == clinic_id)
+                .group_by(Appointment.tutor_id)
+                .subquery()
+            )
+
+            pagination = (
+                User.query
+                .outerjoin(last_appt, User.id == last_appt.c.tutor_id)
+                .filter(
+                    or_(
+                        User.clinica_id == clinic_id,
+                        last_appt.c.last_at != None
+                    )
+                )
+                .order_by(func.coalesce(last_appt.c.last_at, User.created_at).desc())
+                .paginate(page=page, per_page=9)
+            )
+            return pagination.items, pagination
+        else:
+            return [], None
+
     # Criação de novo tutor
     if request.method == 'POST':
         name = request.form.get('tutor_name') or request.form.get('name')
@@ -2394,63 +2595,25 @@ def tutores():
         db.session.add(novo)
         db.session.commit()
 
+        if request.accept_mimetypes.accept_json:
+            scope = request.args.get('scope', 'all')
+            page = request.args.get('page', 1, type=int)
+            tutores_adicionados, pagination = fetch_tutores(scope, page)
+            html = render_template(
+                'partials/tutores_adicionados.html',
+                tutores_adicionados=tutores_adicionados,
+                pagination=pagination,
+                scope=scope
+            )
+            return jsonify(message='Tutor criado com sucesso!', category='success', html=html)
+
         flash('Tutor criado com sucesso!', 'success')
         return redirect(url_for('ficha_tutor', tutor_id=novo.id))
 
     # — GET com paginação —
     page = request.args.get('page', 1, type=int)
     scope = request.args.get('scope', 'all')
-    clinic_id = current_user_clinic_id()
-    if scope == 'mine':
-        query = User.query.filter(User.created_at != None)
-        if clinic_id:
-            query = query.filter(User.clinica_id == clinic_id)
-        consultas_exist = (
-            db.session.query(Consulta.id)
-            .join(Animal, Consulta.animal_id == Animal.id)
-            .filter(
-                Consulta.created_by == current_user.id,
-                Animal.user_id == User.id,
-            )
-        )
-        pagination = (
-            query.filter(
-                or_(
-                    User.added_by_id == current_user.id,
-                    consultas_exist.exists(),
-                )
-            )
-            .order_by(User.created_at.desc())
-            .paginate(page=page, per_page=9)
-        )
-        tutores_adicionados = pagination.items
-    elif clinic_id:
-        last_appt = (
-            db.session.query(
-                Appointment.tutor_id,
-                func.max(Appointment.scheduled_at).label('last_at')
-            )
-            .filter(Appointment.clinica_id == clinic_id)
-            .group_by(Appointment.tutor_id)
-            .subquery()
-        )
-
-        pagination = (
-            User.query
-            .outerjoin(last_appt, User.id == last_appt.c.tutor_id)
-            .filter(
-                or_(
-                    User.clinica_id == clinic_id,
-                    last_appt.c.last_at != None
-                )
-            )
-            .order_by(func.coalesce(last_appt.c.last_at, User.created_at).desc())
-            .paginate(page=page, per_page=9)
-        )
-        tutores_adicionados = pagination.items
-    else:
-        pagination = None
-        tutores_adicionados = []
+    tutores_adicionados, pagination = fetch_tutores(scope, page)
 
     return render_template(
         'tutores.html',
@@ -3817,6 +3980,63 @@ def novo_animal():
         flash('Apenas veterinários ou colaboradores podem cadastrar animais.', 'danger')
         return redirect(url_for('index'))
 
+    def fetch_animais(scope, page):
+        clinic_id = current_user_clinic_id()
+        if scope == 'mine':
+            query = Animal.query.filter(Animal.removido_em == None)
+            if clinic_id:
+                query = query.filter(Animal.clinica_id == clinic_id)
+            consultas_exist = (
+                db.session.query(Consulta.id)
+                .filter(
+                    Consulta.animal_id == Animal.id,
+                    Consulta.created_by == current_user.id,
+                )
+            )
+            pagination = (
+                query.filter(
+                    or_(
+                        Animal.added_by_id == current_user.id,
+                        consultas_exist.exists(),
+                    )
+                )
+                .order_by(Animal.date_added.desc())
+                .paginate(page=page, per_page=9)
+            )
+        elif clinic_id:
+            last_appt = (
+                db.session.query(
+                    Appointment.animal_id,
+                    func.max(Appointment.scheduled_at).label('last_at')
+                )
+                .filter(Appointment.clinica_id == clinic_id)
+                .group_by(Appointment.animal_id)
+                .subquery()
+            )
+
+            pagination = (
+                Animal.query
+                .outerjoin(last_appt, Animal.id == last_appt.c.animal_id)
+                .filter(Animal.removido_em == None)
+                .filter(
+                    or_(
+                        Animal.clinica_id == clinic_id,
+                        last_appt.c.last_at != None
+                    )
+                )
+                .order_by(func.coalesce(last_appt.c.last_at, Animal.date_added).desc())
+                .paginate(page=page, per_page=9)
+            )
+        else:
+            pagination = (
+                Animal.query
+                .filter_by(added_by_id=current_user.id)
+                .filter(Animal.removido_em == None)
+                .order_by(Animal.date_added.desc())
+                .paginate(page=page, per_page=9)
+            )
+        return pagination.items, pagination
+
     if request.method == 'POST':
         tutor_id = request.form.get('tutor_id', type=int)
         tutor = User.query.get_or_404(tutor_id)
@@ -3891,68 +4111,25 @@ def novo_animal():
         db.session.add(consulta)
         db.session.commit()
 
+        if request.accept_mimetypes.accept_json:
+            scope = request.args.get('scope', 'all')
+            page = request.args.get('page', 1, type=int)
+            animais_adicionados, pagination = fetch_animais(scope, page)
+            html = render_template(
+                'partials/animais_adicionados.html',
+                animais_adicionados=animais_adicionados,
+                pagination=pagination,
+                scope=scope
+            )
+            return jsonify(message='Animal cadastrado com sucesso!', category='success', html=html)
+
         flash('Animal cadastrado com sucesso!', 'success')
         return redirect(url_for('consulta_direct', animal_id=animal.id))
 
     # GET: lista de animais adicionados para exibição
     page = request.args.get('page', 1, type=int)
     scope = request.args.get('scope', 'all')
-    clinic_id = current_user_clinic_id()
-    if scope == 'mine':
-        query = Animal.query.filter(Animal.removido_em == None)
-        if clinic_id:
-            query = query.filter(Animal.clinica_id == clinic_id)
-        consultas_exist = (
-            db.session.query(Consulta.id)
-            .filter(
-                Consulta.animal_id == Animal.id,
-                Consulta.created_by == current_user.id,
-            )
-        )
-        pagination = (
-            query.filter(
-                or_(
-                    Animal.added_by_id == current_user.id,
-                    consultas_exist.exists(),
-                )
-            )
-            .order_by(Animal.date_added.desc())
-            .paginate(page=page, per_page=9)
-        )
-    elif clinic_id:
-        last_appt = (
-            db.session.query(
-                Appointment.animal_id,
-                func.max(Appointment.scheduled_at).label('last_at')
-            )
-            .filter(Appointment.clinica_id == clinic_id)
-            .group_by(Appointment.animal_id)
-            .subquery()
-        )
-
-        pagination = (
-            Animal.query
-            .outerjoin(last_appt, Animal.id == last_appt.c.animal_id)
-            .filter(Animal.removido_em == None)
-            .filter(
-                or_(
-                    Animal.clinica_id == clinic_id,
-                    last_appt.c.last_at != None
-                )
-            )
-            .order_by(func.coalesce(last_appt.c.last_at, Animal.date_added).desc())
-            .paginate(page=page, per_page=9)
-        )
-    else:
-        pagination = (
-            Animal.query
-            .filter_by(added_by_id=current_user.id)
-            .filter(Animal.removido_em == None)
-            .order_by(Animal.date_added.desc())
-            .paginate(page=page, per_page=9)
-        )
-
-    animais_adicionados = pagination.items
+    animais_adicionados, pagination = fetch_animais(scope, page)
 
     # Lista de espécies e raças para os <select> do formulário
     species_list = list_species()
@@ -4759,23 +4936,11 @@ def _setup_checkout_form(form, preserve_selected=True):
 
 
 
-from flask import session, render_template, request
+from flask import session, render_template, request, jsonify
 from flask_login import login_required
 
 
-@app.route("/loja")
-@login_required
-def loja():
-    pagamento_pendente = None
-    payment_id = session.get("last_pending_payment")
-    if payment_id:
-        payment = Payment.query.get(payment_id)
-        if payment and payment.status.name == "PENDING":
-            pagamento_pendente = payment
-
-    search_term = request.args.get("q", "").strip()
-    filtro = request.args.get("filter", "all")
-
+def _build_loja_query(search_term: str, filtro: str):
     query = Product.query
     if search_term:
         like = f"%{search_term}%"
@@ -4792,7 +4957,27 @@ def loja():
     else:
         query = query.order_by(Product.name)
 
-    produtos = query.all()
+    return query
+
+
+@app.route("/loja")
+@login_required
+def loja():
+    pagamento_pendente = None
+    payment_id = session.get("last_pending_payment")
+    if payment_id:
+        payment = Payment.query.get(payment_id)
+        if payment and payment.status.name == "PENDING":
+            pagamento_pendente = payment
+
+    search_term = request.args.get("q", "").strip()
+    filtro = request.args.get("filter", "all")
+    page = request.args.get("page", 1, type=int)
+    per_page = 12
+
+    query = _build_loja_query(search_term, filtro)
+    pagination = query.paginate(page=page, per_page=per_page, error_out=False)
+    produtos = pagination.items
     form = AddToCartForm()
 
     # Verifica se há pedidos anteriores
@@ -4801,12 +4986,56 @@ def loja():
     return render_template(
         "loja.html",
         products=produtos,
+        pagination=pagination,
         pagamento_pendente=pagamento_pendente,
         form=form,
         has_orders=has_orders,
         selected_filter=filtro,
         search_term=search_term,
     )
+
+
+@app.route("/loja/data")
+@login_required
+def loja_data():
+    search_term = request.args.get("q", "").strip()
+    filtro = request.args.get("filter", "all")
+    page = request.args.get("page", 1, type=int)
+    per_page = 12
+
+    query = _build_loja_query(search_term, filtro)
+    pagination = query.paginate(page=page, per_page=per_page, error_out=False)
+    produtos = pagination.items
+    form = AddToCartForm()
+
+    if request.args.get("format") == "json":
+        products_data = [
+            {
+                "id": p.id,
+                "name": p.name,
+                "description": p.description,
+                "price": p.price,
+                "image_url": p.image_url,
+            }
+            for p in produtos
+        ]
+        return jsonify(
+            products=products_data,
+            page=pagination.page,
+            total_pages=pagination.pages,
+            has_next=pagination.has_next,
+            has_prev=pagination.has_prev,
+        )
+
+    html = render_template(
+        "partials/_product_grid.html",
+        products=produtos,
+        pagination=pagination,
+        form=form,
+        selected_filter=filtro,
+        search_term=search_term,
+    )
+    return html
 
 
 @app.route('/produto/<int:product_id>', methods=['GET', 'POST'])

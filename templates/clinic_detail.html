@@ -55,10 +55,59 @@
       <div class="tab-pane fade" id="veterinarios" role="tabpanel">
         <div class="d-flex justify-content-between align-items-center mt-4">
           <h3 class="mb-0">Funcionários</h3>
-          {% if current_user.id == clinica.owner_id %}
-          <a href="{{ url_for('clinic_staff', clinica_id=clinica.id) }}" class="btn btn-sm btn-outline-secondary">Gerenciar Funcionários</a>
-          {% endif %}
         </div>
+        {% if current_user.id == clinica.owner_id %}
+        <form method="post" class="mt-3 mb-4" id="add-staff-form">
+          {{ staff_form.hidden_tag() }}
+          <div class="input-group">
+            {{ staff_form.email(class="form-control", placeholder="Email do usuário") }}
+            {{ staff_form.submit(class="btn btn-primary") }}
+          </div>
+        </form>
+        {% endif %}
+        <ul id="employee-list" class="list-unstyled mb-4">
+          {% for s in staff_members %}
+            <li class="border rounded p-3 mb-3">
+              <div class="d-flex justify-content-between align-items-center">
+                <div><strong>{{ s.user.name }}</strong> - {{ s.user.email }}</div>
+                {% if current_user.id == clinica.owner_id %}
+                <button class="btn btn-sm btn-outline-primary" onclick="toggleStaffPerm({{ s.user.id }})">Permissões</button>
+                {% endif %}
+              </div>
+              {% if current_user.id == clinica.owner_id %}
+              <div id="staff-perms-{{ s.user.id }}" style="display:none;" class="mt-2">
+                <form method="post">
+                  {{ staff_permission_forms[s.user.id].hidden_tag() }}
+                  <div class="form-check">
+                    {{ staff_permission_forms[s.user.id].can_manage_clients(class="form-check-input") }}
+                    {{ staff_permission_forms[s.user.id].can_manage_clients.label(class="form-check-label") }}
+                  </div>
+                  <div class="form-check">
+                    {{ staff_permission_forms[s.user.id].can_manage_animals(class="form-check-input") }}
+                    {{ staff_permission_forms[s.user.id].can_manage_animals.label(class="form-check-label") }}
+                  </div>
+                  <div class="form-check">
+                    {{ staff_permission_forms[s.user.id].can_manage_staff(class="form-check-input") }}
+                    {{ staff_permission_forms[s.user.id].can_manage_staff.label(class="form-check-label") }}
+                  </div>
+                  <div class="form-check">
+                    {{ staff_permission_forms[s.user.id].can_manage_schedule(class="form-check-input") }}
+                    {{ staff_permission_forms[s.user.id].can_manage_schedule.label(class="form-check-label") }}
+                  </div>
+                  <div class="form-check">
+                    {{ staff_permission_forms[s.user.id].can_manage_inventory(class="form-check-input") }}
+                    {{ staff_permission_forms[s.user.id].can_manage_inventory.label(class="form-check-label") }}
+                  </div>
+                  {{ staff_permission_forms[s.user.id].submit(class="btn btn-primary btn-sm mt-2") }}
+                </form>
+              </div>
+              {% endif %}
+            </li>
+          {% else %}
+            <li>Nenhum funcionário.</li>
+          {% endfor %}
+        </ul>
+        <h4 class="mt-4">Veterinários</h4>
         <div class="row mt-3 mb-3">
           <div class="col-md-4">
             <input type="text" id="staff-filter" class="form-control" placeholder="Buscar por nome, CRMV...">
@@ -162,7 +211,46 @@
     </div>
 
     <div class="tab-pane fade" id="agendamentos" role="tabpanel">
-      <h3>Horários de Atendimento</h3>
+      <h3>Agendamentos</h3>
+      <div class="d-flex justify-content-between align-items-center mb-3">
+        <div class="btn-group" id="view-toggle">
+          <button class="btn btn-outline-secondary active" data-view="calendar">Calendário</button>
+          <button class="btn btn-outline-secondary" data-view="list">Lista</button>
+          <button class="btn btn-outline-secondary" data-view="timeline">Cronograma</button>
+        </div>
+        <a href="{{ url_for('appointments') }}" class="btn btn-primary">Novo Agendamento</a>
+      </div>
+
+      <div id="calendar-container">
+        {% with clinic_id = clinica.id %}
+          {% include 'partials/schedule_toggle.html' %}
+        {% endwith %}
+      </div>
+
+      <div id="list-container" class="d-none">
+        <form id="appointment-filter-form" method="get" action="{{ url_for('clinic_detail', clinica_id=clinica.id) }}" class="row g-2 mb-3">
+          <div class="col-auto">
+            <label for="start" class="form-label">Início</label>
+            <input type="date" id="start" name="start" class="form-control" value="{{ start }}">
+          </div>
+          <div class="col-auto">
+            <label for="end" class="form-label">Fim</label>
+            <input type="date" id="end" name="end" class="form-control" value="{{ end }}">
+          </div>
+          <div class="col-auto align-self-end">
+            <button type="submit" class="btn btn-primary">Filtrar</button>
+          </div>
+          <div class="col-auto align-self-end">
+            <a href="{{ url_for('clinic_detail', clinica_id=clinica.id, start=today_str, end=today_str) }}" class="btn btn-outline-secondary">Hoje</a>
+            <a href="{{ url_for('clinic_detail', clinica_id=clinica.id, start=today_str, end=next7_str) }}" class="btn btn-outline-secondary">Próximos 7 dias</a>
+          </div>
+        </form>
+        <div id="appointments-table-container">
+          {% include 'partials/appointments_table.html' %}
+        </div>
+      </div>
+
+      <h3 class="mt-4">Horários de Atendimento</h3>
       <table class="table">
         <thead>
           <tr><th>Dia</th><th>Abre</th><th>Fecha</th>{% if pode_editar %}<th>Ações</th>{% endif %}</tr>
@@ -219,63 +307,6 @@
         </form>
       </div>
       {% endif %}
-
-      <h3 class="mt-4">Agendamentos</h3>
-
-      {% with clinic_id = clinica.id %}
-        {% include 'partials/schedule_toggle.html' %}
-      {% endwith %}
-      <a href="{{ url_for('appointments') }}" class="btn btn-primary mb-3">Novo Agendamento</a>
-      <form method="get" class="row g-2 mb-3">
-        <div class="col-auto">
-          <label for="start" class="form-label">Início</label>
-          <input type="date" id="start" name="start" class="form-control" value="{{ start }}">
-        </div>
-        <div class="col-auto">
-          <label for="end" class="form-label">Fim</label>
-          <input type="date" id="end" name="end" class="form-control" value="{{ end }}">
-        </div>
-        <div class="col-auto align-self-end">
-          <button type="submit" class="btn btn-primary">Filtrar</button>
-        </div>
-        <div class="col-auto align-self-end">
-          <a href="{{ url_for('clinic_detail', clinica_id=clinica.id, start=today_str, end=today_str) }}" class="btn btn-outline-secondary">Hoje</a>
-          <a href="{{ url_for('clinic_detail', clinica_id=clinica.id, start=today_str, end=next7_str) }}" class="btn btn-outline-secondary">Próximos 7 dias</a>
-        </div>
-      </form>
-      <table class="table">
-        <thead>
-          <tr>
-            <th>Data</th>
-            <th>Animal</th>
-            <th>Veterinário</th>
-            <th>Ações</th>
-          </tr>
-        </thead>
-        <tbody>
-          {% for a in appointments %}
-            <tr class="{% if a.scheduled_at < now %}table-secondary{% else %}table-success{% endif %}">
-              <td>{{ a.scheduled_at|format_datetime_brazil }}</td>
-              <td>{{ a.animal.name }}</td>
-              <td>{{ a.veterinario.user.name }}</td>
-              <td>
-                <div class="btn-group">
-                  <a href="{{ url_for('ficha_animal', animal_id=a.animal_id) }}" class="btn btn-sm btn-outline-primary">📋 Ficha Animal</a>
-                  <a href="{{ url_for('ficha_tutor', tutor_id=a.tutor_id) }}" class="btn btn-sm btn-outline-secondary">👤 Ficha Tutor</a>
-                  {% if current_user.worker in ['veterinario', 'colaborador'] %}
-                  <a href="{{ url_for('consulta_direct', animal_id=a.animal_id) }}" class="btn btn-sm btn-outline-success">🩺 Iniciar Consulta</a>
-                  {% endif %}
-                  {% if current_user.role == 'admin' or current_user.worker in ['veterinario', 'colaborador'] or current_user.id == a.tutor_id %}
-                  <a href="{{ url_for('edit_appointment', appointment_id=a.id) }}" class="btn btn-sm btn-outline-warning">✏️ Editar</a>
-                  {% endif %}
-                </div>
-              </td>
-            </tr>
-          {% else %}
-            <tr><td colspan="4">Nenhum agendamento encontrado.</td></tr>
-          {% endfor %}
-        </tbody>
-      </table>
 
     </div>
     <div class="tab-pane fade" id="animais" role="tabpanel">
@@ -356,6 +387,12 @@
       section.style.display = section.style.display === 'none' ? 'block' : 'none';
     }
   }
+  function toggleStaffPerm(id) {
+    const section = document.getElementById(`staff-perms-${id}`);
+    if (section) {
+      section.style.display = section.style.display === 'none' ? 'block' : 'none';
+    }
+  }
   function toggleAddVet() {
     const section = document.getElementById('add-vet');
     section.style.display = section.style.display === 'none' ? 'block' : 'none';
@@ -415,6 +452,72 @@ document.addEventListener('DOMContentLoaded', function() {
   sortSelect.addEventListener('change', applySort);
   if (roleSelect) roleSelect.addEventListener('change', () => { applyFilter(); applySort(); });
   applySort();
+});
+
+document.addEventListener('DOMContentLoaded', function() {
+  const form = document.getElementById('appointment-filter-form');
+  const container = document.getElementById('appointments-table-container');
+  if (!form || !container) return;
+
+  function updateTable(url, pushState = true) {
+    fetch(url, { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+      .then(response => response.text())
+      .then(html => {
+        container.innerHTML = html;
+        if (pushState) {
+          window.history.replaceState({}, '', url);
+        }
+      })
+      .catch(err => console.error(err));
+  }
+
+  form.addEventListener('submit', function(e) {
+    e.preventDefault();
+    const params = new URLSearchParams(new FormData(form));
+    const url = `${form.action}?${params.toString()}`;
+    updateTable(url);
+  });
+
+  const quickLinks = form.querySelectorAll('a[href]');
+  quickLinks.forEach(link => {
+    link.addEventListener('click', function(e) {
+      e.preventDefault();
+      const url = this.href;
+      const u = new URL(url);
+      updateTable(url);
+      const startInput = document.getElementById('start');
+      const endInput = document.getElementById('end');
+      if (u.searchParams.get('start')) startInput.value = u.searchParams.get('start');
+      if (u.searchParams.get('end')) endInput.value = u.searchParams.get('end');
+    });
+  });
+});
+
+document.addEventListener('DOMContentLoaded', function() {
+  const toggle = document.getElementById('view-toggle');
+  const list = document.getElementById('list-container');
+  const calendar = document.getElementById('calendar-container');
+  if (!toggle || !list || !calendar) return;
+
+  toggle.querySelectorAll('button').forEach(btn => {
+    btn.addEventListener('click', function() {
+      toggle.querySelectorAll('button').forEach(b => b.classList.remove('active'));
+      this.classList.add('active');
+      const view = this.dataset.view;
+      if (view === 'list') {
+        list.classList.remove('d-none');
+        calendar.classList.add('d-none');
+      } else {
+        list.classList.add('d-none');
+        calendar.classList.remove('d-none');
+        if (window.sharedCalendar) {
+          const mode = view === 'timeline' ? 'timeGridWeek' : 'dayGridMonth';
+          window.sharedCalendar.changeView(mode);
+          window.sharedCalendar.render();
+        }
+      }
+    });
+  });
 });
 
 </script>
