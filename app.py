@@ -1863,8 +1863,6 @@ def clinicas():
 def minha_clinica():
     clinicas = clinicas_do_usuario().all()
     if not clinicas:
-        if getattr(current_user, 'veterinario', None):
-            abort(404)
         form = ClinicForm()
         if form.validate_on_submit():
             clinica = Clinica(

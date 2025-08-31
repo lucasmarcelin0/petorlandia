@@ -21,6 +21,7 @@ def app():
 
 def test_add_veterinarian_sets_clinic(app):
     with app.app_context():
+        db.drop_all()
         db.create_all()
         clinic = Clinica(id=1, nome='Clinica', owner_id=1)
         user = User(id=2, name='Vet', email='vet@test', password_hash='x')
@@ -37,3 +38,6 @@ def test_add_veterinarian_sets_clinic(app):
         db.session.commit()
 
         assert vet.clinica_id == clinic.id
+
+        db.session.remove()
+        db.drop_all()
