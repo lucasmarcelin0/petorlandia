@@ -249,22 +249,11 @@
 
     <div class="tab-pane fade" id="agendamentos" role="tabpanel">
       <h3>Agendamentos</h3>
-      <div class="d-flex justify-content-between align-items-center mb-3">
-        <div class="btn-group" id="view-toggle">
-          <button class="btn btn-outline-secondary active" data-view="calendar">Calendário</button>
-          <button class="btn btn-outline-secondary" data-view="list">Lista</button>
-          <button class="btn btn-outline-secondary" data-view="timeline">Cronograma</button>
-        </div>
+      <div class="mb-3 text-end">
         <a href="{{ url_for('appointments') }}" class="btn btn-primary">Novo Agendamento</a>
       </div>
 
-      <div id="calendar-container">
-        {% with clinic_id=clinica.id, calendar_id='agendamentos-calendar', toggle_id='agendamentos-agenda-toggle', include_assets=False %}
-          {% include 'partials/schedule_toggle.html' %}
-        {% endwith %}
-      </div>
-
-      <div id="list-container" class="d-none">
+      <div id="list-container">
         <form id="appointment-filter-form" method="get" action="{{ url_for('clinic_detail', clinica_id=clinica.id) }}" class="row g-2 mb-3">
           <div class="col-auto">
             <label for="start" class="form-label">Início</label>
@@ -492,33 +481,6 @@ document.addEventListener('DOMContentLoaded', function() {
       const endInput = document.getElementById('end');
       if (u.searchParams.get('start')) startInput.value = u.searchParams.get('start');
       if (u.searchParams.get('end')) endInput.value = u.searchParams.get('end');
-    });
-  });
-});
-
-document.addEventListener('DOMContentLoaded', function() {
-  const toggle = document.getElementById('view-toggle');
-  const list = document.getElementById('list-container');
-  const calendar = document.getElementById('calendar-container');
-  if (!toggle || !list || !calendar) return;
-
-  toggle.querySelectorAll('button').forEach(btn => {
-    btn.addEventListener('click', function() {
-      toggle.querySelectorAll('button').forEach(b => b.classList.remove('active'));
-      this.classList.add('active');
-      const view = this.dataset.view;
-      if (view === 'list') {
-        list.classList.remove('d-none');
-        calendar.classList.add('d-none');
-      } else {
-        list.classList.add('d-none');
-        calendar.classList.remove('d-none');
-        if (window.sharedCalendar) {
-          const mode = view === 'timeline' ? 'timeGridWeek' : 'dayGridMonth';
-          window.sharedCalendar.changeView(mode);
-          window.sharedCalendar.render();
-        }
-      }
     });
   });
 });
