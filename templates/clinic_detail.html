@@ -34,12 +34,14 @@
         <span class="fw-semibold">Tutores</span>
       </button>
     </li>
+    {% if show_inventory %}
     <li class="nav-item" role="presentation">
-      <a class="nav-link d-flex align-items-center gap-2" href="{{ url_for('clinic_stock', clinica_id=clinica.id) }}">
+      <button class="nav-link d-flex align-items-center gap-2" id="estoque-tab" data-bs-toggle="tab" data-bs-target="#estoque" type="button" role="tab">
         <span class="icon-circle bg-warning text-dark"><i class="fa-solid fa-boxes"></i></span>
         <span class="fw-semibold">Estoque</span>
-      </a>
+      </button>
     </li>
+    {% endif %}
     <li class="nav-item" role="presentation">
       <button class="nav-link d-flex align-items-center gap-2" id="orcamento-tab" data-bs-toggle="tab" data-bs-target="#orcamento" type="button" role="tab">
         <span class="icon-circle bg-dark text-white"><i class="fa-solid fa-file-invoice-dollar"></i></span>
@@ -292,6 +294,11 @@
     <div class="tab-pane fade" id="tutores" role="tabpanel">
       {% include 'partials/tutores_adicionados.html' %}
     </div>
+    {% if show_inventory %}
+    <div class="tab-pane fade" id="estoque" role="tabpanel">
+      {% include 'partials/clinic_stock.html' %}
+    </div>
+    {% endif %}
     <div class="tab-pane fade" id="orcamento" role="tabpanel">
       <div class="d-flex justify-content-between align-items-center mb-3 mt-3">
         <h3 class="mb-0">Orçamentos</h3>

@@ -1929,6 +1929,21 @@ def clinic_detail(clinica_id):
             .filter(Clinica.id == clinica_id)
             .first_or_404()
         )
+    is_owner = current_user.id == clinica.owner_id if current_user.is_authenticated else False
+    staff = None
+    if current_user.is_authenticated:
+        staff = ClinicStaff.query.filter_by(clinic_id=clinica.id, user_id=current_user.id).first()
+    has_inventory_perm = staff.can_manage_inventory if staff else False
+    show_inventory = _is_admin() or is_owner or has_inventory_perm
+    inventory_form = InventoryItemForm() if show_inventory else None
+    inventory_items = []
+    if show_inventory:
+        inventory_items = (
+            ClinicInventoryItem.query
+            .filter_by(clinica_id=clinica.id)
+            .order_by(ClinicInventoryItem.name)
+            .all()
+        )
     hours_form = ClinicHoursForm()
     clinic_form = ClinicForm(obj=clinica)
     vets_form = ClinicAddVeterinarianForm()
@@ -2179,6 +2194,9 @@ def clinic_detail(clinica_id):
         today_str=today_str,
         next7_str=next7_str,
         now=now_dt,
+        inventory_items=inventory_items,
+        inventory_form=inventory_form,
+        show_inventory=show_inventory,
     )
 
 
@@ -2194,26 +2212,31 @@ def clinic_stock(clinica_id):
     if not (_is_admin() or is_owner or has_perm):
         abort(403)
 
-    form = InventoryItemForm()
-    if form.validate_on_submit():
+    inventory_form = InventoryItemForm()
+    if inventory_form.validate_on_submit():
         item = ClinicInventoryItem(
             clinica_id=clinica.id,
-            name=form.name.data,
-            quantity=form.quantity.data,
-            unit=form.unit.data,
+            name=inventory_form.name.data,
+            quantity=inventory_form.quantity.data,
+            unit=inventory_form.unit.data,
         )
         db.session.add(item)
         db.session.commit()
         flash('Item adicionado com sucesso.', 'success')
-        return redirect(url_for('clinic_stock', clinica_id=clinica.id))
+        return redirect(url_for('clinic_detail', clinica_id=clinica.id) + '#estoque')
 
-    items = (
+    inventory_items = (
         ClinicInventoryItem.query
         .filter_by(clinica_id=clinica.id)
         .order_by(ClinicInventoryItem.name)
         .all()
     )
-    return render_template('clinic_stock.html', clinica=clinica, items=items, form=form)
+    return render_template(
+        'clinic_stock.html',
+        clinica=clinica,
+        inventory_items=inventory_items,
+        inventory_form=inventory_form,
+    )
 
 
 @app.route('/estoque/item/<int:item_id>/atualizar', methods=['POST'])
@@ -2235,7 +2258,7 @@ def update_inventory_item(item_id):
     item.quantity = max(0, qty)
     db.session.commit()
     flash('Quantidade atualizada.', 'success')
-    return redirect(url_for('clinic_stock', clinica_id=clinica.id))
+    return redirect(url_for('clinic_detail', clinica_id=clinica.id) + '#estoque')
 
 
 @app.route('/clinica/<int:clinica_id>/novo_orcamento', methods=['GET', 'POST'])

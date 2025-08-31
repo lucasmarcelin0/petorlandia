@@ -27,8 +27,9 @@ def test_clinic_inventory_page(app, monkeypatch):
     monkeypatch.setattr(login_utils, '_get_user', lambda: User.query.get(user_id))
     monkeypatch.setattr(app_module, '_is_admin', lambda: False)
 
-    response = client.get(f'/clinica/{clinic_id}/estoque')
+    response = client.get(f'/clinica/{clinic_id}')
     assert response.status_code == 200
+    assert b'Estoque' in response.data
 
     response = client.post(
         f'/clinica/{clinic_id}/estoque',
