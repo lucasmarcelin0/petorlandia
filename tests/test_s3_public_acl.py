@@ -27,5 +27,5 @@ def test_upload_to_s3_sets_public_read_acl(monkeypatch):
     assert captured['extra']['ACL'] == 'public-read'
     assert captured['extra']['ContentType'] == 'image/jpeg'
     assert captured['bucket'] == 'test-bucket'
-    assert captured['key'].startswith('clinicas/logo.png')
+    assert captured['key'].startswith('clinicas/logo.jpg')
     assert url == f"https://test-bucket.s3.amazonaws.com/{captured['key']}"
