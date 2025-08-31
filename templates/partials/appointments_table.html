@@ -35,18 +35,3 @@
     {% endif %}
   </tbody>
 </table>
-<script>
-document.addEventListener('DOMContentLoaded', function() {
-  document.querySelectorAll('.appointment-row').forEach(function(row) {
-    row.addEventListener('click', function(e) {
-      if (e.target.closest('.btn')) {
-        return;
-      }
-      const url = this.dataset.href;
-      if (url) {
-        window.location = url;
-      }
-    });
-  });
-});
-</script>
