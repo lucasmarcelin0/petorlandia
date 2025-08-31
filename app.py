@@ -2024,12 +2024,23 @@ def clinic_detail(clinica_id):
         return redirect(url_for('clinic_detail', clinica_id=clinica.id))
     horarios = ClinicHours.query.filter_by(clinica_id=clinica_id).all()
     veterinarios = Veterinario.query.filter_by(clinica_id=clinica_id).all()
-    staff_members = ClinicStaff.query.filter_by(clinic_id=clinica.id).all()
+    staff_members = ClinicStaff.query.filter(
+        ClinicStaff.clinic_id == clinica.id,
+        ClinicStaff.user.has(User.worker != 'veterinario'),
+    ).all()
 
     staff_permission_forms = {}
     for s in staff_members:
         form = ClinicStaffPermissionForm(prefix=f"perm_{s.user.id}", obj=s)
         staff_permission_forms[s.user.id] = form
+
+    vet_permission_forms = {}
+    for v in veterinarios:
+        staff = ClinicStaff.query.filter_by(clinic_id=clinica.id, user_id=v.user.id).first()
+        if not staff:
+            staff = ClinicStaff(clinic_id=clinica.id, user_id=v.user.id)
+        form = ClinicStaffPermissionForm(prefix=f"vet_perm_{v.user.id}", obj=staff)
+        vet_permission_forms[v.user.id] = form
 
     for s in staff_members:
         form = staff_permission_forms[s.user.id]
@@ -2039,6 +2050,23 @@ def clinic_detail(clinica_id):
             form.populate_obj(s)
             s.user_id = s.user.id
             db.session.add(s)
+            db.session.commit()
+            flash('Permissões atualizadas', 'success')
+            return redirect(url_for('clinic_detail', clinica_id=clinica.id) + '#veterinarios')
+
+    for v in veterinarios:
+        form = vet_permission_forms[v.user.id]
+        if form.submit.data and form.validate_on_submit():
+            if not (_is_admin() or current_user.id == clinica.owner_id):
+                abort(403)
+            staff = ClinicStaff.query.filter_by(
+                clinic_id=clinica.id, user_id=v.user.id
+            ).first()
+            if not staff:
+                staff = ClinicStaff(clinic_id=clinica.id, user_id=v.user.id)
+            form.populate_obj(staff)
+            staff.user_id = v.user.id
+            db.session.add(staff)
             db.session.commit()
             flash('Permissões atualizadas', 'success')
             return redirect(url_for('clinic_detail', clinica_id=clinica.id) + '#veterinarios')
@@ -2136,6 +2164,7 @@ def clinic_detail(clinica_id):
         staff_members=staff_members,
         staff_form=staff_form,
         staff_permission_forms=staff_permission_forms,
+        vet_permission_forms=vet_permission_forms,
         appointments=appointments,
         appointments_grouped=appointments_grouped,
         grouped_vet_schedules=grouped_vet_schedules,
@@ -2339,6 +2368,23 @@ def clinic_staff_permissions(clinica_id, user_id):
         html = render_template('partials/clinic_staff_permissions_form.html', form=form, clinic=clinic)
         return jsonify(success=True, html=html)
     return render_template('clinic_staff_permissions.html', form=form, clinic=clinic)
+
+
+@app.route('/clinica/<int:clinica_id>/funcionario/<int:user_id>/remove', methods=['POST'])
+@login_required
+def remove_funcionario(clinica_id, user_id):
+    clinica = Clinica.query.get_or_404(clinica_id)
+    if not (_is_admin() or current_user.id == clinica.owner_id):
+        abort(403)
+    staff = ClinicStaff.query.filter_by(clinic_id=clinica_id, user_id=user_id).first_or_404()
+    db.session.delete(staff)
+    user = User.query.get(user_id)
+    if user and user.clinica_id == clinica_id:
+        user.clinica_id = None
+        db.session.add(user)
+    db.session.commit()
+    flash('Funcionário removido com sucesso.', 'success')
+    return redirect(url_for('clinic_detail', clinica_id=clinica_id))
 
 
 @app.route('/clinica/<int:clinica_id>/horario/<int:horario_id>/delete', methods=['POST'])
