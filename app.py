@@ -185,7 +185,8 @@ from forms import (
     DeliveryRequestForm, AddToCartForm, SubscribePlanForm,
     ProductUpdateForm, ProductPhotoForm, ChangePasswordForm,
     DeleteAccountForm, ClinicForm, ClinicHoursForm, ClinicAddVeterinarianForm,
-    ClinicStaffPermissionForm, VetScheduleForm, VetSpecialtyForm, AppointmentForm, AppointmentDeleteForm
+    ClinicStaffPermissionForm, VetScheduleForm, VetSpecialtyForm, AppointmentForm, AppointmentDeleteForm,
+    OrcamentoForm
 )
 from helpers import (
     calcular_idade,
@@ -2046,6 +2047,8 @@ def clinic_detail(clinica_id):
         v.id: group_vet_schedules_by_day(v.horarios)
         for v in veterinarios
     }
+
+    orcamentos = Orcamento.query.filter_by(clinica_id=clinica_id).all()
     today = date.today()
     today_str = today.strftime('%Y-%m-%d')
     next7_str = (today + timedelta(days=7)).strftime('%Y-%m-%d')
@@ -2063,6 +2066,7 @@ def clinic_detail(clinica_id):
         appointments=appointments,
         appointments_grouped=appointments_grouped,
         grouped_vet_schedules=grouped_vet_schedules,
+        orcamentos=orcamentos,
         pode_editar=pode_editar,
         animais_adicionados=animais_adicionados,
         tutores_adicionados=tutores_adicionados,
@@ -2073,6 +2077,47 @@ def clinic_detail(clinica_id):
         next7_str=next7_str,
         now=now_dt,
     )
+
+
+@app.route('/clinica/<int:clinica_id>/novo_orcamento', methods=['GET', 'POST'])
+@login_required
+def novo_orcamento(clinica_id):
+    clinica = Clinica.query.get_or_404(clinica_id)
+    if current_user.clinica_id != clinica_id and not _is_admin():
+        abort(403)
+    form = OrcamentoForm()
+    if form.validate_on_submit():
+        o = Orcamento(clinica_id=clinica_id, descricao=form.descricao.data)
+        db.session.add(o)
+        db.session.commit()
+        flash('Orçamento criado com sucesso.', 'success')
+        return redirect(url_for('clinic_detail', clinica_id=clinica_id) + '#orcamento')
+    return render_template('orcamento_form.html', form=form, clinica=clinica)
+
+
+@app.route('/orcamento/<int:orcamento_id>/editar', methods=['GET', 'POST'])
+@login_required
+def editar_orcamento(orcamento_id):
+    orcamento = Orcamento.query.get_or_404(orcamento_id)
+    if current_user.clinica_id != orcamento.clinica_id and not _is_admin():
+        abort(403)
+    form = OrcamentoForm(obj=orcamento)
+    if form.validate_on_submit():
+        orcamento.descricao = form.descricao.data
+        db.session.commit()
+        flash('Orçamento atualizado com sucesso.', 'success')
+        return redirect(url_for('clinic_detail', clinica_id=orcamento.clinica_id) + '#orcamento')
+    return render_template('orcamento_form.html', form=form, clinica=orcamento.clinica)
+
+
+@app.route('/clinica/<int:clinica_id>/orcamentos')
+@login_required
+def orcamentos(clinica_id):
+    clinica = Clinica.query.get_or_404(clinica_id)
+    if current_user.clinica_id != clinica_id and not _is_admin():
+        abort(403)
+    lista = Orcamento.query.filter_by(clinica_id=clinica_id).all()
+    return render_template('orcamentos.html', clinica=clinica, orcamentos=lista)
 
 
 @app.route('/clinica/<int:clinica_id>/dashboard')
