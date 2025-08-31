@@ -5,7 +5,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')
 
 import pytest
 from app import app as flask_app, db
-from models import User, Clinica, Veterinario, Animal, Consulta
+from models import User, Clinica, Veterinario, Animal, Consulta, ClinicStaff
 
 
 @pytest.fixture
@@ -27,7 +27,8 @@ def test_user_cannot_access_other_clinic(monkeypatch, app):
         c2 = Clinica(nome="Clinic Two")
         user = User(name="User", email="user@example.com", password_hash="x")
         vet = Veterinario(user=user, crmv="123", clinica=c1)
-        db.session.add_all([c1, c2, user, vet])
+        staff = ClinicStaff(clinic=c1, user=user)
+        db.session.add_all([c1, c2, user, vet, staff])
         db.session.commit()
         login(monkeypatch, user)
         resp = client.get(f"/clinica/{c2.id}")
@@ -41,7 +42,8 @@ def test_user_sees_own_clinic(monkeypatch, app):
         c1 = Clinica(nome="Clinic One")
         user = User(name="User", email="user3@example.com", password_hash="x")
         vet = Veterinario(user=user, crmv="123", clinica=c1)
-        db.session.add_all([c1, user, vet])
+        staff = ClinicStaff(clinic=c1, user=user)
+        db.session.add_all([c1, user, vet, staff])
         db.session.commit()
         login(monkeypatch, user)
         resp = client.get(f"/clinica/{c1.id}")
@@ -73,9 +75,10 @@ def test_vet_can_access_other_clinic_consulta(monkeypatch, app):
         animal = Animal(name="Rex", owner=tutor, clinica=c2)
         user = User(name="User", email="user2@example.com", password_hash="x", worker="veterinario")
         vet = Veterinario(user=user, crmv="123", clinica=c1)
+        staff = ClinicStaff(clinic=c1, user=user)
         other_user = User(name="OtherVet", email="other@example.com", password_hash="z", worker="veterinario")
         vet2 = Veterinario(user=other_user, crmv="999", clinica=c2)
-        db.session.add_all([c1, c2, tutor, animal, user, vet, other_user, vet2])
+        db.session.add_all([c1, c2, tutor, animal, user, vet, staff, other_user, vet2])
         db.session.commit()
         consulta_c2 = Consulta(animal_id=animal.id, created_by=other_user.id, clinica_id=c2.id,
                                queixa_principal="dados c2", status='in_progress')
@@ -99,8 +102,9 @@ def test_colaborador_can_access_other_clinic_consulta(monkeypatch, app):
         tutor = User(name="Tutor", email="tutor3@example.com", password_hash="x")
         animal = Animal(name="Rex", owner=tutor, clinica=c2)
         colaborador = User(name="Colab", email="colab@example.com", password_hash="x",
-                           worker="colaborador", clinica=c1)
-        db.session.add_all([c1, c2, tutor, animal, colaborador])
+                           worker="colaborador")
+        staff = ClinicStaff(clinic=c1, user=colaborador)
+        db.session.add_all([c1, c2, tutor, animal, colaborador, staff])
         db.session.commit()
         login(monkeypatch, colaborador)
         resp = client.get(f"/consulta/{animal.id}")

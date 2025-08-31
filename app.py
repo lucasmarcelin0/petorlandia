@@ -1836,34 +1836,7 @@ def clinicas():
 def minha_clinica():
     clinicas = clinicas_do_usuario().all()
     if not clinicas:
-        form = ClinicForm()
-        if form.validate_on_submit():
-            clinica = Clinica(
-                nome=form.nome.data,
-                cnpj=form.cnpj.data,
-                endereco=form.endereco.data,
-                telefone=form.telefone.data,
-                email=form.email.data,
-                owner_id=current_user.id,
-            )
-            file = form.logotipo.data
-            if file:
-                filename = f"{uuid.uuid4().hex}_{secure_filename(file.filename)}"
-                image_url = upload_to_s3(file, filename, folder="clinicas")
-                if image_url:
-                    clinica.logotipo = image_url
-                    clinica.photo_rotation = form.photo_rotation.data
-                    clinica.photo_zoom = form.photo_zoom.data
-                    clinica.photo_offset_x = form.photo_offset_x.data
-                    clinica.photo_offset_y = form.photo_offset_y.data
-            db.session.add(clinica)
-            db.session.commit()
-            if current_user.veterinario:
-                current_user.veterinario.clinica_id = clinica.id
-            current_user.clinica_id = clinica.id
-            db.session.commit()
-            return redirect(url_for('clinic_detail', clinica_id=clinica.id))
-        return render_template('create_clinic.html', form=form)
+        abort(404)
 
     if _is_admin() and current_user.clinica_id:
         return redirect(url_for('clinic_detail', clinica_id=current_user.clinica_id))

@@ -471,7 +471,7 @@
                             <ul class="dropdown-menu dropdown-menu-end">
                                 <li><a class="dropdown-item" href="{{ url_for('profile') }}"><i class="fas fa-user me-2 text-primary"></i> Meu Perfil</a></li>
                                 <li><a class="dropdown-item" href="{{ url_for('minhas_compras') }}"><i class="fas fa-box me-2 text-warning"></i> Minhas Compras</a></li>
-                                {% if current_user.veterinario %}
+                                {% if current_user.is_authenticated and (current_user.role == 'admin' or current_user.clinic_roles or current_user.clinicas) %}
                                 <li><a class="dropdown-item" href="{{ url_for('minha_clinica') }}"><i class="fas fa-clinic-medical me-2 text-info"></i> Minha Clínica</a></li>
                                 {% endif %}
                 

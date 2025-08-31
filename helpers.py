@@ -10,6 +10,7 @@ from datetime import datetime
 from itertools import groupby
 from dateutil.relativedelta import relativedelta
 from sqlalchemy import case
+from extensions import db
 
 def parse_data_nascimento(data_str):
     """
@@ -137,34 +138,32 @@ def has_schedule_conflict(veterinario_id, dia_semana, hora_inicio, hora_fim):
 
 
 def clinicas_do_usuario():
-    """Retorna query de ``Clinica`` filtrada pelo usuário atual."""
-    from models import Clinica
+    """Retorna query de ``Clinica`` acessível ao usuário atual."""
+    from models import Clinica, ClinicStaff
 
     if not current_user.is_authenticated:
         return Clinica.query.filter(False)
 
     if current_user.role == "admin":
         query = Clinica.query
-        default_id = None
-        if getattr(current_user, "veterinario", None) and current_user.veterinario.clinica_id:
-            default_id = current_user.veterinario.clinica_id
-        elif current_user.clinica_id:
-            default_id = current_user.clinica_id
-        elif getattr(current_user, "clinicas", []):
-            default_id = current_user.clinicas[0].id
+        default_id = current_user.clinica_id or (
+            current_user.clinicas[0].id if getattr(current_user, "clinicas", []) else None
+        )
         if default_id:
-            query = query.order_by(
-                case((Clinica.id == default_id, 0), else_=1)
-            )
+            query = query.order_by(case((Clinica.id == default_id, 0), else_=1))
         return query
 
-    if getattr(current_user, "veterinario", None) and current_user.veterinario.clinica_id:
-        return Clinica.query.filter_by(id=current_user.veterinario.clinica_id)
-
+    staff_subq = (
+        db.session.query(ClinicStaff.clinic_id).filter_by(user_id=current_user.id)
+    )
+    query = Clinica.query.filter(
+        (Clinica.owner_id == current_user.id) | (Clinica.id.in_(staff_subq))
+    )
     if current_user.clinica_id:
-        return Clinica.query.filter_by(id=current_user.clinica_id)
-
-    return Clinica.query.filter_by(owner_id=current_user.id)
+        query = query.order_by(
+            case((Clinica.id == current_user.clinica_id, 0), else_=1)
+        )
+    return query
 
 
 def has_schedule_conflict(veterinario_id, dia_semana, hora_inicio, hora_fim, exclude_id=None):
