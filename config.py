@@ -36,6 +36,11 @@ class Config:
     MERCADOPAGO_STATEMENT_DESCRIPTOR = os.environ.get("MERCADOPAGO_STATEMENT_DESCRIPTOR", "PETORLANDIA")
     MERCADOPAGO_BINARY_MODE = bool(int(os.environ.get("MERCADOPAGO_BINARY_MODE", "0")))
 
+    # Habilita validação de plano de saúde para agendamentos
+    REQUIRE_HEALTH_SUBSCRIPTION_FOR_APPOINTMENT = bool(
+        int(os.environ.get("REQUIRE_HEALTH_SUBSCRIPTION_FOR_APPOINTMENT", "0"))
+    )
+
     # Endereço de retirada padrão (usado se não houver PickupLocation no banco)
     DEFAULT_PICKUP_ADDRESS = os.environ.get("DEFAULT_PICKUP_ADDRESS", "Rua Nove, 990")
 

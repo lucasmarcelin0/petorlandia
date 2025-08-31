@@ -4,7 +4,7 @@ except ImportError:
     from .extensions import db
 
 from flask_login import UserMixin
-from flask import url_for, request
+from flask import url_for, request, current_app
 from werkzeug.security import generate_password_hash, check_password_hash
 from datetime import datetime, date
 from dateutil.relativedelta import relativedelta
@@ -762,10 +762,11 @@ class Appointment(db.Model):
 
     @staticmethod
     def _validate_subscription(mapper, connection, target):
-        if not type(target).has_active_subscription(target.animal_id, target.tutor_id):
-            raise ValueError(
-                'Animal does not have an active health subscription for this tutor.'
-            )
+        if current_app.config.get('REQUIRE_HEALTH_SUBSCRIPTION_FOR_APPOINTMENT', False):
+            if not type(target).has_active_subscription(target.animal_id, target.tutor_id):
+                raise ValueError(
+                    'Animal does not have an active health subscription for this tutor.'
+                )
 
     @staticmethod
     def _set_clinica(mapper, connection, target):
