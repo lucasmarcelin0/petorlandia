@@ -6512,6 +6512,20 @@ def imprimir_bloco_orcamento(bloco_id):
     )
 
 
+@app.route('/orcamento/<int:orcamento_id>/imprimir')
+@login_required
+def imprimir_orcamento_padrao(orcamento_id):
+    orcamento = Orcamento.query.get_or_404(orcamento_id)
+    ensure_clinic_access(orcamento.clinica_id)
+    return render_template(
+        'imprimir_orcamento_padrao.html',
+        itens=orcamento.items,
+        total=orcamento.total,
+        clinica=orcamento.clinica,
+        orcamento=orcamento,
+    )
+
+
 @app.route('/pagar_bloco_orcamento/<int:bloco_id>')
 @login_required
 def pagar_bloco_orcamento(bloco_id):

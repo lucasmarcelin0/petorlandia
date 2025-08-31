@@ -306,12 +306,13 @@
       </div>
       <table class="table">
         <thead>
-          <tr><th>Descrição</th><th>Ações</th></tr>
+          <tr><th>Descrição</th><th>Valor (R$)</th><th>Ações</th></tr>
         </thead>
         <tbody>
           {% for o in orcamentos %}
           <tr>
             <td>{{ o.descricao }}</td>
+            <td>{{ '%.2f'|format(o.total) }}</td>
             <td>
               {% if o.consulta %}
                 {% if current_user.worker in ['veterinario', 'colaborador'] %}
@@ -319,17 +320,19 @@
                 {% else %}
                 <a href="{{ url_for('editar_orcamento', orcamento_id=o.id) }}" class="btn btn-sm btn-outline-secondary">Ver/Editar</a>
                 {% endif %}
+                <a href="{{ url_for('imprimir_orcamento', consulta_id=o.consulta.id) }}" class="btn btn-sm btn-outline-secondary" target="_blank">Imprimir</a>
                 <a href="mailto:{{ o.consulta.animal.owner.email }}?subject=Orçamento&body={{ url_for('imprimir_orcamento', consulta_id=o.consulta.id, _external=True)|urlencode }}" class="btn btn-sm btn-outline-primary">E-mail</a>
                 <a href="https://api.whatsapp.com/send?phone={{ o.consulta.animal.owner.phone }}&text={{ ('Olá ' ~ o.consulta.animal.owner.name ~ '! Segue o orçamento para ' ~ o.consulta.animal.name ~ ': ' ~ url_for('imprimir_orcamento', consulta_id=o.consulta.id, _external=True))|urlencode }}" target="_blank" class="btn btn-sm btn-outline-success">WhatsApp</a>
               {% else %}
                 <a href="{{ url_for('editar_orcamento', orcamento_id=o.id) }}" class="btn btn-sm btn-outline-secondary">Ver/Editar</a>
+                <a href="{{ url_for('imprimir_orcamento_padrao', orcamento_id=o.id) }}" class="btn btn-sm btn-outline-secondary" target="_blank">Imprimir</a>
                 <a href="mailto:?subject=Orçamento&body={{ url_for('editar_orcamento', orcamento_id=o.id, _external=True) }}" class="btn btn-sm btn-outline-primary">E-mail</a>
                 <a href="https://api.whatsapp.com/send?text={{ url_for('editar_orcamento', orcamento_id=o.id, _external=True)|urlencode }}" target="_blank" class="btn btn-sm btn-outline-success">WhatsApp</a>
               {% endif %}
             </td>
           </tr>
           {% else %}
-          <tr><td colspan="2">Nenhum orçamento cadastrado.</td></tr>
+          <tr><td colspan="3">Nenhum orçamento cadastrado.</td></tr>
           {% endfor %}
         </tbody>
       </table>
