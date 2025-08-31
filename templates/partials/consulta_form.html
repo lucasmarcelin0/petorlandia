@@ -52,7 +52,7 @@
               placeholder="Descreva a conduta adotada">{{ consulta.conduta or '' }}</textarea>
   </div>
 
-  {% if consulta and consulta.status == 'finalizada' and appointment_form %}
+  {% if appointment_form %}
   <div class="mb-3">
     <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#retornoModal">
       Agendar Retorno
@@ -77,7 +77,7 @@
   </div>
 </form>
 
-{% if consulta and consulta.status == 'finalizada' and appointment_form %}
+{% if appointment_form %}
 <div class="modal fade" id="retornoModal" tabindex="-1" aria-hidden="true">
   <div class="modal-dialog">
     <div class="modal-content">
