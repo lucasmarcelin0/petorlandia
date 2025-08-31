@@ -1,4 +1,12 @@
 <h5 class="mb-3">Documentos</h5>
+{% if current_user.worker == 'veterinario' %}
+<div class="mb-3">
+  <div class="btn-group">
+    <a href="{{ url_for('termo_animal', animal_id=animal.id, tipo='internacao') }}" target="_blank" class="btn btn-sm btn-outline-primary">Termo de Internação</a>
+    <a href="{{ url_for('termo_animal', animal_id=animal.id, tipo='eutanasia') }}" target="_blank" class="btn btn-sm btn-outline-primary">Termo de Eutanásia</a>
+  </div>
+</div>
+{% endif %}
 {% if animal.documentos %}
   <ul class="list-group mb-3">
     {% for d in animal.documentos %}

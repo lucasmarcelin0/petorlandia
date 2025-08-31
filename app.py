@@ -1322,6 +1322,22 @@ def termo_transferencia(animal_id, user_id):
     data_atual = datetime.now(BR_TZ).strftime('%d/%m/%Y')
     return render_template('termo_transferencia.html', animal=animal, novo_dono=novo_dono)
 
+@app.route('/animal/<int:animal_id>/termo/<string:tipo>')
+@login_required
+def termo_animal(animal_id, tipo):
+    animal = get_animal_or_404(animal_id)
+    tutor = animal.owner
+    clinica = current_user.veterinario.clinica if current_user.veterinario else None
+    data_atual = datetime.now(BR_TZ).strftime('%d/%m/%Y')
+    templates = {
+        'internacao': 'termo_internacao.html',
+        'eutanasia': 'termo_eutanasia.html',
+    }
+    template = templates.get(tipo)
+    if not template:
+        abort(404)
+    return render_template(template, animal=animal, tutor=tutor, clinica=clinica, data_atual=data_atual)
+
 
 
 
