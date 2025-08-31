@@ -530,9 +530,11 @@ class BlocoOrcamento(db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
     animal_id = db.Column(db.Integer, db.ForeignKey('animal.id'), nullable=False)
+    clinica_id = db.Column(db.Integer, db.ForeignKey('clinica.id'), nullable=False)
     data_criacao = db.Column(db.DateTime, default=datetime.utcnow)
 
     animal = db.relationship('Animal', backref=db.backref('blocos_orcamento', cascade='all, delete-orphan', lazy=True))
+    clinica = db.relationship('Clinica', backref=db.backref('blocos_orcamento', cascade='all, delete-orphan'))
 
     @property
     def total(self):

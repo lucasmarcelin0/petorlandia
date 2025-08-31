@@ -6498,6 +6498,7 @@ def imprimir_orcamento(consulta_id):
 @login_required
 def imprimir_bloco_orcamento(bloco_id):
     bloco = BlocoOrcamento.query.get_or_404(bloco_id)
+    ensure_clinic_access(bloco.clinica_id)
     animal = bloco.animal
     tutor = animal.owner
     clinica = current_user.veterinario.clinica if current_user.veterinario else None
@@ -6515,6 +6516,7 @@ def imprimir_bloco_orcamento(bloco_id):
 @login_required
 def pagar_bloco_orcamento(bloco_id):
     bloco = BlocoOrcamento.query.get_or_404(bloco_id)
+    ensure_clinic_access(bloco.clinica_id)
     if not bloco.itens:
         flash('Nenhum item no orçamento.', 'warning')
         return redirect(url_for('consulta_direct', animal_id=bloco.animal_id))
@@ -6670,7 +6672,7 @@ def salvar_bloco_orcamento(consulta_id):
         return jsonify({'success': False, 'message': 'Apenas veterinários podem salvar orçamento.'}), 403
     if not consulta.orcamento_items:
         return jsonify({'success': False, 'message': 'Nenhum item no orçamento.'}), 400
-    bloco = BlocoOrcamento(animal_id=consulta.animal_id)
+    bloco = BlocoOrcamento(animal_id=consulta.animal_id, clinica_id=consulta.clinica_id)
     db.session.add(bloco)
     db.session.flush()
     for item in list(consulta.orcamento_items):
@@ -6686,6 +6688,7 @@ def salvar_bloco_orcamento(consulta_id):
 @login_required
 def deletar_bloco_orcamento(bloco_id):
     bloco = BlocoOrcamento.query.get_or_404(bloco_id)
+    ensure_clinic_access(bloco.clinica_id)
     if current_user.worker != 'veterinario':
         return jsonify({'success': False, 'message': 'Apenas veterinários podem excluir.'}), 403
     animal_id = bloco.animal_id

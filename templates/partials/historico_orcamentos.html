@@ -1,8 +1,10 @@
-{% if animal.blocos_orcamento %}
+{% set clinic_id = current_user.veterinario.clinica_id if current_user.worker == 'veterinario' and current_user.veterinario else current_user.clinica_id %}
+{% set blocos = animal.blocos_orcamento | selectattr('clinica_id', 'equalto', clinic_id) | list %}
+{% if blocos %}
 <div class="card mb-3">
   <div class="card-body">
     <h5 class="card-title">💰 Histórico de Orçamentos</h5>
-    {% for bloco in animal.blocos_orcamento|reverse %}
+    {% for bloco in blocos|reverse %}
     <div class="border rounded p-3 mb-3">
       <h6 class="text-muted">Orçamento feito em {{ bloco.data_criacao|format_datetime_brazil('%d/%m/%Y %H:%M') }}</h6>
       <ul class="list-group list-group-flush mb-2">
