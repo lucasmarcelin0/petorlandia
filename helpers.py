@@ -5,8 +5,7 @@ from flask_login import current_user
 from functools import wraps
 
 
-from datetime import date
-from datetime import datetime
+from datetime import date, datetime, timedelta
 from itertools import groupby
 from dateutil.relativedelta import relativedelta
 from sqlalchemy import case
@@ -192,6 +191,25 @@ def group_appointments_by_day(appointments):
         (day, list(items))
         for day, items in groupby(sorted_appts, key=lambda a: a.scheduled_at.date())
     ]
+
+
+def appointment_to_event(appointment, duration_minutes=30):
+    """Convert an ``Appointment`` into a FullCalendar-friendly event dict."""
+    end_time = appointment.scheduled_at + timedelta(minutes=duration_minutes)
+    title = appointment.animal.name if appointment.animal else 'Consulta'
+    if appointment.veterinario and appointment.veterinario.user:
+        title = f"{title} - {appointment.veterinario.user.name}"
+    return {
+        'id': appointment.id,
+        'title': title,
+        'start': appointment.scheduled_at.isoformat(),
+        'end': end_time.isoformat(),
+    }
+
+
+def appointments_to_events(appointments, duration_minutes=30):
+    """Convert a list of ``Appointment`` objects into event dicts."""
+    return [appointment_to_event(a, duration_minutes) for a in appointments]
 
 
 def group_vet_schedules_by_day(schedules):

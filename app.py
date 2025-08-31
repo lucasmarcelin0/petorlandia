@@ -196,6 +196,7 @@ from helpers import (
     has_schedule_conflict,
     group_appointments_by_day,
     group_vet_schedules_by_day,
+    appointments_to_events,
 )
 
 
@@ -6393,6 +6394,35 @@ def delete_appointment(appointment_id):
     return redirect(request.referrer or url_for('manage_appointments'))
 
 
+@app.route('/api/my_appointments')
+@login_required
+def api_my_appointments():
+    """Return the current user's appointments as calendar events."""
+    if current_user.worker == 'veterinario' and getattr(current_user, 'veterinario', None):
+        appts = Appointment.query.filter_by(
+            veterinario_id=current_user.veterinario.id
+        ).order_by(Appointment.scheduled_at).all()
+    else:
+        appts = Appointment.query.filter_by(
+            tutor_id=current_user.id
+        ).order_by(Appointment.scheduled_at).all()
+    return jsonify(appointments_to_events(appts))
+
+
+@app.route('/api/clinic_appointments/<int:clinica_id>')
+@login_required
+def api_clinic_appointments(clinica_id):
+    """Return appointments for a clinic as calendar events."""
+    ensure_clinic_access(clinica_id)
+    appts = (
+        Appointment.query
+        .filter_by(clinica_id=clinica_id)
+        .order_by(Appointment.scheduled_at)
+        .all()
+    )
+    return jsonify(appointments_to_events(appts))
+
+
 @app.route('/servico', methods=['POST'])
 @login_required
 def criar_servico_clinica():
@@ -6423,10 +6453,28 @@ def imprimir_orcamento(consulta_id):
     clinica = current_user.veterinario.clinica if current_user.veterinario else None
     return render_template(
         'imprimir_orcamento.html',
-        consulta=consulta,
+        itens=consulta.orcamento_items,
+        total=consulta.total_orcamento,
         animal=animal,
         tutor=tutor,
         clinica=clinica
+    )
+
+
+@app.route('/imprimir_bloco_orcamento/<int:bloco_id>')
+@login_required
+def imprimir_bloco_orcamento(bloco_id):
+    bloco = BlocoOrcamento.query.get_or_404(bloco_id)
+    animal = bloco.animal
+    tutor = animal.owner
+    clinica = current_user.veterinario.clinica if current_user.veterinario else None
+    return render_template(
+        'imprimir_orcamento.html',
+        itens=bloco.itens,
+        total=bloco.total,
+        animal=animal,
+        tutor=tutor,
+        clinica=clinica,
     )
 
 @app.route('/consulta/<int:consulta_id>/pagar_orcamento')
@@ -6533,6 +6581,41 @@ def deletar_orcamento_item(item_id):
     db.session.delete(item)
     db.session.commit()
     return jsonify({'total': float(consulta.total_orcamento)}), 200
+
+
+@app.route('/consulta/<int:consulta_id>/bloco_orcamento', methods=['POST'])
+@login_required
+def salvar_bloco_orcamento(consulta_id):
+    consulta = get_consulta_or_404(consulta_id)
+    if current_user.worker != 'veterinario':
+        return jsonify({'success': False, 'message': 'Apenas veterinários podem salvar orçamento.'}), 403
+    if not consulta.orcamento_items:
+        return jsonify({'success': False, 'message': 'Nenhum item no orçamento.'}), 400
+    bloco = BlocoOrcamento(animal_id=consulta.animal_id)
+    db.session.add(bloco)
+    db.session.flush()
+    for item in list(consulta.orcamento_items):
+        item.bloco_id = bloco.id
+        item.consulta_id = None
+        db.session.add(item)
+    db.session.commit()
+    historico_html = render_template('partials/historico_orcamentos.html', animal=consulta.animal)
+    return jsonify({'success': True, 'html': historico_html})
+
+
+@app.route('/bloco_orcamento/<int:bloco_id>/deletar', methods=['POST'])
+@login_required
+def deletar_bloco_orcamento(bloco_id):
+    bloco = BlocoOrcamento.query.get_or_404(bloco_id)
+    if current_user.worker != 'veterinario':
+        return jsonify({'success': False, 'message': 'Apenas veterinários podem excluir.'}), 403
+    animal_id = bloco.animal_id
+    db.session.delete(bloco)
+    db.session.commit()
+    if request.accept_mimetypes.accept_json:
+        historico_html = render_template('partials/historico_orcamentos.html', animal=Animal.query.get(animal_id))
+        return jsonify({'success': True, 'html': historico_html})
+    return redirect(url_for('consulta_direct', animal_id=animal_id))
 
 
 if __name__ == "__main__":

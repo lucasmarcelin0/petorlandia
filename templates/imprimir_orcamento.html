@@ -61,7 +61,7 @@
       </tr>
     </thead>
     <tbody>
-      {% for item in consulta.orcamento_items %}
+      {% for item in itens %}
       <tr>
         <td>{{ item.descricao }}</td>
         <td>{{ '%.2f'|format(item.valor) }}</td>
@@ -69,7 +69,7 @@
       {% endfor %}
       <tr>
         <th>Total</th>
-        <th>{{ '%.2f'|format(consulta.total_orcamento) }}</th>
+        <th>{{ '%.2f'|format(total) }}</th>
       </tr>
     </tbody>
   </table>
