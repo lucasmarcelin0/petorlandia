@@ -6431,13 +6431,16 @@ def delete_appointment(appointment_id):
 def api_my_appointments():
     """Return the current user's appointments as calendar events."""
     if current_user.worker == 'veterinario' and getattr(current_user, 'veterinario', None):
-        appts = Appointment.query.filter_by(
+        query = Appointment.query.filter_by(
             veterinario_id=current_user.veterinario.id
-        ).order_by(Appointment.scheduled_at).all()
+        )
+    elif current_user.worker == 'colaborador' and current_user.clinica_id:
+        query = Appointment.query.filter_by(clinica_id=current_user.clinica_id)
+    elif current_user.role == 'admin':
+        query = Appointment.query
     else:
-        appts = Appointment.query.filter_by(
-            tutor_id=current_user.id
-        ).order_by(Appointment.scheduled_at).all()
+        query = Appointment.query.filter_by(tutor_id=current_user.id)
+    appts = query.order_by(Appointment.scheduled_at).all()
     return jsonify(appointments_to_events(appts))
 
 
