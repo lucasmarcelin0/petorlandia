@@ -23,7 +23,7 @@
     <tbody>
         {% for c in historico_consultas %}
         <tr id="consulta-{{ c.id }}">
-        <td class="text-nowrap">{{ c.created_at|format_datetime_brazil('%d/%m/%Y %H:%M') }}</td>
+        <td class="text-nowrap">{{ c.created_at|format_datetime_brazil('%d/%m/%Y %H:%M') }}{% if c.retorno_de_id %} <span class="badge bg-info ms-1">Retorno</span>{% endif %}</td>
         <td class="break-word-cell">{{ c.queixa_principal or '—' }}</td>
         <td class="break-word-cell">{{ c.historico_clinico or '—' }}</td>
         <td class="break-word-cell">{{ c.exame_fisico or '—' }}</td>

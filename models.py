@@ -461,6 +461,9 @@ class Consulta(db.Model):
     # Status da consulta (em andamento, finalizada, etc)
     status = db.Column(db.String(20), default='in_progress')
 
+    # Consulta de retorno
+    retorno_de_id = db.Column(db.Integer, db.ForeignKey('consulta.id'))
+
     # Relacionamentos (se quiser acessar animal ou vet diretamente)
     animal = db.relationship('Animal', backref=db.backref('consultas', cascade='all, delete-orphan'))
     veterinario = db.relationship(

@@ -1897,6 +1897,25 @@ def agendar_retorno(consulta_id):
     return redirect(url_for('consulta_direct', animal_id=consulta.animal_id))
 
 
+@app.route('/retorno/<int:appointment_id>/start', methods=['POST'])
+@login_required
+def iniciar_retorno(appointment_id):
+    appt = Appointment.query.get_or_404(appointment_id)
+    if current_user.worker != 'veterinario':
+        abort(403)
+    consulta = Consulta(
+        animal_id=appt.animal_id,
+        created_by=current_user.id,
+        clinica_id=appt.clinica_id or current_user_clinic_id(),
+        status='in_progress',
+        retorno_de_id=appt.consulta_id,
+    )
+    db.session.add(consulta)
+    appt.status = 'completed'
+    db.session.commit()
+    return redirect(url_for('consulta_direct', animal_id=consulta.animal_id))
+
+
 @app.route('/consulta/<int:consulta_id>/deletar', methods=['POST'])
 @login_required
 def deletar_consulta(consulta_id):
