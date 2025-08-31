@@ -357,11 +357,19 @@ function bindSyncForms(root) {
 }
 
 document.addEventListener('DOMContentLoaded', function() {
-  // Ativar a aba salva ou a primeira disponível
-  const abaSalva = localStorage.getItem('abaAtivaConsulta');
-  if (abaSalva) {
-    const tab = document.querySelector(`[data-bs-target="#${abaSalva}"]`);
-    if (tab) new bootstrap.Tab(tab).show();
+  const hash = window.location.hash;
+  if (hash) {
+    const hashTab = document.querySelector(`[data-bs-target="${hash}"]`);
+    if (hashTab) {
+      new bootstrap.Tab(hashTab).show();
+      localStorage.setItem('abaAtivaConsulta', hash.replace('#', ''));
+    }
+  } else {
+    const abaSalva = localStorage.getItem('abaAtivaConsulta');
+    if (abaSalva) {
+      const tab = document.querySelector(`[data-bs-target="#${abaSalva}"]`);
+      if (tab) new bootstrap.Tab(tab).show();
+    }
   }
 
   // Exibe destaque se a aba foi salva anteriormente (após recarregar)
