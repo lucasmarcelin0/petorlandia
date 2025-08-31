@@ -1,0 +1,31 @@
+from io import BytesIO
+from werkzeug.datastructures import FileStorage
+from PIL import Image
+import app
+
+
+def test_upload_to_s3_sets_public_read_acl(monkeypatch):
+    monkeypatch.setattr(app, "BUCKET", "test-bucket")
+
+    captured = {}
+
+    class DummyS3:
+        def upload_fileobj(self, fileobj, bucket, key, ExtraArgs=None):
+            captured['bucket'] = bucket
+            captured['key'] = key
+            captured['extra'] = ExtraArgs
+
+    monkeypatch.setattr(app, "_s3", lambda: DummyS3())
+
+    img_bytes = BytesIO()
+    Image.new('RGB', (1, 1)).save(img_bytes, format='PNG')
+    img_bytes.seek(0)
+
+    fs = FileStorage(stream=img_bytes, filename='logo.png', content_type='image/png')
+    url = app.upload_to_s3(fs, 'logo.png', folder='clinicas')
+
+    assert captured['extra']['ACL'] == 'public-read'
+    assert captured['extra']['ContentType'] == 'image/jpeg'
+    assert captured['bucket'] == 'test-bucket'
+    assert captured['key'].startswith('clinicas/logo.png')
+    assert url == f"https://test-bucket.s3.amazonaws.com/{captured['key']}"

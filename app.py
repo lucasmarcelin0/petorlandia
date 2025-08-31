@@ -115,7 +115,12 @@ def upload_to_s3(file, filename, folder="uploads") -> str | None:
                 filename += '.jpg'
 
         key = f"{folder}/{filename}"
-        _s3().upload_fileobj(fileobj, BUCKET, key, ExtraArgs={"ContentType": content_type})
+        _s3().upload_fileobj(
+            fileobj,
+            BUCKET,
+            key,
+            ExtraArgs={"ACL": "public-read", "ContentType": content_type},
+        )
         return f"https://{BUCKET}.s3.amazonaws.com/{key}"
     except Exception as exc:                 # noqa: BLE001
         app.logger.exception("S3 upload failed: %s", exc)
