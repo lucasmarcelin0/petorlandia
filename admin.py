@@ -251,8 +251,8 @@ class ClinicaAdmin(MyModelView):
     }
 
     def on_model_change(self, form, model, is_created):
-        if form.logotipo_upload.data:
-            file = form.logotipo_upload.data
+        file = form.logotipo_upload.data
+        if file and getattr(file, "filename", ""):
             filename = f"{uuid.uuid4().hex}_{secure_filename(file.filename)}"
             from app import upload_to_s3
             image_url = upload_to_s3(file, filename, folder="clinicas")
