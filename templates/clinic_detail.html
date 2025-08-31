@@ -226,7 +226,7 @@
         {% include 'partials/schedule_toggle.html' %}
       {% endwith %}
       <a href="{{ url_for('appointments') }}" class="btn btn-primary mb-3">Novo Agendamento</a>
-      <form method="get" class="row g-2 mb-3">
+      <form id="appointment-filter-form" method="get" action="{{ url_for('clinic_detail', clinica_id=clinica.id) }}" class="row g-2 mb-3">
         <div class="col-auto">
           <label for="start" class="form-label">Início</label>
           <input type="date" id="start" name="start" class="form-control" value="{{ start }}">
@@ -243,39 +243,9 @@
           <a href="{{ url_for('clinic_detail', clinica_id=clinica.id, start=today_str, end=next7_str) }}" class="btn btn-outline-secondary">Próximos 7 dias</a>
         </div>
       </form>
-      <table class="table">
-        <thead>
-          <tr>
-            <th>Data</th>
-            <th>Animal</th>
-            <th>Veterinário</th>
-            <th>Ações</th>
-          </tr>
-        </thead>
-        <tbody>
-          {% for a in appointments %}
-            <tr class="{% if a.scheduled_at < now %}table-secondary{% else %}table-success{% endif %}">
-              <td>{{ a.scheduled_at|format_datetime_brazil }}</td>
-              <td>{{ a.animal.name }}</td>
-              <td>{{ a.veterinario.user.name }}</td>
-              <td>
-                <div class="btn-group">
-                  <a href="{{ url_for('ficha_animal', animal_id=a.animal_id) }}" class="btn btn-sm btn-outline-primary">📋 Ficha Animal</a>
-                  <a href="{{ url_for('ficha_tutor', tutor_id=a.tutor_id) }}" class="btn btn-sm btn-outline-secondary">👤 Ficha Tutor</a>
-                  {% if current_user.worker in ['veterinario', 'colaborador'] %}
-                  <a href="{{ url_for('consulta_direct', animal_id=a.animal_id) }}" class="btn btn-sm btn-outline-success">🩺 Iniciar Consulta</a>
-                  {% endif %}
-                  {% if current_user.role == 'admin' or current_user.worker in ['veterinario', 'colaborador'] or current_user.id == a.tutor_id %}
-                  <a href="{{ url_for('edit_appointment', appointment_id=a.id) }}" class="btn btn-sm btn-outline-warning">✏️ Editar</a>
-                  {% endif %}
-                </div>
-              </td>
-            </tr>
-          {% else %}
-            <tr><td colspan="4">Nenhum agendamento encontrado.</td></tr>
-          {% endfor %}
-        </tbody>
-      </table>
+      <div id="appointments-table-container">
+        {% include 'partials/appointments_table.html' %}
+      </div>
 
     </div>
     <div class="tab-pane fade" id="animais" role="tabpanel">
@@ -415,6 +385,45 @@ document.addEventListener('DOMContentLoaded', function() {
   sortSelect.addEventListener('change', applySort);
   if (roleSelect) roleSelect.addEventListener('change', () => { applyFilter(); applySort(); });
   applySort();
+});
+
+document.addEventListener('DOMContentLoaded', function() {
+  const form = document.getElementById('appointment-filter-form');
+  const container = document.getElementById('appointments-table-container');
+  if (!form || !container) return;
+
+  function updateTable(url, pushState = true) {
+    fetch(url, { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+      .then(response => response.text())
+      .then(html => {
+        container.innerHTML = html;
+        if (pushState) {
+          window.history.replaceState({}, '', url);
+        }
+      })
+      .catch(err => console.error(err));
+  }
+
+  form.addEventListener('submit', function(e) {
+    e.preventDefault();
+    const params = new URLSearchParams(new FormData(form));
+    const url = `${form.action}?${params.toString()}`;
+    updateTable(url);
+  });
+
+  const quickLinks = form.querySelectorAll('a[href]');
+  quickLinks.forEach(link => {
+    link.addEventListener('click', function(e) {
+      e.preventDefault();
+      const url = this.href;
+      const u = new URL(url);
+      updateTable(url);
+      const startInput = document.getElementById('start');
+      const endInput = document.getElementById('end');
+      if (u.searchParams.get('start')) startInput.value = u.searchParams.get('start');
+      if (u.searchParams.get('end')) endInput.value = u.searchParams.get('end');
+    });
+  });
 });
 
 </script>

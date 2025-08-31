@@ -2043,6 +2043,13 @@ def clinic_detail(clinica_id):
 
     appointments = appointments_query.order_by(Appointment.scheduled_at).all()
     appointments_grouped = group_appointments_by_day(appointments)
+
+    if request.headers.get("X-Requested-With") == "XMLHttpRequest":
+        return render_template(
+            "partials/appointments_table.html",
+            appointments_grouped=appointments_grouped,
+        )
+
     grouped_vet_schedules = {
         v.id: group_vet_schedules_by_day(v.horarios)
         for v in veterinarios
