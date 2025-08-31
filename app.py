@@ -2472,6 +2472,58 @@ def tutores():
         flash('Apenas veterinários ou colaboradores podem acessar esta página.', 'danger')
         return redirect(url_for('index'))
 
+    def fetch_tutores(scope, page):
+        clinic_id = current_user_clinic_id()
+        if scope == 'mine':
+            query = User.query.filter(User.created_at != None)
+            if clinic_id:
+                query = query.filter(User.clinica_id == clinic_id)
+            consultas_exist = (
+                db.session.query(Consulta.id)
+                .join(Animal, Consulta.animal_id == Animal.id)
+                .filter(
+                    Consulta.created_by == current_user.id,
+                    Animal.user_id == User.id,
+                )
+            )
+            pagination = (
+                query.filter(
+                    or_(
+                        User.added_by_id == current_user.id,
+                        consultas_exist.exists(),
+                    )
+                )
+                .order_by(User.created_at.desc())
+                .paginate(page=page, per_page=9)
+            )
+            return pagination.items, pagination
+        elif clinic_id:
+            last_appt = (
+                db.session.query(
+                    Appointment.tutor_id,
+                    func.max(Appointment.scheduled_at).label('last_at')
+                )
+                .filter(Appointment.clinica_id == clinic_id)
+                .group_by(Appointment.tutor_id)
+                .subquery()
+            )
+
+            pagination = (
+                User.query
+                .outerjoin(last_appt, User.id == last_appt.c.tutor_id)
+                .filter(
+                    or_(
+                        User.clinica_id == clinic_id,
+                        last_appt.c.last_at != None
+                    )
+                )
+                .order_by(func.coalesce(last_appt.c.last_at, User.created_at).desc())
+                .paginate(page=page, per_page=9)
+            )
+            return pagination.items, pagination
+        else:
+            return [], None
+
     # Criação de novo tutor
     if request.method == 'POST':
         name = request.form.get('tutor_name') or request.form.get('name')
@@ -2543,63 +2595,25 @@ def tutores():
         db.session.add(novo)
         db.session.commit()
 
+        if request.accept_mimetypes.accept_json:
+            scope = request.args.get('scope', 'all')
+            page = request.args.get('page', 1, type=int)
+            tutores_adicionados, pagination = fetch_tutores(scope, page)
+            html = render_template(
+                'partials/tutores_adicionados.html',
+                tutores_adicionados=tutores_adicionados,
+                pagination=pagination,
+                scope=scope
+            )
+            return jsonify(message='Tutor criado com sucesso!', category='success', html=html)
+
         flash('Tutor criado com sucesso!', 'success')
         return redirect(url_for('ficha_tutor', tutor_id=novo.id))
 
     # — GET com paginação —
     page = request.args.get('page', 1, type=int)
     scope = request.args.get('scope', 'all')
-    clinic_id = current_user_clinic_id()
-    if scope == 'mine':
-        query = User.query.filter(User.created_at != None)
-        if clinic_id:
-            query = query.filter(User.clinica_id == clinic_id)
-        consultas_exist = (
-            db.session.query(Consulta.id)
-            .join(Animal, Consulta.animal_id == Animal.id)
-            .filter(
-                Consulta.created_by == current_user.id,
-                Animal.user_id == User.id,
-            )
-        )
-        pagination = (
-            query.filter(
-                or_(
-                    User.added_by_id == current_user.id,
-                    consultas_exist.exists(),
-                )
-            )
-            .order_by(User.created_at.desc())
-            .paginate(page=page, per_page=9)
-        )
-        tutores_adicionados = pagination.items
-    elif clinic_id:
-        last_appt = (
-            db.session.query(
-                Appointment.tutor_id,
-                func.max(Appointment.scheduled_at).label('last_at')
-            )
-            .filter(Appointment.clinica_id == clinic_id)
-            .group_by(Appointment.tutor_id)
-            .subquery()
-        )
-
-        pagination = (
-            User.query
-            .outerjoin(last_appt, User.id == last_appt.c.tutor_id)
-            .filter(
-                or_(
-                    User.clinica_id == clinic_id,
-                    last_appt.c.last_at != None
-                )
-            )
-            .order_by(func.coalesce(last_appt.c.last_at, User.created_at).desc())
-            .paginate(page=page, per_page=9)
-        )
-        tutores_adicionados = pagination.items
-    else:
-        pagination = None
-        tutores_adicionados = []
+    tutores_adicionados, pagination = fetch_tutores(scope, page)
 
     return render_template(
         'tutores.html',
@@ -3966,6 +3980,63 @@ def novo_animal():
         flash('Apenas veterinários ou colaboradores podem cadastrar animais.', 'danger')
         return redirect(url_for('index'))
 
+    def fetch_animais(scope, page):
+        clinic_id = current_user_clinic_id()
+        if scope == 'mine':
+            query = Animal.query.filter(Animal.removido_em == None)
+            if clinic_id:
+                query = query.filter(Animal.clinica_id == clinic_id)
+            consultas_exist = (
+                db.session.query(Consulta.id)
+                .filter(
+                    Consulta.animal_id == Animal.id,
+                    Consulta.created_by == current_user.id,
+                )
+            )
+            pagination = (
+                query.filter(
+                    or_(
+                        Animal.added_by_id == current_user.id,
+                        consultas_exist.exists(),
+                    )
+                )
+                .order_by(Animal.date_added.desc())
+                .paginate(page=page, per_page=9)
+            )
+        elif clinic_id:
+            last_appt = (
+                db.session.query(
+                    Appointment.animal_id,
+                    func.max(Appointment.scheduled_at).label('last_at')
+                )
+                .filter(Appointment.clinica_id == clinic_id)
+                .group_by(Appointment.animal_id)
+                .subquery()
+            )
+
+            pagination = (
+                Animal.query
+                .outerjoin(last_appt, Animal.id == last_appt.c.animal_id)
+                .filter(Animal.removido_em == None)
+                .filter(
+                    or_(
+                        Animal.clinica_id == clinic_id,
+                        last_appt.c.last_at != None
+                    )
+                )
+                .order_by(func.coalesce(last_appt.c.last_at, Animal.date_added).desc())
+                .paginate(page=page, per_page=9)
+            )
+        else:
+            pagination = (
+                Animal.query
+                .filter_by(added_by_id=current_user.id)
+                .filter(Animal.removido_em == None)
+                .order_by(Animal.date_added.desc())
+                .paginate(page=page, per_page=9)
+            )
+        return pagination.items, pagination
+
     if request.method == 'POST':
         tutor_id = request.form.get('tutor_id', type=int)
         tutor = User.query.get_or_404(tutor_id)
@@ -4040,68 +4111,25 @@ def novo_animal():
         db.session.add(consulta)
         db.session.commit()
 
+        if request.accept_mimetypes.accept_json:
+            scope = request.args.get('scope', 'all')
+            page = request.args.get('page', 1, type=int)
+            animais_adicionados, pagination = fetch_animais(scope, page)
+            html = render_template(
+                'partials/animais_adicionados.html',
+                animais_adicionados=animais_adicionados,
+                pagination=pagination,
+                scope=scope
+            )
+            return jsonify(message='Animal cadastrado com sucesso!', category='success', html=html)
+
         flash('Animal cadastrado com sucesso!', 'success')
         return redirect(url_for('consulta_direct', animal_id=animal.id))
 
     # GET: lista de animais adicionados para exibição
     page = request.args.get('page', 1, type=int)
     scope = request.args.get('scope', 'all')
-    clinic_id = current_user_clinic_id()
-    if scope == 'mine':
-        query = Animal.query.filter(Animal.removido_em == None)
-        if clinic_id:
-            query = query.filter(Animal.clinica_id == clinic_id)
-        consultas_exist = (
-            db.session.query(Consulta.id)
-            .filter(
-                Consulta.animal_id == Animal.id,
-                Consulta.created_by == current_user.id,
-            )
-        )
-        pagination = (
-            query.filter(
-                or_(
-                    Animal.added_by_id == current_user.id,
-                    consultas_exist.exists(),
-                )
-            )
-            .order_by(Animal.date_added.desc())
-            .paginate(page=page, per_page=9)
-        )
-    elif clinic_id:
-        last_appt = (
-            db.session.query(
-                Appointment.animal_id,
-                func.max(Appointment.scheduled_at).label('last_at')
-            )
-            .filter(Appointment.clinica_id == clinic_id)
-            .group_by(Appointment.animal_id)
-            .subquery()
-        )
-
-        pagination = (
-            Animal.query
-            .outerjoin(last_appt, Animal.id == last_appt.c.animal_id)
-            .filter(Animal.removido_em == None)
-            .filter(
-                or_(
-                    Animal.clinica_id == clinic_id,
-                    last_appt.c.last_at != None
-                )
-            )
-            .order_by(func.coalesce(last_appt.c.last_at, Animal.date_added).desc())
-            .paginate(page=page, per_page=9)
-        )
-    else:
-        pagination = (
-            Animal.query
-            .filter_by(added_by_id=current_user.id)
-            .filter(Animal.removido_em == None)
-            .order_by(Animal.date_added.desc())
-            .paginate(page=page, per_page=9)
-        )
-
-    animais_adicionados = pagination.items
+    animais_adicionados, pagination = fetch_animais(scope, page)
 
     # Lista de espécies e raças para os <select> do formulário
     species_list = list_species()
