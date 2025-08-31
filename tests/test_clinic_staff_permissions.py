@@ -62,3 +62,48 @@ def test_owner_can_add_staff(monkeypatch, app):
         assert b"Permiss\xc3\xb5es do Funcion\xc3\xa1rio" in resp.data
         staff = ClinicStaff.query.filter_by(clinic_id=clinic.id, user_id=staff_user.id).first()
         assert staff is not None
+
+
+def test_owner_can_add_staff_json(monkeypatch, app):
+    client = app.test_client()
+    with app.app_context():
+        db.drop_all()
+        db.create_all()
+        clinic = Clinica(nome="Clinic")
+        owner = User(name="Owner", email="o@example.com", password_hash="x")
+        staff_user = User(name="Staff", email="s@example.com", password_hash="y")
+        db.session.add_all([clinic, owner, staff_user])
+        db.session.commit()
+        clinic.owner_id = owner.id
+        db.session.commit()
+        login(monkeypatch, owner)
+        resp = client.post(
+            f"/clinica/{clinic.id}/funcionarios",
+            data={"email": "s@example.com"},
+            headers={'Accept': 'application/json'}
+        )
+        assert resp.status_code == 200
+        assert resp.json['success'] is True
+        assert "s@example.com" in resp.json['html']
+
+
+def test_add_staff_forbidden_json(monkeypatch, app):
+    client = app.test_client()
+    with app.app_context():
+        db.drop_all()
+        db.create_all()
+        clinic = Clinica(nome="Clinic")
+        owner = User(name="Owner", email="o@example.com", password_hash="x")
+        other = User(name="Other", email="other@example.com", password_hash="x")
+        db.session.add_all([clinic, owner, other])
+        db.session.commit()
+        clinic.owner_id = owner.id
+        db.session.commit()
+        login(monkeypatch, other)
+        resp = client.post(
+            f"/clinica/{clinic.id}/funcionarios",
+            data={"email": "o@example.com"},
+            headers={'Accept': 'application/json'}
+        )
+        assert resp.status_code == 403
+        assert resp.json['success'] is False

@@ -3,7 +3,7 @@
 {% block main %}
 <div class="container mt-4">
   <h2>Funcionários de {{ clinic.nome }}</h2>
-  <form method="post" class="mb-4">
+  <form method="post" class="mb-4 js-staff-form" data-target="#staffList">
     <div class="input-group">
       <input type="email" name="email" class="form-control" placeholder="Email do usuário" required>
       <button class="btn btn-primary" type="submit">Adicionar</button>
@@ -17,18 +17,8 @@
         <th>Ações</th>
       </tr>
     </thead>
-    <tbody>
-      {% for s in staff_members %}
-      <tr>
-        <td>{{ s.user.name }}</td>
-        <td>{{ s.user.email }}</td>
-        <td>
-          <a href="{{ url_for('clinic_staff_permissions', clinica_id=clinic.id, user_id=s.user.id) }}" class="btn btn-sm btn-outline-primary">Permissões</a>
-        </td>
-      </tr>
-      {% else %}
-      <tr><td colspan="3">Nenhum funcionário.</td></tr>
-      {% endfor %}
+    <tbody id="staffList">
+      {% include 'partials/clinic_staff_rows.html' %}
     </tbody>
   </table>
 </div>

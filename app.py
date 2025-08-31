@@ -2271,15 +2271,21 @@ def clinic_dashboard(clinica_id):
 def clinic_staff(clinica_id):
     clinic = Clinica.query.get_or_404(clinica_id)
     if current_user.id != clinic.owner_id:
+        if request.accept_mimetypes.accept_json:
+            return jsonify(success=False, message='Sem permissão'), 403
         abort(403)
     if request.method == 'POST':
         email = request.form.get('email')
         user = User.query.filter_by(email=email).first()
         if not user:
+            if request.accept_mimetypes.accept_json:
+                return jsonify(success=False, message='Usuário não encontrado'), 404
             flash('Usuário não encontrado', 'danger')
         else:
             staff = ClinicStaff.query.filter_by(clinic_id=clinic.id, user_id=user.id).first()
             if staff:
+                if request.accept_mimetypes.accept_json:
+                    return jsonify(success=False, message='Funcionário já está na clínica'), 400
                 flash('Funcionário já está na clínica', 'warning')
             else:
                 staff = ClinicStaff(clinic_id=clinic.id, user_id=user.id)
@@ -2287,9 +2293,16 @@ def clinic_staff(clinica_id):
                 user.clinica_id = clinic.id
                 db.session.add(user)
                 db.session.commit()
+                if request.accept_mimetypes.accept_json:
+                    staff_members = ClinicStaff.query.filter_by(clinic_id=clinic.id).all()
+                    html = render_template('partials/clinic_staff_rows.html', clinic=clinic, staff_members=staff_members)
+                    return jsonify(success=True, html=html, message='Funcionário adicionado', category='success')
                 flash('Funcionário adicionado. Defina as permissões.', 'success')
                 return redirect(url_for('clinic_staff_permissions', clinica_id=clinic.id, user_id=user.id))
     staff_members = ClinicStaff.query.filter_by(clinic_id=clinic.id).all()
+    if request.accept_mimetypes.accept_json:
+        html = render_template('partials/clinic_staff_rows.html', clinic=clinic, staff_members=staff_members)
+        return jsonify(success=True, html=html)
     return render_template('clinic_staff_list.html', clinic=clinic, staff_members=staff_members)
 
 
@@ -2298,7 +2311,14 @@ def clinic_staff(clinica_id):
 def clinic_staff_permissions(clinica_id, user_id):
     clinic = Clinica.query.get_or_404(clinica_id)
     if current_user.id != clinic.owner_id:
+        if request.accept_mimetypes.accept_json:
+            return jsonify(success=False, message='Sem permissão'), 403
         abort(403)
+    user = User.query.get(user_id)
+    if not user:
+        if request.accept_mimetypes.accept_json:
+            return jsonify(success=False, message='Usuário não encontrado'), 404
+        abort(404)
     staff = ClinicStaff.query.filter_by(clinic_id=clinic.id, user_id=user_id).first()
     if not staff:
         staff = ClinicStaff(clinic_id=clinic.id, user_id=user_id)
@@ -2307,13 +2327,17 @@ def clinic_staff_permissions(clinica_id, user_id):
         form.populate_obj(staff)
         staff.user_id = user_id
         db.session.add(staff)
-        user = User.query.get(user_id)
-        if user:
-            user.clinica_id = clinic.id
-            db.session.add(user)
+        user.clinica_id = clinic.id
+        db.session.add(user)
         db.session.commit()
+        if request.accept_mimetypes.accept_json:
+            html = render_template('partials/clinic_staff_permissions_form.html', form=form, clinic=clinic)
+            return jsonify(success=True, html=html, message='Permissões atualizadas', category='success')
         flash('Permissões atualizadas', 'success')
         return redirect(url_for('clinic_dashboard', clinica_id=clinic.id))
+    if request.accept_mimetypes.accept_json:
+        html = render_template('partials/clinic_staff_permissions_form.html', form=form, clinic=clinic)
+        return jsonify(success=True, html=html)
     return render_template('clinic_staff_permissions.html', form=form, clinic=clinic)
 
 
