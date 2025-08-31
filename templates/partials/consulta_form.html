@@ -78,7 +78,7 @@
 </form>
 
 {% if appointment_form %}
-<div class="modal fade" id="retornoModal" tabindex="-1" aria-hidden="true">
+<div class="modal fade" id="retornoModal" tabindex="-1" aria-hidden="true" data-bs-backdrop="static" data-bs-keyboard="false">
   <div class="modal-dialog">
     <div class="modal-content">
       <form method="POST" action="{{ url_for('agendar_retorno', consulta_id=consulta.id) }}">
@@ -123,7 +123,7 @@
       new bootstrap.Tab(tabTrigger).show();
     }
 
-    var retornoModal = new bootstrap.Modal(document.getElementById('retornoModal'));
+    var retornoModal = new bootstrap.Modal(document.getElementById('retornoModal'), {keyboard: false, backdrop: 'static'});
     retornoModal.show();
   });
 </script>
