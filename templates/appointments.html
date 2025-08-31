@@ -11,7 +11,7 @@
   <div class="card mb-4">
     <div class="card-body">
       <h5 class="card-title">Agendar Consulta</h5>
-      <form method="POST">
+      <form method="POST" class="js-appointment-form">
         {{ form.hidden_tag() }}
         <div class="mb-3">
           {{ form.animal_id.label(class="form-label") }}
@@ -39,7 +39,9 @@
   </div>
   {% endif %}
 
-  {% include 'partials/appointments_table.html' %}
+  <div id="appointments_table">
+    {% include 'partials/appointments_table.html' %}
+  </div>
 </div>
 {% endblock %}
 {% block scripts %}
