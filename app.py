@@ -2,6 +2,7 @@
 import os, sys, pathlib, importlib, logging, uuid, re
 from io import BytesIO
 from concurrent.futures import ThreadPoolExecutor
+from decimal import Decimal
 
 
 
@@ -6884,6 +6885,47 @@ def deletar_bloco_orcamento(bloco_id):
         historico_html = render_template('partials/historico_orcamentos.html', animal=Animal.query.get(animal_id))
         return jsonify({'success': True, 'html': historico_html})
     return redirect(url_for('consulta_direct', animal_id=animal_id))
+
+
+@app.route('/bloco_orcamento/<int:bloco_id>/editar', methods=['GET'])
+@login_required
+def editar_bloco_orcamento(bloco_id):
+    bloco = BlocoOrcamento.query.get_or_404(bloco_id)
+    ensure_clinic_access(bloco.clinica_id)
+    if current_user.worker != 'veterinario':
+        return jsonify({'success': False, 'message': 'Apenas veterinários podem editar.'}), 403
+    return render_template('editar_bloco_orcamento.html', bloco=bloco)
+
+
+@app.route('/bloco_orcamento/<int:bloco_id>/atualizar', methods=['POST'])
+@login_required
+def atualizar_bloco_orcamento(bloco_id):
+    bloco = BlocoOrcamento.query.get_or_404(bloco_id)
+    ensure_clinic_access(bloco.clinica_id)
+    if current_user.worker != 'veterinario':
+        return jsonify({'success': False, 'message': 'Apenas veterinários podem editar.'}), 403
+
+    data = request.get_json(silent=True) or {}
+    itens = data.get('itens', [])
+
+    for item in list(bloco.itens):
+        db.session.delete(item)
+
+    for it in itens:
+        descricao = (it.get('descricao') or '').strip()
+        valor = it.get('valor')
+        if not descricao or valor is None:
+            continue
+        try:
+            valor_decimal = Decimal(str(valor))
+        except Exception:
+            continue
+        bloco.itens.append(OrcamentoItem(descricao=descricao, valor=valor_decimal))
+
+    db.session.commit()
+
+    historico_html = render_template('partials/historico_orcamentos.html', animal=bloco.animal)
+    return jsonify(success=True, html=historico_html)
 
 
 if __name__ == "__main__":
