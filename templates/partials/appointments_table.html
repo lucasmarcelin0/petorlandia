@@ -14,7 +14,7 @@
           <th colspan="4">{{ day|format_datetime_brazil('%d/%m/%Y') }}</th>
         </tr>
         {% for appt in items %}
-          <tr>
+          <tr class="appointment-row" data-href="{{ url_for('edit_appointment', appointment_id=appt.id) }}">
             <td>{{ appt.scheduled_at|format_datetime_brazil('%H:%M') }}</td>
             <td>{{ appt.animal.name }}</td>
             <td>{{ appt.veterinario.user.name }}</td>
@@ -24,9 +24,6 @@
                 <a href="{{ url_for('ficha_tutor', tutor_id=appt.tutor_id) }}" class="btn btn-sm btn-outline-secondary">👤 Ficha Tutor</a>
                 {% if current_user.worker in ['veterinario', 'colaborador'] %}
                 <a href="{{ url_for('consulta_direct', animal_id=appt.animal_id) }}" class="btn btn-sm btn-outline-success">🩺 Iniciar Consulta</a>
-                {% endif %}
-                {% if current_user.role == 'admin' or current_user.worker in ['veterinario', 'colaborador'] or current_user.id == appt.tutor_id %}
-                <a href="{{ url_for('edit_appointment', appointment_id=appt.id) }}" class="btn btn-sm btn-outline-warning">✏️ Editar</a>
                 {% endif %}
               </div>
             </td>
@@ -38,3 +35,18 @@
     {% endif %}
   </tbody>
 </table>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+  document.querySelectorAll('.appointment-row').forEach(function(row) {
+    row.addEventListener('click', function(e) {
+      if (e.target.closest('.btn')) {
+        return;
+      }
+      const url = this.dataset.href;
+      if (url) {
+        window.location = url;
+      }
+    });
+  });
+});
+</script>
