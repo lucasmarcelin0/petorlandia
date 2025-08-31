@@ -35,7 +35,7 @@
       </button>
     </li>
     <li class="nav-item" role="presentation">
-      <a class="nav-link d-flex align-items-center gap-2" href="{{ url_for('loja') }}">
+      <a class="nav-link d-flex align-items-center gap-2" href="{{ url_for('clinic_stock', clinica_id=clinica.id) }}">
         <span class="icon-circle bg-warning text-dark"><i class="fa-solid fa-boxes"></i></span>
         <span class="fw-semibold">Estoque</span>
       </a>
