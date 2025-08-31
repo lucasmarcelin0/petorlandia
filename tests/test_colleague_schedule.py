@@ -17,7 +17,7 @@ def app():
     yield flask_app
 
 
-def test_colleague_schedules_visible(monkeypatch, app):
+def test_colleague_schedules_hidden(monkeypatch, app):
     client = app.test_client()
     with app.app_context():
         db.create_all()
@@ -31,4 +31,4 @@ def test_colleague_schedules_visible(monkeypatch, app):
         monkeypatch.setattr(login_utils, '_get_user', lambda: main_user)
         resp = client.get('/appointments')
         assert resp.status_code == 200
-        assert b'Col' in resp.data
+        assert b'Agendas dos Colegas' not in resp.data

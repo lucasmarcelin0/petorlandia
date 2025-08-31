@@ -138,24 +138,6 @@
     {% endfor %}
   </ul>
 
-
-  {% if colleagues %}
-  <h3>Agendas dos Colegas</h3>
-  {% for col in colleagues %}
-    <h5>{{ col.user.name }}</h5>
-    <ul class="list-group mb-3">
-      {% for ap in colleague_appointments[col.id] %}
-        <li class="list-group-item">
-          {{ ap.scheduled_at.strftime('%d/%m/%Y %H:%M') }} - {{ ap.animal.name }} ({{ ap.tutor.name }})
-        </li>
-      {% else %}
-        <li class="list-group-item">Nenhuma consulta agendada.</li>
-      {% endfor %}
-    </ul>
-  {% endfor %}
-  {% endif %}
-
-
   <!-- Modal de detalhes da consulta -->
   <div class="modal fade" id="appointmentModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog">
