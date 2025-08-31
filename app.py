@@ -6500,6 +6500,52 @@ def imprimir_bloco_orcamento(bloco_id):
         clinica=clinica,
     )
 
+
+@app.route('/pagar_bloco_orcamento/<int:bloco_id>')
+@login_required
+def pagar_bloco_orcamento(bloco_id):
+    bloco = BlocoOrcamento.query.get_or_404(bloco_id)
+    if not bloco.itens:
+        flash('Nenhum item no orçamento.', 'warning')
+        return redirect(url_for('consulta_direct', animal_id=bloco.animal_id))
+
+    items = [
+        {
+            'id': str(it.id),
+            'title': it.descricao,
+            'quantity': 1,
+            'unit_price': float(it.valor),
+        }
+        for it in bloco.itens
+    ]
+
+    preference_data = {
+        'items': items,
+        'external_reference': f'bloco_orcamento-{bloco.id}',
+        'notification_url': url_for('notificacoes_mercado_pago', _external=True),
+        'statement_descriptor': current_app.config.get('MERCADOPAGO_STATEMENT_DESCRIPTOR'),
+        'back_urls': {
+            s: url_for('consulta_direct', animal_id=bloco.animal_id, _external=True)
+            for s in ('success', 'failure', 'pending')
+        },
+        'auto_return': 'approved',
+    }
+
+    try:
+        resp = mp_sdk().preference().create(preference_data)
+    except Exception:
+        current_app.logger.exception('Erro de conexão com Mercado Pago')
+        flash('Falha ao conectar com Mercado Pago.', 'danger')
+        return redirect(url_for('consulta_direct', animal_id=bloco.animal_id))
+
+    if resp.get('status') != 201:
+        current_app.logger.error('MP error (HTTP %s): %s', resp.get('status'), resp)
+        flash('Erro ao iniciar pagamento.', 'danger')
+        return redirect(url_for('consulta_direct', animal_id=bloco.animal_id))
+
+    pref = resp['response']
+    return redirect(pref['init_point'])
+
 @app.route('/consulta/<int:consulta_id>/pagar_orcamento')
 @login_required
 def pagar_orcamento(consulta_id):
