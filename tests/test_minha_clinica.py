@@ -32,6 +32,27 @@ def test_minha_clinica_redirects(monkeypatch, app):
         assert f"/clinica/{clinica.id}" in resp.headers['Location']
 
 
+def test_vet_without_clinic_can_create(monkeypatch, app):
+    client = app.test_client()
+    with app.app_context():
+        db.drop_all()
+        db.create_all()
+        user = User(name="Vet", email="noclinic@example.com", password_hash="x")
+        vet = Veterinario(user=user, crmv="123")
+        db.session.add_all([user, vet])
+        db.session.commit()
+
+        import flask_login.utils as login_utils
+        monkeypatch.setattr(login_utils, '_get_user', lambda: user)
+
+        resp = client.get('/minha-clinica')
+        assert resp.status_code == 200
+        assert b'Criar Cl' in resp.data
+
+        db.session.remove()
+        db.drop_all()
+
+
 def test_minha_clinica_shows_dashboard_for_multiple_clinics(monkeypatch, app):
     client = app.test_client()
     with app.app_context():

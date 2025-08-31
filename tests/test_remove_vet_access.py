@@ -43,7 +43,12 @@ def test_removed_vet_cannot_access_clinic(monkeypatch, app):
         login(monkeypatch, owner)
         client.post(f'/clinica/{clinic.id}/veterinario/{vet.id}/remove')
 
-        # Vet no longer has access
+        # Vet no longer has access to the old clinic
         login(monkeypatch, vet_user)
-        resp = client.get('/minha-clinica')
+        resp = client.get(f'/clinica/{clinic.id}')
         assert resp.status_code == 404
+
+        # But can create a new clinic
+        resp = client.get('/minha-clinica')
+        assert resp.status_code == 200
+        assert b'Criar Cl' in resp.data

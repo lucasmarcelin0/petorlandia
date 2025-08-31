@@ -38,3 +38,6 @@ def test_add_veterinarian_sets_clinic(app):
         db.session.commit()
 
         assert vet.clinica_id == clinic.id
+
+        db.session.remove()
+        db.drop_all()
