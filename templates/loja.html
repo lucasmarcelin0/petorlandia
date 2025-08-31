@@ -63,7 +63,7 @@
 {% endif %}
 
 <!-- Busca + Filtros -->
-<form method="get" class="row g-2 align-items-stretch mb-3">
+<form method="get" id="search-form" class="row g-2 align-items-stretch mb-3">
   <!-- preserva categoria ao buscar -->
   {% if request.args.get('category') %}
     <input type="hidden" name="category" value="{{ request.args.get('category') }}">
@@ -100,98 +100,9 @@
 </form>
 
 <!-- Grid de Produtos -->
-{% if products %}
-<div class="row row-cols-1 row-cols-sm-2 row-cols-md-3 row-cols-lg-4 g-3 g-md-4">
-  {% for product in products %}
-  <div class="col">
-    <article class="card product-card h-100 d-flex flex-column overflow-hidden">
-      <!-- Imagem -->
-      <a href="{{ url_for('produto_detail', product_id=product.id) }}"
-         class="ratio ratio-4x3 product-image-wrap d-block position-relative" aria-label="Abrir {{ product.name }}">
-        {% if product.image_url %}
-          {% if 'http' in product.image_url %}
-            <img src="{{ product.image_url }}" class="product-image" alt="{{ product.name }}" loading="lazy">
-          {% else %}
-            <img src="{{ url_for('static', filename=product.image_url) }}" class="product-image" alt="{{ product.name }}" loading="lazy">
-          {% endif %}
-        {% else %}
-          <div class="product-image-placeholder">
-            <i class="fa-regular fa-image"></i>
-          </div>
-        {% endif %}
-      </a>
-
-      <!-- Info -->
-      <div class="card-body d-flex flex-column">
-        <h3 class="h6 fw-semibold product-name mb-1" title="{{ product.name }}">{{ product.name }}</h3>
-        {% if product.description %}
-          <p class="text-muted small product-description mb-2" data-bs-toggle="tooltip"
-             data-bs-placement="top" title="{{ product.description }}">
-            {{ product.description|truncate(110) }}
-          </p>
-        {% endif %}
-
-        <div class="mt-auto">
-          <div class="d-flex align-items-center justify-content-between mb-1">
-            <span class="h5 m-0 text-success fw-bold">R$ {{ '%.2f'|format(product.price)|replace('.', ',') }}</span>
-          </div>
-          <div class="text-muted small mb-2">
-            <i class="fa-solid fa-truck-fast ms-1 me-1"></i>entrega rápida
-          </div>
-
-          <form action="{{ url_for('adicionar_carrinho', product_id=product.id) }}"
-                method="post" class="js-cart-form">
-            {{ form.hidden_tag() }}
-            <div class="d-flex align-items-stretch gap-2">
-              <!-- Seletor de quantidade -->
-              <div class="quantity-selector" aria-label="Selecionar quantidade">
-                <button type="button" class="quantity-btn minus" aria-label="Diminuir">–</button>
-                {{ form.quantity(class="form-control quantity-input", min="1", value="1", **{'aria-label': 'Quantidade'}) }}
-                <button type="button" class="quantity-btn plus" aria-label="Aumentar">+</button>
-              </div>
-
-              <!-- Botão adicionar -->
-              <button type="submit" class="btn btn-primary add-to-cart-btn flex-grow-1 js-add-to-cart"
-                      aria-label="Adicionar {{ product.name }} ao carrinho">
-                <i class="fa-solid fa-cart-plus me-2"></i>
-                Adicionar ao carrinho
-              </button>
-            </div>
-          </form>
-        </div>
-      </div>
-    </article>
-  </div>
-  {% endfor %}
+<div id="products-container">
+  {% include 'partials/_product_grid.html' %}
 </div>
-
-<!-- Paginação (exemplo estático; troque pela sua paginação real) -->
-{% if pagination is defined %}
-<nav aria-label="Paginação" class="mt-4">
-  <ul class="pagination justify-content-center">
-    <li class="page-item {% if not pagination.prev %}disabled{% endif %}">
-      <a class="page-link" href="{{ pagination.prev or '#' }}">Anterior</a>
-    </li>
-    {% for p in pagination.pages %}
-      <li class="page-item {% if p.active %}active{% endif %}">
-        <a class="page-link" href="{{ p.url }}">{{ p.number }}</a>
-      </li>
-    {% endfor %}
-    <li class="page-item {% if not pagination.next %}disabled{% endif %}">
-      <a class="page-link" href="{{ pagination.next or '#' }}">Próximo</a>
-    </li>
-  </ul>
-</nav>
-{% endif %}
-
-{% else %}
-<!-- Empty state -->
-<section class="text-center py-5 my-5">
-  <div class="mb-3"><i class="fa-regular fa-face-frown-open display-4 text-muted"></i></div>
-  <h2 class="h5 text-muted">Nenhum produto disponível</h2>
-  <p class="text-muted">Volte em breve para novas ofertas!</p>
-</section>
-{% endif %}
 
 <!-- Floating Cart (mobile) -->
 <div class="d-lg-none fixed-bottom p-3">
@@ -323,71 +234,7 @@
   }
 </style>
 
-<!-- JS específico da loja -->
-<script>
-  // Chips de categoria -> aplicam/limpam query param
-  (function(){
-    const setParam = (key,val)=>{
-      const url = new URL(window.location.href);
-      if (val) url.searchParams.set(key,val); else url.searchParams.delete(key);
-      url.searchParams.delete('page'); // reset de paginação ao filtrar
-      window.location.href = url.toString();
-    };
+  <!-- JS específico da loja -->
+  <script src="{{ url_for('static', filename='loja_dynamic.js') }}"></script>
 
-    document.querySelectorAll('.chip[data-category]').forEach(chip=>{
-      chip.addEventListener('click', ()=>{
-        setParam('category', chip.dataset.category);
-      });
-    });
-
-    document.querySelectorAll('.js-clear-category').forEach(btn=>{
-      btn.addEventListener('click', ()=> setParam('category',''));
-    });
-  })();
-
-  // Seletor de quantidade
-  (function(){
-    document.querySelectorAll('.quantity-selector').forEach(box=>{
-      const input = box.querySelector('.quantity-input');
-      box.querySelector('.minus')?.addEventListener('click', ()=>{
-        const v = parseInt(input.value||'1',10);
-        input.value = Math.max(1, v-1);
-      });
-      box.querySelector('.plus')?.addEventListener('click', ()=>{
-        const v = parseInt(input.value||'1',10);
-        input.value = v+1;
-      });
-    });
-  })();
-
-  // Feedback visual no botão "Adicionar"
-  (function(){
-    document.querySelectorAll('.js-add-to-cart').forEach(btn=>{
-      btn.addEventListener('click', ()=>{
-        const original = btn.innerHTML;
-        btn.disabled = true;
-        btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>Adicionando...';
-        // A submissão real é tratada pelo listener global .js-cart-form do layout via fetch/AJAX.
-        // Após um breve tempo, voltamos o estado (o toast global confirmará).
-        setTimeout(()=>{
-          btn.disabled = false;
-          btn.innerHTML = '<i class="fa-solid fa-cart-plus me-2"></i>Adicionar ao carrinho';
-        }, 1200);
-      }, { once:false });
-    });
-  })();
-
-  // Scroll suave horizontal (mouse wheel) nas chips
-  (function(){
-    const sc = document.getElementById('chipsScroll');
-    if (!sc) return;
-    sc.addEventListener('wheel', (e)=>{
-      if (Math.abs(e.deltaY) > Math.abs(e.deltaX)) {
-        sc.scrollLeft += e.deltaY;
-        e.preventDefault();
-      }
-    }, { passive:false });
-  })();
-</script>
-
-{% endblock %}
+  {% endblock %}
