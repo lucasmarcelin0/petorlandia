@@ -257,7 +257,7 @@
       </div>
 
       <div id="calendar-container">
-        {% with clinic_id = clinica.id %}
+        {% with clinic_id=clinica.id, calendar_id='agendamentos-calendar', toggle_id='agendamentos-agenda-toggle', include_assets=False %}
           {% include 'partials/schedule_toggle.html' %}
         {% endwith %}
       </div>
@@ -284,64 +284,6 @@
           {% include 'partials/appointments_table.html' %}
         </div>
       </div>
-
-      <h3 class="mt-4">Horários de Atendimento</h3>
-      <table class="table">
-        <thead>
-          <tr><th>Dia</th><th>Abre</th><th>Fecha</th>{% if pode_editar %}<th>Ações</th>{% endif %}</tr>
-        </thead>
-        <tbody>
-          {% for h in horarios %}
-            <tr>
-              <td>{{ h.dia_semana }}</td>
-              <td>{{ h.hora_abertura.strftime('%H:%M') }}</td>
-              <td>{{ h.hora_fechamento.strftime('%H:%M') }}</td>
-              {% if pode_editar %}
-              <td>
-                <form method="post" action="{{ url_for('delete_clinic_hour', clinica_id=clinica.id, horario_id=h.id) }}" class="d-inline">
-                  {{ form.csrf_token }}
-                  <button type="submit" class="btn btn-sm btn-outline-danger" onclick="return confirm('Excluir este horário?');">Excluir</button>
-                </form>
-              </td>
-              {% endif %}
-            </tr>
-          {% else %}
-            <tr><td colspan="{% if pode_editar %}4{% else %}3{% endif %}">Nenhum horário cadastrado.</td></tr>
-          {% endfor %}
-        </tbody>
-      </table>
-
-      {% if pode_editar %}
-        <button class="btn btn-secondary mt-3" onclick="toggleEditHours()">Editar Horários</button>
-        <div id="edit-hours" class="mt-4" style="display: none;">
-          <form method="post" class="mb-4">
-            {{ form.hidden_tag() }}
-          <div class="mb-3">
-            {{ form.clinica_id.label }}
-            {{ form.clinica_id(class="form-select") }}
-          </div>
-          <div class="mb-3">
-            {{ form.dias_semana.label }}
-            {{ form.dias_semana(class="form-select", multiple=True, size=7) }}
-            <div class="mt-2">
-              <button type="button" class="btn btn-sm btn-outline-secondary" onclick="selectDays('all')">Todos</button>
-              <button type="button" class="btn btn-sm btn-outline-secondary" onclick="selectDays('weekday')">Dias Úteis</button>
-              <button type="button" class="btn btn-sm btn-outline-secondary" onclick="selectDays('weekend')">Fins de Semana</button>
-              <button type="button" class="btn btn-sm btn-outline-secondary" onclick="selectDays('clear')">Limpar</button>
-            </div>
-          </div>
-          <div class="mb-3">
-            {{ form.hora_abertura.label }}
-            {{ form.hora_abertura(class="form-control") }}
-          </div>
-          <div class="mb-3">
-            {{ form.hora_fechamento.label }}
-            {{ form.hora_fechamento(class="form-control") }}
-          </div>
-          {{ form.submit(class="btn btn-primary") }}
-        </form>
-      </div>
-      {% endif %}
 
     </div>
     <div class="tab-pane fade" id="animais" role="tabpanel">
