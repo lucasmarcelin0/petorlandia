@@ -186,7 +186,7 @@ from forms import (
     ProductUpdateForm, ProductPhotoForm, ChangePasswordForm,
     DeleteAccountForm, ClinicForm, ClinicHoursForm, ClinicAddVeterinarianForm,
     ClinicAddStaffForm, ClinicStaffPermissionForm, VetScheduleForm, VetSpecialtyForm, AppointmentForm, AppointmentDeleteForm,
-    OrcamentoForm
+    InventoryItemForm, OrcamentoForm
 )
 from helpers import (
     calcular_idade,
@@ -2179,6 +2179,62 @@ def clinic_detail(clinica_id):
         next7_str=next7_str,
         now=now_dt,
     )
+
+
+@app.route('/clinica/<int:clinica_id>/estoque', methods=['GET', 'POST'])
+@login_required
+def clinic_stock(clinica_id):
+    clinica = Clinica.query.get_or_404(clinica_id)
+    is_owner = current_user.id == clinica.owner_id if current_user.is_authenticated else False
+    staff = None
+    if current_user.is_authenticated:
+        staff = ClinicStaff.query.filter_by(clinic_id=clinica.id, user_id=current_user.id).first()
+    has_perm = staff.can_manage_inventory if staff else False
+    if not (_is_admin() or is_owner or has_perm):
+        abort(403)
+
+    form = InventoryItemForm()
+    if form.validate_on_submit():
+        item = ClinicInventoryItem(
+            clinica_id=clinica.id,
+            name=form.name.data,
+            quantity=form.quantity.data,
+            unit=form.unit.data,
+        )
+        db.session.add(item)
+        db.session.commit()
+        flash('Item adicionado com sucesso.', 'success')
+        return redirect(url_for('clinic_stock', clinica_id=clinica.id))
+
+    items = (
+        ClinicInventoryItem.query
+        .filter_by(clinica_id=clinica.id)
+        .order_by(ClinicInventoryItem.name)
+        .all()
+    )
+    return render_template('clinic_stock.html', clinica=clinica, items=items, form=form)
+
+
+@app.route('/estoque/item/<int:item_id>/atualizar', methods=['POST'])
+@login_required
+def update_inventory_item(item_id):
+    item = ClinicInventoryItem.query.get_or_404(item_id)
+    clinica = item.clinica
+    is_owner = current_user.id == clinica.owner_id if current_user.is_authenticated else False
+    staff = None
+    if current_user.is_authenticated:
+        staff = ClinicStaff.query.filter_by(clinic_id=clinica.id, user_id=current_user.id).first()
+    has_perm = staff.can_manage_inventory if staff else False
+    if not (_is_admin() or is_owner or has_perm):
+        abort(403)
+    try:
+        qty = int(request.form.get('quantity', item.quantity))
+    except (TypeError, ValueError):
+        qty = item.quantity
+    item.quantity = max(0, qty)
+    db.session.commit()
+    flash('Quantidade atualizada.', 'success')
+    return redirect(url_for('clinic_stock', clinica_id=clinica.id))
 
 
 @app.route('/clinica/<int:clinica_id>/novo_orcamento', methods=['GET', 'POST'])
