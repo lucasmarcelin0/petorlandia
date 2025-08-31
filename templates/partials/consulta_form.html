@@ -116,7 +116,13 @@
 
 {% if show_retorno_modal %}
 <script>
-  document.addEventListener('DOMContentLoaded', function(){
+  document.addEventListener('DOMContentLoaded', function() {
+    // Garante que a aba de consulta esteja ativa antes de exibir o modal
+    var tabTrigger = document.querySelector('[data-bs-target="#consulta-info"]');
+    if (tabTrigger) {
+      new bootstrap.Tab(tabTrigger).show();
+    }
+
     var retornoModal = new bootstrap.Modal(document.getElementById('retornoModal'));
     retornoModal.show();
   });
