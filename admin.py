@@ -238,6 +238,12 @@ class ClinicaAdmin(MyModelView):
         'logotipo_upload': FileField('Logotipo')
     }
 
+    form_ajax_refs = {
+        'owner': {
+            'fields': ('name', 'email')
+        }
+    }
+
     form_columns = [
         'nome', 'cnpj', 'endereco', 'telefone', 'email', 'logotipo_upload', 'owner'
     ]
