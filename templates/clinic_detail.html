@@ -515,4 +515,32 @@ document.addEventListener('DOMContentLoaded', function() {
 
 {% block scripts %}
 {{ super() }}
+<script>
+  document.addEventListener('DOMContentLoaded', function () {
+    const storageKey = 'clinicActiveTab_{{ clinica.id }}';
+    const hash = window.location.hash;
+    if (hash) {
+      const hashTab = document.querySelector(`#clinicTabs button[data-bs-target="${hash}"]`);
+      if (hashTab) {
+        const tab = new bootstrap.Tab(hashTab);
+        tab.show();
+      }
+    } else {
+      const activeTab = localStorage.getItem(storageKey);
+      if (activeTab) {
+        const tabEl = document.querySelector(`#clinicTabs button[data-bs-target="${activeTab}"]`);
+        if (tabEl) {
+          const tab = new bootstrap.Tab(tabEl);
+          tab.show();
+        }
+      }
+    }
+    const tabs = document.querySelectorAll('#clinicTabs button[data-bs-toggle="tab"]');
+    tabs.forEach(tabEl => {
+      tabEl.addEventListener('shown.bs.tab', event => {
+        localStorage.setItem(storageKey, event.target.getAttribute('data-bs-target'));
+      });
+    });
+  });
+</script>
 {% endblock %}
