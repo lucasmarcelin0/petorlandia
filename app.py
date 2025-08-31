@@ -1977,7 +1977,7 @@ def clinic_detail(clinica_id):
                 staff = ClinicStaff(clinic_id=clinica.id, user_id=user.id)
                 db.session.add(staff)
                 user.clinica_id = clinica.id
-                if user.worker == 'veterinario' and getattr(user, 'veterinario', None):
+                if getattr(user, 'veterinario', None):
                     user.veterinario.clinica_id = clinica.id
                     db.session.add(user.veterinario)
                 db.session.add(user)
