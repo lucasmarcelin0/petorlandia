@@ -5,7 +5,7 @@ from concurrent.futures import ThreadPoolExecutor
 
 
 
-from datetime import datetime, timezone, date
+from datetime import datetime, timezone, date, timedelta
 from dateutil.relativedelta import relativedelta
 from zoneinfo import ZoneInfo
 from PIL import Image
@@ -185,7 +185,8 @@ from forms import (
     DeliveryRequestForm, AddToCartForm, SubscribePlanForm,
     ProductUpdateForm, ProductPhotoForm, ChangePasswordForm,
     DeleteAccountForm, ClinicForm, ClinicHoursForm, ClinicAddVeterinarianForm,
-    ClinicStaffPermissionForm, VetScheduleForm, VetSpecialtyForm, AppointmentForm, AppointmentDeleteForm
+    ClinicStaffPermissionForm, VetScheduleForm, VetSpecialtyForm, AppointmentForm, AppointmentDeleteForm,
+    OrcamentoForm
 )
 from helpers import (
     calcular_idade,
@@ -1836,6 +1837,8 @@ def clinicas():
 def minha_clinica():
     clinicas = clinicas_do_usuario().all()
     if not clinicas:
+        if getattr(current_user, 'veterinario', None):
+            abort(404)
         form = ClinicForm()
         if form.validate_on_submit():
             clinica = Clinica(
@@ -2016,17 +2019,41 @@ def clinic_detail(clinica_id):
         .filter(or_(User.worker != 'veterinario', User.worker == None))
         .all()
     )
-    appointments = (
-        Appointment.query
-        .filter_by(clinica_id=clinica_id)
-        .order_by(Appointment.scheduled_at)
-        .all()
-    )
+
+    start_str = request.args.get('start')
+    end_str = request.args.get('end')
+    start_dt = None
+    end_dt = None
+    if start_str:
+        try:
+            start_dt = datetime.strptime(start_str, "%Y-%m-%d")
+        except ValueError:
+            start_dt = None
+    if end_str:
+        try:
+            end_dt = datetime.strptime(end_str, "%Y-%m-%d") + timedelta(days=1)
+        except ValueError:
+            end_dt = None
+
+    appointments_query = Appointment.query.filter_by(clinica_id=clinica_id)
+    if start_dt:
+        appointments_query = appointments_query.filter(Appointment.scheduled_at >= start_dt)
+    if end_dt:
+        appointments_query = appointments_query.filter(Appointment.scheduled_at < end_dt)
+
+    appointments = appointments_query.order_by(Appointment.scheduled_at).all()
     appointments_grouped = group_appointments_by_day(appointments)
     grouped_vet_schedules = {
         v.id: group_vet_schedules_by_day(v.horarios)
         for v in veterinarios
     }
+
+    orcamentos = Orcamento.query.filter_by(clinica_id=clinica_id).all()
+    today = date.today()
+    today_str = today.strftime('%Y-%m-%d')
+    next7_str = (today + timedelta(days=7)).strftime('%Y-%m-%d')
+    now_dt = datetime.utcnow()
+
     return render_template(
         'clinic_detail.html',
         clinica=clinica,
@@ -2039,11 +2066,58 @@ def clinic_detail(clinica_id):
         appointments=appointments,
         appointments_grouped=appointments_grouped,
         grouped_vet_schedules=grouped_vet_schedules,
+        orcamentos=orcamentos,
         pode_editar=pode_editar,
         animais_adicionados=animais_adicionados,
         tutores_adicionados=tutores_adicionados,
         pagination=None,
+        start=start_str,
+        end=end_str,
+        today_str=today_str,
+        next7_str=next7_str,
+        now=now_dt,
     )
+
+
+@app.route('/clinica/<int:clinica_id>/novo_orcamento', methods=['GET', 'POST'])
+@login_required
+def novo_orcamento(clinica_id):
+    clinica = Clinica.query.get_or_404(clinica_id)
+    if current_user.clinica_id != clinica_id and not _is_admin():
+        abort(403)
+    form = OrcamentoForm()
+    if form.validate_on_submit():
+        o = Orcamento(clinica_id=clinica_id, descricao=form.descricao.data)
+        db.session.add(o)
+        db.session.commit()
+        flash('Orçamento criado com sucesso.', 'success')
+        return redirect(url_for('clinic_detail', clinica_id=clinica_id) + '#orcamento')
+    return render_template('orcamento_form.html', form=form, clinica=clinica)
+
+
+@app.route('/orcamento/<int:orcamento_id>/editar', methods=['GET', 'POST'])
+@login_required
+def editar_orcamento(orcamento_id):
+    orcamento = Orcamento.query.get_or_404(orcamento_id)
+    if current_user.clinica_id != orcamento.clinica_id and not _is_admin():
+        abort(403)
+    form = OrcamentoForm(obj=orcamento)
+    if form.validate_on_submit():
+        orcamento.descricao = form.descricao.data
+        db.session.commit()
+        flash('Orçamento atualizado com sucesso.', 'success')
+        return redirect(url_for('clinic_detail', clinica_id=orcamento.clinica_id) + '#orcamento')
+    return render_template('orcamento_form.html', form=form, clinica=orcamento.clinica)
+
+
+@app.route('/clinica/<int:clinica_id>/orcamentos')
+@login_required
+def orcamentos(clinica_id):
+    clinica = Clinica.query.get_or_404(clinica_id)
+    if current_user.clinica_id != clinica_id and not _is_admin():
+        abort(403)
+    lista = Orcamento.query.filter_by(clinica_id=clinica_id).all()
+    return render_template('orcamentos.html', clinica=clinica, orcamentos=lista)
 
 
 @app.route('/clinica/<int:clinica_id>/dashboard')
