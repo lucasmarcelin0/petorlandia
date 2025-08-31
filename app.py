@@ -4936,23 +4936,11 @@ def _setup_checkout_form(form, preserve_selected=True):
 
 
 
-from flask import session, render_template, request
+from flask import session, render_template, request, jsonify
 from flask_login import login_required
 
 
-@app.route("/loja")
-@login_required
-def loja():
-    pagamento_pendente = None
-    payment_id = session.get("last_pending_payment")
-    if payment_id:
-        payment = Payment.query.get(payment_id)
-        if payment and payment.status.name == "PENDING":
-            pagamento_pendente = payment
-
-    search_term = request.args.get("q", "").strip()
-    filtro = request.args.get("filter", "all")
-
+def _build_loja_query(search_term: str, filtro: str):
     query = Product.query
     if search_term:
         like = f"%{search_term}%"
@@ -4969,7 +4957,27 @@ def loja():
     else:
         query = query.order_by(Product.name)
 
-    produtos = query.all()
+    return query
+
+
+@app.route("/loja")
+@login_required
+def loja():
+    pagamento_pendente = None
+    payment_id = session.get("last_pending_payment")
+    if payment_id:
+        payment = Payment.query.get(payment_id)
+        if payment and payment.status.name == "PENDING":
+            pagamento_pendente = payment
+
+    search_term = request.args.get("q", "").strip()
+    filtro = request.args.get("filter", "all")
+    page = request.args.get("page", 1, type=int)
+    per_page = 12
+
+    query = _build_loja_query(search_term, filtro)
+    pagination = query.paginate(page=page, per_page=per_page, error_out=False)
+    produtos = pagination.items
     form = AddToCartForm()
 
     # Verifica se há pedidos anteriores
@@ -4978,12 +4986,56 @@ def loja():
     return render_template(
         "loja.html",
         products=produtos,
+        pagination=pagination,
         pagamento_pendente=pagamento_pendente,
         form=form,
         has_orders=has_orders,
         selected_filter=filtro,
         search_term=search_term,
     )
+
+
+@app.route("/loja/data")
+@login_required
+def loja_data():
+    search_term = request.args.get("q", "").strip()
+    filtro = request.args.get("filter", "all")
+    page = request.args.get("page", 1, type=int)
+    per_page = 12
+
+    query = _build_loja_query(search_term, filtro)
+    pagination = query.paginate(page=page, per_page=per_page, error_out=False)
+    produtos = pagination.items
+    form = AddToCartForm()
+
+    if request.args.get("format") == "json":
+        products_data = [
+            {
+                "id": p.id,
+                "name": p.name,
+                "description": p.description,
+                "price": p.price,
+                "image_url": p.image_url,
+            }
+            for p in produtos
+        ]
+        return jsonify(
+            products=products_data,
+            page=pagination.page,
+            total_pages=pagination.pages,
+            has_next=pagination.has_next,
+            has_prev=pagination.has_prev,
+        )
+
+    html = render_template(
+        "partials/_product_grid.html",
+        products=produtos,
+        pagination=pagination,
+        form=form,
+        selected_filter=filtro,
+        search_term=search_term,
+    )
+    return html
 
 
 @app.route('/produto/<int:product_id>', methods=['GET', 'POST'])
