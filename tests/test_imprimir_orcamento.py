@@ -1,11 +1,12 @@
 import os
-os.environ["SQLALCHEMY_DATABASE_URI"] = "sqlite:///:memory:"
 import sys
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
+os.environ["SQLALCHEMY_DATABASE_URI"] = "sqlite:///:memory:"
+
 import pytest
 from app import app as flask_app, db
-from models import User, Animal, Consulta, OrcamentoItem
+from models import User, Animal, Consulta, OrcamentoItem, Clinica, Orcamento
 
 
 @pytest.fixture
@@ -42,6 +43,37 @@ def test_imprimir_orcamento(app):
         assert resp.status_code == 200
         assert b'Consulta' in resp.data
         assert b'50.00' in resp.data
+
+    with app.app_context():
+        db.drop_all()
+
+
+def test_imprimir_orcamento_padrao(app):
+    with app.app_context():
+        db.drop_all()
+        db.create_all()
+        vet = User(name='Vet', email='vet@example.com', worker='veterinario', role='admin')
+        vet.set_password('x')
+        clinica = Clinica(nome='Clinica X', owner=vet)
+        db.session.add_all([vet, clinica])
+        db.session.commit()
+
+        o = Orcamento(clinica=clinica, descricao='Padrao')
+        db.session.add(o)
+        db.session.commit()
+
+        item = OrcamentoItem(orcamento=o, descricao='Servico', valor=100)
+        db.session.add(item)
+        db.session.commit()
+        orcamento_id = o.id
+
+    client = app.test_client()
+    with client:
+        client.post('/login', data={'email': 'vet@example.com', 'password': 'x'}, follow_redirects=True)
+        resp = client.get(f'/orcamento/{orcamento_id}/imprimir')
+        assert resp.status_code == 200
+        assert b'Servico' in resp.data
+        assert b'100.00' in resp.data
 
     with app.app_context():
         db.drop_all()
