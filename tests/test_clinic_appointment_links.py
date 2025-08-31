@@ -33,7 +33,7 @@ def client():
         with flask_app.app_context():
             db.drop_all()
 
-def test_clinic_page_has_new_and_edit_links(client, monkeypatch):
+def test_clinic_page_has_list_button_and_edit_link(client, monkeypatch):
     with flask_app.app_context():
         admin = User(name="Admin", email="admin_links@example.com", password_hash="x", role="admin")
         clinic = Clinica(nome="Clinica", owner=admin)
@@ -63,5 +63,6 @@ def test_clinic_page_has_new_and_edit_links(client, monkeypatch):
     resp = client.get(f'/clinica/{clinic_id}')
     assert resp.status_code == 200
     html = resp.data.decode()
-    assert 'Novo Agendamento' in html
+    assert 'Novo Agendamento' not in html
+    assert 'Lista' in html
     assert f'/appointments/{appt_id}/edit' in html
