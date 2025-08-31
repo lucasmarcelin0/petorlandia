@@ -39,7 +39,7 @@ def create_basic_appointment():
     db.session.add_all([clinic, tutor, vet_user, vet, animal, plan, sub])
     db.session.commit()
     appt = Appointment(id=1, animal_id=animal.id, tutor_id=tutor.id,
-                       veterinario_id=vet.id, scheduled_at=datetime(2024,5,1,10,0),
+                       veterinario_id=vet.id, scheduled_at=datetime(2024,5,1,13,0),
                        clinica_id=clinic.id)
     db.session.add(appt)
     db.session.commit()

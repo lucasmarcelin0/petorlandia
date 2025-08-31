@@ -56,7 +56,7 @@ def test_vet_can_edit_appointment_date_time_and_vet(client, monkeypatch):
         schedule2 = VetSchedule(id=2, veterinario_id=vet2.id, dia_semana='Quinta', hora_inicio=dtime(9,0), hora_fim=dtime(17,0))
         db.session.add_all([clinic, tutor, vet_user1, vet_user2, animal, plan, sub, vet1, vet2, schedule1, schedule2])
         db.session.commit()
-        appt = Appointment(id=1, animal_id=animal.id, tutor_id=tutor.id, veterinario_id=vet1.id, scheduled_at=datetime(2024,5,1,10,0), clinica_id=clinic.id)
+        appt = Appointment(id=1, animal_id=animal.id, tutor_id=tutor.id, veterinario_id=vet1.id, scheduled_at=datetime(2024,5,1,13,0), clinica_id=clinic.id)
         db.session.add(appt)
         db.session.commit()
         appt_id = appt.id
@@ -82,7 +82,7 @@ def test_vet_can_edit_appointment_date_time_and_vet(client, monkeypatch):
     with flask_app.app_context():
         appt = Appointment.query.get(appt_id)
         assert appt.veterinario_id == 2
-        assert appt.scheduled_at == datetime(2024,5,2,11,30)
+        assert appt.scheduled_at == datetime(2024,5,2,14,30)
         assert appt.notes == 'Trazer exames'
 
 
@@ -105,7 +105,7 @@ def test_vet_can_edit_appointment_missing_clinic_id(client, monkeypatch):
         schedule2 = VetSchedule(id=2, veterinario_id=vet2.id, dia_semana='Quinta', hora_inicio=dtime(9,0), hora_fim=dtime(17,0))
         db.session.add_all([clinic, tutor, vet_user1, vet_user2, animal, plan, sub, vet1, vet2, schedule1, schedule2])
         db.session.commit()
-        appt = Appointment(id=1, animal_id=animal.id, tutor_id=tutor.id, veterinario_id=vet1.id, scheduled_at=datetime(2024,5,1,10,0))
+        appt = Appointment(id=1, animal_id=animal.id, tutor_id=tutor.id, veterinario_id=vet1.id, scheduled_at=datetime(2024,5,1,13,0))
         db.session.add(appt)
         db.session.commit()
         # Simulate legacy data with missing clinica_id
@@ -134,4 +134,4 @@ def test_vet_can_edit_appointment_missing_clinic_id(client, monkeypatch):
     with flask_app.app_context():
         appt = Appointment.query.get(appt_id)
         assert appt.veterinario_id == 2
-        assert appt.scheduled_at == datetime(2024,5,2,11,30)
+        assert appt.scheduled_at == datetime(2024,5,2,14,30)
