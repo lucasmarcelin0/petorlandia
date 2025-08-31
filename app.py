@@ -1796,8 +1796,6 @@ def consulta_direct(animal_id):
             )]
             appointment_form.veterinario_id.data = vet_obj.id
 
-    show_retorno_modal = request.args.get('agendar_retorno')
-
     # Idade e unidade (anos/meses)
     idade = ''
     idade_unidade = ''
@@ -1846,7 +1844,6 @@ def consulta_direct(animal_id):
         animal_idade_unidade=idade_unidade,
         servicos=servicos,
         appointment_form=appointment_form,
-        show_retorno_modal=show_retorno_modal,
     )
 
 
@@ -1862,9 +1859,7 @@ def finalizar_consulta(consulta_id):
     consulta.status = 'finalizada'
     db.session.commit()
     flash('Consulta finalizada e registrada no histórico! Agende o retorno.', 'success')
-    return redirect(
-        url_for('consulta_direct', animal_id=consulta.animal_id, agendar_retorno=1)
-    )
+    return redirect(url_for('consulta_direct', animal_id=consulta.animal_id))
 
 
 @app.route('/agendar_retorno/<int:consulta_id>', methods=['POST'])

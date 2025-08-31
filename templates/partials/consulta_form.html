@@ -52,14 +52,6 @@
               placeholder="Descreva a conduta adotada">{{ consulta.conduta or '' }}</textarea>
   </div>
 
-  {% if appointment_form %}
-  <div class="mb-3">
-    <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#retornoModal">
-      Agendar Retorno
-    </button>
-  </div>
-  {% endif %}
-
   <div class="d-flex justify-content-between mt-4">
     <button type="submit" class="btn btn-primary">
       {% if edit_mode %}
@@ -78,56 +70,28 @@
 </form>
 
 {% if appointment_form %}
-<div class="modal fade" id="retornoModal" tabindex="-1" aria-hidden="true" data-bs-backdrop="static" data-bs-keyboard="false">
-  <div class="modal-dialog">
-    <div class="modal-content">
-      <form method="POST" action="{{ url_for('agendar_retorno', consulta_id=consulta.id) }}">
-        <div class="modal-header">
-          <h5 class="modal-title">Agendar Retorno</h5>
-          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-        </div>
-        <div class="modal-body">
-          {{ appointment_form.hidden_tag() }}
-          <input type="hidden" name="animal_id" value="{{ animal.id }}">
-          <input type="hidden" name="veterinario_id" value="{{ consulta.veterinario.veterinario.id }}">
-          <p><strong>Animal:</strong> {{ animal.name }}</p>
-          <p><strong>Veterinário:</strong> {{ consulta.veterinario.name }}</p>
-          <div class="mb-3">
-            {{ appointment_form.date.label(class='form-label') }}
-            {{ appointment_form.date(class='form-control', type='date') }}
-          </div>
-          <div class="mb-3">
-            {{ appointment_form.time.label(class='form-label') }}
-            {{ appointment_form.time(class='form-control', type='time') }}
-          </div>
-          <div class="mb-3">
-            {{ appointment_form.reason.label(class='form-label') }}
-            {{ appointment_form.reason(class='form-control', rows=3) }}
-          </div>
-        </div>
-        <div class="modal-footer">
-          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
-          {{ appointment_form.submit(class='btn btn-primary') }}
-        </div>
-      </form>
-    </div>
+<hr class="my-4">
+<h5>Agendar Retorno</h5>
+<form method="POST" action="{{ url_for('agendar_retorno', consulta_id=consulta.id) }}" class="row g-3">
+  {{ appointment_form.hidden_tag() }}
+  <input type="hidden" name="animal_id" value="{{ animal.id }}">
+  <input type="hidden" name="veterinario_id" value="{{ consulta.veterinario.veterinario.id }}">
+  <div class="col-md-6">
+    {{ appointment_form.date.label(class='form-label') }}
+    {{ appointment_form.date(class='form-control', type='date') }}
   </div>
-</div>
-
-{% if show_retorno_modal %}
-<script>
-  document.addEventListener('DOMContentLoaded', function() {
-    // Garante que a aba de consulta esteja ativa antes de exibir o modal
-    var tabTrigger = document.querySelector('[data-bs-target="#consulta-info"]');
-    if (tabTrigger) {
-      new bootstrap.Tab(tabTrigger).show();
-    }
-
-    var retornoModal = new bootstrap.Modal(document.getElementById('retornoModal'), {keyboard: false, backdrop: 'static'});
-    retornoModal.show();
-  });
-</script>
-{% endif %}
+  <div class="col-md-6">
+    {{ appointment_form.time.label(class='form-label') }}
+    {{ appointment_form.time(class='form-control', type='time') }}
+  </div>
+  <div class="col-12">
+    {{ appointment_form.reason.label(class='form-label') }}
+    {{ appointment_form.reason(class='form-control', rows=3) }}
+  </div>
+  <div class="col-12">
+    {{ appointment_form.submit(class='btn btn-primary') }}
+  </div>
+</form>
 {% endif %}
 
 <script>
