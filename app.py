@@ -97,7 +97,12 @@ def _s3():
     return boto3.client("s3", aws_access_key_id=AWS_ID, aws_secret_access_key=AWS_SECRET)
 
 def upload_to_s3(file, filename, folder="uploads") -> str | None:
-    """Compress and upload a file to S3."""
+    """Compress and upload a file to S3.
+
+    Falls back to saving the file locally under ``static/uploads`` if the
+    S3 bucket is not configured or the upload fails for any reason.  Returns
+    the public URL of the uploaded file or ``None`` on failure.
+    """
     try:
         fileobj = file
         content_type = file.content_type
@@ -111,18 +116,35 @@ def upload_to_s3(file, filename, folder="uploads") -> str | None:
             buffer.seek(0)
             fileobj = buffer
             content_type = "image/jpeg"
-            if not filename.lower().endswith(('.jpg', '.jpeg')):
-                filename += '.jpg'
+            name, ext = os.path.splitext(filename)
+            if ext.lower() not in {".jpg", ".jpeg"}:
+                filename = f"{name}.jpg"
 
         key = f"{folder}/{filename}"
-        _s3().upload_fileobj(
-            fileobj,
-            BUCKET,
-            key,
-            ExtraArgs={"ACL": "public-read", "ContentType": content_type},
-        )
-        return f"https://{BUCKET}.s3.amazonaws.com/{key}"
-    except Exception as exc:                 # noqa: BLE001
+
+        if BUCKET:
+            _s3().upload_fileobj(
+                fileobj,
+                BUCKET,
+                key,
+                ExtraArgs={"ACL": "public-read", "ContentType": content_type},
+            )
+            return f"https://{BUCKET}.s3.amazonaws.com/{key}"
+
+        # Local fallback when no S3 bucket is configured
+        local_path = PROJECT_ROOT / "static" / "uploads" / key
+        local_path.parent.mkdir(parents=True, exist_ok=True)
+
+        if fileobj is file:
+            file.stream.seek(0)
+            file.save(local_path)
+        else:
+            fileobj.seek(0)
+            with open(local_path, "wb") as fp:
+                fp.write(fileobj.read())
+
+        return f"/static/uploads/{key}"
+    except Exception as exc:  # noqa: BLE001
         app.logger.exception("S3 upload failed: %s", exc)
         return None
 
