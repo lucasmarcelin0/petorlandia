@@ -456,6 +456,9 @@ document.addEventListener('DOMContentLoaded', function() {
       .then(response => response.text())
       .then(html => {
         container.innerHTML = html;
+        if (typeof bindAppointmentRowClicks === 'function') {
+          bindAppointmentRowClicks();
+        }
         if (pushState) {
           window.history.replaceState({}, '', url);
         }
@@ -490,6 +493,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
 {% block scripts %}
 {{ super() }}
+<script src="{{ url_for('static', filename='appointments_table.js') }}"></script>
 <script>
   document.addEventListener('DOMContentLoaded', function () {
     const storageKey = 'clinicActiveTab_{{ clinica.id }}';
