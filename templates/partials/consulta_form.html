@@ -69,34 +69,85 @@
   </div>
 </form>
 
+<div id="retorno-container">
 {% if consulta.appointment %}
-<div class="alert alert-info mt-4">
-  <i class="bi bi-calendar-event"></i>
-  Retorno marcado para {{ consulta.appointment.scheduled_at|format_datetime_brazil('%d/%m/%Y %H:%M') }}.
-</div>
+  <div id="retorno-card" class="card mt-4" data-appointment-id="{{ consulta.appointment.id }}">
+    <div class="card-body d-flex justify-content-between align-items-center">
+      <div>
+        <i class="bi bi-calendar-event"></i>
+        Retorno marcado para {{ consulta.appointment.scheduled_at|format_datetime_brazil('%d/%m/%Y %H:%M') }}.
+      </div>
+      <div class="d-flex gap-2">
+        <a href="#" class="card-link editar-retorno">Editar</a>
+        <form method="POST"
+              action="{{ url_for('delete_appointment', appointment_id=consulta.appointment.id) }}"
+              class="d-inline data-sync delete-appointment-form">
+          <button type="submit" class="btn btn-link p-0 card-link">Excluir</button>
+        </form>
+        <a href="{{ url_for('consulta_direct', animal_id=animal.id) }}" class="card-link start-return-link">Iniciar retorno</a>
+      </div>
+    </div>
+  </div>
 {% elif appointment_form %}
-<hr class="my-4">
-<h5>Agendar Retorno</h5>
-<form method="POST" action="{{ url_for('agendar_retorno', consulta_id=consulta.id) }}" class="row g-3">
-  {{ appointment_form.hidden_tag() }}
-  <input type="hidden" name="animal_id" value="{{ animal.id }}">
-  <input type="hidden" name="veterinario_id" value="{{ consulta.veterinario.veterinario.id }}">
-  <div class="col-md-6">
-    {{ appointment_form.date.label(class='form-label') }}
-    {{ appointment_form.date(class='form-control', type='date') }}
+  <hr class="my-4">
+  <h5>Agendar Retorno</h5>
+  <form method="POST" action="{{ url_for('agendar_retorno', consulta_id=consulta.id) }}" class="row g-3">
+    {{ appointment_form.hidden_tag() }}
+    <input type="hidden" name="animal_id" value="{{ animal.id }}">
+    <input type="hidden" name="veterinario_id" value="{{ consulta.veterinario.veterinario.id }}">
+    <div class="col-md-6">
+      {{ appointment_form.date.label(class='form-label') }}
+      {{ appointment_form.date(class='form-control', type='date') }}
+    </div>
+    <div class="col-md-6">
+      {{ appointment_form.time.label(class='form-label') }}
+      {{ appointment_form.time(class='form-control', type='time') }}
+    </div>
+    <div class="col-12">
+      {{ appointment_form.reason.label(class='form-label') }}
+      {{ appointment_form.reason(class='form-control', rows=3) }}
+    </div>
+    <div class="col-12">
+      {{ appointment_form.submit(class='btn btn-primary') }}
+    </div>
+  </form>
+{% endif %}
+</div>
+
+{% if consulta.appointment %}
+<div class="modal fade" id="editReturnModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <form id="edit-return-form" class="needs-validation" novalidate>
+        <div class="modal-header">
+          <h5 class="modal-title">Editar Retorno</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body">
+          <div class="mb-3">
+            {{ appointment_form.veterinario_id.label(class='form-label') }}
+            {{ appointment_form.veterinario_id(class='form-select', value=consulta.appointment.veterinario_id) }}
+          </div>
+          <div class="mb-3">
+            {{ appointment_form.date.label(class='form-label') }}
+            {{ appointment_form.date(class='form-control', type='date', value=consulta.appointment.scheduled_at|format_datetime_brazil('%Y-%m-%d')) }}
+          </div>
+          <div class="mb-3">
+            {{ appointment_form.time.label(class='form-label') }}
+            {{ appointment_form.time(class='form-control', type='time', value=consulta.appointment.scheduled_at|format_datetime_brazil('%H:%M')) }}
+          </div>
+          <div class="mb-3">
+            {{ appointment_form.reason.label(class='form-label') }}
+            {{ appointment_form.reason(class='form-control', rows=3, value=consulta.appointment.notes or '') }}
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="submit" class="btn btn-primary">Salvar</button>
+        </div>
+      </form>
+    </div>
   </div>
-  <div class="col-md-6">
-    {{ appointment_form.time.label(class='form-label') }}
-    {{ appointment_form.time(class='form-control', type='time') }}
-  </div>
-  <div class="col-12">
-    {{ appointment_form.reason.label(class='form-label') }}
-    {{ appointment_form.reason(class='form-control', rows=3) }}
-  </div>
-  <div class="col-12">
-    {{ appointment_form.submit(class='btn btn-primary') }}
-  </div>
-</form>
+</div>
 {% endif %}
 
 <script>
@@ -140,6 +191,73 @@ document.addEventListener('DOMContentLoaded', function() {
         setupAutoExpand();
       }
     });
+  }
+
+  // --- Retorno edit/delete handlers ---
+  const retornoContainer = document.getElementById('retorno-container');
+  const editModalEl = document.getElementById('editReturnModal');
+  const editForm = document.getElementById('edit-return-form');
+  let currentAppointmentId = null;
+
+  if (retornoContainer && editModalEl && editForm) {
+    const editModal = new bootstrap.Modal(editModalEl);
+
+    document.addEventListener('click', function(event) {
+      const card = event.target.closest('#retorno-card');
+      if (card && !event.target.closest('form') && !event.target.classList.contains('start-return-link')) {
+        event.preventDefault();
+        currentAppointmentId = card.dataset.appointmentId;
+        editModal.show();
+      }
+      if (event.target.closest('.editar-retorno')) {
+        event.preventDefault();
+        const cardEl = event.target.closest('#retorno-card');
+        if (cardEl) currentAppointmentId = cardEl.dataset.appointmentId;
+        editModal.show();
+      }
+    });
+
+    editForm.addEventListener('submit', async function(event) {
+      event.preventDefault();
+      const formData = new FormData(editForm);
+      const payload = {
+        veterinario_id: formData.get('veterinario_id'),
+        date: formData.get('date'),
+        time: formData.get('time'),
+        notes: formData.get('reason')
+      };
+      const resp = await fetch(`/appointments/${currentAppointmentId}/edit`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-CSRFToken': '{{ csrf_token() if csrf_token is defined else '' }}',
+          'Accept': 'application/json'
+        },
+        body: JSON.stringify(payload)
+      });
+      if (resp && resp.ok) {
+        editModal.hide();
+        await atualizarRetorno();
+      }
+    });
+
+    document.addEventListener('form-sync-success', async function(ev) {
+      const form = ev.detail && ev.detail.form;
+      if (form && form.classList.contains('delete-appointment-form')) {
+        ev.preventDefault();
+        await atualizarRetorno();
+      }
+    });
+
+    async function atualizarRetorno() {
+      const resp = await fetch(window.location.href);
+      const html = await resp.text();
+      const doc = new DOMParser().parseFromString(html, 'text/html');
+      const newContainer = doc.querySelector('#retorno-container');
+      if (newContainer && retornoContainer) {
+        retornoContainer.innerHTML = newContainer.innerHTML;
+      }
+    }
   }
 });
 </script>
