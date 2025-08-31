@@ -2127,6 +2127,58 @@ def orcamentos(clinica_id):
     return render_template('orcamentos.html', clinica=clinica, orcamentos=lista)
 
 
+@app.route('/dashboard/orcamentos')
+@login_required
+def dashboard_orcamentos():
+    from collections import defaultdict
+    from models import Consulta, Orcamento, Payment, PaymentStatus
+
+    consultas = Consulta.query.filter(Consulta.orcamento_items.any()).all()
+    dados_consultas = []
+    for consulta in consultas:
+        pagamento = Payment.query.filter_by(
+            external_reference=f'consulta-{consulta.id}',
+            status=PaymentStatus.COMPLETED,
+        ).first()
+        dados_consultas.append(
+            {
+                'cliente': consulta.animal.owner.name if consulta.animal and consulta.animal.owner else 'N/A',
+                'animal': consulta.animal.name if consulta.animal else 'N/A',
+                'total': float(consulta.total_orcamento),
+                'status': 'Pago' if pagamento else 'Pendente',
+            }
+        )
+
+    total_por_cliente = defaultdict(lambda: {'total': 0, 'pagos': 0, 'pendentes': 0})
+    total_por_animal = defaultdict(lambda: {'total': 0, 'pagos': 0, 'pendentes': 0})
+    for d in dados_consultas:
+        tc = total_por_cliente[d['cliente']]
+        tc['total'] += d['total']
+        if d['status'] == 'Pago':
+            tc['pagos'] += d['total']
+        else:
+            tc['pendentes'] += d['total']
+        ta = total_por_animal[d['animal']]
+        ta['total'] += d['total']
+        if d['status'] == 'Pago':
+            ta['pagos'] += d['total']
+        else:
+            ta['pendentes'] += d['total']
+
+    orcamentos = Orcamento.query.all()
+    dados_orcamentos = [
+        {'descricao': o.descricao, 'total': float(o.total)} for o in orcamentos
+    ]
+
+    return render_template(
+        'dashboard_orcamentos.html',
+        consultas=dados_consultas,
+        clientes=total_por_cliente,
+        animais=total_por_animal,
+        orcamentos=dados_orcamentos,
+    )
+
+
 @app.route('/clinica/<int:clinica_id>/dashboard')
 @login_required
 def clinic_dashboard(clinica_id):
