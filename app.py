@@ -6388,22 +6388,6 @@ def appointments():
             .all()
         )
 
-        colleagues = (
-
-            Veterinario.query.filter_by(clinica_id=veterinario.clinica_id)
-            .filter(Veterinario.id != veterinario.id)
-            .all()
-        )
-
-        colleague_appointments = {
-            v.id: (
-                Appointment.query.filter_by(veterinario_id=v.id)
-                .order_by(Appointment.scheduled_at)
-                .all()
-            )
-            for v in colleagues
-        }
-
         return render_template(
             'edit_vet_schedule.html',
             schedule_form=schedule_form,
@@ -6411,10 +6395,6 @@ def appointments():
             veterinario=veterinario,
             horarios=horarios,
             appointments=appointments,
-
-            colleagues=colleagues,
-            colleague_appointments=colleague_appointments,
-
         )
     else:
         if current_user.worker in ['colaborador', 'admin']:
