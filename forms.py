@@ -416,6 +416,11 @@ class ProductPhotoForm(FlaskForm):
     submit = SubmitField('Adicionar Foto')
 
 
+class OrcamentoForm(FlaskForm):
+    descricao = StringField('Descrição', validators=[DataRequired(), Length(max=200)])
+    submit = SubmitField('Salvar')
+
+
 class AppointmentForm(FlaskForm):
     """Formulário para agendamento de consultas."""
 
