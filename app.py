@@ -1977,6 +1977,9 @@ def clinic_detail(clinica_id):
                 staff = ClinicStaff(clinic_id=clinica.id, user_id=user.id)
                 db.session.add(staff)
                 user.clinica_id = clinica.id
+                if user.worker == 'veterinario' and getattr(user, 'veterinario', None):
+                    user.veterinario.clinica_id = clinica.id
+                    db.session.add(user.veterinario)
                 db.session.add(user)
                 db.session.commit()
                 flash('Funcionário adicionado. Defina as permissões.', 'success')
@@ -2400,6 +2403,9 @@ def clinic_staff(clinica_id):
                 staff = ClinicStaff(clinic_id=clinic.id, user_id=user.id)
                 db.session.add(staff)
                 user.clinica_id = clinic.id
+                if user.worker == 'veterinario' and getattr(user, 'veterinario', None):
+                    user.veterinario.clinica_id = clinic.id
+                    db.session.add(user.veterinario)
                 db.session.add(user)
                 db.session.commit()
                 if request.accept_mimetypes.accept_json:
@@ -2461,6 +2467,9 @@ def remove_funcionario(clinica_id, user_id):
     user = User.query.get(user_id)
     if user and user.clinica_id == clinica_id:
         user.clinica_id = None
+        if user.worker == 'veterinario' and getattr(user, 'veterinario', None):
+            user.veterinario.clinica_id = None
+            db.session.add(user.veterinario)
         db.session.add(user)
     db.session.commit()
     flash('Funcionário removido com sucesso.', 'success')
