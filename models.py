@@ -4,6 +4,7 @@ except ImportError:
     from .extensions import db
 
 from flask_login import UserMixin
+from flask import url_for, request
 from werkzeug.security import generate_password_hash, check_password_hash
 from datetime import datetime, date
 from dateutil.relativedelta import relativedelta
@@ -599,6 +600,26 @@ class Clinica(db.Model):
         cascade='all, delete-orphan',
         lazy=True,
     )
+
+
+    @property
+    def logo_url(self):
+        """Return an absolute URL for the clinic logo.
+
+        Handles three cases:
+        * ``http``/``https`` URLs stored directly in ``logotipo``.
+        * Paths starting with ``/`` which are joined with ``request.url_root``.
+        * Bare filenames stored in the uploads folder.
+        """
+        if not self.logotipo:
+            return ""
+        if self.logotipo.startswith("http"):
+            return self.logotipo
+        if self.logotipo.startswith("/"):
+            return request.url_root.rstrip("/") + self.logotipo
+        return url_for(
+            "static", filename=f"uploads/clinicas/{self.logotipo}", _external=True
+        )
 
 
     def __str__(self):

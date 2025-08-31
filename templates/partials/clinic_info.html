@@ -1,16 +1,12 @@
 <!-- partials/clinic_info.html -->
+{% from 'components/logo.html' import clinic_logo %}
 <div class="card shadow-lg border-0 rounded-3 mb-4">
   <div class="card-body text-center">
     <h2 class="fw-bold mb-3">{{ clinica.nome }}</h2>
 
     {% if clinica.logotipo %}
       <div class="mb-3">
-        <img src="{{ clinica.logotipo }}" alt="Imagem da Clínica"
-             class="img-fluid rounded shadow-sm"
-             style="max-height: 180px; object-fit: cover;
-                    transform: translate({{ clinica.photo_offset_x or 0 }}px, {{ clinica.photo_offset_y or 0 }}px)
-                               rotate({{ clinica.photo_rotation or 0 }}deg)
-                               scale({{ clinica.photo_zoom or 1 }});">
+        {{ clinic_logo(clinica) }}
       </div>
     {% endif %}
 
