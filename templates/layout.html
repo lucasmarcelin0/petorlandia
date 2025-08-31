@@ -741,6 +741,59 @@
   </script>
   <script>
     document.addEventListener('DOMContentLoaded', () => {
+      document.querySelectorAll('.js-profile-form').forEach(form => {
+        form.addEventListener('submit', async ev => {
+          ev.preventDefault();
+          const submitBtn = form.querySelector('[type="submit"]');
+          if (submitBtn) submitBtn.disabled = true;
+          try {
+            const resp = await fetchOrQueue(form.action, {
+              method: 'POST',
+              body: new FormData(form),
+              headers: {'Accept': 'application/json'}
+            });
+            if (resp && resp.ok) {
+              const data = await resp.json();
+              ['name','email','phone'].forEach(field => {
+                const display = document.getElementById(field + '-display');
+                const input = document.getElementById(field + '-input');
+                if (display && input) display.textContent = input.value || '---';
+              });
+              const addrSpan = document.getElementById('address-display');
+              if (addrSpan) {
+                const rua = form.querySelector('[name="rua"]').value;
+                const numero = form.querySelector('[name="numero"]').value;
+                const bairro = form.querySelector('[name="bairro"]').value;
+                let txt = rua;
+                if (numero) txt += ', ' + numero;
+                if (bairro) txt += ' - ' + bairro;
+                addrSpan.textContent = txt || '---';
+              }
+              if (typeof toggleAll === 'function') {
+                toggleAll();
+              }
+              const toastEl = document.getElementById('actionToast');
+              toastEl.querySelector('.toast-body').textContent = data.message || 'Sucesso';
+              toastEl.classList.remove('bg-danger', 'bg-info', 'bg-success');
+              toastEl.classList.add('bg-' + (data.category || 'success'));
+              new bootstrap.Toast(toastEl).show();
+            } else if (resp) {
+              const data = await resp.json().catch(() => ({}));
+              const toastEl = document.getElementById('actionToast');
+              toastEl.querySelector('.toast-body').textContent = data.message || 'Erro ao atualizar perfil';
+              toastEl.classList.remove('bg-success', 'bg-info');
+              toastEl.classList.add('bg-danger');
+              new bootstrap.Toast(toastEl).show();
+            }
+          } finally {
+            if (submitBtn) submitBtn.disabled = false;
+          }
+        });
+      });
+    });
+  </script>
+  <script>
+    document.addEventListener('DOMContentLoaded', () => {
       document.querySelectorAll('.js-msg-form').forEach(form => {
         form.addEventListener('submit', async ev => {
           ev.preventDefault();

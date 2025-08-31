@@ -6,7 +6,7 @@
 
   <!-- Cabeçalho do Perfil -->
   <div class="card shadow rounded-4 p-4 mb-5 border-0">
-    <form method="POST" enctype="multipart/form-data">
+    <form method="POST" enctype="multipart/form-data" class="js-profile-form">
       {{ form.hidden_tag() }}
       <div class="row g-4 align-items-center">
 
@@ -73,7 +73,7 @@
           <div class="mb-3">
             <label class="form-label">Endereço</label>
             <div class="d-flex align-items-center text-muted">
-              <span>
+              <span id="address-display">
                 {% if endereco and endereco.rua %}
                   {{ endereco.rua }}{% if endereco.numero %}, {{ endereco.numero }}{% endif %}
                   {% if endereco.bairro %} - {{ endereco.bairro }}{% endif %}
