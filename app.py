@@ -1504,7 +1504,16 @@ def upload_document(animal_id):
         flash('Nenhum arquivo enviado.', 'danger')
         return redirect(request.referrer or url_for('ficha_animal', animal_id=animal.id))
 
-    filename = f"{uuid.uuid4().hex}_{secure_filename(file.filename)}"
+    descricao = (request.form.get('descricao') or '').strip().lower()
+    tipo_termo = (request.form.get('tipo') or descricao)
+    filename_base = secure_filename(file.filename)
+    ext = os.path.splitext(filename_base)[1]
+    if tipo_termo in ['termo_interesse', 'termo_transferencia']:
+        timestamp = datetime.now().strftime('%Y%m%d%H%M%S')
+        filename = f"{tipo_termo}_{animal.id}_{timestamp}{ext}"
+    else:
+        filename = f"{uuid.uuid4().hex}_{filename_base}"
+
     file_url = upload_to_s3(file, filename, folder='documentos')
     if not file_url:
         flash('Falha ao enviar arquivo.', 'danger')
@@ -1513,9 +1522,9 @@ def upload_document(animal_id):
     documento = AnimalDocumento(
         animal_id=animal.id,
         veterinario_id=current_user.id,
-        filename=file.filename,
+        filename=filename,
         file_url=file_url,
-        descricao=request.form.get('descricao')
+        descricao=descricao
     )
     db.session.add(documento)
     db.session.commit()
