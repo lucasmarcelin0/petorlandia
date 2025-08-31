@@ -24,7 +24,7 @@
           <button class="btn btn-danger btn-sm">🗑 Excluir</button>
         </form>
         <a href="{{ url_for('imprimir_bloco_orcamento', bloco_id=bloco.id) }}" class="btn btn-outline-secondary btn-sm" target="_blank">🖨 Imprimir</a>
-        <a href="{{ url_for('pagar_bloco_orcamento', bloco_id=bloco.id) }}" class="btn btn-primary btn-sm">💳 Pagar</a>
+        <a href="{{ url_for('editar_bloco_orcamento', bloco_id=bloco.id) }}" class="btn btn-outline-primary btn-sm">✏️ Editar</a>
       </div>
     </div>
     {% endfor %}
