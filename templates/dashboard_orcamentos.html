@@ -1,0 +1,80 @@
+{% extends "layout.html" %}
+{% block main %}
+<div class="container mt-4">
+  <h2>Dashboard de Orçamentos</h2>
+
+  <h4 class="mt-4">Resumo por Cliente</h4>
+  <table class="table">
+    <thead>
+      <tr><th>Cliente</th><th>Total</th><th>Pagos</th><th>Pendentes</th></tr>
+    </thead>
+    <tbody>
+      {% for nome, info in clientes.items() %}
+      <tr>
+        <td>{{ nome }}</td>
+        <td>{{ '%.2f'|format(info.total) }}</td>
+        <td>{{ '%.2f'|format(info.pagos) }}</td>
+        <td>{{ '%.2f'|format(info.pendentes) }}</td>
+      </tr>
+      {% else %}
+      <tr><td colspan="4">Nenhum orçamento encontrado.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  <h4 class="mt-4">Resumo por Animal</h4>
+  <table class="table">
+    <thead>
+      <tr><th>Animal</th><th>Total</th><th>Pagos</th><th>Pendentes</th></tr>
+    </thead>
+    <tbody>
+      {% for nome, info in animais.items() %}
+      <tr>
+        <td>{{ nome }}</td>
+        <td>{{ '%.2f'|format(info.total) }}</td>
+        <td>{{ '%.2f'|format(info.pagos) }}</td>
+        <td>{{ '%.2f'|format(info.pendentes) }}</td>
+      </tr>
+      {% else %}
+      <tr><td colspan="4">Nenhum orçamento encontrado.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  <h4 class="mt-4">Orçamentos da Clínica</h4>
+  <table class="table">
+    <thead>
+      <tr><th>Descrição</th><th>Total</th></tr>
+    </thead>
+    <tbody>
+      {% for o in orcamentos %}
+      <tr>
+        <td>{{ o.descricao }}</td>
+        <td>{{ '%.2f'|format(o.total) }}</td>
+      </tr>
+      {% else %}
+      <tr><td colspan="2">Nenhum orçamento encontrado.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  <h4 class="mt-4">Orçamentos por Consulta</h4>
+  <table class="table">
+    <thead>
+      <tr><th>Cliente</th><th>Animal</th><th>Total</th><th>Status</th></tr>
+    </thead>
+    <tbody>
+      {% for c in consultas %}
+      <tr>
+        <td>{{ c.cliente }}</td>
+        <td>{{ c.animal }}</td>
+        <td>{{ '%.2f'|format(c.total) }}</td>
+        <td>{{ c.status }}</td>
+      </tr>
+      {% else %}
+      <tr><td colspan="4">Nenhum orçamento encontrado.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}
