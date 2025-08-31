@@ -232,6 +232,18 @@ def get_consulta_or_404(consulta_id):
     ensure_clinic_access(consulta.clinica_id)
     return consulta
 
+
+def _appointment_to_event(appt):
+    """Convert an Appointment to a calendar event dict."""
+    end = appt.scheduled_at + timedelta(hours=1)
+    title = appt.animal.name if appt.animal else "Consulta"
+    return {
+        "id": appt.id,
+        "title": title,
+        "start": appt.scheduled_at.isoformat(),
+        "end": end.isoformat(),
+    }
+
 # ----------------------------------------------------------------
 # 7)  Login & serializer
 # ----------------------------------------------------------------
@@ -6037,6 +6049,27 @@ def pedido_detail(order_id):
 
 
 
+@app.route('/api/my_appointments')
+@login_required
+def api_my_appointments():
+    if current_user.worker == 'veterinario' and getattr(current_user, 'veterinario', None):
+        appointments = Appointment.query.filter_by(
+            veterinario_id=current_user.veterinario.id
+        ).all()
+    elif current_user.worker in ['colaborador', 'admin']:
+        clinic_id = current_user_clinic_id()
+        appointments = Appointment.query.filter_by(clinica_id=clinic_id).all()
+    else:
+        appointments = Appointment.query.filter_by(tutor_id=current_user.id).all()
+    return jsonify([_appointment_to_event(a) for a in appointments])
+
+
+@app.route('/api/clinic_appointments/<int:clinica_id>')
+@login_required
+def api_clinic_appointments(clinica_id):
+    ensure_clinic_access(clinica_id)
+    appointments = Appointment.query.filter_by(clinica_id=clinica_id).all()
+    return jsonify([_appointment_to_event(a) for a in appointments])
 
 
 @app.route('/appointments/<int:appointment_id>/confirmation')
