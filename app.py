@@ -6395,9 +6395,22 @@ def adicionar_orcamento_item(consulta_id):
 
     if not descricao or valor is None:
         return jsonify({'success': False, 'message': 'Dados incompletos.'}), 400
+    orcamento = None
+    if consulta.clinica_id:
+        orcamento = consulta.orcamento
+        if not orcamento:
+            desc = f"Orçamento da consulta {consulta.id} - {consulta.animal.name}"
+            orcamento = Orcamento(
+                clinica_id=consulta.clinica_id,
+                consulta_id=consulta.id,
+                descricao=desc,
+            )
+            db.session.add(orcamento)
+            db.session.flush()
 
     item = OrcamentoItem(
         consulta_id=consulta.id,
+        orcamento_id=orcamento.id if orcamento else None,
         descricao=descricao,
         valor=valor,
         servico_id=servico.id if servico else None,
