@@ -1836,6 +1836,8 @@ def clinicas():
 def minha_clinica():
     clinicas = clinicas_do_usuario().all()
     if not clinicas:
+        if getattr(current_user, 'veterinario', None):
+            abort(404)
         form = ClinicForm()
         if form.validate_on_submit():
             clinica = Clinica(
@@ -2004,17 +2006,18 @@ def clinic_detail(clinica_id):
             db.session.commit()
             flash('Horário do funcionário salvo com sucesso.', 'success')
             return redirect(url_for('clinic_detail', clinica_id=clinica.id))
-    animais_adicionados = (
+    page = request.args.get('page', 1, type=int)
+    animais_pagination = (
         Animal.query
         .filter_by(clinica_id=clinica_id)
         .filter(Animal.removido_em == None)
-        .all()
+        .paginate(page=page, per_page=9)
     )
-    tutores_adicionados = (
+    tutores_pagination = (
         User.query
         .filter_by(clinica_id=clinica_id)
         .filter(or_(User.worker != 'veterinario', User.worker == None))
-        .all()
+        .paginate(page=page, per_page=9)
     )
     appointments = (
         Appointment.query
@@ -2040,9 +2043,8 @@ def clinic_detail(clinica_id):
         appointments_grouped=appointments_grouped,
         grouped_vet_schedules=grouped_vet_schedules,
         pode_editar=pode_editar,
-        animais_adicionados=animais_adicionados,
-        tutores_adicionados=tutores_adicionados,
-        pagination=None,
+        animais_pagination=animais_pagination,
+        tutores_pagination=tutores_pagination,
     )
 
 
@@ -2349,7 +2351,6 @@ def tutores():
             .order_by(User.created_at.desc())
             .paginate(page=page, per_page=9)
         )
-        tutores_adicionados = pagination.items
     elif clinic_id:
         last_appt = (
             db.session.query(
@@ -2373,14 +2374,11 @@ def tutores():
             .order_by(func.coalesce(last_appt.c.last_at, User.created_at).desc())
             .paginate(page=page, per_page=9)
         )
-        tutores_adicionados = pagination.items
     else:
         pagination = None
-        tutores_adicionados = []
 
     return render_template(
         'tutores.html',
-        tutores_adicionados=tutores_adicionados,
         pagination=pagination,
         scope=scope
     )
@@ -3876,9 +3874,7 @@ def novo_animal():
             .filter(Animal.removido_em == None)
             .order_by(Animal.date_added.desc())
             .paginate(page=page, per_page=9)
-        )
-
-    animais_adicionados = pagination.items
+    )
 
     # Lista de espécies e raças para os <select> do formulário
     species_list = list_species()
@@ -3886,7 +3882,6 @@ def novo_animal():
 
     return render_template(
         'novo_animal.html',
-        animais_adicionados=animais_adicionados,
         pagination=pagination,
         species_list=species_list,
         breed_list=breed_list,
