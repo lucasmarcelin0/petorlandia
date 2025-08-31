@@ -554,7 +554,6 @@ def logout():
 @app.route('/profile', methods=['GET', 'POST'])
 @login_required
 def profile():
-    # Garante que current_user.endereco exista para pré-preenchimento
     form = EditProfileForm(obj=current_user)
     delete_form = DeleteAccountForm()
 
@@ -562,10 +561,6 @@ def profile():
         if not current_user.endereco:
             current_user.endereco = Endereco()
 
-
-    form = EditProfileForm(obj=current_user)
-
-    if form.validate_on_submit():
         current_user.name = form.name.data
         current_user.email = form.email.data
         current_user.phone = form.phone.data
@@ -597,8 +592,28 @@ def profile():
             current_user.profile_photo = upload_to_s3(file, filename, folder="profile_photos")
 
         db.session.commit()
+
+        if request.accept_mimetypes['application/json']:
+            address_display = ''
+            if endereco.rua:
+                address_display = endereco.rua
+                if endereco.numero:
+                    address_display += f', {endereco.numero}'
+                if endereco.bairro:
+                    address_display += f' - {endereco.bairro}'
+            return jsonify(
+                message='Perfil atualizado com sucesso!',
+                category='success',
+                name=current_user.name,
+                email=current_user.email,
+                phone=current_user.phone,
+                address=address_display
+            )
+
         flash('Perfil atualizado com sucesso!', 'success')
         return redirect(url_for('profile'))
+    elif request.method == 'POST' and request.accept_mimetypes['application/json']:
+        return jsonify(message='Erro ao atualizar perfil', category='danger', errors=form.errors), 400
 
     # Transações recentes
     transactions = Transaction.query.filter(
