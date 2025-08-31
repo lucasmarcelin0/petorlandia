@@ -501,6 +501,7 @@ class OrcamentoItem(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     consulta_id = db.Column(db.Integer, db.ForeignKey('consulta.id'), nullable=True)
     orcamento_id = db.Column(db.Integer, db.ForeignKey('orcamento.id'), nullable=True)
+    bloco_id = db.Column(db.Integer, db.ForeignKey('bloco_orcamento.id'), nullable=True)
     descricao = db.Column(db.String(120), nullable=False)
     valor = db.Column(db.Numeric(10, 2), nullable=False)
     servico_id = db.Column(db.Integer, db.ForeignKey('servico_clinica.id'))
@@ -513,8 +514,27 @@ class OrcamentoItem(db.Model):
         'Orcamento',
         backref=db.backref('items', cascade='all, delete-orphan')
     )
+    bloco = db.relationship(
+        'BlocoOrcamento',
+        backref=db.backref('itens', cascade='all, delete-orphan')
+    )
     servico = db.relationship('ServicoClinica')
 
+
+
+
+class BlocoOrcamento(db.Model):
+    __tablename__ = 'bloco_orcamento'
+
+    id = db.Column(db.Integer, primary_key=True)
+    animal_id = db.Column(db.Integer, db.ForeignKey('animal.id'), nullable=False)
+    data_criacao = db.Column(db.DateTime, default=datetime.utcnow)
+
+    animal = db.relationship('Animal', backref=db.backref('blocos_orcamento', cascade='all, delete-orphan', lazy=True))
+
+    @property
+    def total(self):
+        return sum(item.valor for item in self.itens)
 
 
 # models.py

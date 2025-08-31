@@ -63,12 +63,17 @@
   </tfoot>
 </table>
 <div class="text-end mt-3">
+  <button type="button" class="btn btn-success me-2" onclick="finalizarBlocoOrcamento()">💾 Salvar orçamento</button>
   <a href="{{ url_for('imprimir_orcamento', consulta_id=consulta.id) }}" class="btn btn-outline-dark me-2" target="_blank">
     🖨️ Imprimir
   </a>
   <a href="{{ url_for('pagar_orcamento', consulta_id=consulta.id) }}" class="btn btn-primary">
     <i class="fa-solid fa-money-bill-wave me-1"></i> Pagar orçamento
   </a>
+</div>
+
+<div id="historico-orcamentos" class="mt-5">
+  {% include 'partials/historico_orcamentos.html' %}
 </div>
 
 <script>
@@ -128,6 +133,24 @@ async function removerItemOrcamento(id) {
     document.querySelector(`#orcamento-tabela tr[data-id='${id}']`).remove();
     const data = await resp.json();
     document.getElementById('orcamento-total').textContent = data.total.toFixed(2);
+  }
+}
+
+async function finalizarBlocoOrcamento() {
+  const tbody = document.querySelector('#orcamento-tabela tbody');
+  if (!tbody.children.length) return;
+  const resp = await fetch(`/consulta/${consultaId}/bloco_orcamento`, {method: 'POST', headers: {'Accept': 'application/json'}});
+  if (resp.ok) {
+    const data = await resp.json();
+    if (data.success) {
+      tbody.innerHTML = '';
+      document.getElementById('orcamento-total').textContent = '0.00';
+      const historico = document.getElementById('historico-orcamentos');
+      if (data.html) {
+        historico.innerHTML = data.html;
+        if (typeof bindSyncForms === 'function') { bindSyncForms(historico); }
+      }
+    }
   }
 }
 </script>
