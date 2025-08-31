@@ -28,8 +28,8 @@
     </div>
 
     <div id="animal-cards" class="row g-3">
-      {% if animais_adicionados %}
-        {% for animal in animais_adicionados %}
+      {% if pagination and pagination.items %}
+        {% for animal in pagination.items %}
         <div class="col-md-6 d-flex" data-name="{{ animal.name|lower }}" data-date="{{ animal.date_added.isoformat() if animal.date_added else '' }}" data-age="{{ animal.age_years or 0 }}">
           <div class="card shadow-sm rounded-4 h-100 flex-fill">
             {% if animal.image %}

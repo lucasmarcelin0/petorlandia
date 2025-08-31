@@ -2007,17 +2007,19 @@ def clinic_detail(clinica_id):
             db.session.commit()
             flash('Horário do funcionário salvo com sucesso.', 'success')
             return redirect(url_for('clinic_detail', clinica_id=clinica.id))
-    animais_adicionados = (
+    page = request.args.get("page", 1, type=int)
+    per_page = 9
+    animais_pagination = (
         Animal.query
         .filter_by(clinica_id=clinica_id)
         .filter(Animal.removido_em == None)
-        .all()
+        .paginate(page=page, per_page=per_page)
     )
-    tutores_adicionados = (
+    tutores_pagination = (
         User.query
         .filter_by(clinica_id=clinica_id)
-        .filter(or_(User.worker != 'veterinario', User.worker == None))
-        .all()
+        .filter(or_(User.worker != "veterinario", User.worker == None))
+        .paginate(page=page, per_page=per_page)
     )
 
     start_str = request.args.get('start')
@@ -2068,9 +2070,8 @@ def clinic_detail(clinica_id):
         grouped_vet_schedules=grouped_vet_schedules,
         orcamentos=orcamentos,
         pode_editar=pode_editar,
-        animais_adicionados=animais_adicionados,
-        tutores_adicionados=tutores_adicionados,
-        pagination=None,
+        animais_pagination=animais_pagination,
+        tutores_pagination=tutores_pagination,
         start=start_str,
         end=end_str,
         today_str=today_str,
@@ -2423,7 +2424,6 @@ def tutores():
             .order_by(User.created_at.desc())
             .paginate(page=page, per_page=9)
         )
-        tutores_adicionados = pagination.items
     elif clinic_id:
         last_appt = (
             db.session.query(
@@ -2447,14 +2447,11 @@ def tutores():
             .order_by(func.coalesce(last_appt.c.last_at, User.created_at).desc())
             .paginate(page=page, per_page=9)
         )
-        tutores_adicionados = pagination.items
     else:
         pagination = None
-        tutores_adicionados = []
 
     return render_template(
         'tutores.html',
-        tutores_adicionados=tutores_adicionados,
         pagination=pagination,
         scope=scope
     )
@@ -3952,15 +3949,12 @@ def novo_animal():
             .paginate(page=page, per_page=9)
         )
 
-    animais_adicionados = pagination.items
-
     # Lista de espécies e raças para os <select> do formulário
     species_list = list_species()
     breed_list = list_breeds()
 
     return render_template(
         'novo_animal.html',
-        animais_adicionados=animais_adicionados,
         pagination=pagination,
         species_list=species_list,
         breed_list=breed_list,
