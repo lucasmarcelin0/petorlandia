@@ -477,10 +477,12 @@ class Consulta(db.Model):
 class Orcamento(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     clinica_id = db.Column(db.Integer, db.ForeignKey('clinica.id'), nullable=False)
+    consulta_id = db.Column(db.Integer, db.ForeignKey('consulta.id'), nullable=True)
     descricao = db.Column(db.String(200), nullable=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
     clinica = db.relationship('Clinica', backref=db.backref('orcamentos', cascade='all, delete-orphan'))
+    consulta = db.relationship('Consulta', backref=db.backref('orcamento', uselist=False))
 
     @property
     def total(self):
