@@ -91,7 +91,7 @@
             <div class="row g-0">
               <div class="col-4">
                 <img src="{{ item.product.image_url or url_for('static', filename='placeholder.png') }}"
-                     class="img-fluid rounded-start" alt="{{ item.product.name }}">
+                     class="img-fluid rounded-start" alt="{{ item.product.name }}" loading="lazy" width="150" height="150">
               </div>
               <div class="col-8">
                 <div class="card-body py-2 px-3">
