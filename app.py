@@ -124,32 +124,32 @@ def upload_to_s3(file, filename, folder="uploads") -> str | None:
                 filename = f"{name}.jpg"
 
         filename = secure_filename(filename)
-
         key = f"{folder}/{filename}"
+
+        # Keep a copy of the data so that we can retry if S3 upload fails
+        fileobj.seek(0)
+        data = fileobj.read()
+        buffer = BytesIO(data)
 
         if BUCKET:
             try:
+                buffer.seek(0)
                 _s3().upload_fileobj(
-                    fileobj,
+                    buffer,
                     BUCKET,
                     key,
-                    ExtraArgs={"ACL": "public-read", "ContentType": content_type},
+                    ExtraArgs={"ContentType": content_type},
                 )
                 return f"https://{BUCKET}.s3.amazonaws.com/{key}"
             except Exception as exc:  # noqa: BLE001
                 app.logger.exception("S3 upload failed: %s", exc)
+                buffer.seek(0)
 
         # Local fallback when S3 is not configured or fails
         local_path = PROJECT_ROOT / "static" / "uploads" / key
         local_path.parent.mkdir(parents=True, exist_ok=True)
-
-        if fileobj is file:
-            file.stream.seek(0)
-            file.save(local_path)
-        else:
-            fileobj.seek(0)
-            with open(local_path, "wb") as fp:
-                fp.write(fileobj.read())
+        with open(local_path, "wb") as fp:
+            fp.write(buffer.read())
 
         return f"/static/uploads/{key}"
     except Exception as exc:  # noqa: BLE001
