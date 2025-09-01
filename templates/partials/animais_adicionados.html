@@ -33,7 +33,7 @@
         <div class="col-md-6 d-flex" data-name="{{ animal.name|lower }}" data-date="{{ animal.date_added.isoformat() if animal.date_added else '' }}" data-age="{{ animal.age_years or 0 }}">
           <div class="card shadow-sm rounded-4 h-100 flex-fill">
             {% if animal.image %}
-              <img src="{{ animal.image }}" class="card-img-top rounded-top-4" style="height: 180px; object-fit: cover;" loading="lazy" alt="Foto de {{ animal.name }}">
+              <img src="{{ animal.image }}" class="card-img card-img-top rounded-top-4" height="180" loading="lazy" alt="Foto de {{ animal.name }}">
             {% else %}
               <div class="d-flex align-items-center justify-content-center bg-light rounded-top-4" style="height: 180px;">
                 <span class="text-muted" style="font-size: 2rem;">🐾</span>

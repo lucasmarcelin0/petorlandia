@@ -24,6 +24,8 @@
     <!-- Font Awesome 6 -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 
+    <link href="{{ url_for('static', filename='images.css') }}" rel="stylesheet">
+
     <style>
         :root {
             --primary-color: #4e73df;
@@ -407,11 +409,15 @@
         <div class="container-fluid">
             {% if current_user.is_authenticated and current_user.role == "admin" %}
                 <a href="{{ url_for('painel_admin.index') }}" class="navbar-brand">
-                    {{ clinic_logo(clinica, text='PetOrlândia') }}
+ 
+                    <img src="{{ url_for('static', filename='pastorgato.png') }}" alt="Logo" class="logo-img">
+                    <span>PetOrlândia</span>
                 </a>
             {% else %}
                 <a href="{{ url_for('index') }}" class="navbar-brand">
-                    {{ clinic_logo(clinica, text='PetOrlândia') }}
+                    <img src="{{ url_for('static', filename='pastorgato.png') }}" alt="Logo" class="logo-img">
+                    <span>PetOrlândia</span>
+ 
                 </a>
             {% endif %}
 
