@@ -24,8 +24,8 @@
   <div class="top-info">
     <div class="info-box">
       <strong>Profissional Responsável</strong><br>
-      {{ current_user.name }}<br>
-      CRMV: {{ current_user.veterinario.crmv if current_user.veterinario else '—' }}
+      {{ veterinario.name if veterinario else '' }}<br>
+      CRMV: {{ veterinario.veterinario.crmv if veterinario and veterinario.veterinario else '—' }}
     </div>
   </div>
   <table>

@@ -28,14 +28,14 @@
   <h2>Requisicao de Exames Complementares</h2>
 
   <div class="top-info">
-    {% if current_user.name or (current_user.veterinario and current_user.veterinario.crmv) %}
+    {% if veterinario and (veterinario.name or (veterinario.veterinario and veterinario.veterinario.crmv)) %}
       <div class="info-box">
         <strong>Médico Veterinário</strong><br>
-        {% if current_user.name %}
-          {{ current_user.name }}<br>
+        {% if veterinario.name %}
+          {{ veterinario.name }}<br>
         {% endif %}
-        {% if current_user.veterinario and current_user.veterinario.crmv %}
-          CRMV: {{ current_user.veterinario.crmv }}
+        {% if veterinario.veterinario and veterinario.veterinario.crmv %}
+          CRMV: {{ veterinario.veterinario.crmv }}
         {% endif %}
       </div>
     {% endif %}
@@ -96,8 +96,8 @@
 
   <div class="assinatura">
     ___________________________________________<br>
-    <span>{{ current_user.name }}</span>
-    <span>CRMV: {{ current_user.veterinario.crmv if current_user.veterinario else '—' }}</span>
+    <span>{{ veterinario.name if veterinario else '' }}</span>
+    <span>CRMV: {{ veterinario.veterinario.crmv if veterinario and veterinario.veterinario else '—' }}</span>
   </div>
 
   <footer>

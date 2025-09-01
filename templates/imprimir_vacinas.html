@@ -45,7 +45,8 @@
     <div class="info-box">
       <strong>Clínica</strong><br>
       {{ clinica.nome if clinica else '—' }}<br>
-      CRMV: {{ current_user.veterinario.crmv if current_user.veterinario else '—' }}<br>
+      Veterinário: {{ veterinario.name if veterinario else '—' }}<br>
+      CRMV: {{ veterinario.veterinario.crmv if veterinario and veterinario.veterinario else '—' }}<br>
       Telefone: {{ clinica.telefone if clinica and clinica.telefone else '—' }}
     </div>
   </div>
@@ -78,8 +79,8 @@
   <div class="assinaturas">
     <div>
       ___________________________________________<br>
-      <span>Responsável pela Aplicação</span>
-      <span>CRMV: _________________________</span>
+      <span>{{ veterinario.name if veterinario else 'Responsável pela Aplicação' }}</span>
+      <span>CRMV: {{ veterinario.veterinario.crmv if veterinario and veterinario.veterinario else '_________________________' }}</span>
     </div>
     <div>
       ___________________________________________<br>

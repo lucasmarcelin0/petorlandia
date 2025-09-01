@@ -33,8 +33,8 @@
   <div class="top-info">
     <div class="info-box">
       <strong>Veterinário Responsável</strong><br>
-      {{ current_user.name }}<br>
-      CRMV: {{ current_user.veterinario.crmv if current_user.veterinario else '—' }}
+      {{ veterinario.name if veterinario else '' }}<br>
+      CRMV: {{ veterinario.veterinario.crmv if veterinario and veterinario.veterinario else '—' }}
     </div>
 
     <div class="info-box">
@@ -84,8 +84,8 @@
   <div class="assinaturas">
     <div>
       ___________________________________________<br>
-      <span>{{ current_user.name }}</span>
-      <span>CRMV: {{ current_user.veterinario.crmv if current_user.veterinario else '—' }}</span>
+      <span>{{ veterinario.name if veterinario else '' }}</span>
+      <span>CRMV: {{ veterinario.veterinario.crmv if veterinario and veterinario.veterinario else '—' }}</span>
     </div>
   </div>
 
