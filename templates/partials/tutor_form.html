@@ -36,7 +36,7 @@
       <div class="d-flex align-items-center gap-3">
         {{ photo_cropper(tutor_form.profile_photo, tutor_form.photo_rotation, tutor_form.photo_zoom,
                          tutor_form.photo_offset_x, tutor_form.photo_offset_y,
-                         tutor.profile_photo if has_tutor else '', 60, 'profile_photo') }}
+                         tutor.profile_photo if has_tutor else '', 120, 'profile_photo') }}
         <input type="text" name="name" class="form-control" placeholder="Nome completo do tutor"
                value="{{ tutor.name|default('', true) if has_tutor else '' }}" required minlength="3" maxlength="100">
         <div class="invalid-feedback">Por favor, insira um nome válido (3-100 caracteres)</div>
