@@ -121,6 +121,18 @@
       text-align: center;
     }
 
+    .menu-group {
+      margin-top: 10px;
+    }
+
+    .menu-group-title {
+      padding: 15px 20px 5px;
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      color: rgba(255, 255, 255, 0.6);
+      font-weight: 600;
+    }
+
     /* Logo Styles */
     .logo {
       position: absolute;
@@ -430,10 +442,22 @@
     </div>
 
     {% for menu_item in admin_view.admin.menu() %}
-      <a href="{{ menu_item.get_url() }}" {% if request.path == menu_item.get_url() %}class="active"{% endif %}>
-        <i class="fas fa-{{ menu_item.icon if menu_item.icon else 'circle' }}"></i>
-        <span class="menu-text">{{ menu_item.name }}</span>
-      </a>
+      {% if menu_item.is_category() %}
+        <div class="menu-group">
+          <div class="menu-group-title">{{ menu_item.name }}</div>
+          {% for child in menu_item.get_children() %}
+            <a href="{{ child.get_url() }}" {% if request.path == child.get_url() %}class="active"{% endif %}>
+              <i class="fas fa-{{ child.get_icon_value() if child.get_icon_value() else 'circle' }}"></i>
+              <span class="menu-text">{{ child.name }}</span>
+            </a>
+          {% endfor %}
+        </div>
+      {% else %}
+        <a href="{{ menu_item.get_url() }}" {% if request.path == menu_item.get_url() %}class="active"{% endif %}>
+          <i class="fas fa-{{ menu_item.get_icon_value() if menu_item.get_icon_value() else 'circle' }}"></i>
+          <span class="menu-text">{{ menu_item.name }}</span>
+        </a>
+      {% endif %}
     {% endfor %}
   </div>
 

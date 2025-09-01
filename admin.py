@@ -456,34 +456,134 @@ def init_admin(app):
     )
 
     # Registro das demais views
-    admin.add_view(AnimalAdminView(Animal, db.session, name='Animais'))
+    admin.add_view(AnimalAdminView(
+        Animal, db.session,
+        name='Animais', category='Cadastros',
+        menu_icon_type='fa', menu_icon_value='fa-paw'
+    ))
 
-    admin.add_view(SpeciesAdminView(Species, db.session, name='Espécies'))
-    admin.add_view(MyModelView(Breed, db.session, name='Raças'))
+    admin.add_view(SpeciesAdminView(
+        Species, db.session,
+        name='Espécies', category='Cadastros',
+        menu_icon_type='fa', menu_icon_value='fa-dna'
+    ))
+    admin.add_view(MyModelView(
+        Breed, db.session,
+        name='Raças', category='Cadastros',
+        menu_icon_type='fa', menu_icon_value='fa-dog'
+    ))
 
-    admin.add_view(UserAdminView(User, db.session))
-    admin.add_view(MyModelView(Message, db.session))
-    admin.add_view(MyModelView(Transaction, db.session))
-    admin.add_view(MyModelView(Medicamento, db.session))
-    admin.add_view(MyModelView(Prescricao, db.session))
-    admin.add_view(ClinicaAdmin(Clinica, db.session))
-    admin.add_view(ClinicHoursAdmin(ClinicHours, db.session, name='Horários da Clínica'))
-    admin.add_view(VetScheduleAdmin(VetSchedule, db.session, name='Agenda do Veterinário'))
-    admin.add_view(VeterinarioAdmin(Veterinario, db.session))
-    admin.add_view(MyModelView(Specialty, db.session, name='Especialidades'))
-    admin.add_view(ExameModeloAdminView(ExameModelo, db.session))
-    admin.add_view(MyModelView(Consulta, db.session))
-    admin.add_view(MyModelView(VacinaModelo, db.session))
-    admin.add_view(MyModelView(ApresentacaoMedicamento, db.session))
-    admin.add_view(MyModelView(TipoRacao, db.session))
-    admin.add_view(ProductAdmin(Product, db.session))
-    admin.add_view(MyModelView(HealthPlan, db.session))
-    admin.add_view(MyModelView(HealthSubscription, db.session, name='Assinaturas'))
+    admin.add_view(UserAdminView(
+        User, db.session,
+        name='Usuários', category='Cadastros',
+        menu_icon_type='fa', menu_icon_value='fa-users'
+    ))
+    admin.add_view(MyModelView(
+        Message, db.session,
+        name='Mensagens', category='Comunicação',
+        menu_icon_type='fa', menu_icon_value='fa-envelope'
+    ))
+    admin.add_view(MyModelView(
+        Transaction, db.session,
+        name='Transações', category='Financeiro',
+        menu_icon_type='fa', menu_icon_value='fa-dollar-sign'
+    ))
+    admin.add_view(MyModelView(
+        Medicamento, db.session,
+        name='Medicamentos', category='Atendimento',
+        menu_icon_type='fa', menu_icon_value='fa-pills'
+    ))
+    admin.add_view(MyModelView(
+        Prescricao, db.session,
+        name='Prescrições', category='Atendimento',
+        menu_icon_type='fa', menu_icon_value='fa-file-medical'
+    ))
+    admin.add_view(ClinicaAdmin(
+        Clinica, db.session,
+        name='Clínicas', category='Cadastros',
+        menu_icon_type='fa', menu_icon_value='fa-hospital'
+    ))
+    admin.add_view(ClinicHoursAdmin(
+        ClinicHours, db.session,
+        name='Horários da Clínica', category='Cadastros',
+        menu_icon_type='fa', menu_icon_value='fa-clock'
+    ))
+    admin.add_view(VetScheduleAdmin(
+        VetSchedule, db.session,
+        name='Agenda do Veterinário', category='Cadastros',
+        menu_icon_type='fa', menu_icon_value='fa-calendar'
+    ))
+    admin.add_view(VeterinarioAdmin(
+        Veterinario, db.session,
+        name='Veterinários', category='Cadastros',
+        menu_icon_type='fa', menu_icon_value='fa-user-md'
+    ))
+    admin.add_view(MyModelView(
+        Specialty, db.session,
+        name='Especialidades', category='Cadastros',
+        menu_icon_type='fa', menu_icon_value='fa-stethoscope'
+    ))
+    admin.add_view(ExameModeloAdminView(
+        ExameModelo, db.session,
+        name='Exames', category='Atendimento',
+        menu_icon_type='fa', menu_icon_value='fa-vials'
+    ))
+    admin.add_view(MyModelView(
+        Consulta, db.session,
+        name='Consultas', category='Atendimento',
+        menu_icon_type='fa', menu_icon_value='fa-notes-medical'
+    ))
+    admin.add_view(MyModelView(
+        VacinaModelo, db.session,
+        name='Vacinas', category='Atendimento',
+        menu_icon_type='fa', menu_icon_value='fa-syringe'
+    ))
+    admin.add_view(MyModelView(
+        ApresentacaoMedicamento, db.session,
+        name='Apresentações de Medicamento', category='Atendimento',
+        menu_icon_type='fa', menu_icon_value='fa-capsules'
+    ))
+    admin.add_view(MyModelView(
+        TipoRacao, db.session,
+        name='Tipos de Ração', category='Atendimento',
+        menu_icon_type='fa', menu_icon_value='fa-bone'
+    ))
+    admin.add_view(ProductAdmin(
+        Product, db.session,
+        name='Produtos', category='Loja',
+        menu_icon_type='fa', menu_icon_value='fa-box-open'
+    ))
+    admin.add_view(MyModelView(
+        HealthPlan, db.session,
+        name='Planos de Saúde', category='Financeiro',
+        menu_icon_type='fa', menu_icon_value='fa-heart'
+    ))
+    admin.add_view(MyModelView(
+        HealthSubscription, db.session,
+        name='Assinaturas', category='Financeiro',
+        menu_icon_type='fa', menu_icon_value='fa-file-contract'
+    ))
 
-    admin.add_view(MyModelView(Order, db.session))
-    admin.add_view(MyModelView(OrderItem, db.session))
-    admin.add_view(MyModelView(DeliveryRequest, db.session))
+    admin.add_view(MyModelView(
+        Order, db.session,
+        name='Pedidos', category='Loja',
+        menu_icon_type='fa', menu_icon_value='fa-shopping-cart'
+    ))
+    admin.add_view(MyModelView(
+        OrderItem, db.session,
+        name='Itens de Pedido', category='Loja',
+        menu_icon_type='fa', menu_icon_value='fa-list'
+    ))
+    admin.add_view(MyModelView(
+        DeliveryRequest, db.session,
+        name='Entregas', category='Loja',
+        menu_icon_type='fa', menu_icon_value='fa-truck'
+    ))
     # registrar
-    admin.add_view(PickupLocationView(PickupLocation, db.session, name="Pontos de Retirada"))
+    admin.add_view(PickupLocationView(
+        PickupLocation, db.session,
+        name="Pontos de Retirada", category='Cadastros',
+        menu_icon_type='fa', menu_icon_value='fa-store'
+    ))
     # Link para voltar ao site principal
     admin.add_link(MenuLink(name='🔙 Voltar ao Site', url='/'))
