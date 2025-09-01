@@ -5,7 +5,10 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')
 
 import pytest
 from app import app as flask_app, db
+import app as app_module
 from models import User, Clinica, Veterinario
+from io import BytesIO
+from PIL import Image
 
 
 @pytest.fixture
@@ -116,3 +119,82 @@ def test_minha_clinica_admin_defaults_to_own_clinic(monkeypatch, app):
         resp = client.get('/minha-clinica')
         assert resp.status_code == 302
         assert f"/clinica/{mine.id}" in resp.headers['Location']
+
+
+def test_create_clinic_without_logo_does_not_upload(monkeypatch, app):
+    client = app.test_client()
+    with app.app_context():
+        db.drop_all()
+        db.create_all()
+        user = User(name="Owner", email="owner@example.com", password_hash="x")
+        db.session.add(user)
+        db.session.commit()
+
+        import flask_login.utils as login_utils
+        monkeypatch.setattr(login_utils, '_get_user', lambda: user)
+
+        called = {}
+
+        def fake_upload(file, filename, folder="uploads"):
+            called["called"] = True
+            return "http://img"
+
+        monkeypatch.setattr(app_module, "upload_to_s3", fake_upload)
+
+        resp = client.post(
+            '/minha-clinica',
+            data={
+                'nome': 'Clinica X',
+                'photo_rotation': '0',
+                'photo_zoom': '1',
+                'photo_offset_x': '0',
+                'photo_offset_y': '0',
+            },
+        )
+
+        assert resp.status_code == 302
+        assert Clinica.query.count() == 1
+        assert "called" not in called
+
+
+def test_create_clinic_with_logo_uploads(monkeypatch, app):
+    client = app.test_client()
+    with app.app_context():
+        db.drop_all()
+        db.create_all()
+        user = User(name="Owner", email="owner2@example.com", password_hash="x")
+        db.session.add(user)
+        db.session.commit()
+
+        import flask_login.utils as login_utils
+        monkeypatch.setattr(login_utils, '_get_user', lambda: user)
+
+        img_bytes = BytesIO()
+        Image.new('RGB', (1, 1)).save(img_bytes, format='PNG')
+        img_bytes.seek(0)
+
+        called = {}
+
+        def fake_upload(file, filename, folder="uploads"):
+            called["called"] = True
+            return "http://img"
+
+        monkeypatch.setattr(app_module, "upload_to_s3", fake_upload)
+
+        resp = client.post(
+            '/minha-clinica',
+            data={
+                'nome': 'Clinica Y',
+                'logotipo': (img_bytes, 'logo.png'),
+                'photo_rotation': '0',
+                'photo_zoom': '1',
+                'photo_offset_x': '0',
+                'photo_offset_y': '0',
+            },
+            content_type='multipart/form-data'
+        )
+
+        assert resp.status_code == 302
+        clinica = Clinica.query.first()
+        assert clinica.logotipo == "http://img"
+        assert "called" in called
