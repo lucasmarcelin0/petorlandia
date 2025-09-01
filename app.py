@@ -6388,9 +6388,17 @@ def appointments():
         horarios = VetSchedule.query.filter_by(
             veterinario_id=veterinario.id
         ).all()
-        appointments = (
+        now = datetime.utcnow()
+        appointments_upcoming = (
             Appointment.query.filter_by(veterinario_id=veterinario.id)
+            .filter(Appointment.scheduled_at >= now)
             .order_by(Appointment.scheduled_at)
+            .all()
+        )
+        appointments_past = (
+            Appointment.query.filter_by(veterinario_id=veterinario.id)
+            .filter(Appointment.scheduled_at < now)
+            .order_by(Appointment.scheduled_at.desc())
             .all()
         )
 
@@ -6400,7 +6408,8 @@ def appointments():
             appointment_form=appointment_form,
             veterinario=veterinario,
             horarios=horarios,
-            appointments=appointments,
+            appointments_upcoming=appointments_upcoming,
+            appointments_past=appointments_past,
         )
     else:
         if current_user.worker in ['colaborador', 'admin']:
