@@ -2024,7 +2024,7 @@ def minha_clinica():
                 owner_id=current_user.id,
             )
             file = form.logotipo.data
-            if file:
+            if file and getattr(file, "filename", ""):
                 filename = f"{uuid.uuid4().hex}_{secure_filename(file.filename)}"
                 image_url = upload_to_s3(file, filename, folder="clinicas")
                 if image_url:
