@@ -487,6 +487,55 @@ document.addEventListener("DOMContentLoaded", function () {
 });
 </script>
 
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+  const overlay = document.createElement('div');
+  overlay.id = 'image-overlay';
+  overlay.className = 'position-fixed top-0 start-0 w-100 h-100 bg-dark bg-opacity-75 d-none justify-content-center align-items-center';
+  overlay.style.zIndex = '1080';
+
+  const img = document.createElement('img');
+  img.id = 'image-overlay-img';
+  img.className = 'img-fluid';
+  overlay.appendChild(img);
+
+  const closeBtn = document.createElement('button');
+  closeBtn.type = 'button';
+  closeBtn.className = 'btn-close position-absolute top-0 end-0 m-3';
+  closeBtn.setAttribute('aria-label', 'Fechar');
+  overlay.appendChild(closeBtn);
+
+  document.body.appendChild(overlay);
+
+  function showOverlay(src) {
+    img.src = src;
+    overlay.classList.remove('d-none');
+  }
+
+  function hideOverlay() {
+    overlay.classList.add('d-none');
+    img.src = '';
+  }
+
+  closeBtn.addEventListener('click', hideOverlay);
+  overlay.addEventListener('click', function (e) {
+    if (e.target === overlay) {
+      hideOverlay();
+    }
+  });
+
+  const selectors = ['.animal-photo img', '#profile_photo-preview img', '#animal-image-preview img', '#profile_photo-img', '#animal-image-img'];
+  selectors.forEach(function (sel) {
+    document.querySelectorAll(sel).forEach(function (image) {
+      image.style.cursor = 'pointer';
+      image.addEventListener('click', function () {
+        showOverlay(image.src);
+      });
+    });
+  });
+});
+</script>
+
 
 
 {% endblock %}
