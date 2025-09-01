@@ -95,7 +95,14 @@
           data-tutor-url="{{ url_for('ficha_tutor', tutor_id=appt.tutor_id) }}"
           data-consulta-url="{{ url_for('consulta_direct', animal_id=appt.animal_id) }}"
           data-notes="{{ appt.notes or '' }}">
-        {{ appt.scheduled_at.strftime('%d/%m/%Y %H:%M') }} - {{ appt.animal.name }} ({{ appt.tutor.name }})
+        <div class="d-flex justify-content-between align-items-center">
+          <span>{{ appt.scheduled_at.strftime('%d/%m/%Y %H:%M') }} - {{ appt.animal.name }} ({{ appt.tutor.name }})</span>
+          <div class="btn-group">
+            <a href="{{ url_for('ficha_animal', animal_id=appt.animal_id) }}" class="btn btn-sm btn-outline-primary">📋 Ficha Animal</a>
+            <a href="{{ url_for('ficha_tutor', tutor_id=appt.tutor_id) }}" class="btn btn-sm btn-outline-secondary">👤 Ficha Tutor</a>
+            <a href="{{ url_for('consulta_direct', animal_id=appt.animal_id) }}" class="btn btn-sm btn-outline-success">🩺 Iniciar Consulta</a>
+          </div>
+        </div>
       </li>
     {% else %}
       <li class="list-group-item">Nenhuma consulta agendada.</li>
@@ -118,7 +125,14 @@
           data-tutor-url="{{ url_for('ficha_tutor', tutor_id=appt.tutor_id) }}"
           data-consulta-url="{{ url_for('consulta_direct', animal_id=appt.animal_id) }}"
           data-notes="{{ appt.notes or '' }}">
-        {{ appt.scheduled_at.strftime('%d/%m/%Y %H:%M') }} - {{ appt.animal.name }} ({{ appt.tutor.name }})
+        <div class="d-flex justify-content-between align-items-center">
+          <span>{{ appt.scheduled_at.strftime('%d/%m/%Y %H:%M') }} - {{ appt.animal.name }} ({{ appt.tutor.name }})</span>
+          <div class="btn-group">
+            <a href="{{ url_for('ficha_animal', animal_id=appt.animal_id) }}" class="btn btn-sm btn-outline-primary">📋 Ficha Animal</a>
+            <a href="{{ url_for('ficha_tutor', tutor_id=appt.tutor_id) }}" class="btn btn-sm btn-outline-secondary">👤 Ficha Tutor</a>
+            <a href="{{ url_for('consulta_direct', animal_id=appt.animal_id) }}" class="btn btn-sm btn-outline-success">🩺 Iniciar Consulta</a>
+          </div>
+        </div>
       </li>
     {% else %}
       <li class="list-group-item">Nenhuma consulta passada.</li>
@@ -285,7 +299,8 @@
 
   // Modal de detalhes das consultas
   document.querySelectorAll('.appointment-item').forEach(item => {
-    item.addEventListener('click', function() {
+    item.addEventListener('click', function(e) {
+      if (e.target.closest('.btn')) return;
       document.getElementById('modal-appt-id').value = this.dataset.id;
       document.getElementById('modal-vet').value = this.dataset.vet;
       document.getElementById('modal-tutor').value = this.dataset.tutor;
