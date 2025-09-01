@@ -1974,13 +1974,19 @@ def imprimir_consulta(consulta_id):
     consulta = get_consulta_or_404(consulta_id)
     animal = consulta.animal
     tutor = animal.owner
-    clinica = current_user.veterinario.clinica if current_user.veterinario else None
+    veterinario = consulta.veterinario
+    clinica = (
+        veterinario.veterinario.clinica if veterinario and veterinario.veterinario else None
+    )
 
-    return render_template('imprimir_consulta.html',
-                           consulta=consulta,
-                           animal=animal,
-                           tutor=tutor,
-                           clinica=clinica)
+    return render_template(
+        'imprimir_consulta.html',
+        consulta=consulta,
+        animal=animal,
+        tutor=tutor,
+        clinica=clinica,
+        veterinario=veterinario,
+    )
 
 
 
@@ -6710,14 +6716,18 @@ def imprimir_orcamento(consulta_id):
     consulta = get_consulta_or_404(consulta_id)
     animal = consulta.animal
     tutor = animal.owner
-    clinica = current_user.veterinario.clinica if current_user.veterinario else None
+    veterinario = consulta.veterinario
+    clinica = (
+        veterinario.veterinario.clinica if veterinario and veterinario.veterinario else None
+    )
     return render_template(
         'imprimir_orcamento.html',
         itens=consulta.orcamento_items,
         total=consulta.total_orcamento,
         animal=animal,
         tutor=tutor,
-        clinica=clinica
+        clinica=clinica,
+        veterinario=veterinario,
     )
 
 
@@ -6728,7 +6738,10 @@ def imprimir_bloco_orcamento(bloco_id):
     ensure_clinic_access(bloco.clinica_id)
     animal = bloco.animal
     tutor = animal.owner
-    clinica = current_user.veterinario.clinica if current_user.veterinario else None
+    veterinario = current_user
+    clinica = (
+        veterinario.veterinario.clinica if veterinario and veterinario.veterinario else None
+    )
     return render_template(
         'imprimir_orcamento.html',
         itens=bloco.itens,
@@ -6736,6 +6749,7 @@ def imprimir_bloco_orcamento(bloco_id):
         animal=animal,
         tutor=tutor,
         clinica=clinica,
+        veterinario=veterinario,
     )
 
 
