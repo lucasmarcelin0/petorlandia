@@ -1,3 +1,4 @@
+{% from 'components/logo.html' import clinic_logo %}
 <!DOCTYPE html>
 <html lang="pt-br">
 <head>
@@ -408,6 +409,7 @@
         <div class="container-fluid">
             {% if current_user.is_authenticated and current_user.role == "admin" %}
                 <a href="{{ url_for('painel_admin.index') }}" class="navbar-brand">
+ 
                     <img src="{{ url_for('static', filename='pastorgato.png') }}" alt="Logo" class="logo-img">
                     <span>PetOrlândia</span>
                 </a>
@@ -415,6 +417,7 @@
                 <a href="{{ url_for('index') }}" class="navbar-brand">
                     <img src="{{ url_for('static', filename='pastorgato.png') }}" alt="Logo" class="logo-img">
                     <span>PetOrlândia</span>
+ 
                 </a>
             {% endif %}
 
