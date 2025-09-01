@@ -4,6 +4,7 @@
       <th>Hora</th>
       <th>Animal</th>
       <th>Veterinário</th>
+      <th>Status</th>
       <th>Ações</th>
     </tr>
   </thead>
@@ -11,13 +12,14 @@
     {% if appointments_grouped %}
       {% for day, items in appointments_grouped %}
         <tr class="table-light">
-          <th colspan="4">{{ day|format_datetime_brazil('%d/%m/%Y') }}</th>
+          <th colspan="5">{{ day|format_datetime_brazil('%d/%m/%Y') }}</th>
         </tr>
         {% for appt in items %}
           <tr class="appointment-row" data-href="{{ url_for('edit_appointment', appointment_id=appt.id) }}">
             <td>{{ appt.scheduled_at|format_datetime_brazil('%H:%M') }}</td>
             <td>{{ appt.animal.name }}</td>
             <td>{{ appt.veterinario.user.name }}</td>
+            <td>{{ {'scheduled':'A fazer','completed':'Realizada','canceled':'Cancelada'}.get(appt.status, appt.status) }}</td>
             <td>
               <div class="btn-group">
                 <a href="{{ url_for('ficha_animal', animal_id=appt.animal_id) }}" class="btn btn-sm btn-outline-primary">📋 Ficha Animal</a>
@@ -25,13 +27,32 @@
                 {% if current_user.worker in ['veterinario', 'colaborador'] %}
                 <a href="{{ url_for('consulta_direct', animal_id=appt.animal_id) }}" class="btn btn-sm btn-outline-success">🩺 Iniciar Consulta</a>
                 {% endif %}
+                <form method="POST" action="{{ url_for('update_appointment_status', appointment_id=appt.id) }}" class="d-inline">
+                  {% if csrf_token is defined %}{{ csrf_token() }}{% endif %}
+                  <input type="hidden" name="status" value="completed">
+                  <button class="btn btn-sm btn-outline-success" title="Marcar como realizada">✔️</button>
+                </form>
+                <form method="POST" action="{{ url_for('update_appointment_status', appointment_id=appt.id) }}" class="d-inline">
+                  {% if csrf_token is defined %}{{ csrf_token() }}{% endif %}
+                  <input type="hidden" name="status" value="canceled">
+                  <button class="btn btn-sm btn-outline-warning" title="Cancelar">✖️</button>
+                </form>
+                <form method="POST" action="{{ url_for('update_appointment_status', appointment_id=appt.id) }}" class="d-inline">
+                  {% if csrf_token is defined %}{{ csrf_token() }}{% endif %}
+                  <input type="hidden" name="status" value="scheduled">
+                  <button class="btn btn-sm btn-outline-secondary" title="Marcar como a fazer">⏳</button>
+                </form>
+                <form method="POST" action="{{ url_for('delete_appointment', appointment_id=appt.id) }}" class="d-inline" data-confirm="Excluir este agendamento?">
+                  {% if csrf_token is defined %}{{ csrf_token() }}{% endif %}
+                  <button class="btn btn-sm btn-outline-danger" title="Excluir">🗑️</button>
+                </form>
               </div>
             </td>
           </tr>
         {% endfor %}
       {% endfor %}
     {% else %}
-      <tr><td colspan="4">Nenhum agendamento encontrado.</td></tr>
+      <tr><td colspan="5">Nenhum agendamento encontrado.</td></tr>
     {% endif %}
   </tbody>
 </table>

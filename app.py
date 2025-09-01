@@ -6603,6 +6603,35 @@ def edit_appointment(appointment_id):
     return render_template('edit_appointment.html', appointment=appointment, veterinarios=veterinarios)
 
 
+@app.route('/appointments/<int:appointment_id>/status', methods=['POST'])
+@login_required
+def update_appointment_status(appointment_id):
+    """Update the status of an appointment."""
+    appointment = Appointment.query.get_or_404(appointment_id)
+    if current_user.worker in ['veterinario', 'colaborador']:
+        if current_user.worker == 'veterinario':
+            user_clinic = current_user.veterinario.clinica_id
+        else:
+            user_clinic = current_user.clinica_id
+        appointment_clinic = appointment.clinica_id
+        if appointment_clinic is None and appointment.veterinario:
+            appointment_clinic = appointment.veterinario.clinica_id
+        if appointment_clinic != user_clinic:
+            abort(403)
+    elif current_user.role != 'admin' and appointment.tutor_id != current_user.id:
+        abort(403)
+
+    status = request.form.get('status') or (request.get_json(silent=True) or {}).get('status')
+    if status not in {'scheduled', 'completed', 'canceled'}:
+        return jsonify({'success': False, 'message': 'Status inválido.'}), 400
+    appointment.status = status
+    db.session.commit()
+    if request.is_json:
+        return jsonify({'success': True})
+    flash('Status atualizado.', 'success')
+    return redirect(request.referrer or url_for('appointments'))
+
+
 @app.route('/appointments/<int:appointment_id>/delete', methods=['POST'])
 @login_required
 def delete_appointment(appointment_id):
