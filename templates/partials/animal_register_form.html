@@ -52,14 +52,10 @@
           <option value="Fêmea">Fêmea</option>
         </select>
       </div>
-      <div class="col-md-6">
-        <label class="form-label">Data de Nascimento</label>
-        <input type="date" name="date_of_birth" id="date_of_birth" class="form-control" lang="pt-BR" placeholder="dd/mm/aaaa">
-      </div>
-      <div class="col-md-6">
-        <label class="form-label">Idade (anos)</label>
-        <input type="number" name="age" id="age" class="form-control" min="0">
-      </div>
+      {% set prefixo = 'animal_reg' %}
+      {% set nome_data = 'date_of_birth' %}
+      {% set nome_idade = 'age' %}
+      {% include 'components/campo_data_idade.html' %}
       <div class="col-md-6">
         <label class="form-label">Microchip</label>
         <input type="text" name="microchip_number" class="form-control">
@@ -87,36 +83,14 @@
         📂 Salvar Animal
       </button>
     </div>
-  </form>
+    </form>
 
-  <script>
-    function calcularDataNascimentoPorIdade() {
-      const idade = parseInt(document.getElementById('age').value);
-      if (!isNaN(idade)) {
-        const hoje = new Date();
-        const nascimento = new Date();
-        nascimento.setFullYear(hoje.getFullYear() - idade);
-        document.getElementById('date_of_birth').value = nascimento.toISOString().split('T')[0];
-      }
-    }
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+    <script src="https://cdn.jsdelivr.net/npm/flatpickr/dist/l10n/pt.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/inputmask@5.0.8/dist/inputmask.min.js"></script>
 
-    function calcularIdadePorDataNascimento() {
-      const dataNascStr = document.getElementById('date_of_birth').value;
-      if (dataNascStr) {
-        const nascimento = new Date(dataNascStr);
-        const hoje = new Date();
-        let idade = hoje.getFullYear() - nascimento.getFullYear();
-        const m = hoje.getMonth() - nascimento.getMonth();
-        if (m < 0 || (m === 0 && hoje.getDate() < nascimento.getDate())) {
-          idade--;
-        }
-        document.getElementById('age').value = idade;
-      }
-    }
-
-    document.getElementById('age').addEventListener('input', calcularDataNascimentoPorIdade);
-    document.getElementById('date_of_birth').addEventListener('change', calcularIdadePorDataNascimento);
-
+    <script>
     function validarTutor() {
       {% if not tutor %}
       if (!document.getElementById('tutor_id').value) {
