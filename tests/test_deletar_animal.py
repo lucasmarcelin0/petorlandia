@@ -31,7 +31,13 @@ def test_deletar_animal_json(monkeypatch, app):
         db.session.add_all([admin, animal])
         db.session.commit()
         import flask_login.utils as login_utils
-        monkeypatch.setattr(login_utils, '_get_user', lambda: admin)
+        fake_admin = type('U', (), {
+            'id': admin.id,
+            'role': 'admin',
+            'worker': 'veterinario',
+            'is_authenticated': True,
+        })()
+        monkeypatch.setattr(login_utils, '_get_user', lambda: fake_admin)
 
     resp = client.post('/animal/1/deletar', headers={'Accept': 'application/json'})
     assert resp.status_code == 200

@@ -1188,6 +1188,17 @@ def inject_default_pickup_address():
 def deletar_animal(animal_id):
     animal = get_animal_or_404(animal_id)
 
+    if not (
+        current_user.role == 'admin'
+        or animal.user_id == current_user.id
+        or animal.added_by_id == current_user.id
+    ):
+        message = 'Você não tem permissão para excluir este animal.'
+        if 'application/json' in request.headers.get('Accept', ''):
+            return jsonify(message=message, category='danger'), 403
+        flash(message, 'danger')
+        abort(403)
+
     if animal.removido_em:
         message = 'Animal já foi removido anteriormente.'
         if 'application/json' in request.headers.get('Accept', ''):
@@ -2921,6 +2932,13 @@ def deletar_tutor(tutor_id):
     if current_user.worker != 'veterinario':
         flash('Apenas veterinários podem excluir tutores.', 'danger')
         return redirect(url_for('index'))
+
+    if current_user.role != 'admin' and tutor.added_by_id != current_user.id:
+        message = 'Você não tem permissão para excluir este tutor.'
+        if 'application/json' in request.headers.get('Accept', ''):
+            return jsonify(message=message, category='danger'), 403
+        flash(message, 'danger')
+        abort(403)
 
     try:
         with db.session.no_autoflush:
