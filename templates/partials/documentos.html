@@ -1,7 +1,8 @@
 <h5 class="mb-3">Documentos</h5>
 {% if current_user.worker == 'veterinario' %}
 <div class="mb-3">
-  <div class="btn-group flex-wrap">
+  <button type="button" class="btn btn-sm btn-outline-primary mb-2" id="toggle-termos-{{ animal.id }}">Ver termos</button>
+  <div class="btn-group flex-wrap d-none" id="termos-container-{{ animal.id }}">
     <a href="{{ url_for('termo_animal', animal_id=animal.id, tipo='internacao') }}" target="_blank" class="btn btn-sm btn-outline-primary">Termo de Internação</a>
     <a href="{{ url_for('termo_animal', animal_id=animal.id, tipo='eutanasia') }}" target="_blank" class="btn btn-sm btn-outline-primary">Termo de Eutanásia</a>
     <a href="{{ url_for('termo_animal', animal_id=animal.id, tipo='procedimentos') }}" target="_blank" class="btn btn-sm btn-outline-primary">Termo de Consentimento para Procedimentos</a>
@@ -12,6 +13,13 @@
     <a href="{{ url_for('termo_animal', animal_id=animal.id, tipo='adocao') }}" target="_blank" class="btn btn-sm btn-outline-primary">Termo de Adoção Responsável</a>
   </div>
 </div>
+<script>
+document.getElementById('toggle-termos-{{ animal.id }}').addEventListener('click', function() {
+  const container = document.getElementById('termos-container-{{ animal.id }}');
+  container.classList.toggle('d-none');
+  this.textContent = container.classList.contains('d-none') ? 'Ver termos' : 'Ocultar termos';
+});
+</script>
 {% endif %}
 {% if animal.documentos %}
   <ul class="list-group mb-3">
