@@ -108,6 +108,7 @@ def upload_to_s3(file, filename, folder="uploads") -> str | None:
     try:
         fileobj = file
         content_type = file.content_type
+        filename = secure_filename(filename)
 
         if content_type and content_type.startswith("image"):
             image = Image.open(file.stream)
@@ -121,6 +122,8 @@ def upload_to_s3(file, filename, folder="uploads") -> str | None:
             name, ext = os.path.splitext(filename)
             if ext.lower() not in {".jpg", ".jpeg"}:
                 filename = f"{name}.jpg"
+
+        filename = secure_filename(filename)
 
         key = f"{folder}/{filename}"
 
