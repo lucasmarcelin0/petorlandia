@@ -23,3 +23,24 @@ def test_upload_to_s3_falls_back_to_local(tmp_path, monkeypatch):
     expected = tmp_path / "static" / "uploads" / "clinicas" / "logo.jpg"
     assert expected.exists()
     assert url == "/static/uploads/clinicas/logo.jpg"
+
+
+def test_upload_to_s3_falls_back_on_error(tmp_path, monkeypatch):
+    class DummyS3:
+        def upload_fileobj(self, *args, **kwargs):
+            raise RuntimeError("boom")
+
+    monkeypatch.setattr(app, "BUCKET", "test-bucket")
+    monkeypatch.setattr(app, "PROJECT_ROOT", tmp_path)
+    monkeypatch.setattr(app, "_s3", lambda: DummyS3())
+
+    img_bytes = BytesIO()
+    Image.new("RGB", (1, 1)).save(img_bytes, format="PNG")
+    img_bytes.seek(0)
+    fs = FileStorage(stream=img_bytes, filename="logo.png", content_type="image/png")
+
+    url = app.upload_to_s3(fs, "logo.png", folder="clinicas")
+
+    expected = tmp_path / "static" / "uploads" / "clinicas" / "logo.jpg"
+    assert expected.exists()
+    assert url == "/static/uploads/clinicas/logo.jpg"
