@@ -1,5 +1,6 @@
 {% extends 'layout.html' %}
 {% from 'components/photo_cropper.html' import photo_cropper %}
+{% import 'components/alt_macros.html' as alt %}
 {% block main %}
 <div class="container py-4">
 
@@ -21,10 +22,10 @@
       <h3 class="card-title mb-3">👤 Dados do Tutor</h3>
 
       <div class="mb-3 text-center">
-        <img
+          <img
           id="preview-tutor"
           src="{{ tutor.profile_photo or '' }}"
-          alt="Foto do Tutor"
+          alt="{{ alt.user(tutor.name) }}"
           class="img-thumbnail {% if not tutor.profile_photo %}d-none{% endif %}"
           style="max-height: 150px;"
         >
@@ -128,7 +129,7 @@
         <tr id="animal-row-{{ a.id }}">
           <td>
             {% if a.image %}
-              <img src="{{ a.image }}" alt="Foto de {{ a.name }}" class="rounded-circle me-2" style="width: 32px; height: 32px; object-fit: cover;">
+              <img src="{{ a.image }}" alt="{{ alt.animal(a.name) }}" class="rounded-circle me-2" style="width: 32px; height: 32px; object-fit: cover;">
             {% endif %}
             <span class="animal-name">{{ a.name }}</span>
           </td>

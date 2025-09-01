@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="pt-br">
+{% import 'components/alt_macros.html' as alt %}
 <head>
     {% block head %}
     {% endblock %}
@@ -406,12 +407,12 @@
         <div class="container-fluid">
             {% if current_user.is_authenticated and current_user.role == "admin" %}
                 <a href="{{ url_for('painel_admin.index') }}" class="navbar-brand">
-                    <img src="{{ url_for('static', filename='pastorgato.png') }}" alt="Logo">
+                    <img src="{{ url_for('static', filename='pastorgato.png') }}" alt="{{ alt.logo() }}">
                     <span>PetOrlândia</span>
                 </a>
             {% else %}
                 <a href="{{ url_for('index') }}" class="navbar-brand">
-                    <img src="{{ url_for('static', filename='pastorgato.png') }}" alt="Logo">
+                    <img src="{{ url_for('static', filename='pastorgato.png') }}" alt="{{ alt.logo() }}">
                     <span>PetOrlândia</span>
                 </a>
             {% endif %}

@@ -10,6 +10,14 @@ import uuid
 from werkzeug.utils import secure_filename
 from sqlalchemy import func
 
+# Alt text constants for image consistency
+ALT_PHOTO = "Foto de {}"
+ALT_LOGOTIPO = "Logotipo de {}"
+ALT_PRODUCT = "Foto do produto {}"
+ALT_CURRENT_PHOTO = "Foto atual"
+ALT_CURRENT_LOGO = "Logotipo atual"
+ALT_CURRENT_IMAGE = "Imagem atual"
+
 def _is_admin():
     """Return True if the current user has the admin role."""
     return current_user.is_authenticated and current_user.role == "admin"
@@ -179,7 +187,7 @@ class UserAdminView(MyModelView):
             f'<a href="https://wa.me/55{re.sub("[^0-9]", "", m.phone)}" target="_blank">{m.phone}</a>'
         ) if m.phone else '—',
         'profile_photo': lambda v, c, m, p: Markup(
-            f'<img src="{m.profile_photo}" width="100">'
+            f'<img src="{m.profile_photo}" width="100" alt="{ALT_PHOTO.format(m.name)}">'
         ) if m.profile_photo else '',
         'added_by': lambda v, c, m, p: m.added_by.name if m.added_by else '—'
     }
@@ -205,7 +213,7 @@ class UserAdminView(MyModelView):
         obj = self.get_one(id)
         if obj and obj.profile_photo:
             form.profile_photo_upload.description = Markup(
-                f'<img src="{obj.profile_photo}" alt="Foto atual" '
+                f'<img src="{obj.profile_photo}" alt="{ALT_CURRENT_PHOTO}" '
                 f'style="max-height:150px;margin-top:10px;">'
             )
 
@@ -252,7 +260,7 @@ class ClinicaAdmin(MyModelView):
 
     column_formatters = {
         'logotipo': lambda v, c, m, p: Markup(
-            f'<img src="{m.logotipo}" width="100">'
+            f'<img src="{m.logotipo}" width="100" alt="{ALT_LOGOTIPO.format(m.nome)}">'
         ) if m.logotipo else ''
     }
 
@@ -269,7 +277,7 @@ class ClinicaAdmin(MyModelView):
         obj = self.get_one(id)
         if obj and obj.logotipo:
             form.logotipo_upload.description = Markup(
-                f'<img src="{obj.logotipo}" alt="Logotipo atual" '
+                f'<img src="{obj.logotipo}" alt="{ALT_CURRENT_LOGO}" '
                 f'style="max-height:150px;margin-top:10px;">'
             )
 
@@ -348,14 +356,14 @@ class AnimalAdminView(MyModelView):
         obj = self.get_one(id)
         if obj and obj.image:
             form.image_upload.description = Markup(
-                f'<img src="{obj.image}" alt="Imagem atual" '
+                f'<img src="{obj.image}" alt="{ALT_CURRENT_IMAGE}" '
                 f'style="max-height:150px;margin-top:10px;">'
             )
 
 
     column_formatters = {
         'image': lambda v, c, m, p: Markup(
-            f'<img src="{m.image}" width="100">'
+            f'<img src="{m.image}" width="100" alt="{ALT_PHOTO.format(m.name)}">'
         ) if m.image else '',
         'name': lambda v, c, m, p: Markup(
             f'<a href="{url_for("consulta_direct", animal_id=m.id)}" target="_blank">{m.name}</a>'
@@ -405,7 +413,7 @@ class ProductAdmin(MyModelView):
     column_sortable_list = ('name', 'price', 'stock', 'id')
     column_formatters = {
         'image_url': lambda v, c, m, p: Markup(
-            f'<img src="{m.image_url}" width="100">'
+            f'<img src="{m.image_url}" width="100" alt="{ALT_PRODUCT.format(m.name)}">'
         ) if m.image_url else ''
     }
 
@@ -421,7 +429,7 @@ class ProductAdmin(MyModelView):
         obj = self.get_one(id)
         if obj and obj.image_url:
             form.image_upload.description = Markup(
-                f'<img src="{obj.image_url}" alt="Imagem atual" '
+                f'<img src="{obj.image_url}" alt="{ALT_CURRENT_IMAGE}" '
                 f'style="max-height:150px;margin-top:10px;">'
             )
 

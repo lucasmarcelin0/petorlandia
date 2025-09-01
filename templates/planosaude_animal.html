@@ -1,4 +1,5 @@
 {% extends "layout.html" %}
+{% import 'components/alt_macros.html' as alt %}
 {% block main %}
 <div class="container mt-4">
 
@@ -6,7 +7,7 @@
 
     {% if animal.image %}
         <div class="text-center mb-4">
-            <img src="{{ animal.image }}" alt="Foto de {{ animal.name }}"
+            <img src="{{ animal.image }}" alt="{{ alt.animal(animal.name) }}"
                  class="rounded-circle shadow-sm" loading="lazy"
                  style="width: 150px; height: 150px; object-fit: cover;">
         </div>

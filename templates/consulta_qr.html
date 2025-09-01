@@ -1,4 +1,5 @@
 {% extends 'layout.html' %}
+{% import 'components/alt_macros.html' as alt %}
 
 {% block head %}
   {{ super() }}
@@ -33,7 +34,7 @@
     {% if animal %}
       <div class="animal-photo shadow-sm rounded-circle border border-2 border-primary">
         {% if animal.photo %}
-          <img src="{{ animal.photo.url }}" alt="{{ animal.name }}" class="rounded-circle" width="56" height="56">
+          <img src="{{ animal.photo.url }}" alt="{{ alt.animal(animal.name) }}" class="rounded-circle" width="56" height="56">
         {% else %}
           <div class="no-photo-placeholder rounded-circle bg-light d-flex align-items-center justify-content-center" style="width: 56px; height: 56px;">
             <i class="fa-solid fa-camera text-muted"></i>

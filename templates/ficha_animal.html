@@ -1,4 +1,5 @@
 {% extends "layout.html" %}
+{% import 'components/alt_macros.html' as alt %}
 {% block main %}
 
 <div class="container py-4">
@@ -23,7 +24,7 @@
     <div class="row g-3 align-items-center">
       {% if animal.image %}
       <div class="col-md-3 text-center">
-        <img src="{{ animal.image }}" class="img-fluid rounded shadow-sm" style="max-height: 200px;" loading="lazy" alt="Foto de {{ animal.name }}">
+        <img src="{{ animal.image }}" class="img-fluid rounded shadow-sm" style="max-height: 200px;" loading="lazy" alt="{{ alt.animal(animal.name) }}">
       </div>
       {% endif %}
       <div class="col-md">

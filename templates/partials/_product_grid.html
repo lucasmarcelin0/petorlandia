@@ -1,3 +1,4 @@
+{% import 'components/alt_macros.html' as alt %}
 {% if products %}
 <div class="row row-cols-1 row-cols-sm-2 row-cols-md-3 row-cols-lg-4 g-3 g-md-4">
   {% for product in products %}
@@ -8,9 +9,9 @@
          class="ratio ratio-4x3 product-image-wrap d-block position-relative" aria-label="Abrir {{ product.name }}">
         {% if product.image_url %}
           {% if 'http' in product.image_url %}
-            <img src="{{ product.image_url }}" class="product-image" alt="{{ product.name }}" loading="lazy">
+            <img src="{{ product.image_url }}" class="product-image" alt="{{ alt.product(product.name) }}" loading="lazy">
           {% else %}
-            <img src="{{ url_for('static', filename=product.image_url) }}" class="product-image" alt="{{ product.name }}" loading="lazy">
+            <img src="{{ url_for('static', filename=product.image_url) }}" class="product-image" alt="{{ alt.product(product.name) }}" loading="lazy">
           {% endif %}
         {% else %}
           <div class="product-image-placeholder">

@@ -1,4 +1,5 @@
 {% extends "layout.html" %}
+{% import 'components/alt_macros.html' as alt %}
 {% block main %}
 <h2>Minhas Mensagens Recebidas 📥</h2>
 
@@ -12,7 +13,7 @@
                 <li class="list-group-item d-flex justify-content-between align-items-center">
                     <div class="d-flex align-items-center">
                         {% if msg.sender.profile_photo %}
-                            <img src="{{ msg.sender.profile_photo }}" alt="Foto" class="rounded-circle me-3" style="width: 50px; height: 50px; object-fit: cover;">
+                            <img src="{{ msg.sender.profile_photo }}" alt="{{ alt.user(msg.sender.name) }}" class="rounded-circle me-3" style="width: 50px; height: 50px; object-fit: cover;">
                         {% else %}
                             <div class="rounded-circle bg-secondary me-3 d-flex justify-content-center align-items-center" style="width: 50px; height: 50px; color: white;">
                                 {{ msg.sender.name[0] }}
