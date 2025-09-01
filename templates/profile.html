@@ -15,7 +15,15 @@
 
           {% if current_user.profile_photo %}
             <div id="photo-container" class="img-thumbnail shadow-sm mb-2 position-relative overflow-hidden" style="width: 240px; height: 240px; border-radius: 1rem;">
-              <img id="profile-photo-img" src="{{ current_user.profile_photo }}" class="avatar w-100 h-100" style="transform: translate({{ current_user.photo_offset_x or 0 }}px, {{ current_user.photo_offset_y or 0 }}px) rotate({{ current_user.photo_rotation or 0 }}deg) scale({{ current_user.photo_zoom or 1 }});" alt="Foto de {{ current_user.name }}">
+              <img id="profile-photo-img"
+                   src="{{ current_user.profile_photo }}"
+                   class="avatar"
+                   data-offset-x="{{ current_user.photo_offset_x or 0 }}"
+                   data-offset-y="{{ current_user.photo_offset_y or 0 }}"
+                   data-rotation="{{ current_user.photo_rotation or 0 }}"
+                   data-zoom="{{ current_user.photo_zoom or 1 }}"
+                   style="--avatar-size:100%;"
+                   alt="Foto de {{ current_user.name }}">
             </div>
           {% else %}
             <div class="bg-light border d-flex align-items-center justify-content-center mb-2" style="width: 240px; height: 240px; border-radius: 1rem; font-size: 1.2rem; color: #555;">
