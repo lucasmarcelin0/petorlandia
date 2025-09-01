@@ -1,5 +1,5 @@
 {% macro clinic_logo(clinica) %}
   {% if clinica and clinica.logotipo %}
-    <img src="{{ clinica.logo_url }}" alt="Logotipo da clínica" style="transform: translate({{ clinica.photo_offset_x or 0 }}px, {{ clinica.photo_offset_y or 0 }}px) rotate({{ clinica.photo_rotation or 0 }}deg) scale({{ clinica.photo_zoom or 1 }}); object-fit: cover;">
+    <img src="{{ clinica.logo_url }}" alt="Logotipo da clínica" class="logo-img rounded-0" style="transform: translate({{ clinica.photo_offset_x or 0 }}px, {{ clinica.photo_offset_y or 0 }}px) rotate({{ clinica.photo_rotation or 0 }}deg) scale({{ clinica.photo_zoom or 1 }});">
   {% endif %}
 {% endmacro %}

@@ -1,0 +1,17 @@
+.logo-img {
+    max-width: 275px;
+    height: auto;
+    border-radius: 1rem;
+    object-fit: cover;
+}
+
+.avatar {
+    object-fit: cover;
+    border-radius: 50%;
+    display: block;
+}
+
+.card-img {
+    object-fit: cover;
+    display: block;
+}

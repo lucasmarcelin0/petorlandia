@@ -9,7 +9,7 @@
         <li class="list-group-item d-flex justify-content-between align-items-center">
             <div class="d-flex align-items-center">
                 {% if other_user.profile_photo %}
-                    <img src="{{ other_user.profile_photo }}" alt="Foto" class="rounded-circle me-3" style="width:50px;height:50px;object-fit:cover;">
+                    <img src="{{ other_user.profile_photo }}" alt="Foto" class="avatar me-3" width="50" height="50">
                 {% else %}
                     <div class="rounded-circle bg-secondary me-3 d-flex justify-content-center align-items-center" style="width:50px;height:50px;color:white;">
                         {{ other_user.name[0] }}
@@ -43,7 +43,7 @@
         <li class="list-group-item d-flex justify-content-between align-items-center">
             <div class="d-flex align-items-center">
                 {% if other_user.profile_photo %}
-                    <img src="{{ other_user.profile_photo }}" alt="Foto" class="rounded-circle me-3" style="width:50px;height:50px;object-fit:cover;">
+                    <img src="{{ other_user.profile_photo }}" alt="Foto" class="avatar me-3" width="50" height="50">
                 {% else %}
                     <div class="rounded-circle bg-secondary me-3 d-flex justify-content-center align-items-center" style="width:50px;height:50px;color:white;">
                         {{ other_user.name[0] }}

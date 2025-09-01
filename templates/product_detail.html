@@ -7,7 +7,7 @@
       <img src="{{ product.image_url }}" class="img-fluid mb-3" alt="{{ product.name }}">
       {% endif %}
       {% for photo in product.extra_photos %}
-        <img src="{{ photo.image_url }}" class="img-thumbnail me-2 mb-2" style="height:100px" alt="Foto extra">
+        <img src="{{ photo.image_url }}" class="img-thumbnail me-2 mb-2" height="100" alt="Foto extra">
       {% endfor %}
     </div>
     <div class="col-md-6">
