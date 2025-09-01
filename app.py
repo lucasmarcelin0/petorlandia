@@ -1333,6 +1333,12 @@ def termo_animal(animal_id, tipo):
     templates = {
         'internacao': 'termo_internacao.html',
         'eutanasia': 'termo_eutanasia.html',
+        'procedimentos': 'termo_procedimentos.html',
+        'exames': 'termo_exames.html',
+        'imagem': 'termo_imagem.html',
+        'medicacao': 'termo_medicacao.html',
+        'planos': 'termo_planos.html',
+        'adocao': 'termo_adocao.html',
     }
     template = templates.get(tipo)
     if not template:
