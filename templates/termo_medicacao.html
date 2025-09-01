@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Termo de Eutanásia | {{ clinica.nome }}</title>
+  <title>Termo de Responsabilidade de Medicação | {{ clinica.nome }}</title>
   <link rel="stylesheet" href="{{ url_for('static', filename='print.css') }}">
 </head>
 <body>
@@ -25,15 +25,11 @@
     </div>
   {% endif %}
 
-  <h2>Termo de Eutanásia</h2>
+  <h2>Termo de Responsabilidade de Medicação</h2>
 
-  <p>Eu, {{ tutor.name }}, CPF {{ tutor.cpf or '—' }}, autorizo a realização do procedimento de eutanásia no animal {{ animal.name }} na clínica {{ clinica.nome }}.</p>
+  <p>Eu, {{ tutor.name }}, CPF {{ tutor.cpf or '—' }}, autorizo a aplicação de medicações no animal {{ animal.name }} durante o tratamento prestado pela clínica {{ clinica.nome }}.</p>
 
-  <p>Estou ciente de que a eutanásia é um procedimento irreversível, indicado com o objetivo de evitar sofrimento ao paciente, e que todas as outras alternativas terapêuticas foram discutidas com a equipe veterinária.</p>
-
-  <p>Declaro que recebi todas as informações necessárias e assumo a responsabilidade pela decisão tomada.</p>
-
-  <p>Fica definido que o destino do corpo será: ____________________________________________ (sepultamento, cremação ou descarte adequado).</p>
+  <p>Estou ciente de que, após a alta hospitalar, é minha responsabilidade administrar corretamente os medicamentos prescritos e seguir todas as orientações fornecidas pela equipe veterinária.</p>
 
   <div class="assinatura">
     ___________________________________________<br>
@@ -68,7 +64,7 @@
       alert('Número de telefone do responsável não informado.');
       return;
     }
-    const mensagem = encodeURIComponent(`Olá {{ tutor.name }}! Segue o termo de eutanásia de {{ animal.name }}:\n\n${window.location.href}\n\nQualquer dúvida, estamos à disposição.\nAtenciosamente,\nEquipe {{ clinica.nome }}`);
+    const mensagem = encodeURIComponent(`Olá {{ tutor.name }}! Segue o termo de responsabilidade de medicação de {{ animal.name }}:\n\n${window.location.href}\n\nQualquer dúvida, estamos à disposição.\nAtenciosamente,\nEquipe {{ clinica.nome }}`);
     const url = `https://api.whatsapp.com/send?phone=${numeroWhatsApp}&text=${mensagem}`;
     try {
       const wpp = window.open(url, '_blank');

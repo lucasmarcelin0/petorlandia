@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Termo de Eutanásia | {{ clinica.nome }}</title>
+  <title>Termo de Consentimento para Procedimentos | {{ clinica.nome }}</title>
   <link rel="stylesheet" href="{{ url_for('static', filename='print.css') }}">
 </head>
 <body>
@@ -25,15 +25,15 @@
     </div>
   {% endif %}
 
-  <h2>Termo de Eutanásia</h2>
+  <h2>Termo de Consentimento para Procedimentos</h2>
 
-  <p>Eu, {{ tutor.name }}, CPF {{ tutor.cpf or '—' }}, autorizo a realização do procedimento de eutanásia no animal {{ animal.name }} na clínica {{ clinica.nome }}.</p>
+  <p>Eu, {{ tutor.name }}, CPF {{ tutor.cpf or '—' }}, autorizo a realização de procedimentos veterinários no animal {{ animal.name }} na clínica {{ clinica.nome }}.</p>
 
-  <p>Estou ciente de que a eutanásia é um procedimento irreversível, indicado com o objetivo de evitar sofrimento ao paciente, e que todas as outras alternativas terapêuticas foram discutidas com a equipe veterinária.</p>
+  <p>Fui informado sobre os riscos, benefícios e alternativas aos procedimentos propostos, incluindo cirurgias como castração, intervenções ortopédicas e remoção de tumores.</p>
 
-  <p>Declaro que recebi todas as informações necessárias e assumo a responsabilidade pela decisão tomada.</p>
+  <p>Estou ciente de que podem ocorrer complicações ou óbito mesmo com todos os cuidados adotados.</p>
 
-  <p>Fica definido que o destino do corpo será: ____________________________________________ (sepultamento, cremação ou descarte adequado).</p>
+  <p>Autorizo o uso de anestesia, medicações e exames necessários à execução do procedimento.</p>
 
   <div class="assinatura">
     ___________________________________________<br>
@@ -68,7 +68,7 @@
       alert('Número de telefone do responsável não informado.');
       return;
     }
-    const mensagem = encodeURIComponent(`Olá {{ tutor.name }}! Segue o termo de eutanásia de {{ animal.name }}:\n\n${window.location.href}\n\nQualquer dúvida, estamos à disposição.\nAtenciosamente,\nEquipe {{ clinica.nome }}`);
+    const mensagem = encodeURIComponent(`Olá {{ tutor.name }}! Segue o termo de consentimento para procedimentos de {{ animal.name }}:\n\n${window.location.href}\n\nQualquer dúvida, estamos à disposição.\nAtenciosamente,\nEquipe {{ clinica.nome }}`);
     const url = `https://api.whatsapp.com/send?phone=${numeroWhatsApp}&text=${mensagem}`;
     try {
       const wpp = window.open(url, '_blank');

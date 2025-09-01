@@ -1,9 +1,15 @@
 <h5 class="mb-3">Documentos</h5>
 {% if current_user.worker == 'veterinario' %}
 <div class="mb-3">
-  <div class="btn-group">
+  <div class="btn-group flex-wrap">
     <a href="{{ url_for('termo_animal', animal_id=animal.id, tipo='internacao') }}" target="_blank" class="btn btn-sm btn-outline-primary">Termo de Internação</a>
     <a href="{{ url_for('termo_animal', animal_id=animal.id, tipo='eutanasia') }}" target="_blank" class="btn btn-sm btn-outline-primary">Termo de Eutanásia</a>
+    <a href="{{ url_for('termo_animal', animal_id=animal.id, tipo='procedimentos') }}" target="_blank" class="btn btn-sm btn-outline-primary">Termo de Consentimento para Procedimentos</a>
+    <a href="{{ url_for('termo_animal', animal_id=animal.id, tipo='exames') }}" target="_blank" class="btn btn-sm btn-outline-primary">Termo de Responsabilidade para Exames</a>
+    <a href="{{ url_for('termo_animal', animal_id=animal.id, tipo='imagem') }}" target="_blank" class="btn btn-sm btn-outline-primary">Termo de Uso de Imagem</a>
+    <a href="{{ url_for('termo_animal', animal_id=animal.id, tipo='medicacao') }}" target="_blank" class="btn btn-sm btn-outline-primary">Termo de Responsabilidade de Medicação</a>
+    <a href="{{ url_for('termo_animal', animal_id=animal.id, tipo='planos') }}" target="_blank" class="btn btn-sm btn-outline-primary">Contrato de Planos de Saúde / Pacotes</a>
+    <a href="{{ url_for('termo_animal', animal_id=animal.id, tipo='adocao') }}" target="_blank" class="btn btn-sm btn-outline-primary">Termo de Adoção Responsável</a>
   </div>
 </div>
 {% endif %}
