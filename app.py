@@ -125,15 +125,18 @@ def upload_to_s3(file, filename, folder="uploads") -> str | None:
         key = f"{folder}/{filename}"
 
         if BUCKET:
-            _s3().upload_fileobj(
-                fileobj,
-                BUCKET,
-                key,
-                ExtraArgs={"ACL": "public-read", "ContentType": content_type},
-            )
-            return f"https://{BUCKET}.s3.amazonaws.com/{key}"
+            try:
+                _s3().upload_fileobj(
+                    fileobj,
+                    BUCKET,
+                    key,
+                    ExtraArgs={"ACL": "public-read", "ContentType": content_type},
+                )
+                return f"https://{BUCKET}.s3.amazonaws.com/{key}"
+            except Exception as exc:  # noqa: BLE001
+                app.logger.exception("S3 upload failed: %s", exc)
 
-        # Local fallback when no S3 bucket is configured
+        # Local fallback when S3 is not configured or fails
         local_path = PROJECT_ROOT / "static" / "uploads" / key
         local_path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -147,7 +150,7 @@ def upload_to_s3(file, filename, folder="uploads") -> str | None:
 
         return f"/static/uploads/{key}"
     except Exception as exc:  # noqa: BLE001
-        app.logger.exception("S3 upload failed: %s", exc)
+        app.logger.exception("Upload failed: %s", exc)
         return None
 
 # ------------------------ Background S3 upload -------------------------
