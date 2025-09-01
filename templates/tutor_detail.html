@@ -25,8 +25,12 @@
           id="preview-tutor"
           src="{{ tutor.profile_photo or '' }}"
           alt="Foto do Tutor"
-          class="img-thumbnail {% if not tutor.profile_photo %}d-none{% endif %}"
-          style="max-height: 150px;"
+          class="img-thumbnail avatar {% if not tutor.profile_photo %}d-none{% endif %}"
+          data-offset-x="{{ tutor.photo_offset_x or 0 }}"
+          data-offset-y="{{ tutor.photo_offset_y or 0 }}"
+          data-rotation="{{ tutor.photo_rotation or 0 }}"
+          data-zoom="{{ tutor.photo_zoom or 1 }}"
+          style="--avatar-size:150px;"
         >
       </div>
 
@@ -128,9 +132,9 @@
         <tr id="animal-row-{{ a.id }}">
           <td>
             {% if a.image %}
-              <img src="{{ a.image }}" alt="Foto de {{ a.name }}" class="rounded-circle me-2" style="width: 32px; height: 32px; object-fit: cover;">
+              <img src="{{ a.image }}" alt="Foto de {{ a.name }}" class="avatar me-2" data-offset-x="{{ a.photo_offset_x or 0 }}" data-offset-y="{{ a.photo_offset_y or 0 }}" data-rotation="{{ a.photo_rotation or 0 }}" data-zoom="{{ a.photo_zoom or 1 }}" style="--avatar-size:32px;">
             {% endif %}
-            <span class="animal-name">{{ a.name }}</span>
+              <span class="animal-name">{{ a.name }}</span>
           </td>
           <td class="animal-species">{{ a.species }} / {{ a.breed }}</td>
           <td class="animal-sex">{{ a.sex or '—' }}</td>

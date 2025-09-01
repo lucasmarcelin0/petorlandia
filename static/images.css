@@ -1,0 +1,13 @@
+.avatar {
+  --avatar-size: 64px;
+  --avatar-radius: 50%;
+  --avatar-offset-x: 0px;
+  --avatar-offset-y: 0px;
+  --avatar-rotation: 0deg;
+  --avatar-zoom: 1;
+  width: var(--avatar-size);
+  height: var(--avatar-size);
+  border-radius: var(--avatar-radius);
+  object-fit: cover;
+  transform: translate(var(--avatar-offset-x), var(--avatar-offset-y)) rotate(var(--avatar-rotation)) scale(var(--avatar-zoom));
+}

@@ -6,9 +6,7 @@
 
     {% if animal.image %}
         <div class="text-center mb-4">
-            <img src="{{ animal.image }}" alt="Foto de {{ animal.name }}"
-                 class="rounded-circle shadow-sm" loading="lazy"
-                 style="width: 150px; height: 150px; object-fit: cover;">
+            <img src="{{ animal.image }}" alt="Foto de {{ animal.name }}" class="avatar shadow-sm" loading="lazy" data-offset-x="{{ animal.photo_offset_x or 0 }}" data-offset-y="{{ animal.photo_offset_y or 0 }}" data-rotation="{{ animal.photo_rotation or 0 }}" data-zoom="{{ animal.photo_zoom or 1 }}" style="--avatar-size:150px;">
         </div>
     {% endif %}
 

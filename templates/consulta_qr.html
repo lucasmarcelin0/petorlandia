@@ -33,7 +33,7 @@
     {% if animal %}
       <div class="animal-photo shadow-sm rounded-circle border border-2 border-primary">
         {% if animal.photo %}
-          <img src="{{ animal.photo.url }}" alt="{{ animal.name }}" class="rounded-circle" width="56" height="56">
+          <img src="{{ animal.photo.url }}" alt="{{ animal.name }}" class="avatar" data-offset-x="{{ animal.photo_offset_x or 0 }}" data-offset-y="{{ animal.photo_offset_y or 0 }}" data-rotation="{{ animal.photo_rotation or 0 }}" data-zoom="{{ animal.photo_zoom or 1 }}" style="--avatar-size:56px;">
         {% else %}
           <div class="no-photo-placeholder rounded-circle bg-light d-flex align-items-center justify-content-center" style="width: 56px; height: 56px;">
             <i class="fa-solid fa-camera text-muted"></i>
