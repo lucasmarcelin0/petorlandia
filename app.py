@@ -1975,7 +1975,7 @@ def imprimir_consulta(consulta_id):
     animal = consulta.animal
     tutor = animal.owner
     veterinario = consulta.veterinario
-    clinica = (
+    clinica = consulta.clinica or (
         veterinario.veterinario.clinica if veterinario and veterinario.veterinario else None
     )
 
@@ -3644,10 +3644,14 @@ def salvar_vacinas(animal_id):
 @app.route("/animal/<int:animal_id>/vacinas/imprimir")
 def imprimir_vacinas(animal_id):
     animal = get_animal_or_404(animal_id)
-    clinica = None
-    if current_user.is_authenticated:
-        vet = getattr(current_user, "veterinario", None)
-        if vet and vet.clinica:
+    consulta = animal.consultas[-1] if animal.consultas else None
+    veterinario = consulta.veterinario if consulta else None
+    if not veterinario and current_user.is_authenticated and getattr(current_user, "worker", None) == "veterinario":
+        veterinario = current_user
+    clinica = consulta.clinica if consulta and consulta.clinica else None
+    if not clinica and veterinario and getattr(veterinario, "veterinario", None):
+        vet = veterinario.veterinario
+        if vet.clinica:
             clinica = vet.clinica
     if not clinica:
         clinica = getattr(animal, "clinica", None)
@@ -3657,7 +3661,7 @@ def imprimir_vacinas(animal_id):
             clinica = Clinica.query.get_or_404(clinica_id)
     if not clinica:
         abort(400, description="É necessário informar uma clínica.")
-    return render_template("imprimir_vacinas.html", animal=animal, clinica=clinica)
+    return render_template("imprimir_vacinas.html", animal=animal, clinica=clinica, veterinario=veterinario)
 
 
 @app.route("/vacina/<int:vacina_id>/deletar", methods=["POST"])
@@ -4052,19 +4056,20 @@ def imprimir_bloco_prescricao(bloco_id):
 
     animal = bloco.animal
     tutor = animal.owner
-
-    # Pegando a clínica do veterinário (se houver)
-    clinica = None
-    if current_user.veterinario:
-        clinica = current_user.veterinario.clinica
+    consulta = animal.consultas[-1] if animal.consultas else None
+    veterinario = consulta.veterinario if consulta else current_user
+    clinica = consulta.clinica if consulta and consulta.clinica else (
+        veterinario.veterinario.clinica if veterinario and getattr(veterinario, "veterinario", None) else None
+    )
 
     return render_template(
         'imprimir_bloco.html',
         bloco=bloco,
-        consulta = animal.consultas[-1] if animal.consultas else None,
+        consulta=consulta,
         animal=animal,
         tutor=tutor,
-        clinica=clinica  # ✅ incluído
+        clinica=clinica,
+        veterinario=veterinario,
     )
 
 
@@ -4114,10 +4119,15 @@ def imprimir_bloco_exames(bloco_id):
     bloco = BlocoExames.query.get_or_404(bloco_id)
     animal = bloco.animal
     tutor = animal.owner
-    clinica = None
-    vet = getattr(current_user, 'veterinario', None)
-    if vet and vet.clinica:
-        clinica = vet.clinica
+    consulta = animal.consultas[-1] if animal.consultas else None
+    veterinario = consulta.veterinario if consulta else None
+    if not veterinario and current_user.is_authenticated and getattr(current_user, 'worker', None) == 'veterinario':
+        veterinario = current_user
+    clinica = consulta.clinica if consulta and consulta.clinica else None
+    if not clinica and veterinario and getattr(veterinario, 'veterinario', None):
+        vet = veterinario.veterinario
+        if vet.clinica:
+            clinica = vet.clinica
     if not clinica:
         clinica = getattr(animal, 'clinica', None)
     if not clinica:
@@ -4127,7 +4137,7 @@ def imprimir_bloco_exames(bloco_id):
     if not clinica:
         abort(400, description="É necessário informar uma clínica.")
 
-    return render_template('imprimir_exames.html', bloco=bloco, animal=animal, tutor=tutor, clinica=clinica)
+    return render_template('imprimir_exames.html', bloco=bloco, animal=animal, tutor=tutor, clinica=clinica, veterinario=veterinario)
 
 
 @app.route('/bloco_exames/<int:bloco_id>/deletar', methods=['POST'])
@@ -6717,7 +6727,7 @@ def imprimir_orcamento(consulta_id):
     animal = consulta.animal
     tutor = animal.owner
     veterinario = consulta.veterinario
-    clinica = (
+    clinica = consulta.clinica or (
         veterinario.veterinario.clinica if veterinario and veterinario.veterinario else None
     )
     return render_template(
@@ -6738,10 +6748,9 @@ def imprimir_bloco_orcamento(bloco_id):
     ensure_clinic_access(bloco.clinica_id)
     animal = bloco.animal
     tutor = animal.owner
-    veterinario = current_user
-    clinica = (
-        veterinario.veterinario.clinica if veterinario and veterinario.veterinario else None
-    )
+    consulta = animal.consultas[-1] if animal.consultas else None
+    veterinario = consulta.veterinario if consulta else current_user
+    clinica = consulta.clinica if consulta and consulta.clinica else bloco.clinica
     return render_template(
         'imprimir_orcamento.html',
         itens=bloco.itens,
@@ -6764,6 +6773,7 @@ def imprimir_orcamento_padrao(orcamento_id):
         total=orcamento.total,
         clinica=orcamento.clinica,
         orcamento=orcamento,
+        veterinario=current_user,
     )
 
 

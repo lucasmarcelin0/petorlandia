@@ -48,6 +48,41 @@ def test_imprimir_orcamento(app):
         db.drop_all()
 
 
+def test_imprimir_orcamento_preserva_veterinario_original(app):
+    with app.app_context():
+        db.drop_all()
+        db.create_all()
+        vet1 = User(name='Vet1', email='vet1@example.com', worker='veterinario', role='admin')
+        vet1.set_password('x')
+        vet2 = User(name='Vet2', email='vet2@example.com', worker='veterinario', role='admin')
+        vet2.set_password('y')
+        tutor = User(name='Tutor', email='tutor@example.com')
+        tutor.set_password('z')
+        animal = Animal(name='Rex', owner=tutor)
+        db.session.add_all([vet1, vet2, tutor, animal])
+        db.session.commit()
+
+        consulta = Consulta(animal_id=animal.id, created_by=vet1.id, status='in_progress')
+        db.session.add(consulta)
+        db.session.commit()
+
+        item = OrcamentoItem(consulta=consulta, descricao='Consulta', valor=50)
+        db.session.add(item)
+        db.session.commit()
+        consulta_id = consulta.id
+
+    client = app.test_client()
+    with client:
+        client.post('/login', data={'email': 'vet2@example.com', 'password': 'y'}, follow_redirects=True)
+        resp = client.get(f'/imprimir_orcamento/{consulta_id}')
+        assert resp.status_code == 200
+        assert b'Vet1' in resp.data
+        assert b'Vet2' not in resp.data
+
+    with app.app_context():
+        db.drop_all()
+
+
 def test_imprimir_orcamento_padrao(app):
     with app.app_context():
         db.drop_all()
