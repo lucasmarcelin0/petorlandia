@@ -22,6 +22,7 @@
         min="0"
         class="form-control"
         id="{{ prefixo }}_age"
+        name="{{ nome_idade or 'age' }}"
         value="{{ valor_idade or '' }}"
         data-age
       >
@@ -44,6 +45,12 @@
     // Máscara de input dd/mm/yyyy
     Inputmask("99/99/9999").mask(dobInput);
 
+    // Função utilitária para formatar datas no padrão YYYY-MM-DD
+    const formatISO = (d) => {
+      const pad = (n) => String(n).padStart(2, '0');
+      return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+    };
+
     // Inicializa flatpickr diretamente no campo visível
     const fp = flatpickr(dobInput, {
       locale: "pt",
@@ -55,7 +62,7 @@
       onReady: function () {
         const parsed = parseData(dobInput.value);
         if (parsed) atualizarIdade(parsed);
-        if (parsed && hiddenInput) hiddenInput.value = parsed.toISOString().split('T')[0];
+        if (parsed && hiddenInput) hiddenInput.value = formatISO(parsed);
       },
 
       onChange: function (selectedDates) {
@@ -84,7 +91,7 @@
           ageUnit.textContent = meses === 1 ? 'mês' : 'meses';
         }
       }
-      if (hiddenInput) hiddenInput.value = dataNascimento.toISOString().split('T')[0];
+      if (hiddenInput) hiddenInput.value = formatISO(dataNascimento);
     }
 
     // Quando o usuário digita a idade
@@ -94,7 +101,7 @@
         const hoje = new Date();
         const estimada = new Date(hoje.getFullYear() - idade, hoje.getMonth(), hoje.getDate());
         fp.setDate(estimada, true);
-        if (hiddenInput) hiddenInput.value = estimada.toISOString().split('T')[0];
+        if (hiddenInput) hiddenInput.value = formatISO(estimada);
         if (ageUnit) ageUnit.textContent = 'anos';
       }
     });
@@ -104,7 +111,7 @@
       const parsed = parseData(dobInput.value);
       if (parsed) {
         fp.setDate(parsed, true);
-        if (hiddenInput) hiddenInput.value = parsed.toISOString().split('T')[0];
+        if (hiddenInput) hiddenInput.value = formatISO(parsed);
       }
     });
 
