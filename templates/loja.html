@@ -1,7 +1,7 @@
 {% extends "layout.html" %}
 {% block main %}
 
-<!-- Header -->
+<!-- Cabeçalho -->
 <section class="pb-2 pb-lg-4">
   <div class="text-center">
     <h1 class="fw-bold mb-2 text-primary">
@@ -11,6 +11,7 @@
       Os melhores produtos para o seu pet com entrega rápida e atendimento especializado!
     </p>
 
+    <!-- Ações principais -->
     <div class="d-flex flex-wrap justify-content-center gap-2 gap-md-3 mt-3">
       {% if has_orders %}
       <a href="{{ url_for('minhas_compras') }}"
@@ -18,44 +19,46 @@
         <i class="fa-solid fa-box-open me-2"></i> Minhas Compras
       </a>
       {% endif %}
+
       <a href="{{ url_for('ver_carrinho') }}"
          class="btn btn-success btn-lg d-flex align-items-center position-relative">
         <i class="fa-solid fa-cart-shopping me-2"></i> Ver Carrinho
         {% if cart_count and cart_count > 0 %}
-          <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger shadow">
-            {{ cart_count }}
-          </span>
+        <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger shadow">
+          {{ cart_count }}
+        </span>
         {% endif %}
       </a>
     </div>
   </div>
 </section>
 
-<!-- Categorias (chips) - opcional -->
+<!-- Categorias -->
 {% set cat_list = categories if categories is defined else
   (products | map(attribute='category') | select | unique | list) %}
 {% if cat_list and cat_list|length > 0 %}
 <section class="mb-3">
   <div class="d-flex align-items-center justify-content-between mb-2">
-    <h2 class="h5 m-0 text-secondary"><i class="fa-solid fa-filter me-2"></i>Categorias</h2>
+    <h2 class="h5 m-0 text-secondary">
+      <i class="fa-solid fa-filter me-2"></i> Categorias
+    </h2>
     <button class="btn btn-sm btn-outline-secondary d-none d-md-inline-flex js-clear-category">
       Limpar
     </button>
   </div>
-  <div class="chips-scroll py-1" id="chipsScroll" role="tablist" aria-label="Categorias">
+
+  <div class="chips-scroll py-1" id="chipsScroll">
     {% set current_cat = request.args.get('category') %}
     {% for cat in cat_list %}
       {% if cat %}
-      <button
-        class="chip {% if current_cat == cat %}chip-active{% endif %}"
-        data-category="{{ cat|e }}" type="button" role="tab"
-        aria-selected="{{ 'true' if current_cat == cat else 'false' }}"
-        title="{{ cat }}">
+      <button class="chip {% if current_cat == cat %}chip-active{% endif %}"
+              data-category="{{ cat|e }}">
         <i class="fa-solid fa-tag me-1"></i>{{ cat }}
       </button>
       {% endif %}
     {% endfor %}
   </div>
+
   <button class="btn btn-sm btn-outline-secondary w-100 mt-2 d-md-none js-clear-category">
     Limpar categoria
   </button>
@@ -64,27 +67,23 @@
 
 <!-- Busca + Filtros -->
 <form method="get" id="search-form" class="row g-2 align-items-stretch mb-3">
-  <!-- preserva categoria ao buscar -->
   {% if request.args.get('category') %}
-    <input type="hidden" name="category" value="{{ request.args.get('category') }}">
+  <input type="hidden" name="category" value="{{ request.args.get('category') }}">
   {% endif %}
 
   <div class="col-12 col-lg-7">
     <div class="input-group input-elevated">
-      <span class="input-group-text"><i class="fa-solid fa-magnifying-glass"></i></span>
-      <input
-        type="text"
-        name="q"
-        value="{{ search_term }}"
-        class="form-control"
-        placeholder="Buscar produtos..."
-        aria-label="Buscar produtos">
+      <span class="input-group-text">
+        <i class="fa-solid fa-magnifying-glass"></i>
+      </span>
+      <input type="text" name="q" value="{{ search_term }}"
+             class="form-control" placeholder="Buscar produtos...">
       <button class="btn btn-primary" type="submit">Buscar</button>
     </div>
   </div>
 
   <div class="col-12 col-sm-6 col-lg-3">
-    <select class="form-select" name="filter" aria-label="Filtrar produtos" onchange="this.form.submit()">
+    <select class="form-select" name="filter" onchange="this.form.submit()">
       <option value="all"       {% if selected_filter=='all' %}selected{% endif %}>Todos os produtos</option>
       <option value="new"       {% if selected_filter=='new' %}selected{% endif %}>Novos produtos</option>
       <option value="priceLow"  {% if selected_filter=='priceLow' %}selected{% endif %}>Preço: menor → maior</option>
@@ -104,7 +103,7 @@
   {% include 'partials/_product_grid.html' %}
 </div>
 
-<!-- Floating Cart (mobile) -->
+<!-- Carrinho flutuante (mobile) -->
 <div class="d-lg-none fixed-bottom p-3">
   <a href="{{ url_for('ver_carrinho') }}"
      class="btn btn-success btn-lg w-100 btn-cart-floating position-relative">
@@ -117,124 +116,63 @@
   </a>
 </div>
 
-<!-- Styles específicos da loja -->
+<!-- Styles -->
 <style>
-  :root{
-    --primary-color: #4e73df; /* herdado do layout */
+  :root {
+    --primary-color: #4e73df;
     --primary-dark: #3d5bd6;
-    --success-color: #1cc88a;
   }
 
-  /* Chips de categoria */
-  .chips-scroll{
-    display:flex; gap:.5rem; overflow-x:auto; padding:.25rem .25rem;
-    -webkit-overflow-scrolling: touch;
-  }
-  .chips-scroll::-webkit-scrollbar{ height:8px; }
-  .chips-scroll::-webkit-scrollbar-thumb{ background:rgba(0,0,0,.15); border-radius:8px; }
+  /* Chips */
+  .chips-scroll { display:flex; gap:.5rem; overflow-x:auto; }
+  .chip { border:1px solid rgba(0,0,0,.1); background:#fff; border-radius:999px;
+          padding:.45rem .9rem; font-weight:600; font-size:.9rem; color:#5a5c69; }
+  .chip-active { color:#fff; background: linear-gradient(90deg, var(--primary-color), var(--primary-dark)); }
 
-  .chip{
-    border:1px solid rgba(0,0,0,.1);
-    background:#fff;
-    border-radius:999px;
-    padding:.45rem .9rem;
-    font-weight:600;
-    font-size:.9rem;
-    color:#5a5c69;
-    box-shadow:0 1px 3px rgba(0,0,0,.06);
-    transition:all .2s ease;
-    white-space:nowrap;
-  }
-  .chip:hover{ transform:translateY(-1px); box-shadow:0 3px 10px rgba(0,0,0,.08); }
-  .chip-active{
-    color:#fff; background: linear-gradient(90deg, var(--primary-color), var(--primary-dark));
-    border-color:transparent;
-  }
+  /* Busca */
+  .input-elevated { box-shadow:0 4px 14px rgba(0,0,0,.06); border-radius:10px; overflow:hidden; }
 
-  /* Busca elevada */
-  .input-elevated .input-group-text{ background:#fff; border-right:0; }
-  .input-elevated .form-control{ border-left:0; }
-  .input-elevated .form-control,
-  .input-elevated .input-group-text,
-  .input-elevated .btn{
-    height:46px;
-  }
-  .input-elevated{
-    box-shadow:0 4px 14px rgba(0,0,0,.06);
-    border-radius:10px; overflow:hidden;
-  }
+  /* Card */
+  .product-card { border:none; border-radius:14px; box-shadow:0 2px 10px rgba(0,0,0,.06); background:#fff; }
+  .product-card:hover { transform:translateY(-4px); box-shadow:0 10px 22px rgba(0,0,0,.12); }
+  .product-image { width:100%; height:100%; object-fit:cover; }
 
-  /* Card do produto */
-  .product-card{
-    border:none; border-radius:14px;
-    box-shadow:0 2px 10px rgba(0,0,0,.06);
-    transition:transform .25s ease, box-shadow .25s ease;
-    background:#fff;
-  }
-  .product-card:hover{
-    transform:translateY(-4px);
-    box-shadow:0 10px 22px rgba(0,0,0,.12);
-  }
+  /* Quantidade */
+  .quantity-selector { display:flex; align-items:center; border:1px solid rgba(0,0,0,.15);
+                       border-radius:6px; background:#fff; }
+  .quantity-btn { width:32px; height:40px; background:#f3f5f9; border:0; font-weight:700;
+                  color:var(--primary-color); cursor:pointer; }
+  .quantity-input { width:48px; height:40px; text-align:center; border:0; font-weight:600; }
 
-  .product-image-wrap{ background:#f8f9fb; }
-  .product-image{ width:100%; height:100%; object-fit:cover; transition:transform .4s ease; }
-  .product-card:hover .product-image{ transform:scale(1.04); }
+  /* Botão adicionar */
+  .add-to-cart-btn { flex:1 1 auto; border:none; border-radius:6px; padding:.65rem 1rem;
+                     font-weight:600; font-size:.95rem; color:#fff;
+                     background:linear-gradient(90deg,var(--primary-color),var(--primary-dark)); }
+  .add-to-cart-btn:hover { filter:brightness(1.05); transform:translateY(-2px); }
 
-  .product-image-placeholder{
-    width:100%; height:100%; display:flex; align-items:center; justify-content:center;
-    color:#c8cbd3; font-size:2rem;
-  }
-
-  .product-badge{
-    position:absolute; top:.6rem; right:.6rem;
-    font-size:.75rem; font-weight:700;
-    border-radius:10px;
-    padding:.35rem .6rem;
-    box-shadow:0 2px 8px rgba(0,0,0,.12);
-  }
-  .badge-lowstock{ background:#ffe08a; color:#6b4e00; }
-  .badge-new{ background:#c7f9cc; color:#116530; }
-
-  .product-name{
-    display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden;
-  }
-  .product-description{
-    display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden;
-  }
-
-  /* Quantidade + botão */
-  .quantity-selector{
-    display:flex; border:1px solid rgba(0,0,0,.1); border-radius:10px; overflow:hidden; background:#fff;
-  }
-  .quantity-btn{
-    width:40px; border:0; background:#f3f5f9; font-weight:700; font-size:1.1rem; color:var(--primary-color);
-  }
-  .quantity-btn:active{ transform:scale(.98); }
-  .quantity-input{
-    width:52px; text-align:center; border:0; font-weight:700; padding:0 .25rem;
-  }
-  .quantity-input:focus{ outline:2px solid var(--primary-color); }
-
-  .add-to-cart-btn{
-    border:none; border-radius:10px;
-    box-shadow:0 4px 12px rgba(78,115,223,.25);
-    background: linear-gradient(90deg, var(--primary-color), var(--primary-dark));
-  }
-  .add-to-cart-btn:hover{ filter:brightness(1.04); transform:translateY(-1px); }
-
-  /* Botão flutuante do carrinho (mobile) */
-  .btn-cart-floating{
-    border-radius:20px;
-    box-shadow:0 12px 26px rgba(0,0,0,.22);
-  }
-
-  @media (max-width: 768px){
-    .add-to-cart-btn, .quantity-btn{ height:46px; }
-    .quantity-input{ height:46px; }
-  }
+  /* Carrinho mobile */
+  .btn-cart-floating { border-radius:20px; box-shadow:0 12px 26px rgba(0,0,0,.22); }
 </style>
 
-  <!-- JS específico da loja -->
-  <script src="{{ url_for('static', filename='loja_dynamic.js') }}"></script>
+<!-- Script para quantidade -->
+<script>
+document.addEventListener("DOMContentLoaded", () => {
+  document.querySelectorAll(".quantity-selector").forEach(selector => {
+    const minusBtn = selector.querySelector(".minus");
+    const plusBtn = selector.querySelector(".plus");
+    const input = selector.querySelector("input");
 
-  {% endblock %}
+    minusBtn.addEventListener("click", () => {
+      let val = parseInt(input.value) || 1;
+      if (val > 1) input.value = val - 1;
+    });
+
+    plusBtn.addEventListener("click", () => {
+      let val = parseInt(input.value) || 1;
+      input.value = val + 1;
+    });
+  });
+});
+</script>
+
+{% endblock %}
