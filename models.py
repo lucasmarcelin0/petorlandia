@@ -6,7 +6,7 @@ except ImportError:
 from flask_login import UserMixin
 from flask import url_for, request, current_app
 from werkzeug.security import generate_password_hash, check_password_hash
-from datetime import datetime, date
+from datetime import datetime, date, timedelta
 from dateutil.relativedelta import relativedelta
 import enum
 from sqlalchemy import Enum, event
@@ -788,6 +788,32 @@ event.listen(Appointment, 'before_insert', Appointment._validate_subscription)
 event.listen(Appointment, 'before_update', Appointment._validate_subscription)
 event.listen(Appointment, 'before_insert', Appointment._set_clinica)
 event.listen(Appointment, 'before_update', Appointment._set_clinica)
+
+# Agendamento de exames
+class ExamAppointment(db.Model):
+    __tablename__ = 'exam_appointment'
+
+    id = db.Column(db.Integer, primary_key=True)
+    animal_id = db.Column(db.Integer, db.ForeignKey('animal.id'), nullable=False)
+    specialist_id = db.Column(db.Integer, db.ForeignKey('veterinario.id'), nullable=False)
+    scheduled_at = db.Column(db.DateTime, nullable=False)
+    status = db.Column(db.String(20), nullable=False, default='pending')
+    request_time = db.Column(db.DateTime, default=datetime.utcnow)
+    confirm_by = db.Column(db.DateTime)
+
+    animal = db.relationship(
+        'Animal',
+        backref=db.backref('exam_appointments', cascade='all, delete-orphan'),
+    )
+    specialist = db.relationship(
+        'Veterinario',
+        backref=db.backref('exam_appointments', cascade='all, delete-orphan'),
+    )
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        if not self.confirm_by:
+            self.confirm_by = (self.request_time or datetime.utcnow()) + timedelta(hours=2)
 
 # Associação many-to-many entre eventos e colaboradores
 EventoColaboradores = db.Table(

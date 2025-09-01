@@ -31,6 +31,24 @@
   <button type="button" class="btn btn-primary mt-2" id="btn-finalizar-exames" onclick="finalizarBlocoExames()">💾 Finalizar Solicitação</button>
 </form>
 
+<!-- Agendamento de exame -->
+<div id="agendar-exame" class="mt-5">
+  <h5 class="mb-3">Agendar Exame</h5>
+  <div class="mb-3">
+    <label for="exam-specialist" class="form-label">Especialista</label>
+    <select id="exam-specialist" class="form-select"></select>
+  </div>
+  <div class="mb-3">
+    <label for="exam-date" class="form-label">Data</label>
+    <input type="date" id="exam-date" class="form-control">
+  </div>
+  <div class="mb-3">
+    <label for="exam-time" class="form-label">Horário</label>
+    <select id="exam-time" class="form-select"><option value="">Selecione...</option></select>
+  </div>
+  <button type="button" class="btn btn-outline-primary" onclick="agendarExame()">📅 Agendar Exame</button>
+</div>
+
 <!-- Histórico de exames -->
 <div id="historico-exames" class="mt-5">
   {% include 'partials/historico_exames.html' %}
@@ -78,6 +96,24 @@
           });
         });
   });
+
+    const specialistSelect = document.getElementById('exam-specialist');
+    if (specialistSelect) {
+      fetch('/api/specialists')
+        .then(r => r.json())
+        .then(data => {
+          specialistSelect.innerHTML = '<option value="">Selecione...</option>';
+          data.forEach(sp => {
+            const opt = document.createElement('option');
+            const esp = sp.especialidades.join(', ');
+            opt.value = sp.id;
+            opt.textContent = esp ? `${sp.nome} - ${esp}` : sp.nome;
+            specialistSelect.appendChild(opt);
+          });
+        });
+      specialistSelect.addEventListener('change', atualizarHorarios);
+      document.getElementById('exam-date').addEventListener('change', atualizarHorarios);
+    }
 
   renderExamesTemp(); // Inicializa a lista se já houver dados
   });
@@ -150,6 +186,43 @@
       `;
       lista.appendChild(div);
     });
+  }
+
+  async function atualizarHorarios() {
+    const vetId = document.getElementById('exam-specialist').value;
+    const date = document.getElementById('exam-date').value;
+    if (!vetId || !date) return;
+    const resp = await fetch(`/api/specialist/${vetId}/available_times?date=${date}`);
+    const horarios = await resp.json();
+    const select = document.getElementById('exam-time');
+    select.innerHTML = '<option value="">Selecione...</option>';
+    horarios.forEach(h => {
+      const opt = document.createElement('option');
+      opt.value = h;
+      opt.textContent = h;
+      select.appendChild(opt);
+    });
+  }
+
+  async function agendarExame() {
+    const vetId = document.getElementById('exam-specialist').value;
+    const date = document.getElementById('exam-date').value;
+    const time = document.getElementById('exam-time').value;
+    if (!vetId || !date || !time) {
+      alert('Selecione especialista, data e horário.');
+      return;
+    }
+    const resp = await fetch(`/animal/{{ animal.id }}/schedule_exam`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+      body: JSON.stringify({ specialist_id: vetId, date, time })
+    });
+    if (resp.ok) {
+      mostrarFeedback('Exame agendado! Aguarde confirmação do especialista.');
+      document.getElementById('exam-time').innerHTML = '<option value="">Selecione...</option>';
+    } else {
+      mostrarFeedback('Erro ao agendar exame.', 'danger');
+    }
   }
 
   async function finalizarBlocoExames() {
