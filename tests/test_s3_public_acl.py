@@ -29,3 +29,25 @@ def test_upload_to_s3_sets_public_read_acl(monkeypatch):
     assert captured['bucket'] == 'test-bucket'
     assert captured['key'].startswith('clinicas/logo.jpg')
     assert url == f"https://test-bucket.s3.amazonaws.com/{captured['key']}"
+
+
+def test_upload_to_s3_secure_filename(monkeypatch):
+    monkeypatch.setattr(app, "BUCKET", "test-bucket")
+
+    captured = {}
+
+    class DummyS3:
+        def upload_fileobj(self, fileobj, bucket, key, ExtraArgs=None):
+            captured['key'] = key
+
+    monkeypatch.setattr(app, "_s3", lambda: DummyS3())
+
+    img_bytes = BytesIO()
+    Image.new('RGB', (1, 1)).save(img_bytes, format='PNG')
+    img_bytes.seek(0)
+
+    fs = FileStorage(stream=img_bytes, filename='../evil image.png', content_type='image/png')
+    url = app.upload_to_s3(fs, '../evil image.png', folder='clinicas')
+
+    assert captured['key'].startswith('clinicas/evil_image.jpg')
+    assert url == f"https://test-bucket.s3.amazonaws.com/{captured['key']}"
