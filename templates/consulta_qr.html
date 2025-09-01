@@ -31,11 +31,11 @@
     </div>
 
     {% if animal %}
-      <div class="animal-photo shadow-sm rounded-circle border border-2 border-primary">
+      <div class="animal-photo shadow-sm rounded-circle border border-2 border-primary" style="width: 120px; height: 120px;">
         {% if animal.photo %}
-          <img src="{{ animal.photo.url }}" alt="{{ animal.name }}" class="rounded-circle" width="56" height="56">
+          <img src="{{ animal.photo.url }}" alt="{{ animal.name }}" class="rounded-circle" width="120" height="120">
         {% else %}
-          <div class="no-photo-placeholder rounded-circle bg-light d-flex align-items-center justify-content-center" style="width: 56px; height: 56px;">
+          <div class="no-photo-placeholder rounded-circle bg-light d-flex align-items-center justify-content-center" style="width: 120px; height: 120px;">
             <i class="fa-solid fa-camera text-muted"></i>
           </div>
         {% endif %}
