@@ -25,14 +25,14 @@ def _is_admin():
 try:
     from models import (
         Breed, Species, TipoRacao, ApresentacaoMedicamento, VacinaModelo, Consulta, Veterinario, Specialty,
-        Clinica, ClinicHours, VetSchedule, Prescricao, Medicamento, db, User, Animal, Message,
+        Clinica, ClinicHours, VetSchedule, ClinicStaff, Prescricao, Medicamento, db, User, Animal, Message,
         Transaction, Review, Favorite, AnimalPhoto, UserRole, ExameModelo,
         Product, Order, OrderItem, DeliveryRequest, HealthPlan, HealthSubscription, PickupLocation, Endereco, Payment, PaymentMethod, PaymentStatus
     )
 except ImportError:
     from .models import (
         Breed, Species, TipoRacao, ApresentacaoMedicamento, VacinaModelo, Consulta, Veterinario, Specialty,
-        Clinica, ClinicHours, VetSchedule, Prescricao, Medicamento, db, User, Animal, Message,
+        Clinica, ClinicHours, VetSchedule, ClinicStaff, Prescricao, Medicamento, db, User, Animal, Message,
         Transaction, Review, Favorite, AnimalPhoto, UserRole, ExameModelo,
         Product, Order, OrderItem, DeliveryRequest, HealthPlan, HealthSubscription, PickupLocation, Endereco, Payment, PaymentMethod, PaymentStatus
     )
@@ -298,6 +298,28 @@ class VetScheduleAdmin(MyModelView):
     ]
 
 
+class ClinicStaffAdmin(MyModelView):
+    column_list = (
+        'clinic',
+        'user',
+        'can_manage_clients',
+        'can_manage_animals',
+        'can_manage_staff',
+        'can_manage_schedule',
+        'can_manage_inventory',
+    )
+    form_columns = column_list
+    column_labels = {
+        'clinic': 'Clínica',
+        'user': 'Usuário',
+        'can_manage_clients': 'Clientes',
+        'can_manage_animals': 'Animais',
+        'can_manage_staff': 'Equipe',
+        'can_manage_schedule': 'Agenda',
+        'can_manage_inventory': 'Estoque',
+    }
+
+
 class TutorAdminView(MyModelView):
     """Exemplo de deleção em cascata (caso use tutores)."""
     def on_model_delete(self, model):
@@ -517,6 +539,11 @@ def init_admin(app):
         Veterinario, db.session,
         name='Veterinários', category='Cadastros',
         menu_icon_type='fa', menu_icon_value='fa-user-md'
+    ))
+    admin.add_view(ClinicStaffAdmin(
+        ClinicStaff, db.session,
+        name='Staff da Clínica', category='Cadastros',
+        menu_icon_type='fa', menu_icon_value='fa-user-nurse'
     ))
     admin.add_view(MyModelView(
         Specialty, db.session,
