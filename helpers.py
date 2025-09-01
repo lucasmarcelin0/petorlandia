@@ -212,6 +212,35 @@ def appointments_to_events(appointments, duration_minutes=30):
     return [appointment_to_event(a, duration_minutes) for a in appointments]
 
 
+def get_available_times(veterinario_id, date):
+    """Retorna horários disponíveis para um especialista em uma data."""
+    from models import VetSchedule, Appointment, ExamAppointment
+
+    weekday_map = ['Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado', 'Domingo']
+    dia_semana = weekday_map[date.weekday()]
+    schedules = VetSchedule.query.filter_by(veterinario_id=veterinario_id, dia_semana=dia_semana).all()
+    available = []
+    step = timedelta(minutes=30)
+    for s in schedules:
+        current = datetime.combine(date, s.hora_inicio)
+        end = datetime.combine(date, s.hora_fim)
+        while current < end:
+            if s.intervalo_inicio and s.intervalo_fim:
+                intervalo_inicio = datetime.combine(date, s.intervalo_inicio)
+                intervalo_fim = datetime.combine(date, s.intervalo_fim)
+                if intervalo_inicio <= current < intervalo_fim:
+                    current += step
+                    continue
+            conflito = (
+                Appointment.query.filter_by(veterinario_id=veterinario_id, scheduled_at=current).first()
+                or ExamAppointment.query.filter_by(specialist_id=veterinario_id, scheduled_at=current).first()
+            )
+            if not conflito:
+                available.append(current.strftime('%H:%M'))
+            current += step
+    return available
+
+
 def group_vet_schedules_by_day(schedules):
     """Group veterinarian schedules by weekday.
 

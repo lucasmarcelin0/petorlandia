@@ -232,6 +232,7 @@ from helpers import (
     group_appointments_by_day,
     group_vet_schedules_by_day,
     appointments_to_events,
+    get_available_times,
 )
 
 
@@ -6697,6 +6698,65 @@ def api_clinic_appointments(clinica_id):
         .all()
     )
     return jsonify(appointments_to_events(appts))
+
+
+@app.route('/api/specialists')
+@login_required
+def api_specialists():
+    from models import Veterinario
+    vets = Veterinario.query.all()
+    return jsonify([
+        {
+            'id': v.id,
+            'nome': v.user.name,
+            'especialidades': [s.nome for s in v.specialties],
+        }
+        for v in vets
+    ])
+
+
+@app.route('/api/specialist/<int:veterinario_id>/available_times')
+@login_required
+def api_specialist_available_times(veterinario_id):
+    date_str = request.args.get('date')
+    if not date_str:
+        return jsonify([])
+    date_obj = datetime.strptime(date_str, '%Y-%m-%d').date()
+    times = get_available_times(veterinario_id, date_obj)
+    return jsonify(times)
+
+
+@app.route('/animal/<int:animal_id>/schedule_exam', methods=['POST'])
+@login_required
+def schedule_exam(animal_id):
+    from models import ExamAppointment
+    data = request.get_json(silent=True) or {}
+    specialist_id = data.get('specialist_id')
+    date_str = data.get('date')
+    time_str = data.get('time')
+    if not all([specialist_id, date_str, time_str]):
+        return jsonify({'success': False, 'message': 'Dados incompletos.'}), 400
+    scheduled_at = datetime.strptime(f"{date_str} {time_str}", '%Y-%m-%d %H:%M')
+    appt = ExamAppointment(
+        animal_id=animal_id,
+        specialist_id=specialist_id,
+        scheduled_at=scheduled_at,
+    )
+    db.session.add(appt)
+    db.session.commit()
+    return jsonify({'success': True, 'confirm_by': appt.confirm_by.isoformat()})
+
+
+@app.route('/exam_appointment/<int:appointment_id>/confirm', methods=['POST'])
+@login_required
+def confirm_exam_appointment(appointment_id):
+    from models import ExamAppointment
+    appt = ExamAppointment.query.get_or_404(appointment_id)
+    if datetime.utcnow() > appt.confirm_by:
+        return jsonify({'success': False, 'message': 'Tempo de confirmação expirado.'}), 400
+    appt.status = 'confirmed'
+    db.session.commit()
+    return jsonify({'success': True})
 
 
 @app.route('/servico', methods=['POST'])
