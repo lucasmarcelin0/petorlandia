@@ -1,3 +1,4 @@
+{% from 'components/logo.html' import clinic_logo %}
 <!DOCTYPE html>
 <html lang="pt-br">
 <head>
@@ -423,8 +424,7 @@
   <div class="sidebar">
     <div class="logo">
       <a href="{{ url_for('index') }}">
-        <img src="{{ url_for('static', filename='pastorgato.png') }}" alt="Logo PetOrlândia">
-        <span class="logo-text">PetOrlândia</span>
+        {{ clinic_logo(clinica, text='PetOrlândia', text_class='logo-text', alt_text='Logo PetOrlândia') }}
         <span class="logo-icon"><i class="fas fa-paw"></i></span>
       </a>
     </div>
