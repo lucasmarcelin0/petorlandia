@@ -1,62 +1,149 @@
 {% extends "layout.html" %}
 
 {% block main %}
-<div class="container mt-4">
-  <h2>Agenda de Consultas</h2>
-  {% with clinic_id = current_user.clinica_id %}
-    {% include 'partials/schedule_toggle.html' %}
-  {% endwith %}
+<div class="container py-4">
 
-  {% if form %}
-  <div class="card mb-4">
-    <div class="card-body">
-      <h5 class="card-title">Agendar Consulta</h5>
-      <form method="POST">
-        {{ form.hidden_tag() }}
-        <div class="mb-3">
-          {{ form.animal_id.label(class="form-label") }}
-          {{ form.animal_id(class="form-select") }}
-        </div>
-        <div class="mb-3">
-          {{ form.veterinario_id.label(class="form-label") }}
-          {{ form.veterinario_id(class="form-select") }}
-        </div>
-        <div class="mb-3">
-          {{ form.date.label(class="form-label") }}
-          {{ form.date(class="form-control", type="date") }}
-        </div>
-        <div class="mb-3">
-          {{ form.time.label(class="form-label") }}
-          {{ form.time(class="form-control", type="time") }}
-        </div>
-        <div class="mb-3">
-          {{ form.reason.label(class="form-label") }}
-          {{ form.reason(class="form-control", rows=3) }}
-        </div>
-        {{ form.submit(class="btn btn-primary") }}
-      </form>
+  <!-- Cabeçalho -->
+  <div class="d-flex justify-content-between align-items-center mb-4">
+    <h2 class="fw-bold text-gradient mb-0">
+      <i class="bi bi-calendar4-week me-2"></i> Agenda de Consultas
+    </h2>
+    {% with clinic_id = current_user.clinica_id %}
+      {% include 'partials/schedule_toggle.html' %}
+    {% endwith %}
+  </div>
+
+  <!-- Gerenciar horários (novo + editar) -->
+  <div class="card border-0 shadow-lg rounded-4 mb-5">
+    <div class="card-header bg-primary text-white rounded-top-4 d-flex justify-content-between align-items-center">
+      <h5 class="mb-0"><i class="bi bi-clock-history me-2"></i> Gerenciar Horários</h5>
+      <div>
+        <button class="btn btn-light btn-sm me-2" data-bs-toggle="modal" data-bs-target="#appointmentEditModal">
+          <i class="bi bi-pencil"></i> Editar Horário
+        </button>
+        <button class="btn btn-success btn-sm" data-bs-toggle="collapse" data-bs-target="#newAppointmentForm">
+          <i class="bi bi-plus-circle"></i> Novo Horário
+        </button>
+      </div>
+    </div>
+
+    <div class="collapse" id="newAppointmentForm">
+      <div class="card-body p-4">
+        {% if form %}
+        <form method="POST">
+          {{ form.hidden_tag() }}
+          <div class="row g-3">
+            <div class="col-md-6">
+              {{ form.animal_id.label(class="form-label fw-semibold") }}
+              {{ form.animal_id(class="form-select") }}
+            </div>
+            <div class="col-md-6">
+              {{ form.veterinario_id.label(class="form-label fw-semibold") }}
+              {{ form.veterinario_id(class="form-select") }}
+            </div>
+          </div>
+
+          <div class="row g-3 mt-2">
+            <div class="col-md-6">
+              {{ form.date.label(class="form-label fw-semibold") }}
+              {{ form.date(class="form-control", type="date") }}
+            </div>
+            <div class="col-md-6">
+              {{ form.time.label(class="form-label fw-semibold") }}
+              {{ form.time(class="form-control", type="time") }}
+            </div>
+          </div>
+
+          <div class="mt-3">
+            {{ form.reason.label(class="form-label fw-semibold") }}
+            {{ form.reason(class="form-control", rows=3, placeholder="Motivo da consulta...") }}
+          </div>
+
+          <div class="d-grid mt-4">
+            {{ form.submit(class="btn btn-success btn-lg rounded-pill") }}
+          </div>
+        </form>
+        {% endif %}
+      </div>
     </div>
   </div>
-  {% endif %}
 
-{% include 'partials/appointments_table.html' %}
+  <!-- Filtro colapsável -->
+  <button class="btn btn-outline-secondary btn-sm mb-3" type="button" data-bs-toggle="collapse" data-bs-target="#filterPeriod">
+    <i class="bi bi-funnel"></i> Filtrar Período
+  </button>
+  <div class="collapse mb-4" id="filterPeriod">
+    <div class="card card-body">
+      <div class="row g-3">
+        <div class="col-md-6">
+          <label class="form-label">De</label>
+          <input type="date" class="form-control">
+        </div>
+        <div class="col-md-6">
+          <label class="form-label">Até</label>
+          <input type="date" class="form-control">
+        </div>
+      </div>
+      <div class="d-flex justify-content-end mt-3">
+        <button class="btn btn-primary btn-sm"><i class="bi bi-check2-circle"></i> Aplicar Filtro</button>
+      </div>
+    </div>
+  </div>
 
-  <h2 class="mt-4">Agenda de Exames</h2>
+  <!-- Lista de Consultas -->
+  <h5 class="fw-bold mb-3"><i class="bi bi-list-check me-2"></i> Consultas Agendadas</h5>
+  <div id="appointmentsList">
+    {% for consulta in consultas %}
+    <div class="card shadow-sm mb-3 animate__animated animate__fadeIn">
+      <div class="card-body d-flex justify-content-between align-items-center">
+        <div>
+          <h6 class="fw-bold mb-1 text-primary">
+            <i class="bi bi-clock me-2"></i> {{ consulta.hora }}
+          </h6>
+          <p class="mb-0 text-muted small">
+            <i class="bi bi-person me-1"></i> Tutor: <span class="fw-semibold">{{ consulta.tutor.nome }}</span>
+          </p>
+          <span class="badge bg-info mt-1">{{ consulta.veterinario.nome }}</span>
+        </div>
+        <div>
+          <button class="btn btn-outline-primary btn-sm" data-bs-toggle="modal" data-bs-target="#appointmentEditModal" data-id="{{ consulta.id }}">
+            <i class="bi bi-pencil"></i>
+          </button>
+        </div>
+      </div>
+    </div>
+    {% else %}
+    <p class="text-muted fst-italic">Nenhuma consulta agendada.</p>
+    {% endfor %}
+  </div>
+
+  <!-- Agenda de Exames -->
+  <h5 class="fw-bold mt-5 mb-3"><i class="bi bi-flask me-2"></i> Agenda de Exames</h5>
   {% include 'partials/exam_appointments_table.html' %}
 
+</div>
+
+<!-- Modal Editar Consulta -->
 <div class="modal fade" id="appointmentEditModal" tabindex="-1" aria-hidden="true">
-  <div class="modal-dialog">
-    <div class="modal-content">
-      <div class="modal-header">
-        <h5 class="modal-title">Editar Consulta</h5>
+  <div class="modal-dialog modal-lg modal-dialog-centered">
+    <div class="modal-content rounded-4 shadow-lg">
+      <div class="modal-header bg-light">
+        <h5 class="modal-title fw-bold">
+          <i class="bi bi-pencil-square me-2"></i> Editar Consulta
+        </h5>
         <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
       </div>
-      <div class="modal-body"></div>
+      <div class="modal-body">
+        <div class="text-center text-muted">
+          <i class="bi bi-hourglass-split fs-2 d-block mb-2"></i>
+          Carregando...
+        </div>
+      </div>
     </div>
   </div>
 </div>
-</div>
 {% endblock %}
+
 {% block scripts %}
 {{ super() }}
 <script src="{{ url_for('static', filename='appointments_table.js') }}"></script>
