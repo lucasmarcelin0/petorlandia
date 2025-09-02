@@ -6912,6 +6912,17 @@ def schedule_exam(animal_id):
         .astimezone(timezone.utc)
         .replace(tzinfo=None)
     )
+    # Ensure requested time falls within the veterinarian's available schedule
+    available_times = get_available_times(specialist_id, scheduled_at_local.date())
+    if time_str not in available_times:
+        if available_times:
+            msg = (
+                'Horário selecionado não está disponível. '
+                f"Horários disponíveis: {', '.join(available_times)}"
+            )
+        else:
+            msg = 'Nenhum horário disponível para a data escolhida.'
+        return jsonify({'success': False, 'message': msg}), 400
     duration = timedelta(minutes=30)
     end = scheduled_at + duration
     conflict = (

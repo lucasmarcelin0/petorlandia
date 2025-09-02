@@ -73,7 +73,7 @@ def test_schedule_exam_message_and_confirm_by(client, monkeypatch):
     login(monkeypatch, fake_user)
     resp = client.post(f'/animal/{animal_id}/schedule_exam', json={
         'specialist_id': vet_id,
-        'date': '2024-05-21',
+        'date': '2024-05-20',
         'time': '09:00'
     }, headers={'Accept': 'application/json'})
     assert resp.status_code == 200
@@ -85,6 +85,22 @@ def test_schedule_exam_message_and_confirm_by(client, monkeypatch):
         assert 'Confirme' in msg.content
 
 
+def test_schedule_exam_rejects_outside_schedule(client, monkeypatch):
+    with flask_app.app_context():
+        tutor_id, vet_user_id, animal_id, vet_id = setup_data()
+    fake_user = type('U', (), {'id': tutor_id, 'worker': None, 'role': 'adotante', 'is_authenticated': True, 'name': 'Tutor'})()
+    login(monkeypatch, fake_user)
+    resp = client.post(
+        f'/animal/{animal_id}/schedule_exam',
+        json={'specialist_id': vet_id, 'date': '2024-05-20', 'time': '08:00'},
+        headers={'Accept': 'application/json'}
+    )
+    assert resp.status_code == 400
+    data = resp.get_json()
+    assert not data['success']
+    assert 'disponível' in data['message']
+
+
 def test_update_exam_appointment_changes_time(client, monkeypatch):
     with flask_app.app_context():
         tutor_id, vet_user_id, animal_id, vet_id = setup_data()
@@ -92,14 +108,14 @@ def test_update_exam_appointment_changes_time(client, monkeypatch):
     login(monkeypatch, fake_user)
     client.post(f'/animal/{animal_id}/schedule_exam', json={
         'specialist_id': vet_id,
-        'date': '2024-05-22',
+        'date': '2024-05-20',
         'time': '09:00'
     }, headers={'Accept': 'application/json'})
-    resp = client.post('/exam_appointment/1/update', json={'date': '2024-05-22', 'time': '10:00'}, headers={'Accept': 'application/json'})
+    resp = client.post('/exam_appointment/1/update', json={'date': '2024-05-20', 'time': '10:00'}, headers={'Accept': 'application/json'})
     assert resp.status_code == 200
     with flask_app.app_context():
         appt = ExamAppointment.query.get(1)
-        assert appt.scheduled_at == datetime(2024, 5, 22, 13, 0)
+        assert appt.scheduled_at == datetime(2024, 5, 20, 13, 0)
 
 
 def test_delete_exam_appointment_removes_record(client, monkeypatch):
@@ -109,7 +125,7 @@ def test_delete_exam_appointment_removes_record(client, monkeypatch):
     login(monkeypatch, fake_user)
     client.post(f'/animal/{animal_id}/schedule_exam', json={
         'specialist_id': vet_id,
-        'date': '2024-05-23',
+        'date': '2024-05-20',
         'time': '09:00'
     }, headers={'Accept': 'application/json'})
     resp = client.post('/exam_appointment/1/delete', headers={'Accept': 'application/json'})
@@ -178,7 +194,7 @@ def test_schedule_exam_same_user_auto_confirms(client, monkeypatch):
     login(monkeypatch, vet_user)
     resp = client.post(
         f'/animal/{animal_id}/schedule_exam',
-        json={'specialist_id': vet_id, 'date': '2024-05-24', 'time': '09:00'},
+        json={'specialist_id': vet_id, 'date': '2024-05-20', 'time': '09:00'},
         headers={'Accept': 'application/json'}
     )
     assert resp.status_code == 200
@@ -195,12 +211,12 @@ def test_schedule_exam_blocks_overlapping_time(client, monkeypatch):
     login(monkeypatch, fake_user)
     client.post(
         f'/animal/{animal_id}/schedule_exam',
-        json={'specialist_id': vet_id, 'date': '2024-05-25', 'time': '09:00'},
+        json={'specialist_id': vet_id, 'date': '2024-05-20', 'time': '09:00'},
         headers={'Accept': 'application/json'}
     )
     resp = client.post(
         f'/animal/{animal_id}/schedule_exam',
-        json={'specialist_id': vet_id, 'date': '2024-05-25', 'time': '09:15'},
+        json={'specialist_id': vet_id, 'date': '2024-05-20', 'time': '09:15'},
         headers={'Accept': 'application/json'}
     )
     assert resp.status_code == 400
@@ -215,17 +231,17 @@ def test_update_exam_appointment_blocks_overlap(client, monkeypatch):
     login(monkeypatch, fake_user)
     client.post(
         f'/animal/{animal_id}/schedule_exam',
-        json={'specialist_id': vet_id, 'date': '2024-05-26', 'time': '09:00'},
+        json={'specialist_id': vet_id, 'date': '2024-05-20', 'time': '09:00'},
         headers={'Accept': 'application/json'}
     )
     client.post(
         f'/animal/{animal_id}/schedule_exam',
-        json={'specialist_id': vet_id, 'date': '2024-05-26', 'time': '10:00'},
+        json={'specialist_id': vet_id, 'date': '2024-05-20', 'time': '10:00'},
         headers={'Accept': 'application/json'}
     )
     resp = client.post(
         '/exam_appointment/2/update',
-        json={'date': '2024-05-26', 'time': '09:15'},
+        json={'date': '2024-05-20', 'time': '09:15'},
         headers={'Accept': 'application/json'}
     )
     assert resp.status_code == 400
