@@ -3683,6 +3683,25 @@ def buscar_vacinas():
         print(f"Erro ao buscar vacinas: {e}")
         return jsonify([])  # Não quebra o front se der erro
 
+@app.route('/vacina_modelo', methods=['POST'])
+def criar_vacina_modelo():
+    data = request.get_json(silent=True) or {}
+    nome = (data.get('nome') or '').strip()
+    tipo = (data.get('tipo') or '').strip()
+    if not nome or not tipo:
+        return jsonify({'success': False, 'message': 'Nome e tipo são obrigatórios.'}), 400
+    try:
+        existente = VacinaModelo.query.filter(func.lower(VacinaModelo.nome) == nome.lower()).first()
+        if existente:
+            return jsonify({'success': False, 'message': 'Vacina já cadastrada.'}), 400
+        vacina = VacinaModelo(nome=nome, tipo=tipo)
+        db.session.add(vacina)
+        db.session.commit()
+        return jsonify({'success': True, 'vacina': {'id': vacina.id, 'nome': vacina.nome, 'tipo': vacina.tipo}})
+    except Exception as e:
+        db.session.rollback()
+        print('Erro ao salvar vacina modelo:', e)
+        return jsonify({'success': False, 'message': 'Erro ao salvar vacina.'}), 500
 
 from datetime import datetime
 
