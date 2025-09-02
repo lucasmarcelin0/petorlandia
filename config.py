@@ -44,3 +44,8 @@ class Config:
     # Endereço de retirada padrão (usado se não houver PickupLocation no banco)
     DEFAULT_PICKUP_ADDRESS = os.environ.get("DEFAULT_PICKUP_ADDRESS", "Rua Nove, 990")
 
+    # Exigir que nomes de exames correspondam a um ExameModelo existente
+    REQUIRE_EXISTING_EXAME_MODELO = bool(
+        int(os.environ.get("REQUIRE_EXISTING_EXAME_MODELO", "0"))
+    )
+
