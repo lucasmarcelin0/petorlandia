@@ -905,6 +905,9 @@ class ExameSolicitado(db.Model):
     bloco_id = db.Column(db.Integer, db.ForeignKey('bloco_exames.id'), nullable=False)
     nome = db.Column(db.String(120), nullable=False)
     justificativa = db.Column(db.Text)
+    status = db.Column(db.String(20), default='pendente')
+    resultado = db.Column(db.Text, nullable=True)
+    performed_at = db.Column(db.DateTime, nullable=True)
 
 
 class VacinaModelo(db.Model):

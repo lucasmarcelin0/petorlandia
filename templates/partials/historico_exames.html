@@ -27,9 +27,16 @@
     <div id="exames-view-{{ bloco.id }}">
       <ul class="list-group list-group-flush">
         {% for exame in bloco.exames %}
-        <li class="list-group-item">
-          🧪 <strong>{{ exame.nome }}</strong><br>
-          <em>{{ exame.justificativa }}</em>
+        <li class="list-group-item d-flex justify-content-between align-items-start">
+          <div>
+            🧪 <strong>{{ exame.nome }}</strong><br>
+            <em>{{ exame.justificativa }}</em>
+            {% if exame.resultado %}<div><small>Resultado: {{ exame.resultado }}</small></div>{% endif %}
+            {% if exame.performed_at %}<div><small>Realizado em {{ exame.performed_at|format_datetime_brazil('%d/%m/%Y') }}</small></div>{% endif %}
+          </div>
+          {% if exame.status == 'concluido' %}
+          <i class="bi bi-check-circle-fill text-success" title="Concluído"></i>
+          {% endif %}
         </li>
         {% endfor %}
       </ul>
@@ -55,6 +62,22 @@
             <div class="mb-2">
               <label class="form-label">Justificativa</label>
               <textarea class="form-control exame-justificativa" rows="2">{{ exame.justificativa or '' }}</textarea>
+            </div>
+            <div class="mb-2">
+              <label class="form-label">Status</label>
+              <select class="form-select exame-status">
+                <option value="pendente" {% if exame.status == 'pendente' %}selected{% endif %}>Pendente</option>
+                <option value="concluido" {% if exame.status == 'concluido' %}selected{% endif %}>Concluído</option>
+                <option value="cancelado" {% if exame.status == 'cancelado' %}selected{% endif %}>Cancelado</option>
+              </select>
+            </div>
+            <div class="mb-2">
+              <label class="form-label">Resultado</label>
+              <textarea class="form-control exame-resultado" rows="2">{{ exame.resultado or '' }}</textarea>
+            </div>
+            <div class="mb-2">
+              <label class="form-label">Data de Realização</label>
+              <input type="date" class="form-control exame-performed_at" value="{{ exame.performed_at.date() if exame.performed_at else '' }}">
             </div>
             <button type="button" class="btn btn-danger btn-sm btn-remover" onclick="removerExame(this)">🗑️ Remover</button>
           </div>
@@ -113,6 +136,22 @@ function adicionarExame(blocoId) {
       <div class="mb-2">
         <label class="form-label">Justificativa</label>
         <textarea class="form-control exame-justificativa" rows="2"></textarea>
+      </div>
+      <div class="mb-2">
+        <label class="form-label">Status</label>
+        <select class="form-select exame-status">
+          <option value="pendente" selected>Pendente</option>
+          <option value="concluido">Concluído</option>
+          <option value="cancelado">Cancelado</option>
+        </select>
+      </div>
+      <div class="mb-2">
+        <label class="form-label">Resultado</label>
+        <textarea class="form-control exame-resultado" rows="2"></textarea>
+      </div>
+      <div class="mb-2">
+        <label class="form-label">Data de Realização</label>
+        <input type="date" class="form-control exame-performed_at">
       </div>
       <div class="d-flex gap-2">
         <button type="button" class="btn btn-danger btn-sm btn-remover" onclick="removerExame(this)">🗑️ Remover</button>
@@ -184,13 +223,16 @@ function salvarBlocoExames(blocoId, consultaId) {
   document.querySelectorAll(`#exames-container-${blocoId} .exame-card`).forEach(card => {
     const nome = card.querySelector('.exame-nome')?.value.trim();
     const justificativa = card.querySelector('.exame-justificativa')?.value.trim();
+    const status = card.querySelector('.exame-status')?.value || 'pendente';
+    const resultado = card.querySelector('.exame-resultado')?.value.trim();
+    const performed_at = card.querySelector('.exame-performed_at')?.value;
 
     if (!nome || !justificativa) {
       valid = false;
       card.classList.add('border-danger');
     } else {
       card.classList.remove('border-danger');
-      exames.push({ nome, justificativa });
+      exames.push({ nome, justificativa, status, resultado, performed_at });
     }
   });
 

@@ -4145,7 +4145,10 @@ def salvar_bloco_exames(animal_id):
         exame_modelo = ExameSolicitado(
             bloco_id=bloco.id,
             nome=exame.get('nome'),
-            justificativa=exame.get('justificativa')
+            justificativa=exame.get('justificativa'),
+            status=exame.get('status', 'pendente'),
+            resultado=exame.get('resultado'),
+            performed_at=datetime.fromisoformat(exame['performed_at']) if exame.get('performed_at') else None,
         )
         db.session.add(exame_modelo)
 
@@ -4243,6 +4246,10 @@ def editar_exame(exame_id):
 
     exame.nome = data.get('nome', exame.nome)
     exame.justificativa = data.get('justificativa', exame.justificativa)
+    exame.status = data.get('status', exame.status)
+    exame.resultado = data.get('resultado', exame.resultado)
+    performed_at = data.get('performed_at')
+    exame.performed_at = datetime.fromisoformat(performed_at) if performed_at else exame.performed_at
 
     db.session.commit()
     return jsonify(success=True)
@@ -4267,6 +4274,10 @@ def atualizar_bloco_exames(bloco_id):
         ex_id = ex_json.get('id')
         nome  = ex_json.get('nome', '').strip()
         just  = ex_json.get('justificativa', '').strip()
+        status = ex_json.get('status', 'pendente')
+        resultado = ex_json.get('resultado')
+        performed_at_str = ex_json.get('performed_at')
+        performed_at = datetime.fromisoformat(performed_at_str) if performed_at_str else None
 
         if not nome:                 # pulamos entradas vazias
             continue
@@ -4276,13 +4287,19 @@ def atualizar_bloco_exames(bloco_id):
             exame = existentes[ex_id]
             exame.nome = nome
             exame.justificativa = just
+            exame.status = status
+            exame.resultado = resultado
+            exame.performed_at = performed_at
             enviados_ids.add(ex_id)
         else:
             # --- criar exame novo ---
             novo = ExameSolicitado(
                 bloco=bloco,
                 nome=nome,
-                justificativa=just
+                justificativa=just,
+                status=status,
+                resultado=resultado,
+                performed_at=performed_at,
             )
             db.session.add(novo)
 
