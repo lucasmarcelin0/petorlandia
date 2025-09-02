@@ -391,7 +391,7 @@ def reset_password_request():
         flash('E-mail não encontrado.', 'danger')
     elif request.method == 'POST' and request.accept_mimetypes['application/json'] > request.accept_mimetypes['text/html']:
         return jsonify({'success': False, 'errors': form.errors}), 400
-    return render_template('reset_password_request.html', form=form)
+    return render_template('auth/reset_password_request.html', form=form)
 
 
 
@@ -411,7 +411,7 @@ def reset_password(token):
             db.session.commit()
             flash('Sua senha foi redefinida. Você já pode entrar!', 'success')
             return redirect(url_for('login_view'))
-    return render_template('reset_password.html', form=form)
+    return render_template('auth/reset_password.html', form=form)
 
 
 
@@ -456,7 +456,7 @@ def register():
             if request.accept_mimetypes['application/json'] > request.accept_mimetypes['text/html']:
                 return jsonify({'success': False, 'errors': {'email': ['Email já está em uso.']}}), 400
             flash('Email já está em uso.', 'danger')
-            return render_template('register.html', form=form, endereco=None)
+            return render_template('auth/register.html', form=form, endereco=None)
 
         # Cria o endereço
         endereco = Endereco(
@@ -500,7 +500,7 @@ def register():
     if request.method == 'POST' and request.accept_mimetypes['application/json'] > request.accept_mimetypes['text/html']:
         return jsonify({'success': False, 'errors': form.errors}), 400
 
-    return render_template('register.html', form=form, endereco=None)
+    return render_template('auth/register.html', form=form, endereco=None)
 
 
 
@@ -613,7 +613,7 @@ def login_view():
             flash('Email ou senha inválidos.', 'danger')
     elif request.method == 'POST' and request.accept_mimetypes['application/json'] > request.accept_mimetypes['text/html']:
         return jsonify({'success': False, 'errors': form.errors}), 400
-    return render_template('login.html', form=form)
+    return render_template('auth/login.html', form=form)
 
 
 @app.route('/logout')
@@ -678,7 +678,7 @@ def profile():
     ).order_by(Transaction.date.desc()).limit(10).all()
 
     return render_template(
-        'profile.html',
+        'auth/profile.html',
         user=current_user,
         form=form,
         delete_form=delete_form,
@@ -704,7 +704,7 @@ def change_password():
             return redirect(url_for('profile'))
     elif request.method == 'POST' and request.accept_mimetypes['application/json'] > request.accept_mimetypes['text/html']:
         return jsonify({'success': False, 'errors': form.errors}), 400
-    return render_template('change_password.html', form=form)
+    return render_template('auth/change_password.html', form=form)
 
 
 @app.route('/delete_account', methods=['POST'])
@@ -6131,7 +6131,7 @@ def legacy_pagamento(status):
 
     if not payment:
         if mp_status in {"success", "completed", "approved", "sucesso"}:
-            return render_template("sucesso.html")
+            return render_template("auth/sucesso.html")
         abort(404)
 
     return redirect(url_for("payment_status", payment_id=payment.id, status=mp_status))
