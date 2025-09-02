@@ -821,6 +821,16 @@ class ExamAppointment(db.Model):
         if not self.confirm_by:
             self.confirm_by = (self.request_time or datetime.utcnow()) + timedelta(hours=2)
 
+    @property
+    def status_display(self):
+        if self.status == 'confirmed':
+            return 'Aceito'
+        if self.status == 'canceled':
+            return 'Cancelado'
+        if self.confirm_by and datetime.utcnow() > self.confirm_by:
+            return 'Prazo expirado'
+        return 'Aguardando aceitação'
+
 # Associação many-to-many entre eventos e colaboradores
 EventoColaboradores = db.Table(
     'evento_colaboradores',
