@@ -11,6 +11,33 @@
     <ul id="sugestoes-medicamentos" class="list-group position-absolute w-100" style="z-index: 10; max-height: 300px; overflow-y: auto; display: none;"></ul>
   </div>
 
+  <!-- Formulário para adicionar novo medicamento -->
+  <div id="novo-medicamento-form" class="card p-3 mb-3 d-none">
+    <h6 class="mb-3">Adicionar novo medicamento</h6>
+    <div class="mb-2">
+      <label for="novo-nome" class="form-label">Nome</label>
+      <input type="text" id="novo-nome" class="form-control">
+    </div>
+    <div class="mb-2">
+      <label for="novo-principio" class="form-label">Princípio ativo</label>
+      <input type="text" id="novo-principio" class="form-control">
+    </div>
+    <div class="row">
+      <div class="col-md-6 mb-2">
+        <label for="novo-forma" class="form-label">Forma</label>
+        <input type="text" id="novo-forma" class="form-control" placeholder="Ex: comprimido">
+      </div>
+      <div class="col-md-6 mb-2">
+        <label for="novo-concentracao" class="form-label">Concentração</label>
+        <input type="text" id="novo-concentracao" class="form-control" placeholder="Ex: 500 mg">
+      </div>
+    </div>
+    <div>
+      <button type="button" class="btn btn-primary btn-sm" id="btn-salvar-medicamento">Salvar</button>
+      <button type="button" class="btn btn-secondary btn-sm" id="btn-cancelar-medicamento">Cancelar</button>
+    </div>
+  </div>
+
   <!-- Card de informações do medicamento -->
   <div id="info-medicamento" class="card border-success mb-3 d-none">
     <div class="card-header bg-success text-white">
@@ -126,6 +153,57 @@
     bulaLink.classList.toggle('text-primary', m.bula);
 
     document.getElementById('info-medicamento').classList.remove('d-none');
+  }
+
+  function mostrarFormNovoMedicamento(nome = '') {
+    document.getElementById('novo-nome').value = nome;
+    document.getElementById('novo-principio').value = '';
+    document.getElementById('novo-forma').value = '';
+    document.getElementById('novo-concentracao').value = '';
+    document.getElementById('novo-medicamento-form').classList.remove('d-none');
+  }
+
+  function cancelarNovoMedicamento() {
+    document.getElementById('novo-medicamento-form').classList.add('d-none');
+  }
+
+  async function salvarNovoMedicamento() {
+    const nome = document.getElementById('novo-nome').value.trim();
+    const principio = document.getElementById('novo-principio').value.trim();
+    const forma = document.getElementById('novo-forma').value.trim();
+    const concentracao = document.getElementById('novo-concentracao').value.trim();
+
+    if (!nome || !principio || !forma || !concentracao) {
+      mostrarFeedback('Preencha todos os campos do novo medicamento.', 'danger');
+      return;
+    }
+
+    try {
+      let res = await fetch('/medicamento', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+        body: JSON.stringify({ nome, principio_ativo: principio })
+      });
+      let data = await res.json();
+      if (!res.ok || !data.success) throw new Error(data.message || 'Erro ao salvar medicamento');
+
+      res = await fetch('/apresentacao_medicamento', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+        body: JSON.stringify({ medicamento_id: data.id, forma, concentracao })
+      });
+      data = await res.json();
+      if (!res.ok || !data.success) throw new Error(data.message || 'Erro ao salvar apresentação');
+
+      mostrarFeedback('Medicamento adicionado com sucesso!', 'success');
+      cancelarNovoMedicamento();
+      const input = document.getElementById('nome-medicamento');
+      input.value = nome;
+      input.dispatchEvent(new Event('input'));
+    } catch (err) {
+      console.error(err);
+      mostrarFeedback(err.message || 'Erro ao adicionar medicamento', 'danger');
+    }
   }
 
   // Alternar entre modos de prescrição
@@ -310,37 +388,49 @@
         sugestoes.style.display = 'none';
         return;
       }
-      
+
       sugestoes.innerHTML = '<li class="list-group-item text-muted">Buscando...</li>';
       sugestoes.style.display = 'block';
-      
+
       fetch(`/buscar_medicamentos?q=${encodeURIComponent(q)}`)
         .then(res => {
           if (!res.ok) throw new Error('Erro na busca');
           return res.json();
         })
         .then(data => {
-          if (data.length === 0) {
-            sugestoes.innerHTML = '<li class="list-group-item text-muted">Nenhum medicamento encontrado</li>';
-            return;
-          }
-          
           sugestoes.innerHTML = '';
-          data.forEach(item => {
-            const li = document.createElement('li');
-            li.className = 'list-group-item list-group-item-action';
-            li.textContent = item.nome;
-            li.onclick = () => {
-              medicamentoSelecionado = item;
-              preencherCardMedicamento(item);
-              input.value = item.nome;
-              document.getElementById('dose').value = item.dosagem_recomendada || '';
-              document.getElementById('duracao').value = item.duracao_tratamento || '';
-              sugestoes.innerHTML = '';
-              sugestoes.style.display = 'none';
-            };
-            sugestoes.appendChild(li);
-          });
+
+          if (data.length === 0) {
+            const none = document.createElement('li');
+            none.className = 'list-group-item text-muted';
+            none.textContent = 'Nenhum medicamento encontrado';
+            sugestoes.appendChild(none);
+          } else {
+            data.forEach(item => {
+              const li = document.createElement('li');
+              li.className = 'list-group-item list-group-item-action';
+              li.textContent = item.nome;
+              li.onclick = () => {
+                medicamentoSelecionado = item;
+                preencherCardMedicamento(item);
+                input.value = item.nome;
+                document.getElementById('dose').value = item.dosagem_recomendada || '';
+                document.getElementById('duracao').value = item.duracao_tratamento || '';
+                sugestoes.innerHTML = '';
+                sugestoes.style.display = 'none';
+              };
+              sugestoes.appendChild(li);
+            });
+          }
+
+          const addLi = document.createElement('li');
+          addLi.className = 'list-group-item list-group-item-action text-primary';
+          addLi.textContent = 'Adicionar medicamento';
+          addLi.onclick = () => {
+            mostrarFormNovoMedicamento(input.value.trim());
+            sugestoes.style.display = 'none';
+          };
+          sugestoes.appendChild(addLi);
         })
         .catch(err => {
           sugestoes.innerHTML = '<li class="list-group-item text-danger">Erro ao buscar medicamentos</li>';
@@ -361,6 +451,8 @@
     // Botões
     document.getElementById('btn-adicionar').addEventListener('click', adicionarMedicamento);
     document.getElementById('btn-finalizar').addEventListener('click', finalizarBlocoPrescricoes);
+    document.getElementById('btn-salvar-medicamento').addEventListener('click', salvarNovoMedicamento);
+    document.getElementById('btn-cancelar-medicamento').addEventListener('click', cancelarNovoMedicamento);
   });
 </script>
 
