@@ -112,8 +112,9 @@
   </form>
 {% elif appointment_form %}
   <hr class="my-4">
-  <h5>Agendar Retorno</h5>
-  <form method="POST" action="{{ url_for('agendar_retorno', consulta_id=consulta.id) }}" class="row g-3">
+  <button type="button" class="btn btn-outline-primary mb-3" id="toggle-retorno-form">Agendar Retorno</button>
+  <form id="agendar-retorno-form" method="POST" action="{{ url_for('agendar_retorno', consulta_id=consulta.id) }}" class="row g-3 d-none">
+    <h5 class="mb-3">Agendar Retorno</h5>
     {{ appointment_form.hidden_tag() }}
     <input type="hidden" name="animal_id" value="{{ animal.id }}">
     <input type="hidden" name="veterinario_id" value="{{ consulta.veterinario.veterinario.id }}">
@@ -181,6 +182,15 @@ document.addEventListener('DOMContentLoaded', function() {
 
   // --- Retorno edit/delete handlers ---
   const retornoContainer = document.getElementById('retorno-container');
+  const toggleRetornoBtn = document.getElementById('toggle-retorno-form');
+  if (toggleRetornoBtn) {
+    toggleRetornoBtn.addEventListener('click', function() {
+      const form = document.getElementById('agendar-retorno-form');
+      if (form) {
+        form.classList.toggle('d-none');
+      }
+    });
+  }
   if (retornoContainer) {
     document.addEventListener('click', function(event) {
       const card = event.target.closest('#retorno-card');
