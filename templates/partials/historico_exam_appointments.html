@@ -4,7 +4,11 @@
     {% for appt in appointments %}
       <li class="list-group-item" id="exam-appt-{{ appt.id }}">
         <div class="d-flex justify-content-between align-items-center exam-view">
-          <span>{{ appt.scheduled_at|datetime_brazil }} - {{ appt.specialist.user.name }}</span>
+          <div>
+            <span>{{ appt.scheduled_at|datetime_brazil }} - {{ appt.specialist.user.name }}</span>
+            {% set status = appt.status_display %}
+            <span class="badge ms-2 {% if status == 'Aceito' %}bg-success{% elif status == 'Cancelado' %}bg-danger{% elif status == 'Prazo expirado' %}bg-secondary{% else %}bg-warning text-dark{% endif %}">{{ status }}</span>
+          </div>
           <div class="btn-group">
             <button type="button" class="btn btn-sm btn-outline-primary" onclick="editarAgendamentoExame({{ appt.id }})">✏️</button>
             <button type="button" class="btn btn-sm btn-outline-danger" onclick="deletarAgendamentoExame({{ appt.id }})">🗑️</button>
