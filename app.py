@@ -3570,7 +3570,7 @@ def relatorio_racoes():
     for r in racoes_recentes:
         racoes_por_tipo[r.tipo_racao].append(r)
 
-    return render_template("relatorio_racoes.html", racoes_por_tipo=racoes_por_tipo)
+    return render_template("loja/relatorio_racoes.html", racoes_por_tipo=racoes_por_tipo)
 
 
 @app.route("/historico_animal/<int:animal_id>")
@@ -3587,7 +3587,7 @@ def historico_animal(animal_id):
 def detalhes_racao(tipo_id):
     tipo = TipoRacao.query.get_or_404(tipo_id)
     racoes = tipo.usos  # usa o backref 'usos'
-    return render_template('detalhes_racao.html', tipo=tipo, racoes=racoes)
+    return render_template('loja/detalhes_racao.html', tipo=tipo, racoes=racoes)
 
 
 
@@ -4634,7 +4634,7 @@ def create_order():
 
     total_quantity = sum(i.quantity for i in order.items)
     return render_template(
-        'create_order.html',
+        'loja/create_order.html',
         form=form,
         delivery_form=delivery_form,
         order=order,
@@ -6154,7 +6154,7 @@ def edit_order_address(order_id):
         return redirect(url_for("loja"))
 
     payment_id = order.payment.id if order.payment else None
-    return render_template("edit_address.html", form=form, payment_id=payment_id)
+    return render_template("loja/edit_address.html", form=form, payment_id=payment_id)
 
 
 @app.route("/payment_status/<int:payment_id>")
@@ -6195,7 +6195,7 @@ def payment_status(payment_id):
     edit_address_url = url_for('edit_order_address', order_id=payment.order_id) if order else None
 
     return render_template(
-        "payment_status.html",
+        "loja/payment_status.html",
         payment          = payment,
         result           = result,
         req_id           = delivery_req.id if delivery_req else None,
