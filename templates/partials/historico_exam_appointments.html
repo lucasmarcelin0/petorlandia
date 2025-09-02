@@ -1,0 +1,12 @@
+{% if appointments %}
+  <h5>Exames Agendados</h5>
+  <ul class="list-group">
+    {% for appt in appointments %}
+      <li class="list-group-item d-flex justify-content-between">
+        <span>{{ appt.scheduled_at|datetime_brazil }} - {{ appt.specialist.user.name }}</span>
+      </li>
+    {% endfor %}
+  </ul>
+{% else %}
+  <p class="text-muted">Nenhum exame agendado.</p>
+{% endif %}
