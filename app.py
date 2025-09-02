@@ -6703,8 +6703,12 @@ def api_clinic_appointments(clinica_id):
 @app.route('/api/specialists')
 @login_required
 def api_specialists():
-    from models import Veterinario
-    vets = Veterinario.query.all()
+    from models import Veterinario, Specialty
+    specialty_id = request.args.get('specialty_id', type=int)
+    query = Veterinario.query
+    if specialty_id:
+        query = query.join(Veterinario.specialties).filter(Specialty.id == specialty_id)
+    vets = query.all()
     return jsonify([
         {
             'id': v.id,
@@ -6713,6 +6717,14 @@ def api_specialists():
         }
         for v in vets
     ])
+
+
+@app.route('/api/specialties')
+@login_required
+def api_specialties():
+    from models import Specialty
+    specs = Specialty.query.order_by(Specialty.nome).all()
+    return jsonify([{ 'id': s.id, 'nome': s.nome } for s in specs])
 
 
 @app.route('/api/specialist/<int:veterinario_id>/available_times')
@@ -6729,7 +6741,7 @@ def api_specialist_available_times(veterinario_id):
 @app.route('/animal/<int:animal_id>/schedule_exam', methods=['POST'])
 @login_required
 def schedule_exam(animal_id):
-    from models import ExamAppointment
+    from models import ExamAppointment, Appointment, AgendaEvento, Veterinario, Animal
     data = request.get_json(silent=True) or {}
     specialist_id = data.get('specialist_id')
     date_str = data.get('date')
@@ -6737,14 +6749,33 @@ def schedule_exam(animal_id):
     if not all([specialist_id, date_str, time_str]):
         return jsonify({'success': False, 'message': 'Dados incompletos.'}), 400
     scheduled_at = datetime.strptime(f"{date_str} {time_str}", '%Y-%m-%d %H:%M')
+    conflito = (
+        Appointment.query.filter_by(veterinario_id=specialist_id, scheduled_at=scheduled_at).first()
+        or ExamAppointment.query.filter_by(specialist_id=specialist_id, scheduled_at=scheduled_at).first()
+    )
+    if conflito:
+        return jsonify({'success': False, 'message': 'Horário indisponível.'}), 400
     appt = ExamAppointment(
         animal_id=animal_id,
         specialist_id=specialist_id,
         scheduled_at=scheduled_at,
     )
+    vet = Veterinario.query.get(specialist_id)
+    animal = Animal.query.get(animal_id)
+    if vet and animal:
+        evento = AgendaEvento(
+            titulo=f"Exame de {animal.name}",
+            inicio=scheduled_at,
+            fim=scheduled_at + timedelta(minutes=30),
+            responsavel_id=vet.user_id,
+            clinica_id=animal.clinica_id,
+        )
+        db.session.add(evento)
     db.session.add(appt)
     db.session.commit()
-    return jsonify({'success': True, 'confirm_by': appt.confirm_by.isoformat()})
+    appointments = ExamAppointment.query.filter_by(animal_id=animal_id).order_by(ExamAppointment.scheduled_at.desc()).all()
+    html = render_template('partials/historico_exam_appointments.html', appointments=appointments)
+    return jsonify({'success': True, 'confirm_by': appt.confirm_by.isoformat(), 'html': html})
 
 
 @app.route('/exam_appointment/<int:appointment_id>/confirm', methods=['POST'])
@@ -6757,6 +6788,18 @@ def confirm_exam_appointment(appointment_id):
     appt.status = 'confirmed'
     db.session.commit()
     return jsonify({'success': True})
+
+
+@app.route('/animal/<int:animal_id>/exam_appointments')
+@login_required
+def animal_exam_appointments(animal_id):
+    from models import ExamAppointment
+    appointments = (
+        ExamAppointment.query.filter_by(animal_id=animal_id)
+        .order_by(ExamAppointment.scheduled_at.desc())
+        .all()
+    )
+    return render_template('partials/historico_exam_appointments.html', appointments=appointments)
 
 
 @app.route('/servico', methods=['POST'])

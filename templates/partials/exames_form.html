@@ -35,6 +35,10 @@
 <div id="agendar-exame" class="mt-5">
   <h5 class="mb-3">Agendar Exame</h5>
   <div class="mb-3">
+    <label for="exam-specialty" class="form-label">Especialidade</label>
+    <select id="exam-specialty" class="form-select"></select>
+  </div>
+  <div class="mb-3">
     <label for="exam-specialist" class="form-label">Especialista</label>
     <select id="exam-specialist" class="form-select"></select>
   </div>
@@ -47,6 +51,12 @@
     <select id="exam-time" class="form-select"><option value="">Selecione...</option></select>
   </div>
   <button type="button" class="btn btn-outline-primary" onclick="agendarExame()">📅 Agendar Exame</button>
+</div>
+
+<!-- Exames agendados -->
+<div id="historico-agendamentos" class="mt-5">
+  {% set appointments = animal.exam_appointments %}
+  {% include 'partials/historico_exam_appointments.html' %}
 </div>
 
 <!-- Histórico de exames -->
@@ -97,20 +107,37 @@
         });
   });
 
+    const specialtySelect = document.getElementById('exam-specialty');
     const specialistSelect = document.getElementById('exam-specialist');
-    if (specialistSelect) {
-      fetch('/api/specialists')
+    if (specialtySelect && specialistSelect) {
+      fetch('/api/specialties')
         .then(r => r.json())
         .then(data => {
-          specialistSelect.innerHTML = '<option value="">Selecione...</option>';
+          specialtySelect.innerHTML = '<option value="">Selecione...</option>';
           data.forEach(sp => {
             const opt = document.createElement('option');
-            const esp = sp.especialidades.join(', ');
             opt.value = sp.id;
-            opt.textContent = esp ? `${sp.nome} - ${esp}` : sp.nome;
-            specialistSelect.appendChild(opt);
+            opt.textContent = sp.nome;
+            specialtySelect.appendChild(opt);
           });
         });
+
+      specialtySelect.addEventListener('change', () => {
+        const specId = specialtySelect.value;
+        specialistSelect.innerHTML = '<option value="">Selecione...</option>';
+        if (!specId) return;
+        fetch(`/api/specialists?specialty_id=${specId}`)
+          .then(r => r.json())
+          .then(data => {
+            data.forEach(sp => {
+              const opt = document.createElement('option');
+              const esp = sp.especialidades.join(', ');
+              opt.value = sp.id;
+              opt.textContent = esp ? `${sp.nome} - ${esp}` : sp.nome;
+              specialistSelect.appendChild(opt);
+            });
+          });
+      });
       specialistSelect.addEventListener('change', atualizarHorarios);
       document.getElementById('exam-date').addEventListener('change', atualizarHorarios);
     }
@@ -218,8 +245,14 @@
       body: JSON.stringify({ specialist_id: vetId, date, time })
     });
     if (resp.ok) {
+      const data = await resp.json();
       mostrarFeedback('Exame agendado! Aguarde confirmação do especialista.');
       document.getElementById('exam-time').innerHTML = '<option value="">Selecione...</option>';
+      if (data.html) {
+        const hist = document.getElementById('historico-agendamentos');
+        hist.innerHTML = data.html;
+      }
+      atualizarHorarios();
     } else {
       mostrarFeedback('Erro ao agendar exame.', 'danger');
     }
