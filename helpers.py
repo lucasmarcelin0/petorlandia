@@ -5,10 +5,13 @@ from flask_login import current_user
 from functools import wraps
 
 
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
+from zoneinfo import ZoneInfo
 from itertools import groupby
 from dateutil.relativedelta import relativedelta
 from sqlalchemy import case
+
+BR_TZ = ZoneInfo("America/Sao_Paulo")
 
 def parse_data_nascimento(data_str):
     """
@@ -114,9 +117,15 @@ def is_slot_available(veterinario_id, scheduled_at):
     if not available:
         return False
 
+    scheduled_at_utc = (
+        scheduled_at
+        .replace(tzinfo=BR_TZ)
+        .astimezone(timezone.utc)
+        .replace(tzinfo=None)
+    )
     conflict = (
         Appointment.query
-        .filter_by(veterinario_id=veterinario_id, scheduled_at=scheduled_at)
+        .filter_by(veterinario_id=veterinario_id, scheduled_at=scheduled_at_utc)
         .first()
     )
     return conflict is None
@@ -231,9 +240,18 @@ def get_available_times(veterinario_id, date):
                 if intervalo_inicio <= current < intervalo_fim:
                     current += step
                     continue
+            current_utc = (
+                current.replace(tzinfo=BR_TZ)
+                .astimezone(timezone.utc)
+                .replace(tzinfo=None)
+            )
             conflito = (
-                Appointment.query.filter_by(veterinario_id=veterinario_id, scheduled_at=current).first()
-                or ExamAppointment.query.filter_by(specialist_id=veterinario_id, scheduled_at=current).first()
+                Appointment.query.filter_by(
+                    veterinario_id=veterinario_id, scheduled_at=current_utc
+                ).first()
+                or ExamAppointment.query.filter_by(
+                    specialist_id=veterinario_id, scheduled_at=current_utc
+                ).first()
             )
             if not conflito:
                 available.append(current.strftime('%H:%M'))
