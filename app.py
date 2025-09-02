@@ -1423,7 +1423,7 @@ def plano_saude_overview():
     subscriptions = {s.animal_id: s for s in subs}
 
     return render_template(
-        "plano_saude_overview.html",
+        "planos/plano_saude_overview.html",
         animais=animais_do_usuario,
         subscriptions=subscriptions,   # ← agora o template encontra
         user=current_user,
