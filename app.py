@@ -334,6 +334,8 @@ def inject_pending_exam_count():
         pending = ExamAppointment.query.filter_by(
             specialist_id=current_user.veterinario.id, status='pending'
         ).count()
+        seen = session.get('exam_pending_seen_count', 0)
+        pending = max(pending - seen, 0)
     else:
         pending = 0
     return dict(pending_exam_count=pending)
@@ -355,6 +357,8 @@ def inject_pending_appointment_count():
             Appointment.status == "scheduled",
             Appointment.scheduled_at >= now + timedelta(hours=2),
         ).count()
+        seen = session.get('appointment_pending_seen_count', 0)
+        pending = max(pending - seen, 0)
     else:
         pending = 0
     return dict(pending_appointment_count=pending)
@@ -6502,6 +6506,16 @@ def appointments():
             .order_by(Appointment.scheduled_at.desc())
             .all()
         )
+        from models import ExamAppointment
+
+        session['exam_pending_seen_count'] = ExamAppointment.query.filter_by(
+            specialist_id=veterinario.id, status='pending'
+        ).count()
+        session['appointment_pending_seen_count'] = Appointment.query.filter(
+            Appointment.veterinario_id == veterinario.id,
+            Appointment.status == 'scheduled',
+            Appointment.scheduled_at >= now + timedelta(hours=2),
+        ).count()
 
         return render_template(
             'agendamentos/edit_vet_schedule.html',
