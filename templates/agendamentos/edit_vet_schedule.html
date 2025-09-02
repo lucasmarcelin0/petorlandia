@@ -7,6 +7,20 @@
   <button class="btn btn-primary mb-3" onclick="toggleScheduleForm()">Adicionar Horário</button>
   <button class="btn btn-secondary mb-3 ms-2" onclick="toggleAppointmentForm()">Agendar Consulta</button>
 
+  <form method="get" class="row g-3 mb-4">
+    <div class="col-auto">
+      <label class="form-label">Início</label>
+      <input type="date" name="start" value="{{ start_dt.date() }}" class="form-control">
+    </div>
+    <div class="col-auto">
+      <label class="form-label">Fim</label>
+      <input type="date" name="end" value="{{ (end_dt - timedelta(days=1)).date() }}" class="form-control">
+    </div>
+    <div class="col-auto align-self-end">
+      <button class="btn btn-outline-primary">Filtrar</button>
+    </div>
+  </form>
+
   <div id="schedule-form-container" class="card mb-4 d-none">
     <div class="card-body">
       <h5 id="schedule-form-title" class="card-title">Adicionar Horário</h5>
@@ -110,9 +124,21 @@
     {% endfor %}
   </ul>
 
-  <h3 class="text-primary"><i class="fas fa-calendar-alt me-2"></i>Consultas Agendadas</h3>
+  <h3 class="text-primary"><i class="fas fa-calendar-alt me-2"></i>Agendamentos</h3>
   <ul class="list-group mb-4">
-    {% for appt in appointments_upcoming %}
+    {% for item in appointments_upcoming %}
+      {% set appt = item.appt %}
+      {% if item.kind == 'exame' %}
+      <li class="list-group-item list-group-item-success" data-type="exame">
+        <div class="d-flex justify-content-between align-items-center">
+          <span>{{ appt.scheduled_at.strftime('%d/%m/%Y %H:%M') }} - {{ appt.animal.name }} ({{ appt.animal.owner.name }}) <span class="badge bg-info ms-2">Exame</span></span>
+          <div class="btn-group">
+            <a href="{{ url_for('ficha_animal', animal_id=appt.animal_id) }}" class="btn btn-sm btn-outline-primary">📋 Ficha Animal</a>
+            <a href="{{ url_for('ficha_tutor', tutor_id=appt.animal.owner.id) }}" class="btn btn-sm btn-outline-secondary">👤 Ficha Tutor</a>
+          </div>
+        </div>
+      </li>
+      {% else %}
       <li class="list-group-item list-group-item-success appointment-item"
           data-id="{{ appt.id }}"
           data-date="{{ appt.scheduled_at.strftime('%Y-%m-%d') }}"
@@ -125,9 +151,12 @@
           data-animal-url="{{ url_for('ficha_animal', animal_id=appt.animal_id) }}"
           data-tutor-url="{{ url_for('ficha_tutor', tutor_id=appt.tutor_id) }}"
           data-consulta-url="{{ url_for('consulta_direct', animal_id=appt.animal_id) }}"
-          data-notes="{{ appt.notes or '' }}">
+          data-notes="{{ appt.notes or '' }}"
+          data-type="{{ item.kind }}">
         <div class="d-flex justify-content-between align-items-center">
-          <span>{{ appt.scheduled_at.strftime('%d/%m/%Y %H:%M') }} - {{ appt.animal.name }} ({{ appt.tutor.name }})</span>
+          <span>{{ appt.scheduled_at.strftime('%d/%m/%Y %H:%M') }} - {{ appt.animal.name }} ({{ appt.tutor.name }})
+            {% if item.kind == 'retorno' %}<span class="badge bg-warning text-dark ms-2">Retorno</span>{% endif %}
+          </span>
           <div class="btn-group">
             <a href="{{ url_for('ficha_animal', animal_id=appt.animal_id) }}" class="btn btn-sm btn-outline-primary">📋 Ficha Animal</a>
             <a href="{{ url_for('ficha_tutor', tutor_id=appt.tutor_id) }}" class="btn btn-sm btn-outline-secondary">👤 Ficha Tutor</a>
@@ -135,13 +164,17 @@
           </div>
         </div>
       </li>
+      {% endif %}
     {% else %}
-      <li class="list-group-item">Nenhuma consulta agendada.</li>
+      <li class="list-group-item">Nenhum agendamento encontrado.</li>
     {% endfor %}
   </ul>
 
-  <h4 class="text-secondary mt-4"><i class="fas fa-history me-2"></i>Consultas Passadas</h4>
-  <ul class="list-group mb-4">
+  <h4 class="text-secondary mt-4">
+    <i class="fas fa-history me-2"></i>Agendamentos Passados
+    <button id="toggle-past" class="btn btn-link btn-sm">Mostrar</button>
+  </h4>
+  <ul class="list-group mb-4 d-none" id="past-list">
     {% for appt in appointments_past %}
       <li class="list-group-item list-group-item-secondary appointment-item"
           data-id="{{ appt.id }}"
@@ -166,7 +199,7 @@
         </div>
       </li>
     {% else %}
-      <li class="list-group-item">Nenhuma consulta passada.</li>
+      <li class="list-group-item">Nenhum agendamento passado.</li>
     {% endfor %}
   </ul>
 
@@ -372,5 +405,14 @@
       }
     }).catch(() => alert('Erro ao salvar'));
   });
+
+  const toggleBtn = document.getElementById('toggle-past');
+  const pastList = document.getElementById('past-list');
+  if (toggleBtn && pastList) {
+    toggleBtn.addEventListener('click', function(){
+      pastList.classList.toggle('d-none');
+      this.textContent = pastList.classList.contains('d-none') ? 'Mostrar' : 'Esconder';
+    });
+  }
 </script>
 {% endblock %}

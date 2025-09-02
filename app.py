@@ -6486,6 +6486,16 @@ def appointments():
             veterinario_id=veterinario.id
         ).all()
         now = datetime.utcnow()
+        start_str = request.args.get('start')
+        end_str = request.args.get('end')
+        if start_str and end_str:
+            start_dt = datetime.fromisoformat(start_str)
+            end_dt = datetime.fromisoformat(end_str) + timedelta(days=1)
+        else:
+            today = date.today()
+            start_dt = datetime.combine(today - timedelta(days=today.weekday()), datetime.min.time())
+            end_dt = start_dt + timedelta(days=7)
+
         appointments_pending = (
             Appointment.query.filter_by(veterinario_id=veterinario.id, status="scheduled")
             .filter(Appointment.scheduled_at > now)
@@ -6494,19 +6504,38 @@ def appointments():
         )
         for appt in appointments_pending:
             appt.time_left = (appt.scheduled_at - timedelta(hours=2)) - now
-        appointments_upcoming = (
+
+        from models import ExamAppointment
+
+        upcoming_consultas = (
             Appointment.query.filter_by(veterinario_id=veterinario.id, status="accepted")
-            .filter(Appointment.scheduled_at >= now)
+            .filter(Appointment.scheduled_at >= start_dt)
+            .filter(Appointment.scheduled_at < end_dt)
             .order_by(Appointment.scheduled_at)
             .all()
         )
+        upcoming_exams = (
+            ExamAppointment.query.filter_by(specialist_id=veterinario.id)
+            .filter(ExamAppointment.scheduled_at >= start_dt)
+            .filter(ExamAppointment.scheduled_at < end_dt)
+            .filter(ExamAppointment.status != 'canceled')
+            .order_by(ExamAppointment.scheduled_at)
+            .all()
+        )
+        appointments_upcoming = []
+        for appt in upcoming_consultas:
+            kind = 'retorno' if appt.consulta_id else 'consulta'
+            appointments_upcoming.append({'kind': kind, 'appt': appt})
+        for exam in upcoming_exams:
+            appointments_upcoming.append({'kind': 'exame', 'appt': exam})
+        appointments_upcoming.sort(key=lambda x: x['appt'].scheduled_at)
+
         appointments_past = (
             Appointment.query.filter_by(veterinario_id=veterinario.id)
-            .filter(Appointment.scheduled_at < now)
+            .filter(Appointment.scheduled_at < start_dt)
             .order_by(Appointment.scheduled_at.desc())
             .all()
         )
-        from models import ExamAppointment
 
         session['exam_pending_seen_count'] = ExamAppointment.query.filter_by(
             specialist_id=veterinario.id, status='pending'
@@ -6526,6 +6555,9 @@ def appointments():
             appointments_pending=appointments_pending,
             appointments_upcoming=appointments_upcoming,
             appointments_past=appointments_past,
+            start_dt=start_dt,
+            end_dt=end_dt,
+            timedelta=timedelta,
         )
     else:
         if current_user.worker in ['colaborador', 'admin']:
