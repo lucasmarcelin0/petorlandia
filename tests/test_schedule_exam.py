@@ -49,7 +49,7 @@ def setup_data():
 def test_schedule_exam_creates_event_and_blocks_time(client, monkeypatch):
     with flask_app.app_context():
         tutor_id, vet_user_id, animal_id, vet_id = setup_data()
-    fake_user = type('U', (), {'id': tutor_id, 'worker': None, 'role': 'adotante', 'is_authenticated': True})()
+    fake_user = type('U', (), {'id': tutor_id, 'worker': None, 'role': 'adotante', 'is_authenticated': True, 'name': 'Tutor'})()
     login(monkeypatch, fake_user)
     resp = client.post(f'/animal/{animal_id}/schedule_exam', json={
         'specialist_id': vet_id,
@@ -69,7 +69,7 @@ def test_schedule_exam_creates_event_and_blocks_time(client, monkeypatch):
 def test_schedule_exam_message_and_confirm_by(client, monkeypatch):
     with flask_app.app_context():
         tutor_id, vet_user_id, animal_id, vet_id = setup_data()
-    fake_user = type('U', (), {'id': tutor_id, 'worker': None, 'role': 'adotante', 'is_authenticated': True})()
+    fake_user = type('U', (), {'id': tutor_id, 'worker': None, 'role': 'adotante', 'is_authenticated': True, 'name': 'Tutor'})()
     login(monkeypatch, fake_user)
     resp = client.post(f'/animal/{animal_id}/schedule_exam', json={
         'specialist_id': vet_id,
@@ -88,7 +88,7 @@ def test_schedule_exam_message_and_confirm_by(client, monkeypatch):
 def test_update_exam_appointment_changes_time(client, monkeypatch):
     with flask_app.app_context():
         tutor_id, vet_user_id, animal_id, vet_id = setup_data()
-    fake_user = type('U', (), {'id': tutor_id, 'worker': None, 'role': 'adotante', 'is_authenticated': True})()
+    fake_user = type('U', (), {'id': tutor_id, 'worker': None, 'role': 'adotante', 'is_authenticated': True, 'name': 'Tutor'})()
     login(monkeypatch, fake_user)
     client.post(f'/animal/{animal_id}/schedule_exam', json={
         'specialist_id': vet_id,
@@ -105,7 +105,7 @@ def test_update_exam_appointment_changes_time(client, monkeypatch):
 def test_delete_exam_appointment_removes_record(client, monkeypatch):
     with flask_app.app_context():
         tutor_id, vet_user_id, animal_id, vet_id = setup_data()
-    fake_user = type('U', (), {'id': tutor_id, 'worker': None, 'role': 'adotante', 'is_authenticated': True})()
+    fake_user = type('U', (), {'id': tutor_id, 'worker': None, 'role': 'adotante', 'is_authenticated': True, 'name': 'Tutor'})()
     login(monkeypatch, fake_user)
     client.post(f'/animal/{animal_id}/schedule_exam', json={
         'specialist_id': vet_id,
@@ -116,3 +116,21 @@ def test_delete_exam_appointment_removes_record(client, monkeypatch):
     assert resp.status_code == 200
     with flask_app.app_context():
         assert ExamAppointment.query.count() == 0
+
+
+def test_exam_appointments_listed_on_page(client, monkeypatch):
+    with flask_app.app_context():
+        tutor_id, vet_user_id, animal_id, vet_id = setup_data()
+    fake_user = type('U', (), {'id': tutor_id, 'worker': None, 'role': 'adotante', 'is_authenticated': True, 'name': 'Tutor'})()
+    login(monkeypatch, fake_user)
+    client.post(
+        f'/animal/{animal_id}/schedule_exam',
+        json={'specialist_id': vet_id, 'date': '2024-05-20', 'time': '09:00'},
+        headers={'Accept': 'application/json'}
+    )
+    resp = client.get('/appointments')
+    assert resp.status_code == 200
+    html = resp.get_data(as_text=True)
+    assert 'Agenda de Exames' in html
+    assert '09:00' in html
+    assert 'Vet' in html

@@ -6517,6 +6517,13 @@ def appointments():
                 .order_by(Appointment.scheduled_at)
                 .all()
             )
+            exam_appointments = (
+                ExamAppointment.query
+                .join(ExamAppointment.animal)
+                .filter(Animal.clinica_id == current_user.clinica_id)
+                .order_by(ExamAppointment.scheduled_at)
+                .all()
+            )
             form = None
         else:
             appointments = (
@@ -6524,12 +6531,22 @@ def appointments():
                 .order_by(Appointment.scheduled_at)
                 .all()
             )
+            exam_appointments = (
+                ExamAppointment.query
+                .join(ExamAppointment.animal)
+                .filter(Animal.user_id == current_user.id)
+                .order_by(ExamAppointment.scheduled_at)
+                .all()
+            )
             form = None
         appointments_grouped = group_appointments_by_day(appointments)
+        exam_appointments_grouped = group_appointments_by_day(exam_appointments)
         return render_template(
             'agendamentos/appointments.html',
             appointments=appointments,
             appointments_grouped=appointments_grouped,
+            exam_appointments=exam_appointments,
+            exam_appointments_grouped=exam_appointments_grouped,
             form=form,
         )
 

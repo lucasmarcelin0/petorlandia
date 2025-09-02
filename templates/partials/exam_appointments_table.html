@@ -1,0 +1,29 @@
+<table class="table">
+  <thead>
+    <tr>
+      <th>Hora</th>
+      <th>Animal</th>
+      <th>Especialista</th>
+      <th>Status</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% if exam_appointments_grouped %}
+      {% for day, items in exam_appointments_grouped %}
+        <tr class="table-light">
+          <th colspan="4">{{ day|format_datetime_brazil('%d/%m/%Y') }}</th>
+        </tr>
+        {% for appt in items %}
+          <tr>
+            <td>{{ appt.scheduled_at|format_datetime_brazil('%H:%M') }}</td>
+            <td>{{ appt.animal.name }}</td>
+            <td>{{ appt.specialist.user.name }}</td>
+            <td>{{ {'pending':'Pendente','confirmed':'Confirmado'}.get(appt.status, appt.status) }}</td>
+          </tr>
+        {% endfor %}
+      {% endfor %}
+    {% else %}
+      <tr><td colspan="4">Nenhum exame agendado.</td></tr>
+    {% endif %}
+  </tbody>
+</table>
