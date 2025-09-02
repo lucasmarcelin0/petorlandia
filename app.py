@@ -587,7 +587,7 @@ def add_animal():
         print("🧾 Erros do formulário:", form.errors)
 
     return render_template(
-        'add_animal.html',
+        'animais/add_animal.html',
         form=form,
         species_list=species_list,
         breed_list=breed_list
@@ -798,7 +798,7 @@ def list_animals():
         breed_list = []
 
     return render_template(
-        'animals.html',
+        'animais/animals.html',
         animals=animals,
         page=page,
         total_pages=pagination.pages,
@@ -888,7 +888,7 @@ def editar_animal(animal_id):
         flash('Animal atualizado com sucesso!', 'success')
         return redirect(url_for('profile'))
 
-    return render_template('editar_animal.html',
+    return render_template('animais/editar_animal.html',
                            form=form,
                            animal=animal,
                            species_list=species_list,
@@ -1467,7 +1467,7 @@ def planosaude_animal(animal_id):
         return redirect(url_for("planosaude_animal", animal_id=animal_id))
 
     return render_template(
-        "planosaude_animal.html",
+        "animais/planosaude_animal.html",
         animal=animal,
         form=form,        # {{ form.hidden_tag() }} agora existe
         subscription=subscription,
@@ -1561,7 +1561,7 @@ def ficha_animal(animal_id):
     vacinas = Vacina.query.filter_by(animal_id=animal.id).all()
 
     return render_template(
-        'ficha_animal.html',
+        'animais/ficha_animal.html',
         animal=animal,
         tutor=tutor,
         consultas=consultas,
@@ -2784,7 +2784,7 @@ def obter_tutor(tutor_id):
 def tutor_detail(tutor_id):
     tutor   = User.query.get_or_404(tutor_id)
     animais = tutor.animais.order_by(Animal.name).all()
-    return render_template('tutor_detail.html', tutor=tutor, animais=animais)
+    return render_template('animais/tutor_detail.html', tutor=tutor, animais=animais)
 
 
 @app.route('/tutores', methods=['GET', 'POST'])
@@ -2939,7 +2939,7 @@ def tutores():
     tutores_adicionados, pagination = fetch_tutores(scope, page)
 
     return render_template(
-        'tutores.html',
+        'animais/tutores.html',
         tutores_adicionados=tutores_adicionados,
         pagination=pagination,
         scope=scope
@@ -3173,7 +3173,7 @@ def ficha_tutor(tutor_id):
         })
 
     return render_template(
-        'tutor_detail.html',
+        'animais/tutor_detail.html',
         tutor=tutor,
         endereco=tutor.endereco,  # Passa explicitamente o endereço
         animais=animais,
@@ -4488,7 +4488,7 @@ def novo_animal():
     breed_list = list_breeds()
 
     return render_template(
-        'novo_animal.html',
+        'animais/novo_animal.html',
         animais_adicionados=animais_adicionados,
         pagination=pagination,
         species_list=species_list,
