@@ -134,3 +134,28 @@ def test_exam_appointments_listed_on_page(client, monkeypatch):
     assert 'Agenda de Exames' in html
     assert '09:00' in html
     assert 'Vet' in html
+
+
+def test_exam_appointment_requires_acceptance(client, monkeypatch):
+    with flask_app.app_context():
+        tutor_id, vet_user_id, animal_id, vet_id = setup_data()
+        vet_obj = Veterinario.query.get(vet_id)
+    # schedule exam as tutor
+    tutor_user = type('U', (), {'id': tutor_id, 'worker': None, 'role': 'adotante', 'is_authenticated': True, 'name': 'Tutor'})()
+    login(monkeypatch, tutor_user)
+    client.post(
+        f'/animal/{animal_id}/schedule_exam',
+        json={'specialist_id': vet_id, 'date': '2024-05-20', 'time': '09:00'},
+        headers={'Accept': 'application/json'}
+    )
+    with flask_app.app_context():
+        appt = ExamAppointment.query.first()
+        assert appt.status == 'pending'
+    # now login as specialist and accept
+    vet_user = type('U', (), {'id': vet_user_id, 'worker': 'veterinario', 'role': None, 'is_authenticated': True, 'name': 'Vet', 'veterinario': vet_obj})()
+    login(monkeypatch, vet_user)
+    resp = client.post('/exam_appointment/1/status', json={'status': 'confirmed'}, headers={'Accept': 'application/json'})
+    assert resp.status_code == 200
+    with flask_app.app_context():
+        appt = ExamAppointment.query.get(1)
+        assert appt.status == 'confirmed'

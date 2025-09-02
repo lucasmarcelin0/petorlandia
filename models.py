@@ -796,6 +796,7 @@ class ExamAppointment(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     animal_id = db.Column(db.Integer, db.ForeignKey('animal.id'), nullable=False)
     specialist_id = db.Column(db.Integer, db.ForeignKey('veterinario.id'), nullable=False)
+    requester_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
     scheduled_at = db.Column(db.DateTime, nullable=False)
     status = db.Column(db.String(20), nullable=False, default='pending')
     request_time = db.Column(db.DateTime, default=datetime.utcnow)
@@ -808,6 +809,11 @@ class ExamAppointment(db.Model):
     specialist = db.relationship(
         'Veterinario',
         backref=db.backref('exam_appointments', cascade='all, delete-orphan'),
+    )
+    requester = db.relationship(
+        'User',
+        backref=db.backref('requested_exam_appointments', cascade='all, delete-orphan'),
+        foreign_keys=[requester_id]
     )
 
     def __init__(self, **kwargs):
