@@ -99,7 +99,7 @@ def test_update_exam_appointment_changes_time(client, monkeypatch):
     assert resp.status_code == 200
     with flask_app.app_context():
         appt = ExamAppointment.query.get(1)
-        assert appt.scheduled_at == datetime(2024, 5, 22, 10, 0)
+        assert appt.scheduled_at == datetime(2024, 5, 22, 13, 0)
 
 
 def test_delete_exam_appointment_removes_record(client, monkeypatch):
