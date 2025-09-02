@@ -6987,6 +6987,18 @@ def update_exam_appointment_status(appointment_id):
             content=f"Especialista não aceitou exame para {appt.animal.name}. Reagende com outro profissional.",
         )
         db.session.add(msg)
+    elif status == 'confirmed':
+        scheduled_local = appt.scheduled_at.replace(tzinfo=timezone.utc).astimezone(BR_TZ)
+        msg = Message(
+            sender_id=current_user.id,
+            receiver_id=appt.requester_id,
+            animal_id=appt.animal_id,
+            content=(
+                f"Exame de {appt.animal.name} confirmado para "
+                f"{scheduled_local.strftime('%d/%m/%Y %H:%M')} com {appt.specialist.user.name}."
+            ),
+        )
+        db.session.add(msg)
     db.session.commit()
     return jsonify({'success': True})
 

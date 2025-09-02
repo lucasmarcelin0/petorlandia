@@ -159,6 +159,10 @@ def test_exam_appointment_requires_acceptance(client, monkeypatch):
     with flask_app.app_context():
         appt = ExamAppointment.query.get(1)
         assert appt.status == 'confirmed'
+        msg = Message.query.filter_by(receiver_id=tutor_id).first()
+        assert msg is not None
+        assert '20/05/2024 09:00' in msg.content
+        assert 'Vet' in msg.content
 
 
 def test_schedule_exam_same_user_auto_confirms(client, monkeypatch):
