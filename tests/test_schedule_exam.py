@@ -186,3 +186,48 @@ def test_schedule_exam_same_user_auto_confirms(client, monkeypatch):
         appt = ExamAppointment.query.first()
         assert appt.status == 'confirmed'
         assert Message.query.count() == 0
+
+
+def test_schedule_exam_blocks_overlapping_time(client, monkeypatch):
+    with flask_app.app_context():
+        tutor_id, vet_user_id, animal_id, vet_id = setup_data()
+    fake_user = type('U', (), {'id': tutor_id, 'worker': None, 'role': 'adotante', 'is_authenticated': True, 'name': 'Tutor'})()
+    login(monkeypatch, fake_user)
+    client.post(
+        f'/animal/{animal_id}/schedule_exam',
+        json={'specialist_id': vet_id, 'date': '2024-05-25', 'time': '09:00'},
+        headers={'Accept': 'application/json'}
+    )
+    resp = client.post(
+        f'/animal/{animal_id}/schedule_exam',
+        json={'specialist_id': vet_id, 'date': '2024-05-25', 'time': '09:15'},
+        headers={'Accept': 'application/json'}
+    )
+    assert resp.status_code == 400
+    data = resp.get_json()
+    assert not data['success']
+
+
+def test_update_exam_appointment_blocks_overlap(client, monkeypatch):
+    with flask_app.app_context():
+        tutor_id, vet_user_id, animal_id, vet_id = setup_data()
+    fake_user = type('U', (), {'id': tutor_id, 'worker': None, 'role': 'adotante', 'is_authenticated': True, 'name': 'Tutor'})()
+    login(monkeypatch, fake_user)
+    client.post(
+        f'/animal/{animal_id}/schedule_exam',
+        json={'specialist_id': vet_id, 'date': '2024-05-26', 'time': '09:00'},
+        headers={'Accept': 'application/json'}
+    )
+    client.post(
+        f'/animal/{animal_id}/schedule_exam',
+        json={'specialist_id': vet_id, 'date': '2024-05-26', 'time': '10:00'},
+        headers={'Accept': 'application/json'}
+    )
+    resp = client.post(
+        '/exam_appointment/2/update',
+        json={'date': '2024-05-26', 'time': '09:15'},
+        headers={'Accept': 'application/json'}
+    )
+    assert resp.status_code == 400
+    data = resp.get_json()
+    assert not data['success']

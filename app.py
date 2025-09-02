@@ -6912,11 +6912,21 @@ def schedule_exam(animal_id):
         .astimezone(timezone.utc)
         .replace(tzinfo=None)
     )
-    conflito = (
-        Appointment.query.filter_by(veterinario_id=specialist_id, scheduled_at=scheduled_at).first()
-        or ExamAppointment.query.filter_by(specialist_id=specialist_id, scheduled_at=scheduled_at).first()
+    duration = timedelta(minutes=30)
+    end = scheduled_at + duration
+    conflict = (
+        Appointment.query.filter(
+            Appointment.veterinario_id == specialist_id,
+            Appointment.scheduled_at < end,
+            Appointment.scheduled_at > scheduled_at - duration,
+        ).first()
+        or ExamAppointment.query.filter(
+            ExamAppointment.specialist_id == specialist_id,
+            ExamAppointment.scheduled_at < end,
+            ExamAppointment.scheduled_at > scheduled_at - duration,
+        ).first()
     )
-    if conflito:
+    if conflict:
         return jsonify({'success': False, 'message': 'Horário indisponível.'}), 400
     vet = Veterinario.query.get(specialist_id)
     animal = Animal.query.get(animal_id)
@@ -6999,15 +7009,22 @@ def update_exam_appointment(appointment_id):
         .astimezone(timezone.utc)
         .replace(tzinfo=None)
     )
-    conflito = (
-        Appointment.query.filter_by(veterinario_id=specialist_id, scheduled_at=scheduled_at).first()
+    duration = timedelta(minutes=30)
+    end = scheduled_at + duration
+    conflict = (
+        Appointment.query.filter(
+            Appointment.veterinario_id == specialist_id,
+            Appointment.scheduled_at < end,
+            Appointment.scheduled_at > scheduled_at - duration,
+        ).first()
         or ExamAppointment.query.filter(
             ExamAppointment.specialist_id == specialist_id,
-            ExamAppointment.scheduled_at == scheduled_at,
             ExamAppointment.id != appointment_id,
+            ExamAppointment.scheduled_at < end,
+            ExamAppointment.scheduled_at > scheduled_at - duration,
         ).first()
     )
-    if conflito:
+    if conflict:
         return jsonify({'success': False, 'message': 'Horário indisponível.'}), 400
     appt.specialist_id = specialist_id
     appt.scheduled_at = scheduled_at
