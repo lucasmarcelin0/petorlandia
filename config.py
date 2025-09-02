@@ -44,3 +44,6 @@ class Config:
     # Endereço de retirada padrão (usado se não houver PickupLocation no banco)
     DEFAULT_PICKUP_ADDRESS = os.environ.get("DEFAULT_PICKUP_ADDRESS", "Rua Nove, 990")
 
+    # Política padrão de retorno em dias para consultas
+    DEFAULT_RETURN_DAYS = int(os.environ.get("DEFAULT_RETURN_DAYS", "7"))
+

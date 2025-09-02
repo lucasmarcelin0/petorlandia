@@ -6,7 +6,7 @@ from decimal import Decimal
 
 
 
-from datetime import datetime, timezone, date, timedelta
+from datetime import datetime, timezone, date, timedelta, time
 from dateutil.relativedelta import relativedelta
 from zoneinfo import ZoneInfo
 from PIL import Image
@@ -1938,9 +1938,39 @@ def finalizar_consulta(consulta_id):
         return redirect(url_for('index'))
 
     consulta.status = 'finalizada'
+
+    # Mensagem de resumo para o tutor
+    resumo = (
+        f"Consulta do {consulta.animal.name} finalizada.\n"
+        f"Queixa: {consulta.queixa_principal or 'N/A'}\n"
+        f"Conduta: {consulta.conduta or 'N/A'}\n"
+        f"Prescrição: {consulta.prescricao or 'N/A'}"
+    )
+    msg = Message(
+        sender_id=current_user.id,
+        receiver_id=consulta.animal.owner.id,
+        animal_id=consulta.animal_id,
+        content=resumo,
+    )
+    db.session.add(msg)
+
+    # Prepara formulário de retorno com dados padrão
+    form = AppointmentForm()
+    form.animal_id.choices = [(consulta.animal.id, consulta.animal.name)]
+    form.animal_id.data = consulta.animal.id
+    form.veterinario_id.choices = [
+        (consulta.veterinario.veterinario.id, consulta.veterinario.name)
+    ]
+    form.veterinario_id.data = consulta.veterinario.veterinario.id
+
+    dias_retorno = current_app.config.get('DEFAULT_RETURN_DAYS', 7)
+    data_recomendada = (datetime.now(BR_TZ) + timedelta(days=dias_retorno)).date()
+    form.date.data = data_recomendada
+    form.time.data = time(10, 0)
+
     db.session.commit()
     flash('Consulta finalizada e registrada no histórico! Agende o retorno.', 'success')
-    return redirect(url_for('consulta_direct', animal_id=consulta.animal_id))
+    return render_template('agendamentos/confirmar_retorno.html', consulta=consulta, form=form)
 
 
 @app.route('/agendar_retorno/<int:consulta_id>', methods=['POST'])
