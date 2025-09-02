@@ -19,7 +19,7 @@
       <h5>Próximos Agendamentos</h5>
       <ul>
         {% for ap in item.appointments %}
-        <li>{{ ap.scheduled_at.strftime('%d/%m/%Y %H:%M') }} - {{ ap.animal.name }}</li>
+        <li>{{ ap.scheduled_at|format_datetime_brazil('%d/%m/%Y %H:%M') }} - {{ ap.animal.name }}</li>
         {% else %}
         <li>Nenhum agendamento.</li>
         {% endfor %}
