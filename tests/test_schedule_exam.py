@@ -159,3 +159,30 @@ def test_exam_appointment_requires_acceptance(client, monkeypatch):
     with flask_app.app_context():
         appt = ExamAppointment.query.get(1)
         assert appt.status == 'confirmed'
+
+
+def test_schedule_exam_same_user_auto_confirms(client, monkeypatch):
+    with flask_app.app_context():
+        tutor_id, vet_user_id, animal_id, vet_id = setup_data()
+    vet_user = type(
+        'U',
+        (),
+        {
+            'id': vet_user_id,
+            'worker': 'veterinario',
+            'role': None,
+            'is_authenticated': True,
+            'name': 'Vet'
+        }
+    )()
+    login(monkeypatch, vet_user)
+    resp = client.post(
+        f'/animal/{animal_id}/schedule_exam',
+        json={'specialist_id': vet_id, 'date': '2024-05-24', 'time': '09:00'},
+        headers={'Accept': 'application/json'}
+    )
+    assert resp.status_code == 200
+    with flask_app.app_context():
+        appt = ExamAppointment.query.first()
+        assert appt.status == 'confirmed'
+        assert Message.query.count() == 0
