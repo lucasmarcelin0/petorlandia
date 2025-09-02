@@ -4,7 +4,7 @@
 <div class="container mt-4">
   <h2>Agenda de Consultas</h2>
   {% with clinic_id = current_user.clinica_id %}
-    {% include 'partials/schedule_toggle.html' %}
+    {% include 'partials/clinica/schedule_toggle.html' %}
   {% endwith %}
 
   {% if form %}
@@ -39,7 +39,7 @@
   </div>
   {% endif %}
 
-{% include 'partials/appointments_table.html' %}
+{% include 'partials/clinica/appointments_table.html' %}
 
 <div class="modal fade" id="appointmentEditModal" tabindex="-1" aria-hidden="true">
   <div class="modal-dialog">
