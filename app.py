@@ -2760,7 +2760,7 @@ def edit_vet_specialties(veterinario_id):
         flash('Especialidades atualizadas com sucesso.', 'success')
         return redirect(url_for('ficha_tutor', tutor_id=veterinario.user_id))
     form.specialties.data = [s.id for s in veterinario.specialties]
-    return render_template('edit_vet_specialties.html', form=form, veterinario=veterinario)
+    return render_template('agendamentos/edit_vet_specialties.html', form=form, veterinario=veterinario)
 
 
 @app.route('/tutor/<int:tutor_id>')
@@ -4269,7 +4269,7 @@ def novo_atendimento():
         return redirect(url_for('index'))
 
     tutor_form = EditProfileForm()
-    return render_template('novo_atendimento.html', tutor_form=tutor_form)
+    return render_template('agendamentos/novo_atendimento.html', tutor_form=tutor_form)
 
 
 @app.route('/criar_tutor_ajax', methods=['POST'])
@@ -6351,7 +6351,7 @@ def appointment_confirmation(appointment_id):
     appointment = Appointment.query.get_or_404(appointment_id)
     if appointment.tutor_id != current_user.id:
         abort(403)
-    return render_template('appointment_confirmation.html', appointment=appointment)
+    return render_template('agendamentos/appointment_confirmation.html', appointment=appointment)
 
 
 @app.route('/appointments', methods=['GET', 'POST'])
@@ -6460,7 +6460,7 @@ def appointments():
         )
 
         return render_template(
-            'edit_vet_schedule.html',
+            'agendamentos/edit_vet_schedule.html',
             schedule_form=schedule_form,
             appointment_form=appointment_form,
             veterinario=veterinario,
@@ -6486,7 +6486,7 @@ def appointments():
             form = None
         appointments_grouped = group_appointments_by_day(appointments)
         return render_template(
-            'appointments.html',
+            'agendamentos/appointments.html',
             appointments=appointments,
             appointments_grouped=appointments_grouped,
             form=form,
@@ -6563,7 +6563,7 @@ def manage_appointments():
             query = query.filter_by(clinica_id=current_user.clinica_id)
     appointments = query.all()
     delete_form = AppointmentDeleteForm()
-    return render_template('appointments_admin.html', appointments=appointments, delete_form=delete_form)
+    return render_template('agendamentos/appointments_admin.html', appointments=appointments, delete_form=delete_form)
 
 
 @app.route('/appointments/<int:appointment_id>/edit', methods=['GET', 'POST'])
@@ -6633,7 +6633,7 @@ def edit_appointment(appointment_id):
             appointment=appointment,
             veterinarios=veterinarios,
         )
-    return render_template('edit_appointment.html', appointment=appointment, veterinarios=veterinarios)
+    return render_template('agendamentos/edit_appointment.html', appointment=appointment, veterinarios=veterinarios)
 
 
 @app.route('/appointments/<int:appointment_id>/status', methods=['POST'])
