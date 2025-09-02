@@ -2344,7 +2344,7 @@ def clinic_detail(clinica_id):
 
     if request.headers.get("X-Requested-With") == "XMLHttpRequest":
         return render_template(
-            "partials/appointments_table.html",
+            "partials/clinica/appointments_table.html",
             appointments_grouped=appointments_grouped,
         )
 
@@ -2598,13 +2598,13 @@ def clinic_staff(clinica_id):
                 db.session.commit()
                 if request.accept_mimetypes.accept_json:
                     staff_members = ClinicStaff.query.filter_by(clinic_id=clinic.id).all()
-                    html = render_template('partials/clinic_staff_rows.html', clinic=clinic, staff_members=staff_members)
+                    html = render_template('partials/clinica/clinic_staff_rows.html', clinic=clinic, staff_members=staff_members)
                     return jsonify(success=True, html=html, message='Funcionário adicionado', category='success')
                 flash('Funcionário adicionado. Defina as permissões.', 'success')
                 return redirect(url_for('clinic_staff_permissions', clinica_id=clinic.id, user_id=user.id))
     staff_members = ClinicStaff.query.filter_by(clinic_id=clinic.id).all()
     if request.accept_mimetypes.accept_json:
-        html = render_template('partials/clinic_staff_rows.html', clinic=clinic, staff_members=staff_members)
+        html = render_template('partials/clinica/clinic_staff_rows.html', clinic=clinic, staff_members=staff_members)
         return jsonify(success=True, html=html)
     return render_template('clinic_staff_list.html', clinic=clinic, staff_members=staff_members)
 
@@ -2634,12 +2634,12 @@ def clinic_staff_permissions(clinica_id, user_id):
         db.session.add(user)
         db.session.commit()
         if request.accept_mimetypes.accept_json:
-            html = render_template('partials/clinic_staff_permissions_form.html', form=form, clinic=clinic)
+            html = render_template('partials/clinica/clinic_staff_permissions_form.html', form=form, clinic=clinic)
             return jsonify(success=True, html=html, message='Permissões atualizadas', category='success')
         flash('Permissões atualizadas', 'success')
         return redirect(url_for('clinic_dashboard', clinica_id=clinic.id))
     if request.accept_mimetypes.accept_json:
-        html = render_template('partials/clinic_staff_permissions_form.html', form=form, clinic=clinic)
+        html = render_template('partials/clinica/clinic_staff_permissions_form.html', form=form, clinic=clinic)
         return jsonify(success=True, html=html)
     return render_template('clinic_staff_permissions.html', form=form, clinic=clinic)
 
