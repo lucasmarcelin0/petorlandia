@@ -2722,14 +2722,14 @@ def delete_vet_schedule_clinic(clinica_id, veterinario_id, horario_id):
 @app.route('/veterinarios')
 def veterinarios():
     veterinarios = Veterinario.query.all()
-    return render_template('veterinarios.html', veterinarios=veterinarios)
+    return render_template('veterinarios/veterinarios.html', veterinarios=veterinarios)
 
 
 @app.route('/veterinario/<int:veterinario_id>')
 def vet_detail(veterinario_id):
     veterinario = Veterinario.query.get_or_404(veterinario_id)
     horarios = VetSchedule.query.filter_by(veterinario_id=veterinario_id).all()
-    return render_template('vet_detail.html', veterinario=veterinario, horarios=horarios)
+    return render_template('veterinarios/vet_detail.html', veterinario=veterinario, horarios=horarios)
 
 
 
