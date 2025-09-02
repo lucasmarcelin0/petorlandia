@@ -2045,7 +2045,7 @@ def buscar_tutores():
 @app.route('/clinicas')
 def clinicas():
     clinicas = clinicas_do_usuario().all()
-    return render_template('clinicas.html', clinicas=clinicas)
+    return render_template('clinica/clinicas.html', clinicas=clinicas)
 
 
 @app.route('/minha-clinica', methods=['GET', 'POST'])
@@ -2360,7 +2360,7 @@ def clinic_detail(clinica_id):
     now_dt = datetime.utcnow()
 
     return render_template(
-        'clinic_detail.html',
+        'clinica/clinic_detail.html',
         clinica=clinica,
         horarios=horarios,
         form=hours_form,
@@ -2423,7 +2423,7 @@ def clinic_stock(clinica_id):
         .all()
     )
     return render_template(
-        'clinic_stock.html',
+        'clinica/clinic_stock.html',
         clinica=clinica,
         inventory_items=inventory_items,
         inventory_form=inventory_form,
@@ -2563,7 +2563,7 @@ def clinic_dashboard(clinica_id):
         staff = ClinicStaff.query.filter_by(clinic_id=clinic.id, user_id=current_user.id).first()
         if not staff:
             abort(403)
-    return render_template('clinic_dashboard.html', clinic=clinic, staff=staff)
+    return render_template('clinica/clinic_dashboard.html', clinic=clinic, staff=staff)
 
 
 @app.route('/clinica/<int:clinica_id>/funcionarios', methods=['GET', 'POST'])
@@ -2606,7 +2606,7 @@ def clinic_staff(clinica_id):
     if request.accept_mimetypes.accept_json:
         html = render_template('partials/clinic_staff_rows.html', clinic=clinic, staff_members=staff_members)
         return jsonify(success=True, html=html)
-    return render_template('clinic_staff_list.html', clinic=clinic, staff_members=staff_members)
+    return render_template('clinica/clinic_staff_list.html', clinic=clinic, staff_members=staff_members)
 
 
 @app.route('/clinica/<int:clinica_id>/funcionario/<int:user_id>/permissoes', methods=['GET', 'POST'])
@@ -2641,7 +2641,7 @@ def clinic_staff_permissions(clinica_id, user_id):
     if request.accept_mimetypes.accept_json:
         html = render_template('partials/clinic_staff_permissions_form.html', form=form, clinic=clinic)
         return jsonify(success=True, html=html)
-    return render_template('clinic_staff_permissions.html', form=form, clinic=clinic)
+    return render_template('clinica/clinic_staff_permissions.html', form=form, clinic=clinic)
 
 
 @app.route('/clinica/<int:clinica_id>/funcionario/<int:user_id>/remove', methods=['POST'])
