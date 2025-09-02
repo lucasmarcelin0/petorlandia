@@ -32,7 +32,8 @@
 </form>
 
 <!-- Agendamento de exame -->
-<div id="agendar-exame" class="mt-5">
+<button type="button" class="btn btn-outline-primary mt-4" id="toggle-agendar-exame">Agendar Exame</button>
+<div id="agendar-exame" class="mt-5 d-none">
   <h5 class="mb-3">Agendar Exame</h5>
   <div class="mb-3">
     <label for="exam-specialty" class="form-label">Especialidade</label>
@@ -82,6 +83,14 @@
   document.addEventListener('DOMContentLoaded', function () {
     inputExame = document.getElementById('nome-exame');
     sugestoes = document.getElementById('sugestoes-exames');
+
+    const toggleAgendarBtn = document.getElementById('toggle-agendar-exame');
+    const agendarDiv = document.getElementById('agendar-exame');
+    if (toggleAgendarBtn && agendarDiv) {
+      toggleAgendarBtn.addEventListener('click', function () {
+        agendarDiv.classList.toggle('d-none');
+      });
+    }
 
     inputExame.addEventListener('input', function () {
       const query = this.value;
