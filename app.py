@@ -4203,6 +4203,19 @@ def buscar_exames():
     ])
 
 
+@app.route('/exame_modelo', methods=['POST'])
+@login_required
+def criar_exame_modelo():
+    data = request.get_json(silent=True) or {}
+    nome = (data.get('nome') or '').strip()
+    if not nome:
+        return jsonify({'error': 'Nome é obrigatório'}), 400
+    exame = ExameModelo(nome=nome)
+    db.session.add(exame)
+    db.session.commit()
+    return jsonify({'id': exame.id, 'nome': exame.nome})
+
+
 @app.route('/imprimir_bloco_exames/<int:bloco_id>')
 @login_required
 def imprimir_bloco_exames(bloco_id):

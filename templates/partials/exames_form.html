@@ -71,6 +71,7 @@
 
 <script>
   let exames = [];
+  let inputExame, sugestoes;
   function mostrarFeedback(msg, tipo = 'success') {
     const fb = document.getElementById('feedback-exames');
     fb.textContent = msg;
@@ -79,8 +80,8 @@
   }
 
   document.addEventListener('DOMContentLoaded', function () {
-    const inputExame = document.getElementById('nome-exame');
-    const sugestoes = document.getElementById('sugestoes-exames');
+    inputExame = document.getElementById('nome-exame');
+    sugestoes = document.getElementById('sugestoes-exames');
 
     inputExame.addEventListener('input', function () {
       const query = this.value;
@@ -93,17 +94,31 @@
         .then(res => res.json())
         .then(data => {
           sugestoes.innerHTML = '';
-          data.forEach(item => {
+          if (data.length) {
+            data.forEach(item => {
+              const li = document.createElement('li');
+              li.className = 'list-group-item list-group-item-action';
+              li.textContent = item.nome;
+              li.onclick = () => {
+                inputExame.value = item.nome;
+                document.getElementById('justificativa-exame').value = item.justificativa || '';
+                sugestoes.innerHTML = '';
+              };
+              sugestoes.appendChild(li);
+            });
+          } else {
             const li = document.createElement('li');
-            li.className = 'list-group-item list-group-item-action';
-            li.textContent = item.nome;
-            li.onclick = () => {
-              inputExame.value = item.nome;
-              document.getElementById('justificativa-exame').value = item.justificativa || '';
-              sugestoes.innerHTML = '';
-            };
+            li.className = 'list-group-item';
+            li.innerHTML = `
+              <div class="input-group">
+                <input type="text" id="novo-exame-nome" class="form-control" placeholder="Novo exame">
+                <button class="btn btn-outline-primary" type="button" id="btn-criar-exame">Criar</button>
+              </div>`;
             sugestoes.appendChild(li);
-          });
+            const novoInput = document.getElementById('novo-exame-nome');
+            novoInput.value = query;
+            document.getElementById('btn-criar-exame').onclick = criarExameModelo;
+          }
         });
   });
 
@@ -144,6 +159,37 @@
 
   renderExamesTemp(); // Inicializa a lista se já houver dados
   });
+
+  async function criarExameModelo() {
+    const nome = document.getElementById('novo-exame-nome')?.value.trim();
+    if (!nome) {
+      mostrarFeedback('Informe o nome do exame.', 'danger');
+      return;
+    }
+    try {
+      const resp = await fetch('/exame_modelo', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+        body: JSON.stringify({ nome })
+      });
+      if (!resp.ok) throw new Error();
+      const data = await resp.json();
+      mostrarFeedback('Exame criado com sucesso!');
+      const li = document.createElement('li');
+      li.className = 'list-group-item list-group-item-action';
+      li.textContent = data.nome;
+      li.onclick = () => {
+        inputExame.value = data.nome;
+        document.getElementById('justificativa-exame').value = '';
+        sugestoes.innerHTML = '';
+      };
+      sugestoes.innerHTML = '';
+      sugestoes.appendChild(li);
+      li.click();
+    } catch (e) {
+      mostrarFeedback('Erro ao criar exame.', 'danger');
+    }
+  }
 
   function adicionarExame() {
     const nome = document.getElementById('nome-exame').value.trim();
