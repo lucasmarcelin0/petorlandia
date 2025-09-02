@@ -258,6 +258,43 @@
     }
   }
 
+  async function deletarAgendamentoExame(id) {
+    if (!confirm('Excluir este agendamento?')) return;
+    const resp = await fetch(`/exam_appointment/${id}/delete`, {
+      method: 'POST',
+      headers: { 'Accept': 'application/json' }
+    });
+    if (resp.ok) {
+      const data = await resp.json();
+      if (data.html) {
+        document.getElementById('historico-agendamentos').innerHTML = data.html;
+      }
+      mostrarFeedback('Agendamento excluído.');
+    } else {
+      mostrarFeedback('Erro ao excluir agendamento.', 'danger');
+    }
+  }
+
+  async function editarAgendamentoExame(id) {
+    const date = prompt('Nova data (AAAA-MM-DD):');
+    const time = prompt('Novo horário (HH:MM):');
+    if (!date || !time) return;
+    const resp = await fetch(`/exam_appointment/${id}/update`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+      body: JSON.stringify({ date, time })
+    });
+    if (resp.ok) {
+      const data = await resp.json();
+      if (data.html) {
+        document.getElementById('historico-agendamentos').innerHTML = data.html;
+      }
+      mostrarFeedback('Agendamento atualizado!');
+    } else {
+      mostrarFeedback('Erro ao atualizar agendamento.', 'danger');
+    }
+  }
+
   async function finalizarBlocoExames() {
     if (exames.length === 0) {
       mostrarFeedback('Adicione pelo menos um exame antes de finalizar.', 'warning');

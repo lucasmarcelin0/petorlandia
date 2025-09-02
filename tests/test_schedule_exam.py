@@ -6,7 +6,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')
 import pytest
 import flask_login.utils as login_utils
 from app import app as flask_app, db
-from models import User, Clinica, Animal, Veterinario, Specialty, VetSchedule, ExamAppointment, AgendaEvento
+from models import User, Clinica, Animal, Veterinario, Specialty, VetSchedule, ExamAppointment, AgendaEvento, Message
 from datetime import datetime, time, date
 from helpers import get_available_times
 
@@ -64,3 +64,55 @@ def test_schedule_exam_creates_event_and_blocks_time(client, monkeypatch):
         assert AgendaEvento.query.count() == 1
         times = get_available_times(vet_id, date(2024,5,20))
         assert '09:00' not in times
+
+
+def test_schedule_exam_message_and_confirm_by(client, monkeypatch):
+    with flask_app.app_context():
+        tutor_id, vet_user_id, animal_id, vet_id = setup_data()
+    fake_user = type('U', (), {'id': tutor_id, 'worker': None, 'role': 'adotante', 'is_authenticated': True})()
+    login(monkeypatch, fake_user)
+    resp = client.post(f'/animal/{animal_id}/schedule_exam', json={
+        'specialist_id': vet_id,
+        'date': '2024-05-21',
+        'time': '09:00'
+    }, headers={'Accept': 'application/json'})
+    assert resp.status_code == 200
+    with flask_app.app_context():
+        appt = ExamAppointment.query.first()
+        assert pytest.approx((appt.confirm_by - appt.request_time).total_seconds(), rel=1e-3) == 7200
+        msg = Message.query.filter_by(receiver_id=vet_user_id).first()
+        assert msg is not None
+        assert 'Confirme' in msg.content
+
+
+def test_update_exam_appointment_changes_time(client, monkeypatch):
+    with flask_app.app_context():
+        tutor_id, vet_user_id, animal_id, vet_id = setup_data()
+    fake_user = type('U', (), {'id': tutor_id, 'worker': None, 'role': 'adotante', 'is_authenticated': True})()
+    login(monkeypatch, fake_user)
+    client.post(f'/animal/{animal_id}/schedule_exam', json={
+        'specialist_id': vet_id,
+        'date': '2024-05-22',
+        'time': '09:00'
+    }, headers={'Accept': 'application/json'})
+    resp = client.post('/exam_appointment/1/update', json={'date': '2024-05-22', 'time': '10:00'}, headers={'Accept': 'application/json'})
+    assert resp.status_code == 200
+    with flask_app.app_context():
+        appt = ExamAppointment.query.get(1)
+        assert appt.scheduled_at == datetime(2024, 5, 22, 10, 0)
+
+
+def test_delete_exam_appointment_removes_record(client, monkeypatch):
+    with flask_app.app_context():
+        tutor_id, vet_user_id, animal_id, vet_id = setup_data()
+    fake_user = type('U', (), {'id': tutor_id, 'worker': None, 'role': 'adotante', 'is_authenticated': True})()
+    login(monkeypatch, fake_user)
+    client.post(f'/animal/{animal_id}/schedule_exam', json={
+        'specialist_id': vet_id,
+        'date': '2024-05-23',
+        'time': '09:00'
+    }, headers={'Accept': 'application/json'})
+    resp = client.post('/exam_appointment/1/delete', headers={'Accept': 'application/json'})
+    assert resp.status_code == 200
+    with flask_app.app_context():
+        assert ExamAppointment.query.count() == 0

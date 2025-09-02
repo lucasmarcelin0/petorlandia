@@ -312,6 +312,22 @@ def inject_unread_count():
     return dict(unread_messages=unread)
 
 
+@app.context_processor
+def inject_pending_exam_count():
+    if (
+        current_user.is_authenticated
+        and getattr(current_user, 'worker', None) == 'veterinario'
+        and getattr(current_user, 'veterinario', None)
+    ):
+        from models import ExamAppointment
+        pending = ExamAppointment.query.filter_by(
+            specialist_id=current_user.veterinario.id, status='pending'
+        ).count()
+    else:
+        pending = 0
+    return dict(pending_exam_count=pending)
+
+
 
 
 
@@ -6741,7 +6757,7 @@ def api_specialist_available_times(veterinario_id):
 @app.route('/animal/<int:animal_id>/schedule_exam', methods=['POST'])
 @login_required
 def schedule_exam(animal_id):
-    from models import ExamAppointment, Appointment, AgendaEvento, Veterinario, Animal
+    from models import ExamAppointment, Appointment, AgendaEvento, Veterinario, Animal, Message
     data = request.get_json(silent=True) or {}
     specialist_id = data.get('specialist_id')
     date_str = data.get('date')
@@ -6771,6 +6787,16 @@ def schedule_exam(animal_id):
             clinica_id=animal.clinica_id,
         )
         db.session.add(evento)
+        msg = Message(
+            sender_id=current_user.id,
+            receiver_id=vet.user_id,
+            animal_id=animal_id,
+            content=(
+                f"Exame agendado para {animal.name} em {scheduled_at.strftime('%d/%m/%Y %H:%M')}. "
+                f"Confirme até {appt.confirm_by.strftime('%H:%M')}"
+            ),
+        )
+        db.session.add(msg)
     db.session.add(appt)
     db.session.commit()
     appointments = ExamAppointment.query.filter_by(animal_id=animal_id).order_by(ExamAppointment.scheduled_at.desc()).all()
@@ -6788,6 +6814,49 @@ def confirm_exam_appointment(appointment_id):
     appt.status = 'confirmed'
     db.session.commit()
     return jsonify({'success': True})
+
+
+@app.route('/exam_appointment/<int:appointment_id>/update', methods=['POST'])
+@login_required
+def update_exam_appointment(appointment_id):
+    from models import ExamAppointment, Appointment
+    appt = ExamAppointment.query.get_or_404(appointment_id)
+    data = request.get_json(silent=True) or {}
+    date_str = data.get('date')
+    time_str = data.get('time')
+    specialist_id = data.get('specialist_id', appt.specialist_id)
+    if not date_str or not time_str:
+        return jsonify({'success': False, 'message': 'Dados incompletos.'}), 400
+    scheduled_at = datetime.strptime(f"{date_str} {time_str}", '%Y-%m-%d %H:%M')
+    conflito = (
+        Appointment.query.filter_by(veterinario_id=specialist_id, scheduled_at=scheduled_at).first()
+        or ExamAppointment.query.filter(
+            ExamAppointment.specialist_id == specialist_id,
+            ExamAppointment.scheduled_at == scheduled_at,
+            ExamAppointment.id != appointment_id,
+        ).first()
+    )
+    if conflito:
+        return jsonify({'success': False, 'message': 'Horário indisponível.'}), 400
+    appt.specialist_id = specialist_id
+    appt.scheduled_at = scheduled_at
+    db.session.commit()
+    appointments = ExamAppointment.query.filter_by(animal_id=appt.animal_id).order_by(ExamAppointment.scheduled_at.desc()).all()
+    html = render_template('partials/historico_exam_appointments.html', appointments=appointments)
+    return jsonify({'success': True, 'html': html})
+
+
+@app.route('/exam_appointment/<int:appointment_id>/delete', methods=['POST'])
+@login_required
+def delete_exam_appointment(appointment_id):
+    from models import ExamAppointment
+    appt = ExamAppointment.query.get_or_404(appointment_id)
+    animal_id = appt.animal_id
+    db.session.delete(appt)
+    db.session.commit()
+    appointments = ExamAppointment.query.filter_by(animal_id=animal_id).order_by(ExamAppointment.scheduled_at.desc()).all()
+    html = render_template('partials/historico_exam_appointments.html', appointments=appointments)
+    return jsonify({'success': True, 'html': html})
 
 
 @app.route('/animal/<int:animal_id>/exam_appointments')
