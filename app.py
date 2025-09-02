@@ -6912,6 +6912,10 @@ def schedule_exam(animal_id):
         .astimezone(timezone.utc)
         .replace(tzinfo=None)
     )
+    date_obj = datetime.strptime(date_str, '%Y-%m-%d').date()
+    times = get_available_times(specialist_id, date_obj)
+    if time_str not in times:
+        return jsonify({'success': False, 'message': 'Horário inválido.'}), 400
     conflito = (
         Appointment.query.filter_by(veterinario_id=specialist_id, scheduled_at=scheduled_at).first()
         or ExamAppointment.query.filter_by(specialist_id=specialist_id, scheduled_at=scheduled_at).first()

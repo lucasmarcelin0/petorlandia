@@ -39,9 +39,12 @@ def setup_data():
     vet = Veterinario(user=vet_user, crmv='123', clinica=clinic)
     spec = Specialty(nome='Raio-X')
     vet.specialties.append(spec)
-    schedule = VetSchedule(veterinario=vet, dia_semana='Segunda', hora_inicio=time(9,0), hora_fim=time(17,0))
+    schedules = [
+        VetSchedule(veterinario=vet, dia_semana=dia, hora_inicio=time(9, 0), hora_fim=time(17, 0))
+        for dia in ['Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta']
+    ]
     animal = Animal(name='Rex', owner=tutor, clinica=clinic)
-    db.session.add_all([clinic, tutor, vet_user, vet, spec, schedule, animal])
+    db.session.add_all([clinic, tutor, vet_user, vet, spec, *schedules, animal])
     db.session.commit()
     return tutor.id, vet_user.id, animal.id, vet.id
 
@@ -64,6 +67,22 @@ def test_schedule_exam_creates_event_and_blocks_time(client, monkeypatch):
         assert AgendaEvento.query.count() == 1
         times = get_available_times(vet_id, date(2024,5,20))
         assert '09:00' not in times
+
+
+def test_schedule_exam_invalid_time(client, monkeypatch):
+    with flask_app.app_context():
+        tutor_id, vet_user_id, animal_id, vet_id = setup_data()
+    fake_user = type('U', (), {'id': tutor_id, 'worker': None, 'role': 'adotante', 'is_authenticated': True, 'name': 'Tutor'})()
+    login(monkeypatch, fake_user)
+    resp = client.post(
+        f'/animal/{animal_id}/schedule_exam',
+        json={'specialist_id': vet_id, 'date': '2024-05-20', 'time': '18:00'},
+        headers={'Accept': 'application/json'}
+    )
+    assert resp.status_code == 400
+    data = resp.get_json()
+    assert not data['success']
+    assert 'inválido' in data['message'].lower()
 
 
 def test_schedule_exam_message_and_confirm_by(client, monkeypatch):
