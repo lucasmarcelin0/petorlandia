@@ -36,7 +36,7 @@
   <div id="new-address-form" class="d-none mb-4">
     <form action="{{ url_for('carrinho_salvar_endereco') }}" method="post">
       {{ addr_form.hidden_tag() }}
-      {% include 'partials/endereco_form.html' %}
+      {% include 'partials/comuns/endereco_form.html' %}
       <div class="text-end">
         <button type="submit" class="btn btn-primary">
           <i class="bi bi-save"></i> Salvar Endereço
