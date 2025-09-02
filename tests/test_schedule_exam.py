@@ -186,3 +186,25 @@ def test_schedule_exam_same_user_auto_confirms(client, monkeypatch):
         appt = ExamAppointment.query.first()
         assert appt.status == 'confirmed'
         assert Message.query.count() == 0
+
+
+def test_schedule_exam_permission_denied(client, monkeypatch):
+    with flask_app.app_context():
+        tutor_id, vet_user_id, animal_id, vet_id = setup_data()
+        other = User(name='Other', email='o@test')
+        other.set_password('x')
+        db.session.add(other)
+        db.session.commit()
+        other_id = other.id
+    fake_user = type(
+        'U',
+        (),
+        {'id': other_id, 'worker': None, 'role': 'adotante', 'is_authenticated': True, 'name': 'Other'},
+    )()
+    login(monkeypatch, fake_user)
+    resp = client.post(
+        f'/animal/{animal_id}/schedule_exam',
+        json={'specialist_id': vet_id, 'date': '2024-05-25', 'time': '09:00'},
+        headers={'Accept': 'application/json'},
+    )
+    assert resp.status_code == 403

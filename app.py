@@ -6898,7 +6898,15 @@ def api_specialist_available_times(veterinario_id):
 @app.route('/animal/<int:animal_id>/schedule_exam', methods=['POST'])
 @login_required
 def schedule_exam(animal_id):
-    from models import ExamAppointment, Appointment, AgendaEvento, Veterinario, Animal, Message
+    from models import (
+        ExamAppointment,
+        Appointment,
+        AgendaEvento,
+        Veterinario,
+        Animal,
+        Message,
+        ClinicStaff,
+    )
     data = request.get_json(silent=True) or {}
     specialist_id = data.get('specialist_id')
     date_str = data.get('date')
@@ -6920,6 +6928,28 @@ def schedule_exam(animal_id):
         return jsonify({'success': False, 'message': 'Horário indisponível.'}), 400
     vet = Veterinario.query.get(specialist_id)
     animal = Animal.query.get(animal_id)
+    if not animal:
+        return jsonify({'success': False, 'message': 'Animal não encontrado.'}), 404
+    authorized = False
+    if current_user.role == 'admin':
+        authorized = True
+    elif animal.user_id == current_user.id:
+        authorized = True
+    elif current_user.worker == 'veterinario':
+        vet_obj = getattr(current_user, 'veterinario', None)
+        if not vet_obj:
+            vet_obj = Veterinario.query.filter_by(user_id=current_user.id).first()
+        if vet_obj:
+            authorized = vet_obj.clinica_id == animal.clinica_id
+    elif current_user.worker == 'colaborador':
+        authorized = (
+            ClinicStaff.query.filter_by(
+                clinic_id=animal.clinica_id, user_id=current_user.id
+            ).first()
+            is not None
+        )
+    if not authorized:
+        return jsonify({'success': False, 'message': 'Permissão negada.'}), 403
     same_user = vet and vet.user_id == current_user.id
     appt = ExamAppointment(
         animal_id=animal_id,
