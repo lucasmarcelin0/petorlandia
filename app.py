@@ -343,10 +343,14 @@ def inject_pending_appointment_count():
             Appointment.veterinario_id == current_user.veterinario.id,
             Appointment.status == "scheduled",
             Appointment.scheduled_at >= now + timedelta(hours=2),
-        ).count()
+        ).all()
+
+        seen_ids = set(session.get("seen_appointment_ids", []))
+        new_pending = [appt for appt in pending if appt.id not in seen_ids]
+        count = len(new_pending)
     else:
-        pending = 0
-    return dict(pending_appointment_count=pending)
+        count = 0
+    return dict(pending_appointment_count=count)
 
 
 
@@ -6588,6 +6592,10 @@ def pending_appointments():
         .order_by(Appointment.scheduled_at)
         .all()
     )
+    seen = set(session.get("seen_appointment_ids", []))
+    seen.update(appt.id for appt in appointments)
+    session["seen_appointment_ids"] = list(seen)
+
     return render_template(
         'agendamentos/pending_appointments.html', appointments=appointments, now=now
     )
