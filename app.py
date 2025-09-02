@@ -4137,17 +4137,41 @@ def salvar_bloco_exames(animal_id):
     exames_data = data.get('exames', [])
     observacoes_gerais = data.get('observacoes_gerais', '')
 
+    errors = []
+    valid_exames = []
+    enforce_modelo = current_app.config.get('REQUIRE_EXISTING_EXAME_MODELO', False)
+
+    for idx, exame in enumerate(exames_data, start=1):
+        nome = (exame.get('nome') or '').strip()
+        justificativa = (exame.get('justificativa') or '').strip()
+
+        if not nome:
+            errors.append(f'Exame #{idx} sem nome.')
+            continue
+        if not justificativa:
+            errors.append(f'Exame "{nome}" sem justificativa.')
+            continue
+        if enforce_modelo and not ExameModelo.query.filter(ExameModelo.nome.ilike(nome)).first():
+            errors.append(f'Exame "{nome}" não encontrado.')
+            continue
+
+        valid_exames.append({'nome': nome, 'justificativa': justificativa})
+
+    if not valid_exames:
+        return jsonify(success=False, errors=errors or ['Nenhum exame válido fornecido.']), 400
+
     bloco = BlocoExames(animal_id=animal_id, observacoes_gerais=observacoes_gerais)
     db.session.add(bloco)
     db.session.flush()  # Garante que bloco.id esteja disponível
 
-    for exame in exames_data:
-        exame_modelo = ExameSolicitado(
-            bloco_id=bloco.id,
-            nome=exame.get('nome'),
-            justificativa=exame.get('justificativa')
+    for exame in valid_exames:
+        db.session.add(
+            ExameSolicitado(
+                bloco_id=bloco.id,
+                nome=exame['nome'],
+                justificativa=exame['justificativa']
+            )
         )
-        db.session.add(exame_modelo)
 
     db.session.commit()
     animal = get_animal_or_404(animal_id)
@@ -4262,15 +4286,26 @@ def atualizar_bloco_exames(bloco_id):
     # ---------- mapeia exames já existentes ----------
     existentes = {e.id: e for e in bloco.exames}
     enviados_ids = set()
+    errors = []
+    valid_count = 0
+    enforce_modelo = current_app.config.get('REQUIRE_EXISTING_EXAME_MODELO', False)
 
-    for ex_json in dados.get('exames', []):
+    for idx, ex_json in enumerate(dados.get('exames', []), start=1):
         ex_id = ex_json.get('id')
-        nome  = ex_json.get('nome', '').strip()
-        just  = ex_json.get('justificativa', '').strip()
+        nome  = (ex_json.get('nome') or '').strip()
+        just  = (ex_json.get('justificativa') or '').strip()
 
-        if not nome:                 # pulamos entradas vazias
+        if not nome:
+            errors.append(f'Exame #{idx} sem nome.')
+            continue
+        if not just:
+            errors.append(f'Exame "{nome}" sem justificativa.')
+            continue
+        if enforce_modelo and not ExameModelo.query.filter(ExameModelo.nome.ilike(nome)).first():
+            errors.append(f'Exame "{nome}" não encontrado.')
             continue
 
+        valid_count += 1
         if ex_id and ex_id in existentes:
             # --- atualizar exame já salvo ---
             exame = existentes[ex_id]
@@ -4285,6 +4320,9 @@ def atualizar_bloco_exames(bloco_id):
                 justificativa=just
             )
             db.session.add(novo)
+
+    if not valid_count:
+        return jsonify(success=False, errors=errors or ['Nenhum exame válido fornecido.']), 400
 
     # ---------- remover os que ficaram de fora ----------
     for ex in bloco.exames:
