@@ -2080,7 +2080,7 @@ def minha_clinica():
             current_user.clinica_id = clinica.id
             db.session.commit()
             return redirect(url_for('clinic_detail', clinica_id=clinica.id))
-        return render_template('create_clinic.html', form=form)
+        return render_template('clinica/create_clinic.html', form=form)
 
     if _is_admin() and current_user.clinica_id:
         return redirect(url_for('clinic_detail', clinica_id=current_user.clinica_id))
@@ -2097,7 +2097,7 @@ def minha_clinica():
             .all()
         )
         overview.append({'clinic': c, 'staff': staff, 'appointments': upcoming})
-    return render_template('multi_clinic_dashboard.html', clinics=overview)
+    return render_template('clinica/multi_clinic_dashboard.html', clinics=overview)
 
 
 
