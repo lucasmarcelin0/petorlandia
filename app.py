@@ -206,6 +206,17 @@ def format_datetime_brazil(value, fmt="%d/%m/%Y %H:%M"):
 
     return value
 
+
+@app.template_filter("format_timedelta")
+def format_timedelta(value):
+    """Format a ``timedelta`` as ``'Xh Ym'``."""
+    total_seconds = int(value.total_seconds())
+    if total_seconds <= 0:
+        return "0h 0m"
+    hours, remainder = divmod(total_seconds, 3600)
+    minutes, _ = divmod(remainder, 60)
+    return f"{hours}h {minutes}m"
+
 @app.template_filter("digits_only")
 def digits_only(value):
     """Return only the digits from a string."""
@@ -6467,8 +6478,16 @@ def appointments():
             veterinario_id=veterinario.id
         ).all()
         now = datetime.utcnow()
+        appointments_pending = (
+            Appointment.query.filter_by(veterinario_id=veterinario.id, status="scheduled")
+            .filter(Appointment.scheduled_at > now)
+            .order_by(Appointment.scheduled_at)
+            .all()
+        )
+        for appt in appointments_pending:
+            appt.time_left = (appt.scheduled_at - timedelta(hours=2)) - now
         appointments_upcoming = (
-            Appointment.query.filter_by(veterinario_id=veterinario.id)
+            Appointment.query.filter_by(veterinario_id=veterinario.id, status="accepted")
             .filter(Appointment.scheduled_at >= now)
             .order_by(Appointment.scheduled_at)
             .all()
@@ -6486,6 +6505,7 @@ def appointments():
             appointment_form=appointment_form,
             veterinario=veterinario,
             horarios=horarios,
+            appointments_pending=appointments_pending,
             appointments_upcoming=appointments_upcoming,
             appointments_past=appointments_past,
         )
@@ -6573,24 +6593,7 @@ def delete_vet_schedule(veterinario_id, horario_id):
 @app.route('/appointments/pending')
 @login_required
 def pending_appointments():
-    """List scheduled appointments awaiting veterinarian response."""
-    if not (
-        current_user.worker == 'veterinario'
-        and getattr(current_user, 'veterinario', None)
-    ):
-        abort(403)
-    now = datetime.utcnow()
-    appointments = (
-        Appointment.query.filter_by(
-            veterinario_id=current_user.veterinario.id, status='scheduled'
-        )
-        .filter(Appointment.scheduled_at > now)
-        .order_by(Appointment.scheduled_at)
-        .all()
-    )
-    return render_template(
-        'agendamentos/pending_appointments.html', appointments=appointments, now=now
-    )
+    return redirect(url_for('appointments'))
 
 
 @app.route('/appointments/manage')
