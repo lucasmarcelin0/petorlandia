@@ -458,7 +458,7 @@
                                 <li class="nav-item position-relative">
                                     <a class="nav-link" href="{{ url_for('appointments') }}">
                                         <i class="fas fa-calendar-alt me-1 text-success"></i> Agenda
-                                        {% set total_pending = pending_exam_count + pending_appointment_count %}
+                                        {% set total_pending = pending_exam_count + pending_appointment_count + clinic_pending_appointment_count %}
                                         {% if total_pending > 0 %}
                                             <span class="badge rounded-pill bg-danger position-absolute top-0 start-100 translate-middle">{{ total_pending }}</span>
                                         {% endif %}

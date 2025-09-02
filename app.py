@@ -360,26 +360,30 @@ def inject_pending_appointment_count():
     return dict(pending_appointment_count=pending)
 
 
+@app.context_processor
+def inject_clinic_pending_appointment_count():
+    """Expose count of scheduled appointments in the clinic excluding the current vet."""
+    if (
+        current_user.is_authenticated
+        and getattr(current_user, "worker", None) == "veterinario"
+        and getattr(current_user, "veterinario", None)
+    ):
+        from models import Appointment
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+        clinic_id = current_user.veterinario.clinica_id
+        if clinic_id:
+            pending = (
+                Appointment.query.filter(
+                    Appointment.clinica_id == clinic_id,
+                    Appointment.status == "scheduled",
+                    Appointment.veterinario_id != current_user.veterinario.id,
+                ).count()
+            )
+        else:
+            pending = 0
+    else:
+        pending = 0
+    return dict(clinic_pending_appointment_count=pending)
 
 
 s = URLSafeTimedSerializer(app.config['SECRET_KEY'])
