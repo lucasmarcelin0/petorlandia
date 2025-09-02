@@ -179,14 +179,12 @@
                   <button type="submit" class="btn btn-danger btn-sm"><i class="fas fa-times me-1"></i>Recusar</button>
                 </form>
                 {% else %}
-                <form method="POST" action="{{ url_for('update_exam_appointment_status', appointment_id=appt.id) }}">
-                  <input type="hidden" name="status" value="confirmed">
-                  <button type="submit" class="btn btn-success btn-sm"><i class="fas fa-check me-1"></i>Aceitar</button>
-                </form>
-                <form method="POST" action="{{ url_for('update_exam_appointment_status', appointment_id=appt.id) }}">
-                  <input type="hidden" name="status" value="canceled">
-                  <button type="submit" class="btn btn-danger btn-sm"><i class="fas fa-times me-1"></i>Recusar</button>
-                </form>
+                <button type="button" class="btn btn-success btn-sm" onclick="responderAgendamentoExame({{ appt.id }}, 'confirmed')">
+                  <i class="fas fa-check me-1"></i>Aceitar
+                </button>
+                <button type="button" class="btn btn-danger btn-sm" onclick="responderAgendamentoExame({{ appt.id }}, 'canceled')">
+                  <i class="fas fa-times me-1"></i>Recusar
+                </button>
                 {% endif %}
               </div>
             {% endif %}
@@ -499,6 +497,27 @@
       btn.innerHTML = '<i class="fas fa-times me-1"></i>Cancelar Edição';
     } else {
       btn.innerHTML = '<i class="fas fa-edit me-1"></i>Editar horários';
+    }
+  }
+
+  async function responderAgendamentoExame(id, status) {
+    const resp = await fetch(`/exam_appointment/${id}/status`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json'
+      },
+      body: JSON.stringify({ status })
+    });
+    if (resp.ok) {
+      const data = await resp.json();
+      if (data.success) {
+        location.reload();
+      } else {
+        alert(data.message || 'Erro ao atualizar status.');
+      }
+    } else {
+      alert('Erro ao atualizar status.');
     }
   }
 
