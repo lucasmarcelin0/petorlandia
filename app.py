@@ -5123,7 +5123,7 @@ def delivery_archive():
         .all()
     )
 
-    return render_template('admin/delivery_archive.html', requests=reqs)
+    return render_template('admin/delivery_archive_admin.html', requests=reqs)
 
 
 @app.route('/delivery_archive')
