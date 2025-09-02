@@ -3,7 +3,7 @@
   <h5 class="mb-3">Solicitação de Exames</h5>
 
   <!-- Botão para cadastrar novo exame -->
-  <button type="button" class="btn btn-outline-primary mb-3" onclick="toggleNovoExame()">➕ Novo exame</button>
+    <button type="button" class="btn btn-outline-primary mb-3" id="toggle-novo-exame">➕ Novo exame</button>
   <div id="novo-exame-container" class="border rounded p-3 mb-3 bg-light d-none">
     <div class="mb-2">
       <label for="novo-exame-nome" class="form-label">Nome do exame</label>
@@ -90,17 +90,25 @@
     setTimeout(() => fb.classList.add('d-none'), 3000);
   }
 
-  document.addEventListener('DOMContentLoaded', function () {
-    inputExame = document.getElementById('nome-exame');
-    sugestoes = document.getElementById('sugestoes-exames');
+    document.addEventListener('DOMContentLoaded', function () {
+      inputExame = document.getElementById('nome-exame');
+      sugestoes = document.getElementById('sugestoes-exames');
 
-    const toggleAgendarBtn = document.getElementById('toggle-agendar-exame');
-    const agendarDiv = document.getElementById('agendar-exame');
-    if (toggleAgendarBtn && agendarDiv) {
-      toggleAgendarBtn.addEventListener('click', function () {
-        agendarDiv.classList.toggle('d-none');
-      });
-    }
+      const toggleAgendarBtn = document.getElementById('toggle-agendar-exame');
+      const agendarDiv = document.getElementById('agendar-exame');
+      if (toggleAgendarBtn && agendarDiv) {
+        toggleAgendarBtn.addEventListener('click', function () {
+          agendarDiv.classList.toggle('d-none');
+        });
+      }
+
+      const toggleNovoExameBtn = document.getElementById('toggle-novo-exame');
+      const novoExameBox = document.getElementById('novo-exame-container');
+      if (toggleNovoExameBtn && novoExameBox) {
+        toggleNovoExameBtn.addEventListener('click', () => {
+          novoExameBox.classList.toggle('d-none');
+        });
+      }
 
     inputExame.addEventListener('input', function () {
       const query = this.value;
@@ -179,12 +187,7 @@
   renderExamesTemp(); // Inicializa a lista se já houver dados
   });
 
-  function toggleNovoExame() {
-    const box = document.getElementById('novo-exame-container');
-    if (box) box.classList.toggle('d-none');
-  }
-
-  async function criarExameModelo() {
+    async function criarExameModelo() {
     const nome = document.getElementById('novo-exame-nome')?.value.trim();
     if (!nome) {
       mostrarFeedback('Informe o nome do exame.', 'danger');
