@@ -917,7 +917,7 @@ def enviar_mensagem(animal_id):
         flash('Mensagem enviada com sucesso!', 'success')
         return redirect(url_for('list_animals'))
 
-    return render_template('enviar_mensagem.html', form=form, animal=animal)
+    return render_template('mensagens/enviar_mensagem.html', form=form, animal=animal)
 
 
 @app.route('/mensagem/<int:message_id>/aceitar', methods=['POST'])
@@ -942,7 +942,7 @@ def aceitar_interesse(message_id):
 @login_required
 def mensagens():
     mensagens_recebidas = [m for m in current_user.received_messages if m.sender is not None]
-    return render_template('mensagens.html', mensagens=mensagens_recebidas)
+    return render_template('mensagens/mensagens.html', mensagens=mensagens_recebidas)
 
 
 @app.route('/conversa/<int:animal_id>/<int:user_id>', methods=['GET', 'POST'])
@@ -985,7 +985,7 @@ def conversa(animal_id, user_id):
         db.session.commit()
 
     return render_template(
-        'conversa.html',
+        'mensagens/conversa.html',
         mensagens=mensagens,
         form=form,
         animal=animal,
@@ -1078,7 +1078,7 @@ def conversa_admin(user_id=None):
     db.session.commit()
 
     return render_template(
-        'conversa_admin.html',
+        'mensagens/conversa_admin.html',
         mensagens=mensagens,
         form=form,
         admin=interlocutor
@@ -1161,7 +1161,7 @@ def mensagens_admin():
     unread_counts = {u[0]: u[1] for u in unread}
 
     return render_template(
-        'mensagens_admin.html',
+        'mensagens/mensagens_admin.html',
         mensagens_animais=mensagens_animais,
         mensagens_gerais=mensagens_gerais,
         unread_counts=unread_counts
