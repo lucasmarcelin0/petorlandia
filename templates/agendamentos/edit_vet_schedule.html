@@ -93,13 +93,14 @@
     </div>
   </div>
 
-  <h3 class="text-warning"><i class="fas fa-clock me-2"></i>Consultas Pendentes</h3>
+  <h3 class="text-warning"><i class="fas fa-clock me-2"></i>Agendamentos Pendentes</h3>
   <ul class="list-group mb-4">
-    {% for appt in appointments_pending %}
+    {% for item in appointments_pending %}
+      {% set appt = item.appt %}
       {% set can_respond = appt.time_left.total_seconds() > 0 %}
       <li class="list-group-item d-flex justify-content-between align-items-center">
         <div>
-          {{ appt.scheduled_at.strftime('%d/%m/%Y %H:%M') }} - {{ appt.animal.name }} ({{ appt.tutor.name }})
+          {{ appt.scheduled_at.strftime('%d/%m/%Y %H:%M') }} - {{ appt.animal.name }} ({{ appt.tutor.name if item.kind=='consulta' else appt.animal.owner.name }}){% if item.kind == 'exame' %} <span class="badge bg-info ms-2">Exame</span>{% endif %}
           {% if can_respond %}
             <small class="text-muted ms-2">Tempo restante: {{ appt.time_left|format_timedelta }}</small>
           {% else %}
@@ -108,6 +109,7 @@
         </div>
         {% if can_respond %}
           <div class="d-flex gap-2">
+            {% if item.kind == 'consulta' %}
             <form method="POST" action="{{ url_for('update_appointment_status', appointment_id=appt.id) }}">
               <input type="hidden" name="status" value="accepted">
               <button type="submit" class="btn btn-success btn-sm">Aceitar</button>
@@ -116,6 +118,16 @@
               <input type="hidden" name="status" value="canceled">
               <button type="submit" class="btn btn-danger btn-sm">Cancelar</button>
             </form>
+            {% else %}
+            <form method="POST" action="{{ url_for('update_exam_appointment_status', appointment_id=appt.id) }}">
+              <input type="hidden" name="status" value="confirmed">
+              <button type="submit" class="btn btn-success btn-sm">Aceitar</button>
+            </form>
+            <form method="POST" action="{{ url_for('update_exam_appointment_status', appointment_id=appt.id) }}">
+              <input type="hidden" name="status" value="canceled">
+              <button type="submit" class="btn btn-danger btn-sm">Cancelar</button>
+            </form>
+            {% endif %}
           </div>
         {% endif %}
       </li>

@@ -6497,16 +6497,39 @@ def appointments():
             start_dt = datetime.combine(today - timedelta(days=today.weekday()), datetime.min.time())
             end_dt = start_dt + timedelta(days=7)
 
-        appointments_pending = (
+        pending_consultas = (
             Appointment.query.filter_by(veterinario_id=veterinario.id, status="scheduled")
             .filter(Appointment.scheduled_at > now)
             .order_by(Appointment.scheduled_at)
             .all()
         )
-        for appt in appointments_pending:
+        appointments_pending = []
+        for appt in pending_consultas:
             appt.time_left = (appt.scheduled_at - timedelta(hours=2)) - now
+            appointments_pending.append({'kind': 'consulta', 'appt': appt})
 
-        from models import ExamAppointment
+        from models import ExamAppointment, Message
+
+        exam_pending = (
+            ExamAppointment.query.filter_by(specialist_id=veterinario.id, status='pending')
+            .filter(ExamAppointment.scheduled_at > now)
+            .order_by(ExamAppointment.scheduled_at)
+            .all()
+        )
+        for ex in exam_pending:
+            ex.time_left = ex.confirm_by - now
+            if ex.time_left.total_seconds() <= 0:
+                ex.status = 'canceled'
+                msg = Message(
+                    sender_id=veterinario.user_id,
+                    receiver_id=ex.requester_id,
+                    animal_id=ex.animal_id,
+                    content=f"Especialista não aceitou exame para {ex.animal.name}. Reagende com outro profissional.",
+                )
+                db.session.add(msg)
+                db.session.commit()
+            else:
+                appointments_pending.append({'kind': 'exame', 'appt': ex})
 
         upcoming_consultas = (
             Appointment.query.filter_by(veterinario_id=veterinario.id, status="accepted")
@@ -6516,10 +6539,9 @@ def appointments():
             .all()
         )
         upcoming_exams = (
-            ExamAppointment.query.filter_by(specialist_id=veterinario.id)
+            ExamAppointment.query.filter_by(specialist_id=veterinario.id, status='confirmed')
             .filter(ExamAppointment.scheduled_at >= start_dt)
             .filter(ExamAppointment.scheduled_at < end_dt)
-            .filter(ExamAppointment.status != 'canceled')
             .order_by(ExamAppointment.scheduled_at)
             .all()
         )
@@ -6896,6 +6918,7 @@ def schedule_exam(animal_id):
     appt = ExamAppointment(
         animal_id=animal_id,
         specialist_id=specialist_id,
+        requester_id=current_user.id,
         scheduled_at=scheduled_at,
     )
     vet = Veterinario.query.get(specialist_id)
@@ -6926,14 +6949,27 @@ def schedule_exam(animal_id):
     return jsonify({'success': True, 'confirm_by': appt.confirm_by.isoformat(), 'html': html})
 
 
-@app.route('/exam_appointment/<int:appointment_id>/confirm', methods=['POST'])
+@app.route('/exam_appointment/<int:appointment_id>/status', methods=['POST'])
 @login_required
-def confirm_exam_appointment(appointment_id):
-    from models import ExamAppointment
+def update_exam_appointment_status(appointment_id):
+    from models import ExamAppointment, Message
     appt = ExamAppointment.query.get_or_404(appointment_id)
-    if datetime.utcnow() > appt.confirm_by:
+    if current_user.id != appt.specialist.user_id and current_user.role != 'admin':
+        abort(403)
+    status = request.form.get('status') or (request.get_json(silent=True) or {}).get('status')
+    if status not in {'confirmed', 'canceled'}:
+        return jsonify({'success': False, 'message': 'Status inválido.'}), 400
+    if status == 'confirmed' and datetime.utcnow() > appt.confirm_by:
         return jsonify({'success': False, 'message': 'Tempo de confirmação expirado.'}), 400
-    appt.status = 'confirmed'
+    appt.status = status
+    if status == 'canceled':
+        msg = Message(
+            sender_id=current_user.id,
+            receiver_id=appt.requester_id,
+            animal_id=appt.animal_id,
+            content=f"Especialista não aceitou exame para {appt.animal.name}. Reagende com outro profissional.",
+        )
+        db.session.add(msg)
     db.session.commit()
     return jsonify({'success': True})
 
