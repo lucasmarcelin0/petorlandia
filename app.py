@@ -2923,7 +2923,7 @@ def tutores():
             page = request.args.get('page', 1, type=int)
             tutores_adicionados, pagination = fetch_tutores(scope, page)
             html = render_template(
-                'partials/tutores_adicionados.html',
+                'partials/comuns/tutores_adicionados.html',
                 tutores_adicionados=tutores_adicionados,
                 pagination=pagination,
                 scope=scope
@@ -4464,7 +4464,7 @@ def novo_animal():
             page = request.args.get('page', 1, type=int)
             animais_adicionados, pagination = fetch_animais(scope, page)
             html = render_template(
-                'partials/animais_adicionados.html',
+                'partials/comuns/animais_adicionados.html',
                 animais_adicionados=animais_adicionados,
                 pagination=pagination,
                 scope=scope
@@ -5380,7 +5380,7 @@ def loja_data():
         )
 
     html = render_template(
-        "partials/_product_grid.html",
+        "partials/comuns/_product_grid.html",
         products=produtos,
         pagination=pagination,
         form=form,
