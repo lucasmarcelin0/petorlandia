@@ -4013,7 +4013,7 @@ def editar_bloco_prescricao(bloco_id):
         flash('Apenas veterinários podem editar prescrições.', 'danger')
         return redirect(url_for('index'))
 
-    return render_template('editar_bloco.html', bloco=bloco)
+    return render_template('orcamentos/editar_bloco.html', bloco=bloco)
 
 
 @app.route('/bloco_prescricao/<int:bloco_id>/atualizar', methods=['POST'])
@@ -4080,7 +4080,7 @@ def imprimir_bloco_prescricao(bloco_id):
     )
 
     return render_template(
-        'imprimir_bloco.html',
+        'orcamentos/imprimir_bloco.html',
         bloco=bloco,
         consulta=consulta,
         animal=animal,
@@ -4189,7 +4189,7 @@ def editar_bloco_exames(bloco_id):
     bloco = BlocoExames.query.get_or_404(bloco_id)
     if current_user.worker != 'veterinario':
         return jsonify({'success': False, 'message': 'Apenas veterinários podem editar exames.'}), 403
-    return render_template('editar_bloco_exames.html', bloco=bloco)
+    return render_template('orcamentos/editar_bloco_exames.html', bloco=bloco)
 
 
 
@@ -7144,7 +7144,7 @@ def editar_bloco_orcamento(bloco_id):
     ensure_clinic_access(bloco.clinica_id)
     if current_user.worker != 'veterinario':
         return jsonify({'success': False, 'message': 'Apenas veterinários podem editar.'}), 403
-    return render_template('editar_bloco_orcamento.html', bloco=bloco)
+    return render_template('orcamentos/editar_bloco_orcamento.html', bloco=bloco)
 
 
 @app.route('/bloco_orcamento/<int:bloco_id>/atualizar', methods=['POST'])
