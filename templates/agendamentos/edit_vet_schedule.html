@@ -79,6 +79,37 @@
     </div>
   </div>
 
+  <h3 class="text-warning"><i class="fas fa-clock me-2"></i>Consultas Pendentes</h3>
+  <ul class="list-group mb-4">
+    {% for appt in appointments_pending %}
+      {% set can_respond = appt.time_left.total_seconds() > 0 %}
+      <li class="list-group-item d-flex justify-content-between align-items-center">
+        <div>
+          {{ appt.scheduled_at.strftime('%d/%m/%Y %H:%M') }} - {{ appt.animal.name }} ({{ appt.tutor.name }})
+          {% if can_respond %}
+            <small class="text-muted ms-2">Tempo restante: {{ appt.time_left|format_timedelta }}</small>
+          {% else %}
+            <span class="text-muted ms-2">Prazo expirado</span>
+          {% endif %}
+        </div>
+        {% if can_respond %}
+          <div class="d-flex gap-2">
+            <form method="POST" action="{{ url_for('update_appointment_status', appointment_id=appt.id) }}">
+              <input type="hidden" name="status" value="accepted">
+              <button type="submit" class="btn btn-success btn-sm">Aceitar</button>
+            </form>
+            <form method="POST" action="{{ url_for('update_appointment_status', appointment_id=appt.id) }}">
+              <input type="hidden" name="status" value="canceled">
+              <button type="submit" class="btn btn-danger btn-sm">Cancelar</button>
+            </form>
+          </div>
+        {% endif %}
+      </li>
+    {% else %}
+      <li class="list-group-item">Não há agendamentos pendentes.</li>
+    {% endfor %}
+  </ul>
+
   <h3 class="text-primary"><i class="fas fa-calendar-alt me-2"></i>Consultas Agendadas</h3>
   <ul class="list-group mb-4">
     {% for appt in appointments_upcoming %}

@@ -20,25 +20,28 @@ def client():
     )
     with flask_app.test_client() as client:
         with flask_app.app_context():
+            db.session.remove()
             db.create_all()
         yield client
         with flask_app.app_context():
+            db.session.remove()
             db.drop_all()
 
 
 def test_veterinarios_listing_and_detail(client):
     with flask_app.app_context():
-        user = User(id=1, name="Vet", email="vet@test", password_hash="x", worker="veterinario")
-        vet = Veterinario(id=1, user=user, crmv="123")
+        user = User(name="Vet", email="vet@test", password_hash="x", worker="veterinario")
+        vet = Veterinario(user=user, crmv="123")
         schedule = VetSchedule(veterinario=vet, dia_semana="Segunda", hora_inicio=time(9, 0), hora_fim=time(17, 0))
         db.session.add_all([user, vet, schedule])
         db.session.commit()
+        vet_id = vet.id
 
     resp = client.get("/veterinarios")
     assert resp.status_code == 200
     assert b"Vet" in resp.data
 
-    resp = client.get("/veterinario/1")
+    resp = client.get(f"/veterinario/{vet_id}")
     assert resp.status_code == 200
     assert b"CRMV" in resp.data
     assert b"123" in resp.data

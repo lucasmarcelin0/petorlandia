@@ -63,17 +63,22 @@ def test_pending_page_allows_accept(client, monkeypatch):
         'role': 'adotante',
         'name': 'Vet',
         'is_authenticated': True,
-        'veterinario': type('V', (), {'id': vet_id, 'clinica_id': 1})()
+        'veterinario': type('V', (), {'id': vet_id, 'clinica_id': 1, 'user': type('UU', (), {'name': 'Vet'})()})()
     })()
     login(monkeypatch, fake_vet)
-    resp = client.get('/appointments/pending')
+    resp = client.get('/appointments')
     assert resp.status_code == 200
     html = resp.get_data(as_text=True)
     assert 'Aceitar' in html
+    assert 'Tempo restante' in html
     resp = client.post(f'/appointments/{appt_id}/status', data={'status': 'accepted'})
     assert resp.status_code == 302
     with flask_app.app_context():
         assert Appointment.query.get(appt_id).status == 'accepted'
+    resp = client.get('/appointments')
+    html = resp.get_data(as_text=True)
+    assert 'Aceitar' not in html
+    assert 'Rex' in html
 
 
 def test_cannot_accept_within_two_hours(client, monkeypatch):
