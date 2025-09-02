@@ -1266,7 +1266,7 @@ def termo_interesse(animal_id, user_id):
         return redirect(url_for('conversa', animal_id=animal.id, user_id=animal.user_id))
 
     data_atual = datetime.now(BR_TZ).strftime('%d/%m/%Y')
-    return render_template('termo_interesse.html', animal=animal, interessado=interessado, data_atual=data_atual)
+    return render_template('termos/termo_interesse.html', animal=animal, interessado=interessado, data_atual=data_atual)
 
 
 # Função local de formatação, caso ainda não tenha no projeto
@@ -1355,7 +1355,7 @@ def termo_transferencia(animal_id, user_id):
         return redirect(url_for('profile'))
 
     data_atual = datetime.now(BR_TZ).strftime('%d/%m/%Y')
-    return render_template('termo_transferencia.html', animal=animal, novo_dono=novo_dono)
+    return render_template('termos/termo_transferencia.html', animal=animal, novo_dono=novo_dono)
 
 @app.route('/animal/<int:animal_id>/termo/<string:tipo>')
 @login_required
@@ -1365,14 +1365,14 @@ def termo_animal(animal_id, tipo):
     clinica = current_user.veterinario.clinica if current_user.veterinario else None
     data_atual = datetime.now(BR_TZ).strftime('%d/%m/%Y')
     templates = {
-        'internacao': 'termo_internacao.html',
-        'eutanasia': 'termo_eutanasia.html',
-        'procedimentos': 'termo_procedimentos.html',
-        'exames': 'termo_exames.html',
-        'imagem': 'termo_imagem.html',
-        'medicacao': 'termo_medicacao.html',
-        'planos': 'termo_planos.html',
-        'adocao': 'termo_adocao.html',
+        'internacao': 'termos/termo_internacao.html',
+        'eutanasia': 'termos/termo_eutanasia.html',
+        'procedimentos': 'termos/termo_procedimentos.html',
+        'exames': 'termos/termo_exames.html',
+        'imagem': 'termos/termo_imagem.html',
+        'medicacao': 'termos/termo_medicacao.html',
+        'planos': 'termos/termo_planos.html',
+        'adocao': 'termos/termo_adocao.html',
     }
     template = templates.get(tipo)
     if not template:
