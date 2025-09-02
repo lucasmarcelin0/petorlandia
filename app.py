@@ -3899,6 +3899,49 @@ def importar_medicamentos():
         return f"❌ Erro: {e}"
 
 
+@app.route("/medicamento", methods=["POST"])
+def criar_medicamento():
+    data = request.get_json(silent=True) or {}
+    nome = (data.get("nome") or "").strip()
+    principio = (data.get("principio_ativo") or "").strip()
+
+    if not nome or not principio:
+        return jsonify({"success": False, "message": "Nome e princípio ativo são obrigatórios"}), 400
+
+    try:
+        novo = Medicamento(nome=nome, principio_ativo=principio)
+        db.session.add(novo)
+        db.session.commit()
+        return jsonify({"success": True, "id": novo.id})
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"success": False, "message": str(e)}), 500
+
+
+@app.route("/apresentacao_medicamento", methods=["POST"])
+def criar_apresentacao_medicamento():
+    data = request.get_json(silent=True) or {}
+    medicamento_id = data.get("medicamento_id")
+    forma = (data.get("forma") or "").strip()
+    concentracao = (data.get("concentracao") or "").strip()
+
+    if not medicamento_id or not forma or not concentracao:
+        return jsonify({"success": False, "message": "Dados obrigatórios ausentes"}), 400
+
+    try:
+        apresentacao = ApresentacaoMedicamento(
+            medicamento_id=int(medicamento_id),
+            forma=forma,
+            concentracao=concentracao,
+        )
+        db.session.add(apresentacao)
+        db.session.commit()
+        return jsonify({"success": True, "id": apresentacao.id})
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"success": False, "message": str(e)}), 500
+
+
 @app.route("/buscar_medicamentos")
 def buscar_medicamentos():
     q = (request.args.get("q") or "").strip()
