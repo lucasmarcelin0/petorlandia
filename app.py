@@ -6915,14 +6915,16 @@ def schedule_exam(animal_id):
     )
     if conflito:
         return jsonify({'success': False, 'message': 'Horário indisponível.'}), 400
+    vet = Veterinario.query.get(specialist_id)
+    animal = Animal.query.get(animal_id)
+    same_user = vet and vet.user_id == current_user.id
     appt = ExamAppointment(
         animal_id=animal_id,
         specialist_id=specialist_id,
         requester_id=current_user.id,
         scheduled_at=scheduled_at,
+        status='confirmed' if same_user else 'pending',
     )
-    vet = Veterinario.query.get(specialist_id)
-    animal = Animal.query.get(animal_id)
     if vet and animal:
         evento = AgendaEvento(
             titulo=f"Exame de {animal.name}",
@@ -6932,21 +6934,23 @@ def schedule_exam(animal_id):
             clinica_id=animal.clinica_id,
         )
         db.session.add(evento)
-        msg = Message(
-            sender_id=current_user.id,
-            receiver_id=vet.user_id,
-            animal_id=animal_id,
-            content=(
-                f"Exame agendado para {animal.name} em {scheduled_at_local.strftime('%d/%m/%Y %H:%M')}. "
-                f"Confirme até {appt.confirm_by.replace(tzinfo=timezone.utc).astimezone(BR_TZ).strftime('%H:%M')}"
-            ),
-        )
-        db.session.add(msg)
+        if not same_user:
+            msg = Message(
+                sender_id=current_user.id,
+                receiver_id=vet.user_id,
+                animal_id=animal_id,
+                content=(
+                    f"Exame agendado para {animal.name} em {scheduled_at_local.strftime('%d/%m/%Y %H:%M')}. "
+                    f"Confirme até {appt.confirm_by.replace(tzinfo=timezone.utc).astimezone(BR_TZ).strftime('%H:%M')}"
+                ),
+            )
+            db.session.add(msg)
     db.session.add(appt)
     db.session.commit()
     appointments = ExamAppointment.query.filter_by(animal_id=animal_id).order_by(ExamAppointment.scheduled_at.desc()).all()
     html = render_template('partials/historico_exam_appointments.html', appointments=appointments)
-    return jsonify({'success': True, 'confirm_by': appt.confirm_by.isoformat(), 'html': html})
+    confirm_by = None if same_user else appt.confirm_by.isoformat()
+    return jsonify({'success': True, 'confirm_by': confirm_by, 'html': html})
 
 
 @app.route('/exam_appointment/<int:appointment_id>/status', methods=['POST'])
