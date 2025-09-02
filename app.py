@@ -6397,6 +6397,7 @@ def appointment_confirmation(appointment_id):
 @app.route('/appointments', methods=['GET', 'POST'])
 @login_required
 def appointments():
+    from models import ExamAppointment
     if request.method == 'POST' and current_user.worker not in ['veterinario', 'colaborador', 'admin']:
         abort(403)
     if current_user.worker == 'veterinario':
@@ -6835,7 +6836,6 @@ def api_clinic_appointments(clinica_id):
 
 
 @app.route('/api/specialists')
-@login_required
 def api_specialists():
     from models import Veterinario, Specialty
     specialty_id = request.args.get('specialty_id', type=int)
@@ -6854,7 +6854,6 @@ def api_specialists():
 
 
 @app.route('/api/specialties')
-@login_required
 def api_specialties():
     from models import Specialty
     specs = Specialty.query.order_by(Specialty.nome).all()
@@ -6862,7 +6861,6 @@ def api_specialties():
 
 
 @app.route('/api/specialist/<int:veterinario_id>/available_times')
-@login_required
 def api_specialist_available_times(veterinario_id):
     date_str = request.args.get('date')
     if not date_str:
