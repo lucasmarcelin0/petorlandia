@@ -328,6 +328,27 @@ def inject_pending_exam_count():
     return dict(pending_exam_count=pending)
 
 
+@app.context_processor
+def inject_pending_appointment_count():
+    """Expose count of upcoming appointments requiring vet action."""
+    if (
+        current_user.is_authenticated
+        and getattr(current_user, "worker", None) == "veterinario"
+        and getattr(current_user, "veterinario", None)
+    ):
+        from models import Appointment
+
+        now = datetime.utcnow()
+        pending = Appointment.query.filter(
+            Appointment.veterinario_id == current_user.veterinario.id,
+            Appointment.status == "scheduled",
+            Appointment.scheduled_at >= now + timedelta(hours=2),
+        ).count()
+    else:
+        pending = 0
+    return dict(pending_appointment_count=pending)
+
+
 
 
 
@@ -6549,6 +6570,29 @@ def delete_vet_schedule(veterinario_id, horario_id):
     return redirect(url_for('appointments'))
 
 
+@app.route('/appointments/pending')
+@login_required
+def pending_appointments():
+    """List scheduled appointments awaiting veterinarian response."""
+    if not (
+        current_user.worker == 'veterinario'
+        and getattr(current_user, 'veterinario', None)
+    ):
+        abort(403)
+    now = datetime.utcnow()
+    appointments = (
+        Appointment.query.filter_by(
+            veterinario_id=current_user.veterinario.id, status='scheduled'
+        )
+        .filter(Appointment.scheduled_at > now)
+        .order_by(Appointment.scheduled_at)
+        .all()
+    )
+    return render_template(
+        'agendamentos/pending_appointments.html', appointments=appointments, now=now
+    )
+
+
 @app.route('/appointments/manage')
 @login_required
 def manage_appointments():
@@ -6655,8 +6699,12 @@ def update_appointment_status(appointment_id):
         abort(403)
 
     status = request.form.get('status') or (request.get_json(silent=True) or {}).get('status')
-    if status not in {'scheduled', 'completed', 'canceled'}:
+    if status not in {'scheduled', 'completed', 'canceled', 'accepted'}:
         return jsonify({'success': False, 'message': 'Status inválido.'}), 400
+    if status in {'accepted', 'canceled'} and appointment.scheduled_at - datetime.utcnow() < timedelta(hours=2):
+        if request.is_json:
+            return jsonify({'success': False, 'message': 'Prazo expirado.'}), 400
+        return 'Prazo expirado.', 400
     appointment.status = status
     db.session.commit()
     if request.is_json:

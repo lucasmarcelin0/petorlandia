@@ -1,0 +1,33 @@
+{% extends 'layout.html' %}
+{% block main %}
+<h1>Agendamentos Pendentes</h1>
+{% if appointments %}
+  <ul class="list-group">
+  {% for appt in appointments %}
+    {% set can_respond = (appt.scheduled_at - now).total_seconds() >= 7200 %}
+    <li class="list-group-item d-flex justify-content-between align-items-center">
+      <div>
+        {{ appt.animal.name if appt.animal else 'Consulta' }} -
+        {{ appt.scheduled_at|datetime_brazil }}
+      </div>
+      {% if can_respond %}
+        <div class="d-flex gap-2">
+          <form method="POST" action="{{ url_for('update_appointment_status', appointment_id=appt.id) }}">
+            <input type="hidden" name="status" value="accepted">
+            <button type="submit" class="btn btn-success btn-sm">Aceitar</button>
+          </form>
+          <form method="POST" action="{{ url_for('update_appointment_status', appointment_id=appt.id) }}">
+            <input type="hidden" name="status" value="canceled">
+            <button type="submit" class="btn btn-danger btn-sm">Cancelar</button>
+          </form>
+        </div>
+      {% else %}
+        <span class="text-muted">Prazo expirado</span>
+      {% endif %}
+    </li>
+  {% endfor %}
+  </ul>
+{% else %}
+  <p>Não há agendamentos pendentes.</p>
+{% endif %}
+{% endblock %}

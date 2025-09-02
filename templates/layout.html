@@ -456,10 +456,11 @@
 
                             {% if current_user.worker == 'veterinario' %}
                                 <li class="nav-item position-relative">
-                                    <a class="nav-link" href="{{ url_for('appointments') }}">
+                                    <a class="nav-link" href="{{ url_for('pending_appointments') }}">
                                         <i class="fas fa-calendar-alt me-1 text-success"></i> Agenda
-                                        {% if pending_exam_count > 0 %}
-                                            <span class="badge rounded-pill bg-danger position-absolute top-0 start-100 translate-middle">{{ pending_exam_count }}</span>
+                                        {% set total_pending = pending_exam_count + pending_appointment_count %}
+                                        {% if total_pending > 0 %}
+                                            <span class="badge rounded-pill bg-danger position-absolute top-0 start-100 translate-middle">{{ total_pending }}</span>
                                         {% endif %}
                                     </a>
                                 </li>

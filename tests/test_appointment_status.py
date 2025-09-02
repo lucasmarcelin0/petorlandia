@@ -1,6 +1,6 @@
 import pytest
 import flask_login.utils as login_utils
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from app import app as flask_app, db
 from models import User, Clinica, Veterinario, Animal, Appointment, HealthPlan, HealthSubscription
@@ -38,7 +38,7 @@ def _setup_data():
         animal_id=animal.id,
         tutor_id=tutor.id,
         veterinario_id=vet.id,
-        scheduled_at=datetime.utcnow(),
+        scheduled_at=datetime.utcnow() + timedelta(hours=3),
         clinica_id=clinic.id,
     )
     db.session.add(appt)
