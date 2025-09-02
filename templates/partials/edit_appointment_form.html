@@ -2,11 +2,11 @@
   <input type="hidden" id="csrf_token" value="{{ csrf_token() if csrf_token is defined else '' }}">
   <div class="mb-3">
     <label for="edit-date" class="form-label">Data</label>
-    <input type="date" id="edit-date" class="form-control" value="{{ appointment.scheduled_at.date() }}">
+    <input type="date" id="edit-date" class="form-control" value="{{ appointment.scheduled_at|format_datetime_brazil('%Y-%m-%d') }}">
   </div>
   <div class="mb-3">
     <label for="edit-time" class="form-label">Horário</label>
-    <input type="time" id="edit-time" class="form-control" value="{{ appointment.scheduled_at.strftime('%H:%M') }}">
+    <input type="time" id="edit-time" class="form-control" value="{{ appointment.scheduled_at|format_datetime_brazil('%H:%M') }}">
   </div>
   <div class="mb-3">
     <label for="edit-vet" class="form-label">Veterinário</label>

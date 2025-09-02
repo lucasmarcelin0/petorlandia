@@ -156,7 +156,7 @@
                 <i class="fas fa-clock {% if can_respond %}text-warning{% else %}text-secondary{% endif %} fa-2x"></i>
               </div>
               <div>
-                <h6 class="mb-0">{{ appt.scheduled_at.strftime('%d/%m/%Y %H:%M') }} - {{ appt.animal.name }}</h6>
+                <h6 class="mb-0">{{ appt.scheduled_at|format_datetime_brazil('%d/%m/%Y %H:%M') }} - {{ appt.animal.name }}</h6>
                 <small class="text-muted">{{ appt.tutor.name if item.kind=='consulta' else appt.animal.owner.name }}{% if item.kind == 'exame' %} <span class="badge bg-info ms-1">Exame</span>{% endif %}</small>
                 <div class="mt-1">
                   {% if can_respond %}
@@ -218,7 +218,7 @@
                   <i class="fas fa-flask fa-2x text-info"></i>
                 </div>
                 <div>
-                  <h6 class="mb-0">{{ appt.scheduled_at.strftime('%d/%m/%Y %H:%M') }} - {{ appt.animal.name }}</h6>
+                  <h6 class="mb-0">{{ appt.scheduled_at|format_datetime_brazil('%d/%m/%Y %H:%M') }} - {{ appt.animal.name }}</h6>
                   <small class="text-muted">{{ appt.animal.owner.name }} <span class="badge bg-info ms-1">Exame</span></small>
                 </div>
               </div>
@@ -231,8 +231,8 @@
           {% else %}
           <div class="list-group-item list-group-item-action appointment-item"
               data-id="{{ appt.id }}"
-              data-date="{{ appt.scheduled_at.strftime('%Y-%m-%d') }}"
-              data-time="{{ appt.scheduled_at.strftime('%H:%M') }}"
+              data-date="{{ appt.scheduled_at|format_datetime_brazil('%Y-%m-%d') }}"
+              data-time="{{ appt.scheduled_at|format_datetime_brazil('%H:%M') }}"
               data-vet="{{ appt.veterinario.user.name }}"
               data-tutor="{{ appt.tutor.name }}"
               data-tutor-id="{{ appt.tutor_id }}"
@@ -249,7 +249,7 @@
                   <i class="fas fa-stethoscope fa-2x text-success"></i>
                 </div>
                 <div>
-                  <h6 class="mb-0">{{ appt.scheduled_at.strftime('%d/%m/%Y %H:%M') }} - {{ appt.animal.name }}</h6>
+                  <h6 class="mb-0">{{ appt.scheduled_at|format_datetime_brazil('%d/%m/%Y %H:%M') }} - {{ appt.animal.name }}</h6>
                   <small class="text-muted">{{ appt.tutor.name }}
                     {% if item.kind == 'retorno' %}<span class="badge bg-warning text-dark ms-1">Retorno</span>{% endif %}
                   </small>
@@ -286,8 +286,8 @@
         {% for appt in appointments_past %}
           <div class="list-group-item list-group-item-action appointment-item"
               data-id="{{ appt.id }}"
-              data-date="{{ appt.scheduled_at.strftime('%Y-%m-%d') }}"
-              data-time="{{ appt.scheduled_at.strftime('%H:%M') }}"
+              data-date="{{ appt.scheduled_at|format_datetime_brazil('%Y-%m-%d') }}"
+              data-time="{{ appt.scheduled_at|format_datetime_brazil('%H:%M') }}"
               data-vet="{{ appt.veterinario.user.name }}"
               data-tutor="{{ appt.tutor.name }}"
               data-tutor-id="{{ appt.tutor_id }}"
@@ -303,7 +303,7 @@
                   <i class="fas fa-history fa-2x text-secondary"></i>
                 </div>
                 <div>
-                  <h6 class="mb-0">{{ appt.scheduled_at.strftime('%d/%m/%Y %H:%M') }} - {{ appt.animal.name }}</h6>
+                  <h6 class="mb-0">{{ appt.scheduled_at|format_datetime_brazil('%d/%m/%Y %H:%M') }} - {{ appt.animal.name }}</h6>
                   <small class="text-muted">{{ appt.tutor.name }}</small>
                 </div>
               </div>

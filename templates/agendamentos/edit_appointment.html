@@ -6,11 +6,11 @@
   <form id="edit-form">
     <div class="mb-3">
       <label for="date" class="form-label">Data</label>
-      <input type="date" id="date" class="form-control" value="{{ appointment.scheduled_at.date() }}">
+      <input type="date" id="date" class="form-control" value="{{ appointment.scheduled_at|format_datetime_brazil('%Y-%m-%d') }}">
     </div>
     <div class="mb-3">
       <label for="time" class="form-label">Horário</label>
-      <input type="time" id="time" class="form-control" value="{{ appointment.scheduled_at.strftime('%H:%M') }}">
+      <input type="time" id="time" class="form-control" value="{{ appointment.scheduled_at|format_datetime_brazil('%H:%M') }}">
     </div>
     <div class="mb-3">
       <label for="veterinario" class="form-label">Veterinário</label>
