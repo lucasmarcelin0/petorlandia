@@ -1975,7 +1975,7 @@ def deletar_consulta(consulta_id):
     if request.accept_mimetypes.accept_json:
         animal = get_animal_or_404(animal_id)
         historico_html = render_template(
-            'partials/historico_consultas.html',
+            'partials/consulta/historico_consultas.html',
             animal=animal,
             historico_consultas=animal.consultas
         )
@@ -3349,7 +3349,7 @@ def update_consulta(consulta_id):
             .all()
         )
         html = render_template(
-            'partials/historico_consultas.html',
+            'partials/consulta/historico_consultas.html',
             animal=consulta.animal,
             historico_consultas=historico,
         )
@@ -3646,7 +3646,7 @@ def salvar_vacinas(animal_id):
         db.session.commit()
         animal = get_animal_or_404(animal_id)
         historico_html = render_template(
-            'partials/historico_vacinas.html',
+            'partials/consulta/historico_vacinas.html',
             animal=animal
         )
         return jsonify({"success": True, "html": historico_html})
@@ -3699,7 +3699,7 @@ def deletar_vacina(vacina_id):
 
     if request.accept_mimetypes.accept_json:
         animal = get_animal_or_404(animal_id)
-        historico_html = render_template('partials/historico_vacinas.html',
+        historico_html = render_template('partials/consulta/historico_vacinas.html',
                                          animal=animal)
         return jsonify(success=True, html=historico_html)
 
@@ -3919,7 +3919,7 @@ def salvar_prescricoes_lote(consulta_id):
 
     db.session.commit()
 
-    historico_html = render_template('partials/historico_prescricoes.html', consulta=consulta)
+    historico_html = render_template('partials/consulta/historico_prescricoes.html', consulta=consulta)
     return jsonify({'status': 'ok', 'historico_html': historico_html})
 
 
@@ -3969,7 +3969,7 @@ def salvar_bloco_prescricao(consulta_id):
 
     db.session.commit()
     historico_html = render_template(
-        'partials/historico_prescricoes.html',
+        'partials/consulta/historico_prescricoes.html',
         animal=consulta.animal
     )
     return jsonify({
@@ -3996,7 +3996,7 @@ def deletar_bloco_prescricao(bloco_id):
 
     if request.accept_mimetypes.accept_json:
         animal = get_animal_or_404(animal_id)
-        historico_html = render_template('partials/historico_prescricoes.html',
+        historico_html = render_template('partials/consulta/historico_prescricoes.html',
                                          animal=animal)
         return jsonify(success=True, html=historico_html)
 
@@ -4112,7 +4112,7 @@ def salvar_bloco_exames(animal_id):
     db.session.commit()
     animal = get_animal_or_404(animal_id)
     historico_html = render_template(
-        'partials/historico_exames.html',
+        'partials/consulta/historico_exames.html',
         animal=animal
     )
     return jsonify({'success': True, 'html': historico_html})
@@ -4174,7 +4174,7 @@ def deletar_bloco_exames(bloco_id):
 
     if request.accept_mimetypes.accept_json:
         animal = get_animal_or_404(animal_id)
-        historico_html = render_template('partials/historico_exames.html',
+        historico_html = render_template('partials/consulta/historico_exames.html',
                                          animal=animal)
         return jsonify(success=True, html=historico_html)
 
@@ -4254,7 +4254,7 @@ def atualizar_bloco_exames(bloco_id):
     db.session.commit()
 
     historico_html = render_template(
-        'partials/historico_exames.html',
+        'partials/consulta/historico_exames.html',
         animal=bloco.animal
     )
     return jsonify(success=True, html=historico_html)
@@ -6800,7 +6800,7 @@ def schedule_exam(animal_id):
     db.session.add(appt)
     db.session.commit()
     appointments = ExamAppointment.query.filter_by(animal_id=animal_id).order_by(ExamAppointment.scheduled_at.desc()).all()
-    html = render_template('partials/historico_exam_appointments.html', appointments=appointments)
+    html = render_template('partials/consulta/historico_exam_appointments.html', appointments=appointments)
     return jsonify({'success': True, 'confirm_by': appt.confirm_by.isoformat(), 'html': html})
 
 
@@ -6842,7 +6842,7 @@ def update_exam_appointment(appointment_id):
     appt.scheduled_at = scheduled_at
     db.session.commit()
     appointments = ExamAppointment.query.filter_by(animal_id=appt.animal_id).order_by(ExamAppointment.scheduled_at.desc()).all()
-    html = render_template('partials/historico_exam_appointments.html', appointments=appointments)
+    html = render_template('partials/consulta/historico_exam_appointments.html', appointments=appointments)
     return jsonify({'success': True, 'html': html})
 
 
@@ -6855,7 +6855,7 @@ def delete_exam_appointment(appointment_id):
     db.session.delete(appt)
     db.session.commit()
     appointments = ExamAppointment.query.filter_by(animal_id=animal_id).order_by(ExamAppointment.scheduled_at.desc()).all()
-    html = render_template('partials/historico_exam_appointments.html', appointments=appointments)
+    html = render_template('partials/consulta/historico_exam_appointments.html', appointments=appointments)
     return jsonify({'success': True, 'html': html})
 
 
@@ -6868,7 +6868,7 @@ def animal_exam_appointments(animal_id):
         .order_by(ExamAppointment.scheduled_at.desc())
         .all()
     )
-    return render_template('partials/historico_exam_appointments.html', appointments=appointments)
+    return render_template('partials/consulta/historico_exam_appointments.html', appointments=appointments)
 
 
 @app.route('/servico', methods=['POST'])
@@ -7117,7 +7117,7 @@ def salvar_bloco_orcamento(consulta_id):
         item.consulta_id = None
         db.session.add(item)
     db.session.commit()
-    historico_html = render_template('partials/historico_orcamentos.html', animal=consulta.animal)
+    historico_html = render_template('partials/consulta/historico_orcamentos.html', animal=consulta.animal)
     return jsonify({'success': True, 'html': historico_html})
 
 
@@ -7132,7 +7132,7 @@ def deletar_bloco_orcamento(bloco_id):
     db.session.delete(bloco)
     db.session.commit()
     if request.accept_mimetypes.accept_json:
-        historico_html = render_template('partials/historico_orcamentos.html', animal=Animal.query.get(animal_id))
+        historico_html = render_template('partials/consulta/historico_orcamentos.html', animal=Animal.query.get(animal_id))
         return jsonify({'success': True, 'html': historico_html})
     return redirect(url_for('consulta_direct', animal_id=animal_id))
 
@@ -7174,7 +7174,7 @@ def atualizar_bloco_orcamento(bloco_id):
 
     db.session.commit()
 
-    historico_html = render_template('partials/historico_orcamentos.html', animal=bloco.animal)
+    historico_html = render_template('partials/consulta/historico_orcamentos.html', animal=bloco.animal)
     return jsonify(success=True, html=historico_html)
 
 

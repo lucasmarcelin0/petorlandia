@@ -108,7 +108,7 @@
   <div class="tab-pane fade show active" id="tutor-info" role="tabpanel">
     <div class="card shadow-sm">
       <div class="card-body">
-        {% include 'partials/tutor_form.html' with context %}
+        {% include 'partials/consulta/tutor_form.html' with context %}
       </div>
     </div>
   </div>
@@ -117,7 +117,7 @@
     <div class="card shadow-sm">
       <div class="card-body">
         {% if animal or tutor %}
-          {% include 'partials/animal_form.html' with context %}
+          {% include 'partials/consulta/animal_form.html' with context %}
         {% else %}
           <div class="alert alert-warning">
             <i class="fa-solid fa-triangle-exclamation me-2"></i>
@@ -132,7 +132,7 @@
     <div class="card shadow-sm">
       <div class="card-body">
         {% if animal %}
-          {% include 'partials/food_form.html' with context %}
+          {% include 'partials/consulta/food_form.html' with context %}
         {% else %}
           <div class="alert alert-warning">
             <i class="fa-solid fa-triangle-exclamation me-2"></i>
@@ -147,9 +147,9 @@
     <div class="tab-pane fade" id="consulta-info" role="tabpanel">
       <div class="card shadow-sm">
         <div class="card-body">
-          {% include 'partials/consulta_form.html' %}
+          {% include 'partials/consulta/consulta_form.html' %}
           <div id="historico-consultas">
-            {% include 'partials/historico_consultas.html' %}
+            {% include 'partials/consulta/historico_consultas.html' %}
           </div>
         </div>
       </div>
@@ -158,7 +158,7 @@
     <div class="tab-pane fade" id="medicamentos" role="tabpanel">
       <div class="card shadow-sm">
         <div class="card-body">
-          {% include 'partials/prescricao_form.html' %}
+          {% include 'partials/consulta/prescricao_form.html' %}
         </div>
       </div>
     </div>
@@ -166,7 +166,7 @@
     <div class="tab-pane fade" id="exames" role="tabpanel">
       <div class="card shadow-sm">
         <div class="card-body">
-          {% include 'partials/exames_form.html' %}
+          {% include 'partials/consulta/exames_form.html' %}
         </div>
       </div>
     </div>
@@ -174,21 +174,21 @@
     <div class="tab-pane fade" id="vacinas" role="tabpanel">
       <div class="card shadow-sm">
         <div class="card-body">
-          {% include 'partials/vacinas_form.html' %}
+          {% include 'partials/consulta/vacinas_form.html' %}
         </div>
       </div>
     </div>
     <div class="tab-pane fade" id="documentos" role="tabpanel">
       <div class="card shadow-sm">
         <div class="card-body">
-          {% include 'partials/documentos.html' %}
+          {% include 'partials/consulta/documentos.html' %}
         </div>
       </div>
     </div>
     <div class="tab-pane fade" id="orcamento" role="tabpanel">
       <div class="card shadow-sm">
         <div class="card-body">
-          {% include 'partials/orcamento_form.html' %}
+          {% include 'partials/consulta/orcamento_form.html' %}
         </div>
       </div>
     </div>
