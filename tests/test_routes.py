@@ -1725,7 +1725,7 @@ def test_delete_document_by_veterinarian(app, monkeypatch):
 def test_documentos_whatsapp_button_rendered(app):
     with app.app_context():
         with flask_app.test_request_context():
-            template = flask_app.jinja_env.get_template('partials/documentos.html')
+            template = flask_app.jinja_env.get_template('partials/consulta/documentos.html')
             tutor = SimpleNamespace(name='Fulano', phone='+55 (11) 98765-4321')
             doc = SimpleNamespace(id=1, veterinario_id=1, filename='doc.pdf', file_url='http://example.com/doc.pdf')
             animal = SimpleNamespace(id=1, documentos=[doc])

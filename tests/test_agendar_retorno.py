@@ -137,5 +137,5 @@ def test_iniciar_retorno_cria_consulta_e_badge(client, monkeypatch):
         nova_consulta.status = 'finalizada'
         db.session.commit()
         animal = Animal.query.get(animal_id)
-        html = render_template('partials/historico_consultas.html', animal=animal, historico_consultas=[consulta, nova_consulta])
+        html = render_template('partials/consulta/historico_consultas.html', animal=animal, historico_consultas=[consulta, nova_consulta])
         assert 'Retorno' in html

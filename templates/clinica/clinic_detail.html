@@ -52,7 +52,7 @@
 
     <div class="tab-content">
       <div class="tab-pane fade show active" id="clinica" role="tabpanel">
-        {% include 'partials/clinic_info.html' %}
+        {% include 'partials/clinica/clinic_info.html' %}
       </div>
       <div class="tab-pane fade" id="veterinarios" role="tabpanel">
         <div class="d-flex justify-content-between align-items-center mt-4">
@@ -272,20 +272,20 @@
           </div>
         </form>
         <div id="appointments-table-container">
-          {% include 'partials/appointments_table.html' %}
+          {% include 'partials/clinica/appointments_table.html' %}
         </div>
       </div>
 
     </div>
     <div class="tab-pane fade" id="animais" role="tabpanel">
-      {% include 'partials/animais_adicionados.html' %}
+      {% include 'partials/comuns/animais_adicionados.html' %}
     </div>
     <div class="tab-pane fade" id="tutores" role="tabpanel">
-      {% include 'partials/tutores_adicionados.html' %}
+      {% include 'partials/comuns/tutores_adicionados.html' %}
     </div>
     {% if show_inventory %}
     <div class="tab-pane fade" id="estoque" role="tabpanel">
-      {% include 'partials/clinic_stock.html' %}
+      {% include 'partials/clinica/clinic_stock.html' %}
     </div>
     {% endif %}
     <div class="tab-pane fade" id="orcamento" role="tabpanel">
