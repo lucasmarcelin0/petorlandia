@@ -3,14 +3,10 @@
   <h5 class="mb-3">Solicitação de Exames</h5>
 
   <!-- Botão para cadastrar novo exame -->
-    <button type="button" class="btn btn-outline-primary mb-3" id="toggle-novo-exame">➕ Novo exame</button>
-  <div id="novo-exame-container" class="border rounded p-3 mb-3 bg-light d-none">
-    <div class="mb-2">
-      <label for="novo-exame-nome" class="form-label">Nome do exame</label>
-      <input type="text" id="novo-exame-nome" class="form-control" placeholder="Ex: Hemograma">
-    </div>
-    <button type="button" class="btn btn-primary" onclick="criarExameModelo()">💾 Salvar Exame</button>
-  </div>
+    <button type="button" class="btn btn-outline-primary mb-3" onclick="openModal('modal-exame')">➕ Novo exame</button>
+  {% with modal_id='modal-exame', title='Novo exame', save_button_id='salvar-exame-modal' %}
+    {% include 'components/modal_form.html' %}
+  {% endwith %}
 
   <!-- Campo com autocomplete -->
   <div class="mb-3 position-relative">
@@ -80,6 +76,7 @@
 
 
 
+<script src="{{ url_for('static', filename='admin/modelos.js') }}"></script>
 <script>
   let exames = [];
   let inputExame, sugestoes;
@@ -102,12 +99,9 @@
         });
       }
 
-      const toggleNovoExameBtn = document.getElementById('toggle-novo-exame');
-      const novoExameBox = document.getElementById('novo-exame-container');
-      if (toggleNovoExameBtn && novoExameBox) {
-        toggleNovoExameBtn.addEventListener('click', () => {
-          novoExameBox.classList.toggle('d-none');
-        });
+      const salvarExameBtn = document.getElementById('salvar-exame-modal');
+      if (salvarExameBtn) {
+        salvarExameBtn.addEventListener('click', () => criarExameModelo('modal-exame'));
       }
 
     inputExame.addEventListener('input', function () {
@@ -135,16 +129,14 @@
             });
           } else {
             const li = document.createElement('li');
-            li.className = 'list-group-item';
-            li.innerHTML = `
-              <div class="input-group">
-                <input type="text" id="novo-exame-nome" class="form-control" placeholder="Novo exame">
-                <button class="btn btn-outline-primary" type="button" id="btn-criar-exame">Criar</button>
-              </div>`;
+            li.className = 'list-group-item list-group-item-action text-primary';
+            li.textContent = 'Adicionar exame';
+            li.onclick = () => {
+              openModal('modal-exame');
+              const input = document.getElementById('modal-exame-nome');
+              if (input) input.value = query;
+            };
             sugestoes.appendChild(li);
-            const novoInput = document.getElementById('novo-exame-nome');
-            novoInput.value = query;
-            document.getElementById('btn-criar-exame').onclick = criarExameModelo;
           }
         });
   });
@@ -186,37 +178,6 @@
 
   renderExamesTemp(); // Inicializa a lista se já houver dados
   });
-
-    async function criarExameModelo() {
-    const nome = document.getElementById('novo-exame-nome')?.value.trim();
-    if (!nome) {
-      mostrarFeedback('Informe o nome do exame.', 'danger');
-      return;
-    }
-    try {
-      const resp = await fetch('/exame_modelo', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
-        body: JSON.stringify({ nome })
-      });
-      if (!resp.ok) throw new Error();
-      const data = await resp.json();
-      mostrarFeedback('Exame criado com sucesso!');
-      const li = document.createElement('li');
-      li.className = 'list-group-item list-group-item-action';
-      li.textContent = data.nome;
-      li.onclick = () => {
-        inputExame.value = data.nome;
-        document.getElementById('justificativa-exame').value = '';
-        sugestoes.innerHTML = '';
-      };
-      sugestoes.innerHTML = '';
-      sugestoes.appendChild(li);
-      li.click();
-    } catch (e) {
-      mostrarFeedback('Erro ao criar exame.', 'danger');
-    }
-  }
 
   function adicionarExame() {
     const nome = document.getElementById('nome-exame').value.trim();
