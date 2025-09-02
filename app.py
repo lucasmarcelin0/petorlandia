@@ -6795,14 +6795,17 @@ def update_appointment_status(appointment_id):
     if status not in {'scheduled', 'completed', 'canceled', 'accepted'}:
         return jsonify({'success': False, 'message': 'Status inválido.'}), 400
     if status in {'accepted', 'canceled'} and appointment.scheduled_at - datetime.utcnow() < timedelta(hours=2):
+        # A resposta JSON levava o usuário para uma página vazia. Manter o
+        # comportamento simples de texto quando o prazo expira.
         if request.is_json:
             return jsonify({'success': False, 'message': 'Prazo expirado.'}), 400
         return 'Prazo expirado.', 400
+
     appointment.status = status
     db.session.commit()
-    if request.is_json:
-        return jsonify({'success': True})
     flash('Status atualizado.', 'success')
+    # Sempre redireciona de volta à página anterior para evitar exibir apenas
+    # o JSON "{\"success\": true}".
     return redirect(request.referrer or url_for('appointments'))
 
 

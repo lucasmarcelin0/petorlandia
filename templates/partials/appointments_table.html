@@ -27,6 +27,7 @@
                 {% if current_user.worker in ['veterinario', 'colaborador'] %}
                 <a href="{{ url_for('consulta_direct', animal_id=appt.animal_id) }}" class="btn btn-sm btn-outline-success">🩺 Iniciar Consulta</a>
                 {% endif %}
+                <a href="{{ url_for('edit_appointment', appointment_id=appt.id) }}" class="btn btn-sm btn-outline-info" title="Propor novo horário">🔄</a>
                 <form method="POST" action="{{ url_for('update_appointment_status', appointment_id=appt.id) }}" class="d-inline">
                   {% if csrf_token is defined %}{{ csrf_token() }}{% endif %}
                   <input type="hidden" name="status" value="completed">
