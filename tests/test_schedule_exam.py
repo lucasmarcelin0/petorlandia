@@ -7,7 +7,8 @@ import pytest
 import flask_login.utils as login_utils
 from app import app as flask_app, db
 from models import User, Clinica, Animal, Veterinario, Specialty, VetSchedule, ExamAppointment, AgendaEvento, Message
-from datetime import datetime, time, date
+from datetime import datetime, time, date, timezone
+from zoneinfo import ZoneInfo
 from helpers import get_available_times
 
 
@@ -99,7 +100,9 @@ def test_update_exam_appointment_changes_time(client, monkeypatch):
     assert resp.status_code == 200
     with flask_app.app_context():
         appt = ExamAppointment.query.get(1)
-        assert appt.scheduled_at == datetime(2024, 5, 22, 10, 0)
+        br_tz = ZoneInfo("America/Sao_Paulo")
+        scheduled_local = appt.scheduled_at.replace(tzinfo=timezone.utc).astimezone(br_tz)
+        assert scheduled_local == datetime(2024, 5, 22, 10, 0, tzinfo=br_tz)
 
 
 def test_delete_exam_appointment_removes_record(client, monkeypatch):

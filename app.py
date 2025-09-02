@@ -6764,10 +6764,22 @@ def schedule_exam(animal_id):
     time_str = data.get('time')
     if not all([specialist_id, date_str, time_str]):
         return jsonify({'success': False, 'message': 'Dados incompletos.'}), 400
-    scheduled_at = datetime.strptime(f"{date_str} {time_str}", '%Y-%m-%d %H:%M')
+    scheduled_at_local = datetime.strptime(
+        f"{date_str} {time_str}", "%Y-%m-%d %H:%M"
+    )
+    scheduled_at = (
+        scheduled_at_local
+        .replace(tzinfo=BR_TZ)
+        .astimezone(timezone.utc)
+        .replace(tzinfo=None)
+    )
     conflito = (
-        Appointment.query.filter_by(veterinario_id=specialist_id, scheduled_at=scheduled_at).first()
-        or ExamAppointment.query.filter_by(specialist_id=specialist_id, scheduled_at=scheduled_at).first()
+        Appointment.query.filter_by(
+            veterinario_id=specialist_id, scheduled_at=scheduled_at
+        ).first()
+        or ExamAppointment.query.filter_by(
+            specialist_id=specialist_id, scheduled_at=scheduled_at
+        ).first()
     )
     if conflito:
         return jsonify({'success': False, 'message': 'Horário indisponível.'}), 400
@@ -6792,7 +6804,7 @@ def schedule_exam(animal_id):
             receiver_id=vet.user_id,
             animal_id=animal_id,
             content=(
-                f"Exame agendado para {animal.name} em {scheduled_at.strftime('%d/%m/%Y %H:%M')}. "
+                f"Exame agendado para {animal.name} em {scheduled_at_local.strftime('%d/%m/%Y %H:%M')}. "
                 f"Confirme até {appt.confirm_by.strftime('%H:%M')}"
             ),
         )
@@ -6827,9 +6839,19 @@ def update_exam_appointment(appointment_id):
     specialist_id = data.get('specialist_id', appt.specialist_id)
     if not date_str or not time_str:
         return jsonify({'success': False, 'message': 'Dados incompletos.'}), 400
-    scheduled_at = datetime.strptime(f"{date_str} {time_str}", '%Y-%m-%d %H:%M')
+    scheduled_at_local = datetime.strptime(
+        f"{date_str} {time_str}", "%Y-%m-%d %H:%M"
+    )
+    scheduled_at = (
+        scheduled_at_local
+        .replace(tzinfo=BR_TZ)
+        .astimezone(timezone.utc)
+        .replace(tzinfo=None)
+    )
     conflito = (
-        Appointment.query.filter_by(veterinario_id=specialist_id, scheduled_at=scheduled_at).first()
+        Appointment.query.filter_by(
+            veterinario_id=specialist_id, scheduled_at=scheduled_at
+        ).first()
         or ExamAppointment.query.filter(
             ExamAppointment.specialist_id == specialist_id,
             ExamAppointment.scheduled_at == scheduled_at,
