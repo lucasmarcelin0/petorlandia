@@ -1997,7 +1997,7 @@ def imprimir_consulta(consulta_id):
     )
 
     return render_template(
-        'imprimir_consulta.html',
+        'orcamentos/imprimir_consulta.html',
         consulta=consulta,
         animal=animal,
         tutor=tutor,
@@ -2465,7 +2465,7 @@ def novo_orcamento(clinica_id):
         db.session.commit()
         flash('Orçamento criado com sucesso.', 'success')
         return redirect(url_for('clinic_detail', clinica_id=clinica_id) + '#orcamento')
-    return render_template('orcamento_form.html', form=form, clinica=clinica)
+    return render_template('orcamentos/orcamento_form.html', form=form, clinica=clinica)
 
 
 @app.route('/orcamento/<int:orcamento_id>/editar', methods=['GET', 'POST'])
@@ -2480,7 +2480,7 @@ def editar_orcamento(orcamento_id):
         db.session.commit()
         flash('Orçamento atualizado com sucesso.', 'success')
         return redirect(url_for('clinic_detail', clinica_id=orcamento.clinica_id) + '#orcamento')
-    return render_template('orcamento_form.html', form=form, clinica=orcamento.clinica)
+    return render_template('orcamentos/orcamento_form.html', form=form, clinica=orcamento.clinica)
 
 
 @app.route('/clinica/<int:clinica_id>/orcamentos')
@@ -2490,7 +2490,7 @@ def orcamentos(clinica_id):
     if current_user.clinica_id != clinica_id and not _is_admin():
         abort(403)
     lista = Orcamento.query.filter_by(clinica_id=clinica_id).all()
-    return render_template('orcamentos.html', clinica=clinica, orcamentos=lista)
+    return render_template('orcamentos/orcamentos.html', clinica=clinica, orcamentos=lista)
 
 
 @app.route('/dashboard/orcamentos')
@@ -2537,7 +2537,7 @@ def dashboard_orcamentos():
     ]
 
     return render_template(
-        'dashboard_orcamentos.html',
+        'orcamentos/dashboard_orcamentos.html',
         consultas=dados_consultas,
         clientes=total_por_cliente,
         animais=total_por_animal,
@@ -3678,7 +3678,7 @@ def imprimir_vacinas(animal_id):
             clinica = Clinica.query.get_or_404(clinica_id)
     if not clinica:
         abort(400, description="É necessário informar uma clínica.")
-    return render_template("imprimir_vacinas.html", animal=animal, clinica=clinica, veterinario=veterinario)
+    return render_template("orcamentos/imprimir_vacinas.html", animal=animal, clinica=clinica, veterinario=veterinario)
 
 
 @app.route("/vacina/<int:vacina_id>/deletar", methods=["POST"])
@@ -4154,7 +4154,7 @@ def imprimir_bloco_exames(bloco_id):
     if not clinica:
         abort(400, description="É necessário informar uma clínica.")
 
-    return render_template('imprimir_exames.html', bloco=bloco, animal=animal, tutor=tutor, clinica=clinica, veterinario=veterinario)
+    return render_template('orcamentos/imprimir_exames.html', bloco=bloco, animal=animal, tutor=tutor, clinica=clinica, veterinario=veterinario)
 
 
 @app.route('/bloco_exames/<int:bloco_id>/deletar', methods=['POST'])
@@ -4757,7 +4757,7 @@ def list_delivery_requests():
         canceled = base.filter_by(status="cancelada").all()
 
     return render_template(
-        "delivery_requests.html",
+        "entregas/delivery_requests.html",
         available=available,
         doing=doing,
         done=done,
@@ -4933,7 +4933,7 @@ def delivery_detail(req_id):
         abort(403)
 
     return render_template(
-        "delivery_detail.html",
+        "entregas/delivery_detail.html",
         req=req,
         order=order,
         items=items,
@@ -5140,7 +5140,7 @@ def delivery_archive_user():
         reqs = base.filter_by(worker_id=current_user.id).all()
     else:
         reqs = base.filter_by(requested_by_id=current_user.id).all()
-    return render_template('delivery_archive.html', requests=reqs)
+    return render_template('entregas/delivery_archive.html', requests=reqs)
 
 
 
@@ -5336,7 +5336,7 @@ def loja():
     has_orders = Order.query.filter_by(user_id=current_user.id).first() is not None
 
     return render_template(
-        "loja.html",
+        "loja/loja.html",
         products=produtos,
         pagination=pagination,
         pagamento_pendente=pagamento_pendente,
@@ -5428,7 +5428,7 @@ def produto_detail(product_id):
             return redirect(url_for('produto_detail', product_id=product.id))
 
     return render_template(
-        'product_detail.html',
+        'loja/product_detail.html',
         product=product,
         update_form=update_form,
         photo_form=photo_form,
@@ -5586,7 +5586,7 @@ def ver_carrinho():
 
     # 4) Renderiza o carrinho passando o form
     return render_template(
-        'carrinho.html',
+        'loja/carrinho.html',
         form=form,
         order=order,
         pagamento_pendente=pagamento_pendente,
@@ -5658,7 +5658,7 @@ def checkout_confirm():
         selected_address = current_user.endereco.full
 
     return render_template(
-        "checkout_confirm.html",
+        "loja/checkout_confirm.html",
         form=form,
         order=order,
         selected_address=selected_address,
@@ -6238,7 +6238,7 @@ def minhas_compras():
                   .paginate(page=page, per_page=per_page, error_out=False))
 
     return render_template(
-        "minhas_compras.html",
+        "loja/minhas_compras.html",
         orders=pagination.items,
         pagination=pagination,
         PaymentStatus=PaymentStatus,
@@ -6308,7 +6308,7 @@ def pedido_detail(order_id):
     )
 
     return render_template(
-        "delivery_detail.html",
+        "entregas/delivery_detail.html",
         req=req,
         order=order,
         items=items,
@@ -6903,7 +6903,7 @@ def imprimir_orcamento(consulta_id):
         veterinario.veterinario.clinica if veterinario and veterinario.veterinario else None
     )
     return render_template(
-        'imprimir_orcamento.html',
+        'orcamentos/imprimir_orcamento.html',
         itens=consulta.orcamento_items,
         total=consulta.total_orcamento,
         animal=animal,
@@ -6924,7 +6924,7 @@ def imprimir_bloco_orcamento(bloco_id):
     veterinario = consulta.veterinario if consulta else current_user
     clinica = consulta.clinica if consulta and consulta.clinica else bloco.clinica
     return render_template(
-        'imprimir_orcamento.html',
+        'orcamentos/imprimir_orcamento.html',
         itens=bloco.itens,
         total=bloco.total,
         animal=animal,
@@ -6940,7 +6940,7 @@ def imprimir_orcamento_padrao(orcamento_id):
     orcamento = Orcamento.query.get_or_404(orcamento_id)
     ensure_clinic_access(orcamento.clinica_id)
     return render_template(
-        'imprimir_orcamento_padrao.html',
+        'orcamentos/imprimir_orcamento_padrao.html',
         itens=orcamento.items,
         total=orcamento.total,
         clinica=orcamento.clinica,
