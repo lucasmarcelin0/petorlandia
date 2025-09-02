@@ -5,7 +5,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')
 
 import pytest
 from app import app as flask_app, db
-from models import User, Animal, Clinica, Vacina
+from models import User, Animal, Clinica, Vacina, VacinaModelo
 
 @pytest.fixture
 def app():
@@ -50,3 +50,16 @@ def test_salvar_vacina_data_invalida(app):
         vacina = Vacina.query.filter_by(animal_id=animal.id).first()
         assert vacina is not None
         assert vacina.data is None
+
+
+def test_criar_vacina_modelo(app):
+    with app.app_context():
+        db.drop_all()
+        db.create_all()
+        client = app.test_client()
+        resp = client.post('/vacina_modelo', json={'nome': 'V10', 'tipo': 'Obrigatória'})
+        assert resp.status_code == 200
+        data = resp.get_json()
+        assert data['success'] is True
+        vm = VacinaModelo.query.filter_by(nome='V10').first()
+        assert vm is not None
