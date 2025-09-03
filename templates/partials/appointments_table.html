@@ -1,59 +1,264 @@
-<table class="table">
-  <thead>
-    <tr>
-      <th>Hora</th>
-      <th>Animal</th>
-      <th>Veterinário</th>
-      <th>Status</th>
-      <th>Ações</th>
-    </tr>
-  </thead>
-  <tbody>
-    {% if appointments_grouped %}
-      {% for day, items in appointments_grouped %}
-        <tr class="table-light">
-          <th colspan="5">{{ day|format_datetime_brazil('%d/%m/%Y') }}</th>
-        </tr>
-        {% for appt in items %}
-          <tr class="appointment-row" data-href="{{ url_for('edit_appointment', appointment_id=appt.id) }}">
-            <td>{{ appt.scheduled_at|format_datetime_brazil('%H:%M') }}</td>
-            <td>{{ appt.animal.name }}</td>
-            <td>{{ appt.veterinario.user.name }}</td>
-            <td>{{ {'scheduled':'A fazer','completed':'Realizada','canceled':'Cancelada'}.get(appt.status, appt.status) }}</td>
-            <td>
-              <div class="btn-group">
-                <a href="{{ url_for('ficha_animal', animal_id=appt.animal_id) }}" class="btn btn-sm btn-outline-primary">📋 Ficha Animal</a>
-                <a href="{{ url_for('ficha_tutor', tutor_id=appt.tutor_id) }}" class="btn btn-sm btn-outline-secondary">👤 Ficha Tutor</a>
-                {% if current_user.worker in ['veterinario', 'colaborador'] %}
-                <a href="{{ url_for('consulta_direct', animal_id=appt.animal_id) }}" class="btn btn-sm btn-outline-success">🩺 Iniciar Consulta</a>
-                {% endif %}
-                <a href="{{ url_for('edit_appointment', appointment_id=appt.id) }}" class="btn btn-sm btn-outline-info" title="Propor novo horário">🔄</a>
-                <form method="POST" action="{{ url_for('update_appointment_status', appointment_id=appt.id) }}" class="d-inline">
-                  {% if csrf_token is defined %}{{ csrf_token() }}{% endif %}
-                  <input type="hidden" name="status" value="completed">
-                  <button class="btn btn-sm btn-outline-success" title="Marcar como realizada">✔️</button>
-                </form>
-                <form method="POST" action="{{ url_for('update_appointment_status', appointment_id=appt.id) }}" class="d-inline">
-                  {% if csrf_token is defined %}{{ csrf_token() }}{% endif %}
-                  <input type="hidden" name="status" value="canceled">
-                  <button class="btn btn-sm btn-outline-warning" title="Cancelar">✖️</button>
-                </form>
-                <form method="POST" action="{{ url_for('update_appointment_status', appointment_id=appt.id) }}" class="d-inline">
-                  {% if csrf_token is defined %}{{ csrf_token() }}{% endif %}
-                  <input type="hidden" name="status" value="scheduled">
-                  <button class="btn btn-sm btn-outline-secondary" title="Marcar como a fazer">⏳</button>
-                </form>
-                <form method="POST" action="{{ url_for('delete_appointment', appointment_id=appt.id) }}" class="d-inline" data-confirm="Excluir este agendamento?">
-                  {% if csrf_token is defined %}{{ csrf_token() }}{% endif %}
-                  <button class="btn btn-sm btn-outline-danger" title="Excluir">🗑️</button>
-                </form>
-              </div>
-            </td>
-          </tr>
-        {% endfor %}
-      {% endfor %}
-    {% else %}
-      <tr><td colspan="5">Nenhum agendamento encontrado.</td></tr>
-    {% endif %}
-  </tbody>
-</table>
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Agendamentos Veterinários</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        :root {
+            --primary-color: #4e73df;
+            --success-color: #1cc88a;
+            --info-color: #36b9cc;
+            --warning-color: #f6c23e;
+            --danger-color: #e74a3b;
+            --light-bg: #f8f9fc;
+        }
+        
+        body {
+            background-color: #f5f7fb;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        
+        .page-header {
+            border-bottom: 1px solid #e3e6f0;
+            padding-bottom: 1rem;
+            margin-bottom: 2rem;
+        }
+        
+        .day-header {
+            background: linear-gradient(135deg, var(--primary-color) 0%, #2a3e9d 100%);
+            color: white;
+            border-radius: 8px;
+            padding: 12px 20px;
+            margin: 25px 0 15px 0;
+            font-weight: 600;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+        
+        .appointment-card {
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0 3px 10px rgba(0, 0, 0, 0.08);
+            margin-bottom: 15px;
+            transition: all 0.3s ease;
+            border-left: 4px solid var(--primary-color);
+        }
+        
+        .appointment-card:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+            cursor: pointer;
+        }
+        
+        .appointment-card.scheduled { border-left-color: var(--primary-color); }
+        .appointment-card.completed { border-left-color: var(--success-color); }
+        .appointment-card.canceled { border-left-color: var(--danger-color); }
+        
+        .status-badge {
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-weight: 500;
+            font-size: 0.85rem;
+        }
+        
+        .status-scheduled { background-color: #e8eeff; color: var(--primary-color); }
+        .status-completed { background-color: #e6faf3; color: var(--success-color); }
+        .status-canceled { background-color: #fce8e6; color: var(--danger-color); }
+        
+        .btn-icon {
+            width: 36px;
+            height: 36px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 50%;
+            margin: 0 3px;
+        }
+        
+        .time-display {
+            font-size: 1.1rem;
+            font-weight: 600;
+            color: #4e5b6a;
+        }
+        
+        .animal-name {
+            font-weight: 600;
+            color: #2e3a4b;
+            font-size: 1.1rem;
+        }
+        
+        .vet-name {
+            color: #656f7d;
+        }
+        
+        .actions-container {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            justify-content: flex-end;
+        }
+        
+        .empty-state {
+            text-align: center;
+            padding: 40px 20px;
+            color: #6c757d;
+        }
+        
+        .empty-state i {
+            font-size: 5rem;
+            margin-bottom: 20px;
+            color: #dee2e6;
+        }
+        
+        @media (max-width: 992px) {
+            .appointment-card .col-md-3 {
+                margin-bottom: 15px;
+            }
+            
+            .actions-container {
+                justify-content: flex-start;
+            }
+        }
+        
+        .form-confirm {
+            display: inline;
+        }
+    </style>
+</head>
+<body>
+    <div class="container py-4">
+        <div class="page-header">
+            <h1 class="h3 mb-0 text-gray-800"><i class="fas fa-calendar-alt me-2"></i>Agendamentos</h1>
+        </div>
+
+        {% if appointments_grouped %}
+            {% for day, items in appointments_grouped %}
+                <div class="day-header">
+                    <i class="fas fa-calendar-day me-2"></i>{{ day|format_datetime_brazil('%A, %d/%m/%Y') }}
+                </div>
+                
+                {% for appt in items %}
+                    <div class="appointment-card scheduled" onclick="window.location='{{ url_for('edit_appointment', appointment_id=appt.id) }}'">
+                        <div class="card-body">
+                            <div class="row align-items-center">
+                                <div class="col-md-2">
+                                    <div class="time-display">
+                                        <i class="far fa-clock me-1"></i>
+                                        {{ appt.scheduled_at|format_datetime_brazil('%H:%M') }}
+                                    </div>
+                                </div>
+                                <div class="col-md-3">
+                                    <div class="animal-name">
+                                        <i class="fas fa-paw me-2"></i>{{ appt.animal.name }}
+                                    </div>
+                                </div>
+                                <div class="col-md-2">
+                                    <div class="vet-name">
+                                        <i class="fas fa-user-md me-2"></i>{{ appt.veterinario.user.name }}
+                                    </div>
+                                </div>
+                                <div class="col-md-2">
+                                    <span class="status-badge status-{{ appt.status }}">
+                                        {% if appt.status == 'scheduled' %}A fazer{% endif %}
+                                        {% if appt.status == 'completed' %}Realizada{% endif %}
+                                        {% if appt.status == 'canceled' %}Cancelada{% endif %}
+                                    </span>
+                                </div>
+                                <div class="col-md-3">
+                                    <div class="actions-container">
+                                        <a href="{{ url_for('ficha_animal', animal_id=appt.animal_id) }}" class="btn btn-icon btn-primary" title="Ficha do Animal">
+                                            <i class="fas fa-file-medical"></i>
+                                        </a>
+                                        <a href="{{ url_for('ficha_tutor', tutor_id=appt.tutor_id) }}" class="btn btn-icon btn-secondary" title="Ficha do Tutor">
+                                            <i class="fas fa-user"></i>
+                                        </a>
+                                        {% if current_user.worker in ['veterinario', 'colaborador'] %}
+                                        <a href="{{ url_for('consulta_direct', animal_id=appt.animal_id) }}" class="btn btn-icon btn-success" title="Iniciar Consulta">
+                                            <i class="fas fa-stethoscope"></i>
+                                        </a>
+                                        {% endif %}
+                                        <a href="{{ url_for('edit_appointment', appointment_id=appt.id) }}" class="btn btn-icon btn-info" title="Propor novo horário">
+                                            <i class="fas fa-sync-alt"></i>
+                                        </a>
+                                        
+                                        <form method="POST" action="{{ url_for('update_appointment_status', appointment_id=appt.id) }}" class="form-confirm">
+                                            {% if csrf_token is defined %}{{ csrf_token() }}{% endif %}
+                                            <input type="hidden" name="status" value="completed">
+                                            <button class="btn btn-icon btn-success" title="Marcar como realizada">
+                                                <i class="fas fa-check"></i>
+                                            </button>
+                                        </form>
+                                        
+                                        <form method="POST" action="{{ url_for('update_appointment_status', appointment_id=appt.id) }}" class="form-confirm">
+                                            {% if csrf_token is defined %}{{ csrf_token() }}{% endif %}
+                                            <input type="hidden" name="status" value="canceled">
+                                            <button class="btn btn-icon btn-warning" title="Cancelar">
+                                                <i class="fas fa-times"></i>
+                                            </button>
+                                        </form>
+                                        
+                                        <form method="POST" action="{{ url_for('update_appointment_status', appointment_id=appt.id) }}" class="form-confirm">
+                                            {% if csrf_token is defined %}{{ csrf_token() }}{% endif %}
+                                            <input type="hidden" name="status" value="scheduled">
+                                            <button class="btn btn-icon btn-secondary" title="Marcar como a fazer">
+                                                <i class="fas fa-clock"></i>
+                                            </button>
+                                        </form>
+                                        
+                                        <form method="POST" action="{{ url_for('delete_appointment', appointment_id=appt.id) }}" class="form-confirm" data-confirm="Excluir este agendamento?">
+                                            {% if csrf_token is defined %}{{ csrf_token() }}{% endif %}
+                                            <button class="btn btn-icon btn-danger" title="Excluir">
+                                                <i class="fas fa-trash"></i>
+                                            </button>
+                                        </form>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                {% endfor %}
+            {% endfor %}
+        {% else %}
+            <div class="empty-state">
+                <i class="far fa-calendar-times"></i>
+                <h3>Nenhum agendamento encontrado</h3>
+                <p>Não há agendamentos para exibir no momento.</p>
+            </div>
+        {% endif %}
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // Adiciona confirmação para exclusão
+        document.addEventListener('DOMContentLoaded', function() {
+            const deleteForms = document.querySelectorAll('form[data-confirm]');
+            
+            deleteForms.forEach(form => {
+                form.addEventListener('submit', function(e) {
+                    const message = this.getAttribute('data-confirm');
+                    if (!confirm(message)) {
+                        e.preventDefault();
+                    }
+                });
+            });
+            
+            // Adiciona classes de status aos cards
+            const appointmentCards = document.querySelectorAll('.appointment-card');
+            appointmentCards.forEach(card => {
+                const statusBadge = card.querySelector('.status-badge');
+                if (statusBadge) {
+                    if (statusBadge.classList.contains('status-scheduled')) {
+                        card.classList.add('scheduled');
+                    } else if (statusBadge.classList.contains('status-completed')) {
+                        card.classList.add('completed');
+                    } else if (statusBadge.classList.contains('status-canceled')) {
+                        card.classList.add('canceled');
+                    }
+                }
+            });
+        });
+    </script>
+</body>
+</html>
