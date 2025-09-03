@@ -1878,6 +1878,8 @@ def consulta_direct(animal_id):
 
     appointment_form = None
     if consulta:
+        from models import Veterinario
+
         appointment_form = AppointmentForm()
         appointment_form.animal_id.choices = [(animal.id, animal.name)]
         appointment_form.animal_id.data = animal.id
@@ -1885,10 +1887,14 @@ def consulta_direct(animal_id):
         if consulta.veterinario and getattr(consulta.veterinario, "veterinario", None):
             vet_obj = consulta.veterinario.veterinario
         if vet_obj:
-            appointment_form.veterinario_id.choices = [(
-                vet_obj.id,
-                consulta.veterinario.name,
-            )]
+            vets = (
+                Veterinario.query.filter_by(
+                    clinica_id=current_user_clinic_id()
+                ).all()
+            )
+            appointment_form.veterinario_id.choices = [
+                (v.id, v.user.name) for v in vets
+            ]
             appointment_form.veterinario_id.data = vet_obj.id
 
     # Idade e unidade (anos/meses)
@@ -1968,13 +1974,23 @@ def finalizar_consulta(consulta_id):
     )
     db.session.add(msg)
 
+    if consulta.appointment:
+        db.session.commit()
+        flash('Consulta finalizada e retorno já agendado.', 'success')
+        return redirect(url_for('consulta_direct', animal_id=consulta.animal_id))
+
     # Prepara formulário de retorno com dados padrão
     form = AppointmentForm()
     form.animal_id.choices = [(consulta.animal.id, consulta.animal.name)]
     form.animal_id.data = consulta.animal.id
-    form.veterinario_id.choices = [
-        (consulta.veterinario.veterinario.id, consulta.veterinario.name)
-    ]
+    from models import Veterinario
+
+    vets = (
+        Veterinario.query.filter_by(
+            clinica_id=current_user_clinic_id()
+        ).all()
+    )
+    form.veterinario_id.choices = [(v.id, v.user.name) for v in vets]
     form.veterinario_id.data = consulta.veterinario.veterinario.id
 
     dias_retorno = current_app.config.get('DEFAULT_RETURN_DAYS', 7)
@@ -1993,11 +2009,16 @@ def agendar_retorno(consulta_id):
     consulta = get_consulta_or_404(consulta_id)
     if current_user.worker != 'veterinario':
         abort(403)
+    from models import Veterinario
+
     form = AppointmentForm()
     form.animal_id.choices = [(consulta.animal.id, consulta.animal.name)]
-    form.veterinario_id.choices = [
-        (consulta.veterinario.veterinario.id, consulta.veterinario.name)
-    ]
+    vets = (
+        Veterinario.query.filter_by(
+            clinica_id=current_user_clinic_id()
+        ).all()
+    )
+    form.veterinario_id.choices = [(v.id, v.user.name) for v in vets]
     if form.validate_on_submit():
         scheduled_at_local = datetime.combine(form.date.data, form.time.data)
         scheduled_at = (
@@ -2010,7 +2031,7 @@ def agendar_retorno(consulta_id):
             consulta_id=consulta.id,
             animal_id=consulta.animal_id,
             tutor_id=consulta.animal.owner.id,
-            veterinario_id=consulta.veterinario.veterinario.id,
+            veterinario_id=form.veterinario_id.data,
             scheduled_at=scheduled_at,
             notes=form.reason.data,
         )
