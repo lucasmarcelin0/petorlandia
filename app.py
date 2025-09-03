@@ -1479,14 +1479,14 @@ def verificar_datas_proximas() -> None:
 
         vacinas = (
             Vacina.query
-            .filter(Vacina.data >= agora.date(), Vacina.data <= limite.date())
+            .filter(Vacina.aplicada_em >= agora.date(), Vacina.aplicada_em <= limite.date())
             .all()
         )
         for vac in vacinas:
             tutor = vac.animal.owner
             texto = (
                 f"Lembrete: vacina '{vac.nome}' de {vac.animal.name} em "
-                f"{vac.data.strftime('%d/%m/%Y')}"
+                f"{vac.aplicada_em.strftime('%d/%m/%Y')}"
             )
             if tutor.email:
                 msg = MailMessage(
@@ -1796,8 +1796,8 @@ def ficha_animal(animal_id):
     )
     doses_futuras = (
         Vacina.query.filter_by(animal_id=animal.id)
-        .filter(Vacina.data >= date.today())
-        .order_by(Vacina.data)
+        .filter(Vacina.aplicada_em >= date.today())
+        .order_by(Vacina.aplicada_em)
         .all()
     )
 
@@ -4061,14 +4061,14 @@ def salvar_vacinas(animal_id):
 
     try:
         for v in data["vacinas"]:
-            data_str = v.get("data")
-            if data_str:
+            aplicada_em_str = v.get("aplicada_em")
+            if aplicada_em_str:
                 try:
-                    data_formatada = datetime.strptime(data_str, "%Y-%m-%d").date()
+                    aplicada_em = datetime.strptime(aplicada_em_str, "%Y-%m-%d").date()
                 except ValueError:
-                    data_formatada = None
+                    aplicada_em = None
             else:
-                data_formatada = None
+                aplicada_em = None
 
             vacina = Vacina(
                 animal_id=animal_id,
@@ -4078,7 +4078,8 @@ def salvar_vacinas(animal_id):
                 doses_totais=v.get("doses_totais"),
                 intervalo_dias=v.get("intervalo_dias"),
                 frequencia=v.get("frequencia"),
-                data=data_formatada,
+                aplicada=v.get("aplicada", False),
+                aplicada_em=aplicada_em,
                 observacoes=v.get("observacoes"),
                 created_by=current_user.id if current_user.is_authenticated else None,
             )
@@ -4152,13 +4153,17 @@ def alterar_vacina(vacina_id):
     vacina.intervalo_dias = data.get('intervalo_dias', vacina.intervalo_dias)
     vacina.frequencia = data.get('frequencia', vacina.frequencia)
     vacina.observacoes = data.get('observacoes', vacina.observacoes)
+    vacina.aplicada = data.get('aplicada', vacina.aplicada)
 
-    data_str = data.get('data')
-    if data_str:
-        try:
-            vacina.data = datetime.strptime(data_str, '%Y-%m-%d').date()
-        except ValueError:
-            vacina.data = None
+    aplicada_em_str = data.get('aplicada_em')
+    if aplicada_em_str is not None:
+        if aplicada_em_str:
+            try:
+                vacina.aplicada_em = datetime.strptime(aplicada_em_str, '%Y-%m-%d').date()
+            except ValueError:
+                vacina.aplicada_em = None
+        else:
+            vacina.aplicada_em = None
 
     try:
         db.session.commit()
@@ -7199,12 +7204,12 @@ def appointments():
                 Vacina.query
                 .join(Vacina.animal)
                 .filter(Animal.user_id == current_user.id)
-                .filter(Vacina.data >= date.today())
-                .order_by(Vacina.data)
+                .filter(Vacina.aplicada_em >= date.today())
+                .order_by(Vacina.aplicada_em)
                 .all()
             )
             for vac in vaccine_appointments:
-                vac.scheduled_at = datetime.combine(vac.data, time.min)
+                vac.scheduled_at = datetime.combine(vac.aplicada_em, time.min)
             form = None
         appointments_grouped = group_appointments_by_day(appointments)
         exam_appointments_grouped = group_appointments_by_day(exam_appointments)

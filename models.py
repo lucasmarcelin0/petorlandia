@@ -245,7 +245,7 @@ class Animal(db.Model):
 
     @property
     def vacinas_ordenadas(self):
-        return sorted(self.vacinas, key=lambda v: v.data or date.min, reverse=True)
+        return sorted(self.vacinas, key=lambda v: v.aplicada_em or date.min, reverse=True)
 
     user_id = db.Column(
         db.Integer,
@@ -957,7 +957,8 @@ class Vacina(db.Model):
     doses_totais = db.Column(db.Integer)
     intervalo_dias = db.Column(db.Integer)
     frequencia = db.Column(db.String(50))
-    data = db.Column(db.Date)        # Data da aplicação
+    aplicada = db.Column(db.Boolean, default=False)
+    aplicada_em = db.Column(db.Date)        # Data da aplicação
     observacoes = db.Column(db.Text)
     aplicada = db.Column(db.Boolean, default=False)
     aplicada_em = db.Column(db.Date)

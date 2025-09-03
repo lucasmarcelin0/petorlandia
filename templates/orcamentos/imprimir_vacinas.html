@@ -65,7 +65,7 @@
     <tbody>
       {% for vacina in animal.vacinas_ordenadas %}
       <tr>
-        <td>{{ vacina.data.strftime('%d/%m/%Y') if vacina.data else '—' }}</td>
+        <td>{{ vacina.aplicada_em.strftime('%d/%m/%Y') if vacina.aplicada_em else '—' }}</td>
         <td>{{ vacina.nome }}</td>
         <td>{{ vacina.tipo or '—' }}</td>
         <td>{{ vacina.lote or '—' }}</td>
