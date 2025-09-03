@@ -1,5 +1,10 @@
 {% extends "layout.html" %}
 {% block main %}
+{% set payment_status_text = {
+  'COMPLETED': 'Concluído',
+  'PENDING': 'Pendente',
+  'FAILED': 'Falhou'
+} %}
 <div class="container py-5">
   <h2 class="mb-4">Minhas Compras</h2>
   {% if orders %}
@@ -21,8 +26,9 @@
           <td>{{ o.created_at|format_datetime_brazil('%d/%m/%Y') }}</td>
           <td>R$ {{ '%.2f'|format(((o.payment.__dict__.get('amount') if o.payment else None) or o.total_value())) }}</td>
           <td>
-            <span class="badge{% if o.payment and o.payment.status == PaymentStatus.COMPLETED %} bg-success{% elif not o.payment or o.payment.status == PaymentStatus.PENDING %} bg-warning text-dark{% else %} bg-danger{% endif %}">
-              {{ o.payment.status.value if o.payment else 'Pendente' }}
+            {% set status = o.payment.status.name if o.payment else 'PENDING' %}
+            <span class="badge{% if status == 'COMPLETED' %} bg-success{% elif status == 'PENDING' %} bg-warning text-dark{% else %} bg-danger{% endif %}">
+              {{ payment_status_text.get(status, status) }}
             </span>
           </td>
           <td>
