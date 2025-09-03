@@ -31,6 +31,9 @@
       <div class="mt-2 d-flex gap-2">
         <button class="btn btn-sm btn-danger" onclick="excluirVacina({{ vacina.id }})">🗑️ Remover</button>
         <button class="btn btn-sm btn-outline-primary" onclick="editarVacina({{ vacina.id }})">✏️ Editar</button>
+        {% if not vacina.aplicada %}
+        <button class="btn btn-sm btn-success" onclick="aplicarVacina({{ vacina.id }})">✅ Aplicar</button>
+        {% endif %}
         <a href="{{ url_for('imprimir_vacinas', animal_id=animal.id) }}" class="btn btn-sm btn-outline-dark" target="_blank">🖨️ Imprimir</a>
       </div>
       </li>
@@ -141,6 +144,23 @@ function excluirVacina(id) {
     .catch(err => {
       console.error('Erro ao excluir vacina:', err);
       alert('Erro ao excluir vacina.');
+    });
+}
+
+function aplicarVacina(id) {
+  fetch(`/vacina/${id}/aplicar`, { method: 'POST' })
+    .then(res => res.json())
+    .then(d => {
+      if (d.success) {
+        alert('Vacina aplicada!');
+        location.reload();
+      } else {
+        alert(d.error || 'Erro ao aplicar vacina.');
+      }
+    })
+    .catch(err => {
+      console.error('Erro ao aplicar vacina:', err);
+      alert('Erro ao aplicar vacina.');
     });
 }
 </script>
