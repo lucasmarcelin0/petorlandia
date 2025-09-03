@@ -3716,7 +3716,15 @@ def buscar_vacinas():
         ).all()
 
         return jsonify([
-            {'nome': v.nome, 'tipo': v.tipo or ''}
+            {
+                'id': v.id,
+                'nome': v.nome,
+                'tipo': v.tipo or '',
+                'frequencia': v.frequencia or '',
+                'doses_totais': v.doses_totais,
+                'intervalo_dias': v.intervalo_dias,
+                'fabricante': v.fabricante or ''
+            }
             for v in resultados
         ])
     except Exception as e:
