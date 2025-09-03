@@ -5,15 +5,40 @@
     <!-- Botão para cadastrar nova vacina -->
     <button type="button" class="btn btn-outline-primary mb-3" onclick="toggleNovaVacina()">➕ Nova vacina</button>
     <div id="nova-vacina-container" class="border rounded p-3 mb-3 bg-light d-none">
+      <div class="mb-2 position-relative">
+        <label for="buscar-vacina-modelo" class="form-label">Pesquisar vacina existente</label>
+        <input type="text" id="buscar-vacina-modelo" class="form-control" placeholder="Digite para buscar...">
+        <ul id="sugestoes-busca-vacina" class="list-group position-absolute w-100" style="z-index: 10; max-height: 300px; overflow-y: auto; display: none;"></ul>
+      </div>
       <div class="mb-2">
-        <label for="nova-vacina-nome" class="form-label">Nome da vacina</label>
-        <input type="text" id="nova-vacina-nome" class="form-control" placeholder="Ex: Antirrábica">
+        <label for="nova-vacina-nome" class="form-label">Nome da vacina*</label>
+        <input type="text" id="nova-vacina-nome" class="form-control">
       </div>
       <div class="mb-2">
         <label for="nova-vacina-tipo" class="form-label">Tipo</label>
         <input type="text" id="nova-vacina-tipo" class="form-control" placeholder="Campanha, Reforço...">
       </div>
-      <button type="button" class="btn btn-primary" onclick="salvarVacinaModelo()">💾 Salvar Vacina</button>
+      <div class="mb-2">
+        <label for="nova-vacina-fabricante" class="form-label">Fabricante</label>
+        <input type="text" id="nova-vacina-fabricante" class="form-control">
+      </div>
+      <div class="mb-2">
+        <label for="nova-vacina-frequencia" class="form-label">Frequência</label>
+        <input type="text" id="nova-vacina-frequencia" class="form-control">
+      </div>
+      <div class="mb-2">
+        <label for="nova-vacina-doses" class="form-label">Doses Totais</label>
+        <input type="number" id="nova-vacina-doses" class="form-control">
+      </div>
+      <div class="mb-2">
+        <label for="nova-vacina-intervalo" class="form-label">Intervalo (dias)</label>
+        <input type="number" id="nova-vacina-intervalo" class="form-control">
+      </div>
+      <div class="mt-3">
+        <button type="button" id="btn-salvar-vacina-modelo" class="btn btn-primary me-2" onclick="salvarVacinaModelo()">💾 Salvar Vacina</button>
+        <button type="button" id="btn-editar-vacina-modelo" class="btn btn-success me-2 d-none" onclick="salvarVacinaModelo()">✏️ Editar</button>
+        <button type="button" id="btn-excluir-vacina-modelo" class="btn btn-outline-danger d-none" onclick="excluirVacinaModelo()">🗑️ Excluir</button>
+      </div>
     </div>
 
     <!-- Campo com autocomplete -->
@@ -23,9 +48,9 @@
       <ul id="sugestoes-vacinas" class="list-group position-absolute w-100 bg-white shadow border rounded mt-1" style="z-index: 1050;"></ul>
     </div>
 
-    <!-- Tipo e data -->
+    <!-- Tipo e informações -->
     <div class="row mb-3">
-      <div class="col-md-6">
+      <div class="col-md-4">
         <label for="tipo-vacina" class="form-label">Tipo</label>
         <select id="tipo-vacina" class="form-select">
           <option value="">Selecione...</option>
@@ -35,9 +60,27 @@
           <option value="Opcional">Opcional</option>
         </select>
       </div>
-      <div class="col-md-6">
+      <div class="col-md-4">
         <label for="data-vacina" class="form-label">Data da Aplicação</label>
         <input type="date" id="data-vacina" class="form-control">
+      </div>
+      <div class="col-md-4">
+        <label for="fabricante-vacina" class="form-label">Fabricante</label>
+        <input type="text" id="fabricante-vacina" class="form-control">
+      </div>
+    </div>
+    <div class="row mb-3">
+      <div class="col-md-4">
+        <label for="frequencia-vacina" class="form-label">Frequência</label>
+        <input type="text" id="frequencia-vacina" class="form-control">
+      </div>
+      <div class="col-md-4">
+        <label for="doses-totais-vacina" class="form-label">Doses Totais</label>
+        <input type="number" id="doses-totais-vacina" class="form-control">
+      </div>
+      <div class="col-md-4">
+        <label for="intervalo-dias-vacina" class="form-label">Intervalo (dias)</label>
+        <input type="number" id="intervalo-dias-vacina" class="form-control">
       </div>
     </div>
 
@@ -64,7 +107,7 @@
 
   <script>
     let vacinas = [];
-    let inputVacina, sugestoesVacinas;
+    let inputVacina, sugestoesVacinas, vacinaModeloSelecionada = null;
     function mostrarFeedback(msg, tipo = 'success') {
       const fb = document.getElementById('feedback-vacinas');
       fb.textContent = msg;
@@ -75,89 +118,168 @@
     document.addEventListener('DOMContentLoaded', () => {
       inputVacina = document.getElementById('nome-vacina');
       sugestoesVacinas = document.getElementById('sugestoes-vacinas');
+      const buscarModelo = document.getElementById('buscar-vacina-modelo');
+      const sugestoesModelo = document.getElementById('sugestoes-busca-vacina');
 
       inputVacina.addEventListener('input', function () {
         const q = this.value.trim();
-        console.log("🟡 Buscando vacina:", q);
-
         if (q.length < 2) {
           sugestoesVacinas.innerHTML = '';
           return;
         }
-
         fetch(`/buscar_vacinas?q=${encodeURIComponent(q)}`)
           .then(res => res.json())
           .then(data => {
-            console.log("🟢 Resultados:", data);
             sugestoesVacinas.innerHTML = '';
-
             if (!data.length) {
               sugestoesVacinas.innerHTML = '<li class="list-group-item text-muted">Nenhuma vacina encontrada</li>';
               return;
             }
-
             data.forEach(item => {
               const li = document.createElement('li');
               li.className = 'list-group-item list-group-item-action';
               li.textContent = item.nome;
               li.onclick = () => {
                 inputVacina.value = item.nome;
+                document.getElementById('tipo-vacina').value = item.tipo || '';
+                document.getElementById('frequencia-vacina').value = item.frequencia || '';
+                document.getElementById('doses-totais-vacina').value = item.doses_totais || '';
+                document.getElementById('intervalo-dias-vacina').value = item.intervalo_dias || '';
+                document.getElementById('fabricante-vacina').value = item.fabricante || '';
                 sugestoesVacinas.innerHTML = '';
               };
               sugestoesVacinas.appendChild(li);
             });
           })
-          .catch(err => {
-            console.error("❌ Erro no autocomplete:", err);
+          .catch(err => console.error('❌ Erro no autocomplete:', err));
+      });
+
+      buscarModelo.addEventListener('input', function () {
+        const q = this.value.trim();
+        if (q.length < 2) {
+          sugestoesModelo.innerHTML = '';
+          sugestoesModelo.style.display = 'none';
+          return;
+        }
+        fetch(`/buscar_vacinas?q=${encodeURIComponent(q)}`)
+          .then(res => res.json())
+          .then(data => {
+            sugestoesModelo.innerHTML = '';
+            if (!data.length) {
+              sugestoesModelo.innerHTML = '<li class="list-group-item text-muted">Nenhuma vacina encontrada</li>';
+              sugestoesModelo.style.display = 'block';
+              return;
+            }
+            data.forEach(item => {
+              const li = document.createElement('li');
+              li.className = 'list-group-item list-group-item-action';
+              li.textContent = item.nome;
+              li.onclick = () => openVacinaCard(item);
+              sugestoesModelo.appendChild(li);
+            });
+            sugestoesModelo.style.display = 'block';
           });
       });
 
-      // Fecha sugestões ao clicar fora
       document.addEventListener('click', e => {
         if (!sugestoesVacinas.contains(e.target) && e.target !== inputVacina) {
           sugestoesVacinas.innerHTML = '';
+        }
+        if (!sugestoesModelo.contains(e.target) && e.target !== buscarModelo) {
+          sugestoesModelo.style.display = 'none';
         }
       });
 
       renderVacinasTemp();
     });
 
+    function openVacinaCard(vm) {
+      const container = document.getElementById('nova-vacina-container');
+      container.classList.remove('d-none');
+
+      const sugestoesModelo = document.getElementById('sugestoes-busca-vacina');
+      sugestoesModelo.innerHTML = '';
+      sugestoesModelo.style.display = 'none';
+
+      document.getElementById('buscar-vacina-modelo').value = vm?.nome || '';
+      document.getElementById('nova-vacina-nome').value = vm?.nome || '';
+      document.getElementById('nova-vacina-tipo').value = vm?.tipo || '';
+      document.getElementById('nova-vacina-fabricante').value = vm?.fabricante || '';
+      document.getElementById('nova-vacina-frequencia').value = vm?.frequencia || '';
+      document.getElementById('nova-vacina-doses').value = vm?.doses_totais || '';
+      document.getElementById('nova-vacina-intervalo').value = vm?.intervalo_dias || '';
+
+      vacinaModeloSelecionada = vm?.id ? vm : null;
+
+      document.getElementById('btn-salvar-vacina-modelo').classList.toggle('d-none', !!vm?.id);
+      document.getElementById('btn-editar-vacina-modelo').classList.toggle('d-none', !vm?.id);
+      document.getElementById('btn-excluir-vacina-modelo').classList.toggle('d-none', !vm?.id);
+    }
+
     function toggleNovaVacina() {
       const box = document.getElementById('nova-vacina-container');
-      box.classList.toggle('d-none');
+      if (box.classList.contains('d-none')) {
+        openVacinaCard(null);
+      } else {
+        box.classList.add('d-none');
+      }
     }
 
     async function salvarVacinaModelo() {
-      const nome = document.getElementById('nova-vacina-nome').value.trim();
-      const tipo = document.getElementById('nova-vacina-tipo').value.trim();
-      if (!nome || !tipo) {
+      const payload = {
+        nome: document.getElementById('nova-vacina-nome').value.trim(),
+        tipo: document.getElementById('nova-vacina-tipo').value.trim(),
+        fabricante: document.getElementById('nova-vacina-fabricante').value.trim(),
+        frequencia: document.getElementById('nova-vacina-frequencia').value.trim(),
+        doses_totais: parseInt(document.getElementById('nova-vacina-doses').value) || null,
+        intervalo_dias: parseInt(document.getElementById('nova-vacina-intervalo').value) || null,
+      };
+      if (!payload.nome || !payload.tipo) {
         mostrarFeedback('Preencha nome e tipo da vacina.', 'warning');
         return;
       }
       try {
-        const resp = await fetch('/vacina_modelo', {
-          method: 'POST',
+        let url = '/vacina_modelo';
+        let method = 'POST';
+        if (vacinaModeloSelecionada?.id) {
+          url = `/vacina_modelo/${vacinaModeloSelecionada.id}`;
+          method = 'PUT';
+        }
+        const resp = await fetch(url, {
+          method,
           headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
-          body: JSON.stringify({ nome, tipo })
+          body: JSON.stringify(payload)
         });
         const data = await resp.json();
         if (data.success) {
-          mostrarFeedback('Vacina cadastrada com sucesso!');
-          const li = document.createElement('li');
-          li.className = 'list-group-item list-group-item-action';
-          li.textContent = nome;
-          li.onclick = () => { inputVacina.value = nome; sugestoesVacinas.innerHTML = ''; };
-          sugestoesVacinas.prepend(li);
-          inputVacina.value = nome;
-          document.getElementById('nova-vacina-nome').value = '';
-          document.getElementById('nova-vacina-tipo').value = '';
+          mostrarFeedback('Vacina modelo salva!');
+          inputVacina.value = payload.nome;
           document.getElementById('nova-vacina-container').classList.add('d-none');
         } else {
-          mostrarFeedback(data.message || 'Erro ao cadastrar vacina.', 'danger');
+          mostrarFeedback(data.message || 'Erro ao salvar vacina.', 'danger');
         }
       } catch (err) {
         console.error('❌ Erro ao salvar vacina modelo:', err);
-        mostrarFeedback('Erro ao cadastrar vacina.', 'danger');
+        mostrarFeedback('Erro ao salvar vacina.', 'danger');
+      }
+    }
+
+    async function excluirVacinaModelo() {
+      if (!vacinaModeloSelecionada?.id) return;
+      if (!confirm('Deseja mesmo remover este modelo de vacina?')) return;
+      try {
+        const resp = await fetch(`/vacina_modelo/${vacinaModeloSelecionada.id}`, { method: 'DELETE' });
+        const data = await resp.json();
+        if (data.success) {
+          mostrarFeedback('Modelo de vacina removido!');
+          document.getElementById('nova-vacina-container').classList.add('d-none');
+          vacinaModeloSelecionada = null;
+        } else {
+          mostrarFeedback(data.message || 'Erro ao remover.', 'danger');
+        }
+      } catch (err) {
+        console.error('Erro ao excluir modelo:', err);
+        mostrarFeedback('Erro ao remover.', 'danger');
       }
     }
 
@@ -165,18 +287,42 @@
       const nome = document.getElementById('nome-vacina').value.trim();
       const tipo = document.getElementById('tipo-vacina').value.trim();
       const data = document.getElementById('data-vacina').value;
+      const fabricante = document.getElementById('fabricante-vacina').value.trim();
+      const frequencia = document.getElementById('frequencia-vacina').value.trim();
+      const dosesTotais = parseInt(document.getElementById('doses-totais-vacina').value) || 1;
+      const intervaloDias = parseInt(document.getElementById('intervalo-dias-vacina').value) || 0;
 
       if (!nome || !tipo || !data) {
-        alert('Preencha todos os campos.');
+        alert('Preencha nome, tipo e data.');
         return;
       }
 
-      vacinas.push({ nome, tipo, data });
+      let proxima = null;
+      if (dosesTotais > 1 && intervaloDias > 0) {
+        const d = new Date(data);
+        d.setDate(d.getDate() + intervaloDias);
+        proxima = d.toISOString().split('T')[0];
+      }
+
+      vacinas.push({
+        nome,
+        tipo,
+        data,
+        fabricante,
+        frequencia,
+        doses_totais: dosesTotais,
+        intervalo_dias: intervaloDias,
+        proxima_dose: proxima,
+      });
       renderVacinasTemp();
 
       document.getElementById('nome-vacina').value = '';
       document.getElementById('tipo-vacina').value = '';
       document.getElementById('data-vacina').value = '';
+      document.getElementById('fabricante-vacina').value = '';
+      document.getElementById('frequencia-vacina').value = '';
+      document.getElementById('doses-totais-vacina').value = '';
+      document.getElementById('intervalo-dias-vacina').value = '';
     }
 
     function removerVacina(index) {
@@ -191,8 +337,10 @@
       vacinas.forEach((v, i) => {
         const div = document.createElement('div');
         div.className = 'border p-2 mb-2 bg-light rounded shadow-sm';
+        const prox = v.proxima_dose ? ` (próx: ${v.proxima_dose})` : '';
+        const fab = v.fabricante ? ` (${v.fabricante})` : '';
         div.innerHTML = `
-          💉 <strong>${v.nome}</strong> — ${v.tipo} em ${v.data}
+          💉 <strong>${v.nome}</strong> — ${v.tipo} em ${v.data}${fab}${prox}
           <button class="btn btn-sm btn-danger ms-2" onclick="removerVacina(${i})">🗑️ Remover</button>
         `;
         lista.appendChild(div);

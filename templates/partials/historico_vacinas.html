@@ -9,10 +9,21 @@
         <div class="vacina-info">
           <strong class="vacina-nome">{{ vacina.nome }}</strong>
           {% if vacina.tipo %} — <span class="vacina-tipo">{{ vacina.tipo }}</span>{% endif %}
+          {% if vacina.fabricante %} — <span class="vacina-fabricante">{{ vacina.fabricante }}</span>{% endif %}
           {% if vacina.data %}
             em <span class="vacina-data" data-date="{{ vacina.data.strftime('%Y-%m-%d') }}">
               {{ vacina.data.strftime('%d/%m/%Y') }}
             </span>
+          {% endif %}
+          {% if vacina.proxima_dose %}
+            <br><small>Próxima dose: <span class="vacina-proxima" data-date="{{ vacina.proxima_dose.strftime('%Y-%m-%d') }}">{{ vacina.proxima_dose.strftime('%d/%m/%Y') }}</span></small>
+          {% endif %}
+          {% if vacina.frequencia or vacina.doses_totais or vacina.intervalo_dias %}
+            <br><small>
+              {% if vacina.frequencia %}<span class="vacina-frequencia">{{ vacina.frequencia }}</span>{% endif %}
+              {% if vacina.doses_totais %}<span class="vacina-doses">Doses: {{ vacina.doses_totais }}</span>{% endif %}
+              {% if vacina.intervalo_dias %}<span class="vacina-intervalo">Intervalo: {{ vacina.intervalo_dias }} dias</span>{% endif %}
+            </small>
           {% endif %}
           {% if vacina.observacoes %}
             <br><em class="vacina-obs">{{ vacina.observacoes }}</em>
@@ -40,6 +51,11 @@ function editarVacina(id) {
   const tipo = li.querySelector('.vacina-tipo')?.textContent.trim() || '';
   const data = li.querySelector('.vacina-data')?.dataset.date || '';
   const obs = li.querySelector('.vacina-obs')?.textContent.trim() || '';
+  const fabricante = li.querySelector('.vacina-fabricante')?.textContent.trim() || '';
+  const frequencia = li.querySelector('.vacina-frequencia')?.textContent.trim() || '';
+  const doses = li.querySelector('.vacina-doses')?.textContent.replace('Doses:','').trim() || '';
+  const intervalo = li.querySelector('.vacina-intervalo')?.textContent.replace('Intervalo:','').replace(' dias','').trim() || '';
+  const proxima = li.querySelector('.vacina-proxima')?.dataset.date || '';
 
   li.innerHTML = `
     <div class="mb-2">
@@ -55,6 +71,28 @@ function editarVacina(id) {
       <input type="date" class="form-control" id="edit-data-${id}" value="${data}">
     </div>
     <div class="mb-2">
+      <label class="form-label">Fabricante</label>
+      <input class="form-control" id="edit-fabricante-${id}" value="${fabricante}">
+    </div>
+    <div class="mb-2">
+      <label class="form-label">Frequência</label>
+      <input class="form-control" id="edit-frequencia-${id}" value="${frequencia}">
+    </div>
+    <div class="row">
+      <div class="col mb-2">
+        <label class="form-label">Doses Totais</label>
+        <input type="number" class="form-control" id="edit-doses-${id}" value="${doses}">
+      </div>
+      <div class="col mb-2">
+        <label class="form-label">Intervalo (dias)</label>
+        <input type="number" class="form-control" id="edit-intervalo-${id}" value="${intervalo}">
+      </div>
+    </div>
+    <div class="mb-2">
+      <label class="form-label">Próxima dose</label>
+      <input type="date" class="form-control" id="edit-proxima-${id}" value="${proxima}">
+    </div>
+    <div class="mb-2">
       <label class="form-label">Observações</label>
       <textarea class="form-control" id="edit-obs-${id}">${obs}</textarea>
     </div>
@@ -68,11 +106,16 @@ function salvarEdicaoVacina(id) {
   const tipo = document.getElementById(`edit-tipo-${id}`).value.trim();
   const data = document.getElementById(`edit-data-${id}`).value.trim();
   const observacoes = document.getElementById(`edit-obs-${id}`).value.trim();
+  const fabricante = document.getElementById(`edit-fabricante-${id}`).value.trim();
+  const frequencia = document.getElementById(`edit-frequencia-${id}`).value.trim();
+  const doses_totais = parseInt(document.getElementById(`edit-doses-${id}`).value) || null;
+  const intervalo_dias = parseInt(document.getElementById(`edit-intervalo-${id}`).value) || null;
+  const proxima_dose = document.getElementById(`edit-proxima-${id}`).value.trim();
 
   fetch(`/vacina/${id}`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ nome, tipo, data, observacoes })
+    body: JSON.stringify({ nome, tipo, data, observacoes, fabricante, frequencia, doses_totais, intervalo_dias, proxima_dose })
   })
   .then(res => res.json())
   .then(d => {

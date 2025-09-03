@@ -927,6 +927,10 @@ class VacinaModelo(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     nome = db.Column(db.String(100), nullable=False)
     tipo = db.Column(db.String(50))  # Opcional, mas útil para o frontend
+    frequencia = db.Column(db.String(50))
+    doses_totais = db.Column(db.Integer)
+    intervalo_dias = db.Column(db.Integer)
+    fabricante = db.Column(db.String(100))
     created_by = db.Column(
         db.Integer,
         db.ForeignKey('user.id', ondelete='CASCADE'),
@@ -943,7 +947,12 @@ class Vacina(db.Model):
 
     nome = db.Column(db.String(100), nullable=False)
     tipo = db.Column(db.String(50))  # Campanha, Obrigatória, Reforço
+    frequencia = db.Column(db.String(50))
+    doses_totais = db.Column(db.Integer)
+    intervalo_dias = db.Column(db.Integer)
+    fabricante = db.Column(db.String(100))
     data = db.Column(db.Date)        # Data da aplicação
+    proxima_dose = db.Column(db.Date)
     observacoes = db.Column(db.Text)
     criada_em = db.Column(db.DateTime, default=datetime.utcnow)
 
