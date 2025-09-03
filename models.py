@@ -927,6 +927,10 @@ class VacinaModelo(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     nome = db.Column(db.String(100), nullable=False)
     tipo = db.Column(db.String(50))  # Opcional, mas útil para o frontend
+    fabricante = db.Column(db.String(100))
+    doses_totais = db.Column(db.Integer)
+    intervalo_dias = db.Column(db.Integer)
+    frequencia = db.Column(db.String(50))
     created_by = db.Column(
         db.Integer,
         db.ForeignKey('user.id', ondelete='CASCADE'),
@@ -934,7 +938,11 @@ class VacinaModelo(db.Model):
     )
 
     def __repr__(self):
-        return f'<VacinaModelo {self.nome}>'
+        return (
+            f"<VacinaModelo {self.nome} fabricante={self.fabricante} "
+            f"doses={self.doses_totais} intervalo={self.intervalo_dias} "
+            f"frequencia={self.frequencia}>"
+        )
 
 
 class Vacina(db.Model):
@@ -943,6 +951,10 @@ class Vacina(db.Model):
 
     nome = db.Column(db.String(100), nullable=False)
     tipo = db.Column(db.String(50))  # Campanha, Obrigatória, Reforço
+    fabricante = db.Column(db.String(100))
+    doses_totais = db.Column(db.Integer)
+    intervalo_dias = db.Column(db.Integer)
+    frequencia = db.Column(db.String(50))
     data = db.Column(db.Date)        # Data da aplicação
     observacoes = db.Column(db.Text)
     criada_em = db.Column(db.DateTime, default=datetime.utcnow)

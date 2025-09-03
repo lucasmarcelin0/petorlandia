@@ -3716,7 +3716,14 @@ def buscar_vacinas():
         ).all()
 
         return jsonify([
-            {'nome': v.nome, 'tipo': v.tipo or ''}
+            {
+                'nome': v.nome,
+                'tipo': v.tipo or '',
+                'fabricante': v.fabricante or '',
+                'doses_totais': v.doses_totais,
+                'intervalo_dias': v.intervalo_dias,
+                'frequencia': v.frequencia or '',
+            }
             for v in resultados
         ])
     except Exception as e:
@@ -3729,16 +3736,39 @@ def criar_vacina_modelo():
     data = request.get_json(silent=True) or {}
     nome = (data.get('nome') or '').strip()
     tipo = (data.get('tipo') or '').strip()
+    fabricante = (data.get('fabricante') or '').strip() or None
+    doses_totais = data.get('doses_totais')
+    intervalo_dias = data.get('intervalo_dias')
+    frequencia = (data.get('frequencia') or '').strip() or None
     if not nome or not tipo:
         return jsonify({'success': False, 'message': 'Nome e tipo são obrigatórios.'}), 400
     try:
         existente = VacinaModelo.query.filter(func.lower(VacinaModelo.nome) == nome.lower()).first()
         if existente:
             return jsonify({'success': False, 'message': 'Vacina já cadastrada.'}), 400
-        vacina = VacinaModelo(nome=nome, tipo=tipo, created_by=current_user.id)
+        vacina = VacinaModelo(
+            nome=nome,
+            tipo=tipo,
+            fabricante=fabricante,
+            doses_totais=doses_totais,
+            intervalo_dias=intervalo_dias,
+            frequencia=frequencia,
+            created_by=current_user.id,
+        )
         db.session.add(vacina)
         db.session.commit()
-        return jsonify({'success': True, 'vacina': {'id': vacina.id, 'nome': vacina.nome, 'tipo': vacina.tipo}})
+        return jsonify({
+            'success': True,
+            'vacina': {
+                'id': vacina.id,
+                'nome': vacina.nome,
+                'tipo': vacina.tipo,
+                'fabricante': vacina.fabricante,
+                'doses_totais': vacina.doses_totais,
+                'intervalo_dias': vacina.intervalo_dias,
+                'frequencia': vacina.frequencia,
+            },
+        })
     except Exception as e:
         db.session.rollback()
         print('Erro ao salvar vacina modelo:', e)
@@ -3766,6 +3796,10 @@ def alterar_vacina_modelo(vacina_id):
     if tipo_val is not None:
         tipo_val = tipo_val.strip()
     vacina.tipo = tipo_val or None
+    vacina.fabricante = (data.get('fabricante', vacina.fabricante) or '').strip() or None
+    vacina.doses_totais = data.get('doses_totais', vacina.doses_totais)
+    vacina.intervalo_dias = data.get('intervalo_dias', vacina.intervalo_dias)
+    vacina.frequencia = (data.get('frequencia', vacina.frequencia) or '').strip() or None
     db.session.commit()
     return jsonify({'success': True})
 
@@ -3793,6 +3827,10 @@ def salvar_vacinas(animal_id):
                 animal_id=animal_id,
                 nome=v.get("nome"),
                 tipo=v.get("tipo"),
+                fabricante=v.get("fabricante"),
+                doses_totais=v.get("doses_totais"),
+                intervalo_dias=v.get("intervalo_dias"),
+                frequencia=v.get("frequencia"),
                 data=data_formatada,
                 observacoes=v.get("observacoes")
             )
@@ -3858,6 +3896,10 @@ def alterar_vacina(vacina_id):
     data = request.get_json(silent=True) or {}
     vacina.nome = data.get('nome', vacina.nome)
     vacina.tipo = data.get('tipo', vacina.tipo)
+    vacina.fabricante = data.get('fabricante', vacina.fabricante)
+    vacina.doses_totais = data.get('doses_totais', vacina.doses_totais)
+    vacina.intervalo_dias = data.get('intervalo_dias', vacina.intervalo_dias)
+    vacina.frequencia = data.get('frequencia', vacina.frequencia)
     vacina.observacoes = data.get('observacoes', vacina.observacoes)
 
     data_str = data.get('data')

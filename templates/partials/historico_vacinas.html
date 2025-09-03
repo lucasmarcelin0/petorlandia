@@ -9,6 +9,10 @@
         <div class="vacina-info">
           <strong class="vacina-nome">{{ vacina.nome }}</strong>
           {% if vacina.tipo %} — <span class="vacina-tipo">{{ vacina.tipo }}</span>{% endif %}
+          {% if vacina.fabricante %} — <span class="vacina-fabricante">{{ vacina.fabricante }}</span>{% endif %}
+          {% if vacina.doses_totais %} — <span class="vacina-doses">{{ vacina.doses_totais }} doses</span>{% endif %}
+          {% if vacina.intervalo_dias %} — <span class="vacina-intervalo">{{ vacina.intervalo_dias }} dias</span>{% endif %}
+          {% if vacina.frequencia %} — <span class="vacina-frequencia">{{ vacina.frequencia }}</span>{% endif %}
           {% if vacina.data %}
             em <span class="vacina-data" data-date="{{ vacina.data.strftime('%Y-%m-%d') }}">
               {{ vacina.data.strftime('%d/%m/%Y') }}
@@ -38,6 +42,10 @@ function editarVacina(id) {
   const li = document.querySelector(`[data-vacina-id='${id}']`);
   const nome = li.querySelector('.vacina-nome')?.textContent.trim() || '';
   const tipo = li.querySelector('.vacina-tipo')?.textContent.trim() || '';
+  const fabricante = li.querySelector('.vacina-fabricante')?.textContent.trim() || '';
+  const doses = li.querySelector('.vacina-doses')?.textContent.replace(' doses','').trim() || '';
+  const intervalo = li.querySelector('.vacina-intervalo')?.textContent.replace(' dias','').trim() || '';
+  const freq = li.querySelector('.vacina-frequencia')?.textContent.trim() || '';
   const data = li.querySelector('.vacina-data')?.dataset.date || '';
   const obs = li.querySelector('.vacina-obs')?.textContent.trim() || '';
 
@@ -49,6 +57,24 @@ function editarVacina(id) {
     <div class="mb-2">
       <label class="form-label">Tipo</label>
       <input class="form-control" id="edit-tipo-${id}" value="${tipo}">
+    </div>
+    <div class="mb-2">
+      <label class="form-label">Fabricante</label>
+      <input class="form-control" id="edit-fabricante-${id}" value="${fabricante}">
+    </div>
+    <div class="row">
+      <div class="col-md-4 mb-2">
+        <label class="form-label">Doses Totais</label>
+        <input type="number" class="form-control" id="edit-doses-${id}" value="${doses}">
+      </div>
+      <div class="col-md-4 mb-2">
+        <label class="form-label">Intervalo (dias)</label>
+        <input type="number" class="form-control" id="edit-intervalo-${id}" value="${intervalo}">
+      </div>
+      <div class="col-md-4 mb-2">
+        <label class="form-label">Frequência</label>
+        <input class="form-control" id="edit-frequencia-${id}" value="${freq}">
+      </div>
     </div>
     <div class="mb-2">
       <label class="form-label">Data</label>
@@ -66,13 +92,17 @@ function editarVacina(id) {
 function salvarEdicaoVacina(id) {
   const nome = document.getElementById(`edit-nome-${id}`).value.trim();
   const tipo = document.getElementById(`edit-tipo-${id}`).value.trim();
+  const fabricante = document.getElementById(`edit-fabricante-${id}`).value.trim();
+  const doses_totais = document.getElementById(`edit-doses-${id}`).value;
+  const intervalo_dias = document.getElementById(`edit-intervalo-${id}`).value;
+  const frequencia = document.getElementById(`edit-frequencia-${id}`).value.trim();
   const data = document.getElementById(`edit-data-${id}`).value.trim();
   const observacoes = document.getElementById(`edit-obs-${id}`).value.trim();
 
   fetch(`/vacina/${id}`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ nome, tipo, data, observacoes })
+    body: JSON.stringify({ nome, tipo, fabricante, doses_totais, intervalo_dias, frequencia, data, observacoes })
   })
   .then(res => res.json())
   .then(d => {
