@@ -6,6 +6,11 @@
    <!-- Botão para cadastrar nova medicação -->
    <button type="button" class="btn btn-outline-primary mb-3" onclick="toggleNovaMedicacao()">➕ Nova medicação</button>
    <div id="nova-medicacao-container" class="border rounded p-3 mb-3 bg-light d-none">
+     <div class="mb-2 position-relative">
+       <label for="buscar-medicamento-nova" class="form-label">Pesquisar medicamento existente</label>
+       <input type="text" id="buscar-medicamento-nova" class="form-control" placeholder="Digite para buscar...">
+       <ul id="sugestoes-busca-nova" class="list-group position-absolute w-100" style="z-index: 10; max-height: 300px; overflow-y: auto; display: none;"></ul>
+     </div>
      <div class="mb-2">
        <label for="nova-medicacao-nome" class="form-label">Nome do medicamento*</label>
        <input type="text" id="nova-medicacao-nome" class="form-control">
@@ -153,12 +158,20 @@
     } else {
       container.classList.add('d-none');
     }
+
   }
 
   function openMedicacaoCard(med) {
     const container = document.getElementById('nova-medicacao-container');
     container.classList.remove('d-none');
 
+    const sugestoesNova = document.getElementById('sugestoes-busca-nova');
+    if (sugestoesNova) {
+      sugestoesNova.innerHTML = '';
+      sugestoesNova.style.display = 'none';
+    }
+
+    document.getElementById('buscar-medicamento-nova').value = med?.nome || '';
     document.getElementById('nova-medicacao-nome').value = med?.nome || '';
     document.getElementById('nova-medicacao-principio').value = med?.principio_ativo || '';
     document.getElementById('nova-medicacao-classificacao').value = med?.classificacao || '';
@@ -177,6 +190,7 @@
   }
 
   function limparFormularioMedicamento() {
+    document.getElementById('buscar-medicamento-nova').value = '';
     document.getElementById('nova-medicacao-nome').value = '';
     document.getElementById('nova-medicacao-principio').value = '';
     document.getElementById('nova-medicacao-classificacao').value = '';
@@ -527,6 +541,8 @@
     document.addEventListener('DOMContentLoaded', function() {
       const input = document.getElementById('nome-medicamento');
       const sugestoes = document.getElementById('sugestoes-medicamentos');
+      const buscarNova = document.getElementById('buscar-medicamento-nova');
+      const sugestoesNova = document.getElementById('sugestoes-busca-nova');
 
     // Busca de medicamentos com debounce
     input.addEventListener('input', debounce(function() {
@@ -587,10 +603,57 @@
         });
     }, 300));
 
+    // Busca dentro do card de nova medicação
+    buscarNova.addEventListener('input', debounce(function() {
+      const q = this.value.trim();
+      if (q.length < 2) {
+        sugestoesNova.innerHTML = '';
+        sugestoesNova.style.display = 'none';
+        return;
+      }
+
+      sugestoesNova.innerHTML = '<li class="list-group-item text-muted">Buscando...</li>';
+      sugestoesNova.style.display = 'block';
+
+      fetch(`/buscar_medicamentos?q=${encodeURIComponent(q)}`)
+        .then(res => {
+          if (!res.ok) throw new Error('Erro na busca');
+          return res.json();
+        })
+        .then(data => {
+          sugestoesNova.innerHTML = '';
+          if (data.length === 0) {
+            const none = document.createElement('li');
+            none.className = 'list-group-item text-muted';
+            none.textContent = 'Nenhum medicamento encontrado';
+            sugestoesNova.appendChild(none);
+          } else {
+            data.forEach(item => {
+              const li = document.createElement('li');
+              li.className = 'list-group-item list-group-item-action';
+              li.textContent = item.nome;
+              li.onclick = () => {
+                openMedicacaoCard(item);
+                sugestoesNova.innerHTML = '';
+                sugestoesNova.style.display = 'none';
+              };
+              sugestoesNova.appendChild(li);
+            });
+          }
+        })
+        .catch(err => {
+          sugestoesNova.innerHTML = '<li class="list-group-item text-danger">Erro ao buscar medicamentos</li>';
+          console.error('Erro ao buscar medicamentos:', err);
+        });
+    }, 300));
+
     // Fechar sugestões ao clicar fora
     document.addEventListener('click', function(e) {
       if (e.target !== input) {
         sugestoes.style.display = 'none';
+      }
+      if (e.target !== buscarNova) {
+        sugestoesNova.style.display = 'none';
       }
     });
 
@@ -605,12 +668,14 @@
 
 <style>
   /* Melhorias visuais */
-  #sugestoes-medicamentos {
+  #sugestoes-medicamentos,
+  #sugestoes-busca-nova {
     box-shadow: 0 5px 15px rgba(0,0,0,0.1);
     border-radius: 0.25rem;
   }
-  
-  #sugestoes-medicamentos .list-group-item:hover {
+
+  #sugestoes-medicamentos .list-group-item:hover,
+  #sugestoes-busca-nova .list-group-item:hover {
     background-color: #f8f9fa;
     cursor: pointer;
   }
