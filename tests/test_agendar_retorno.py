@@ -139,3 +139,50 @@ def test_iniciar_retorno_cria_consulta_e_badge(client, monkeypatch):
         animal = Animal.query.get(animal_id)
         html = render_template('partials/historico_consultas.html', animal=animal, historico_consultas=[consulta, nova_consulta])
         assert 'Retorno' in html
+
+
+def test_finalizar_consulta_sem_confirmacao_quando_retorno_existente(client, monkeypatch):
+    with flask_app.app_context():
+        clinic = Clinica(id=1, nome='Clinica')
+        tutor = User(id=1, name='Tutor', email='tutor@test')
+        tutor.set_password('x')
+        vet_user = User(id=2, name='Vet', email='vet@test', worker='veterinario')
+        vet_user.set_password('x')
+        vet = Veterinario(id=1, user_id=vet_user.id, crmv='123', clinica_id=clinic.id)
+        animal = Animal(id=1, name='Rex', user_id=tutor.id, clinica_id=clinic.id)
+        consulta = Consulta(id=1, animal_id=animal.id, created_by=vet_user.id, clinica_id=clinic.id)
+        appt = Appointment(
+            id=1,
+            consulta_id=consulta.id,
+            animal_id=animal.id,
+            tutor_id=tutor.id,
+            veterinario_id=vet.id,
+            scheduled_at=datetime.utcnow(),
+        )
+        db.session.add_all([clinic, tutor, vet_user, vet, animal, consulta, appt])
+        db.session.commit()
+        consulta_id = consulta.id
+        animal_id = animal.id
+        clinic_id = clinic.id
+        vet_user_id = vet_user.id
+        vet_id = vet.id
+
+    fake_vet = type('U', (), {
+        'id': vet_user_id,
+        'worker': 'veterinario',
+        'role': 'adotante',
+        'name': 'Vet',
+        'is_authenticated': True,
+        'veterinario': type('V', (), {
+            'id': vet_id,
+            'user': type('WU', (), {'name': 'Vet'})(),
+            'clinica_id': clinic_id,
+        })()
+    })()
+
+    login(monkeypatch, fake_vet)
+    resp = client.post(f'/finalizar_consulta/{consulta_id}')
+    assert resp.status_code == 302
+    with flask_app.app_context():
+        assert Consulta.query.get(consulta_id).status == 'finalizada'
+        assert Appointment.query.count() == 1

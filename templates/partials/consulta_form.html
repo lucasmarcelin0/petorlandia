@@ -117,7 +117,10 @@
     <h5 class="mb-3">Agendar Retorno</h5>
     {{ appointment_form.hidden_tag() }}
     <input type="hidden" name="animal_id" value="{{ animal.id }}">
-    <input type="hidden" name="veterinario_id" value="{{ consulta.veterinario.veterinario.id }}">
+    <div class="col-md-6">
+      {{ appointment_form.veterinario_id.label(class='form-label') }}
+      {{ appointment_form.veterinario_id(class='form-select') }}
+    </div>
     <div class="col-md-6">
       {{ appointment_form.date.label(class='form-label') }}
       {{ appointment_form.date(class='form-control', type='date') }}
