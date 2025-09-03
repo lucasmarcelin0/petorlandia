@@ -937,15 +937,51 @@ class VacinaModelo(db.Model):
         return f'<VacinaModelo {self.nome}>'
 
 
+class VacinaProtocolo(db.Model):
+    __tablename__ = 'vacina_protocolo'
+
+    id = db.Column(db.Integer, primary_key=True)
+    vacina_modelo_id = db.Column(
+        db.Integer,
+        db.ForeignKey('vacina_modelo.id', ondelete='CASCADE'),
+        nullable=False,
+    )
+    fabricante = db.Column(db.String(100), nullable=False)
+    idade_inicial = db.Column(db.Integer, nullable=True)
+    doses_totais = db.Column(db.Integer, nullable=True)
+    intervalo_dias = db.Column(db.Integer, nullable=True)
+
+
+VacinaModelo.protocolos = db.relationship(
+    'VacinaProtocolo',
+    backref='vacina_modelo',
+    cascade='all, delete-orphan',
+    lazy=True,
+)
+
+
 class Vacina(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     animal_id = db.Column(db.Integer, db.ForeignKey('animal.id'), nullable=False)
+    vacina_modelo_id = db.Column(
+        db.Integer,
+        db.ForeignKey('vacina_modelo.id'),
+        nullable=True,
+    )
+    vacina_protocolo_id = db.Column(
+        db.Integer,
+        db.ForeignKey('vacina_protocolo.id'),
+        nullable=True,
+    )
 
     nome = db.Column(db.String(100), nullable=False)
     tipo = db.Column(db.String(50))  # Campanha, Obrigatória, Reforço
     data = db.Column(db.Date)        # Data da aplicação
     observacoes = db.Column(db.Text)
     criada_em = db.Column(db.DateTime, default=datetime.utcnow)
+
+    vacina_modelo = db.relationship('VacinaModelo')
+    protocolo = db.relationship('VacinaProtocolo')
 
 
 class AnimalDocumento(db.Model):

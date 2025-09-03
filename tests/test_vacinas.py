@@ -70,3 +70,49 @@ def test_criar_vacina_modelo(app):
         assert data['success'] is True
         vm = VacinaModelo.query.filter_by(nome='V10').first()
         assert vm is not None and vm.created_by == user.id
+
+
+def test_vacina_associacao_modelo_protocolo(app):
+    with app.app_context():
+        db.drop_all()
+        db.create_all()
+
+        vet = User(name="Vet", email="vet2@example.com")
+        vet.set_password("x")
+        owner = User(name="Tutor", email="tutor2@example.com", password_hash="x")
+        animal = Animal(name="Rex", owner=owner)
+        db.session.add_all([vet, owner, animal])
+        db.session.commit()
+
+        client = app.test_client()
+        client.post('/login', data={'email': 'vet2@example.com', 'password': 'x'}, follow_redirects=True)
+
+        resp = client.post('/vacina_modelo', json={'nome': 'V8', 'tipo': 'Obrigatória'})
+        vm_id = resp.get_json()['vacina']['id']
+
+        resp = client.post('/vacina_protocolo', json={
+            'vacina_modelo_id': vm_id,
+            'fabricante': 'MarcaX',
+            'idade_inicial': 30,
+            'doses_totais': 3,
+            'intervalo_dias': 21,
+        })
+        protocolo_id = resp.get_json()['protocolo']['id']
+
+        payload = {
+            'vacinas': [
+                {
+                    'nome': 'V8',
+                    'tipo': 'Obrigatória',
+                    'data': '2024-01-01',
+                    'vacina_modelo_id': vm_id,
+                    'vacina_protocolo_id': protocolo_id,
+                }
+            ]
+        }
+        resp = client.post(f'/animal/{animal.id}/vacinas', json=payload)
+        assert resp.status_code == 200
+
+        vac = Vacina.query.filter_by(animal_id=animal.id).first()
+        assert vac.vacina_modelo_id == vm_id
+        assert vac.vacina_protocolo_id == protocolo_id

@@ -3716,12 +3716,27 @@ def buscar_vacinas():
         ).all()
 
         return jsonify([
-            {'nome': v.nome, 'tipo': v.tipo or ''}
+            {'id': v.id, 'nome': v.nome, 'tipo': v.tipo or ''}
             for v in resultados
         ])
     except Exception as e:
         print(f"Erro ao buscar vacinas: {e}")
         return jsonify([])  # Não quebra o front se der erro
+
+
+@app.route('/vacina_modelo/<int:modelo_id>/protocolos')
+def listar_protocolos(modelo_id):
+    protocolos = VacinaProtocolo.query.filter_by(vacina_modelo_id=modelo_id).all()
+    return jsonify([
+        {
+            'id': p.id,
+            'fabricante': p.fabricante,
+            'idade_inicial': p.idade_inicial,
+            'doses_totais': p.doses_totais,
+            'intervalo_dias': p.intervalo_dias,
+        }
+        for p in protocolos
+    ])
 
 @app.route('/vacina_modelo', methods=['POST'])
 @login_required
@@ -3769,6 +3784,47 @@ def alterar_vacina_modelo(vacina_id):
     db.session.commit()
     return jsonify({'success': True})
 
+
+@app.route('/vacina_protocolo', methods=['POST'])
+@login_required
+def criar_vacina_protocolo():
+    data = request.get_json(silent=True) or {}
+    modelo_id = data.get('vacina_modelo_id')
+    fabricante = (data.get('fabricante') or '').strip()
+    if not modelo_id or not fabricante:
+        return jsonify({'success': False, 'message': 'Modelo e fabricante são obrigatórios.'}), 400
+    protocolo = VacinaProtocolo(
+        vacina_modelo_id=modelo_id,
+        fabricante=fabricante,
+        idade_inicial=data.get('idade_inicial'),
+        doses_totais=data.get('doses_totais'),
+        intervalo_dias=data.get('intervalo_dias'),
+    )
+    db.session.add(protocolo)
+    db.session.commit()
+    return jsonify({'success': True, 'protocolo': {
+        'id': protocolo.id,
+        'fabricante': protocolo.fabricante,
+    }})
+
+
+@app.route('/vacina_protocolo/<int:protocolo_id>', methods=['PUT', 'DELETE'])
+@login_required
+def alterar_vacina_protocolo(protocolo_id):
+    protocolo = VacinaProtocolo.query.get_or_404(protocolo_id)
+
+    if request.method == 'DELETE':
+        db.session.delete(protocolo)
+        db.session.commit()
+        return jsonify({'success': True})
+
+    data = request.get_json(silent=True) or {}
+    for campo in ['fabricante', 'idade_inicial', 'doses_totais', 'intervalo_dias']:
+        if campo in data:
+            setattr(protocolo, campo, data[campo])
+    db.session.commit()
+    return jsonify({'success': True})
+
 from datetime import datetime
 
 @app.route("/animal/<int:animal_id>/vacinas", methods=["POST"])
@@ -3794,7 +3850,9 @@ def salvar_vacinas(animal_id):
                 nome=v.get("nome"),
                 tipo=v.get("tipo"),
                 data=data_formatada,
-                observacoes=v.get("observacoes")
+                observacoes=v.get("observacoes"),
+                vacina_modelo_id=v.get("vacina_modelo_id"),
+                vacina_protocolo_id=v.get("vacina_protocolo_id"),
             )
             db.session.add(vacina)
 
@@ -3859,6 +3917,10 @@ def alterar_vacina(vacina_id):
     vacina.nome = data.get('nome', vacina.nome)
     vacina.tipo = data.get('tipo', vacina.tipo)
     vacina.observacoes = data.get('observacoes', vacina.observacoes)
+    if 'vacina_modelo_id' in data:
+        vacina.vacina_modelo_id = data.get('vacina_modelo_id')
+    if 'vacina_protocolo_id' in data:
+        vacina.vacina_protocolo_id = data.get('vacina_protocolo_id')
 
     data_str = data.get('data')
     if data_str:
