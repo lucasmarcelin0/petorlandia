@@ -114,3 +114,52 @@ def test_buscar_vacinas_campos(app):
         assert item['doses_totais'] == 3
         assert item['intervalo_dias'] == 30
         assert item['frequencia'] == 'Anual'
+
+
+def test_fluxo_criacao_edicao_vacina(app):
+    with app.app_context():
+        db.drop_all()
+        db.create_all()
+        tutor = User(name="Tutor", email="tutor@example.com", password_hash="x")
+        animal = Animal(name="Rex", owner=tutor)
+        vet = User(name="Vet", email="vet@example.com", worker="veterinario")
+        vet.set_password("x")
+        db.session.add_all([tutor, animal, vet])
+        db.session.commit()
+
+        client = app.test_client()
+        client.post('/login', data={'email': 'vet@example.com', 'password': 'x'}, follow_redirects=True)
+
+        payload = {
+            'vacinas': [
+                {
+                    'nome': 'V10',
+                    'tipo': 'Obrigatória',
+                    'data': '2024-01-01',
+                    'fabricante': 'ACME',
+                    'doses_totais': 3,
+                    'intervalo_dias': 30,
+                    'frequencia': 'Anual'
+                }
+            ]
+        }
+        resp = client.post(f'/animal/{animal.id}/vacinas', json=payload)
+        assert resp.status_code == 200
+        assert resp.get_json()['success'] is True
+        vac = Vacina.query.filter_by(animal_id=animal.id, nome='V10').first()
+        assert vac is not None and vac.fabricante == 'ACME'
+
+        resp = client.put(f'/vacina/{vac.id}', json={
+            'nome': 'V10X',
+            'tipo': 'Reforço',
+            'fabricante': 'XYZ',
+            'doses_totais': 2,
+            'intervalo_dias': 60,
+            'frequencia': 'Bienal',
+            'data': '2024-02-01'
+        })
+        assert resp.status_code == 200
+        assert resp.get_json()['success'] is True
+        vac2 = Vacina.query.get(vac.id)
+        assert vac2.nome == 'V10X'
+        assert vac2.intervalo_dias == 60
