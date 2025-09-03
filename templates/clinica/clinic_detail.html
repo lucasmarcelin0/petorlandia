@@ -224,7 +224,7 @@ document.addEventListener('DOMContentLoaded', function() {
           window.history.replaceState({}, '', url);
         }
       })
-      .catch(err => console.error(err));
+      .catch(err => console.error('Erro:', err));
   }
 
   form.addEventListener('submit', function(e) {
