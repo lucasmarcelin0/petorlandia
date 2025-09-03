@@ -38,6 +38,7 @@
     <div class="mb-3 position-relative">
       <label for="nome-vacina" class="form-label">Vacina</label>
       <input type="text" id="nome-vacina" class="form-control" placeholder="Ex: Antirrábica, V10, V8..." autocomplete="off">
+      <input type="hidden" id="vacina-id">
       <ul id="sugestoes-vacinas" class="list-group position-absolute w-100 bg-white shadow border rounded mt-1" style="z-index: 1050;"></ul>
     </div>
 
@@ -133,16 +134,22 @@
               return;
             }
 
-            data.forEach(item => {
-              const li = document.createElement('li');
-              li.className = 'list-group-item list-group-item-action';
-              li.textContent = item.nome;
-              li.onclick = () => {
-                inputVacina.value = item.nome;
-                sugestoesVacinas.innerHTML = '';
-              };
-              sugestoesVacinas.appendChild(li);
-            });
+              data.forEach(item => {
+                const li = document.createElement('li');
+                li.className = 'list-group-item list-group-item-action';
+                li.textContent = item.nome;
+                li.onclick = () => {
+                  document.getElementById('vacina-id').value = item.id || '';
+                  inputVacina.value = item.nome;
+                  document.getElementById('tipo-vacina').value = item.tipo || '';
+                  document.getElementById('fabricante-vacina').value = item.fabricante || '';
+                  document.getElementById('doses-vacina').value = item.doses_totais || '';
+                  document.getElementById('intervalo-vacina').value = item.intervalo_dias || '';
+                  document.getElementById('frequencia-vacina').value = item.frequencia || '';
+                  sugestoesVacinas.innerHTML = '';
+                };
+                sugestoesVacinas.appendChild(li);
+              });
           })
           .catch(err => {
             console.error("❌ Erro no autocomplete:", err);

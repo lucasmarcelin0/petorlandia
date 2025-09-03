@@ -81,3 +81,36 @@ def test_criar_vacina_modelo(app):
         assert vm.doses_totais == 3
         assert vm.intervalo_dias == 30
         assert vm.frequencia == 'Anual'
+
+
+def test_buscar_vacinas_campos(app):
+    with app.app_context():
+        db.drop_all()
+        db.create_all()
+        user = User(name="Vet", email="vet@example.com", password_hash="x")
+        db.session.add(user)
+        db.session.commit()
+
+        vm = VacinaModelo(
+            nome="V8",
+            tipo="Obrigatória",
+            fabricante="ACME",
+            doses_totais=3,
+            intervalo_dias=30,
+            frequencia="Anual",
+            created_by=user.id,
+        )
+        db.session.add(vm)
+        db.session.commit()
+
+        client = app.test_client()
+        resp = client.get('/buscar_vacinas?q=V8')
+        assert resp.status_code == 200
+        data = resp.get_json()
+        assert isinstance(data, list) and len(data) == 1
+        item = data[0]
+        assert item['id'] == vm.id
+        assert item['fabricante'] == 'ACME'
+        assert item['doses_totais'] == 3
+        assert item['intervalo_dias'] == 30
+        assert item['frequencia'] == 'Anual'
