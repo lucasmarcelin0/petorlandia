@@ -151,7 +151,7 @@
         <li class="list-group-item d-flex justify-content-between align-items-center">
           <div>
             <strong>{{ v.nome }}</strong>
-            {% if v.data %} — {{ v.data|format_datetime_brazil('%d/%m/%Y') }}{% endif %}
+            {% if v.aplicada_em %} — {{ v.aplicada_em|format_datetime_brazil('%d/%m/%Y') }}{% endif %}
           </div>
         </li>
         {% endfor %}
@@ -167,7 +167,7 @@
         <li class="list-group-item d-flex justify-content-between align-items-center">
           <div>
             <strong>{{ v.nome }}</strong>
-            {% if v.data %} — {{ v.data|format_datetime_brazil('%d/%m/%Y') }}{% endif %}
+            {% if v.aplicada_em %} — {{ v.aplicada_em|format_datetime_brazil('%d/%m/%Y') }}{% endif %}
           </div>
         </li>
         {% endfor %}
@@ -182,7 +182,7 @@
         {% for v in vacinas_aplicadas %}
         <li class="list-group-item d-flex justify-content-between align-items-center">
           <div>
-            <strong>{{ v.nome }}</strong> — {{ v.tipo or "Tipo não informado" }} em {{ v.data|format_datetime_brazil('%d/%m/%Y') if v.data else 'Data não registrada' }}
+            <strong>{{ v.nome }}</strong> — {{ v.tipo or "Tipo não informado" }} em {{ v.aplicada_em|format_datetime_brazil('%d/%m/%Y') if v.aplicada_em else 'Data não registrada' }}
             {% if v.observacoes %}
               <br><em class="text-muted">Obs: {{ v.observacoes }}</em>
             {% endif %}

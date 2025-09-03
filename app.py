@@ -1777,17 +1777,21 @@ def ficha_animal(animal_id):
     blocos_prescricao = BlocoPrescricao.query.filter_by(animal_id=animal.id).all()
     blocos_exames = BlocoExames.query.filter_by(animal_id=animal.id).all()
 
-    vacinas_aplicadas = Vacina.query.filter_by(
-        animal_id=animal.id, aplicada=True
-    ).all()
+    vacinas_aplicadas = (
+        Vacina.query.filter_by(animal_id=animal.id, aplicada=True)
+        .order_by(Vacina.aplicada_em.desc())
+        .all()
+    )
     doses_futuras = (
         Vacina.query.filter_by(animal_id=animal.id, aplicada=False)
-        .filter(Vacina.data >= date.today())
+        .filter(Vacina.aplicada_em >= date.today())
+        .order_by(Vacina.aplicada_em)
         .all()
     )
     doses_atrasadas = (
         Vacina.query.filter_by(animal_id=animal.id, aplicada=False)
-        .filter(Vacina.data < date.today())
+        .filter(Vacina.aplicada_em < date.today())
+        .order_by(Vacina.aplicada_em)
         .all()
     )
 
