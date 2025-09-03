@@ -4,6 +4,8 @@ import sys
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 import pytest
+from datetime import date
+
 from app import app as flask_app, db
 from models import User, Animal, Clinica, Vacina, VacinaModelo
 
@@ -137,7 +139,7 @@ def test_fluxo_criacao_edicao_vacina(app):
                     'nome': 'V10',
                     'tipo': 'Obrigatória',
                     'aplicada': True,
-                    'aplicada_em': '2024-01-01',
+                    'aplicada_em': '2099-01-01',
                     'fabricante': 'ACME',
                     'doses_totais': 3,
                     'intervalo_dias': 30,
@@ -168,3 +170,59 @@ def test_fluxo_criacao_edicao_vacina(app):
         assert vac2.intervalo_dias == 60
         assert vac2.aplicada_em.strftime('%Y-%m-%d') == '2024-02-01'
         assert vac2.aplicada is True
+
+
+def test_alterar_vacina_cria_proxima_dose(app):
+    with app.app_context():
+        db.drop_all()
+        db.create_all()
+        tutor = User(name="Tutor", email="tutor@example.com")
+        tutor.set_password("x")
+        animal = Animal(name="Rex", owner=tutor)
+        vet = User(name="Vet", email="vet@example.com", worker="veterinario")
+        vet.set_password("x")
+        db.session.add_all([tutor, animal, vet])
+        db.session.commit()
+
+        client = app.test_client()
+        client.post('/login', data={'email': 'vet@example.com', 'password': 'x'}, follow_redirects=True)
+        payload = {
+            'vacinas': [
+                {
+                    'nome': 'V10',
+                    'tipo': 'Obrigatória',
+                    'aplicada': False,
+                    'aplicada_em': '2099-01-01',
+                    'fabricante': 'ACME',
+                    'doses_totais': 3,
+                    'intervalo_dias': 30,
+                }
+            ]
+        }
+        resp = client.post(f'/animal/{animal.id}/vacinas', json=payload)
+        assert resp.status_code == 200
+        vac = Vacina.query.filter_by(animal_id=animal.id, nome='V10').first()
+        assert vac is not None
+
+        resp = client.put(
+            f'/vacina/{vac.id}',
+            json={'aplicada': True, 'aplicada_em': '2099-01-01', 'intervalo_dias': 30},
+        )
+        assert resp.status_code == 200
+        assert resp.get_json()['success'] is True
+
+        vacinas = (
+            Vacina.query.filter_by(animal_id=animal.id, nome='V10')
+            .order_by(Vacina.aplicada_em)
+            .all()
+        )
+        assert len(vacinas) == 2
+        assert vacinas[0].aplicada is True
+        assert vacinas[1].aplicada is False
+        assert vacinas[1].aplicada_em == date(2099, 1, 31)
+
+        client.get('/logout')
+        client.post('/login', data={'email': 'tutor@example.com', 'password': 'x'}, follow_redirects=True)
+        resp = client.get('/appointments')
+        assert b'V10' in resp.data
+        assert b'31/01/2099' in resp.data
