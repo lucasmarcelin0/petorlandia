@@ -42,7 +42,7 @@ def test_salvar_vacina_data_invalida(app):
         db.session.commit()
 
         client = app.test_client()
-        payload = {"vacinas": [{"nome": "Antirrabica", "tipo": "Teste", "data": "111111-11-11"}]}
+        payload = {"vacinas": [{"nome": "Antirrabica", "tipo": "Teste", "aplicada": True, "aplicada_em": "111111-11-11"}]}
         resp = client.post(f"/animal/{animal.id}/vacinas", json=payload)
 
         assert resp.status_code == 200
@@ -51,7 +51,8 @@ def test_salvar_vacina_data_invalida(app):
 
         vacina = Vacina.query.filter_by(animal_id=animal.id).first()
         assert vacina is not None
-        assert vacina.data is None
+        assert vacina.aplicada_em is None
+        assert vacina.aplicada is True
 
 
 def test_criar_vacina_modelo(app):
@@ -135,7 +136,8 @@ def test_fluxo_criacao_edicao_vacina(app):
                 {
                     'nome': 'V10',
                     'tipo': 'Obrigatória',
-                    'data': '2024-01-01',
+                    'aplicada': True,
+                    'aplicada_em': '2024-01-01',
                     'fabricante': 'ACME',
                     'doses_totais': 3,
                     'intervalo_dias': 30,
@@ -156,10 +158,13 @@ def test_fluxo_criacao_edicao_vacina(app):
             'doses_totais': 2,
             'intervalo_dias': 60,
             'frequencia': 'Bienal',
-            'data': '2024-02-01'
+            'aplicada': True,
+            'aplicada_em': '2024-02-01'
         })
         assert resp.status_code == 200
         assert resp.get_json()['success'] is True
         vac2 = Vacina.query.get(vac.id)
         assert vac2.nome == 'V10X'
         assert vac2.intervalo_dias == 60
+        assert vac2.aplicada_em.strftime('%Y-%m-%d') == '2024-02-01'
+        assert vac2.aplicada is True

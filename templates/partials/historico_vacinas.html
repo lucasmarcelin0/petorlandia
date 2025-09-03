@@ -9,7 +9,8 @@
           data-nome="{{ vacina.nome }}" data-tipo="{{ vacina.tipo or '' }}"
           data-fabricante="{{ vacina.fabricante or '' }}" data-doses="{{ vacina.doses_totais or '' }}"
           data-intervalo="{{ vacina.intervalo_dias or '' }}" data-frequencia="{{ vacina.frequencia or '' }}"
-          data-data="{% if vacina.data %}{{ vacina.data.strftime('%Y-%m-%d') }}{% endif %}"
+          data-aplicada="{{ '1' if vacina.aplicada else '0' }}"
+          data-aplicada_em="{% if vacina.aplicada_em %}{{ vacina.aplicada_em.strftime('%Y-%m-%d') }}{% endif %}"
           data-obs="{{ vacina.observacoes or '' }}">
         <div class="vacina-info">
           <strong class="vacina-nome">{{ vacina.nome }}</strong>
@@ -18,10 +19,12 @@
           {% if vacina.doses_totais %} — <span class="vacina-doses">{{ vacina.doses_totais }} doses</span>{% endif %}
           {% if vacina.intervalo_dias %} — <span class="vacina-intervalo">{{ vacina.intervalo_dias }} dias</span>{% endif %}
           {% if vacina.frequencia %} — <span class="vacina-frequencia">{{ vacina.frequencia }}</span>{% endif %}
-          {% if vacina.data %}
-            em <span class="vacina-data" data-date="{{ vacina.data.strftime('%Y-%m-%d') }}">
-              {{ vacina.data.strftime('%d/%m/%Y') }}
+          {% if vacina.aplicada %}
+            em <span class="vacina-data" data-date="{{ vacina.aplicada_em.strftime('%Y-%m-%d') if vacina.aplicada_em else '' }}">
+              {{ vacina.aplicada_em.strftime('%d/%m/%Y') if vacina.aplicada_em else '' }}
             </span>
+          {% else %}
+            <span class="text-muted">Não aplicada</span>
           {% endif %}
           {% if vacina.observacoes %}
             <br><em class="vacina-obs">{{ vacina.observacoes }}</em>
@@ -52,7 +55,8 @@ function editarVacina(id) {
     doses = '',
     intervalo = '',
     frequencia = '',
-    data = '',
+    aplicada = '0',
+    aplicada_em = '',
     obs = ''
   } = li.dataset;
 
@@ -83,9 +87,13 @@ function editarVacina(id) {
         <input class="form-control" id="edit-frequencia-${id}" value="${frequencia}">
       </div>
     </div>
+    <div class="form-check mb-2">
+      <input class="form-check-input" type="checkbox" id="edit-aplicada-${id}" ${aplicada === '1' ? 'checked' : ''}>
+      <label class="form-check-label" for="edit-aplicada-${id}">Aplicada?</label>
+    </div>
     <div class="mb-2">
       <label class="form-label">Data</label>
-      <input type="date" class="form-control" id="edit-data-${id}" value="${data}">
+      <input type="date" class="form-control" id="edit-aplicada-em-${id}" value="${aplicada_em}" ${aplicada === '1' ? '' : 'disabled'}>
     </div>
     <div class="mb-2">
       <label class="form-label">Observações</label>
@@ -94,6 +102,13 @@ function editarVacina(id) {
     <button class="btn btn-sm btn-success" onclick="salvarEdicaoVacina(${id})">💾 Salvar</button>
     <button class="btn btn-sm btn-secondary" onclick="location.reload()">Cancelar</button>
   `;
+
+  const chk = document.getElementById(`edit-aplicada-${id}`);
+  const dt = document.getElementById(`edit-aplicada-em-${id}`);
+  chk.addEventListener('change', () => {
+    dt.disabled = !chk.checked;
+    if (!chk.checked) dt.value = '';
+  });
 }
 
 function salvarEdicaoVacina(id) {
@@ -103,13 +118,14 @@ function salvarEdicaoVacina(id) {
   const doses_totais = document.getElementById(`edit-doses-${id}`).value;
   const intervalo_dias = document.getElementById(`edit-intervalo-${id}`).value;
   const frequencia = document.getElementById(`edit-frequencia-${id}`).value.trim();
-  const data = document.getElementById(`edit-data-${id}`).value.trim();
+  const aplicada = document.getElementById(`edit-aplicada-${id}`).checked;
+  const aplicada_em = document.getElementById(`edit-aplicada-em-${id}`).value.trim();
   const observacoes = document.getElementById(`edit-obs-${id}`).value.trim();
 
   fetch(`/vacina/${id}`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ nome, tipo, fabricante, doses_totais, intervalo_dias, frequencia, data, observacoes })
+    body: JSON.stringify({ nome, tipo, fabricante, doses_totais, intervalo_dias, frequencia, aplicada, aplicada_em, observacoes })
   })
   .then(res => res.json())
   .then(d => {

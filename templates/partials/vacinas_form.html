@@ -53,7 +53,7 @@
 
     <!-- Tipo e data -->
     <div class="row mb-3">
-      <div class="col-md-6">
+      <div class="col-md-4">
         <label for="tipo-vacina" class="form-label">Tipo</label>
         <select id="tipo-vacina" class="form-select">
           <option value="">Selecione...</option>
@@ -63,9 +63,15 @@
           <option value="Opcional">Opcional</option>
         </select>
       </div>
-      <div class="col-md-6">
-        <label for="data-vacina" class="form-label">Data da Aplicação</label>
-        <input type="date" id="data-vacina" class="form-control">
+      <div class="col-md-4 d-flex align-items-end">
+        <div class="form-check">
+          <input class="form-check-input" type="checkbox" id="aplicada-vacina">
+          <label class="form-check-label" for="aplicada-vacina">Aplicada?</label>
+        </div>
+      </div>
+      <div class="col-md-4">
+        <label for="aplicada-em" class="form-label">Data da Aplicação</label>
+        <input type="date" id="aplicada-em" class="form-control" disabled>
       </div>
     </div>
 
@@ -113,6 +119,7 @@
     let vacinas = [];
     let inputVacina, sugestoesVacinas, vacinaSelecionada = null;
     let buscaVacinaInput, sugestoesBuscaVacina;
+    let aplicadaCheckbox, aplicadaEmInput;
     function mostrarFeedback(msg, tipo = 'success') {
       const fb = document.getElementById('feedback-vacinas');
       fb.textContent = msg;
@@ -125,6 +132,13 @@
       sugestoesVacinas = document.getElementById('sugestoes-vacinas');
       buscaVacinaInput = document.getElementById('buscar-vacina-nova');
       sugestoesBuscaVacina = document.getElementById('sugestoes-busca-vacina');
+      aplicadaCheckbox = document.getElementById('aplicada-vacina');
+      aplicadaEmInput = document.getElementById('aplicada-em');
+
+      aplicadaCheckbox.addEventListener('change', () => {
+        aplicadaEmInput.disabled = !aplicadaCheckbox.checked;
+        if (!aplicadaCheckbox.checked) aplicadaEmInput.value = '';
+      });
 
       inputVacina.addEventListener('input', function () {
         const q = this.value.trim();
@@ -292,30 +306,37 @@
     function adicionarVacina() {
       const nome = document.getElementById('nome-vacina').value.trim();
       const tipo = document.getElementById('tipo-vacina').value.trim();
-      const data = document.getElementById('data-vacina').value;
+      const aplicada = document.getElementById('aplicada-vacina').checked;
+      const aplicada_em = document.getElementById('aplicada-em').value;
       const fabricante = document.getElementById('fabricante-vacina').value.trim();
       const doses_totais = parseInt(document.getElementById('doses-vacina').value) || 1;
       const intervalo_dias = parseInt(document.getElementById('intervalo-vacina').value) || 0;
       const frequencia = document.getElementById('frequencia-vacina').value.trim();
 
-      if (!nome || !tipo || !data) {
+      if (!nome || !tipo || (aplicada && !aplicada_em)) {
         alert('Preencha todos os campos obrigatórios.');
         return;
       }
 
-      const base = { nome, tipo, fabricante, doses_totais, intervalo_dias, frequencia };
-      const primeiraData = new Date(data);
-      for (let i = 0; i < doses_totais; i++) {
-        const d = new Date(primeiraData);
-        d.setDate(d.getDate() + i * intervalo_dias);
-        const dataStr = d.toISOString().split('T')[0];
-        vacinas.push({ ...base, data: dataStr, dose_numero: i + 1 });
+      const base = { nome, tipo, fabricante, doses_totais, intervalo_dias, frequencia, aplicada };
+      if (aplicada && aplicada_em) {
+        const primeiraData = new Date(aplicada_em);
+        for (let i = 0; i < doses_totais; i++) {
+          const d = new Date(primeiraData);
+          d.setDate(d.getDate() + i * intervalo_dias);
+          const dataStr = d.toISOString().split('T')[0];
+          vacinas.push({ ...base, aplicada_em: dataStr, dose_numero: i + 1 });
+        }
+      } else {
+        vacinas.push({ ...base, aplicada_em: null, dose_numero: 1 });
       }
       renderVacinasTemp();
 
       document.getElementById('nome-vacina').value = '';
       document.getElementById('tipo-vacina').value = '';
-      document.getElementById('data-vacina').value = '';
+      document.getElementById('aplicada-vacina').checked = false;
+      document.getElementById('aplicada-em').value = '';
+      document.getElementById('aplicada-em').disabled = true;
       document.getElementById('fabricante-vacina').value = '';
       document.getElementById('doses-vacina').value = '';
       document.getElementById('intervalo-vacina').value = '';
@@ -335,7 +356,7 @@
         const div = document.createElement('div');
         div.className = 'border p-2 mb-2 bg-light rounded shadow-sm';
         div.innerHTML = `
-          💉 <strong>${v.nome}</strong> — ${v.tipo} em ${v.data}
+          💉 <strong>${v.nome}</strong> — ${v.tipo} ${v.aplicada ? `em ${v.aplicada_em}` : '(não aplicada)'}
           ${v.fabricante ? ` - ${v.fabricante}` : ''}
           ${v.doses_totais ? ` - dose ${v.dose_numero}/${v.doses_totais}` : ''}
           ${v.intervalo_dias ? ` - intervalo ${v.intervalo_dias}d` : ''}
