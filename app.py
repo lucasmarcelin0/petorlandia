@@ -1614,6 +1614,29 @@ def ficha_animal(animal_id):
     blocos_exames = BlocoExames.query.filter_by(animal_id=animal.id).all()
     vacinas = Vacina.query.filter_by(animal_id=animal.id).all()
 
+    now = datetime.utcnow()
+    retornos = (
+        Appointment.query.filter_by(animal_id=animal.id)
+        .filter(Appointment.scheduled_at >= now)
+        .filter(Appointment.status.in_(["scheduled", "accepted"]))
+        .filter(Appointment.consulta_id.isnot(None))
+        .order_by(Appointment.scheduled_at)
+        .all()
+    )
+    exames_agendados = (
+        ExamAppointment.query.filter_by(animal_id=animal.id)
+        .filter(ExamAppointment.scheduled_at >= now)
+        .filter(ExamAppointment.status.in_(["pending", "confirmed"]))
+        .order_by(ExamAppointment.scheduled_at)
+        .all()
+    )
+    doses_futuras = (
+        Vacina.query.filter_by(animal_id=animal.id)
+        .filter(Vacina.data >= date.today())
+        .order_by(Vacina.data)
+        .all()
+    )
+
     return render_template(
         'animais/ficha_animal.html',
         animal=animal,
@@ -1621,7 +1644,10 @@ def ficha_animal(animal_id):
         consultas=consultas,
         blocos_prescricao=blocos_prescricao,
         blocos_exames=blocos_exames,
-        vacinas=vacinas
+        vacinas=vacinas,
+        retornos=retornos,
+        exames_agendados=exames_agendados,
+        doses_futuras=doses_futuras,
     )
 @app.route('/animal/<int:animal_id>/documentos', methods=['POST'])
 @login_required
@@ -6990,6 +7016,7 @@ def appointments():
                 .order_by(ExamAppointment.scheduled_at)
                 .all()
             )
+            vaccine_appointments = []
             form = None
         else:
             appointments = (
@@ -7004,15 +7031,28 @@ def appointments():
                 .order_by(ExamAppointment.scheduled_at)
                 .all()
             )
+            vaccine_appointments = (
+                Vacina.query
+                .join(Vacina.animal)
+                .filter(Animal.user_id == current_user.id)
+                .filter(Vacina.data >= date.today())
+                .order_by(Vacina.data)
+                .all()
+            )
+            for vac in vaccine_appointments:
+                vac.scheduled_at = datetime.combine(vac.data, time.min)
             form = None
         appointments_grouped = group_appointments_by_day(appointments)
         exam_appointments_grouped = group_appointments_by_day(exam_appointments)
+        vaccine_appointments_grouped = group_appointments_by_day(vaccine_appointments)
         return render_template(
             'agendamentos/appointments.html',
             appointments=appointments,
             appointments_grouped=appointments_grouped,
             exam_appointments=exam_appointments,
             exam_appointments_grouped=exam_appointments_grouped,
+            vaccine_appointments=vaccine_appointments,
+            vaccine_appointments_grouped=vaccine_appointments_grouped,
             form=form,
         )
 
