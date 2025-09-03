@@ -383,6 +383,7 @@ class Message(db.Model):
         nullable=False,
     )
     animal_id = db.Column(db.Integer, db.ForeignKey('animal.id'), nullable=True)
+    clinica_id = db.Column(db.Integer, db.ForeignKey('clinica.id'), nullable=True)
 
     content = db.Column(db.Text, nullable=False)
     timestamp = db.Column(db.DateTime, default=datetime.utcnow)
@@ -391,6 +392,7 @@ class Message(db.Model):
     sender = db.relationship('User', foreign_keys=[sender_id], back_populates='sent_messages')
     receiver = db.relationship('User', foreign_keys=[receiver_id], back_populates='received_messages')
     animal = db.relationship('Animal', backref=db.backref('messages', cascade='all, delete-orphan'))
+    clinica = db.relationship('Clinica', backref=db.backref('messages', cascade='all, delete-orphan'))
 
     lida = db.Column(db.Boolean, default=False)
 

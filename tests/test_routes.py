@@ -781,6 +781,39 @@ def test_conversa_admin_shows_message_for_any_admin(monkeypatch, app):
         assert b'hello' in response.data
 
 
+def test_chat_api_get_post(monkeypatch, app):
+    client = app.test_client()
+
+    with app.app_context():
+        db.drop_all()
+        db.create_all()
+
+        user1 = User(id=1, name='User1', email='u1@test')
+        user1.set_password('x')
+        user2 = User(id=2, name='User2', email='u2@test')
+        user2.set_password('x')
+        animal = Animal(id=1, name='Dog', user_id=user2.id)
+        db.session.add_all([user1, user2, animal])
+        db.session.commit()
+
+        import flask_login.utils as login_utils
+        monkeypatch.setattr(login_utils, '_get_user', lambda: user1)
+
+        resp = client.get('/chat/1')
+        assert resp.status_code == 200
+        assert resp.get_json() == []
+
+        resp = client.post('/chat/1', json={
+            'sender_id': 1,
+            'receiver_id': 2,
+            'content': 'hello'
+        })
+        assert resp.status_code == 201
+
+        resp = client.get('/chat/1')
+        assert len(resp.get_json()) == 1
+
+
 def test_change_password_requires_login(app):
     client = app.test_client()
     response = client.get('/change_password')

@@ -999,6 +999,64 @@ def mensagens():
     return render_template('mensagens/mensagens.html', mensagens=mensagens_recebidas)
 
 
+@app.route('/chat/<int:animal_id>', methods=['GET', 'POST'])
+@login_required
+def chat_messages(animal_id):
+    """API simples para listar e criar mensagens relacionadas a um animal."""
+    get_animal_or_404(animal_id)
+    if request.method == 'GET':
+        mensagens = (
+            Message.query
+            .filter_by(animal_id=animal_id)
+            .order_by(Message.timestamp)
+            .all()
+        )
+        return jsonify([
+            {
+                'id': m.id,
+                'sender_id': m.sender_id,
+                'receiver_id': m.receiver_id,
+                'animal_id': m.animal_id,
+                'clinica_id': m.clinica_id,
+                'content': m.content,
+                'timestamp': m.timestamp.isoformat(),
+            }
+            for m in mensagens
+        ])
+
+    data = request.get_json() or {}
+    nova_msg = Message(
+        sender_id=data.get('sender_id', current_user.id),
+        receiver_id=data['receiver_id'],
+        animal_id=animal_id,
+        clinica_id=data.get('clinica_id'),
+        content=data['content'],
+    )
+    db.session.add(nova_msg)
+    db.session.commit()
+    return (
+        jsonify(
+            {
+                'id': nova_msg.id,
+                'sender_id': nova_msg.sender_id,
+                'receiver_id': nova_msg.receiver_id,
+                'animal_id': nova_msg.animal_id,
+                'clinica_id': nova_msg.clinica_id,
+                'content': nova_msg.content,
+                'timestamp': nova_msg.timestamp.isoformat(),
+            }
+        ),
+        201,
+    )
+
+
+@app.route('/chat/<int:animal_id>/view')
+@login_required
+def chat_view(animal_id):
+    animal = get_animal_or_404(animal_id)
+    return render_template('chat/conversa.html', animal=animal)
+
+
 @app.route('/conversa/<int:animal_id>/<int:user_id>', methods=['GET', 'POST'])
 @login_required
 def conversa(animal_id, user_id):
