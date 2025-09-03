@@ -4024,7 +4024,7 @@ def criar_medicamento():
 @login_required
 def alterar_medicamento(med_id):
     medicamento = Medicamento.query.get_or_404(med_id)
-    if medicamento.created_by != current_user.id:
+    if medicamento.created_by != current_user.id and getattr(current_user, 'role', '') != 'admin':
         return jsonify({"success": False, "message": "Permissão negada"}), 403
 
     if request.method == "DELETE":
@@ -4033,14 +4033,22 @@ def alterar_medicamento(med_id):
         return jsonify({"success": True})
 
     data = request.get_json(silent=True) or {}
-    nome_val = data.get("nome", medicamento.nome)
-    if nome_val is not None:
-        nome_val = nome_val.strip()
-    principio_val = data.get("principio_ativo", medicamento.principio_ativo)
-    if principio_val is not None:
-        principio_val = principio_val.strip()
-    medicamento.nome = nome_val
-    medicamento.principio_ativo = principio_val or None
+    campos = {
+        "nome": "nome",
+        "principio_ativo": "principio_ativo",
+        "classificacao": "classificacao",
+        "via_administracao": "via_administracao",
+        "dosagem_recomendada": "dosagem_recomendada",
+        "frequencia": "frequencia",
+        "duracao_tratamento": "duracao_tratamento",
+        "observacoes": "observacoes",
+        "bula": "bula",
+    }
+    for key, attr in campos.items():
+        if key in data:
+            val = (data.get(key) or "").strip()
+            setattr(medicamento, attr, val or None)
+
     db.session.commit()
     return jsonify({"success": True})
 
