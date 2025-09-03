@@ -12,6 +12,7 @@ import enum
 from sqlalchemy import Enum, event
 from enum import Enum
 from sqlalchemy import Enum as PgEnum
+from sqlalchemy.orm import synonym
 
 
 
@@ -964,6 +965,7 @@ class Vacina(db.Model):
     aplicada_em = db.Column(db.Date)
     aplicada_por = db.Column(db.Integer, db.ForeignKey('user.id'))
     criada_em = db.Column(db.DateTime, default=datetime.utcnow)
+    data = synonym('aplicada_em')
 
     # Registro de quem cadastrou a vacina
     created_by = db.Column(
