@@ -3471,7 +3471,8 @@ def salvar_racao(animal_id):
                 recomendacao_custom=recomendacao_custom,
                 observacoes_racao=observacoes_racao,
                 preco_pago=data.get('preco_pago'),  # ✅ CORRIGIDO
-                tamanho_embalagem=data.get('tamanho_embalagem')  # ✅ CORRIGIDO
+                tamanho_embalagem=data.get('tamanho_embalagem'),  # ✅ CORRIGIDO
+                created_by=current_user.id
             )
             db.session.add(nova_racao)
 
@@ -3501,7 +3502,8 @@ def salvar_racao(animal_id):
                     animal_id=animal.id,
                     tipo_racao_id=tipo_racao.id,
                     recomendacao_custom=r.get('recomendacao_custom'),
-                    observacoes_racao=r.get('observacoes_racao')
+                    observacoes_racao=r.get('observacoes_racao'),
+                    created_by=current_user.id
                 )
                 db.session.add(nova_racao)
 
@@ -3573,7 +3575,7 @@ def criar_tipo_racao():
 @login_required
 def alterar_tipo_racao(tipo_id):
     tipo = TipoRacao.query.get_or_404(tipo_id)
-    if tipo.created_by != current_user.id:
+    if tipo.created_by != current_user.id and getattr(current_user, 'role', '') != 'admin':
         return jsonify({'success': False, 'error': 'Permissão negada.'}), 403
 
     if request.method == 'DELETE':
@@ -3612,12 +3614,45 @@ def tipos_racao():
     ])
 
 
+@app.route('/buscar_racoes')
+def buscar_racoes():
+    q = (request.args.get('q') or '').strip()
+    if len(q) < 2:
+        return jsonify([])
+
+    resultados = (
+        TipoRacao.query
+        .filter(
+            (TipoRacao.marca.ilike(f'%{q}%')) |
+            (TipoRacao.linha.ilike(f'%{q}%'))
+        )
+        .order_by(TipoRacao.marca)
+        .limit(15)
+        .all()
+    )
+
+    return jsonify([
+        {
+            'id': r.id,
+            'marca': r.marca,
+            'linha': r.linha,
+            'recomendacao': r.recomendacao,
+            'peso_pacote_kg': r.peso_pacote_kg,
+            'observacoes': r.observacoes,
+        }
+        for r in resultados
+    ])
+
+
 @app.route('/racao/<int:racao_id>', methods=['PUT', 'DELETE'])
 @login_required
 def alterar_racao(racao_id):
     racao = Racao.query.get_or_404(racao_id)
 
     if current_user.worker != 'veterinario':
+        return jsonify({'success': False, 'error': 'Permissão negada.'}), 403
+
+    if racao.created_by and racao.created_by != current_user.id and getattr(current_user, 'role', '') != 'admin':
         return jsonify({'success': False, 'error': 'Permissão negada.'}), 403
 
     if request.method == 'DELETE':
@@ -3780,7 +3815,7 @@ def criar_vacina_modelo():
 @login_required
 def alterar_vacina_modelo(vacina_id):
     vacina = VacinaModelo.query.get_or_404(vacina_id)
-    if vacina.created_by != current_user.id:
+    if vacina.created_by != current_user.id and getattr(current_user, 'role', '') != 'admin':
         return jsonify({'success': False, 'message': 'Permissão negada'}), 403
 
     if request.method == 'DELETE':
@@ -3833,7 +3868,8 @@ def salvar_vacinas(animal_id):
                 intervalo_dias=v.get("intervalo_dias"),
                 frequencia=v.get("frequencia"),
                 data=data_formatada,
-                observacoes=v.get("observacoes")
+                observacoes=v.get("observacoes"),
+                created_by=current_user.id if current_user.is_authenticated else None,
             )
             db.session.add(vacina)
 
@@ -3881,6 +3917,9 @@ def alterar_vacina(vacina_id):
     vacina = Vacina.query.get_or_404(vacina_id)
 
     if current_user.worker != 'veterinario':
+        return jsonify({'success': False, 'error': 'Permissão negada.'}), 403
+
+    if vacina.created_by and vacina.created_by != current_user.id and getattr(current_user, 'role', '') != 'admin':
         return jsonify({'success': False, 'error': 'Permissão negada.'}), 403
 
     if request.method == 'DELETE':
