@@ -3717,6 +3717,7 @@ def buscar_vacinas():
 
         return jsonify([
             {
+                'id': v.id,
                 'nome': v.nome,
                 'tipo': v.tipo or '',
                 'fabricante': v.fabricante or '',
