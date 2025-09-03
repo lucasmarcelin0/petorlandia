@@ -69,8 +69,10 @@ async function salvarNovaMedicacao(modalId){
         if(typeof preencherCardMedicamento === 'function') preencherCardMedicamento(data);
         input.value = data.nome || nome;
         const dose = document.getElementById('dose');
+        const freq = document.getElementById('frequencia');
         const duracao = document.getElementById('duracao');
         if(dose) dose.value = data.dosagem_recomendada || '';
+        if(freq) freq.value = data.frequencia || '';
         if(duracao) duracao.value = data.duracao_tratamento || '';
         sugestoes.innerHTML='';
         sugestoes.style.display='none';

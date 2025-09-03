@@ -3983,16 +3983,38 @@ def importar_medicamentos():
 def criar_medicamento():
     data = request.get_json(silent=True) or {}
     nome = (data.get("nome") or "").strip()
-    principio = (data.get("principio_ativo") or "").strip()
 
-    if not nome or not principio:
-        return jsonify({"success": False, "message": "Nome e princípio ativo são obrigatórios"}), 400
+    if not nome:
+        return jsonify({"success": False, "message": "Nome é obrigatório"}), 400
 
     try:
-        novo = Medicamento(nome=nome, principio_ativo=principio, created_by=current_user.id)
+        novo = Medicamento(
+            nome=nome,
+            principio_ativo=(data.get("principio_ativo") or "").strip() or None,
+            classificacao=(data.get("classificacao") or "").strip() or None,
+            via_administracao=(data.get("via_administracao") or "").strip() or None,
+            dosagem_recomendada=(data.get("dosagem_recomendada") or "").strip() or None,
+            frequencia=(data.get("frequencia") or "").strip() or None,
+            duracao_tratamento=(data.get("duracao_tratamento") or "").strip() or None,
+            observacoes=(data.get("observacoes") or "").strip() or None,
+            bula=(data.get("bula") or "").strip() or None,
+            created_by=current_user.id,
+        )
         db.session.add(novo)
         db.session.commit()
-        return jsonify({"success": True, "id": novo.id})
+        return jsonify({
+            "success": True,
+            "id": novo.id,
+            "nome": novo.nome,
+            "classificacao": novo.classificacao,
+            "principio_ativo": novo.principio_ativo,
+            "via_administracao": novo.via_administracao,
+            "dosagem_recomendada": novo.dosagem_recomendada,
+            "frequencia": novo.frequencia,
+            "duracao_tratamento": novo.duracao_tratamento,
+            "observacoes": novo.observacoes,
+            "bula": novo.bula,
+        })
     except Exception as e:
         db.session.rollback()
         return jsonify({"success": False, "message": str(e)}), 500
@@ -4075,6 +4097,7 @@ def buscar_medicamentos():
             "principio_ativo": m.principio_ativo,
             "via_administracao": m.via_administracao,
             "dosagem_recomendada": m.dosagem_recomendada,
+            "frequencia": m.frequencia,
             "duracao_tratamento": m.duracao_tratamento,
             "observacoes": m.observacoes,
             "bula": m.bula,
