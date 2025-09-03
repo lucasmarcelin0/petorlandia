@@ -1,0 +1,25 @@
+<table class="table">
+  <thead>
+    <tr>
+      <th>Animal</th>
+      <th>Vacina</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% if vaccine_appointments_grouped %}
+      {% for day, items in vaccine_appointments_grouped %}
+        <tr class="table-light">
+          <th colspan="2">{{ day|format_datetime_brazil('%d/%m/%Y') }}</th>
+        </tr>
+        {% for vac in items %}
+          <tr>
+            <td>{{ vac.animal.name }}</td>
+            <td>{{ vac.nome }}</td>
+          </tr>
+        {% endfor %}
+      {% endfor %}
+    {% else %}
+      <tr><td colspan="2">Nenhuma vacina agendada.</td></tr>
+    {% endif %}
+  </tbody>
+</table>
