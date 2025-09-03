@@ -5,7 +5,12 @@
 
     <ul class="list-group list-group-flush mb-2">
       {% for vacina in animal.vacinas_ordenadas %}
-      <li class="list-group-item" data-vacina-id="{{ vacina.id }}">
+      <li class="list-group-item" data-vacina-id="{{ vacina.id }}"
+          data-nome="{{ vacina.nome }}" data-tipo="{{ vacina.tipo or '' }}"
+          data-fabricante="{{ vacina.fabricante or '' }}" data-doses="{{ vacina.doses_totais or '' }}"
+          data-intervalo="{{ vacina.intervalo_dias or '' }}" data-frequencia="{{ vacina.frequencia or '' }}"
+          data-data="{% if vacina.data %}{{ vacina.data.strftime('%Y-%m-%d') }}{% endif %}"
+          data-obs="{{ vacina.observacoes or '' }}">
         <div class="vacina-info">
           <strong class="vacina-nome">{{ vacina.nome }}</strong>
           {% if vacina.tipo %} — <span class="vacina-tipo">{{ vacina.tipo }}</span>{% endif %}
@@ -40,14 +45,16 @@
 <script>
 function editarVacina(id) {
   const li = document.querySelector(`[data-vacina-id='${id}']`);
-  const nome = li.querySelector('.vacina-nome')?.textContent.trim() || '';
-  const tipo = li.querySelector('.vacina-tipo')?.textContent.trim() || '';
-  const fabricante = li.querySelector('.vacina-fabricante')?.textContent.trim() || '';
-  const doses = li.querySelector('.vacina-doses')?.textContent.replace(' doses','').trim() || '';
-  const intervalo = li.querySelector('.vacina-intervalo')?.textContent.replace(' dias','').trim() || '';
-  const freq = li.querySelector('.vacina-frequencia')?.textContent.trim() || '';
-  const data = li.querySelector('.vacina-data')?.dataset.date || '';
-  const obs = li.querySelector('.vacina-obs')?.textContent.trim() || '';
+  const {
+    nome = '',
+    tipo = '',
+    fabricante = '',
+    doses = '',
+    intervalo = '',
+    frequencia = '',
+    data = '',
+    obs = ''
+  } = li.dataset;
 
   li.innerHTML = `
     <div class="mb-2">
@@ -73,7 +80,7 @@ function editarVacina(id) {
       </div>
       <div class="col-md-4 mb-2">
         <label class="form-label">Frequência</label>
-        <input class="form-control" id="edit-frequencia-${id}" value="${freq}">
+        <input class="form-control" id="edit-frequencia-${id}" value="${frequencia}">
       </div>
     </div>
     <div class="mb-2">
