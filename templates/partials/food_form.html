@@ -286,7 +286,7 @@ function confirmarEdicaoRacao() {
   const recomendacao = parseFloat(document.getElementById('edit-recomendacao').value) || null;
   const preco = parseFloat(document.getElementById('edit-preco').value) || null;
 
-  fetch(`/racao/${racaoId}/editar`, {
+  fetch(`/racao/${racaoId}`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
@@ -313,7 +313,7 @@ function confirmarEdicaoRacao() {
 function excluirRacao(racaoId) {
   if (!confirm('Tem certeza que deseja excluir esta ração?')) return;
 
-  fetch(`/racao/${racaoId}/excluir`, {
+  fetch(`/racao/${racaoId}`, {
     method: 'DELETE'
   })
   .then(resp => resp.json())

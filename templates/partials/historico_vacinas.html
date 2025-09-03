@@ -20,18 +20,9 @@
         </div>
 
       <div class="mt-2 d-flex gap-2">
-        <form method="POST" action="{{ url_for('deletar_vacina', vacina_id=vacina.id) }}"
-              class="delete-history-form" data-sync data-target="historico-vacinas"
-              data-confirm="Deseja mesmo remover esta vacina?">
-          <button class="btn btn-sm btn-danger">🗑️ Remover</button>
-        </form>
-
-        <button class="btn btn-sm btn-outline-primary" onclick="editarVacina({{ vacina.id }})">
-          ✏️ Editar
-        </button>
-        <a href="{{ url_for('imprimir_vacinas', animal_id=animal.id) }}" class="btn btn-sm btn-outline-dark" target="_blank">
-          🖨️ Imprimir
-        </a>
+        <button class="btn btn-sm btn-danger" onclick="excluirVacina({{ vacina.id }})">🗑️ Remover</button>
+        <button class="btn btn-sm btn-outline-primary" onclick="editarVacina({{ vacina.id }})">✏️ Editar</button>
+        <a href="{{ url_for('imprimir_vacinas', animal_id=animal.id) }}" class="btn btn-sm btn-outline-dark" target="_blank">🖨️ Imprimir</a>
       </div>
       </li>
       {% endfor %}
@@ -78,23 +69,41 @@ function salvarEdicaoVacina(id) {
   const data = document.getElementById(`edit-data-${id}`).value.trim();
   const observacoes = document.getElementById(`edit-obs-${id}`).value.trim();
 
-  fetch(`/vacina/${id}/editar`, {
-    method: 'POST',
+  fetch(`/vacina/${id}`, {
+    method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ nome, tipo, data, observacoes })
   })
   .then(res => res.json())
   .then(d => {
     if (d.success) {
-      alert("Vacina atualizada!");
+      alert('Vacina atualizada!');
       location.reload();
     } else {
-      alert("Erro ao salvar.");
+      alert('Erro ao salvar.');
     }
   })
   .catch(err => {
     console.error('Erro:', err);
-    alert("Erro na requisição.");
+    alert('Erro na requisição.');
   });
+}
+
+function excluirVacina(id) {
+  if (!confirm('Deseja mesmo remover esta vacina?')) return;
+  fetch(`/vacina/${id}`, { method: 'DELETE' })
+    .then(res => res.json())
+    .then(d => {
+      if (d.success) {
+        const li = document.querySelector(`[data-vacina-id='${id}']`);
+        li?.remove();
+      } else {
+        alert(d.error || 'Erro ao excluir vacina.');
+      }
+    })
+    .catch(err => {
+      console.error('Erro ao excluir vacina:', err);
+      alert('Erro ao excluir vacina.');
+    });
 }
 </script>
