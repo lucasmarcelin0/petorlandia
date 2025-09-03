@@ -41,44 +41,6 @@ class ResetPasswordForm(FlaskForm):
 
 class RegistrationForm(FlaskForm):
     name = StringField(
-        'Name',
-        validators=[DataRequired(message="Nome é obrigatório"), Length(min=2, max=120)],
-        render_kw={"required": True},
-    )
-    email = StringField(
-        'Email',
-        validators=[DataRequired(message="Email é obrigatório"), Email()],
-        render_kw={"required": True},
-    )
-    phone = StringField('Phone', validators=[Optional(), Length(min=8, max=20)])
-    address = StringField('Address', validators=[Optional(), Length(max=200)])
-    profile_photo = FileField('Foto de Perfil', validators=[
-        Optional(),
-        FileAllowed(['jpg', 'jpeg', 'png', 'gif'], 'Apenas imagens!')
-    ])
-    photo_rotation = IntegerField('Rotação', default=0, validators=[Optional()])
-    photo_zoom = DecimalField('Zoom', places=2, default=1.0, validators=[Optional()])
-    photo_offset_x = DecimalField('Offset X', places=0, default=0, validators=[Optional()])
-    photo_offset_y = DecimalField('Offset Y', places=0, default=0, validators=[Optional()])
-    password = PasswordField(
-        'Password',
-        validators=[DataRequired(message="Senha é obrigatória"), Length(min=6)],
-        render_kw={"required": True},
-    )
-    confirm_password = PasswordField(
-        'Confirm Password',
-        validators=[DataRequired(message="Confirmação de senha é obrigatória"), EqualTo('password', message='Passwords must match')],
-        render_kw={"required": True},
-    )
-    submit = SubmitField('Cadastrar')
-
-
-
-
-
-
-class RegistrationForm(FlaskForm):
-    name = StringField(
         'Nome',
         validators=[DataRequired(message="Nome é obrigatório"), Length(min=2, max=120)],
         render_kw={"required": True},
@@ -108,26 +70,12 @@ class RegistrationForm(FlaskForm):
     confirm_password = PasswordField(
         'Confirme a senha',
         validators=[
-            DataRequired(message="Confirmação obrigatória"),
+            DataRequired(message="Confirmação de senha é obrigatória"),
             EqualTo('password', message='As senhas devem coincidir')
         ],
         render_kw={"required": True},
     )
 
-    submit = SubmitField('Cadastrar')
-
-
-
-    password = PasswordField(
-        'Password',
-        validators=[DataRequired(message="Senha é obrigatória"), Length(min=6)],
-        render_kw={"required": True},
-    )
-    confirm_password = PasswordField(
-        'Confirm Password',
-        validators=[DataRequired(message="Confirmação de senha é obrigatória"), EqualTo('password', message='Passwords must match')],
-        render_kw={"required": True},
-    )
     submit = SubmitField('Cadastrar')
 
 
