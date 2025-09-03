@@ -81,7 +81,7 @@
         <a href="#" class="card-link editar-retorno">Editar</a>
         <form method="POST"
               action="{{ url_for('delete_appointment', appointment_id=consulta.appointment.id) }}"
-              class="d-inline data-sync delete-appointment-form">
+              class="d-inline delete-appointment-form" data-sync>
           <button type="submit" class="btn btn-link p-0 card-link">Excluir</button>
         </form>
         <a href="{{ url_for('consulta_direct', animal_id=animal.id) }}" class="card-link start-return-link">Iniciar retorno</a>
