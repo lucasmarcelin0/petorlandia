@@ -318,17 +318,18 @@
         return;
       }
 
-      const base = { nome, tipo, fabricante, doses_totais, intervalo_dias, frequencia, aplicada };
+      const base = { nome, tipo, fabricante, doses_totais, intervalo_dias, frequencia };
       if (aplicada && aplicada_em) {
         const primeiraData = new Date(aplicada_em);
         for (let i = 0; i < doses_totais; i++) {
           const d = new Date(primeiraData);
           d.setDate(d.getDate() + i * intervalo_dias);
           const dataStr = d.toISOString().split('T')[0];
-          vacinas.push({ ...base, aplicada_em: dataStr, dose_numero: i + 1 });
+          const isAplicada = i === 0 ? aplicada : false;
+          vacinas.push({ ...base, aplicada: isAplicada, aplicada_em: dataStr, dose_numero: i + 1 });
         }
       } else {
-        vacinas.push({ ...base, aplicada_em: null, dose_numero: 1 });
+        vacinas.push({ ...base, aplicada, aplicada_em: null, dose_numero: 1 });
       }
       renderVacinasTemp();
 

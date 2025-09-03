@@ -4,6 +4,7 @@ import sys
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 import pytest
+from datetime import date, timedelta
 from app import app as flask_app, db
 from models import User, Animal, Clinica, Vacina, VacinaModelo
 
@@ -168,3 +169,61 @@ def test_fluxo_criacao_edicao_vacina(app):
         assert vac2.intervalo_dias == 60
         assert vac2.aplicada_em.strftime('%Y-%m-%d') == '2024-02-01'
         assert vac2.aplicada is True
+
+
+def test_vacina_futura_aparece_agendamentos(app):
+    with app.app_context():
+        db.drop_all()
+        db.create_all()
+        tutor = User(name="Tutor", email="tutor@example.com")
+        tutor.set_password("x")
+        animal = Animal(name="Rex", owner=tutor)
+        db.session.add_all([tutor, animal])
+        db.session.commit()
+
+        client = app.test_client()
+        client.post('/login', data={'email': 'tutor@example.com', 'password': 'x'}, follow_redirects=True)
+
+        today = date.today()
+        future = today + timedelta(days=30)
+
+        payload = {
+            'vacinas': [
+                {
+                    'nome': 'V10',
+                    'tipo': 'Obrigatória',
+                    'aplicada': True,
+                    'aplicada_em': today.isoformat(),
+                    'fabricante': 'ACME',
+                    'doses_totais': 2,
+                    'intervalo_dias': 30,
+                    'frequencia': 'Anual',
+                    'dose_numero': 1,
+                },
+                {
+                    'nome': 'V10',
+                    'tipo': 'Obrigatória',
+                    'aplicada': False,
+                    'aplicada_em': future.isoformat(),
+                    'fabricante': 'ACME',
+                    'doses_totais': 2,
+                    'intervalo_dias': 30,
+                    'frequencia': 'Anual',
+                    'dose_numero': 2,
+                },
+            ]
+        }
+
+        resp = client.post(f'/animal/{animal.id}/vacinas', json=payload)
+        assert resp.status_code == 200
+        assert resp.get_json()['success'] is True
+
+        vacs = Vacina.query.filter_by(animal_id=animal.id).order_by(Vacina.aplicada_em).all()
+        assert len(vacs) == 2
+        assert vacs[0].aplicada is True
+        assert vacs[1].aplicada is False
+        assert vacs[1].aplicada_em == future
+
+        resp = client.get('/appointments')
+        assert resp.status_code == 200
+        assert future.strftime('%d/%m/%Y').encode() in resp.data
