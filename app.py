@@ -6618,6 +6618,11 @@ def appointments():
             'Domingo': 6,
         }
         horarios.sort(key=lambda h: weekday_order.get(h.dia_semana, 7))
+        horarios_grouped = []
+        for h in horarios:
+            if not horarios_grouped or horarios_grouped[-1]['dia'] != h.dia_semana:
+                horarios_grouped.append({'dia': h.dia_semana, 'itens': []})
+            horarios_grouped[-1]['itens'].append(h)
         now = datetime.utcnow()
         start_str = request.args.get('start')
         end_str = request.args.get('end')
@@ -6706,7 +6711,7 @@ def appointments():
             schedule_form=schedule_form,
             appointment_form=appointment_form,
             veterinario=veterinario,
-            horarios=horarios,
+            horarios_grouped=horarios_grouped,
             appointments_pending=appointments_pending,
             appointments_upcoming=appointments_upcoming,
             appointments_past=appointments_past,
