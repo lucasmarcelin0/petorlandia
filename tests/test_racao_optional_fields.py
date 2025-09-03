@@ -95,3 +95,25 @@ def test_alterar_medicamento_principio_nulo(app):
         resp = client.put(f'/medicamento/{med.id}', json={'nome': 'MedX'})
         assert resp.status_code == 200
         assert Medicamento.query.get(med.id).nome == 'MedX'
+
+
+def test_criar_medicamento_campos_opcionais(app):
+    with app.app_context():
+        db.create_all()
+        vet = User(name="Vet", email="vet@example.com", worker="veterinario")
+        vet.set_password("x")
+        db.session.add(vet)
+        db.session.commit()
+        client = app.test_client()
+        _login(client, 'vet@example.com', 'x')
+        payload = {
+            'nome': 'Dipirona',
+            'classificacao': 'analgésico'
+        }
+        resp = client.post('/medicamento', json=payload)
+        assert resp.status_code == 200
+        data = resp.get_json()
+        med = Medicamento.query.get(data['id'])
+        assert med.nome == 'Dipirona'
+        assert med.classificacao == 'analgésico'
+        assert med.principio_ativo is None
