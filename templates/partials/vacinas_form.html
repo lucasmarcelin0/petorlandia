@@ -21,6 +21,11 @@
       <label for="nome-vacina" class="form-label">Vacina</label>
       <input type="text" id="nome-vacina" class="form-control" placeholder="Ex: Antirrábica, V10, V8..." autocomplete="off">
       <ul id="sugestoes-vacinas" class="list-group position-absolute w-100 bg-white shadow border rounded mt-1" style="z-index: 1050;"></ul>
+      <input type="hidden" id="vacina-id">
+      <input type="hidden" id="vacina-frequencia">
+      <input type="hidden" id="vacina-doses-totais">
+      <input type="hidden" id="vacina-intervalo-dias">
+      <input type="hidden" id="vacina-fabricante">
     </div>
 
     <!-- Tipo e data -->
@@ -102,6 +107,13 @@
               li.textContent = item.nome;
               li.onclick = () => {
                 inputVacina.value = item.nome;
+                const tipo = document.getElementById('tipo-vacina');
+                if (tipo) tipo.value = item.tipo || '';
+                document.getElementById('vacina-id').value = item.id || '';
+                document.getElementById('vacina-frequencia').value = item.frequencia || '';
+                document.getElementById('vacina-doses-totais').value = item.doses_totais || '';
+                document.getElementById('vacina-intervalo-dias').value = item.intervalo_dias || '';
+                document.getElementById('vacina-fabricante').value = item.fabricante || '';
                 sugestoesVacinas.innerHTML = '';
               };
               sugestoesVacinas.appendChild(li);

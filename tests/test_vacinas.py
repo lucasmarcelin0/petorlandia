@@ -70,3 +70,33 @@ def test_criar_vacina_modelo(app):
         assert data['success'] is True
         vm = VacinaModelo.query.filter_by(nome='V10').first()
         assert vm is not None and vm.created_by == user.id
+
+
+def test_buscar_vacinas_retorna_campos(app):
+    with app.app_context():
+        db.drop_all()
+        db.create_all()
+        user = User(name="Vet", email="vet@example.com")
+        user.set_password("x")
+        db.session.add(user)
+        db.session.commit()
+        vm = VacinaModelo(
+            nome="V8",
+            tipo="Obrigatória",
+            frequencia="Anual",
+            doses_totais=3,
+            intervalo_dias=30,
+            fabricante="PetVac",
+            created_by=user.id,
+        )
+        db.session.add(vm)
+        db.session.commit()
+        client = app.test_client()
+        resp = client.get('/buscar_vacinas?q=V8')
+        assert resp.status_code == 200
+        data = resp.get_json()
+        assert data[0]["id"] == vm.id
+        assert data[0]["frequencia"] == "Anual"
+        assert data[0]["doses_totais"] == 3
+        assert data[0]["intervalo_dias"] == 30
+        assert data[0]["fabricante"] == "PetVac"
