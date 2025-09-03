@@ -1776,7 +1776,20 @@ def ficha_animal(animal_id):
 
     blocos_prescricao = BlocoPrescricao.query.filter_by(animal_id=animal.id).all()
     blocos_exames = BlocoExames.query.filter_by(animal_id=animal.id).all()
-    vacinas = Vacina.query.filter_by(animal_id=animal.id).all()
+
+    vacinas_aplicadas = Vacina.query.filter_by(
+        animal_id=animal.id, aplicada=True
+    ).all()
+    doses_futuras = (
+        Vacina.query.filter_by(animal_id=animal.id, aplicada=False)
+        .filter(Vacina.data >= date.today())
+        .all()
+    )
+    doses_atrasadas = (
+        Vacina.query.filter_by(animal_id=animal.id, aplicada=False)
+        .filter(Vacina.data < date.today())
+        .all()
+    )
 
     now = datetime.utcnow()
     retornos = (
@@ -1794,12 +1807,6 @@ def ficha_animal(animal_id):
         .order_by(ExamAppointment.scheduled_at)
         .all()
     )
-    doses_futuras = (
-        Vacina.query.filter_by(animal_id=animal.id)
-        .filter(Vacina.aplicada_em >= date.today())
-        .order_by(Vacina.aplicada_em)
-        .all()
-    )
 
     return render_template(
         'animais/ficha_animal.html',
@@ -1808,10 +1815,11 @@ def ficha_animal(animal_id):
         consultas=consultas,
         blocos_prescricao=blocos_prescricao,
         blocos_exames=blocos_exames,
-        vacinas=vacinas,
+        vacinas_aplicadas=vacinas_aplicadas,
+        doses_futuras=doses_futuras,
+        doses_atrasadas=doses_atrasadas,
         retornos=retornos,
         exames_agendados=exames_agendados,
-        doses_futuras=doses_futuras,
     )
 @app.route('/animal/<int:animal_id>/documentos', methods=['POST'])
 @login_required
