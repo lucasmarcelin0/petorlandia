@@ -222,6 +222,20 @@ def digits_only(value):
     """Return only the digits from a string."""
     return "".join(filter(str.isdigit, value)) if value else ""
 
+
+@app.template_filter("payment_status_label")
+def payment_status_label(value):
+    """Translate payment status codes to Portuguese labels."""
+    mapping = {
+        "pending": "Pendente",
+        "success": "Aprovado",
+        "completed": "Aprovado",
+        "approved": "Aprovado",
+        "failure": "Falha no pagamento",
+        "failed": "Falha no pagamento",
+    }
+    return mapping.get(value.lower(), value) if value else ""
+
 # ----------------------------------------------------------------
 # 6)  Forms e helpers
 # ----------------------------------------------------------------
