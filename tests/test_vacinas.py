@@ -6,6 +6,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')
 import pytest
 from app import app as flask_app, db
 from models import User, Animal, Clinica, Vacina, VacinaModelo
+from datetime import date
 
 @pytest.fixture
 def app():
@@ -163,3 +164,27 @@ def test_fluxo_criacao_edicao_vacina(app):
         vac2 = Vacina.query.get(vac.id)
         assert vac2.nome == 'V10X'
         assert vac2.intervalo_dias == 60
+
+
+def test_aplicar_vacina(app):
+    with app.app_context():
+        db.drop_all()
+        db.create_all()
+        tutor = User(name="Tutor", email="tutor@example.com", password_hash="x")
+        animal = Animal(name="Rex", owner=tutor)
+        vet = User(name="Vet", email="vet@example.com", worker="veterinario")
+        vet.set_password("x")
+        vacina = Vacina(nome="V10", animal=animal, created_by=vet.id)
+        db.session.add_all([tutor, animal, vet, vacina])
+        db.session.commit()
+
+        client = app.test_client()
+        client.post('/login', data={'email': 'vet@example.com', 'password': 'x'}, follow_redirects=True)
+        resp = client.post(f'/vacina/{vacina.id}/aplicar')
+        assert resp.status_code == 200
+        assert resp.get_json()['success'] is True
+
+        vac2 = Vacina.query.get(vacina.id)
+        assert vac2.aplicada is True
+        assert vac2.aplicada_por == vet.id
+        assert vac2.aplicada_em == date.today()

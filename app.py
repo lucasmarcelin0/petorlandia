@@ -4169,6 +4169,27 @@ def alterar_vacina(vacina_id):
         return jsonify({'success': False, 'error': 'Erro ao editar vacina.'}), 500
 
 
+@app.route('/vacina/<int:vacina_id>/aplicar', methods=['POST'])
+@login_required
+def aplicar_vacina(vacina_id):
+    vacina = Vacina.query.get_or_404(vacina_id)
+
+    if current_user.worker != 'veterinario':
+        return jsonify({'success': False, 'error': 'Permissão negada.'}), 403
+
+    vacina.aplicada = True
+    vacina.aplicada_em = date.today()
+    vacina.aplicada_por = current_user.id
+
+    try:
+        db.session.commit()
+        return jsonify({'success': True})
+    except Exception as e:
+        db.session.rollback()
+        print('Erro ao aplicar vacina:', e)
+        return jsonify({'success': False, 'error': 'Erro ao aplicar vacina.'}), 500
+
+
 
 @app.route('/consulta/<int:consulta_id>/prescricao', methods=['POST'])
 @login_required

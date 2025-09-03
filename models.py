@@ -959,6 +959,13 @@ class Vacina(db.Model):
     frequencia = db.Column(db.String(50))
     data = db.Column(db.Date)        # Data da aplicação
     observacoes = db.Column(db.Text)
+    aplicada = db.Column(db.Boolean, default=False)
+    aplicada_em = db.Column(db.Date)
+    aplicada_por = db.Column(
+        db.Integer,
+        db.ForeignKey('user.id', ondelete='SET NULL'),
+        nullable=True,
+    )
     criada_em = db.Column(db.DateTime, default=datetime.utcnow)
 
     # Registro de quem cadastrou a vacina
