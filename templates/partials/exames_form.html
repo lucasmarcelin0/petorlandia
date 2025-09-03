@@ -9,6 +9,10 @@
       <label for="novo-exame-nome" class="form-label">Nome do exame</label>
       <input type="text" id="novo-exame-nome" class="form-control">
     </div>
+    <div class="mb-2">
+      <label for="novo-exame-justificativa" class="form-label">Justificativa</label>
+      <textarea id="novo-exame-justificativa" class="form-control" rows="2"></textarea>
+    </div>
     <button type="button" class="btn btn-primary" onclick="salvarExameModelo()">💾 Salvar Exame</button>
   </div>
 
@@ -97,6 +101,7 @@
 
   async function salvarExameModelo() {
     const nome = document.getElementById('novo-exame-nome').value.trim();
+    const justificativa = document.getElementById('novo-exame-justificativa').value.trim();
     if (!nome) {
       mostrarFeedback('Informe o nome do exame.', 'warning');
       return;
@@ -105,13 +110,15 @@
       const resp = await fetch('/exame_modelo', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
-        body: JSON.stringify({ nome })
+        body: JSON.stringify({ nome, justificativa })
       });
       const data = await resp.json();
       if (resp.ok && data.id) {
         mostrarFeedback('Exame cadastrado com sucesso!');
         document.getElementById('nome-exame').value = nome;
+        document.getElementById('justificativa-exame').value = justificativa;
         document.getElementById('novo-exame-nome').value = '';
+        document.getElementById('novo-exame-justificativa').value = '';
         document.getElementById('novo-exame-container').classList.add('d-none');
       } else {
         mostrarFeedback(data.message || 'Erro ao cadastrar exame.', 'danger');

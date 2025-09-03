@@ -1,6 +1,8 @@
 async function criarExameModelo(modalId){
   const nomeInput = document.getElementById(`${modalId}-nome`);
   const nome = nomeInput ? nomeInput.value.trim() : '';
+  const justificativaInput = document.getElementById(`${modalId}-justificativa`);
+  const justificativa = justificativaInput ? justificativaInput.value.trim() : '';
   if(!nome){
     if(typeof mostrarFeedback === 'function') mostrarFeedback('Informe o nome do exame.', 'danger');
     return;
@@ -9,7 +11,7 @@ async function criarExameModelo(modalId){
     const resp = await fetch('/exame_modelo', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
-      body: JSON.stringify({ nome })
+      body: JSON.stringify({ nome, justificativa })
     });
     if(!resp.ok) throw new Error();
     const data = await resp.json();
@@ -22,7 +24,7 @@ async function criarExameModelo(modalId){
       li.onclick = () => {
         inputExame.value = data.nome;
         const just = document.getElementById('justificativa-exame');
-        if(just) just.value = '';
+        if(just) just.value = data.justificativa || '';
         const sug = document.getElementById('sugestoes-exames');
         if(sug) sug.innerHTML = '';
       };
@@ -33,6 +35,8 @@ async function criarExameModelo(modalId){
       }
       li.click();
     }
+    if(nomeInput) nomeInput.value = '';
+    if(justificativaInput) justificativaInput.value = '';
   }catch(e){
     if(typeof mostrarFeedback === 'function') mostrarFeedback('Erro ao criar exame.', 'danger');
   }

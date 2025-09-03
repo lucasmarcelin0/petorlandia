@@ -28,14 +28,16 @@ def test_criar_exame_modelo(app):
     client = app.test_client()
     with client:
         client.post('/login', data={'email': 'vet@example.com', 'password': 'x'}, follow_redirects=True)
-        resp = client.post('/exame_modelo', json={'nome': 'Hemograma'})
+        resp = client.post('/exame_modelo', json={'nome': 'Hemograma', 'justificativa': 'Exame de rotina'})
         assert resp.status_code == 200
         data = resp.get_json()
         assert data['nome'] == 'Hemograma'
+        assert data['justificativa'] == 'Exame de rotina'
         with app.app_context():
             exame = ExameModelo.query.first()
             user_db = User.query.filter_by(email='vet@example.com').first()
             assert exame and exame.nome == 'Hemograma'
+            assert exame.justificativa == 'Exame de rotina'
             assert user_db and exame.created_by == user_db.id
 
 
