@@ -4356,12 +4356,13 @@ def buscar_exames():
 def criar_exame_modelo():
     data = request.get_json(silent=True) or {}
     nome = (data.get('nome') or '').strip()
+    justificativa = (data.get('justificativa') or '').strip() or None
     if not nome:
         return jsonify({'error': 'Nome é obrigatório'}), 400
-    exame = ExameModelo(nome=nome, created_by=current_user.id)
+    exame = ExameModelo(nome=nome, justificativa=justificativa, created_by=current_user.id)
     db.session.add(exame)
     db.session.commit()
-    return jsonify({'id': exame.id, 'nome': exame.nome})
+    return jsonify({'id': exame.id, 'nome': exame.nome, 'justificativa': exame.justificativa})
 
 
 @app.route('/exame_modelo/<int:exame_id>', methods=['PUT', 'DELETE'])
