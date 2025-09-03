@@ -3568,7 +3568,10 @@ def alterar_tipo_racao(tipo_id):
         return jsonify({'success': True})
 
     data = request.get_json(silent=True) or {}
-    tipo.marca = data.get('marca', tipo.marca).strip()
+    marca_val = data.get('marca', tipo.marca)
+    if marca_val is not None:
+        marca_val = marca_val.strip()
+    tipo.marca = marca_val
     linha_val = data.get('linha', tipo.linha)
     if linha_val is not None:
         linha_val = linha_val.strip()
