@@ -52,7 +52,7 @@
     <div id="exames-edit-{{ bloco.id }}" class="d-none">
       <div id="exames-container-{{ bloco.id }}">
         {% for exame in bloco.exames %}
-        <div class="card mb-3 exame-card">
+        <div class="card mb-3 exame-card" data-id="{{ exame.id }}">
           <div class="card-body">
             <div class="mb-2 position-relative">
               <label class="form-label">Nome do Exame</label>
@@ -164,17 +164,27 @@ function adicionarExame(blocoId) {
 
 
 function removerExame(button) {
+  if (!confirm('Deseja remover este exame?')) return;
   const card = button.closest('.exame-card');
-  card.remove();
-}
-
-document.addEventListener('click', function (e) {
-  if (e.target.classList.contains('btn-remover')) {
-    if (confirm('Deseja remover este exame?')) {
-      e.target.closest('.exame-card')?.remove();
-    }
+  const exameId = card.dataset.id;
+  if (exameId) {
+    fetch(`/exame/${exameId}`, { method: 'DELETE' })
+      .then(r => r.json())
+      .then(data => {
+        if (data.success) {
+          card.remove();
+        } else {
+          alert(data.error || 'Erro ao excluir exame.');
+        }
+      })
+      .catch(err => {
+        console.error('Erro ao excluir exame:', err);
+        alert('Erro ao excluir exame.');
+      });
+  } else {
+    card.remove();
   }
-});
+}
 
 function sugerirExames(input) {
   const lista = input.nextElementSibling;

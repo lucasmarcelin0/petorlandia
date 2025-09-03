@@ -3612,13 +3612,23 @@ def tipos_racao():
     ])
 
 
-@app.route('/racao/<int:racao_id>/editar', methods=['PUT'])
+@app.route('/racao/<int:racao_id>', methods=['PUT', 'DELETE'])
 @login_required
-def editar_racao(racao_id):
+def alterar_racao(racao_id):
     racao = Racao.query.get_or_404(racao_id)
 
     if current_user.worker != 'veterinario':
         return jsonify({'success': False, 'error': 'Permissão negada.'}), 403
+
+    if request.method == 'DELETE':
+        try:
+            db.session.delete(racao)
+            db.session.commit()
+            return jsonify({'success': True})
+        except Exception as e:
+            db.session.rollback()
+            print(f"Erro ao excluir ração: {e}")
+            return jsonify({'success': False, 'error': 'Erro técnico ao excluir ração.'}), 500
 
     data = request.get_json(silent=True) or {}
     racao.recomendacao_custom = data.get('recomendacao_custom') or None
@@ -3634,24 +3644,6 @@ def editar_racao(racao_id):
         print(f"Erro ao editar ração: {e}")
         return jsonify({'success': False, 'error': 'Erro técnico ao editar ração.'}), 500
 
-
-
-@app.route('/racao/<int:racao_id>/excluir', methods=['DELETE'])
-@login_required
-def excluir_racao(racao_id):
-    racao = Racao.query.get_or_404(racao_id)
-
-    if current_user.worker != 'veterinario':
-        return jsonify({'success': False, 'error': 'Permissão negada.'}), 403
-
-    try:
-        db.session.delete(racao)
-        db.session.commit()
-        return jsonify({'success': True})
-    except Exception as e:
-        db.session.rollback()
-        print(f"Erro ao excluir ração: {e}")
-        return jsonify({'success': False, 'error': 'Erro técnico ao excluir ração.'}), 500
 
 
 
@@ -3844,60 +3836,45 @@ def imprimir_vacinas(animal_id):
     return render_template("orcamentos/imprimir_vacinas.html", animal=animal, clinica=clinica, veterinario=veterinario)
 
 
-@app.route("/vacina/<int:vacina_id>/deletar", methods=["POST"])
+@app.route('/vacina/<int:vacina_id>', methods=['PUT', 'DELETE'])
 @login_required
-def deletar_vacina(vacina_id):
+def alterar_vacina(vacina_id):
     vacina = Vacina.query.get_or_404(vacina_id)
-    animal_id = vacina.animal_id
 
     if current_user.worker != 'veterinario':
-        if request.accept_mimetypes.accept_json:
-            return jsonify(success=False,
-                           message='Apenas veterinários podem excluir vacinas.'), 403
-        flash('Apenas veterinários podem excluir vacinas.', 'danger')
-        return redirect(request.referrer or url_for('index'))
+        return jsonify({'success': False, 'error': 'Permissão negada.'}), 403
 
-    db.session.delete(vacina)
-    db.session.commit()
+    if request.method == 'DELETE':
+        try:
+            animal_id = vacina.animal_id
+            db.session.delete(vacina)
+            db.session.commit()
+            return jsonify({'success': True, 'animal_id': animal_id})
+        except Exception as e:
+            db.session.rollback()
+            print('Erro ao excluir vacina:', e)
+            return jsonify({'success': False, 'error': 'Erro ao excluir vacina.'}), 500
 
-    if request.accept_mimetypes.accept_json:
-        animal = get_animal_or_404(animal_id)
-        historico_html = render_template('partials/historico_vacinas.html',
-                                         animal=animal)
-        return jsonify(success=True, html=historico_html)
-
-    return redirect(url_for("consulta_direct", animal_id=animal_id))
-
-
-
-
-@app.route("/vacina/<int:vacina_id>/editar", methods=["POST"])
-def editar_vacina(vacina_id):
     data = request.get_json(silent=True) or {}
+    vacina.nome = data.get('nome', vacina.nome)
+    vacina.tipo = data.get('tipo', vacina.tipo)
+    vacina.observacoes = data.get('observacoes', vacina.observacoes)
 
-    if not data:
-        return jsonify({"success": False, "error": "Dados ausentes"}), 400
+    data_str = data.get('data')
+    if data_str:
+        try:
+            vacina.data = datetime.strptime(data_str, '%Y-%m-%d').date()
+        except ValueError:
+            vacina.data = None
 
     try:
-        vacina = Vacina.query.get_or_404(vacina_id)
-
-        vacina.nome = data.get("nome", vacina.nome)
-        vacina.tipo = data.get("tipo", vacina.tipo)
-        vacina.observacoes = data.get("observacoes", vacina.observacoes)
-
-        data_str = data.get("data")
-        if data_str:
-            try:
-                vacina.data = datetime.strptime(data_str, "%Y-%m-%d").date()
-            except ValueError:
-                vacina.data = None
-
         db.session.commit()
-        return jsonify({"success": True})
-
+        return jsonify({'success': True})
     except Exception as e:
-        print("Erro ao editar vacina:", e)
-        return jsonify({"success": False, "error": str(e)}), 500
+        db.session.rollback()
+        print('Erro ao editar vacina:', e)
+        return jsonify({'success': False, 'error': 'Erro ao editar vacina.'}), 500
+
 
 
 @app.route('/consulta/<int:consulta_id>/prescricao', methods=['POST'])
@@ -4496,21 +4473,44 @@ def editar_bloco_exames(bloco_id):
 
 
 
-@app.route('/exame/<int:exame_id>/editar', methods=['POST'])
+@app.route('/exame/<int:exame_id>', methods=['PUT', 'DELETE'])
 @login_required
-def editar_exame(exame_id):
+def alterar_exame(exame_id):
     exame = ExameSolicitado.query.get_or_404(exame_id)
-    data = request.get_json(silent=True) or {}
 
+    if current_user.worker != 'veterinario':
+        return jsonify({'success': False, 'error': 'Permissão negada.'}), 403
+
+    if request.method == 'DELETE':
+        try:
+            db.session.delete(exame)
+            db.session.commit()
+            return jsonify({'success': True})
+        except Exception as e:
+            db.session.rollback()
+            print('Erro ao excluir exame:', e)
+            return jsonify({'success': False, 'error': 'Erro ao excluir exame.'}), 500
+
+    data = request.get_json(silent=True) or {}
     exame.nome = data.get('nome', exame.nome)
     exame.justificativa = data.get('justificativa', exame.justificativa)
     exame.status = data.get('status', exame.status)
     exame.resultado = data.get('resultado', exame.resultado)
     performed_at = data.get('performed_at')
-    exame.performed_at = datetime.fromisoformat(performed_at) if performed_at else exame.performed_at
+    if performed_at:
+        try:
+            exame.performed_at = datetime.fromisoformat(performed_at)
+        except ValueError:
+            pass
 
-    db.session.commit()
-    return jsonify(success=True)
+    try:
+        db.session.commit()
+        return jsonify({'success': True})
+    except Exception as e:
+        db.session.rollback()
+        print('Erro ao editar exame:', e)
+        return jsonify({'success': False, 'error': 'Erro ao editar exame.'}), 500
+
 
 
 
