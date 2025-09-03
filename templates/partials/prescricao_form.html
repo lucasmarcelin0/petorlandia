@@ -42,7 +42,11 @@
        <label for="nova-medicacao-bula" class="form-label">Bula</label>
        <textarea id="nova-medicacao-bula" class="form-control" rows="2"></textarea>
      </div>
-     <button type="button" class="btn btn-primary" onclick="salvarMedicamentoModelo()">💾 Salvar Medicamento</button>
+     <div class="mt-3">
+       <button type="button" id="btn-salvar-medicacao" class="btn btn-primary me-2" onclick="salvarMedicamento()">💾 Salvar Medicamento</button>
+       <button type="button" id="btn-editar-medicacao" class="btn btn-success me-2 d-none" onclick="salvarMedicamento()">✏️ Editar</button>
+       <button type="button" id="btn-excluir-medicacao" class="btn btn-outline-danger d-none" onclick="excluirMedicamento()">🗑️ Excluir</button>
+     </div>
    </div>
 
    <!-- Campo com autocomplete -->
@@ -75,6 +79,9 @@
       <hr>
       <p><strong>Observações:</strong> <span id="med-observacoes" class="text-muted">–</span></p>
       <p><strong>Bula:</strong> <a id="med-bula" href="#" target="_blank" class="text-decoration-none">–</a></p>
+    </div>
+    <div class="text-end mt-2">
+      <button type="button" class="btn btn-sm btn-outline-secondary" onclick="editarMedicamentoSelecionado()">Editar medicamento</button>
     </div>
   </div>
 
@@ -140,10 +147,48 @@
     let prescricoes = [];
 
   function toggleNovaMedicacao() {
-    document.getElementById('nova-medicacao-container').classList.toggle('d-none');
+    const container = document.getElementById('nova-medicacao-container');
+    if (container.classList.contains('d-none')) {
+      openMedicacaoCard(null);
+    } else {
+      container.classList.add('d-none');
+    }
   }
 
-  async function salvarMedicamentoModelo() {
+  function openMedicacaoCard(med) {
+    const container = document.getElementById('nova-medicacao-container');
+    container.classList.remove('d-none');
+
+    document.getElementById('nova-medicacao-nome').value = med?.nome || '';
+    document.getElementById('nova-medicacao-principio').value = med?.principio_ativo || '';
+    document.getElementById('nova-medicacao-classificacao').value = med?.classificacao || '';
+    document.getElementById('nova-medicacao-via').value = med?.via_administracao || '';
+    document.getElementById('nova-medicacao-dosagem').value = med?.dosagem_recomendada || '';
+    document.getElementById('nova-medicacao-frequencia').value = med?.frequencia || '';
+    document.getElementById('nova-medicacao-duracao').value = med?.duracao_tratamento || '';
+    document.getElementById('nova-medicacao-observacoes').value = med?.observacoes || '';
+    document.getElementById('nova-medicacao-bula').value = med?.bula || '';
+
+    medicamentoSelecionado = med?.id ? med : null;
+
+    document.getElementById('btn-salvar-medicacao').classList.toggle('d-none', !!med?.id);
+    document.getElementById('btn-editar-medicacao').classList.toggle('d-none', !med?.id);
+    document.getElementById('btn-excluir-medicacao').classList.toggle('d-none', !med?.id);
+  }
+
+  function limparFormularioMedicamento() {
+    document.getElementById('nova-medicacao-nome').value = '';
+    document.getElementById('nova-medicacao-principio').value = '';
+    document.getElementById('nova-medicacao-classificacao').value = '';
+    document.getElementById('nova-medicacao-via').value = '';
+    document.getElementById('nova-medicacao-dosagem').value = '';
+    document.getElementById('nova-medicacao-frequencia').value = '';
+    document.getElementById('nova-medicacao-duracao').value = '';
+    document.getElementById('nova-medicacao-observacoes').value = '';
+    document.getElementById('nova-medicacao-bula').value = '';
+  }
+
+  async function salvarMedicamento() {
     const nome = document.getElementById('nova-medicacao-nome').value.trim();
     const principio = document.getElementById('nova-medicacao-principio').value.trim();
     const classificacao = document.getElementById('nova-medicacao-classificacao').value.trim();
@@ -153,49 +198,81 @@
     const duracao = document.getElementById('nova-medicacao-duracao').value.trim();
     const observacoes = document.getElementById('nova-medicacao-observacoes').value.trim();
     const bula = document.getElementById('nova-medicacao-bula').value.trim();
+
     if (!nome) {
       mostrarFeedback('Informe o nome do medicamento.', 'warning');
       return;
     }
+
+    const payload = {
+      nome,
+      principio_ativo: principio || null,
+      classificacao: classificacao || null,
+      via_administracao: via || null,
+      dosagem_recomendada: dosagem || null,
+      frequencia: frequencia || null,
+      duracao_tratamento: duracao || null,
+      observacoes: observacoes || null,
+      bula: bula || null
+    };
+
+    const id = medicamentoSelecionado?.id;
+    const url = id ? `/medicamento/${id}` : '/medicamento';
+    const method = id ? 'PUT' : 'POST';
+
     try {
-      const resp = await fetch('/medicamento', {
-        method: 'POST',
+      const resp = await fetch(url, {
+        method,
         headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
-        body: JSON.stringify({
-          nome,
-          principio_ativo: principio || null,
-          classificacao: classificacao || null,
-          via_administracao: via || null,
-          dosagem_recomendada: dosagem || null,
-          frequencia: frequencia || null,
-          duracao_tratamento: duracao || null,
-          observacoes: observacoes || null,
-          bula: bula || null
-        })
+        body: JSON.stringify(payload)
       });
       const data = await resp.json();
-      if (resp.ok && data.id) {
-        mostrarFeedback('Medicação cadastrada com sucesso!');
-        document.getElementById('nome-medicamento').value = nome;
-        document.getElementById('nova-medicacao-nome').value = '';
-        document.getElementById('nova-medicacao-principio').value = '';
-        document.getElementById('nova-medicacao-classificacao').value = '';
-        document.getElementById('nova-medicacao-via').value = '';
-        document.getElementById('nova-medicacao-dosagem').value = '';
-        document.getElementById('nova-medicacao-frequencia').value = '';
-        document.getElementById('nova-medicacao-duracao').value = '';
-        document.getElementById('nova-medicacao-observacoes').value = '';
-        document.getElementById('nova-medicacao-bula').value = '';
-        document.getElementById('nova-medicacao-container').classList.add('d-none');
-        preencherCardMedicamento(data);
-        document.getElementById('dose').value = data.dosagem_recomendada || '';
-        document.getElementById('frequencia').value = data.frequencia || '';
-        document.getElementById('duracao').value = data.duracao_tratamento || '';
+      if (!resp.ok || data.success === false) throw new Error(data.message || 'Erro');
+
+      mostrarFeedback(id ? 'Medicação atualizada!' : 'Medicação cadastrada com sucesso!');
+
+      document.getElementById('nova-medicacao-container').classList.add('d-none');
+      limparFormularioMedicamento();
+
+      if (id) {
+        medicamentoSelecionado = { ...medicamentoSelecionado, ...payload };
+        preencherCardMedicamento(medicamentoSelecionado);
       } else {
-        mostrarFeedback(data.message || 'Erro ao cadastrar medicação.', 'danger');
+        medicamentoSelecionado = data;
+        document.getElementById('nome-medicamento').value = data.nome;
+        preencherCardMedicamento(data);
       }
+
+      document.getElementById('dose').value = payload.dosagem_recomendada || '';
+      document.getElementById('frequencia').value = payload.frequencia || '';
+      document.getElementById('duracao').value = payload.duracao_tratamento || '';
     } catch (e) {
-      mostrarFeedback('Erro ao cadastrar medicação.', 'danger');
+      mostrarFeedback('Erro ao salvar medicação.', 'danger');
+    }
+  }
+
+  async function excluirMedicamento() {
+    if (!medicamentoSelecionado?.id) return;
+    if (!confirm('Deseja realmente excluir este medicamento?')) return;
+    try {
+      const resp = await fetch(`/medicamento/${medicamentoSelecionado.id}`, { method: 'DELETE' });
+      const data = await resp.json().catch(() => ({}));
+      if (!resp.ok || data.success === false) throw new Error(data.message || 'Erro');
+
+      mostrarFeedback('Medicação excluída.');
+      medicamentoSelecionado = null;
+      document.getElementById('info-medicamento').classList.add('d-none');
+      document.getElementById('nome-medicamento').value = '';
+      limparFormularioMedicamento();
+      document.getElementById('nova-medicacao-container').classList.add('d-none');
+    } catch (e) {
+      mostrarFeedback('Erro ao excluir medicação.', 'danger');
+    }
+  }
+
+  function editarMedicamentoSelecionado() {
+    if (medicamentoSelecionado) {
+      openMedicacaoCard(medicamentoSelecionado);
     }
   }
 
@@ -499,25 +576,7 @@
             addLi.className = 'list-group-item list-group-item-action text-primary';
             addLi.textContent = 'Adicionar medicação';
             addLi.onclick = () => {
-              document.getElementById('nova-medicacao-container').classList.remove('d-none');
-              const nomeInput = document.getElementById('nova-medicacao-nome');
-              const principioInput = document.getElementById('nova-medicacao-principio');
-              const classInput = document.getElementById('nova-medicacao-classificacao');
-              const viaInput = document.getElementById('nova-medicacao-via');
-              const doseInput = document.getElementById('nova-medicacao-dosagem');
-              const freqInput = document.getElementById('nova-medicacao-frequencia');
-              const durInput = document.getElementById('nova-medicacao-duracao');
-              const obsInput = document.getElementById('nova-medicacao-observacoes');
-              const bulaInput = document.getElementById('nova-medicacao-bula');
-              if (nomeInput) nomeInput.value = input.value.trim();
-              if (principioInput) principioInput.value = '';
-              if (classInput) classInput.value = '';
-              if (viaInput) viaInput.value = '';
-              if (doseInput) doseInput.value = '';
-              if (freqInput) freqInput.value = '';
-              if (durInput) durInput.value = '';
-              if (obsInput) obsInput.value = '';
-              if (bulaInput) bulaInput.value = '';
+              openMedicacaoCard({ nome: input.value.trim() });
               sugestoes.style.display = 'none';
             };
             sugestoes.appendChild(addLi);
