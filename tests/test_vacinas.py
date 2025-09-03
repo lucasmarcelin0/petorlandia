@@ -64,9 +64,57 @@ def test_criar_vacina_modelo(app):
         db.session.commit()
         client = app.test_client()
         client.post('/login', data={'email': 'vet@example.com', 'password': 'x'}, follow_redirects=True)
-        resp = client.post('/vacina_modelo', json={'nome': 'V10', 'tipo': 'Obrigatória'})
+        resp = client.post('/vacina_modelo', json={'nome': 'V10', 'tipo': 'Obrigatória', 'frequencia': 'Anual', 'doses_totais': 2, 'intervalo_dias': 30, 'fabricante': 'PetVac'})
         assert resp.status_code == 200
         data = resp.get_json()
         assert data['success'] is True
         vm = VacinaModelo.query.filter_by(nome='V10').first()
         assert vm is not None and vm.created_by == user.id
+        assert vm.frequencia == 'Anual'
+        assert vm.doses_totais == 2
+        assert vm.intervalo_dias == 30
+        assert vm.fabricante == 'PetVac'
+
+
+def test_criar_e_editar_vacina_com_protocolo(app):
+    with app.app_context():
+        db.drop_all()
+        db.create_all()
+        owner = User(name="Tutor", email="tutor@example.com", password_hash="x")
+        animal = Animal(name="Rex", owner=owner)
+        db.session.add_all([owner, animal])
+        db.session.commit()
+        vet = User(name="Vet", email="vet@example.com", worker="veterinario")
+        vet.set_password("x")
+        db.session.add(vet)
+        db.session.commit()
+
+        client = app.test_client()
+
+        payload = {
+            "vacinas": [{
+                "nome": "V8",
+                "tipo": "Obrigatória",
+                "data": "2024-01-01",
+                "frequencia": "Anual",
+                "doses_totais": 2,
+                "intervalo_dias": 30,
+                "fabricante": "PetVac",
+                "proxima_dose": "2024-01-31"
+            }]
+        }
+        resp = client.post(f"/animal/{animal.id}/vacinas", json=payload)
+        assert resp.status_code == 200
+        vacina = Vacina.query.filter_by(animal_id=animal.id).first()
+        assert vacina is not None
+        assert vacina.frequencia == 'Anual'
+        assert vacina.doses_totais == 2
+        assert vacina.intervalo_dias == 30
+        assert vacina.fabricante == 'PetVac'
+        assert str(vacina.proxima_dose) == '2024-01-31'
+
+        client.post('/login', data={'email': 'vet@example.com', 'password': 'x'}, follow_redirects=True)
+        resp = client.put(f"/vacina/{vacina.id}", json={"fabricante": "Novo"})
+        assert resp.status_code == 200
+        assert resp.get_json()["success"] is True
+        assert Vacina.query.get(vacina.id).fabricante == 'Novo'
