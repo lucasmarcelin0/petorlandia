@@ -31,6 +31,7 @@ from twilio.rest import Client
 from itsdangerous import URLSafeTimedSerializer
 from jinja2 import TemplateNotFound
 import json
+import unicodedata
 from sqlalchemy import func, or_, exists
 
 # ----------------------------------------------------------------
@@ -4177,7 +4178,54 @@ def alterar_vacina(vacina_id):
         else:
             vacina.aplicada_em = None
 
+    nova_vacina = None
+    if vacina.aplicada:
+        base_date = vacina.aplicada_em or date.today()
+        proxima_data = None
+        if vacina.intervalo_dias:
+            proxima_data = base_date + timedelta(days=vacina.intervalo_dias)
+        elif vacina.frequencia:
+            def _norm(txt):
+                return ''.join(
+                    c for c in unicodedata.normalize('NFD', txt.lower())
+                    if unicodedata.category(c) != 'Mn'
+                )
+
+            freq_map = {
+                'diario': 1,
+                'diaria': 1,
+                'semanal': 7,
+                'quinzenal': 15,
+                'mensal': 30,
+                'bimestral': 60,
+                'trimestral': 91,
+                'quadrimestral': 120,
+                'semestral': 182,
+                'anual': 365,
+                'bienal': 730,
+            }
+            dias = freq_map.get(_norm(vacina.frequencia))
+            if dias:
+                proxima_data = base_date + timedelta(days=dias)
+
+        if proxima_data:
+            nova_vacina = Vacina(
+                animal_id=vacina.animal_id,
+                nome=vacina.nome,
+                tipo=vacina.tipo,
+                fabricante=vacina.fabricante,
+                doses_totais=vacina.doses_totais,
+                intervalo_dias=vacina.intervalo_dias,
+                frequencia=vacina.frequencia,
+                observacoes=vacina.observacoes,
+                aplicada=False,
+                aplicada_em=proxima_data,
+                created_by=vacina.created_by,
+            )
+
     try:
+        if nova_vacina:
+            db.session.add(nova_vacina)
         db.session.commit()
         return jsonify({'success': True})
     except Exception as e:
