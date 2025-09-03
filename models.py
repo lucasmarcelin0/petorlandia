@@ -980,6 +980,17 @@ class AnimalDocumento(db.Model):
     veterinario = db.relationship('User')
 
 
+class Notification(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    message = db.Column(db.Text, nullable=False)
+    channel = db.Column(db.String(20), nullable=False)
+    kind = db.Column(db.String(50), nullable=True)
+    sent_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    user = db.relationship('User', backref=db.backref('notifications', cascade='all, delete-orphan'))
+
+
 class TipoRacao(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     marca = db.Column(db.String(100), nullable=False)
