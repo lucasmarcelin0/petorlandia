@@ -64,9 +64,20 @@ def test_criar_vacina_modelo(app):
         db.session.commit()
         client = app.test_client()
         client.post('/login', data={'email': 'vet@example.com', 'password': 'x'}, follow_redirects=True)
-        resp = client.post('/vacina_modelo', json={'nome': 'V10', 'tipo': 'Obrigatória'})
+        resp = client.post('/vacina_modelo', json={
+            'nome': 'V10',
+            'tipo': 'Obrigatória',
+            'fabricante': 'ACME',
+            'doses_totais': 3,
+            'intervalo_dias': 30,
+            'frequencia': 'Anual'
+        })
         assert resp.status_code == 200
         data = resp.get_json()
         assert data['success'] is True
         vm = VacinaModelo.query.filter_by(nome='V10').first()
         assert vm is not None and vm.created_by == user.id
+        assert vm.fabricante == 'ACME'
+        assert vm.doses_totais == 3
+        assert vm.intervalo_dias == 30
+        assert vm.frequencia == 'Anual'

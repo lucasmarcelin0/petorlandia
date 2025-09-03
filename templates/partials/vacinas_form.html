@@ -13,6 +13,24 @@
         <label for="nova-vacina-tipo" class="form-label">Tipo</label>
         <input type="text" id="nova-vacina-tipo" class="form-control" placeholder="Campanha, Reforço...">
       </div>
+      <div class="row mb-2">
+        <div class="col-md-3">
+          <label for="nova-vacina-fabricante" class="form-label">Fabricante</label>
+          <input type="text" id="nova-vacina-fabricante" class="form-control">
+        </div>
+        <div class="col-md-3">
+          <label for="nova-vacina-doses" class="form-label">Doses Totais</label>
+          <input type="number" id="nova-vacina-doses" class="form-control">
+        </div>
+        <div class="col-md-3">
+          <label for="nova-vacina-intervalo" class="form-label">Intervalo (dias)</label>
+          <input type="number" id="nova-vacina-intervalo" class="form-control">
+        </div>
+        <div class="col-md-3">
+          <label for="nova-vacina-frequencia" class="form-label">Frequência</label>
+          <input type="text" id="nova-vacina-frequencia" class="form-control">
+        </div>
+      </div>
       <button type="button" class="btn btn-primary" onclick="salvarVacinaModelo()">💾 Salvar Vacina</button>
     </div>
 
@@ -38,6 +56,25 @@
       <div class="col-md-6">
         <label for="data-vacina" class="form-label">Data da Aplicação</label>
         <input type="date" id="data-vacina" class="form-control">
+      </div>
+    </div>
+
+    <div class="row mb-3">
+      <div class="col-md-3">
+        <label for="fabricante-vacina" class="form-label">Fabricante</label>
+        <input type="text" id="fabricante-vacina" class="form-control">
+      </div>
+      <div class="col-md-3">
+        <label for="doses-vacina" class="form-label">Doses Totais</label>
+        <input type="number" id="doses-vacina" class="form-control">
+      </div>
+      <div class="col-md-3">
+        <label for="intervalo-vacina" class="form-label">Intervalo (dias)</label>
+        <input type="number" id="intervalo-vacina" class="form-control">
+      </div>
+      <div class="col-md-3">
+        <label for="frequencia-vacina" class="form-label">Frequência</label>
+        <input type="text" id="frequencia-vacina" class="form-control">
       </div>
     </div>
 
@@ -130,6 +167,10 @@
     async function salvarVacinaModelo() {
       const nome = document.getElementById('nova-vacina-nome').value.trim();
       const tipo = document.getElementById('nova-vacina-tipo').value.trim();
+      const fabricante = document.getElementById('nova-vacina-fabricante').value.trim();
+      const doses_totais = document.getElementById('nova-vacina-doses').value;
+      const intervalo_dias = document.getElementById('nova-vacina-intervalo').value;
+      const frequencia = document.getElementById('nova-vacina-frequencia').value.trim();
       if (!nome || !tipo) {
         mostrarFeedback('Preencha nome e tipo da vacina.', 'warning');
         return;
@@ -138,7 +179,7 @@
         const resp = await fetch('/vacina_modelo', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
-          body: JSON.stringify({ nome, tipo })
+          body: JSON.stringify({ nome, tipo, fabricante, doses_totais: doses_totais || null, intervalo_dias: intervalo_dias || null, frequencia })
         });
         const data = await resp.json();
         if (data.success) {
@@ -151,6 +192,10 @@
           inputVacina.value = nome;
           document.getElementById('nova-vacina-nome').value = '';
           document.getElementById('nova-vacina-tipo').value = '';
+          document.getElementById('nova-vacina-fabricante').value = '';
+          document.getElementById('nova-vacina-doses').value = '';
+          document.getElementById('nova-vacina-intervalo').value = '';
+          document.getElementById('nova-vacina-frequencia').value = '';
           document.getElementById('nova-vacina-container').classList.add('d-none');
         } else {
           mostrarFeedback(data.message || 'Erro ao cadastrar vacina.', 'danger');
@@ -165,18 +210,26 @@
       const nome = document.getElementById('nome-vacina').value.trim();
       const tipo = document.getElementById('tipo-vacina').value.trim();
       const data = document.getElementById('data-vacina').value;
+      const fabricante = document.getElementById('fabricante-vacina').value.trim();
+      const doses_totais = document.getElementById('doses-vacina').value;
+      const intervalo_dias = document.getElementById('intervalo-vacina').value;
+      const frequencia = document.getElementById('frequencia-vacina').value.trim();
 
       if (!nome || !tipo || !data) {
-        alert('Preencha todos os campos.');
+        alert('Preencha todos os campos obrigatórios.');
         return;
       }
 
-      vacinas.push({ nome, tipo, data });
+      vacinas.push({ nome, tipo, data, fabricante, doses_totais: doses_totais || null, intervalo_dias: intervalo_dias || null, frequencia });
       renderVacinasTemp();
 
       document.getElementById('nome-vacina').value = '';
       document.getElementById('tipo-vacina').value = '';
       document.getElementById('data-vacina').value = '';
+      document.getElementById('fabricante-vacina').value = '';
+      document.getElementById('doses-vacina').value = '';
+      document.getElementById('intervalo-vacina').value = '';
+      document.getElementById('frequencia-vacina').value = '';
     }
 
     function removerVacina(index) {
@@ -193,6 +246,10 @@
         div.className = 'border p-2 mb-2 bg-light rounded shadow-sm';
         div.innerHTML = `
           💉 <strong>${v.nome}</strong> — ${v.tipo} em ${v.data}
+          ${v.fabricante ? ` - ${v.fabricante}` : ''}
+          ${v.doses_totais ? ` - ${v.doses_totais} doses` : ''}
+          ${v.intervalo_dias ? ` - intervalo ${v.intervalo_dias}d` : ''}
+          ${v.frequencia ? ` - ${v.frequencia}` : ''}
           <button class="btn btn-sm btn-danger ms-2" onclick="removerVacina(${i})">🗑️ Remover</button>
         `;
         lista.appendChild(div);
