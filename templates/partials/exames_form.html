@@ -3,10 +3,14 @@
   <h5 class="mb-3">Solicitação de Exames</h5>
 
   <!-- Botão para cadastrar novo exame -->
-    <button type="button" class="btn btn-outline-primary mb-3" onclick="openModal('modal-exame')">➕ Novo exame</button>
-  {% with modal_id='modal-exame', title='Novo exame', save_button_id='salvar-exame-modal' %}
-    {% include 'components/modal_form.html' %}
-  {% endwith %}
+  <button type="button" class="btn btn-outline-primary mb-3" onclick="toggleNovoExame()">➕ Novo exame</button>
+  <div id="novo-exame-container" class="border rounded p-3 mb-3 bg-light d-none">
+    <div class="mb-2">
+      <label for="novo-exame-nome" class="form-label">Nome do exame</label>
+      <input type="text" id="novo-exame-nome" class="form-control">
+    </div>
+    <button type="button" class="btn btn-primary" onclick="salvarExameModelo()">💾 Salvar Exame</button>
+  </div>
 
   <!-- Campo com autocomplete -->
   <div class="mb-3 position-relative">
@@ -87,6 +91,36 @@
     setTimeout(() => fb.classList.add('d-none'), 3000);
   }
 
+  function toggleNovoExame() {
+    document.getElementById('novo-exame-container').classList.toggle('d-none');
+  }
+
+  async function salvarExameModelo() {
+    const nome = document.getElementById('novo-exame-nome').value.trim();
+    if (!nome) {
+      mostrarFeedback('Informe o nome do exame.', 'warning');
+      return;
+    }
+    try {
+      const resp = await fetch('/exame_modelo', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+        body: JSON.stringify({ nome })
+      });
+      const data = await resp.json();
+      if (resp.ok && data.id) {
+        mostrarFeedback('Exame cadastrado com sucesso!');
+        document.getElementById('nome-exame').value = nome;
+        document.getElementById('novo-exame-nome').value = '';
+        document.getElementById('novo-exame-container').classList.add('d-none');
+      } else {
+        mostrarFeedback(data.message || 'Erro ao cadastrar exame.', 'danger');
+      }
+    } catch (e) {
+      mostrarFeedback('Erro ao cadastrar exame.', 'danger');
+    }
+  }
+
     document.addEventListener('DOMContentLoaded', function () {
       inputExame = document.getElementById('nome-exame');
       sugestoes = document.getElementById('sugestoes-exames');
@@ -99,10 +133,6 @@
         });
       }
 
-      const salvarExameBtn = document.getElementById('salvar-exame-modal');
-      if (salvarExameBtn) {
-        salvarExameBtn.addEventListener('click', () => criarExameModelo('modal-exame'));
-      }
 
     inputExame.addEventListener('input', function () {
       const query = this.value;
@@ -132,8 +162,8 @@
             li.className = 'list-group-item list-group-item-action text-primary';
             li.textContent = 'Adicionar exame';
             li.onclick = () => {
-              openModal('modal-exame');
-              const input = document.getElementById('modal-exame-nome');
+              document.getElementById('novo-exame-container').classList.remove('d-none');
+              const input = document.getElementById('novo-exame-nome');
               if (input) input.value = query;
             };
             sugestoes.appendChild(li);

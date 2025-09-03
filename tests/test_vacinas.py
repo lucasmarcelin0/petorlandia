@@ -11,6 +11,8 @@ from models import User, Animal, Clinica, Vacina, VacinaModelo
 def app():
     flask_app.config.update(TESTING=True, WTF_CSRF_ENABLED=False, SQLALCHEMY_DATABASE_URI="sqlite:///:memory:")
     yield flask_app
+    with flask_app.app_context():
+        db.drop_all()
 
 
 def test_imprimir_vacinas_requer_clinica(app):
@@ -56,10 +58,15 @@ def test_criar_vacina_modelo(app):
     with app.app_context():
         db.drop_all()
         db.create_all()
+        user = User(name="Vet", email="vet@example.com")
+        user.set_password("x")
+        db.session.add(user)
+        db.session.commit()
         client = app.test_client()
+        client.post('/login', data={'email': 'vet@example.com', 'password': 'x'}, follow_redirects=True)
         resp = client.post('/vacina_modelo', json={'nome': 'V10', 'tipo': 'Obrigatória'})
         assert resp.status_code == 200
         data = resp.get_json()
         assert data['success'] is True
         vm = VacinaModelo.query.filter_by(nome='V10').first()
-        assert vm is not None
+        assert vm is not None and vm.created_by == user.id

@@ -12,6 +12,8 @@ from models import User, ExameModelo
 def app():
     flask_app.config.update(TESTING=True, WTF_CSRF_ENABLED=False, SQLALCHEMY_DATABASE_URI="sqlite:///:memory:")
     yield flask_app
+    with flask_app.app_context():
+        db.drop_all()
 
 
 def test_criar_exame_modelo(app):
@@ -32,7 +34,9 @@ def test_criar_exame_modelo(app):
         assert data['nome'] == 'Hemograma'
         with app.app_context():
             exame = ExameModelo.query.first()
+            user_db = User.query.filter_by(email='vet@example.com').first()
             assert exame and exame.nome == 'Hemograma'
+            assert user_db and exame.created_by == user_db.id
 
 
 def test_criar_exame_modelo_nome_obrigatorio(app):
@@ -49,3 +53,25 @@ def test_criar_exame_modelo_nome_obrigatorio(app):
         client.post('/login', data={'email': 'vet@example.com', 'password': 'x'}, follow_redirects=True)
         resp = client.post('/exame_modelo', json={})
         assert resp.status_code == 400
+
+
+def test_exame_modelo_delete_restrito(app):
+    with app.app_context():
+        db.drop_all()
+        db.create_all()
+        user1 = User(name="Vet", email="vet@example.com")
+        user1.set_password("x")
+        user2 = User(name="Outro", email="outro@example.com")
+        user2.set_password("x")
+        db.session.add_all([user1, user2])
+        db.session.commit()
+
+    client = app.test_client()
+    with client:
+        client.post('/login', data={'email': 'vet@example.com', 'password': 'x'}, follow_redirects=True)
+        resp = client.post('/exame_modelo', json={'nome': 'Raio X'})
+        exame_id = resp.get_json()['id']
+        client.get('/logout')
+        client.post('/login', data={'email': 'outro@example.com', 'password': 'x'}, follow_redirects=True)
+        resp_del = client.delete(f'/exame_modelo/{exame_id}')
+        assert resp_del.status_code == 403
