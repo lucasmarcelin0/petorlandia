@@ -332,14 +332,14 @@
     </div>
     <div class="card-body">
       <div class="row">
-        {% for dia, itens in horarios|groupby('dia_semana') %}
+        {% for grupo in horarios_grouped %}
           <div class="col-md-6 col-lg-4 mb-3">
             <div class="card h-100">
               <div class="card-header py-2">
-                <h6 class="mb-0">{{ dia }}</h6>
+                <h6 class="mb-0">{{ grupo.dia }}</h6>
               </div>
               <div class="card-body py-2">
-                {% for h in itens %}
+                {% for h in grupo.itens %}
                   <div class="d-flex justify-content-between align-items-center mb-2">
                     <div>
                       <span class="badge bg-light text-dark">{{ h.hora_inicio.strftime('%H:%M') }} - {{ h.hora_fim.strftime('%H:%M') }}</span>
