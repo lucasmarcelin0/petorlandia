@@ -332,7 +332,7 @@
     </div>
     <div class="card-body">
       <div class="row">
-        {% for dia, itens in horarios|sort(attribute='dia_semana')|groupby('dia_semana') %}
+        {% for dia, itens in horarios|groupby('dia_semana') %}
           <div class="col-md-6 col-lg-4 mb-3">
             <div class="card h-100">
               <div class="card-header py-2">

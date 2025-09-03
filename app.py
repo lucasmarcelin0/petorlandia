@@ -6608,6 +6608,16 @@ def appointments():
         horarios = VetSchedule.query.filter_by(
             veterinario_id=veterinario.id
         ).all()
+        weekday_order = {
+            'Segunda': 0,
+            'Terça': 1,
+            'Quarta': 2,
+            'Quinta': 3,
+            'Sexta': 4,
+            'Sábado': 5,
+            'Domingo': 6,
+        }
+        horarios.sort(key=lambda h: weekday_order.get(h.dia_semana, 7))
         now = datetime.utcnow()
         start_str = request.args.get('start')
         end_str = request.args.get('end')
