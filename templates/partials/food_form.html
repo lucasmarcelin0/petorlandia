@@ -9,6 +9,12 @@
   <form id="form-tipo-racao" class="border rounded p-3 mb-4 bg-light">
     <h6 class="text-primary">Cadastrar nova ração no sistema</h6>
 
+    <div class="mb-2">
+      <label for="buscar-racao-nova" class="form-label">Buscar ração existente</label>
+      <input type="text" id="buscar-racao-nova" class="form-control" placeholder="Digite para buscar..." autocomplete="off">
+      <ul id="sugestoes-busca-racao" class="list-group position-absolute" style="z-index: 1000;"></ul>
+    </div>
+
     <!-- Marca com autocomplete -->
     <div class="mb-2">
       <label for="marca" class="form-label">Marca</label>
@@ -49,8 +55,9 @@
       <textarea class="form-control" id="obs_tipo_racao" rows="2"></textarea>
     </div>
 
-    <!-- Botão de envio -->
-    <button type="button" class="btn btn-primary" onclick="salvarTipoRacao()">💾 Salvar Tipo de Ração</button>
+    <!-- Botões de ação -->
+    <button type="button" id="btn-salvar-tipo-racao" class="btn btn-primary me-2" onclick="salvarTipoRacao()">💾 Salvar Tipo de Ração</button>
+    <button type="button" id="btn-excluir-tipo-racao" class="btn btn-outline-danger d-none" onclick="excluirTipoRacao()">🗑️ Excluir</button>
   </form>
 </div>
 
@@ -189,10 +196,70 @@
 
 <!-- Scripts JS -->
 <script>
+let tipoRacaoSelecionada = null;
+const buscaRacaoInput = document.getElementById('buscar-racao-nova');
+const sugestoesBuscaRacao = document.getElementById('sugestoes-busca-racao');
+
 function toggleFormTipoRacao() {
   const container = document.getElementById('form-tipo-racao-container');
   container.style.display = container.style.display === 'none' ? 'block' : 'none';
+  if (container.style.display === 'block') {
+    tipoRacaoSelecionada = null;
+    document.getElementById('btn-excluir-tipo-racao').classList.add('d-none');
+    document.getElementById('form-tipo-racao').reset();
+    buscaRacaoInput.value = '';
+    sugestoesBuscaRacao.innerHTML = '';
+    sugestoesBuscaRacao.style.display = 'none';
+  }
 }
+
+buscaRacaoInput.addEventListener('input', () => {
+  const q = buscaRacaoInput.value.trim();
+  if (q.length < 2) {
+    sugestoesBuscaRacao.innerHTML = '';
+    sugestoesBuscaRacao.style.display = 'none';
+    return;
+  }
+
+  fetch(`/buscar_racoes?q=${encodeURIComponent(q)}`)
+    .then(resp => resp.json())
+    .then(data => {
+      sugestoesBuscaRacao.innerHTML = '';
+      if (!data.length) {
+        sugestoesBuscaRacao.innerHTML = '<li class="list-group-item text-muted">Nenhuma ração encontrada</li>';
+      } else {
+        data.forEach(item => {
+          const li = document.createElement('li');
+          li.className = 'list-group-item list-group-item-action';
+          li.textContent = item.marca + (item.linha ? ' - ' + item.linha : '');
+          li.onclick = () => {
+            tipoRacaoSelecionada = item;
+            document.getElementById('marca').value = item.marca;
+            document.getElementById('linha').value = item.linha || '';
+            document.getElementById('recomendacao').value = item.recomendacao || '';
+            document.getElementById('peso_pacote_kg').value = item.peso_pacote_kg || 15;
+            document.getElementById('obs_tipo_racao').value = item.observacoes || '';
+            document.getElementById('btn-excluir-tipo-racao').classList.remove('d-none');
+            sugestoesBuscaRacao.innerHTML = '';
+            sugestoesBuscaRacao.style.display = 'none';
+          };
+          sugestoesBuscaRacao.appendChild(li);
+        });
+      }
+      sugestoesBuscaRacao.style.display = 'block';
+    })
+    .catch(() => {
+      sugestoesBuscaRacao.innerHTML = '<li class="list-group-item text-danger">Erro ao buscar</li>';
+      sugestoesBuscaRacao.style.display = 'block';
+    });
+});
+
+document.addEventListener('click', (e) => {
+  if (!sugestoesBuscaRacao.contains(e.target) && e.target !== buscaRacaoInput) {
+    sugestoesBuscaRacao.innerHTML = '';
+    sugestoesBuscaRacao.style.display = 'none';
+  }
+});
 
 function toggleFormRacaoAnimal() {
   const container = document.getElementById('form-racao-animal-container');
@@ -208,24 +275,41 @@ function salvarTipoRacao() {
     observacoes: document.getElementById('obs_tipo_racao').value
   };
 
-  fetch('/tipo_racao', {
-    method: 'POST',
+  const url = tipoRacaoSelecionada ? `/tipo_racao/${tipoRacaoSelecionada.id}` : '/tipo_racao';
+  const method = tipoRacaoSelecionada ? 'PUT' : 'POST';
+
+  fetch(url, {
+    method: method,
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload)
   })
-  .then(resp => resp.json())
-  .then(data => {
-    if (data.success) {
-      alert('Tipo de ração cadastrado com sucesso!');
-      location.reload();
-    } else {
-      alert('Erro: ' + (data.error || 'Falha ao cadastrar'));
-    }
-  })
-  .catch(error => {
-    alert('Erro técnico ao salvar tipo de ração.');
-    console.error('Erro:', error);
-  });
+    .then(resp => resp.json())
+    .then(data => {
+      if (data.success) {
+        alert(tipoRacaoSelecionada ? 'Tipo de ração atualizado!' : 'Tipo de ração cadastrado com sucesso!');
+        location.reload();
+      } else {
+        alert('Erro: ' + (data.error || 'Falha ao salvar'));
+      }
+    })
+    .catch(error => {
+      alert('Erro técnico ao salvar tipo de ração.');
+      console.error('Erro:', error);
+    });
+}
+
+function excluirTipoRacao() {
+  if (!tipoRacaoSelecionada || !confirm('Tem certeza que deseja excluir esta ração?')) return;
+  fetch(`/tipo_racao/${tipoRacaoSelecionada.id}`, { method: 'DELETE' })
+    .then(resp => resp.json())
+    .then(data => {
+      if (data.success) {
+        alert('Ração excluída.');
+        location.reload();
+      } else {
+        alert(data.error || 'Erro ao excluir ração.');
+      }
+    });
 }
 
 

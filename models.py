@@ -959,6 +959,13 @@ class Vacina(db.Model):
     observacoes = db.Column(db.Text)
     criada_em = db.Column(db.DateTime, default=datetime.utcnow)
 
+    # Registro de quem cadastrou a vacina
+    created_by = db.Column(
+        db.Integer,
+        db.ForeignKey('user.id', ondelete='SET NULL'),
+        nullable=True,
+    )
+
 
 class AnimalDocumento(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -1003,6 +1010,13 @@ class Racao(db.Model):
 
     preco_pago = db.Column(db.Float)  # R$ que o tutor paga
     tamanho_embalagem = db.Column(db.String(50))  # Ex: "15kg", "10,1kg", etc.
+
+    # Veterinário que cadastrou a ração do animal
+    created_by = db.Column(
+        db.Integer,
+        db.ForeignKey('user.id', ondelete='SET NULL'),
+        nullable=True,
+    )
 
 
 
