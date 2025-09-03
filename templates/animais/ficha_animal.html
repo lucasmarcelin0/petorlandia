@@ -157,10 +157,10 @@
 
 
 <!-- VACINAS -->
-<h6 class="mt-4 text-muted">💉 Vacinas Aplicadas</h6>
-{% if animal.vacinas %}
+<h6 class="mt-4 text-muted">💉 Doses Futuras</h6>
+{% if doses_futuras %}
   <ul class="list-group mb-2">
-    {% for v in animal.vacinas_ordenadas %}
+    {% for v in doses_futuras %}
     <li class="list-group-item d-flex justify-content-between align-items-center">
       <div>
         <strong>{{ v.nome }}</strong> — {{ v.tipo or "Tipo não informado" }} em {{ v.data|format_datetime_brazil('%d/%m/%Y') if v.data else 'Data não registrada' }}
@@ -171,9 +171,45 @@
     </li>
     {% endfor %}
   </ul>
-  {% else %}
-  <p class="text-muted">Nenhuma vacina registrada.</p>
-  {% endif %}
+{% else %}
+  <p class="text-muted">Nenhuma dose futura.</p>
+{% endif %}
+
+<h6 class="mt-4 text-muted">⚠️ Doses Atrasadas</h6>
+{% if doses_atrasadas %}
+  <ul class="list-group mb-2">
+    {% for v in doses_atrasadas %}
+    <li class="list-group-item d-flex justify-content-between align-items-center">
+      <div>
+        <strong>{{ v.nome }}</strong> — {{ v.tipo or "Tipo não informado" }} em {{ v.data|format_datetime_brazil('%d/%m/%Y') if v.data else 'Data não registrada' }}
+        {% if v.observacoes %}
+          <br><em class="text-muted">Obs: {{ v.observacoes }}</em>
+        {% endif %}
+      </div>
+    </li>
+    {% endfor %}
+  </ul>
+{% else %}
+  <p class="text-muted">Nenhuma dose atrasada.</p>
+{% endif %}
+
+<h6 class="mt-4 text-muted">💉 Vacinas Aplicadas</h6>
+{% if vacinas_aplicadas %}
+  <ul class="list-group mb-2">
+    {% for v in vacinas_aplicadas %}
+    <li class="list-group-item d-flex justify-content-between align-items-center">
+      <div>
+        <strong>{{ v.nome }}</strong> — {{ v.tipo or "Tipo não informado" }} em {{ v.data|format_datetime_brazil('%d/%m/%Y') if v.data else 'Data não registrada' }}
+        {% if v.observacoes %}
+          <br><em class="text-muted">Obs: {{ v.observacoes }}</em>
+        {% endif %}
+      </div>
+    </li>
+    {% endfor %}
+  </ul>
+{% else %}
+  <p class="text-muted">Nenhuma vacina aplicada.</p>
+{% endif %}
 
   <!-- DOCUMENTOS -->
   <div class="mt-4">
