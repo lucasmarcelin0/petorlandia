@@ -74,11 +74,11 @@
        */
       function processLeafletWidget($el, name) {
         if (!window.MAPBOX_MAP_ID) {
-          console.error("You must set MAPBOX_MAP_ID in your Flask settings to use the map widget");
+          console.error("Você deve definir MAPBOX_MAP_ID nas configurações do Flask para usar o widget de mapa");
           return false;
         }
         if (!window.DEFAULT_CENTER_LAT || !window.DEFAULT_CENTER_LONG) {
-          console.error("You must set DEFAULT_CENTER_LAT and DEFAULT_CENTER_LONG in your Flask settings to use the map widget");
+          console.error("Você deve definir DEFAULT_CENTER_LAT e DEFAULT_CENTER_LONG nas configurações do Flask para usar o widget de mapa");
           return false;
         }
 

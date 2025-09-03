@@ -169,7 +169,7 @@
         document.getElementById('done-count').textContent = data.done;
         document.getElementById('canceled-count').textContent = data.canceled;
       } catch (err) {
-        console.error('Failed to update counts', err);
+        console.error('Falha ao atualizar contadores', err);
       }
     }
     refreshCounts();

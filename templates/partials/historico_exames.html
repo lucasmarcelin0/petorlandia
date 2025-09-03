@@ -270,7 +270,7 @@ function salvarBlocoExames(blocoId, consultaId) {
     }
   })
   .catch(err => {
-    console.error(err);
+    console.error('Erro:', err);
     alert('Erro na requisição.');
   });
 }
