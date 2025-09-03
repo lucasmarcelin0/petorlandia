@@ -270,7 +270,7 @@
 
 <script>
 function bindSyncForms(root) {
-  root.querySelectorAll('.tab-pane form[data-sync]').forEach(form => {
+  root.querySelectorAll('form[data-sync]').forEach(form => {
     if (form.dataset.syncBound) return;
     form.dataset.syncBound = '1';
     form.addEventListener('submit', async ev => {
