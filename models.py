@@ -869,6 +869,12 @@ class Medicamento(db.Model):
     observacoes = db.Column(db.Text)  # para contraindicações, interações, etc.
     bula = db.Column(db.Text)  # 🆕 Texto completo da bula, opcional
 
+    created_by = db.Column(
+        db.Integer,
+        db.ForeignKey('user.id', ondelete='CASCADE'),
+        nullable=False,
+    )
+
     apresentacoes = db.relationship('ApresentacaoMedicamento', backref='medicamento', cascade='all, delete-orphan')
 
     def __str__(self):
@@ -890,6 +896,11 @@ class ExameModelo(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     nome = db.Column(db.String(120), nullable=False)  # ex: Hemograma, Raio-X...
     justificativa = db.Column(db.Text)
+    created_by = db.Column(
+        db.Integer,
+        db.ForeignKey('user.id', ondelete='CASCADE'),
+        nullable=False,
+    )
 
 class BlocoExames(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -916,6 +927,11 @@ class VacinaModelo(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     nome = db.Column(db.String(100), nullable=False)
     tipo = db.Column(db.String(50))  # Opcional, mas útil para o frontend
+    created_by = db.Column(
+        db.Integer,
+        db.ForeignKey('user.id', ondelete='CASCADE'),
+        nullable=False,
+    )
 
     def __repr__(self):
         return f'<VacinaModelo {self.nome}>'
@@ -952,6 +968,11 @@ class TipoRacao(db.Model):
     recomendacao = db.Column(db.Float)  # g/kg/dia
     observacoes = db.Column(db.Text)
     peso_pacote_kg = db.Column(db.Float, default=15.0)  # Peso do pacote (kg)
+    created_by = db.Column(
+        db.Integer,
+        db.ForeignKey('user.id', ondelete='CASCADE'),
+        nullable=False,
+    )
 
 
 class Racao(db.Model):

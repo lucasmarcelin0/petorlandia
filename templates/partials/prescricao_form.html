@@ -4,10 +4,18 @@
 
   <h5 class="mb-3">Prescrição de Medicamentos</h5>
    <!-- Botão para cadastrar nova medicação -->
-   <button type="button" class="btn btn-outline-primary mb-3" onclick="openModal('modal-medicacao')">➕ Nova medicação</button>
-   {% with modal_id='modal-medicacao', title='Nova medicação', save_button_id='salvar-medicacao-modal', extra_fields='<div class="mb-2"><label for="modal-medicacao-principio" class="form-label">Princípio ativo</label><input type="text" id="modal-medicacao-principio" class="form-control"></div>' %}
-     {% include 'components/modal_form.html' %}
-   {% endwith %}
+   <button type="button" class="btn btn-outline-primary mb-3" onclick="toggleNovaMedicacao()">➕ Nova medicação</button>
+   <div id="nova-medicacao-container" class="border rounded p-3 mb-3 bg-light d-none">
+     <div class="mb-2">
+       <label for="nova-medicacao-nome" class="form-label">Nome do medicamento</label>
+       <input type="text" id="nova-medicacao-nome" class="form-control">
+     </div>
+     <div class="mb-2">
+       <label for="nova-medicacao-principio" class="form-label">Princípio ativo</label>
+       <input type="text" id="nova-medicacao-principio" class="form-control">
+     </div>
+     <button type="button" class="btn btn-primary" onclick="salvarMedicamentoModelo()">💾 Salvar Medicamento</button>
+   </div>
 
    <!-- Campo com autocomplete -->
    <div class="mb-3 position-relative">
@@ -100,6 +108,38 @@
 <script>
     let medicamentoSelecionado = null;
     let prescricoes = [];
+
+  function toggleNovaMedicacao() {
+    document.getElementById('nova-medicacao-container').classList.toggle('d-none');
+  }
+
+  async function salvarMedicamentoModelo() {
+    const nome = document.getElementById('nova-medicacao-nome').value.trim();
+    const principio = document.getElementById('nova-medicacao-principio').value.trim();
+    if (!nome || !principio) {
+      mostrarFeedback('Preencha nome e princípio ativo.', 'warning');
+      return;
+    }
+    try {
+      const resp = await fetch('/medicamento', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+        body: JSON.stringify({ nome, principio_ativo: principio })
+      });
+      const data = await resp.json();
+      if (resp.ok && data.id) {
+        mostrarFeedback('Medicação cadastrada com sucesso!');
+        document.getElementById('nome-medicamento').value = nome;
+        document.getElementById('nova-medicacao-nome').value = '';
+        document.getElementById('nova-medicacao-principio').value = '';
+        document.getElementById('nova-medicacao-container').classList.add('d-none');
+      } else {
+        mostrarFeedback(data.message || 'Erro ao cadastrar medicação.', 'danger');
+      }
+    } catch (e) {
+      mostrarFeedback('Erro ao cadastrar medicação.', 'danger');
+    }
+  }
 
   // Função para mostrar feedback ao usuário
   function mostrarFeedback(mensagem, tipo = 'success') {
@@ -350,8 +390,6 @@
     document.addEventListener('DOMContentLoaded', function() {
       const input = document.getElementById('nome-medicamento');
       const sugestoes = document.getElementById('sugestoes-medicamentos');
-      const salvarBtn = document.getElementById('salvar-medicacao-modal');
-      if (salvarBtn) salvarBtn.addEventListener('click', () => salvarNovaMedicacao('modal-medicacao'));
 
     // Busca de medicamentos com debounce
     input.addEventListener('input', debounce(function() {
@@ -400,14 +438,14 @@
             addLi.className = 'list-group-item list-group-item-action text-primary';
             addLi.textContent = 'Adicionar medicação';
             addLi.onclick = () => {
-          const nomeInput = document.getElementById('modal-medicacao-nome');
-          const principioInput = document.getElementById('modal-medicacao-principio');
-          if (nomeInput) nomeInput.value = input.value.trim();
-          if (principioInput) principioInput.value = '';
-          openModal('modal-medicacao');
-          sugestoes.style.display = 'none';
-        };
-        sugestoes.appendChild(addLi);
+              document.getElementById('nova-medicacao-container').classList.remove('d-none');
+              const nomeInput = document.getElementById('nova-medicacao-nome');
+              const principioInput = document.getElementById('nova-medicacao-principio');
+              if (nomeInput) nomeInput.value = input.value.trim();
+              if (principioInput) principioInput.value = '';
+              sugestoes.style.display = 'none';
+            };
+            sugestoes.appendChild(addLi);
         })
         .catch(err => {
           sugestoes.innerHTML = '<li class="list-group-item text-danger">Erro ao buscar medicamentos</li>';

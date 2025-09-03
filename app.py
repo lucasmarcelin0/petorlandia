@@ -3531,7 +3531,8 @@ def criar_tipo_racao():
             linha=linha if linha else None,
             recomendacao=recomendacao,
             peso_pacote_kg=peso_pacote_kg or 15.0,  # valor padrão se não enviado
-            observacoes=observacoes if observacoes else None
+            observacoes=observacoes if observacoes else None,
+            created_by=current_user.id,
         )
         db.session.add(nova_racao)
         db.session.commit()
@@ -3547,6 +3548,28 @@ def criar_tipo_racao():
         db.session.rollback()
         print(f"Erro ao cadastrar tipo de ração: {e}")
         return jsonify({'success': False, 'error': 'Erro técnico ao cadastrar tipo de ração.'}), 500
+
+
+@app.route('/tipo_racao/<int:tipo_id>', methods=['PUT', 'DELETE'])
+@login_required
+def alterar_tipo_racao(tipo_id):
+    tipo = TipoRacao.query.get_or_404(tipo_id)
+    if tipo.created_by != current_user.id:
+        return jsonify({'success': False, 'error': 'Permissão negada.'}), 403
+
+    if request.method == 'DELETE':
+        db.session.delete(tipo)
+        db.session.commit()
+        return jsonify({'success': True})
+
+    data = request.get_json(silent=True) or {}
+    tipo.marca = data.get('marca', tipo.marca).strip()
+    tipo.linha = data.get('linha', tipo.linha).strip() or None
+    tipo.recomendacao = data.get('recomendacao', tipo.recomendacao)
+    tipo.peso_pacote_kg = data.get('peso_pacote_kg', tipo.peso_pacote_kg)
+    tipo.observacoes = data.get('observacoes', tipo.observacoes)
+    db.session.commit()
+    return jsonify({'success': True})
 
 
 
@@ -3684,6 +3707,7 @@ def buscar_vacinas():
         return jsonify([])  # Não quebra o front se der erro
 
 @app.route('/vacina_modelo', methods=['POST'])
+@login_required
 def criar_vacina_modelo():
     data = request.get_json(silent=True) or {}
     nome = (data.get('nome') or '').strip()
@@ -3694,7 +3718,7 @@ def criar_vacina_modelo():
         existente = VacinaModelo.query.filter(func.lower(VacinaModelo.nome) == nome.lower()).first()
         if existente:
             return jsonify({'success': False, 'message': 'Vacina já cadastrada.'}), 400
-        vacina = VacinaModelo(nome=nome, tipo=tipo)
+        vacina = VacinaModelo(nome=nome, tipo=tipo, created_by=current_user.id)
         db.session.add(vacina)
         db.session.commit()
         return jsonify({'success': True, 'vacina': {'id': vacina.id, 'nome': vacina.nome, 'tipo': vacina.tipo}})
@@ -3702,6 +3726,25 @@ def criar_vacina_modelo():
         db.session.rollback()
         print('Erro ao salvar vacina modelo:', e)
         return jsonify({'success': False, 'message': 'Erro ao salvar vacina.'}), 500
+
+
+@app.route('/vacina_modelo/<int:vacina_id>', methods=['PUT', 'DELETE'])
+@login_required
+def alterar_vacina_modelo(vacina_id):
+    vacina = VacinaModelo.query.get_or_404(vacina_id)
+    if vacina.created_by != current_user.id:
+        return jsonify({'success': False, 'message': 'Permissão negada'}), 403
+
+    if request.method == 'DELETE':
+        db.session.delete(vacina)
+        db.session.commit()
+        return jsonify({'success': True})
+
+    data = request.get_json(silent=True) or {}
+    vacina.nome = (data.get('nome') or vacina.nome).strip()
+    vacina.tipo = (data.get('tipo') or vacina.tipo).strip()
+    db.session.commit()
+    return jsonify({'success': True})
 
 from datetime import datetime
 
@@ -3919,6 +3962,7 @@ def importar_medicamentos():
 
 
 @app.route("/medicamento", methods=["POST"])
+@login_required
 def criar_medicamento():
     data = request.get_json(silent=True) or {}
     nome = (data.get("nome") or "").strip()
@@ -3928,13 +3972,34 @@ def criar_medicamento():
         return jsonify({"success": False, "message": "Nome e princípio ativo são obrigatórios"}), 400
 
     try:
-        novo = Medicamento(nome=nome, principio_ativo=principio)
+        novo = Medicamento(nome=nome, principio_ativo=principio, created_by=current_user.id)
         db.session.add(novo)
         db.session.commit()
         return jsonify({"success": True, "id": novo.id})
     except Exception as e:
         db.session.rollback()
         return jsonify({"success": False, "message": str(e)}), 500
+
+
+@app.route("/medicamento/<int:med_id>", methods=["PUT", "DELETE"])
+@login_required
+def alterar_medicamento(med_id):
+    medicamento = Medicamento.query.get_or_404(med_id)
+    if medicamento.created_by != current_user.id:
+        return jsonify({"success": False, "message": "Permissão negada"}), 403
+
+    if request.method == "DELETE":
+        db.session.delete(medicamento)
+        db.session.commit()
+        return jsonify({"success": True})
+
+    data = request.get_json(silent=True) or {}
+    nome = (data.get("nome") or medicamento.nome).strip()
+    principio = (data.get("principio_ativo") or medicamento.principio_ativo).strip()
+    medicamento.nome = nome
+    medicamento.principio_ativo = principio
+    db.session.commit()
+    return jsonify({"success": True})
 
 
 @app.route("/apresentacao_medicamento", methods=["POST"])
@@ -4272,10 +4337,31 @@ def criar_exame_modelo():
     nome = (data.get('nome') or '').strip()
     if not nome:
         return jsonify({'error': 'Nome é obrigatório'}), 400
-    exame = ExameModelo(nome=nome)
+    exame = ExameModelo(nome=nome, created_by=current_user.id)
     db.session.add(exame)
     db.session.commit()
     return jsonify({'id': exame.id, 'nome': exame.nome})
+
+
+@app.route('/exame_modelo/<int:exame_id>', methods=['PUT', 'DELETE'])
+@login_required
+def alterar_exame_modelo(exame_id):
+    exame = ExameModelo.query.get_or_404(exame_id)
+    if exame.created_by != current_user.id:
+        return jsonify({'success': False, 'message': 'Permissão negada'}), 403
+
+    if request.method == 'DELETE':
+        db.session.delete(exame)
+        db.session.commit()
+        return jsonify({'success': True})
+
+    data = request.get_json(silent=True) or {}
+    nome = (data.get('nome') or exame.nome).strip()
+    justificativa = data.get('justificativa', exame.justificativa)
+    exame.nome = nome
+    exame.justificativa = justificativa
+    db.session.commit()
+    return jsonify({'success': True})
 
 
 @app.route('/imprimir_bloco_exames/<int:bloco_id>')
