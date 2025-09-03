@@ -12,6 +12,7 @@ from zoneinfo import ZoneInfo
 from PIL import Image
 
 
+from apscheduler.schedulers.background import BackgroundScheduler
 from dotenv import load_dotenv
 from flask import (
     Flask,
@@ -1348,6 +1349,111 @@ def enviar_mensagem_whatsapp(texto: str, numero: str) -> None:
 
     client = Client(account_sid, auth_token)
     client.messages.create(body=texto, from_=from_number, to=numero)
+
+
+def verificar_datas_proximas() -> None:
+    from models import Appointment, ExameSolicitado, Vacina, Notification
+
+    with app.app_context():
+        agora = datetime.now(BR_TZ)
+        limite = agora + timedelta(days=1)
+
+        consultas = (
+            Appointment.query
+            .filter(Appointment.scheduled_at >= agora, Appointment.scheduled_at <= limite)
+            .all()
+        )
+        for appt in consultas:
+            tutor = appt.tutor
+            texto = (
+                f"Lembrete: consulta de {appt.animal.name} em "
+                f"{appt.scheduled_at.astimezone(BR_TZ).strftime('%d/%m/%Y %H:%M')}"
+            )
+            if tutor.email:
+                msg = MailMessage(
+                    subject="Lembrete de consulta - PetOrlândia",
+                    sender=app.config['MAIL_DEFAULT_SENDER'],
+                    recipients=[tutor.email],
+                    body=texto,
+                )
+                mail.send(msg)
+                db.session.add(Notification(user_id=tutor.id, message=texto, channel='email', kind='appointment'))
+            if tutor.phone:
+                numero = f"whatsapp:{formatar_telefone(tutor.phone)}"
+                try:
+                    enviar_mensagem_whatsapp(texto, numero)
+                    db.session.add(Notification(user_id=tutor.id, message=texto, channel='whatsapp', kind='appointment'))
+                except Exception as e:
+                    current_app.logger.error("Erro ao enviar WhatsApp: %s", e)
+
+        exames = (
+            ExameSolicitado.query
+            .filter(
+                ExameSolicitado.status == 'pendente',
+                ExameSolicitado.performed_at.isnot(None),
+                ExameSolicitado.performed_at >= agora,
+                ExameSolicitado.performed_at <= limite,
+            )
+            .all()
+        )
+        for ex in exames:
+            tutor = ex.bloco.animal.owner
+            texto = (
+                f"Lembrete: exame '{ex.nome}' de {ex.bloco.animal.name} em "
+                f"{ex.performed_at.astimezone(BR_TZ).strftime('%d/%m/%Y %H:%M')}"
+            )
+            if tutor.email:
+                msg = MailMessage(
+                    subject="Lembrete de exame - PetOrlândia",
+                    sender=app.config['MAIL_DEFAULT_SENDER'],
+                    recipients=[tutor.email],
+                    body=texto,
+                )
+                mail.send(msg)
+                db.session.add(Notification(user_id=tutor.id, message=texto, channel='email', kind='exam'))
+            if tutor.phone:
+                numero = f"whatsapp:{formatar_telefone(tutor.phone)}"
+                try:
+                    enviar_mensagem_whatsapp(texto, numero)
+                    db.session.add(Notification(user_id=tutor.id, message=texto, channel='whatsapp', kind='exam'))
+                except Exception as e:
+                    current_app.logger.error("Erro ao enviar WhatsApp: %s", e)
+
+        vacinas = (
+            Vacina.query
+            .filter(Vacina.data >= agora.date(), Vacina.data <= limite.date())
+            .all()
+        )
+        for vac in vacinas:
+            tutor = vac.animal.owner
+            texto = (
+                f"Lembrete: vacina '{vac.nome}' de {vac.animal.name} em "
+                f"{vac.data.strftime('%d/%m/%Y')}"
+            )
+            if tutor.email:
+                msg = MailMessage(
+                    subject="Lembrete de vacina - PetOrlândia",
+                    sender=app.config['MAIL_DEFAULT_SENDER'],
+                    recipients=[tutor.email],
+                    body=texto,
+                )
+                mail.send(msg)
+                db.session.add(Notification(user_id=tutor.id, message=texto, channel='email', kind='vaccine'))
+            if tutor.phone:
+                numero = f"whatsapp:{formatar_telefone(tutor.phone)}"
+                try:
+                    enviar_mensagem_whatsapp(texto, numero)
+                    db.session.add(Notification(user_id=tutor.id, message=texto, channel='whatsapp', kind='vaccine'))
+                except Exception as e:
+                    current_app.logger.error("Erro ao enviar WhatsApp: %s", e)
+
+        db.session.commit()
+
+
+if not app.config.get("TESTING"):
+    scheduler = BackgroundScheduler(timezone=str(BR_TZ))
+    scheduler.add_job(verificar_datas_proximas, 'cron', hour=8)
+    scheduler.start()
 
 
 @app.route('/termo/transferencia/<int:animal_id>/<int:user_id>', methods=['GET', 'POST'])
