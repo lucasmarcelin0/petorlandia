@@ -3466,7 +3466,8 @@ def salvar_racao(animal_id):
             racoes_data = data.get('racoes', [])
             for r in racoes_data:
                 marca = r.get('marca_racao', '').strip()
-                linha = r.get('linha_racao', '').strip()
+                linha_val = r.get('linha_racao')
+                linha = linha_val.strip() if linha_val else None
 
                 if not marca:
                     continue  # ignora se não houver marca
@@ -3474,7 +3475,11 @@ def salvar_racao(animal_id):
                 tipo_racao = TipoRacao.query.filter_by(marca=marca, linha=linha).first()
 
                 if not tipo_racao:
-                    tipo_racao = TipoRacao(marca=marca, linha=linha)
+                    tipo_racao = TipoRacao(
+                        marca=marca,
+                        linha=linha,
+                        created_by=current_user.id,
+                    )
                     db.session.add(tipo_racao)
                     db.session.flush()  # garante que o ID estará disponível
 
@@ -3564,7 +3569,10 @@ def alterar_tipo_racao(tipo_id):
 
     data = request.get_json(silent=True) or {}
     tipo.marca = data.get('marca', tipo.marca).strip()
-    tipo.linha = data.get('linha', tipo.linha).strip() or None
+    linha_val = data.get('linha', tipo.linha)
+    if linha_val is not None:
+        linha_val = linha_val.strip()
+    tipo.linha = linha_val or None
     tipo.recomendacao = data.get('recomendacao', tipo.recomendacao)
     tipo.peso_pacote_kg = data.get('peso_pacote_kg', tipo.peso_pacote_kg)
     tipo.observacoes = data.get('observacoes', tipo.observacoes)
@@ -3741,8 +3749,14 @@ def alterar_vacina_modelo(vacina_id):
         return jsonify({'success': True})
 
     data = request.get_json(silent=True) or {}
-    vacina.nome = (data.get('nome') or vacina.nome).strip()
-    vacina.tipo = (data.get('tipo') or vacina.tipo).strip()
+    nome_val = data.get('nome', vacina.nome)
+    if nome_val is not None:
+        nome_val = nome_val.strip()
+    vacina.nome = nome_val
+    tipo_val = data.get('tipo', vacina.tipo)
+    if tipo_val is not None:
+        tipo_val = tipo_val.strip()
+    vacina.tipo = tipo_val or None
     db.session.commit()
     return jsonify({'success': True})
 
@@ -3994,10 +4008,14 @@ def alterar_medicamento(med_id):
         return jsonify({"success": True})
 
     data = request.get_json(silent=True) or {}
-    nome = (data.get("nome") or medicamento.nome).strip()
-    principio = (data.get("principio_ativo") or medicamento.principio_ativo).strip()
-    medicamento.nome = nome
-    medicamento.principio_ativo = principio
+    nome_val = data.get("nome", medicamento.nome)
+    if nome_val is not None:
+        nome_val = nome_val.strip()
+    principio_val = data.get("principio_ativo", medicamento.principio_ativo)
+    if principio_val is not None:
+        principio_val = principio_val.strip()
+    medicamento.nome = nome_val
+    medicamento.principio_ativo = principio_val or None
     db.session.commit()
     return jsonify({"success": True})
 
