@@ -291,7 +291,7 @@ function bindSyncForms(root) {
         localStorage.setItem('tabSavedHighlight', pane.id);
       }
 
-      const btn = form.querySelector('button[type="submit"]');
+      const btn = ev.submitter;
       if (btn && !btn.querySelector('.spinner-border')) {
         btn.disabled = true;
         const sp = document.createElement('span');
