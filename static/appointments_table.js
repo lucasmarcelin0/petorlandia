@@ -57,3 +57,14 @@ function bindAppointmentRowClicks() {
 }
 
 document.addEventListener('DOMContentLoaded', bindAppointmentRowClicks);
+
+function activateAnimalTabs() {
+  document.querySelectorAll('#animalTabs button[data-bs-toggle="tab"]').forEach(function (triggerEl) {
+    triggerEl.addEventListener('click', function (e) {
+      e.preventDefault();
+      bootstrap.Tab.getOrCreateInstance(triggerEl).show();
+    });
+  });
+}
+
+document.addEventListener('DOMContentLoaded', activateAnimalTabs);
