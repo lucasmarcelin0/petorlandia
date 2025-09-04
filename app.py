@@ -1783,7 +1783,7 @@ def ficha_animal(animal_id):
         .order_by(Vacina.aplicada_em.desc())
         .all()
     )
-    doses_futuras = (
+    vacinas_agendadas = (
         Vacina.query.filter_by(animal_id=animal.id, aplicada=False)
         .filter(Vacina.aplicada_em >= date.today())
         .order_by(Vacina.aplicada_em)
@@ -1821,7 +1821,7 @@ def ficha_animal(animal_id):
         blocos_prescricao=blocos_prescricao,
         blocos_exames=blocos_exames,
         vacinas_aplicadas=vacinas_aplicadas,
-        doses_futuras=doses_futuras,
+        vacinas_agendadas=vacinas_agendadas,
         doses_atrasadas=doses_atrasadas,
         retornos=retornos,
         exames_agendados=exames_agendados,
