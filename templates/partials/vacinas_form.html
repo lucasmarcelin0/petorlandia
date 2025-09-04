@@ -172,6 +172,14 @@
                   document.getElementById('doses-vacina').value = item.doses_totais || '';
                   document.getElementById('intervalo-vacina').value = item.intervalo_dias || '';
                   document.getElementById('frequencia-vacina').value = item.frequencia || '';
+                  aplicadaCheckbox.checked = true;
+                  aplicadaCheckbox.dispatchEvent(new Event('change'));
+                  const today = new Date();
+                  const offset = today.getTimezoneOffset();
+                  const localISODate = new Date(today.getTime() - offset * 60000)
+                    .toISOString()
+                    .split('T')[0];
+                  aplicadaEmInput.value = localISODate;
                   sugestoesVacinas.innerHTML = '';
                 };
                 sugestoesVacinas.appendChild(li);
