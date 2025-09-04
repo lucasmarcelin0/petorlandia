@@ -47,163 +47,171 @@
   </div>
   {% endif %}
 
-  <!-- PRÓXIMOS EVENTOS -->
-  <div class="card shadow-sm p-4 mb-4">
-    <h4 class="mb-3"><i class="bi bi-calendar-event text-primary me-2"></i>Próximos eventos</h4>
 
-    <h6 class="text-muted">🔁 Retornos</h6>
-    {% if retornos %}
-      <ul class="list-group mb-3">
-        {% for r in retornos %}
-        <li class="list-group-item d-flex justify-content-between align-items-center">
-          <span>{{ r.scheduled_at|format_datetime_brazil('%d/%m/%Y %H:%M') }}</span>
-        </li>
-        {% endfor %}
-      </ul>
-    {% else %}
-      <p class="text-muted">Nenhum retorno agendado.</p>
-    {% endif %}
+    <!-- TABS -->
+    <ul class="nav nav-tabs" id="animalTabs" role="tablist">
+      <li class="nav-item" role="presentation">
+        <button class="nav-link active" id="eventos-tab" data-bs-toggle="tab" data-bs-target="#eventos" type="button" role="tab" aria-controls="eventos" aria-selected="true">Próximos eventos</button>
+      </li>
+      <li class="nav-item" role="presentation">
+        <button class="nav-link" id="historico-tab" data-bs-toggle="tab" data-bs-target="#historico" type="button" role="tab" aria-controls="historico" aria-selected="false">Histórico Médico</button>
+      </li>
+    </ul>
+    <div class="tab-content" id="animalTabsContent">
+      <div class="tab-pane fade show active" id="eventos" role="tabpanel" aria-labelledby="eventos-tab">
+        <!-- PRÓXIMOS EVENTOS -->
+        <div class="card shadow-sm p-4 mb-4">
+          <h4 class="mb-3"><i class="bi bi-calendar-event text-primary me-2"></i>Próximos eventos</h4>
 
-    <h6 class="mt-3 text-muted">🧪 Exames</h6>
-    {% if exames_agendados %}
-      <ul class="list-group mb-3">
-        {% for ex in exames_agendados %}
-        <li class="list-group-item d-flex justify-content-between align-items-center">
-          <span>{{ ex.scheduled_at|format_datetime_brazil('%d/%m/%Y %H:%M') }}</span>
-          <span class="text-muted small">{{ ex.specialist.user.name }}</span>
-        </li>
-        {% endfor %}
-      </ul>
-    {% else %}
-      <p class="text-muted">Nenhum exame agendado.</p>
-    {% endif %}
+          <h6 class="text-muted">🔁 Retornos</h6>
+          {% if retornos %}
+            <ul class="list-group mb-3">
+              {% for r in retornos %}
+              <li class="list-group-item d-flex justify-content-between align-items-center">
+                <span>{{ r.scheduled_at|format_datetime_brazil('%d/%m/%Y %H:%M') }}</span>
+              </li>
+              {% endfor %}
+            </ul>
+          {% else %}
+            <p class="text-muted">Nenhum retorno agendado.</p>
+          {% endif %}
 
-  </div>
-
-  <!-- HISTÓRICO MÉDICO -->
-  <div class="card shadow-sm p-4 mb-4">
-    <h4 class="mb-3"><i class="bi bi-journal-medical text-success me-2"></i>Histórico Médico</h4>
-
-    <!-- PRESCRIÇÕES -->
-    <h6 class="mt-4 text-muted">💊 Prescrições</h6>
-    {% if blocos_prescricao %}
-      {% for bloco in blocos_prescricao[:3] %}
-      <div class="card mb-2 shadow-sm">
-        <div class="card-body d-flex justify-content-between align-items-center">
-          <span class="text-dark">
-            {{ bloco.data_criacao|format_datetime_brazil('%d/%m/%Y') }} — {{ bloco.prescricoes | length }} medicação(ões)
-          </span>
-          {% if current_user.worker == 'veterinario' %}
-            <a href="{{ url_for('imprimir_bloco_prescricao', bloco_id=bloco.id) }}"
-               class="btn btn-sm btn-outline-primary">🖨️ Imprimir</a>
+          <h6 class="mt-3 text-muted">🧪 Exames</h6>
+          {% if exames_agendados %}
+            <ul class="list-group mb-3">
+              {% for ex in exames_agendados %}
+              <li class="list-group-item d-flex justify-content-between align-items-center">
+                <span>{{ ex.scheduled_at|format_datetime_brazil('%d/%m/%Y %H:%M') }}</span>
+                <span class="text-muted small">{{ ex.specialist.user.name }}</span>
+              </li>
+              {% endfor %}
+            </ul>
+          {% else %}
+            <p class="text-muted">Nenhum exame agendado.</p>
           {% endif %}
         </div>
       </div>
-      {% endfor %}
-    {% else %}
-      <p class="text-muted">Nenhuma prescrição encontrada.</p>
-    {% endif %}
+      <div class="tab-pane fade" id="historico" role="tabpanel" aria-labelledby="historico-tab">
+        <!-- HISTÓRICO MÉDICO -->
+        <div class="card shadow-sm p-4 mb-4">
+          <h4 class="mb-3"><i class="bi bi-journal-medical text-success me-2"></i>Histórico Médico</h4>
 
-    <!-- EXAMES -->
-    <h6 class="mt-4 text-muted">🧪 Exames Solicitados</h6>
-    {% if blocos_exames %}
-      {% for bloco in blocos_exames[:3] %}
-      <div class="card mb-2 shadow-sm">
-        <div class="card-body d-flex justify-content-between align-items-center">
-          <span class="text-dark">
-            {{ bloco.data_criacao|format_datetime_brazil('%d/%m/%Y') }} — {{ bloco.exames | length }} exame(s)
-          </span>
-          {% if current_user.worker == 'veterinario' %}
-            <a href="{{ url_for('imprimir_bloco_exames', bloco_id=bloco.id) }}"
-               class="btn btn-sm btn-outline-primary">🖨️ Imprimir</a>
+          <!-- PRESCRIÇÕES -->
+          <h6 class="mt-4 text-muted">💊 Prescrições</h6>
+          {% if blocos_prescricao %}
+            {% for bloco in blocos_prescricao[:3] %}
+            <div class="card mb-2 shadow-sm">
+              <div class="card-body d-flex justify-content-between align-items-center">
+                <span class="text-dark">
+                  {{ bloco.data_criacao|format_datetime_brazil('%d/%m/%Y') }} — {{ bloco.prescricoes | length }} medicação(ões)
+                </span>
+                {% if current_user.worker == 'veterinario' %}
+                  <a href="{{ url_for('imprimir_bloco_prescricao', bloco_id=bloco.id) }}"
+                     class="btn btn-sm btn-outline-primary">🖨️ Imprimir</a>
+                {% endif %}
+              </div>
+            </div>
+            {% endfor %}
+          {% else %}
+            <p class="text-muted">Nenhuma prescrição encontrada.</p>
           {% endif %}
-        </div>
-      </div>
-      {% endfor %}
-    {% else %}
-      <p class="text-muted">Nenhum exame solicitado.</p>
-    {% endif %}
 
-    <!-- CONSULTAS -->
-    <h6 class="mt-4 text-muted">📅 Consultas Veterinárias</h6>
-    {% if consultas %}
-      <ul class="list-group mb-2">
-        {% for c in consultas[:3] %}
-        <li class="list-group-item d-flex justify-content-between align-items-center">
-          <span>{{ c.created_at|format_datetime_brazil('%d/%m/%Y') }}</span>
-          <span class="text-muted small">{{ c.veterinario.name }}</span>
-        </li>
-        {% endfor %}
-      </ul>
-      {% if consultas|length > 3 %}
-        <a href="{{ url_for('historico_consultas', animal_id=animal.id) }}" class="btn btn-sm btn-outline-dark">🔍 Ver todas</a>
-      {% endif %}
-    {% else %}
-      <p class="text-muted">Nenhuma consulta registrada.</p>
-    {% endif %}
+          <!-- EXAMES -->
+          <h6 class="mt-4 text-muted">🧪 Exames Solicitados</h6>
+          {% if blocos_exames %}
+            {% for bloco in blocos_exames[:3] %}
+            <div class="card mb-2 shadow-sm">
+              <div class="card-body d-flex justify-content-between align-items-center">
+                <span class="text-dark">
+                  {{ bloco.data_criacao|format_datetime_brazil('%d/%m/%Y') }} — {{ bloco.exames | length }} exame(s)
+                </span>
+                {% if current_user.worker == 'veterinario' %}
+                  <a href="{{ url_for('imprimir_bloco_exames', bloco_id=bloco.id) }}"
+                     class="btn btn-sm btn-outline-primary">🖨️ Imprimir</a>
+                {% endif %}
+              </div>
+            </div>
+            {% endfor %}
+          {% else %}
+            <p class="text-muted">Nenhum exame solicitado.</p>
+          {% endif %}
 
-
-    <!-- VACINAS -->
-    <h6 class="mt-4 text-muted">💉 Doses Futuras</h6>
-    {% if doses_futuras %}
-      <ul class="list-group mb-2">
-        {% for v in doses_futuras %}
-        <li class="list-group-item d-flex justify-content-between align-items-center">
-          <div>
-            <strong>{{ v.nome }}</strong>
-            {% if v.aplicada_em %} — {{ v.aplicada_em|format_datetime_brazil('%d/%m/%Y') }}{% endif %}
-          </div>
-        </li>
-        {% endfor %}
-      </ul>
-    {% else %}
-      <p class="text-muted">Nenhuma dose futura agendada.</p>
-    {% endif %}
-
-    <h6 class="mt-4 text-muted">💉 Doses Atrasadas</h6>
-    {% if doses_atrasadas %}
-      <ul class="list-group mb-2">
-        {% for v in doses_atrasadas %}
-        <li class="list-group-item d-flex justify-content-between align-items-center">
-          <div>
-            <strong>{{ v.nome }}</strong>
-            {% if v.aplicada_em %} — {{ v.aplicada_em|format_datetime_brazil('%d/%m/%Y') }}{% endif %}
-          </div>
-        </li>
-        {% endfor %}
-      </ul>
-    {% else %}
-      <p class="text-muted">Nenhuma dose atrasada.</p>
-    {% endif %}
-
-    <h6 class="mt-4 text-muted">💉 Vacinas Aplicadas</h6>
-    {% if vacinas_aplicadas %}
-      <ul class="list-group mb-2">
-        {% for v in vacinas_aplicadas %}
-        <li class="list-group-item d-flex justify-content-between align-items-center">
-          <div>
-            <strong>{{ v.nome }}</strong> — {{ v.tipo or "Tipo não informado" }} em {{ v.aplicada_em|format_datetime_brazil('%d/%m/%Y') if v.aplicada_em else 'Data não registrada' }}
-            {% if v.observacoes %}
-              <br><em class="text-muted">Obs: {{ v.observacoes }}</em>
+          <!-- CONSULTAS -->
+          <h6 class="mt-4 text-muted">📅 Consultas Veterinárias</h6>
+          {% if consultas %}
+            <ul class="list-group mb-2">
+              {% for c in consultas[:3] %}
+              <li class="list-group-item d-flex justify-content-between align-items-center">
+                <span>{{ c.created_at|format_datetime_brazil('%d/%m/%Y') }}</span>
+                <span class="text-muted small">{{ c.veterinario.name }}</span>
+              </li>
+              {% endfor %}
+            </ul>
+            {% if consultas|length > 3 %}
+              <a href="{{ url_for('historico_consultas', animal_id=animal.id) }}" class="btn btn-sm btn-outline-dark">🔍 Ver todas</a>
             {% endif %}
+          {% else %}
+            <p class="text-muted">Nenhuma consulta registrada.</p>
+          {% endif %}
+
+          <!-- VACINAS -->
+          <h6 class="mt-4 text-muted">💉 Doses Futuras</h6>
+          {% if doses_futuras %}
+            <ul class="list-group mb-2">
+              {% for v in doses_futuras %}
+              <li class="list-group-item d-flex justify-content-between align-items-center">
+                <div>
+                  <strong>{{ v.nome }}</strong>
+                  {% if v.aplicada_em %} — {{ v.aplicada_em|format_datetime_brazil('%d/%m/%Y') }}{% endif %}
+                </div>
+              </li>
+              {% endfor %}
+            </ul>
+          {% else %}
+            <p class="text-muted">Nenhuma dose futura agendada.</p>
+          {% endif %}
+
+          <h6 class="mt-4 text-muted">💉 Doses Atrasadas</h6>
+          {% if doses_atrasadas %}
+            <ul class="list-group mb-2">
+              {% for v in doses_atrasadas %}
+              <li class="list-group-item d-flex justify-content-between align-items-center">
+                <div>
+                  <strong>{{ v.nome }}</strong>
+                  {% if v.aplicada_em %} — {{ v.aplicada_em|format_datetime_brazil('%d/%m/%Y') }}{% endif %}
+                </div>
+              </li>
+              {% endfor %}
+            </ul>
+          {% else %}
+            <p class="text-muted">Nenhuma dose atrasada.</p>
+          {% endif %}
+
+          <h6 class="mt-4 text-muted">💉 Vacinas Aplicadas</h6>
+          {% if vacinas_aplicadas %}
+            <ul class="list-group mb-2">
+              {% for v in vacinas_aplicadas %}
+              <li class="list-group-item d-flex justify-content-between align-items-center">
+                <div>
+                  <strong>{{ v.nome }}</strong> — {{ v.tipo or "Tipo não informado" }} em {{ v.aplicada_em|format_datetime_brazil('%d/%m/%Y') if v.aplicada_em else 'Data não registrada' }}
+                  {% if v.observacoes %}
+                    <br><em class="text-muted">Obs: {{ v.observacoes }}</em>
+                  {% endif %}
+                </div>
+              </li>
+              {% endfor %}
+            </ul>
+          {% else %}
+            <p class="text-muted">Nenhuma vacina registrada.</p>
+          {% endif %}
+
+          <!-- DOCUMENTOS -->
+          <div class="mt-4">
+            {% include 'partials/documentos.html' %}
           </div>
-        </li>
-        {% endfor %}
-      </ul>
-    {% else %}
-      <p class="text-muted">Nenhuma vacina registrada.</p>
-    {% endif %}
-
-    <!-- DOCUMENTOS -->
-    <div class="mt-4">
-      {% include 'partials/documentos.html' %}
-  </div>
-
-  </div>
-
-
-
-
+        </div>
+      </div>
+    </div>
   <!-- VOLTAR -->
   <h3>Ficha de {{ animal.name }}</h3>
   <p><strong>Tutor:</strong>
@@ -308,4 +316,7 @@
 </script>
 
 
+{% endblock %}
+{% block scripts %}
+  <script src="{{ url_for('static', filename='appointments_table.js') }}"></script>
 {% endblock %}
