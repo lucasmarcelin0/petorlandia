@@ -174,7 +174,12 @@
                   document.getElementById('frequencia-vacina').value = item.frequencia || '';
                   aplicadaCheckbox.checked = true;
                   aplicadaCheckbox.dispatchEvent(new Event('change'));
-                  aplicadaEmInput.value = new Date().toISOString().split('T')[0];
+                  const today = new Date();
+                  const offset = today.getTimezoneOffset();
+                  const localISODate = new Date(today.getTime() - offset * 60000)
+                    .toISOString()
+                    .split('T')[0];
+                  aplicadaEmInput.value = localISODate;
                   sugestoesVacinas.innerHTML = '';
                 };
                 sugestoesVacinas.appendChild(li);
