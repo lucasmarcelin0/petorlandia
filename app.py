@@ -7245,7 +7245,16 @@ def appointments():
                 .order_by(ExamAppointment.scheduled_at)
                 .all()
             )
-            vaccine_appointments = []
+            vaccine_appointments = (
+                Vacina.query
+                .join(Vacina.animal)
+                .filter(Animal.clinica_id == current_user.clinica_id)
+                .filter(Vacina.aplicada_em >= date.today())
+                .order_by(Vacina.aplicada_em)
+                .all()
+            )
+            for vac in vaccine_appointments:
+                vac.scheduled_at = datetime.combine(vac.aplicada_em, time.min)
             form = None
         else:
             appointments = (

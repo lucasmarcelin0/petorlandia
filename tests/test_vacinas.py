@@ -226,3 +226,43 @@ def test_alterar_vacina_cria_proxima_dose(app):
         resp = client.get('/appointments')
         assert b'V10' in resp.data
         assert b'31/01/2099' in resp.data
+
+
+def test_vaccine_appointments_visible_to_collaborator(app):
+    with app.app_context():
+        db.drop_all()
+        db.create_all()
+
+        clinica = Clinica(nome="Pet Clinic")
+        tutor = User(name="Tutor", email="tutor@example.com")
+        tutor.set_password("x")
+        animal = Animal(name="Rex", owner=tutor, clinica=clinica)
+        colaborador = User(
+            name="Colab",
+            email="colab@example.com",
+            worker="colaborador",
+            clinica=clinica,
+        )
+        colaborador.set_password("x")
+        db.session.add_all([clinica, tutor, animal, colaborador])
+        db.session.commit()
+
+        vacina = Vacina(
+            nome="V10",
+            aplicada=False,
+            aplicada_em=date(2099, 1, 1),
+            animal=animal,
+        )
+        db.session.add(vacina)
+        db.session.commit()
+
+        client = app.test_client()
+        client.post(
+            '/login',
+            data={'email': 'colab@example.com', 'password': 'x'},
+            follow_redirects=True,
+        )
+        resp = client.get('/appointments')
+        assert resp.status_code == 200
+        assert b'V10' in resp.data
+        assert b'01/01/2099' in resp.data
