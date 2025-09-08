@@ -2700,6 +2700,46 @@ def clinic_detail(clinica_id):
     )
 
 
+@app.route('/clinica/<int:clinica_id>/veterinario', methods=['POST'])
+@login_required
+def create_clinic_veterinario(clinica_id):
+    """Create a new veterinarian linked to a clinic."""
+    clinica = Clinica.query.get_or_404(clinica_id)
+    if not (_is_admin() or current_user.id == clinica.owner_id):
+        abort(403)
+
+    name = request.form.get('name', '').strip()
+    email = request.form.get('email', '').strip().lower()
+    crmv = request.form.get('crmv', '').strip()
+
+    if not name or not email or not crmv:
+        flash('Nome, e-mail e CRMV são obrigatórios.', 'danger')
+        return redirect(url_for('clinic_detail', clinica_id=clinica.id) + '#veterinarios')
+
+    if User.query.filter_by(email=email).first():
+        flash('E-mail já cadastrado.', 'danger')
+        return redirect(url_for('clinic_detail', clinica_id=clinica.id) + '#veterinarios')
+
+    if Veterinario.query.filter_by(crmv=crmv).first():
+        flash('CRMV já cadastrado.', 'danger')
+        return redirect(url_for('clinic_detail', clinica_id=clinica.id) + '#veterinarios')
+
+    password = uuid.uuid4().hex[:8]
+    user = User(name=name, email=email, worker='veterinario')
+    user.set_password(password)
+    user.clinica_id = clinica.id
+    db.session.add(user)
+
+    veterinario = Veterinario(user=user, crmv=crmv, clinica=clinica)
+    db.session.add(veterinario)
+
+    db.session.add(ClinicStaff(clinic_id=clinica.id, user=user))
+    db.session.commit()
+
+    flash('Veterinário cadastrado com sucesso.', 'success')
+    return redirect(url_for('clinic_detail', clinica_id=clinica.id) + '#veterinarios')
+
+
 @app.route('/clinica/<int:clinica_id>/estoque', methods=['GET', 'POST'])
 @login_required
 def clinic_stock(clinica_id):
