@@ -5,7 +5,7 @@ from flask_login import current_user
 from functools import wraps
 
 
-from datetime import date, datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone, time
 from itertools import groupby
 from dateutil.relativedelta import relativedelta
 from sqlalchemy import case
@@ -249,6 +249,74 @@ def get_available_times(veterinario_id, date):
                 available.append(current.strftime('%H:%M'))
             current += step
     return available
+
+
+def get_weekly_schedule(veterinario_id, start_date, days=7, day_start=time(8, 0), day_end=time(18, 0)):
+    """Return schedule overview for a veterinarian.
+
+    The result is a list of dictionaries, one for each day, containing
+    arrays of available times, booked times and slots when the vet does
+    not work. All times are returned as strings in ``HH:MM`` format.
+    """
+    from models import VetSchedule, Appointment, ExamAppointment
+
+    result = []
+    step = timedelta(minutes=30)
+    weekday_map = ['Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado', 'Domingo']
+
+    for i in range(days):
+        dia = start_date + timedelta(days=i)
+        dia_semana = weekday_map[dia.weekday()]
+        schedules = VetSchedule.query.filter_by(
+            veterinario_id=veterinario_id, dia_semana=dia_semana
+        ).all()
+
+        working_slots = set()
+        for s in schedules:
+            current = datetime.combine(dia, s.hora_inicio)
+            end = datetime.combine(dia, s.hora_fim)
+            while current < end:
+                if s.intervalo_inicio and s.intervalo_fim:
+                    intervalo_inicio = datetime.combine(dia, s.intervalo_inicio)
+                    intervalo_fim = datetime.combine(dia, s.intervalo_fim)
+                    if intervalo_inicio <= current < intervalo_fim:
+                        current += step
+                        continue
+                working_slots.add(current)
+                current += step
+
+        all_slots = []
+        current = datetime.combine(dia, day_start)
+        end_day = datetime.combine(dia, day_end)
+        while current < end_day:
+            all_slots.append(current)
+            current += step
+
+        available = []
+        booked = []
+        for slot in working_slots:
+            current_utc = slot.replace(tzinfo=BR_TZ).astimezone(timezone.utc).replace(tzinfo=None)
+            conflito = (
+                Appointment.query.filter_by(veterinario_id=veterinario_id, scheduled_at=current_utc).first()
+                or ExamAppointment.query.filter_by(specialist_id=veterinario_id, scheduled_at=current_utc).first()
+            )
+            time_str = slot.strftime('%H:%M')
+            if conflito:
+                booked.append(time_str)
+            else:
+                available.append(time_str)
+
+        not_working = [s.strftime('%H:%M') for s in all_slots if s not in working_slots]
+        result.append(
+            {
+                'date': dia.isoformat(),
+                'available': sorted(available),
+                'booked': sorted(booked),
+                'not_working': sorted(not_working),
+            }
+        )
+
+    return result
 
 
 def group_vet_schedules_by_day(schedules):

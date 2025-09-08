@@ -69,6 +69,15 @@
             {{ form.submit(class="btn btn-success btn-lg rounded-pill") }}
           </div>
         </form>
+        <div class="mt-4">
+          <h6 class="fw-bold"><i class="bi bi-calendar3 me-2"></i>Disponibilidade do Veterinário</h6>
+          <div id="schedule-overview" class="row row-cols-1 row-cols-md-2 row-cols-lg-3 g-3 small"></div>
+          <div class="mt-2 small">
+            <span class="badge bg-success me-1">&nbsp;</span> Disponível
+            <span class="badge bg-danger ms-2 me-1">&nbsp;</span> Ocupado
+            <span class="badge bg-secondary ms-2 me-1">&nbsp;</span> Não trabalha
+          </div>
+        </div>
         {% endif %}
       </div>
     </div>
@@ -162,6 +171,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const vetField = document.getElementById('veterinario_id');
   const dateField = document.getElementById('date');
   const datalist = document.getElementById('available-times');
+  const scheduleContainer = document.getElementById('schedule-overview');
 
   async function updateTimes() {
     if (!vetField || !dateField || !datalist) return;
@@ -178,8 +188,52 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  vetField && vetField.addEventListener('change', updateTimes);
-  dateField && dateField.addEventListener('change', updateTimes);
+  function badge(text, cls) {
+    const span = document.createElement('span');
+    span.className = `badge ${cls} me-1 mb-1`;
+    span.textContent = text;
+    return span;
+  }
+
+  async function loadSchedule() {
+    if (!vetField || !scheduleContainer) return;
+    const vetId = vetField.value;
+    if (!vetId) { scheduleContainer.innerHTML = ''; return; }
+    const start = dateField && dateField.value ? dateField.value : new Date().toISOString().split('T')[0];
+    const resp = await fetch(`/api/specialist/${vetId}/weekly_schedule?start=${start}`);
+    const days = await resp.json();
+    scheduleContainer.innerHTML = '';
+    days.forEach(day => {
+      const col = document.createElement('div');
+      col.className = 'col';
+      const card = document.createElement('div');
+      card.className = 'card h-100';
+      const body = document.createElement('div');
+      body.className = 'card-body';
+      const title = document.createElement('h6');
+      title.className = 'card-title fw-bold';
+      title.textContent = new Date(day.date).toLocaleDateString('pt-BR', { weekday: 'short', day: '2-digit', month: '2-digit' });
+      body.appendChild(title);
+      const slots = document.createElement('div');
+      day.available.forEach(t => slots.appendChild(badge(t, 'bg-success')));
+      day.booked.forEach(t => slots.appendChild(badge(t, 'bg-danger')));
+      day.not_working.forEach(t => slots.appendChild(badge(t, 'bg-secondary')));
+      if (!slots.children.length) {
+        const span = document.createElement('span');
+        span.className = 'text-muted small';
+        span.textContent = 'Folga';
+        slots.appendChild(span);
+      }
+      body.appendChild(slots);
+      card.appendChild(body);
+      col.appendChild(card);
+      scheduleContainer.appendChild(col);
+    });
+  }
+
+  vetField && vetField.addEventListener('change', () => { updateTimes(); loadSchedule(); });
+  dateField && dateField.addEventListener('change', () => { updateTimes(); loadSchedule(); });
+  loadSchedule();
 });
 </script>
 {% endblock %}
