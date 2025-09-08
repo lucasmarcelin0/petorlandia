@@ -60,16 +60,19 @@
         </div>
         <div class="col-md-6">
           <label class="form-label">Telefone</label>
-          <input name="phone" class="form-control" value="{{ tutor.phone or '' }}">
+          <input name="phone" class="form-control" value="{{ tutor.phone or '' }}"
+                 data-mask="(99) 99999-9999" pattern="\(\d{2}\) \d{5}-\d{4}">
         </div>
 
         <div class="col-md-4">
           <label class="form-label">CPF</label>
-          <input name="cpf" class="form-control" value="{{ tutor.cpf or '' }}">
+          <input name="cpf" class="form-control" value="{{ tutor.cpf or '' }}"
+                 data-mask="999.999.999-99" pattern="\d{3}\.\d{3}\.\d{3}-\d{2}">
         </div>
         <div class="col-md-4">
           <label class="form-label">RG</label>
-          <input name="rg" class="form-control" value="{{ tutor.rg or '' }}">
+          <input name="rg" class="form-control" value="{{ tutor.rg or '' }}"
+                 data-mask="99.999.999-9" pattern="\d{2}\.\d{3}\.\d{3}-\d">
         </div>
         <div class="col-md-4">
           <label class="form-label">Data de Nascimento</label>
