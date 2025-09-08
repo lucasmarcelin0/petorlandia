@@ -446,6 +446,7 @@
       else if (mode === 'weekend') opt.selected = weekend.includes(opt.value);
       else if (mode === 'clear') opt.selected = false;
     }
+    select.dispatchEvent(new Event('change'));
   }
 
   function toggleScheduleForm() {
