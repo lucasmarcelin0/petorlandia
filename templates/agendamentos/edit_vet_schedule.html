@@ -127,6 +127,10 @@
               </div>
             </div>
             <div class="mb-3">
+              {{ appointment_form.kind.label(class="form-label fw-bold") }}
+              {{ appointment_form.kind(class="form-select") }}
+            </div>
+            <div class="mb-3">
               {{ appointment_form.reason.label(class="form-label fw-bold") }}
               {{ appointment_form.reason(class="form-control", rows=3) }}
             </div>

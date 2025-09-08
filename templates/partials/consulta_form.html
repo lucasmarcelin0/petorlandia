@@ -102,6 +102,10 @@
       {{ appointment_form.time(class='form-control', type='time', value=consulta.appointment.scheduled_at|format_datetime_brazil('%H:%M')) }}
     </div>
     <div class="col-12">
+      {{ appointment_form.kind.label(class='form-label') }}
+      {{ appointment_form.kind(class='form-select', value=consulta.appointment.kind) }}
+    </div>
+    <div class="col-12">
       {{ appointment_form.reason.label(class='form-label') }}
       {{ appointment_form.reason(class='form-control', rows=3, value=consulta.appointment.notes or '') }}
     </div>
@@ -128,6 +132,10 @@
     <div class="col-md-6">
       {{ appointment_form.time.label(class='form-label') }}
       {{ appointment_form.time(class='form-control', type='time') }}
+    </div>
+    <div class="col-12">
+      {{ appointment_form.kind.label(class='form-label') }}
+      {{ appointment_form.kind(class='form-select') }}
     </div>
     <div class="col-12">
       {{ appointment_form.reason.label(class='form-label') }}

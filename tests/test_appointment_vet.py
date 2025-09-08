@@ -89,6 +89,7 @@ def test_veterinarian_can_schedule_for_other_users_animal(client, monkeypatch):
             'appointment-veterinario_id': vet_id,
             'appointment-date': '2024-05-01',
             'appointment-time': '10:00',
+            'appointment-kind': 'consulta',
             'appointment-reason': 'Checkup',
             'appointment-submit': True,
         },
