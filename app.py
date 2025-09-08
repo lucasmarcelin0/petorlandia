@@ -247,6 +247,7 @@ from forms import (
     DeliveryRequestForm, AddToCartForm, SubscribePlanForm,
     ProductUpdateForm, ProductPhotoForm, ChangePasswordForm,
     DeleteAccountForm, ClinicForm, ClinicHoursForm, ClinicAddVeterinarianForm,
+    ClinicCreateVeterinarianForm,
     ClinicAddStaffForm, ClinicStaffPermissionForm, VetScheduleForm, VetSpecialtyForm, AppointmentForm, AppointmentDeleteForm,
     InventoryItemForm, OrcamentoForm
 )
@@ -2444,6 +2445,7 @@ def clinic_detail(clinica_id):
     hours_form = ClinicHoursForm()
     clinic_form = ClinicForm(obj=clinica)
     vets_form = ClinicAddVeterinarianForm()
+    new_vet_form = ClinicCreateVeterinarianForm()
     staff_form = ClinicAddStaffForm()
     vets_form.veterinario_id.choices = [
         (v.id, v.user.name)
@@ -2679,6 +2681,7 @@ def clinic_detail(clinica_id):
         vet_schedule_forms=vet_schedule_forms,
         staff_members=staff_members,
         staff_form=staff_form,
+        new_vet_form=new_vet_form,
         staff_permission_forms=staff_permission_forms,
         vet_permission_forms=vet_permission_forms,
         appointments=appointments,
@@ -2974,6 +2977,41 @@ def remove_funcionario(clinica_id, user_id):
     db.session.commit()
     flash('Funcionário removido com sucesso.', 'success')
     return redirect(url_for('clinic_detail', clinica_id=clinica_id))
+
+
+@app.route('/clinica/<int:clinica_id>/veterinario/novo', methods=['POST'])
+@login_required
+def add_new_veterinario(clinica_id):
+    clinica = Clinica.query.get_or_404(clinica_id)
+    if not (_is_admin() or current_user.id == clinica.owner_id):
+        abort(403)
+    form = ClinicCreateVeterinarianForm()
+    if not form.validate_on_submit():
+        flash('Dados inválidos.', 'danger')
+        return redirect(url_for('clinic_detail', clinica_id=clinica_id) + '#veterinarios')
+    name = form.name.data.strip()
+    email = form.email.data.strip()
+    crmv = form.crmv.data.strip()
+    if User.query.filter_by(email=email).first():
+        flash('E-mail já cadastrado.', 'danger')
+        return redirect(url_for('clinic_detail', clinica_id=clinica_id) + '#veterinarios')
+    if Veterinario.query.filter_by(crmv=crmv).first():
+        flash('CRMV já cadastrado.', 'danger')
+        return redirect(url_for('clinic_detail', clinica_id=clinica_id) + '#veterinarios')
+    user = User(
+        name=name,
+        email=email,
+        role='veterinario',
+        worker='veterinario',
+        clinica_id=clinica.id,
+    )
+    user.set_password('123456789')
+    vet = Veterinario(crmv=crmv, user=user, clinica_id=clinica.id)
+    staff = ClinicStaff(clinic_id=clinica.id, user=user)
+    db.session.add_all([user, vet, staff])
+    db.session.commit()
+    flash('Veterinário criado com sucesso.', 'success')
+    return redirect(url_for('clinic_detail', clinica_id=clinica.id) + '#veterinarios')
 
 
 @app.route('/clinica/<int:clinica_id>/horario/<int:horario_id>/delete', methods=['POST'])
