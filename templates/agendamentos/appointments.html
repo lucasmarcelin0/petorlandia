@@ -50,7 +50,8 @@
             </div>
             <div class="col-md-6">
               {{ form.time.label(class="form-label fw-semibold") }}
-              {{ form.time(class="form-control", type="time") }}
+              {{ form.time(class="form-control", type="time", list="available-times") }}
+              <datalist id="available-times"></datalist>
             </div>
           </div>
 
@@ -156,4 +157,29 @@
 {% block scripts %}
 {{ super() }}
 <script src="{{ url_for('static', filename='appointments_table.js') }}"></script>
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+  const vetField = document.getElementById('veterinario_id');
+  const dateField = document.getElementById('date');
+  const datalist = document.getElementById('available-times');
+
+  async function updateTimes() {
+    if (!vetField || !dateField || !datalist) return;
+    const vetId = vetField.value;
+    const date = dateField.value;
+    if (!vetId || !date) return;
+    const resp = await fetch(`/api/specialist/${vetId}/available_times?date=${date}`);
+    const times = await resp.json();
+    datalist.innerHTML = '';
+    times.forEach(t => {
+      const opt = document.createElement('option');
+      opt.value = t;
+      datalist.appendChild(opt);
+    });
+  }
+
+  vetField && vetField.addEventListener('change', updateTimes);
+  dateField && dateField.addEventListener('change', updateTimes);
+});
+</script>
 {% endblock %}
