@@ -91,7 +91,7 @@
                     👥 Tutores
                 </a>
 
-                {% if current_user.worker == 'veterinario' and current_user.veterinario %}
+                {% if (current_user.worker == 'veterinario' and current_user.veterinario) or current_user.worker == 'colaborador' %}
                 <a href="{{ url_for('appointments') }}"
                    class="btn btn-outline-warning rounded-pill shadow-sm px-4 py-2"
                    data-bs-toggle="tooltip" title="Administre sua agenda de atendimentos.">
