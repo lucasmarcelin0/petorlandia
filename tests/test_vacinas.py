@@ -6,7 +6,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')
 import pytest
 from datetime import date
 
-from routes.app import app as flask_app, db
+from app import app as flask_app, db
 from models import User, Animal, Clinica, Vacina, VacinaModelo
 
 @pytest.fixture

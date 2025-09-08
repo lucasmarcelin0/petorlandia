@@ -6,7 +6,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')
 import pytest
 from datetime import datetime, time, date
 from zoneinfo import ZoneInfo
-from routes.app import app as flask_app, db
+from app import app as flask_app, db
 from models import User, Animal, Veterinario, Clinica, VetSchedule, Appointment
 from helpers import BR_TZ
 

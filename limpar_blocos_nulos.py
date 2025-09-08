@@ -1,4 +1,4 @@
-from routes.app import app, db
+from app import app, db
 from models import Animal, BlocoExames, ExameSolicitado, Consulta
 
 with app.app_context():

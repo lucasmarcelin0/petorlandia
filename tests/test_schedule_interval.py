@@ -7,7 +7,7 @@ from datetime import datetime, time
 
 import pytest
 
-from routes.app import app as flask_app, db
+from app import app as flask_app, db
 from models import User, Veterinario, VetSchedule
 from helpers import is_slot_available, has_schedule_conflict
 
