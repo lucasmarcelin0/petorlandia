@@ -1,0 +1,22 @@
+{% macro render_field(field, type='text', label=None, placeholder='', classes='form-control') %}
+<div class="mb-3">
+  <label for="{{ field.id }}" class="form-label">{{ label if label is not none else field.label.text }}</label>
+  {{ field(class=classes, id=field.id, placeholder=placeholder, type=type) }}
+  {% for error in field.errors %}
+  <div class="text-danger">{{ error }}</div>
+  {% endfor %}
+</div>
+{% endmacro %}
+
+{% macro render_checkbox(field, label=None, classes='form-check-input') %}
+<div class="mb-3 form-check">
+  {{ field(class=classes, id=field.id) }}
+  <label for="{{ field.id }}" class="form-check-label">{{ label if label is not none else field.label.text }}</label>
+</div>
+{% endmacro %}
+
+{% macro render_submit(field, classes='btn btn-primary w-100') %}
+<div class="d-grid">
+  {{ field(class=classes) }}
+</div>
+{% endmacro %}

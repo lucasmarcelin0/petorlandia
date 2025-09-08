@@ -1,29 +1,20 @@
-<table class="table">
-  <thead>
-    <tr>
-      <th>Hora</th>
-      <th>Animal</th>
-      <th>Especialista</th>
-      <th>Status</th>
-    </tr>
-  </thead>
-  <tbody>
-    {% if exam_appointments_grouped %}
-      {% for day, items in exam_appointments_grouped %}
-        <tr class="table-light">
-          <th colspan="4">{{ day|format_datetime_brazil('%d/%m/%Y') }}</th>
-        </tr>
-        {% for appt in items %}
-          <tr>
-            <td>{{ appt.scheduled_at|format_datetime_brazil('%H:%M') }}</td>
-            <td>{{ appt.animal.name }}</td>
-            <td>{{ appt.specialist.user.name }}</td>
-            <td>{{ appt.status_display }}</td>
-          </tr>
-        {% endfor %}
+{% from 'components/table_macros.html' import render_table %}
+{% call render_table(['Hora', 'Animal', 'Especialista', 'Status']) %}
+  {% if exam_appointments_grouped %}
+    {% for day, items in exam_appointments_grouped %}
+      <tr class="table-light">
+        <th colspan="4">{{ day|format_datetime_brazil('%d/%m/%Y') }}</th>
+      </tr>
+      {% for appt in items %}
+      <tr>
+        <td>{{ appt.scheduled_at|format_datetime_brazil('%H:%M') }}</td>
+        <td>{{ appt.animal.name }}</td>
+        <td>{{ appt.specialist.user.name }}</td>
+        <td>{{ appt.status_display }}</td>
+      </tr>
       {% endfor %}
-    {% else %}
-      <tr><td colspan="4">Nenhum exame agendado.</td></tr>
-    {% endif %}
-  </tbody>
-</table>
+    {% endfor %}
+  {% else %}
+    <tr><td colspan="4">Nenhum exame agendado.</td></tr>
+  {% endif %}
+{% endcall %}

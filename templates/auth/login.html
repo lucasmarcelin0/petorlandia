@@ -1,4 +1,5 @@
 {% extends "layout.html" %}
+{% from 'components/form_macros.html' import render_field, render_checkbox, render_submit %}
 
 {% block main %}
 <div class="container d-flex justify-content-center align-items-center mt-5">
@@ -6,35 +7,13 @@
         <h3 class="mb-4 text-center">🔐 Entrar na PetOrlândia</h3>
         <form method="POST" class="js-auth-form">
             {{ form.hidden_tag() }}
-
-            <div class="mb-3">
-                {{ form.email.label(class="form-label") }}
-                {{ form.email(class="form-control rounded-pill") }}
-                {% for error in form.email.errors %}
-                    <div class="text-danger">{{ error }}</div>
-                {% endfor %}
-            </div>
-
-            <div class="mb-3">
-                {{ form.password.label(class="form-label") }}
-                {{ form.password(class="form-control rounded-pill") }}
-                {% for error in form.password.errors %}
-                    <div class="text-danger">{{ error }}</div>
-                {% endfor %}
-            </div>
-
-            <div class="mb-3 form-check">
-                {{ form.remember(class="form-check-input") }}
-                {{ form.remember.label(class="form-check-label") }}
-            </div>
-
-            <div class="d-grid">
-                {{ form.submit(class="btn btn-primary rounded-pill py-2") }}
-            </div>
+            {{ render_field(form.email, classes='form-control rounded-pill') }}
+            {{ render_field(form.password, classes='form-control rounded-pill') }}
+            {{ render_checkbox(form.remember) }}
+            {{ render_submit(form.submit, classes='btn btn-primary rounded-pill py-2') }}
             <div class="text-center mt-3">
                 <a href="{{ url_for('reset_password_request') }}" class="text-decoration-none">Esqueceu sua senha?</a>
             </div>
-
         </form>
     </div>
 </div>
