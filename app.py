@@ -2566,6 +2566,7 @@ def clinic_detail(clinica_id):
         return redirect(url_for('clinic_detail', clinica_id=clinica.id))
     horarios = ClinicHours.query.filter_by(clinica_id=clinica_id).all()
     veterinarios = Veterinario.query.filter_by(clinica_id=clinica_id).all()
+    all_veterinarios = Veterinario.query.all()
     staff_members = ClinicStaff.query.filter(
         ClinicStaff.clinic_id == clinica.id,
         ClinicStaff.user.has(User.veterinario == None),
@@ -2702,6 +2703,7 @@ def clinic_detail(clinica_id):
         clinic_form=clinic_form,
         invite_form=invite_form,
         veterinarios=veterinarios,
+        all_veterinarios=all_veterinarios,
         vet_schedule_forms=vet_schedule_forms,
         staff_members=staff_members,
         staff_form=staff_form,

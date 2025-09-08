@@ -215,7 +215,12 @@
             {{ invite_form.hidden_tag() }}
             <div class="mb-3">
               {{ invite_form.email.label }}
-              {{ invite_form.email(class="form-control") }}
+              {{ invite_form.email(class="form-control", list="all-vets-list") }}
+              <datalist id="all-vets-list">
+                {% for v in all_veterinarios %}
+                <option value="{{ v.user.email }}">{{ v.user.name }} (CRMV: {{ v.crmv }})</option>
+                {% endfor %}
+              </datalist>
             </div>
             {{ invite_form.submit(class="btn btn-primary") }}
           </form>
