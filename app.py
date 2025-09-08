@@ -2757,7 +2757,10 @@ def update_inventory_item(item_id):
         qty = item.quantity
     item.quantity = max(0, qty)
     db.session.commit()
-    flash('Quantidade atualizada.', 'success')
+    message = 'Quantidade atualizada.'
+    flash(message, 'success')
+    if 'application/json' in request.headers.get('Accept', ''):
+        return jsonify(success=True, message=message, category='success', quantity=item.quantity)
     return redirect(url_for('clinic_detail', clinica_id=clinica.id) + '#estoque')
 
 
@@ -3334,9 +3337,9 @@ def update_tutor(user_id):
     # 🔐 Permissão: veterinários ou colaboradores
     if current_user.worker not in ['veterinario', 'colaborador']:
         message = 'Apenas veterinários ou colaboradores podem editar dados do tutor.'
-        if wants_json:
-            return jsonify(success=False, message=message), 403
         flash(message, 'danger')
+        if wants_json:
+            return jsonify(success=False, message=message, category='danger'), 403
         return redirect(request.referrer or url_for('index'))
 
     # 📋 Campos básicos (exceto CPF)
@@ -3353,9 +3356,9 @@ def update_tutor(user_id):
             existing = User.query.filter(User.cpf == cpf_val, User.id != user.id).first()
             if existing:
                 message = 'CPF já cadastrado para outro tutor.'
-                if wants_json:
-                    return jsonify(success=False, message=message), 400
                 flash(message, 'danger')
+                if wants_json:
+                    return jsonify(success=False, message=message, category='danger'), 400
                 return redirect(request.referrer or url_for('index'))
         user.cpf = cpf_val
 
@@ -3366,9 +3369,9 @@ def update_tutor(user_id):
             user.date_of_birth = datetime.strptime(date_str, '%Y-%m-%d').date()
         except ValueError:
             message = 'Data de nascimento inválida. Use o formato correto.'
-            if wants_json:
-                return jsonify(success=False, message=message), 400
             flash(message, 'danger')
+            if wants_json:
+                return jsonify(success=False, message=message, category='danger'), 400
             return redirect(request.referrer or url_for('index'))
 
     # 📸 Foto de perfil
@@ -3415,9 +3418,9 @@ def update_tutor(user_id):
             user.endereco_id = endereco.id
     elif any(addr_fields.values()):
         message = 'Por favor, informe CEP, rua, cidade e estado.'
-        if wants_json:
-            return jsonify(success=False, message=message), 400
         flash(message, 'warning')
+        if wants_json:
+            return jsonify(success=False, message=message, category='warning'), 400
         return redirect(request.referrer or url_for('index'))
 
     # 💾 Commit final
@@ -3427,15 +3430,15 @@ def update_tutor(user_id):
         db.session.rollback()
         print(f"❌ ERRO ao salvar tutor: {e}")
         message = f'Ocorreu um erro ao salvar: {str(e)}'
-        if wants_json:
-            return jsonify(success=False, message=message), 500
         flash(message, 'danger')
+        if wants_json:
+            return jsonify(success=False, message=message, category='danger'), 500
         return redirect(request.referrer or url_for('index'))
 
     message = 'Dados do tutor atualizados com sucesso!'
-    if wants_json:
-        return jsonify(success=True, message=message, tutor_name=user.name)
     flash(message, 'success')
+    if wants_json:
+        return jsonify(success=True, message=message, tutor_name=user.name, category='success')
     return redirect(request.referrer or url_for('index'))
 
 
@@ -3508,9 +3511,9 @@ def update_animal(animal_id):
 
     if current_user.worker != 'veterinario':
         message = 'Apenas veterinários podem editar dados do animal.'
-        if wants_json:
-            return jsonify(success=False, message=message), 403
         flash(message, 'danger')
+        if wants_json:
+            return jsonify(success=False, message=message, category='danger'), 403
         return redirect(request.referrer or url_for('index'))
 
     # Campos básicos
@@ -3594,15 +3597,15 @@ def update_animal(animal_id):
     except Exception as e:
         db.session.rollback()
         message = f'Ocorreu um erro ao salvar: {str(e)}'
-        if wants_json:
-            return jsonify(success=False, message=message), 500
         flash(message, 'danger')
+        if wants_json:
+            return jsonify(success=False, message=message, category='danger'), 500
         return redirect(request.referrer or url_for('index'))
 
     message = 'Dados do animal atualizados com sucesso!'
-    if wants_json:
-        return jsonify(success=True, message=message, animal_name=animal.name)
     flash(message, 'success')
+    if wants_json:
+        return jsonify(success=True, message=message, animal_name=animal.name, category='success')
     return redirect(request.referrer or url_for('index'))
 
 
@@ -3613,8 +3616,13 @@ def update_animal(animal_id):
 def update_consulta(consulta_id):
     consulta = get_consulta_or_404(consulta_id)
 
+    wants_json = 'application/json' in request.headers.get('Accept', '')
+
     if current_user.worker != 'veterinario':
-        flash('Apenas veterinários podem editar a consulta.', 'danger')
+        message = 'Apenas veterinários podem editar a consulta.'
+        flash(message, 'danger')
+        if wants_json:
+            return jsonify(success=False, message=message, category='danger'), 403
         return redirect(url_for('index'))
 
     # Atualiza os campos
@@ -3646,7 +3654,7 @@ def update_consulta(consulta_id):
         message = 'Consulta salva e movida para o histórico!'
         flash(message, 'success')
 
-    if 'application/json' in request.headers.get('Accept', ''):
+    if wants_json:
         historico = (
             Consulta.query
             .filter_by(
@@ -3662,7 +3670,7 @@ def update_consulta(consulta_id):
             animal=consulta.animal,
             historico_consultas=historico,
         )
-        return jsonify(success=True, message=message, html=html)
+        return jsonify(success=True, message=message, category='success', html=html)
 
     return redirect(url_for('consulta_direct', animal_id=consulta.animal_id))
 

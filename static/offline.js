@@ -109,6 +109,10 @@
     if (resp) {
       let json = null;
       try { json = await resp.json(); } catch(e) {}
+      if (json && json.message) {
+        const category = json.category || (json.success === false || !resp.ok ? 'danger' : 'success');
+        showToast(json.message, category);
+      }
       const evt = new CustomEvent('form-sync-success', {detail: {form, data: json, response: resp}, cancelable: true});
       document.dispatchEvent(evt);
       if (!evt.defaultPrevented) {
@@ -129,7 +133,6 @@
         const cont=document.getElementById('tutores-adicionados');
         if(cont) cont.innerHTML=data.html;
       }
-      showToast(data.message || 'Tutor criado com sucesso', data.category || 'success');
       form.reset();
       const btn=form.querySelector('button[type="submit"]');
       if(btn && btn.dataset.original){
@@ -142,7 +145,6 @@
         const cont=document.getElementById('animais-adicionados');
         if(cont) cont.innerHTML=data.html;
       }
-      showToast(data.message || 'Animal cadastrado com sucesso', data.category || 'success');
       form.reset();
       const btn=form.querySelector('button[type="submit"]');
       if(btn && btn.dataset.original){
