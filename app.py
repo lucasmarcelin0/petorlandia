@@ -7102,7 +7102,12 @@ def appointments():
             else:
                 animal = get_animal_or_404(appointment_form.animal_id.data)
                 tutor_id = animal.user_id
-                if not Appointment.has_active_subscription(animal.id, tutor_id):
+                requires_plan = current_app.config.get(
+                    'REQUIRE_HEALTH_SUBSCRIPTION_FOR_APPOINTMENT', False
+                )
+                if requires_plan and not Appointment.has_active_subscription(
+                    animal.id, tutor_id
+                ):
                     flash(
                         'O animal não possui uma assinatura de plano de saúde ativa.',
                         'danger',
@@ -7287,7 +7292,12 @@ def appointments():
                     else:
                         animal = get_animal_or_404(appointment_form.animal_id.data)
                         tutor_id = animal.user_id
-                        if not Appointment.has_active_subscription(animal.id, tutor_id):
+                        requires_plan = current_app.config.get(
+                            'REQUIRE_HEALTH_SUBSCRIPTION_FOR_APPOINTMENT', False
+                        )
+                        if requires_plan and not Appointment.has_active_subscription(
+                            animal.id, tutor_id
+                        ):
                             flash(
                                 'O animal não possui uma assinatura de plano de saúde ativa.',
                                 'danger',
