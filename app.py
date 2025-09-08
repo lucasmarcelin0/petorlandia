@@ -260,6 +260,7 @@ from helpers import (
     group_vet_schedules_by_day,
     appointments_to_events,
     get_available_times,
+    get_weekly_schedule,
 )
 
 
@@ -7688,6 +7689,15 @@ def api_specialist_available_times(veterinario_id):
     date_obj = datetime.strptime(date_str, '%Y-%m-%d').date()
     times = get_available_times(veterinario_id, date_obj)
     return jsonify(times)
+
+
+@app.route('/api/specialist/<int:veterinario_id>/weekly_schedule')
+def api_specialist_weekly_schedule(veterinario_id):
+    start_str = request.args.get('start')
+    days = int(request.args.get('days', 7))
+    start_date = datetime.strptime(start_str, '%Y-%m-%d').date() if start_str else date.today()
+    data = get_weekly_schedule(veterinario_id, start_date, days)
+    return jsonify(data)
 
 
 @app.route('/animal/<int:animal_id>/schedule_exam', methods=['POST'])
