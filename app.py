@@ -2237,6 +2237,7 @@ def agendar_retorno(consulta_id):
             veterinario_id=form.veterinario_id.data,
             scheduled_at=scheduled_at,
             notes=form.reason.data,
+            kind='retorno',
         )
         db.session.add(appt)
         db.session.commit()
@@ -7111,6 +7112,8 @@ def appointments():
                         veterinario_id=appointment_form.veterinario_id.data,
                         scheduled_at=scheduled_at,
                         clinica_id=veterinario.clinica_id or animal.clinica_id,
+                        notes=appointment_form.reason.data,
+                        kind=appointment_form.kind.data,
                     )
                     db.session.add(appt)
                     db.session.commit()
@@ -7195,7 +7198,7 @@ def appointments():
         )
         appointments_upcoming = []
         for appt in upcoming_consultas:
-            kind = 'retorno' if appt.consulta_id else 'consulta'
+            kind = appt.kind or ('retorno' if appt.consulta_id else 'consulta')
             appointments_upcoming.append({'kind': kind, 'appt': appt})
         for exam in upcoming_exams:
             appointments_upcoming.append({'kind': 'exame', 'appt': exam})
@@ -7232,6 +7235,69 @@ def appointments():
         )
     else:
         if current_user.worker in ['colaborador', 'admin']:
+            appointment_form = AppointmentForm(prefix='appointment')
+            animals = Animal.query.filter_by(clinica_id=current_user.clinica_id).all()
+            appointment_form.animal_id.choices = [(a.id, a.name) for a in animals]
+            vets = Veterinario.query.filter_by(clinica_id=current_user.clinica_id).all()
+            appointment_form.veterinario_id.choices = [(v.id, v.user.name) for v in vets]
+            if appointment_form.submit.data and appointment_form.validate_on_submit():
+                scheduled_at_local = datetime.combine(
+                    appointment_form.date.data, appointment_form.time.data
+                )
+                if not is_slot_available(
+                    appointment_form.veterinario_id.data, scheduled_at_local
+                ):
+                    flash('Horário indisponível para o veterinário selecionado.', 'danger')
+                else:
+                    scheduled_at = (
+                        scheduled_at_local
+                        .replace(tzinfo=BR_TZ)
+                        .astimezone(timezone.utc)
+                        .replace(tzinfo=None)
+                    )
+                    if appointment_form.kind.data == 'exame':
+                        duration = timedelta(minutes=30)
+                        end = scheduled_at + duration
+                        conflict = ExamAppointment.query.filter(
+                            ExamAppointment.specialist_id == appointment_form.veterinario_id.data,
+                            ExamAppointment.scheduled_at < end,
+                            ExamAppointment.scheduled_at > scheduled_at - duration,
+                        ).first()
+                        if conflict:
+                            flash('Horário indisponível para o veterinário selecionado.', 'danger')
+                        else:
+                            appt = ExamAppointment(
+                                animal_id=appointment_form.animal_id.data,
+                                specialist_id=appointment_form.veterinario_id.data,
+                                requester_id=current_user.id,
+                                scheduled_at=scheduled_at,
+                                status='confirmed',
+                            )
+                            db.session.add(appt)
+                            db.session.commit()
+                            flash('Exame agendado com sucesso.', 'success')
+                    else:
+                        animal = get_animal_or_404(appointment_form.animal_id.data)
+                        tutor_id = animal.user_id
+                        if not Appointment.has_active_subscription(animal.id, tutor_id):
+                            flash(
+                                'O animal não possui uma assinatura de plano de saúde ativa.',
+                                'danger',
+                            )
+                            return redirect(url_for('appointments'))
+                        appt = Appointment(
+                            animal_id=animal.id,
+                            tutor_id=tutor_id,
+                            veterinario_id=appointment_form.veterinario_id.data,
+                            scheduled_at=scheduled_at,
+                            clinica_id=current_user.clinica_id,
+                            notes=appointment_form.reason.data,
+                            kind=appointment_form.kind.data,
+                        )
+                        db.session.add(appt)
+                        db.session.commit()
+                        flash('Agendamento criado com sucesso.', 'success')
+                return redirect(url_for('appointments'))
             appointments = (
                 Appointment.query
                 .filter_by(clinica_id=current_user.clinica_id)
@@ -7255,7 +7321,7 @@ def appointments():
             )
             for vac in vaccine_appointments:
                 vac.scheduled_at = datetime.combine(vac.aplicada_em, time.min)
-            form = None
+            form = appointment_form
         else:
             appointments = (
                 Appointment.query.filter_by(tutor_id=current_user.id)

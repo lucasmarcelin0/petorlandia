@@ -55,6 +55,11 @@
           </div>
 
           <div class="mt-3">
+            {{ form.kind.label(class="form-label fw-semibold") }}
+            {{ form.kind(class="form-select") }}
+          </div>
+
+          <div class="mt-3">
             {{ form.reason.label(class="form-label fw-semibold") }}
             {{ form.reason(class="form-control", rows=3, placeholder="Motivo da consulta...") }}
           </div>

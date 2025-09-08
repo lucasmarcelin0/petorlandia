@@ -408,6 +408,13 @@ class AppointmentForm(FlaskForm):
         validators=[DataRequired()],
     )
 
+    kind = SelectField(
+        'Tipo',
+        choices=[('consulta', 'Consulta'), ('retorno', 'Retorno'), ('exame', 'Exame')],
+        validators=[DataRequired()],
+        default='consulta',
+    )
+
     reason = TextAreaField(
         'Motivo',
         validators=[Optional(), Length(max=500)],
@@ -432,4 +439,6 @@ class AppointmentForm(FlaskForm):
         self.veterinario_id.choices = [
             (v.id, v.user.name if v.user else str(v.id)) for v in veterinarios
         ]
+        if not self.kind.data:
+            self.kind.data = 'consulta'
 
