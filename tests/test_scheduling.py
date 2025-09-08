@@ -9,7 +9,7 @@ from flask_login import login_required, current_user
 import flask_login.utils as login_utils
 
 from datetime import time
-from routes.app import app as flask_app, db
+from app import app as flask_app, db
 from models import HealthSubscription, VetSchedule, User, Veterinario
 from helpers import has_schedule_conflict
 

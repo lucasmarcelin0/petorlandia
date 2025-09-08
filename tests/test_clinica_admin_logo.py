@@ -11,7 +11,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')
 
 from admin import ClinicaAdmin  # noqa: E402
 from models import Clinica, db  # noqa: E402
-import routes.app as app_module  # noqa: E402
+import app as app_module  # noqa: E402
 
 
 @pytest.fixture

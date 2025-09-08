@@ -1,4 +1,4 @@
-from routes.app import app, db
+from app import app, db
 from models import Payment
 
 with app.app_context():

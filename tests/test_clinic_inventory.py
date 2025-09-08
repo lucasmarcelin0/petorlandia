@@ -1,6 +1,6 @@
 import pytest
-import routes.app as app_module
-from routes.app import app as flask_app, db
+import app as app_module
+from app import app as flask_app, db
 from models import User, Clinica, ClinicInventoryItem
 import flask_login.utils as login_utils
 

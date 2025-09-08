@@ -1,6 +1,6 @@
 import pytest
 import flask_login.utils as login_utils
-from routes.app import app as flask_app, db
+from app import app as flask_app, db
 from models import User, Clinica, Veterinario, Animal, VetSchedule, HealthPlan, HealthSubscription, Appointment
 from datetime import time, date
 

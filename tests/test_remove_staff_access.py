@@ -4,7 +4,7 @@ import sys
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 import pytest
-from routes.app import app as flask_app, db
+from app import app as flask_app, db
 from models import User, Clinica, ClinicStaff
 
 

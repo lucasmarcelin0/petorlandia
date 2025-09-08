@@ -4,8 +4,8 @@ import sys
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 import pytest
-import routes.app as app_module
-from routes.app import app as flask_app, mp_sdk, db
+import app as app_module
+from app import app as flask_app, mp_sdk, db
 from io import BytesIO
 from models import (
     User,

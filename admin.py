@@ -196,7 +196,7 @@ class UserAdminView(MyModelView):
         if form.profile_photo_upload.data:
             file = form.profile_photo_upload.data
             filename = f"{uuid.uuid4().hex}_{secure_filename(file.filename)}"
-            from routes.app import upload_to_s3
+            from app import upload_to_s3
             image_url = upload_to_s3(file, filename, folder="profile_photos")
             if image_url:
                 model.profile_photo = image_url
@@ -260,7 +260,7 @@ class ClinicaAdmin(MyModelView):
         file = form.logotipo_upload.data
         if file and getattr(file, "filename", ""):
             filename = f"{uuid.uuid4().hex}_{secure_filename(file.filename)}"
-            from routes.app import upload_to_s3
+            from app import upload_to_s3
             image_url = upload_to_s3(file, filename, folder="clinicas")
             if image_url:
                 model.logotipo = image_url
@@ -361,7 +361,7 @@ class AnimalAdminView(MyModelView):
         if form.image_upload.data:
             file = form.image_upload.data
             filename = f"{uuid.uuid4().hex}_{secure_filename(file.filename)}"
-            from routes.app import upload_to_s3
+            from app import upload_to_s3
             image_url = upload_to_s3(file, filename, folder="animals")
             if image_url:
                 model.image = image_url
@@ -435,7 +435,7 @@ class ProductAdmin(MyModelView):
         if form.image_upload.data:
             file = form.image_upload.data
             filename = f"{uuid.uuid4().hex}_{secure_filename(file.filename)}"
-            from routes.app import upload_to_s3
+            from app import upload_to_s3
             image_url = upload_to_s3(file, filename, folder="products")
             model.image_url = image_url
 

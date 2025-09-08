@@ -1,6 +1,6 @@
 import pytest
 from datetime import time
-from routes.app import app as flask_app, db
+from app import app as flask_app, db
 from models import User, Clinica, Veterinario, VetSchedule
 
 
