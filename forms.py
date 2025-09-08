@@ -285,6 +285,13 @@ class ClinicAddVeterinarianForm(FlaskForm):
     submit = SubmitField('Adicionar')
 
 
+class ClinicCreateVeterinarianForm(FlaskForm):
+    name = StringField('Nome', validators=[DataRequired()], render_kw={"class": "form-control"})
+    email = StringField('Email', validators=[DataRequired(), Email()], render_kw={"class": "form-control"})
+    crmv = StringField('CRMV', validators=[DataRequired()], render_kw={"class": "form-control"})
+    submit = SubmitField('Criar')
+
+
 class ClinicAddStaffForm(FlaskForm):
     """Simple form to add an existing user as clinic staff."""
     email = StringField('Email do usuário', validators=[DataRequired(), Email()])
