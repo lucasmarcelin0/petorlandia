@@ -96,6 +96,22 @@ def test_layout_shows_minha_clinica_for_veterinario(monkeypatch, app):
         assert b'Minha Cl\xc3\xadnica' in resp.data
 
 
+def test_layout_shows_minha_clinica_for_colaborador(monkeypatch, app):
+    client = app.test_client()
+    with app.app_context():
+        db.create_all()
+        clinica = Clinica(nome="Pet Clinic")
+        user = User(name="Colab", email="colab@example.com", password_hash="x", worker="colaborador", clinica=clinica)
+        db.session.add_all([clinica, user])
+        db.session.commit()
+
+        import flask_login.utils as login_utils
+        monkeypatch.setattr(login_utils, '_get_user', lambda: user)
+
+        resp = client.get('/')
+        assert b'Minha Cl\xc3\xadnica' in resp.data
+
+
 def test_minha_clinica_admin_defaults_to_own_clinic(monkeypatch, app):
     client = app.test_client()
     with app.app_context():
