@@ -600,6 +600,11 @@ class Clinica(db.Model):
     owner = db.relationship('User', backref=db.backref('clinicas', foreign_keys='Clinica.owner_id'), foreign_keys=[owner_id])
 
     veterinarios = db.relationship('Veterinario', backref='clinica', lazy=True)
+    veterinarios_associados = db.relationship(
+        'Veterinario',
+        secondary='veterinario_clinica',
+        back_populates='clinicas',
+    )
     eventos = db.relationship(
         'AgendaEvento',
         back_populates='clinica',
@@ -687,6 +692,13 @@ veterinario_especialidade = db.Table(
     db.Column('specialty_id', db.Integer, db.ForeignKey('specialty.id'), primary_key=True)
 )
 
+# Associação many-to-many entre veterinário e clínica
+veterinario_clinica = db.Table(
+    'veterinario_clinica',
+    db.Column('veterinario_id', db.Integer, db.ForeignKey('veterinario.id'), primary_key=True),
+    db.Column('clinica_id', db.Integer, db.ForeignKey('clinica.id'), primary_key=True),
+)
+
 
 class Specialty(db.Model):
     __tablename__ = 'specialty'
@@ -708,6 +720,11 @@ class Veterinario(db.Model):
 
     user = db.relationship('User', back_populates='veterinario', uselist=False)
     specialties = db.relationship('Specialty', secondary='veterinario_especialidade', backref='veterinarios')
+    clinicas = db.relationship(
+        'Clinica',
+        secondary='veterinario_clinica',
+        back_populates='veterinarios_associados',
+    )
 
     @property
     def specialty_list(self):
