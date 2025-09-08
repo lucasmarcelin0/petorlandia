@@ -7184,7 +7184,7 @@ def appointments():
                 ):
                     flash(f'Conflito de horário em {dia}.', 'danger')
                     return redirect(url_for('appointments'))
-
+            added = False
             for dia in schedule_form.dias_semana.data:
                 if has_schedule_conflict(
                     schedule_form.veterinario_id.data,
@@ -7207,6 +7207,8 @@ def appointments():
             if added:
                 db.session.commit()
                 flash('Horário salvo com sucesso.', 'success')
+            else:
+                flash('Nenhum novo horário foi salvo.', 'info')
             return redirect(url_for('appointments'))
         if appointment_form.submit.data and appointment_form.validate_on_submit():
             scheduled_at_local = datetime.combine(
