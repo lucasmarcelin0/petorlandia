@@ -1,6 +1,11 @@
-      <h3>Agendamentos</h3>
+      <h3 class="d-flex align-items-center gap-2">
+        <span class="icon-circle bg-success text-white"><i class="fa-solid fa-calendar"></i></span>
+        <span class="fw-semibold">Agendamentos</span>
+      </h3>
       <div class="mb-3 text-end">
-        <button class="btn btn-primary" disabled>Lista</button>
+        <button class="btn btn-primary" disabled>
+          <i class="fa-solid fa-list me-1"></i>Lista
+        </button>
       </div>
 
       <div id="list-container">
@@ -14,11 +19,17 @@
             <input type="date" id="end" name="end" class="form-control" value="{{ end }}">
           </div>
           <div class="col-auto align-self-end">
-            <button type="submit" class="btn btn-primary">Filtrar</button>
+            <button type="submit" class="btn btn-primary">
+              <i class="fa-solid fa-filter me-1"></i>Filtrar
+            </button>
           </div>
-          <div class="col-auto align-self-end">
-            <a href="{{ url_for('clinic_detail', clinica_id=clinica.id, start=today_str, end=today_str) }}" class="btn btn-outline-secondary">Hoje</a>
-            <a href="{{ url_for('clinic_detail', clinica_id=clinica.id, start=today_str, end=next7_str) }}" class="btn btn-outline-secondary">Próximos 7 dias</a>
+          <div class="col-auto align-self-end d-flex gap-2">
+            <a href="{{ url_for('clinic_detail', clinica_id=clinica.id, start=today_str, end=today_str) }}" class="btn btn-outline-secondary">
+              <i class="fa-solid fa-calendar-day me-1"></i>Hoje
+            </a>
+            <a href="{{ url_for('clinic_detail', clinica_id=clinica.id, start=today_str, end=next7_str) }}" class="btn btn-outline-secondary">
+              <i class="fa-solid fa-calendar-week me-1"></i>Próximos 7 dias
+            </a>
           </div>
         </form>
         <div id="appointments-table-container">

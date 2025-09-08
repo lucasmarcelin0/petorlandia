@@ -130,13 +130,17 @@
 <body>
     <div class="container py-4">
         <div class="page-header">
-            <h1 class="h3 mb-0 text-gray-800"><i class="fas fa-calendar-alt me-2"></i>Agendamentos</h1>
+            <h1 class="h3 mb-0 text-gray-800 d-flex align-items-center gap-2">
+                <span class="icon-circle bg-success text-white"><i class="fa-solid fa-calendar-alt"></i></span>
+                <span class="fw-semibold">Agendamentos</span>
+            </h1>
         </div>
 
         {% if appointments_grouped %}
             {% for day, items in appointments_grouped %}
-                <div class="day-header">
-                    <i class="fas fa-calendar-day me-2"></i>{{ day|format_datetime_brazil('%A, %d/%m/%Y') }}
+                <div class="day-header d-flex align-items-center gap-2">
+                    <span class="icon-circle bg-primary text-white"><i class="fa-solid fa-calendar-day"></i></span>
+                    {{ day|format_datetime_brazil('%A, %d/%m/%Y') }}
                 </div>
                 
                 {% for appt in items %}
@@ -144,19 +148,19 @@
                         <div class="card-body">
                             <div class="row align-items-center">
                                 <div class="col-md-2">
-                                    <div class="time-display">
-                                        <i class="far fa-clock me-1"></i>
+                                    <div class="time-display d-flex align-items-center gap-1">
+                                        <span class="icon-circle bg-secondary text-white"><i class="fa-regular fa-clock"></i></span>
                                         {{ appt.scheduled_at|format_datetime_brazil('%H:%M') }}
                                     </div>
                                 </div>
                                 <div class="col-md-3">
-                                    <div class="animal-name">
-                                        <i class="fas fa-paw me-2"></i>{{ appt.animal.name }}
+                                    <div class="animal-name d-flex align-items-center gap-2">
+                                        <span class="icon-circle bg-danger text-white"><i class="fa-solid fa-paw"></i></span>{{ appt.animal.name }}
                                     </div>
                                 </div>
                                 <div class="col-md-2">
-                                    <div class="vet-name">
-                                        <i class="fas fa-user-md me-2"></i>{{ appt.veterinario.user.name }}
+                                    <div class="vet-name d-flex align-items-center gap-2">
+                                        <span class="icon-circle bg-info text-white"><i class="fa-solid fa-user-doctor"></i></span>{{ appt.veterinario.user.name }}
                                     </div>
                                 </div>
                                 <div class="col-md-2">
@@ -169,25 +173,25 @@
                                 <div class="col-md-3">
                                     <div class="actions-container">
                                         <a href="{{ url_for('ficha_animal', animal_id=appt.animal_id) }}" class="btn btn-icon btn-primary" title="Ficha do Animal">
-                                            <i class="fas fa-file-medical"></i>
+                                            <i class="fa-solid fa-file-medical"></i>
                                         </a>
                                         <a href="{{ url_for('ficha_tutor', tutor_id=appt.tutor_id) }}" class="btn btn-icon btn-secondary" title="Ficha do Tutor">
-                                            <i class="fas fa-user"></i>
+                                            <i class="fa-solid fa-user"></i>
                                         </a>
                                         {% if current_user.worker in ['veterinario', 'colaborador'] %}
                                         <a href="{{ url_for('consulta_direct', animal_id=appt.animal_id) }}" class="btn btn-icon btn-success" title="Iniciar Consulta">
-                                            <i class="fas fa-stethoscope"></i>
+                                            <i class="fa-solid fa-stethoscope"></i>
                                         </a>
                                         {% endif %}
                                         <a href="{{ url_for('edit_appointment', appointment_id=appt.id) }}" class="btn btn-icon btn-info" title="Propor novo horário">
-                                            <i class="fas fa-sync-alt"></i>
+                                            <i class="fa-solid fa-arrows-rotate"></i>
                                         </a>
                                         
                                         <form method="POST" action="{{ url_for('update_appointment_status', appointment_id=appt.id) }}" class="form-confirm">
                                             {% if csrf_token is defined %}{{ csrf_token() }}{% endif %}
                                             <input type="hidden" name="status" value="completed">
                                             <button class="btn btn-icon btn-success" title="Marcar como realizada">
-                                                <i class="fas fa-check"></i>
+                                                <i class="fa-solid fa-check"></i>
                                             </button>
                                         </form>
                                         
@@ -195,7 +199,7 @@
                                             {% if csrf_token is defined %}{{ csrf_token() }}{% endif %}
                                             <input type="hidden" name="status" value="canceled">
                                             <button class="btn btn-icon btn-warning" title="Cancelar">
-                                                <i class="fas fa-times"></i>
+                                                <i class="fa-solid fa-xmark"></i>
                                             </button>
                                         </form>
                                         
@@ -203,14 +207,14 @@
                                             {% if csrf_token is defined %}{{ csrf_token() }}{% endif %}
                                             <input type="hidden" name="status" value="scheduled">
                                             <button class="btn btn-icon btn-secondary" title="Marcar como a fazer">
-                                                <i class="fas fa-clock"></i>
+                                                <i class="fa-solid fa-clock"></i>
                                             </button>
                                         </form>
                                         
                                         <form method="POST" action="{{ url_for('delete_appointment', appointment_id=appt.id) }}" class="form-confirm" data-confirm="Excluir este agendamento?">
                                             {% if csrf_token is defined %}{{ csrf_token() }}{% endif %}
                                             <button class="btn btn-icon btn-danger" title="Excluir">
-                                                <i class="fas fa-trash"></i>
+                                                <i class="fa-solid fa-trash"></i>
                                             </button>
                                         </form>
                                     </div>
@@ -222,7 +226,7 @@
             {% endfor %}
         {% else %}
             <div class="empty-state">
-                <i class="far fa-calendar-times"></i>
+                <span class="icon-circle bg-secondary text-white"><i class="fa-regular fa-calendar-xmark"></i></span>
                 <h3>Nenhum agendamento encontrado</h3>
                 <p>Não há agendamentos para exibir no momento.</p>
             </div>
