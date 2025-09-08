@@ -657,6 +657,18 @@ class ClinicStaff(db.Model):
     clinic = db.relationship('Clinica', backref='staff_members')
     user = db.relationship('User', backref='clinic_roles')
 
+# Convites para que veterinários se associem a uma clínica
+class VetClinicInvite(db.Model):
+    __tablename__ = 'vet_clinic_invite'
+    id = db.Column(db.Integer, primary_key=True)
+    clinica_id = db.Column(db.Integer, db.ForeignKey('clinica.id'), nullable=False)
+    veterinario_id = db.Column(db.Integer, db.ForeignKey('veterinario.id'), nullable=False)
+    status = db.Column(db.String(20), nullable=False, default='pending')
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    clinica = db.relationship('Clinica', backref='vet_invites')
+    veterinario = db.relationship('Veterinario', backref='clinic_invites')
+
 # Itens de estoque específicos por clínica
 class ClinicInventoryItem(db.Model):
     __tablename__ = 'clinic_inventory_item'

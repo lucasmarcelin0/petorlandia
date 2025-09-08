@@ -246,7 +246,8 @@ from forms import (
     ResetPasswordRequestForm, ResetPasswordForm, OrderItemForm,
     DeliveryRequestForm, AddToCartForm, SubscribePlanForm,
     ProductUpdateForm, ProductPhotoForm, ChangePasswordForm,
-    DeleteAccountForm, ClinicForm, ClinicHoursForm, ClinicAddVeterinarianForm,
+    DeleteAccountForm, ClinicForm, ClinicHoursForm,
+    ClinicInviteVeterinarianForm, ClinicInviteResponseForm,
     ClinicAddStaffForm, ClinicStaffPermissionForm, VetScheduleForm, VetSpecialtyForm, AppointmentForm, AppointmentDeleteForm,
     InventoryItemForm, OrcamentoForm
 )
@@ -405,6 +406,23 @@ def inject_clinic_pending_appointment_count():
     else:
         pending = 0
     return dict(clinic_pending_appointment_count=pending)
+
+
+@app.context_processor
+def inject_clinic_invite_count():
+    if (
+        current_user.is_authenticated
+        and getattr(current_user, 'worker', None) == 'veterinario'
+        and getattr(current_user, 'veterinario', None)
+    ):
+        from models import VetClinicInvite
+
+        pending = VetClinicInvite.query.filter_by(
+            veterinario_id=current_user.veterinario.id, status='pending'
+        ).count()
+    else:
+        pending = 0
+    return dict(pending_clinic_invites=pending)
 
 
 s = URLSafeTimedSerializer(app.config['SECRET_KEY'])
@@ -2444,12 +2462,8 @@ def clinic_detail(clinica_id):
         )
     hours_form = ClinicHoursForm()
     clinic_form = ClinicForm(obj=clinica)
-    vets_form = ClinicAddVeterinarianForm()
+    invite_form = ClinicInviteVeterinarianForm()
     staff_form = ClinicAddStaffForm()
-    vets_form.veterinario_id.choices = [
-        (v.id, v.user.name)
-        for v in Veterinario.query.filter_by(clinica_id=None).all()
-    ]
     if request.method == 'GET':
         hours_form.clinica_id.data = clinica.id
     pode_editar = current_user.is_authenticated and (
@@ -2499,22 +2513,33 @@ def clinic_detail(clinica_id):
         db.session.commit()
         flash('Clínica atualizada com sucesso.', 'success')
         return redirect(url_for('clinic_detail', clinica_id=clinica.id))
-    if vets_form.submit.data and vets_form.validate_on_submit():
+    if invite_form.submit.data and invite_form.validate_on_submit():
         if not pode_editar:
             abort(403)
-        vet = Veterinario.query.get_or_404(vets_form.veterinario_id.data)
-        vet.clinica_id = clinica.id
-        if vet.user:
-            # Ensure the user is linked as clinic staff so permissions can be managed
-            vet.user.clinica_id = clinica.id
-            staff = ClinicStaff.query.filter_by(
-                clinic_id=clinica.id, user_id=vet.user.id
+        user = User.query.filter_by(email=invite_form.email.data.lower()).first()
+        if not user or getattr(user, 'worker', '') != 'veterinario' or not getattr(user, 'veterinario', None):
+            flash('Veterinário não encontrado.', 'danger')
+        else:
+            from models import VetClinicInvite
+
+            existing = VetClinicInvite.query.filter_by(
+                clinica_id=clinica.id,
+                veterinario_id=user.veterinario.id,
+                status='pending',
             ).first()
-            if not staff:
-                db.session.add(ClinicStaff(clinic_id=clinica.id, user_id=vet.user.id))
-        db.session.commit()
-        flash('Veterinário adicionado com sucesso.', 'success')
-        return redirect(url_for('clinic_detail', clinica_id=clinica.id))
+            if user.veterinario.clinica_id == clinica.id:
+                flash('Veterinário já associado à clínica.', 'warning')
+            elif existing:
+                flash('Convite já enviado.', 'warning')
+            else:
+                invite = VetClinicInvite(
+                    clinica_id=clinica.id,
+                    veterinario_id=user.veterinario.id,
+                )
+                db.session.add(invite)
+                db.session.commit()
+                flash('Convite enviado.', 'success')
+        return redirect(url_for('clinic_detail', clinica_id=clinica.id) + '#veterinarios')
     if hours_form.submit.data and hours_form.validate_on_submit():
         if not pode_editar:
             abort(403)
@@ -2675,7 +2700,7 @@ def clinic_detail(clinica_id):
         horarios=horarios,
         form=hours_form,
         clinic_form=clinic_form,
-        vets_form=vets_form,
+        invite_form=invite_form,
         veterinarios=veterinarios,
         vet_schedule_forms=vet_schedule_forms,
         staff_members=staff_members,
@@ -2739,6 +2764,57 @@ def create_clinic_veterinario(clinica_id):
 
     flash('Veterinário cadastrado com sucesso.', 'success')
     return redirect(url_for('clinic_detail', clinica_id=clinica.id) + '#veterinarios')
+
+
+@app.route('/convites/clinica')
+@login_required
+def clinic_invites():
+    """List pending clinic invitations for the logged veterinarian."""
+    if (
+        getattr(current_user, 'worker', None) != 'veterinario'
+        or not getattr(current_user, 'veterinario', None)
+    ):
+        abort(403)
+    from models import VetClinicInvite
+
+    invites = VetClinicInvite.query.filter_by(
+        veterinario_id=current_user.veterinario.id,
+        status='pending',
+    ).all()
+    form = ClinicInviteResponseForm()
+    return render_template('clinica/clinic_invites.html', invites=invites, form=form)
+
+
+@app.route('/convites/<int:invite_id>/<string:action>', methods=['POST'])
+@login_required
+def respond_clinic_invite(invite_id, action):
+    """Accept or decline a clinic invitation."""
+    from models import VetClinicInvite
+
+    invite = VetClinicInvite.query.get_or_404(invite_id)
+    if (
+        getattr(current_user, 'worker', None) != 'veterinario'
+        or not getattr(current_user, 'veterinario', None)
+        or invite.veterinario_id != current_user.veterinario.id
+    ):
+        abort(403)
+    if action == 'accept':
+        invite.status = 'accepted'
+        vet = invite.veterinario
+        vet.clinica_id = invite.clinica_id
+        if vet.user:
+            vet.user.clinica_id = invite.clinica_id
+            staff = ClinicStaff.query.filter_by(
+                clinic_id=invite.clinica_id, user_id=vet.user.id
+            ).first()
+            if not staff:
+                db.session.add(ClinicStaff(clinic_id=invite.clinica_id, user_id=vet.user.id))
+        flash('Convite aceito.', 'success')
+    else:
+        invite.status = 'declined'
+        flash('Convite recusado.', 'info')
+    db.session.commit()
+    return redirect(url_for('clinic_invites'))
 
 
 @app.route('/clinica/<int:clinica_id>/estoque', methods=['GET', 'POST'])
