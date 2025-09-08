@@ -74,8 +74,7 @@
           <div id="schedule-overview" class="row row-cols-1 row-cols-md-2 row-cols-lg-3 g-3 small"></div>
           <div class="mt-2 small">
             <span class="badge bg-success me-1">&nbsp;</span> Disponível
-            <span class="badge bg-danger ms-2 me-1">&nbsp;</span> Ocupado
-            <span class="badge bg-secondary ms-2 me-1">&nbsp;</span> Não trabalha
+            <span class="badge bg-danger ms-2 me-1">&nbsp;</span> Indisponível
           </div>
         </div>
         {% endif %}
@@ -232,7 +231,8 @@ document.addEventListener('DOMContentLoaded', () => {
       const col = document.createElement('div');
       col.className = 'col';
       const card = document.createElement('div');
-      card.className = 'card h-100';
+      const cardClass = day.available.length ? 'border-success' : 'border-danger';
+      card.className = `card h-100 ${cardClass}`;
       const body = document.createElement('div');
       body.className = 'card-body';
       const title = document.createElement('h6');
@@ -242,7 +242,7 @@ document.addEventListener('DOMContentLoaded', () => {
       const slots = document.createElement('div');
       day.available.forEach(t => slots.appendChild(badge(t, 'bg-success')));
       day.booked.forEach(t => slots.appendChild(badge(t, 'bg-danger')));
-      day.not_working.forEach(t => slots.appendChild(badge(t, 'bg-secondary')));
+      day.not_working.forEach(t => slots.appendChild(badge(t, 'bg-danger')));
       if (!slots.children.length) {
         const span = document.createElement('span');
         span.className = 'text-muted small';
