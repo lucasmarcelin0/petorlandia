@@ -2542,7 +2542,7 @@ def clinic_detail(clinica_id):
     veterinarios = Veterinario.query.filter_by(clinica_id=clinica_id).all()
     staff_members = ClinicStaff.query.filter(
         ClinicStaff.clinic_id == clinica.id,
-        ClinicStaff.user.has(or_(User.worker != 'veterinario', User.worker.is_(None))),
+        ClinicStaff.user.has(User.veterinario == None),
     ).all()
 
     staff_permission_forms = {}

@@ -128,3 +128,28 @@ def test_veterinarian_added_as_staff_appears(monkeypatch, app):
         assert vet.clinica_id == clinic.id
         resp = client.get(f"/clinica/{clinic.id}")
         assert b"Vet" in resp.data
+
+
+def test_vet_worker_without_record_shows_as_staff(monkeypatch, app):
+    client = app.test_client()
+    with app.app_context():
+        db.drop_all()
+        db.create_all()
+        clinic = Clinica(nome="Clinic")
+        owner = User(name="Owner", email="o@example.com", password_hash="x")
+        temp_vet = User(
+            name="TempVet", email="t@example.com", password_hash="y", worker="veterinario"
+        )
+        db.session.add_all([clinic, owner, temp_vet])
+        db.session.commit()
+        clinic.owner_id = owner.id
+        db.session.add(clinic)
+        db.session.commit()
+        login(monkeypatch, owner)
+        client.post(
+            f"/clinica/{clinic.id}/funcionarios",
+            data={"email": "t@example.com"},
+            follow_redirects=True,
+        )
+        resp = client.get(f"/clinica/{clinic.id}")
+        assert b"TempVet" in resp.data
