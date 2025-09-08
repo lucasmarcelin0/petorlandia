@@ -25,6 +25,7 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 
     <link href="{{ url_for('static', filename='images.css') }}" rel="stylesheet">
+    <link href="{{ url_for('static', filename='styles.css') }}" rel="stylesheet">
 
     <style>
         :root {
@@ -891,6 +892,7 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/inputmask/5.0.8/inputmask.min.js"></script>
   <script src="{{ url_for('static', filename='masks.js') }}"></script>
   <script src="{{ url_for('static', filename='avatar_helper.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/mobile.js') }}"></script>
   <!-- Page specific scripts -->
   {% block scripts %}{% endblock %}
 </body>

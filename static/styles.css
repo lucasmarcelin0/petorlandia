@@ -1,0 +1,14 @@
+/* Estilos adicionais para responsividade */
+@media (max-width: 576px) {
+  .form-control, .form-select {
+    font-size: 1rem;
+  }
+  .btn {
+    font-size: 1rem;
+  }
+}
+
+/* Garante que tabelas sempre possam rolar em telas pequenas */
+.table-responsive {
+  overflow-x: auto;
+}
