@@ -18,7 +18,7 @@
             <td>{{ appt.scheduled_at|format_datetime_brazil('%H:%M') }}</td>
             <td>{{ appt.animal.name }}</td>
             <td>{{ appt.specialist.user.name }}</td>
-            <td>{{ {'pending':'Pendente','confirmed':'Confirmado'}.get(appt.status, appt.status) }}</td>
+            <td>{{ appt.status_display }}</td>
           </tr>
         {% endfor %}
       {% endfor %}

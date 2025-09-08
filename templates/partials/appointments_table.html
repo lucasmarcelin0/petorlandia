@@ -55,6 +55,7 @@
         .appointment-card.scheduled { border-left-color: var(--primary-color); }
         .appointment-card.completed { border-left-color: var(--success-color); }
         .appointment-card.canceled { border-left-color: var(--danger-color); }
+        .appointment-card.accepted { border-left-color: var(--info-color); }
         
         .status-badge {
             padding: 6px 12px;
@@ -66,6 +67,7 @@
         .status-scheduled { background-color: #e8eeff; color: var(--primary-color); }
         .status-completed { background-color: #e6faf3; color: var(--success-color); }
         .status-canceled { background-color: #fce8e6; color: var(--danger-color); }
+        .status-accepted { background-color: #e6f9fa; color: var(--info-color); }
         
         .time-display {
             font-size: 1.1rem;
@@ -158,6 +160,7 @@
                                         {% if appt.status == 'scheduled' %}A fazer{% endif %}
                                         {% if appt.status == 'completed' %}Realizada{% endif %}
                                         {% if appt.status == 'canceled' %}Cancelada{% endif %}
+                                        {% if appt.status == 'accepted' %}Aceita{% endif %}
                                     </span>
                                 </div>
                                 <div class="col-md-3">
@@ -245,6 +248,8 @@
                         card.classList.add('completed');
                     } else if (statusBadge.classList.contains('status-canceled')) {
                         card.classList.add('canceled');
+                    } else if (statusBadge.classList.contains('status-accepted')) {
+                        card.classList.add('accepted');
                     }
                 }
             });
