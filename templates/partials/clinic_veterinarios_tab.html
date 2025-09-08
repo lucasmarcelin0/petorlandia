@@ -89,6 +89,11 @@
         </div>
         <div class="table-responsive">
           <table id="staff-list" class="table table-striped">
+            <thead>
+              <tr>
+                <th>Veterinário</th>
+              </tr>
+            </thead>
             <tbody>
               {% for v in veterinarios %}
               <tr data-name="{{ v.user.name|lower }}" data-role="{{ v.user.worker or '' }}">
