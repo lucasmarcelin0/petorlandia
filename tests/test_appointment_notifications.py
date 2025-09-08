@@ -6,7 +6,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')
 import pytest
 import flask_login.utils as login_utils
 from datetime import datetime, timedelta
-from app import app as flask_app, db
+from routes.app import app as flask_app, db
 from models import User, Clinica, Animal, Veterinario, HealthPlan, HealthSubscription, Appointment
 
 

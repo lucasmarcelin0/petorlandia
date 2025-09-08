@@ -7,7 +7,7 @@ import pytest
 import flask_login.utils as login_utils
 from datetime import time, datetime
 from flask import render_template
-from app import app as flask_app, db
+from routes.app import app as flask_app, db
 from models import (
     User,
     Animal,

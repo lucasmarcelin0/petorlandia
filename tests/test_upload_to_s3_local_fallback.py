@@ -5,7 +5,7 @@ from PIL import Image
 from werkzeug.datastructures import FileStorage
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
-import app  # noqa: E402
+import routes.app as app  # noqa: E402
 
 
 def test_upload_to_s3_falls_back_to_local(tmp_path, monkeypatch):

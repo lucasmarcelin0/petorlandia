@@ -1,4 +1,4 @@
-from app import app, db
+from routes.app import app, db
 from models import Species, Breed
 
 novas_racas = [
