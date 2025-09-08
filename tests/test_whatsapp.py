@@ -5,8 +5,8 @@ import sys
 os.environ["SQLALCHEMY_DATABASE_URI"] = "sqlite:///:memory:"
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
-import app
-from app import enviar_mensagem_whatsapp
+import routes.app as app
+from routes.app import enviar_mensagem_whatsapp
 
 from unittest.mock import Mock
 

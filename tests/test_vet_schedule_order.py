@@ -2,7 +2,7 @@ import pytest
 import flask_login.utils as login_utils
 from datetime import time
 
-from app import app as flask_app, db
+from routes.app import app as flask_app, db
 from models import User, Veterinario, VetSchedule, Clinica
 
 
