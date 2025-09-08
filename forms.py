@@ -275,14 +275,13 @@ class ClinicHoursForm(FlaskForm):
         ]
 
 
-class ClinicAddVeterinarianForm(FlaskForm):
-    veterinario_id = SelectField(
-        'Veterinário',
-        coerce=int,
-        validators=[DataRequired()],
-        render_kw={"class": "form-select"},
-    )
-    submit = SubmitField('Adicionar')
+class ClinicInviteVeterinarianForm(FlaskForm):
+    email = StringField('Email do Veterinário', validators=[DataRequired(), Email()])
+    submit = SubmitField('Convidar')
+
+
+class ClinicInviteResponseForm(FlaskForm):
+    submit = SubmitField('Enviar')
 
 
 class ClinicAddStaffForm(FlaskForm):

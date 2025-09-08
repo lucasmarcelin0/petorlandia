@@ -1,0 +1,27 @@
+{% extends 'layout.html' %}
+{% block content %}
+<div class="container py-4">
+  <h2>Convites de Clínicas</h2>
+  {% if invites %}
+  <ul class="list-group">
+    {% for invite in invites %}
+    <li class="list-group-item d-flex justify-content-between align-items-center">
+      {{ invite.clinica.nome }}
+      <div>
+        <form method="post" action="{{ url_for('respond_clinic_invite', invite_id=invite.id, action='accept') }}" class="d-inline">
+          {{ form.csrf_token }}
+          <button type="submit" class="btn btn-sm btn-success">Aceitar</button>
+        </form>
+        <form method="post" action="{{ url_for('respond_clinic_invite', invite_id=invite.id, action='decline') }}" class="d-inline">
+          {{ form.csrf_token }}
+          <button type="submit" class="btn btn-sm btn-danger">Recusar</button>
+        </form>
+      </div>
+    </li>
+    {% endfor %}
+  </ul>
+  {% else %}
+  <p>Não há convites pendentes.</p>
+  {% endif %}
+</div>
+{% endblock %}
