@@ -7729,6 +7729,28 @@ def delete_appointment(appointment_id):
     return redirect(request.referrer or url_for('manage_appointments'))
 
 
+@app.route('/api/my_pets')
+@login_required
+def api_my_pets():
+    """Return the authenticated tutor's pets."""
+    pets = (
+        Animal.query
+        .filter_by(user_id=current_user.id)
+        .filter(Animal.removido_em.is_(None))
+        .order_by(Animal.name)
+        .all()
+    )
+    return jsonify([
+        {
+            "id": p.id,
+            "name": p.name,
+            "species": p.species.name if getattr(p, "species", None) else "",
+            "breed": p.breed.name if getattr(p, "breed", None) else "",
+        }
+        for p in pets
+    ])
+
+
 @app.route('/api/my_appointments')
 @login_required
 def api_my_appointments():

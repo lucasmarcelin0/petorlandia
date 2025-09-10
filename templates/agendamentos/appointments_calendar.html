@@ -158,7 +158,7 @@
   <script>
     // -- Dados e armazenamento local (localStorage)
     const STORAGE_KEYS = { PETS: 'vet_pets_v1', EVENTS: 'vet_events_v1' }
-    let pets = JSON.parse(localStorage.getItem(STORAGE_KEYS.PETS) || '[]')
+    let pets = []
     let events = JSON.parse(localStorage.getItem(STORAGE_KEYS.EVENTS) || '[]')
 
     // -- Estado do calendário
@@ -191,9 +191,20 @@
     }
 
     // -- Pets
-    function renderPets(){
+    async function renderPets(){
       petListEl.innerHTML = ''
       eventPetSelect.innerHTML = ''
+      try {
+        const resp = await fetch('/api/my_pets')
+        if (resp.ok) {
+          pets = await resp.json()
+        } else {
+          pets = []
+        }
+      } catch (err) {
+        console.error('Erro ao carregar pets', err)
+        pets = []
+      }
       if(pets.length===0){
         petListEl.innerHTML = '<div class="small">Nenhum pet cadastrado. Clique em + Novo Pet</div>'
       }
