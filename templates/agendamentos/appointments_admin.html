@@ -2,6 +2,13 @@
 
 {% block main %}
 <div class="container mt-4">
+  {% if current_user.role == 'admin' %}
+  <div class="mb-3">
+    <a href="{{ url_for('appointments', view_as='colaborador') }}" class="btn btn-outline-primary btn-sm">Ver como Colaborador</a>
+    <a href="{{ url_for('appointments', view_as='veterinario') }}" class="btn btn-outline-primary btn-sm">Ver como Veterinário</a>
+    <a href="{{ url_for('appointments', view_as='tutor') }}" class="btn btn-outline-primary btn-sm">Ver como Tutor</a>
+  </div>
+  {% endif %}
   <h2>Agendamentos</h2>
   <ul class="list-group">
     {% for appt in appointments %}
