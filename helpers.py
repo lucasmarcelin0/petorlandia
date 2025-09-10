@@ -102,21 +102,21 @@ def is_slot_available(veterinario_id, scheduled_at):
     schedules = VetSchedule.query.filter_by(
         veterinario_id=veterinario_id, dia_semana=dia
     ).all()
-    if not schedules:
-        return False
 
-    time = scheduled_at.time()
-    available = any(
-        s.hora_inicio <= time < s.hora_fim
-        and not (
-            s.intervalo_inicio
-            and s.intervalo_fim
-            and s.intervalo_inicio <= time < s.intervalo_fim
+    # Se não houver horários cadastrados para o dia, assume-se disponibilidade.
+    if schedules:
+        time = scheduled_at.time()
+        available = any(
+            s.hora_inicio <= time < s.hora_fim
+            and not (
+                s.intervalo_inicio
+                and s.intervalo_fim
+                and s.intervalo_inicio <= time < s.intervalo_fim
+            )
+            for s in schedules
         )
-        for s in schedules
-    )
-    if not available:
-        return False
+        if not available:
+            return False
 
     conflict = (
         Appointment.query

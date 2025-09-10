@@ -7513,9 +7513,16 @@ def appointments():
             exam_appointments=exam_appointments,
             exam_appointments_grouped=exam_appointments_grouped,
             vaccine_appointments=vaccine_appointments,
-            vaccine_appointments_grouped=vaccine_appointments_grouped,
-            form=form,
-        )
+        vaccine_appointments_grouped=vaccine_appointments_grouped,
+        form=form,
+    )
+
+
+@app.route('/appointments/calendar')
+@login_required
+def appointments_calendar():
+    """Página experimental de calendário para tutores."""
+    return render_template('agendamentos/appointments_calendar.html')
 
 
 @app.route('/appointments/<int:veterinario_id>/schedule/<int:horario_id>/edit', methods=['POST'])
