@@ -7158,11 +7158,22 @@ def appointment_confirmation(appointment_id):
 @app.route('/appointments', methods=['GET', 'POST'])
 @login_required
 def appointments():
-    from models import ExamAppointment
-    if request.method == 'POST' and current_user.worker not in ['veterinario', 'colaborador', 'admin']:
+    from models import ExamAppointment, Veterinario, Clinica, User
+
+    view_as = request.args.get('view_as')
+    worker = current_user.worker
+    if current_user.role == 'admin' and view_as in ['veterinario', 'colaborador', 'tutor']:
+        worker = view_as
+
+    if request.method == 'POST' and worker not in ['veterinario', 'colaborador', 'admin']:
         abort(403)
-    if current_user.worker == 'veterinario':
-        veterinario = current_user.veterinario
+    if worker == 'veterinario':
+        if current_user.role == 'admin':
+            veterinario = Veterinario.query.first()
+            if not veterinario:
+                abort(404)
+        else:
+            veterinario = current_user.veterinario
         schedule_form = VetScheduleForm(prefix='schedule')
         appointment_form = AppointmentForm(is_veterinario=True, prefix='appointment')
         schedule_form.veterinario_id.choices = [
@@ -7368,11 +7379,15 @@ def appointments():
             timedelta=timedelta,
         )
     else:
-        if current_user.worker in ['colaborador', 'admin']:
+        if worker in ['colaborador', 'admin']:
             appointment_form = AppointmentForm(prefix='appointment')
-            animals = Animal.query.filter_by(clinica_id=current_user.clinica_id).all()
+            clinica_id = current_user.clinica_id
+            if current_user.role == 'admin' and worker == 'colaborador' and not clinica_id:
+                clinica = Clinica.query.first()
+                clinica_id = clinica.id if clinica else None
+            animals = Animal.query.filter_by(clinica_id=clinica_id).all()
             appointment_form.animal_id.choices = [(a.id, a.name) for a in animals]
-            vets = Veterinario.query.filter_by(clinica_id=current_user.clinica_id).all()
+            vets = Veterinario.query.filter_by(clinica_id=clinica_id).all()
             appointment_form.veterinario_id.choices = [(v.id, v.user.name) for v in vets]
             if appointment_form.submit.data and appointment_form.validate_on_submit():
                 scheduled_at_local = datetime.combine(
@@ -7424,36 +7439,36 @@ def appointments():
                                 'danger',
                             )
                             return redirect(url_for('appointments'))
-                        appt = Appointment(
-                            animal_id=animal.id,
-                            tutor_id=tutor_id,
-                            veterinario_id=appointment_form.veterinario_id.data,
-                            scheduled_at=scheduled_at,
-                            clinica_id=current_user.clinica_id,
-                            notes=appointment_form.reason.data,
-                            kind=appointment_form.kind.data,
-                        )
-                        db.session.add(appt)
-                        db.session.commit()
-                        flash('Agendamento criado com sucesso.', 'success')
+                            appt = Appointment(
+                                animal_id=animal.id,
+                                tutor_id=tutor_id,
+                                veterinario_id=appointment_form.veterinario_id.data,
+                                scheduled_at=scheduled_at,
+                                clinica_id=clinica_id,
+                                notes=appointment_form.reason.data,
+                                kind=appointment_form.kind.data,
+                            )
+                            db.session.add(appt)
+                            db.session.commit()
+                            flash('Agendamento criado com sucesso.', 'success')
                 return redirect(url_for('appointments'))
             appointments = (
                 Appointment.query
-                .filter_by(clinica_id=current_user.clinica_id)
+                .filter_by(clinica_id=clinica_id)
                 .order_by(Appointment.scheduled_at)
                 .all()
             )
             exam_appointments = (
                 ExamAppointment.query
                 .join(ExamAppointment.animal)
-                .filter(Animal.clinica_id == current_user.clinica_id)
+                .filter(Animal.clinica_id == clinica_id)
                 .order_by(ExamAppointment.scheduled_at)
                 .all()
             )
             vaccine_appointments = (
                 Vacina.query
                 .join(Vacina.animal)
-                .filter(Animal.clinica_id == current_user.clinica_id)
+                .filter(Animal.clinica_id == clinica_id)
                 .filter(Vacina.aplicada_em >= date.today())
                 .order_by(Vacina.aplicada_em)
                 .all()
@@ -7462,22 +7477,25 @@ def appointments():
                 vac.scheduled_at = datetime.combine(vac.aplicada_em, time.min)
             form = appointment_form
         else:
+            tutor_user = current_user
+            if current_user.role == 'admin' and worker == 'tutor':
+                tutor_user = User.query.filter(User.worker.is_(None)).first() or current_user
             appointments = (
-                Appointment.query.filter_by(tutor_id=current_user.id)
+                Appointment.query.filter_by(tutor_id=tutor_user.id)
                 .order_by(Appointment.scheduled_at)
                 .all()
             )
             exam_appointments = (
                 ExamAppointment.query
                 .join(ExamAppointment.animal)
-                .filter(Animal.user_id == current_user.id)
+                .filter(Animal.user_id == tutor_user.id)
                 .order_by(ExamAppointment.scheduled_at)
                 .all()
             )
             vaccine_appointments = (
                 Vacina.query
                 .join(Vacina.animal)
-                .filter(Animal.user_id == current_user.id)
+                .filter(Animal.user_id == tutor_user.id)
                 .filter(Vacina.aplicada_em >= date.today())
                 .order_by(Vacina.aplicada_em)
                 .all()
