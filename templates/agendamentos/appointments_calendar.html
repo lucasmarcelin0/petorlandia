@@ -1,0 +1,443 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Calendário Veterinário</title>
+  <style>
+    :root{--bg:#f6f7fb;--card:#ffffff;--accent:#2b7cff;--muted:#6b7280;--success:#16a34a}
+    *{box-sizing:border-box}
+    body{font-family:Inter, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial; margin:0; background:var(--bg); color:#0f172a}
+    header{background:linear-gradient(90deg,#0ea5e9 0%, #6366f1 100%); color:white; padding:18px 24px; display:flex;align-items:center;gap:16px}
+    header h1{font-size:1.1rem;margin:0}
+    .container{max-width:1100px;margin:22px auto;padding:16px}
+    .grid{display:grid;grid-template-columns:320px 1fr;gap:16px}
+
+    /* Sidebar */
+    .card{background:var(--card);border-radius:12px;padding:16px;box-shadow:0 6px 18px rgba(10,10,20,0.06)}
+    .sidebar h2{font-size:.95rem;margin:0 0 8px}
+    .pet-list{display:flex;flex-direction:column;gap:8px;max-height:320px;overflow:auto;padding-right:4px}
+    .pet{display:flex;gap:10px;align-items:center;padding:8px;border-radius:8px;border:1px solid #eef2ff}
+    .pet .avatar{width:44px;height:44px;border-radius:8px;background:#eef2ff;display:flex;align-items:center;justify-content:center;font-weight:700}
+    .small{font-size:.85rem;color:var(--muted)}
+    button{cursor:pointer}
+    .btn{background:var(--accent);color:white;padding:8px 12px;border-radius:8px;border:0}
+    .btn.ghost{background:transparent;color:var(--accent);border:1px solid rgba(43,124,255,0.12)}
+
+    /* Calendar area */
+    .topbar{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;gap:12px}
+    .month-nav{display:flex;gap:8px;align-items:center}
+    .month-label{font-weight:700}
+    .weeks{display:grid;grid-template-columns:repeat(7,1fr);gap:6px}
+    .weekday{background:transparent;text-align:center;padding:6px 0;font-weight:600;color:var(--muted)}
+    .days{display:grid;grid-template-columns:repeat(7,1fr);gap:6px}
+    .day{min-height:88px;background:linear-gradient(180deg,#fff,#fbfdff);border-radius:10px;padding:8px;border:1px solid #eef2ff}
+    .day.other{opacity:.45}
+    .day .date{font-weight:700}
+    .events{margin-top:6px;display:flex;flex-direction:column;gap:6px}
+    .event{padding:6px;border-radius:8px;font-size:.85rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    .event.vacina{background:#fef3c7;border:1px solid #fde68a}
+    .event.consulta{background:#e0f2fe;border:1px solid #bae6fd}
+    .event.reminder{background:#ecfdf5;border:1px solid #bbf7d0}
+
+    /* Modal */
+    .modal-backdrop{position:fixed;inset:0;background:rgba(2,6,23,0.45);display:none;align-items:center;justify-content:center;padding:18px}
+    .modal{background:var(--card);width:100%;max-width:520px;border-radius:12px;padding:18px}
+    .form-row{display:flex;gap:8px;margin-bottom:10px}
+    .form-row > *{flex:1}
+    input,select,textarea{width:100%;padding:10px;border-radius:8px;border:1px solid #e6eef8}
+
+    footer{margin-top:16px;font-size:.85rem;color:var(--muted)}
+
+    @media(max-width:900px){.grid{grid-template-columns:1fr;}.sidebar{order:2}}
+  </style>
+</head>
+<body>
+  <header>
+    <svg width="34" height="34" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M12 2C13.657 2 15 3.343 15 5C15 6.657 13.657 8 12 8C10.343 8 9 6.657 9 5C9 3.343 10.343 2 12 2Z" fill="white"/><path d="M3 21C3 16.589 6.589 13 11 13H13C17.411 13 21 16.589 21 21H3Z" fill="white"/></svg>
+    <div>
+      <h1>Calendário Veterinário — Agendamentos & Vacinas</h1>
+      <div class="small">Registre consultas, vacinas, lembretes e dados dos pacientes — tudo no navegador.</div>
+    </div>
+  </header>
+
+  <main class="container">
+    <div class="grid">
+      <aside class="sidebar">
+        <div class="card">
+          <h2>Pacientes (Pets)</h2>
+          <div class="pet-list" id="petList"></div>
+          <div style="display:flex;gap:8px;margin-top:12px">
+            <button class="btn" id="addPetBtn">+ Novo Pet</button>
+            <button class="btn ghost" id="importSample">Popular</button>
+          </div>
+        </div>
+
+        <div class="card" style="margin-top:12px">
+          <h2>Filtros rápidos</h2>
+          <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap">
+            <button class="btn ghost" data-filter="all">Todos</button>
+            <button class="btn ghost" data-filter="vacina">Vacinas</button>
+            <button class="btn ghost" data-filter="consulta">Consultas</button>
+            <button class="btn ghost" data-filter="reminder">Lembretes</button>
+          </div>
+          <footer>Eventos salvos no armazenamento local do navegador.</footer>
+        </div>
+      </aside>
+
+      <section>
+        <div class="topbar">
+          <div class="month-nav">
+            <button class="btn ghost" id="prevMonth">◀</button>
+            <div style="padding:8px 12px;border-radius:8px;background:var(--card);box-shadow:0 2px 10px rgba(10,10,20,0.04)"><div class="month-label" id="monthLabel"></div><div class="small" id="yearLabel"></div></div>
+            <button class="btn" id="nextMonth">▶</button>
+          </div>
+          <div style="display:flex;gap:8px">
+            <button class="btn" id="todayBtn">Hoje</button>
+            <button class="btn" id="newEventBtn">+ Agendar</button>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="weeks" id="weekdays"></div>
+          <div class="days" id="calendarGrid"></div>
+        </div>
+      </section>
+    </div>
+  </main>
+
+  <!-- Modal: adicionar pet / evento -->
+  <div class="modal-backdrop" id="modalBackdrop">
+    <div class="modal" role="dialog" aria-modal="true">
+      <h3 id="modalTitle">Novo Evento</h3>
+      <div style="margin-top:8px">
+        <div class="form-row">
+          <select id="eventType">
+            <option value="consulta">Consulta</option>
+            <option value="vacina">Vacina</option>
+            <option value="reminder">Lembrete</option>
+          </select>
+          <input id="eventDate" type="date" />
+        </div>
+        <div class="form-row">
+          <select id="eventPet"></select>
+          <input id="eventTime" type="time" />
+        </div>
+        <input id="eventTitle" placeholder="Título (ex: Vacina antirrábica)" />
+        <textarea id="eventNotes" rows="3" placeholder="Observações"></textarea>
+        <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:12px">
+          <button class="btn ghost" id="cancelModal">Cancelar</button>
+          <button class="btn" id="saveEvent">Salvar</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: adicionar pet -->
+  <div class="modal-backdrop" id="petModalBackdrop">
+    <div class="modal">
+      <h3>Novo Pet</h3>
+      <div style="margin-top:8px">
+        <input id="petName" placeholder="Nome do pet" />
+        <div class="form-row" style="margin-top:8px">
+          <input id="petSpecies" placeholder="Espécie (Cão/Gato)" />
+          <input id="petBreed" placeholder="Raça" />
+        </div>
+        <div class="form-row" style="margin-top:8px">
+          <input id="petOwner" placeholder="Dono" />
+          <input id="petPhone" placeholder="Telefone" />
+        </div>
+        <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:12px">
+          <button class="btn ghost" id="cancelPet">Cancelar</button>
+          <button class="btn" id="savePet">Salvar Pet</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // -- Dados e armazenamento local (localStorage)
+    const STORAGE_KEYS = { PETS: 'vet_pets_v1', EVENTS: 'vet_events_v1' }
+    let pets = JSON.parse(localStorage.getItem(STORAGE_KEYS.PETS) || '[]')
+    let events = JSON.parse(localStorage.getItem(STORAGE_KEYS.EVENTS) || '[]')
+
+    // -- Estado do calendário
+    let viewDate = new Date()
+    const weekdays = ['Dom','Seg','Ter','Qua','Qui','Sex','Sáb']
+
+    // -- Elementos
+    const petListEl = document.getElementById('petList')
+    const calendarGrid = document.getElementById('calendarGrid')
+    const monthLabel = document.getElementById('monthLabel')
+    const yearLabel = document.getElementById('yearLabel')
+    const weekdaysEl = document.getElementById('weekdays')
+
+    // modal elements
+    const modalBackdrop = document.getElementById('modalBackdrop')
+    const petModal = document.getElementById('petModalBackdrop')
+    const eventPetSelect = document.getElementById('eventPet')
+
+    // init
+    function init(){
+      renderWeekdays()
+      renderPets()
+      renderCalendar()
+      attachListeners()
+    }
+
+    function saveAll(){
+      localStorage.setItem(STORAGE_KEYS.PETS, JSON.stringify(pets))
+      localStorage.setItem(STORAGE_KEYS.EVENTS, JSON.stringify(events))
+    }
+
+    // -- Pets
+    function renderPets(){
+      petListEl.innerHTML = ''
+      eventPetSelect.innerHTML = ''
+      if(pets.length===0){
+        petListEl.innerHTML = '<div class="small">Nenhum pet cadastrado. Clique em + Novo Pet</div>'
+      }
+      pets.forEach((p,idx)=>{
+        const div = document.createElement('div')
+        div.className = 'pet'
+        div.innerHTML = `<div class="avatar">${(p.name||'Pet').charAt(0).toUpperCase()}</div>
+                         <div style="flex:1">
+                           <div style="font-weight:700">${p.name}</div>
+                           <div class="small">${p.species || ''} • ${p.breed || ''}</div>
+                         </div>
+                         <div style="display:flex;flex-direction:column;gap:6px">
+                           <button class="btn ghost" data-edit="${idx}">Editar</button>
+                           <button class="btn" data-del="${idx}">Apagar</button>
+                         </div>`
+        petListEl.appendChild(div)
+
+        const opt = document.createElement('option')
+        opt.value = p.id
+        opt.text = p.name
+        eventPetSelect.appendChild(opt)
+      })
+    }
+
+    // -- Calendar rendering
+    function renderWeekdays(){
+      weekdaysEl.innerHTML = ''
+      weekdays.forEach(w=>{ const d = document.createElement('div'); d.className='weekday'; d.textContent=w; weekdaysEl.appendChild(d) })
+    }
+
+    function startOfMonth(date){ return new Date(date.getFullYear(), date.getMonth(), 1) }
+    function endOfMonth(date){ return new Date(date.getFullYear(), date.getMonth()+1, 0) }
+
+    function renderCalendar(){
+      const start = startOfMonth(viewDate)
+      const end = endOfMonth(viewDate)
+      monthLabel.textContent = start.toLocaleString('pt-BR',{month:'long'})
+      yearLabel.textContent = start.getFullYear()
+
+      calendarGrid.innerHTML = ''
+      const startDay = start.getDay() // 0..6
+      // days from previous month
+      const daysInPrev = startDay
+      const prevMonthEnd = new Date(start.getFullYear(), start.getMonth(), 0).getDate()
+
+      const totalCells = 42 // 6 weeks
+      for(let i=0;i<totalCells;i++){
+        const cell = document.createElement('div')
+        const dayIndex = i - daysInPrev + 1
+        let cellDate
+        if(dayIndex<=0){ // previous month
+          cell.className='day other card'
+          const dayNum = prevMonthEnd + dayIndex
+          const d = new Date(start.getFullYear(), start.getMonth()-1, dayNum)
+          cellDate = d
+        } else if(dayIndex>end.getDate()){ // next month
+          cell.className='day other card'
+          const d = new Date(start.getFullYear(), start.getMonth()+1, dayIndex - end.getDate())
+          cellDate = d
+        } else {
+          cell.className='day card'
+          cellDate = new Date(start.getFullYear(), start.getMonth(), dayIndex)
+        }
+
+        const iso = cellDate.toISOString().slice(0,10)
+        const dateDiv = document.createElement('div')
+        dateDiv.className='date'
+        dateDiv.textContent = cellDate.getDate()
+        cell.appendChild(dateDiv)
+
+        const evWrap = document.createElement('div')
+        evWrap.className='events'
+
+        // find events for the day
+        const dayEvents = events.filter(e => e.date === iso)
+        dayEvents.forEach(e=>{
+          const ev = document.createElement('div')
+          ev.className = 'event '+(e.type||'')
+          ev.title = `${e.title} — ${e.time || ''} — ${getPetName(e.petId)}`
+          ev.textContent = `${(e.time||'')} ${e.title} • ${getPetName(e.petId)}`
+          ev.onclick = (evClick=>(){ showEventDetails(e) })
+          evWrap.appendChild(ev)
+        })
+
+        cell.appendChild(evWrap)
+        cell.onclick = ()=>openNewEvent(iso)
+        calendarGrid.appendChild(cell)
+      }
+    }
+
+    function getPetName(id){ const p = pets.find(x=>x.id===id); return p ? p.name : '—' }
+
+    // -- Event modal / creation
+    function openModal(){ modalBackdrop.style.display='flex' }
+    function closeModal(){ modalBackdrop.style.display='none' }
+
+    function openPetModal(){ petModal.style.display='flex' }
+    function closePetModal(){ petModal.style.display='none' }
+
+    function openNewEvent(date=''){
+      document.getElementById('modalTitle').textContent='Novo Evento'
+      document.getElementById('eventDate').value = date || (new Date()).toISOString().slice(0,10)
+      document.getElementById('eventTime').value = ''
+      document.getElementById('eventTitle').value = ''
+      document.getElementById('eventNotes').value = ''
+      if(eventPetSelect.options.length>0) eventPetSelect.selectedIndex = 0
+      openModal()
+    }
+
+    function showEventDetails(e){
+      // preenche modal para edição
+      document.getElementById('modalTitle').textContent='Editar Evento'
+      document.getElementById('eventType').value = e.type
+      document.getElementById('eventDate').value = e.date
+      document.getElementById('eventTime').value = e.time || ''
+      document.getElementById('eventTitle').value = e.title
+      document.getElementById('eventNotes').value = e.notes || ''
+      eventPetSelect.value = e.petId
+      openModal()
+
+      // alterar ação do salvar para atualizar
+      document.getElementById('saveEvent').onclick = ()=>{
+        e.type = document.getElementById('eventType').value
+        e.date = document.getElementById('eventDate').value
+        e.time = document.getElementById('eventTime').value
+        e.title = document.getElementById('eventTitle').value
+        e.notes = document.getElementById('eventNotes').value
+        e.petId = eventPetSelect.value
+        saveAll(); renderCalendar(); closeModal(); resetSaveEventHandler()
+      }
+    }
+
+    function resetSaveEventHandler(){
+      document.getElementById('saveEvent').onclick = ()=>{
+        const title = document.getElementById('eventTitle').value.trim()
+        if(!title){ alert('Escreva um título para o evento.'); return }
+        const e = {
+          id: 'ev_' + Date.now(),
+          type: document.getElementById('eventType').value,
+          date: document.getElementById('eventDate').value,
+          time: document.getElementById('eventTime').value,
+          title: title,
+          notes: document.getElementById('eventNotes').value,
+          petId: eventPetSelect.value
+        }
+        events.push(e); saveAll(); renderCalendar(); closeModal()
+      }
+    }
+
+    // -- Pet modal actions
+    function resetPetSave(){
+      document.getElementById('savePet').onclick = ()=>{
+        const name = document.getElementById('petName').value.trim()
+        if(!name){ alert('Nome do pet é obrigatório'); return }
+        const p = {
+          id: 'pet_' + Date.now(),
+          name: name,
+          species: document.getElementById('petSpecies').value.trim(),
+          breed: document.getElementById('petBreed').value.trim(),
+          owner: document.getElementById('petOwner').value.trim(),
+          phone: document.getElementById('petPhone').value.trim()
+        }
+        pets.push(p); saveAll(); renderPets(); closePetModal()
+      }
+    }
+
+    // -- Utilities
+    function attachListeners(){
+      document.getElementById('addPetBtn').onclick = ()=>{ resetPetForm(); openPetModal() }
+      document.getElementById('cancelPet').onclick = ()=>closePetModal()
+      document.getElementById('importSample').onclick = ()=>importSampleData()
+
+      document.getElementById('prevMonth').onclick = ()=>{ viewDate = new Date(viewDate.getFullYear(), viewDate.getMonth()-1, 1); renderCalendar() }
+      document.getElementById('nextMonth').onclick = ()=>{ viewDate = new Date(viewDate.getFullYear(), viewDate.getMonth()+1, 1); renderCalendar() }
+      document.getElementById('todayBtn').onclick = ()=>{ viewDate = new Date(); renderCalendar() }
+      document.getElementById('newEventBtn').onclick = ()=>{ resetSaveEventHandler(); openNewEvent() }
+
+      document.getElementById('cancelModal').onclick = ()=>{ resetSaveEventHandler(); closeModal() }
+      resetSaveEventHandler(); resetPetSave()
+
+      // pet edit/delete delegated
+      petListEl.addEventListener('click', (ev)=>{
+        const edit = ev.target.getAttribute('data-edit')
+        const del = ev.target.getAttribute('data-del')
+        if(edit!==null){ const p = pets[Number(edit)]; fillPetFormForEdit(p, Number(edit)); openPetModal(); }
+        if(del!==null){ if(confirm('Apagar este pet? Isso removerá também eventos associados.')){ const idx=Number(del); const id=pets[idx].id; pets.splice(idx,1); events = events.filter(e=>e.petId!==id); saveAll(); renderPets(); renderCalendar() } }
+      })
+
+      // filters
+      document.querySelectorAll('[data-filter]').forEach(btn=>btn.onclick = ()=>{ const f=btn.getAttribute('data-filter'); if(f==='all'){ renderCalendar() } else { filterByType(f) } })
+    }
+
+    function fillPetFormForEdit(p, idx){ document.getElementById('petName').value = p.name; document.getElementById('petSpecies').value=p.species; document.getElementById('petBreed').value=p.breed; document.getElementById('petOwner').value=p.owner; document.getElementById('petPhone').value=p.phone;
+      document.getElementById('savePet').onclick = ()=>{ p.name = document.getElementById('petName').value.trim(); p.species = document.getElementById('petSpecies').value.trim(); p.breed = document.getElementById('petBreed').value.trim(); p.owner = document.getElementById('petOwner').value.trim(); p.phone = document.getElementById('petPhone').value.trim(); saveAll(); renderPets(); closePetModal(); resetPetSave(); }
+    }
+
+    function resetPetForm(){ document.getElementById('petName').value=''; document.getElementById('petSpecies').value=''; document.getElementById('petBreed').value=''; document.getElementById('petOwner').value=''; document.getElementById('petPhone').value=''; document.getElementById('savePet').onclick = ()=>{ resetPetSave(); document.getElementById('savePet').click() } }
+
+    function importSampleData(){
+      pets = [
+        {id:'pet_1',name:'Luna',species:'Cão',breed:'Vira-lata',owner:'Mariana',phone:'(31) 9xxxx-xxxx'},
+        {id:'pet_2',name:'Mimi',species:'Gato',breed:'Siamês',owner:'Carlos',phone:'(31) 9xxxx-xxxx'}
+      ]
+      events = [
+        {id:'ev1',type:'vacina',date: new Date().toISOString().slice(0,10),time:'10:00',title:'Vacina antirrábica',notes:'Levar cartão',petId:'pet_1'},
+        {id:'ev2',type:'consulta',date: new Date(new Date().getFullYear(), new Date().getMonth(), new Date().getDate()+2).toISOString().slice(0,10),time:'15:00',title:'Consulta geral',notes:'Checar ferida',petId:'pet_2'}
+      ]
+      saveAll(); renderPets(); renderCalendar()
+    }
+
+    function filterByType(type){
+      // render calendar with only events of this type
+      const start = startOfMonth(viewDate)
+      const end = endOfMonth(viewDate)
+      monthLabel.textContent = start.toLocaleString('pt-BR',{month:'long'})
+      yearLabel.textContent = start.getFullYear()
+      calendarGrid.innerHTML = ''
+      const startDay = start.getDay()
+      const daysInPrev = startDay
+      const prevMonthEnd = new Date(start.getFullYear(), start.getMonth(), 0).getDate()
+      for(let i=0;i<42;i++){
+        const cell = document.createElement('div')
+        const dayIndex = i - daysInPrev + 1
+        let cellDate
+        if(dayIndex<=0){ cell.className='day other card'; const dayNum = prevMonthEnd + dayIndex; cellDate = new Date(start.getFullYear(), start.getMonth()-1, dayNum) }
+        else if(dayIndex> end.getDate()){ cell.className='day other card'; cellDate = new Date(start.getFullYear(), start.getMonth()+1, dayIndex - end.getDate()) }
+        else { cell.className='day card'; cellDate = new Date(start.getFullYear(), start.getMonth(), dayIndex) }
+        const iso = cellDate.toISOString().slice(0,10)
+        const dateDiv = document.createElement('div'); dateDiv.className='date'; dateDiv.textContent = cellDate.getDate(); cell.appendChild(dateDiv)
+        const evWrap = document.createElement('div'); evWrap.className='events'
+        const dayEvents = events.filter(e => e.date === iso && e.type===type)
+        dayEvents.forEach(e=>{ const ev = document.createElement('div'); ev.className='event '+(e.type||''); ev.textContent = `${(e.time||'')} ${e.title} • ${getPetName(e.petId)}`; evWrap.appendChild(ev) })
+        cell.appendChild(evWrap)
+        calendarGrid.appendChild(cell)
+      }
+    }
+
+    // show details of event (simple alert) - could be extended
+    function showEventDetailsAlert(e){
+      alert(`${e.title}\nData: ${e.date} ${e.time || ''}\nPet: ${getPetName(e.petId)}\nNotas: ${e.notes || ''}`)
+    }
+
+    // default init
+    init()
+  </script>
+</body>
+</html>
