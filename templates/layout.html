@@ -474,6 +474,9 @@
                                         {% endif %}
                                     </a>
                                 </li>
+                            {% endif %}
+
+                            {% if current_user.worker == 'veterinario' %}
                                 <li class="nav-item position-relative">
                                     <a class="nav-link" href="{{ url_for('appointments') }}">
                                         <i class="fas fa-calendar-alt me-1 text-success"></i> Agenda
@@ -481,6 +484,12 @@
                                         {% if total_pending > 0 %}
                                             <span class="badge rounded-pill bg-danger position-absolute top-0 start-100 translate-middle">{{ total_pending }}</span>
                                         {% endif %}
+                                    </a>
+                                </li>
+                            {% elif not current_user.worker or current_user.worker == 'tutor' %}
+                                <li class="nav-item">
+                                    <a class="nav-link" href="{{ url_for('appointments') }}">
+                                        <i class="fas fa-calendar-alt me-1 text-success"></i> Agenda
                                     </a>
                                 </li>
                             {% endif %}
