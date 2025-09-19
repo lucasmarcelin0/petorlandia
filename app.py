@@ -7439,18 +7439,19 @@ def appointments():
                                 'danger',
                             )
                             return redirect(url_for('appointments'))
-                            appt = Appointment(
-                                animal_id=animal.id,
-                                tutor_id=tutor_id,
-                                veterinario_id=appointment_form.veterinario_id.data,
-                                scheduled_at=scheduled_at,
-                                clinica_id=clinica_id,
-                                notes=appointment_form.reason.data,
-                                kind=appointment_form.kind.data,
-                            )
-                            db.session.add(appt)
-                            db.session.commit()
-                            flash('Agendamento criado com sucesso.', 'success')
+
+                        appt = Appointment(
+                            animal_id=animal.id,
+                            tutor_id=tutor_id,
+                            veterinario_id=appointment_form.veterinario_id.data,
+                            scheduled_at=scheduled_at,
+                            clinica_id=clinica_id,
+                            notes=appointment_form.reason.data,
+                            kind=appointment_form.kind.data,
+                        )
+                        db.session.add(appt)
+                        db.session.commit()
+                        flash('Agendamento criado com sucesso.', 'success')
                 return redirect(url_for('appointments'))
             appointments = (
                 Appointment.query

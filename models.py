@@ -896,9 +896,9 @@ class Medicamento(db.Model):
     classificacao = db.Column(db.String(100))  # 🆕 antibiótico, anti-inflamatório, etc.
     principio_ativo = db.Column(db.String(100))  # opcional
     via_administracao = db.Column(db.String(50))  # oral, IM, IV...
-    dosagem_recomendada = db.Column(db.String(100))  # Ex: 5 mg/kg SID
-    frequencia = db.Column(db.String(50))  # Ex: SID, BID, TID
-    duracao_tratamento = db.Column(db.String(100))  # Ex: 7 dias
+    dosagem_recomendada = db.Column(db.Text)  # Ex: 5 mg/kg SID
+    frequencia = db.Column(db.Text)  # Ex: SID, BID, TID
+    duracao_tratamento = db.Column(db.Text)  # Ex: 7 dias
     observacoes = db.Column(db.Text)  # para contraindicações, interações, etc.
     bula = db.Column(db.Text)  # 🆕 Texto completo da bula, opcional
 
