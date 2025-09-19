@@ -292,6 +292,24 @@ class ClinicInviteResponseForm(FlaskForm):
     submit = SubmitField('Enviar')
 
 
+def _strip_filter(value):
+    return value.strip() if isinstance(value, str) else value
+
+
+class VeterinarianProfileForm(FlaskForm):
+    crmv = StringField(
+        'CRMV',
+        validators=[DataRequired(), Length(max=20)],
+        filters=[_strip_filter],
+    )
+    phone = StringField(
+        'Telefone profissional',
+        validators=[Optional(), Length(max=20)],
+        filters=[_strip_filter],
+    )
+    submit = SubmitField('Salvar cadastro')
+
+
 class ClinicAddStaffForm(FlaskForm):
     """Simple form to add an existing user as clinic staff."""
     email = StringField('Email do usuário', validators=[DataRequired(), Email()])
