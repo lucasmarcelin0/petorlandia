@@ -104,9 +104,15 @@ def is_slot_available(veterinario_id, scheduled_at):
         veterinario_id=veterinario_id, dia_semana=dia
     ).all()
 
-    # Se não houver horários cadastrados para o dia, assume-se disponibilidade.
+    if scheduled_at.tzinfo is None:
+        scheduled_at_with_tz = scheduled_at.replace(tzinfo=BR_TZ)
+    else:
+        scheduled_at_with_tz = scheduled_at.astimezone(BR_TZ)
+
+    scheduled_at_local = scheduled_at_with_tz.replace(tzinfo=None)
+
     if schedules:
-        slot_time = scheduled_at.time()
+        slot_time = scheduled_at_local.time()
         available = any(
             s.hora_inicio <= slot_time < s.hora_fim
             and not (
@@ -120,16 +126,11 @@ def is_slot_available(veterinario_id, scheduled_at):
             return False
 
     duration = timedelta(minutes=30)
-    if scheduled_at.tzinfo is None:
-        scheduled_at_with_tz = scheduled_at.replace(tzinfo=BR_TZ)
-    else:
-        scheduled_at_with_tz = scheduled_at.astimezone(BR_TZ)
     scheduled_at_utc = (
         scheduled_at_with_tz
         .astimezone(timezone.utc)
         .replace(tzinfo=None)
     )
-    scheduled_at_local = scheduled_at_with_tz.replace(tzinfo=None)
     start_window = scheduled_at_utc - duration
     end_window = scheduled_at_utc + duration
     local_start_window = scheduled_at_local - duration
