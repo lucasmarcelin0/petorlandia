@@ -33,6 +33,7 @@ from jinja2 import TemplateNotFound
 import json
 import unicodedata
 from sqlalchemy import func, or_, exists
+from sqlalchemy.orm import joinedload
 
 # ----------------------------------------------------------------
 # 1)  Alias único para “models”
@@ -2818,10 +2819,17 @@ def clinic_invites():
         abort(403)
     from models import VetClinicInvite
 
-    invites = VetClinicInvite.query.filter_by(
-        veterinario_id=current_user.veterinario.id,
-        status='pending',
-    ).all()
+    invites = (
+        VetClinicInvite.query.options(
+            joinedload(VetClinicInvite.clinica).joinedload(Clinica.owner)
+        )
+        .filter_by(
+            veterinario_id=current_user.veterinario.id,
+            status='pending',
+        )
+        .order_by(VetClinicInvite.created_at.desc())
+        .all()
+    )
     form = ClinicInviteResponseForm()
     return render_template('clinica/clinic_invites.html', invites=invites, form=form)
 

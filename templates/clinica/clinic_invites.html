@@ -1,27 +1,89 @@
 {% extends 'layout.html' %}
-{% block content %}
-<div class="container py-4">
-  <h2>Convites de Clínicas</h2>
-  {% if invites %}
-  <ul class="list-group">
-    {% for invite in invites %}
-    <li class="list-group-item d-flex justify-content-between align-items-center">
-      {{ invite.clinica.nome }}
-      <div>
-        <form method="post" action="{{ url_for('respond_clinic_invite', invite_id=invite.id, action='accept') }}" class="d-inline">
-          {{ form.csrf_token }}
-          <button type="submit" class="btn btn-sm btn-success">Aceitar</button>
-        </form>
-        <form method="post" action="{{ url_for('respond_clinic_invite', invite_id=invite.id, action='decline') }}" class="d-inline">
-          {{ form.csrf_token }}
-          <button type="submit" class="btn btn-sm btn-danger">Recusar</button>
-        </form>
+{% block main %}
+<div class="py-4">
+  <div class="row justify-content-center">
+    <div class="col-12 col-lg-10 col-xl-8">
+      <h1 class="h3 mb-4">Convites de Clínicas</h1>
+      {% if invites %}
+      <div class="row gy-4">
+        {% for invite in invites %}
+        <div class="col-12">
+          <article class="card shadow-sm h-100" aria-labelledby="invite-title-{{ invite.id }}">
+            <div class="card-body">
+              <div class="d-flex flex-column flex-md-row align-items-start gap-3">
+                <div class="flex-shrink-0">
+                  {% if invite.clinica.logo_url %}
+                  <img src="{{ invite.clinica.logo_url }}"
+                       alt="Logo da clínica {{ invite.clinica.nome }}"
+                       class="rounded border"
+                       style="width: 96px; height: 96px; object-fit: cover;">
+                  {% else %}
+                  <div class="bg-light border rounded d-flex align-items-center justify-content-center"
+                       style="width: 96px; height: 96px;">
+                    <span class="text-muted fw-semibold small text-center">Sem logo</span>
+                  </div>
+                  {% endif %}
+                </div>
+                <div class="flex-grow-1 w-100">
+                  <header class="mb-2">
+                    <h2 id="invite-title-{{ invite.id }}" class="h5 mb-2">{{ invite.clinica.nome }}</h2>
+                    {% if invite.clinica.endereco %}
+                    <p class="mb-1 text-muted">
+                      <span class="me-1" aria-hidden="true">📍</span>
+                      <span>{{ invite.clinica.endereco }}</span>
+                    </p>
+                    {% endif %}
+                    {% if invite.clinica.owner %}
+                    <p class="mb-0 text-muted">
+                      <span class="me-1" aria-hidden="true">👤</span>
+                      Proprietário: <span class="fw-semibold">{{ invite.clinica.owner.name }}</span>
+                    </p>
+                    {% endif %}
+                  </header>
+                  <p class="text-muted mb-3">
+                    A clínica convidou você para integrar a equipe e atender pacientes pela plataforma.
+                    {% if invite.created_at %}
+                    Convite enviado em <span class="fw-semibold">{{ invite.created_at|datetime_brazil }}</span>.
+                    {% endif %}
+                  </p>
+                  <div class="mt-auto">
+                    <div class="d-flex flex-column flex-sm-row gap-2" role="group" aria-label="Ações para o convite da clínica {{ invite.clinica.nome }}">
+                      <form method="post"
+                            action="{{ url_for('respond_clinic_invite', invite_id=invite.id, action='accept') }}"
+                            class="d-inline"
+                            aria-label="Aceitar convite da clínica {{ invite.clinica.nome }}">
+                        {{ form.hidden_tag() }}
+                        <button type="submit" class="btn btn-primary w-100">Aceitar</button>
+                      </form>
+                      <form method="post"
+                            action="{{ url_for('respond_clinic_invite', invite_id=invite.id, action='decline') }}"
+                            class="d-inline"
+                            aria-label="Recusar convite da clínica {{ invite.clinica.nome }}">
+                        {{ form.hidden_tag() }}
+                        <button type="submit" class="btn btn-outline-secondary w-100">Recusar</button>
+                      </form>
+                    </div>
+                    <p class="text-muted small mt-3 mb-0">
+                      Aceitar adiciona esta clínica ao seu perfil e libera os recursos dela. Recusar mantém tudo como está.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </article>
+        </div>
+        {% endfor %}
       </div>
-    </li>
-    {% endfor %}
-  </ul>
-  {% else %}
-  <p>Não há convites pendentes.</p>
-  {% endif %}
+      {% else %}
+      <div class="card shadow-sm border-0">
+        <div class="card-body text-center py-5" role="status" aria-live="polite">
+          <h2 class="h5">Nenhum convite por aqui</h2>
+          <p class="text-muted mb-2">Quando uma clínica cadastrar seu e-mail para colaboração, você receberá um convite por e-mail e ele aparecerá aqui.</p>
+          <p class="text-muted mb-0">Combine com a clínica qual endereço de e-mail você usa no PetOrlândia para que o convite chegue corretamente.</p>
+        </div>
+      </div>
+      {% endif %}
+    </div>
+  </div>
 </div>
 {% endblock %}
