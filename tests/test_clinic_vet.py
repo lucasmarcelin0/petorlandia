@@ -101,6 +101,49 @@ def test_creating_invite_sends_email(app, monkeypatch):
         db.drop_all()
 
 
+def test_invite_lookup_is_case_insensitive_and_trimmed(app, monkeypatch):
+    with app.app_context():
+        db.drop_all()
+        db.create_all()
+
+        owner = User(id=1, name='Owner', email='owner@test', password_hash='x')
+        clinic = Clinica(id=1, nome='Clinica', owner_id=owner.id)
+        owner.clinica_id = clinic.id
+        vet_user = User(
+            id=2,
+            name='Vet',
+            email='VetUpper@example.com',
+            password_hash='x',
+            worker='veterinario',
+        )
+        vet = Veterinario(id=1, user_id=vet_user.id, crmv='123')
+        db.session.add_all([owner, clinic, vet_user, vet])
+        db.session.commit()
+
+        mocked_send = MagicMock()
+        monkeypatch.setattr('app.mail.send', mocked_send)
+        monkeypatch.setattr('app.ClinicAddStaffForm.validate_on_submit', lambda self: False)
+
+        client = app.test_client()
+        login(client, owner.id)
+        response = client.post(
+            f'/clinica/{clinic.id}',
+            data={'email': '  vetupper@example.com  ', 'submit': 'Convidar', 'nome': ''},
+        )
+
+        assert response.status_code == 302
+        invite = VetClinicInvite.query.filter_by(
+            clinica_id=clinic.id,
+            veterinario_id=vet.id,
+            status='pending',
+        ).first()
+        assert invite is not None
+        mocked_send.assert_called_once()
+
+        db.session.remove()
+        db.drop_all()
+
+
 def test_cancel_invite_requires_permission(app):
     with app.app_context():
         db.drop_all()

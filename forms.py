@@ -275,8 +275,16 @@ class ClinicHoursForm(FlaskForm):
         ]
 
 
+def _strip_filter(value):
+    return value.strip() if isinstance(value, str) else value
+
+
 class ClinicInviteVeterinarianForm(FlaskForm):
-    email = StringField('Email do Veterinário', validators=[DataRequired(), Email()])
+    email = StringField(
+        'Email do Veterinário',
+        validators=[DataRequired(), Email()],
+        filters=[_strip_filter],
+    )
     submit = SubmitField('Convidar')
 
 
@@ -290,10 +298,6 @@ class ClinicInviteResendForm(FlaskForm):
 
 class ClinicInviteResponseForm(FlaskForm):
     submit = SubmitField('Enviar')
-
-
-def _strip_filter(value):
-    return value.strip() if isinstance(value, str) else value
 
 
 class VeterinarianProfileForm(FlaskForm):
