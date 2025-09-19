@@ -113,7 +113,11 @@
         </div>
         <div class="modal-footer">
           <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
-          <button type="submit" form="schedule-form" class="btn btn-primary">Salvar Horário</button>
+          <button type="submit"
+                  form="schedule-form"
+                  class="btn btn-primary"
+                  name="{{ schedule_form.submit.name }}"
+                  value="Salvar Horário">Salvar Horário</button>
         </div>
       </div>
     </div>
