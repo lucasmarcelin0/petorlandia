@@ -1,5 +1,6 @@
 # ───────────────────────────  app.py  ───────────────────────────
 import os, sys, pathlib, importlib, logging, uuid, re
+from collections import defaultdict
 from io import BytesIO
 from concurrent.futures import ThreadPoolExecutor
 from decimal import Decimal
@@ -33,6 +34,7 @@ from jinja2 import TemplateNotFound
 import json
 import unicodedata
 from sqlalchemy import func, or_, exists
+from sqlalchemy.orm import joinedload
 
 # ----------------------------------------------------------------
 # 1)  Alias único para “models”
@@ -247,7 +249,7 @@ from forms import (
     DeliveryRequestForm, AddToCartForm, SubscribePlanForm,
     ProductUpdateForm, ProductPhotoForm, ChangePasswordForm,
     DeleteAccountForm, ClinicForm, ClinicHoursForm,
-    ClinicInviteVeterinarianForm, ClinicInviteResponseForm,
+    ClinicInviteVeterinarianForm, ClinicInviteCancelForm, ClinicInviteResendForm, ClinicInviteResponseForm,
     ClinicAddStaffForm, ClinicStaffPermissionForm, VetScheduleForm, VetSpecialtyForm, AppointmentForm, AppointmentDeleteForm,
     InventoryItemForm, OrcamentoForm
 )
@@ -2441,6 +2443,56 @@ def minha_clinica():
     return render_template('clinica/multi_clinic_dashboard.html', clinics=overview)
 
 
+def _user_can_manage_clinic(clinica):
+    """Return True when the current user can manage the given clinic."""
+    if not current_user.is_authenticated:
+        return False
+    if _is_admin():
+        return True
+    if current_user.id == clinica.owner_id:
+        return True
+    if (
+        current_user.worker == 'veterinario'
+        and getattr(current_user, 'veterinario', None)
+        and current_user.veterinario.clinica_id == clinica.id
+    ):
+        return True
+    return False
+
+
+def _send_clinic_invite_email(clinica, veterinarian_user, inviter):
+    """Send the invite email for a clinic invitation."""
+    if not veterinarian_user:
+        current_app.logger.warning(
+            'Convite para clínica %s ignorado: veterinário sem usuário associado.',
+            clinica.id,
+        )
+        return False
+
+    acceptance_url = url_for('clinic_invites', _external=True)
+    inviter_name = getattr(inviter, 'name', None) or 'Um membro da clínica'
+    recipient_name = getattr(veterinarian_user, 'name', None) or 'veterinário(a)'
+    subject = f"Convite para ingressar na clínica {clinica.nome}"
+    body = (
+        f"Olá {recipient_name},\n\n"
+        f"{inviter_name} convidou você para ingressar na clínica {clinica.nome} na PetOrlândia.\n"
+        f"Acesse {acceptance_url} para aceitar ou recusar o convite e concluir o processo.\n\n"
+        "Se tiver dúvidas, responda a este e-mail ou entre em contato com a clínica.\n\n"
+        "Equipe PetOrlândia"
+    )
+    msg = MailMessage(
+        subject=subject,
+        sender=app.config['MAIL_DEFAULT_SENDER'],
+        recipients=[veterinarian_user.email],
+        body=body,
+    )
+    try:
+        mail.send(msg)
+    except Exception as exc:  # noqa: BLE001
+        current_app.logger.exception('Falha ao enviar e-mail de convite da clínica: %s', exc)
+        return False
+    return True
+
 
 @app.route('/clinica/<int:clinica_id>', methods=['GET', 'POST'])
 @login_required
@@ -2458,6 +2510,8 @@ def clinic_detail(clinica_id):
             .filter(Clinica.id == clinica_id)
             .first_or_404()
         )
+    from models import VetClinicInvite
+
     is_owner = current_user.id == clinica.owner_id if current_user.is_authenticated else False
     staff = None
     if current_user.is_authenticated:
@@ -2476,18 +2530,12 @@ def clinic_detail(clinica_id):
     hours_form = ClinicHoursForm()
     clinic_form = ClinicForm(obj=clinica)
     invite_form = ClinicInviteVeterinarianForm()
+    invite_cancel_form = ClinicInviteCancelForm(prefix='cancel_invite')
+    invite_resend_form = ClinicInviteResendForm(prefix='resend_invite')
     staff_form = ClinicAddStaffForm()
     if request.method == 'GET':
         hours_form.clinica_id.data = clinica.id
-    pode_editar = current_user.is_authenticated and (
-        _is_admin()
-        or (
-            current_user.worker == 'veterinario'
-            and getattr(current_user, 'veterinario', None)
-            and current_user.veterinario.clinica_id == clinica_id
-        )
-        or current_user.id == clinica.owner_id
-    )
+    pode_editar = _user_can_manage_clinic(clinica)
     if staff_form.submit.data and staff_form.validate_on_submit():
         if not (_is_admin() or current_user.id == clinica.owner_id):
             abort(403)
@@ -2533,8 +2581,6 @@ def clinic_detail(clinica_id):
         if not user or getattr(user, 'worker', '') != 'veterinario' or not getattr(user, 'veterinario', None):
             flash('Veterinário não encontrado.', 'danger')
         else:
-            from models import VetClinicInvite
-
             existing = VetClinicInvite.query.filter_by(
                 clinica_id=clinica.id,
                 veterinario_id=user.veterinario.id,
@@ -2551,7 +2597,13 @@ def clinic_detail(clinica_id):
                 )
                 db.session.add(invite)
                 db.session.commit()
-                flash('Convite enviado.', 'success')
+                if _send_clinic_invite_email(clinica, user, current_user):
+                    flash('Convite enviado.', 'success')
+                else:
+                    flash(
+                        'Convite criado, mas houve um problema ao enviar o e-mail para o veterinário.',
+                        'warning',
+                    )
         return redirect(url_for('clinic_detail', clinica_id=clinica.id) + '#veterinarios')
     if hours_form.submit.data and hours_form.validate_on_submit():
         if not pode_editar:
@@ -2584,6 +2636,18 @@ def clinic_detail(clinica_id):
         ClinicStaff.clinic_id == clinica.id,
         ClinicStaff.user.has(User.veterinario == None),
     ).all()
+
+    clinic_invites = (
+        VetClinicInvite.query
+        .filter_by(clinica_id=clinica.id)
+        .order_by(VetClinicInvite.created_at.desc())
+        .all()
+    )
+    invites_by_status = defaultdict(list)
+    for invite in clinic_invites:
+        invites_by_status[invite.status].append(invite)
+    invites_by_status = dict(invites_by_status)
+    invite_status_order = ['pending', 'declined', 'accepted', 'cancelled']
 
     staff_permission_forms = {}
     for s in staff_members:
@@ -2715,6 +2779,8 @@ def clinic_detail(clinica_id):
         form=hours_form,
         clinic_form=clinic_form,
         invite_form=invite_form,
+        invite_cancel_form=invite_cancel_form,
+        invite_resend_form=invite_resend_form,
         veterinarios=veterinarios,
         all_veterinarios=all_veterinarios,
         vet_schedule_forms=vet_schedule_forms,
@@ -2738,7 +2804,68 @@ def clinic_detail(clinica_id):
         inventory_items=inventory_items,
         inventory_form=inventory_form,
         show_inventory=show_inventory,
+        invites_by_status=invites_by_status,
+        invite_status_order=invite_status_order,
     )
+
+
+@app.route('/clinica/<int:clinica_id>/convites/<int:invite_id>/cancel', methods=['POST'])
+@login_required
+def cancel_clinic_invite(clinica_id, invite_id):
+    """Cancel a pending clinic invite."""
+    clinica = Clinica.query.get_or_404(clinica_id)
+    if not _user_can_manage_clinic(clinica):
+        abort(403)
+
+    invite = VetClinicInvite.query.get_or_404(invite_id)
+    if invite.clinica_id != clinica.id:
+        abort(404)
+
+    form = ClinicInviteCancelForm()
+    if not form.validate_on_submit():
+        abort(400)
+
+    if invite.status != 'pending':
+        flash('Somente convites pendentes podem ser cancelados.', 'warning')
+    else:
+        invite.status = 'cancelled'
+        db.session.commit()
+        flash('Convite cancelado.', 'success')
+
+    return redirect(url_for('clinic_detail', clinica_id=clinica.id) + '#veterinarios')
+
+
+@app.route('/clinica/<int:clinica_id>/convites/<int:invite_id>/resend', methods=['POST'])
+@login_required
+def resend_clinic_invite(clinica_id, invite_id):
+    """Resend a declined clinic invite."""
+    clinica = Clinica.query.get_or_404(clinica_id)
+    if not _user_can_manage_clinic(clinica):
+        abort(403)
+
+    invite = VetClinicInvite.query.get_or_404(invite_id)
+    if invite.clinica_id != clinica.id:
+        abort(404)
+
+    form = ClinicInviteResendForm()
+    if not form.validate_on_submit():
+        abort(400)
+
+    if invite.status != 'declined':
+        flash('Apenas convites recusados podem ser reenviados.', 'warning')
+        return redirect(url_for('clinic_detail', clinica_id=clinica.id) + '#veterinarios')
+
+    invite.status = 'pending'
+    invite.created_at = datetime.utcnow()
+    db.session.commit()
+
+    vet_user = invite.veterinario.user if invite.veterinario else None
+    if _send_clinic_invite_email(clinica, vet_user, current_user):
+        flash('Convite reenviado.', 'success')
+    else:
+        flash('Convite reativado, mas houve um problema ao reenviar o e-mail.', 'warning')
+
+    return redirect(url_for('clinic_detail', clinica_id=clinica.id) + '#veterinarios')
 
 
 @app.route('/clinica/<int:clinica_id>/veterinario', methods=['POST'])
@@ -2792,10 +2919,17 @@ def clinic_invites():
         abort(403)
     from models import VetClinicInvite
 
-    invites = VetClinicInvite.query.filter_by(
-        veterinario_id=current_user.veterinario.id,
-        status='pending',
-    ).all()
+    invites = (
+        VetClinicInvite.query.options(
+            joinedload(VetClinicInvite.clinica).joinedload(Clinica.owner)
+        )
+        .filter_by(
+            veterinario_id=current_user.veterinario.id,
+            status='pending',
+        )
+        .order_by(VetClinicInvite.created_at.desc())
+        .all()
+    )
     form = ClinicInviteResponseForm()
     return render_template('clinica/clinic_invites.html', invites=invites, form=form)
 

@@ -280,6 +280,14 @@ class ClinicInviteVeterinarianForm(FlaskForm):
     submit = SubmitField('Convidar')
 
 
+class ClinicInviteCancelForm(FlaskForm):
+    submit = SubmitField('Cancelar')
+
+
+class ClinicInviteResendForm(FlaskForm):
+    submit = SubmitField('Reenviar')
+
+
 class ClinicInviteResponseForm(FlaskForm):
     submit = SubmitField('Enviar')
 
