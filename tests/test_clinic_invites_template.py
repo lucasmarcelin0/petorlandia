@@ -48,6 +48,23 @@ def login(monkeypatch, user):
         login_user(user)
 
 
+def extract_csrf_token(html: str, form_id: str) -> str:
+    marker = f'<form id="{form_id}"'
+    start = html.find(marker)
+    assert start != -1, f"Formulário {form_id} não encontrado no HTML"
+    snippet = html[start:]
+    token_name = 'name="csrf_token"'
+    token_pos = snippet.find(token_name)
+    assert token_pos != -1, "Token CSRF não encontrado"
+    value_marker = 'value="'
+    value_start = snippet.find(value_marker, token_pos)
+    assert value_start != -1, "Atributo value do token CSRF não encontrado"
+    value_start += len(value_marker)
+    value_end = snippet.find('"', value_start)
+    assert value_end != -1, "Fechamento do atributo value do token CSRF não encontrado"
+    return snippet[value_start:value_end]
+
+
 def test_clinic_invites_template_renders_details(monkeypatch, app):
     client = app.test_client()
     with app.app_context():
@@ -125,8 +142,64 @@ def test_clinic_invites_template_guides_user_without_profile(monkeypatch, app):
         assert response.status_code == 200
         html = response.get_data(as_text=True)
 
+        assert "Complete seu cadastro de veterinário" in html
         assert MISSING_VET_PROFILE_MESSAGE in html
         assert "Nenhum convite por aqui" not in html
+        assert 'id="vet-profile-form"' in html
+        assert 'name="crmv"' in html
+        assert 'Telefone profissional' in html
+
+        db.session.remove()
+        db.drop_all()
+
+
+def test_clinic_invites_allows_vet_profile_creation(monkeypatch, app):
+    client = app.test_client()
+    with app.app_context():
+        db.drop_all()
+        db.create_all()
+
+        vet_user = User(
+            name="Dra. Maria",
+            email="dra.maria@example.com",
+            password_hash="senha-super-secreta",
+            worker="veterinario",
+        )
+        db.session.add(vet_user)
+        db.session.commit()
+
+        login(monkeypatch, vet_user)
+
+        response = client.get('/convites/clinica')
+        assert response.status_code == 200
+        html = response.get_data(as_text=True)
+        csrf_token = extract_csrf_token(html, "vet-profile-form")
+
+        post_response = client.post(
+            '/convites/clinica',
+            data={
+                'crmv': 'SP-12345',
+                'phone': '(16) 4002-8922',
+                'csrf_token': csrf_token,
+            },
+            follow_redirects=False,
+        )
+
+        assert post_response.status_code == 302
+        assert post_response.headers['Location'].endswith('/convites/clinica')
+
+        vet = Veterinario.query.filter_by(user_id=vet_user.id).first()
+        assert vet is not None
+        assert vet.crmv == 'SP-12345'
+
+        refreshed_user = User.query.get(vet_user.id)
+        assert refreshed_user.phone == '(16) 4002-8922'
+
+        follow_response = client.get('/convites/clinica')
+        assert follow_response.status_code == 200
+        follow_html = follow_response.get_data(as_text=True)
+        assert 'id="vet-profile-form"' not in follow_html
+        assert "Nenhum convite por aqui" in follow_html
 
         db.session.remove()
         db.drop_all()

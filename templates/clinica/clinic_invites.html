@@ -6,9 +6,42 @@
       <h1 class="h3 mb-4">Convites de Clínicas</h1>
       {% if missing_vet_profile %}
       <div class="card shadow-sm border-0">
-        <div class="card-body text-center py-5" role="status" aria-live="polite">
-          <h2 class="h5">Complete seu cadastro de veterinário</h2>
-          <p class="text-muted mb-0">{{ missing_vet_profile_message }}</p>
+        <div class="card-body p-4 p-md-5" role="region" aria-labelledby="vet-profile-heading">
+          <div class="row g-4 align-items-start">
+            <div class="col-12 col-lg-5">
+              <h2 id="vet-profile-heading" class="h5 mb-3">Complete seu cadastro de veterinário</h2>
+              <p class="text-muted mb-3">{{ missing_vet_profile_message }}</p>
+              <p class="text-muted small mb-0">Assim que finalizar, os convites das clínicas que chamaram você aparecerão aqui automaticamente.</p>
+            </div>
+            {% if vet_profile_form %}
+            <div class="col-12 col-lg-7">
+              <form id="vet-profile-form" method="post" action="{{ url_for('clinic_invites') }}" class="row g-3 needs-validation" novalidate>
+                {{ vet_profile_form.hidden_tag() }}
+                <div class="col-12 col-md-6">
+                  <label for="{{ vet_profile_form.crmv.id }}" class="form-label">CRMV</label>
+                  {{ vet_profile_form.crmv(class="form-control" + (' is-invalid' if vet_profile_form.crmv.errors else ''), placeholder="UF-00000") }}
+                  {% if vet_profile_form.crmv.errors %}
+                  <div class="invalid-feedback d-block">{{ vet_profile_form.crmv.errors[0] }}</div>
+                  {% else %}
+                  <div class="form-text">Informe o número completo, incluindo a UF quando houver.</div>
+                  {% endif %}
+                </div>
+                <div class="col-12 col-md-6">
+                  <label for="{{ vet_profile_form.phone.id }}" class="form-label">Telefone profissional <span class="text-muted">(opcional)</span></label>
+                  {{ vet_profile_form.phone(class="form-control" + (' is-invalid' if vet_profile_form.phone.errors else ''), placeholder="(00) 00000-0000") }}
+                  {% if vet_profile_form.phone.errors %}
+                  <div class="invalid-feedback d-block">{{ vet_profile_form.phone.errors[0] }}</div>
+                  {% else %}
+                  <div class="form-text">Esse contato fica disponível para a clínica após a associação.</div>
+                  {% endif %}
+                </div>
+                <div class="col-12">
+                  <button type="submit" class="btn btn-primary">Salvar cadastro</button>
+                </div>
+              </form>
+            </div>
+            {% endif %}
+          </div>
         </div>
       </div>
       {% elif invites %}
