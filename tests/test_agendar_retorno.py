@@ -91,6 +91,7 @@ def test_agendar_retorno_cria_appointment(client, monkeypatch):
         assert appt.animal_id == animal_id
         assert appt.tutor_id == tutor_id
         assert appt.veterinario_id == vet_id
+        assert appt.status == 'accepted'
 
 
 def test_agendar_retorno_falha_quando_horario_ocupado(client, monkeypatch):

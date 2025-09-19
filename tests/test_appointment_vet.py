@@ -101,6 +101,7 @@ def test_veterinarian_can_schedule_for_other_users_animal(client, monkeypatch):
         assert appt.animal_id == animal_id
         assert appt.veterinario_id == vet_id
         assert appt.clinica_id == clinic_id
+        assert appt.status == 'accepted'
 
 
 def test_tutor_sees_only_their_animals_in_form(client):
