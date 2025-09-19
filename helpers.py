@@ -126,19 +126,6 @@ def is_slot_available(veterinario_id, scheduled_at):
     return conflict is None
 
 
-def has_schedule_conflict(veterinario_id, dia_semana, hora_inicio, hora_fim):
-    """Verifica se há conflito com horários existentes do veterinário."""
-    from models import VetSchedule
-
-    existentes = VetSchedule.query.filter_by(
-        veterinario_id=veterinario_id, dia_semana=dia_semana
-    ).all()
-    for s in existentes:
-        if hora_inicio < s.hora_fim and hora_fim > s.hora_inicio:
-            return True
-    return False
-
-
 def clinicas_do_usuario():
     """Retorna query de ``Clinica`` filtrada pelo usuário atual."""
     from models import Clinica
