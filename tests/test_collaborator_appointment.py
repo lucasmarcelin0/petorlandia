@@ -64,3 +64,4 @@ def test_collaborator_can_schedule_consulta(client, monkeypatch):
         assert appt is not None
         assert appt.kind == 'consulta'
         assert appt.notes == 'Checkup'
+        assert appt.status == 'scheduled'

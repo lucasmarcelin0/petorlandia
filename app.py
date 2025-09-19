@@ -2264,6 +2264,8 @@ def agendar_retorno(consulta_id):
             if conflict_exam:
                 flash('Horário indisponível para o veterinário selecionado.', 'danger')
             else:
+                current_vet = getattr(current_user, 'veterinario', None)
+                same_user = current_vet and current_vet.id == vet_id
                 appt = Appointment(
                     consulta_id=consulta.id,
                     animal_id=consulta.animal_id,
@@ -2272,6 +2274,7 @@ def agendar_retorno(consulta_id):
                     scheduled_at=scheduled_at,
                     notes=form.reason.data,
                     kind='retorno',
+                    status='accepted' if same_user else 'scheduled',
                 )
                 db.session.add(appt)
                 db.session.commit()
@@ -7433,6 +7436,8 @@ def appointments():
                         .astimezone(timezone.utc)
                         .replace(tzinfo=None)
                     )
+                    current_vet = getattr(current_user, 'veterinario', None)
+                    same_user = current_vet and current_vet.id == veterinario.id
                     appt = Appointment(
                         animal_id=animal.id,
                         tutor_id=tutor_id,
@@ -7441,6 +7446,7 @@ def appointments():
                         clinica_id=veterinario.clinica_id or animal.clinica_id,
                         notes=appointment_form.reason.data,
                         kind=appointment_form.kind.data,
+                        status='accepted' if same_user else 'scheduled',
                     )
                     db.session.add(appt)
                     db.session.commit()
