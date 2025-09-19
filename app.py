@@ -300,6 +300,33 @@ def get_consulta_or_404(consulta_id):
     ensure_clinic_access(consulta.clinica_id)
     return consulta
 
+
+MISSING_VET_PROFILE_MESSAGE = (
+    "Para visualizar os convites de clínica, finalize seu cadastro de "
+    "veterinário informando o CRMV e demais dados profissionais."
+)
+
+
+def _ensure_veterinarian_profile(form=None):
+    """Return veterinarian profile or render guidance message when missing."""
+    worker = getattr(current_user, "worker", None)
+    if worker != "veterinario":
+        abort(403)
+
+    vet_profile = getattr(current_user, "veterinario", None)
+    if vet_profile is None:
+        if form is None:
+            form = ClinicInviteResponseForm()
+        return None, render_template(
+            "clinica/clinic_invites.html",
+            invites=[],
+            form=form,
+            missing_vet_profile=True,
+            missing_vet_profile_message=MISSING_VET_PROFILE_MESSAGE,
+        )
+
+    return vet_profile, None
+
 # ----------------------------------------------------------------
 # 7)  Login & serializer
 # ----------------------------------------------------------------
@@ -2915,26 +2942,31 @@ def create_clinic_veterinario(clinica_id):
 @login_required
 def clinic_invites():
     """List pending clinic invitations for the logged veterinarian."""
-    if (
-        getattr(current_user, 'worker', None) != 'veterinario'
-        or not getattr(current_user, 'veterinario', None)
-    ):
-        abort(403)
     from models import VetClinicInvite
+
+    form = ClinicInviteResponseForm()
+    vet_profile, response = _ensure_veterinarian_profile(form=form)
+    if response is not None:
+        return response
 
     invites = (
         VetClinicInvite.query.options(
             joinedload(VetClinicInvite.clinica).joinedload(Clinica.owner)
         )
         .filter_by(
-            veterinario_id=current_user.veterinario.id,
+            veterinario_id=vet_profile.id,
             status='pending',
         )
         .order_by(VetClinicInvite.created_at.desc())
         .all()
     )
-    form = ClinicInviteResponseForm()
-    return render_template('clinica/clinic_invites.html', invites=invites, form=form)
+    return render_template(
+        'clinica/clinic_invites.html',
+        invites=invites,
+        form=form,
+        missing_vet_profile=False,
+        missing_vet_profile_message=MISSING_VET_PROFILE_MESSAGE,
+    )
 
 
 @app.route('/convites/<int:invite_id>/<string:action>', methods=['POST'])
@@ -2943,12 +2975,12 @@ def respond_clinic_invite(invite_id, action):
     """Accept or decline a clinic invitation."""
     from models import VetClinicInvite
 
+    vet_profile, response = _ensure_veterinarian_profile()
+    if response is not None:
+        return response
+
     invite = VetClinicInvite.query.get_or_404(invite_id)
-    if (
-        getattr(current_user, 'worker', None) != 'veterinario'
-        or not getattr(current_user, 'veterinario', None)
-        or invite.veterinario_id != current_user.veterinario.id
-    ):
+    if invite.veterinario_id != vet_profile.id:
         abort(403)
     if action == 'accept':
         invite.status = 'accepted'

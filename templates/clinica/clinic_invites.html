@@ -4,7 +4,14 @@
   <div class="row justify-content-center">
     <div class="col-12 col-lg-10 col-xl-8">
       <h1 class="h3 mb-4">Convites de Clínicas</h1>
-      {% if invites %}
+      {% if missing_vet_profile %}
+      <div class="card shadow-sm border-0">
+        <div class="card-body text-center py-5" role="status" aria-live="polite">
+          <h2 class="h5">Complete seu cadastro de veterinário</h2>
+          <p class="text-muted mb-0">{{ missing_vet_profile_message }}</p>
+        </div>
+      </div>
+      {% elif invites %}
       <div class="row gy-4">
         {% for invite in invites %}
         <div class="col-12">
