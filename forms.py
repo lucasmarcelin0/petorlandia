@@ -284,6 +284,10 @@ class ClinicInviteResponseForm(FlaskForm):
     submit = SubmitField('Enviar')
 
 
+class ClinicInviteActionForm(FlaskForm):
+    submit = SubmitField('Confirmar')
+
+
 class ClinicAddStaffForm(FlaskForm):
     """Simple form to add an existing user as clinic staff."""
     email = StringField('Email do usuário', validators=[DataRequired(), Email()])
