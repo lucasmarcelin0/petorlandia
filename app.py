@@ -7439,7 +7439,10 @@ def appointments():
             )
         schedule_form = VetScheduleForm(prefix='schedule')
         appointment_form = AppointmentForm(is_veterinario=True, prefix='appointment')
-        vets_for_choices = agenda_veterinarios or Veterinario.query.all()
+        if _is_admin():
+            vets_for_choices = agenda_veterinarios or Veterinario.query.all()
+        else:
+            vets_for_choices = [veterinario]
         schedule_form.veterinario_id.choices = [
             (v.id, v.user.name) for v in vets_for_choices
         ]
@@ -7449,7 +7452,20 @@ def appointments():
         if request.method == 'GET':
             schedule_form.veterinario_id.data = veterinario.id
             appointment_form.veterinario_id.data = veterinario.id
+        if schedule_form.submit.data and not _is_admin():
+            raw_vet_id = request.form.get(schedule_form.veterinario_id.name)
+            if raw_vet_id is None:
+                abort(403)
+            try:
+                submitted_vet_id = int(raw_vet_id)
+            except (TypeError, ValueError):
+                abort(403)
+            if submitted_vet_id != veterinario.id:
+                abort(403)
+
         if schedule_form.submit.data and schedule_form.validate_on_submit():
+            if not _is_admin() and schedule_form.veterinario_id.data != veterinario.id:
+                abort(403)
 
             vet_id = schedule_form.veterinario_id.data
             for dia in schedule_form.dias_semana.data:
@@ -7818,12 +7834,30 @@ def edit_vet_schedule_slot(veterinario_id, horario_id):
         abort(403)
     veterinario = Veterinario.query.get_or_404(veterinario_id)
     horario = VetSchedule.query.get_or_404(horario_id)
+    if not _is_admin() and horario.veterinario_id != veterinario_id:
+        abort(403)
     form = VetScheduleForm(prefix='schedule')
+    if _is_admin():
+        vet_choices = Veterinario.query.all()
+    else:
+        vet_choices = [veterinario]
     form.veterinario_id.choices = [
-        (v.id, v.user.name) for v in Veterinario.query.all()
+        (v.id, v.user.name) for v in vet_choices
     ]
+    if not _is_admin():
+        raw_vet_id = request.form.get(form.veterinario_id.name)
+        if raw_vet_id is None:
+            abort(403)
+        try:
+            submitted_vet_id = int(raw_vet_id)
+        except (TypeError, ValueError):
+            abort(403)
+        if submitted_vet_id != veterinario_id:
+            abort(403)
     if form.validate_on_submit():
         novo_vet = form.veterinario_id.data
+        if not _is_admin() and novo_vet != veterinario_id:
+            abort(403)
         dia = form.dias_semana.data[0]
         inicio = form.hora_inicio.data
         fim = form.hora_fim.data
@@ -7854,6 +7888,8 @@ def delete_vet_schedule(veterinario_id, horario_id):
     ):
         abort(403)
     horario = VetSchedule.query.get_or_404(horario_id)
+    if not _is_admin() and horario.veterinario_id != veterinario_id:
+        abort(403)
     db.session.delete(horario)
     db.session.commit()
     flash('Horário removido com sucesso.', 'success')
