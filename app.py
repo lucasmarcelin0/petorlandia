@@ -2616,7 +2616,12 @@ def clinic_detail(clinica_id):
     if invite_form.submit.data and invite_form.validate_on_submit():
         if not pode_editar:
             abort(403)
-        user = User.query.filter_by(email=invite_form.email.data.lower()).first()
+        email = invite_form.email.data.strip().lower()
+        user = (
+            User.query
+            .filter(func.lower(User.email) == email)
+            .first()
+        )
         if not user or getattr(user, 'worker', '') != 'veterinario' or not getattr(user, 'veterinario', None):
             flash('Veterinário não encontrado.', 'danger')
         else:
