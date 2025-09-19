@@ -119,6 +119,7 @@ def is_slot_available(veterinario_id, scheduled_at):
         if not available:
             return False
 
+    duration = timedelta(minutes=30)
     if scheduled_at.tzinfo is None:
         scheduled_at_with_tz = scheduled_at.replace(tzinfo=BR_TZ)
     else:
@@ -128,9 +129,11 @@ def is_slot_available(veterinario_id, scheduled_at):
         .astimezone(timezone.utc)
         .replace(tzinfo=None)
     )
-    duration = timedelta(minutes=30)
+    scheduled_at_local = scheduled_at_with_tz.replace(tzinfo=None)
     start_window = scheduled_at_utc - duration
     end_window = scheduled_at_utc + duration
+    local_start_window = scheduled_at_local - duration
+    local_end_window = scheduled_at_local + duration
     conflict = (
         Appointment.query.filter(
             Appointment.veterinario_id == veterinario_id,
@@ -143,6 +146,19 @@ def is_slot_available(veterinario_id, scheduled_at):
             ExamAppointment.scheduled_at > start_window,
         ).first()
     )
+    if not conflict:
+        conflict = (
+            Appointment.query.filter(
+                Appointment.veterinario_id == veterinario_id,
+                Appointment.scheduled_at < local_end_window,
+                Appointment.scheduled_at > local_start_window,
+            ).first()
+            or ExamAppointment.query.filter(
+                ExamAppointment.specialist_id == veterinario_id,
+                ExamAppointment.scheduled_at < local_end_window,
+                ExamAppointment.scheduled_at > local_start_window,
+            ).first()
+        )
     return conflict is None
 
 
