@@ -93,6 +93,68 @@ def test_agendar_retorno_cria_appointment(client, monkeypatch):
         assert appt.veterinario_id == vet_id
 
 
+def test_agendar_retorno_falha_quando_horario_ocupado(client, monkeypatch):
+    with flask_app.app_context():
+        clinic = Clinica(id=1, nome='Clinica')
+        tutor = User(id=1, name='Tutor', email='tutor@test')
+        tutor.set_password('x')
+        vet_user = User(id=2, name='Vet', email='vet@test', worker='veterinario')
+        vet_user.set_password('x')
+        vet = Veterinario(id=1, user_id=vet_user.id, crmv='123', clinica_id=clinic.id)
+        animal = Animal(id=1, name='Rex', user_id=tutor.id, clinica_id=clinic.id)
+        consulta = Consulta(id=1, animal_id=animal.id, created_by=vet_user.id, clinica_id=clinic.id, status='finalizada')
+        plan = HealthPlan(id=1, name='Basic', price=10.0)
+        db.session.add_all([clinic, tutor, vet_user, vet, animal, consulta, plan])
+        db.session.commit()
+        sub = HealthSubscription(animal_id=animal.id, plan_id=plan.id, user_id=tutor.id, active=True)
+        db.session.add(sub)
+        existing = Appointment(
+            animal_id=animal.id,
+            tutor_id=tutor.id,
+            veterinario_id=vet.id,
+            scheduled_at=datetime(2024, 5, 1, 10, 0),
+        )
+        db.session.add(existing)
+        db.session.commit()
+        consulta_id = consulta.id
+        animal_id = animal.id
+        vet_id = vet.id
+        clinic_id = clinic.id
+        vet_user_id = vet_user.id
+
+    fake_vet = type('U', (), {
+        'id': vet_user_id,
+        'worker': 'veterinario',
+        'role': 'adotante',
+        'name': 'Vet',
+        'is_authenticated': True,
+        'veterinario': type('V', (), {
+            'id': vet_id,
+            'user': type('WU', (), {'name': 'Vet'})(),
+            'clinica_id': clinic_id,
+        })()
+    })()
+
+    login(monkeypatch, fake_vet)
+    resp = client.post(
+        f'/agendar_retorno/{consulta_id}',
+        data={
+            'animal_id': animal_id,
+            'veterinario_id': vet_id,
+            'date': '2024-05-01',
+            'time': '10:00',
+            'reason': 'Reavaliação',
+        }
+    )
+    assert resp.status_code == 302
+    with client.session_transaction() as sess:
+        flashes = sess.get('_flashes', [])
+    assert ('danger', 'Horário indisponível para o veterinário selecionado.') in flashes
+    with flask_app.app_context():
+        assert Appointment.query.count() == 1
+        assert Appointment.query.filter_by(consulta_id=consulta_id).count() == 0
+
+
 def test_iniciar_retorno_cria_consulta_e_badge(client, monkeypatch):
     with flask_app.app_context():
         clinic = Clinica(id=1, nome='Clinica')

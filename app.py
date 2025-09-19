@@ -2243,24 +2243,37 @@ def agendar_retorno(consulta_id):
     form.veterinario_id.choices = [(v.id, v.user.name) for v in vets]
     if form.validate_on_submit():
         scheduled_at_local = datetime.combine(form.date.data, form.time.data)
-        scheduled_at = (
-            scheduled_at_local
-            .replace(tzinfo=BR_TZ)
-            .astimezone(timezone.utc)
-            .replace(tzinfo=None)
-        )
-        appt = Appointment(
-            consulta_id=consulta.id,
-            animal_id=consulta.animal_id,
-            tutor_id=consulta.animal.owner.id,
-            veterinario_id=form.veterinario_id.data,
-            scheduled_at=scheduled_at,
-            notes=form.reason.data,
-            kind='retorno',
-        )
-        db.session.add(appt)
-        db.session.commit()
-        flash('Retorno agendado com sucesso.', 'success')
+        vet_id = form.veterinario_id.data
+        if not is_slot_available(vet_id, scheduled_at_local):
+            flash('Horário indisponível para o veterinário selecionado.', 'danger')
+        else:
+            scheduled_at = (
+                scheduled_at_local
+                .replace(tzinfo=BR_TZ)
+                .astimezone(timezone.utc)
+                .replace(tzinfo=None)
+            )
+            duration = timedelta(minutes=30)
+            conflict_exam = ExamAppointment.query.filter(
+                ExamAppointment.specialist_id == vet_id,
+                ExamAppointment.scheduled_at < scheduled_at + duration,
+                ExamAppointment.scheduled_at > scheduled_at - duration,
+            ).first()
+            if conflict_exam:
+                flash('Horário indisponível para o veterinário selecionado.', 'danger')
+            else:
+                appt = Appointment(
+                    consulta_id=consulta.id,
+                    animal_id=consulta.animal_id,
+                    tutor_id=consulta.animal.owner.id,
+                    veterinario_id=vet_id,
+                    scheduled_at=scheduled_at,
+                    notes=form.reason.data,
+                    kind='retorno',
+                )
+                db.session.add(appt)
+                db.session.commit()
+                flash('Retorno agendado com sucesso.', 'success')
     else:
         flash('Erro ao agendar retorno.', 'danger')
     return redirect(url_for('consulta_direct', animal_id=consulta.animal_id))
