@@ -2243,24 +2243,37 @@ def agendar_retorno(consulta_id):
     form.veterinario_id.choices = [(v.id, v.user.name) for v in vets]
     if form.validate_on_submit():
         scheduled_at_local = datetime.combine(form.date.data, form.time.data)
-        scheduled_at = (
-            scheduled_at_local
-            .replace(tzinfo=BR_TZ)
-            .astimezone(timezone.utc)
-            .replace(tzinfo=None)
-        )
-        appt = Appointment(
-            consulta_id=consulta.id,
-            animal_id=consulta.animal_id,
-            tutor_id=consulta.animal.owner.id,
-            veterinario_id=form.veterinario_id.data,
-            scheduled_at=scheduled_at,
-            notes=form.reason.data,
-            kind='retorno',
-        )
-        db.session.add(appt)
-        db.session.commit()
-        flash('Retorno agendado com sucesso.', 'success')
+        vet_id = form.veterinario_id.data
+        if not is_slot_available(vet_id, scheduled_at_local):
+            flash('Horário indisponível para o veterinário selecionado.', 'danger')
+        else:
+            scheduled_at = (
+                scheduled_at_local
+                .replace(tzinfo=BR_TZ)
+                .astimezone(timezone.utc)
+                .replace(tzinfo=None)
+            )
+            duration = timedelta(minutes=30)
+            conflict_exam = ExamAppointment.query.filter(
+                ExamAppointment.specialist_id == vet_id,
+                ExamAppointment.scheduled_at < scheduled_at + duration,
+                ExamAppointment.scheduled_at > scheduled_at - duration,
+            ).first()
+            if conflict_exam:
+                flash('Horário indisponível para o veterinário selecionado.', 'danger')
+            else:
+                appt = Appointment(
+                    consulta_id=consulta.id,
+                    animal_id=consulta.animal_id,
+                    tutor_id=consulta.animal.owner.id,
+                    veterinario_id=vet_id,
+                    scheduled_at=scheduled_at,
+                    notes=form.reason.data,
+                    kind='retorno',
+                )
+                db.session.add(appt)
+                db.session.commit()
+                flash('Retorno agendado com sucesso.', 'success')
     else:
         flash('Erro ao agendar retorno.', 'danger')
     return redirect(url_for('consulta_direct', animal_id=consulta.animal_id))
@@ -7230,7 +7243,10 @@ def appointments():
             if not is_slot_available(
                 appointment_form.veterinario_id.data, scheduled_at_local
             ):
-                flash('Horário indisponível para o veterinário selecionado.', 'danger')
+                flash(
+                    'Horário indisponível para o veterinário selecionado. Já existe uma consulta ou exame nesse intervalo.',
+                    'danger'
+                )
             else:
                 animal = get_animal_or_404(appointment_form.animal_id.data)
                 tutor_id = animal.user_id
@@ -7396,7 +7412,10 @@ def appointments():
                 if not is_slot_available(
                     appointment_form.veterinario_id.data, scheduled_at_local
                 ):
-                    flash('Horário indisponível para o veterinário selecionado.', 'danger')
+                    flash(
+                        'Horário indisponível para o veterinário selecionado. Já existe uma consulta ou exame nesse intervalo.',
+                        'danger'
+                    )
                 else:
                     scheduled_at = (
                         scheduled_at_local
@@ -7413,7 +7432,10 @@ def appointments():
                             ExamAppointment.scheduled_at > scheduled_at - duration,
                         ).first()
                         if conflict:
-                            flash('Horário indisponível para o veterinário selecionado.', 'danger')
+                            flash(
+                                'Horário indisponível para o veterinário selecionado. Já existe uma consulta ou exame nesse intervalo.',
+                                'danger'
+                            )
                         else:
                             appt = ExamAppointment(
                                 animal_id=appointment_form.animal_id.data,
@@ -7652,7 +7674,10 @@ def edit_appointment(appointment_id):
         if not is_slot_available(vet_id, scheduled_at_local) and not (
             vet_id == appointment.veterinario_id and scheduled_at_local == existing_local
         ):
-            return jsonify({'success': False, 'message': 'Horário indisponível.'}), 400
+            return jsonify({
+                'success': False,
+                'message': 'Horário indisponível. Já existe uma consulta ou exame nesse intervalo.'
+            }), 400
         appointment.veterinario_id = vet_id
         appointment.scheduled_at = (
             scheduled_at_local
@@ -7871,7 +7896,10 @@ def schedule_exam(animal_id):
         ).first()
     )
     if conflict:
-        return jsonify({'success': False, 'message': 'Horário indisponível.'}), 400
+        return jsonify({
+            'success': False,
+            'message': 'Horário indisponível. Já existe uma consulta ou exame nesse intervalo.'
+        }), 400
     vet = Veterinario.query.get(specialist_id)
     animal = Animal.query.get(animal_id)
     same_user = vet and vet.user_id == current_user.id
@@ -7981,7 +8009,10 @@ def update_exam_appointment(appointment_id):
         ).first()
     )
     if conflict:
-        return jsonify({'success': False, 'message': 'Horário indisponível.'}), 400
+        return jsonify({
+            'success': False,
+            'message': 'Horário indisponível. Já existe uma consulta ou exame nesse intervalo.'
+        }), 400
     appt.specialist_id = specialist_id
     appt.scheduled_at = scheduled_at
     db.session.commit()

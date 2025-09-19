@@ -85,9 +85,10 @@ def is_slot_available(veterinario_id, scheduled_at):
 
     A slot is available when it falls inside the veterinarian's schedule
     (``VetSchedule``) for the corresponding weekday and there is no
-    existing ``Appointment`` at the exact datetime.
+    overlapping ``Appointment`` or ``ExamAppointment`` within the
+    30-minute window used for bookings.
     """
-    from models import VetSchedule, Appointment
+    from models import VetSchedule, Appointment, ExamAppointment
 
     weekday_map = {
         0: 'Segunda',
@@ -105,38 +106,44 @@ def is_slot_available(veterinario_id, scheduled_at):
 
     # Se não houver horários cadastrados para o dia, assume-se disponibilidade.
     if schedules:
-        time = scheduled_at.time()
+        slot_time = scheduled_at.time()
         available = any(
-            s.hora_inicio <= time < s.hora_fim
+            s.hora_inicio <= slot_time < s.hora_fim
             and not (
                 s.intervalo_inicio
                 and s.intervalo_fim
-                and s.intervalo_inicio <= time < s.intervalo_fim
+                and s.intervalo_inicio <= slot_time < s.intervalo_fim
             )
             for s in schedules
         )
         if not available:
             return False
 
+    if scheduled_at.tzinfo is None:
+        scheduled_at_with_tz = scheduled_at.replace(tzinfo=BR_TZ)
+    else:
+        scheduled_at_with_tz = scheduled_at.astimezone(BR_TZ)
+    scheduled_at_utc = (
+        scheduled_at_with_tz
+        .astimezone(timezone.utc)
+        .replace(tzinfo=None)
+    )
+    duration = timedelta(minutes=30)
+    start_window = scheduled_at_utc - duration
+    end_window = scheduled_at_utc + duration
     conflict = (
-        Appointment.query
-        .filter_by(veterinario_id=veterinario_id, scheduled_at=scheduled_at)
-        .first()
+        Appointment.query.filter(
+            Appointment.veterinario_id == veterinario_id,
+            Appointment.scheduled_at < end_window,
+            Appointment.scheduled_at > start_window,
+        ).first()
+        or ExamAppointment.query.filter(
+            ExamAppointment.specialist_id == veterinario_id,
+            ExamAppointment.scheduled_at < end_window,
+            ExamAppointment.scheduled_at > start_window,
+        ).first()
     )
     return conflict is None
-
-
-def has_schedule_conflict(veterinario_id, dia_semana, hora_inicio, hora_fim):
-    """Verifica se há conflito com horários existentes do veterinário."""
-    from models import VetSchedule
-
-    existentes = VetSchedule.query.filter_by(
-        veterinario_id=veterinario_id, dia_semana=dia_semana
-    ).all()
-    for s in existentes:
-        if hora_inicio < s.hora_fim and hora_fim > s.hora_inicio:
-            return True
-    return False
 
 
 def clinicas_do_usuario():
