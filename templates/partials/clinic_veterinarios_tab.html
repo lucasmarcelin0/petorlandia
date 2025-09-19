@@ -209,6 +209,61 @@
           </table>
         </div>
         {% if pode_editar %}
+        <div class="mt-4">
+          <h5>Convites enviados</h5>
+          {% set status_badges = {
+            'pending': ('Pendente', 'bg-warning text-dark'),
+            'declined': ('Recusado', 'bg-danger'),
+            'accepted': ('Aceito', 'bg-success'),
+            'cancelled': ('Cancelado', 'bg-secondary')
+          } %}
+          {% if invites_by_status %}
+          <div class="list-group">
+            {% for status in invite_status_order %}
+            {% set invites = invites_by_status.get(status, []) %}
+            {% if invites %}
+            {% set status_info = status_badges.get(status, (status|capitalize, 'bg-secondary')) %}
+            <div class="list-group-item">
+              <div class="d-flex align-items-center mb-2">
+                <span class="badge {{ status_info[1] }}">{{ status_info[0] }}</span>
+              </div>
+              <ul class="list-unstyled mb-0">
+                {% for invite in invites %}
+                {% set vet_user = invite.veterinario.user if invite.veterinario and invite.veterinario.user else None %}
+                <li class="mb-3">
+                  <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
+                    <div>
+                      <strong>{{ vet_user.name if vet_user else 'Veterinário convidado' }}</strong>
+                      {% if vet_user %}
+                      <div class="small text-muted">{{ vet_user.email }}</div>
+                      {% endif %}
+                      <div class="small text-muted">Enviado em {{ invite.created_at|datetime_brazil }}</div>
+                    </div>
+                    <div class="d-flex gap-2">
+                      {% if status == 'pending' %}
+                      <form method="post" class="d-inline" action="{{ url_for('cancel_clinic_invite', clinica_id=clinica.id, invite_id=invite.id) }}">
+                        {{ invite_cancel_form.hidden_tag() }}
+                        {{ invite_cancel_form.submit(class_="btn btn-sm btn-outline-danger") }}
+                      </form>
+                      {% elif status == 'declined' %}
+                      <form method="post" class="d-inline" action="{{ url_for('resend_clinic_invite', clinica_id=clinica.id, invite_id=invite.id) }}">
+                        {{ invite_resend_form.hidden_tag() }}
+                        {{ invite_resend_form.submit(class_="btn btn-sm btn-outline-primary") }}
+                      </form>
+                      {% endif %}
+                    </div>
+                  </div>
+                </li>
+                {% endfor %}
+              </ul>
+            </div>
+            {% endif %}
+            {% endfor %}
+          </div>
+          {% else %}
+          <p class="text-muted">Nenhum convite enviado.</p>
+          {% endif %}
+        </div>
         <button class="btn btn-secondary mt-3" onclick="toggleAddVet()">Adicionar Veterinário</button>
         <div id="add-vet" class="mt-3" style="display:none;">
           <form method="post" class="mb-4">
