@@ -3,18 +3,40 @@
 {% block main %}
 <div class="container mt-4">
   <!-- Cabeçalho melhorado -->
-  <div class="d-flex justify-content-between align-items-center mb-4">
+  <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-4">
     <div>
       <h2 class="mb-0"><i class="fas fa-calendar-alt me-2 text-primary"></i>Agenda – {{ veterinario.user.name }}</h2>
       <p class="text-muted">Gerencie seus horários e consultas</p>
     </div>
-    <div>
-      <button class="btn btn-primary mb-1" onclick="toggleScheduleForm()">
-        <i class="fas fa-plus-circle me-1"></i>Adicionar Horário
-      </button>
-      <button class="btn btn-outline-primary mb-1 ms-2" onclick="toggleAppointmentForm()">
-        <i class="fas fa-calendar-plus me-1"></i>Agendar Consulta
-      </button>
+    <div class="ms-auto">
+      {% if current_user.role == 'admin' and agenda_veterinarios %}
+      <form action="{{ url_for('appointments') }}" method="get" class="d-flex align-items-center justify-content-end gap-2 mb-2 flex-wrap">
+        <input type="hidden" name="view_as" value="veterinario">
+        {% set start_arg = request.args.get('start') %}
+        {% if start_arg %}
+        <input type="hidden" name="start" value="{{ start_arg }}">
+        {% endif %}
+        {% set end_arg = request.args.get('end') %}
+        {% if end_arg %}
+        <input type="hidden" name="end" value="{{ end_arg }}">
+        {% endif %}
+        <label for="vet-agenda-picker" class="form-label fw-semibold small mb-0">Pesquisar agenda</label>
+        <select id="vet-agenda-picker" name="veterinario_id" class="form-select form-select-sm text-truncate" onchange="this.form.submit()" style="min-width: 220px;">
+          <option value="" {% if not veterinario %}selected{% endif %}>Selecione um usuário</option>
+          {% for vet in agenda_veterinarios %}
+          <option value="{{ vet.id }}" {% if vet.id == veterinario.id %}selected{% endif %}>{{ vet.user.name }}{% if vet.user.email %} – {{ vet.user.email }}{% endif %}</option>
+          {% endfor %}
+        </select>
+      </form>
+      {% endif %}
+      <div class="d-flex flex-wrap justify-content-end gap-2">
+        <button class="btn btn-primary mb-1" onclick="toggleScheduleForm()">
+          <i class="fas fa-plus-circle me-1"></i>Adicionar Horário
+        </button>
+        <button class="btn btn-outline-primary mb-1" onclick="toggleAppointmentForm()">
+          <i class="fas fa-calendar-plus me-1"></i>Agendar Consulta
+        </button>
+      </div>
     </div>
   </div>
 
