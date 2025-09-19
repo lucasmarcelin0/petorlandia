@@ -5,7 +5,7 @@ import pytest
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
-from app import app as flask_app, db
+from app import app as flask_app, db, MISSING_VET_PROFILE_MESSAGE
 from sqlalchemy.pool import StaticPool
 from models import Clinica, User, Veterinario, VetClinicInvite
 
@@ -99,6 +99,34 @@ def test_clinic_invites_template_renders_details(monkeypatch, app):
 
         assert f'action="{accept_url}"' in html
         assert f'action="{decline_url}"' in html
+
+        db.session.remove()
+        db.drop_all()
+
+
+def test_clinic_invites_template_guides_user_without_profile(monkeypatch, app):
+    client = app.test_client()
+    with app.app_context():
+        db.drop_all()
+        db.create_all()
+
+        vet_user = User(
+            name="Dr. Sem Perfil",
+            email="semperfil@example.com",
+            password_hash="senha-secreta",
+            worker="veterinario",
+        )
+        db.session.add(vet_user)
+        db.session.commit()
+
+        login(monkeypatch, vet_user)
+
+        response = client.get('/convites/clinica')
+        assert response.status_code == 200
+        html = response.get_data(as_text=True)
+
+        assert MISSING_VET_PROFILE_MESSAGE in html
+        assert "Nenhum convite por aqui" not in html
 
         db.session.remove()
         db.drop_all()
