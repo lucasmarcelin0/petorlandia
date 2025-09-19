@@ -71,3 +71,53 @@ def test_admin_can_switch_views(client, monkeypatch):
     assert b'view_as=colaborador' in resp.data
     assert b'view_as=veterinario' in resp.data
     assert b'view_as=tutor' in resp.data
+
+
+def test_non_admin_view_as_redirects(client, monkeypatch):
+    with flask_app.app_context():
+        setup_data()
+        collaborator = User(
+            id=10,
+            name='Colab',
+            email='colab@test',
+            worker='colaborador',
+            clinica_id=1,
+        )
+        collaborator.set_password('x')
+        db.session.add(collaborator)
+        db.session.commit()
+        tutor = User.query.filter_by(email='tutor@test').first()
+        tutor_id = tutor.id
+        collab_id = collaborator.id
+
+    fake_collaborator = type(
+        'U',
+        (),
+        {
+            'id': collab_id,
+            'worker': 'colaborador',
+            'role': 'adotante',
+            'is_authenticated': True,
+            'clinica_id': 1,
+        },
+    )()
+    login(monkeypatch, fake_collaborator)
+    resp = client.get('/appointments?view_as=veterinario')
+    assert resp.status_code == 302
+    assert resp.headers['Location'].endswith('/appointments')
+
+    fake_tutor = type(
+        'U',
+        (),
+        {
+            'id': tutor_id,
+            'worker': None,
+            'role': 'adotante',
+            'is_authenticated': True,
+            'clinica_id': None,
+        },
+    )()
+    login(monkeypatch, fake_tutor)
+    resp = client.get('/appointments?view_as=veterinario')
+    assert resp.status_code == 302
+    assert resp.headers['Location'].endswith('/appointments')

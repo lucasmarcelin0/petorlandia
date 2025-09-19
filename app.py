@@ -7309,8 +7309,16 @@ def appointments():
 
     view_as = request.args.get('view_as')
     worker = current_user.worker
-    if current_user.role == 'admin' and view_as in ['veterinario', 'colaborador', 'tutor']:
-        worker = view_as
+    if view_as:
+        allowed_views = {'veterinario', 'colaborador', 'tutor'}
+        if current_user.role == 'admin' and view_as in allowed_views:
+            worker = view_as
+        elif current_user.role != 'admin':
+            # Non-admin users can only request the view matching their own role.
+            user_view = worker if worker in allowed_views else 'tutor'
+            if view_as not in allowed_views or view_as != user_view:
+                flash('Você não tem permissão para acessar essa visão de agenda.', 'warning')
+                return redirect(url_for('appointments'))
 
     agenda_users = []
     if current_user.role == 'admin':
