@@ -250,6 +250,7 @@ from forms import (
     ProductUpdateForm, ProductPhotoForm, ChangePasswordForm,
     DeleteAccountForm, ClinicForm, ClinicHoursForm,
     ClinicInviteVeterinarianForm, ClinicInviteCancelForm, ClinicInviteResendForm, ClinicInviteResponseForm,
+    VeterinarianProfileForm,
     ClinicAddStaffForm, ClinicStaffPermissionForm, VetScheduleForm, VetSpecialtyForm, AppointmentForm, AppointmentDeleteForm,
     InventoryItemForm, OrcamentoForm
 )
@@ -307,6 +308,22 @@ MISSING_VET_PROFILE_MESSAGE = (
 )
 
 
+def _render_missing_vet_profile(form=None, profile_form=None):
+    """Render the clinic invite page guiding the vet to complete the profile."""
+    if form is None:
+        form = ClinicInviteResponseForm()
+    if profile_form is None:
+        profile_form = VeterinarianProfileForm()
+    return render_template(
+        "clinica/clinic_invites.html",
+        invites=[],
+        form=form,
+        missing_vet_profile=True,
+        missing_vet_profile_message=MISSING_VET_PROFILE_MESSAGE,
+        vet_profile_form=profile_form,
+    )
+
+
 def _ensure_veterinarian_profile(form=None):
     """Return veterinarian profile or render guidance message when missing."""
     worker = getattr(current_user, "worker", None)
@@ -315,15 +332,7 @@ def _ensure_veterinarian_profile(form=None):
 
     vet_profile = getattr(current_user, "veterinario", None)
     if vet_profile is None:
-        if form is None:
-            form = ClinicInviteResponseForm()
-        return None, render_template(
-            "clinica/clinic_invites.html",
-            invites=[],
-            form=form,
-            missing_vet_profile=True,
-            missing_vet_profile_message=MISSING_VET_PROFILE_MESSAGE,
-        )
+        return None, _render_missing_vet_profile(form=form)
 
     return vet_profile, None
 
@@ -2938,16 +2947,43 @@ def create_clinic_veterinario(clinica_id):
     return redirect(url_for('clinic_detail', clinica_id=clinica.id) + '#veterinarios')
 
 
-@app.route('/convites/clinica')
+@app.route('/convites/clinica', methods=['GET', 'POST'])
 @login_required
 def clinic_invites():
     """List pending clinic invitations for the logged veterinarian."""
-    from models import VetClinicInvite
+    from models import VetClinicInvite, Veterinario
 
-    form = ClinicInviteResponseForm()
-    vet_profile, response = _ensure_veterinarian_profile(form=form)
-    if response is not None:
-        return response
+    if getattr(current_user, "worker", None) != "veterinario":
+        abort(403)
+
+    response_form = ClinicInviteResponseForm()
+    profile_form = VeterinarianProfileForm()
+
+    vet_profile = getattr(current_user, "veterinario", None)
+    if vet_profile is None:
+        if profile_form.validate_on_submit():
+            crmv = profile_form.crmv.data
+            existing = (
+                Veterinario.query.filter(
+                    func.lower(Veterinario.crmv) == crmv.lower(),
+                    Veterinario.user_id != current_user.id,
+                ).first()
+            )
+            if existing:
+                profile_form.crmv.errors.append('Este CRMV já está cadastrado.')
+            else:
+                vet = Veterinario(user=current_user, crmv=crmv)
+                phone = profile_form.phone.data
+                if phone:
+                    current_user.phone = phone
+                db.session.add(vet)
+                db.session.commit()
+                flash('Cadastro de veterinário concluído com sucesso!', 'success')
+                return redirect(url_for('clinic_invites'))
+        return _render_missing_vet_profile(
+            form=response_form,
+            profile_form=profile_form,
+        )
 
     invites = (
         VetClinicInvite.query.options(
@@ -2963,9 +2999,10 @@ def clinic_invites():
     return render_template(
         'clinica/clinic_invites.html',
         invites=invites,
-        form=form,
+        form=response_form,
         missing_vet_profile=False,
         missing_vet_profile_message=MISSING_VET_PROFILE_MESSAGE,
+        vet_profile_form=None,
     )
 
 
