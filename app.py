@@ -7316,19 +7316,47 @@ def appointments():
     if current_user.role == 'admin':
         agenda_users = User.query.order_by(User.name).all()
 
+    agenda_veterinarios = []
+
     if request.method == 'POST' and worker not in ['veterinario', 'colaborador', 'admin']:
         abort(403)
     if worker == 'veterinario':
         if current_user.role == 'admin':
-            veterinario = Veterinario.query.first()
-            if not veterinario:
+            agenda_veterinarios = (
+                Veterinario.query.join(User).order_by(User.name).all()
+            )
+            veterinario_id_arg = request.args.get(
+                'veterinario_id', type=int
+            )
+            if veterinario_id_arg:
+                veterinario = next(
+                    (v for v in agenda_veterinarios if v.id == veterinario_id_arg),
+                    None,
+                )
+                if not veterinario:
+                    veterinario = Veterinario.query.get_or_404(
+                        veterinario_id_arg
+                    )
+            elif agenda_veterinarios:
+                veterinario = agenda_veterinarios[0]
+            else:
                 abort(404)
         else:
             veterinario = current_user.veterinario
+        if not veterinario:
+            abort(404)
+        appointments_url = url_for('appointments')
+        if current_user.role == 'admin':
+            appointments_url = url_for(
+                'appointments',
+                view_as='veterinario',
+                veterinario_id=veterinario.id,
+            )
         schedule_form = VetScheduleForm(prefix='schedule')
         appointment_form = AppointmentForm(is_veterinario=True, prefix='appointment')
+        vets_for_choices = agenda_veterinarios or Veterinario.query.all()
         schedule_form.veterinario_id.choices = [
-            (v.id, v.user.name) for v in Veterinario.query.all()
+            (v.id, v.user.name) for v in vets_for_choices
         ]
         appointment_form.veterinario_id.choices = [
             (veterinario.id, veterinario.user.name)
@@ -7347,7 +7375,7 @@ def appointments():
                     schedule_form.hora_fim.data,
                 ):
                     flash(f'Conflito de horário em {dia}.', 'danger')
-                    return redirect(url_for('appointments'))
+                    return redirect(appointments_url)
             added = False
             for dia in schedule_form.dias_semana.data:
                 if has_schedule_conflict(
@@ -7373,7 +7401,7 @@ def appointments():
                 flash('Horário salvo com sucesso.', 'success')
             else:
                 flash('Nenhum novo horário foi salvo.', 'info')
-            return redirect(url_for('appointments'))
+            return redirect(appointments_url)
         if appointment_form.submit.data and appointment_form.validate_on_submit():
             scheduled_at_local = datetime.combine(
                 appointment_form.date.data, appointment_form.time.data
@@ -7417,7 +7445,7 @@ def appointments():
                     db.session.add(appt)
                     db.session.commit()
                     flash('Agendamento criado com sucesso.', 'success')
-            return redirect(url_for('appointments'))
+            return redirect(appointments_url)
         horarios = VetSchedule.query.filter_by(
             veterinario_id=veterinario.id
         ).all()
@@ -7524,6 +7552,7 @@ def appointments():
             schedule_form=schedule_form,
             appointment_form=appointment_form,
             veterinario=veterinario,
+            agenda_veterinarios=agenda_veterinarios,
             horarios_grouped=horarios_grouped,
             appointments_pending=appointments_pending,
             appointments_upcoming=appointments_upcoming,
