@@ -2551,7 +2551,33 @@ def clinic_detail(clinica_id):
                 )
                 db.session.add(invite)
                 db.session.commit()
-                flash('Convite enviado.', 'success')
+                acceptance_url = url_for('clinic_invites', _external=True)
+                inviter_name = getattr(current_user, 'name', None) or 'Um membro da clínica'
+                recipient_name = getattr(user, 'name', None) or 'veterinário(a)'
+                subject = f"Convite para ingressar na clínica {clinica.nome}"
+                body = (
+                    f"Olá {recipient_name},\n\n"
+                    f"{inviter_name} convidou você para ingressar na clínica {clinica.nome} na PetOrlândia.\n"
+                    f"Acesse {acceptance_url} para aceitar ou recusar o convite e concluir o processo.\n\n"
+                    "Se tiver dúvidas, responda a este e-mail ou entre em contato com a clínica.\n\n"
+                    "Equipe PetOrlândia"
+                )
+                msg = MailMessage(
+                    subject=subject,
+                    sender=app.config['MAIL_DEFAULT_SENDER'],
+                    recipients=[user.email],
+                    body=body,
+                )
+                try:
+                    mail.send(msg)
+                except Exception as exc:  # noqa: BLE001
+                    current_app.logger.exception('Falha ao enviar e-mail de convite da clínica: %s', exc)
+                    flash(
+                        'Convite criado, mas houve um problema ao enviar o e-mail para o veterinário.',
+                        'warning',
+                    )
+                else:
+                    flash('Convite enviado.', 'success')
         return redirect(url_for('clinic_detail', clinica_id=clinica.id) + '#veterinarios')
     if hours_form.submit.data and hours_form.validate_on_submit():
         if not pode_editar:
