@@ -44,6 +44,29 @@ def test_interval_blocks_slot(app_context):
     assert is_slot_available(vet.id, datetime(2024, 5, 1, 12, 30)) is False
 
 
+def test_slot_available_with_timezone_aware_datetime(app_context):
+    user = User(name="Vet", email="vet-aware@test", worker="veterinario")
+    user.set_password("x")
+    db.session.add(user)
+    db.session.commit()
+
+    vet = Veterinario(user_id=user.id, crmv="654")
+    db.session.add(vet)
+    db.session.commit()
+
+    schedule = VetSchedule(
+        veterinario_id=vet.id,
+        dia_semana="Quarta",
+        hora_inicio=time(9, 0),
+        hora_fim=time(17, 0),
+    )
+    db.session.add(schedule)
+    db.session.commit()
+
+    aware_slot = datetime(2024, 5, 1, 11, 0, tzinfo=BR_TZ)
+    assert is_slot_available(vet.id, aware_slot) is True
+
+
 def test_slot_unavailable_when_exam_conflicts(app_context):
     vet_user = User(name="Vet", email="vet_exam@test", worker="veterinario")
     vet_user.set_password("x")
