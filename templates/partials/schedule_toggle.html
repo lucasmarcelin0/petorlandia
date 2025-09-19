@@ -23,11 +23,16 @@
 document.addEventListener('DOMContentLoaded', function() {
   const calendarEl = document.getElementById('{{ calendar_id }}');
   const toggle = document.getElementById('{{ toggle_id }}');
+  const userPicker = document.getElementById('admin-agenda-user-picker');
   let source = '{{ 'clinic' if clinic_id else 'user' }}';
+  let selectedUserId = userPicker && userPicker.value ? userPicker.value : null;
 
   function eventUrl() {
     if (source === 'clinic') {
       return '/api/clinic_appointments/{{ clinic_id }}';
+    }
+    if (selectedUserId) {
+      return `/api/user_appointments/${selectedUserId}`;
     }
     return '/api/my_appointments';
   }
@@ -35,6 +40,15 @@ document.addEventListener('DOMContentLoaded', function() {
   function addEvents() {
     calendar.removeAllEventSources();
     calendar.addEventSource(eventUrl());
+  }
+
+  function setActiveButton(targetSource) {
+    if (!toggle) {
+      return;
+    }
+    toggle.querySelectorAll('button').forEach(function(btn) {
+      btn.classList.toggle('active', btn.dataset.source === targetSource);
+    });
   }
 
   const calendar = new FullCalendar.Calendar(calendarEl, {
@@ -48,13 +62,25 @@ document.addEventListener('DOMContentLoaded', function() {
   if (toggle) {
     toggle.querySelectorAll('button').forEach(function(btn) {
       btn.addEventListener('click', function() {
-        toggle.querySelectorAll('button').forEach(b => b.classList.remove('active'));
-        this.classList.add('active');
         source = this.dataset.source;
+        setActiveButton(source);
         addEvents();
       });
     });
   }
+
+  if (userPicker) {
+    userPicker.addEventListener('change', function() {
+      selectedUserId = this.value || null;
+      if (selectedUserId) {
+        source = 'user';
+        setActiveButton('user');
+      }
+      addEvents();
+    });
+  }
+
+  setActiveButton(source);
 });
 </script>
 

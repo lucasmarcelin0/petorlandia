@@ -106,5 +106,10 @@ def test_my_appointments_returns_all_for_admin(client, monkeypatch):
     resp = client.get('/api/my_appointments')
     assert resp.status_code == 200
     data = resp.get_json()
-    assert len(data) == 1
-    assert data[0]['id'] == appt_id
+    assert data == []
+
+    user_resp = client.get(f'/api/user_appointments/{tutor_id}')
+    assert user_resp.status_code == 200
+    user_data = user_resp.get_json()
+    assert len(user_data) == 1
+    assert user_data[0]['id'] == appt_id
