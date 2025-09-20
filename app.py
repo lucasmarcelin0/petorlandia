@@ -33,7 +33,7 @@ from itsdangerous import URLSafeTimedSerializer
 from jinja2 import TemplateNotFound
 import json
 import unicodedata
-from sqlalchemy import func, or_, exists
+from sqlalchemy import func, or_, exists, and_
 from sqlalchemy.orm import joinedload
 
 # ----------------------------------------------------------------
@@ -7681,7 +7681,7 @@ def appointments():
             appt.time_left = (appt.scheduled_at - timedelta(hours=2)) - now
             appointments_pending.append({'kind': 'consulta', 'appt': appt})
 
-        from models import ExamAppointment, Message
+        from models import ExamAppointment, Message, BlocoExames
 
         exam_pending = (
             ExamAppointment.query.filter_by(specialist_id=veterinario.id, status='pending')
@@ -7726,11 +7726,134 @@ def appointments():
             appointments_upcoming.append({'kind': 'exame', 'appt': exam})
         appointments_upcoming.sort(key=lambda x: x['appt'].scheduled_at)
 
-        appointments_past = (
-            Appointment.query.filter_by(veterinario_id=veterinario.id)
-            .filter(Appointment.scheduled_at < start_dt_utc)
-            .order_by(Appointment.scheduled_at.desc())
+        consulta_filters = [Consulta.status == 'finalizada']
+        scope_filters = []
+        if veterinario.user_id:
+            scope_filters.append(Consulta.created_by == veterinario.user_id)
+        if veterinario.clinica_id:
+            scope_filters.append(Consulta.clinica_id == veterinario.clinica_id)
+        if scope_filters:
+            consulta_filters.append(or_(*scope_filters))
+
+        consultas_finalizadas = (
+            Consulta.query.outerjoin(Appointment, Consulta.appointment)
+            .options(
+                joinedload(Consulta.animal).joinedload('owner'),
+                joinedload(Consulta.veterinario),
+                joinedload(Consulta.appointment).joinedload('animal').joinedload('owner'),
+            )
+            .filter(*consulta_filters)
+            .filter(
+                or_(
+                    and_(
+                        Appointment.id.isnot(None),
+                        Appointment.scheduled_at >= start_dt_utc,
+                        Appointment.scheduled_at < end_dt_utc,
+                    ),
+                    and_(
+                        Appointment.id.is_(None),
+                        Consulta.created_at >= start_dt_utc,
+                        Consulta.created_at < end_dt_utc,
+                    ),
+                )
+            )
             .all()
+        )
+
+        consulta_animal_ids = {c.animal_id for c in consultas_finalizadas}
+        exam_blocks_by_consulta = defaultdict(list)
+        exam_blocks_by_animal = defaultdict(list)
+        if consulta_animal_ids:
+            blocos_query = (
+                BlocoExames.query.options(joinedload(BlocoExames.exames))
+                .filter(BlocoExames.animal_id.in_(consulta_animal_ids))
+            )
+            for bloco in blocos_query.all():
+                exam_blocks_by_animal[bloco.animal_id].append(bloco)
+                consulta_ref = getattr(bloco, 'consulta_id', None)
+                if consulta_ref:
+                    exam_blocks_by_consulta[consulta_ref].append(bloco)
+
+        schedule_events = []
+
+        def _consulta_timestamp(consulta_obj):
+            if consulta_obj.appointment and consulta_obj.appointment.scheduled_at:
+                return consulta_obj.appointment.scheduled_at
+            return consulta_obj.created_at
+
+        for consulta in consultas_finalizadas:
+            timestamp = _consulta_timestamp(consulta)
+            if not timestamp or not (start_dt_utc <= timestamp < end_dt_utc):
+                continue
+            relevant_blocks = exam_blocks_by_consulta.get(consulta.id)
+            if not relevant_blocks:
+                relevant_blocks = [
+                    bloco
+                    for bloco in exam_blocks_by_animal.get(consulta.animal_id, [])
+                    if bloco.data_criacao
+                    and timestamp
+                    and bloco.data_criacao.date() == timestamp.date()
+                ]
+            exam_summary = []
+            exam_ids = []
+            for bloco in relevant_blocks or []:
+                for exame in bloco.exames:
+                    exam_ids.append(exame.id)
+                    exam_summary.append(
+                        {
+                            'nome': exame.nome,
+                            'status': exame.status,
+                            'justificativa': exame.justificativa,
+                            'bloco_id': bloco.id,
+                        }
+                    )
+            schedule_events.append(
+                {
+                    'kind': 'consulta_finalizada',
+                    'timestamp': timestamp,
+                    'animal': consulta.animal,
+                    'consulta': consulta,
+                    'consulta_id': consulta.id,
+                    'appointment': consulta.appointment,
+                    'exam_summary': exam_summary,
+                    'exam_blocks': relevant_blocks or [],
+                    'exam_ids': exam_ids,
+                }
+            )
+
+        for item in appointments_upcoming:
+            if item['kind'] == 'retorno':
+                appt = item['appt']
+                schedule_events.append(
+                    {
+                        'kind': 'retorno',
+                        'timestamp': appt.scheduled_at,
+                        'animal': appt.animal,
+                        'appointment': appt,
+                        'consulta_id': appt.consulta_id,
+                        'exam_summary': [],
+                        'exam_blocks': [],
+                        'exam_ids': [],
+                    }
+                )
+
+        for exam in upcoming_exams:
+            schedule_events.append(
+                {
+                    'kind': 'exame',
+                    'timestamp': exam.scheduled_at,
+                    'animal': exam.animal,
+                    'exam': exam,
+                    'consulta_id': None,
+                    'exam_summary': [],
+                    'exam_blocks': [],
+                    'exam_ids': [exam.id],
+                }
+            )
+
+        schedule_events.sort(
+            key=lambda event: event.get('timestamp') or datetime.min,
+            reverse=True,
         )
 
         session['exam_pending_seen_count'] = ExamAppointment.query.filter_by(
@@ -7751,7 +7874,7 @@ def appointments():
             horarios_grouped=horarios_grouped,
             appointments_pending=appointments_pending,
             appointments_upcoming=appointments_upcoming,
-            appointments_past=appointments_past,
+            schedule_events=schedule_events,
             start_dt=start_dt,
             end_dt=end_dt,
             timedelta=timedelta,
