@@ -434,6 +434,7 @@ class AppointmentForm(FlaskForm):
 
     time = TimeField(
         'Horário',
+        format='%H:%M',
         validators=[DataRequired()],
     )
 
