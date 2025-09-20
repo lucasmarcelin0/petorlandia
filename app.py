@@ -7522,6 +7522,7 @@ def appointments():
             veterinario = current_user.veterinario
         if not veterinario:
             abort(404)
+        vet_user_id = getattr(veterinario, "user_id", None)
         query_args = request.args.to_dict()
         if current_user.role == 'admin':
             query_args['view_as'] = 'veterinario'
@@ -7694,7 +7695,7 @@ def appointments():
             if ex.time_left.total_seconds() <= 0:
                 ex.status = 'canceled'
                 msg = Message(
-                    sender_id=veterinario.user_id,
+                    sender_id=vet_user_id or getattr(current_user, "id", None),
                     receiver_id=ex.requester_id,
                     animal_id=ex.animal_id,
                     content=f"Especialista não aceitou exame para {ex.animal.name}. Reagende com outro profissional.",
@@ -7728,8 +7729,8 @@ def appointments():
 
         consulta_filters = [Consulta.status == 'finalizada']
         scope_filters = []
-        if veterinario.user_id:
-            scope_filters.append(Consulta.created_by == veterinario.user_id)
+        if vet_user_id:
+            scope_filters.append(Consulta.created_by == vet_user_id)
         if veterinario.clinica_id:
             scope_filters.append(Consulta.clinica_id == veterinario.clinica_id)
         if scope_filters:
@@ -7738,9 +7739,11 @@ def appointments():
         consultas_finalizadas = (
             Consulta.query.outerjoin(Appointment, Consulta.appointment)
             .options(
-                joinedload(Consulta.animal).joinedload('owner'),
+                joinedload(Consulta.animal).joinedload(Animal.owner),
                 joinedload(Consulta.veterinario),
-                joinedload(Consulta.appointment).joinedload('animal').joinedload('owner'),
+                joinedload(Consulta.appointment)
+                .joinedload(Appointment.animal)
+                .joinedload(Animal.owner),
             )
             .filter(*consulta_filters)
             .filter(
