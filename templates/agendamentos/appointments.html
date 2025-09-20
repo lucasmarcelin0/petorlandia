@@ -70,8 +70,27 @@
             </div>
             <div class="col-md-6">
               {{ form.time.label(class="form-label fw-semibold") }}
-              {{ form.time(class="form-control", type="time", list="available-times") }}
-              <datalist id="available-times"></datalist>
+              {% set time_value = '' %}
+              {% if form.time.raw_data %}
+                {% set time_value = form.time.raw_data[0] %}
+              {% elif form.time.data is string %}
+                {% set time_value = form.time.data %}
+              {% elif form.time.data %}
+                {% set time_value = form.time.data.strftime('%H:%M') %}
+              {% endif %}
+              <select
+                id="{{ form.time.id }}"
+                name="{{ form.time.name }}"
+                class="form-select"
+                data-selected="{{ time_value }}"
+                required
+                {% if not time_value %}disabled{% endif %}
+              >
+                <option value="" disabled {% if not time_value %}selected{% endif %}>Selecione um horário</option>
+                {% if time_value %}
+                  <option value="{{ time_value }}" selected>{{ time_value }}</option>
+                {% endif %}
+              </select>
             </div>
           </div>
 
@@ -214,22 +233,70 @@
 document.addEventListener('DOMContentLoaded', () => {
   const vetField = {% if form %}document.getElementById('{{ form.veterinario_id.id }}'){% else %}null{% endif %};
   const dateField = {% if form %}document.getElementById('{{ form.date.id }}'){% else %}null{% endif %};
-  const datalist = document.getElementById('available-times');
+  const timeField = {% if form %}document.getElementById('{{ form.time.id }}'){% else %}null{% endif %};
   const scheduleContainer = document.getElementById('schedule-overview');
 
-  async function updateTimes() {
-    if (!vetField || !dateField || !datalist) return;
-    const vetId = vetField.value;
-    const date = dateField.value;
-    if (!vetId || !date) return;
-    const resp = await fetch(`/api/specialist/${vetId}/available_times?date=${date}`);
-    const times = await resp.json();
-    datalist.innerHTML = '';
-    times.forEach(t => {
+  function renderTimeOptions(times, emptyMessage = 'Sem horários disponíveis') {
+    if (!timeField) return;
+    const available = Array.isArray(times) ? times : [];
+    const previous = timeField.dataset.selected || timeField.value;
+    timeField.innerHTML = '';
+
+    const placeholder = document.createElement('option');
+    placeholder.value = '';
+    placeholder.disabled = true;
+
+    if (!available.length) {
+      placeholder.textContent = emptyMessage;
+      placeholder.selected = true;
+      timeField.appendChild(placeholder);
+      timeField.disabled = true;
+      timeField.value = '';
+      timeField.dataset.selected = '';
+      return;
+    }
+
+    placeholder.textContent = 'Selecione um horário';
+    placeholder.selected = !available.includes(previous);
+    timeField.appendChild(placeholder);
+
+    available.forEach((t) => {
       const opt = document.createElement('option');
       opt.value = t;
-      datalist.appendChild(opt);
+      opt.textContent = t;
+      if (t === previous) {
+        opt.selected = true;
+      }
+      timeField.appendChild(opt);
     });
+
+    timeField.disabled = false;
+    if (available.includes(previous)) {
+      timeField.value = previous;
+      timeField.dataset.selected = previous;
+    } else {
+      timeField.value = '';
+      timeField.dataset.selected = '';
+    }
+  }
+
+  async function updateTimes() {
+    if (!vetField || !dateField || !timeField) return;
+    const vetId = vetField.value;
+    const date = dateField.value;
+    if (!vetId || !date) {
+      renderTimeOptions([], 'Selecione um horário');
+      return;
+    }
+    try {
+      const resp = await fetch(`/api/specialist/${vetId}/available_times?date=${date}`);
+      if (!resp.ok) throw new Error('Erro ao carregar horários');
+      const times = await resp.json();
+      renderTimeOptions(times);
+    } catch (error) {
+      console.error(error);
+      renderTimeOptions([], 'Sem horários disponíveis');
+    }
   }
 
   function badge(text, cls) {
@@ -291,8 +358,13 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
+  timeField && timeField.addEventListener('change', () => {
+    timeField.dataset.selected = timeField.value;
+  });
+
   vetField && vetField.addEventListener('change', () => { updateTimes(); loadSchedule(); });
   dateField && dateField.addEventListener('change', () => { updateTimes(); loadSchedule(); });
+  updateTimes();
   loadSchedule();
 });
 </script>
