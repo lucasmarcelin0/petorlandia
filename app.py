@@ -7430,13 +7430,11 @@ def appointments():
             veterinario = current_user.veterinario
         if not veterinario:
             abort(404)
-        appointments_url = url_for('appointments')
+        query_args = request.args.to_dict()
         if current_user.role == 'admin':
-            appointments_url = url_for(
-                'appointments',
-                view_as='veterinario',
-                veterinario_id=veterinario.id,
-            )
+            query_args['view_as'] = 'veterinario'
+            query_args['veterinario_id'] = veterinario.id
+        appointments_url = url_for('appointments', **query_args)
         schedule_form = VetScheduleForm(prefix='schedule')
         appointment_form = AppointmentForm(is_veterinario=True, prefix='appointment')
         if _is_admin():
