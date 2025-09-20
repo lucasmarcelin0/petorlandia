@@ -760,7 +760,7 @@ class Appointment(db.Model):
     veterinario_id = db.Column(db.Integer, db.ForeignKey('veterinario.id'), nullable=False)
     scheduled_at = db.Column(db.DateTime, nullable=False)
     status = db.Column(db.String(20), nullable=False, default='scheduled')
-    kind = db.Column(db.String(20), nullable=False, default='consulta')
+    kind = db.Column(db.String(20), nullable=False, default='general')
     notes = db.Column(db.Text, nullable=True)
     consulta_id = db.Column(db.Integer, db.ForeignKey('consulta.id'), nullable=True)
     clinica_id = db.Column(db.Integer, db.ForeignKey('clinica.id'), nullable=True)
