@@ -21,7 +21,15 @@
     {% endif %}
   </div>
 
-  {% with clinic_id = current_user.clinica_id %}
+  {% set calendar_redirect_url = none %}
+  {% if not form %}
+    {% if current_user.role == 'admin' %}
+      {% set calendar_redirect_url = url_for('appointments', view_as='colaborador') %}
+    {% else %}
+      {% set calendar_redirect_url = url_for('appointments_calendar') %}
+    {% endif %}
+  {% endif %}
+  {% with clinic_id = current_user.clinica_id, calendar_redirect_url = calendar_redirect_url %}
     {% include 'partials/schedule_toggle.html' %}
   {% endwith %}
 
@@ -214,8 +222,45 @@
 document.addEventListener('DOMContentLoaded', () => {
   const vetField = {% if form %}document.getElementById('{{ form.veterinario_id.id }}'){% else %}null{% endif %};
   const dateField = {% if form %}document.getElementById('{{ form.date.id }}'){% else %}null{% endif %};
+  const timeField = {% if form %}document.getElementById('{{ form.time.id }}'){% else %}null{% endif %};
   const datalist = document.getElementById('available-times');
   const scheduleContainer = document.getElementById('schedule-overview');
+  const calendarContainer = document.querySelector('[data-calendar-redirect-url]');
+  const calendarRedirectUrl = (calendarContainer && calendarContainer.dataset && calendarContainer.dataset.calendarRedirectUrl) || '';
+  const newAppointmentCollapseEl = document.getElementById('newAppointmentForm');
+  const newAppointmentToggleBtn = document.querySelector('[data-bs-target="#newAppointmentForm"]');
+  let newAppointmentCollapseInstance = null;
+
+  function ensureNewAppointmentVisible() {
+    if (!newAppointmentCollapseEl || !window.bootstrap || !bootstrap.Collapse) {
+      return;
+    }
+    if (!newAppointmentCollapseInstance) {
+      newAppointmentCollapseInstance = bootstrap.Collapse.getOrCreateInstance(
+        newAppointmentCollapseEl,
+        { toggle: false }
+      );
+    }
+    if (!newAppointmentCollapseEl.classList.contains('show')) {
+      newAppointmentCollapseInstance.show();
+    }
+    if (newAppointmentToggleBtn) {
+      newAppointmentToggleBtn.setAttribute('aria-expanded', 'true');
+    }
+  }
+
+  function focusFirstAppointmentField() {
+    if (!newAppointmentCollapseEl) {
+      return;
+    }
+    const firstField = newAppointmentCollapseEl.querySelector('input, select, textarea');
+    if (!firstField) {
+      return;
+    }
+    window.setTimeout(() => {
+      firstField.focus({ preventScroll: false });
+    }, 150);
+  }
 
   async function updateTimes() {
     if (!vetField || !dateField || !datalist) return;
@@ -290,6 +335,36 @@ document.addEventListener('DOMContentLoaded', () => {
       scheduleModal.show();
     });
   }
+
+  document.addEventListener('calendarSlotChosen', event => {
+    const detail = event.detail || {};
+    if (!detail.date) {
+      return;
+    }
+    if (!dateField) {
+      if (calendarRedirectUrl) {
+        const targetUrl = new URL(calendarRedirectUrl, window.location.origin);
+        targetUrl.searchParams.set('date', detail.date);
+        if (detail.time) {
+          targetUrl.searchParams.set('time', detail.time);
+        }
+        window.location.href = targetUrl.toString();
+      }
+      return;
+    }
+
+    ensureNewAppointmentVisible();
+
+    dateField.value = detail.date;
+    dateField.dispatchEvent(new Event('change', { bubbles: true }));
+
+    if (timeField && detail.time) {
+      timeField.value = detail.time;
+      timeField.dispatchEvent(new Event('change', { bubbles: true }));
+    }
+
+    focusFirstAppointmentField();
+  });
 
   vetField && vetField.addEventListener('change', () => { updateTimes(); loadSchedule(); });
   dateField && dateField.addEventListener('change', () => { updateTimes(); loadSchedule(); });
