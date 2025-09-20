@@ -184,6 +184,23 @@ def upload_profile_photo_async(user_id, data, content_type, filename):
 BR_TZ = ZoneInfo("America/Sao_Paulo")
 
 
+def local_date_range_to_utc(start_dt, end_dt):
+    """Convert local date/datetime boundaries to naive UTC datetimes."""
+
+    def _convert(value):
+        if value is None:
+            return None
+        if isinstance(value, date) and not isinstance(value, datetime):
+            value = datetime.combine(value, time.min)
+        if value.tzinfo is None:
+            value = value.replace(tzinfo=BR_TZ)
+        else:
+            value = value.astimezone(BR_TZ)
+        return value.astimezone(timezone.utc).replace(tzinfo=None)
+
+    return _convert(start_dt), _convert(end_dt)
+
+
 @app.template_filter("datetime_brazil")
 def datetime_brazil(value):
     if isinstance(value, datetime):
@@ -263,6 +280,7 @@ from helpers import (
     group_appointments_by_day,
     group_vet_schedules_by_day,
     appointments_to_events,
+    to_timezone_aware,
     get_available_times,
     get_weekly_schedule,
 )
@@ -2790,11 +2808,13 @@ def clinic_detail(clinica_id):
         except ValueError:
             end_dt = None
 
+    start_dt_utc, end_dt_utc = local_date_range_to_utc(start_dt, end_dt)
+
     appointments_query = Appointment.query.filter_by(clinica_id=clinica_id)
-    if start_dt:
-        appointments_query = appointments_query.filter(Appointment.scheduled_at >= start_dt)
-    if end_dt:
-        appointments_query = appointments_query.filter(Appointment.scheduled_at < end_dt)
+    if start_dt_utc:
+        appointments_query = appointments_query.filter(Appointment.scheduled_at >= start_dt_utc)
+    if end_dt_utc:
+        appointments_query = appointments_query.filter(Appointment.scheduled_at < end_dt_utc)
 
     appointments = appointments_query.order_by(Appointment.scheduled_at).all()
     appointments_grouped = group_appointments_by_day(appointments)
@@ -7576,6 +7596,7 @@ def appointments():
             today = date.today()
             start_dt = datetime.combine(today - timedelta(days=today.weekday()), datetime.min.time())
             end_dt = start_dt + timedelta(days=7)
+        start_dt_utc, end_dt_utc = local_date_range_to_utc(start_dt, end_dt)
 
         pending_consultas = (
             Appointment.query.filter_by(veterinario_id=veterinario.id, status="scheduled")
@@ -7613,15 +7634,15 @@ def appointments():
 
         upcoming_consultas = (
             Appointment.query.filter_by(veterinario_id=veterinario.id, status="accepted")
-            .filter(Appointment.scheduled_at >= start_dt)
-            .filter(Appointment.scheduled_at < end_dt)
+            .filter(Appointment.scheduled_at >= start_dt_utc)
+            .filter(Appointment.scheduled_at < end_dt_utc)
             .order_by(Appointment.scheduled_at)
             .all()
         )
         upcoming_exams = (
             ExamAppointment.query.filter_by(specialist_id=veterinario.id, status='confirmed')
-            .filter(ExamAppointment.scheduled_at >= start_dt)
-            .filter(ExamAppointment.scheduled_at < end_dt)
+            .filter(ExamAppointment.scheduled_at >= start_dt_utc)
+            .filter(ExamAppointment.scheduled_at < end_dt_utc)
             .order_by(ExamAppointment.scheduled_at)
             .all()
         )
@@ -7635,7 +7656,7 @@ def appointments():
 
         appointments_past = (
             Appointment.query.filter_by(veterinario_id=veterinario.id)
-            .filter(Appointment.scheduled_at < start_dt)
+            .filter(Appointment.scheduled_at < start_dt_utc)
             .order_by(Appointment.scheduled_at.desc())
             .all()
         )
@@ -8130,11 +8151,13 @@ def api_user_appointments(user_id):
             if getattr(exam, 'specialist', None) and getattr(exam.specialist, 'user', None):
                 title = f"{title} - {exam.specialist.user.name}"
             end_time = exam.scheduled_at + timedelta(minutes=30)
+            start = to_timezone_aware(exam.scheduled_at)
+            end = to_timezone_aware(end_time)
             return {
                 'id': f"exam-{exam.id}",
                 'title': title,
-                'start': exam.scheduled_at.isoformat(),
-                'end': end_time.isoformat(),
+                'start': start.isoformat() if start else None,
+                'end': end.isoformat() if end else None,
             }
 
         exam_events = [exam_to_event(exam) for exam in unique_exam_appointments]
@@ -8162,16 +8185,18 @@ def api_user_appointments(user_id):
                 unique_vaccines.append(vac)
 
         def vaccine_to_event(vaccine):
-            start = datetime.combine(vaccine.aplicada_em, time.min)
+            start = datetime.combine(vaccine.aplicada_em, time.min, tzinfo=BR_TZ)
             end = start + timedelta(hours=1)
             title = f"Vacina: {vaccine.nome}"
             if getattr(vaccine, 'animal', None):
                 title = f"{title} - {vaccine.animal.name}"
+            start_aware = to_timezone_aware(start)
+            end_aware = to_timezone_aware(end)
             return {
                 'id': f"vaccine-{vaccine.id}",
                 'title': title,
-                'start': start.isoformat(),
-                'end': end.isoformat(),
+                'start': start_aware.isoformat() if start_aware else None,
+                'end': end_aware.isoformat() if end_aware else None,
             }
 
         vaccine_events = [vaccine_to_event(vac) for vac in unique_vaccines]
