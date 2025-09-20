@@ -212,8 +212,8 @@
 <script src="{{ url_for('static', filename='appointments_table.js') }}"></script>
 <script>
 document.addEventListener('DOMContentLoaded', () => {
-  const vetField = document.getElementById('veterinario_id');
-  const dateField = document.getElementById('date');
+  const vetField = {% if form %}document.getElementById('{{ form.veterinario_id.id }}'){% else %}null{% endif %};
+  const dateField = {% if form %}document.getElementById('{{ form.date.id }}'){% else %}null{% endif %};
   const datalist = document.getElementById('available-times');
   const scheduleContainer = document.getElementById('schedule-overview');
 
@@ -281,7 +281,7 @@ document.addEventListener('DOMContentLoaded', () => {
   if (scheduleBtn && scheduleModalEl) {
     const scheduleModal = new bootstrap.Modal(scheduleModalEl);
     scheduleBtn.addEventListener('click', () => {
-      const vetSelectSrc = document.getElementById('veterinario_id');
+      const vetSelectSrc = vetField;
       const vetSelect = document.getElementById('schedule-vet');
       if (vetSelectSrc && vetSelect) {
         vetSelect.innerHTML = vetSelectSrc.innerHTML;
