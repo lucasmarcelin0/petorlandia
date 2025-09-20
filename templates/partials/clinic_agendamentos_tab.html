@@ -32,7 +32,7 @@
             </a>
           </div>
         </form>
-        <div id="appointments-table-container">
+        <div id="appointments-table-container" data-appointments-container data-refresh-url="{{ request.url }}">
           {% include 'partials/appointments_table.html' %}
         </div>
       </div>

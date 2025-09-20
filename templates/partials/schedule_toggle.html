@@ -11,7 +11,10 @@
     </div>
   </div>
   <div class="card-body p-0">
-    <div id="{{ calendar_id }}"></div>
+    <div id="{{ calendar_id }}" data-calendar-redirect-url="{{ calendar_redirect_url|default('') }}"></div>
+  </div>
+  <div class="card-footer bg-light small text-muted text-center">
+    💡 Clique em um dia do calendário para iniciar um novo agendamento.
   </div>
 </div>
 
@@ -26,6 +29,10 @@ document.addEventListener('DOMContentLoaded', function() {
   const userPicker = document.getElementById('admin-agenda-user-picker');
   let source = '{{ 'clinic' if clinic_id else 'user' }}';
   let selectedUserId = userPicker && userPicker.value ? userPicker.value : null;
+
+  if (!calendarEl) {
+    return;
+  }
 
   function eventUrl() {
     if (source === 'clinic') {
@@ -51,8 +58,53 @@ document.addEventListener('DOMContentLoaded', function() {
     });
   }
 
+  function pad(value) {
+    return String(value).padStart(2, '0');
+  }
+
+  function formatLocalDate(dateObj) {
+    return [
+      dateObj.getFullYear(),
+      pad(dateObj.getMonth() + 1),
+      pad(dateObj.getDate())
+    ].join('-');
+  }
+
+  function inferApproximateTime(dateObj, isAllDay) {
+    if (isAllDay) {
+      return '09:00';
+    }
+    return `${pad(dateObj.getHours())}:${pad(dateObj.getMinutes())}`;
+  }
+
+  function emitSlotChosen(dateObj, isAllDay) {
+    if (!dateObj) {
+      return;
+    }
+    const detail = {
+      date: formatLocalDate(dateObj),
+      time: inferApproximateTime(dateObj, isAllDay),
+      allDay: !!isAllDay,
+      source,
+    };
+    const customEvent = new CustomEvent('calendarSlotChosen', {
+      detail,
+      bubbles: true,
+    });
+    calendarEl.dispatchEvent(customEvent);
+  }
+
   const calendar = new FullCalendar.Calendar(calendarEl, {
     initialView: 'dayGridMonth',
+    selectable: true,
+    selectMirror: true,
+    select: function(info) {
+      emitSlotChosen(info.start, info.allDay);
+      calendar.unselect();
+    },
+    dateClick: function(info) {
+      emitSlotChosen(info.date, info.allDay);
+    },
   });
 
   window.sharedCalendar = calendar;
