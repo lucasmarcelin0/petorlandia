@@ -210,15 +210,25 @@ def has_schedule_conflict(veterinario_id, dia_semana, hora_inicio, hora_fim, exc
 
 
 def group_appointments_by_day(appointments):
-    """Group appointments by date.
+    """Group appointments by local (BRT) date.
 
     Returns a list of tuples ``(date, [appointments])`` ordered by day.
     """
-    sorted_appts = sorted(appointments, key=lambda a: a.scheduled_at)
-    return [
-        (day, list(items))
-        for day, items in groupby(sorted_appts, key=lambda a: a.scheduled_at.date())
+
+    def to_local_datetime(dt):
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        return dt.astimezone(BR_TZ)
+
+    decorated = [
+        (to_local_datetime(appt.scheduled_at), appt)
+        for appt in appointments
     ]
+    decorated.sort(key=lambda item: item[0])
+    grouped = []
+    for day, items in groupby(decorated, key=lambda item: item[0].date()):
+        grouped.append((day, [appt for _, appt in items]))
+    return grouped
 
 
 def appointment_to_event(appointment, duration_minutes=30):
