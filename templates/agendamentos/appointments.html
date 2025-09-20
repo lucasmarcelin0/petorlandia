@@ -78,8 +78,22 @@
             </div>
             <div class="col-md-6">
               {{ form.time.label(class="form-label fw-semibold") }}
-              {{ form.time(class="form-control", type="time", list="available-times") }}
-              <datalist id="available-times"></datalist>
+              <select
+                id="{{ form.time.id }}"
+                name="{{ form.time.name }}"
+                class="form-select"
+                data-placeholder="Selecione um horário"
+                data-empty-text="Sem horários disponíveis"
+                data-current-time="{{ form.time.data.strftime('%H:%M') if form.time.data else '' }}"
+                {% if form.time.flags.required %}required{% endif %}
+              >
+                {% if form.time.data %}
+                  {% set current_time = form.time.data.strftime('%H:%M') %}
+                  <option value="{{ current_time }}" selected>{{ current_time }}</option>
+                {% else %}
+                  <option value="" selected disabled>Selecione um horário</option>
+                {% endif %}
+              </select>
             </div>
           </div>
 
@@ -223,7 +237,12 @@ document.addEventListener('DOMContentLoaded', () => {
   const vetField = {% if form %}document.getElementById('{{ form.veterinario_id.id }}'){% else %}null{% endif %};
   const dateField = {% if form %}document.getElementById('{{ form.date.id }}'){% else %}null{% endif %};
   const timeField = {% if form %}document.getElementById('{{ form.time.id }}'){% else %}null{% endif %};
-  const datalist = document.getElementById('available-times');
+  const timeFieldPlaceholder = timeField && timeField.dataset && timeField.dataset.placeholder
+    ? timeField.dataset.placeholder
+    : 'Selecione um horário';
+  const timeFieldEmptyText = timeField && timeField.dataset && timeField.dataset.emptyText
+    ? timeField.dataset.emptyText
+    : 'Sem horários disponíveis';
   const scheduleContainer = document.getElementById('schedule-overview');
   const calendarContainer = document.querySelector('[data-calendar-redirect-url]');
   const calendarRedirectUrl = (calendarContainer && calendarContainer.dataset && calendarContainer.dataset.calendarRedirectUrl) || '';
@@ -262,19 +281,86 @@ document.addEventListener('DOMContentLoaded', () => {
     }, 150);
   }
 
+  function setTimeFieldMessage(message, { disable = false } = {}) {
+    if (!timeField) {
+      return;
+    }
+    timeField.innerHTML = '';
+    const option = document.createElement('option');
+    option.value = '';
+    option.textContent = message;
+    option.disabled = true;
+    option.selected = true;
+    timeField.appendChild(option);
+    timeField.disabled = disable;
+    timeField.value = '';
+    timeField.dataset.currentTime = '';
+  }
+
+  function populateTimeFieldOptions(times) {
+    if (!timeField) {
+      return;
+    }
+    const currentTime = timeField.dataset.currentTime || timeField.value || '';
+    timeField.innerHTML = '';
+
+    const placeholderOption = document.createElement('option');
+    placeholderOption.value = '';
+    placeholderOption.textContent = timeFieldPlaceholder;
+    placeholderOption.disabled = true;
+    placeholderOption.selected = !currentTime;
+    timeField.appendChild(placeholderOption);
+
+    let hasCurrentTime = false;
+    times.forEach(t => {
+      const option = document.createElement('option');
+      option.value = t;
+      option.textContent = t;
+      if (currentTime === t) {
+        option.selected = true;
+        placeholderOption.selected = false;
+        hasCurrentTime = true;
+      }
+      timeField.appendChild(option);
+    });
+
+    if (currentTime && !hasCurrentTime) {
+      const preservedOption = document.createElement('option');
+      preservedOption.value = currentTime;
+      preservedOption.textContent = currentTime;
+      preservedOption.selected = true;
+      timeField.appendChild(preservedOption);
+    }
+
+    timeField.disabled = false;
+    timeField.dataset.currentTime = timeField.value;
+  }
+
   async function updateTimes() {
-    if (!vetField || !dateField || !datalist) return;
+    if (!vetField || !dateField || !timeField) return;
     const vetId = vetField.value;
     const date = dateField.value;
-    if (!vetId || !date) return;
-    const resp = await fetch(`/api/specialist/${vetId}/available_times?date=${date}`);
-    const times = await resp.json();
-    datalist.innerHTML = '';
-    times.forEach(t => {
-      const opt = document.createElement('option');
-      opt.value = t;
-      datalist.appendChild(opt);
-    });
+
+    if (!vetId || !date) {
+      setTimeFieldMessage(timeFieldPlaceholder, { disable: true });
+      return;
+    }
+
+    try {
+      const resp = await fetch(`/api/specialist/${vetId}/available_times?date=${date}`);
+      if (!resp.ok) {
+        throw new Error('Erro ao carregar horários disponíveis');
+      }
+      const times = await resp.json();
+      if (!Array.isArray(times) || times.length === 0) {
+        setTimeFieldMessage(timeFieldEmptyText, { disable: true });
+        return;
+      }
+      populateTimeFieldOptions(times);
+    } catch (error) {
+      console.error(error);
+      setTimeFieldMessage(timeFieldEmptyText, { disable: true });
+    }
   }
 
   function badge(text, cls) {
@@ -360,14 +446,20 @@ document.addEventListener('DOMContentLoaded', () => {
 
     if (timeField && detail.time) {
       timeField.value = detail.time;
+      timeField.dataset.currentTime = detail.time;
       timeField.dispatchEvent(new Event('change', { bubbles: true }));
     }
 
     focusFirstAppointmentField();
   });
 
+  timeField && timeField.addEventListener('change', () => {
+    timeField.dataset.currentTime = timeField.value;
+  });
+
   vetField && vetField.addEventListener('change', () => { updateTimes(); loadSchedule(); });
   dateField && dateField.addEventListener('change', () => { updateTimes(); loadSchedule(); });
+  updateTimes();
   loadSchedule();
 });
 </script>
