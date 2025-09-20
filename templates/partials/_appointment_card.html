@@ -1,0 +1,86 @@
+{% set day_key = appt.scheduled_at|format_datetime_brazil('%Y-%m-%d') %}
+{% set scheduled_key = appt.scheduled_at|format_datetime_brazil('%Y-%m-%dT%H:%M') %}
+{% set day_label = appt.scheduled_at|format_datetime_brazil('%A, %d/%m/%Y') %}
+{% set card_classes = 'appointment-card appointment-row ' + (appt.status or '') %}
+<div
+  class="{{ card_classes.strip() }}"
+  data-appointment-id="{{ appt.id }}"
+  data-href="{{ url_for('edit_appointment', appointment_id=appt.id) }}"
+  data-day="{{ day_key }}"
+  data-day-label="{{ day_label }}"
+  data-scheduled="{{ scheduled_key }}"
+>
+  <div class="card-body">
+    <div class="row align-items-center">
+      <div class="col-md-2">
+        <div class="time-display d-flex align-items-center gap-1">
+          <span class="icon-circle bg-secondary text-white"><i class="fa-regular fa-clock"></i></span>
+          {{ appt.scheduled_at|format_datetime_brazil('%H:%M') }}
+        </div>
+      </div>
+      <div class="col-md-3">
+        <div class="animal-name d-flex align-items-center gap-2">
+          <span class="icon-circle bg-danger text-white"><i class="fa-solid fa-paw"></i></span>{{ appt.animal.name }}
+        </div>
+      </div>
+      <div class="col-md-2">
+        <div class="vet-name d-flex align-items-center gap-2">
+          <span class="icon-circle bg-info text-white"><i class="fa-solid fa-user-doctor"></i></span>{{ appt.veterinario.user.name }}
+        </div>
+      </div>
+      <div class="col-md-2">
+        <span class="status-badge status-{{ appt.status }}">
+          {% if appt.status == 'scheduled' %}A fazer{% endif %}
+          {% if appt.status == 'completed' %}Realizada{% endif %}
+          {% if appt.status == 'canceled' %}Cancelada{% endif %}
+          {% if appt.status == 'accepted' %}Aceita{% endif %}
+        </span>
+      </div>
+      <div class="col-md-3">
+        <div class="actions-container">
+          <a href="{{ url_for('ficha_animal', animal_id=appt.animal_id) }}" class="btn btn-sm btn-outline-primary" title="Ficha do Animal">
+            <i class="fa-solid fa-file-medical me-1"></i>Ficha do Animal
+          </a>
+          <a href="{{ url_for('ficha_tutor', tutor_id=appt.tutor_id) }}" class="btn btn-sm btn-outline-secondary" title="Ficha do Tutor">
+            <i class="fa-solid fa-user me-1"></i>Ficha do Tutor
+          </a>
+          {% if current_user.worker in ['veterinario', 'colaborador'] %}
+          <a href="{{ url_for('consulta_direct', animal_id=appt.animal_id, appointment_id=appt.id) }}" class="btn btn-sm btn-outline-success" title="Iniciar Consulta">
+            <i class="fa-solid fa-stethoscope me-1"></i>Iniciar Consulta
+          </a>
+          {% endif %}
+          <a href="{{ url_for('edit_appointment', appointment_id=appt.id) }}" class="btn btn-sm btn-outline-info" title="Propor novo horário">
+            <i class="fa-solid fa-arrows-rotate me-1"></i>Propor novo horário
+          </a>
+          <form method="POST" action="{{ url_for('update_appointment_status', appointment_id=appt.id) }}" class="form-confirm">
+            {% if csrf_token is defined %}{{ csrf_token() }}{% endif %}
+            <input type="hidden" name="status" value="completed">
+            <button class="btn btn-sm btn-outline-success" title="Marcar como realizada">
+              <i class="fa-solid fa-check me-1"></i>Realizada
+            </button>
+          </form>
+          <form method="POST" action="{{ url_for('update_appointment_status', appointment_id=appt.id) }}" class="form-confirm">
+            {% if csrf_token is defined %}{{ csrf_token() }}{% endif %}
+            <input type="hidden" name="status" value="canceled">
+            <button class="btn btn-sm btn-outline-warning" title="Cancelar">
+              <i class="fa-solid fa-xmark me-1"></i>Cancelar
+            </button>
+          </form>
+          <form method="POST" action="{{ url_for('update_appointment_status', appointment_id=appt.id) }}" class="form-confirm">
+            {% if csrf_token is defined %}{{ csrf_token() }}{% endif %}
+            <input type="hidden" name="status" value="scheduled">
+            <button class="btn btn-sm btn-outline-secondary" title="Marcar como a fazer">
+              <i class="fa-solid fa-clock me-1"></i>A fazer
+            </button>
+          </form>
+          <form method="POST" action="{{ url_for('delete_appointment', appointment_id=appt.id) }}" class="form-confirm" data-confirm="Excluir este agendamento?">
+            {% if csrf_token is defined %}{{ csrf_token() }}{% endif %}
+            <button class="btn btn-sm btn-outline-danger" title="Excluir">
+              <i class="fa-solid fa-trash me-1"></i>Excluir
+            </button>
+          </form>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>

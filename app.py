@@ -8017,6 +8017,12 @@ def appointments():
         appointments_grouped = group_appointments_by_day(appointments)
         exam_appointments_grouped = group_appointments_by_day(exam_appointments)
         vaccine_appointments_grouped = group_appointments_by_day(vaccine_appointments)
+        if request.headers.get('X-Partial') == 'appointments_table' or request.args.get('partial') == 'appointments_table':
+            return render_template(
+                'partials/appointments_table.html',
+                appointments_grouped=appointments_grouped,
+            )
+
         return render_template(
             'agendamentos/appointments.html',
             appointments=appointments,
@@ -8197,7 +8203,13 @@ def edit_appointment(appointment_id):
         if notes is not None:
             appointment.notes = notes
         db.session.commit()
-        return jsonify({'success': True})
+        card_html = render_template('partials/_appointment_card.html', appt=appointment)
+        return jsonify({
+            'success': True,
+            'message': 'Agendamento atualizado com sucesso.',
+            'card_html': card_html,
+            'appointment_id': appointment.id,
+        })
 
     veterinarios = Veterinario.query.all()
     if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
