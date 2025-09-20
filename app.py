@@ -2108,19 +2108,48 @@ def consulta_direct(animal_id):
     tutor = animal.owner
     clinica_id = current_user_clinic_id()
 
+    appointment_id = request.args.get('appointment_id', type=int)
+    appointment = None
+    if appointment_id:
+        appointment = Appointment.query.get_or_404(appointment_id)
+        if appointment.animal_id != animal.id:
+            abort(404)
+        appointment_clinic_id = appointment.clinica_id or (
+            appointment.veterinario.clinica_id if appointment.veterinario else None
+        )
+        if not appointment_clinic_id and getattr(appointment, 'animal', None):
+            appointment_clinic_id = appointment.animal.clinica_id
+        if appointment_clinic_id:
+            ensure_clinic_access(appointment_clinic_id)
+            if clinica_id and appointment_clinic_id != clinica_id:
+                abort(404)
+            if not clinica_id:
+                clinica_id = appointment_clinic_id
+
     edit_id = request.args.get('c', type=int)
     edit_mode = False
 
+    consulta = None
     if current_user.worker == 'veterinario':
+        consulta_created = False
+        appointment_updated = False
+
         if edit_id:
             consulta = get_consulta_or_404(edit_id)
             edit_mode = True
         else:
-            consulta = (
-                Consulta.query
-                .filter_by(animal_id=animal.id, status='in_progress', clinica_id=clinica_id)
-                .first()
-            )
+            if appointment and appointment.consulta_id:
+                consulta_vinculada = get_consulta_or_404(appointment.consulta_id)
+                if consulta_vinculada.status != 'finalizada':
+                    consulta = consulta_vinculada
+
+            if not consulta:
+                consulta = (
+                    Consulta.query
+                    .filter_by(animal_id=animal.id, status='in_progress', clinica_id=clinica_id)
+                    .first()
+                )
+
             if not consulta:
                 consulta = Consulta(
                     animal_id=animal.id,
@@ -2129,7 +2158,25 @@ def consulta_direct(animal_id):
                     status='in_progress'
                 )
                 db.session.add(consulta)
-                db.session.commit()
+                consulta_created = True
+
+        if appointment and consulta:
+            if appointment.consulta_id != consulta.id:
+                appointment.consulta = consulta
+                appointment_updated = True
+
+            vet_profile = getattr(current_user, 'veterinario', None)
+            if (
+                vet_profile
+                and appointment.veterinario_id == getattr(vet_profile, 'id', None)
+                and appointment.status not in {'completed', 'canceled'}
+                and appointment.status != 'accepted'
+            ):
+                appointment.status = 'accepted'
+                appointment_updated = True
+
+        if consulta_created or appointment_updated:
+            db.session.commit()
     else:
         consulta = None
 
@@ -2236,6 +2283,9 @@ def finalizar_consulta(consulta_id):
         return redirect(url_for('index'))
 
     consulta.status = 'finalizada'
+    appointment = consulta.appointment
+    if appointment and appointment.status != 'completed':
+        appointment.status = 'completed'
 
     # Mensagem de resumo para o tutor
     resumo = (
@@ -2252,7 +2302,7 @@ def finalizar_consulta(consulta_id):
     )
     db.session.add(msg)
 
-    if consulta.appointment:
+    if appointment:
         db.session.commit()
         flash('Consulta finalizada e retorno já agendado.', 'success')
         return redirect(url_for('consulta_direct', animal_id=consulta.animal_id))
@@ -4003,6 +4053,9 @@ def update_consulta(consulta_id):
     else:
         # Salva, finaliza e cria nova automaticamente
         consulta.status = 'finalizada'
+        appointment = consulta.appointment
+        if appointment and appointment.status != 'completed':
+            appointment.status = 'completed'
         db.session.commit()
 
         nova = Consulta(
@@ -4033,7 +4086,26 @@ def update_consulta(consulta_id):
             animal=consulta.animal,
             historico_consultas=historico,
         )
-        return jsonify(success=True, message=message, category='success', html=html)
+        appointments_html = None
+        if consulta.appointment and consulta.clinica_id:
+            clinic_appointments = (
+                Appointment.query
+                .filter_by(clinica_id=consulta.clinica_id)
+                .order_by(Appointment.scheduled_at)
+                .all()
+            )
+            appointments_grouped = group_appointments_by_day(clinic_appointments)
+            appointments_html = render_template(
+                'partials/appointments_table.html',
+                appointments_grouped=appointments_grouped,
+            )
+        return jsonify(
+            success=True,
+            message=message,
+            category='success',
+            html=html,
+            appointments_html=appointments_html,
+        )
 
     return redirect(url_for('consulta_direct', animal_id=consulta.animal_id))
 
