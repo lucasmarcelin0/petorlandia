@@ -231,123 +231,191 @@
     </div>
   </div>
 
-  <!-- Seção de Próximos Agendamentos -->
+  {% set retorno_events = agenda_events | selectattr('kind', 'in', ['consulta', 'retorno']) | list %}
+  {% set retorno_events = retorno_events | sort(attribute='timestamp') %}
+  {% set exam_events = agenda_events | selectattr('kind', 'equalto', 'exame') | list %}
+  {% set exam_events = exam_events | sort(attribute='timestamp') %}
+  {% set final_events = agenda_events | selectattr('kind', 'equalto', 'consulta_finalizada') | list %}
+  {% set final_events = final_events | sort(attribute='timestamp', reverse=True) %}
+
+  <!-- Seção de Retornos -->
   <div class="card mb-4 border-primary">
-    <div class="card-header bg-primary text-white">
-      <h5 class="mb-0"><i class="fas fa-calendar-check me-2"></i>Próximos Agendamentos</h5>
+    <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
+      <h5 class="mb-0"><i class="fas fa-sync-alt me-2"></i>Retornos agendados</h5>
+      <span class="badge bg-light text-primary">{{ retorno_events|length }}</span>
     </div>
     <div class="card-body p-0">
       <div class="list-group list-group-flush">
-        {% for item in appointments_upcoming %}
-          {% set appt = item.appt %}
-          {% if item.kind == 'exame' %}
-          <div class="list-group-item list-group-item-action appointment-item" data-type="exame">
-            <div class="d-flex justify-content-between align-items-center">
-              <div class="d-flex align-items-center">
-                <div class="me-3">
-                  <i class="fas fa-flask fa-2x text-info"></i>
-                </div>
-                <div>
-                  <h6 class="mb-0">{{ appt.scheduled_at|format_datetime_brazil('%d/%m/%Y %H:%M') }} - {{ appt.animal.name }}</h6>
-                  <small class="text-muted">{{ appt.animal.owner.name }} <span class="badge bg-info ms-1">Exame</span></small>
-                </div>
-              </div>
-              <div class="btn-group">
-                <a href="{{ url_for('ficha_animal', animal_id=appt.animal_id) }}" class="btn btn-sm btn-outline-primary"><i class="fas fa-file-medical me-1"></i>Ficha</a>
-                <a href="{{ url_for('ficha_tutor', tutor_id=appt.animal.owner.id) }}" class="btn btn-sm btn-outline-secondary"><i class="fas fa-user me-1"></i>Tutor</a>
-              </div>
-            </div>
-          </div>
-          {% else %}
+        {% for event in retorno_events %}
+          {% set appt = event.appointment %}
+          {% set tutor = event.tutor %}
           <div class="list-group-item list-group-item-action appointment-item"
               data-id="{{ appt.id }}"
               data-date="{{ appt.scheduled_at|format_datetime_brazil('%Y-%m-%d') }}"
               data-time="{{ appt.scheduled_at|format_datetime_brazil('%H:%M') }}"
-              data-vet="{{ appt.veterinario.user.name }}"
-              data-tutor="{{ appt.tutor.name }}"
-              data-tutor-id="{{ appt.tutor_id }}"
-              data-animal="{{ appt.animal.name }}"
-              data-animal-id="{{ appt.animal_id }}"
-              data-animal-url="{{ url_for('ficha_animal', animal_id=appt.animal_id) }}"
-              data-tutor-url="{{ url_for('ficha_tutor', tutor_id=appt.tutor_id) }}"
-              data-consulta-url="{{ url_for('consulta_direct', animal_id=appt.animal_id) }}"
+              data-vet="{{ appt.veterinario.user.name if appt.veterinario and appt.veterinario.user else veterinario.user.name }}"
+              data-tutor="{{ tutor.name if tutor else '' }}"
+              data-tutor-id="{{ tutor.id if tutor else '' }}"
+              data-animal="{{ event.animal.name }}"
+              data-animal-id="{{ event.animal.id }}"
+              data-animal-url="{{ url_for('ficha_animal', animal_id=event.animal.id) }}"
+              data-tutor-url="{{ url_for('ficha_tutor', tutor_id=tutor.id) if tutor else '' }}"
+              data-consulta-url="{{ url_for('consulta_direct', animal_id=event.animal.id) }}"
               data-notes="{{ appt.notes or '' }}"
-              data-type="{{ item.kind }}">
+              data-type="{{ event.kind }}">
             <div class="d-flex justify-content-between align-items-center">
               <div class="d-flex align-items-center">
                 <div class="me-3">
-                  <i class="fas fa-stethoscope fa-2x text-success"></i>
+                  <i class="fas {{ 'fa-undo-alt text-warning' if event.kind == 'retorno' else 'fa-stethoscope text-success' }} fa-2x"></i>
                 </div>
                 <div>
-                  <h6 class="mb-0">{{ appt.scheduled_at|format_datetime_brazil('%d/%m/%Y %H:%M') }} - {{ appt.animal.name }}</h6>
-                  <small class="text-muted">{{ appt.tutor.name }}
-                    {% if item.kind == 'retorno' %}<span class="badge bg-warning text-dark ms-1">Retorno</span>{% endif %}
+                  <h6 class="mb-0">{{ event.timestamp|format_datetime_brazil('%d/%m/%Y %H:%M') }} - {{ event.animal.name }}</h6>
+                  <small class="text-muted">
+                    {{ tutor.name if tutor else 'Tutor não informado' }}
+                    <span class="badge {{ 'bg-warning text-dark' if event.kind == 'retorno' else 'bg-success' }} ms-1">
+                      {{ 'Retorno' if event.kind == 'retorno' else 'Consulta' }}
+                    </span>
                   </small>
+                  {% if appt.notes %}
+                  <div class="mt-1"><small class="text-muted"><i class="fas fa-sticky-note me-1"></i>{{ appt.notes }}</small></div>
+                  {% endif %}
                 </div>
               </div>
               <div class="btn-group">
-                <a href="{{ url_for('ficha_animal', animal_id=appt.animal_id) }}" class="btn btn-sm btn-outline-primary"><i class="fas fa-file-medical me-1"></i>Ficha</a>
-                <a href="{{ url_for('ficha_tutor', tutor_id=appt.tutor_id) }}" class="btn btn-sm btn-outline-secondary"><i class="fas fa-user me-1"></i>Tutor</a>
-                <a href="{{ url_for('consulta_direct', animal_id=appt.animal_id) }}" class="btn btn-sm btn-outline-success"><i class="fas fa-play-circle me-1"></i>Iniciar</a>
+                <a href="{{ url_for('ficha_animal', animal_id=event.animal.id) }}" class="btn btn-sm btn-outline-primary"><i class="fas fa-file-medical me-1"></i>Ficha</a>
+                {% if tutor %}
+                <a href="{{ url_for('ficha_tutor', tutor_id=tutor.id) }}" class="btn btn-sm btn-outline-secondary"><i class="fas fa-user me-1"></i>Tutor</a>
+                {% endif %}
+                <a href="{{ url_for('consulta_direct', animal_id=event.animal.id) }}" class="btn btn-sm btn-outline-success"><i class="fas fa-play-circle me-1"></i>Iniciar</a>
               </div>
             </div>
           </div>
-          {% endif %}
         {% else %}
           <div class="list-group-item text-center py-4">
             <i class="fas fa-calendar-times fa-2x text-muted mb-2"></i>
-            <p class="text-muted mb-0">Nenhum agendamento encontrado.</p>
+            <p class="text-muted mb-0">Nenhum retorno agendado.</p>
           </div>
         {% endfor %}
       </div>
     </div>
   </div>
 
-  <!-- Seção de Agendamentos Passados -->
-  <div class="card mb-4 border-secondary">
-    <div class="card-header bg-secondary text-white d-flex justify-content-between align-items-center">
-      <h5 class="mb-0"><i class="fas fa-history me-2"></i>Agendamentos Passados</h5>
-      <button id="toggle-past" class="btn btn-sm btn-light">
-        <i class="fas fa-chevron-down me-1"></i>Mostrar
-      </button>
+  <!-- Seção de Exames -->
+  <div class="card mb-4 border-info">
+    <div class="card-header bg-info text-white d-flex justify-content-between align-items-center">
+      <h5 class="mb-0"><i class="fas fa-vials me-2"></i>Exames</h5>
+      <span class="badge bg-light text-info">{{ exam_events|length }}</span>
     </div>
-    <div class="card-body p-0 d-none" id="past-list">
+    <div class="card-body p-0">
       <div class="list-group list-group-flush">
-        {% for appt in appointments_past %}
-          <div class="list-group-item list-group-item-action appointment-item"
-              data-id="{{ appt.id }}"
-              data-date="{{ appt.scheduled_at|format_datetime_brazil('%Y-%m-%d') }}"
-              data-time="{{ appt.scheduled_at|format_datetime_brazil('%H:%M') }}"
-              data-vet="{{ appt.veterinario.user.name }}"
-              data-tutor="{{ appt.tutor.name }}"
-              data-tutor-id="{{ appt.tutor_id }}"
-              data-animal="{{ appt.animal.name }}"
-              data-animal-id="{{ appt.animal_id }}"
-              data-animal-url="{{ url_for('ficha_animal', animal_id=appt.animal_id) }}"
-              data-tutor-url="{{ url_for('ficha_tutor', tutor_id=appt.tutor_id) }}"
-              data-consulta-url="{{ url_for('consulta_direct', animal_id=appt.animal_id) }}"
-              data-notes="{{ appt.notes or '' }}">
+        {% for event in exam_events %}
+          {% set exam = event.exam %}
+          <div class="list-group-item">
             <div class="d-flex justify-content-between align-items-center">
               <div class="d-flex align-items-center">
                 <div class="me-3">
-                  <i class="fas fa-history fa-2x text-secondary"></i>
+                  <i class="fas fa-flask fa-2x text-info"></i>
                 </div>
                 <div>
-                  <h6 class="mb-0">{{ appt.scheduled_at|format_datetime_brazil('%d/%m/%Y %H:%M') }} - {{ appt.animal.name }}</h6>
-                  <small class="text-muted">{{ appt.tutor.name }}</small>
+                  <h6 class="mb-0">{{ event.timestamp|format_datetime_brazil('%d/%m/%Y %H:%M') }} - {{ event.animal.name }}</h6>
+                  <small class="text-muted">
+                    {{ event.tutor.name if event.tutor else 'Tutor não informado' }}
+                    {% if exam.status %}
+                      <span class="badge bg-light text-dark border ms-1">{{ exam.status|capitalize }}</span>
+                    {% endif %}
+                  </small>
+                  {% if exam.requester %}
+                    <div class="mt-1"><small class="text-muted">Solicitado por {{ exam.requester.name }}</small></div>
+                  {% endif %}
                 </div>
               </div>
               <div class="btn-group">
-                <a href="{{ url_for('ficha_animal', animal_id=appt.animal_id) }}" class="btn btn-sm btn-outline-primary"><i class="fas fa-file-medical me-1"></i>Ficha</a>
-                <a href="{{ url_for('ficha_tutor', tutor_id=appt.tutor_id) }}" class="btn btn-sm btn-outline-secondary"><i class="fas fa-user me-1"></i>Tutor</a>
-                <a href="{{ url_for('consulta_direct', animal_id=appt.animal_id) }}" class="btn btn-sm btn-outline-success"><i class="fas fa-play-circle me-1"></i>Iniciar</a>
+                <a href="{{ url_for('ficha_animal', animal_id=event.animal.id) }}" class="btn btn-sm btn-outline-primary"><i class="fas fa-file-medical me-1"></i>Ficha</a>
+                {% if event.tutor %}
+                <a href="{{ url_for('ficha_tutor', tutor_id=event.tutor.id) }}" class="btn btn-sm btn-outline-secondary"><i class="fas fa-user me-1"></i>Tutor</a>
+                {% endif %}
               </div>
             </div>
           </div>
         {% else %}
           <div class="list-group-item text-center py-4">
             <i class="fas fa-inbox fa-2x text-muted mb-2"></i>
-            <p class="text-muted mb-0">Nenhum agendamento passado.</p>
+            <p class="text-muted mb-0">Nenhum exame agendado.</p>
+          </div>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+
+  <!-- Seção de Consultas finalizadas -->
+  <div class="card mb-4 border-secondary">
+    <div class="card-header bg-secondary text-white d-flex justify-content-between align-items-center">
+      <h5 class="mb-0"><i class="fas fa-history me-2"></i>Consultas finalizadas</h5>
+      <span class="badge bg-light text-secondary">{{ final_events|length }}</span>
+    </div>
+    <div class="card-body p-0">
+      <div class="list-group list-group-flush">
+        {% for event in final_events %}
+          {% set consulta = event.consulta %}
+          {% set tutor = event.tutor %}
+          <div class="list-group-item">
+            <div class="d-flex justify-content-between align-items-start flex-wrap gap-3">
+              <div>
+                <h6 class="mb-1">{{ event.timestamp|format_datetime_brazil('%d/%m/%Y %H:%M') }} - {{ event.animal.name }}</h6>
+                <small class="text-muted d-block">Tutor: {{ tutor.name if tutor else 'Tutor não informado' }}</small>
+                {% if consulta.conduta %}
+                  <div class="mt-2"><small class="text-muted"><strong>Conduta:</strong> {{ consulta.conduta }}</small></div>
+                {% endif %}
+                {% if consulta.prescricao %}
+                  <div class="mt-1"><small class="text-muted"><strong>Prescrição:</strong> {{ consulta.prescricao }}</small></div>
+                {% endif %}
+              </div>
+              <div class="btn-group">
+                <a href="{{ url_for('ficha_animal', animal_id=event.animal.id) }}" class="btn btn-sm btn-outline-primary"><i class="fas fa-file-medical me-1"></i>Ficha</a>
+                {% if tutor %}
+                  <a href="{{ url_for('ficha_tutor', tutor_id=tutor.id) }}" class="btn btn-sm btn-outline-secondary"><i class="fas fa-user me-1"></i>Tutor</a>
+                {% endif %}
+                <a href="{{ url_for('consulta_direct', animal_id=event.animal.id, c=consulta.id) }}" class="btn btn-sm btn-outline-success"><i class="fas fa-eye me-1"></i>Ver consulta</a>
+                <a href="{{ url_for('imprimir_consulta', consulta_id=consulta.id) }}" class="btn btn-sm btn-outline-dark" target="_blank"><i class="fas fa-print me-1"></i>Imprimir</a>
+              </div>
+            </div>
+            {% if event.exam_requests %}
+            <div class="mt-3">
+              <strong><i class="fas fa-vials me-1"></i>Exames solicitados</strong>
+              {% for resumo in event.exam_requests | sort(attribute='timestamp', reverse=True) %}
+                <div class="mt-2 p-3 bg-light rounded border">
+                  <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                      <small class="text-muted">{{ resumo.timestamp|format_datetime_brazil('%d/%m/%Y %H:%M') if resumo.timestamp else 'Data não informada' }}</small>
+                    </div>
+                    {% if resumo.bloco %}
+                      <div class="btn-group btn-group-sm">
+                        <a href="{{ url_for('imprimir_bloco_exames', bloco_id=resumo.bloco.id) }}" class="btn btn-outline-secondary" target="_blank"><i class="fas fa-print"></i></a>
+                      </div>
+                    {% endif %}
+                  </div>
+                  <ul class="mb-0 small">
+                    {% for exame in resumo.exames %}
+                      <li>
+                        <strong>{{ exame.nome }}</strong>
+                        {% if exame.status %}
+                          <span class="badge bg-secondary ms-1">{{ exame.status|capitalize }}</span>
+                        {% endif %}
+                        {% if exame.performed_at %}
+                          <span class="text-muted ms-1">{{ exame.performed_at|format_datetime_brazil('%d/%m/%Y') }}</span>
+                        {% endif %}
+                      </li>
+                    {% endfor %}
+                  </ul>
+                </div>
+              {% endfor %}
+            </div>
+            {% endif %}
+          </div>
+        {% else %}
+          <div class="list-group-item text-center py-4">
+            <i class="fas fa-inbox fa-2x text-muted mb-2"></i>
+            <p class="text-muted mb-0">Nenhuma consulta finalizada no período.</p>
           </div>
         {% endfor %}
       </div>
