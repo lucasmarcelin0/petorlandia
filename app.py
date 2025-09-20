@@ -7402,7 +7402,7 @@ def appointment_confirmation(appointment_id):
 @app.route('/appointments', methods=['GET', 'POST'])
 @login_required
 def appointments():
-    from models import ExamAppointment, Veterinario, Clinica, User
+    from models import ExamAppointment, Veterinario, Clinica, User, BlocoExames
 
     view_as = request.args.get('view_as')
     worker = current_user.worker
@@ -7646,20 +7646,109 @@ def appointments():
             .order_by(ExamAppointment.scheduled_at)
             .all()
         )
-        appointments_upcoming = []
-        for appt in upcoming_consultas:
-            kind = appt.kind or ('retorno' if appt.consulta_id else 'consulta')
-            appointments_upcoming.append({'kind': kind, 'appt': appt})
-        for exam in upcoming_exams:
-            appointments_upcoming.append({'kind': 'exame', 'appt': exam})
-        appointments_upcoming.sort(key=lambda x: x['appt'].scheduled_at)
 
-        appointments_past = (
-            Appointment.query.filter_by(veterinario_id=veterinario.id)
-            .filter(Appointment.scheduled_at < start_dt_utc)
-            .order_by(Appointment.scheduled_at.desc())
-            .all()
+        agenda_events = []
+        for appt in upcoming_consultas:
+            event_kind = 'retorno' if appt.consulta_id or appt.kind == 'retorno' else (appt.kind or 'consulta')
+            agenda_events.append(
+                {
+                    'kind': event_kind,
+                    'timestamp': appt.scheduled_at,
+                    'appointment': appt,
+                    'consulta': appt.consulta,
+                    'animal': appt.animal,
+                    'tutor': appt.tutor,
+                    'exam_requests': [],
+                }
+            )
+        for exam in upcoming_exams:
+            agenda_events.append(
+                {
+                    'kind': 'exame',
+                    'timestamp': exam.scheduled_at,
+                    'appointment': None,
+                    'consulta': None,
+                    'animal': exam.animal,
+                    'tutor': exam.animal.owner if getattr(exam.animal, 'owner', None) else None,
+                    'exam': exam,
+                    'exam_requests': [],
+                }
+            )
+
+        consultas_finalizadas_query = (
+            Consulta.query.options(
+                joinedload(Consulta.animal).joinedload('owner'),
+                joinedload(Consulta.appointment).joinedload('animal'),
+            )
+            .filter(Consulta.status == 'finalizada')
+            .filter(
+                or_(
+                    Consulta.created_by == veterinario.user_id,
+                    Consulta.clinica_id == veterinario.clinica_id,
+                )
+            )
         )
+        if start_dt_utc:
+            consultas_finalizadas_query = consultas_finalizadas_query.filter(
+                Consulta.created_at >= start_dt_utc
+            )
+        if end_dt_utc:
+            consultas_finalizadas_query = consultas_finalizadas_query.filter(
+                Consulta.created_at < end_dt_utc
+            )
+        consultas_finalizadas = consultas_finalizadas_query.order_by(Consulta.created_at.desc()).all()
+
+        exam_requests_by_consulta: dict[int, list[dict]] = defaultdict(list)
+        exam_requests_by_animal: dict[int, list[dict]] = defaultdict(list)
+        if consultas_finalizadas:
+            consulta_ids = [c.id for c in consultas_finalizadas]
+            animal_ids = {c.animal_id for c in consultas_finalizadas}
+            blocos_exames = []
+            if animal_ids:
+                bloco_query = BlocoExames.query.options(joinedload(BlocoExames.exames))
+                consulta_attr_exists = hasattr(BlocoExames, 'consulta_id')
+                filtros = []
+                if animal_ids:
+                    filtros.append(BlocoExames.animal_id.in_(animal_ids))
+                if consulta_attr_exists and consulta_ids:
+                    filtros.append(getattr(BlocoExames, 'consulta_id').in_(consulta_ids))
+                if filtros:
+                    bloco_query = bloco_query.filter(or_(*filtros))
+                blocos_exames = bloco_query.all()
+            for bloco in blocos_exames:
+                resumo = {
+                    'bloco': bloco,
+                    'exames': list(bloco.exames),
+                    'timestamp': bloco.data_criacao,
+                }
+                consulta_ref = getattr(bloco, 'consulta_id', None)
+                if consulta_ref:
+                    exam_requests_by_consulta[consulta_ref].append(resumo)
+                exam_requests_by_animal[bloco.animal_id].append(resumo)
+
+        for consulta in consultas_finalizadas:
+            event_timestamp = None
+            if consulta.appointment and consulta.appointment.scheduled_at:
+                event_timestamp = consulta.appointment.scheduled_at
+            else:
+                event_timestamp = consulta.created_at
+            exam_resumos = exam_requests_by_consulta.get(consulta.id) or exam_requests_by_animal.get(
+                consulta.animal_id,
+                [],
+            )
+            agenda_events.append(
+                {
+                    'kind': 'consulta_finalizada',
+                    'timestamp': event_timestamp,
+                    'appointment': consulta.appointment,
+                    'consulta': consulta,
+                    'animal': consulta.animal,
+                    'tutor': consulta.animal.owner if getattr(consulta.animal, 'owner', None) else None,
+                    'exam_requests': exam_resumos or [],
+                }
+            )
+
+        agenda_events.sort(key=lambda item: item.get('timestamp') or datetime.min)
 
         session['exam_pending_seen_count'] = ExamAppointment.query.filter_by(
             specialist_id=veterinario.id, status='pending'
@@ -7678,8 +7767,7 @@ def appointments():
             agenda_veterinarios=agenda_veterinarios,
             horarios_grouped=horarios_grouped,
             appointments_pending=appointments_pending,
-            appointments_upcoming=appointments_upcoming,
-            appointments_past=appointments_past,
+            agenda_events=agenda_events,
             start_dt=start_dt,
             end_dt=end_dt,
             timedelta=timedelta,
