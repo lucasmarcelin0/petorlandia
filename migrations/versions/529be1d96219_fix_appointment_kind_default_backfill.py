@@ -5,7 +5,9 @@ Revises: 2f9a0dc93f25
 Create Date: 2025-09-20 18:38:44.919801
 """
 
+
 from importlib import util as importlib_util
+
 
 from alembic import op
 import sqlalchemy as sa
@@ -14,10 +16,12 @@ import sqlalchemy as sa
 # revision identifiers, used by Alembic.
 revision = "529be1d96219"
 
+
 _HAS_MEDICAMENTO_TEXT_EXPANSION = importlib_util.find_spec(
     "migrations.versions.2f9a0dc93f25_expand_medicamento_text_fields"
 ) is not None
 down_revision = "2f9a0dc93f25" if _HAS_MEDICAMENTO_TEXT_EXPANSION else "b1db1e768d50"
+
 branch_labels = None
 depends_on = None
 
