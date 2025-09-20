@@ -6,6 +6,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')
 import pytest
 import flask_login.utils as login_utils
 from app import app as flask_app, db
+from helpers import to_timezone_aware
 from models import User, Clinica, Animal, Veterinario, HealthPlan, HealthSubscription, Appointment
 from datetime import datetime
 
@@ -43,7 +44,8 @@ def create_basic_appointment():
                        clinica_id=clinic.id)
     db.session.add(appt)
     db.session.commit()
-    return tutor.id, vet_user.id, clinic.id, appt.id, appt.scheduled_at.isoformat()
+    start_iso = to_timezone_aware(appt.scheduled_at).isoformat()
+    return tutor.id, vet_user.id, clinic.id, appt.id, start_iso
 
 def test_my_appointments_returns_events(client, monkeypatch):
     with flask_app.app_context():
@@ -56,6 +58,8 @@ def test_my_appointments_returns_events(client, monkeypatch):
     assert len(data) == 1
     assert data[0]['id'] == appt_id
     assert data[0]['start'] == start_iso
+    start_dt = datetime.fromisoformat(data[0]['start'])
+    assert start_dt.tzinfo is not None
 
 def test_clinic_appointments_returns_events(client, monkeypatch):
     with flask_app.app_context():
@@ -73,6 +77,7 @@ def test_clinic_appointments_returns_events(client, monkeypatch):
     data = resp.get_json()
     assert len(data) == 1
     assert data[0]['id'] == appt_id
+    assert data[0]['start'] == start_iso
 
 
 def test_my_appointments_returns_clinic_events_for_collaborator(client, monkeypatch):
@@ -91,6 +96,7 @@ def test_my_appointments_returns_clinic_events_for_collaborator(client, monkeypa
     data = resp.get_json()
     assert len(data) == 1
     assert data[0]['id'] == appt_id
+    assert data[0]['start'] == start_iso
 
 
 def test_my_appointments_returns_all_for_admin(client, monkeypatch):
@@ -113,3 +119,4 @@ def test_my_appointments_returns_all_for_admin(client, monkeypatch):
     user_data = user_resp.get_json()
     assert len(user_data) == 1
     assert user_data[0]['id'] == appt_id
+    assert user_data[0]['start'] == start_iso

@@ -14,6 +14,24 @@ from zoneinfo import ZoneInfo
 
 BR_TZ = ZoneInfo("America/Sao_Paulo")
 
+
+def to_timezone_aware(dt, target_tz=BR_TZ):
+    """Return ``dt`` converted to ``target_tz`` with an explicit offset.
+
+    Datetimes stored in the database are naive UTC values.  When they are
+    rendered for the calendar we need to include the timezone offset so the
+    client can display the correct local hour.  This helper treats naive
+    datetimes as UTC and converts them to the desired timezone.
+    """
+
+    if dt is None:
+        return None
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    if target_tz:
+        return dt.astimezone(target_tz)
+    return dt
+
 def parse_data_nascimento(data_str):
     """
     Converte uma string no formato 'dd/mm/yyyy' para datetime.
@@ -237,11 +255,13 @@ def appointment_to_event(appointment, duration_minutes=30):
     title = appointment.animal.name if appointment.animal else 'Consulta'
     if appointment.veterinario and appointment.veterinario.user:
         title = f"{title} - {appointment.veterinario.user.name}"
+    start = to_timezone_aware(appointment.scheduled_at)
+    end = to_timezone_aware(end_time)
     return {
         'id': appointment.id,
         'title': title,
-        'start': appointment.scheduled_at.isoformat(),
-        'end': end_time.isoformat(),
+        'start': start.isoformat() if start else None,
+        'end': end.isoformat() if end else None,
     }
 
 
