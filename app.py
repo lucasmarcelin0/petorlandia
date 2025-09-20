@@ -7766,7 +7766,7 @@ def appointments():
                 .all()
             )
             for vac in vaccine_appointments:
-                vac.scheduled_at = datetime.combine(vac.aplicada_em, time.min)
+                vac.scheduled_at = datetime.combine(vac.aplicada_em, time.min, tzinfo=BR_TZ)
             form = appointment_form
         else:
             tutor_user = current_user
@@ -7793,7 +7793,7 @@ def appointments():
                 .all()
             )
             for vac in vaccine_appointments:
-                vac.scheduled_at = datetime.combine(vac.aplicada_em, time.min)
+                vac.scheduled_at = datetime.combine(vac.aplicada_em, time.min, tzinfo=BR_TZ)
             form = None
         appointments_grouped = group_appointments_by_day(appointments)
         exam_appointments_grouped = group_appointments_by_day(exam_appointments)
