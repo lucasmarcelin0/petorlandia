@@ -149,7 +149,7 @@
               </div>
               <div class="col-md-6 mb-3">
                 {{ appointment_form.time.label(class="form-label fw-bold") }}
-                <select id="appointment-time" name="time" class="form-select">
+                <select id="appointment-time" name="{{ appointment_form.time.name }}" class="form-select">
                   <option value="">Selecione...</option>
                 </select>
               </div>
