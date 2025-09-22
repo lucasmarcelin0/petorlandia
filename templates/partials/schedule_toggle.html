@@ -27,8 +27,10 @@ document.addEventListener('DOMContentLoaded', function() {
   const calendarEl = document.getElementById('{{ calendar_id }}');
   const toggle = document.getElementById('{{ toggle_id }}');
   const userPicker = document.getElementById('admin-agenda-user-picker');
+  const csrfToken = '{{ csrf_token() if csrf_token is defined else '' }}';
   let source = '{{ 'clinic' if clinic_id else 'user' }}';
   let selectedUserId = userPicker && userPicker.value ? userPicker.value : null;
+  let calendar;
 
   if (!calendarEl) {
     return;
@@ -94,10 +96,59 @@ document.addEventListener('DOMContentLoaded', function() {
     calendarEl.dispatchEvent(customEvent);
   }
 
-  const calendar = new FullCalendar.Calendar(calendarEl, {
+  async function persistEventChange(info) {
+    if (!calendar) {
+      if (typeof info.revert === 'function') {
+        info.revert();
+      }
+      return;
+    }
+
+    const event = info.event;
+    if (!event || !event.start) {
+      if (typeof info.revert === 'function') {
+        info.revert();
+      }
+      return;
+    }
+
+    const payload = {
+      start: event.start ? event.start.toISOString() : null,
+      end: event.end ? event.end.toISOString() : null,
+    };
+
+    try {
+      const response = await fetch(`/api/appointments/${event.id}/reschedule`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-CSRFToken': csrfToken,
+          'X-Requested-With': 'XMLHttpRequest',
+        },
+        credentials: 'same-origin',
+        body: JSON.stringify(payload),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok || !data.success) {
+        const message = data && data.message ? data.message : 'Não foi possível reagendar este compromisso.';
+        throw new Error(message);
+      }
+      calendar.refetchEvents();
+    } catch (error) {
+      if (typeof info.revert === 'function') {
+        info.revert();
+      }
+      const message = (error && error.message) ? error.message : 'Ocorreu um erro ao reagendar este compromisso.';
+      window.alert(message);
+    }
+  }
+
+  calendar = new FullCalendar.Calendar(calendarEl, {
     initialView: 'dayGridMonth',
     selectable: true,
     selectMirror: true,
+    editable: true,
+    eventDurationEditable: true,
     select: function(info) {
       emitSlotChosen(info.start, info.allDay);
       calendar.unselect();
@@ -105,6 +156,8 @@ document.addEventListener('DOMContentLoaded', function() {
     dateClick: function(info) {
       emitSlotChosen(info.date, info.allDay);
     },
+    eventDrop: persistEventChange,
+    eventResize: persistEventChange,
   });
 
   window.sharedCalendar = calendar;

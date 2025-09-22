@@ -8414,6 +8414,85 @@ def api_user_appointments(user_id):
     return jsonify(events)
 
 
+@app.route('/api/appointments/<int:appointment_id>/reschedule', methods=['POST'])
+@login_required
+def api_reschedule_appointment(appointment_id):
+    """Update the schedule of an appointment after drag & drop operations."""
+
+    appointment = Appointment.query.get_or_404(appointment_id)
+
+    if current_user.worker in ['veterinario', 'colaborador']:
+        if current_user.worker == 'veterinario':
+            user_clinic = current_user.veterinario.clinica_id
+        else:
+            user_clinic = current_user.clinica_id
+        appointment_clinic = appointment.clinica_id
+        if appointment_clinic is None and appointment.veterinario:
+            appointment_clinic = appointment.veterinario.clinica_id
+        if appointment_clinic != user_clinic:
+            abort(403)
+    elif current_user.role != 'admin' and appointment.tutor_id != current_user.id:
+        abort(403)
+
+    data = request.get_json(silent=True) or {}
+    start_str = data.get('start') or data.get('startStr')
+
+    def _parse_client_datetime(value):
+        if not value or not isinstance(value, str):
+            return None
+        value = value.strip()
+        if value.endswith('Z'):
+            value = value[:-1] + '+00:00'
+        try:
+            return datetime.fromisoformat(value)
+        except ValueError:
+            return None
+
+    new_start = _parse_client_datetime(start_str)
+    if not new_start:
+        return jsonify({'success': False, 'message': 'Horário inválido.'}), 400
+
+    if new_start.tzinfo is None:
+        new_start_with_tz = new_start.replace(tzinfo=BR_TZ)
+        new_start_local = new_start
+    else:
+        new_start_with_tz = new_start.astimezone(BR_TZ)
+        new_start_local = new_start_with_tz.replace(tzinfo=None)
+
+    if appointment.scheduled_at.tzinfo is None:
+        existing_local = (
+            appointment.scheduled_at
+            .replace(tzinfo=timezone.utc)
+            .astimezone(BR_TZ)
+            .replace(tzinfo=None)
+        )
+    else:
+        existing_local = appointment.scheduled_at.astimezone(BR_TZ).replace(tzinfo=None)
+
+    if (
+        not is_slot_available(appointment.veterinario_id, new_start_local, kind=appointment.kind)
+        and new_start_local != existing_local
+    ):
+        return jsonify({
+            'success': False,
+            'message': 'Horário indisponível. Já existe uma consulta ou exame nesse intervalo.',
+        }), 400
+
+    appointment.scheduled_at = (
+        new_start_with_tz
+        .astimezone(timezone.utc)
+        .replace(tzinfo=None)
+    )
+    db.session.commit()
+
+    updated_start = to_timezone_aware(appointment.scheduled_at)
+    return jsonify({
+        'success': True,
+        'message': 'Agendamento atualizado com sucesso.',
+        'start': updated_start.isoformat() if updated_start else None,
+    })
+
+
 @app.route('/api/clinic_appointments/<int:clinica_id>')
 @login_required
 def api_clinic_appointments(clinica_id):
