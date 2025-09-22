@@ -23,6 +23,9 @@ APPOINTMENT_KIND_DURATIONS = {
     'exame': 30,
 }
 
+DEFAULT_VACCINE_EVENT_START_TIME = time(9, 0)
+DEFAULT_VACCINE_EVENT_DURATION = timedelta(minutes=30)
+
 if APPOINTMENT_KIND_DURATIONS:
     MAX_APPOINTMENT_DURATION_MINUTES = max(APPOINTMENT_KIND_DURATIONS.values())
 else:
@@ -360,25 +363,164 @@ def group_appointments_by_day(appointments):
     return grouped
 
 
+def _build_calendar_event(*, event_id, title, start, end, event_type,
+                          editable, duration_editable, record_id=None,
+                          class_names=None, extra_extended_props=None):
+    """Serialize event metadata for FullCalendar."""
+
+    if not start:
+        return None
+
+    start_aware = to_timezone_aware(start)
+    end_aware = to_timezone_aware(end) if end else None
+
+    if not start_aware:
+        return None
+
+    event = {
+        'id': event_id,
+        'title': title,
+        'start': start_aware.isoformat(),
+        'end': end_aware.isoformat() if end_aware else None,
+        'allDay': False,
+        'editable': editable,
+        'durationEditable': duration_editable,
+        'extendedProps': {
+            'eventType': event_type,
+        },
+    }
+
+    if record_id is not None:
+        event['extendedProps']['recordId'] = record_id
+
+    if extra_extended_props:
+        event['extendedProps'].update(extra_extended_props)
+
+    if class_names:
+        event['classNames'] = list(class_names)
+
+    return event
+
+
 def appointment_to_event(appointment):
     """Convert an ``Appointment`` into a FullCalendar-friendly event dict."""
+
+    if not appointment:
+        return None
+
     end_time = appointment.scheduled_at + get_appointment_duration(appointment.kind)
     title = appointment.animal.name if appointment.animal else 'Consulta'
     if appointment.veterinario and appointment.veterinario.user:
         title = f"{title} - {appointment.veterinario.user.name}"
-    start = to_timezone_aware(appointment.scheduled_at)
-    end = to_timezone_aware(end_time)
-    return {
-        'id': appointment.id,
-        'title': title,
-        'start': start.isoformat() if start else None,
-        'end': end.isoformat() if end else None,
+
+    extra_props = {
+        'kind': getattr(appointment, 'kind', None),
+        'clinicId': getattr(appointment, 'clinica_id', None),
+        'veterinarioId': getattr(appointment, 'veterinario_id', None),
+        'animalId': getattr(appointment, 'animal_id', None),
     }
+
+    return _build_calendar_event(
+        event_id=f"appointment-{appointment.id}",
+        title=title,
+        start=appointment.scheduled_at,
+        end=end_time,
+        event_type='appointment',
+        editable=True,
+        duration_editable=True,
+        record_id=appointment.id,
+        class_names=['calendar-event-appointment'],
+        extra_extended_props=extra_props,
+    )
+
+
+def exam_to_event(exam):
+    """Convert an ``ExamAppointment`` into a calendar event."""
+
+    if not exam:
+        return None
+
+    title = f"Exame: {exam.animal.name if getattr(exam, 'animal', None) else 'Exame'}"
+    if getattr(exam, 'specialist', None) and getattr(exam.specialist, 'user', None):
+        title = f"{title} - {exam.specialist.user.name}"
+    end_time = exam.scheduled_at + get_appointment_duration('exame')
+
+    extra_props = {
+        'status': getattr(exam, 'status', None),
+        'animalId': getattr(exam, 'animal_id', None),
+        'specialistId': getattr(exam, 'specialist_id', None),
+    }
+
+    return _build_calendar_event(
+        event_id=f"exam-{exam.id}",
+        title=title,
+        start=exam.scheduled_at,
+        end=end_time,
+        event_type='exam',
+        editable=False,
+        duration_editable=False,
+        record_id=exam.id,
+        class_names=['calendar-event-exam'],
+        extra_extended_props=extra_props,
+    )
+
+
+def vaccine_to_event(vaccine):
+    """Convert a ``Vacina`` record into a calendar event."""
+
+    if not vaccine or not getattr(vaccine, 'aplicada_em', None):
+        return None
+
+    start = datetime.combine(vaccine.aplicada_em, DEFAULT_VACCINE_EVENT_START_TIME)
+    start = start.replace(tzinfo=BR_TZ)
+    end = start + DEFAULT_VACCINE_EVENT_DURATION
+
+    title = f"Vacina: {vaccine.nome}"
+    if getattr(vaccine, 'animal', None):
+        title = f"{title} - {vaccine.animal.name}"
+
+    extra_props = {
+        'aplicada': getattr(vaccine, 'aplicada', None),
+        'animalId': getattr(vaccine, 'animal_id', None),
+        'aplicadaPor': getattr(vaccine, 'aplicada_por', None),
+    }
+
+    return _build_calendar_event(
+        event_id=f"vaccine-{vaccine.id}",
+        title=title,
+        start=start,
+        end=end,
+        event_type='vaccine',
+        editable=False,
+        duration_editable=False,
+        record_id=vaccine.id,
+        class_names=['calendar-event-vaccine'],
+        extra_extended_props=extra_props,
+    )
 
 
 def appointments_to_events(appointments):
     """Convert a list of ``Appointment`` objects into event dicts."""
-    return [appointment_to_event(a) for a in appointments]
+    events = []
+    for appointment in appointments or []:
+        event = appointment_to_event(appointment)
+        if event:
+            events.append(event)
+    return events
+
+
+def unique_items_by_id(items):
+    """Return a list with duplicate IDs removed while preserving order."""
+
+    seen = set()
+    unique = []
+    for item in items or []:
+        item_id = getattr(item, 'id', None)
+        if item_id is None or item_id in seen:
+            continue
+        seen.add(item_id)
+        unique.append(item)
+    return unique
 
 
 def get_available_times(veterinario_id, date, kind='consulta'):

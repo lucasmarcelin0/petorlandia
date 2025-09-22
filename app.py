@@ -281,6 +281,9 @@ from helpers import (
     group_appointments_by_day,
     group_vet_schedules_by_day,
     appointments_to_events,
+    exam_to_event,
+    vaccine_to_event,
+    unique_items_by_id,
     to_timezone_aware,
     get_available_times,
     get_weekly_schedule,
@@ -8423,40 +8426,19 @@ def api_user_appointments(user_id):
         exam_filters.append(ExamAppointment.specialist_id == vet.id)
     exam_query = ExamAppointment.query.outerjoin(ExamAppointment.animal)
     exam_filters.append(Animal.user_id == user.id)
-    exam_events = []
     if exam_filters:
         exam_appointments = (
             exam_query.filter(or_(*exam_filters))
             .order_by(ExamAppointment.scheduled_at)
             .all()
         )
-        seen_exam_ids = set()
-        unique_exam_appointments = []
-        for exam in exam_appointments:
-            if exam.id not in seen_exam_ids:
-                seen_exam_ids.add(exam.id)
-                unique_exam_appointments.append(exam)
-
-        def exam_to_event(exam):
-            title = f"Exame: {exam.animal.name if getattr(exam, 'animal', None) else 'Exame'}"
-            if getattr(exam, 'specialist', None) and getattr(exam.specialist, 'user', None):
-                title = f"{title} - {exam.specialist.user.name}"
-            end_time = exam.scheduled_at + get_appointment_duration('exame')
-            start = to_timezone_aware(exam.scheduled_at)
-            end = to_timezone_aware(end_time)
-            return {
-                'id': f"exam-{exam.id}",
-                'title': title,
-                'start': start.isoformat() if start else None,
-                'end': end.isoformat() if end else None,
-            }
-
-        exam_events = [exam_to_event(exam) for exam in unique_exam_appointments]
-        events.extend(exam_events)
+        for exam in unique_items_by_id(exam_appointments):
+            event = exam_to_event(exam)
+            if event:
+                events.append(event)
 
     vaccine_filters = [Animal.user_id == user.id, Vacina.aplicada_por == user.id]
     vaccine_query = Vacina.query.outerjoin(Vacina.animal)
-    vaccine_events = []
     if vaccine_filters:
         vaccine_appointments = (
             vaccine_query.filter(
@@ -8467,31 +8449,10 @@ def api_user_appointments(user_id):
             .order_by(Vacina.aplicada_em)
             .all()
         )
-
-        unique_vaccines = []
-        seen_vaccine_ids = set()
-        for vac in vaccine_appointments:
-            if vac.id not in seen_vaccine_ids:
-                seen_vaccine_ids.add(vac.id)
-                unique_vaccines.append(vac)
-
-        def vaccine_to_event(vaccine):
-            start = datetime.combine(vaccine.aplicada_em, time.min, tzinfo=BR_TZ)
-            end = start + timedelta(hours=1)
-            title = f"Vacina: {vaccine.nome}"
-            if getattr(vaccine, 'animal', None):
-                title = f"{title} - {vaccine.animal.name}"
-            start_aware = to_timezone_aware(start)
-            end_aware = to_timezone_aware(end)
-            return {
-                'id': f"vaccine-{vaccine.id}",
-                'title': title,
-                'start': start_aware.isoformat() if start_aware else None,
-                'end': end_aware.isoformat() if end_aware else None,
-            }
-
-        vaccine_events = [vaccine_to_event(vac) for vac in unique_vaccines]
-        events.extend(vaccine_events)
+        for vac in unique_items_by_id(vaccine_appointments):
+            event = vaccine_to_event(vac)
+            if event:
+                events.append(event)
 
     return jsonify(events)
 
@@ -8586,7 +8547,43 @@ def api_clinic_appointments(clinica_id):
         .order_by(Appointment.scheduled_at)
         .all()
     )
-    return jsonify(appointments_to_events(appts))
+    events = appointments_to_events(appts)
+
+    exam_query = ExamAppointment.query.outerjoin(ExamAppointment.animal)
+    exam_appointments = (
+        exam_query
+        .filter(
+            or_(
+                Animal.clinica_id == clinica_id,
+                ExamAppointment.specialist.has(Veterinario.clinica_id == clinica_id),
+            ),
+            ExamAppointment.status.in_(['pending', 'confirmed']),
+        )
+        .order_by(ExamAppointment.scheduled_at)
+        .all()
+    )
+    for exam in unique_items_by_id(exam_appointments):
+        event = exam_to_event(exam)
+        if event:
+            events.append(event)
+
+    vaccine_query = Vacina.query.outerjoin(Vacina.animal)
+    vaccine_appointments = (
+        vaccine_query
+        .filter(
+            Animal.clinica_id == clinica_id,
+            Vacina.aplicada_em.isnot(None),
+            Vacina.aplicada_em >= date.today(),
+        )
+        .order_by(Vacina.aplicada_em)
+        .all()
+    )
+    for vaccine in unique_items_by_id(vaccine_appointments):
+        event = vaccine_to_event(vaccine)
+        if event:
+            events.append(event)
+
+    return jsonify(events)
 
 
 @app.route('/api/specialists')
