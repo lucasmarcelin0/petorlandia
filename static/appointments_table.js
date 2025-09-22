@@ -187,9 +187,24 @@ function updateAppointmentRow(existingRow, newRow) {
   return true;
 }
 
+function applyFilterParams(parsedUrl) {
+  if (!parsedUrl || !(parsedUrl instanceof URL)) {
+    return;
+  }
+  const currentParams = new URLSearchParams(window.location.search);
+  ['start', 'end'].forEach((param) => {
+    if (currentParams.has(param)) {
+      parsedUrl.searchParams.set(param, currentParams.get(param));
+    } else {
+      parsedUrl.searchParams.delete(param);
+    }
+  });
+}
+
 function buildPartialUrl(url) {
   try {
     const parsed = new URL(url, window.location.origin);
+    applyFilterParams(parsed);
     parsed.searchParams.set('partial', 'appointments_table');
     return parsed.toString();
   } catch (error) {
@@ -201,7 +216,14 @@ async function refreshAppointmentsContainer(container) {
   if (!container) {
     return false;
   }
-  const refreshUrl = container.dataset.refreshUrl || window.location.href;
+  let refreshUrl = container.dataset.refreshUrl || window.location.href;
+  try {
+    const parsedRefreshUrl = new URL(refreshUrl, window.location.origin);
+    applyFilterParams(parsedRefreshUrl);
+    refreshUrl = parsedRefreshUrl.toString();
+    container.dataset.refreshUrl = refreshUrl;
+  } catch (error) {
+  }
   const targetUrl = buildPartialUrl(refreshUrl);
   try {
     const response = await fetch(targetUrl, {

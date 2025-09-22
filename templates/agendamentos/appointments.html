@@ -145,19 +145,42 @@
   </button>
   <div class="collapse mb-4" id="filterPeriod">
     <div class="card card-body">
-      <div class="row g-3">
-        <div class="col-md-6">
-          <label class="form-label">De</label>
-          <input type="date" class="form-control">
+      <form method="get" action="{{ url_for('appointments') }}">
+        {% for key, values in request.args.lists() %}
+          {% if key not in ['start', 'end', 'partial'] %}
+            {% for value in values %}
+              <input type="hidden" name="{{ key }}" value="{{ value }}">
+            {% endfor %}
+          {% endif %}
+        {% endfor %}
+        <div class="row g-3">
+          <div class="col-md-6">
+            <label class="form-label" for="appointments-filter-start">De</label>
+            <input
+              type="date"
+              id="appointments-filter-start"
+              name="start"
+              class="form-control"
+              value="{{ request.args.get('start', '') }}"
+            >
+          </div>
+          <div class="col-md-6">
+            <label class="form-label" for="appointments-filter-end">Até</label>
+            <input
+              type="date"
+              id="appointments-filter-end"
+              name="end"
+              class="form-control"
+              value="{{ request.args.get('end', '') }}"
+            >
+          </div>
         </div>
-        <div class="col-md-6">
-          <label class="form-label">Até</label>
-          <input type="date" class="form-control">
+        <div class="d-flex justify-content-end mt-3">
+          <button type="submit" class="btn btn-primary btn-sm">
+            <i class="bi bi-check2-circle"></i> Aplicar Filtro
+          </button>
         </div>
-      </div>
-      <div class="d-flex justify-content-end mt-3">
-        <button class="btn btn-primary btn-sm"><i class="bi bi-check2-circle"></i> Aplicar Filtro</button>
-      </div>
+      </form>
     </div>
   </div>
 
