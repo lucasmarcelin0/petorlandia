@@ -27,21 +27,77 @@ document.addEventListener('DOMContentLoaded', function() {
   const calendarEl = document.getElementById('{{ calendar_id }}');
   const toggle = document.getElementById('{{ toggle_id }}');
   const userPicker = document.getElementById('admin-agenda-user-picker');
+  const hiddenVetInput = (function() {
+    if (userPicker && typeof userPicker.closest === 'function') {
+      const form = userPicker.closest('[data-admin-agenda-switcher]');
+      if (form) {
+        return form.querySelector('[data-switcher-vet]');
+      }
+    }
+    return document.querySelector('[data-switcher-vet]');
+  })();
+  const hiddenColabInput = (function() {
+    if (userPicker && typeof userPicker.closest === 'function') {
+      const form = userPicker.closest('[data-admin-agenda-switcher]');
+      if (form) {
+        return form.querySelector('[data-switcher-colab]');
+      }
+    }
+    return document.querySelector('[data-switcher-colab]');
+  })();
   const csrfToken = '{{ csrf_token() if csrf_token is defined else '' }}';
   let source = '{{ 'clinic' if clinic_id else 'user' }}';
-  let selectedUserId = userPicker && userPicker.value ? userPicker.value : null;
+  let selectedUserId = resolveInitialUserId();
   let calendar;
 
   if (!calendarEl) {
     return;
   }
 
+  function extractNumericUserId(rawValue) {
+    if (rawValue === undefined || rawValue === null) {
+      return null;
+    }
+    const normalized = String(rawValue).trim();
+    if (!normalized) {
+      return null;
+    }
+    const parts = normalized.split(':');
+    const numericPart = parts.length > 1 ? parts[1] : parts[0];
+    const parsed = parseInt(numericPart, 10);
+    if (Number.isNaN(parsed)) {
+      return null;
+    }
+    return parsed;
+  }
+
+  function resolveInitialUserId() {
+    const pickerValue = userPicker ? extractNumericUserId(userPicker.value) : null;
+    if (pickerValue !== null) {
+      return pickerValue;
+    }
+    if (hiddenVetInput) {
+      const vetValue = extractNumericUserId(hiddenVetInput.value);
+      if (vetValue !== null) {
+        return vetValue;
+      }
+    }
+    if (hiddenColabInput) {
+      const colabValue = extractNumericUserId(hiddenColabInput.value);
+      if (colabValue !== null) {
+        return colabValue;
+      }
+    }
+    return null;
+  }
+
   function eventUrl() {
     if (source === 'clinic') {
       return '/api/clinic_appointments/{{ clinic_id }}';
     }
-    if (selectedUserId) {
-      return `/api/user_appointments/${selectedUserId}`;
+    const userId = extractNumericUserId(selectedUserId);
+    if (userId !== null) {
+      return `/api/user_appointments/${userId}`;
     }
     return '/api/my_appointments';
   }
@@ -239,8 +295,8 @@ document.addEventListener('DOMContentLoaded', function() {
 
   if (userPicker) {
     userPicker.addEventListener('change', function() {
-      selectedUserId = this.value || null;
-      if (selectedUserId) {
+      selectedUserId = extractNumericUserId(this.value);
+      if (selectedUserId !== null) {
         source = 'user';
         setActiveButton('user');
       }
