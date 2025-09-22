@@ -7,7 +7,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')
 import pytest
 import flask_login.utils as login_utils
 from app import app as flask_app, db
-from models import User, Animal, Veterinario, Clinica
+from models import User, Animal, Veterinario, Clinica, Appointment
 
 
 @pytest.fixture
@@ -121,3 +121,57 @@ def test_non_admin_view_as_redirects(client, monkeypatch):
     resp = client.get('/appointments?view_as=veterinario')
     assert resp.status_code == 302
     assert resp.headers['Location'].endswith('/appointments')
+
+
+def test_admin_collaborator_post_preserves_query_and_lists_new_appointment(client, monkeypatch):
+    with flask_app.app_context():
+        setup_data()
+        admin = User.query.filter_by(role='admin').first()
+        animal = Animal.query.first()
+        vet = Veterinario.query.first()
+        vet_id = vet.id
+        admin_id = admin.id
+        animal_id = animal.id
+
+    fake_admin = type(
+        'U',
+        (),
+        {
+            'id': admin_id,
+            'role': 'admin',
+            'worker': None,
+            'is_authenticated': True,
+            'clinica_id': None,
+            'name': 'Admin',
+        },
+    )()
+
+    login(monkeypatch, fake_admin)
+
+    query_string = f'?view_as=colaborador&veterinario_id={vet_id}'
+    resp = client.post(
+        f'/appointments{query_string}',
+        data={
+            'appointment-animal_id': str(animal_id),
+            'appointment-veterinario_id': str(vet_id),
+            'appointment-date': '2024-05-20',
+            'appointment-time': '09:00',
+            'appointment-kind': 'consulta',
+            'appointment-reason': 'Checkup',
+            'appointment-submit': True,
+        },
+    )
+
+    assert resp.status_code == 302
+    location = resp.headers['Location']
+    assert 'view_as=colaborador' in location
+    assert f'veterinario_id={vet_id}' in location
+
+    with flask_app.app_context():
+        appt = Appointment.query.one()
+        appointment_id = appt.id
+
+    follow_resp = client.get(f'/appointments{query_string}')
+    assert follow_resp.status_code == 200
+    assert b'Nova Consulta' in follow_resp.data
+    assert f'data-appointment-id="{appointment_id}"'.encode() in follow_resp.data
