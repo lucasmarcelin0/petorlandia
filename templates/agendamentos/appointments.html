@@ -252,12 +252,14 @@ document.addEventListener('DOMContentLoaded', () => {
   const vetField = {% if form %}document.getElementById('{{ form.veterinario_id.id }}'){% else %}null{% endif %};
   const dateField = {% if form %}document.getElementById('{{ form.date.id }}'){% else %}null{% endif %};
   const timeField = {% if form %}document.getElementById('{{ form.time.id }}'){% else %}null{% endif %};
+  const kindField = {% if form %}document.getElementById('{{ form.kind.id }}'){% else %}null{% endif %};
   const timeFieldPlaceholder = timeField && timeField.dataset && timeField.dataset.placeholder
     ? timeField.dataset.placeholder
     : 'Selecione um horário';
   const timeFieldEmptyText = timeField && timeField.dataset && timeField.dataset.emptyText
     ? timeField.dataset.emptyText
     : 'Sem horários disponíveis';
+  const timeFieldLoadingText = 'Carregando horários disponíveis...';
   const scheduleContainer = document.getElementById('schedule-overview');
   const scheduleCollapseEl = document.getElementById('scheduleOverviewCollapse');
   const scheduleToggleBtn = document.querySelector('[data-bs-target="#scheduleOverviewCollapse"]');
@@ -269,6 +271,8 @@ document.addEventListener('DOMContentLoaded', () => {
     ? newAppointmentCollapseEl.querySelector('form')
     : null;
   let newAppointmentCollapseInstance = null;
+  let timesAbortController = null;
+  let scheduleAbortController = null;
 
   function updateNewAppointmentToggleAria() {
     if (!newAppointmentCollapseEl || !newAppointmentToggleBtn) {
@@ -379,24 +383,50 @@ document.addEventListener('DOMContentLoaded', () => {
     const date = dateField.value;
 
     if (!vetId || !date) {
+      if (timesAbortController) {
+        timesAbortController.abort();
+        timesAbortController = null;
+      }
       setTimeFieldMessage(timeFieldPlaceholder, { disable: true });
       return;
     }
 
+    if (timesAbortController) {
+      timesAbortController.abort();
+    }
+    timesAbortController = new AbortController();
+    const { signal } = timesAbortController;
+    setTimeFieldMessage(timeFieldLoadingText, { disable: true });
+
+    const params = new URLSearchParams({ date });
+    if (kindField && kindField.value) {
+      params.set('kind', kindField.value);
+    }
+
     try {
-      const resp = await fetch(`/api/specialist/${vetId}/available_times?date=${date}`);
+      const resp = await fetch(`/api/specialist/${vetId}/available_times?${params.toString()}`, { signal });
       if (!resp.ok) {
         throw new Error('Erro ao carregar horários disponíveis');
       }
       const times = await resp.json();
+      if (signal.aborted) {
+        return;
+      }
       if (!Array.isArray(times) || times.length === 0) {
         setTimeFieldMessage(timeFieldEmptyText, { disable: true });
         return;
       }
       populateTimeFieldOptions(times);
     } catch (error) {
+      if (error.name === 'AbortError') {
+        return;
+      }
       console.error(error);
       setTimeFieldMessage(timeFieldEmptyText, { disable: true });
+    } finally {
+      if (timesAbortController && timesAbortController.signal === signal) {
+        timesAbortController = null;
+      }
     }
   }
 
@@ -407,41 +437,102 @@ document.addEventListener('DOMContentLoaded', () => {
     return span;
   }
 
+  function showScheduleMessage(text, className = 'text-muted small text-center py-3') {
+    if (!scheduleContainer) {
+      return;
+    }
+    scheduleContainer.innerHTML = '';
+    const col = document.createElement('div');
+    col.className = 'col';
+    const message = document.createElement('div');
+    message.className = className;
+    message.textContent = text;
+    col.appendChild(message);
+    scheduleContainer.appendChild(col);
+  }
+
   async function loadSchedule() {
     if (!vetField || !scheduleContainer) return;
     const vetId = vetField.value;
-    if (!vetId) { scheduleContainer.innerHTML = ''; return; }
-    const start = dateField && dateField.value ? dateField.value : new Date().toISOString().split('T')[0];
-    const resp = await fetch(`/api/specialist/${vetId}/weekly_schedule?start=${start}`);
-    const days = await resp.json();
-    scheduleContainer.innerHTML = '';
-    days.forEach(day => {
-      const col = document.createElement('div');
-      col.className = 'col';
-      const card = document.createElement('div');
-      const cardClass = day.available.length ? 'border-success' : 'border-danger';
-      card.className = `card h-100 ${cardClass}`;
-      const body = document.createElement('div');
-      body.className = 'card-body';
-      const title = document.createElement('h6');
-      title.className = 'card-title fw-bold';
-      title.textContent = new Date(day.date).toLocaleDateString('pt-BR', { weekday: 'short', day: '2-digit', month: '2-digit' });
-      body.appendChild(title);
-      const slots = document.createElement('div');
-      day.available.forEach(t => slots.appendChild(badge(t, 'bg-success')));
-      day.booked.forEach(t => slots.appendChild(badge(t, 'bg-danger')));
-      day.not_working.forEach(t => slots.appendChild(badge(t, 'bg-danger')));
-      if (!slots.children.length) {
-        const span = document.createElement('span');
-        span.className = 'text-muted small';
-        span.textContent = 'Folga';
-        slots.appendChild(span);
+    if (!vetId) {
+      if (scheduleAbortController) {
+        scheduleAbortController.abort();
+        scheduleAbortController = null;
       }
-      body.appendChild(slots);
-      card.appendChild(body);
-      col.appendChild(card);
-      scheduleContainer.appendChild(col);
-    });
+      scheduleContainer.innerHTML = '';
+      return;
+    }
+
+    const start = dateField && dateField.value ? dateField.value : new Date().toISOString().split('T')[0];
+    if (scheduleAbortController) {
+      scheduleAbortController.abort();
+    }
+    scheduleAbortController = new AbortController();
+    const { signal } = scheduleAbortController;
+
+    showScheduleMessage('Carregando disponibilidade...', 'text-muted small text-center py-3');
+
+    try {
+      const params = new URLSearchParams({ start });
+      const resp = await fetch(`/api/specialist/${vetId}/weekly_schedule?${params.toString()}`, { signal });
+      if (!resp.ok) {
+        throw new Error('Erro ao carregar disponibilidade do veterinário');
+      }
+      const days = await resp.json();
+      if (signal.aborted) {
+        return;
+      }
+      scheduleContainer.innerHTML = '';
+      if (!Array.isArray(days) || days.length === 0) {
+        showScheduleMessage('Nenhuma disponibilidade encontrada.', 'text-muted small text-center py-3');
+        return;
+      }
+      days.forEach(day => {
+        const col = document.createElement('div');
+        col.className = 'col';
+        const card = document.createElement('div');
+        const hasAvailability = Array.isArray(day.available) && day.available.length > 0;
+        const cardClass = hasAvailability ? 'border-success' : 'border-danger';
+        card.className = `card h-100 ${cardClass}`;
+        const body = document.createElement('div');
+        body.className = 'card-body';
+        const title = document.createElement('h6');
+        title.className = 'card-title fw-bold';
+        let displayDate = '';
+        if (day.date) {
+          const parsed = new Date(day.date);
+          if (!Number.isNaN(parsed.valueOf())) {
+            displayDate = parsed.toLocaleDateString('pt-BR', { weekday: 'short', day: '2-digit', month: '2-digit' });
+          }
+        }
+        title.textContent = displayDate || day.date || '';
+        body.appendChild(title);
+        const slots = document.createElement('div');
+        (Array.isArray(day.available) ? day.available : []).forEach(t => slots.appendChild(badge(t, 'bg-success')));
+        (Array.isArray(day.booked) ? day.booked : []).forEach(t => slots.appendChild(badge(t, 'bg-danger')));
+        (Array.isArray(day.not_working) ? day.not_working : []).forEach(t => slots.appendChild(badge(t, 'bg-danger')));
+        if (!slots.children.length) {
+          const span = document.createElement('span');
+          span.className = 'text-muted small';
+          span.textContent = 'Folga';
+          slots.appendChild(span);
+        }
+        body.appendChild(slots);
+        card.appendChild(body);
+        col.appendChild(card);
+        scheduleContainer.appendChild(col);
+      });
+    } catch (error) {
+      if (error.name === 'AbortError') {
+        return;
+      }
+      console.error(error);
+      showScheduleMessage('Não foi possível carregar a disponibilidade.', 'text-danger small text-center py-3');
+    } finally {
+      if (scheduleAbortController && scheduleAbortController.signal === signal) {
+        scheduleAbortController = null;
+      }
+    }
   }
 
   function handleVetChange() {
@@ -506,6 +597,15 @@ document.addEventListener('DOMContentLoaded', () => {
   timeField && timeField.addEventListener('change', () => {
     timeField.dataset.currentTime = timeField.value;
   });
+
+  if (kindField) {
+    kindField.addEventListener('change', () => {
+      if (timeField) {
+        timeField.dataset.currentTime = '';
+      }
+      updateTimes();
+    });
+  }
 
   vetField && vetField.addEventListener('change', handleVetChange);
   dateField && dateField.addEventListener('change', handleVetChange);
