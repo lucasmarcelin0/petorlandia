@@ -418,6 +418,16 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
+  function handleVetChange() {
+    if (!vetField && !dateField && !timeField && !scheduleContainer) {
+      return;
+    }
+    updateTimes();
+    loadSchedule();
+  }
+
+  window.handleVetChange = handleVetChange;
+
   const scheduleBtn = document.getElementById('openScheduleModal');
   const scheduleModalEl = document.getElementById('scheduleEditModal');
   if (scheduleBtn && scheduleModalEl) {
@@ -429,6 +439,7 @@ document.addEventListener('DOMContentLoaded', () => {
         vetSelect.innerHTML = vetSelectSrc.innerHTML;
         vetSelect.value = vetSelectSrc.value;
       }
+      handleVetChange();
       scheduleModal.show();
     });
   }
@@ -461,6 +472,8 @@ document.addEventListener('DOMContentLoaded', () => {
       timeField.dispatchEvent(new Event('change', { bubbles: true }));
     }
 
+    handleVetChange();
+
     focusFirstAppointmentField();
   });
 
@@ -468,10 +481,9 @@ document.addEventListener('DOMContentLoaded', () => {
     timeField.dataset.currentTime = timeField.value;
   });
 
-  vetField && vetField.addEventListener('change', () => { updateTimes(); loadSchedule(); });
-  dateField && dateField.addEventListener('change', () => { updateTimes(); loadSchedule(); });
-  updateTimes();
-  loadSchedule();
+  vetField && vetField.addEventListener('change', handleVetChange);
+  dateField && dateField.addEventListener('change', handleVetChange);
+  handleVetChange();
 
   if (newAppointmentCollapseEl && newAppointmentToggleBtn) {
     newAppointmentCollapseEl.addEventListener('shown.bs.collapse', updateNewAppointmentToggleAria);
