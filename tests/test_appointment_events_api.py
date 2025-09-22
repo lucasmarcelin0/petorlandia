@@ -6,9 +6,25 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')
 import pytest
 import flask_login.utils as login_utils
 from app import app as flask_app, db
-from helpers import to_timezone_aware
-from models import User, Clinica, Animal, Veterinario, HealthPlan, HealthSubscription, Appointment
-from datetime import datetime
+from helpers import (
+    to_timezone_aware,
+    get_appointment_duration,
+    DEFAULT_VACCINE_EVENT_START_TIME,
+    DEFAULT_VACCINE_EVENT_DURATION,
+    BR_TZ,
+)
+from models import (
+    User,
+    Clinica,
+    Animal,
+    Veterinario,
+    HealthPlan,
+    HealthSubscription,
+    Appointment,
+    ExamAppointment,
+    Vacina,
+)
+from datetime import datetime, timedelta, date
 
 @pytest.fixture
 def client():
@@ -56,8 +72,11 @@ def test_my_appointments_returns_events(client, monkeypatch):
     assert resp.status_code == 200
     data = resp.get_json()
     assert len(data) == 1
-    assert data[0]['id'] == appt_id
+    assert data[0]['id'] == f'appointment-{appt_id}'
     assert data[0]['start'] == start_iso
+    assert data[0]['editable'] is True
+    assert data[0]['extendedProps']['eventType'] == 'appointment'
+    assert data[0]['extendedProps']['recordId'] == appt_id
     start_dt = datetime.fromisoformat(data[0]['start'])
     assert start_dt.tzinfo is not None
 
@@ -76,8 +95,9 @@ def test_clinic_appointments_returns_events(client, monkeypatch):
     assert resp.status_code == 200
     data = resp.get_json()
     assert len(data) == 1
-    assert data[0]['id'] == appt_id
+    assert data[0]['id'] == f'appointment-{appt_id}'
     assert data[0]['start'] == start_iso
+    assert data[0]['editable'] is True
 
 
 def test_my_appointments_returns_clinic_events_for_collaborator(client, monkeypatch):
@@ -95,7 +115,7 @@ def test_my_appointments_returns_clinic_events_for_collaborator(client, monkeypa
     assert resp.status_code == 200
     data = resp.get_json()
     assert len(data) == 1
-    assert data[0]['id'] == appt_id
+    assert data[0]['id'] == f'appointment-{appt_id}'
     assert data[0]['start'] == start_iso
 
 
@@ -114,12 +134,79 @@ def test_my_appointments_returns_all_for_admin(client, monkeypatch):
     assert resp.status_code == 200
     data = resp.get_json()
     assert len(data) == 1
-    assert data[0]['id'] == appt_id
+    assert data[0]['id'] == f'appointment-{appt_id}'
     assert data[0]['start'] == start_iso
 
     user_resp = client.get(f'/api/user_appointments/{tutor_id}')
     assert user_resp.status_code == 200
     user_data = user_resp.get_json()
     assert len(user_data) == 1
-    assert user_data[0]['id'] == appt_id
+    assert user_data[0]['id'] == f'appointment-{appt_id}'
     assert user_data[0]['start'] == start_iso
+
+
+def test_clinic_appointments_include_exam_and_vaccine(client, monkeypatch):
+    with flask_app.app_context():
+        tutor_id, vet_user_id, clinic_id, appt_id, start_iso = create_basic_appointment()
+        animal = Animal.query.get(1)
+        vet = Veterinario.query.get(1)
+        exam = ExamAppointment(
+            id=2,
+            animal_id=animal.id,
+            specialist_id=vet.id,
+            requester_id=tutor_id,
+            scheduled_at=datetime(2024, 5, 1, 15, 0),
+            status='confirmed',
+        )
+        vaccine_date = date.today() + timedelta(days=1)
+        vaccine = Vacina(
+            id=3,
+            animal_id=animal.id,
+            nome='Raiva',
+            aplicada_em=vaccine_date,
+            aplicada_por=vet_user_id,
+        )
+        db.session.add_all([exam, vaccine])
+        db.session.commit()
+
+        exam_id = exam.id
+        vaccine_id = vaccine.id
+        exam_start_iso = to_timezone_aware(exam.scheduled_at).isoformat()
+        exam_end_iso = to_timezone_aware(
+            exam.scheduled_at + get_appointment_duration('exame')
+        ).isoformat()
+        vaccine_start = datetime.combine(
+            vaccine_date,
+            DEFAULT_VACCINE_EVENT_START_TIME,
+        ).replace(tzinfo=BR_TZ)
+        vaccine_end = vaccine_start + DEFAULT_VACCINE_EVENT_DURATION
+
+    fake_vet = type('U', (), {
+        'id': vet_user_id,
+        'worker': 'veterinario',
+        'role': 'adotante',
+        'is_authenticated': True,
+        'veterinario': type('V', (), {'id': 1, 'clinica_id': clinic_id})()
+    })()
+    login(monkeypatch, fake_vet)
+    resp = client.get(f'/api/clinic_appointments/{clinic_id}')
+    assert resp.status_code == 200
+    data = resp.get_json()
+    assert len(data) == 3
+
+    events = {event['id']: event for event in data}
+    assert f'appointment-{appt_id}' in events
+    assert f'exam-{exam_id}' in events
+    assert f'vaccine-{vaccine_id}' in events
+
+    exam_event = events[f'exam-{exam_id}']
+    assert exam_event['editable'] is False
+    assert exam_event['start'] == exam_start_iso
+    assert exam_event['end'] == exam_end_iso
+    assert exam_event['extendedProps']['eventType'] == 'exam'
+
+    vaccine_event = events[f'vaccine-{vaccine_id}']
+    assert vaccine_event['editable'] is False
+    assert vaccine_event['start'] == vaccine_start.isoformat()
+    assert vaccine_event['end'] == vaccine_end.isoformat()
+    assert vaccine_event['extendedProps']['eventType'] == 'vaccine'

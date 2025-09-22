@@ -72,6 +72,40 @@ document.addEventListener('DOMContentLoaded', function() {
     ].join('-');
   }
 
+  function getEventType(event) {
+    if (!event) {
+      return null;
+    }
+    const type = event.extendedProps && event.extendedProps.eventType;
+    if (type) {
+      return type;
+    }
+    if (typeof event.id === 'string') {
+      const prefix = event.id.split('-')[0];
+      return prefix || null;
+    }
+    return 'appointment';
+  }
+
+  function getAppointmentId(event) {
+    if (!event) {
+      return null;
+    }
+    if (event.extendedProps && event.extendedProps.recordId) {
+      return event.extendedProps.recordId;
+    }
+    if (typeof event.id === 'string') {
+      const match = event.id.match(/^(?:appointment-)?(\d+)$/);
+      if (match) {
+        return parseInt(match[1], 10);
+      }
+    }
+    if (typeof event.id === 'number') {
+      return event.id;
+    }
+    return null;
+  }
+
   function inferApproximateTime(dateObj, isAllDay) {
     if (isAllDay) {
       return '09:00';
@@ -117,8 +151,17 @@ document.addEventListener('DOMContentLoaded', function() {
       end: event.end ? event.end.toISOString() : null,
     };
 
+    const eventType = getEventType(event);
+    const appointmentId = getAppointmentId(event);
+    if (eventType !== 'appointment' || !appointmentId) {
+      if (typeof info.revert === 'function') {
+        info.revert();
+      }
+      return;
+    }
+
     try {
-      const response = await fetch(`/api/appointments/${event.id}/reschedule`, {
+      const response = await fetch(`/api/appointments/${appointmentId}/reschedule`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -158,6 +201,26 @@ document.addEventListener('DOMContentLoaded', function() {
     },
     eventDrop: persistEventChange,
     eventResize: persistEventChange,
+    eventAllow: function(dropInfo, draggedEvent) {
+      return getEventType(draggedEvent) === 'appointment';
+    },
+    eventDidMount: function(info) {
+      const type = getEventType(info.event);
+      if (info.el && type) {
+        info.el.dataset.eventType = type;
+      }
+      if (!info.el || !type || type === 'appointment') {
+        return;
+      }
+      const icon = type === 'exam' ? '🧪' : type === 'vaccine' ? '💉' : null;
+      if (!icon) {
+        return;
+      }
+      const titleEl = info.el.querySelector('.fc-event-title');
+      if (titleEl && !titleEl.textContent.trim().startsWith(icon)) {
+        titleEl.textContent = `${icon} ${titleEl.textContent}`;
+      }
+    },
   });
 
   window.sharedCalendar = calendar;
