@@ -62,7 +62,7 @@ def test_schedule_exam_creates_event_and_blocks_time(client, monkeypatch):
     with flask_app.app_context():
         assert ExamAppointment.query.count() == 1
         assert AgendaEvento.query.count() == 1
-        times = get_available_times(vet_id, date(2024,5,20))
+        times = get_available_times(vet_id, date(2024,5,20), kind='exame')
         assert '09:00' not in times
 
 

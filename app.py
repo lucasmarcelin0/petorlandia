@@ -283,6 +283,8 @@ from helpers import (
     to_timezone_aware,
     get_available_times,
     get_weekly_schedule,
+    get_appointment_duration,
+    has_conflict_for_slot,
 )
 
 
@@ -2350,7 +2352,7 @@ def agendar_retorno(consulta_id):
     if form.validate_on_submit():
         scheduled_at_local = datetime.combine(form.date.data, form.time.data)
         vet_id = form.veterinario_id.data
-        if not is_slot_available(vet_id, scheduled_at_local):
+        if not is_slot_available(vet_id, scheduled_at_local, kind='retorno'):
             flash('Horário indisponível para o veterinário selecionado.', 'danger')
         else:
             scheduled_at = (
@@ -2359,13 +2361,8 @@ def agendar_retorno(consulta_id):
                 .astimezone(timezone.utc)
                 .replace(tzinfo=None)
             )
-            duration = timedelta(minutes=30)
-            conflict_exam = ExamAppointment.query.filter(
-                ExamAppointment.specialist_id == vet_id,
-                ExamAppointment.scheduled_at < scheduled_at + duration,
-                ExamAppointment.scheduled_at > scheduled_at - duration,
-            ).first()
-            if conflict_exam:
+            duration = get_appointment_duration('retorno')
+            if has_conflict_for_slot(vet_id, scheduled_at_local, duration):
                 flash('Horário indisponível para o veterinário selecionado.', 'danger')
             else:
                 current_vet = getattr(current_user, 'veterinario', None)
@@ -7599,7 +7596,9 @@ def appointments():
                 appointment_form.date.data, appointment_form.time.data
             )
             if not is_slot_available(
-                appointment_form.veterinario_id.data, scheduled_at_local
+                appointment_form.veterinario_id.data,
+                scheduled_at_local,
+                kind=appointment_form.kind.data,
             ):
                 flash(
                     'Horário indisponível para o veterinário selecionado. Já existe uma consulta ou exame nesse intervalo.',
@@ -7898,7 +7897,9 @@ def appointments():
                     appointment_form.date.data, appointment_form.time.data
                 )
                 if not is_slot_available(
-                    appointment_form.veterinario_id.data, scheduled_at_local
+                    appointment_form.veterinario_id.data,
+                    scheduled_at_local,
+                    kind=appointment_form.kind.data,
                 ):
                     flash(
                         'Horário indisponível para o veterinário selecionado. Já existe uma consulta ou exame nesse intervalo.',
@@ -7912,14 +7913,12 @@ def appointments():
                         .replace(tzinfo=None)
                     )
                     if appointment_form.kind.data == 'exame':
-                        duration = timedelta(minutes=30)
-                        end = scheduled_at + duration
-                        conflict = ExamAppointment.query.filter(
-                            ExamAppointment.specialist_id == appointment_form.veterinario_id.data,
-                            ExamAppointment.scheduled_at < end,
-                            ExamAppointment.scheduled_at > scheduled_at - duration,
-                        ).first()
-                        if conflict:
+                        duration = get_appointment_duration('exame')
+                        if has_conflict_for_slot(
+                            appointment_form.veterinario_id.data,
+                            scheduled_at_local,
+                            duration,
+                        ):
                             flash(
                                 'Horário indisponível para o veterinário selecionado. Já existe uma consulta ou exame nesse intervalo.',
                                 'danger'
@@ -8186,7 +8185,7 @@ def edit_appointment(appointment_id):
             .astimezone(BR_TZ)
             .replace(tzinfo=None)
         )
-        if not is_slot_available(vet_id, scheduled_at_local) and not (
+        if not is_slot_available(vet_id, scheduled_at_local, kind=appointment.kind) and not (
             vet_id == appointment.veterinario_id and scheduled_at_local == existing_local
         ):
             return jsonify({
@@ -8360,7 +8359,7 @@ def api_user_appointments(user_id):
             title = f"Exame: {exam.animal.name if getattr(exam, 'animal', None) else 'Exame'}"
             if getattr(exam, 'specialist', None) and getattr(exam.specialist, 'user', None):
                 title = f"{title} - {exam.specialist.user.name}"
-            end_time = exam.scheduled_at + timedelta(minutes=30)
+            end_time = exam.scheduled_at + get_appointment_duration('exame')
             start = to_timezone_aware(exam.scheduled_at)
             end = to_timezone_aware(end_time)
             return {
@@ -8460,7 +8459,8 @@ def api_specialist_available_times(veterinario_id):
     if not date_str:
         return jsonify([])
     date_obj = datetime.strptime(date_str, '%Y-%m-%d').date()
-    times = get_available_times(veterinario_id, date_obj)
+    kind = request.args.get('kind', 'consulta')
+    times = get_available_times(veterinario_id, date_obj, kind=kind)
     return jsonify(times)
 
 
@@ -8476,7 +8476,7 @@ def api_specialist_weekly_schedule(veterinario_id):
 @app.route('/animal/<int:animal_id>/schedule_exam', methods=['POST'])
 @login_required
 def schedule_exam(animal_id):
-    from models import ExamAppointment, Appointment, AgendaEvento, Veterinario, Animal, Message
+    from models import ExamAppointment, AgendaEvento, Veterinario, Animal, Message
     data = request.get_json(silent=True) or {}
     specialist_id = data.get('specialist_id')
     date_str = data.get('date')
@@ -8491,7 +8491,7 @@ def schedule_exam(animal_id):
         .replace(tzinfo=None)
     )
     # Ensure requested time falls within the veterinarian's available schedule
-    available_times = get_available_times(specialist_id, scheduled_at_local.date())
+    available_times = get_available_times(specialist_id, scheduled_at_local.date(), kind='exame')
     if time_str not in available_times:
         if available_times:
             msg = (
@@ -8501,21 +8501,8 @@ def schedule_exam(animal_id):
         else:
             msg = 'Nenhum horário disponível para a data escolhida.'
         return jsonify({'success': False, 'message': msg}), 400
-    duration = timedelta(minutes=30)
-    end = scheduled_at + duration
-    conflict = (
-        Appointment.query.filter(
-            Appointment.veterinario_id == specialist_id,
-            Appointment.scheduled_at < end,
-            Appointment.scheduled_at > scheduled_at - duration,
-        ).first()
-        or ExamAppointment.query.filter(
-            ExamAppointment.specialist_id == specialist_id,
-            ExamAppointment.scheduled_at < end,
-            ExamAppointment.scheduled_at > scheduled_at - duration,
-        ).first()
-    )
-    if conflict:
+    duration = get_appointment_duration('exame')
+    if has_conflict_for_slot(specialist_id, scheduled_at_local, duration):
         return jsonify({
             'success': False,
             'message': 'Horário indisponível. Já existe uma consulta ou exame nesse intervalo.'
@@ -8534,7 +8521,7 @@ def schedule_exam(animal_id):
         evento = AgendaEvento(
             titulo=f"Exame de {animal.name}",
             inicio=scheduled_at,
-            fim=scheduled_at + timedelta(minutes=30),
+            fim=scheduled_at + duration,
             responsavel_id=vet.user_id,
             clinica_id=animal.clinica_id,
         )
@@ -8598,7 +8585,7 @@ def update_exam_appointment_status(appointment_id):
 @app.route('/exam_appointment/<int:appointment_id>/update', methods=['POST'])
 @login_required
 def update_exam_appointment(appointment_id):
-    from models import ExamAppointment, Appointment
+    from models import ExamAppointment
     appt = ExamAppointment.query.get_or_404(appointment_id)
     data = request.get_json(silent=True) or {}
     date_str = data.get('date')
@@ -8613,22 +8600,13 @@ def update_exam_appointment(appointment_id):
         .astimezone(timezone.utc)
         .replace(tzinfo=None)
     )
-    duration = timedelta(minutes=30)
-    end = scheduled_at + duration
-    conflict = (
-        Appointment.query.filter(
-            Appointment.veterinario_id == specialist_id,
-            Appointment.scheduled_at < end,
-            Appointment.scheduled_at > scheduled_at - duration,
-        ).first()
-        or ExamAppointment.query.filter(
-            ExamAppointment.specialist_id == specialist_id,
-            ExamAppointment.id != appointment_id,
-            ExamAppointment.scheduled_at < end,
-            ExamAppointment.scheduled_at > scheduled_at - duration,
-        ).first()
-    )
-    if conflict:
+    duration = get_appointment_duration('exame')
+    if has_conflict_for_slot(
+        specialist_id,
+        scheduled_at_local,
+        duration,
+        exclude_exam_id=appointment_id,
+    ):
         return jsonify({
             'success': False,
             'message': 'Horário indisponível. Já existe uma consulta ou exame nesse intervalo.'
