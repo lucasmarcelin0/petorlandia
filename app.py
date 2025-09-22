@@ -285,6 +285,7 @@ from helpers import (
     get_available_times,
     get_weekly_schedule,
     get_appointment_duration,
+    get_appointment_end,
     has_conflict_for_slot,
 )
 
@@ -8210,11 +8211,15 @@ def edit_appointment(appointment_id):
             appointment.notes = notes
         db.session.commit()
         card_html = render_template('partials/_appointment_card.html', appt=appointment)
+        start_aware = to_timezone_aware(appointment.scheduled_at)
+        end_aware = to_timezone_aware(get_appointment_end(appointment.scheduled_at, appointment.kind))
         return jsonify({
             'success': True,
             'message': 'Agendamento atualizado com sucesso.',
             'card_html': card_html,
             'appointment_id': appointment.id,
+            'start': start_aware.isoformat() if start_aware else None,
+            'end': end_aware.isoformat() if end_aware else None,
         })
 
     veterinarios = Veterinario.query.all()
@@ -8441,7 +8446,7 @@ def api_user_appointments(user_id):
             title = f"Exame: {exam.animal.name if getattr(exam, 'animal', None) else 'Exame'}"
             if getattr(exam, 'specialist', None) and getattr(exam.specialist, 'user', None):
                 title = f"{title} - {exam.specialist.user.name}"
-            end_time = exam.scheduled_at + get_appointment_duration('exame')
+            end_time = get_appointment_end(exam.scheduled_at, 'exame')
             start = to_timezone_aware(exam.scheduled_at)
             end = to_timezone_aware(end_time)
             return {
@@ -8568,10 +8573,12 @@ def api_reschedule_appointment(appointment_id):
     db.session.commit()
 
     updated_start = to_timezone_aware(appointment.scheduled_at)
+    updated_end = to_timezone_aware(get_appointment_end(appointment.scheduled_at, appointment.kind))
     return jsonify({
         'success': True,
         'message': 'Agendamento atualizado com sucesso.',
         'start': updated_start.isoformat() if updated_start else None,
+        'end': updated_end.isoformat() if updated_end else None,
     })
 
 
@@ -8663,6 +8670,7 @@ def schedule_exam(animal_id):
             msg = 'Nenhum horário disponível para a data escolhida.'
         return jsonify({'success': False, 'message': msg}), 400
     duration = get_appointment_duration('exame')
+    appointment_end = get_appointment_end(scheduled_at, 'exame')
     if has_conflict_for_slot(specialist_id, scheduled_at_local, duration):
         return jsonify({
             'success': False,
@@ -8682,7 +8690,7 @@ def schedule_exam(animal_id):
         evento = AgendaEvento(
             titulo=f"Exame de {animal.name}",
             inicio=scheduled_at,
-            fim=scheduled_at + duration,
+            fim=appointment_end,
             responsavel_id=vet.user_id,
             clinica_id=animal.clinica_id,
         )
@@ -8703,7 +8711,13 @@ def schedule_exam(animal_id):
     appointments = ExamAppointment.query.filter_by(animal_id=animal_id).order_by(ExamAppointment.scheduled_at.desc()).all()
     html = render_template('partials/historico_exam_appointments.html', appointments=appointments)
     confirm_by = None if same_user else appt.confirm_by.isoformat()
-    return jsonify({'success': True, 'confirm_by': confirm_by, 'html': html})
+    end_aware = to_timezone_aware(appointment_end)
+    return jsonify({
+        'success': True,
+        'confirm_by': confirm_by,
+        'html': html,
+        'end': end_aware.isoformat() if end_aware else None,
+    })
 
 
 @app.route('/exam_appointment/<int:appointment_id>/status', methods=['POST'])
@@ -8777,7 +8791,12 @@ def update_exam_appointment(appointment_id):
     db.session.commit()
     appointments = ExamAppointment.query.filter_by(animal_id=appt.animal_id).order_by(ExamAppointment.scheduled_at.desc()).all()
     html = render_template('partials/historico_exam_appointments.html', appointments=appointments)
-    return jsonify({'success': True, 'html': html})
+    end_aware = to_timezone_aware(get_appointment_end(appt.scheduled_at, 'exame'))
+    return jsonify({
+        'success': True,
+        'html': html,
+        'end': end_aware.isoformat() if end_aware else None,
+    })
 
 
 @app.route('/exam_appointment/<int:appointment_id>/delete', methods=['POST'])

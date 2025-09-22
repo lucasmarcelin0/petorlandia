@@ -1,3 +1,4 @@
+import math
 import requests
 
 from flask import redirect, render_template, session
@@ -19,7 +20,7 @@ DEFAULT_APPOINTMENT_DURATION_MINUTES = 30
 
 APPOINTMENT_KIND_DURATIONS = {
     'consulta': 30,
-    'retorno': 30,
+    'retorno': 20,
     'exame': 30,
 }
 
@@ -33,15 +34,22 @@ MAX_APPOINTMENT_DURATION = timedelta(minutes=MAX_APPOINTMENT_DURATION_MINUTES)
 def get_appointment_duration_minutes(kind):
     """Return the duration in minutes for the given appointment ``kind``."""
 
-    if not kind:
-        return DEFAULT_APPOINTMENT_DURATION_MINUTES
-    return APPOINTMENT_KIND_DURATIONS.get(kind, DEFAULT_APPOINTMENT_DURATION_MINUTES)
+    normalized_kind = kind or 'consulta'
+    return APPOINTMENT_KIND_DURATIONS.get(normalized_kind, DEFAULT_APPOINTMENT_DURATION_MINUTES)
 
 
 def get_appointment_duration(kind):
     """Return a ``timedelta`` with the duration for the given appointment kind."""
 
     return timedelta(minutes=get_appointment_duration_minutes(kind))
+
+
+def get_appointment_end(start, kind):
+    """Return the expected end datetime for an appointment of ``kind``."""
+
+    if start is None:
+        return None
+    return start + get_appointment_duration(kind)
 
 
 def _to_utc_naive(dt):
@@ -144,16 +152,15 @@ def has_conflict_for_slot(
             if _intervals_overlap(start_local_naive, end_local_naive, local_start, local_end):
                 return True
 
-    exam_duration = get_appointment_duration('exame')
     for exam in exams.values():
         if exclude_exam_id and exam.id == exclude_exam_id:
             continue
         exam_start_utc = _to_utc_naive(exam.scheduled_at)
-        exam_end_utc = exam_start_utc + exam_duration
+        exam_end_utc = get_appointment_end(exam_start_utc, 'exame')
         if _intervals_overlap(start_utc_naive, end_utc_naive, exam_start_utc, exam_end_utc):
             return True
         for local_start in _local_start_candidates(exam.scheduled_at):
-            local_end = local_start + exam_duration
+            local_end = get_appointment_end(local_start, 'exame')
             if _intervals_overlap(start_local_naive, end_local_naive, local_start, local_end):
                 return True
 
@@ -362,7 +369,7 @@ def group_appointments_by_day(appointments):
 
 def appointment_to_event(appointment):
     """Convert an ``Appointment`` into a FullCalendar-friendly event dict."""
-    end_time = appointment.scheduled_at + get_appointment_duration(appointment.kind)
+    end_time = get_appointment_end(appointment.scheduled_at, appointment.kind)
     title = appointment.animal.name if appointment.animal else 'Consulta'
     if appointment.veterinario and appointment.veterinario.user:
         title = f"{title} - {appointment.veterinario.user.name}"
@@ -389,8 +396,15 @@ def get_available_times(veterinario_id, date, kind='consulta'):
     dia_semana = weekday_map[date.weekday()]
     schedules = VetSchedule.query.filter_by(veterinario_id=veterinario_id, dia_semana=dia_semana).all()
     available = []
-    step = timedelta(minutes=30)
     duration = get_appointment_duration(kind)
+    duration_minutes = max(get_appointment_duration_minutes(kind), 1)
+    base_step = DEFAULT_APPOINTMENT_DURATION_MINUTES
+    if duration_minutes < base_step:
+        step_minutes = duration_minutes
+    else:
+        step_minutes = math.gcd(duration_minutes, base_step) or base_step
+    step_minutes = max(step_minutes, 5)
+    step = timedelta(minutes=step_minutes)
     for s in schedules:
         current = datetime.combine(date, s.hora_inicio)
         end = datetime.combine(date, s.hora_fim)
