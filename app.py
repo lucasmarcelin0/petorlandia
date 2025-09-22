@@ -7475,6 +7475,12 @@ def appointments():
 
     view_as = request.args.get('view_as')
     worker = current_user.worker
+
+    def _redirect_to_current_appointments():
+        query_args = request.args.to_dict(flat=False)
+        if query_args:
+            return redirect(url_for('appointments', **query_args))
+        return redirect(url_for('appointments'))
     if view_as:
         allowed_views = {'veterinario', 'colaborador', 'tutor'}
         if current_user.role == 'admin' and view_as in allowed_views:
@@ -7947,7 +7953,7 @@ def appointments():
                                 'O animal não possui uma assinatura de plano de saúde ativa.',
                                 'danger',
                             )
-                            return redirect(url_for('appointments'))
+                            return _redirect_to_current_appointments()
 
                         appt = Appointment(
                             animal_id=animal.id,
@@ -7961,7 +7967,7 @@ def appointments():
                         db.session.add(appt)
                         db.session.commit()
                         flash('Agendamento criado com sucesso.', 'success')
-                return redirect(url_for('appointments'))
+                return _redirect_to_current_appointments()
             appointments = (
                 Appointment.query
                 .filter_by(clinica_id=clinica_id)
