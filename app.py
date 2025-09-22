@@ -4,6 +4,7 @@ from collections import defaultdict
 from io import BytesIO
 from concurrent.futures import ThreadPoolExecutor
 from decimal import Decimal
+from urllib.parse import urlparse, parse_qs
 
 
 
@@ -8301,16 +8302,91 @@ def api_my_pets():
 @login_required
 def api_my_appointments():
     """Return the current user's appointments as calendar events."""
+    query = Appointment.query
+
     if current_user.role == 'admin':
-        query = Appointment.query.filter_by(tutor_id=current_user.id)
+        def _coerce_first_int(values):
+            if values is None:
+                return None
+            if isinstance(values, (list, tuple)):
+                values = values[0] if values else None
+            if values in (None, ""):
+                return None
+            try:
+                return int(values)
+            except (TypeError, ValueError):
+                return None
+
+        def _admin_view_context():
+            referrer_params = {}
+            if request.referrer:
+                parsed = urlparse(request.referrer)
+                referrer_params = parse_qs(parsed.query)
+            view_as = request.args.get('view_as') or referrer_params.get('view_as', [None])[0]
+            vet_id = request.args.get('veterinario_id', type=int)
+            if vet_id is None:
+                vet_id = _coerce_first_int(referrer_params.get('veterinario_id'))
+            clinic_id = request.args.get('clinica_id', type=int)
+            if clinic_id is None:
+                clinic_id = _coerce_first_int(referrer_params.get('clinica_id'))
+            tutor_id = request.args.get('tutor_id', type=int)
+            if tutor_id is None:
+                tutor_id = _coerce_first_int(referrer_params.get('tutor_id'))
+            return view_as, vet_id, clinic_id, tutor_id
+
+        accessible_clinic_ids = None
+
+        def _accessible_clinic_ids():
+            nonlocal accessible_clinic_ids
+            if accessible_clinic_ids is None:
+                rows = clinicas_do_usuario().with_entities(Clinica.id).all()
+                clinic_ids = []
+                for row in rows:
+                    try:
+                        clinic_id_value = row[0]
+                    except (TypeError, IndexError):
+                        clinic_id_value = getattr(row, 'id', None)
+                    if clinic_id_value is None or clinic_id_value in clinic_ids:
+                        continue
+                    clinic_ids.append(clinic_id_value)
+                accessible_clinic_ids = clinic_ids
+            return accessible_clinic_ids
+
+        view_as, vet_id, clinic_id, tutor_id = _admin_view_context()
+
+        if view_as == 'veterinario':
+            if not vet_id and getattr(current_user, 'veterinario', None):
+                vet_id = current_user.veterinario.id
+            if vet_id:
+                query = query.filter(Appointment.veterinario_id == vet_id)
+        elif view_as == 'colaborador':
+            clinic_ids = list(_accessible_clinic_ids())
+            if clinic_id and clinic_id not in clinic_ids:
+                clinic_ids.append(clinic_id)
+            if clinic_ids:
+                query = query.filter(Appointment.clinica_id.in_(clinic_ids))
+        elif view_as == 'tutor':
+            target_tutor_id = tutor_id or current_user.id
+            query = query.filter(Appointment.tutor_id == target_tutor_id)
+        else:
+            clinic_ids = _accessible_clinic_ids()
+            if clinic_ids:
+                query = query.filter(
+                    or_(
+                        Appointment.clinica_id.in_(clinic_ids),
+                        Appointment.veterinario.has(
+                            Veterinario.clinica_id.in_(clinic_ids)
+                        ),
+                    )
+                )
     elif current_user.worker == 'veterinario' and getattr(current_user, 'veterinario', None):
-        query = Appointment.query.filter_by(
+        query = query.filter_by(
             veterinario_id=current_user.veterinario.id
         )
     elif current_user.worker == 'colaborador' and current_user.clinica_id:
-        query = Appointment.query.filter_by(clinica_id=current_user.clinica_id)
+        query = query.filter_by(clinica_id=current_user.clinica_id)
     else:
-        query = Appointment.query.filter_by(tutor_id=current_user.id)
+        query = query.filter_by(tutor_id=current_user.id)
     appts = query.order_by(Appointment.scheduled_at).all()
     return jsonify(appointments_to_events(appts))
 

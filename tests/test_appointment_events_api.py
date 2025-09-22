@@ -106,13 +106,16 @@ def test_my_appointments_returns_all_for_admin(client, monkeypatch):
         'id': 99,
         'worker': None,
         'role': 'admin',
+        'clinica_id': None,
         'is_authenticated': True,
     })()
     login(monkeypatch, fake_admin)
     resp = client.get('/api/my_appointments')
     assert resp.status_code == 200
     data = resp.get_json()
-    assert data == []
+    assert len(data) == 1
+    assert data[0]['id'] == appt_id
+    assert data[0]['start'] == start_iso
 
     user_resp = client.get(f'/api/user_appointments/{tutor_id}')
     assert user_resp.status_code == 200
