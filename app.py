@@ -7601,7 +7601,7 @@ def appointments():
             else:
                 flash('Nenhum novo horário foi salvo.', 'info')
             return redirect(appointments_url)
-        if appointment_form.submit.data and appointment_form.validate_on_submit():
+        if appointment_form.validate_on_submit():
             scheduled_at_local = datetime.combine(
                 appointment_form.date.data, appointment_form.time.data
             )
@@ -7902,7 +7902,7 @@ def appointments():
             appointment_form.animal_id.choices = [(a.id, a.name) for a in animals]
             vets = Veterinario.query.filter_by(clinica_id=clinica_id).all()
             appointment_form.veterinario_id.choices = [(v.id, v.user.name) for v in vets]
-            if appointment_form.submit.data and appointment_form.validate_on_submit():
+            if appointment_form.validate_on_submit():
                 scheduled_at_local = datetime.combine(
                     appointment_form.date.data, appointment_form.time.data
                 )

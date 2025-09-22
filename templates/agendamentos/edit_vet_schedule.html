@@ -166,7 +166,7 @@
         </div>
         <div class="modal-footer">
           <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
-          <button type="submit" form="appointment-form" class="btn btn-primary">Agendar Consulta</button>
+          {{ appointment_form.submit(class="btn btn-primary", form="appointment-form", value="Agendar Consulta") }}
         </div>
       </div>
     </div>
