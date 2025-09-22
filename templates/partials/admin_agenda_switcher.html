@@ -81,6 +81,9 @@
         updateHiddenInputs(select.value);
         select.addEventListener('change', function() {
           updateHiddenInputs(this.value);
+          if (window.handleVetChange) {
+            window.handleVetChange();
+          }
           form.submit();
         });
       });
