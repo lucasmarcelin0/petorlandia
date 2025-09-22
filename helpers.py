@@ -87,6 +87,8 @@ def has_conflict_for_slot(
     *,
     exclude_appointment_id=None,
     exclude_exam_id=None,
+    preloaded_appointments=None,
+    preloaded_exams=None,
 ):
     """Return ``True`` when the slot conflicts with existing appointments/exams."""
 
@@ -108,31 +110,38 @@ def has_conflict_for_slot(
         (start_local_naive - MAX_APPOINTMENT_DURATION, end_local_naive + MAX_APPOINTMENT_DURATION),
     )
 
-    appointments = {}
-    exams = {}
-    for window_start, window_end in windows:
-        appts = (
-            Appointment.query
-            .filter(
-                Appointment.veterinario_id == veterinario_id,
-                Appointment.scheduled_at < window_end,
-                Appointment.scheduled_at > window_start,
-            )
-            .all()
-        )
-        exams_conflicts = (
-            ExamAppointment.query
-            .filter(
-                ExamAppointment.specialist_id == veterinario_id,
-                ExamAppointment.scheduled_at < window_end,
-                ExamAppointment.scheduled_at > window_start,
-            )
-            .all()
-        )
-        for appt in appts:
-            appointments.setdefault(appt.id, appt)
-        for exam in exams_conflicts:
-            exams.setdefault(exam.id, exam)
+    cached_appts = preloaded_appointments is not None
+    cached_exams = preloaded_exams is not None
+
+    appointments = preloaded_appointments if cached_appts else {}
+    exams = preloaded_exams if cached_exams else {}
+
+    if not cached_appts or not cached_exams:
+        for window_start, window_end in windows:
+            if not cached_appts:
+                appts = (
+                    Appointment.query
+                    .filter(
+                        Appointment.veterinario_id == veterinario_id,
+                        Appointment.scheduled_at < window_end,
+                        Appointment.scheduled_at > window_start,
+                    )
+                    .all()
+                )
+                for appt in appts:
+                    appointments.setdefault(appt.id, appt)
+            if not cached_exams:
+                exams_conflicts = (
+                    ExamAppointment.query
+                    .filter(
+                        ExamAppointment.specialist_id == veterinario_id,
+                        ExamAppointment.scheduled_at < window_end,
+                        ExamAppointment.scheduled_at > window_start,
+                    )
+                    .all()
+                )
+                for exam in exams_conflicts:
+                    exams.setdefault(exam.id, exam)
 
     for appt in appointments.values():
         if exclude_appointment_id and appt.id == exclude_appointment_id:
@@ -525,14 +534,60 @@ def unique_items_by_id(items):
 
 def get_available_times(veterinario_id, date, kind='consulta'):
     """Retorna horários disponíveis para um especialista em uma data."""
-    from models import VetSchedule
+    from models import Appointment, ExamAppointment, VetSchedule
 
     weekday_map = ['Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado', 'Domingo']
     dia_semana = weekday_map[date.weekday()]
     schedules = VetSchedule.query.filter_by(veterinario_id=veterinario_id, dia_semana=dia_semana).all()
-    available = []
-    step = timedelta(minutes=30)
+    if not schedules:
+        return []
+
     duration = get_appointment_duration(kind)
+    step = timedelta(minutes=30)
+
+    earliest_start = min(s.hora_inicio for s in schedules)
+    latest_end = max(s.hora_fim for s in schedules)
+
+    day_start = datetime.combine(date, earliest_start)
+    day_end = datetime.combine(date, latest_end)
+
+    window_local_start = day_start - MAX_APPOINTMENT_DURATION
+    window_local_end = day_end + MAX_APPOINTMENT_DURATION
+
+    window_utc_start = window_local_start.replace(tzinfo=BR_TZ).astimezone(timezone.utc).replace(tzinfo=None)
+    window_utc_end = window_local_end.replace(tzinfo=BR_TZ).astimezone(timezone.utc).replace(tzinfo=None)
+
+    appointments_cache = {}
+    exams_cache = {}
+    for window_start, window_end in (
+        (window_utc_start, window_utc_end),
+        (window_local_start, window_local_end),
+    ):
+        appts = (
+            Appointment.query
+            .filter(
+                Appointment.veterinario_id == veterinario_id,
+                Appointment.scheduled_at < window_end,
+                Appointment.scheduled_at > window_start,
+            )
+            .all()
+        )
+        for appt in appts:
+            appointments_cache.setdefault(appt.id, appt)
+
+        exams_conflicts = (
+            ExamAppointment.query
+            .filter(
+                ExamAppointment.specialist_id == veterinario_id,
+                ExamAppointment.scheduled_at < window_end,
+                ExamAppointment.scheduled_at > window_start,
+            )
+            .all()
+        )
+        for exam in exams_conflicts:
+            exams_cache.setdefault(exam.id, exam)
+
+    available = []
     for s in schedules:
         current = datetime.combine(date, s.hora_inicio)
         end = datetime.combine(date, s.hora_fim)
@@ -543,7 +598,13 @@ def get_available_times(veterinario_id, date, kind='consulta'):
                 if _intervals_overlap(current, current + duration, intervalo_inicio, intervalo_fim):
                     current += step
                     continue
-            if not has_conflict_for_slot(veterinario_id, current, duration):
+            if not has_conflict_for_slot(
+                veterinario_id,
+                current,
+                duration,
+                preloaded_appointments=appointments_cache,
+                preloaded_exams=exams_cache,
+            ):
                 available.append(current.strftime('%H:%M'))
             current += step
     return available
