@@ -12,3 +12,32 @@
 .table-responsive {
   overflow-x: auto;
 }
+
+/* Tipos de eventos no calendário compartilhado */
+.fc-event.calendar-event-appointment {
+  background-color: #4e73df;
+  border-color: #2e59d9;
+  color: #ffffff;
+}
+
+.fc-event.calendar-event-exam {
+  background-color: #f6c23e;
+  border-color: #dda20a;
+  color: #1f2d3d;
+}
+
+.fc-event.calendar-event-vaccine {
+  background-color: #1cc88a;
+  border-color: #17a673;
+  color: #ffffff;
+}
+
+.fc-event.calendar-event-exam .fc-event-title,
+.fc-event.calendar-event-exam .fc-event-time {
+  color: inherit;
+}
+
+.fc-event.calendar-event-vaccine .fc-event-title,
+.fc-event.calendar-event-vaccine .fc-event-time {
+  color: inherit;
+}

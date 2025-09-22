@@ -4,6 +4,7 @@ from collections import defaultdict
 from io import BytesIO
 from concurrent.futures import ThreadPoolExecutor
 from decimal import Decimal
+from urllib.parse import urlparse, parse_qs
 
 
 
@@ -280,9 +281,14 @@ from helpers import (
     group_appointments_by_day,
     group_vet_schedules_by_day,
     appointments_to_events,
+    exam_to_event,
+    vaccine_to_event,
+    unique_items_by_id,
     to_timezone_aware,
     get_available_times,
     get_weekly_schedule,
+    get_appointment_duration,
+    has_conflict_for_slot,
 )
 
 
@@ -2350,7 +2356,7 @@ def agendar_retorno(consulta_id):
     if form.validate_on_submit():
         scheduled_at_local = datetime.combine(form.date.data, form.time.data)
         vet_id = form.veterinario_id.data
-        if not is_slot_available(vet_id, scheduled_at_local):
+        if not is_slot_available(vet_id, scheduled_at_local, kind='retorno'):
             flash('Horário indisponível para o veterinário selecionado.', 'danger')
         else:
             scheduled_at = (
@@ -2359,13 +2365,8 @@ def agendar_retorno(consulta_id):
                 .astimezone(timezone.utc)
                 .replace(tzinfo=None)
             )
-            duration = timedelta(minutes=30)
-            conflict_exam = ExamAppointment.query.filter(
-                ExamAppointment.specialist_id == vet_id,
-                ExamAppointment.scheduled_at < scheduled_at + duration,
-                ExamAppointment.scheduled_at > scheduled_at - duration,
-            ).first()
-            if conflict_exam:
+            duration = get_appointment_duration('retorno')
+            if has_conflict_for_slot(vet_id, scheduled_at_local, duration):
                 flash('Horário indisponível para o veterinário selecionado.', 'danger')
             else:
                 current_vet = getattr(current_user, 'veterinario', None)
@@ -7478,6 +7479,12 @@ def appointments():
 
     view_as = request.args.get('view_as')
     worker = current_user.worker
+
+    def _redirect_to_current_appointments():
+        query_args = request.args.to_dict(flat=False)
+        if query_args:
+            return redirect(url_for('appointments', **query_args))
+        return redirect(url_for('appointments'))
     if view_as:
         allowed_views = {'veterinario', 'colaborador', 'tutor'}
         if current_user.role == 'admin' and view_as in allowed_views:
@@ -7490,18 +7497,33 @@ def appointments():
                 return redirect(url_for('appointments'))
 
     agenda_users = []
+    agenda_veterinarios = []
+    agenda_colaboradores = []
+    admin_selected_veterinario_id = None
+    admin_selected_colaborador_id = None
+    selected_colaborador = None
+
     if current_user.role == 'admin':
         agenda_users = User.query.order_by(User.name).all()
+        agenda_veterinarios = (
+            Veterinario.query.join(User).order_by(User.name).all()
+        )
+        agenda_colaboradores = (
+            User.query.filter(User.worker == 'colaborador')
+            .order_by(User.name)
+            .all()
+        )
 
-    agenda_veterinarios = []
+    admin_selected_view = (
+        worker
+        if current_user.role == 'admin' and worker in {'veterinario', 'colaborador'}
+        else None
+    )
 
     if request.method == 'POST' and worker not in ['veterinario', 'colaborador', 'admin']:
         abort(403)
     if worker == 'veterinario':
         if current_user.role == 'admin':
-            agenda_veterinarios = (
-                Veterinario.query.join(User).order_by(User.name).all()
-            )
             veterinario_id_arg = request.args.get(
                 'veterinario_id', type=int
             )
@@ -7518,6 +7540,7 @@ def appointments():
                 veterinario = agenda_veterinarios[0]
             else:
                 abort(404)
+            admin_selected_veterinario_id = veterinario.id
         else:
             veterinario = current_user.veterinario
         if not veterinario:
@@ -7594,12 +7617,14 @@ def appointments():
             else:
                 flash('Nenhum novo horário foi salvo.', 'info')
             return redirect(appointments_url)
-        if appointment_form.submit.data and appointment_form.validate_on_submit():
+        if appointment_form.validate_on_submit():
             scheduled_at_local = datetime.combine(
                 appointment_form.date.data, appointment_form.time.data
             )
             if not is_slot_available(
-                appointment_form.veterinario_id.data, scheduled_at_local
+                appointment_form.veterinario_id.data,
+                scheduled_at_local,
+                kind=appointment_form.kind.data,
             ):
                 flash(
                     'Horário indisponível para o veterinário selecionado. Já existe uma consulta ou exame nesse intervalo.',
@@ -7874,6 +7899,10 @@ def appointments():
             appointment_form=appointment_form,
             veterinario=veterinario,
             agenda_veterinarios=agenda_veterinarios,
+            agenda_colaboradores=agenda_colaboradores,
+            admin_selected_view=admin_selected_view,
+            admin_selected_veterinario_id=admin_selected_veterinario_id,
+            admin_selected_colaborador_id=admin_selected_colaborador_id,
             horarios_grouped=horarios_grouped,
             appointments_pending=appointments_pending,
             appointments_upcoming=appointments_upcoming,
@@ -7886,19 +7915,44 @@ def appointments():
         if worker in ['colaborador', 'admin']:
             appointment_form = AppointmentForm(prefix='appointment')
             clinica_id = current_user.clinica_id
-            if current_user.role == 'admin' and worker == 'colaborador' and not clinica_id:
+            if current_user.role == 'admin' and worker == 'colaborador':
+                colaborador_id_arg = request.args.get('colaborador_id', type=int)
+                if colaborador_id_arg:
+                    selected_colaborador = next(
+                        (c for c in agenda_colaboradores if c.id == colaborador_id_arg),
+                        None,
+                    )
+                    if not selected_colaborador:
+                        selected_colaborador = (
+                            User.query.filter_by(
+                                id=colaborador_id_arg, worker='colaborador'
+                            )
+                            .first_or_404()
+                        )
+                elif agenda_colaboradores:
+                    selected_colaborador = agenda_colaboradores[0]
+                if selected_colaborador:
+                    admin_selected_colaborador_id = selected_colaborador.id
+                    if selected_colaborador.clinica_id:
+                        clinica_id = selected_colaborador.clinica_id
+                if not clinica_id:
+                    clinica = Clinica.query.first()
+                    clinica_id = clinica.id if clinica else None
+            elif current_user.role == 'admin' and not clinica_id:
                 clinica = Clinica.query.first()
                 clinica_id = clinica.id if clinica else None
             animals = Animal.query.filter_by(clinica_id=clinica_id).all()
             appointment_form.animal_id.choices = [(a.id, a.name) for a in animals]
             vets = Veterinario.query.filter_by(clinica_id=clinica_id).all()
             appointment_form.veterinario_id.choices = [(v.id, v.user.name) for v in vets]
-            if appointment_form.submit.data and appointment_form.validate_on_submit():
+            if appointment_form.validate_on_submit():
                 scheduled_at_local = datetime.combine(
                     appointment_form.date.data, appointment_form.time.data
                 )
                 if not is_slot_available(
-                    appointment_form.veterinario_id.data, scheduled_at_local
+                    appointment_form.veterinario_id.data,
+                    scheduled_at_local,
+                    kind=appointment_form.kind.data,
                 ):
                     flash(
                         'Horário indisponível para o veterinário selecionado. Já existe uma consulta ou exame nesse intervalo.',
@@ -7912,14 +7966,12 @@ def appointments():
                         .replace(tzinfo=None)
                     )
                     if appointment_form.kind.data == 'exame':
-                        duration = timedelta(minutes=30)
-                        end = scheduled_at + duration
-                        conflict = ExamAppointment.query.filter(
-                            ExamAppointment.specialist_id == appointment_form.veterinario_id.data,
-                            ExamAppointment.scheduled_at < end,
-                            ExamAppointment.scheduled_at > scheduled_at - duration,
-                        ).first()
-                        if conflict:
+                        duration = get_appointment_duration('exame')
+                        if has_conflict_for_slot(
+                            appointment_form.veterinario_id.data,
+                            scheduled_at_local,
+                            duration,
+                        ):
                             flash(
                                 'Horário indisponível para o veterinário selecionado. Já existe uma consulta ou exame nesse intervalo.',
                                 'danger'
@@ -7948,7 +8000,7 @@ def appointments():
                                 'O animal não possui uma assinatura de plano de saúde ativa.',
                                 'danger',
                             )
-                            return redirect(url_for('appointments'))
+                            return _redirect_to_current_appointments()
 
                         appt = Appointment(
                             animal_id=animal.id,
@@ -7962,7 +8014,7 @@ def appointments():
                         db.session.add(appt)
                         db.session.commit()
                         flash('Agendamento criado com sucesso.', 'success')
-                return redirect(url_for('appointments'))
+                return _redirect_to_current_appointments()
             appointments = (
                 Appointment.query
                 .filter_by(clinica_id=clinica_id)
@@ -8033,6 +8085,11 @@ def appointments():
             vaccine_appointments_grouped=vaccine_appointments_grouped,
             form=form,
             agenda_users=agenda_users,
+            agenda_veterinarios=agenda_veterinarios,
+            agenda_colaboradores=agenda_colaboradores,
+            admin_selected_view=admin_selected_view,
+            admin_selected_veterinario_id=admin_selected_veterinario_id,
+            admin_selected_colaborador_id=admin_selected_colaborador_id,
         )
 
 
@@ -8186,7 +8243,7 @@ def edit_appointment(appointment_id):
             .astimezone(BR_TZ)
             .replace(tzinfo=None)
         )
-        if not is_slot_available(vet_id, scheduled_at_local) and not (
+        if not is_slot_available(vet_id, scheduled_at_local, kind=appointment.kind) and not (
             vet_id == appointment.veterinario_id and scheduled_at_local == existing_local
         ):
             return jsonify({
@@ -8302,16 +8359,91 @@ def api_my_pets():
 @login_required
 def api_my_appointments():
     """Return the current user's appointments as calendar events."""
+    query = Appointment.query
+
     if current_user.role == 'admin':
-        query = Appointment.query.filter_by(tutor_id=current_user.id)
+        def _coerce_first_int(values):
+            if values is None:
+                return None
+            if isinstance(values, (list, tuple)):
+                values = values[0] if values else None
+            if values in (None, ""):
+                return None
+            try:
+                return int(values)
+            except (TypeError, ValueError):
+                return None
+
+        def _admin_view_context():
+            referrer_params = {}
+            if request.referrer:
+                parsed = urlparse(request.referrer)
+                referrer_params = parse_qs(parsed.query)
+            view_as = request.args.get('view_as') or referrer_params.get('view_as', [None])[0]
+            vet_id = request.args.get('veterinario_id', type=int)
+            if vet_id is None:
+                vet_id = _coerce_first_int(referrer_params.get('veterinario_id'))
+            clinic_id = request.args.get('clinica_id', type=int)
+            if clinic_id is None:
+                clinic_id = _coerce_first_int(referrer_params.get('clinica_id'))
+            tutor_id = request.args.get('tutor_id', type=int)
+            if tutor_id is None:
+                tutor_id = _coerce_first_int(referrer_params.get('tutor_id'))
+            return view_as, vet_id, clinic_id, tutor_id
+
+        accessible_clinic_ids = None
+
+        def _accessible_clinic_ids():
+            nonlocal accessible_clinic_ids
+            if accessible_clinic_ids is None:
+                rows = clinicas_do_usuario().with_entities(Clinica.id).all()
+                clinic_ids = []
+                for row in rows:
+                    try:
+                        clinic_id_value = row[0]
+                    except (TypeError, IndexError):
+                        clinic_id_value = getattr(row, 'id', None)
+                    if clinic_id_value is None or clinic_id_value in clinic_ids:
+                        continue
+                    clinic_ids.append(clinic_id_value)
+                accessible_clinic_ids = clinic_ids
+            return accessible_clinic_ids
+
+        view_as, vet_id, clinic_id, tutor_id = _admin_view_context()
+
+        if view_as == 'veterinario':
+            if not vet_id and getattr(current_user, 'veterinario', None):
+                vet_id = current_user.veterinario.id
+            if vet_id:
+                query = query.filter(Appointment.veterinario_id == vet_id)
+        elif view_as == 'colaborador':
+            clinic_ids = list(_accessible_clinic_ids())
+            if clinic_id and clinic_id not in clinic_ids:
+                clinic_ids.append(clinic_id)
+            if clinic_ids:
+                query = query.filter(Appointment.clinica_id.in_(clinic_ids))
+        elif view_as == 'tutor':
+            target_tutor_id = tutor_id or current_user.id
+            query = query.filter(Appointment.tutor_id == target_tutor_id)
+        else:
+            clinic_ids = _accessible_clinic_ids()
+            if clinic_ids:
+                query = query.filter(
+                    or_(
+                        Appointment.clinica_id.in_(clinic_ids),
+                        Appointment.veterinario.has(
+                            Veterinario.clinica_id.in_(clinic_ids)
+                        ),
+                    )
+                )
     elif current_user.worker == 'veterinario' and getattr(current_user, 'veterinario', None):
-        query = Appointment.query.filter_by(
+        query = query.filter_by(
             veterinario_id=current_user.veterinario.id
         )
     elif current_user.worker == 'colaborador' and current_user.clinica_id:
-        query = Appointment.query.filter_by(clinica_id=current_user.clinica_id)
+        query = query.filter_by(clinica_id=current_user.clinica_id)
     else:
-        query = Appointment.query.filter_by(tutor_id=current_user.id)
+        query = query.filter_by(tutor_id=current_user.id)
     appts = query.order_by(Appointment.scheduled_at).all()
     return jsonify(appointments_to_events(appts))
 
@@ -8342,40 +8474,19 @@ def api_user_appointments(user_id):
         exam_filters.append(ExamAppointment.specialist_id == vet.id)
     exam_query = ExamAppointment.query.outerjoin(ExamAppointment.animal)
     exam_filters.append(Animal.user_id == user.id)
-    exam_events = []
     if exam_filters:
         exam_appointments = (
             exam_query.filter(or_(*exam_filters))
             .order_by(ExamAppointment.scheduled_at)
             .all()
         )
-        seen_exam_ids = set()
-        unique_exam_appointments = []
-        for exam in exam_appointments:
-            if exam.id not in seen_exam_ids:
-                seen_exam_ids.add(exam.id)
-                unique_exam_appointments.append(exam)
-
-        def exam_to_event(exam):
-            title = f"Exame: {exam.animal.name if getattr(exam, 'animal', None) else 'Exame'}"
-            if getattr(exam, 'specialist', None) and getattr(exam.specialist, 'user', None):
-                title = f"{title} - {exam.specialist.user.name}"
-            end_time = exam.scheduled_at + timedelta(minutes=30)
-            start = to_timezone_aware(exam.scheduled_at)
-            end = to_timezone_aware(end_time)
-            return {
-                'id': f"exam-{exam.id}",
-                'title': title,
-                'start': start.isoformat() if start else None,
-                'end': end.isoformat() if end else None,
-            }
-
-        exam_events = [exam_to_event(exam) for exam in unique_exam_appointments]
-        events.extend(exam_events)
+        for exam in unique_items_by_id(exam_appointments):
+            event = exam_to_event(exam)
+            if event:
+                events.append(event)
 
     vaccine_filters = [Animal.user_id == user.id, Vacina.aplicada_por == user.id]
     vaccine_query = Vacina.query.outerjoin(Vacina.animal)
-    vaccine_events = []
     if vaccine_filters:
         vaccine_appointments = (
             vaccine_query.filter(
@@ -8386,33 +8497,91 @@ def api_user_appointments(user_id):
             .order_by(Vacina.aplicada_em)
             .all()
         )
-
-        unique_vaccines = []
-        seen_vaccine_ids = set()
-        for vac in vaccine_appointments:
-            if vac.id not in seen_vaccine_ids:
-                seen_vaccine_ids.add(vac.id)
-                unique_vaccines.append(vac)
-
-        def vaccine_to_event(vaccine):
-            start = datetime.combine(vaccine.aplicada_em, time.min, tzinfo=BR_TZ)
-            end = start + timedelta(hours=1)
-            title = f"Vacina: {vaccine.nome}"
-            if getattr(vaccine, 'animal', None):
-                title = f"{title} - {vaccine.animal.name}"
-            start_aware = to_timezone_aware(start)
-            end_aware = to_timezone_aware(end)
-            return {
-                'id': f"vaccine-{vaccine.id}",
-                'title': title,
-                'start': start_aware.isoformat() if start_aware else None,
-                'end': end_aware.isoformat() if end_aware else None,
-            }
-
-        vaccine_events = [vaccine_to_event(vac) for vac in unique_vaccines]
-        events.extend(vaccine_events)
+        for vac in unique_items_by_id(vaccine_appointments):
+            event = vaccine_to_event(vac)
+            if event:
+                events.append(event)
 
     return jsonify(events)
+
+
+@app.route('/api/appointments/<int:appointment_id>/reschedule', methods=['POST'])
+@login_required
+def api_reschedule_appointment(appointment_id):
+    """Update the schedule of an appointment after drag & drop operations."""
+
+    appointment = Appointment.query.get_or_404(appointment_id)
+
+    if current_user.worker in ['veterinario', 'colaborador']:
+        if current_user.worker == 'veterinario':
+            user_clinic = current_user.veterinario.clinica_id
+        else:
+            user_clinic = current_user.clinica_id
+        appointment_clinic = appointment.clinica_id
+        if appointment_clinic is None and appointment.veterinario:
+            appointment_clinic = appointment.veterinario.clinica_id
+        if appointment_clinic != user_clinic:
+            abort(403)
+    elif current_user.role != 'admin' and appointment.tutor_id != current_user.id:
+        abort(403)
+
+    data = request.get_json(silent=True) or {}
+    start_str = data.get('start') or data.get('startStr')
+
+    def _parse_client_datetime(value):
+        if not value or not isinstance(value, str):
+            return None
+        value = value.strip()
+        if value.endswith('Z'):
+            value = value[:-1] + '+00:00'
+        try:
+            return datetime.fromisoformat(value)
+        except ValueError:
+            return None
+
+    new_start = _parse_client_datetime(start_str)
+    if not new_start:
+        return jsonify({'success': False, 'message': 'Horário inválido.'}), 400
+
+    if new_start.tzinfo is None:
+        new_start_with_tz = new_start.replace(tzinfo=BR_TZ)
+        new_start_local = new_start
+    else:
+        new_start_with_tz = new_start.astimezone(BR_TZ)
+        new_start_local = new_start_with_tz.replace(tzinfo=None)
+
+    if appointment.scheduled_at.tzinfo is None:
+        existing_local = (
+            appointment.scheduled_at
+            .replace(tzinfo=timezone.utc)
+            .astimezone(BR_TZ)
+            .replace(tzinfo=None)
+        )
+    else:
+        existing_local = appointment.scheduled_at.astimezone(BR_TZ).replace(tzinfo=None)
+
+    if (
+        not is_slot_available(appointment.veterinario_id, new_start_local, kind=appointment.kind)
+        and new_start_local != existing_local
+    ):
+        return jsonify({
+            'success': False,
+            'message': 'Horário indisponível. Já existe uma consulta ou exame nesse intervalo.',
+        }), 400
+
+    appointment.scheduled_at = (
+        new_start_with_tz
+        .astimezone(timezone.utc)
+        .replace(tzinfo=None)
+    )
+    db.session.commit()
+
+    updated_start = to_timezone_aware(appointment.scheduled_at)
+    return jsonify({
+        'success': True,
+        'message': 'Agendamento atualizado com sucesso.',
+        'start': updated_start.isoformat() if updated_start else None,
+    })
 
 
 @app.route('/api/clinic_appointments/<int:clinica_id>')
@@ -8426,7 +8595,43 @@ def api_clinic_appointments(clinica_id):
         .order_by(Appointment.scheduled_at)
         .all()
     )
-    return jsonify(appointments_to_events(appts))
+    events = appointments_to_events(appts)
+
+    exam_query = ExamAppointment.query.outerjoin(ExamAppointment.animal)
+    exam_appointments = (
+        exam_query
+        .filter(
+            or_(
+                Animal.clinica_id == clinica_id,
+                ExamAppointment.specialist.has(Veterinario.clinica_id == clinica_id),
+            ),
+            ExamAppointment.status.in_(['pending', 'confirmed']),
+        )
+        .order_by(ExamAppointment.scheduled_at)
+        .all()
+    )
+    for exam in unique_items_by_id(exam_appointments):
+        event = exam_to_event(exam)
+        if event:
+            events.append(event)
+
+    vaccine_query = Vacina.query.outerjoin(Vacina.animal)
+    vaccine_appointments = (
+        vaccine_query
+        .filter(
+            Animal.clinica_id == clinica_id,
+            Vacina.aplicada_em.isnot(None),
+            Vacina.aplicada_em >= date.today(),
+        )
+        .order_by(Vacina.aplicada_em)
+        .all()
+    )
+    for vaccine in unique_items_by_id(vaccine_appointments):
+        event = vaccine_to_event(vaccine)
+        if event:
+            events.append(event)
+
+    return jsonify(events)
 
 
 @app.route('/api/specialists')
@@ -8460,7 +8665,8 @@ def api_specialist_available_times(veterinario_id):
     if not date_str:
         return jsonify([])
     date_obj = datetime.strptime(date_str, '%Y-%m-%d').date()
-    times = get_available_times(veterinario_id, date_obj)
+    kind = request.args.get('kind', 'consulta')
+    times = get_available_times(veterinario_id, date_obj, kind=kind)
     return jsonify(times)
 
 
@@ -8476,7 +8682,7 @@ def api_specialist_weekly_schedule(veterinario_id):
 @app.route('/animal/<int:animal_id>/schedule_exam', methods=['POST'])
 @login_required
 def schedule_exam(animal_id):
-    from models import ExamAppointment, Appointment, AgendaEvento, Veterinario, Animal, Message
+    from models import ExamAppointment, AgendaEvento, Veterinario, Animal, Message
     data = request.get_json(silent=True) or {}
     specialist_id = data.get('specialist_id')
     date_str = data.get('date')
@@ -8491,7 +8697,7 @@ def schedule_exam(animal_id):
         .replace(tzinfo=None)
     )
     # Ensure requested time falls within the veterinarian's available schedule
-    available_times = get_available_times(specialist_id, scheduled_at_local.date())
+    available_times = get_available_times(specialist_id, scheduled_at_local.date(), kind='exame')
     if time_str not in available_times:
         if available_times:
             msg = (
@@ -8501,21 +8707,8 @@ def schedule_exam(animal_id):
         else:
             msg = 'Nenhum horário disponível para a data escolhida.'
         return jsonify({'success': False, 'message': msg}), 400
-    duration = timedelta(minutes=30)
-    end = scheduled_at + duration
-    conflict = (
-        Appointment.query.filter(
-            Appointment.veterinario_id == specialist_id,
-            Appointment.scheduled_at < end,
-            Appointment.scheduled_at > scheduled_at - duration,
-        ).first()
-        or ExamAppointment.query.filter(
-            ExamAppointment.specialist_id == specialist_id,
-            ExamAppointment.scheduled_at < end,
-            ExamAppointment.scheduled_at > scheduled_at - duration,
-        ).first()
-    )
-    if conflict:
+    duration = get_appointment_duration('exame')
+    if has_conflict_for_slot(specialist_id, scheduled_at_local, duration):
         return jsonify({
             'success': False,
             'message': 'Horário indisponível. Já existe uma consulta ou exame nesse intervalo.'
@@ -8534,7 +8727,7 @@ def schedule_exam(animal_id):
         evento = AgendaEvento(
             titulo=f"Exame de {animal.name}",
             inicio=scheduled_at,
-            fim=scheduled_at + timedelta(minutes=30),
+            fim=scheduled_at + duration,
             responsavel_id=vet.user_id,
             clinica_id=animal.clinica_id,
         )
@@ -8598,7 +8791,7 @@ def update_exam_appointment_status(appointment_id):
 @app.route('/exam_appointment/<int:appointment_id>/update', methods=['POST'])
 @login_required
 def update_exam_appointment(appointment_id):
-    from models import ExamAppointment, Appointment
+    from models import ExamAppointment
     appt = ExamAppointment.query.get_or_404(appointment_id)
     data = request.get_json(silent=True) or {}
     date_str = data.get('date')
@@ -8613,22 +8806,13 @@ def update_exam_appointment(appointment_id):
         .astimezone(timezone.utc)
         .replace(tzinfo=None)
     )
-    duration = timedelta(minutes=30)
-    end = scheduled_at + duration
-    conflict = (
-        Appointment.query.filter(
-            Appointment.veterinario_id == specialist_id,
-            Appointment.scheduled_at < end,
-            Appointment.scheduled_at > scheduled_at - duration,
-        ).first()
-        or ExamAppointment.query.filter(
-            ExamAppointment.specialist_id == specialist_id,
-            ExamAppointment.id != appointment_id,
-            ExamAppointment.scheduled_at < end,
-            ExamAppointment.scheduled_at > scheduled_at - duration,
-        ).first()
-    )
-    if conflict:
+    duration = get_appointment_duration('exame')
+    if has_conflict_for_slot(
+        specialist_id,
+        scheduled_at_local,
+        duration,
+        exclude_exam_id=appointment_id,
+    ):
         return jsonify({
             'success': False,
             'message': 'Horário indisponível. Já existe uma consulta ou exame nesse intervalo.'

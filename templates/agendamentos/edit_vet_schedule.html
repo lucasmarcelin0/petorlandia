@@ -9,25 +9,15 @@
       <p class="text-muted">Gerencie seus horários e consultas</p>
     </div>
     <div class="ms-auto">
-      {% if current_user.role == 'admin' and agenda_veterinarios %}
-      <form action="{{ url_for('appointments') }}" method="get" class="d-flex align-items-center justify-content-end gap-2 mb-2 flex-wrap">
-        <input type="hidden" name="view_as" value="veterinario">
-        {% set start_arg = request.args.get('start') %}
-        {% if start_arg %}
-        <input type="hidden" name="start" value="{{ start_arg }}">
-        {% endif %}
-        {% set end_arg = request.args.get('end') %}
-        {% if end_arg %}
-        <input type="hidden" name="end" value="{{ end_arg }}">
-        {% endif %}
-        <label for="vet-agenda-picker" class="form-label fw-semibold small mb-0">Pesquisar agenda</label>
-        <select id="vet-agenda-picker" name="veterinario_id" class="form-select form-select-sm text-truncate" onchange="this.form.submit()" style="min-width: 220px;">
-          <option value="" {% if not veterinario %}selected{% endif %}>Selecione um usuário</option>
-          {% for vet in agenda_veterinarios %}
-          <option value="{{ vet.id }}" {% if vet.id == veterinario.id %}selected{% endif %}>{{ vet.user.name }}{% if vet.user.email %} – {{ vet.user.email }}{% endif %}</option>
-          {% endfor %}
-        </select>
-      </form>
+      {% if current_user.role == 'admin' %}
+      {% set preserve_params = ['start', 'end'] %}
+      {% set switcher_select_id = 'vet-agenda-picker' %}
+      {% set switcher_label_text = 'Pesquisar agenda' %}
+      {% set switcher_select_classes = 'form-select form-select-sm text-truncate' %}
+      {% set switcher_select_style = 'min-width: 220px;' %}
+      {% set switcher_form_classes = 'd-flex align-items-center justify-content-end gap-2 mb-2 flex-wrap' %}
+      {% set switcher_default_option_label = 'Selecione um usuário' %}
+      {% include 'partials/admin_agenda_switcher.html' %}
       {% endif %}
       <div class="d-flex flex-wrap justify-content-end gap-2">
         <button class="btn btn-primary mb-1" onclick="toggleScheduleForm()">
@@ -47,6 +37,9 @@
     </div>
     <div class="card-body">
       <form method="get" class="row g-3 align-items-end">
+        {% for arg_key, arg_val in request.args.items() if arg_key not in ['start', 'end'] %}
+        <input type="hidden" name="{{ arg_key }}" value="{{ arg_val }}">
+        {% endfor %}
         <div class="col-md-3">
           <label class="form-label fw-bold">Data Inicial</label>
           <input type="date" name="start" value="{{ start_dt.date() }}" class="form-control">
@@ -166,7 +159,7 @@
         </div>
         <div class="modal-footer">
           <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
-          <button type="submit" form="appointment-form" class="btn btn-primary">Agendar Consulta</button>
+          {{ appointment_form.submit(class="btn btn-primary", form="appointment-form", value="Agendar Consulta") }}
         </div>
       </div>
     </div>
