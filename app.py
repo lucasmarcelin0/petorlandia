@@ -444,27 +444,33 @@ def inject_pending_appointment_count():
     return dict(pending_appointment_count=pending)
 
 
+def _clinic_pending_appointments_query(veterinario):
+    """Return query for scheduled clinic appointments excluding the given vet."""
+    if not veterinario or not getattr(veterinario, "clinica_id", None):
+        return None
+
+    from models import Appointment
+
+    return Appointment.query.filter(
+        Appointment.clinica_id == veterinario.clinica_id,
+        Appointment.status == "scheduled",
+        Appointment.veterinario_id != veterinario.id,
+    )
+
+
 @app.context_processor
 def inject_clinic_pending_appointment_count():
     """Expose count of scheduled appointments in the clinic excluding the current vet."""
     if (
         current_user.is_authenticated
         and getattr(current_user, "worker", None) == "veterinario"
-        and getattr(current_user, "veterinario", None)
     ):
-        from models import Appointment
-
-        clinic_id = current_user.veterinario.clinica_id
-        if clinic_id:
-            pending = (
-                Appointment.query.filter(
-                    Appointment.clinica_id == clinic_id,
-                    Appointment.status == "scheduled",
-                    Appointment.veterinario_id != current_user.veterinario.id,
-                ).count()
-            )
-        else:
-            pending = 0
+        pending_query = _clinic_pending_appointments_query(
+            getattr(current_user, "veterinario", None)
+        )
+        pending = pending_query.count() if pending_query is not None else 0
+        seen = session.get("clinic_pending_seen_count", 0)
+        pending = max(pending - seen, 0)
     else:
         pending = 0
     return dict(clinic_pending_appointment_count=pending)
@@ -7903,6 +7909,10 @@ def appointments():
             Appointment.status == 'scheduled',
             Appointment.scheduled_at >= now + timedelta(hours=2),
         ).count()
+        clinic_pending_query = _clinic_pending_appointments_query(veterinario)
+        session['clinic_pending_seen_count'] = (
+            clinic_pending_query.count() if clinic_pending_query is not None else 0
+        )
 
         return render_template(
             'agendamentos/edit_vet_schedule.html',
