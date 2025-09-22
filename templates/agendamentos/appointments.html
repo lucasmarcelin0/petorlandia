@@ -111,11 +111,27 @@
           </div>
         </form>
         <div class="mt-4">
-          <h6 class="fw-bold"><i class="bi bi-calendar3 me-2"></i>Disponibilidade do Veterinário</h6>
-          <div id="schedule-overview" class="row row-cols-1 row-cols-md-2 row-cols-lg-3 g-3 small"></div>
-          <div class="mt-2 small">
-            <span class="badge bg-success me-1">&nbsp;</span> Disponível
-            <span class="badge bg-danger ms-2 me-1">&nbsp;</span> Indisponível
+          <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2">
+            <h6 class="fw-bold mb-0">
+              <i class="bi bi-calendar3 me-2"></i>Disponibilidade do Veterinário
+            </h6>
+            <button
+              class="btn btn-outline-primary btn-sm"
+              type="button"
+              data-bs-toggle="collapse"
+              data-bs-target="#scheduleOverviewCollapse"
+              aria-expanded="true"
+              aria-controls="scheduleOverviewCollapse"
+            >
+              Alternar visualização
+            </button>
+          </div>
+          <div class="collapse show" id="scheduleOverviewCollapse">
+            <div id="schedule-overview" class="row row-cols-1 row-cols-md-2 row-cols-lg-3 g-3 small"></div>
+            <div class="mt-2 small">
+              <span class="badge bg-success me-1">&nbsp;</span> Disponível
+              <span class="badge bg-danger ms-2 me-1">&nbsp;</span> Indisponível
+            </div>
           </div>
         </div>
         {% endif %}
@@ -243,6 +259,8 @@ document.addEventListener('DOMContentLoaded', () => {
     ? timeField.dataset.emptyText
     : 'Sem horários disponíveis';
   const scheduleContainer = document.getElementById('schedule-overview');
+  const scheduleCollapseEl = document.getElementById('scheduleOverviewCollapse');
+  const scheduleToggleBtn = document.querySelector('[data-bs-target="#scheduleOverviewCollapse"]');
   const calendarContainer = document.querySelector('[data-calendar-redirect-url]');
   const calendarRedirectUrl = (calendarContainer && calendarContainer.dataset && calendarContainer.dataset.calendarRedirectUrl) || '';
   const newAppointmentCollapseEl = document.getElementById('newAppointmentForm');
@@ -258,6 +276,14 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     const isShown = newAppointmentCollapseEl.classList.contains('show');
     newAppointmentToggleBtn.setAttribute('aria-expanded', isShown ? 'true' : 'false');
+  }
+
+  function updateScheduleToggleAria() {
+    if (!scheduleCollapseEl || !scheduleToggleBtn) {
+      return;
+    }
+    const isShown = scheduleCollapseEl.classList.contains('show');
+    scheduleToggleBtn.setAttribute('aria-expanded', isShown ? 'true' : 'false');
   }
 
   function ensureNewAppointmentVisible() {
@@ -418,6 +444,16 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
+  function handleVetChange() {
+    if (!vetField && !dateField && !timeField && !scheduleContainer) {
+      return;
+    }
+    updateTimes();
+    loadSchedule();
+  }
+
+  window.handleVetChange = handleVetChange;
+
   const scheduleBtn = document.getElementById('openScheduleModal');
   const scheduleModalEl = document.getElementById('scheduleEditModal');
   if (scheduleBtn && scheduleModalEl) {
@@ -429,6 +465,7 @@ document.addEventListener('DOMContentLoaded', () => {
         vetSelect.innerHTML = vetSelectSrc.innerHTML;
         vetSelect.value = vetSelectSrc.value;
       }
+      handleVetChange();
       scheduleModal.show();
     });
   }
@@ -461,6 +498,8 @@ document.addEventListener('DOMContentLoaded', () => {
       timeField.dispatchEvent(new Event('change', { bubbles: true }));
     }
 
+    handleVetChange();
+
     focusFirstAppointmentField();
   });
 
@@ -468,10 +507,18 @@ document.addEventListener('DOMContentLoaded', () => {
     timeField.dataset.currentTime = timeField.value;
   });
 
-  vetField && vetField.addEventListener('change', () => { updateTimes(); loadSchedule(); });
-  dateField && dateField.addEventListener('change', () => { updateTimes(); loadSchedule(); });
-  updateTimes();
-  loadSchedule();
+  vetField && vetField.addEventListener('change', handleVetChange);
+  dateField && dateField.addEventListener('change', handleVetChange);
+  handleVetChange();
+
+  if (scheduleCollapseEl && scheduleToggleBtn) {
+    scheduleCollapseEl.addEventListener('shown.bs.collapse', () => {
+      updateScheduleToggleAria();
+      loadSchedule();
+    });
+    scheduleCollapseEl.addEventListener('hidden.bs.collapse', updateScheduleToggleAria);
+    updateScheduleToggleAria();
+  }
 
   if (newAppointmentCollapseEl && newAppointmentToggleBtn) {
     newAppointmentCollapseEl.addEventListener('shown.bs.collapse', updateNewAppointmentToggleAria);
