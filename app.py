@@ -7685,16 +7685,27 @@ def appointments():
                 horarios_grouped.append({'dia': h.dia_semana, 'itens': []})
             horarios_grouped[-1]['itens'].append(h)
         now = datetime.utcnow()
+        today_start_local = datetime.now(BR_TZ).replace(
+            hour=0, minute=0, second=0, microsecond=0
+        )
+        today_start_utc = (
+            today_start_local.astimezone(timezone.utc).replace(tzinfo=None)
+        )
         start_str = request.args.get('start')
         end_str = request.args.get('end')
         if start_str and end_str:
             start_dt = datetime.fromisoformat(start_str)
             end_dt = datetime.fromisoformat(end_str) + timedelta(days=1)
+            restrict_to_today = False
         else:
             today = date.today()
             start_dt = datetime.combine(today - timedelta(days=today.weekday()), datetime.min.time())
             end_dt = start_dt + timedelta(days=7)
+            restrict_to_today = True
         start_dt_utc, end_dt_utc = local_date_range_to_utc(start_dt, end_dt)
+        upcoming_start = start_dt_utc or today_start_utc
+        if restrict_to_today and today_start_utc:
+            upcoming_start = max(upcoming_start, today_start_utc)
 
         pending_consultas = (
             Appointment.query.filter_by(veterinario_id=veterinario.id, status="scheduled")
@@ -7732,14 +7743,14 @@ def appointments():
 
         upcoming_consultas = (
             Appointment.query.filter_by(veterinario_id=veterinario.id, status="accepted")
-            .filter(Appointment.scheduled_at >= start_dt_utc)
+            .filter(Appointment.scheduled_at >= upcoming_start)
             .filter(Appointment.scheduled_at < end_dt_utc)
             .order_by(Appointment.scheduled_at)
             .all()
         )
         upcoming_exams = (
             ExamAppointment.query.filter_by(specialist_id=veterinario.id, status='confirmed')
-            .filter(ExamAppointment.scheduled_at >= start_dt_utc)
+            .filter(ExamAppointment.scheduled_at >= upcoming_start)
             .filter(ExamAppointment.scheduled_at < end_dt_utc)
             .order_by(ExamAppointment.scheduled_at)
             .all()
