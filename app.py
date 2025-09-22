@@ -7497,18 +7497,33 @@ def appointments():
                 return redirect(url_for('appointments'))
 
     agenda_users = []
+    agenda_veterinarios = []
+    agenda_colaboradores = []
+    admin_selected_veterinario_id = None
+    admin_selected_colaborador_id = None
+    selected_colaborador = None
+
     if current_user.role == 'admin':
         agenda_users = User.query.order_by(User.name).all()
+        agenda_veterinarios = (
+            Veterinario.query.join(User).order_by(User.name).all()
+        )
+        agenda_colaboradores = (
+            User.query.filter(User.worker == 'colaborador')
+            .order_by(User.name)
+            .all()
+        )
 
-    agenda_veterinarios = []
+    admin_selected_view = (
+        worker
+        if current_user.role == 'admin' and worker in {'veterinario', 'colaborador'}
+        else None
+    )
 
     if request.method == 'POST' and worker not in ['veterinario', 'colaborador', 'admin']:
         abort(403)
     if worker == 'veterinario':
         if current_user.role == 'admin':
-            agenda_veterinarios = (
-                Veterinario.query.join(User).order_by(User.name).all()
-            )
             veterinario_id_arg = request.args.get(
                 'veterinario_id', type=int
             )
@@ -7525,6 +7540,7 @@ def appointments():
                 veterinario = agenda_veterinarios[0]
             else:
                 abort(404)
+            admin_selected_veterinario_id = veterinario.id
         else:
             veterinario = current_user.veterinario
         if not veterinario:
@@ -7883,6 +7899,10 @@ def appointments():
             appointment_form=appointment_form,
             veterinario=veterinario,
             agenda_veterinarios=agenda_veterinarios,
+            agenda_colaboradores=agenda_colaboradores,
+            admin_selected_view=admin_selected_view,
+            admin_selected_veterinario_id=admin_selected_veterinario_id,
+            admin_selected_colaborador_id=admin_selected_colaborador_id,
             horarios_grouped=horarios_grouped,
             appointments_pending=appointments_pending,
             appointments_upcoming=appointments_upcoming,
@@ -7895,7 +7915,30 @@ def appointments():
         if worker in ['colaborador', 'admin']:
             appointment_form = AppointmentForm(prefix='appointment')
             clinica_id = current_user.clinica_id
-            if current_user.role == 'admin' and worker == 'colaborador' and not clinica_id:
+            if current_user.role == 'admin' and worker == 'colaborador':
+                colaborador_id_arg = request.args.get('colaborador_id', type=int)
+                if colaborador_id_arg:
+                    selected_colaborador = next(
+                        (c for c in agenda_colaboradores if c.id == colaborador_id_arg),
+                        None,
+                    )
+                    if not selected_colaborador:
+                        selected_colaborador = (
+                            User.query.filter_by(
+                                id=colaborador_id_arg, worker='colaborador'
+                            )
+                            .first_or_404()
+                        )
+                elif agenda_colaboradores:
+                    selected_colaborador = agenda_colaboradores[0]
+                if selected_colaborador:
+                    admin_selected_colaborador_id = selected_colaborador.id
+                    if selected_colaborador.clinica_id:
+                        clinica_id = selected_colaborador.clinica_id
+                if not clinica_id:
+                    clinica = Clinica.query.first()
+                    clinica_id = clinica.id if clinica else None
+            elif current_user.role == 'admin' and not clinica_id:
                 clinica = Clinica.query.first()
                 clinica_id = clinica.id if clinica else None
             animals = Animal.query.filter_by(clinica_id=clinica_id).all()
@@ -8042,6 +8085,11 @@ def appointments():
             vaccine_appointments_grouped=vaccine_appointments_grouped,
             form=form,
             agenda_users=agenda_users,
+            agenda_veterinarios=agenda_veterinarios,
+            agenda_colaboradores=agenda_colaboradores,
+            admin_selected_view=admin_selected_view,
+            admin_selected_veterinario_id=admin_selected_veterinario_id,
+            admin_selected_colaborador_id=admin_selected_colaborador_id,
         )
 
 

@@ -10,13 +10,12 @@
     </h2>
     {% if current_user.role == 'admin' %}
     <div class="w-100 ms-lg-auto">
-      <label for="admin-agenda-user-picker" class="form-label fw-semibold small mb-1">Selecionar usuário</label>
-      <select id="admin-agenda-user-picker" class="form-select" data-placeholder="Buscar usuário">
-        <option value="">Minha agenda</option>
-        {% for user in agenda_users %}
-        <option value="{{ user.id }}">{{ user.name }}{% if user.email %} – {{ user.email }}{% endif %}</option>
-        {% endfor %}
-      </select>
+      {% set switcher_select_id = 'admin-agenda-user-picker' %}
+      {% set switcher_label_text = 'Selecionar usuário' %}
+      {% set switcher_select_classes = 'form-select w-100' %}
+      {% set switcher_form_classes = 'd-flex align-items-center gap-2 w-100' %}
+      {% set switcher_default_option_label = 'Minha agenda' %}
+      {% include 'partials/admin_agenda_switcher.html' %}
     </div>
     {% endif %}
   </div>
