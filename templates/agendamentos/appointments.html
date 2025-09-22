@@ -247,7 +247,18 @@ document.addEventListener('DOMContentLoaded', () => {
   const calendarRedirectUrl = (calendarContainer && calendarContainer.dataset && calendarContainer.dataset.calendarRedirectUrl) || '';
   const newAppointmentCollapseEl = document.getElementById('newAppointmentForm');
   const newAppointmentToggleBtn = document.querySelector('[data-bs-target="#newAppointmentForm"]');
+  const newAppointmentForm = newAppointmentCollapseEl
+    ? newAppointmentCollapseEl.querySelector('form')
+    : null;
   let newAppointmentCollapseInstance = null;
+
+  function updateNewAppointmentToggleAria() {
+    if (!newAppointmentCollapseEl || !newAppointmentToggleBtn) {
+      return;
+    }
+    const isShown = newAppointmentCollapseEl.classList.contains('show');
+    newAppointmentToggleBtn.setAttribute('aria-expanded', isShown ? 'true' : 'false');
+  }
 
   function ensureNewAppointmentVisible() {
     if (!newAppointmentCollapseEl || !window.bootstrap || !bootstrap.Collapse) {
@@ -265,6 +276,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (newAppointmentToggleBtn) {
       newAppointmentToggleBtn.setAttribute('aria-expanded', 'true');
     }
+    updateNewAppointmentToggleAria();
   }
 
   function focusFirstAppointmentField() {
@@ -460,6 +472,16 @@ document.addEventListener('DOMContentLoaded', () => {
   dateField && dateField.addEventListener('change', () => { updateTimes(); loadSchedule(); });
   updateTimes();
   loadSchedule();
+
+  if (newAppointmentCollapseEl && newAppointmentToggleBtn) {
+    newAppointmentCollapseEl.addEventListener('shown.bs.collapse', updateNewAppointmentToggleAria);
+    newAppointmentCollapseEl.addEventListener('hidden.bs.collapse', updateNewAppointmentToggleAria);
+    updateNewAppointmentToggleAria();
+  }
+
+  if (newAppointmentForm) {
+    ensureNewAppointmentVisible();
+  }
 });
 </script>
 {% endblock %}
