@@ -15,9 +15,63 @@
 document.addEventListener('DOMContentLoaded', function() {
   var calendarEl = document.getElementById('calendar');
   if (calendarEl) {
-    var calendar = new FullCalendar.Calendar(calendarEl, {
+    var csrfToken = '{{ csrf_token() if csrf_token is defined else '' }}';
+    var calendar;
+
+    async function persistEventChange(info) {
+      if (!calendar) {
+        if (typeof info.revert === 'function') {
+          info.revert();
+        }
+        return;
+      }
+
+      var event = info.event;
+      if (!event || !event.start) {
+        if (typeof info.revert === 'function') {
+          info.revert();
+        }
+        return;
+      }
+
+      var payload = {
+        start: event.start ? event.start.toISOString() : null,
+        end: event.end ? event.end.toISOString() : null,
+      };
+
+      try {
+        var response = await fetch(`/api/appointments/${event.id}/reschedule`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': csrfToken,
+            'X-Requested-With': 'XMLHttpRequest',
+          },
+          credentials: 'same-origin',
+          body: JSON.stringify(payload),
+        });
+        var data = await response.json().catch(function() { return {}; });
+        if (!response.ok || !data.success) {
+          var message = data && data.message ? data.message : 'Não foi possível reagendar este compromisso.';
+          throw new Error(message);
+        }
+        calendar.refetchEvents();
+      } catch (error) {
+        if (typeof info.revert === 'function') {
+          info.revert();
+        }
+        var fallbackMessage = (error && error.message) ? error.message : 'Ocorreu um erro ao reagendar este compromisso.';
+        window.alert(fallbackMessage);
+      }
+    }
+
+    calendar = new FullCalendar.Calendar(calendarEl, {
       initialView: 'dayGridMonth',
-      events: '/api/my_appointments'
+      events: '/api/my_appointments',
+      editable: true,
+      eventDurationEditable: true,
+      eventDrop: persistEventChange,
+      eventResize: persistEventChange,
     });
     calendar.render();
   }
