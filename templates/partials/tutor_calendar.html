@@ -68,7 +68,7 @@
       <div class="card shadow-sm border-0 h-100">
         <div class="card-body">
           <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-3">
-            <div class="d-flex align-items-center gap-2">
+            <div class="d-flex align-items-center gap-2 flex-wrap">
               <button type="button" class="btn btn-outline-primary btn-sm" data-prev-month aria-label="Mês anterior">
                 <i class="bi bi-chevron-left"></i>
               </button>
@@ -79,6 +79,14 @@
               <button type="button" class="btn btn-primary btn-sm" data-next-month aria-label="Próximo mês">
                 <i class="bi bi-chevron-right"></i>
               </button>
+              <div class="btn-group btn-group-sm tutor-calendar__view-toggle ms-2" role="group" aria-label="Alternar visualização">
+                <button type="button" class="btn btn-outline-secondary active" data-view-mode="month" aria-pressed="true">
+                  Mensal
+                </button>
+                <button type="button" class="btn btn-outline-secondary" data-view-mode="week" aria-pressed="false">
+                  Semanal
+                </button>
+              </div>
             </div>
             <div class="d-flex flex-wrap gap-2">
               <button type="button" class="btn btn-outline-secondary btn-sm" data-today>Hoje</button>
@@ -89,6 +97,7 @@
           </div>
           <div class="tutor-calendar__weekdays" data-weekdays></div>
           <div class="tutor-calendar__days" data-calendar-grid></div>
+          <div class="tutor-calendar__week d-none" data-week-view></div>
         </div>
       </div>
     </div>
@@ -157,6 +166,16 @@
   border-color: var(--bs-primary);
 }
 
+#{{ component_id }} .tutor-calendar__view-toggle .btn {
+  min-width: 88px;
+}
+
+#{{ component_id }} .tutor-calendar__view-toggle .btn.active {
+  background: var(--bs-primary);
+  color: #fff;
+  border-color: var(--bs-primary);
+}
+
 #{{ component_id }} .tutor-calendar__weekdays {
   display: grid;
   grid-template-columns: repeat(7, 1fr);
@@ -177,6 +196,45 @@
   display: grid;
   grid-template-columns: repeat(7, minmax(0, 1fr));
   gap: 0.75rem;
+}
+
+#{{ component_id }} .tutor-calendar__week {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+#{{ component_id }} .tutor-calendar__week-day-card {
+  flex: 1 1 220px;
+  min-width: 200px;
+  border-radius: 1rem;
+  padding: 0.75rem;
+  background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+  border: 1px solid rgba(148, 163, 184, 0.3);
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
+  cursor: pointer;
+}
+
+#{{ component_id }} .tutor-calendar__week-day-card:hover {
+  border-color: rgba(99, 102, 241, 0.55);
+  box-shadow: 0 14px 30px rgba(99, 102, 241, 0.15);
+  transform: translateY(-1px);
+}
+
+#{{ component_id }} .tutor-calendar__week-day-card.is-outside {
+  opacity: 0.65;
+}
+
+#{{ component_id }} .tutor-calendar__week-day-card.is-today {
+  border-color: var(--bs-primary);
+  box-shadow: 0 0 0 0.2rem rgba(13, 110, 253, 0.15);
+}
+
+#{{ component_id }} .tutor-calendar__week-day-card .tutor-calendar__event-list {
+  flex-grow: 1;
 }
 
 #{{ component_id }} .tutor-calendar__day {
@@ -284,6 +342,15 @@
     padding: 0.6rem;
   }
 
+  #{{ component_id }} .tutor-calendar__week {
+    gap: 0.5rem;
+  }
+
+  #{{ component_id }} .tutor-calendar__week-day-card {
+    min-width: 160px;
+    padding: 0.6rem;
+  }
+
   #{{ component_id }} .tutor-calendar__pet-list {
     max-height: none;
   }
@@ -301,6 +368,7 @@ document.addEventListener('DOMContentLoaded', function() {
   const petsUrl = root.dataset.petsUrl || '/api/my_pets';
   const petListEl = root.querySelector('[data-pet-list]');
   const calendarGrid = root.querySelector('[data-calendar-grid]');
+  const weekViewEl = root.querySelector('[data-week-view]');
   const weekdaysEl = root.querySelector('[data-weekdays]');
   const monthLabelEl = root.querySelector('[data-month-label]');
   const yearLabelEl = root.querySelector('[data-year-label]');
@@ -310,6 +378,7 @@ document.addEventListener('DOMContentLoaded', function() {
   const newEventBtn = root.querySelector('[data-new-event]');
   const refreshPetsBtn = root.querySelector('[data-refresh-pets]');
   const filterButtons = Array.prototype.slice.call(root.querySelectorAll('[data-filter]'));
+  const viewModeButtons = Array.prototype.slice.call(root.querySelectorAll('[data-view-mode]'));
 
   const weekdays = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
   const typeLabels = {
@@ -321,6 +390,7 @@ document.addEventListener('DOMContentLoaded', function() {
   let pets = [];
   let events = [];
   let viewDate = new Date();
+  let currentViewMode = 'month';
   let currentFilter = 'all';
   let usingSharedCalendar = false;
 
@@ -360,6 +430,15 @@ document.addEventListener('DOMContentLoaded', function() {
       minute: '2-digit',
       hour12: false,
     });
+  }
+
+  function getStartOfWeek(date) {
+    const base = date instanceof Date ? new Date(date.getTime()) : parseDate(date);
+    const target = base || new Date();
+    const start = new Date(target.getFullYear(), target.getMonth(), target.getDate());
+    const weekDay = start.getDay();
+    start.setDate(start.getDate() - weekDay);
+    return start;
   }
 
   function isSameDay(a, b) {
@@ -423,6 +502,15 @@ document.addEventListener('DOMContentLoaded', function() {
     filterButtons.forEach(function(btn) {
       const isActive = btn.dataset.filter === currentFilter;
       btn.classList.toggle('active', isActive);
+    });
+  }
+
+  function updateViewModeButtons() {
+    viewModeButtons.forEach(function(btn) {
+      const mode = btn.dataset.viewMode === 'week' ? 'week' : 'month';
+      const isActive = mode === currentViewMode;
+      btn.classList.toggle('active', isActive);
+      btn.setAttribute('aria-pressed', isActive ? 'true' : 'false');
     });
   }
 
@@ -581,7 +669,7 @@ document.addEventListener('DOMContentLoaded', function() {
     root.dispatchEvent(customEvent);
   }
 
-  function renderCalendar() {
+  function renderMonthView() {
     if (!calendarGrid) {
       return;
     }
@@ -600,7 +688,7 @@ document.addEventListener('DOMContentLoaded', function() {
     for (let i = 0; i < totalCells; i += 1) {
       const cellDate = new Date(gridStart.getFullYear(), gridStart.getMonth(), gridStart.getDate() + i);
       const iso = formatDateKey(cellDate);
-      const isOutside = cellDate.getMonth() !== viewDate.getMonth();
+      const isOutside = cellDate.getMonth() !== monthStart.getMonth() || cellDate.getFullYear() !== monthStart.getFullYear();
       const cell = document.createElement('div');
       cell.className = 'tutor-calendar__day';
       cell.dataset.date = iso;
@@ -656,6 +744,117 @@ document.addEventListener('DOMContentLoaded', function() {
       });
 
       calendarGrid.appendChild(cell);
+    }
+  }
+
+  function renderWeekView() {
+    if (!weekViewEl) {
+      return;
+    }
+
+    const start = getStartOfWeek(viewDate);
+    const end = new Date(start.getFullYear(), start.getMonth(), start.getDate() + 6);
+    const startLabel = start.toLocaleDateString('pt-BR', { day: 'numeric', month: 'short' });
+    const endLabel = end.toLocaleDateString('pt-BR', { day: 'numeric', month: 'short' });
+    monthLabelEl && (monthLabelEl.textContent = `Semana de ${startLabel} a ${endLabel}`);
+    const yearLabelParts = [String(start.getFullYear())];
+    if (end.getFullYear() !== start.getFullYear()) {
+      yearLabelParts.push(String(end.getFullYear()));
+    }
+    yearLabelEl && (yearLabelEl.textContent = yearLabelParts.join(' / '));
+
+    weekViewEl.innerHTML = '';
+    const today = new Date();
+    const baseMonth = new Date(viewDate.getFullYear(), viewDate.getMonth(), 1);
+
+    for (let i = 0; i < 7; i += 1) {
+      const dayDate = new Date(start.getFullYear(), start.getMonth(), start.getDate() + i);
+      const iso = formatDateKey(dayDate);
+      const card = document.createElement('div');
+      card.className = 'tutor-calendar__week-day-card';
+      card.dataset.date = iso;
+
+      const isOutside = dayDate.getMonth() !== baseMonth.getMonth() || dayDate.getFullYear() !== baseMonth.getFullYear();
+      if (isOutside) {
+        card.classList.add('is-outside');
+      }
+      if (isSameDay(dayDate, today)) {
+        card.classList.add('is-today');
+      }
+
+      const header = document.createElement('div');
+      header.className = 'd-flex justify-content-between align-items-baseline mb-2';
+
+      const dayNameEl = document.createElement('div');
+      dayNameEl.className = 'text-uppercase small text-muted';
+      dayNameEl.textContent = weekdays[dayDate.getDay()];
+
+      const dateEl = document.createElement('div');
+      dateEl.className = 'fw-semibold';
+      dateEl.textContent = dayDate.toLocaleDateString('pt-BR', { day: 'numeric', month: 'short' });
+
+      header.appendChild(dayNameEl);
+      header.appendChild(dateEl);
+      card.appendChild(header);
+
+      const eventsWrapper = document.createElement('div');
+      eventsWrapper.className = 'tutor-calendar__event-list flex-grow-1';
+
+      const dayEvents = events.filter(function(event) {
+        if (event.date !== iso) {
+          return false;
+        }
+        if (currentFilter === 'all') {
+          return true;
+        }
+        return event.type === currentFilter;
+      }).sort(function(a, b) {
+        if (a.start && b.start) {
+          return a.start - b.start;
+        }
+        if (a.time && b.time) {
+          return a.time.localeCompare(b.time);
+        }
+        return 0;
+      });
+
+      dayEvents.forEach(function(eventData) {
+        eventsWrapper.appendChild(buildEventElement(eventData));
+      });
+
+      if (!dayEvents.length) {
+        const emptyMarker = document.createElement('div');
+        emptyMarker.className = 'text-muted small';
+        emptyMarker.textContent = '—';
+        eventsWrapper.appendChild(emptyMarker);
+      }
+
+      card.appendChild(eventsWrapper);
+
+      card.addEventListener('click', function() {
+        dispatchSlot(dayDate, '09:00');
+      });
+
+      weekViewEl.appendChild(card);
+    }
+  }
+
+  function renderCalendar() {
+    updateViewModeButtons();
+    if (currentViewMode === 'week') {
+      weekdaysEl && weekdaysEl.classList.add('d-none');
+      calendarGrid && calendarGrid.classList.add('d-none');
+      if (weekViewEl) {
+        weekViewEl.classList.remove('d-none');
+      }
+      renderWeekView();
+    } else {
+      weekdaysEl && weekdaysEl.classList.remove('d-none');
+      calendarGrid && calendarGrid.classList.remove('d-none');
+      if (weekViewEl) {
+        weekViewEl.classList.add('d-none');
+      }
+      renderMonthView();
     }
   }
 
@@ -719,18 +918,47 @@ document.addEventListener('DOMContentLoaded', function() {
     renderCalendar();
   }
 
-  prevBtn && prevBtn.addEventListener('click', function() {
-    viewDate = new Date(viewDate.getFullYear(), viewDate.getMonth() - 1, 1);
+  function moveView(step) {
+    if (currentViewMode === 'week') {
+      const base = getStartOfWeek(viewDate);
+      base.setDate(base.getDate() + (step * 7));
+      viewDate = base;
+    } else {
+      viewDate = new Date(viewDate.getFullYear(), viewDate.getMonth() + step, 1);
+    }
     renderCalendar();
+  }
+
+  function setViewMode(mode) {
+    const normalized = mode === 'week' ? 'week' : 'month';
+    if (normalized === currentViewMode) {
+      return;
+    }
+    currentViewMode = normalized;
+    if (currentViewMode === 'week') {
+      viewDate = getStartOfWeek(viewDate);
+    } else {
+      viewDate = new Date(viewDate.getFullYear(), viewDate.getMonth(), 1);
+    }
+    updateViewModeButtons();
+    renderCalendar();
+  }
+
+  prevBtn && prevBtn.addEventListener('click', function() {
+    moveView(-1);
   });
 
   nextBtn && nextBtn.addEventListener('click', function() {
-    viewDate = new Date(viewDate.getFullYear(), viewDate.getMonth() + 1, 1);
-    renderCalendar();
+    moveView(1);
   });
 
   todayBtn && todayBtn.addEventListener('click', function() {
-    viewDate = new Date();
+    const now = new Date();
+    if (currentViewMode === 'week') {
+      viewDate = getStartOfWeek(now);
+    } else {
+      viewDate = new Date(now.getFullYear(), now.getMonth(), 1);
+    }
     renderCalendar();
   });
 
@@ -745,6 +973,12 @@ document.addEventListener('DOMContentLoaded', function() {
   filterButtons.forEach(function(btn) {
     btn.addEventListener('click', function() {
       setFilter(btn.dataset.filter || 'all');
+    });
+  });
+
+  viewModeButtons.forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      setViewMode(btn.dataset.viewMode);
     });
   });
 
@@ -796,6 +1030,7 @@ document.addEventListener('DOMContentLoaded', function() {
   }
 
   renderWeekdays();
+  updateViewModeButtons();
   renderCalendar();
   updateFilterButtons();
   loadPets();
