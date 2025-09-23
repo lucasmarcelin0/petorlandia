@@ -482,6 +482,51 @@ document.addEventListener('DOMContentLoaded', () => {
     return null;
   }
 
+  function decorateSummaryItemWithVet(element, vetId) {
+    if (!element) {
+      return null;
+    }
+    const normalizedVetId = normalizeSummaryVetId(vetId);
+    if (!normalizedVetId) {
+      if (element.dataset) {
+        delete element.dataset.veterinarioId;
+        delete element.dataset.vetId;
+      }
+      element.removeAttribute('data-veterinario-id');
+      return null;
+    }
+
+    let colorClass = null;
+    if (typeof window !== 'undefined'
+      && window.calendarVetColorManager
+      && typeof window.calendarVetColorManager.applyClasses === 'function') {
+      colorClass = window.calendarVetColorManager.applyClasses(element, normalizedVetId, {
+        assignedClass: null,
+        clearWhenInvalid: true,
+      });
+    } else {
+      const classesToRemove = Array.from(element.classList).filter(cls => (
+        cls.startsWith('calendar-vet-color-') || cls.startsWith('calendar-vet-')
+      ));
+      classesToRemove.forEach(cls => element.classList.remove(cls));
+      element.classList.add(`calendar-vet-${normalizedVetId}`);
+      colorClass = resolveSummaryColorClass(normalizedVetId);
+      if (colorClass) {
+        element.classList.add(colorClass);
+      }
+      if (element.dataset) {
+        element.dataset.veterinarioId = normalizedVetId;
+      }
+      element.setAttribute('data-veterinario-id', normalizedVetId);
+    }
+
+    if (element.dataset) {
+      element.dataset.vetId = normalizedVetId;
+    }
+
+    return colorClass;
+  }
+
   function computeSummaryMetrics(events) {
     const summaryMap = new Map();
     const today = startOfDay(new Date());
@@ -597,11 +642,7 @@ document.addEventListener('DOMContentLoaded', () => {
     rows.forEach(entry => {
       const item = document.createElement('div');
       item.classList.add('calendar-summary-item');
-      const colorClass = resolveSummaryColorClass(entry.vetId);
-      if (colorClass) {
-        item.classList.add(colorClass);
-      }
-      item.dataset.vetId = entry.vetId;
+      decorateSummaryItemWithVet(item, entry.vetId);
 
       const header = document.createElement('div');
       header.classList.add('calendar-summary-header');
