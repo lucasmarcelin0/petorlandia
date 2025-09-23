@@ -848,6 +848,12 @@
   gap: 0.35rem;
 }
 
+#{{ component_id }} .tutor-calendar__appointment-actions .btn.is-loading {
+  opacity: 0.65;
+  pointer-events: none;
+  cursor: wait;
+}
+
 #{{ component_id }} .tutor-calendar__day-detail-meta {
   display: flex;
   flex-wrap: wrap;
@@ -1008,11 +1014,14 @@
   padding: 0.5rem 0.75rem;
   background: rgba(226, 232, 240, 0.6);
   border: 1px solid transparent;
+  border-left-width: 4px;
+  border-left-style: solid;
+  border-left-color: transparent;
   display: flex;
   flex-direction: column;
   gap: 0.25rem;
   font-size: 0.85rem;
-  transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+  transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease, border-left-color 0.2s ease;
 }
 
 #{{ component_id }} .tutor-calendar__event:hover {
@@ -1027,9 +1036,86 @@
   transform: translateY(-2px);
 }
 
+#{{ component_id }} .tutor-calendar__event-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+#{{ component_id }} .tutor-calendar__event-status {
+  margin-left: auto;
+  border-radius: 999px;
+  padding: 0.2rem 0.6rem;
+  font-size: 0.65rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  background: rgba(59, 130, 246, 0.16);
+  color: #1d4ed8;
+}
+
+#{{ component_id }} .tutor-calendar__event-status.status-completed {
+  background: rgba(22, 163, 74, 0.15);
+  color: #15803d;
+}
+
+#{{ component_id }} .tutor-calendar__event-status.status-canceled {
+  background: rgba(239, 68, 68, 0.16);
+  color: #b91c1c;
+}
+
+#{{ component_id }} .tutor-calendar__event-status.status-accepted {
+  background: rgba(14, 165, 233, 0.16);
+  color: #0369a1;
+}
+
 #{{ component_id }} .tutor-calendar__event--appointment {
   background: rgba(59, 130, 246, 0.14);
   border-color: rgba(59, 130, 246, 0.35);
+  border-left-color: rgba(59, 130, 246, 0.55);
+}
+
+#{{ component_id }} .tutor-calendar__event--appointment.status-completed {
+  background: rgba(22, 163, 74, 0.14);
+  border-color: rgba(22, 163, 74, 0.35);
+  border-left-color: rgba(22, 163, 74, 0.6);
+}
+
+#{{ component_id }} .tutor-calendar__event--appointment.status-canceled {
+  background: rgba(248, 113, 113, 0.16);
+  border-color: rgba(239, 68, 68, 0.35);
+  border-left-color: rgba(239, 68, 68, 0.6);
+}
+
+#{{ component_id }} .tutor-calendar__event--appointment.status-accepted {
+  background: rgba(14, 165, 233, 0.14);
+  border-color: rgba(14, 165, 233, 0.35);
+  border-left-color: rgba(14, 165, 233, 0.6);
+}
+
+#{{ component_id }} .tutor-calendar__event--appointment.status-completed .tutor-calendar__event-title {
+  color: #14532d;
+}
+
+#{{ component_id }} .tutor-calendar__event--appointment.status-completed .tutor-calendar__event-pet {
+  color: #166534;
+}
+
+#{{ component_id }} .tutor-calendar__event--appointment.status-canceled .tutor-calendar__event-title {
+  color: #b91c1c;
+}
+
+#{{ component_id }} .tutor-calendar__event--appointment.status-canceled .tutor-calendar__event-pet {
+  color: #dc2626;
+}
+
+#{{ component_id }} .tutor-calendar__event--appointment.status-accepted .tutor-calendar__event-title {
+  color: #0e7490;
+}
+
+#{{ component_id }} .tutor-calendar__event--appointment.status-accepted .tutor-calendar__event-pet {
+  color: #0e7490;
 }
 
 #{{ component_id }} .tutor-calendar__event--exam {
@@ -1170,6 +1256,7 @@ document.addEventListener('DOMContentLoaded', function() {
     canceled: 'Cancelada',
     accepted: 'Aceita',
   };
+  const knownStatusKeys = Object.keys(statusLabels);
   const statusActionConfig = [
     {
       status: 'completed',
@@ -1366,6 +1453,28 @@ document.addEventListener('DOMContentLoaded', function() {
     return text.charAt(0).toUpperCase() + text.slice(1);
   }
 
+  function normalizeStatusKey(value) {
+    if (value === null || value === undefined) {
+      return '';
+    }
+    return String(value).trim().toLowerCase();
+  }
+
+  function isKnownStatus(key) {
+    if (!key) {
+      return false;
+    }
+    return knownStatusKeys.indexOf(key) !== -1;
+  }
+
+  function resolveStatusKey(value, typeKey) {
+    const normalized = normalizeStatusKey(value);
+    if (normalized) {
+      return normalized;
+    }
+    return typeKey === 'appointment' ? 'scheduled' : '';
+  }
+
   function getStartOfWeek(date) {
     const base = date instanceof Date ? new Date(date.getTime()) : parseDate(date);
     const target = base || new Date();
@@ -1506,6 +1615,133 @@ document.addEventListener('DOMContentLoaded', function() {
     });
   }
 
+  function updateEventStatusLocally(recordId, statusValue) {
+    if (recordId === undefined || recordId === null) {
+      return;
+    }
+    const targetId = String(recordId);
+    let matched = false;
+    events.forEach(function(eventItem) {
+      if (!eventItem) {
+        return;
+      }
+      const ext = eventItem.raw && eventItem.raw.extendedProps ? eventItem.raw.extendedProps : null;
+      const eventRecordId = eventItem.recordId !== undefined && eventItem.recordId !== null
+        ? String(eventItem.recordId)
+        : (ext && ext.recordId !== undefined && ext.recordId !== null ? String(ext.recordId) : null);
+      if (!eventRecordId || eventRecordId !== targetId) {
+        return;
+      }
+      matched = true;
+      const typeKey = eventItem.type || 'appointment';
+      const nextStatus = resolveStatusKey(statusValue, typeKey);
+      eventItem.status = nextStatus;
+      if (ext) {
+        ext.status = nextStatus;
+      }
+    });
+    if (matched) {
+      renderCalendar();
+    }
+  }
+
+  function attachStatusFormHandler(form, options) {
+    if (!form || form.dataset.statusHandlerBound === 'true') {
+      return;
+    }
+    const opts = options && typeof options === 'object' ? options : {};
+    const targetStatus = opts.status;
+    const providedRecordId = opts.recordId;
+    form.dataset.statusHandlerBound = 'true';
+    form.addEventListener('submit', function(event) {
+      if (form.dataset.skipAjax === 'true') {
+        return;
+      }
+      if (event.defaultPrevented) {
+        return;
+      }
+      event.preventDefault();
+
+      const submitButton = form.querySelector('button[type="submit"]');
+      if (submitButton) {
+        submitButton.disabled = true;
+        submitButton.classList.add('is-loading');
+        submitButton.setAttribute('aria-busy', 'true');
+      }
+
+      const formData = new FormData(form);
+      if (targetStatus && !formData.get('status')) {
+        formData.append('status', targetStatus);
+      }
+      const requestedStatus = formData.get('status');
+
+      const requestConfig = {
+        method: 'POST',
+        headers: {
+          'X-Requested-With': 'XMLHttpRequest',
+          'Accept': 'application/json',
+        },
+        credentials: 'same-origin',
+        body: formData,
+      };
+
+      fetch(form.action, requestConfig)
+        .then(function(response) {
+          const parseJson = function() {
+            return response.json().catch(function() {
+              const error = new Error('Não foi possível interpretar a resposta do servidor.');
+              error.isParseError = true;
+              throw error;
+            });
+          };
+          if (!response.ok) {
+            return parseJson().then(function(data) {
+              const error = new Error(data && data.message ? data.message : 'Não foi possível atualizar o status.');
+              error.data = data;
+              throw error;
+            });
+          }
+          return parseJson();
+        })
+        .then(function(data) {
+          if (!data || data.success !== true) {
+            const error = new Error(data && data.message ? data.message : 'Não foi possível atualizar o status.');
+            error.data = data;
+            throw error;
+          }
+          const returnedStatus = data.status || requestedStatus;
+          const responseRecordId = data.appointment_id !== undefined && data.appointment_id !== null
+            ? data.appointment_id
+            : null;
+          const effectiveRecordId = providedRecordId !== undefined && providedRecordId !== null
+            ? providedRecordId
+            : (form.dataset.recordId || responseRecordId);
+          if (effectiveRecordId !== undefined && effectiveRecordId !== null) {
+            updateEventStatusLocally(effectiveRecordId, returnedStatus);
+          }
+        })
+        .catch(function(error) {
+          if (error && error.data) {
+            const message = error.message || (error.data && error.data.message) || 'Não foi possível atualizar o status.';
+            window.alert(message);
+            return;
+          }
+          console.error('Falha ao atualizar status do compromisso.', error);
+          form.dataset.skipAjax = 'true';
+          setTimeout(function() {
+            form.submit();
+          }, 0);
+        })
+        .finally(function() {
+          if (submitButton) {
+            submitButton.disabled = false;
+            submitButton.classList.remove('is-loading');
+            submitButton.removeAttribute('aria-busy');
+          }
+        });
+    });
+  }
+
   function normalizeEvent(raw) {
     if (!raw) {
       return null;
@@ -1518,9 +1754,19 @@ document.addEventListener('DOMContentLoaded', function() {
     const timeText = startDate ? formatTime(startDate) : (raw.time || '');
     const animalId = raw.animalId || extended.animalId || extended.animal_id || null;
     const title = raw.title || extended.title || 'Evento';
+    const recordIdValue = extended.recordId !== undefined && extended.recordId !== null
+      ? extended.recordId
+      : (raw.recordId !== undefined && raw.recordId !== null ? raw.recordId : null);
+    const statusKey = resolveStatusKey(extended.status || raw.status, type);
+    if (extended && statusKey) {
+      extended.status = statusKey;
+    }
+    const recordId = recordIdValue !== undefined && recordIdValue !== null ? String(recordIdValue) : null;
 
     return {
       id: raw.id || (extended && extended.recordId) || null,
+      recordId: recordId,
+      status: statusKey,
       type: type,
       title: title,
       date: dateKey,
@@ -1749,8 +1995,11 @@ document.addEventListener('DOMContentLoaded', function() {
   }
 
   function buildEventElement(eventData) {
+    const typeKey = eventData.type || 'appointment';
     const el = document.createElement('div');
-    el.className = 'tutor-calendar__event tutor-calendar__event--' + (eventData.type || 'appointment');
+    el.className = 'tutor-calendar__event tutor-calendar__event--' + typeKey;
+    const raw = eventData && eventData.raw ? eventData.raw : {};
+    const ext = raw.extendedProps || {};
     const eventKey = getEventKey(eventData);
     if (eventKey) {
       el.dataset.eventId = String(eventKey);
@@ -1758,18 +2007,46 @@ document.addEventListener('DOMContentLoaded', function() {
         el.classList.add('is-active');
       }
     }
-    const recordId = eventData && eventData.raw && eventData.raw.extendedProps && eventData.raw.extendedProps.recordId;
+    const recordId = eventData && eventData.recordId !== undefined && eventData.recordId !== null
+      ? eventData.recordId
+      : (ext.recordId !== undefined && ext.recordId !== null ? ext.recordId : null);
     if (recordId !== undefined && recordId !== null) {
       el.dataset.recordId = String(recordId);
     }
 
+    const statusKey = resolveStatusKey(eventData.status || ext.status, typeKey);
+    const statusLabel = statusLabels[statusKey] || humanizeLabel(statusKey);
+    const statusClassName = isKnownStatus(statusKey) ? statusKey : (typeKey === 'appointment' ? 'scheduled' : '');
+    if (statusClassName) {
+      el.classList.add(`status-${statusClassName}`);
+    }
+    el.dataset.status = statusKey || '';
+
+    const headerEl = document.createElement('div');
+    headerEl.className = 'tutor-calendar__event-header';
+
     const timeEl = document.createElement('div');
     timeEl.className = 'tutor-calendar__event-time';
     timeEl.textContent = eventData.time || '--:--';
+    headerEl.appendChild(timeEl);
+
+    if (statusLabel) {
+      const statusEl = document.createElement('span');
+      const badgeClasses = ['tutor-calendar__event-status'];
+      if (statusClassName) {
+        badgeClasses.push(`status-${statusClassName}`);
+      }
+      statusEl.className = badgeClasses.join(' ');
+      statusEl.textContent = statusLabel;
+      headerEl.appendChild(statusEl);
+    }
+
+    el.appendChild(headerEl);
 
     const titleEl = document.createElement('div');
     titleEl.className = 'tutor-calendar__event-title';
     titleEl.textContent = eventData.title;
+    el.appendChild(titleEl);
 
     const petName = getPetName(eventData.animalId) || derivePetNameFromTitle(eventData.title);
     if (petName) {
@@ -1778,9 +2055,6 @@ document.addEventListener('DOMContentLoaded', function() {
       petEl.textContent = petName;
       el.appendChild(petEl);
     }
-
-    el.insertBefore(titleEl, el.firstChild);
-    el.insertBefore(timeEl, el.firstChild);
 
     el.addEventListener('click', function(evt) {
       evt.stopPropagation();
@@ -1823,9 +2097,9 @@ document.addEventListener('DOMContentLoaded', function() {
     const kindLabel = humanizeLabel(ext.kind) || typeLabel;
     const tutorName = ext.tutorName || null;
     const vetName = ext.vetName || ext.veterinarioName || null;
-    const statusKey = String(ext.status || '').toLowerCase();
+    const statusKey = resolveStatusKey(ext.status || eventData.status, typeKey);
     const statusLabel = statusLabels[statusKey] || humanizeLabel(statusKey);
-    const statusClass = statusKey ? `status-${statusKey}` : 'status-scheduled';
+    const statusClassName = isKnownStatus(statusKey) ? statusKey : (typeKey === 'appointment' ? 'scheduled' : '');
     const recordId = ext.recordId !== undefined && ext.recordId !== null ? ext.recordId : null;
     const startDate = eventData.start instanceof Date ? eventData.start : parseDate(raw.start || raw.startStr || ext.start);
     const endDate = parseDate(raw.end || raw.endStr || ext.end);
@@ -1854,7 +2128,11 @@ document.addEventListener('DOMContentLoaded', function() {
 
     if (statusLabel) {
       const statusEl = document.createElement('span');
-      statusEl.className = `tutor-calendar__day-detail-status ${statusClass}`;
+      const statusClasses = ['tutor-calendar__day-detail-status'];
+      if (statusClassName) {
+        statusClasses.push(`status-${statusClassName}`);
+      }
+      statusEl.className = statusClasses.join(' ');
       statusEl.textContent = statusLabel;
       meta.appendChild(statusEl);
     }
@@ -1908,9 +2186,9 @@ document.addEventListener('DOMContentLoaded', function() {
 
     const fragment = document.createDocumentFragment();
     const typeKey = eventData.type || 'appointment';
-    const statusKey = String(ext.status || '').toLowerCase();
-    const statusClass = statusKey || 'scheduled';
-    const statusLabel = statusLabels[statusKey] || statusClass || '—';
+    const statusKey = resolveStatusKey(ext.status || eventData.status, typeKey);
+    const statusClass = isKnownStatus(statusKey) ? statusKey : 'scheduled';
+    const statusLabel = statusLabels[statusKey] || humanizeLabel(statusKey) || '—';
     const typeLabel = typeLabels[typeKey] || 'Evento';
     const kindLabel = ext.kind ? String(ext.kind) : '';
     const tutorName = ext.tutorName || null;
@@ -1966,10 +2244,12 @@ document.addEventListener('DOMContentLoaded', function() {
     typeBadge.textContent = kindLabel ? kindLabel : typeLabel;
     topRow.appendChild(typeBadge);
 
-    const statusBadge = document.createElement('span');
-    statusBadge.className = `status-badge status-${statusClass} tutor-calendar__appointment-status`;
-    statusBadge.textContent = statusLabel;
-    topRow.appendChild(statusBadge);
+    if (statusLabel) {
+      const statusBadge = document.createElement('span');
+      statusBadge.className = `status-badge status-${statusClass} tutor-calendar__appointment-status`;
+      statusBadge.textContent = statusLabel;
+      topRow.appendChild(statusBadge);
+    }
 
     card.appendChild(topRow);
 
@@ -2147,6 +2427,9 @@ document.addEventListener('DOMContentLoaded', function() {
           form.method = 'POST';
           form.action = statusUrl;
           form.className = 'form-confirm';
+          if (recordId !== undefined && recordId !== null) {
+            form.dataset.recordId = String(recordId);
+          }
 
           if (csrfToken) {
             const csrfInput = document.createElement('input');
@@ -2174,6 +2457,7 @@ document.addEventListener('DOMContentLoaded', function() {
           form.appendChild(button);
 
           attachConfirmHandler(form);
+          attachStatusFormHandler(form, { recordId: recordId, status: action.status });
           appendActionElement(form);
         });
       }
