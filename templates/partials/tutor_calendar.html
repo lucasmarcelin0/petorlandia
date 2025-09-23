@@ -688,10 +688,28 @@
   display: flex;
   flex-direction: column;
   gap: 0.85rem;
+  cursor: pointer;
+  transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
 }
 
 #{{ component_id }} .tutor-calendar__day-detail-card + .tutor-calendar__day-detail-card {
   margin-top: 0.75rem;
+}
+
+#{{ component_id }} .tutor-calendar__day-detail-card:hover {
+  transform: translateY(-1px);
+  border-color: rgba(99, 102, 241, 0.35);
+  box-shadow: 0 20px 44px rgba(15, 23, 42, 0.14);
+}
+
+#{{ component_id }} .tutor-calendar__day-detail-card:focus-visible {
+  outline: 3px solid rgba(59, 130, 246, 0.35);
+  outline-offset: 4px;
+}
+
+#{{ component_id }} .tutor-calendar__day-detail-card.is-active {
+  border-color: var(--bs-primary);
+  box-shadow: 0 22px 54px rgba(37, 99, 235, 0.25);
 }
 
 #{{ component_id }} .tutor-calendar__appointment-card {
@@ -2500,6 +2518,21 @@ document.addEventListener('DOMContentLoaded', function() {
 
     card.className = 'tutor-calendar__day-detail-card tutor-calendar__day-detail-card--' + typeKey;
 
+    const eventKey = getEventKey(eventData);
+    if (eventKey) {
+      card.dataset.eventId = String(eventKey);
+      if (focusedEventId && String(focusedEventId) === String(eventKey)) {
+        card.classList.add('is-active');
+      }
+    }
+
+    if (recordId !== null) {
+      card.dataset.recordId = String(recordId);
+    }
+
+    card.setAttribute('role', 'button');
+    card.setAttribute('tabindex', '0');
+
     const meta = document.createElement('div');
     meta.className = 'tutor-calendar__day-detail-meta';
 
@@ -2558,6 +2591,41 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     card.appendChild(infoList);
+
+    function openDetailView() {
+      const dateKey = eventData.date || (eventData.start ? formatDateKey(eventData.start) : null);
+      if (dateKey) {
+        selectedDate = dateKey;
+      }
+      lastDetailTrigger = card;
+      showEventDetails(eventData, { trigger: card });
+    }
+
+    card.addEventListener('click', function(evt) {
+      if (evt) {
+        const interactiveSelector = 'a, button, input, textarea, select, [role="button"], [data-ignore-card-click]';
+        if (evt.target && evt.target.closest(interactiveSelector)) {
+          return;
+        }
+        evt.stopPropagation();
+      }
+      openDetailView();
+    });
+
+    card.addEventListener('keydown', function(evt) {
+      if (!evt || evt.target !== card) {
+        return;
+      }
+      const isEnter = evt.key === 'Enter';
+      const isSpace = evt.key === ' ' || evt.key === 'Spacebar';
+      if (!isEnter && !isSpace) {
+        return;
+      }
+      evt.preventDefault();
+      evt.stopPropagation();
+      openDetailView();
+    });
+
     return card;
   }
 
