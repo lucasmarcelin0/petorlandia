@@ -610,7 +610,9 @@ document.addEventListener('DOMContentLoaded', () => {
       const vetId = normalizeSummaryVetId(
         event.extendedProps.veterinarioId
         || event.extendedProps.vetId
-        || event.extendedProps.veterinarianId,
+        || event.extendedProps.veterinarianId
+        || event.extendedProps.specialistId
+        || event.extendedProps.specialist_id,
       );
       if (!vetId) {
         return;
