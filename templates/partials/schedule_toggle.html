@@ -131,11 +131,66 @@ document.addEventListener('DOMContentLoaded', function() {
     return className;
   }
 
+  function applyVetColorClasses(element, vetId, options = {}) {
+    if (!element || !element.classList) {
+      return null;
+    }
+    const normalizedVetId = normalizeVetColorKey(vetId);
+    if (!normalizedVetId) {
+      if (options.clearWhenInvalid) {
+        const classesToRemove = Array.from(element.classList).filter(function(cls) {
+          return cls.startsWith('calendar-vet-color-') || cls.startsWith('calendar-vet-');
+        });
+        classesToRemove.forEach(function(cls) {
+          element.classList.remove(cls);
+        });
+        if (element.dataset) {
+          delete element.dataset.veterinarioId;
+          delete element.dataset.vetId;
+        }
+        element.removeAttribute('data-veterinario-id');
+      }
+      return null;
+    }
+
+    const classesToRemove = Array.from(element.classList).filter(function(cls) {
+      return cls.startsWith('calendar-vet-color-') || cls.startsWith('calendar-vet-');
+    });
+    classesToRemove.forEach(function(cls) {
+      element.classList.remove(cls);
+    });
+
+    const assignedClass = options.assignedClass === undefined ? 'calendar-vet-assigned' : options.assignedClass;
+    if (assignedClass) {
+      element.classList.add(assignedClass);
+    }
+
+    if (options.includeIdClass !== false) {
+      element.classList.add(`calendar-vet-${normalizedVetId}`);
+    }
+
+    const colorClass = resolveVetColorClass(normalizedVetId);
+    if (colorClass) {
+      element.classList.add(colorClass);
+    }
+
+    if (element.dataset) {
+      element.dataset.veterinarioId = normalizedVetId;
+      element.dataset.vetId = normalizedVetId;
+    }
+    element.setAttribute('data-veterinario-id', normalizedVetId);
+
+    return colorClass;
+  }
+
   if (typeof window !== 'undefined') {
     window.calendarVetColorManager = window.calendarVetColorManager || {};
     window.calendarVetColorManager.getClass = resolveVetColorClass;
     window.calendarVetColorManager.normalize = normalizeVetColorKey;
     window.calendarVetColorManager.palette = vetColorPalette.slice();
+    window.calendarVetColorManager.applyClasses = function(element, vetId, options) {
+      return applyVetColorClasses(element, vetId, options || {});
+    };
   }
 
   if (typeof window !== 'undefined') {
@@ -521,15 +576,10 @@ document.addEventListener('DOMContentLoaded', function() {
             || info.event.extendedProps.vetId
             || info.event.extendedProps.veterinarianId)
           : null;
-        const normalizedVetId = normalizeVetColorKey(rawVetId);
-        if (normalizedVetId) {
-          const colorClass = resolveVetColorClass(normalizedVetId);
-          info.el.classList.add('calendar-vet-assigned', `calendar-vet-${normalizedVetId}`);
-          if (colorClass) {
-            info.el.classList.add(colorClass);
-          }
-          info.el.dataset.veterinarioId = normalizedVetId;
-        }
+        applyVetColorClasses(info.el, rawVetId, {
+          assignedClass: 'calendar-vet-assigned',
+          clearWhenInvalid: true,
+        });
       }
       if (!info.el || !type || type === 'appointment') {
         return;
