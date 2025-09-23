@@ -2387,6 +2387,7 @@ def agendar_retorno(consulta_id):
                     kind='retorno',
                     status='accepted' if same_user else 'scheduled',
                     created_by=current_user.id,
+                    created_at=datetime.utcnow(),
                 )
                 db.session.add(appt)
                 db.session.commit()
@@ -7668,6 +7669,8 @@ def appointments():
                         notes=appointment_form.reason.data,
                         kind=appointment_form.kind.data,
                         status='accepted' if same_user else 'scheduled',
+                        created_by=current_user.id,
+                        created_at=datetime.utcnow(),
                     )
                     db.session.add(appt)
                     db.session.commit()
@@ -8033,6 +8036,7 @@ def appointments():
                         notes=appointment_form.reason.data,
                         kind=appointment_form.kind.data,
                         created_by=current_user.id,
+                        created_at=datetime.utcnow(),
                     )
                     db.session.add(appt)
                     db.session.commit()
