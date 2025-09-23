@@ -8423,26 +8423,123 @@ def delete_appointment(appointment_id):
     return redirect(request.referrer or url_for('manage_appointments'))
 
 
+def _serialize_calendar_pet(pet):
+    """Serialize ``Animal`` data for the experimental calendar widgets."""
+
+    def _extract_name(value):
+        if not value:
+            return ""
+        if hasattr(value, "name"):
+            return value.name or ""
+        return str(value)
+
+    owner_name = ""
+    owner = getattr(pet, "owner", None)
+    if owner and getattr(owner, "name", None):
+        owner_name = owner.name
+
+    return {
+        "id": pet.id,
+        "name": pet.name,
+        "species": _extract_name(getattr(pet, "species", "")),
+        "breed": _extract_name(getattr(pet, "breed", "")),
+        "date_added": pet.date_added.isoformat() if pet.date_added else None,
+        "image": getattr(pet, "image", None),
+        "tutor_name": owner_name,
+        "age_display": pet.age_display if hasattr(pet, "age_display") else None,
+        "clinica_id": getattr(pet, "clinica_id", None),
+    }
+
+
 @app.route('/api/my_pets')
 @login_required
 def api_my_pets():
-    """Return the authenticated tutor's pets."""
+    """Return the authenticated tutor's pets ordered by recency."""
     pets = (
         Animal.query
+        .options(
+            joinedload(Animal.species),
+            joinedload(Animal.breed),
+            joinedload(Animal.owner),
+        )
         .filter_by(user_id=current_user.id)
         .filter(Animal.removido_em.is_(None))
-        .order_by(Animal.name)
+        .order_by(Animal.date_added.desc())
         .all()
     )
-    return jsonify([
-        {
-            "id": p.id,
-            "name": p.name,
-            "species": p.species.name if getattr(p, "species", None) else "",
-            "breed": p.breed.name if getattr(p, "breed", None) else "",
-        }
-        for p in pets
-    ])
+    return jsonify([_serialize_calendar_pet(p) for p in pets])
+
+
+@app.route('/api/clinic_pets')
+@login_required
+def api_clinic_pets():
+    """Return pets associated with the current clinic (or admin selection)."""
+
+    if current_user.worker not in {"veterinario", "colaborador"} and current_user.role != 'admin':
+        return api_my_pets()
+
+    clinic_id = None
+    view_as = request.args.get('view_as')
+
+    if current_user.role == 'admin':
+        if view_as == 'veterinario':
+            vet_id = request.args.get('veterinario_id', type=int)
+            if vet_id:
+                veterinario = Veterinario.query.get(vet_id)
+                clinic_id = veterinario.clinica_id if veterinario else None
+        elif view_as == 'colaborador':
+            colaborador_id = request.args.get('colaborador_id', type=int)
+            if colaborador_id:
+                colaborador = User.query.get(colaborador_id)
+                clinic_id = colaborador.clinica_id if colaborador else None
+        if clinic_id is None:
+            clinic_id = request.args.get('clinica_id', type=int)
+        if clinic_id is None:
+            # Default to the first accessible clinic for the admin, if any.
+            clinic_rows = clinicas_do_usuario().with_entities(Clinica.id).all()
+            for row in clinic_rows:
+                try:
+                    clinic_id = row[0]
+                except (TypeError, IndexError):
+                    clinic_id = getattr(row, 'id', None)
+                if clinic_id:
+                    break
+    else:
+        clinic_id = current_user_clinic_id()
+
+    if not clinic_id:
+        return jsonify([])
+
+    last_appt = (
+        db.session.query(
+            Appointment.animal_id,
+            func.max(Appointment.scheduled_at).label('last_at'),
+        )
+        .filter(Appointment.clinica_id == clinic_id)
+        .group_by(Appointment.animal_id)
+        .subquery()
+    )
+
+    pets = (
+        Animal.query
+        .options(
+            joinedload(Animal.species),
+            joinedload(Animal.breed),
+            joinedload(Animal.owner),
+        )
+        .outerjoin(last_appt, Animal.id == last_appt.c.animal_id)
+        .filter(Animal.removido_em.is_(None))
+        .filter(
+            or_(
+                Animal.clinica_id == clinic_id,
+                last_appt.c.last_at.isnot(None),
+            )
+        )
+        .order_by(func.coalesce(last_appt.c.last_at, Animal.date_added).desc())
+        .all()
+    )
+
+    return jsonify([_serialize_calendar_pet(p) for p in pets])
 
 
 @app.route('/api/my_appointments')

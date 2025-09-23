@@ -40,7 +40,7 @@
           <div class="d-flex justify-content-between align-items-start mb-3 flex-wrap gap-2">
             <div>
               <h3 class="h6 mb-1">Pacientes (Pets)</h3>
-              <span class="text-muted small">Dados reais da clínica</span>
+              <span class="text-muted small" data-pet-subtitle>Dados reais da clínica</span>
             </div>
             {% if new_pet_url %}
             <a class="btn btn-primary btn-sm" href="{{ new_pet_url }}">
@@ -48,12 +48,22 @@
             </a>
             {% endif %}
           </div>
-          <div class="tutor-calendar__pet-list" data-pet-list>
+          <div class="tutor-calendar__pet-list" data-pet-list aria-live="polite">
             <div class="text-muted small">Carregando pets...</div>
           </div>
-          <button type="button" class="btn btn-outline-primary btn-sm w-100 mt-3" data-refresh-pets>
-            <i class="bi bi-arrow-clockwise me-1"></i> Atualizar lista
-          </button>
+          <div class="d-flex flex-column flex-sm-row gap-2 mt-3">
+            <button
+              type="button"
+              class="btn btn-outline-secondary btn-sm w-100 flex-sm-fill d-none"
+              data-toggle-pets
+              aria-expanded="false"
+            >
+              <i class="bi bi-card-list me-1"></i> Ver todos os pets
+            </button>
+            <button type="button" class="btn btn-outline-primary btn-sm w-100 flex-sm-fill" data-refresh-pets>
+              <i class="bi bi-arrow-clockwise me-1"></i> Atualizar lista
+            </button>
+          </div>
         </div>
       </div>
 
@@ -170,13 +180,20 @@
   overflow-y: auto;
   padding-right: 0.25rem;
   align-content: start;
+  transition: max-height 0.3s ease;
+}
+
+#{{ component_id }} .tutor-calendar__pet-list.is-expanded {
+  max-height: none;
+  overflow: visible;
+  padding-right: 0;
 }
 
 #{{ component_id }} .tutor-calendar__pet {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 0.75rem;
-  padding: 0.75rem;
+  padding: 0.9rem;
   border-radius: 0.9rem;
   border: 1px solid rgba(99, 102, 241, 0.15);
   background: var(--tutor-calendar-card-bg);
@@ -184,8 +201,8 @@
 }
 
 #{{ component_id }} .tutor-calendar__pet-avatar {
-  width: 44px;
-  height: 44px;
+  width: 48px;
+  height: 48px;
   border-radius: 0.75rem;
   background: rgba(99, 102, 241, 0.12);
   color: #4338ca;
@@ -194,6 +211,61 @@
   justify-content: center;
   font-weight: 700;
   font-size: 1rem;
+  overflow: hidden;
+}
+
+#{{ component_id }} .tutor-calendar__pet-avatar.has-image {
+  background: rgba(15, 23, 42, 0.08);
+  padding: 0;
+}
+
+#{{ component_id }} .tutor-calendar__pet-avatar.has-image img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: inherit;
+}
+
+#{{ component_id }} .tutor-calendar__pet-content {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+#{{ component_id }} .tutor-calendar__pet-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+#{{ component_id }} .tutor-calendar__pet-name {
+  font-size: 0.95rem;
+  color: var(--bs-body-color);
+}
+
+#{{ component_id }} .tutor-calendar__pet-detail {
+  color: var(--bs-secondary-color, #64748b);
+}
+
+#{{ component_id }} .tutor-calendar__pet-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1rem;
+  color: var(--bs-secondary-color, #64748b);
+}
+
+#{{ component_id }} .tutor-calendar__pet-meta-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+#{{ component_id }} .tutor-calendar__pet-meta-item i {
+  font-size: 0.85rem;
+  opacity: 0.7;
 }
 
 #{{ component_id }} .tutor-calendar__filters .btn {
@@ -1014,6 +1086,8 @@ document.addEventListener('DOMContentLoaded', function() {
   const todayBtn = root.querySelector('[data-today]');
   const newEventBtn = root.querySelector('[data-new-event]');
   const refreshPetsBtn = root.querySelector('[data-refresh-pets]');
+  const togglePetsBtn = root.querySelector('[data-toggle-pets]');
+  const petSubtitleEl = root.querySelector('[data-pet-subtitle]');
   const filterButtons = Array.prototype.slice.call(root.querySelectorAll('[data-filter]'));
   const viewModeButtons = Array.prototype.slice.call(root.querySelectorAll('[data-view-mode]'));
   const csrfToken = root.dataset.csrfToken || '';
@@ -1063,6 +1137,8 @@ document.addEventListener('DOMContentLoaded', function() {
     },
   ];
 
+  const petsCollapsedLimit = 3;
+
   let pets = [];
   let events = [];
   let viewDate = new Date();
@@ -1074,6 +1150,9 @@ document.addEventListener('DOMContentLoaded', function() {
   let lastDetailTrigger = null;
   let dayDetailMode = 'day';
   let focusedEventId = null;
+  let showingAllPets = false;
+  let hasLoadedPets = false;
+  let petListHasError = false;
 
   function openDayDetail(options) {
     if (!dayDetailLayer || !dayDetailContainer) {
@@ -1382,63 +1461,170 @@ document.addEventListener('DOMContentLoaded', function() {
     }).length;
   }
 
+  function formatPetDate(value) {
+    if (!value) {
+      return '';
+    }
+    const parsed = new Date(value);
+    if (Number.isNaN(parsed.getTime())) {
+      return '';
+    }
+    return parsed.toLocaleDateString('pt-BR', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+    });
+  }
+
+  function updatePetSubtitle(total, visible) {
+    if (!petSubtitleEl) {
+      return;
+    }
+    const baseLabel = 'Dados reais da clínica';
+    if (!total) {
+      petSubtitleEl.textContent = `${baseLabel} • Nenhum pet cadastrado ainda.`;
+      return;
+    }
+    if (showingAllPets || total <= petsCollapsedLimit) {
+      const plural = total === 1 ? 'pet' : 'pets';
+      petSubtitleEl.textContent = `${baseLabel} • Exibindo ${total} ${plural} da clínica.`;
+      return;
+    }
+    const pluralVisible = visible === 1 ? 'pet' : 'pets';
+    petSubtitleEl.textContent = `${baseLabel} • Últimos ${visible} ${pluralVisible} cadastrados (${total} no total).`;
+  }
+
+  function updateToggleButton(total) {
+    if (!togglePetsBtn) {
+      return;
+    }
+    if (total <= petsCollapsedLimit) {
+      togglePetsBtn.classList.add('d-none');
+      togglePetsBtn.setAttribute('aria-hidden', 'true');
+      togglePetsBtn.setAttribute('aria-expanded', 'false');
+      return;
+    }
+    togglePetsBtn.classList.remove('d-none');
+    togglePetsBtn.setAttribute('aria-hidden', 'false');
+    togglePetsBtn.setAttribute('aria-expanded', showingAllPets ? 'true' : 'false');
+    if (showingAllPets) {
+      togglePetsBtn.innerHTML = '<i class="bi bi-chevron-up me-1"></i> Mostrar menos';
+    } else {
+      togglePetsBtn.innerHTML = `<i class="bi bi-chevron-down me-1"></i> Ver todos os ${total} pets`;
+    }
+  }
+
   function renderPetList() {
-    if (!petListEl) {
+    if (!petListEl || petListHasError || !hasLoadedPets) {
       return;
     }
 
-    if (!pets.length) {
+    const totalPets = pets.length;
+
+    if (!totalPets) {
       petListEl.innerHTML = '<div class="text-muted small tutor-calendar__empty">Nenhum pet cadastrado até o momento.</div>';
+      petListEl.classList.remove('is-expanded');
+      updatePetSubtitle(totalPets, 0);
+      updateToggleButton(totalPets);
       return;
     }
+
+    const visiblePets = (showingAllPets || totalPets <= petsCollapsedLimit)
+      ? pets
+      : pets.slice(0, petsCollapsedLimit);
+
+    petListEl.classList.toggle('is-expanded', showingAllPets);
 
     const fragment = document.createDocumentFragment();
-    pets.forEach(function(pet) {
+    visiblePets.forEach(function(pet) {
       const item = document.createElement('div');
       item.className = 'tutor-calendar__pet';
 
       const avatar = document.createElement('div');
       avatar.className = 'tutor-calendar__pet-avatar';
-      avatar.textContent = (pet.name || 'Pet').charAt(0).toUpperCase();
+      const imageUrl = pet.image;
+      if (imageUrl) {
+        const img = document.createElement('img');
+        img.src = imageUrl;
+        img.loading = 'lazy';
+        img.alt = pet.name ? `Foto de ${pet.name}` : 'Foto do pet';
+        avatar.classList.add('has-image');
+        avatar.appendChild(img);
+      } else {
+        const nameValue = (pet.name || 'Pet').trim();
+        const initial = nameValue ? nameValue.charAt(0).toUpperCase() : 'P';
+        avatar.textContent = initial;
+      }
 
-      const body = document.createElement('div');
-      body.className = 'flex-grow-1';
+      const content = document.createElement('div');
+      content.className = 'tutor-calendar__pet-content';
+
+      const heading = document.createElement('div');
+      heading.className = 'tutor-calendar__pet-heading';
 
       const nameEl = document.createElement('div');
-      nameEl.className = 'fw-semibold';
+      nameEl.className = 'tutor-calendar__pet-name fw-semibold text-truncate';
       nameEl.textContent = pet.name || 'Pet sem nome';
+      heading.appendChild(nameEl);
+
+      const totalEvents = countEventsForPet(pet.id);
+      if (totalEvents > 0) {
+        const badge = document.createElement('span');
+        badge.className = 'badge rounded-pill bg-primary-subtle text-primary-emphasis';
+        badge.textContent = totalEvents === 1 ? '1 evento' : `${totalEvents} eventos`;
+        heading.appendChild(badge);
+      }
 
       const detailEl = document.createElement('div');
-      detailEl.className = 'text-muted small';
+      detailEl.className = 'tutor-calendar__pet-detail text-muted small';
       const species = pet.species || '';
       const breed = pet.breed || '';
       const details = [species, breed].filter(Boolean).join(' • ');
       detailEl.textContent = details || 'Sem detalhes adicionais';
 
-      body.appendChild(nameEl);
-      body.appendChild(detailEl);
+      content.appendChild(heading);
+      content.appendChild(detailEl);
 
-      const meta = document.createElement('div');
-      meta.className = 'text-end';
-      const total = countEventsForPet(pet.id);
-      if (total > 0) {
-        const badge = document.createElement('span');
-        badge.className = 'badge bg-primary-subtle text-primary-emphasis';
-        badge.textContent = total === 1 ? '1 evento' : `${total} eventos`;
-        meta.appendChild(badge);
+      const metaParts = [];
+      if (pet.tutor_name) {
+        metaParts.push({ icon: 'bi-person-heart', text: `Tutor: ${pet.tutor_name}` });
+      }
+      if (pet.age_display) {
+        metaParts.push({ icon: 'bi-hourglass', text: pet.age_display });
+      }
+      const formattedDate = formatPetDate(pet.dateAdded || pet.date_added);
+      if (formattedDate) {
+        metaParts.push({ icon: 'bi-calendar-plus', text: `Adicionado em ${formattedDate}` });
+      }
+
+      if (metaParts.length) {
+        const metaEl = document.createElement('div');
+        metaEl.className = 'tutor-calendar__pet-meta text-muted small';
+        metaParts.forEach(function(part) {
+          const span = document.createElement('span');
+          span.className = 'tutor-calendar__pet-meta-item';
+          if (part.icon) {
+            const iconEl = document.createElement('i');
+            iconEl.className = `bi ${part.icon}`;
+            iconEl.setAttribute('aria-hidden', 'true');
+            span.appendChild(iconEl);
+          }
+          span.appendChild(document.createTextNode(part.text));
+          metaEl.appendChild(span);
+        });
+        content.appendChild(metaEl);
       }
 
       item.appendChild(avatar);
-      item.appendChild(body);
-      if (meta.childNodes.length > 0) {
-        item.appendChild(meta);
-      }
+      item.appendChild(content);
 
       fragment.appendChild(item);
     });
 
     petListEl.innerHTML = '';
     petListEl.appendChild(fragment);
+    updatePetSubtitle(totalPets, visiblePets.length);
+    updateToggleButton(totalPets);
   }
 
   function renderWeekdays() {
@@ -2442,7 +2628,20 @@ document.addEventListener('DOMContentLoaded', function() {
   async function loadPets() {
     if (petListEl) {
       petListEl.innerHTML = '<div class="text-muted small">Carregando pets...</div>';
+      petListEl.classList.remove('is-expanded');
     }
+    showingAllPets = false;
+    hasLoadedPets = false;
+    petListHasError = false;
+    if (togglePetsBtn) {
+      togglePetsBtn.classList.add('d-none');
+      togglePetsBtn.setAttribute('aria-hidden', 'true');
+      togglePetsBtn.setAttribute('aria-expanded', 'false');
+    }
+    if (petSubtitleEl) {
+      petSubtitleEl.textContent = 'Carregando pets da clínica...';
+    }
+
     try {
       const response = await fetch(petsUrl, {
         headers: {
@@ -2454,12 +2653,45 @@ document.addEventListener('DOMContentLoaded', function() {
         throw new Error('Não foi possível carregar a lista de pets.');
       }
       const data = await response.json();
-      pets = Array.isArray(data) ? data : [];
+      const normalized = Array.isArray(data) ? data.map(function(item) {
+        const copy = Object.assign({}, item);
+        const rawDate = copy.dateAdded || copy.date_added || null;
+        copy.dateAdded = rawDate;
+        return copy;
+      }) : [];
+      normalized.sort(function(a, b) {
+        const aDate = a.dateAdded ? new Date(a.dateAdded) : null;
+        const bDate = b.dateAdded ? new Date(b.dateAdded) : null;
+        const aValid = aDate && !Number.isNaN(aDate.getTime());
+        const bValid = bDate && !Number.isNaN(bDate.getTime());
+        if (aValid && bValid) {
+          return bDate.getTime() - aDate.getTime();
+        }
+        if (aValid) {
+          return -1;
+        }
+        if (bValid) {
+          return 1;
+        }
+        const nameA = (a.name || '').toLowerCase();
+        const nameB = (b.name || '').toLowerCase();
+        return nameA.localeCompare(nameB);
+      });
+      pets = normalized;
+      hasLoadedPets = true;
+      petListHasError = false;
       renderPetList();
     } catch (error) {
       console.error('Erro ao carregar pets.', error);
+      pets = [];
+      petListHasError = true;
+      hasLoadedPets = false;
       if (petListEl) {
         petListEl.innerHTML = '<div class="text-muted small">Não foi possível carregar os pets.</div>';
+        petListEl.classList.remove('is-expanded');
+      }
+      if (petSubtitleEl) {
+        petSubtitleEl.textContent = 'Não foi possível carregar os pets.';
       }
     }
   }
@@ -2530,6 +2762,21 @@ document.addEventListener('DOMContentLoaded', function() {
 
   refreshPetsBtn && refreshPetsBtn.addEventListener('click', function() {
     loadPets();
+  });
+
+  togglePetsBtn && togglePetsBtn.addEventListener('click', function() {
+    if (petListHasError || !hasLoadedPets) {
+      return;
+    }
+    showingAllPets = !showingAllPets;
+    renderPetList();
+    if (!showingAllPets && petListEl) {
+      if (typeof petListEl.scrollTo === 'function') {
+        petListEl.scrollTo({ top: 0, behavior: 'smooth' });
+      } else {
+        petListEl.scrollTop = 0;
+      }
+    }
   });
 
   filterButtons.forEach(function(btn) {
