@@ -8373,17 +8373,23 @@ def edit_appointment(appointment_id):
 def update_appointment_status(appointment_id):
     """Update the status of an appointment."""
     appointment = Appointment.query.get_or_404(appointment_id)
-    if current_user.worker in ['veterinario', 'colaborador']:
+
+    if current_user.role == 'admin':
+        pass
+    elif current_user.worker in ['veterinario', 'colaborador']:
         if current_user.worker == 'veterinario':
-            user_clinic = current_user.veterinario.clinica_id
+            veterinario = getattr(current_user, 'veterinario', None)
+            user_clinic = getattr(veterinario, 'clinica_id', None)
         else:
-            user_clinic = current_user.clinica_id
+            user_clinic = getattr(current_user, 'clinica_id', None)
+
         appointment_clinic = appointment.clinica_id
         if appointment_clinic is None and appointment.veterinario:
             appointment_clinic = appointment.veterinario.clinica_id
+
         if appointment_clinic != user_clinic:
             abort(403)
-    elif current_user.role != 'admin' and appointment.tutor_id != current_user.id:
+    elif appointment.tutor_id != current_user.id:
         abort(403)
 
     accepts = request.accept_mimetypes
@@ -8435,14 +8441,23 @@ def update_appointment_status(appointment_id):
 @login_required
 def delete_appointment(appointment_id):
     appointment = Appointment.query.get_or_404(appointment_id)
-    if current_user.worker in ['veterinario', 'colaborador']:
+
+    if current_user.role == 'admin':
+        pass
+    elif current_user.worker in ['veterinario', 'colaborador']:
         if current_user.worker == 'veterinario':
-            user_clinic = current_user.veterinario.clinica_id
+            veterinario = getattr(current_user, 'veterinario', None)
+            user_clinic = getattr(veterinario, 'clinica_id', None)
         else:
-            user_clinic = current_user.clinica_id
-        if appointment.clinica_id != user_clinic:
+            user_clinic = getattr(current_user, 'clinica_id', None)
+
+        appointment_clinic = appointment.clinica_id
+        if appointment_clinic is None and appointment.veterinario:
+            appointment_clinic = appointment.veterinario.clinica_id
+
+        if appointment_clinic != user_clinic:
             abort(403)
-    elif current_user.role != 'admin':
+    else:
         abort(403)
     db.session.delete(appointment)
     db.session.commit()
