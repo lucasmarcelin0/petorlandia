@@ -87,8 +87,15 @@
               </button>
             </div>
           </div>
-          <div class="tutor-calendar__weekdays" data-weekdays></div>
-          <div class="tutor-calendar__days" data-calendar-grid></div>
+          <div class="tutor-calendar__calendar-wrapper">
+            <div class="tutor-calendar__calendar" data-calendar-area>
+              <div class="tutor-calendar__weekdays" data-weekdays></div>
+              <div class="tutor-calendar__days" data-calendar-grid></div>
+            </div>
+            <aside class="tutor-calendar__day-detail" data-day-detail>
+              <div class="text-muted small">Selecione um dia para ver os compromissos.</div>
+            </aside>
+          </div>
         </div>
       </div>
     </div>
@@ -179,6 +186,20 @@
   gap: 0.75rem;
 }
 
+#{{ component_id }} .tutor-calendar__calendar-wrapper {
+  display: flex;
+  gap: 1.25rem;
+  align-items: stretch;
+}
+
+#{{ component_id }} .tutor-calendar__calendar {
+  flex: 1 1 0%;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
 #{{ component_id }} .tutor-calendar__day {
   min-height: 110px;
   border-radius: 1rem;
@@ -190,6 +211,11 @@
   gap: 0.5rem;
   transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
   cursor: pointer;
+}
+
+#{{ component_id }} .tutor-calendar__day.is-selected {
+  border-color: rgba(13, 110, 253, 0.7);
+  box-shadow: 0 0 0 0.25rem rgba(13, 110, 253, 0.12);
 }
 
 #{{ component_id }} .tutor-calendar__day:hover {
@@ -217,6 +243,128 @@
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
+}
+
+#{{ component_id }} .tutor-calendar__day-detail {
+  flex: 0 0 280px;
+  background: linear-gradient(180deg, rgba(15, 23, 42, 0.03) 0%, rgba(99, 102, 241, 0.04) 100%);
+  border: 1px solid rgba(148, 163, 184, 0.35);
+  border-radius: 1rem;
+  padding: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  max-height: 480px;
+  overflow-y: auto;
+}
+
+#{{ component_id }} .tutor-calendar__day-detail-heading {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+#{{ component_id }} .tutor-calendar__day-detail-date {
+  font-weight: 600;
+  text-transform: capitalize;
+  color: var(--bs-gray-900);
+}
+
+#{{ component_id }} .tutor-calendar__day-detail-count {
+  font-size: 0.8rem;
+  color: var(--bs-gray-600);
+}
+
+#{{ component_id }} .tutor-calendar__day-detail-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+#{{ component_id }} .tutor-calendar__day-detail-card {
+  background: var(--tutor-calendar-card-bg);
+  border-radius: 0.9rem;
+  padding: 0.85rem;
+  border: 1px solid rgba(99, 102, 241, 0.15);
+  box-shadow: 0 8px 16px rgba(15, 23, 42, 0.08);
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+#{{ component_id }} .tutor-calendar__day-detail-card--appointment {
+  border-color: rgba(59, 130, 246, 0.35);
+  background: rgba(59, 130, 246, 0.08);
+}
+
+#{{ component_id }} .tutor-calendar__day-detail-card--exam {
+  border-color: rgba(139, 92, 246, 0.35);
+  background: rgba(139, 92, 246, 0.08);
+}
+
+#{{ component_id }} .tutor-calendar__day-detail-card--vaccine {
+  border-color: rgba(250, 204, 21, 0.45);
+  background: rgba(250, 204, 21, 0.12);
+}
+
+#{{ component_id }} .tutor-calendar__day-detail-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+#{{ component_id }} .tutor-calendar__day-detail-time {
+  font-weight: 600;
+  font-size: 0.85rem;
+  color: var(--bs-gray-700);
+}
+
+#{{ component_id }} .tutor-calendar__day-detail-type {
+  font-size: 0.7rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  background: rgba(99, 102, 241, 0.12);
+  color: #4338ca;
+  border-radius: 999px;
+  padding: 0.15rem 0.5rem;
+}
+
+#{{ component_id }} .tutor-calendar__day-detail-title {
+  font-weight: 600;
+  color: var(--bs-gray-900);
+}
+
+#{{ component_id }} .tutor-calendar__day-detail-pet {
+  font-size: 0.85rem;
+  color: var(--bs-gray-600);
+}
+
+#{{ component_id }} .tutor-calendar__day-detail-meta {
+  margin: 0;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.25rem 0.5rem;
+  font-size: 0.8rem;
+}
+
+#{{ component_id }} .tutor-calendar__day-detail-meta dt {
+  margin: 0;
+  font-weight: 600;
+  color: var(--bs-gray-600);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+#{{ component_id }} .tutor-calendar__day-detail-meta dd {
+  margin: 0;
+  color: var(--bs-gray-700);
+}
+
+#{{ component_id }} .tutor-calendar__day-detail-empty {
+  color: var(--bs-gray-600);
+  font-size: 0.85rem;
 }
 
 #{{ component_id }} .tutor-calendar__event {
@@ -287,6 +435,20 @@
   #{{ component_id }} .tutor-calendar__pet-list {
     max-height: none;
   }
+
+  #{{ component_id }} .tutor-calendar__calendar-wrapper {
+    flex-direction: column;
+  }
+
+  #{{ component_id }} .tutor-calendar__day-detail {
+    flex: 1 1 auto;
+    width: 100%;
+    max-height: none;
+  }
+
+  #{{ component_id }} .tutor-calendar__day-detail-meta {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 </style>
 
@@ -310,6 +472,7 @@ document.addEventListener('DOMContentLoaded', function() {
   const newEventBtn = root.querySelector('[data-new-event]');
   const refreshPetsBtn = root.querySelector('[data-refresh-pets]');
   const filterButtons = Array.prototype.slice.call(root.querySelectorAll('[data-filter]'));
+  const dayDetailEl = root.querySelector('[data-day-detail]');
 
   const weekdays = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
   const typeLabels = {
@@ -323,6 +486,7 @@ document.addEventListener('DOMContentLoaded', function() {
   let viewDate = new Date();
   let currentFilter = 'all';
   let usingSharedCalendar = false;
+  let selectedDate = formatDateKey(new Date());
 
   function parseDate(value) {
     if (!value) {
@@ -392,6 +556,102 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     const candidate = parts[0].trim();
     return candidate || null;
+  }
+
+  function getEventsForDate(dateKey) {
+    if (!dateKey) {
+      return [];
+    }
+    return events.filter(function(event) {
+      if (event.date !== dateKey) {
+        return false;
+      }
+      if (currentFilter !== 'all' && event.type !== currentFilter) {
+        return false;
+      }
+      return true;
+    }).sort(function(a, b) {
+      if (a.start && b.start) {
+        return a.start - b.start;
+      }
+      if (a.time && b.time) {
+        return a.time.localeCompare(b.time);
+      }
+      return 0;
+    });
+  }
+
+  function formatDetailLabel(key) {
+    if (key === undefined || key === null) {
+      return '';
+    }
+    const label = String(key)
+      .replace(/_/g, ' ')
+      .replace(/([a-z])([A-Z])/g, '$1 $2')
+      .trim();
+    if (!label) {
+      return '';
+    }
+    return label
+      .split(/\s+/)
+      .map(function(part) {
+        return part.charAt(0).toUpperCase() + part.slice(1);
+      })
+      .join(' ');
+  }
+
+  function formatDetailValue(value) {
+    if (value === undefined || value === null || value === '') {
+      return '—';
+    }
+    if (value instanceof Date) {
+      return value.toLocaleString('pt-BR');
+    }
+    if (typeof value === 'object') {
+      try {
+        return JSON.stringify(value);
+      } catch (error) {
+        return String(value);
+      }
+    }
+    return String(value);
+  }
+
+  function extractRawEntries(raw) {
+    const entries = [];
+    if (!raw || typeof raw !== 'object') {
+      return entries;
+    }
+    const skip = new Set(['title', 'start', 'startStr', 'end', 'date', 'time', 'extendedProps']);
+    const seen = new Set();
+
+    function addEntry(key, value) {
+      if (!key && key !== 0) {
+        return;
+      }
+      if (value === undefined || typeof value === 'function') {
+        return;
+      }
+      const normalizedKey = String(key);
+      if (skip.has(normalizedKey) || seen.has(normalizedKey)) {
+        return;
+      }
+      entries.push([normalizedKey, value]);
+      seen.add(normalizedKey);
+    }
+
+    Object.keys(raw).forEach(function(key) {
+      const value = raw[key];
+      if (key === 'extendedProps' && value && typeof value === 'object') {
+        Object.keys(value).forEach(function(innerKey) {
+          addEntry(innerKey, value[innerKey]);
+        });
+        return;
+      }
+      addEntry(key, value);
+    });
+
+    return entries;
   }
 
   function normalizeEvent(raw) {
@@ -535,7 +795,8 @@ document.addEventListener('DOMContentLoaded', function() {
 
     el.addEventListener('click', function(evt) {
       evt.stopPropagation();
-      showEventDetails(eventData);
+      selectedDate = eventData.date || (eventData.start ? formatDateKey(eventData.start) : selectedDate);
+      renderDayDetail(selectedDate);
     });
 
     return el;
@@ -545,23 +806,148 @@ document.addEventListener('DOMContentLoaded', function() {
     if (!eventData) {
       return;
     }
+    const target = eventData.date || (eventData.start ? formatDateKey(eventData.start) : null);
+    renderDayDetail(target);
+  }
+
+  function buildDayDetailCard(eventData) {
+    const card = document.createElement('div');
+    card.className = 'tutor-calendar__day-detail-card tutor-calendar__day-detail-card--' + (eventData.type || 'appointment');
+
+    const header = document.createElement('div');
+    header.className = 'tutor-calendar__day-detail-card-header';
+
+    const timeEl = document.createElement('div');
+    timeEl.className = 'tutor-calendar__day-detail-time';
+    timeEl.textContent = eventData.time || '--:--';
+    header.appendChild(timeEl);
+
+    const typeEl = document.createElement('span');
+    typeEl.className = 'tutor-calendar__day-detail-type';
+    typeEl.textContent = typeLabels[eventData.type] || 'Evento';
+    header.appendChild(typeEl);
+
+    card.appendChild(header);
+
+    const titleEl = document.createElement('div');
+    titleEl.className = 'tutor-calendar__day-detail-title';
+    titleEl.textContent = eventData.title || 'Evento';
+    card.appendChild(titleEl);
+
     const petName = getPetName(eventData.animalId) || derivePetNameFromTitle(eventData.title);
-    const typeLabel = typeLabels[eventData.type] || 'Evento';
-    const parts = [
-      typeLabel,
-      eventData.title,
-    ];
-    if (eventData.date) {
-      if (eventData.time) {
-        parts.push(`Data: ${eventData.date} às ${eventData.time}`);
-      } else {
-        parts.push(`Data: ${eventData.date}`);
+    if (petName) {
+      const petEl = document.createElement('div');
+      petEl.className = 'tutor-calendar__day-detail-pet';
+      petEl.textContent = `Paciente: ${petName}`;
+      card.appendChild(petEl);
+    }
+
+    const metaEntries = extractRawEntries(eventData.raw);
+    if (metaEntries.length) {
+      const meta = document.createElement('dl');
+      meta.className = 'tutor-calendar__day-detail-meta';
+
+      metaEntries.forEach(function(entry) {
+        const key = formatDetailLabel(entry[0]);
+        if (!key) {
+          return;
+        }
+        const value = formatDetailValue(entry[1]);
+
+        const dt = document.createElement('dt');
+        dt.textContent = key;
+        const dd = document.createElement('dd');
+        dd.textContent = value;
+
+        meta.appendChild(dt);
+        meta.appendChild(dd);
+      });
+
+      if (meta.childNodes.length) {
+        card.appendChild(meta);
       }
     }
-    if (petName) {
-      parts.push(`Paciente: ${petName}`);
+
+    return card;
+  }
+
+  function renderDayDetail(dateKey) {
+    if (!dayDetailEl) {
+      return;
     }
-    window.alert(parts.join('\n'));
+
+    if (typeof dateKey === 'string' && dateKey.length) {
+      selectedDate = dateKey;
+    } else if (dateKey === null) {
+      selectedDate = null;
+    }
+
+    const activeDate = selectedDate;
+
+    if (calendarGrid) {
+      const cells = calendarGrid.querySelectorAll('.tutor-calendar__day');
+      Array.prototype.forEach.call(cells, function(cell) {
+        cell.classList.toggle('is-selected', Boolean(activeDate) && cell.dataset.date === activeDate);
+      });
+    }
+
+    dayDetailEl.innerHTML = '';
+
+    if (!activeDate) {
+      const placeholder = document.createElement('div');
+      placeholder.className = 'tutor-calendar__day-detail-empty';
+      placeholder.textContent = 'Selecione um dia para ver os compromissos.';
+      dayDetailEl.appendChild(placeholder);
+      return;
+    }
+
+    const dayEvents = getEventsForDate(activeDate);
+    const dayDate = parseDate(activeDate);
+    const heading = document.createElement('div');
+    heading.className = 'tutor-calendar__day-detail-heading';
+
+    const dateEl = document.createElement('div');
+    dateEl.className = 'tutor-calendar__day-detail-date';
+    if (dayDate) {
+      const formatted = dayDate.toLocaleDateString('pt-BR', {
+        weekday: 'long',
+        day: '2-digit',
+        month: 'long',
+        year: 'numeric',
+      });
+      dateEl.textContent = formatted.charAt(0).toUpperCase() + formatted.slice(1);
+    } else {
+      dateEl.textContent = activeDate;
+    }
+
+    const countEl = document.createElement('div');
+    countEl.className = 'tutor-calendar__day-detail-count';
+    countEl.textContent = dayEvents.length === 1 ? '1 compromisso' : `${dayEvents.length} compromissos`;
+
+    heading.appendChild(dateEl);
+    heading.appendChild(countEl);
+
+    const fragment = document.createDocumentFragment();
+    fragment.appendChild(heading);
+
+    if (!dayEvents.length) {
+      const empty = document.createElement('div');
+      empty.className = 'tutor-calendar__day-detail-empty';
+      empty.textContent = 'Nenhum compromisso encontrado para este dia.';
+      fragment.appendChild(empty);
+      dayDetailEl.appendChild(fragment);
+      return;
+    }
+
+    const list = document.createElement('div');
+    list.className = 'tutor-calendar__day-detail-list';
+
+    dayEvents.forEach(function(eventData) {
+      list.appendChild(buildDayDetailCard(eventData));
+    });
+
+    fragment.appendChild(list);
+    dayDetailEl.appendChild(fragment);
   }
 
   function dispatchSlot(dateObj, timeHint) {
@@ -620,23 +1006,7 @@ document.addEventListener('DOMContentLoaded', function() {
       const eventsWrapper = document.createElement('div');
       eventsWrapper.className = 'tutor-calendar__event-list';
 
-      const dayEvents = events.filter(function(event) {
-        if (event.date !== iso) {
-          return false;
-        }
-        if (currentFilter === 'all') {
-          return true;
-        }
-        return event.type === currentFilter;
-      }).sort(function(a, b) {
-        if (a.start && b.start) {
-          return a.start - b.start;
-        }
-        if (a.time && b.time) {
-          return a.time.localeCompare(b.time);
-        }
-        return 0;
-      });
+      const dayEvents = getEventsForDate(iso);
 
       dayEvents.forEach(function(eventData) {
         eventsWrapper.appendChild(buildEventElement(eventData));
@@ -652,11 +1022,15 @@ document.addEventListener('DOMContentLoaded', function() {
       cell.appendChild(eventsWrapper);
 
       cell.addEventListener('click', function() {
+        selectedDate = iso;
+        renderDayDetail(selectedDate);
         dispatchSlot(cellDate, '09:00');
       });
 
       calendarGrid.appendChild(cell);
     }
+
+    renderDayDetail(selectedDate);
   }
 
   function updateEvents(newEvents) {
@@ -730,7 +1104,9 @@ document.addEventListener('DOMContentLoaded', function() {
   });
 
   todayBtn && todayBtn.addEventListener('click', function() {
-    viewDate = new Date();
+    const today = new Date();
+    viewDate = today;
+    selectedDate = formatDateKey(today);
     renderCalendar();
   });
 
