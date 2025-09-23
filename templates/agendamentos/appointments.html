@@ -903,6 +903,12 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     updateTimes();
     loadSchedule();
+    const vetIdValue = vetField ? vetField.value : null;
+    if (typeof window.updateCalendarVetSelection === 'function') {
+      window.updateCalendarVetSelection(vetIdValue, { activate: false, refetch: true });
+    } else if (window.sharedCalendar && typeof window.sharedCalendar.refetchEvents === 'function') {
+      window.sharedCalendar.refetchEvents();
+    }
   }
 
   window.handleVetChange = handleVetChange;

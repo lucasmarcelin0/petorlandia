@@ -150,6 +150,7 @@ def test_clinic_appointments_include_exam_and_vaccine(client, monkeypatch):
         tutor_id, vet_user_id, clinic_id, appt_id, start_iso = create_basic_appointment()
         animal = Animal.query.get(1)
         vet = Veterinario.query.get(1)
+        vet_id = vet.id
         exam = ExamAppointment(
             id=2,
             animal_id=animal.id,
@@ -210,3 +211,130 @@ def test_clinic_appointments_include_exam_and_vaccine(client, monkeypatch):
     assert vaccine_event['start'] == vaccine_start.isoformat()
     assert vaccine_event['end'] == vaccine_end.isoformat()
     assert vaccine_event['extendedProps']['eventType'] == 'vaccine'
+
+
+def test_vet_appointments_admin_includes_related_events(client, monkeypatch):
+    with flask_app.app_context():
+        tutor_id, vet_user_id, clinic_id, appt_id, start_iso = create_basic_appointment()
+        animal = Animal.query.get(1)
+        vet = Veterinario.query.get(1)
+        vet_id = vet.id
+        exam = ExamAppointment(
+            id=4,
+            animal_id=animal.id,
+            specialist_id=vet.id,
+            requester_id=tutor_id,
+            scheduled_at=datetime(2024, 5, 2, 10, 0),
+            status='confirmed',
+        )
+        vaccine_date = date.today() + timedelta(days=2)
+        vaccine = Vacina(
+            id=5,
+            animal_id=animal.id,
+            nome='Gripe',
+            aplicada_em=vaccine_date,
+            aplicada_por=vet_user_id,
+        )
+        db.session.add_all([exam, vaccine])
+        db.session.commit()
+
+        exam_id = exam.id
+        vaccine_id = vaccine.id
+        exam_start_iso = to_timezone_aware(exam.scheduled_at).isoformat()
+        exam_end_iso = to_timezone_aware(
+            exam.scheduled_at + get_appointment_duration('exame')
+        ).isoformat()
+        vaccine_start = datetime.combine(
+            vaccine_date,
+            DEFAULT_VACCINE_EVENT_START_TIME,
+        ).replace(tzinfo=BR_TZ)
+        vaccine_end = vaccine_start + DEFAULT_VACCINE_EVENT_DURATION
+
+    fake_admin = type('U', (), {
+        'id': 99,
+        'worker': None,
+        'role': 'admin',
+        'clinica_id': None,
+        'is_authenticated': True,
+    })()
+    login(monkeypatch, fake_admin)
+    resp = client.get(f'/api/vet_appointments/{vet_id}')
+    assert resp.status_code == 200
+    data = resp.get_json()
+    events = {event['id']: event for event in data}
+    assert f'appointment-{appt_id}' in events
+    assert f'exam-{exam_id}' in events
+    assert f'vaccine-{vaccine_id}' in events
+
+    exam_event = events[f'exam-{exam_id}']
+    assert exam_event['start'] == exam_start_iso
+    assert exam_event['end'] == exam_end_iso
+    vaccine_event = events[f'vaccine-{vaccine_id}']
+    assert vaccine_event['start'] == vaccine_start.isoformat()
+    assert vaccine_event['end'] == vaccine_end.isoformat()
+
+
+def test_vet_appointments_collaborator_filters_by_clinic(client, monkeypatch):
+    with flask_app.app_context():
+        tutor_id, vet_user_id, clinic_id, appt_id, start_iso = create_basic_appointment()
+        vet = Veterinario.query.get(1)
+        vet_id = vet.id
+        clinic2 = Clinica(id=2, nome='Outra Clínica')
+        animal2 = Animal(id=2, name='Bolt', user_id=tutor_id, clinica_id=clinic2.id)
+        original_clinic_id = vet.clinica_id
+        vet.clinica_id = clinic2.id
+        db.session.add(vet)
+        db.session.add(clinic2)
+        db.session.add(animal2)
+        db.session.commit()
+        appt2 = Appointment(
+            id=3,
+            animal_id=animal2.id,
+            tutor_id=tutor_id,
+            veterinario_id=vet.id,
+            scheduled_at=datetime(2024, 5, 3, 14, 0),
+            clinica_id=clinic2.id,
+        )
+        db.session.add(appt2)
+        db.session.commit()
+        vet.clinica_id = original_clinic_id
+        db.session.add(vet)
+        db.session.commit()
+
+    fake_colab = type('U', (), {
+        'id': 50,
+        'worker': 'colaborador',
+        'role': 'adotante',
+        'clinica_id': clinic_id,
+        'is_authenticated': True,
+    })()
+    login(monkeypatch, fake_colab)
+    resp = client.get(f'/api/vet_appointments/{vet_id}')
+    assert resp.status_code == 200
+    data = resp.get_json()
+    appointment_events = [event for event in data if event['id'].startswith('appointment-')]
+    assert len(appointment_events) == 1
+    assert appointment_events[0]['id'] == f'appointment-{appt_id}'
+
+
+def test_vet_appointments_collaborator_cannot_access_other_vet(client, monkeypatch):
+    with flask_app.app_context():
+        tutor_id, vet_user_id, clinic_id, appt_id, start_iso = create_basic_appointment()
+        clinic2 = Clinica(id=3, nome='Clínica Dois')
+        vet2_user = User(id=10, name='Outro Vet', email='o@test', worker='veterinario')
+        vet2_user.set_password('x')
+        vet2 = Veterinario(id=5, user_id=vet2_user.id, crmv='999', clinica_id=clinic2.id)
+        vet2_id = vet2.id
+        db.session.add_all([clinic2, vet2_user, vet2])
+        db.session.commit()
+
+    fake_colab = type('U', (), {
+        'id': 51,
+        'worker': 'colaborador',
+        'role': 'adotante',
+        'clinica_id': clinic_id,
+        'is_authenticated': True,
+    })()
+    login(monkeypatch, fake_colab)
+    resp = client.get(f'/api/vet_appointments/{vet2_id}')
+    assert resp.status_code == 404
