@@ -28,59 +28,84 @@
       {% set calendar_redirect_url = url_for('appointments_calendar') %}
     {% endif %}
   {% endif %}
-  <ul class="nav nav-pills mb-3" id="appointments-calendar-tabs" role="tablist">
-    <li class="nav-item" role="presentation">
-      <button
-        class="nav-link active"
-        id="calendar-tab-full"
-        data-bs-toggle="tab"
-        data-bs-target="#calendar-pane-full"
-        type="button"
-        role="tab"
-        aria-controls="calendar-pane-full"
-        aria-selected="true"
-      >
-        <i class="bi bi-calendar3 me-1"></i> Calendário mensal
-      </button>
-    </li>
-    <li class="nav-item" role="presentation">
-      <button
-        class="nav-link"
-        id="calendar-tab-experimental"
-        data-bs-toggle="tab"
-        data-bs-target="#calendar-pane-experimental"
-        type="button"
-        role="tab"
-        aria-controls="calendar-pane-experimental"
-        aria-selected="false"
-      >
-        <i class="bi bi-layout-text-window-reverse me-1"></i> Calendário visual
-      </button>
-    </li>
-  </ul>
+  <div class="row g-4 align-items-stretch mb-4" id="appointments-calendar-overview">
+    <div class="col-12 col-xl-8 col-xxl-9">
+      <ul class="nav nav-pills mb-3" id="appointments-calendar-tabs" role="tablist">
+        <li class="nav-item" role="presentation">
+          <button
+            class="nav-link active"
+            id="calendar-tab-full"
+            data-bs-toggle="tab"
+            data-bs-target="#calendar-pane-full"
+            type="button"
+            role="tab"
+            aria-controls="calendar-pane-full"
+            aria-selected="true"
+          >
+            <i class="bi bi-calendar3 me-1"></i> Calendário mensal
+          </button>
+        </li>
+        <li class="nav-item" role="presentation">
+          <button
+            class="nav-link"
+            id="calendar-tab-experimental"
+            data-bs-toggle="tab"
+            data-bs-target="#calendar-pane-experimental"
+            type="button"
+            role="tab"
+            aria-controls="calendar-pane-experimental"
+            aria-selected="false"
+          >
+            <i class="bi bi-layout-text-window-reverse me-1"></i> Calendário visual
+          </button>
+        </li>
+      </ul>
 
-  <div class="tab-content mt-3" id="appointments-calendar-content">
-    <div
-      class="tab-pane fade show active pt-2"
-      id="calendar-pane-full"
-      role="tabpanel"
-      aria-labelledby="calendar-tab-full"
-      tabindex="0"
-    >
-      {% with clinic_id = current_user.clinica_id, calendar_redirect_url = calendar_redirect_url %}
-        {% include 'partials/schedule_toggle.html' %}
-      {% endwith %}
+      <div class="tab-content mt-3" id="appointments-calendar-content">
+        <div
+          class="tab-pane fade show active pt-2"
+          id="calendar-pane-full"
+          role="tabpanel"
+          aria-labelledby="calendar-tab-full"
+          tabindex="0"
+        >
+          {% with clinic_id = current_user.clinica_id, calendar_redirect_url = calendar_redirect_url %}
+            {% include 'partials/schedule_toggle.html' %}
+          {% endwith %}
+        </div>
+        <div
+          class="tab-pane fade pt-2"
+          id="calendar-pane-experimental"
+          role="tabpanel"
+          aria-labelledby="calendar-tab-experimental"
+          tabindex="0"
+        >
+          {% with component_id = 'tutor-calendar-inline' %}
+            {% include 'partials/tutor_calendar.html' %}
+          {% endwith %}
+        </div>
+      </div>
     </div>
-    <div
-      class="tab-pane fade pt-2"
-      id="calendar-pane-experimental"
-      role="tabpanel"
-      aria-labelledby="calendar-tab-experimental"
-      tabindex="0"
-    >
-      {% with component_id = 'tutor-calendar-inline' %}
-        {% include 'partials/tutor_calendar.html' %}
-      {% endwith %}
+    <div class="col-12 col-xl-4 col-xxl-3">
+      <div class="card calendar-summary-card border-0 shadow-sm h-100" data-calendar-summary-panel>
+        <div class="card-header bg-white border-0 pb-0">
+          <div class="d-flex align-items-center justify-content-between gap-2">
+            <h5 class="mb-0 fw-semibold">
+              <i class="bi bi-people-fill me-2"></i> Resumo por profissional
+            </h5>
+            <span class="badge calendar-summary-total-badge" data-calendar-summary-total>0</span>
+          </div>
+          <p class="text-muted small mb-0">
+            Totais diários e semanais por veterinário com base no calendário visível.
+          </p>
+        </div>
+        <div class="card-body">
+          <div class="text-muted small" data-calendar-summary-empty>
+            Carregando estatísticas da agenda...
+          </div>
+          <div class="calendar-summary-list d-flex flex-column gap-3 mt-2" data-calendar-summary-list></div>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -351,7 +376,314 @@ document.addEventListener('DOMContentLoaded', () => {
     ? newAppointmentCollapseEl.querySelector('form')
     : null;
   const appointmentsContainer = document.querySelector('[data-appointments-container]');
+  const calendarSummaryPanel = document.querySelector('[data-calendar-summary-panel]');
+  const calendarSummaryList = calendarSummaryPanel
+    ? calendarSummaryPanel.querySelector('[data-calendar-summary-list]')
+    : null;
+  const calendarSummaryEmpty = calendarSummaryPanel
+    ? calendarSummaryPanel.querySelector('[data-calendar-summary-empty]')
+    : null;
+  const calendarSummaryTotalBadge = calendarSummaryPanel
+    ? calendarSummaryPanel.querySelector('[data-calendar-summary-total]')
+    : null;
   let newAppointmentCollapseInstance = null;
+
+  const calendarSummaryWeekdays = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
+
+  function padNumber(value) {
+    return String(value).padStart(2, '0');
+  }
+
+  function startOfDay(date) {
+    if (!(date instanceof Date) || Number.isNaN(date.getTime())) {
+      return null;
+    }
+    return new Date(date.getFullYear(), date.getMonth(), date.getDate());
+  }
+
+  function parseSummaryDate(value) {
+    if (!value) {
+      return null;
+    }
+    const parsed = new Date(value);
+    if (Number.isNaN(parsed.getTime())) {
+      return null;
+    }
+    return parsed;
+  }
+
+  function normalizeSummaryVetId(value) {
+    if (typeof window !== 'undefined'
+      && window.calendarVetColorManager
+      && typeof window.calendarVetColorManager.normalize === 'function') {
+      return window.calendarVetColorManager.normalize(value);
+    }
+    if (value === undefined || value === null) {
+      return null;
+    }
+    const normalized = String(value).trim();
+    return normalized || null;
+  }
+
+  function formatSummaryDateKey(date) {
+    if (!(date instanceof Date) || Number.isNaN(date.getTime())) {
+      return '';
+    }
+    return [
+      date.getFullYear(),
+      padNumber(date.getMonth() + 1),
+      padNumber(date.getDate()),
+    ].join('-');
+  }
+
+  function formatSummaryDayLabel(date) {
+    if (!(date instanceof Date) || Number.isNaN(date.getTime())) {
+      return '';
+    }
+    const weekday = calendarSummaryWeekdays[date.getDay()] || '';
+    return `${weekday} ${padNumber(date.getDate())}/${padNumber(date.getMonth() + 1)}`;
+  }
+
+  function deriveSummaryVetName(event, fallbackId) {
+    if (!event) {
+      return fallbackId ? `Profissional ${fallbackId}` : '';
+    }
+    const extended = event.extendedProps || {};
+    const preferredName = extended.veterinarioNome
+      || extended.veterinarioName
+      || extended.veterinarianName
+      || extended.vetName
+      || extended.nomeVeterinario;
+    if (preferredName) {
+      return preferredName;
+    }
+    const title = typeof event.title === 'string' ? event.title : '';
+    if (title.includes(' - ')) {
+      const possibleName = title.split(' - ').pop();
+      if (possibleName && possibleName.trim()) {
+        return possibleName.trim();
+      }
+    }
+    if (fallbackId) {
+      return `Profissional ${fallbackId}`;
+    }
+    return title || '';
+  }
+
+  function resolveSummaryColorClass(vetId) {
+    if (!vetId) {
+      return null;
+    }
+    if (typeof window !== 'undefined'
+      && window.calendarVetColorManager
+      && typeof window.calendarVetColorManager.getClass === 'function') {
+      return window.calendarVetColorManager.getClass(vetId);
+    }
+    return null;
+  }
+
+  function computeSummaryMetrics(events) {
+    const summaryMap = new Map();
+    const today = startOfDay(new Date());
+    const todayKey = formatSummaryDateKey(today);
+    const startOfWeek = today ? new Date(today) : null;
+    if (startOfWeek) {
+      const weekDayIndex = (startOfWeek.getDay() + 6) % 7;
+      startOfWeek.setDate(startOfWeek.getDate() - weekDayIndex);
+    }
+    const endOfWeek = startOfWeek ? new Date(startOfWeek) : null;
+    if (endOfWeek) {
+      endOfWeek.setDate(endOfWeek.getDate() + 7);
+    }
+
+    (Array.isArray(events) ? events : []).forEach(event => {
+      if (!event || !event.extendedProps) {
+        return;
+      }
+      const vetId = normalizeSummaryVetId(
+        event.extendedProps.veterinarioId
+        || event.extendedProps.vetId
+        || event.extendedProps.veterinarianId,
+      );
+      if (!vetId) {
+        return;
+      }
+      const eventDate = startOfDay(parseSummaryDate(event.start || event.startStr || event.date || null));
+      if (!eventDate) {
+        return;
+      }
+      const dateKey = formatSummaryDateKey(eventDate);
+      let entry = summaryMap.get(vetId);
+      if (!entry) {
+        entry = {
+          vetId,
+          vetName: deriveSummaryVetName(event, vetId),
+          total: 0,
+          today: 0,
+          thisWeek: 0,
+          byDate: new Map(),
+        };
+        summaryMap.set(vetId, entry);
+      } else if (!entry.vetName) {
+        entry.vetName = deriveSummaryVetName(event, vetId);
+      }
+      entry.total += 1;
+      if (todayKey && dateKey === todayKey) {
+        entry.today += 1;
+      }
+      if (startOfWeek && endOfWeek && eventDate >= startOfWeek && eventDate < endOfWeek) {
+        entry.thisWeek += 1;
+      }
+      const existing = entry.byDate.get(dateKey);
+      if (existing) {
+        existing.count += 1;
+      } else {
+        entry.byDate.set(dateKey, { count: 1, date: eventDate });
+      }
+    });
+
+    const rows = Array.from(summaryMap.values());
+    rows.sort((a, b) => {
+      if (b.thisWeek !== a.thisWeek) {
+        return b.thisWeek - a.thisWeek;
+      }
+      if (b.total !== a.total) {
+        return b.total - a.total;
+      }
+      const nameA = a.vetName || a.vetId;
+      const nameB = b.vetName || b.vetId;
+      return nameA.localeCompare(nameB, undefined, { numeric: true, sensitivity: 'base' });
+    });
+
+    const totalEvents = rows.reduce((acc, item) => acc + item.total, 0);
+
+    return { rows, totalEvents };
+  }
+
+  function getUpcomingSummaryDays(entry, limit = 4) {
+    if (!entry || !entry.byDate) {
+      return [];
+    }
+    const days = Array.from(entry.byDate.values())
+      .filter(item => item && item.date instanceof Date && !Number.isNaN(item.date.getTime()));
+    days.sort((a, b) => a.date - b.date);
+    const today = startOfDay(new Date());
+    const future = today ? days.filter(item => item.date >= today) : days;
+    const source = future.length ? future : days;
+    return source.slice(0, limit);
+  }
+
+  function renderCalendarSummary(events) {
+    if (!calendarSummaryPanel || !calendarSummaryList) {
+      return;
+    }
+    const { rows, totalEvents } = computeSummaryMetrics(events);
+    if (calendarSummaryTotalBadge) {
+      calendarSummaryTotalBadge.textContent = String(totalEvents);
+    }
+    calendarSummaryList.innerHTML = '';
+    if (!rows.length) {
+      if (calendarSummaryEmpty) {
+        calendarSummaryEmpty.classList.remove('d-none');
+      }
+      calendarSummaryPanel.classList.remove('has-data');
+      return;
+    }
+    calendarSummaryPanel.classList.add('has-data');
+    if (calendarSummaryEmpty) {
+      calendarSummaryEmpty.classList.add('d-none');
+    }
+
+    rows.forEach(entry => {
+      const item = document.createElement('div');
+      item.classList.add('calendar-summary-item');
+      const colorClass = resolveSummaryColorClass(entry.vetId);
+      if (colorClass) {
+        item.classList.add(colorClass);
+      }
+      item.dataset.vetId = entry.vetId;
+
+      const header = document.createElement('div');
+      header.classList.add('calendar-summary-header');
+
+      const nameWrapper = document.createElement('div');
+      nameWrapper.classList.add('calendar-summary-name');
+      const bullet = document.createElement('span');
+      bullet.classList.add('calendar-summary-bullet');
+      nameWrapper.appendChild(bullet);
+      const nameText = document.createElement('span');
+      nameText.textContent = entry.vetName || `Profissional ${entry.vetId}`;
+      nameWrapper.appendChild(nameText);
+      header.appendChild(nameWrapper);
+
+      const totalBadge = document.createElement('span');
+      totalBadge.classList.add('calendar-summary-total');
+      const totalLabel = document.createElement('span');
+      totalLabel.classList.add('label');
+      totalLabel.textContent = 'Total';
+      const totalValue = document.createElement('span');
+      totalValue.classList.add('value');
+      totalValue.textContent = String(entry.total);
+      totalBadge.appendChild(totalLabel);
+      totalBadge.appendChild(totalValue);
+      header.appendChild(totalBadge);
+
+      item.appendChild(header);
+
+      const metrics = document.createElement('div');
+      metrics.classList.add('calendar-summary-metrics');
+      const todayMetric = document.createElement('span');
+      todayMetric.classList.add('metric');
+      todayMetric.append('Hoje: ');
+      const todayValue = document.createElement('strong');
+      todayValue.textContent = String(entry.today);
+      todayMetric.appendChild(todayValue);
+      metrics.appendChild(todayMetric);
+
+      const weekMetric = document.createElement('span');
+      weekMetric.classList.add('metric');
+      weekMetric.append('Semana: ');
+      const weekValue = document.createElement('strong');
+      weekValue.textContent = String(entry.thisWeek);
+      weekMetric.appendChild(weekValue);
+      metrics.appendChild(weekMetric);
+
+      item.appendChild(metrics);
+
+      const upcomingDays = getUpcomingSummaryDays(entry);
+      if (upcomingDays.length) {
+        const dayList = document.createElement('div');
+        dayList.classList.add('calendar-summary-days');
+        upcomingDays.forEach(dayInfo => {
+          const dayItem = document.createElement('span');
+          dayItem.classList.add('calendar-summary-day');
+          const label = document.createElement('span');
+          label.classList.add('label');
+          label.textContent = formatSummaryDayLabel(dayInfo.date);
+          const count = document.createElement('span');
+          count.classList.add('count');
+          count.textContent = String(dayInfo.count);
+          dayItem.appendChild(label);
+          dayItem.appendChild(count);
+          dayList.appendChild(dayItem);
+        });
+        item.appendChild(dayList);
+      }
+
+      calendarSummaryList.appendChild(item);
+    });
+  }
+
+  if (calendarSummaryPanel) {
+    const initialEvents = Array.isArray(window.sharedCalendarEvents)
+      ? window.sharedCalendarEvents
+      : [];
+    renderCalendarSummary(initialEvents);
+    document.addEventListener('sharedCalendarEvents', event => {
+      const items = (event && event.detail && event.detail.events) || [];
+      renderCalendarSummary(items);
+    });
+  }
 
   function updateNewAppointmentToggleAria() {
     if (!newAppointmentCollapseEl || !newAppointmentToggleBtn) {
