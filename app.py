@@ -8124,6 +8124,25 @@ def appointments_calendar():
 @app.route('/appointments/<int:veterinario_id>/schedule/<int:horario_id>/edit', methods=['POST'])
 @login_required
 def edit_vet_schedule_slot(veterinario_id, horario_id):
+    wants_json = (
+        request.headers.get('X-Requested-With') == 'XMLHttpRequest'
+        or request.accept_mimetypes.best == 'application/json'
+    )
+
+    def json_response(success, status=200, message=None, errors=None, extra=None):
+        if not wants_json:
+            abort(status)
+        payload = {'success': success}
+        if message:
+            payload['message'] = message
+        if errors:
+            payload['errors'] = errors
+        if extra:
+            payload.update(extra)
+        response = jsonify(payload)
+        response.status_code = status
+        return response
+
     if not (
         _is_admin()
         or (
@@ -8132,10 +8151,14 @@ def edit_vet_schedule_slot(veterinario_id, horario_id):
             and current_user.veterinario.id == veterinario_id
         )
     ):
+        if wants_json:
+            return json_response(False, status=403, message='Você não tem permissão para editar este horário.')
         abort(403)
     veterinario = Veterinario.query.get_or_404(veterinario_id)
     horario = VetSchedule.query.get_or_404(horario_id)
     if not _is_admin() and horario.veterinario_id != veterinario_id:
+        if wants_json:
+            return json_response(False, status=403, message='Você não tem permissão para editar este horário.')
         abort(403)
     form = VetScheduleForm(prefix='schedule')
     if _is_admin():
@@ -8148,21 +8171,38 @@ def edit_vet_schedule_slot(veterinario_id, horario_id):
     if not _is_admin():
         raw_vet_id = request.form.get(form.veterinario_id.name)
         if raw_vet_id is None:
+            if wants_json:
+                return json_response(False, status=403, message='Você não tem permissão para editar este horário.')
             abort(403)
         try:
             submitted_vet_id = int(raw_vet_id)
         except (TypeError, ValueError):
+            if wants_json:
+                return json_response(False, status=403, message='Você não tem permissão para editar este horário.')
             abort(403)
         if submitted_vet_id != veterinario_id:
+            if wants_json:
+                return json_response(False, status=403, message='Você não tem permissão para editar este horário.')
             abort(403)
+    redirect_response = redirect(url_for('appointments'))
     if form.validate_on_submit():
         novo_vet = form.veterinario_id.data
         if not _is_admin() and novo_vet != veterinario_id:
+            if wants_json:
+                return json_response(False, status=403, message='Você não tem permissão para editar este horário.')
             abort(403)
-        dia = form.dias_semana.data[0]
+        dias = form.dias_semana.data
+        if not dias:
+            if wants_json:
+                return json_response(False, status=400, message='Selecione ao menos um dia da semana.')
+            flash('Selecione ao menos um dia da semana.', 'danger')
+            return redirect_response
+        dia = dias[0]
         inicio = form.hora_inicio.data
         fim = form.hora_fim.data
         if has_schedule_conflict(novo_vet, dia, inicio, fim, exclude_id=horario.id):
+            if wants_json:
+                return json_response(False, status=400, message='Conflito de horário.')
             flash('Conflito de horário.', 'danger')
         else:
             horario.veterinario_id = novo_vet
@@ -8172,8 +8212,31 @@ def edit_vet_schedule_slot(veterinario_id, horario_id):
             horario.intervalo_inicio = form.intervalo_inicio.data
             horario.intervalo_fim = form.intervalo_fim.data
             db.session.commit()
+            if wants_json:
+                return json_response(
+                    True,
+                    message='Horário atualizado com sucesso.',
+                    extra={
+                        'schedule': {
+                            'id': horario.id,
+                            'veterinario_id': horario.veterinario_id,
+                            'dia_semana': horario.dia_semana,
+                            'hora_inicio': horario.hora_inicio.strftime('%H:%M') if horario.hora_inicio else None,
+                            'hora_fim': horario.hora_fim.strftime('%H:%M') if horario.hora_fim else None,
+                            'intervalo_inicio': horario.intervalo_inicio.strftime('%H:%M') if horario.intervalo_inicio else None,
+                            'intervalo_fim': horario.intervalo_fim.strftime('%H:%M') if horario.intervalo_fim else None,
+                        }
+                    }
+                )
             flash('Horário atualizado com sucesso.', 'success')
-    return redirect(url_for('appointments'))
+        return redirect_response
+    if wants_json:
+        errors = form.errors or {}
+        flat_errors = [err for field_errors in errors.values() for err in field_errors]
+        message = flat_errors[0] if flat_errors else 'Não foi possível atualizar o horário.'
+        return json_response(False, status=400, message=message, errors=errors if errors else None)
+    flash('Não foi possível atualizar o horário. Verifique os dados e tente novamente.', 'danger')
+    return redirect_response
 
 
 @app.route('/appointments/<int:veterinario_id>/schedule/<int:horario_id>/delete', methods=['POST'])
