@@ -386,6 +386,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const calendarSummaryTotalBadge = calendarSummaryPanel
     ? calendarSummaryPanel.querySelector('[data-calendar-summary-total]')
     : null;
+  let activeCalendarSummaryVetId = null;
   let newAppointmentCollapseInstance = null;
 
   const calendarSummaryWeekdays = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
@@ -573,6 +574,28 @@ document.addEventListener('DOMContentLoaded', () => {
     return source.slice(0, limit);
   }
 
+  function refreshCalendarSummaryActiveState() {
+    if (!calendarSummaryList) {
+      return;
+    }
+    const items = calendarSummaryList.querySelectorAll('.calendar-summary-item');
+    items.forEach(element => {
+      const elementVetId = normalizeSummaryVetId(
+        element && element.dataset ? element.dataset.vetId : null,
+      );
+      if (activeCalendarSummaryVetId && elementVetId === activeCalendarSummaryVetId) {
+        element.classList.add('is-active');
+      } else {
+        element.classList.remove('is-active');
+      }
+    });
+  }
+
+  function setActiveCalendarSummaryItem(vetId) {
+    activeCalendarSummaryVetId = vetId ? normalizeSummaryVetId(vetId) : null;
+    refreshCalendarSummaryActiveState();
+  }
+
   function renderCalendarSummary(events) {
     if (!calendarSummaryPanel || !calendarSummaryList) {
       return;
@@ -672,6 +695,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
       calendarSummaryList.appendChild(item);
     });
+
+    refreshCalendarSummaryActiveState();
   }
 
   if (calendarSummaryPanel) {
@@ -682,6 +707,33 @@ document.addEventListener('DOMContentLoaded', () => {
     document.addEventListener('sharedCalendarEvents', event => {
       const items = (event && event.detail && event.detail.events) || [];
       renderCalendarSummary(items);
+    });
+  }
+
+  if (calendarSummaryList) {
+    calendarSummaryList.addEventListener('click', event => {
+      const isTextNode = typeof Node !== 'undefined'
+        && event.target
+        && event.target.nodeType === Node.TEXT_NODE;
+      const origin = isTextNode ? event.target.parentElement : event.target;
+      const targetItem = origin && typeof origin.closest === 'function'
+        ? origin.closest('.calendar-summary-item')
+        : null;
+      if (!targetItem || !calendarSummaryList.contains(targetItem)) {
+        return;
+      }
+      const rawVetId = targetItem.dataset ? targetItem.dataset.vetId : null;
+      const normalizedVetId = normalizeSummaryVetId(rawVetId);
+      const isCurrentlyActive = Boolean(
+        activeCalendarSummaryVetId !== null
+        && normalizedVetId !== null
+        && normalizedVetId === activeCalendarSummaryVetId,
+      );
+      const nextActiveVetId = isCurrentlyActive ? null : normalizedVetId;
+      setActiveCalendarSummaryItem(nextActiveVetId);
+      if (typeof window.updateCalendarVetSelection === 'function') {
+        window.updateCalendarVetSelection(nextActiveVetId, { activate: true, refetch: true });
+      }
     });
   }
 
