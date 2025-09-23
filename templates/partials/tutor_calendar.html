@@ -1661,6 +1661,65 @@ document.addEventListener('DOMContentLoaded', function() {
     return null;
   }
 
+  function findEventByRecordId(recordId) {
+    if (recordId === undefined || recordId === null) {
+      return null;
+    }
+    const target = String(recordId);
+    if (!target) {
+      return null;
+    }
+    const match = events.find(function(eventItem) {
+      if (!eventItem) {
+        return false;
+      }
+      if (eventItem.recordId !== undefined && eventItem.recordId !== null && String(eventItem.recordId) === target) {
+        return true;
+      }
+      const ext = eventItem.raw && eventItem.raw.extendedProps ? eventItem.raw.extendedProps : null;
+      return Boolean(ext && ext.recordId !== undefined && ext.recordId !== null && String(ext.recordId) === target);
+    });
+    return match || null;
+  }
+
+  function findEventByKey(eventKey) {
+    if (eventKey === undefined || eventKey === null) {
+      return null;
+    }
+    const target = String(eventKey);
+    if (!target) {
+      return null;
+    }
+    const directMatch = events.find(function(eventItem) {
+      const key = getEventKey(eventItem);
+      return Boolean(key && String(key) === target);
+    });
+    if (directMatch) {
+      return directMatch;
+    }
+    if (target.indexOf('appointment-') === 0) {
+      return findEventByRecordId(target.substring('appointment-'.length));
+    }
+    return null;
+  }
+
+  function findEventFromElement(element) {
+    if (!element) {
+      return null;
+    }
+    const dataset = element.dataset || {};
+    if (dataset.eventId) {
+      const byKey = findEventByKey(dataset.eventId);
+      if (byKey) {
+        return byKey;
+      }
+    }
+    if (dataset.recordId) {
+      return findEventByRecordId(dataset.recordId);
+    }
+    return null;
+  }
+
   function fillUrlWithId(template, id) {
     if (!template || id === undefined || id === null) {
       return null;
@@ -2592,6 +2651,7 @@ document.addEventListener('DOMContentLoaded', function() {
         if (evt.target && evt.target.closest(interactiveSelector)) {
           return;
         }
+        evt.preventDefault();
         evt.stopPropagation();
       }
       openDetailView();
@@ -3661,6 +3721,51 @@ document.addEventListener('DOMContentLoaded', function() {
   dayDetailBackdrop && dayDetailBackdrop.addEventListener('click', function() {
     closeDayDetail({ restoreFocus: true });
   });
+
+  if (dayDetailContent) {
+    dayDetailContent.addEventListener('click', function(event) {
+      if (event.defaultPrevented) {
+        return;
+      }
+      const card = event.target && event.target.closest('.tutor-calendar__day-detail-card');
+      if (!card) {
+        return;
+      }
+      const interactiveSelector = 'a, button, input, textarea, select, [role="button"], [data-ignore-card-click]';
+      if (event.target && event.target.closest(interactiveSelector)) {
+        return;
+      }
+      const eventData = findEventFromElement(card);
+      if (!eventData) {
+        return;
+      }
+      event.preventDefault();
+      event.stopPropagation();
+      showEventDetails(eventData, { trigger: card });
+    });
+
+    dayDetailContent.addEventListener('keydown', function(event) {
+      if (!event || event.defaultPrevented) {
+        return;
+      }
+      const card = event.target && event.target.closest('.tutor-calendar__day-detail-card');
+      if (!card || event.target !== card) {
+        return;
+      }
+      const isEnter = event.key === 'Enter';
+      const isSpace = event.key === ' ' || event.key === 'Spacebar';
+      if (!isEnter && !isSpace) {
+        return;
+      }
+      const eventData = findEventFromElement(card);
+      if (!eventData) {
+        return;
+      }
+      event.preventDefault();
+      event.stopPropagation();
+      showEventDetails(eventData, { trigger: card });
+    });
+  }
 
   if (dayDetailContainer) {
     dayDetailContainer.addEventListener('keydown', function(event) {
