@@ -1,3 +1,5 @@
+import { submitAppointmentUpdate } from './appointments_shared.js';
+
 const EMPTY_STATE_HTML = `
   <div class="empty-state">
     <span class="icon-circle bg-secondary text-white"><i class="fa-regular fa-calendar-xmark"></i></span>
@@ -5,6 +7,9 @@ const EMPTY_STATE_HTML = `
     <p>Não há agendamentos para exibir no momento.</p>
   </div>
 `;
+
+const UPDATE_ERROR_MESSAGE = 'Erro ao salvar. Verifique os dados e tente novamente.';
+const UPDATE_SUCCESS_MESSAGE = 'Agendamento atualizado com sucesso.';
 
 function parseHTML(html) {
   if (!html) {
@@ -312,28 +317,18 @@ function attachAppointmentFormHandler(form, { url, row, modalBody, bsModal }) {
     }
 
     try {
-      const response = await fetch(url, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-CSRFToken': token
-        },
-        body: JSON.stringify(payload)
+      const result = await submitAppointmentUpdate(url, payload, token, {
+        defaultErrorMessage: UPDATE_ERROR_MESSAGE,
+        successMessage: UPDATE_SUCCESS_MESSAGE
       });
-      let data = null;
-      try {
-        data = await response.json();
-      } catch (err) {
-        data = null;
-      }
 
-      if (!response.ok || !data || !data.success) {
-        const message = (data && data.message) ? data.message : 'Erro ao salvar. Verifique os dados e tente novamente.';
-        showModalAlert(modalBody, 'danger', message);
+      if (!result.success || !result.data) {
+        showModalAlert(modalBody, 'danger', result.message || UPDATE_ERROR_MESSAGE);
         return;
       }
 
-      showModalAlert(modalBody, 'success', data.message || 'Agendamento atualizado com sucesso.');
+      const data = result.data;
+      showModalAlert(modalBody, 'success', result.message || UPDATE_SUCCESS_MESSAGE);
 
       let updated = false;
       if (data.card_html) {
@@ -369,6 +364,10 @@ function attachAppointmentFormHandler(form, { url, row, modalBody, bsModal }) {
       }
     }
   });
+}
+
+if (typeof window !== 'undefined') {
+  window.bindAppointmentRowClicks = bindAppointmentRowClicks;
 }
 
 document.addEventListener('DOMContentLoaded', bindAppointmentRowClicks);
