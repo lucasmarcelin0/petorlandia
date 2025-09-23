@@ -29,7 +29,7 @@
     {% endif %}
   {% endif %}
   <div class="row g-4 align-items-stretch mb-4" id="appointments-calendar-overview">
-    <div class="col-12 col-xl-8 col-xxl-9">
+    <div class="col-12 col-xl-8 col-xxl-9" data-calendar-main-column>
       <ul class="nav nav-pills mb-3" id="appointments-calendar-tabs" role="tablist">
         <li class="nav-item" role="presentation">
           <button
@@ -42,7 +42,7 @@
             aria-controls="calendar-pane-full"
             aria-selected="true"
           >
-            <i class="bi bi-calendar3 me-1"></i> Calendário mensal
+            <i class="bi bi-calendar3 me-1"></i> Agendamento
           </button>
         </li>
         <li class="nav-item" role="presentation">
@@ -56,7 +56,7 @@
             aria-controls="calendar-pane-experimental"
             aria-selected="false"
           >
-            <i class="bi bi-layout-text-window-reverse me-1"></i> Calendário visual
+            <i class="bi bi-layout-text-window-reverse me-1"></i> Calendário
           </button>
         </li>
       </ul>
@@ -86,7 +86,7 @@
         </div>
       </div>
     </div>
-    <div class="col-12 col-xl-4 col-xxl-3">
+    <div class="col-12 col-xl-4 col-xxl-3" data-calendar-summary-column>
       <div class="card calendar-summary-card border-0 shadow-sm h-100" data-calendar-summary-panel>
         <div class="card-header bg-white border-0 pb-0">
           <div class="d-flex align-items-center justify-content-between gap-2">
@@ -390,10 +390,57 @@ document.addEventListener('DOMContentLoaded', () => {
   const calendarSummaryTotalBadge = calendarSummaryPanel
     ? calendarSummaryPanel.querySelector('[data-calendar-summary-total]')
     : null;
+  const calendarSummaryColumn = document.querySelector('[data-calendar-summary-column]');
+  const calendarMainColumn = document.querySelector('[data-calendar-main-column]');
+  const calendarTabButtons = document.querySelectorAll('#appointments-calendar-tabs [data-bs-toggle="tab"]');
+  const calendarMainColumnVisibleClasses = ['col-xl-8', 'col-xxl-9'];
+  const calendarMainColumnFullWidthClasses = ['col-xl-12', 'col-xxl-12'];
   let activeCalendarSummaryVetId = null;
   let newAppointmentCollapseInstance = null;
 
   const calendarSummaryWeekdays = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
+
+  function setCalendarSummaryVisibility(shouldShow) {
+    if (calendarSummaryColumn) {
+      calendarSummaryColumn.classList.toggle('d-none', !shouldShow);
+    }
+    if (calendarMainColumn) {
+      calendarMainColumnVisibleClasses.forEach((className) => {
+        calendarMainColumn.classList.toggle(className, shouldShow);
+      });
+      calendarMainColumnFullWidthClasses.forEach((className) => {
+        calendarMainColumn.classList.toggle(className, !shouldShow);
+      });
+    }
+  }
+
+  function updateCalendarSummaryVisibilityFromTarget(targetSelector) {
+    const normalized = typeof targetSelector === 'string'
+      ? targetSelector.trim()
+      : '';
+    const shouldShow = normalized === '#calendar-pane-full'
+      || normalized === 'calendar-pane-full'
+      || normalized === '';
+    setCalendarSummaryVisibility(shouldShow);
+  }
+
+  if (calendarTabButtons.length > 0) {
+    calendarTabButtons.forEach((button) => {
+      button.addEventListener('shown.bs.tab', (event) => {
+        const target = event.target
+          ? event.target.getAttribute('data-bs-target')
+          : '';
+        updateCalendarSummaryVisibilityFromTarget(target);
+      });
+    });
+  }
+
+  const activeCalendarTab = document.querySelector('#appointments-calendar-tabs .nav-link.active[data-bs-target]');
+  if (activeCalendarTab) {
+    updateCalendarSummaryVisibilityFromTarget(activeCalendarTab.getAttribute('data-bs-target'));
+  } else {
+    updateCalendarSummaryVisibilityFromTarget('#calendar-pane-full');
+  }
 
   function padNumber(value) {
     return String(value).padStart(2, '0');
