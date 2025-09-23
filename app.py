@@ -8750,7 +8750,13 @@ def api_specialist_available_times(veterinario_id):
         return jsonify([])
     date_obj = datetime.strptime(date_str, '%Y-%m-%d').date()
     kind = request.args.get('kind', 'consulta')
-    times = get_available_times(veterinario_id, date_obj, kind=kind)
+    include_booked = request.args.get('include_booked', '').lower() in ('1', 'true', 'yes', 'on')
+    times = get_available_times(
+        veterinario_id,
+        date_obj,
+        kind=kind,
+        include_booked=include_booked,
+    )
     return jsonify(times)
 
 
