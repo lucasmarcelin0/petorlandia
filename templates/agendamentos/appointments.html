@@ -500,58 +500,11 @@ document.addEventListener('DOMContentLoaded', () => {
     return false;
   }
 
-  function getCalendarTabTarget(button) {
-    if (!button) {
-      return '';
-    }
-    const attributeTarget = button.getAttribute('data-bs-target');
-    if (attributeTarget && attributeTarget.trim()) {
-      return normalizeCalendarTabTarget(attributeTarget);
-    }
-    if (button.dataset && button.dataset.bsTarget) {
-      return normalizeCalendarTabTarget(button.dataset.bsTarget);
-    }
-    return '';
-  }
-
-  function hideCalendarTab(button) {
-    if (!button) {
-      return;
-    }
-
-    const targetSelector = getCalendarTabTarget(button);
-    const targetPane = targetSelector ? document.querySelector(targetSelector) : null;
-
-    button.classList.remove('active');
-    button.setAttribute('aria-selected', 'false');
-    button.setAttribute('tabindex', '0');
-
-    const parentNavItem = button.closest('.nav-item');
-    if (parentNavItem) {
-      parentNavItem.classList.remove('active');
-    }
-
-    if (targetPane) {
-      targetPane.classList.remove('show', 'active');
-    }
-
-    storeCalendarActiveTab('');
-    updateCalendarSummaryVisibilityFromTarget('');
-  }
-
   if (calendarTabButtons.length > 0) {
     const calendarTabButtonsArray = Array.prototype.slice.call(calendarTabButtons);
     const storedCalendarTabTarget = getStoredCalendarActiveTab();
 
     calendarTabButtonsArray.forEach((button) => {
-      button.addEventListener('click', (event) => {
-        if (button.classList.contains('active')) {
-          event.preventDefault();
-          event.stopPropagation();
-          hideCalendarTab(button);
-        }
-      });
-
       button.addEventListener('shown.bs.tab', (event) => {
         const target = event && event.target
           ? event.target.getAttribute('data-bs-target')
