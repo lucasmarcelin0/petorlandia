@@ -105,6 +105,8 @@
               class="tutor-calendar__day-detail"
               data-day-detail
               aria-live="polite"
+              aria-label="Detalhes do dia selecionado"
+              tabindex="-1"
             >
               <div class="tutor-calendar__day-detail-placeholder text-muted small">
                 Selecione um dia para ver os compromissos.
@@ -1047,6 +1049,8 @@ document.addEventListener('DOMContentLoaded', function() {
       return;
     }
 
+    dayDetailContainer.setAttribute('aria-busy', 'true');
+
     const explicitDate = typeof dateKey === 'string' && dateKey ? dateKey : null;
     let targetDateKey = explicitDate || selectedDate || null;
     if (!targetDateKey) {
@@ -1107,6 +1111,8 @@ document.addEventListener('DOMContentLoaded', function() {
 
     updateSelectedDateHighlight();
 
+    dayDetailContainer.setAttribute('aria-busy', 'false');
+
     if (explicitDate && typeof window !== 'undefined' && typeof window.matchMedia === 'function') {
       const isMobile = window.matchMedia('(max-width: 991.98px)').matches;
       if (isMobile) {
@@ -1115,6 +1121,14 @@ document.addEventListener('DOMContentLoaded', function() {
         } catch (error) {
           dayDetailContainer.scrollIntoView();
         }
+      }
+    }
+
+    if (explicitDate && typeof dayDetailContainer.focus === 'function') {
+      try {
+        dayDetailContainer.focus({ preventScroll: true });
+      } catch (error) {
+        dayDetailContainer.focus();
       }
     }
   }
