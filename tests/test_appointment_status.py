@@ -1,6 +1,13 @@
+import os
+import sys
+
 import pytest
 import flask_login.utils as login_utils
 from datetime import datetime, timedelta
+
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+
+os.environ.setdefault("SQLALCHEMY_DATABASE_URI", "sqlite:///:memory:")
 
 from app import app as flask_app, db
 from models import User, Clinica, Veterinario, Animal, Appointment, HealthPlan, HealthSubscription
@@ -71,3 +78,61 @@ def test_update_status_and_delete(client, monkeypatch):
     assert resp.status_code == 302
     with flask_app.app_context():
         assert Appointment.query.get(appt_id) is None
+
+
+def test_admin_impersonating_collaborator_can_update_and_delete(client, monkeypatch):
+    with flask_app.app_context():
+        appt_id, _clinic_id = _setup_data()
+        admin = User(id=50, name="Admin", email="admin@test", role='admin')
+        admin.set_password("x")
+        db.session.add(admin)
+        db.session.commit()
+        admin_id = admin.id
+
+    admin_identity = type('U', (), {
+        'id': admin_id,
+        'worker': 'colaborador',
+        'role': 'admin',
+        'is_authenticated': True,
+        'clinica_id': None,
+    })()
+
+    login(monkeypatch, admin_identity)
+
+    resp = client.post(f'/appointments/{appt_id}/status', data={'status': 'completed'})
+    assert resp.status_code == 302
+    with flask_app.app_context():
+        appt = Appointment.query.get(appt_id)
+        assert appt.status == 'completed'
+
+    resp = client.post(f'/appointments/{appt_id}/delete', data={})
+    assert resp.status_code == 302
+    with flask_app.app_context():
+        assert Appointment.query.get(appt_id) is None
+
+
+def test_unrelated_tutor_cannot_update_or_delete(client, monkeypatch):
+    with flask_app.app_context():
+        appt_id, _clinic_id = _setup_data()
+        outsider = User(id=60, name="Other", email="other@test")
+        outsider.set_password("x")
+        db.session.add(outsider)
+        db.session.commit()
+        outsider_id = outsider.id
+
+    tutor_identity = type('U', (), {
+        'id': outsider_id,
+        'worker': None,
+        'role': 'adotante',
+        'is_authenticated': True,
+        'clinica_id': None,
+    })()
+
+    login(monkeypatch, tutor_identity)
+
+    resp = client.post(f'/appointments/{appt_id}/status', data={'status': 'completed'})
+    assert resp.status_code == 403
+    resp = client.post(f'/appointments/{appt_id}/delete', data={})
+    assert resp.status_code == 403
+    with flask_app.app_context():
+        assert Appointment.query.get(appt_id) is not None
