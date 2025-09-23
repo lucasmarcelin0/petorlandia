@@ -101,17 +101,32 @@
               <div class="tutor-calendar__days" data-calendar-grid></div>
               <div class="tutor-calendar__week d-none" data-week-view></div>
             </div>
-            <aside
-              class="tutor-calendar__day-detail"
-              data-day-detail
-              aria-live="polite"
-              aria-label="Detalhes do dia selecionado"
-              tabindex="-1"
-            >
-              <div class="tutor-calendar__day-detail-placeholder text-muted small">
-                Selecione um dia para ver os compromissos.
-              </div>
-            </aside>
+            <div class="tutor-calendar__day-detail-layer" data-day-detail-layer>
+              <div class="tutor-calendar__day-detail-backdrop" data-day-detail-backdrop></div>
+              <aside
+                class="tutor-calendar__day-detail"
+                data-day-detail
+                aria-live="polite"
+                aria-label="Detalhes do dia selecionado"
+                tabindex="-1"
+                aria-busy="false"
+                aria-hidden="true"
+              >
+                <button
+                  type="button"
+                  class="tutor-calendar__day-detail-close"
+                  data-close-day-detail
+                  aria-label="Fechar detalhes do dia"
+                >
+                  <i class="bi bi-x-lg" aria-hidden="true"></i>
+                </button>
+                <div class="tutor-calendar__day-detail-content" data-day-detail-content>
+                  <div class="tutor-calendar__day-detail-placeholder text-muted small">
+                    Selecione um dia para ver os compromissos.
+                  </div>
+                </div>
+              </aside>
+            </div>
           </div>
         </div>
       </div>
@@ -250,10 +265,14 @@
 
 #{{ component_id }} .tutor-calendar__week-day-card .tutor-calendar__event-list {
   flex-grow: 1;
+  overflow: visible;
+  max-height: none;
+  padding-right: 0;
 }
 
 #{{ component_id }} .tutor-calendar__day {
-  min-height: 110px;
+  min-height: 160px;
+  max-height: 220px;
   border-radius: 1rem;
   padding: 0.75rem;
   background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
@@ -263,6 +282,7 @@
   gap: 0.5rem;
   transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
   cursor: pointer;
+  overflow: hidden;
 }
 
 #{{ component_id }} .tutor-calendar__day:hover {
@@ -312,35 +332,128 @@
   gap: 0.5rem;
 }
 
+#{{ component_id }} .tutor-calendar__day .tutor-calendar__event-list {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding-right: 0.25rem;
+  scrollbar-width: thin;
+}
+
+#{{ component_id }} .tutor-calendar__day .tutor-calendar__event-list::-webkit-scrollbar {
+  width: 4px;
+}
+
+#{{ component_id }} .tutor-calendar__day .tutor-calendar__event-list::-webkit-scrollbar-thumb {
+  background: rgba(148, 163, 184, 0.4);
+  border-radius: 999px;
+}
+
 #{{ component_id }} .tutor-calendar__layout {
-  display: flex;
-  flex-direction: column;
-  gap: 1.5rem;
+  position: relative;
+  min-height: 420px;
 }
 
 #{{ component_id }} .tutor-calendar__schedule {
-  flex: 1 1 auto;
-  min-width: 0;
+  position: relative;
+  z-index: 1;
   display: flex;
   flex-direction: column;
   gap: 0.75rem;
+  min-width: 0;
+}
+
+#{{ component_id }} .tutor-calendar__day-detail-layer {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  pointer-events: none;
+  visibility: hidden;
+  transition: visibility 0s linear 0.2s;
+  z-index: 5;
+  padding: 0.5rem;
+}
+
+#{{ component_id }} .tutor-calendar__day-detail-layer.is-open {
+  pointer-events: auto;
+  visibility: visible;
+  transition-delay: 0s;
+}
+
+#{{ component_id }} .tutor-calendar__day-detail-backdrop {
+  position: absolute;
+  inset: 0;
+  border-radius: 1rem;
+  background: rgba(15, 23, 42, 0.25);
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+#{{ component_id }} .tutor-calendar__day-detail-layer.is-open .tutor-calendar__day-detail-backdrop {
+  opacity: 1;
 }
 
 #{{ component_id }} .tutor-calendar__day-detail {
-  flex: 1 1 auto;
+  position: relative;
+  margin: 1rem;
+  width: min(420px, calc(100% - 2rem));
+  max-height: min(80vh, 520px);
+  overflow-y: auto;
   border-radius: 1rem;
   border: 1px solid rgba(148, 163, 184, 0.35);
   background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
-  box-shadow: 0 18px 36px rgba(15, 23, 42, 0.08);
-  padding: 1rem 1.25rem;
-  max-height: 100%;
-  overflow-y: auto;
-  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+  box-shadow: 0 18px 36px rgba(15, 23, 42, 0.18);
+  padding: 1.25rem 1.5rem;
+  opacity: 0;
+  transform: translateY(1rem) scale(0.98);
+  transition: transform 0.25s ease, opacity 0.25s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+  outline: none;
+}
+
+#{{ component_id }} .tutor-calendar__day-detail-layer.is-open .tutor-calendar__day-detail {
+  opacity: 1;
+  transform: translateY(0) scale(1);
 }
 
 #{{ component_id }} .tutor-calendar__day-detail:hover {
   border-color: rgba(99, 102, 241, 0.45);
-  box-shadow: 0 22px 40px rgba(99, 102, 241, 0.16);
+  box-shadow: 0 22px 40px rgba(99, 102, 241, 0.2);
+}
+
+#{{ component_id }} .tutor-calendar__day-detail-close {
+  position: absolute;
+  top: 0.75rem;
+  right: 0.75rem;
+  border: none;
+  background: rgba(15, 23, 42, 0.05);
+  color: var(--bs-gray-700);
+  border-radius: 50%;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.2s ease, color 0.2s ease, transform 0.2s ease;
+}
+
+#{{ component_id }} .tutor-calendar__day-detail-close:hover,
+#{{ component_id }} .tutor-calendar__day-detail-close:focus {
+  background: rgba(99, 102, 241, 0.16);
+  color: #4338ca;
+  transform: scale(1.05);
+}
+
+#{{ component_id }} .tutor-calendar__day-detail-close:focus {
+  outline: 0;
+  box-shadow: 0 0 0 0.2rem rgba(99, 102, 241, 0.25);
+}
+
+#{{ component_id }} .tutor-calendar__day-detail-content {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
 }
 
 #{{ component_id }} .tutor-calendar__day-detail-placeholder {
@@ -353,7 +466,8 @@
   align-items: baseline;
   justify-content: space-between;
   gap: 0.75rem;
-  margin-bottom: 1rem;
+  margin-bottom: 0.75rem;
+  padding-right: 2.25rem;
 }
 
 #{{ component_id }} .tutor-calendar__day-detail-date {
@@ -474,15 +588,27 @@
   background: linear-gradient(180deg, #eef2ff 0%, #ffffff 100%);
 }
 
-@media (min-width: 992px) {
-  #{{ component_id }} .tutor-calendar__layout {
-    flex-direction: row;
-    align-items: stretch;
+@media (max-width: 767.98px) {
+  #{{ component_id }} .tutor-calendar__day-detail-layer {
+    justify-content: center;
+    padding: 0.75rem;
   }
 
   #{{ component_id }} .tutor-calendar__day-detail {
-    flex: 0 0 320px;
-    max-height: 480px;
+    margin: 0.5rem auto;
+    width: min(100%, 520px);
+    max-height: min(85vh, 560px);
+  }
+}
+
+@media (min-width: 768px) {
+  #{{ component_id }} .tutor-calendar__day-detail-layer {
+    justify-content: flex-end;
+    padding: 1.5rem 1rem;
+  }
+
+  #{{ component_id }} .tutor-calendar__day-detail {
+    margin: 0;
   }
 }
 
@@ -547,8 +673,9 @@
   }
 
   #{{ component_id }} .tutor-calendar__day {
-    min-height: 92px;
-    padding: 0.6rem;
+    min-height: 140px;
+    max-height: 200px;
+    padding: 0.65rem;
   }
 
   #{{ component_id }} .tutor-calendar__week {
@@ -566,11 +693,6 @@
 
   #{{ component_id }} .tutor-calendar__layout {
     gap: 1rem;
-  }
-
-  #{{ component_id }} .tutor-calendar__day-detail {
-    padding: 0.9rem 1rem;
-    max-height: none;
   }
 
   #{{ component_id }} .tutor-calendar__day-detail-info {
@@ -593,6 +715,10 @@ document.addEventListener('DOMContentLoaded', function() {
   const weekViewEl = root.querySelector('[data-week-view]');
   const weekdaysEl = root.querySelector('[data-weekdays]');
   const dayDetailContainer = root.querySelector('[data-day-detail]');
+  const dayDetailLayer = root.querySelector('[data-day-detail-layer]');
+  const dayDetailBackdrop = root.querySelector('[data-day-detail-backdrop]');
+  const dayDetailCloseBtn = root.querySelector('[data-close-day-detail]');
+  const dayDetailContent = root.querySelector('[data-day-detail-content]');
   const monthLabelEl = root.querySelector('[data-month-label]');
   const yearLabelEl = root.querySelector('[data-year-label]');
   const prevBtn = root.querySelector('[data-prev-month]');
@@ -617,6 +743,49 @@ document.addEventListener('DOMContentLoaded', function() {
   let currentFilter = 'all';
   let selectedDate = formatDateKey(new Date());
   let usingSharedCalendar = false;
+  let isDayDetailOpen = false;
+  let lastDetailTrigger = null;
+
+  function openDayDetail(options) {
+    if (!dayDetailLayer || !dayDetailContainer) {
+      return;
+    }
+    const opts = options && typeof options === 'object' ? options : {};
+    const trigger = opts.trigger;
+    if (trigger && typeof trigger.focus === 'function') {
+      lastDetailTrigger = trigger;
+    }
+    isDayDetailOpen = true;
+    dayDetailLayer.classList.add('is-open');
+    dayDetailContainer.classList.add('is-open');
+    dayDetailContainer.setAttribute('aria-hidden', 'false');
+    if (opts.focus !== false && typeof dayDetailContainer.focus === 'function') {
+      try {
+        dayDetailContainer.focus({ preventScroll: true });
+      } catch (error) {
+        dayDetailContainer.focus();
+      }
+    }
+  }
+
+  function closeDayDetail(options) {
+    if (!dayDetailLayer || !dayDetailContainer) {
+      return;
+    }
+    const opts = options && typeof options === 'object' ? options : {};
+    isDayDetailOpen = false;
+    dayDetailLayer.classList.remove('is-open');
+    dayDetailContainer.classList.remove('is-open');
+    dayDetailContainer.setAttribute('aria-hidden', 'true');
+    const focusTarget = opts.trigger || lastDetailTrigger;
+    if (opts.restoreFocus !== false && focusTarget && typeof focusTarget.focus === 'function') {
+      try {
+        focusTarget.focus({ preventScroll: true });
+      } catch (error) {
+        focusTarget.focus();
+      }
+    }
+  }
 
   function parseDate(value) {
     if (!value) {
@@ -882,7 +1051,8 @@ document.addEventListener('DOMContentLoaded', function() {
       if (dateKey) {
         selectedDate = dateKey;
       }
-      showEventDetails(eventData);
+      lastDetailTrigger = el;
+      showEventDetails(eventData, { trigger: el });
     });
 
     return el;
@@ -1044,12 +1214,16 @@ document.addEventListener('DOMContentLoaded', function() {
     });
   }
 
-  function renderDayDetail(dateKey) {
-    if (!dayDetailContainer) {
+  function renderDayDetail(dateKey, options) {
+    if (!dayDetailContainer || !dayDetailContent) {
       return;
     }
 
     dayDetailContainer.setAttribute('aria-busy', 'true');
+
+    const opts = options && typeof options === 'object' ? options : {};
+    const shouldOpen = Boolean(opts.open);
+    const shouldFocus = opts.focus !== false;
 
     const explicitDate = typeof dateKey === 'string' && dateKey ? dateKey : null;
     let targetDateKey = explicitDate || selectedDate || null;
@@ -1075,8 +1249,8 @@ document.addEventListener('DOMContentLoaded', function() {
       return event.type === currentFilter;
     }).sort(sortEventsByStart);
 
-    dayDetailContainer.innerHTML = '';
     dayDetailContainer.dataset.date = targetDateKey;
+    dayDetailContent.innerHTML = '';
 
     const header = document.createElement('div');
     header.className = 'tutor-calendar__day-detail-header';
@@ -1092,7 +1266,7 @@ document.addEventListener('DOMContentLoaded', function() {
     countEl.textContent = countLabel;
     header.appendChild(countEl);
 
-    dayDetailContainer.appendChild(header);
+    dayDetailContent.appendChild(header);
 
     if (!dayEvents.length) {
       const emptyState = document.createElement('div');
@@ -1100,48 +1274,40 @@ document.addEventListener('DOMContentLoaded', function() {
       emptyState.textContent = currentFilter === 'all'
         ? 'Nenhum compromisso cadastrado para este dia.'
         : 'Nenhum compromisso para este filtro neste dia.';
-      dayDetailContainer.appendChild(emptyState);
+      dayDetailContent.appendChild(emptyState);
     } else {
       const fragment = document.createDocumentFragment();
       dayEvents.forEach(function(eventItem) {
         fragment.appendChild(buildDayDetailCard(eventItem));
       });
-      dayDetailContainer.appendChild(fragment);
+      dayDetailContent.appendChild(fragment);
     }
 
     updateSelectedDateHighlight();
 
     dayDetailContainer.setAttribute('aria-busy', 'false');
 
-    if (explicitDate && typeof window !== 'undefined' && typeof window.matchMedia === 'function') {
-      const isMobile = window.matchMedia('(max-width: 991.98px)').matches;
-      if (isMobile) {
-        try {
-          dayDetailContainer.scrollIntoView({ behavior: 'smooth', block: 'start' });
-        } catch (error) {
-          dayDetailContainer.scrollIntoView();
-        }
-      }
-    }
-
-    if (explicitDate && typeof dayDetailContainer.focus === 'function') {
-      try {
-        dayDetailContainer.focus({ preventScroll: true });
-      } catch (error) {
-        dayDetailContainer.focus();
-      }
+    if (shouldOpen) {
+      openDayDetail({ focus: shouldFocus, trigger: opts.trigger });
+    } else if (!isDayDetailOpen) {
+      dayDetailContainer.setAttribute('aria-hidden', 'true');
     }
   }
 
-  function showEventDetails(eventData) {
+  function showEventDetails(eventData, options) {
     if (!eventData) {
       return;
     }
+    const opts = options && typeof options === 'object' ? options : {};
     const dateKey = eventData.date || (eventData.start ? formatDateKey(eventData.start) : null);
     if (dateKey) {
       selectedDate = dateKey;
     }
-    renderDayDetail(dateKey);
+    renderDayDetail(dateKey, {
+      open: true,
+      focus: opts.focus !== false,
+      trigger: opts.trigger,
+    });
   }
 
   function dispatchSlot(dateObj, timeHint) {
@@ -1238,7 +1404,8 @@ document.addEventListener('DOMContentLoaded', function() {
 
       cell.addEventListener('click', function() {
         selectedDate = iso;
-        renderDayDetail(iso);
+        lastDetailTrigger = cell;
+        renderDayDetail(iso, { open: true, focus: true, trigger: cell });
         dispatchSlot(cellDate, '09:00');
       });
 
@@ -1324,7 +1491,8 @@ document.addEventListener('DOMContentLoaded', function() {
 
       card.addEventListener('click', function() {
         selectedDate = iso;
-        renderDayDetail(iso);
+        lastDetailTrigger = card;
+        renderDayDetail(iso, { open: true, focus: true, trigger: card });
         dispatchSlot(dayDate, '09:00');
       });
 
@@ -1349,7 +1517,11 @@ document.addEventListener('DOMContentLoaded', function() {
       }
       renderMonthView();
     }
-    renderDayDetail(null);
+    renderDayDetail(null, {
+      open: isDayDetailOpen,
+      focus: false,
+      trigger: lastDetailTrigger,
+    });
   }
 
   function updateEvents(newEvents) {
@@ -1474,6 +1646,33 @@ document.addEventListener('DOMContentLoaded', function() {
     btn.addEventListener('click', function() {
       setViewMode(btn.dataset.viewMode);
     });
+  });
+
+  dayDetailCloseBtn && dayDetailCloseBtn.addEventListener('click', function(event) {
+    event.preventDefault();
+    closeDayDetail({ restoreFocus: true });
+  });
+
+  dayDetailBackdrop && dayDetailBackdrop.addEventListener('click', function() {
+    closeDayDetail({ restoreFocus: true });
+  });
+
+  if (dayDetailContainer) {
+    dayDetailContainer.addEventListener('keydown', function(event) {
+      if ((event.key === 'Escape' || event.key === 'Esc') && isDayDetailOpen) {
+        event.stopPropagation();
+        closeDayDetail({ restoreFocus: true });
+      }
+    });
+  }
+
+  root.addEventListener('keydown', function(event) {
+    if (!isDayDetailOpen) {
+      return;
+    }
+    if (event.key === 'Escape' || event.key === 'Esc') {
+      closeDayDetail({ restoreFocus: true });
+    }
   });
 
   function handleSharedEvents(event) {
