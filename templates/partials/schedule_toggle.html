@@ -46,9 +46,23 @@ document.addEventListener('DOMContentLoaded', function() {
     return document.querySelector('[data-switcher-colab]');
   })();
   const csrfToken = '{{ csrf_token() if csrf_token is defined else '' }}';
-  let source = '{{ 'clinic' if clinic_id else 'user' }}';
-  let selectedUserId = resolveInitialUserId();
-  let calendar;
+  const clinicId = {{ clinic_id|tojson }};
+  const adminInitialView = {{ (admin_selected_view or '')|tojson }};
+  const defaultSource = {{ ('clinic' if clinic_id else 'user')|tojson }};
+  const clinicFilters = (function() {
+    if (typeof window === 'undefined') {
+      return [];
+    }
+    const params = new URLSearchParams(window.location.search);
+    const ids = [];
+    params.getAll('clinica_id').forEach(function(value) {
+      const parsed = toNumericId(value);
+      if (parsed !== null && !ids.includes(parsed)) {
+        ids.push(parsed);
+      }
+    });
+    return ids;
+  })();
 
   if (typeof window !== 'undefined') {
     window.sharedCalendarEvents = window.sharedCalendarEvents || [];
@@ -58,7 +72,24 @@ document.addEventListener('DOMContentLoaded', function() {
     return;
   }
 
-  function extractNumericUserId(rawValue) {
+  function toNumericId(rawValue) {
+    if (rawValue === undefined || rawValue === null) {
+      return null;
+    }
+    if (typeof rawValue === 'number') {
+      return Number.isNaN(rawValue) ? null : rawValue;
+    }
+    const normalized = String(rawValue).trim();
+    if (!normalized) {
+      return null;
+    }
+    const colonIndex = normalized.indexOf(':');
+    const numericPart = colonIndex >= 0 ? normalized.slice(colonIndex + 1) : normalized;
+    const parsed = parseInt(numericPart, 10);
+    return Number.isNaN(parsed) ? null : parsed;
+  }
+
+  function parseSelectionValue(rawValue) {
     if (rawValue === undefined || rawValue === null) {
       return null;
     }
@@ -66,57 +97,112 @@ document.addEventListener('DOMContentLoaded', function() {
     if (!normalized) {
       return null;
     }
-    const parts = normalized.split(':');
-    const numericPart = parts.length > 1 ? parts[1] : parts[0];
-    const parsed = parseInt(numericPart, 10);
-    if (Number.isNaN(parsed)) {
-      return null;
+    const parts = normalized.split(':', 2);
+    if (parts.length === 2) {
+      const id = toNumericId(parts[1]);
+      if (id === null) {
+        return null;
+      }
+      return { kind: parts[0] || null, id };
     }
-    return parsed;
+    const id = toNumericId(normalized);
+    return id === null ? null : { kind: null, id };
   }
 
   function resolveInitialUserId() {
-    const pickerValue = userPicker ? extractNumericUserId(userPicker.value) : null;
-    if (pickerValue !== null) {
-      return pickerValue;
-    }
-    if (hiddenVetInput) {
-      const vetValue = extractNumericUserId(hiddenVetInput.value);
-      if (vetValue !== null) {
-        return vetValue;
-      }
+    const selection = parseSelectionValue(userPicker ? userPicker.value : null);
+    if (selection && selection.id !== null && selection.kind !== 'veterinario') {
+      return selection.id;
     }
     if (hiddenColabInput) {
-      const colabValue = extractNumericUserId(hiddenColabInput.value);
-      if (colabValue !== null) {
-        return colabValue;
+      const hiddenColabId = toNumericId(hiddenColabInput.value);
+      if (hiddenColabId !== null) {
+        return hiddenColabId;
       }
     }
     return null;
   }
 
+  function resolveInitialVetId() {
+    const selection = parseSelectionValue(userPicker ? userPicker.value : null);
+    if (selection && selection.kind === 'veterinario' && selection.id !== null) {
+      return selection.id;
+    }
+    if (hiddenVetInput) {
+      const hiddenVetId = toNumericId(hiddenVetInput.value);
+      if (hiddenVetId !== null) {
+        return hiddenVetId;
+      }
+    }
+    return null;
+  }
+
+  let source = defaultSource;
+  let selectedUserId = resolveInitialUserId();
+  let selectedVetId = resolveInitialVetId();
+  let calendar;
+
+  if (adminInitialView === 'veterinario') {
+    source = 'vet';
+  } else if (adminInitialView === 'colaborador') {
+    source = 'clinic';
+  } else if (adminInitialView === 'tutor') {
+    source = 'user';
+  }
+  if (source === 'user' && selectedVetId !== null) {
+    source = 'vet';
+  }
+
   function eventUrl() {
     if (source === 'clinic') {
-      return '/api/clinic_appointments/{{ clinic_id }}';
+      const clinicNumeric = toNumericId(clinicId);
+      if (clinicNumeric !== null) {
+        return `/api/clinic_appointments/${clinicNumeric}`;
+      }
+      return null;
     }
-    const userId = extractNumericUserId(selectedUserId);
+    if (source === 'vet') {
+      const vetId = toNumericId(selectedVetId);
+      if (vetId === null) {
+        return null;
+      }
+      let url = `/api/vet_appointments/${vetId}`;
+      if (clinicFilters.length) {
+        const query = clinicFilters.map(function(id) {
+          return `clinica_id=${encodeURIComponent(id)}`;
+        }).join('&');
+        url += `?${query}`;
+      }
+      return url;
+    }
+    const userId = toNumericId(selectedUserId);
     if (userId !== null) {
       return `/api/user_appointments/${userId}`;
     }
     return '/api/my_appointments';
   }
 
-  function addEvents() {
+  function addEvents(options = {}) {
+    if (!calendar) {
+      return;
+    }
     calendar.removeAllEventSources();
-    calendar.addEventSource(eventUrl());
+    const url = eventUrl();
+    if (url) {
+      calendar.addEventSource(url);
+    }
+    if (options.refetch && typeof calendar.refetchEvents === 'function') {
+      calendar.refetchEvents();
+    }
   }
 
   function setActiveButton(targetSource) {
     if (!toggle) {
       return;
     }
+    const normalized = targetSource === 'vet' ? 'user' : targetSource;
     toggle.querySelectorAll('button').forEach(function(btn) {
-      btn.classList.toggle('active', btn.dataset.source === targetSource);
+      btn.classList.toggle('active', btn.dataset.source === normalized);
     });
   }
 
@@ -244,6 +330,32 @@ document.addEventListener('DOMContentLoaded', function() {
     }));
   }
 
+  function updateCalendarVetSelection(vetId, options = {}) {
+    const shouldActivate = options.activate !== false;
+    const shouldRefetch = options.refetch !== false;
+    const numericVetId = toNumericId(vetId);
+    const previousVetId = selectedVetId;
+    selectedVetId = numericVetId;
+    if (shouldActivate) {
+      source = numericVetId !== null ? 'vet' : defaultSource;
+      if (numericVetId !== null) {
+        selectedUserId = null;
+      }
+      setActiveButton(source);
+    }
+    const vetChanged = previousVetId !== numericVetId;
+    if (vetChanged && (shouldActivate || source === 'vet')) {
+      addEvents({ refetch: shouldRefetch });
+      return true;
+    }
+    if (shouldRefetch && calendar && typeof calendar.refetchEvents === 'function') {
+      calendar.refetchEvents();
+    }
+    return false;
+  }
+
+  window.updateCalendarVetSelection = updateCalendarVetSelection;
+
   async function persistEventChange(info) {
     if (!calendar) {
       if (typeof info.revert === 'function') {
@@ -349,21 +461,35 @@ document.addEventListener('DOMContentLoaded', function() {
   if (toggle) {
     toggle.querySelectorAll('button').forEach(function(btn) {
       btn.addEventListener('click', function() {
-        source = this.dataset.source;
+        const target = this.dataset.source;
+        if (target === 'user' && selectedVetId !== null) {
+          source = 'vet';
+        } else {
+          source = target;
+        }
         setActiveButton(source);
-        addEvents();
+        addEvents({ refetch: true });
       });
     });
   }
 
   if (userPicker) {
     userPicker.addEventListener('change', function() {
-      selectedUserId = extractNumericUserId(this.value);
-      if (selectedUserId !== null) {
-        source = 'user';
-        setActiveButton('user');
+      const selection = parseSelectionValue(this.value);
+      if (selection && selection.kind === 'veterinario' && selection.id !== null) {
+        selectedUserId = null;
+        updateCalendarVetSelection(selection.id, { activate: true, refetch: true });
+        return;
       }
-      addEvents();
+      selectedVetId = null;
+      if (selection && selection.id !== null) {
+        selectedUserId = selection.id;
+      } else {
+        selectedUserId = null;
+      }
+      source = 'user';
+      setActiveButton(source);
+      addEvents({ refetch: true });
     });
   }
 

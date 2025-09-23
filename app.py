@@ -8724,6 +8724,118 @@ def api_clinic_appointments(clinica_id):
     return jsonify(events)
 
 
+@app.route('/api/vet_appointments/<int:veterinario_id>')
+@login_required
+def api_vet_appointments(veterinario_id):
+    """Return appointments for a veterinarian as calendar events."""
+    veterinario = Veterinario.query.get_or_404(veterinario_id)
+
+    requested_clinic_ids = []
+    for value in request.args.getlist('clinica_id'):
+        try:
+            clinic_id_value = int(value)
+        except (TypeError, ValueError):
+            continue
+        if clinic_id_value not in requested_clinic_ids:
+            requested_clinic_ids.append(clinic_id_value)
+
+    vet_clinic_ids = set()
+    primary_clinic_id = getattr(veterinario, 'clinica_id', None)
+    if primary_clinic_id:
+        vet_clinic_ids.add(primary_clinic_id)
+    for clinic in getattr(veterinario, 'clinicas', []) or []:
+        clinic_id_value = getattr(clinic, 'id', None)
+        if clinic_id_value:
+            vet_clinic_ids.add(clinic_id_value)
+
+    is_admin = current_user.role == 'admin'
+    collaborator_clinic_id = None
+
+    if is_admin:
+        pass
+    elif current_user.worker == 'veterinario':
+        current_vet = getattr(current_user, 'veterinario', None)
+        if not current_vet or current_vet.id != veterinario_id:
+            abort(403)
+    elif current_user.worker == 'colaborador':
+        collaborator_clinic_id = getattr(current_user, 'clinica_id', None)
+        ensure_clinic_access(collaborator_clinic_id)
+        if not collaborator_clinic_id:
+            abort(404)
+        if vet_clinic_ids and collaborator_clinic_id not in vet_clinic_ids:
+            abort(404)
+    else:
+        abort(403)
+
+    query = Appointment.query.filter(Appointment.veterinario_id == veterinario_id)
+
+    target_clinic_ids = []
+
+    if is_admin:
+        if requested_clinic_ids:
+            query = query.filter(Appointment.clinica_id.in_(requested_clinic_ids))
+            target_clinic_ids = requested_clinic_ids
+    elif collaborator_clinic_id:
+        query = query.filter(Appointment.clinica_id == collaborator_clinic_id)
+        target_clinic_ids = [collaborator_clinic_id]
+
+    appointments = query.order_by(Appointment.scheduled_at).all()
+    events = appointments_to_events(appointments)
+
+    exam_filters = [
+        ExamAppointment.specialist_id == veterinario_id,
+        ExamAppointment.status.in_(['pending', 'confirmed']),
+    ]
+
+    if target_clinic_ids:
+        exam_filters.append(
+            or_(
+                Animal.clinica_id.in_(target_clinic_ids),
+                ExamAppointment.specialist.has(
+                    Veterinario.clinica_id.in_(target_clinic_ids)
+                ),
+            )
+        )
+
+    exam_query = ExamAppointment.query.outerjoin(ExamAppointment.animal)
+    exam_appointments = (
+        exam_query.filter(*exam_filters)
+        .order_by(ExamAppointment.scheduled_at)
+        .all()
+    )
+
+    for exam in unique_items_by_id(exam_appointments):
+        event = exam_to_event(exam)
+        if event:
+            events.append(event)
+
+    vaccine_filters = [
+        Vacina.aplicada_em.isnot(None),
+        Vacina.aplicada_em >= date.today(),
+    ]
+
+    vet_user_id = getattr(veterinario, 'user_id', None)
+    if vet_user_id:
+        vaccine_filters.append(Vacina.aplicada_por == vet_user_id)
+
+    if target_clinic_ids:
+        vaccine_filters.append(Animal.clinica_id.in_(target_clinic_ids))
+
+    vaccine_query = Vacina.query.outerjoin(Vacina.animal)
+    vaccine_appointments = (
+        vaccine_query.filter(*vaccine_filters)
+        .order_by(Vacina.aplicada_em)
+        .all()
+    )
+
+    for vaccine in unique_items_by_id(vaccine_appointments):
+        event = vaccine_to_event(vaccine)
+        if event:
+            events.append(event)
+
+    return jsonify(events)
+
+
 @app.route('/api/specialists')
 def api_specialists():
     from models import Veterinario, Specialty
