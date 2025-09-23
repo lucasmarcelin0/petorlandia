@@ -417,22 +417,33 @@ document.addEventListener('DOMContentLoaded', () => {
     timeField.dataset.currentTime = '';
   }
 
-  function populateTimeFieldOptions(times) {
+  function populateTimeFieldOptions(times, { bookedTimes = [], placeholderText } = {}) {
     if (!timeField) {
       return;
     }
+
     const currentTime = timeField.dataset.currentTime || timeField.value || '';
+    const availableTimes = Array.from(new Set(Array.isArray(times) ? times : []));
+    availableTimes.sort();
+
+    let bookedList = Array.from(new Set(Array.isArray(bookedTimes) ? bookedTimes : []));
+    bookedList.sort();
+    bookedList = bookedList.filter(t => !availableTimes.includes(t));
+
+    const placeholderLabel = placeholderText
+      || (availableTimes.length ? timeFieldPlaceholder : timeFieldEmptyText);
+
     timeField.innerHTML = '';
 
     const placeholderOption = document.createElement('option');
     placeholderOption.value = '';
-    placeholderOption.textContent = timeFieldPlaceholder;
+    placeholderOption.textContent = placeholderLabel;
     placeholderOption.disabled = true;
     placeholderOption.selected = !currentTime;
     timeField.appendChild(placeholderOption);
 
     let hasCurrentTime = false;
-    times.forEach(t => {
+    availableTimes.forEach(t => {
       const option = document.createElement('option');
       option.value = t;
       option.textContent = t;
@@ -444,13 +455,29 @@ document.addEventListener('DOMContentLoaded', () => {
       timeField.appendChild(option);
     });
 
+    const currentIsBooked = currentTime && bookedList.includes(currentTime);
     if (currentTime && !hasCurrentTime) {
       const preservedOption = document.createElement('option');
       preservedOption.value = currentTime;
-      preservedOption.textContent = currentTime;
+      preservedOption.textContent = currentIsBooked ? `${currentTime} — ocupado` : currentTime;
       preservedOption.selected = true;
+      if (currentIsBooked) {
+        preservedOption.dataset.status = 'booked';
+        preservedOption.style.color = 'var(--bs-danger)';
+        bookedList = bookedList.filter(t => t !== currentTime);
+      }
       timeField.appendChild(preservedOption);
     }
+
+    bookedList.forEach(t => {
+      const option = document.createElement('option');
+      option.value = t;
+      option.textContent = `${t} — ocupado`;
+      option.disabled = true;
+      option.dataset.status = 'booked';
+      option.style.color = 'var(--bs-danger)';
+      timeField.appendChild(option);
+    });
 
     timeField.disabled = false;
     timeField.dataset.currentTime = timeField.value;
@@ -467,16 +494,27 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     try {
-      const resp = await fetch(`/api/specialist/${vetId}/available_times?date=${date}`);
+      const resp = await fetch(`/api/specialist/${vetId}/available_times?date=${date}&include_booked=1`);
       if (!resp.ok) {
         throw new Error('Erro ao carregar horários disponíveis');
       }
-      const times = await resp.json();
-      if (!Array.isArray(times) || times.length === 0) {
-        setTimeFieldMessage(timeFieldEmptyText, { disable: true });
-        return;
+      const payload = await resp.json();
+      let availableTimes = [];
+      let bookedTimes = [];
+      if (Array.isArray(payload)) {
+        availableTimes = payload;
+      } else if (payload && typeof payload === 'object') {
+        if (Array.isArray(payload.available)) {
+          availableTimes = payload.available;
+        }
+        if (Array.isArray(payload.booked)) {
+          bookedTimes = payload.booked;
+        }
       }
-      populateTimeFieldOptions(times);
+      populateTimeFieldOptions(availableTimes, { bookedTimes });
+      if (!availableTimes.length && !bookedTimes.length) {
+        timeField.disabled = true;
+      }
     } catch (error) {
       console.error(error);
       setTimeFieldMessage(timeFieldEmptyText, { disable: true });
