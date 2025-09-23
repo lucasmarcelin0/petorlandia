@@ -935,7 +935,7 @@
   transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
 }
 
-#{{ component_id }} .tutor-calendar__event-meta {
+#{{ component_id }} .tutor-calendar__event-header {
   display: flex;
   align-items: center;
   gap: 0.5rem;
@@ -1053,26 +1053,6 @@
 
 #{{ component_id }} .tutor-calendar__event--status-accepted .tutor-calendar__event-title {
   color: #115e59;
-}
-
-#{{ component_id }} .tutor-calendar__event--status-scheduled:hover {
-  border-color: var(--tutor-calendar-status-scheduled-border);
-  box-shadow: 0 10px 22px rgba(37, 99, 235, 0.18);
-}
-
-#{{ component_id }} .tutor-calendar__event--status-completed:hover {
-  border-color: var(--tutor-calendar-status-completed-border);
-  box-shadow: 0 10px 22px rgba(22, 163, 74, 0.18);
-}
-
-#{{ component_id }} .tutor-calendar__event--status-canceled:hover {
-  border-color: var(--tutor-calendar-status-canceled-border);
-  box-shadow: 0 10px 22px rgba(185, 28, 28, 0.18);
-}
-
-#{{ component_id }} .tutor-calendar__event--status-accepted:hover {
-  border-color: var(--tutor-calendar-status-accepted-border);
-  box-shadow: 0 10px 22px rgba(15, 118, 110, 0.18);
 }
 
 #{{ component_id }} .tutor-calendar__event--status-scheduled.is-active {
@@ -1248,7 +1228,8 @@ document.addEventListener('DOMContentLoaded', function() {
       return fallback;
     }
     try {
-      return String(status).trim().toLowerCase();
+      const normalized = String(status).trim().toLowerCase();
+      return normalized || fallback;
     } catch (error) {
       return fallback;
     }
@@ -1801,14 +1782,13 @@ document.addEventListener('DOMContentLoaded', function() {
   function buildEventElement(eventData) {
     const el = document.createElement('div');
     const typeKey = eventData.type || 'appointment';
+    el.className = 'tutor-calendar__event tutor-calendar__event--' + typeKey;
     const statusKey = normalizeStatus(eventData.status || (eventData.raw && eventData.raw.extendedProps && eventData.raw.extendedProps.status), typeKey);
-    const statusLabel = formatStatusLabel(statusKey);
-    const classNames = ['tutor-calendar__event', 'tutor-calendar__event--' + typeKey];
     if (statusKey) {
-      classNames.push('tutor-calendar__event--status-' + statusKey);
+      el.classList.add('tutor-calendar__event--status-' + statusKey);
       el.dataset.status = statusKey;
     }
-    el.className = classNames.join(' ');
+    const statusLabel = formatStatusLabel(statusKey);
     const eventKey = getEventKey(eventData);
     if (eventKey) {
       el.dataset.eventId = String(eventKey);
@@ -1829,18 +1809,18 @@ document.addEventListener('DOMContentLoaded', function() {
     titleEl.className = 'tutor-calendar__event-title';
     titleEl.textContent = eventData.title;
 
-    const metaEl = document.createElement('div');
-    metaEl.className = 'tutor-calendar__event-meta';
-    metaEl.appendChild(timeEl);
+    const headerEl = document.createElement('div');
+    headerEl.className = 'tutor-calendar__event-header';
+    headerEl.appendChild(timeEl);
 
     if (statusLabel) {
       const statusEl = document.createElement('span');
       statusEl.className = 'status-badge status-' + statusKey + ' tutor-calendar__event-status';
       statusEl.textContent = statusLabel;
-      metaEl.appendChild(statusEl);
+      headerEl.appendChild(statusEl);
     }
 
-    el.appendChild(metaEl);
+    el.appendChild(headerEl);
     el.appendChild(titleEl);
 
     const petName = getPetName(eventData.animalId) || derivePetNameFromTitle(eventData.title);
@@ -1960,6 +1940,7 @@ document.addEventListener('DOMContentLoaded', function() {
     const card = document.createElement('article');
     card.className = 'tutor-calendar__day-detail-card tutor-calendar__day-detail-card--' + (eventData.type || 'appointment');
     const statusKey = normalizeStatus(eventData.status || (eventData.raw && eventData.raw.extendedProps && eventData.raw.extendedProps.status), eventData.type);
+    const statusLabel = formatStatusLabel(statusKey);
     if (statusKey) {
       card.classList.add('tutor-calendar__day-detail-card--status-' + statusKey);
       card.dataset.status = statusKey;
@@ -1979,6 +1960,12 @@ document.addEventListener('DOMContentLoaded', function() {
 
     meta.appendChild(timeEl);
     meta.appendChild(typeEl);
+    if (statusLabel) {
+      const statusEl = document.createElement('span');
+      statusEl.className = 'status-badge status-' + statusKey;
+      statusEl.textContent = statusLabel;
+      meta.appendChild(statusEl);
+    }
     card.appendChild(meta);
 
     const titleEl = document.createElement('h4');
@@ -1998,6 +1985,9 @@ document.addEventListener('DOMContentLoaded', function() {
     appendDetailRow(infoList, 'Horário', eventData.time || '--:--');
     appendDetailRow(infoList, 'Paciente', petName || '—');
     appendDetailRow(infoList, 'Tipo', typeLabel);
+    if (statusLabel) {
+      appendDetailRow(infoList, 'Status', statusLabel);
+    }
     if (eventData.date) {
       appendDetailRow(infoList, 'Data', eventData.date);
     }
@@ -2028,7 +2018,7 @@ document.addEventListener('DOMContentLoaded', function() {
     const typeKey = eventData.type || 'appointment';
     const statusKey = normalizeStatus(ext.status || eventData.status, eventData.type);
     const statusClass = statusKey || 'scheduled';
-    const statusLabel = formatStatusLabel(statusClass) || formatStatusLabel(statusKey) || statusClass || '—';
+    const statusLabel = formatStatusLabel(statusKey) || formatStatusLabel(statusClass) || statusClass || '—';
     const typeLabel = typeLabels[typeKey] || 'Evento';
     const kindLabel = ext.kind ? String(ext.kind) : '';
     const tutorName = ext.tutorName || null;
@@ -2269,6 +2259,9 @@ document.addEventListener('DOMContentLoaded', function() {
           form.method = 'POST';
           form.action = statusUrl;
           form.className = 'form-confirm';
+          form.dataset.statusTarget = action.status;
+          form.dataset.statusLabel = action.label;
+          form.dataset.appointmentId = String(recordId);
 
           if (csrfToken) {
             const csrfInput = document.createElement('input');
@@ -2295,9 +2288,6 @@ document.addEventListener('DOMContentLoaded', function() {
           button.appendChild(document.createTextNode(action.label));
           form.appendChild(button);
 
-          form.dataset.statusTarget = action.status;
-          form.dataset.statusLabel = action.label;
-          form.dataset.appointmentId = String(recordId);
           attachConfirmHandler(form);
           bindStatusForm(form, recordId, action);
           appendActionElement(form);
