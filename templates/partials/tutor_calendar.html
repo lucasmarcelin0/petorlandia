@@ -284,6 +284,28 @@
   border: 1px solid rgba(99, 102, 241, 0.15);
   background: var(--tutor-calendar-card-bg);
   box-shadow: 0 4px 16px rgba(15, 23, 42, 0.04);
+  color: inherit;
+  text-decoration: none;
+  transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+}
+
+#{{ component_id }} .tutor-calendar__pet.tutor-calendar__pet--link {
+  cursor: pointer;
+}
+
+#{{ component_id }} .tutor-calendar__pet.tutor-calendar__pet--link:hover {
+  border-color: rgba(99, 102, 241, 0.35);
+  box-shadow: 0 8px 22px rgba(15, 23, 42, 0.08);
+  text-decoration: none;
+  transform: translateY(-1px);
+}
+
+#{{ component_id }} .tutor-calendar__pet.tutor-calendar__pet--link:focus-visible {
+  border-color: rgba(99, 102, 241, 0.5);
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.25), 0 8px 22px rgba(15, 23, 42, 0.08);
+  outline: 0;
+  text-decoration: none;
+  transform: translateY(-1px);
 }
 
 #{{ component_id }} .tutor-calendar__pet-avatar {
@@ -2248,8 +2270,22 @@ document.addEventListener('DOMContentLoaded', function() {
 
     const fragment = document.createDocumentFragment();
     visiblePets.forEach(function(pet) {
-      const item = document.createElement('div');
+      const petId = pet && pet.id !== undefined && pet.id !== null ? pet.id : null;
+      const profileUrl = petId ? fillUrlWithId(urlTemplates.animalProfile, petId) : null;
+      const elementTag = profileUrl ? 'a' : 'div';
+      const item = document.createElement(elementTag);
       item.className = 'tutor-calendar__pet';
+      if (petId !== null) {
+        item.dataset.petId = String(petId);
+      }
+      if (profileUrl) {
+        item.href = profileUrl;
+        item.classList.add('tutor-calendar__pet--link');
+        item.dataset.profileUrl = profileUrl;
+        const labelName = pet && pet.name ? `Abrir ficha do pet ${pet.name}` : 'Abrir ficha do pet';
+        item.setAttribute('aria-label', labelName);
+        item.title = pet && pet.name ? `Abrir ficha de ${pet.name}` : 'Abrir ficha do pet';
+      }
 
       const avatar = document.createElement('div');
       avatar.className = 'tutor-calendar__pet-avatar';
