@@ -532,15 +532,25 @@ def unique_items_by_id(items):
     return unique
 
 
-def get_available_times(veterinario_id, date, kind='consulta'):
-    """Retorna horários disponíveis para um especialista em uma data."""
+def get_available_times(veterinario_id, date, kind='consulta', *, include_booked=False):
+    """Retorna horários disponíveis para um especialista em uma data.
+
+    When ``include_booked`` is ``True`` a dictionary with the available and
+    booked slots is returned. Otherwise only the list of available times is
+    returned for backwards compatibility.
+    """
     from models import Appointment, ExamAppointment, VetSchedule
 
     weekday_map = ['Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado', 'Domingo']
     dia_semana = weekday_map[date.weekday()]
-    schedules = VetSchedule.query.filter_by(veterinario_id=veterinario_id, dia_semana=dia_semana).all()
+    schedules = (
+        VetSchedule.query
+        .filter_by(veterinario_id=veterinario_id, dia_semana=dia_semana)
+        .order_by(VetSchedule.hora_inicio)
+        .all()
+    )
     if not schedules:
-        return []
+        return {'available': [], 'booked': []} if include_booked else []
 
     duration = get_appointment_duration(kind)
     step = timedelta(minutes=30)
@@ -588,6 +598,9 @@ def get_available_times(veterinario_id, date, kind='consulta'):
             exams_cache.setdefault(exam.id, exam)
 
     available = []
+    booked = [] if include_booked else None
+    available_seen = set()
+    booked_seen = set() if include_booked else None
     for s in schedules:
         current = datetime.combine(date, s.hora_inicio)
         end = datetime.combine(date, s.hora_fim)
@@ -598,15 +611,29 @@ def get_available_times(veterinario_id, date, kind='consulta'):
                 if _intervals_overlap(current, current + duration, intervalo_inicio, intervalo_fim):
                     current += step
                     continue
-            if not has_conflict_for_slot(
+            time_str = current.strftime('%H:%M')
+            conflict = has_conflict_for_slot(
                 veterinario_id,
                 current,
                 duration,
                 preloaded_appointments=appointments_cache,
                 preloaded_exams=exams_cache,
-            ):
-                available.append(current.strftime('%H:%M'))
+            )
+            if not conflict:
+                if time_str not in available_seen:
+                    available.append(time_str)
+                    available_seen.add(time_str)
+            elif include_booked:
+                if time_str not in booked_seen:
+                    booked.append(time_str)
+                    booked_seen.add(time_str)
             current += step
+    available.sort()
+    if include_booked:
+        booked = booked or []
+        booked = [t for t in booked if t not in available_seen]
+        booked.sort()
+        return {'available': available, 'booked': booked}
     return available
 
 
