@@ -246,7 +246,7 @@
 
 {% block scripts %}
 {{ super() }}
-<script src="{{ url_for('static', filename='appointments_table.js') }}"></script>
+<script type="module" src="{{ url_for('static', filename='appointments_table.js') }}"></script>
 <script>
 document.addEventListener('DOMContentLoaded', () => {
   const vetField = {% if form %}document.getElementById('{{ form.veterinario_id.id }}'){% else %}null{% endif %};

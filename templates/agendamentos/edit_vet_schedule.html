@@ -1,7 +1,11 @@
 {% extends "layout.html" %}
 
 {% block main %}
-<div class="container mt-4">
+<div class="container mt-4"
+     data-vet-schedule-root
+     data-vet-id="{{ veterinario.id }}"
+     data-appointments-base-url="{{ url_for('appointments') }}"
+     data-csrf-token="{{ csrf_token() if csrf_token is defined else '' }}">
   <!-- Cabeçalho melhorado -->
   <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-4">
     <div>
@@ -427,7 +431,9 @@
   <div class="card mb-4">
     <div class="card-header bg-light d-flex justify-content-between align-items-center">
       <h5 class="mb-0"><i class="fas fa-business-time me-2"></i>Horários Cadastrados</h5>
-      <button class="btn btn-sm btn-outline-primary" onclick="toggleScheduleEdit()">
+      <button class="btn btn-sm btn-outline-primary"
+              data-schedule-edit-toggle
+              onclick="toggleScheduleEdit()">
         <i class="fas fa-edit me-1"></i>Editar horários
       </button>
     </div>
@@ -529,198 +535,7 @@
 
 </div>
 
-<script>
-  // Funções JavaScript para melhorar a interação
-  function selectDays(mode) {
-    const select = document.getElementById('schedule-dias_semana');
-    const weekdays = ['Segunda','Terça','Quarta','Quinta','Sexta'];
-    const weekend = ['Sábado','Domingo'];
-    for (const opt of select.options) {
-      if (mode === 'all') opt.selected = true;
-      else if (mode === 'weekday') opt.selected = weekdays.includes(opt.value);
-      else if (mode === 'weekend') opt.selected = weekend.includes(opt.value);
-      else if (mode === 'clear') opt.selected = false;
-    }
-    select.dispatchEvent(new Event('change'));
-  }
 
-  function toggleScheduleForm() {
-    const modal = new bootstrap.Modal(document.getElementById('scheduleModal'));
-    const title = document.getElementById('scheduleModalTitle');
-    const form = document.getElementById('schedule-form');
-    const select = document.getElementById('schedule-dias_semana');
-    
-    form.reset();
-    document.getElementById('schedule-veterinario_id').value = '{{ veterinario.id }}';
-    title.textContent = 'Adicionar Horário';
-    form.action = "{{ url_for('appointments') }}";
-    select.multiple = true;
-    
-    modal.show();
-  }
-
-  function editSchedule(data) {
-    const modal = new bootstrap.Modal(document.getElementById('scheduleModal'));
-    const title = document.getElementById('scheduleModalTitle');
-    const form = document.getElementById('schedule-form');
-    const select = document.getElementById('schedule-dias_semana');
-    
-    form.reset();
-    form.action = `/appointments/{{ veterinario.id }}/schedule/${data.id}/edit`;
-    title.textContent = 'Editar Horário';
-    select.multiple = false;
-    [...select.options].forEach(opt => opt.selected = opt.value === data.dia);
-    document.getElementById('schedule-hora_inicio').value = data.horaInicio;
-    document.getElementById('schedule-hora_fim').value = data.horaFim;
-    document.getElementById('schedule-intervalo_inicio').value = data.intervaloInicio;
-    document.getElementById('schedule-intervalo_fim').value = data.intervaloFim;
-    
-    modal.show();
-  }
-
-  document.querySelectorAll('.edit-btn').forEach(btn => {
-    btn.addEventListener('click', function() {
-      editSchedule(this.dataset);
-    });
-  });
-
-  function toggleAppointmentForm() {
-    const modal = new bootstrap.Modal(document.getElementById('appointmentModalForm'));
-    modal.show();
-    updateAppointmentTimes();
-  }
-
-  async function updateAppointmentTimes() {
-    const date = document.getElementById('appointment-date').value;
-    const select = document.getElementById('appointment-time');
-    if (!date) {
-      select.innerHTML = '<option value="">Selecione...</option>';
-      return;
-    }
-    const resp = await fetch(`/api/specialist/{{ veterinario.id }}/available_times?date=${date}`);
-    const times = await resp.json();
-    select.innerHTML = '<option value="">Selecione...</option>';
-    times.forEach(t => {
-      const opt = document.createElement('option');
-      opt.value = t;
-      opt.textContent = t;
-      select.appendChild(opt);
-    });
-  }
-
-  document.getElementById('appointment-date').addEventListener('change', updateAppointmentTimes);
-
-  function toggleScheduleEdit() {
-    document.querySelectorAll('.schedule-actions').forEach(el => {
-      el.classList.toggle('d-none');
-    });
-    
-    const btn = document.querySelector('[onclick="toggleScheduleEdit()"]');
-    if (btn.querySelector('i').classList.contains('fa-edit')) {
-      btn.innerHTML = '<i class="fas fa-times me-1"></i>Cancelar Edição';
-    } else {
-      btn.innerHTML = '<i class="fas fa-edit me-1"></i>Editar horários';
-    }
-  }
-
-  async function responderAgendamentoExame(id, status) {
-    const resp = await fetch(`/exam_appointment/${id}/status`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Accept': 'application/json'
-      },
-      body: JSON.stringify({ status })
-    });
-    if (resp.ok) {
-      const data = await resp.json();
-      if (data.success) {
-        location.reload();
-      } else {
-        alert(data.message || 'Erro ao atualizar status.');
-      }
-    } else {
-      alert('Erro ao atualizar status.');
-    }
-  }
-
-  // Modal de detalhes das consultas
-  document.querySelectorAll('.appointment-item').forEach(item => {
-    item.addEventListener('click', function(e) {
-      if (e.target.closest('.btn')) return;
-      document.getElementById('modal-appt-id').value = this.dataset.id;
-      document.getElementById('modal-vet').value = this.dataset.vet;
-      document.getElementById('modal-tutor').value = this.dataset.tutor;
-      document.getElementById('modal-animal').value = this.dataset.animal;
-      document.getElementById('modal-date').value = this.dataset.date;
-      document.getElementById('modal-time').value = this.dataset.time;
-      document.getElementById('modal-notes').value = this.dataset.notes || '';
-      document.getElementById('modal-animal-link').href = this.dataset.animalUrl;
-      document.getElementById('modal-tutor-link').href = this.dataset.tutorUrl;
-      document.getElementById('modal-consulta-link').href = this.dataset.consultaUrl;
-      
-      const modal = new bootstrap.Modal(document.getElementById('appointmentDetailModal'));
-      modal.show();
-    });
-  });
-
-  document.getElementById('modal-save-btn').addEventListener('click', function() {
-    const id = document.getElementById('modal-appt-id').value;
-    const date = document.getElementById('modal-date').value;
-    const time = document.getElementById('modal-time').value;
-    const notes = document.getElementById('modal-notes').value;
-    
-    fetch(`/appointments/${id}/edit`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-CSRFToken': '{{ csrf_token() if csrf_token is defined else '' }}'
-      },
-      body: JSON.stringify({
-        date: date,
-        time: time,
-        veterinario_id: '{{ veterinario.id }}',
-        notes: notes
-      })
-    }).then(r => r.json()).then(data => {
-      if (data.success) {
-        location.reload();
-      } else {
-        alert(data.message || 'Erro ao salvar');
-      }
-    }).catch(() => alert('Erro ao salvar'));
-  });
-
-  const toggleBtn = document.getElementById('toggle-past');
-  const pastList = document.getElementById('past-list');
-  if (toggleBtn && pastList) {
-    toggleBtn.addEventListener('click', function(){
-      pastList.classList.toggle('d-none');
-      const icon = this.querySelector('i');
-      if (pastList.classList.contains('d-none')) {
-        this.innerHTML = '<i class="fas fa-chevron-down me-1"></i>Mostrar';
-      } else {
-        this.innerHTML = '<i class="fas fa-chevron-up me-1"></i>Ocultar';
-      }
-    });
-  }
-
-  // Adicionar animações de transição suave
-  document.addEventListener('DOMContentLoaded', function() {
-    // Adicionar classes de animação para os elementos
-    const cards = document.querySelectorAll('.card');
-    cards.forEach((card, index) => {
-      card.style.opacity = '0';
-      card.style.transform = 'translateY(20px)';
-      card.style.transition = 'opacity 0.5s ease, transform 0.5s ease';
-      
-      setTimeout(() => {
-        card.style.opacity = '1';
-        card.style.transform = 'translateY(0)';
-      }, 100 + (index * 100));
-    });
-  });
-</script>
 
 <style>
   .appointment-item {
@@ -758,4 +573,9 @@
     }
   }
 </style>
+{% endblock %}
+
+{% block scripts %}
+  {{ super() }}
+  <script type="module" src="{{ url_for('static', filename='appointments_vet.js') }}"></script>
 {% endblock %}
