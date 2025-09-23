@@ -1,11 +1,11 @@
 {% extends "layout.html" %}
 
 {% block main %}
-<div class="container py-4">
+<section class="container py-4" aria-labelledby="appointments-calendar-title">
 
   <!-- Cabeçalho -->
-  <div class="d-flex flex-column flex-lg-row justify-content-between align-items-lg-center gap-3 mb-4">
-    <h2 class="fw-bold text-gradient mb-0">
+    <div class="d-flex flex-column flex-lg-row justify-content-between align-items-lg-center gap-3 mb-4">
+      <h2 id="appointments-calendar-title" class="fw-bold text-gradient mb-0">
       <i class="bi bi-calendar4-week me-2"></i> Agenda de Consultas
     </h2>
     {% if current_user.role == 'admin' %}
@@ -100,10 +100,14 @@
           </p>
         </div>
         <div class="card-body">
-          <div class="text-muted small" data-calendar-summary-empty>
+          <div class="text-muted small" data-calendar-summary-empty aria-live="polite">
             Carregando estatísticas da agenda...
           </div>
-          <div class="calendar-summary-list d-flex flex-column gap-3 mt-2" data-calendar-summary-list></div>
+          <ul
+            role="list"
+            class="calendar-summary-list d-flex flex-column gap-3 mt-2"
+            data-calendar-summary-list
+          ></ul>
         </div>
       </div>
     </div>
@@ -267,7 +271,7 @@
   <h5 class="fw-bold mt-5 mb-3"><i class="bi bi-syringe me-2"></i> Agenda de Vacinas</h5>
   {% include 'partials/vaccine_appointments_table.html' %}
 
-</div>
+</section>
 
 <!-- Modal Editar Horário do Colaborador -->
 <div class="modal fade" id="scheduleEditModal" tabindex="-1" aria-hidden="true">
@@ -595,7 +599,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     rows.forEach(entry => {
-      const item = document.createElement('div');
+      const item = document.createElement('li');
       item.classList.add('calendar-summary-item');
       const colorClass = resolveSummaryColorClass(entry.vetId);
       if (colorClass) {
@@ -603,7 +607,7 @@ document.addEventListener('DOMContentLoaded', () => {
       }
       item.dataset.vetId = entry.vetId;
 
-      const header = document.createElement('div');
+      const header = document.createElement('header');
       header.classList.add('calendar-summary-header');
 
       const nameWrapper = document.createElement('div');
@@ -630,9 +634,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
       item.appendChild(header);
 
-      const metrics = document.createElement('div');
+      const metrics = document.createElement('ul');
       metrics.classList.add('calendar-summary-metrics');
-      const todayMetric = document.createElement('span');
+      metrics.setAttribute('role', 'list');
+      const todayMetric = document.createElement('li');
       todayMetric.classList.add('metric');
       todayMetric.append('Hoje: ');
       const todayValue = document.createElement('strong');
@@ -640,7 +645,7 @@ document.addEventListener('DOMContentLoaded', () => {
       todayMetric.appendChild(todayValue);
       metrics.appendChild(todayMetric);
 
-      const weekMetric = document.createElement('span');
+      const weekMetric = document.createElement('li');
       weekMetric.classList.add('metric');
       weekMetric.append('Semana: ');
       const weekValue = document.createElement('strong');
@@ -652,10 +657,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
       const upcomingDays = getUpcomingSummaryDays(entry);
       if (upcomingDays.length) {
-        const dayList = document.createElement('div');
+        const dayList = document.createElement('ul');
         dayList.classList.add('calendar-summary-days');
+        dayList.setAttribute('role', 'list');
         upcomingDays.forEach(dayInfo => {
-          const dayItem = document.createElement('span');
+          const dayItem = document.createElement('li');
           dayItem.classList.add('calendar-summary-day');
           const label = document.createElement('span');
           label.classList.add('label');
