@@ -290,12 +290,12 @@
           <input type="hidden" name="schedule-intervalo_fim" id="schedule-interval-end">
           <div class="mb-3">
             <label class="form-label fw-semibold">Colaborador</label>
-            <select id="schedule-vet" name="schedule-veterinario_id" class="form-select"></select>
+            <select id="schedule-vet" name="schedule-veterinario_id" class="form-select" required></select>
           </div>
           <div class="row g-3">
             <div class="col-md-6">
               <label class="form-label fw-semibold">Dia da Semana</label>
-              <select id="schedule-day" name="schedule-dias_semana" class="form-select">
+              <select id="schedule-day" name="schedule-dias_semana" class="form-select" required>
                 <option value="Segunda">Segunda</option>
                 <option value="Terça">Terça</option>
                 <option value="Quarta">Quarta</option>
@@ -307,11 +307,11 @@
             </div>
             <div class="col-md-3">
               <label class="form-label fw-semibold">Início</label>
-              <input type="time" id="schedule-start" name="schedule-hora_inicio" class="form-control">
+              <input type="time" id="schedule-start" name="schedule-hora_inicio" class="form-control" required>
             </div>
             <div class="col-md-3">
               <label class="form-label fw-semibold">Fim</label>
-              <input type="time" id="schedule-end" name="schedule-hora_fim" class="form-control">
+              <input type="time" id="schedule-end" name="schedule-hora_fim" class="form-control" required>
             </div>
           </div>
         </form>
