@@ -148,6 +148,12 @@
   padding: 0.4rem 0.75rem;
 }
 
+.calendar-summary-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
 .calendar-summary-item {
   border-radius: 0.9rem;
   padding: 0.9rem 1rem;
@@ -156,6 +162,7 @@
   box-shadow: 0 16px 32px -26px rgba(15, 23, 42, 0.6);
   cursor: pointer;
   transition: transform 0.2s ease, box-shadow 0.2s ease;
+  list-style: none;
 }
 
 .calendar-summary-item:hover {
@@ -232,6 +239,14 @@
   margin-top: 0.75rem;
   font-size: 0.86rem;
   color: #475569;
+  list-style: none;
+  padding: 0;
+}
+
+.calendar-summary-item .calendar-summary-metrics .metric {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.35rem;
 }
 
 .calendar-summary-item .calendar-summary-metrics strong {
@@ -243,6 +258,8 @@
   flex-wrap: wrap;
   gap: 0.4rem 0.55rem;
   margin-top: 0.85rem;
+  list-style: none;
+  padding: 0;
 }
 
 .calendar-summary-item .calendar-summary-day {
@@ -255,6 +272,7 @@
   padding: 0.18rem 0.7rem;
   font-size: 0.76rem;
   font-weight: 600;
+  list-style: none;
 }
 
 .calendar-summary-item .calendar-summary-day .label {
