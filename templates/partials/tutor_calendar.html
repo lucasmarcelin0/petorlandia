@@ -1,0 +1,803 @@
+{% set component_id = component_id|default('tutor-calendar-component') %}
+{% set events_url = events_url|default(url_for('api_my_appointments')) %}
+{% set pets_url = pets_url|default(url_for('api_my_pets')) %}
+{% set new_pet_url = new_pet_url|default(url_for('novo_animal')) %}
+
+<section
+  id="{{ component_id }}"
+  class="tutor-calendar"
+  data-events-url="{{ events_url }}"
+  data-pets-url="{{ pets_url }}"
+>
+  <div class="tutor-calendar__hero bg-gradient text-white rounded-4 p-4 mb-4">
+    <div class="d-flex align-items-start gap-3">
+      <div class="tutor-calendar__hero-icon">
+        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M12 2C13.657 2 15 3.343 15 5C15 6.657 13.657 8 12 8C10.343 8 9 6.657 9 5C9 3.343 10.343 2 12 2Z" fill="currentColor"/>
+          <path d="M3 21C3 16.589 6.589 13 11 13H13C17.411 13 21 16.589 21 21H3Z" fill="currentColor"/>
+        </svg>
+      </div>
+      <div>
+        <h2 class="h4 fw-semibold mb-1">Calendário Veterinário — Agendamentos &amp; Vacinas</h2>
+        <p class="mb-0 small opacity-75">Visualize consultas, exames e vacinas usando os mesmos dados da agenda oficial.</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="row g-4 align-items-start">
+    <div class="col-12 col-lg-4">
+      <div class="card shadow-sm border-0 h-100">
+        <div class="card-body">
+          <div class="d-flex justify-content-between align-items-start mb-3 flex-wrap gap-2">
+            <div>
+              <h3 class="h6 mb-1">Pacientes (Pets)</h3>
+              <span class="text-muted small">Dados reais da clínica</span>
+            </div>
+            {% if new_pet_url %}
+            <a class="btn btn-primary btn-sm" href="{{ new_pet_url }}">
+              <i class="bi bi-plus-circle me-1"></i> Novo pet
+            </a>
+            {% endif %}
+          </div>
+          <div class="tutor-calendar__pet-list" data-pet-list>
+            <div class="text-muted small">Carregando pets...</div>
+          </div>
+          <button type="button" class="btn btn-outline-primary btn-sm w-100 mt-3" data-refresh-pets>
+            <i class="bi bi-arrow-clockwise me-1"></i> Atualizar lista
+          </button>
+        </div>
+      </div>
+
+      <div class="card shadow-sm border-0 mt-3">
+        <div class="card-body">
+          <h3 class="h6 mb-3">Filtros rápidos</h3>
+          <div class="tutor-calendar__filters d-flex flex-wrap gap-2">
+            <button type="button" class="btn btn-outline-primary btn-sm active" data-filter="all">Todos</button>
+            <button type="button" class="btn btn-outline-primary btn-sm" data-filter="appointment">Consultas</button>
+            <button type="button" class="btn btn-outline-primary btn-sm" data-filter="exam">Exames</button>
+            <button type="button" class="btn btn-outline-primary btn-sm" data-filter="vaccine">Vacinas</button>
+          </div>
+          <p class="text-muted small mb-0 mt-3">
+            Eventos sincronizados automaticamente com o FullCalendar. Escolha um dia para iniciar um novo agendamento.
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-12 col-lg-8">
+      <div class="card shadow-sm border-0 h-100">
+        <div class="card-body">
+          <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-3">
+            <div class="d-flex align-items-center gap-2">
+              <button type="button" class="btn btn-outline-primary btn-sm" data-prev-month aria-label="Mês anterior">
+                <i class="bi bi-chevron-left"></i>
+              </button>
+              <div>
+                <div class="fw-bold text-capitalize" data-month-label></div>
+                <div class="text-muted small" data-year-label></div>
+              </div>
+              <button type="button" class="btn btn-primary btn-sm" data-next-month aria-label="Próximo mês">
+                <i class="bi bi-chevron-right"></i>
+              </button>
+            </div>
+            <div class="d-flex flex-wrap gap-2">
+              <button type="button" class="btn btn-outline-secondary btn-sm" data-today>Hoje</button>
+              <button type="button" class="btn btn-success btn-sm" data-new-event>
+                <i class="bi bi-plus-circle me-1"></i> Novo agendamento
+              </button>
+            </div>
+          </div>
+          <div class="tutor-calendar__weekdays" data-weekdays></div>
+          <div class="tutor-calendar__days" data-calendar-grid></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<style>
+#{{ component_id }}.tutor-calendar {
+  --tutor-calendar-card-bg: var(--bs-body-bg, #fff);
+}
+
+#{{ component_id }} .tutor-calendar__hero {
+  background: linear-gradient(90deg, #0ea5e9 0%, #6366f1 100%);
+}
+
+#{{ component_id }} .tutor-calendar__hero-icon {
+  width: 48px;
+  height: 48px;
+  border-radius: 1rem;
+  background: rgba(255, 255, 255, 0.2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+#{{ component_id }} .tutor-calendar__pet-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  max-height: 320px;
+  overflow-y: auto;
+  padding-right: 0.25rem;
+}
+
+#{{ component_id }} .tutor-calendar__pet {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.75rem;
+  border-radius: 0.9rem;
+  border: 1px solid rgba(99, 102, 241, 0.15);
+  background: var(--tutor-calendar-card-bg);
+  box-shadow: 0 4px 16px rgba(15, 23, 42, 0.04);
+}
+
+#{{ component_id }} .tutor-calendar__pet-avatar {
+  width: 44px;
+  height: 44px;
+  border-radius: 0.75rem;
+  background: rgba(99, 102, 241, 0.12);
+  color: #4338ca;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 1rem;
+}
+
+#{{ component_id }} .tutor-calendar__filters .btn {
+  border-radius: 999px;
+}
+
+#{{ component_id }} .tutor-calendar__filters .btn.active {
+  background: var(--bs-primary);
+  color: #fff;
+  border-color: var(--bs-primary);
+}
+
+#{{ component_id }} .tutor-calendar__weekdays {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  text-align: center;
+  font-weight: 600;
+  color: var(--bs-gray-600);
+  gap: 0.5rem;
+  margin-bottom: 0.25rem;
+}
+
+#{{ component_id }} .tutor-calendar__weekdays > div {
+  padding: 0.25rem;
+  text-transform: uppercase;
+  font-size: 0.8rem;
+}
+
+#{{ component_id }} .tutor-calendar__days {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 0.75rem;
+}
+
+#{{ component_id }} .tutor-calendar__day {
+  min-height: 110px;
+  border-radius: 1rem;
+  padding: 0.75rem;
+  background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+  border: 1px solid rgba(148, 163, 184, 0.3);
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
+  cursor: pointer;
+}
+
+#{{ component_id }} .tutor-calendar__day:hover {
+  border-color: rgba(99, 102, 241, 0.55);
+  box-shadow: 0 14px 30px rgba(99, 102, 241, 0.15);
+  transform: translateY(-1px);
+}
+
+#{{ component_id }} .tutor-calendar__day.is-outside {
+  opacity: 0.45;
+}
+
+#{{ component_id }} .tutor-calendar__day.is-today {
+  border-color: var(--bs-primary);
+  box-shadow: 0 0 0 0.2rem rgba(13, 110, 253, 0.15);
+}
+
+#{{ component_id }} .tutor-calendar__date {
+  font-weight: 700;
+  font-size: 1rem;
+  color: var(--bs-gray-900);
+}
+
+#{{ component_id }} .tutor-calendar__event-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+#{{ component_id }} .tutor-calendar__event {
+  border-radius: 0.85rem;
+  padding: 0.5rem 0.75rem;
+  background: rgba(226, 232, 240, 0.6);
+  border: 1px solid transparent;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  font-size: 0.85rem;
+  transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+}
+
+#{{ component_id }} .tutor-calendar__event:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.12);
+  border-color: rgba(99, 102, 241, 0.25);
+}
+
+#{{ component_id }} .tutor-calendar__event--appointment {
+  background: rgba(59, 130, 246, 0.14);
+  border-color: rgba(59, 130, 246, 0.35);
+}
+
+#{{ component_id }} .tutor-calendar__event--exam {
+  background: rgba(139, 92, 246, 0.14);
+  border-color: rgba(139, 92, 246, 0.35);
+}
+
+#{{ component_id }} .tutor-calendar__event--vaccine {
+  background: rgba(250, 204, 21, 0.18);
+  border-color: rgba(250, 204, 21, 0.45);
+}
+
+#{{ component_id }} .tutor-calendar__event-time {
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--bs-gray-700);
+  font-size: 0.75rem;
+}
+
+#{{ component_id }} .tutor-calendar__event-title {
+  font-weight: 600;
+  color: var(--bs-gray-900);
+}
+
+#{{ component_id }} .tutor-calendar__event-pet {
+  font-size: 0.75rem;
+  color: var(--bs-gray-600);
+}
+
+#{{ component_id }} .tutor-calendar__empty {
+  padding: 0.75rem 0;
+}
+
+@media (max-width: 991.98px) {
+  #{{ component_id }} .tutor-calendar__days {
+    gap: 0.5rem;
+  }
+
+  #{{ component_id }} .tutor-calendar__day {
+    min-height: 92px;
+    padding: 0.6rem;
+  }
+
+  #{{ component_id }} .tutor-calendar__pet-list {
+    max-height: none;
+  }
+}
+</style>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+  const root = document.getElementById('{{ component_id }}');
+  if (!root) {
+    return;
+  }
+
+  const eventsUrl = root.dataset.eventsUrl || '/api/my_appointments';
+  const petsUrl = root.dataset.petsUrl || '/api/my_pets';
+  const petListEl = root.querySelector('[data-pet-list]');
+  const calendarGrid = root.querySelector('[data-calendar-grid]');
+  const weekdaysEl = root.querySelector('[data-weekdays]');
+  const monthLabelEl = root.querySelector('[data-month-label]');
+  const yearLabelEl = root.querySelector('[data-year-label]');
+  const prevBtn = root.querySelector('[data-prev-month]');
+  const nextBtn = root.querySelector('[data-next-month]');
+  const todayBtn = root.querySelector('[data-today]');
+  const newEventBtn = root.querySelector('[data-new-event]');
+  const refreshPetsBtn = root.querySelector('[data-refresh-pets]');
+  const filterButtons = Array.prototype.slice.call(root.querySelectorAll('[data-filter]'));
+
+  const weekdays = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
+  const typeLabels = {
+    appointment: 'Consulta',
+    exam: 'Exame',
+    vaccine: 'Vacina',
+  };
+
+  let pets = [];
+  let events = [];
+  let viewDate = new Date();
+  let currentFilter = 'all';
+  let usingSharedCalendar = false;
+
+  function parseDate(value) {
+    if (!value) {
+      return null;
+    }
+    if (value instanceof Date) {
+      return new Date(value.getTime());
+    }
+    if (typeof value === 'string') {
+      const normalized = value.replace(/\s+/g, 'T');
+      const parsed = new Date(normalized);
+      if (!Number.isNaN(parsed.getTime())) {
+        return parsed;
+      }
+    }
+    return null;
+  }
+
+  function formatDateKey(date) {
+    if (!(date instanceof Date)) {
+      return '';
+    }
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  }
+
+  function formatTime(date) {
+    if (!(date instanceof Date)) {
+      return '';
+    }
+    return date.toLocaleTimeString('pt-BR', {
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false,
+    });
+  }
+
+  function isSameDay(a, b) {
+    if (!(a instanceof Date) || !(b instanceof Date)) {
+      return false;
+    }
+    return a.getFullYear() === b.getFullYear() &&
+      a.getMonth() === b.getMonth() &&
+      a.getDate() === b.getDate();
+  }
+
+  function getPetName(animalId) {
+    if (!animalId && animalId !== 0) {
+      return null;
+    }
+    const target = String(animalId);
+    const pet = pets.find(function(item) {
+      return String(item.id) === target;
+    });
+    return pet ? pet.name : null;
+  }
+
+  function derivePetNameFromTitle(title) {
+    if (!title) {
+      return null;
+    }
+    const parts = String(title).split('-');
+    if (!parts.length) {
+      return title.trim() || null;
+    }
+    const candidate = parts[0].trim();
+    return candidate || null;
+  }
+
+  function normalizeEvent(raw) {
+    if (!raw) {
+      return null;
+    }
+    const extended = raw.extendedProps || {};
+    const type = raw.type || raw.eventType || extended.eventType || extended.type || 'appointment';
+    const startValue = raw.start || raw.startStr || extended.start;
+    const startDate = parseDate(startValue);
+    const dateKey = startDate ? formatDateKey(startDate) : (raw.date || null);
+    const timeText = startDate ? formatTime(startDate) : (raw.time || '');
+    const animalId = raw.animalId || extended.animalId || extended.animal_id || null;
+    const title = raw.title || extended.title || 'Evento';
+
+    return {
+      id: raw.id || (extended && extended.recordId) || null,
+      type: type,
+      title: title,
+      date: dateKey,
+      time: timeText,
+      start: startDate,
+      animalId: animalId,
+      raw: raw,
+    };
+  }
+
+  function updateFilterButtons() {
+    filterButtons.forEach(function(btn) {
+      const isActive = btn.dataset.filter === currentFilter;
+      btn.classList.toggle('active', isActive);
+    });
+  }
+
+  function countEventsForPet(petId) {
+    if (petId === undefined || petId === null) {
+      return 0;
+    }
+    const idStr = String(petId);
+    return events.filter(function(event) {
+      if (event.animalId === undefined || event.animalId === null) {
+        return false;
+      }
+      return String(event.animalId) === idStr;
+    }).length;
+  }
+
+  function renderPetList() {
+    if (!petListEl) {
+      return;
+    }
+
+    if (!pets.length) {
+      petListEl.innerHTML = '<div class="text-muted small tutor-calendar__empty">Nenhum pet cadastrado até o momento.</div>';
+      return;
+    }
+
+    const fragment = document.createDocumentFragment();
+    pets.forEach(function(pet) {
+      const item = document.createElement('div');
+      item.className = 'tutor-calendar__pet';
+
+      const avatar = document.createElement('div');
+      avatar.className = 'tutor-calendar__pet-avatar';
+      avatar.textContent = (pet.name || 'Pet').charAt(0).toUpperCase();
+
+      const body = document.createElement('div');
+      body.className = 'flex-grow-1';
+
+      const nameEl = document.createElement('div');
+      nameEl.className = 'fw-semibold';
+      nameEl.textContent = pet.name || 'Pet sem nome';
+
+      const detailEl = document.createElement('div');
+      detailEl.className = 'text-muted small';
+      const species = pet.species || '';
+      const breed = pet.breed || '';
+      const details = [species, breed].filter(Boolean).join(' • ');
+      detailEl.textContent = details || 'Sem detalhes adicionais';
+
+      body.appendChild(nameEl);
+      body.appendChild(detailEl);
+
+      const meta = document.createElement('div');
+      meta.className = 'text-end';
+      const total = countEventsForPet(pet.id);
+      if (total > 0) {
+        const badge = document.createElement('span');
+        badge.className = 'badge bg-primary-subtle text-primary-emphasis';
+        badge.textContent = total === 1 ? '1 evento' : `${total} eventos`;
+        meta.appendChild(badge);
+      }
+
+      item.appendChild(avatar);
+      item.appendChild(body);
+      if (meta.childNodes.length > 0) {
+        item.appendChild(meta);
+      }
+
+      fragment.appendChild(item);
+    });
+
+    petListEl.innerHTML = '';
+    petListEl.appendChild(fragment);
+  }
+
+  function renderWeekdays() {
+    if (!weekdaysEl) {
+      return;
+    }
+    weekdaysEl.innerHTML = '';
+    weekdays.forEach(function(label) {
+      const div = document.createElement('div');
+      div.textContent = label;
+      weekdaysEl.appendChild(div);
+    });
+  }
+
+  function buildEventElement(eventData) {
+    const el = document.createElement('div');
+    el.className = 'tutor-calendar__event tutor-calendar__event--' + (eventData.type || 'appointment');
+
+    const timeEl = document.createElement('div');
+    timeEl.className = 'tutor-calendar__event-time';
+    timeEl.textContent = eventData.time || '--:--';
+
+    const titleEl = document.createElement('div');
+    titleEl.className = 'tutor-calendar__event-title';
+    titleEl.textContent = eventData.title;
+
+    const petName = getPetName(eventData.animalId) || derivePetNameFromTitle(eventData.title);
+    if (petName) {
+      const petEl = document.createElement('div');
+      petEl.className = 'tutor-calendar__event-pet';
+      petEl.textContent = petName;
+      el.appendChild(petEl);
+    }
+
+    el.insertBefore(titleEl, el.firstChild);
+    el.insertBefore(timeEl, el.firstChild);
+
+    el.addEventListener('click', function(evt) {
+      evt.stopPropagation();
+      showEventDetails(eventData);
+    });
+
+    return el;
+  }
+
+  function showEventDetails(eventData) {
+    if (!eventData) {
+      return;
+    }
+    const petName = getPetName(eventData.animalId) || derivePetNameFromTitle(eventData.title);
+    const typeLabel = typeLabels[eventData.type] || 'Evento';
+    const parts = [
+      typeLabel,
+      eventData.title,
+    ];
+    if (eventData.date) {
+      if (eventData.time) {
+        parts.push(`Data: ${eventData.date} às ${eventData.time}`);
+      } else {
+        parts.push(`Data: ${eventData.date}`);
+      }
+    }
+    if (petName) {
+      parts.push(`Paciente: ${petName}`);
+    }
+    window.alert(parts.join('\n'));
+  }
+
+  function dispatchSlot(dateObj, timeHint) {
+    const target = dateObj instanceof Date ? new Date(dateObj.getTime()) : parseDate(dateObj);
+    if (!target) {
+      return;
+    }
+    const detail = {
+      date: formatDateKey(target),
+      time: timeHint || formatTime(target) || '09:00',
+      source: 'tutor-calendar',
+    };
+    const customEvent = new CustomEvent('calendarSlotChosen', {
+      detail: detail,
+      bubbles: true,
+    });
+    root.dispatchEvent(customEvent);
+  }
+
+  function renderCalendar() {
+    if (!calendarGrid) {
+      return;
+    }
+
+    const monthStart = new Date(viewDate.getFullYear(), viewDate.getMonth(), 1);
+    const gridStart = new Date(monthStart);
+    gridStart.setDate(monthStart.getDate() - monthStart.getDay());
+    const totalCells = 42;
+
+    monthLabelEl && (monthLabelEl.textContent = monthStart.toLocaleDateString('pt-BR', { month: 'long' }));
+    yearLabelEl && (yearLabelEl.textContent = monthStart.getFullYear());
+
+    calendarGrid.innerHTML = '';
+    const today = new Date();
+
+    for (let i = 0; i < totalCells; i += 1) {
+      const cellDate = new Date(gridStart.getFullYear(), gridStart.getMonth(), gridStart.getDate() + i);
+      const iso = formatDateKey(cellDate);
+      const isOutside = cellDate.getMonth() !== viewDate.getMonth();
+      const cell = document.createElement('div');
+      cell.className = 'tutor-calendar__day';
+      cell.dataset.date = iso;
+
+      if (isOutside) {
+        cell.classList.add('is-outside');
+      }
+      if (isSameDay(cellDate, today)) {
+        cell.classList.add('is-today');
+      }
+
+      const dateLabel = document.createElement('div');
+      dateLabel.className = 'tutor-calendar__date';
+      dateLabel.textContent = String(cellDate.getDate());
+      cell.appendChild(dateLabel);
+
+      const eventsWrapper = document.createElement('div');
+      eventsWrapper.className = 'tutor-calendar__event-list';
+
+      const dayEvents = events.filter(function(event) {
+        if (event.date !== iso) {
+          return false;
+        }
+        if (currentFilter === 'all') {
+          return true;
+        }
+        return event.type === currentFilter;
+      }).sort(function(a, b) {
+        if (a.start && b.start) {
+          return a.start - b.start;
+        }
+        if (a.time && b.time) {
+          return a.time.localeCompare(b.time);
+        }
+        return 0;
+      });
+
+      dayEvents.forEach(function(eventData) {
+        eventsWrapper.appendChild(buildEventElement(eventData));
+      });
+
+      if (!dayEvents.length) {
+        const emptyMarker = document.createElement('div');
+        emptyMarker.className = 'text-muted small';
+        emptyMarker.textContent = '—';
+        eventsWrapper.appendChild(emptyMarker);
+      }
+
+      cell.appendChild(eventsWrapper);
+
+      cell.addEventListener('click', function() {
+        dispatchSlot(cellDate, '09:00');
+      });
+
+      calendarGrid.appendChild(cell);
+    }
+  }
+
+  function updateEvents(newEvents) {
+    const normalized = (newEvents || []).map(normalizeEvent).filter(function(ev) {
+      return ev && ev.date;
+    });
+    events = normalized;
+    renderCalendar();
+    renderPetList();
+  }
+
+  async function fetchEventsFromApi() {
+    try {
+      const response = await fetch(eventsUrl, {
+        headers: {
+          'Accept': 'application/json',
+        },
+        credentials: 'same-origin',
+      });
+      if (!response.ok) {
+        throw new Error('Não foi possível carregar eventos.');
+      }
+      const data = await response.json();
+      if (Array.isArray(data)) {
+        updateEvents(data);
+      }
+    } catch (error) {
+      console.error('Erro ao carregar eventos para o calendário experimental.', error);
+    }
+  }
+
+  async function loadPets() {
+    if (petListEl) {
+      petListEl.innerHTML = '<div class="text-muted small">Carregando pets...</div>';
+    }
+    try {
+      const response = await fetch(petsUrl, {
+        headers: {
+          'Accept': 'application/json',
+        },
+        credentials: 'same-origin',
+      });
+      if (!response.ok) {
+        throw new Error('Não foi possível carregar a lista de pets.');
+      }
+      const data = await response.json();
+      pets = Array.isArray(data) ? data : [];
+      renderPetList();
+    } catch (error) {
+      console.error('Erro ao carregar pets.', error);
+      if (petListEl) {
+        petListEl.innerHTML = '<div class="text-muted small">Não foi possível carregar os pets.</div>';
+      }
+    }
+  }
+
+  function setFilter(filter) {
+    currentFilter = filter || 'all';
+    updateFilterButtons();
+    renderCalendar();
+  }
+
+  prevBtn && prevBtn.addEventListener('click', function() {
+    viewDate = new Date(viewDate.getFullYear(), viewDate.getMonth() - 1, 1);
+    renderCalendar();
+  });
+
+  nextBtn && nextBtn.addEventListener('click', function() {
+    viewDate = new Date(viewDate.getFullYear(), viewDate.getMonth() + 1, 1);
+    renderCalendar();
+  });
+
+  todayBtn && todayBtn.addEventListener('click', function() {
+    viewDate = new Date();
+    renderCalendar();
+  });
+
+  newEventBtn && newEventBtn.addEventListener('click', function() {
+    dispatchSlot(viewDate, '09:00');
+  });
+
+  refreshPetsBtn && refreshPetsBtn.addEventListener('click', function() {
+    loadPets();
+  });
+
+  filterButtons.forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      setFilter(btn.dataset.filter || 'all');
+    });
+  });
+
+  function handleSharedEvents(event) {
+    if (!event || !event.detail) {
+      return;
+    }
+    usingSharedCalendar = true;
+    const shared = Array.isArray(event.detail.events) ? event.detail.events : [];
+    updateEvents(shared);
+  }
+
+  document.addEventListener('sharedCalendarEvents', handleSharedEvents);
+
+  document.addEventListener('sharedCalendarReady', function(evt) {
+    if (usingSharedCalendar) {
+      return;
+    }
+    const calendar = evt && evt.detail && evt.detail.calendar;
+    if (calendar && typeof calendar.getEvents === 'function') {
+      const calendarEvents = calendar.getEvents();
+      updateEvents(calendarEvents);
+      usingSharedCalendar = true;
+    }
+  });
+
+  if (Array.isArray(window.sharedCalendarEvents) && window.sharedCalendarEvents.length) {
+    usingSharedCalendar = true;
+    updateEvents(window.sharedCalendarEvents);
+  } else if (typeof window !== 'undefined' && window.sharedCalendar && typeof window.sharedCalendar.getEvents === 'function') {
+    const existing = window.sharedCalendar.getEvents();
+    if (Array.isArray(existing) && existing.length) {
+      usingSharedCalendar = true;
+      updateEvents(existing);
+    }
+  }
+
+  if (!usingSharedCalendar) {
+    const shouldDelayFallback = typeof window !== 'undefined' && window.sharedCalendar;
+    if (shouldDelayFallback) {
+      setTimeout(function() {
+        if (!usingSharedCalendar) {
+          fetchEventsFromApi();
+        }
+      }, 1200);
+    } else {
+      fetchEventsFromApi();
+    }
+  }
+
+  renderWeekdays();
+  renderCalendar();
+  updateFilterButtons();
+  loadPets();
+});
+</script>
