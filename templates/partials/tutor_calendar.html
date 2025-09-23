@@ -271,6 +271,26 @@
   color: var(--bs-gray-900);
 }
 
+#{{ component_id }} .tutor-calendar__day-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+#{{ component_id }} .tutor-calendar__date-count {
+  margin-left: auto;
+  background: var(--bs-primary);
+  color: #fff;
+  border-radius: 999px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  padding: 0.1rem 0.45rem;
+  line-height: 1.2;
+  min-width: 1.5rem;
+  text-align: center;
+}
+
 #{{ component_id }} .tutor-calendar__event-list {
   display: flex;
   flex-direction: column;
@@ -703,10 +723,10 @@ document.addEventListener('DOMContentLoaded', function() {
       const dateLabel = document.createElement('div');
       dateLabel.className = 'tutor-calendar__date';
       dateLabel.textContent = String(cellDate.getDate());
-      cell.appendChild(dateLabel);
 
-      const eventsWrapper = document.createElement('div');
-      eventsWrapper.className = 'tutor-calendar__event-list';
+      const dayHeader = document.createElement('div');
+      dayHeader.className = 'tutor-calendar__day-header';
+      dayHeader.appendChild(dateLabel);
 
       const dayEvents = events.filter(function(event) {
         if (event.date !== iso) {
@@ -725,6 +745,19 @@ document.addEventListener('DOMContentLoaded', function() {
         }
         return 0;
       });
+
+      const totalCount = dayEvents.length;
+      if (totalCount > 0) {
+        const dateCount = document.createElement('div');
+        dateCount.className = 'tutor-calendar__date-count';
+        dateCount.textContent = String(totalCount);
+        dayHeader.appendChild(dateCount);
+      }
+
+      cell.appendChild(dayHeader);
+
+      const eventsWrapper = document.createElement('div');
+      eventsWrapper.className = 'tutor-calendar__event-list';
 
       dayEvents.forEach(function(eventData) {
         eventsWrapper.appendChild(buildEventElement(eventData));
