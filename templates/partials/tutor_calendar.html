@@ -8,6 +8,15 @@
   class="tutor-calendar"
   data-events-url="{{ events_url }}"
   data-pets-url="{{ pets_url }}"
+  data-csrf-token="{{ csrf_token() if csrf_token is defined else '' }}"
+  data-url-animal-profile="{{ url_for('ficha_animal', animal_id=0) }}"
+  data-url-tutor-profile="{{ url_for('ficha_tutor', tutor_id=0) }}"
+  data-url-consulta="{{ url_for('consulta_direct', animal_id=0) }}"
+  data-url-edit-appointment="{{ url_for('edit_appointment', appointment_id=0) }}"
+  data-url-status="{{ url_for('update_appointment_status', appointment_id=0) }}"
+  data-url-delete-appointment="{{ url_for('delete_appointment', appointment_id=0) }}"
+  data-can-start-consulta="{{ 'true' if current_user.worker in ['veterinario', 'colaborador'] else 'false' }}"
+  data-can-manage-status="{{ 'true' if (current_user.worker in ['veterinario', 'colaborador']) or current_user.role == 'admin' else 'false' }}"
 >
   <div class="tutor-calendar__hero bg-gradient text-white rounded-4 p-4 mb-4">
     <div class="d-flex align-items-start gap-3">
@@ -631,6 +640,12 @@
   border-color: rgba(99, 102, 241, 0.25);
 }
 
+#{{ component_id }} .tutor-calendar__event.is-active {
+  border-color: var(--bs-primary) !important;
+  box-shadow: 0 10px 22px rgba(37, 99, 235, 0.25);
+  transform: translateY(-2px);
+}
+
 #{{ component_id }} .tutor-calendar__event--appointment {
   background: rgba(59, 130, 246, 0.14);
   border-color: rgba(59, 130, 246, 0.35);
@@ -662,6 +677,23 @@
 #{{ component_id }} .tutor-calendar__event-pet {
   font-size: 0.75rem;
   color: var(--bs-gray-600);
+}
+
+#{{ component_id }} .appointments-day-block--calendar {
+  margin: 1rem 0 0;
+}
+
+#{{ component_id }} .appointments-day-block--calendar .day-header {
+  margin: 0 0 0.75rem 0;
+  border-radius: 0.85rem;
+}
+
+#{{ component_id }} .appointments-day-block--calendar .appointment-card {
+  margin-bottom: 0;
+}
+
+#{{ component_id }} .appointments-day-block--calendar .actions-container {
+  justify-content: flex-start;
 }
 
 #{{ component_id }} .tutor-calendar__empty {
@@ -729,6 +761,19 @@ document.addEventListener('DOMContentLoaded', function() {
   const refreshPetsBtn = root.querySelector('[data-refresh-pets]');
   const filterButtons = Array.prototype.slice.call(root.querySelectorAll('[data-filter]'));
   const viewModeButtons = Array.prototype.slice.call(root.querySelectorAll('[data-view-mode]'));
+  const csrfToken = root.dataset.csrfToken || '';
+  const urlTemplates = {
+    animalProfile: root.dataset.urlAnimalProfile || '',
+    tutorProfile: root.dataset.urlTutorProfile || '',
+    consulta: root.dataset.urlConsulta || '',
+    editAppointment: root.dataset.urlEditAppointment || '',
+    status: root.dataset.urlStatus || '',
+    deleteAppointment: root.dataset.urlDeleteAppointment || '',
+  };
+  const permissions = {
+    canStartConsulta: root.dataset.canStartConsulta === 'true',
+    canManageStatus: root.dataset.canManageStatus === 'true',
+  };
 
   const weekdays = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
   const typeLabels = {
@@ -736,6 +781,32 @@ document.addEventListener('DOMContentLoaded', function() {
     exam: 'Exame',
     vaccine: 'Vacina',
   };
+  const statusLabels = {
+    scheduled: 'A fazer',
+    completed: 'Realizada',
+    canceled: 'Cancelada',
+    accepted: 'Aceita',
+  };
+  const statusActionConfig = [
+    {
+      status: 'completed',
+      label: 'Realizada',
+      buttonClass: 'btn btn-sm btn-outline-success',
+      icon: 'fa-solid fa-check me-1',
+    },
+    {
+      status: 'canceled',
+      label: 'Cancelar',
+      buttonClass: 'btn btn-sm btn-outline-warning',
+      icon: 'fa-solid fa-xmark me-1',
+    },
+    {
+      status: 'scheduled',
+      label: 'A fazer',
+      buttonClass: 'btn btn-sm btn-outline-secondary',
+      icon: 'fa-solid fa-clock me-1',
+    },
+  ];
 
   let pets = [];
   let events = [];
@@ -746,6 +817,8 @@ document.addEventListener('DOMContentLoaded', function() {
   let usingSharedCalendar = false;
   let isDayDetailOpen = false;
   let lastDetailTrigger = null;
+  let dayDetailMode = 'day';
+  let focusedEventId = null;
 
   function openDayDetail(options) {
     if (!dayDetailLayer || !dayDetailContainer) {
@@ -775,6 +848,9 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     const opts = options && typeof options === 'object' ? options : {};
     isDayDetailOpen = false;
+    focusedEventId = null;
+    dayDetailMode = 'day';
+    updateEventFocusHighlight();
     dayDetailLayer.classList.remove('is-open');
     dayDetailContainer.classList.remove('is-open');
     dayDetailContainer.setAttribute('aria-hidden', 'true');
@@ -886,6 +962,105 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     const candidate = parts[0].trim();
     return candidate || null;
+  }
+
+  function deriveVetNameFromTitle(title) {
+    if (!title) {
+      return null;
+    }
+    const parts = String(title).split('-');
+    if (parts.length < 2) {
+      return null;
+    }
+    const candidate = parts.slice(1).join('-').trim();
+    return candidate || null;
+  }
+
+  function getEventKey(eventData) {
+    if (!eventData) {
+      return null;
+    }
+    if (eventData.id !== undefined && eventData.id !== null) {
+      return String(eventData.id);
+    }
+    const raw = eventData.raw || {};
+    if (raw.id !== undefined && raw.id !== null) {
+      return String(raw.id);
+    }
+    const ext = raw.extendedProps || {};
+    if (ext.recordId !== undefined && ext.recordId !== null) {
+      return `appointment-${ext.recordId}`;
+    }
+    return null;
+  }
+
+  function fillUrlWithId(template, id) {
+    if (!template || id === undefined || id === null) {
+      return null;
+    }
+    const idStr = String(id);
+    if (!idStr) {
+      return null;
+    }
+    const pattern = /\/0(\/|$)/;
+    if (pattern.test(template)) {
+      return template.replace(pattern, `/${idStr}$1`);
+    }
+    return template.replace('0', idStr);
+  }
+
+  function appendQueryParam(url, key, value) {
+    if (!url) {
+      return null;
+    }
+    if (value === undefined || value === null) {
+      return url;
+    }
+    try {
+      const parsed = new URL(url, window.location.origin);
+      parsed.searchParams.set(key, value);
+      if (parsed.origin === window.location.origin) {
+        return parsed.pathname + parsed.search + parsed.hash;
+      }
+      return parsed.toString();
+    } catch (error) {
+      const hasQuery = url.indexOf('?') !== -1;
+      const separator = hasQuery ? '&' : '?';
+      return `${url}${separator}${encodeURIComponent(key)}=${encodeURIComponent(value)}`;
+    }
+  }
+
+  function buildConsultaUrl(animalId, appointmentId) {
+    const base = fillUrlWithId(urlTemplates.consulta, animalId);
+    if (!base) {
+      return null;
+    }
+    return appendQueryParam(base, 'appointment_id', appointmentId);
+  }
+
+  function updateEventFocusHighlight() {
+    const activeKey = focusedEventId ? String(focusedEventId) : null;
+    const nodes = root.querySelectorAll('[data-event-id]');
+    nodes.forEach(function(node) {
+      const key = node.dataset.eventId || (node.dataset.recordId ? `appointment-${node.dataset.recordId}` : null);
+      node.classList.toggle('is-active', Boolean(activeKey && key === activeKey));
+    });
+  }
+
+  function attachConfirmHandler(form) {
+    if (!form || form.dataset.confirmBound === 'true') {
+      return;
+    }
+    const message = form.getAttribute('data-confirm');
+    form.dataset.confirmBound = 'true';
+    if (!message) {
+      return;
+    }
+    form.addEventListener('submit', function(event) {
+      if (!window.confirm(message)) {
+        event.preventDefault();
+      }
+    });
   }
 
   function normalizeEvent(raw) {
@@ -1026,6 +1201,17 @@ document.addEventListener('DOMContentLoaded', function() {
   function buildEventElement(eventData) {
     const el = document.createElement('div');
     el.className = 'tutor-calendar__event tutor-calendar__event--' + (eventData.type || 'appointment');
+    const eventKey = getEventKey(eventData);
+    if (eventKey) {
+      el.dataset.eventId = String(eventKey);
+      if (focusedEventId && String(focusedEventId) === String(eventKey)) {
+        el.classList.add('is-active');
+      }
+    }
+    const recordId = eventData && eventData.raw && eventData.raw.extendedProps && eventData.raw.extendedProps.recordId;
+    if (recordId !== undefined && recordId !== null) {
+      el.dataset.recordId = String(recordId);
+    }
 
     const timeEl = document.createElement('div');
     timeEl.className = 'tutor-calendar__event-time';
@@ -1203,6 +1389,331 @@ document.addEventListener('DOMContentLoaded', function() {
     return card;
   }
 
+  function buildAppointmentDetailBlock(eventData, displayLabel, dateKey) {
+    if (!eventData) {
+      return null;
+    }
+    const raw = eventData.raw || {};
+    const ext = raw.extendedProps || {};
+    const recordId = ext.recordId !== undefined && ext.recordId !== null ? ext.recordId : null;
+    if (recordId === null) {
+      return null;
+    }
+
+    const fragment = document.createDocumentFragment();
+    const block = document.createElement('div');
+    block.className = 'appointments-day-block appointments-day-block--calendar';
+    if (dateKey) {
+      block.dataset.day = dateKey;
+      block.dataset.dayLabel = displayLabel || dateKey;
+    }
+
+    const header = document.createElement('div');
+    header.className = 'day-header d-flex align-items-center gap-2';
+    if (dateKey) {
+      header.dataset.day = dateKey;
+      header.dataset.dayLabel = displayLabel || dateKey;
+    }
+    const headerIconWrapper = document.createElement('span');
+    headerIconWrapper.className = 'icon-circle bg-primary text-white';
+    const headerIcon = document.createElement('i');
+    headerIcon.className = 'fa-solid fa-calendar-day';
+    headerIcon.setAttribute('aria-hidden', 'true');
+    headerIconWrapper.appendChild(headerIcon);
+    header.appendChild(headerIconWrapper);
+    const headerText = document.createElement('span');
+    headerText.textContent = displayLabel || dateKey || 'Compromisso';
+    header.appendChild(headerText);
+    block.appendChild(header);
+
+    const dayAppointments = document.createElement('div');
+    dayAppointments.className = 'day-appointments';
+    block.appendChild(dayAppointments);
+
+    const statusKey = String(ext.status || '').toLowerCase();
+    const card = document.createElement('div');
+    card.className = 'appointment-card appointment-row';
+    if (statusKey) {
+      card.classList.add(statusKey);
+    }
+    card.dataset.appointmentId = String(recordId);
+    if (dateKey) {
+      card.dataset.day = dateKey;
+      card.dataset.dayLabel = displayLabel || dateKey;
+    }
+    const scheduledIso = raw.startStr || raw.start || (eventData.start instanceof Date ? eventData.start.toISOString() : '');
+    if (scheduledIso) {
+      card.dataset.scheduled = scheduledIso;
+    }
+    card.dataset.recordId = String(recordId);
+    const editUrl = fillUrlWithId(urlTemplates.editAppointment, recordId);
+    if (editUrl) {
+      card.dataset.href = editUrl;
+      card.dataset.boundClick = 'true';
+    }
+
+    const cardBody = document.createElement('div');
+    cardBody.className = 'card-body';
+    card.appendChild(cardBody);
+
+    const row = document.createElement('div');
+    row.className = 'row align-items-center';
+    cardBody.appendChild(row);
+
+    const timeCol = document.createElement('div');
+    timeCol.className = 'col-md-2';
+    const timeDisplay = document.createElement('div');
+    timeDisplay.className = 'time-display d-flex align-items-center gap-1';
+    const timeIconWrapper = document.createElement('span');
+    timeIconWrapper.className = 'icon-circle bg-secondary text-white';
+    const timeIcon = document.createElement('i');
+    timeIcon.className = 'fa-regular fa-clock';
+    timeIcon.setAttribute('aria-hidden', 'true');
+    timeIconWrapper.appendChild(timeIcon);
+    timeDisplay.appendChild(timeIconWrapper);
+    const timeText = document.createElement('span');
+    timeText.textContent = eventData.time || '--:--';
+    timeDisplay.appendChild(timeText);
+    timeCol.appendChild(timeDisplay);
+    row.appendChild(timeCol);
+
+    const animalCol = document.createElement('div');
+    animalCol.className = 'col-md-3';
+    const animalWrapper = document.createElement('div');
+    animalWrapper.className = 'animal-name d-flex align-items-center gap-2';
+    const animalIconWrapper = document.createElement('span');
+    animalIconWrapper.className = 'icon-circle bg-danger text-white';
+    const animalIcon = document.createElement('i');
+    animalIcon.className = 'fa-solid fa-paw';
+    animalIcon.setAttribute('aria-hidden', 'true');
+    animalIconWrapper.appendChild(animalIcon);
+    animalWrapper.appendChild(animalIconWrapper);
+    const animalName = ext.animalName || getPetName(eventData.animalId) || derivePetNameFromTitle(eventData.title) || 'Paciente';
+    const animalText = document.createElement('span');
+    animalText.textContent = animalName;
+    animalWrapper.appendChild(animalText);
+    animalCol.appendChild(animalWrapper);
+    row.appendChild(animalCol);
+
+    const vetCol = document.createElement('div');
+    vetCol.className = 'col-md-2';
+    const vetWrapper = document.createElement('div');
+    vetWrapper.className = 'vet-name d-flex align-items-center gap-2';
+    const vetIconWrapper = document.createElement('span');
+    vetIconWrapper.className = 'icon-circle bg-info text-white';
+    const vetIcon = document.createElement('i');
+    vetIcon.className = 'fa-solid fa-user-doctor';
+    vetIcon.setAttribute('aria-hidden', 'true');
+    vetIconWrapper.appendChild(vetIcon);
+    vetWrapper.appendChild(vetIconWrapper);
+    const vetName = ext.vetName || ext.veterinarioName || deriveVetNameFromTitle(eventData.title) || '—';
+    const vetText = document.createElement('span');
+    vetText.textContent = vetName;
+    vetWrapper.appendChild(vetText);
+    vetCol.appendChild(vetWrapper);
+    row.appendChild(vetCol);
+
+    const statusCol = document.createElement('div');
+    statusCol.className = 'col-md-2';
+    const statusBadge = document.createElement('span');
+    const statusClass = statusKey || 'scheduled';
+    statusBadge.className = `status-badge status-${statusClass}`;
+    statusBadge.textContent = statusLabels[statusKey] || statusClass;
+    statusCol.appendChild(statusBadge);
+    row.appendChild(statusCol);
+
+    const actionsCol = document.createElement('div');
+    actionsCol.className = 'col-md-3';
+    const actionsContainer = document.createElement('div');
+    actionsContainer.className = 'actions-container';
+    actionsCol.appendChild(actionsContainer);
+    row.appendChild(actionsCol);
+
+    if (ext.animalId) {
+      const animalUrl = fillUrlWithId(urlTemplates.animalProfile, ext.animalId);
+      if (animalUrl) {
+        const btn = document.createElement('a');
+        btn.className = 'btn btn-sm btn-outline-primary';
+        btn.href = animalUrl;
+        btn.title = 'Ficha do Animal';
+        const icon = document.createElement('i');
+        icon.className = 'fa-solid fa-file-medical me-1';
+        icon.setAttribute('aria-hidden', 'true');
+        btn.appendChild(icon);
+        btn.appendChild(document.createTextNode('Ficha do Animal'));
+        actionsContainer.appendChild(btn);
+      }
+    }
+
+    if (ext.tutorId) {
+      const tutorUrl = fillUrlWithId(urlTemplates.tutorProfile, ext.tutorId);
+      if (tutorUrl) {
+        const btn = document.createElement('a');
+        btn.className = 'btn btn-sm btn-outline-secondary';
+        btn.href = tutorUrl;
+        btn.title = 'Ficha do Tutor';
+        const icon = document.createElement('i');
+        icon.className = 'fa-solid fa-user me-1';
+        icon.setAttribute('aria-hidden', 'true');
+        btn.appendChild(icon);
+        btn.appendChild(document.createTextNode('Ficha do Tutor'));
+        actionsContainer.appendChild(btn);
+      }
+    }
+
+    if (permissions.canStartConsulta && ext.animalId) {
+      const consultaUrl = buildConsultaUrl(ext.animalId, recordId);
+      if (consultaUrl) {
+        const btn = document.createElement('a');
+        btn.className = 'btn btn-sm btn-outline-success';
+        btn.href = consultaUrl;
+        btn.title = 'Iniciar Consulta';
+        const icon = document.createElement('i');
+        icon.className = 'fa-solid fa-stethoscope me-1';
+        icon.setAttribute('aria-hidden', 'true');
+        btn.appendChild(icon);
+        btn.appendChild(document.createTextNode('Iniciar Consulta'));
+        actionsContainer.appendChild(btn);
+      }
+    }
+
+    if (editUrl) {
+      const btn = document.createElement('a');
+      btn.className = 'btn btn-sm btn-outline-info';
+      btn.href = editUrl;
+      btn.title = 'Propor novo horário';
+      const icon = document.createElement('i');
+      icon.className = 'fa-solid fa-arrows-rotate me-1';
+      icon.setAttribute('aria-hidden', 'true');
+      btn.appendChild(icon);
+      btn.appendChild(document.createTextNode('Propor novo horário'));
+      actionsContainer.appendChild(btn);
+    }
+
+    if (permissions.canManageStatus) {
+      const statusUrl = fillUrlWithId(urlTemplates.status, recordId);
+      if (statusUrl) {
+        statusActionConfig.forEach(function(action) {
+          const form = document.createElement('form');
+          form.method = 'POST';
+          form.action = statusUrl;
+          form.className = 'form-confirm';
+
+          if (csrfToken) {
+            const csrfInput = document.createElement('input');
+            csrfInput.type = 'hidden';
+            csrfInput.name = 'csrf_token';
+            csrfInput.value = csrfToken;
+            form.appendChild(csrfInput);
+          }
+
+          const statusInput = document.createElement('input');
+          statusInput.type = 'hidden';
+          statusInput.name = 'status';
+          statusInput.value = action.status;
+          form.appendChild(statusInput);
+
+          const button = document.createElement('button');
+          button.type = 'submit';
+          button.className = action.buttonClass;
+          button.title = action.label;
+          const icon = document.createElement('i');
+          icon.className = action.icon;
+          icon.setAttribute('aria-hidden', 'true');
+          button.appendChild(icon);
+          button.appendChild(document.createTextNode(action.label));
+          form.appendChild(button);
+
+          attachConfirmHandler(form);
+          actionsContainer.appendChild(form);
+        });
+      }
+    }
+
+    if (permissions.canManageStatus) {
+      const deleteUrl = fillUrlWithId(urlTemplates.deleteAppointment, recordId);
+      if (deleteUrl) {
+        const form = document.createElement('form');
+        form.method = 'POST';
+        form.action = deleteUrl;
+        form.className = 'form-confirm';
+        form.setAttribute('data-confirm', 'Excluir este agendamento?');
+
+        if (csrfToken) {
+          const csrfInput = document.createElement('input');
+          csrfInput.type = 'hidden';
+          csrfInput.name = 'csrf_token';
+          csrfInput.value = csrfToken;
+          form.appendChild(csrfInput);
+        }
+
+        const button = document.createElement('button');
+        button.type = 'submit';
+        button.className = 'btn btn-sm btn-outline-danger';
+        button.title = 'Excluir';
+        const icon = document.createElement('i');
+        icon.className = 'fa-solid fa-trash me-1';
+        icon.setAttribute('aria-hidden', 'true');
+        button.appendChild(icon);
+        button.appendChild(document.createTextNode('Excluir'));
+        form.appendChild(button);
+
+        attachConfirmHandler(form);
+        actionsContainer.appendChild(form);
+      }
+    }
+
+    dayAppointments.appendChild(card);
+
+    const infoList = document.createElement('dl');
+    infoList.className = 'tutor-calendar__day-detail-info mt-3';
+
+    const typeLabel = typeLabels[eventData.type] || 'Evento';
+    const kindLabel = ext.kind ? String(ext.kind) : '';
+    const tutorName = ext.tutorName || null;
+
+    appendDetailRow(infoList, 'Horário', eventData.time || '--:--');
+    appendDetailRow(infoList, 'Paciente', animalName);
+    if (tutorName) {
+      appendDetailRow(infoList, 'Tutor', tutorName);
+    }
+    appendDetailRow(infoList, 'Veterinário', vetName);
+    appendDetailRow(infoList, 'Tipo', kindLabel ? kindLabel : typeLabel);
+    appendDetailRow(infoList, 'Status', statusLabels[statusKey] || statusKey || '—');
+    appendDetailRow(infoList, 'Data', eventData.date || dateKey || '—');
+    appendDetailRow(infoList, 'ID', recordId);
+    if (ext.clinicId !== undefined && ext.clinicId !== null) {
+      appendDetailRow(infoList, 'Clínica', ext.clinicId);
+    }
+    if (ext.notes) {
+      appendDetailRow(infoList, 'Observações', ext.notes);
+    }
+
+    if (infoList.childNodes.length) {
+      fragment.appendChild(block);
+      fragment.appendChild(infoList);
+    } else {
+      fragment.appendChild(block);
+    }
+
+    return fragment;
+  }
+
+  function buildEventDetailContent(eventData, displayLabel, dateKey) {
+    if (!eventData) {
+      return null;
+    }
+    if (eventData.type === 'appointment') {
+      const appointmentContent = buildAppointmentDetailBlock(eventData, displayLabel, dateKey);
+      if (appointmentContent) {
+        return appointmentContent;
+      }
+    }
+    const fallback = document.createDocumentFragment();
+    fallback.appendChild(buildDayDetailCard(eventData));
+    return fallback;
+  }
+
   function updateSelectedDateHighlight() {
     const datedElements = root.querySelectorAll('[data-date]');
     const activeDate = selectedDate;
@@ -1215,12 +1726,30 @@ document.addEventListener('DOMContentLoaded', function() {
     });
   }
 
+  function formatDateLabel(dateKey) {
+    if (!dateKey) {
+      return '';
+    }
+    const parsedDate = parseDateKey(dateKey);
+    if (!parsedDate) {
+      return dateKey;
+    }
+    return parsedDate.toLocaleDateString('pt-BR', {
+      weekday: 'long',
+      day: 'numeric',
+      month: 'long',
+    });
+  }
+
   function renderDayDetail(dateKey, options) {
     if (!dayDetailContainer || !dayDetailContent) {
       return;
     }
 
     dayDetailContainer.setAttribute('aria-busy', 'true');
+
+    dayDetailMode = 'day';
+    focusedEventId = null;
 
     const opts = options && typeof options === 'object' ? options : {};
     const shouldOpen = Boolean(opts.open);
@@ -1233,12 +1762,7 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     selectedDate = targetDateKey;
 
-    const parsedDate = parseDateKey(targetDateKey);
-    const displayLabel = parsedDate ? parsedDate.toLocaleDateString('pt-BR', {
-      weekday: 'long',
-      day: 'numeric',
-      month: 'long',
-    }) : targetDateKey;
+    const displayLabel = formatDateLabel(targetDateKey);
 
     const dayEvents = events.filter(function(event) {
       if (event.date !== targetDateKey) {
@@ -1285,6 +1809,66 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     updateSelectedDateHighlight();
+    updateEventFocusHighlight();
+
+    dayDetailContainer.setAttribute('aria-busy', 'false');
+
+    if (shouldOpen) {
+      openDayDetail({ focus: shouldFocus, trigger: opts.trigger });
+    } else if (!isDayDetailOpen) {
+      dayDetailContainer.setAttribute('aria-hidden', 'true');
+    }
+  }
+
+  function renderFocusedEvent(eventData, options) {
+    if (!dayDetailContainer || !dayDetailContent || !eventData) {
+      return;
+    }
+
+    dayDetailContainer.setAttribute('aria-busy', 'true');
+
+    dayDetailMode = 'event';
+    focusedEventId = getEventKey(eventData);
+
+    const opts = options && typeof options === 'object' ? options : {};
+    const shouldOpen = opts.open !== false;
+    const shouldFocus = opts.focus !== false;
+
+    const dateKey = eventData.date || (eventData.start ? formatDateKey(eventData.start) : selectedDate);
+    if (dateKey) {
+      selectedDate = dateKey;
+    }
+
+    const displayLabel = formatDateLabel(dateKey);
+
+    dayDetailContainer.dataset.date = dateKey || '';
+    dayDetailContent.innerHTML = '';
+
+    const header = document.createElement('div');
+    header.className = 'tutor-calendar__day-detail-header';
+
+    const dateEl = document.createElement('div');
+    dateEl.className = 'tutor-calendar__day-detail-date';
+    dateEl.textContent = displayLabel || dateKey || 'Detalhes do compromisso';
+    header.appendChild(dateEl);
+
+    const typeEl = document.createElement('span');
+    typeEl.className = 'tutor-calendar__day-detail-count';
+    const eventTypeLabel = typeLabels[eventData.type] || 'Evento';
+    typeEl.textContent = `Compromisso: ${eventTypeLabel}`;
+    header.appendChild(typeEl);
+
+    dayDetailContent.appendChild(header);
+
+    const content = buildEventDetailContent(eventData, displayLabel, dateKey);
+    if (content) {
+      dayDetailContent.appendChild(content);
+    } else {
+      dayDetailContent.appendChild(buildDayDetailCard(eventData));
+    }
+
+    updateSelectedDateHighlight();
+    updateEventFocusHighlight();
 
     dayDetailContainer.setAttribute('aria-busy', 'false');
 
@@ -1300,11 +1884,7 @@ document.addEventListener('DOMContentLoaded', function() {
       return;
     }
     const opts = options && typeof options === 'object' ? options : {};
-    const dateKey = eventData.date || (eventData.start ? formatDateKey(eventData.start) : null);
-    if (dateKey) {
-      selectedDate = dateKey;
-    }
-    renderDayDetail(dateKey, {
+    renderFocusedEvent(eventData, {
       open: true,
       focus: opts.focus !== false,
       trigger: opts.trigger,
@@ -1412,6 +1992,8 @@ document.addEventListener('DOMContentLoaded', function() {
 
       calendarGrid.appendChild(cell);
     }
+
+    updateEventFocusHighlight();
   }
 
   function renderWeekView() {
@@ -1499,6 +2081,8 @@ document.addEventListener('DOMContentLoaded', function() {
 
       weekViewEl.appendChild(card);
     }
+
+    updateEventFocusHighlight();
   }
 
   function renderCalendar() {
@@ -1517,6 +2101,34 @@ document.addEventListener('DOMContentLoaded', function() {
         weekViewEl.classList.add('d-none');
       }
       renderMonthView();
+    }
+    if (dayDetailMode === 'event' && focusedEventId) {
+      const activeKey = String(focusedEventId);
+      const targetEvent = events.find(function(eventItem) {
+        return getEventKey(eventItem) === activeKey;
+      });
+      if (targetEvent) {
+        let activeElement = null;
+        if (activeKey) {
+          try {
+            const selectorKey = activeKey.replace(/"/g, '\"');
+            activeElement = root.querySelector(`[data-event-id="${selectorKey}"]`);
+          } catch (error) {
+            activeElement = null;
+          }
+        }
+        if (activeElement) {
+          lastDetailTrigger = activeElement;
+        }
+        renderFocusedEvent(targetEvent, {
+          open: isDayDetailOpen,
+          focus: false,
+          trigger: lastDetailTrigger,
+        });
+        return;
+      }
+      dayDetailMode = 'day';
+      focusedEventId = null;
     }
     renderDayDetail(null, {
       open: isDayDetailOpen,
@@ -1621,12 +2233,22 @@ document.addEventListener('DOMContentLoaded', function() {
 
   todayBtn && todayBtn.addEventListener('click', function() {
     const now = new Date();
+    const todayKey = formatDateKey(now);
+    selectedDate = todayKey;
+    dayDetailMode = 'day';
+    focusedEventId = null;
+    lastDetailTrigger = todayBtn;
     if (currentViewMode === 'week') {
       viewDate = getStartOfWeek(now);
     } else {
       viewDate = new Date(now.getFullYear(), now.getMonth(), 1);
     }
     renderCalendar();
+    renderDayDetail(todayKey, {
+      open: true,
+      focus: true,
+      trigger: todayBtn,
+    });
   });
 
   newEventBtn && newEventBtn.addEventListener('click', function() {
