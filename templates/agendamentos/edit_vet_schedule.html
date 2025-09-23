@@ -261,6 +261,7 @@
               data-date="{{ appt.scheduled_at|format_datetime_brazil('%Y-%m-%d') }}"
               data-time="{{ appt.scheduled_at|format_datetime_brazil('%H:%M') }}"
               data-vet="{{ appt.veterinario.user.name }}"
+              data-vet-id="{{ appt.veterinario_id }}"
               data-tutor="{{ appt.tutor.name }}"
               data-tutor-id="{{ appt.tutor_id }}"
               data-animal="{{ appt.animal.name }}"
@@ -269,6 +270,8 @@
               data-tutor-url="{{ url_for('ficha_tutor', tutor_id=appt.tutor_id) }}"
               data-consulta-url="{{ url_for('consulta_direct', animal_id=appt.animal_id, appointment_id=appt.id) }}"
               data-notes="{{ appt.notes or '' }}"
+              data-created-by="{{ appt.creator.name if appt.creator else '' }}"
+              data-created-at="{{ appt.created_at|format_datetime_brazil('%d/%m/%Y %H:%M') if appt.created_at else '' }}"
               data-type="{{ item.kind }}">
             <div class="d-flex justify-content-between align-items-center">
               <div class="d-flex align-items-center">
@@ -510,12 +513,24 @@
           </div>
           <div class="row">
             <div class="col-md-6 mb-3">
+              <label class="form-label fw-bold">Agendado por</label>
+              <input type="text" class="form-control" id="modal-created-by" readonly>
+            </div>
+            <div class="col-md-6 mb-3">
+              <label class="form-label fw-bold">Agendado em</label>
+              <input type="text" class="form-control" id="modal-created-at" readonly>
+            </div>
+          </div>
+          <div class="row">
+            <div class="col-md-6 mb-3">
               <label class="form-label fw-bold">Data</label>
               <input type="date" class="form-control" id="modal-date">
             </div>
             <div class="col-md-6 mb-3">
               <label class="form-label fw-bold">Hora</label>
-              <input type="time" class="form-control" id="modal-time">
+              <select class="form-select" id="modal-time" data-placeholder="Selecione...">
+                <option value="">Selecione...</option>
+              </select>
             </div>
           </div>
           <div class="mb-3">
