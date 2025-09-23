@@ -1,14 +1,33 @@
 {% set calendar_id = calendar_id|default('shared-calendar') %}
 {% set toggle_id = toggle_id|default('agenda-toggle') %}
+{% set vet_select_id = toggle_id ~ '-vet-selector' %}
+{% set available_vets = vets|default([]) %}
+{% set initial_source = 'clinic' if clinic_id else 'user' %}
+{% set current_role = current_user.role if current_user.is_authenticated else None %}
+{% set current_worker = current_user.worker if current_user.is_authenticated else None %}
+{% set view_as_param = request.args.get('view_as') if request else None %}
+{% set show_vet_selector = (current_worker == 'colaborador') or (current_role == 'admin' and view_as_param == 'colaborador') %}
 
 <div class="card mb-4">
-  <div class="card-header d-flex justify-content-center">
+  <div class="card-header d-flex flex-wrap align-items-center justify-content-center gap-2">
     <div class="btn-group" id="{{ toggle_id }}">
       <button class="btn btn-outline-primary{% if not clinic_id %} active{% endif %}" data-source="user">Minha Agenda</button>
       {% if clinic_id %}
       <button class="btn btn-outline-primary{% if clinic_id %} active{% endif %}" data-source="clinic">Agenda da Clínica</button>
       {% endif %}
     </div>
+    {% if show_vet_selector %}
+    <div class="d-flex align-items-center gap-2 ms-lg-auto" data-collaborator-schedule-picker>
+      <label for="{{ vet_select_id }}" class="visually-hidden">Selecionar agenda</label>
+      <select id="{{ vet_select_id }}" class="form-select form-select-sm w-auto" aria-label="Selecionar agenda">
+        <option value="user"{% if initial_source == 'user' %} selected{% endif %}>Minha agenda</option>
+        <option value="clinic"{% if not clinic_id %} disabled{% endif %}{% if initial_source == 'clinic' %} selected{% endif %}>Agenda da clínica</option>
+        {% for vet in available_vets %}
+        <option value="vet:{{ vet.id }}">{{ vet.user.name if vet.user else 'Veterinário #' ~ vet.id }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    {% endif %}
   </div>
   <div class="card-body p-0">
     <div id="{{ calendar_id }}" data-calendar-redirect-url="{{ calendar_redirect_url|default('') }}"></div>
@@ -26,6 +45,7 @@
 document.addEventListener('DOMContentLoaded', function() {
   const calendarEl = document.getElementById('{{ calendar_id }}');
   const toggle = document.getElementById('{{ toggle_id }}');
+  const vetSelect = document.getElementById('{{ vet_select_id }}');
   const userPicker = document.getElementById('admin-agenda-user-picker');
   const hiddenVetInput = (function() {
     if (userPicker && typeof userPicker.closest === 'function') {
@@ -46,8 +66,11 @@ document.addEventListener('DOMContentLoaded', function() {
     return document.querySelector('[data-switcher-colab]');
   })();
   const csrfToken = '{{ csrf_token() if csrf_token is defined else '' }}';
-  let source = '{{ 'clinic' if clinic_id else 'user' }}';
+  const defaultSource = '{{ 'clinic' if clinic_id else 'user' }}';
+  let source = defaultSource;
   let selectedUserId = resolveInitialUserId();
+  let selectedVetId = resolveInitialVetId();
+  updateSelectedVetContext(selectedVetId);
   let calendar;
 
   if (typeof window !== 'undefined') {
@@ -80,7 +103,7 @@ document.addEventListener('DOMContentLoaded', function() {
     if (pickerValue !== null) {
       return pickerValue;
     }
-    if (hiddenVetInput) {
+    if (!vetSelect && hiddenVetInput) {
       const vetValue = extractNumericUserId(hiddenVetInput.value);
       if (vetValue !== null) {
         return vetValue;
@@ -95,9 +118,45 @@ document.addEventListener('DOMContentLoaded', function() {
     return null;
   }
 
+  function resolveInitialVetId() {
+    if (vetSelect) {
+      const selectValue = String(vetSelect.value || '').trim();
+      if (selectValue.toLowerCase().startsWith('vet:')) {
+        const vetValue = extractNumericUserId(selectValue);
+        if (vetValue !== null) {
+          return vetValue;
+        }
+      }
+    }
+    if (hiddenVetInput) {
+      const vetValue = extractNumericUserId(hiddenVetInput.value);
+      if (vetValue !== null) {
+        return vetValue;
+      }
+    }
+    return null;
+  }
+
+  function updateSelectedVetContext(vetId) {
+    if (!calendarEl) {
+      return;
+    }
+    if (vetId === null || vetId === undefined || vetId === '') {
+      delete calendarEl.dataset.veterinarioId;
+      return;
+    }
+    calendarEl.dataset.veterinarioId = vetId;
+  }
+
   function eventUrl() {
     if (source === 'clinic') {
       return '/api/clinic_appointments/{{ clinic_id }}';
+    }
+    if (source === 'vet') {
+      const vetId = extractNumericUserId(selectedVetId);
+      if (vetId !== null) {
+        return `/api/vet_appointments/${vetId}`;
+      }
     }
     const userId = extractNumericUserId(selectedUserId);
     if (userId !== null) {
@@ -111,13 +170,48 @@ document.addEventListener('DOMContentLoaded', function() {
     calendar.addEventSource(eventUrl());
   }
 
-  function setActiveButton(targetSource) {
-    if (!toggle) {
+  function setActiveButton(targetSource, options) {
+    if (toggle) {
+      toggle.querySelectorAll('button').forEach(function(btn) {
+        btn.classList.toggle('active', btn.dataset.source === targetSource);
+      });
+    }
+    if (!vetSelect) {
       return;
     }
-    toggle.querySelectorAll('button').forEach(function(btn) {
-      btn.classList.toggle('active', btn.dataset.source === targetSource);
+    const selectOptions = Array.from(vetSelect.options || []);
+    if (targetSource === 'user' || targetSource === 'clinic') {
+      const matchingOption = selectOptions.find(function(option) {
+        return option.value === targetSource;
+      });
+      if (matchingOption) {
+        vetSelect.value = matchingOption.value;
+      }
+      return;
+    }
+    if (targetSource === 'vet') {
+      const vetIdValue = options && Object.prototype.hasOwnProperty.call(options, 'vetId')
+        ? options.vetId
+        : selectedVetId;
+      if (vetIdValue !== null && vetIdValue !== undefined) {
+        const targetValue = `vet:${vetIdValue}`;
+        const matchingVetOption = selectOptions.find(function(option) {
+          return option.value === targetValue;
+        });
+        if (matchingVetOption) {
+          vetSelect.value = matchingVetOption.value;
+          return;
+        }
+      }
+    }
+    const fallbackOption = selectOptions.find(function(option) {
+      return option.value === defaultSource;
+    }) || selectOptions.find(function(option) {
+      return option.value === 'user';
     });
+    if (fallbackOption) {
+      vetSelect.value = fallbackOption.value;
+    }
   }
 
   function pad(value) {
@@ -183,6 +277,9 @@ document.addEventListener('DOMContentLoaded', function() {
       allDay: !!isAllDay,
       source,
     };
+    if (source === 'vet' && selectedVetId !== null && selectedVetId !== undefined) {
+      detail.vetId = selectedVetId;
+    }
     const customEvent = new CustomEvent('calendarSlotChosen', {
       detail,
       bubbles: true,
@@ -350,6 +447,8 @@ document.addEventListener('DOMContentLoaded', function() {
     toggle.querySelectorAll('button').forEach(function(btn) {
       btn.addEventListener('click', function() {
         source = this.dataset.source;
+        selectedVetId = null;
+        updateSelectedVetContext(null);
         setActiveButton(source);
         addEvents();
       });
@@ -361,13 +460,50 @@ document.addEventListener('DOMContentLoaded', function() {
       selectedUserId = extractNumericUserId(this.value);
       if (selectedUserId !== null) {
         source = 'user';
+        selectedVetId = null;
+        updateSelectedVetContext(null);
         setActiveButton('user');
       }
       addEvents();
     });
   }
 
-  setActiveButton(source);
+  if (vetSelect) {
+    vetSelect.addEventListener('change', function() {
+      const rawValue = String(this.value || '').trim();
+      if (rawValue === 'user') {
+        source = 'user';
+        selectedVetId = null;
+        selectedUserId = null;
+        updateSelectedVetContext(null);
+        setActiveButton('user');
+      } else if (rawValue === 'clinic') {
+        source = 'clinic';
+        selectedVetId = null;
+        selectedUserId = null;
+        updateSelectedVetContext(null);
+        setActiveButton('clinic');
+      } else {
+        const vetId = extractNumericUserId(rawValue);
+        if (vetId !== null) {
+          selectedVetId = vetId;
+          selectedUserId = null;
+          source = 'vet';
+          updateSelectedVetContext(selectedVetId);
+          setActiveButton('vet', { vetId: selectedVetId });
+        } else {
+          selectedVetId = null;
+          selectedUserId = null;
+          source = defaultSource;
+          updateSelectedVetContext(null);
+          setActiveButton(source);
+        }
+      }
+      addEvents();
+    });
+  }
+
+  setActiveButton(source, { vetId: selectedVetId });
 });
 </script>
 
