@@ -50,6 +50,10 @@ document.addEventListener('DOMContentLoaded', function() {
   let selectedUserId = resolveInitialUserId();
   let calendar;
 
+  if (typeof window !== 'undefined') {
+    window.sharedCalendarEvents = window.sharedCalendarEvents || [];
+  }
+
   if (!calendarEl) {
     return;
   }
@@ -186,6 +190,60 @@ document.addEventListener('DOMContentLoaded', function() {
     calendarEl.dispatchEvent(customEvent);
   }
 
+  function toSharedEventObject(eventApi) {
+    if (!eventApi) {
+      return null;
+    }
+    const extended = Object.assign({}, eventApi.extendedProps || {});
+    const eventType = extended.eventType || extended.type || eventApi.type || null;
+    return {
+      id: eventApi.id || null,
+      title: eventApi.title || '',
+      start: eventApi.start ? eventApi.start.toISOString() : (eventApi.startStr || null),
+      end: eventApi.end ? eventApi.end.toISOString() : (eventApi.endStr || null),
+      allDay: !!eventApi.allDay,
+      type: eventType,
+      extendedProps: extended,
+    };
+  }
+
+  function dispatchSharedCalendarEvents(events) {
+    const normalized = (events || []).map(function(item) {
+      if (item && typeof item.start === 'string') {
+        const plain = Object.assign({
+          id: item.id || null,
+          title: item.title || '',
+          start: item.start || null,
+          end: item.end || null,
+          allDay: !!item.allDay,
+        }, item);
+        const extended = Object.assign({}, plain.extendedProps || {});
+        if (!plain.type) {
+          const derivedType = extended.eventType || extended.type;
+          if (derivedType) {
+            plain.type = derivedType;
+          }
+        }
+        plain.extendedProps = extended;
+        return plain;
+      }
+      return toSharedEventObject(item);
+    }).filter(Boolean);
+
+    if (typeof window !== 'undefined') {
+      window.sharedCalendarEvents = normalized;
+    }
+    document.dispatchEvent(new CustomEvent('sharedCalendarEvents', {
+      detail: { events: normalized },
+    }));
+  }
+
+  function announceSharedCalendarReady(instance) {
+    document.dispatchEvent(new CustomEvent('sharedCalendarReady', {
+      detail: { calendar: instance },
+    }));
+  }
+
   async function persistEventChange(info) {
     if (!calendar) {
       if (typeof info.revert === 'function') {
@@ -260,6 +318,9 @@ document.addEventListener('DOMContentLoaded', function() {
     eventAllow: function(dropInfo, draggedEvent) {
       return getEventType(draggedEvent) === 'appointment';
     },
+    eventsSet: function(eventList) {
+      dispatchSharedCalendarEvents(eventList);
+    },
     eventDidMount: function(info) {
       const type = getEventType(info.event);
       if (info.el && type) {
@@ -282,6 +343,8 @@ document.addEventListener('DOMContentLoaded', function() {
   window.sharedCalendar = calendar;
   addEvents();
   calendar.render();
+  dispatchSharedCalendarEvents(calendar.getEvents());
+  announceSharedCalendarReady(calendar);
 
   if (toggle) {
     toggle.querySelectorAll('button').forEach(function(btn) {
