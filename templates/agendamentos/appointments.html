@@ -100,8 +100,11 @@
           </p>
         </div>
         <div class="card-body">
-          <div class="text-muted small" data-calendar-summary-empty>
-            Carregando estatísticas da agenda...
+          <div class="text-muted small" data-calendar-summary-loading>
+            Carregando…
+          </div>
+          <div class="text-muted small d-none" data-calendar-summary-empty>
+            Nenhum agendamento encontrado
           </div>
           <div class="calendar-summary-list d-flex flex-column gap-3 mt-2" data-calendar-summary-list></div>
         </div>
@@ -380,6 +383,9 @@ document.addEventListener('DOMContentLoaded', () => {
   const calendarSummaryList = calendarSummaryPanel
     ? calendarSummaryPanel.querySelector('[data-calendar-summary-list]')
     : null;
+  const calendarSummaryLoading = calendarSummaryPanel
+    ? calendarSummaryPanel.querySelector('[data-calendar-summary-loading]')
+    : null;
   const calendarSummaryEmpty = calendarSummaryPanel
     ? calendarSummaryPanel.querySelector('[data-calendar-summary-empty]')
     : null;
@@ -387,8 +393,33 @@ document.addEventListener('DOMContentLoaded', () => {
     ? calendarSummaryPanel.querySelector('[data-calendar-summary-total]')
     : null;
   let newAppointmentCollapseInstance = null;
+  let calendarSummaryHasRenderedOnce = false;
+  let calendarSummaryIsLoading = false;
 
   const calendarSummaryWeekdays = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
+
+  function setCalendarSummaryLoadingState(isLoading) {
+    if (!calendarSummaryPanel) {
+      return;
+    }
+    const shouldShow = !!isLoading;
+    calendarSummaryIsLoading = shouldShow;
+    calendarSummaryPanel.classList.toggle('is-loading', shouldShow);
+    if (calendarSummaryLoading) {
+      calendarSummaryLoading.classList.toggle('d-none', !shouldShow);
+    }
+    if (shouldShow && calendarSummaryEmpty) {
+      calendarSummaryEmpty.classList.add('d-none');
+    }
+  }
+
+  function isCalendarSummaryDataReady() {
+    if (typeof window !== 'undefined'
+      && Object.prototype.hasOwnProperty.call(window, 'sharedCalendarEventsReady')) {
+      return !!window.sharedCalendarEventsReady;
+    }
+    return calendarSummaryHasRenderedOnce || !calendarSummaryIsLoading;
+  }
 
   function padNumber(value) {
     return String(value).padStart(2, '0');
@@ -573,8 +604,11 @@ document.addEventListener('DOMContentLoaded', () => {
     return source.slice(0, limit);
   }
 
-  function renderCalendarSummary(events) {
+  function renderCalendarSummary(events, { requireDataReady = false } = {}) {
     if (!calendarSummaryPanel || !calendarSummaryList) {
+      return;
+    }
+    if (requireDataReady && !isCalendarSummaryDataReady()) {
       return;
     }
     const { rows, totalEvents } = computeSummaryMetrics(events);
@@ -582,6 +616,8 @@ document.addEventListener('DOMContentLoaded', () => {
       calendarSummaryTotalBadge.textContent = String(totalEvents);
     }
     calendarSummaryList.innerHTML = '';
+    calendarSummaryHasRenderedOnce = true;
+    setCalendarSummaryLoadingState(false);
     if (!rows.length) {
       if (calendarSummaryEmpty) {
         calendarSummaryEmpty.classList.remove('d-none');
@@ -675,13 +711,36 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   if (calendarSummaryPanel) {
+    setCalendarSummaryLoadingState(true);
+
     const initialEvents = Array.isArray(window.sharedCalendarEvents)
       ? window.sharedCalendarEvents
       : [];
-    renderCalendarSummary(initialEvents);
+    renderCalendarSummary(initialEvents, { requireDataReady: true });
+
     document.addEventListener('sharedCalendarEvents', event => {
-      const items = (event && event.detail && event.detail.events) || [];
+      const detail = event && event.detail ? event.detail : {};
+      const items = Array.isArray(detail.events) ? detail.events : [];
+      const isReady = detail.ready !== false;
+      if (!isReady) {
+        return;
+      }
       renderCalendarSummary(items);
+    });
+
+    document.addEventListener('sharedCalendarLoading', event => {
+      const isLoading = !!(event && event.detail && event.detail.isLoading);
+      if (isLoading) {
+        setCalendarSummaryLoadingState(true);
+        return;
+      }
+      if (!calendarSummaryHasRenderedOnce) {
+        setCalendarSummaryLoadingState(false);
+        if (calendarSummaryEmpty) {
+          calendarSummaryEmpty.classList.remove('d-none');
+        }
+        calendarSummaryPanel.classList.remove('has-data');
+      }
     });
   }
 
