@@ -146,6 +146,18 @@
 <style>
 #{{ component_id }}.tutor-calendar {
   --tutor-calendar-card-bg: var(--bs-body-bg, #fff);
+  --tutor-calendar-status-scheduled-color: #2563eb;
+  --tutor-calendar-status-scheduled-border: rgba(59, 130, 246, 0.35);
+  --tutor-calendar-status-scheduled-bg: rgba(59, 130, 246, 0.12);
+  --tutor-calendar-status-completed-color: #15803d;
+  --tutor-calendar-status-completed-border: rgba(34, 197, 94, 0.4);
+  --tutor-calendar-status-completed-bg: rgba(134, 239, 172, 0.24);
+  --tutor-calendar-status-canceled-color: #b91c1c;
+  --tutor-calendar-status-canceled-border: rgba(248, 113, 113, 0.4);
+  --tutor-calendar-status-canceled-bg: rgba(254, 202, 202, 0.32);
+  --tutor-calendar-status-accepted-color: #0f766e;
+  --tutor-calendar-status-accepted-border: rgba(45, 212, 191, 0.42);
+  --tutor-calendar-status-accepted-bg: rgba(153, 246, 228, 0.28);
 }
 
 #{{ component_id }} .tutor-calendar__hero {
@@ -515,6 +527,23 @@
   display: flex;
   flex-direction: column;
   gap: 0.6rem;
+  border-left: 4px solid transparent;
+}
+
+#{{ component_id }} .tutor-calendar__day-detail-card--status-scheduled {
+  border-left-color: var(--tutor-calendar-status-scheduled-color);
+}
+
+#{{ component_id }} .tutor-calendar__day-detail-card--status-completed {
+  border-left-color: var(--tutor-calendar-status-completed-color);
+}
+
+#{{ component_id }} .tutor-calendar__day-detail-card--status-canceled {
+  border-left-color: var(--tutor-calendar-status-canceled-color);
+}
+
+#{{ component_id }} .tutor-calendar__day-detail-card--status-accepted {
+  border-left-color: var(--tutor-calendar-status-accepted-color);
 }
 
 #{{ component_id }} .tutor-calendar__day-detail-card + .tutor-calendar__day-detail-card {
@@ -531,6 +560,23 @@
   display: flex;
   flex-direction: column;
   gap: 1.5rem;
+  border-left: 4px solid transparent;
+}
+
+#{{ component_id }} .tutor-calendar__appointment-card--status-scheduled {
+  border-left-color: var(--tutor-calendar-status-scheduled-color);
+}
+
+#{{ component_id }} .tutor-calendar__appointment-card--status-completed {
+  border-left-color: var(--tutor-calendar-status-completed-color);
+}
+
+#{{ component_id }} .tutor-calendar__appointment-card--status-canceled {
+  border-left-color: var(--tutor-calendar-status-canceled-color);
+}
+
+#{{ component_id }} .tutor-calendar__appointment-card--status-accepted {
+  border-left-color: var(--tutor-calendar-status-accepted-color);
 }
 
 #{{ component_id }} .tutor-calendar__appointment-card--exam {
@@ -889,6 +935,51 @@
   transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
 }
 
+#{{ component_id }} .tutor-calendar__event-meta {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+#{{ component_id }} .tutor-calendar__event-status {
+  margin-left: auto;
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  white-space: nowrap;
+}
+
+#{{ component_id }} .status-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  padding: 0.2rem 0.6rem;
+  font-weight: 600;
+  font-size: 0.7rem;
+  letter-spacing: 0.04em;
+}
+
+#{{ component_id }} .status-scheduled {
+  background: rgba(59, 130, 246, 0.15);
+  color: var(--tutor-calendar-status-scheduled-color);
+}
+
+#{{ component_id }} .status-completed {
+  background: rgba(34, 197, 94, 0.18);
+  color: var(--tutor-calendar-status-completed-color);
+}
+
+#{{ component_id }} .status-canceled {
+  background: rgba(248, 113, 113, 0.18);
+  color: var(--tutor-calendar-status-canceled-color);
+}
+
+#{{ component_id }} .status-accepted {
+  background: rgba(45, 212, 191, 0.18);
+  color: var(--tutor-calendar-status-accepted-color);
+}
+
 #{{ component_id }} .tutor-calendar__event:hover {
   transform: translateY(-1px);
   box-shadow: 0 8px 18px rgba(15, 23, 42, 0.12);
@@ -914,6 +1005,94 @@
 #{{ component_id }} .tutor-calendar__event--vaccine {
   background: rgba(250, 204, 21, 0.18);
   border-color: rgba(250, 204, 21, 0.45);
+}
+
+#{{ component_id }} .tutor-calendar__event--status-scheduled {
+  background: linear-gradient(180deg, var(--tutor-calendar-status-scheduled-bg) 0%, rgba(255, 255, 255, 0.96) 100%);
+  border-color: var(--tutor-calendar-status-scheduled-border);
+}
+
+#{{ component_id }} .tutor-calendar__event--status-completed {
+  background: linear-gradient(180deg, rgba(134, 239, 172, 0.2) 0%, rgba(220, 252, 231, 0.92) 100%);
+  border-color: var(--tutor-calendar-status-completed-border);
+}
+
+#{{ component_id }} .tutor-calendar__event--status-canceled {
+  background: linear-gradient(180deg, rgba(248, 113, 113, 0.1) 0%, rgba(254, 226, 226, 0.92) 100%);
+  border-color: var(--tutor-calendar-status-canceled-border);
+}
+
+#{{ component_id }} .tutor-calendar__event--status-accepted {
+  background: linear-gradient(180deg, rgba(45, 212, 191, 0.12) 0%, rgba(236, 253, 245, 0.9) 100%);
+  border-color: var(--tutor-calendar-status-accepted-border);
+}
+
+#{{ component_id }} .tutor-calendar__event--status-scheduled .tutor-calendar__event-time {
+  color: var(--tutor-calendar-status-scheduled-color);
+}
+
+#{{ component_id }} .tutor-calendar__event--status-completed .tutor-calendar__event-time {
+  color: var(--tutor-calendar-status-completed-color);
+}
+
+#{{ component_id }} .tutor-calendar__event--status-canceled .tutor-calendar__event-time {
+  color: var(--tutor-calendar-status-canceled-color);
+}
+
+#{{ component_id }} .tutor-calendar__event--status-accepted .tutor-calendar__event-time {
+  color: var(--tutor-calendar-status-accepted-color);
+}
+
+#{{ component_id }} .tutor-calendar__event--status-completed .tutor-calendar__event-title {
+  color: #166534;
+}
+
+#{{ component_id }} .tutor-calendar__event--status-canceled .tutor-calendar__event-title {
+  color: #7f1d1d;
+}
+
+#{{ component_id }} .tutor-calendar__event--status-accepted .tutor-calendar__event-title {
+  color: #115e59;
+}
+
+#{{ component_id }} .tutor-calendar__event--status-scheduled:hover {
+  border-color: var(--tutor-calendar-status-scheduled-border);
+  box-shadow: 0 10px 22px rgba(37, 99, 235, 0.18);
+}
+
+#{{ component_id }} .tutor-calendar__event--status-completed:hover {
+  border-color: var(--tutor-calendar-status-completed-border);
+  box-shadow: 0 10px 22px rgba(22, 163, 74, 0.18);
+}
+
+#{{ component_id }} .tutor-calendar__event--status-canceled:hover {
+  border-color: var(--tutor-calendar-status-canceled-border);
+  box-shadow: 0 10px 22px rgba(185, 28, 28, 0.18);
+}
+
+#{{ component_id }} .tutor-calendar__event--status-accepted:hover {
+  border-color: var(--tutor-calendar-status-accepted-border);
+  box-shadow: 0 10px 22px rgba(15, 118, 110, 0.18);
+}
+
+#{{ component_id }} .tutor-calendar__event--status-scheduled.is-active {
+  border-color: var(--tutor-calendar-status-scheduled-border) !important;
+  box-shadow: 0 12px 26px rgba(37, 99, 235, 0.22);
+}
+
+#{{ component_id }} .tutor-calendar__event--status-completed.is-active {
+  border-color: var(--tutor-calendar-status-completed-border) !important;
+  box-shadow: 0 12px 26px rgba(22, 163, 74, 0.22);
+}
+
+#{{ component_id }} .tutor-calendar__event--status-canceled.is-active {
+  border-color: var(--tutor-calendar-status-canceled-border) !important;
+  box-shadow: 0 12px 26px rgba(185, 28, 28, 0.2);
+}
+
+#{{ component_id }} .tutor-calendar__event--status-accepted.is-active {
+  border-color: var(--tutor-calendar-status-accepted-border) !important;
+  box-shadow: 0 12px 26px rgba(15, 118, 110, 0.2);
 }
 
 #{{ component_id }} .tutor-calendar__event-time {
@@ -1062,6 +1241,38 @@ document.addEventListener('DOMContentLoaded', function() {
       icon: 'fa-solid fa-clock me-1',
     },
   ];
+
+  function normalizeStatus(status, type) {
+    const fallback = type === 'appointment' || typeof type === 'undefined' ? 'scheduled' : '';
+    if (status === undefined || status === null || status === '') {
+      return fallback;
+    }
+    try {
+      return String(status).trim().toLowerCase();
+    } catch (error) {
+      return fallback;
+    }
+  }
+
+  function formatStatusLabel(statusKey) {
+    if (!statusKey) {
+      return '';
+    }
+    const normalized = normalizeStatus(statusKey);
+    if (!normalized) {
+      return '';
+    }
+    if (Object.prototype.hasOwnProperty.call(statusLabels, normalized)) {
+      return statusLabels[normalized];
+    }
+    return normalized
+      .split(/[\s_-]+/)
+      .filter(Boolean)
+      .map(function(part) {
+        return part.charAt(0).toUpperCase() + part.slice(1);
+      })
+      .join(' ');
+  }
 
   let pets = [];
   let events = [];
@@ -1302,6 +1513,59 @@ document.addEventListener('DOMContentLoaded', function() {
     });
   }
 
+  function getEventRecordId(eventData) {
+    if (!eventData) {
+      return null;
+    }
+    if (eventData.recordId !== undefined && eventData.recordId !== null) {
+      return eventData.recordId;
+    }
+    const raw = eventData.raw || {};
+    if (raw.recordId !== undefined && raw.recordId !== null) {
+      return raw.recordId;
+    }
+    const ext = raw.extendedProps || {};
+    if (ext.recordId !== undefined && ext.recordId !== null) {
+      return ext.recordId;
+    }
+    if (eventData.id && typeof eventData.id === 'string') {
+      const match = eventData.id.match(/appointment-(\d+)/i);
+      if (match && match[1]) {
+        return match[1];
+      }
+    }
+    return null;
+  }
+
+  function applyLocalAppointmentStatus(recordId, status) {
+    if (recordId === undefined || recordId === null) {
+      return false;
+    }
+    const idStr = String(recordId);
+    const normalizedStatus = normalizeStatus(status, 'appointment');
+    let updated = false;
+    events.forEach(function(eventItem) {
+      if (!eventItem) {
+        return;
+      }
+      const eventRecordId = getEventRecordId(eventItem);
+      if (eventRecordId !== undefined && eventRecordId !== null && String(eventRecordId) === idStr) {
+        eventItem.status = normalizedStatus;
+        if (eventItem.raw && typeof eventItem.raw === 'object') {
+          eventItem.raw.status = normalizedStatus;
+          if (eventItem.raw.extendedProps && typeof eventItem.raw.extendedProps === 'object') {
+            eventItem.raw.extendedProps.status = normalizedStatus;
+          }
+        }
+        updated = true;
+      }
+    });
+    if (updated) {
+      renderCalendar();
+    }
+    return updated;
+  }
+
   function attachConfirmHandler(form) {
     if (!form || form.dataset.confirmBound === 'true') {
       return;
@@ -1318,6 +1582,74 @@ document.addEventListener('DOMContentLoaded', function() {
     });
   }
 
+  function bindStatusForm(form, recordId, action) {
+    if (!form || form.dataset.statusHandlerBound === 'true') {
+      return;
+    }
+    const targetStatus = action && action.status ? action.status : form.dataset.statusTarget;
+    if (!targetStatus) {
+      return;
+    }
+    form.dataset.statusHandlerBound = 'true';
+    form.addEventListener('submit', function(event) {
+      event.preventDefault();
+      const submitButton = form.querySelector('button[type="submit"]');
+      let originalHtml = null;
+      const label = action && action.label ? action.label : (submitButton ? submitButton.textContent.trim() : 'Atualizando');
+      if (submitButton) {
+        originalHtml = submitButton.innerHTML;
+        submitButton.disabled = true;
+        submitButton.innerHTML = `<span class="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span>${label}`;
+      }
+      const formData = new FormData(form);
+      fetch(form.action, {
+        method: 'POST',
+        body: formData,
+        credentials: 'same-origin',
+        redirect: 'follow',
+      }).then(async function(response) {
+        const responseText = await response.text();
+        if (!response.ok) {
+          let message = responseText.trim();
+          if (!message) {
+            message = 'Não foi possível atualizar o status.';
+          }
+          try {
+            const parsed = JSON.parse(responseText);
+            if (parsed && parsed.message) {
+              message = parsed.message;
+            }
+          } catch (error) {
+            // ignore parse errors for non-JSON responses
+          }
+          throw new Error(message);
+        }
+        const updated = applyLocalAppointmentStatus(recordId, targetStatus);
+        if (!updated && typeof fetchEventsFromApi === 'function') {
+          try {
+            fetchEventsFromApi();
+          } catch (error) {
+            console.warn('Não foi possível recarregar os eventos após alterar o status.', error);
+          }
+        }
+        const detail = {
+          appointmentId: recordId,
+          status: normalizeStatus(targetStatus, 'appointment'),
+          label: formatStatusLabel(targetStatus),
+        };
+        root.dispatchEvent(new CustomEvent('appointmentStatusUpdated', { detail: detail }));
+      }).catch(function(error) {
+        console.error('Erro ao atualizar o status do agendamento.', error);
+        window.alert(error && error.message ? error.message : 'Não foi possível atualizar o status.');
+      }).finally(function() {
+        if (submitButton) {
+          submitButton.disabled = false;
+          submitButton.innerHTML = originalHtml;
+        }
+      });
+    });
+  }
+
   function normalizeEvent(raw) {
     if (!raw) {
       return null;
@@ -1330,6 +1662,18 @@ document.addEventListener('DOMContentLoaded', function() {
     const timeText = startDate ? formatTime(startDate) : (raw.time || '');
     const animalId = raw.animalId || extended.animalId || extended.animal_id || null;
     const title = raw.title || extended.title || 'Evento';
+    const statusKey = normalizeStatus(extended.status || raw.status, type);
+    if (extended && typeof extended === 'object') {
+      extended.status = statusKey;
+    }
+    if (raw && typeof raw === 'object') {
+      raw.status = statusKey;
+      if (!raw.extendedProps && statusKey) {
+        raw.extendedProps = { status: statusKey };
+      } else if (raw.extendedProps && typeof raw.extendedProps === 'object') {
+        raw.extendedProps.status = statusKey;
+      }
+    }
 
     return {
       id: raw.id || (extended && extended.recordId) || null,
@@ -1339,6 +1683,7 @@ document.addEventListener('DOMContentLoaded', function() {
       time: timeText,
       start: startDate,
       animalId: animalId,
+      status: statusKey,
       raw: raw,
     };
   }
@@ -1455,7 +1800,15 @@ document.addEventListener('DOMContentLoaded', function() {
 
   function buildEventElement(eventData) {
     const el = document.createElement('div');
-    el.className = 'tutor-calendar__event tutor-calendar__event--' + (eventData.type || 'appointment');
+    const typeKey = eventData.type || 'appointment';
+    const statusKey = normalizeStatus(eventData.status || (eventData.raw && eventData.raw.extendedProps && eventData.raw.extendedProps.status), typeKey);
+    const statusLabel = formatStatusLabel(statusKey);
+    const classNames = ['tutor-calendar__event', 'tutor-calendar__event--' + typeKey];
+    if (statusKey) {
+      classNames.push('tutor-calendar__event--status-' + statusKey);
+      el.dataset.status = statusKey;
+    }
+    el.className = classNames.join(' ');
     const eventKey = getEventKey(eventData);
     if (eventKey) {
       el.dataset.eventId = String(eventKey);
@@ -1476,6 +1829,20 @@ document.addEventListener('DOMContentLoaded', function() {
     titleEl.className = 'tutor-calendar__event-title';
     titleEl.textContent = eventData.title;
 
+    const metaEl = document.createElement('div');
+    metaEl.className = 'tutor-calendar__event-meta';
+    metaEl.appendChild(timeEl);
+
+    if (statusLabel) {
+      const statusEl = document.createElement('span');
+      statusEl.className = 'status-badge status-' + statusKey + ' tutor-calendar__event-status';
+      statusEl.textContent = statusLabel;
+      metaEl.appendChild(statusEl);
+    }
+
+    el.appendChild(metaEl);
+    el.appendChild(titleEl);
+
     const petName = getPetName(eventData.animalId) || derivePetNameFromTitle(eventData.title);
     if (petName) {
       const petEl = document.createElement('div');
@@ -1483,9 +1850,6 @@ document.addEventListener('DOMContentLoaded', function() {
       petEl.textContent = petName;
       el.appendChild(petEl);
     }
-
-    el.insertBefore(titleEl, el.firstChild);
-    el.insertBefore(timeEl, el.firstChild);
 
     el.addEventListener('click', function(evt) {
       evt.stopPropagation();
@@ -1595,6 +1959,11 @@ document.addEventListener('DOMContentLoaded', function() {
   function buildDayDetailCard(eventData) {
     const card = document.createElement('article');
     card.className = 'tutor-calendar__day-detail-card tutor-calendar__day-detail-card--' + (eventData.type || 'appointment');
+    const statusKey = normalizeStatus(eventData.status || (eventData.raw && eventData.raw.extendedProps && eventData.raw.extendedProps.status), eventData.type);
+    if (statusKey) {
+      card.classList.add('tutor-calendar__day-detail-card--status-' + statusKey);
+      card.dataset.status = statusKey;
+    }
 
     const meta = document.createElement('div');
     meta.className = 'tutor-calendar__day-detail-meta';
@@ -1657,9 +2026,9 @@ document.addEventListener('DOMContentLoaded', function() {
 
     const fragment = document.createDocumentFragment();
     const typeKey = eventData.type || 'appointment';
-    const statusKey = String(ext.status || '').toLowerCase();
+    const statusKey = normalizeStatus(ext.status || eventData.status, eventData.type);
     const statusClass = statusKey || 'scheduled';
-    const statusLabel = statusLabels[statusKey] || statusClass || '—';
+    const statusLabel = formatStatusLabel(statusClass) || formatStatusLabel(statusKey) || statusClass || '—';
     const typeLabel = typeLabels[typeKey] || 'Evento';
     const kindLabel = ext.kind ? String(ext.kind) : '';
     const tutorName = ext.tutorName || null;
@@ -1669,6 +2038,10 @@ document.addEventListener('DOMContentLoaded', function() {
     const card = document.createElement('article');
     card.className = 'tutor-calendar__appointment-card';
     card.classList.add('tutor-calendar__appointment-card--' + typeKey);
+    if (statusClass) {
+      card.classList.add('tutor-calendar__appointment-card--status-' + statusClass);
+      card.dataset.status = statusClass;
+    }
     card.dataset.appointmentId = String(recordId);
     if (dateKey) {
       card.dataset.day = dateKey;
@@ -1922,7 +2295,11 @@ document.addEventListener('DOMContentLoaded', function() {
           button.appendChild(document.createTextNode(action.label));
           form.appendChild(button);
 
+          form.dataset.statusTarget = action.status;
+          form.dataset.statusLabel = action.label;
+          form.dataset.appointmentId = String(recordId);
           attachConfirmHandler(form);
+          bindStatusForm(form, recordId, action);
           appendActionElement(form);
         });
       }
