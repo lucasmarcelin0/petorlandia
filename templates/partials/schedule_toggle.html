@@ -419,7 +419,10 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     const vetChanged = previousVetId !== numericVetId;
     if (vetChanged && (shouldActivate || source === 'vet')) {
-      addEvents({ refetch: shouldRefetch });
+      addEvents({ refetch: false });
+      if (shouldRefetch && calendar && typeof calendar.refetchEvents === 'function') {
+        calendar.refetchEvents();
+      }
       return true;
     }
     if (shouldRefetch && calendar && typeof calendar.refetchEvents === 'function') {
