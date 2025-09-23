@@ -764,6 +764,12 @@ class Appointment(db.Model):
     notes = db.Column(db.Text, nullable=True)
     consulta_id = db.Column(db.Integer, db.ForeignKey('consulta.id'), nullable=True)
     clinica_id = db.Column(db.Integer, db.ForeignKey('clinica.id'), nullable=True)
+    created_by = db.Column(
+        db.Integer,
+        db.ForeignKey('user.id', ondelete='SET NULL'),
+        nullable=True,
+    )
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
 
     animal = db.relationship(
         'Animal',
@@ -783,6 +789,11 @@ class Appointment(db.Model):
         'Consulta',
         backref=db.backref('appointment', uselist=False),
         uselist=False,
+    )
+    creator = db.relationship(
+        'User',
+        foreign_keys=[created_by],
+        backref='created_appointments',
     )
 
     @classmethod

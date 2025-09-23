@@ -2386,6 +2386,7 @@ def agendar_retorno(consulta_id):
                     notes=form.reason.data,
                     kind='retorno',
                     status='accepted' if same_user else 'scheduled',
+                    created_by=current_user.id,
                 )
                 db.session.add(appt)
                 db.session.commit()
@@ -8023,18 +8024,19 @@ def appointments():
                             )
                             return _redirect_to_current_appointments()
 
-                        appt = Appointment(
-                            animal_id=animal.id,
-                            tutor_id=tutor_id,
-                            veterinario_id=appointment_form.veterinario_id.data,
-                            scheduled_at=scheduled_at,
-                            clinica_id=clinica_id,
-                            notes=appointment_form.reason.data,
-                            kind=appointment_form.kind.data,
-                        )
-                        db.session.add(appt)
-                        db.session.commit()
-                        flash('Agendamento criado com sucesso.', 'success')
+                    appt = Appointment(
+                        animal_id=animal.id,
+                        tutor_id=tutor_id,
+                        veterinario_id=appointment_form.veterinario_id.data,
+                        scheduled_at=scheduled_at,
+                        clinica_id=clinica_id,
+                        notes=appointment_form.reason.data,
+                        kind=appointment_form.kind.data,
+                        created_by=current_user.id,
+                    )
+                    db.session.add(appt)
+                    db.session.commit()
+                    flash('Agendamento criado com sucesso.', 'success')
                 return _redirect_to_current_appointments()
             appointments = (
                 Appointment.query
