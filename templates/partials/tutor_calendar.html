@@ -154,12 +154,13 @@
 }
 
 #{{ component_id }} .tutor-calendar__pet-list {
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
   gap: 0.75rem;
   max-height: 320px;
   overflow-y: auto;
   padding-right: 0.25rem;
+  align-content: start;
 }
 
 #{{ component_id }} .tutor-calendar__pet {
