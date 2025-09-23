@@ -229,6 +229,68 @@ export async function updateAppointmentTimes(options = {}) {
   return times;
 }
 
+async function populateAppointmentModalTimes({
+  root,
+  vetId,
+  kind,
+  dateField,
+  timeSelect,
+  currentTime
+} = {}) {
+  if (!timeSelect) {
+    return [];
+  }
+
+  const placeholderText = timeSelect?.dataset?.placeholder || DEFAULT_TIME_PLACEHOLDER;
+  const hasDateValue = Boolean(dateField?.value);
+  const times = await updateAppointmentTimes({
+    root,
+    dateInput: dateField,
+    timeSelect,
+    veterinarianId: vetId,
+    kind,
+    placeholder: placeholderText
+  });
+
+  const placeholderOption = timeSelect.querySelector('option[value=""]');
+  if (!hasDateValue) {
+    if (placeholderOption) {
+      placeholderOption.textContent = placeholderText;
+      placeholderOption.selected = true;
+    }
+    return times;
+  }
+
+  if (!Array.isArray(times) || times.length === 0) {
+    if (placeholderOption) {
+      placeholderOption.textContent = 'Nenhum horário disponível';
+      placeholderOption.selected = true;
+    }
+  } else if (placeholderOption) {
+    placeholderOption.textContent = placeholderText;
+  }
+
+  const normalizedCurrent = (currentTime || '').trim();
+  if (!normalizedCurrent) {
+    return times;
+  }
+
+  const existingOption = Array
+    .from(timeSelect.options || [])
+    .find((option) => option.value === normalizedCurrent);
+  if (existingOption) {
+    existingOption.selected = true;
+    return times;
+  }
+
+  const fallbackOption = document.createElement('option');
+  fallbackOption.value = normalizedCurrent;
+  fallbackOption.textContent = `${normalizedCurrent} (atual)`;
+  fallbackOption.selected = true;
+  timeSelect.appendChild(fallbackOption);
+  return times;
+}
+
 export function toggleScheduleEdit(rootParam) {
   if (isEvent(rootParam)) {
     rootParam.preventDefault();
@@ -311,6 +373,8 @@ function bindAppointmentItems(root) {
       const vetField = document.getElementById('modal-vet');
       const tutorField = document.getElementById('modal-tutor');
       const animalField = document.getElementById('modal-animal');
+      const createdByField = document.getElementById('modal-created-by');
+      const createdAtField = document.getElementById('modal-created-at');
       const dateField = document.getElementById('modal-date');
       const timeField = document.getElementById('modal-time');
       const notesField = document.getElementById('modal-notes');
@@ -331,11 +395,19 @@ function bindAppointmentItems(root) {
       if (animalField) {
         animalField.value = item.dataset.animal || '';
       }
+      if (createdByField) {
+        const createdBy = item.dataset.createdBy || '';
+        createdByField.value = createdBy || 'Não informado';
+      }
+      if (createdAtField) {
+        const createdAt = item.dataset.createdAt || '';
+        createdAtField.value = createdAt || 'Não informado';
+      }
       if (dateField) {
         dateField.value = item.dataset.date || '';
       }
       if (timeField) {
-        timeField.value = item.dataset.time || '';
+        ensurePlaceholderOption(timeField, timeField?.dataset?.placeholder || DEFAULT_TIME_PLACEHOLDER);
       }
       if (notesField) {
         notesField.value = item.dataset.notes || '';
@@ -350,8 +422,25 @@ function bindAppointmentItems(root) {
         consultaLink.href = item.dataset.consultaUrl;
       }
 
+      if (modalEl) {
+        modalEl.dataset.vetId = item.dataset.vetId || getVetId(root) || '';
+        modalEl.dataset.kind = item.dataset.type || '';
+        modalEl.dataset.currentTime = item.dataset.time || '';
+      }
+
       if (modal) {
         modal.show();
+      }
+
+      if (timeField) {
+        populateAppointmentModalTimes({
+          root,
+          vetId: modalEl?.dataset?.vetId || getVetId(root),
+          kind: modalEl?.dataset?.kind || '',
+          dateField,
+          timeSelect: timeField,
+          currentTime: modalEl?.dataset?.currentTime || ''
+        });
       }
     });
   });
@@ -368,15 +457,17 @@ function bindAppointmentModalSave(root) {
     const dateField = document.getElementById('modal-date');
     const timeField = document.getElementById('modal-time');
     const notesField = document.getElementById('modal-notes');
+    const modalEl = document.getElementById('appointmentDetailModal');
     const appointmentId = idField?.value;
     if (!appointmentId) {
       return;
     }
     const updateUrl = `${getAppointmentsBaseUrl(root)}/${appointmentId}/edit`;
+    const vetId = modalEl?.dataset?.vetId || getVetId(root);
     const payload = {
       date: dateField?.value || '',
       time: timeField?.value || '',
-      veterinario_id: getVetId(root),
+      veterinario_id: vetId,
       notes: notesField?.value || ''
     };
     const result = await submitAppointmentUpdate(updateUrl, payload, getCsrfToken(root), {
@@ -397,6 +488,41 @@ function bindAppointmentDateWatcher(root) {
   }
   dateInput.dataset.vetScheduleBound = 'true';
   dateInput.addEventListener('change', (event) => updateAppointmentTimes({ root, dateInput: event.currentTarget || event.target }));
+}
+
+function bindAppointmentEditDateWatcher(root) {
+  const modalEl = document.getElementById('appointmentDetailModal');
+  const dateInput = document.getElementById('modal-date');
+  const timeSelect = document.getElementById('modal-time');
+  if (!modalEl || !dateInput || !timeSelect || dateInput.dataset.vetScheduleBound === 'true') {
+    return;
+  }
+  dateInput.dataset.vetScheduleBound = 'true';
+  dateInput.addEventListener('change', () => {
+    const vetId = modalEl.dataset?.vetId || getVetId(root);
+    const kind = modalEl.dataset?.kind || '';
+    modalEl.dataset.currentTime = '';
+    populateAppointmentModalTimes({
+      root,
+      vetId,
+      kind,
+      dateField: dateInput,
+      timeSelect,
+      currentTime: ''
+    });
+  });
+}
+
+function bindAppointmentEditTimeWatcher() {
+  const modalEl = document.getElementById('appointmentDetailModal');
+  const timeSelect = document.getElementById('modal-time');
+  if (!modalEl || !timeSelect || timeSelect.dataset.vetScheduleBound === 'true') {
+    return;
+  }
+  timeSelect.dataset.vetScheduleBound = 'true';
+  timeSelect.addEventListener('change', () => {
+    modalEl.dataset.currentTime = timeSelect.value || '';
+  });
 }
 
 function bindPastToggle(root) {
@@ -439,6 +565,8 @@ export function initVetSchedulePage(options = {}) {
   bindAppointmentItems(root);
   bindAppointmentModalSave(root);
   bindAppointmentDateWatcher(root);
+  bindAppointmentEditDateWatcher(root);
+  bindAppointmentEditTimeWatcher();
   bindPastToggle(root);
   animateCards(root);
 
