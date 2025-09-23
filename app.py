@@ -8730,15 +8730,6 @@ def api_vet_appointments(veterinario_id):
     """Return appointments for a veterinarian as calendar events."""
     veterinario = Veterinario.query.get_or_404(veterinario_id)
 
-    requested_clinic_ids = []
-    for value in request.args.getlist('clinica_id'):
-        try:
-            clinic_id_value = int(value)
-        except (TypeError, ValueError):
-            continue
-        if clinic_id_value not in requested_clinic_ids:
-            requested_clinic_ids.append(clinic_id_value)
-
     vet_clinic_ids = set()
     primary_clinic_id = getattr(veterinario, 'clinica_id', None)
     if primary_clinic_id:
@@ -8748,11 +8739,22 @@ def api_vet_appointments(veterinario_id):
         if clinic_id_value:
             vet_clinic_ids.add(clinic_id_value)
 
-    is_admin = current_user.role == 'admin'
-    collaborator_clinic_id = None
+    requested_clinic_ids = []
+    for value in request.args.getlist('clinica_id'):
+        try:
+            clinic_id_value = int(value)
+        except (TypeError, ValueError):
+            continue
+        if clinic_id_value not in requested_clinic_ids:
+            requested_clinic_ids.append(clinic_id_value)
 
-    if is_admin:
-        pass
+    query = Appointment.query.filter_by(veterinario_id=veterinario_id)
+    target_clinic_ids = []
+
+    if current_user.role == 'admin':
+        if requested_clinic_ids:
+            query = query.filter(Appointment.clinica_id.in_(requested_clinic_ids))
+            target_clinic_ids = requested_clinic_ids
     elif current_user.worker == 'veterinario':
         current_vet = getattr(current_user, 'veterinario', None)
         if not current_vet or current_vet.id != veterinario_id:
@@ -8764,20 +8766,10 @@ def api_vet_appointments(veterinario_id):
             abort(404)
         if vet_clinic_ids and collaborator_clinic_id not in vet_clinic_ids:
             abort(404)
-    else:
-        abort(403)
-
-    query = Appointment.query.filter(Appointment.veterinario_id == veterinario_id)
-
-    target_clinic_ids = []
-
-    if is_admin:
-        if requested_clinic_ids:
-            query = query.filter(Appointment.clinica_id.in_(requested_clinic_ids))
-            target_clinic_ids = requested_clinic_ids
-    elif collaborator_clinic_id:
         query = query.filter(Appointment.clinica_id == collaborator_clinic_id)
         target_clinic_ids = [collaborator_clinic_id]
+    else:
+        abort(403)
 
     appointments = query.order_by(Appointment.scheduled_at).all()
     events = appointments_to_events(appointments)
