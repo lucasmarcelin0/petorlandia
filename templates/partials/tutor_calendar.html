@@ -37,55 +37,6 @@
     <div class="col-12">
       <div class="card shadow-sm border-0 h-100">
         <div class="card-body">
-          <div class="d-flex justify-content-between align-items-start mb-3 flex-wrap gap-2">
-            <div>
-              <h3 class="h6 mb-1">Pacientes (Pets)</h3>
-              <span class="text-muted small" data-pet-subtitle>Dados reais da clínica</span>
-            </div>
-            {% if new_pet_url %}
-            <a class="btn btn-primary btn-sm" href="{{ new_pet_url }}">
-              <i class="bi bi-plus-circle me-1"></i> Novo pet
-            </a>
-            {% endif %}
-          </div>
-          <div class="tutor-calendar__pet-list" data-pet-list aria-live="polite">
-            <div class="text-muted small">Carregando pets...</div>
-          </div>
-          <div class="d-flex flex-column flex-sm-row gap-2 mt-3">
-            <button
-              type="button"
-              class="btn btn-outline-secondary btn-sm w-100 flex-sm-fill d-none"
-              data-toggle-pets
-              aria-expanded="false"
-            >
-              <i class="bi bi-card-list me-1"></i> Ver todos os pets
-            </button>
-            <button type="button" class="btn btn-outline-primary btn-sm w-100 flex-sm-fill" data-refresh-pets>
-              <i class="bi bi-arrow-clockwise me-1"></i> Atualizar lista
-            </button>
-          </div>
-        </div>
-      </div>
-
-      <div class="card shadow-sm border-0 mt-3">
-        <div class="card-body">
-          <h3 class="h6 mb-3">Filtros rápidos</h3>
-          <div class="tutor-calendar__filters d-flex flex-wrap gap-2">
-            <button type="button" class="btn btn-outline-primary btn-sm active" data-filter="all">Todos</button>
-            <button type="button" class="btn btn-outline-primary btn-sm" data-filter="appointment">Consultas</button>
-            <button type="button" class="btn btn-outline-primary btn-sm" data-filter="exam">Exames</button>
-            <button type="button" class="btn btn-outline-primary btn-sm" data-filter="vaccine">Vacinas</button>
-          </div>
-          <p class="text-muted small mb-0 mt-3">
-            Eventos sincronizados automaticamente com o FullCalendar. Escolha um dia para iniciar um novo agendamento.
-          </p>
-        </div>
-      </div>
-    </div>
-
-    <div class="col-12">
-      <div class="card shadow-sm border-0 h-100">
-        <div class="card-body">
           <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-3">
             <div class="d-flex align-items-center gap-2 flex-wrap">
               <button type="button" class="btn btn-outline-primary btn-sm" data-prev-month aria-label="Mês anterior">
@@ -150,6 +101,89 @@
         </div>
       </div>
     </div>
+
+    <div class="col-12">
+      <div class="card shadow-sm border-0 h-100">
+        <div class="card-body">
+          <div class="d-flex justify-content-between align-items-start mb-3 flex-wrap gap-2">
+            <div>
+              <h3 class="h6 mb-1">Pacientes (Pets)</h3>
+              <span class="text-muted small" data-pet-subtitle>Dados reais da clínica</span>
+            </div>
+            {% if new_pet_url %}
+            <a class="btn btn-primary btn-sm" href="{{ new_pet_url }}">
+              <i class="bi bi-plus-circle me-1"></i> Novo pet
+            </a>
+            {% endif %}
+          </div>
+          <div class="tutor-calendar__pet-filters" data-pet-filters>
+            <div class="tutor-calendar__pet-filter-control tutor-calendar__pet-filter-control--search">
+              <div class="input-group input-group-sm">
+                <span class="input-group-text">
+                  <i class="bi bi-search"></i>
+                </span>
+                <input
+                  type="search"
+                  class="form-control"
+                  data-pet-filter-search
+                  placeholder="Buscar por nome, tutor ou detalhes"
+                  aria-label="Buscar pets"
+                />
+              </div>
+            </div>
+            <div class="tutor-calendar__pet-filter-control">
+              <select class="form-select form-select-sm" data-pet-filter-species aria-label="Filtrar por espécie">
+                <option value="">Todas as espécies</option>
+              </select>
+            </div>
+            <div class="tutor-calendar__pet-filter-control">
+              <select class="form-select form-select-sm" data-pet-filter-breed aria-label="Filtrar por raça" disabled>
+                <option value="">Todas as raças</option>
+              </select>
+            </div>
+            <div class="tutor-calendar__pet-filter-actions">
+              <button type="button" class="btn btn-outline-secondary btn-sm w-100" data-pet-filter-clear disabled>
+                <i class="bi bi-x-circle me-1"></i> Limpar filtros
+              </button>
+            </div>
+          </div>
+          <div class="tutor-calendar__pet-list" data-pet-list aria-live="polite">
+            <div class="text-muted small">Carregando pets...</div>
+          </div>
+          <div class="d-flex flex-column flex-sm-row gap-2 mt-3">
+            <button
+              type="button"
+              class="btn btn-outline-secondary btn-sm w-100 flex-sm-fill d-none"
+              data-toggle-pets
+              aria-expanded="false"
+              aria-hidden="true"
+            >
+              <i class="bi bi-plus-circle me-1"></i> Ver mais pets
+            </button>
+            <button type="button" class="btn btn-outline-primary btn-sm w-100 flex-sm-fill" data-refresh-pets>
+              <i class="bi bi-arrow-clockwise me-1"></i> Atualizar lista
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-12">
+      <div class="card shadow-sm border-0 h-100">
+        <div class="card-body">
+          <h3 class="h6 mb-3">Filtros rápidos</h3>
+          <div class="tutor-calendar__filters d-flex flex-wrap gap-2">
+            <button type="button" class="btn btn-outline-primary btn-sm active" data-filter="all">Todos</button>
+            <button type="button" class="btn btn-outline-primary btn-sm" data-filter="appointment">Consultas</button>
+            <button type="button" class="btn btn-outline-primary btn-sm" data-filter="exam">Exames</button>
+            <button type="button" class="btn btn-outline-primary btn-sm" data-filter="vaccine">Vacinas</button>
+          </div>
+          <p class="text-muted small mb-0 mt-3">
+            Eventos sincronizados automaticamente com o FullCalendar. Escolha um dia para iniciar um novo agendamento.
+          </p>
+        </div>
+      </div>
+    </div>
   </div>
 </section>
 
@@ -170,6 +204,58 @@
   display: flex;
   align-items: center;
   justify-content: center;
+}
+
+#{{ component_id }} .tutor-calendar__pet-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
+
+#{{ component_id }} .tutor-calendar__pet-filter-control {
+  flex: 1 1 220px;
+  min-width: 200px;
+}
+
+#{{ component_id }} .tutor-calendar__pet-filter-control--search {
+  flex: 2 1 300px;
+  min-width: 240px;
+}
+
+#{{ component_id }} .tutor-calendar__pet-filter-control .input-group-text {
+  background: rgba(99, 102, 241, 0.12);
+  border-color: rgba(99, 102, 241, 0.25);
+  color: #4338ca;
+}
+
+#{{ component_id }} .tutor-calendar__pet-filter-control .form-control,
+#{{ component_id }} .tutor-calendar__pet-filter-control .form-select {
+  border-radius: 0.75rem;
+}
+
+#{{ component_id }} .tutor-calendar__pet-filter-actions {
+  flex: 0 0 auto;
+  min-width: 160px;
+}
+
+#{{ component_id }} .tutor-calendar__pet-filter-actions .btn {
+  border-radius: 999px;
+}
+
+#{{ component_id }} .tutor-calendar__pet-filter-actions .btn:disabled {
+  opacity: 0.6;
+}
+
+@media (max-width: 576px) {
+  #{{ component_id }} .tutor-calendar__pet-filter-control,
+  #{{ component_id }} .tutor-calendar__pet-filter-actions {
+    min-width: 100%;
+  }
+
+  #{{ component_id }} .tutor-calendar__pet-filter-actions .btn {
+    width: 100%;
+  }
 }
 
 #{{ component_id }} .tutor-calendar__pet-list {
@@ -1228,6 +1314,10 @@ document.addEventListener('DOMContentLoaded', function() {
   const refreshPetsBtn = root.querySelector('[data-refresh-pets]');
   const togglePetsBtn = root.querySelector('[data-toggle-pets]');
   const petSubtitleEl = root.querySelector('[data-pet-subtitle]');
+  const petFilterSearchInput = root.querySelector('[data-pet-filter-search]');
+  const petFilterSpeciesSelect = root.querySelector('[data-pet-filter-species]');
+  const petFilterBreedSelect = root.querySelector('[data-pet-filter-breed]');
+  const petFilterClearBtn = root.querySelector('[data-pet-filter-clear]');
   const filterButtons = Array.prototype.slice.call(root.querySelectorAll('[data-filter]'));
   const viewModeButtons = Array.prototype.slice.call(root.querySelectorAll('[data-view-mode]'));
   const csrfToken = root.dataset.csrfToken || '';
@@ -1278,7 +1368,8 @@ document.addEventListener('DOMContentLoaded', function() {
     },
   ];
 
-  const petsCollapsedLimit = 3;
+  const petsInitialLimit = 3;
+  const petsPageSize = 9;
 
   let pets = [];
   let events = [];
@@ -1291,9 +1382,15 @@ document.addEventListener('DOMContentLoaded', function() {
   let lastDetailTrigger = null;
   let dayDetailMode = 'day';
   let focusedEventId = null;
-  let showingAllPets = false;
   let hasLoadedPets = false;
   let petListHasError = false;
+  let currentPetLimit = petsInitialLimit;
+  let filteredPetsCache = [];
+  const petFilterState = {
+    search: '',
+    species: '',
+    breed: '',
+  };
 
   function openDayDetail(options) {
     if (!dayDetailLayer || !dayDetailContainer) {
@@ -1803,6 +1900,206 @@ document.addEventListener('DOMContentLoaded', function() {
     });
   }
 
+  function normalizeFilterValue(value) {
+    if (value === undefined || value === null) {
+      return '';
+    }
+    return String(value).trim().toLowerCase();
+  }
+
+  function normalizeTextForSearch(text) {
+    if (text === undefined || text === null) {
+      return '';
+    }
+    let normalized = String(text);
+    if (typeof normalized.normalize === 'function') {
+      normalized = normalized.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+    }
+    return normalized.toLowerCase();
+  }
+
+  function getPetSearchIndex(pet) {
+    if (!pet) {
+      return '';
+    }
+    if (typeof pet._searchIndex === 'string') {
+      return pet._searchIndex;
+    }
+    const parts = [];
+    if (pet.name) {
+      parts.push(pet.name);
+    }
+    if (pet.tutor_name) {
+      parts.push(pet.tutor_name);
+    }
+    if (pet.species) {
+      parts.push(pet.species);
+    }
+    if (pet.breed) {
+      parts.push(pet.breed);
+    }
+    pet._searchIndex = normalizeTextForSearch(parts.join(' '));
+    return pet._searchIndex;
+  }
+
+  function hasActivePetFilters() {
+    if (petFilterState.search && petFilterState.search.trim() !== '') {
+      return true;
+    }
+    if (petFilterState.species) {
+      return true;
+    }
+    if (petFilterState.breed) {
+      return true;
+    }
+    return false;
+  }
+
+  function applyPetFilters(list) {
+    if (!Array.isArray(list) || !list.length) {
+      return [];
+    }
+    const searchTerm = normalizeTextForSearch(petFilterState.search || '').trim();
+    return list.filter(function(pet) {
+      if (!pet) {
+        return false;
+      }
+      if (petFilterState.species && pet._speciesKey !== petFilterState.species) {
+        return false;
+      }
+      if (petFilterState.breed && pet._breedKey !== petFilterState.breed) {
+        return false;
+      }
+      if (searchTerm) {
+        const target = getPetSearchIndex(pet);
+        if (!target || target.indexOf(searchTerm) === -1) {
+          return false;
+        }
+      }
+      return true;
+    });
+  }
+
+  function collectPetSpeciesOptions(list) {
+    const map = new Map();
+    (list || []).forEach(function(pet) {
+      if (!pet) {
+        return;
+      }
+      const value = pet._speciesKey || normalizeFilterValue(pet.species);
+      if (!value) {
+        return;
+      }
+      if (!map.has(value)) {
+        const label = pet.species ? String(pet.species).trim() : 'Outra';
+        map.set(value, label);
+      }
+    });
+    return Array.from(map.entries()).map(function(entry) {
+      return { value: entry[0], label: entry[1] };
+    });
+  }
+
+  function collectPetBreedOptions(list, speciesKey) {
+    const normalizedSpecies = normalizeFilterValue(speciesKey);
+    const map = new Map();
+    (list || []).forEach(function(pet) {
+      if (!pet) {
+        return;
+      }
+      const petSpecies = pet._speciesKey || normalizeFilterValue(pet.species);
+      if (normalizedSpecies && petSpecies !== normalizedSpecies) {
+        return;
+      }
+      const value = pet._breedKey || normalizeFilterValue(pet.breed);
+      if (!value) {
+        return;
+      }
+      if (!map.has(value)) {
+        const label = pet.breed ? String(pet.breed).trim() : 'Outra';
+        map.set(value, label);
+      }
+    });
+    return Array.from(map.entries()).map(function(entry) {
+      return { value: entry[0], label: entry[1] };
+    });
+  }
+
+  function fillSelectOptions(selectEl, options, placeholder) {
+    if (!selectEl) {
+      return;
+    }
+    const previousValue = selectEl.value;
+    selectEl.innerHTML = '';
+    const defaultOption = document.createElement('option');
+    defaultOption.value = '';
+    defaultOption.textContent = placeholder || '';
+    selectEl.appendChild(defaultOption);
+
+    const sorted = options.slice().sort(function(a, b) {
+      return a.label.localeCompare(b.label, 'pt-BR', { sensitivity: 'base' });
+    });
+
+    sorted.forEach(function(option) {
+      const opt = document.createElement('option');
+      opt.value = option.value;
+      opt.textContent = option.label;
+      selectEl.appendChild(opt);
+    });
+
+    if (previousValue && sorted.some(function(option) { return option.value === previousValue; })) {
+      selectEl.value = previousValue;
+    } else {
+      selectEl.value = '';
+    }
+  }
+
+  function refreshPetSpeciesOptions() {
+    if (!petFilterSpeciesSelect) {
+      return;
+    }
+    const options = collectPetSpeciesOptions(pets);
+    fillSelectOptions(petFilterSpeciesSelect, options, 'Todas as espécies');
+    if (petFilterState.species && !options.some(function(option) { return option.value === petFilterState.species; })) {
+      petFilterState.species = '';
+    }
+    petFilterSpeciesSelect.disabled = options.length === 0;
+    petFilterSpeciesSelect.value = petFilterState.species;
+  }
+
+  function refreshPetBreedOptions() {
+    if (!petFilterBreedSelect) {
+      return;
+    }
+    const options = collectPetBreedOptions(pets, petFilterState.species);
+    fillSelectOptions(petFilterBreedSelect, options, 'Todas as raças');
+    if (petFilterState.breed && !options.some(function(option) { return option.value === petFilterState.breed; })) {
+      petFilterState.breed = '';
+    }
+    const hasOptions = options.length > 0;
+    petFilterBreedSelect.disabled = !hasOptions;
+    petFilterBreedSelect.value = petFilterState.breed;
+  }
+
+  function refreshPetFilterOptions() {
+    refreshPetSpeciesOptions();
+    refreshPetBreedOptions();
+    if (petFilterSearchInput) {
+      petFilterSearchInput.value = petFilterState.search || '';
+    }
+  }
+
+  function resetPetPagination() {
+    currentPetLimit = petsInitialLimit;
+  }
+
+  function updatePetFilterClearState() {
+    if (!petFilterClearBtn) {
+      return;
+    }
+    petFilterClearBtn.disabled = !hasActivePetFilters();
+  }
+
   function countEventsForPet(petId) {
     if (petId === undefined || petId === null) {
       return 0;
@@ -1831,42 +2128,79 @@ document.addEventListener('DOMContentLoaded', function() {
     });
   }
 
-  function updatePetSubtitle(total, visible) {
+  function updatePetSubtitle(total, visible, filtered) {
     if (!petSubtitleEl) {
       return;
     }
     const baseLabel = 'Dados reais da clínica';
-    if (!total) {
+    const totalCount = Number(total) || 0;
+    const visibleCount = Number(visible) || 0;
+    const filteredCount = filtered === undefined ? totalCount : (Number(filtered) || 0);
+
+    if (!totalCount) {
       petSubtitleEl.textContent = `${baseLabel} • Nenhum pet cadastrado ainda.`;
       return;
     }
-    if (showingAllPets || total <= petsCollapsedLimit) {
-      const plural = total === 1 ? 'pet' : 'pets';
-      petSubtitleEl.textContent = `${baseLabel} • Exibindo ${total} ${plural} da clínica.`;
+
+    if (!filteredCount) {
+      const totalLabel = totalCount === 1 ? '1 pet no total' : `${totalCount} pets no total`;
+      petSubtitleEl.textContent = `${baseLabel} • Nenhum pet encontrado com os filtros selecionados (${totalLabel}).`;
       return;
     }
-    const pluralVisible = visible === 1 ? 'pet' : 'pets';
-    petSubtitleEl.textContent = `${baseLabel} • Últimos ${visible} ${pluralVisible} cadastrados (${total} no total).`;
+
+    const totalLabel = totalCount === 1 ? '1 pet no total' : `${totalCount} pets no total`;
+    const pluralVisible = visibleCount === 1 ? 'pet' : 'pets';
+    const pluralFiltered = filteredCount === 1 ? 'pet' : 'pets';
+
+    if (!hasActivePetFilters()) {
+      if (visibleCount >= filteredCount) {
+        petSubtitleEl.textContent = `${baseLabel} • Exibindo ${filteredCount} ${pluralFiltered} da clínica.`;
+      } else {
+        petSubtitleEl.textContent = `${baseLabel} • Últimos ${visibleCount} ${pluralVisible} cadastrados (${totalLabel}).`;
+      }
+      return;
+    }
+
+    if (visibleCount < filteredCount) {
+      petSubtitleEl.textContent = `${baseLabel} • ${filteredCount} ${pluralFiltered} encontrados (${totalLabel}), exibindo ${visibleCount}.`;
+    } else {
+      petSubtitleEl.textContent = `${baseLabel} • ${filteredCount} ${pluralFiltered} encontrados (${totalLabel}).`;
+    }
   }
 
-  function updateToggleButton(total) {
+  function updateToggleButton(filteredCount) {
     if (!togglePetsBtn) {
       return;
     }
-    if (total <= petsCollapsedLimit) {
+    const totalFiltered = Number(filteredCount) || 0;
+    const minimumLimit = Math.min(petsInitialLimit, totalFiltered || petsInitialLimit);
+    const hasMore = totalFiltered > currentPetLimit;
+    const canCollapse = totalFiltered > minimumLimit && currentPetLimit > minimumLimit;
+
+    if (!hasMore && !canCollapse) {
       togglePetsBtn.classList.add('d-none');
       togglePetsBtn.setAttribute('aria-hidden', 'true');
       togglePetsBtn.setAttribute('aria-expanded', 'false');
+      togglePetsBtn.removeAttribute('data-action');
       return;
     }
+
     togglePetsBtn.classList.remove('d-none');
     togglePetsBtn.setAttribute('aria-hidden', 'false');
-    togglePetsBtn.setAttribute('aria-expanded', showingAllPets ? 'true' : 'false');
-    if (showingAllPets) {
-      togglePetsBtn.innerHTML = '<i class="bi bi-chevron-up me-1"></i> Mostrar menos';
-    } else {
-      togglePetsBtn.innerHTML = `<i class="bi bi-chevron-down me-1"></i> Ver todos os ${total} pets`;
+    togglePetsBtn.disabled = false;
+
+    if (hasMore) {
+      const remaining = totalFiltered - currentPetLimit;
+      const nextBatch = Math.min(remaining, petsPageSize);
+      togglePetsBtn.dataset.action = 'more';
+      togglePetsBtn.setAttribute('aria-expanded', 'false');
+      togglePetsBtn.innerHTML = `<i class="bi bi-plus-circle me-1"></i> Ver mais ${nextBatch} ${nextBatch === 1 ? 'pet' : 'pets'}`;
+      return;
     }
+
+    togglePetsBtn.dataset.action = 'collapse';
+    togglePetsBtn.setAttribute('aria-expanded', 'true');
+    togglePetsBtn.innerHTML = '<i class="bi bi-chevron-up me-1"></i> Mostrar menos';
   }
 
   function renderPetList() {
@@ -1879,16 +2213,38 @@ document.addEventListener('DOMContentLoaded', function() {
     if (!totalPets) {
       petListEl.innerHTML = '<div class="text-muted small tutor-calendar__empty">Nenhum pet cadastrado até o momento.</div>';
       petListEl.classList.remove('is-expanded');
-      updatePetSubtitle(totalPets, 0);
-      updateToggleButton(totalPets);
+      filteredPetsCache = [];
+      updatePetSubtitle(totalPets, 0, 0);
+      updateToggleButton(0);
+      updatePetFilterClearState();
       return;
     }
 
-    const visiblePets = (showingAllPets || totalPets <= petsCollapsedLimit)
-      ? pets
-      : pets.slice(0, petsCollapsedLimit);
+    const filteredPets = applyPetFilters(pets);
+    filteredPetsCache = filteredPets;
+    const filteredCount = filteredPets.length;
 
-    petListEl.classList.toggle('is-expanded', showingAllPets);
+    if (!filteredCount) {
+      const message = hasActivePetFilters()
+        ? 'Nenhum pet encontrado com os filtros selecionados.'
+        : 'Nenhum pet cadastrado até o momento.';
+      petListEl.innerHTML = `<div class="text-muted small tutor-calendar__empty">${message}</div>`;
+      petListEl.classList.remove('is-expanded');
+      updatePetSubtitle(totalPets, 0, filteredCount);
+      updateToggleButton(filteredCount);
+      updatePetFilterClearState();
+      return;
+    }
+
+    const minimumLimit = Math.min(petsInitialLimit, filteredCount);
+    if (!currentPetLimit || currentPetLimit < minimumLimit) {
+      currentPetLimit = minimumLimit;
+    }
+    if (currentPetLimit > filteredCount) {
+      currentPetLimit = filteredCount;
+    }
+
+    const visiblePets = filteredPets.slice(0, currentPetLimit);
 
     const fragment = document.createDocumentFragment();
     visiblePets.forEach(function(pet) {
@@ -1978,8 +2334,11 @@ document.addEventListener('DOMContentLoaded', function() {
 
     petListEl.innerHTML = '';
     petListEl.appendChild(fragment);
-    updatePetSubtitle(totalPets, visiblePets.length);
-    updateToggleButton(totalPets);
+    const shouldExpand = currentPetLimit >= filteredCount && filteredCount > petsInitialLimit;
+    petListEl.classList.toggle('is-expanded', shouldExpand);
+    updatePetSubtitle(totalPets, visiblePets.length, filteredCount);
+    updateToggleButton(filteredCount);
+    updatePetFilterClearState();
   }
 
   function renderWeekdays() {
@@ -2979,13 +3338,15 @@ document.addEventListener('DOMContentLoaded', function() {
       petListEl.innerHTML = '<div class="text-muted small">Carregando pets...</div>';
       petListEl.classList.remove('is-expanded');
     }
-    showingAllPets = false;
+    currentPetLimit = petsInitialLimit;
+    filteredPetsCache = [];
     hasLoadedPets = false;
     petListHasError = false;
     if (togglePetsBtn) {
       togglePetsBtn.classList.add('d-none');
       togglePetsBtn.setAttribute('aria-hidden', 'true');
       togglePetsBtn.setAttribute('aria-expanded', 'false');
+      togglePetsBtn.removeAttribute('data-action');
     }
     if (petSubtitleEl) {
       petSubtitleEl.textContent = 'Carregando pets da clínica...';
@@ -3006,6 +3367,22 @@ document.addEventListener('DOMContentLoaded', function() {
         const copy = Object.assign({}, item);
         const rawDate = copy.dateAdded || copy.date_added || null;
         copy.dateAdded = rawDate;
+        copy._speciesKey = normalizeFilterValue(copy.species);
+        copy._breedKey = normalizeFilterValue(copy.breed);
+        const searchParts = [];
+        if (copy.name) {
+          searchParts.push(copy.name);
+        }
+        if (copy.tutor_name) {
+          searchParts.push(copy.tutor_name);
+        }
+        if (copy.species) {
+          searchParts.push(copy.species);
+        }
+        if (copy.breed) {
+          searchParts.push(copy.breed);
+        }
+        copy._searchIndex = normalizeTextForSearch(searchParts.join(' '));
         return copy;
       }) : [];
       normalized.sort(function(a, b) {
@@ -3029,6 +3406,8 @@ document.addEventListener('DOMContentLoaded', function() {
       pets = normalized;
       hasLoadedPets = true;
       petListHasError = false;
+      resetPetPagination();
+      refreshPetFilterOptions();
       renderPetList();
     } catch (error) {
       console.error('Erro ao carregar pets.', error);
@@ -3042,6 +3421,8 @@ document.addEventListener('DOMContentLoaded', function() {
       if (petSubtitleEl) {
         petSubtitleEl.textContent = 'Não foi possível carregar os pets.';
       }
+      refreshPetFilterOptions();
+      updatePetFilterClearState();
     }
   }
 
@@ -3117,16 +3498,66 @@ document.addEventListener('DOMContentLoaded', function() {
     if (petListHasError || !hasLoadedPets) {
       return;
     }
-    showingAllPets = !showingAllPets;
-    renderPetList();
-    if (!showingAllPets && petListEl) {
-      if (typeof petListEl.scrollTo === 'function') {
-        petListEl.scrollTo({ top: 0, behavior: 'smooth' });
-      } else {
-        petListEl.scrollTop = 0;
+    const totalFiltered = Array.isArray(filteredPetsCache) ? filteredPetsCache.length : 0;
+    const action = togglePetsBtn.dataset.action || 'more';
+    if (action === 'collapse') {
+      const minimumLimit = Math.min(petsInitialLimit, totalFiltered || petsInitialLimit);
+      currentPetLimit = minimumLimit;
+      renderPetList();
+      if (petListEl) {
+        if (typeof petListEl.scrollTo === 'function') {
+          petListEl.scrollTo({ top: 0, behavior: 'smooth' });
+        } else {
+          petListEl.scrollTop = 0;
+        }
       }
+      return;
+    }
+    if (totalFiltered > currentPetLimit) {
+      currentPetLimit = Math.min(currentPetLimit + petsPageSize, totalFiltered);
+      renderPetList();
     }
   });
+
+  if (petFilterSearchInput) {
+    petFilterSearchInput.addEventListener('input', function(event) {
+      petFilterState.search = event.target.value || '';
+      resetPetPagination();
+      renderPetList();
+    });
+  }
+
+  if (petFilterSpeciesSelect) {
+    petFilterSpeciesSelect.addEventListener('change', function(event) {
+      petFilterState.species = normalizeFilterValue(event.target.value);
+      petFilterState.breed = '';
+      resetPetPagination();
+      refreshPetBreedOptions();
+      renderPetList();
+    });
+  }
+
+  if (petFilterBreedSelect) {
+    petFilterBreedSelect.addEventListener('change', function(event) {
+      petFilterState.breed = normalizeFilterValue(event.target.value);
+      resetPetPagination();
+      renderPetList();
+    });
+  }
+
+  if (petFilterClearBtn) {
+    petFilterClearBtn.addEventListener('click', function() {
+      if (!hasActivePetFilters()) {
+        return;
+      }
+      petFilterState.search = '';
+      petFilterState.species = '';
+      petFilterState.breed = '';
+      resetPetPagination();
+      refreshPetFilterOptions();
+      renderPetList();
+    });
+  }
 
   filterButtons.forEach(function(btn) {
     btn.addEventListener('click', function() {
