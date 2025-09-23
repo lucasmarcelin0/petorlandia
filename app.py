@@ -8386,18 +8386,45 @@ def update_appointment_status(appointment_id):
     elif current_user.role != 'admin' and appointment.tutor_id != current_user.id:
         abort(403)
 
-    status = request.form.get('status') or (request.get_json(silent=True) or {}).get('status')
-    if status not in {'scheduled', 'completed', 'canceled', 'accepted'}:
-        return jsonify({'success': False, 'message': 'Status inválido.'}), 400
+    accepts = request.accept_mimetypes
+    accept_json = accepts['application/json']
+    accept_html = accepts['text/html']
+    wants_json = (
+        request.is_json
+        or request.headers.get('X-Requested-With') == 'XMLHttpRequest'
+        or (accept_json > 0 and accept_json > accept_html)
+    )
+
+    status_value = request.form.get('status') or (request.get_json(silent=True) or {}).get('status')
+    status = (status_value or '').strip().lower()
+    allowed_statuses = {'scheduled', 'completed', 'canceled', 'accepted'}
+    if status not in allowed_statuses:
+        message = 'Status inválido.'
+        if wants_json:
+            return jsonify({'success': False, 'message': message}), 400
+        flash(message, 'error')
+        return redirect(request.referrer or url_for('appointments'))
+
     if status in {'accepted', 'canceled'} and appointment.scheduled_at - datetime.utcnow() < timedelta(hours=2):
-        # A resposta JSON levava o usuário para uma página vazia. Manter o
-        # comportamento simples de texto quando o prazo expira.
-        if request.is_json:
-            return jsonify({'success': False, 'message': 'Prazo expirado.'}), 400
-        return 'Prazo expirado.', 400
+        message = 'Prazo expirado.'
+        if wants_json:
+            return jsonify({'success': False, 'message': message}), 400
+        # Mantém o comportamento simples de texto quando o prazo expira.
+        return message, 400
 
     appointment.status = status
     db.session.commit()
+
+    if wants_json:
+        card_html = render_template('partials/_appointment_card.html', appt=appointment)
+        return jsonify({
+            'success': True,
+            'message': 'Status atualizado.',
+            'status': appointment.status,
+            'appointment_id': appointment.id,
+            'card_html': card_html,
+        })
+
     flash('Status atualizado.', 'success')
     # Sempre redireciona de volta à página anterior para evitar exibir apenas
     # o JSON "{\"success\": true}".
