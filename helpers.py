@@ -659,25 +659,60 @@ def get_weekly_schedule(veterinario_id, start_date, days=7, day_start=time(8, 0)
     """
     from models import VetSchedule, Appointment, ExamAppointment
 
-    result = []
     step = timedelta(minutes=30)
     weekday_map = ['Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado', 'Domingo']
+
+    # Load all schedules for the veterinarian once and group them by weekday.
+    schedules_by_day = {}
+    vet_schedules = VetSchedule.query.filter_by(veterinario_id=veterinario_id).all()
+    for schedule in vet_schedules:
+        schedules_by_day.setdefault(schedule.dia_semana, []).append(schedule)
+
+    # Preload appointments/exams within the requested window so we can
+    # determine slot availability without issuing a query per slot.
+    range_start_local = datetime.combine(start_date, day_start)
+    range_end_local = datetime.combine(start_date + timedelta(days=days), day_end)
+    range_start_utc = range_start_local.replace(tzinfo=BR_TZ).astimezone(timezone.utc).replace(tzinfo=None)
+    range_end_utc = range_end_local.replace(tzinfo=BR_TZ).astimezone(timezone.utc).replace(tzinfo=None)
+
+    appointment_rows = (
+        Appointment.query
+        .filter_by(veterinario_id=veterinario_id)
+        .filter(Appointment.scheduled_at >= range_start_utc)
+        .filter(Appointment.scheduled_at < range_end_utc)
+        .with_entities(Appointment.scheduled_at)
+        .all()
+    )
+    exam_rows = (
+        ExamAppointment.query
+        .filter_by(specialist_id=veterinario_id)
+        .filter(ExamAppointment.scheduled_at >= range_start_utc)
+        .filter(ExamAppointment.scheduled_at < range_end_utc)
+        .with_entities(ExamAppointment.scheduled_at)
+        .all()
+    )
+
+    booked_datetimes = {
+        _to_utc_naive(row[0])
+        for row in appointment_rows + exam_rows
+        if row and row[0] is not None
+    }
+
+    result = []
 
     for i in range(days):
         dia = start_date + timedelta(days=i)
         dia_semana = weekday_map[dia.weekday()]
-        schedules = VetSchedule.query.filter_by(
-            veterinario_id=veterinario_id, dia_semana=dia_semana
-        ).all()
+        schedules = schedules_by_day.get(dia_semana, [])
 
         working_slots = set()
-        for s in schedules:
-            current = datetime.combine(dia, s.hora_inicio)
-            end = datetime.combine(dia, s.hora_fim)
+        for schedule in schedules:
+            current = datetime.combine(dia, schedule.hora_inicio)
+            end = datetime.combine(dia, schedule.hora_fim)
             while current < end:
-                if s.intervalo_inicio and s.intervalo_fim:
-                    intervalo_inicio = datetime.combine(dia, s.intervalo_inicio)
-                    intervalo_fim = datetime.combine(dia, s.intervalo_fim)
+                if schedule.intervalo_inicio and schedule.intervalo_fim:
+                    intervalo_inicio = datetime.combine(dia, schedule.intervalo_inicio)
+                    intervalo_fim = datetime.combine(dia, schedule.intervalo_fim)
                     if intervalo_inicio <= current < intervalo_fim:
                         current += step
                         continue
@@ -695,12 +730,8 @@ def get_weekly_schedule(veterinario_id, start_date, days=7, day_start=time(8, 0)
         booked = []
         for slot in working_slots:
             current_utc = slot.replace(tzinfo=BR_TZ).astimezone(timezone.utc).replace(tzinfo=None)
-            conflito = (
-                Appointment.query.filter_by(veterinario_id=veterinario_id, scheduled_at=current_utc).first()
-                or ExamAppointment.query.filter_by(specialist_id=veterinario_id, scheduled_at=current_utc).first()
-            )
             time_str = slot.strftime('%H:%M')
-            if conflito:
+            if current_utc in booked_datetimes:
                 booked.append(time_str)
             else:
                 available.append(time_str)
