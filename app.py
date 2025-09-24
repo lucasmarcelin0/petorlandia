@@ -8637,7 +8637,15 @@ def api_clinic_pets():
 @login_required
 def api_my_appointments():
     """Return the current user's appointments as calendar events."""
+    from models import Appointment, ExamAppointment, Vacina, Animal, Veterinario
+
     query = Appointment.query
+    context = {
+        'mode': None,
+        'tutor_id': None,
+        'vet': None,
+        'clinic_ids': [],
+    }
 
     if current_user.role == 'admin':
         def _coerce_first_int(values):
@@ -8689,6 +8697,31 @@ def api_my_appointments():
 
         view_as, vet_id, clinic_id, tutor_id = _admin_view_context()
 
+        context['clinic_ids'] = list(_accessible_clinic_ids())
+        if view_as == 'tutor' and tutor_id:
+            context['mode'] = 'tutor'
+            context['tutor_id'] = tutor_id
+        elif view_as == 'veterinario':
+            target_vet = Veterinario.query.get(vet_id) if vet_id else None
+            context['mode'] = 'veterinario'
+            context['vet'] = target_vet
+            target_clinics = []
+            if clinic_id:
+                target_clinics.append(clinic_id)
+            elif context['clinic_ids']:
+                target_clinics.extend(context['clinic_ids'])
+            context['clinic_ids'] = [cid for cid in target_clinics if cid]
+        elif view_as == 'colaborador':
+            target_clinics = []
+            if clinic_id:
+                target_clinics.append(clinic_id)
+            elif context['clinic_ids']:
+                target_clinics.extend(context['clinic_ids'])
+            context['mode'] = 'clinics'
+            context['clinic_ids'] = [cid for cid in target_clinics if cid]
+        else:
+            context['mode'] = 'clinics'
+
         if view_as == 'veterinario':
             if not vet_id and getattr(current_user, 'veterinario', None):
                 vet_id = current_user.veterinario.id
@@ -8714,16 +8747,168 @@ def api_my_appointments():
                         ),
                     )
                 )
+            if not context['clinic_ids']:
+                context['clinic_ids'] = [cid for cid in (clinic_ids or []) if cid]
+            context['mode'] = context['mode'] or 'clinics'
     elif current_user.worker == 'veterinario' and getattr(current_user, 'veterinario', None):
         query = query.filter_by(
             veterinario_id=current_user.veterinario.id
         )
+        vet_profile = current_user.veterinario
+        context['mode'] = 'veterinario'
+        context['vet'] = vet_profile
+        clinic_ids = []
+        primary_clinic = getattr(vet_profile, 'clinica_id', None)
+        if primary_clinic:
+            clinic_ids.append(primary_clinic)
+        for clinic in getattr(vet_profile, 'clinicas', []) or []:
+            clinic_id_value = getattr(clinic, 'id', None)
+            if clinic_id_value and clinic_id_value not in clinic_ids:
+                clinic_ids.append(clinic_id_value)
+        context['clinic_ids'] = clinic_ids
     elif current_user.worker == 'colaborador' and current_user.clinica_id:
         query = query.filter_by(clinica_id=current_user.clinica_id)
+        context['mode'] = 'clinics'
+        context['clinic_ids'] = [current_user.clinica_id]
     else:
         query = query.filter_by(tutor_id=current_user.id)
+        context['mode'] = 'tutor'
+        context['tutor_id'] = current_user.id
+
     appts = query.order_by(Appointment.scheduled_at).all()
-    return jsonify(appointments_to_events(appts))
+    events = appointments_to_events(appts)
+
+    existing_event_ids = set()
+    for event in events:
+        event_id = event.get('id') if isinstance(event, dict) else None
+        if event_id:
+            existing_event_ids.add(event_id)
+
+    def _append_event(event):
+        if not event or not isinstance(event, dict):
+            return
+        event_id = event.get('id')
+        if event_id and event_id in existing_event_ids:
+            return
+        events.append(event)
+        if event_id:
+            existing_event_ids.add(event_id)
+
+    def _extend_exam_events(*, or_filters=None, and_filters=None):
+        query_obj = ExamAppointment.query.outerjoin(ExamAppointment.animal)
+        and_conditions = [cond for cond in (and_filters or []) if cond is not None]
+        if and_conditions:
+            query_obj = query_obj.filter(*and_conditions)
+        or_conditions = [cond for cond in (or_filters or []) if cond is not None]
+        if or_conditions:
+            query_obj = query_obj.filter(or_(*or_conditions))
+        exam_items = query_obj.order_by(ExamAppointment.scheduled_at).all()
+        for exam in unique_items_by_id(exam_items):
+            event = exam_to_event(exam)
+            if event:
+                _append_event(event)
+
+    def _extend_vaccine_events(*, or_filters=None, and_filters=None):
+        query_obj = Vacina.query.outerjoin(Vacina.animal)
+        and_conditions = [cond for cond in (and_filters or []) if cond is not None]
+        if and_conditions:
+            query_obj = query_obj.filter(*and_conditions)
+        or_conditions = [cond for cond in (or_filters or []) if cond is not None]
+        if or_conditions:
+            query_obj = query_obj.filter(or_(*or_conditions))
+        vaccine_items = query_obj.order_by(Vacina.aplicada_em).all()
+        for vaccine in unique_items_by_id(vaccine_items):
+            event = vaccine_to_event(vaccine)
+            if event:
+                _append_event(event)
+
+    def _extend_for_tutor(tutor_id):
+        if not tutor_id:
+            return
+        tutor_vet = None
+        if current_user.is_authenticated and current_user.id == tutor_id:
+            tutor_vet = getattr(current_user, 'veterinario', None)
+        else:
+            tutor_obj = User.query.get(tutor_id)
+            tutor_vet = getattr(tutor_obj, 'veterinario', None) if tutor_obj else None
+        or_filters = [
+            ExamAppointment.requester_id == tutor_id,
+            Animal.user_id == tutor_id,
+        ]
+        if tutor_vet:
+            or_filters.append(ExamAppointment.specialist_id == tutor_vet.id)
+        _extend_exam_events(or_filters=or_filters)
+        _extend_vaccine_events(
+            or_filters=[
+                Animal.user_id == tutor_id,
+                Vacina.aplicada_por == tutor_id,
+            ],
+            and_filters=[
+                Vacina.aplicada_em.isnot(None),
+                Vacina.aplicada_em >= date.today(),
+            ],
+        )
+
+    def _extend_for_vet(vet_profile, clinic_ids=None):
+        if not vet_profile:
+            return
+        vet_id = getattr(vet_profile, 'id', None)
+        if not vet_id:
+            return
+        sanitized_clinic_ids = [cid for cid in (clinic_ids or []) if cid]
+        exam_filters = [ExamAppointment.specialist_id == vet_id]
+        exam_filters.append(ExamAppointment.status.in_(['pending', 'confirmed']))
+        if sanitized_clinic_ids:
+            exam_filters.append(
+                or_(
+                    Animal.clinica_id.in_(sanitized_clinic_ids),
+                    ExamAppointment.specialist.has(
+                        Veterinario.clinica_id.in_(sanitized_clinic_ids)
+                    ),
+                )
+            )
+        _extend_exam_events(and_filters=exam_filters)
+
+        vaccine_filters = [
+            Vacina.aplicada_em.isnot(None),
+            Vacina.aplicada_em >= date.today(),
+        ]
+        vet_user_id = getattr(vet_profile, 'user_id', None)
+        if vet_user_id:
+            vaccine_filters.append(Vacina.aplicada_por == vet_user_id)
+        if sanitized_clinic_ids:
+            vaccine_filters.append(Animal.clinica_id.in_(sanitized_clinic_ids))
+        _extend_vaccine_events(and_filters=vaccine_filters)
+
+    def _extend_for_clinics(clinic_ids):
+        sanitized = [cid for cid in (clinic_ids or []) if cid]
+        if not sanitized:
+            return
+        clinic_filters = [
+            or_(
+                Animal.clinica_id.in_(sanitized),
+                ExamAppointment.specialist.has(
+                    Veterinario.clinica_id.in_(sanitized)
+                ),
+            ),
+            ExamAppointment.status.in_(['pending', 'confirmed']),
+        ]
+        _extend_exam_events(and_filters=clinic_filters)
+        vaccine_filters = [
+            Animal.clinica_id.in_(sanitized),
+            Vacina.aplicada_em.isnot(None),
+            Vacina.aplicada_em >= date.today(),
+        ]
+        _extend_vaccine_events(and_filters=vaccine_filters)
+
+    if context['mode'] == 'tutor':
+        _extend_for_tutor(context.get('tutor_id'))
+    elif context['mode'] == 'veterinario':
+        _extend_for_vet(context.get('vet'), context.get('clinic_ids'))
+    elif context['mode'] == 'clinics':
+        _extend_for_clinics(context.get('clinic_ids'))
+
+    return jsonify(events)
 
 
 @app.route('/api/user_appointments/<int:user_id>')
