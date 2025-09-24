@@ -223,7 +223,16 @@
               </div>
               <div>
                 <h6 class="mb-0">{{ appt.scheduled_at|format_datetime_brazil('%d/%m/%Y %H:%M') }} - {{ appt.animal.name }}</h6>
-                <small class="text-muted">{{ appt.tutor.name if item.kind=='consulta' else appt.animal.owner.name }}{% if item.kind == 'exame' %} <span class="badge bg-info ms-1">Exame</span>{% endif %}</small>
+                <small class="text-muted">
+                  {{ appt.tutor.name if item.kind in ['consulta', 'retorno', 'banho_tosa'] else appt.animal.owner.name }}
+                  {% if item.kind == 'exame' %}
+                    <span class="badge bg-info ms-1">Exame</span>
+                  {% elif item.kind == 'banho_tosa' %}
+                    <span class="badge bg-primary ms-1">Banho e Tosa</span>
+                  {% elif item.kind == 'retorno' %}
+                    <span class="badge bg-warning text-dark ms-1">Retorno</span>
+                  {% endif %}
+                </small>
                 <div class="mt-1">
                   {% if can_respond %}
                     <small class="text-muted"><i class="fas fa-hourglass-half me-1"></i>Tempo restante: {{ appt.time_left|format_timedelta }}</small>
@@ -235,7 +244,7 @@
             </div>
             {% if can_respond %}
               <div class="d-flex gap-2">
-                {% if item.kind == 'consulta' %}
+                {% if item.kind in ['consulta', 'retorno', 'banho_tosa'] %}
                 <form method="POST" action="{{ url_for('update_appointment_status', appointment_id=appt.id) }}">
                   <input type="hidden" name="status" value="accepted">
                   <button type="submit" class="btn btn-success btn-sm"><i class="fas fa-check me-1"></i>Aceitar</button>
@@ -317,8 +326,12 @@
                 </div>
                 <div>
                   <h6 class="mb-0">{{ appt.scheduled_at|format_datetime_brazil('%d/%m/%Y %H:%M') }} - {{ appt.animal.name }}</h6>
-                  <small class="text-muted">{{ appt.tutor.name }}
-                    {% if item.kind == 'retorno' %}<span class="badge bg-warning text-dark ms-1">Retorno</span>{% endif %}
+                  <small class="text-muted">{{ appt.tutor.name if item.kind in ['consulta', 'retorno', 'banho_tosa'] else appt.animal.owner.name }}
+                    {% if item.kind == 'retorno' %}
+                      <span class="badge bg-warning text-dark ms-1">Retorno</span>
+                    {% elif item.kind == 'banho_tosa' %}
+                      <span class="badge bg-primary text-white ms-1">Banho e Tosa</span>
+                    {% endif %}
                   </small>
                 </div>
               </div>
