@@ -56,6 +56,7 @@
             <button type="button" class="btn btn-outline-primary btn-sm" data-filter="appointment">Consultas</button>
             <button type="button" class="btn btn-outline-primary btn-sm" data-filter="exam">Exames</button>
             <button type="button" class="btn btn-outline-primary btn-sm" data-filter="vaccine">Vacinas</button>
+            <button type="button" class="btn btn-outline-primary btn-sm" data-filter="grooming">Banho e Tosa</button>
           </div>
           <p class="text-muted small mb-4 mt-3">
             Eventos sincronizados automaticamente com o FullCalendar. Escolha um dia para iniciar um novo agendamento.
@@ -717,6 +718,10 @@
   background: linear-gradient(180deg, rgba(254, 240, 138, 0.65) 0%, #ffffff 100%);
 }
 
+#{{ component_id }} .tutor-calendar__appointment-card--grooming {
+  background: linear-gradient(180deg, rgba(252, 231, 243, 0.75) 0%, #ffffff 100%);
+}
+
 #{{ component_id }} .tutor-calendar__appointment-top {
   display: flex;
   flex-wrap: wrap;
@@ -770,6 +775,11 @@
 #{{ component_id }} .tutor-calendar__appointment-card--vaccine .tutor-calendar__appointment-pill {
   background: rgba(250, 204, 21, 0.2);
   color: #a16207;
+}
+
+#{{ component_id }} .tutor-calendar__appointment-card--grooming .tutor-calendar__appointment-pill {
+  background: rgba(236, 72, 153, 0.18);
+  color: #be185d;
 }
 
 #{{ component_id }} .tutor-calendar__appointment-status {
@@ -1019,6 +1029,11 @@
   color: #a16207;
 }
 
+#{{ component_id }} .tutor-calendar__day-detail-card--grooming .tutor-calendar__day-detail-type {
+  background: rgba(236, 72, 153, 0.2);
+  color: #be185d;
+}
+
 #{{ component_id }} .tutor-calendar__day-detail-title {
   font-size: 1rem;
   margin: 0;
@@ -1232,6 +1247,30 @@
   border-color: rgba(250, 204, 21, 0.45);
 }
 
+#{{ component_id }} .tutor-calendar__event--grooming {
+  background: rgba(244, 114, 182, 0.18);
+  border-color: rgba(236, 72, 153, 0.45);
+  border-left-color: rgba(236, 72, 153, 0.65);
+}
+
+#{{ component_id }} .tutor-calendar__event--grooming.status-completed {
+  background: rgba(22, 163, 74, 0.14);
+  border-color: rgba(22, 163, 74, 0.35);
+  border-left-color: rgba(22, 163, 74, 0.6);
+}
+
+#{{ component_id }} .tutor-calendar__event--grooming.status-canceled {
+  background: rgba(248, 113, 113, 0.16);
+  border-color: rgba(239, 68, 68, 0.35);
+  border-left-color: rgba(239, 68, 68, 0.6);
+}
+
+#{{ component_id }} .tutor-calendar__event--grooming.status-accepted {
+  background: rgba(14, 165, 233, 0.14);
+  border-color: rgba(14, 165, 233, 0.35);
+  border-left-color: rgba(14, 165, 233, 0.6);
+}
+
 #{{ component_id }} .tutor-calendar__event-time {
   font-weight: 600;
   text-transform: uppercase;
@@ -1357,6 +1396,7 @@ document.addEventListener('DOMContentLoaded', function() {
     appointment: 'Consulta',
     exam: 'Exame',
     vaccine: 'Vacina',
+    grooming: 'Banho e Tosa',
   };
   const statusLabels = {
     scheduled: 'A fazer',
@@ -1807,7 +1847,7 @@ document.addEventListener('DOMContentLoaded', function() {
         return;
       }
       matched = true;
-      const typeKey = eventItem.type || 'appointment';
+      const typeKey = getEventBaseType(eventItem) || 'appointment';
       const nextStatus = resolveStatusKey(statusValue, typeKey);
       eventItem.status = nextStatus;
       if (ext) {
@@ -1921,7 +1961,25 @@ document.addEventListener('DOMContentLoaded', function() {
       return null;
     }
     const extended = raw.extendedProps || {};
-    const type = raw.type || raw.eventType || extended.eventType || extended.type || 'appointment';
+    const rawTypeValue = raw.type || raw.eventType || raw.event_type || extended.eventType || extended.type || extended.event_type || '';
+    const rawKindValue = extended.kind || raw.kind || raw.eventKind || raw.event_kind || '';
+    const canonicalType = canonicalizeEventTypeKey(rawTypeValue);
+    const normalizedKind = normalizeFilterValue(rawKindValue);
+    let baseType = canonicalType && canonicalType !== 'all' ? canonicalType : '';
+    if (!baseType) {
+      baseType = 'appointment';
+    }
+    if (baseType === 'grooming') {
+      baseType = 'appointment';
+    }
+    let category = canonicalType && canonicalType !== 'all' ? canonicalType : baseType;
+    if (baseType === 'appointment' && (category === 'grooming' || isGroomingKind(normalizedKind))) {
+      category = 'grooming';
+    }
+    if (!category || category === 'all') {
+      category = baseType || 'appointment';
+    }
+
     const startValue = raw.start || raw.startStr || extended.start;
     const startDate = parseDate(startValue);
     const dateKey = startDate ? formatDateKey(startDate) : (raw.date || null);
@@ -1931,7 +1989,7 @@ document.addEventListener('DOMContentLoaded', function() {
     const recordIdValue = extended.recordId !== undefined && extended.recordId !== null
       ? extended.recordId
       : (raw.recordId !== undefined && raw.recordId !== null ? raw.recordId : null);
-    const statusKey = resolveStatusKey(extended.status || raw.status, type);
+    const statusKey = resolveStatusKey(extended.status || raw.status, baseType);
     if (extended && statusKey) {
       extended.status = statusKey;
     }
@@ -1941,7 +1999,10 @@ document.addEventListener('DOMContentLoaded', function() {
       id: raw.id || (extended && extended.recordId) || null,
       recordId: recordId,
       status: statusKey,
-      type: type,
+      type: baseType,
+      category: category,
+      kind: normalizedKind,
+      rawKind: rawKindValue,
       title: title,
       date: dateKey,
       time: timeText,
@@ -1963,8 +2024,11 @@ document.addEventListener('DOMContentLoaded', function() {
 
   function updateFilterButtons() {
     filterButtons.forEach(function(btn) {
-      const isActive = btn.dataset.filter === currentFilter;
+      const btnFilter = canonicalizeEventTypeKey(btn.dataset.filter || '');
+      const normalizedButtonFilter = btnFilter || 'all';
+      const isActive = normalizedButtonFilter === currentFilter;
       btn.classList.toggle('active', isActive);
+      btn.setAttribute('aria-pressed', isActive ? 'true' : 'false');
     });
   }
 
@@ -1982,6 +2046,129 @@ document.addEventListener('DOMContentLoaded', function() {
       return '';
     }
     return String(value).trim().toLowerCase();
+  }
+
+  function canonicalizeEventTypeKey(value) {
+    const normalized = normalizeFilterValue(value);
+    switch (normalized) {
+      case 'appointment':
+      case 'appointments':
+      case 'agenda':
+      case 'agendamento':
+      case 'consulta':
+      case 'consultas':
+      case 'consultation':
+        return 'appointment';
+      case 'exam':
+      case 'exame':
+      case 'exames':
+        return 'exam';
+      case 'vaccine':
+      case 'vacina':
+      case 'vacinas':
+      case 'imunizacao':
+        return 'vaccine';
+      case 'grooming':
+      case 'banho':
+      case 'tosa':
+      case 'banho_tosa':
+      case 'banho e tosa':
+        return 'grooming';
+      case 'all':
+        return 'all';
+      default:
+        return normalized;
+    }
+  }
+
+  function isGroomingKind(value) {
+    const normalized = normalizeFilterValue(value);
+    return normalized === 'banho_tosa' || normalized === 'banho e tosa' || normalized === 'grooming';
+  }
+
+  function getEventKindKey(eventData) {
+    if (!eventData) {
+      return '';
+    }
+    if (eventData.kind) {
+      return normalizeFilterValue(eventData.kind);
+    }
+    const raw = eventData.raw || {};
+    const ext = raw.extendedProps || {};
+    if (ext.kind) {
+      return normalizeFilterValue(ext.kind);
+    }
+    if (raw.kind) {
+      return normalizeFilterValue(raw.kind);
+    }
+    if (raw.eventKind) {
+      return normalizeFilterValue(raw.eventKind);
+    }
+    if (raw.event_kind) {
+      return normalizeFilterValue(raw.event_kind);
+    }
+    return '';
+  }
+
+  function getEventBaseType(eventData) {
+    const typeKey = eventData && eventData.type ? normalizeFilterValue(eventData.type) : '';
+    if (typeKey) {
+      return typeKey;
+    }
+    if (eventData && eventData.category) {
+      const categoryKey = normalizeFilterValue(eventData.category);
+      if (categoryKey && categoryKey !== 'grooming') {
+        return categoryKey;
+      }
+    }
+    const kindKey = getEventKindKey(eventData);
+    if (isGroomingKind(kindKey)) {
+      return 'appointment';
+    }
+    return 'appointment';
+  }
+
+  function getEventCategoryKey(eventData) {
+    if (!eventData) {
+      return 'appointment';
+    }
+    if (eventData.category) {
+      const normalized = normalizeFilterValue(eventData.category);
+      if (normalized) {
+        return normalized;
+      }
+    }
+    const baseType = getEventBaseType(eventData);
+    const kindKey = getEventKindKey(eventData);
+    if (baseType === 'appointment' && isGroomingKind(kindKey)) {
+      return 'grooming';
+    }
+    return baseType || 'appointment';
+  }
+
+  function eventMatchesFilter(eventData, filterKey) {
+    if (!eventData) {
+      return false;
+    }
+    const activeFilter = canonicalizeEventTypeKey(filterKey || currentFilter || 'all') || 'all';
+    if (activeFilter === 'all') {
+      return true;
+    }
+    const categoryKey = getEventCategoryKey(eventData);
+    const baseType = getEventBaseType(eventData);
+    if (activeFilter === 'grooming') {
+      if (categoryKey === 'grooming') {
+        return true;
+      }
+      return isGroomingKind(getEventKindKey(eventData));
+    }
+    if (activeFilter === 'appointment') {
+      if (categoryKey === 'grooming') {
+        return false;
+      }
+      return baseType === 'appointment' || categoryKey === 'appointment';
+    }
+    return categoryKey === activeFilter || baseType === activeFilter;
   }
 
   function normalizeTextForSearch(text) {
@@ -2445,9 +2632,14 @@ document.addEventListener('DOMContentLoaded', function() {
   }
 
   function buildEventElement(eventData) {
-    const typeKey = eventData.type || 'appointment';
+    const typeKey = getEventCategoryKey(eventData);
+    const baseType = getEventBaseType(eventData) || 'appointment';
     const el = document.createElement('div');
-    el.className = 'tutor-calendar__event tutor-calendar__event--' + typeKey;
+    const eventClasses = ['tutor-calendar__event', 'tutor-calendar__event--' + typeKey];
+    if (baseType && baseType !== typeKey) {
+      eventClasses.push('tutor-calendar__event--' + baseType);
+    }
+    el.className = eventClasses.join(' ');
     const raw = eventData && eventData.raw ? eventData.raw : {};
     const ext = raw.extendedProps || {};
     const eventKey = getEventKey(eventData);
@@ -2464,9 +2656,12 @@ document.addEventListener('DOMContentLoaded', function() {
       el.dataset.recordId = String(recordId);
     }
 
-    const statusKey = resolveStatusKey(eventData.status || ext.status, typeKey);
+    el.dataset.type = typeKey;
+    el.dataset.baseType = baseType;
+
+    const statusKey = resolveStatusKey(eventData.status || ext.status, baseType);
     const statusLabel = statusLabels[statusKey] || humanizeLabel(statusKey);
-    const statusClassName = isKnownStatus(statusKey) ? statusKey : (typeKey === 'appointment' ? 'scheduled' : '');
+    const statusClassName = isKnownStatus(statusKey) ? statusKey : (baseType === 'appointment' ? 'scheduled' : '');
     if (statusClassName) {
       el.classList.add(`status-${statusClassName}`);
     }
@@ -2540,16 +2735,21 @@ document.addEventListener('DOMContentLoaded', function() {
 
   function buildDayDetailCard(eventData) {
     const card = document.createElement('article');
-    const typeKey = eventData.type || 'appointment';
+    const typeKey = getEventCategoryKey(eventData);
+    const baseType = getEventBaseType(eventData) || 'appointment';
     const raw = eventData && eventData.raw ? eventData.raw : {};
     const ext = raw.extendedProps || {};
-    const typeLabel = typeLabels[typeKey] || 'Evento';
-    const kindLabel = humanizeLabel(ext.kind) || typeLabel;
+    const typeLabel = typeLabels[typeKey] || typeLabels[baseType] || 'Evento';
+    const kindKey = getEventKindKey(eventData);
+    let kindLabel = humanizeLabel(ext.kind || eventData.rawKind || eventData.kind) || typeLabel;
+    if (isGroomingKind(kindKey)) {
+      kindLabel = 'Banho e Tosa';
+    }
     const tutorName = ext.tutorName || null;
     const vetName = ext.vetName || ext.veterinarioName || null;
-    const statusKey = resolveStatusKey(ext.status || eventData.status, typeKey);
+    const statusKey = resolveStatusKey(ext.status || eventData.status, baseType);
     const statusLabel = statusLabels[statusKey] || humanizeLabel(statusKey);
-    const statusClassName = isKnownStatus(statusKey) ? statusKey : (typeKey === 'appointment' ? 'scheduled' : '');
+    const statusClassName = isKnownStatus(statusKey) ? statusKey : (baseType === 'appointment' ? 'scheduled' : '');
     const recordId = ext.recordId !== undefined && ext.recordId !== null ? ext.recordId : null;
     const startDate = eventData.start instanceof Date ? eventData.start : parseDate(raw.start || raw.startStr || ext.start);
     const endDate = parseDate(raw.end || raw.endStr || ext.end);
@@ -2561,6 +2761,8 @@ document.addEventListener('DOMContentLoaded', function() {
     const appointmentCode = recordId !== null ? `#${recordId}` : null;
 
     card.className = 'tutor-calendar__day-detail-card tutor-calendar__day-detail-card--' + typeKey;
+    card.dataset.type = typeKey;
+    card.dataset.baseType = baseType;
 
     const eventKey = getEventKey(eventData);
     if (eventKey) {
@@ -2686,12 +2888,19 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     const fragment = document.createDocumentFragment();
-    const typeKey = eventData.type || 'appointment';
-    const statusKey = resolveStatusKey(ext.status || eventData.status, typeKey);
+    const typeKey = getEventCategoryKey(eventData);
+    const baseType = getEventBaseType(eventData) || 'appointment';
+    const statusKey = resolveStatusKey(ext.status || eventData.status, baseType);
     const statusClass = isKnownStatus(statusKey) ? statusKey : 'scheduled';
     const statusLabel = statusLabels[statusKey] || humanizeLabel(statusKey) || '—';
-    const typeLabel = typeLabels[typeKey] || 'Evento';
-    const kindLabel = ext.kind ? String(ext.kind) : '';
+    const typeLabel = typeLabels[typeKey] || typeLabels[baseType] || 'Evento';
+    const kindKey = getEventKindKey(eventData);
+    let kindLabel = ext.kind || eventData.rawKind || eventData.kind || '';
+    if (isGroomingKind(kindKey)) {
+      kindLabel = 'Banho e Tosa';
+    } else if (kindLabel) {
+      kindLabel = humanizeLabel(kindLabel);
+    }
     const tutorName = ext.tutorName || null;
     const animalName = ext.animalName || getPetName(eventData.animalId) || derivePetNameFromTitle(eventData.title) || 'Paciente';
     const vetName = ext.vetName || ext.veterinarioName || deriveVetNameFromTitle(eventData.title) || '—';
@@ -2699,7 +2908,12 @@ document.addEventListener('DOMContentLoaded', function() {
     const card = document.createElement('article');
     card.className = 'tutor-calendar__appointment-card';
     card.classList.add('tutor-calendar__appointment-card--' + typeKey);
+    if (baseType && baseType !== typeKey) {
+      card.classList.add('tutor-calendar__appointment-card--' + baseType);
+    }
     card.dataset.appointmentId = String(recordId);
+    card.dataset.type = typeKey;
+    card.dataset.baseType = baseType;
     if (dateKey) {
       card.dataset.day = dateKey;
       card.dataset.dayLabel = displayLabel || dateKey;
@@ -3012,7 +3226,7 @@ document.addEventListener('DOMContentLoaded', function() {
     if (!eventData) {
       return null;
     }
-    if (eventData.type === 'appointment') {
+    if (getEventBaseType(eventData) === 'appointment') {
       const appointmentContent = buildAppointmentDetailBlock(eventData, displayLabel, dateKey);
       if (appointmentContent) {
         return appointmentContent;
@@ -3077,10 +3291,7 @@ document.addEventListener('DOMContentLoaded', function() {
       if (event.date !== targetDateKey) {
         return false;
       }
-      if (currentFilter === 'all') {
-        return true;
-      }
-      return event.type === currentFilter;
+      return eventMatchesFilter(event, currentFilter);
     }).sort(sortEventsByStart);
 
     dayDetailContainer.dataset.date = targetDateKey;
@@ -3163,7 +3374,9 @@ document.addEventListener('DOMContentLoaded', function() {
 
     const typeEl = document.createElement('span');
     typeEl.className = 'tutor-calendar__day-detail-count';
-    const eventTypeLabel = typeLabels[eventData.type] || 'Evento';
+    const focusedTypeKey = getEventCategoryKey(eventData);
+    const focusedBaseType = getEventBaseType(eventData);
+    const eventTypeLabel = typeLabels[focusedTypeKey] || typeLabels[focusedBaseType] || 'Evento';
     typeEl.textContent = `Compromisso: ${eventTypeLabel}`;
     header.appendChild(typeEl);
 
@@ -3260,10 +3473,7 @@ document.addEventListener('DOMContentLoaded', function() {
         if (event.date !== iso) {
           return false;
         }
-        if (currentFilter === 'all') {
-          return true;
-        }
-        return event.type === currentFilter;
+        return eventMatchesFilter(event, currentFilter);
       }).sort(sortEventsByStart);
 
       const totalCount = dayEvents.length;
@@ -3362,10 +3572,7 @@ document.addEventListener('DOMContentLoaded', function() {
         if (event.date !== iso) {
           return false;
         }
-        if (currentFilter === 'all') {
-          return true;
-        }
-        return event.type === currentFilter;
+        return eventMatchesFilter(event, currentFilter);
       }).sort(sortEventsByStart);
 
       dayEvents.forEach(function(eventData) {
@@ -3395,6 +3602,7 @@ document.addEventListener('DOMContentLoaded', function() {
   }
 
   function renderCalendar() {
+    updateFilterButtons();
     updateViewModeButtons();
     if (currentViewMode === 'week') {
       weekdaysEl && weekdaysEl.classList.add('d-none');
@@ -3569,7 +3777,7 @@ document.addEventListener('DOMContentLoaded', function() {
   }
 
   function setFilter(filter) {
-    currentFilter = filter || 'all';
+    currentFilter = canonicalizeEventTypeKey(filter) || 'all';
     updateFilterButtons();
     renderCalendar();
   }
