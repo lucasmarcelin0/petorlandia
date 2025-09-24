@@ -30,7 +30,12 @@
   {% endif %}
   <div class="row g-4 align-items-stretch mb-4" id="appointments-calendar-overview">
     <div class="col-12 col-xl-8 col-xxl-9" data-calendar-main-column>
-      <ul class="nav nav-pills mb-3" id="appointments-calendar-tabs" role="tablist">
+      <ul
+        class="nav nav-pills calendar-tabs mb-3"
+        id="appointments-calendar-tabs"
+        role="tablist"
+        aria-label="Alternar entre o calendário e o agendamento"
+      >
         <li class="nav-item" role="presentation">
           <button
             class="nav-link active"
@@ -63,7 +68,7 @@
 
       <div class="tab-content mt-3" id="appointments-calendar-content">
         <div
-          class="tab-pane fade show active pt-2"
+          class="tab-pane fade calendar-tab-pane show active pt-2"
           id="calendar-pane-experimental"
           role="tabpanel"
           aria-labelledby="calendar-tab-experimental"
@@ -84,7 +89,7 @@
           {% endwith %}
         </div>
         <div
-          class="tab-pane fade pt-2"
+          class="tab-pane fade calendar-tab-pane pt-2"
           id="calendar-pane-full"
           role="tabpanel"
           aria-labelledby="calendar-tab-full"
