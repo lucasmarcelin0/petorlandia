@@ -2876,7 +2876,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
     card.addEventListener('click', function(evt) {
       if (evt) {
-        const interactiveSelector = 'a, button, input, textarea, select, [role="button"], [data-ignore-card-click]';
+        const interactiveSelector = 'a, button, input, textarea, select, [data-ignore-card-click], [role="button"]:not(.tutor-calendar__day-detail-card)';
         if (evt.target && evt.target.closest(interactiveSelector)) {
           return;
         }
@@ -3966,7 +3966,7 @@ document.addEventListener('DOMContentLoaded', function() {
       if (!card) {
         return;
       }
-      const interactiveSelector = 'a, button, input, textarea, select, [role="button"], [data-ignore-card-click]';
+      const interactiveSelector = 'a, button, input, textarea, select, [data-ignore-card-click], [role="button"]:not(.tutor-calendar__day-detail-card)';
       if (event.target && event.target.closest(interactiveSelector)) {
         return;
       }
