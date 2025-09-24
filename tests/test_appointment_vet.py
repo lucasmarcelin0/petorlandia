@@ -137,7 +137,8 @@ def test_veterinarian_sees_all_animals_in_form(client):
         assert (animal2.id, animal2.name) in form.animal_id.choices
 
 
-def test_appointment_form_has_banho_tosa_choice(client):
+def test_appointment_form_has_extra_kind_choices(client):
     with flask_app.app_context():
         form = AppointmentForm()
         assert ('banho_tosa', 'Banho e Tosa') in form.kind.choices
+        assert ('vacina', 'Vacina') in form.kind.choices

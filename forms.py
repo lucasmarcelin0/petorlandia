@@ -445,6 +445,7 @@ class AppointmentForm(FlaskForm):
             ('retorno', 'Retorno'),
             ('exame', 'Exame'),
             ('banho_tosa', 'Banho e Tosa'),
+            ('vacina', 'Vacina'),
         ],
         validators=[DataRequired()],
         default='consulta',

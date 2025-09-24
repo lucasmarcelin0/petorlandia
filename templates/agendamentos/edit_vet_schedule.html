@@ -224,11 +224,13 @@
               <div>
                 <h6 class="mb-0">{{ appt.scheduled_at|format_datetime_brazil('%d/%m/%Y %H:%M') }} - {{ appt.animal.name }}</h6>
                 <small class="text-muted">
-                  {{ appt.tutor.name if item.kind in ['consulta', 'retorno', 'banho_tosa'] else appt.animal.owner.name }}
+                  {{ appt.tutor.name if item.kind in ['consulta', 'retorno', 'banho_tosa', 'vacina'] else appt.animal.owner.name }}
                   {% if item.kind == 'exame' %}
                     <span class="badge bg-info ms-1">Exame</span>
                   {% elif item.kind == 'banho_tosa' %}
                     <span class="badge bg-primary ms-1">Banho e Tosa</span>
+                  {% elif item.kind == 'vacina' %}
+                    <span class="badge bg-success ms-1">Vacina</span>
                   {% elif item.kind == 'retorno' %}
                     <span class="badge bg-warning text-dark ms-1">Retorno</span>
                   {% endif %}
@@ -244,7 +246,7 @@
             </div>
             {% if can_respond %}
               <div class="d-flex gap-2">
-                {% if item.kind in ['consulta', 'retorno', 'banho_tosa'] %}
+                {% if item.kind in ['consulta', 'retorno', 'banho_tosa', 'vacina'] %}
                 <form method="POST" action="{{ url_for('update_appointment_status', appointment_id=appt.id) }}">
                   <input type="hidden" name="status" value="accepted">
                   <button type="submit" class="btn btn-success btn-sm"><i class="fas fa-check me-1"></i>Aceitar</button>
@@ -326,11 +328,13 @@
                 </div>
                 <div>
                   <h6 class="mb-0">{{ appt.scheduled_at|format_datetime_brazil('%d/%m/%Y %H:%M') }} - {{ appt.animal.name }}</h6>
-                  <small class="text-muted">{{ appt.tutor.name if item.kind in ['consulta', 'retorno', 'banho_tosa'] else appt.animal.owner.name }}
+                  <small class="text-muted">{{ appt.tutor.name if item.kind in ['consulta', 'retorno', 'banho_tosa', 'vacina'] else appt.animal.owner.name }}
                     {% if item.kind == 'retorno' %}
                       <span class="badge bg-warning text-dark ms-1">Retorno</span>
                     {% elif item.kind == 'banho_tosa' %}
                       <span class="badge bg-primary text-white ms-1">Banho e Tosa</span>
+                    {% elif item.kind == 'vacina' %}
+                      <span class="badge bg-success text-white ms-1">Vacina</span>
                     {% endif %}
                   </small>
                 </div>
