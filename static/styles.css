@@ -13,6 +13,106 @@
   overflow-x: auto;
 }
 
+/* Alternância entre calendário e agendamento */
+.calendar-tabs {
+  --calendar-tab-border: rgba(148, 163, 184, 0.18);
+  --calendar-tab-bg: rgba(15, 23, 42, 0.04);
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.95), rgba(241, 245, 249, 0.88));
+  border-radius: 999px;
+  border: 1px solid var(--calendar-tab-border);
+  padding: 0.35rem;
+  display: inline-flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  align-items: center;
+  position: relative;
+  box-shadow: 0 20px 40px -35px rgba(30, 64, 175, 0.55);
+}
+
+.calendar-tabs .nav-item {
+  margin: 0;
+}
+
+.calendar-tabs .nav-link {
+  border-radius: 999px;
+  border: none;
+  background: transparent;
+  color: #334155;
+  font-weight: 600;
+  padding: 0.65rem 1.25rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  position: relative;
+  transition: color 0.28s ease, background 0.28s ease, box-shadow 0.28s ease, transform 0.28s ease;
+}
+
+.calendar-tabs .nav-link .bi {
+  font-size: 1.05rem;
+  line-height: 1;
+}
+
+.calendar-tabs .nav-link:hover {
+  color: #1d4ed8;
+  background: rgba(37, 99, 235, 0.12);
+}
+
+.calendar-tabs .nav-link:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 0.22rem rgba(59, 130, 246, 0.35);
+}
+
+.calendar-tabs .nav-link::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  bottom: 0.3rem;
+  width: 0;
+  height: 3px;
+  background: rgba(255, 255, 255, 0.92);
+  border-radius: 999px;
+  opacity: 0;
+  transform: translateX(-50%);
+  transition: width 0.28s ease, opacity 0.28s ease;
+}
+
+.calendar-tabs .nav-link.active {
+  color: #ffffff;
+  background: linear-gradient(135deg, #2563eb 0%, #7c3aed 100%);
+  box-shadow: 0 14px 32px -24px rgba(37, 99, 235, 0.95);
+}
+
+.calendar-tabs .nav-link.active::after {
+  width: 60%;
+  opacity: 1;
+}
+
+.calendar-tabs .nav-link.active:hover {
+  color: #ffffff;
+}
+
+.calendar-tab-pane {
+  transition: opacity 0.35s ease, transform 0.35s ease;
+  transform-origin: top center;
+}
+
+.calendar-tab-pane:not(.active) {
+  transform: translateY(12px);
+}
+
+.calendar-tab-pane.active {
+  transform: translateY(0);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .calendar-tabs,
+  .calendar-tabs .nav-link,
+  .calendar-tab-pane {
+    transition: none !important;
+    box-shadow: none;
+  }
+}
+
 /* Tipos de eventos no calendário compartilhado */
 .fc-event.calendar-event-appointment {
   background-color: #4e73df;
