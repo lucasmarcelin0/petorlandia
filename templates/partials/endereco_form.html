@@ -1,4 +1,4 @@
-<div class="card shadow-sm rounded-4 p-4 mb-4 border-0 bg-light">
+<div class="card shadow-sm rounded-4 p-4 mb-4 border-0 bg-light" data-address-card>
   <h5 class="mb-3 text-primary d-flex align-items-center">
     <i class="bi bi-geo-alt-fill me-2"></i> Endereço
   </h5>
@@ -13,13 +13,13 @@
       </label>
       <div class="input-group">
         {% if addr_form %}
-          {{ addr_form.cep(class="form-control", id="cep", placeholder="00000-000", onblur="buscarCep()") }}
+          {{ addr_form.cep(class="form-control", id="cep", placeholder="00000-000", onblur="buscarCep(this)") }}
         {% else %}
           <input type="text" class="form-control" name="cep" id="cep"
                  value="{{ endereco.cep|default('', true) if endereco else '' }}"
-                 placeholder="00000-000" onblur="buscarCep()">
+                 placeholder="00000-000" onblur="buscarCep(this)">
         {% endif %}
-        <button class="btn btn-outline-secondary" type="button" onclick="buscarCep()">
+        <button class="btn btn-outline-secondary" type="button" onclick="buscarCep(this)">
           <i class="bi bi-search"></i>
         </button>
       </div>
@@ -179,17 +179,29 @@ document.addEventListener("DOMContentLoaded", function() {
   }
 });
 
-function buscarCep() {
-  const cep = document.getElementById("cep").value.replace(/\D/g, '');
-  const loading = document.getElementById("cep-loading");
+function buscarCep(trigger) {
+  const addressCard = trigger ? trigger.closest('[data-address-card]') : document.querySelector('[data-address-card]');
+  if (!addressCard) {
+    return;
+  }
+
+  const cepField = addressCard.querySelector('#cep');
+  if (!cepField) {
+    return;
+  }
+
+  const cep = cepField.value.replace(/\D/g, '');
+  const loading = addressCard.querySelector('#cep-loading');
   
   if (cep.length !== 8) {
     alert("CEP inválido. Digite 8 números.");
     return;
   }
 
-  loading.classList.remove("d-none");
-  
+  if (loading) {
+    loading.classList.remove("d-none");
+  }
+
   fetch(`https://viacep.com.br/ws/${cep}/json/`)
     .then(res => {
       if (!res.ok) throw new Error("Erro na requisição");
@@ -201,25 +213,37 @@ function buscarCep() {
       }
       
       // Preenche os campos
-      document.getElementById("rua").value = data.logradouro || "";
-      document.getElementById("complemento").value = data.complemento || "";
-      document.getElementById("bairro").value = data.bairro || "";
-      document.getElementById("cidade").value = data.localidade || "";
-      
+      const ruaField = addressCard.querySelector('#rua');
+      const complementoField = addressCard.querySelector('#complemento');
+      const bairroField = addressCard.querySelector('#bairro');
+      const cidadeField = addressCard.querySelector('#cidade');
+
+      if (ruaField) ruaField.value = data.logradouro || "";
+      if (complementoField) complementoField.value = data.complemento || "";
+      if (bairroField) bairroField.value = data.bairro || "";
+      if (cidadeField) cidadeField.value = data.localidade || "";
+
       // Atualiza o select de estado
-      const estadoSelect = document.getElementById("estado");
+      const estadoSelect = addressCard.querySelector('#estado');
       if (estadoSelect && data.uf) {
         estadoSelect.value = data.uf;
       }
-      
+
       // Foca no número (campo que geralmente não vem no CEP)
-      document.getElementById("numero").focus();
+      const numeroField = addressCard.querySelector('#numero');
+      if (numeroField) {
+        numeroField.focus();
+      }
     })
     .catch(error => {
       console.error("Erro ao buscar CEP:", error);
       alert(error.message);
     })
-    .finally(() => loading.classList.add("d-none"));
+    .finally(() => {
+      if (loading) {
+        loading.classList.add("d-none");
+      }
+    });
 }
 
 // Validação melhorada
