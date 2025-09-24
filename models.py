@@ -452,7 +452,6 @@ class Consulta(db.Model):
     )  # veterinário
     clinica_id = db.Column(db.Integer, db.ForeignKey('clinica.id'), nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
-
     # Campos principais da consulta
     queixa_principal = db.Column(db.Text)
     historico_clinico = db.Column(db.Text)
