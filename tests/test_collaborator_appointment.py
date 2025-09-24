@@ -106,3 +106,36 @@ def test_collaborator_can_schedule_banho_tosa(client, monkeypatch):
         assert appt.kind == 'banho_tosa'
         assert appt.notes == 'Spa day'
         assert appt.status == 'scheduled'
+
+
+def test_collaborator_can_schedule_vacina(client, monkeypatch):
+    with flask_app.app_context():
+        clinic_id, animal_id, vet_id = setup_data()
+
+    collaborator = type('U', (), {
+        'id': 5,
+        'worker': 'colaborador',
+        'role': 'adotante',
+        'is_authenticated': True,
+        'clinica_id': clinic_id,
+    })()
+    login(monkeypatch, collaborator)
+
+    resp = client.post('/appointments', data={
+        'appointment-animal_id': str(animal_id),
+        'appointment-veterinario_id': str(vet_id),
+        'appointment-date': '2024-05-20',
+        'appointment-time': '11:00',
+        'appointment-kind': 'vacina',
+        'appointment-reason': 'Reforço anual',
+        'appointment-submit': True,
+    })
+
+    assert resp.status_code == 302
+
+    with flask_app.app_context():
+        appt = Appointment.query.order_by(Appointment.id.desc()).first()
+        assert appt is not None
+        assert appt.kind == 'vacina'
+        assert appt.notes == 'Reforço anual'
+        assert appt.status == 'scheduled'
