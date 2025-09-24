@@ -2045,7 +2045,11 @@ document.addEventListener('DOMContentLoaded', function() {
     if (value === undefined || value === null) {
       return '';
     }
-    return String(value).trim().toLowerCase();
+    let normalized = String(value).trim().toLowerCase();
+    if (typeof normalized.normalize === 'function') {
+      normalized = normalized.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+    }
+    return normalized;
   }
 
   function canonicalizeEventTypeKey(value) {
@@ -2066,6 +2070,7 @@ document.addEventListener('DOMContentLoaded', function() {
       case 'vaccine':
       case 'vacina':
       case 'vacinas':
+      case 'vacinacao':
       case 'imunizacao':
         return 'vaccine';
       case 'grooming':
