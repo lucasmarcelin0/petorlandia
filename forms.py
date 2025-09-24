@@ -440,7 +440,12 @@ class AppointmentForm(FlaskForm):
 
     kind = SelectField(
         'Tipo',
-        choices=[('consulta', 'Consulta'), ('retorno', 'Retorno'), ('exame', 'Exame')],
+        choices=[
+            ('consulta', 'Consulta'),
+            ('retorno', 'Retorno'),
+            ('exame', 'Exame'),
+            ('banho_tosa', 'Banho e Tosa'),
+        ],
         validators=[DataRequired()],
         default='consulta',
     )
