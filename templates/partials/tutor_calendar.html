@@ -1969,11 +1969,15 @@ document.addEventListener('DOMContentLoaded', function() {
     if (!baseType) {
       baseType = 'appointment';
     }
-    if (baseType === 'grooming') {
+    if (isVaccineKind(normalizedKind)) {
+      baseType = 'vaccine';
+    } else if (baseType === 'grooming') {
       baseType = 'appointment';
     }
     let category = canonicalType && canonicalType !== 'all' ? canonicalType : baseType;
-    if (baseType === 'appointment' && (category === 'grooming' || isGroomingKind(normalizedKind))) {
+    if (isVaccineKind(normalizedKind)) {
+      category = 'vaccine';
+    } else if (baseType === 'appointment' && (category === 'grooming' || isGroomingKind(normalizedKind))) {
       category = 'grooming';
     }
     if (!category || category === 'all') {
@@ -2091,6 +2095,15 @@ document.addEventListener('DOMContentLoaded', function() {
     return normalized === 'banho_tosa' || normalized === 'banho e tosa' || normalized === 'grooming';
   }
 
+  function isVaccineKind(value) {
+    const normalized = normalizeFilterValue(value);
+    return normalized === 'vacina'
+      || normalized === 'vacinas'
+      || normalized === 'vacinacao'
+      || normalized === 'imunizacao'
+      || normalized === 'vaccine';
+  }
+
   function getEventKindKey(eventData) {
     if (!eventData) {
       return '';
@@ -2117,7 +2130,11 @@ document.addEventListener('DOMContentLoaded', function() {
 
   function getEventBaseType(eventData) {
     const typeKey = eventData && eventData.type ? normalizeFilterValue(eventData.type) : '';
+    const kindKey = getEventKindKey(eventData);
     if (typeKey) {
+      if (typeKey === 'appointment' && isVaccineKind(kindKey)) {
+        return 'vaccine';
+      }
       return typeKey;
     }
     if (eventData && eventData.category) {
@@ -2126,7 +2143,9 @@ document.addEventListener('DOMContentLoaded', function() {
         return categoryKey;
       }
     }
-    const kindKey = getEventKindKey(eventData);
+    if (isVaccineKind(kindKey)) {
+      return 'vaccine';
+    }
     if (isGroomingKind(kindKey)) {
       return 'appointment';
     }
@@ -2145,6 +2164,9 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     const baseType = getEventBaseType(eventData);
     const kindKey = getEventKindKey(eventData);
+    if (isVaccineKind(kindKey)) {
+      return 'vaccine';
+    }
     if (baseType === 'appointment' && isGroomingKind(kindKey)) {
       return 'grooming';
     }
