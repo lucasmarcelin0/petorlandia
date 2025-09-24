@@ -508,8 +508,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const normalized = typeof targetSelector === 'string'
       ? targetSelector.trim()
       : '';
-    const shouldShow = normalized === '#calendar-pane-full'
-      || normalized === 'calendar-pane-full'
+    const shouldShow = normalized === '#calendar-pane-experimental'
+      || normalized === 'calendar-pane-experimental'
       || normalized === '';
     setCalendarSummaryVisibility(shouldShow);
   }
@@ -617,7 +617,7 @@ document.addEventListener('DOMContentLoaded', () => {
   if (activeCalendarTab) {
     updateCalendarSummaryVisibilityFromTarget(activeCalendarTab.getAttribute('data-bs-target'));
   } else {
-    updateCalendarSummaryVisibilityFromTarget('#calendar-pane-full');
+    updateCalendarSummaryVisibilityFromTarget('#calendar-pane-experimental');
   }
 
   function padNumber(value) {
