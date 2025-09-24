@@ -7,6 +7,7 @@
   or (current_user.role == 'admin' and admin_view_mode == 'colaborador')
 ) %}
 {% set collaborator_select_default = 'clinic' if clinic_id else 'user' %}
+{% set prefer_user_vet_source = prefer_user_vet_source|default(admin_view_mode == 'veterinario') %}
 
 <div class="card mb-4">
   <div class="card-header">
@@ -63,6 +64,7 @@ document.addEventListener('DOMContentLoaded', function() {
   const toggle = document.getElementById('{{ toggle_id }}');
   const collaboratorPicker = document.getElementById('collaborator-schedule-picker');
   const userPicker = document.getElementById('admin-agenda-user-picker');
+  const preferUserVetSourceFlag = {{ prefer_user_vet_source|default(False)|tojson }};
   const hiddenVetInput = (function() {
     if (userPicker && typeof userPicker.closest === 'function') {
       const form = userPicker.closest('[data-admin-agenda-switcher]');
@@ -323,9 +325,14 @@ document.addEventListener('DOMContentLoaded', function() {
     return null;
   }
 
+  const initialUserId = resolveInitialUserId();
+  const initialVetId = resolveInitialVetId();
+
   let source = defaultSource;
-  let selectedUserId = resolveInitialUserId();
-  let selectedVetId = resolveInitialVetId();
+  let selectedUserId = initialUserId;
+  let selectedVetId = initialVetId;
+  let lastKnownVetId = selectedVetId;
+  let userButtonPrefersVet = preferUserVetSourceFlag && (initialVetId !== null);
   let calendar;
 
   if (adminInitialView === 'veterinario') {
@@ -384,8 +391,11 @@ document.addEventListener('DOMContentLoaded', function() {
 
   function setActiveButton(targetSource) {
     if (toggle) {
+      const effectiveSource = (targetSource === 'vet' && userButtonPrefersVet)
+        ? 'user'
+        : targetSource;
       toggle.querySelectorAll('button').forEach(function(btn) {
-        const isActive = targetSource !== 'vet' && btn.dataset.source === targetSource;
+        const isActive = effectiveSource !== 'vet' && btn.dataset.source === effectiveSource;
         btn.classList.toggle('active', isActive);
       });
     }
@@ -522,6 +532,13 @@ document.addEventListener('DOMContentLoaded', function() {
     const numericVetId = toNumericId(vetId);
     const previousVetId = selectedVetId;
     selectedVetId = numericVetId;
+    if (numericVetId !== null) {
+      lastKnownVetId = numericVetId;
+    }
+    if (preferUserVetSourceFlag) {
+      const fallbackVet = selectedVetId !== null ? selectedVetId : (lastKnownVetId !== null ? lastKnownVetId : initialVetId);
+      userButtonPrefersVet = fallbackVet !== null;
+    }
     if (shouldActivate) {
       source = numericVetId !== null ? 'vet' : defaultSource;
       if (numericVetId !== null) {
@@ -665,11 +682,29 @@ document.addEventListener('DOMContentLoaded', function() {
       btn.addEventListener('click', function() {
         const target = this.dataset.source;
         if (target === 'user') {
+          if (userButtonPrefersVet) {
+            const fallbackVetId = selectedVetId !== null
+              ? selectedVetId
+              : (lastKnownVetId !== null ? lastKnownVetId : initialVetId);
+            if (fallbackVetId !== null) {
+              selectedUserId = null;
+              updateCalendarVetSelection(fallbackVetId, { activate: true, refetch: true });
+              return;
+            }
+          }
           source = 'user';
           selectedVetId = null;
+          if (preferUserVetSourceFlag) {
+            const fallbackVet = lastKnownVetId !== null ? lastKnownVetId : initialVetId;
+            userButtonPrefersVet = fallbackVet !== null;
+          }
         } else if (target === 'clinic') {
           source = 'clinic';
           selectedVetId = null;
+          if (preferUserVetSourceFlag) {
+            const fallbackVet = lastKnownVetId !== null ? lastKnownVetId : initialVetId;
+            userButtonPrefersVet = fallbackVet !== null;
+          }
         } else {
           source = target;
         }
