@@ -13,11 +13,11 @@
       </label>
       <div class="input-group">
         {% if addr_form %}
-          {{ addr_form.cep(class="form-control", id="cep", placeholder="00000-000", onblur="buscarCep()") }}
+          {{ addr_form.cep(class="form-control", id="cep", placeholder="00000-000", data_mask="00000-000", onblur="buscarCep()") }}
         {% else %}
           <input type="text" class="form-control" name="cep" id="cep"
                  value="{{ endereco.cep|default('', true) if endereco else '' }}"
-                 placeholder="00000-000" onblur="buscarCep()">
+                 placeholder="00000-000" data-mask="00000-000" onblur="buscarCep()">
         {% endif %}
         <button class="btn btn-outline-secondary" type="button" onclick="buscarCep()">
           <i class="bi bi-search"></i>
