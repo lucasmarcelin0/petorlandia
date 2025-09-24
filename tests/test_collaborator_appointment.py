@@ -1,5 +1,13 @@
+import os
+import sys
+
 import pytest
 import flask_login.utils as login_utils
+
+os.environ["SQLALCHEMY_DATABASE_URI"] = "sqlite:///:memory:"
+
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+
 from app import app as flask_app, db
 from models import User, Clinica, Veterinario, Animal, VetSchedule, HealthPlan, HealthSubscription, Appointment
 from datetime import time, date
@@ -64,4 +72,37 @@ def test_collaborator_can_schedule_consulta(client, monkeypatch):
         assert appt is not None
         assert appt.kind == 'consulta'
         assert appt.notes == 'Checkup'
+        assert appt.status == 'scheduled'
+
+
+def test_collaborator_can_schedule_banho_tosa(client, monkeypatch):
+    with flask_app.app_context():
+        clinic_id, animal_id, vet_id = setup_data()
+
+    collaborator = type('U', (), {
+        'id': 4,
+        'worker': 'colaborador',
+        'role': 'adotante',
+        'is_authenticated': True,
+        'clinica_id': clinic_id,
+    })()
+    login(monkeypatch, collaborator)
+
+    resp = client.post('/appointments', data={
+        'appointment-animal_id': str(animal_id),
+        'appointment-veterinario_id': str(vet_id),
+        'appointment-date': '2024-05-20',
+        'appointment-time': '10:00',
+        'appointment-kind': 'banho_tosa',
+        'appointment-reason': 'Spa day',
+        'appointment-submit': True,
+    })
+
+    assert resp.status_code == 302
+
+    with flask_app.app_context():
+        appt = Appointment.query.order_by(Appointment.id.desc()).first()
+        assert appt is not None
+        assert appt.kind == 'banho_tosa'
+        assert appt.notes == 'Spa day'
         assert appt.status == 'scheduled'

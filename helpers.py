@@ -21,6 +21,7 @@ APPOINTMENT_KIND_DURATIONS = {
     'consulta': 30,
     'retorno': 30,
     'exame': 30,
+    'banho_tosa': 30,
 }
 
 DEFAULT_VACCINE_EVENT_START_TIME = time(9, 0)

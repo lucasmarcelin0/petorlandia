@@ -7726,7 +7726,10 @@ def appointments():
         appointments_pending = []
         for appt in pending_consultas:
             appt.time_left = (appt.scheduled_at - timedelta(hours=2)) - now
-            appointments_pending.append({'kind': 'consulta', 'appt': appt})
+            kind = appt.kind or ('retorno' if appt.consulta_id else 'consulta')
+            if kind == 'general':
+                kind = 'consulta'
+            appointments_pending.append({'kind': kind, 'appt': appt})
 
         from models import ExamAppointment, Message, BlocoExames
 
@@ -7778,6 +7781,8 @@ def appointments():
         appointments_upcoming = []
         for appt in upcoming_consultas:
             kind = appt.kind or ('retorno' if appt.consulta_id else 'consulta')
+            if kind == 'general':
+                kind = 'consulta'
             appointments_upcoming.append({'kind': kind, 'appt': appt})
         for exam in upcoming_exams:
             appointments_upcoming.append({'kind': 'exame', 'appt': exam})
@@ -8438,7 +8443,16 @@ def update_appointment_status(appointment_id):
         flash(message, 'error')
         return redirect(request.referrer or url_for('appointments'))
 
-    if status in {'accepted', 'canceled'} and appointment.scheduled_at - datetime.utcnow() < timedelta(hours=2):
+    should_enforce_deadline = False
+    if status == 'accepted':
+        should_enforce_deadline = current_user.role != 'admin'
+    elif status == 'canceled':
+        should_enforce_deadline = (
+            current_user.role != 'admin'
+            and current_user.worker not in {'veterinario', 'colaborador'}
+        )
+
+    if should_enforce_deadline and appointment.scheduled_at - datetime.utcnow() < timedelta(hours=2):
         message = 'Prazo expirado.'
         if wants_json:
             return jsonify({'success': False, 'message': message}), 400

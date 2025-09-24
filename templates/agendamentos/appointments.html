@@ -222,64 +222,9 @@
     </div>
   </div>
 
-  <!-- Filtro colapsável -->
-  <button class="btn btn-outline-secondary btn-sm mb-3" type="button" data-bs-toggle="collapse" data-bs-target="#filterPeriod">
-    <i class="bi bi-funnel"></i> Filtrar Período
-  </button>
-  <div class="collapse mb-4" id="filterPeriod">
-    <div class="card card-body">
-      <form method="get" action="{{ url_for('appointments') }}">
-        {% for key, values in request.args.lists() %}
-          {% if key not in ['start', 'end', 'partial'] %}
-            {% for value in values %}
-              <input type="hidden" name="{{ key }}" value="{{ value }}">
-            {% endfor %}
-          {% endif %}
-        {% endfor %}
-        <div class="row g-3">
-          <div class="col-md-6">
-            <label class="form-label" for="appointments-filter-start">De</label>
-            <input
-              type="date"
-              id="appointments-filter-start"
-              name="start"
-              class="form-control"
-              value="{{ request.args.get('start', '') }}"
-            >
-          </div>
-          <div class="col-md-6">
-            <label class="form-label" for="appointments-filter-end">Até</label>
-            <input
-              type="date"
-              id="appointments-filter-end"
-              name="end"
-              class="form-control"
-              value="{{ request.args.get('end', '') }}"
-            >
-          </div>
-        </div>
-        <div class="d-flex justify-content-end mt-3">
-          <button type="submit" class="btn btn-primary btn-sm">
-            <i class="bi bi-check2-circle"></i> Aplicar Filtro
-          </button>
-        </div>
-      </form>
-    </div>
-  </div>
-
-  <!-- Lista de Agendamentos -->
-  <h5 class="fw-bold mb-3"><i class="bi bi-list-check me-2"></i> Consultas Agendadas</h5>
   <div id="appointmentsList" data-appointments-container data-refresh-url="{{ request.url }}">
     {% include 'partials/appointments_table.html' %}
   </div>
-
-  <!-- Agenda de Exames -->
-  <h5 class="fw-bold mt-5 mb-3"><i class="bi bi-flask me-2"></i> Agenda de Exames</h5>
-  {% include 'partials/exam_appointments_table.html' %}
-
-  <!-- Agenda de Vacinas -->
-  <h5 class="fw-bold mt-5 mb-3"><i class="bi bi-syringe me-2"></i> Agenda de Vacinas</h5>
-  {% include 'partials/vaccine_appointments_table.html' %}
 
 </section>
 
