@@ -422,11 +422,22 @@ def appointment_to_event(appointment):
     if appointment.veterinario and appointment.veterinario.user:
         title = f"{title} - {appointment.veterinario.user.name}"
 
+    tutor = getattr(appointment, 'tutor', None)
+    animal = getattr(appointment, 'animal', None)
+    vet = getattr(appointment, 'veterinario', None)
+    vet_user = getattr(vet, 'user', None)
+
     extra_props = {
         'kind': getattr(appointment, 'kind', None),
         'clinicId': getattr(appointment, 'clinica_id', None),
         'veterinarioId': getattr(appointment, 'veterinario_id', None),
         'animalId': getattr(appointment, 'animal_id', None),
+        'status': getattr(appointment, 'status', None),
+        'tutorId': getattr(appointment, 'tutor_id', None),
+        'tutorName': getattr(tutor, 'name', None),
+        'animalName': getattr(animal, 'name', None),
+        'vetName': getattr(vet_user, 'name', None),
+        'notes': getattr(appointment, 'notes', None),
     }
 
     return _build_calendar_event(

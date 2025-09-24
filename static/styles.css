@@ -41,3 +41,255 @@
 .fc-event.calendar-event-vaccine .fc-event-time {
   color: inherit;
 }
+
+/* Paleta de cores para os eventos por veterinário */
+.calendar-vet-color-0 {
+  --calendar-vet-color: #2563eb;
+  --calendar-vet-bg: rgba(37, 99, 235, 0.14);
+  --calendar-vet-soft: rgba(37, 99, 235, 0.08);
+}
+
+.calendar-vet-color-1 {
+  --calendar-vet-color: #f97316;
+  --calendar-vet-bg: rgba(249, 115, 22, 0.18);
+  --calendar-vet-soft: rgba(249, 115, 22, 0.1);
+}
+
+.calendar-vet-color-2 {
+  --calendar-vet-color: #16a34a;
+  --calendar-vet-bg: rgba(22, 163, 74, 0.16);
+  --calendar-vet-soft: rgba(22, 163, 74, 0.08);
+}
+
+.calendar-vet-color-3 {
+  --calendar-vet-color: #8b5cf6;
+  --calendar-vet-bg: rgba(139, 92, 246, 0.18);
+  --calendar-vet-soft: rgba(139, 92, 246, 0.1);
+}
+
+.calendar-vet-color-4 {
+  --calendar-vet-color: #f43f5e;
+  --calendar-vet-bg: rgba(244, 63, 94, 0.18);
+  --calendar-vet-soft: rgba(244, 63, 94, 0.1);
+}
+
+.calendar-vet-color-5 {
+  --calendar-vet-color: #0ea5e9;
+  --calendar-vet-bg: rgba(14, 165, 233, 0.18);
+  --calendar-vet-soft: rgba(14, 165, 233, 0.1);
+}
+
+.calendar-vet-color-6 {
+  --calendar-vet-color: #14b8a6;
+  --calendar-vet-bg: rgba(20, 184, 166, 0.18);
+  --calendar-vet-soft: rgba(20, 184, 166, 0.1);
+}
+
+.calendar-vet-color-7 {
+  --calendar-vet-color: #facc15;
+  --calendar-vet-bg: rgba(250, 204, 21, 0.24);
+  --calendar-vet-soft: rgba(250, 204, 21, 0.12);
+}
+
+.fc .fc-event.calendar-vet-assigned {
+  position: relative;
+  border: 1px solid rgba(148, 163, 184, 0.35);
+  border-radius: 0.75rem;
+  overflow: hidden;
+  background-color: rgba(255, 255, 255, 0.94);
+  color: #1f2937;
+  padding-left: 0.25rem;
+  transition: box-shadow 0.2s ease, transform 0.2s ease;
+}
+
+.fc .fc-event.calendar-vet-assigned::before {
+  content: '';
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 6px;
+  background: var(--calendar-vet-color, #4e73df);
+  box-shadow: 0 0 0 1px rgba(15, 23, 42, 0.05);
+}
+
+.fc .fc-event.calendar-vet-assigned .fc-event-main {
+  padding-left: 0.75rem;
+  background: linear-gradient(
+    90deg,
+    var(--calendar-vet-bg, rgba(78, 115, 223, 0.15)) 0%,
+    rgba(255, 255, 255, 0.85) 65%
+  );
+}
+
+.fc .fc-event.calendar-vet-assigned .fc-event-time,
+.fc .fc-event.calendar-vet-assigned .fc-event-title {
+  color: inherit;
+}
+
+.fc .fc-event.calendar-vet-assigned:hover {
+  box-shadow: 0 16px 32px -22px rgba(15, 23, 42, 0.65);
+  transform: translateY(-1px);
+}
+
+.calendar-summary-card {
+  background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+  border-radius: 1rem;
+  border: 1px solid rgba(148, 163, 184, 0.2);
+}
+
+.calendar-summary-card .card-body {
+  padding-top: 1.25rem;
+}
+
+.calendar-summary-card.has-data [data-calendar-summary-empty] {
+  display: none !important;
+}
+
+.calendar-summary-card:not(.has-data) [data-calendar-summary-list] {
+  display: none;
+}
+
+.calendar-summary-total-badge {
+  background: rgba(37, 99, 235, 0.12);
+  color: #1d4ed8;
+  font-weight: 600;
+  border-radius: 999px;
+  padding: 0.4rem 0.75rem;
+}
+
+.calendar-summary-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.calendar-summary-item {
+  border-radius: 0.9rem;
+  padding: 0.9rem 1rem;
+  background: linear-gradient(135deg, var(--calendar-vet-soft, rgba(148, 163, 184, 0.12)), #ffffff);
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  box-shadow: 0 16px 32px -26px rgba(15, 23, 42, 0.6);
+  cursor: pointer;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  list-style: none;
+}
+
+.calendar-summary-item:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 24px 36px -28px rgba(15, 23, 42, 0.65);
+}
+
+.calendar-summary-item.is-active {
+  border-color: var(--calendar-vet-color, #2563eb);
+  box-shadow:
+    0 24px 42px -28px rgba(37, 99, 235, 0.45),
+    0 0 0 2px rgba(37, 99, 235, 0.25);
+  background: linear-gradient(
+    135deg,
+    rgba(255, 255, 255, 0.96) 0%,
+    var(--calendar-vet-soft, rgba(148, 163, 184, 0.18)) 55%,
+    rgba(37, 99, 235, 0.08) 100%
+  );
+  transform: translateY(-2px);
+}
+
+.calendar-summary-item.is-active .calendar-summary-total {
+  background-color: rgba(37, 99, 235, 0.14);
+  color: #1d4ed8;
+}
+
+.calendar-summary-item.is-active .calendar-summary-bullet {
+  box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.18);
+}
+
+.calendar-summary-item .calendar-summary-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.calendar-summary-item .calendar-summary-name {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-weight: 600;
+  color: #0f172a;
+}
+
+.calendar-summary-item .calendar-summary-bullet {
+  width: 0.75rem;
+  height: 0.75rem;
+  border-radius: 999px;
+  background-color: var(--calendar-vet-color, #2563eb);
+  box-shadow: 0 0 0 3px rgba(15, 23, 42, 0.05);
+}
+
+.calendar-summary-item .calendar-summary-total {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.35rem;
+  padding: 0.2rem 0.65rem;
+  border-radius: 999px;
+  background-color: rgba(255, 255, 255, 0.75);
+  font-size: 0.8rem;
+  color: #475569;
+}
+
+.calendar-summary-item .calendar-summary-total .value {
+  font-weight: 700;
+  color: var(--calendar-vet-color, #2563eb);
+}
+
+.calendar-summary-item .calendar-summary-metrics {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-top: 0.75rem;
+  font-size: 0.86rem;
+  color: #475569;
+  list-style: none;
+  padding: 0;
+}
+
+.calendar-summary-item .calendar-summary-metrics .metric {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.35rem;
+}
+
+.calendar-summary-item .calendar-summary-metrics strong {
+  color: var(--calendar-vet-color, #2563eb);
+}
+
+.calendar-summary-item .calendar-summary-days {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem 0.55rem;
+  margin-top: 0.85rem;
+  list-style: none;
+  padding: 0;
+}
+
+.calendar-summary-item .calendar-summary-day {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  background-color: var(--calendar-vet-bg, rgba(37, 99, 235, 0.18));
+  color: var(--calendar-vet-color, #1d4ed8);
+  border-radius: 999px;
+  padding: 0.18rem 0.7rem;
+  font-size: 0.76rem;
+  font-weight: 600;
+  list-style: none;
+}
+
+.calendar-summary-item .calendar-summary-day .label {
+  font-weight: 500;
+}
+
+@media (min-width: 1200px) {
+  .calendar-summary-card {
+    position: sticky;
+    top: 96px;
+  }
+}

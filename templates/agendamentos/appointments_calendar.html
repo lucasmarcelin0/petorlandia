@@ -11,7 +11,17 @@
     </a>
   </div>
 
-  {% with component_id = 'tutor-calendar-page' %}
+  {% set calendar_pets_endpoint = url_for('api_my_pets') %}
+  {% if current_user.role == 'admin' or current_user.worker in ['veterinario', 'colaborador'] %}
+    {% set calendar_pets_endpoint = url_for(
+      'api_clinic_pets',
+      view_as=request.args.get('view_as'),
+      veterinario_id=request.args.get('veterinario_id'),
+      colaborador_id=request.args.get('colaborador_id'),
+      clinica_id=request.args.get('clinica_id')
+    ) %}
+  {% endif %}
+  {% with component_id = 'tutor-calendar-page', pets_url = calendar_pets_endpoint %}
     {% include 'partials/tutor_calendar.html' %}
   {% endwith %}
 </div>
