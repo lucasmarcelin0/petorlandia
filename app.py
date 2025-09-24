@@ -8438,7 +8438,16 @@ def update_appointment_status(appointment_id):
         flash(message, 'error')
         return redirect(request.referrer or url_for('appointments'))
 
-    if status in {'accepted', 'canceled'} and appointment.scheduled_at - datetime.utcnow() < timedelta(hours=2):
+    should_enforce_deadline = False
+    if status == 'accepted':
+        should_enforce_deadline = current_user.role != 'admin'
+    elif status == 'canceled':
+        should_enforce_deadline = (
+            current_user.role != 'admin'
+            and current_user.worker not in {'veterinario', 'colaborador'}
+        )
+
+    if should_enforce_deadline and appointment.scheduled_at - datetime.utcnow() < timedelta(hours=2):
         message = 'Prazo expirado.'
         if wants_json:
             return jsonify({'success': False, 'message': message}), 400
