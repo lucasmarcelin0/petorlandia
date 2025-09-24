@@ -332,60 +332,152 @@
 
 <!-- Modal Editar Horário do Colaborador -->
 <div class="modal fade" id="scheduleEditModal" tabindex="-1" aria-hidden="true">
-  <div class="modal-dialog">
-    <div class="modal-content">
-      <div class="modal-header">
-        <h5 class="modal-title"><i class="bi bi-clock-history me-2"></i>Editar Horário</h5>
-        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+  <div class="modal-dialog modal-lg modal-dialog-centered">
+    <div class="modal-content border-0 shadow-lg rounded-4 overflow-hidden">
+      <div class="modal-header bg-primary text-white border-0 align-items-start">
+        <div>
+          <h5 class="modal-title fw-semibold d-flex align-items-center gap-2 mb-1">
+            <i class="bi bi-clock-history"></i>
+            Editar Horário do Colaborador
+          </h5>
+          <p class="mb-0 small text-white-50">Ajuste a disponibilidade de atendimento com rapidez e segurança.</p>
+        </div>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Fechar"></button>
       </div>
-      <div class="modal-body">
+      <div class="modal-body bg-light">
         <form
           id="schedule-edit-form"
+          class="needs-validation"
+          novalidate
           method="post"
           action="{{ url_for('edit_vet_schedule_slot', veterinario_id=0, horario_id=0) }}"
           data-action-template="{{ url_for('edit_vet_schedule_slot', veterinario_id=0, horario_id=0) }}"
         >
           <input type="hidden" name="schedule-csrf_token" value="{{ csrf_token() if csrf_token is defined else '' }}">
           <input type="hidden" id="schedule-slot-id">
-          <input type="hidden" name="schedule-intervalo_inicio" id="schedule-interval-start">
-          <input type="hidden" name="schedule-intervalo_fim" id="schedule-interval-end">
-          <div class="mb-3">
-            <label for="schedule-vet" class="form-label fw-semibold">Colaborador</label>
-            <select id="schedule-vet" name="schedule-veterinario_id" class="form-select"></select>
+          <div class="alert alert-primary d-flex align-items-start gap-3 small shadow-sm mb-4" role="status">
+            <i class="bi bi-info-circle-fill fs-5"></i>
+            <div>
+              Revise os dados antes de salvar. As alterações impactam imediatamente na agenda disponível para agendamentos.
+            </div>
           </div>
-          <div class="row g-3">
-            <div class="col-md-6">
-              <label for="schedule-day" class="form-label fw-semibold">Dia da Semana</label>
-              <select id="schedule-day" name="schedule-dias_semana" class="form-select">
-                <option value="Segunda">Segunda</option>
-                <option value="Terça">Terça</option>
-                <option value="Quarta">Quarta</option>
-                <option value="Quinta">Quinta</option>
-                <option value="Sexta">Sexta</option>
-                <option value="Sábado">Sábado</option>
-                <option value="Domingo">Domingo</option>
-              </select>
+          <div class="row g-4">
+            <div class="col-lg-5">
+              <div class="bg-white border rounded-3 shadow-sm p-3 h-100">
+                <label for="schedule-vet" class="form-label fw-semibold text-muted text-uppercase small">Colaborador</label>
+                <div class="input-group">
+                  <span class="input-group-text bg-light text-secondary">
+                    <i class="bi bi-person-badge"></i>
+                  </span>
+                  <select id="schedule-vet" name="schedule-veterinario_id" class="form-select"></select>
+                </div>
+                <p class="form-text small mt-2 mb-0">Selecione o profissional para aplicar o ajuste de disponibilidade.</p>
+              </div>
             </div>
-            <div class="col-md-3">
-              <label for="schedule-start" class="form-label fw-semibold">Início</label>
-              <input type="time" id="schedule-start" name="schedule-hora_inicio" class="form-control">
-            </div>
-            <div class="col-md-3">
-              <label for="schedule-end" class="form-label fw-semibold">Fim</label>
-              <input type="time" id="schedule-end" name="schedule-hora_fim" class="form-control">
+            <div class="col-lg-7">
+              <div class="bg-white border rounded-3 shadow-sm p-3">
+                <div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-3">
+                  <div>
+                    <span class="badge text-bg-primary rounded-pill">Disponibilidade semanal</span>
+                    <p class="small text-muted mb-0">Defina o dia, horário de início e término do atendimento.</p>
+                  </div>
+                  <div class="d-flex align-items-center gap-2">
+                    <i class="bi bi-calendar-event text-primary"></i>
+                    <span class="small text-muted">Campos obrigatórios</span>
+                  </div>
+                </div>
+                <div class="row g-3">
+                  <div class="col-sm-6">
+                    <label for="schedule-day" class="form-label fw-semibold">Dia da Semana</label>
+                    <div class="input-group">
+                      <span class="input-group-text bg-light text-secondary"><i class="bi bi-calendar3"></i></span>
+                      <select id="schedule-day" name="schedule-dias_semana" class="form-select">
+                        <option value="Segunda">Segunda</option>
+                        <option value="Terça">Terça</option>
+                        <option value="Quarta">Quarta</option>
+                        <option value="Quinta">Quinta</option>
+                        <option value="Sexta">Sexta</option>
+                        <option value="Sábado">Sábado</option>
+                        <option value="Domingo">Domingo</option>
+                      </select>
+                    </div>
+                  </div>
+                  <div class="col-sm-3">
+                    <label for="schedule-start" class="form-label fw-semibold">Início</label>
+                    <div class="input-group">
+                      <span class="input-group-text bg-light text-secondary"><i class="bi bi-clock"></i></span>
+                      <input type="time" id="schedule-start" name="schedule-hora_inicio" class="form-control">
+                    </div>
+                  </div>
+                  <div class="col-sm-3">
+                    <label for="schedule-end" class="form-label fw-semibold">Fim</label>
+                    <div class="input-group">
+                      <span class="input-group-text bg-light text-secondary"><i class="bi bi-clock-history"></i></span>
+                      <input type="time" id="schedule-end" name="schedule-hora_fim" class="form-control">
+                    </div>
+                  </div>
+                </div>
+                <div class="mt-4">
+                  <button
+                    class="btn btn-outline-secondary btn-sm d-inline-flex align-items-center gap-2"
+                    type="button"
+                    data-bs-toggle="collapse"
+                    data-bs-target="#scheduleIntervalCollapse"
+                    aria-expanded="false"
+                    aria-controls="scheduleIntervalCollapse"
+                  >
+                    <i class="bi bi-arrow-repeat"></i>
+                    Intervalo de atendimento opcional
+                  </button>
+                  <div class="collapse mt-3" id="scheduleIntervalCollapse">
+                    <div class="row g-3">
+                      <div class="col-sm-6">
+                        <label for="schedule-interval-start" class="form-label fw-semibold">Início do intervalo</label>
+                        <div class="input-group">
+                          <span class="input-group-text bg-light text-secondary"><i class="bi bi-hourglass-split"></i></span>
+                          <input
+                            type="time"
+                            name="schedule-intervalo_inicio"
+                            id="schedule-interval-start"
+                            class="form-control"
+                          >
+                        </div>
+                      </div>
+                      <div class="col-sm-6">
+                        <label for="schedule-interval-end" class="form-label fw-semibold">Fim do intervalo</label>
+                        <div class="input-group">
+                          <span class="input-group-text bg-light text-secondary"><i class="bi bi-hourglass-bottom"></i></span>
+                          <input
+                            type="time"
+                            name="schedule-intervalo_fim"
+                            id="schedule-interval-end"
+                            class="form-control"
+                          >
+                        </div>
+                      </div>
+                    </div>
+                    <p class="form-text small mt-2 mb-0">Defina um período em que o colaborador ficará indisponível (por exemplo, horário de almoço).</p>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
         </form>
       </div>
-      <div class="modal-footer">
-        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
-        <button
-          type="submit"
-          form="schedule-edit-form"
-          class="btn btn-primary"
-          name="schedule-submit"
-          value="Salvar"
-        >Salvar</button>
+      <div class="modal-footer bg-white border-0 d-flex justify-content-between align-items-center">
+        <div class="small text-muted">
+          <i class="bi bi-shield-check me-1"></i>Alterações salvas atualizam instantaneamente o portal de agendamentos.
+        </div>
+        <div class="d-flex gap-2">
+          <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
+          <button
+            type="submit"
+            form="schedule-edit-form"
+            class="btn btn-primary"
+            name="schedule-submit"
+            value="Salvar"
+          >Salvar</button>
+        </div>
       </div>
     </div>
   </div>
@@ -1663,6 +1755,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const scheduleEndInput = scheduleForm ? scheduleForm.querySelector('#schedule-end') : null;
   const scheduleIntervalStart = scheduleForm ? scheduleForm.querySelector('#schedule-interval-start') : null;
   const scheduleIntervalEnd = scheduleForm ? scheduleForm.querySelector('#schedule-interval-end') : null;
+  const scheduleIntervalCollapse = scheduleForm ? document.getElementById('scheduleIntervalCollapse') : null;
   const scheduleSlotInput = scheduleForm ? scheduleForm.querySelector('#schedule-slot-id') : null;
   const scheduleActionTemplate = scheduleForm
     ? (scheduleForm.dataset && scheduleForm.dataset.actionTemplate)
@@ -1762,6 +1855,15 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     if (scheduleIntervalEnd) {
       scheduleIntervalEnd.value = context.intervaloFim || '';
+    }
+
+    if (scheduleIntervalCollapse && window.bootstrap && typeof bootstrap.Collapse === 'function') {
+      const collapseInstance = bootstrap.Collapse.getOrCreateInstance(scheduleIntervalCollapse, { toggle: false });
+      if (context.intervaloInicio || context.intervaloFim) {
+        collapseInstance.show();
+      } else {
+        collapseInstance.hide();
+      }
     }
 
     clearScheduleFeedback();
