@@ -3941,7 +3941,31 @@ document.addEventListener('DOMContentLoaded', function() {
   });
 
   newEventBtn && newEventBtn.addEventListener('click', function() {
-    dispatchSlot(viewDate, '09:00');
+    const todayKey = formatDateKey(new Date());
+    let targetDateKey = selectedDate || todayKey;
+    let targetDate = parseDateKey(targetDateKey);
+
+    if (!targetDate) {
+      targetDateKey = formatDateKey(viewDate instanceof Date ? viewDate : new Date());
+      targetDate = parseDateKey(targetDateKey) || new Date();
+    }
+
+    selectedDate = targetDateKey;
+
+    if (currentViewMode === 'week') {
+      viewDate = getStartOfWeek(targetDate);
+    } else {
+      viewDate = new Date(targetDate.getFullYear(), targetDate.getMonth(), 1);
+    }
+
+    renderCalendar();
+    renderDayDetail(targetDateKey, {
+      open: true,
+      focus: true,
+      trigger: newEventBtn,
+    });
+
+    dispatchSlot(targetDate, '09:00');
   });
 
   refreshPetsBtn && refreshPetsBtn.addEventListener('click', function() {
