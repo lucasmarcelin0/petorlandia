@@ -385,6 +385,7 @@ document.addEventListener('DOMContentLoaded', function() {
       calendar.addEventSource(url);
     }
     if (options.refetch && typeof calendar.refetchEvents === 'function') {
+      dispatchSharedCalendarLoading(true);
       calendar.refetchEvents();
     }
   }
@@ -520,6 +521,15 @@ document.addEventListener('DOMContentLoaded', function() {
     }));
   }
 
+  function dispatchSharedCalendarLoading(isLoading) {
+    if (typeof window !== 'undefined') {
+      window.sharedCalendarIsLoading = !!isLoading;
+    }
+    document.dispatchEvent(new CustomEvent('sharedCalendarEventsLoading', {
+      detail: { loading: !!isLoading },
+    }));
+  }
+
   function announceSharedCalendarReady(instance) {
     document.dispatchEvent(new CustomEvent('sharedCalendarReady', {
       detail: { calendar: instance },
@@ -626,6 +636,9 @@ document.addEventListener('DOMContentLoaded', function() {
     selectMirror: true,
     editable: true,
     eventDurationEditable: true,
+    loading: function(isLoading) {
+      dispatchSharedCalendarLoading(isLoading);
+    },
     select: function(info) {
       emitSlotChosen(info.start, info.allDay);
       calendar.unselect();
@@ -674,7 +687,11 @@ document.addEventListener('DOMContentLoaded', function() {
   window.sharedCalendar = calendar;
   addEvents();
   calendar.render();
-  dispatchSharedCalendarEvents(calendar.getEvents());
+  const initialCalendarEvents = calendar.getEvents();
+  dispatchSharedCalendarEvents(initialCalendarEvents);
+  if (initialCalendarEvents.length) {
+    dispatchSharedCalendarLoading(false);
+  }
   announceSharedCalendarReady(calendar);
 
   if (toggle) {

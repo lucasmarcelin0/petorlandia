@@ -234,10 +234,46 @@
   background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
   border-radius: 1rem;
   border: 1px solid rgba(148, 163, 184, 0.2);
+  position: relative;
 }
 
 .calendar-summary-card .card-body {
   padding-top: 1.25rem;
+}
+
+.calendar-summary-loading {
+  display: none;
+  padding: 1rem 1.1rem;
+  background: rgba(59, 130, 246, 0.06);
+  border-radius: 0.9rem;
+  border-color: rgba(37, 99, 235, 0.35) !important;
+}
+
+.border-dashed {
+  border-style: dashed !important;
+}
+
+.calendar-summary-loading .spinner-border {
+  width: 1.75rem;
+  height: 1.75rem;
+  border-width: 0.2rem;
+}
+
+.calendar-summary-card.is-loading .calendar-summary-loading {
+  display: flex;
+}
+
+.calendar-summary-card.is-loading .calendar-summary-list,
+.calendar-summary-card.is-loading .calendar-summary-overview {
+  opacity: 0.45;
+  filter: saturate(0.85) contrast(0.95);
+  pointer-events: none;
+  transition: opacity 0.2s ease;
+}
+
+.calendar-summary-list.is-disabled,
+.calendar-summary-overview.is-disabled {
+  pointer-events: none;
 }
 
 .calendar-summary-card.has-data [data-calendar-summary-empty] {
@@ -260,6 +296,72 @@
   list-style: none;
   margin: 0;
   padding: 0;
+}
+
+.calendar-summary-overview {
+  margin-top: 0.75rem;
+}
+
+.calendar-summary-overview-card {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  padding: 0.9rem 1rem;
+  border-radius: 0.9rem;
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.08), rgba(59, 130, 246, 0.02));
+  border: 1px solid rgba(148, 163, 184, 0.24);
+  box-shadow: 0 12px 24px -24px rgba(15, 23, 42, 0.6);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  height: 100%;
+}
+
+.calendar-summary-overview-card:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 20px 32px -30px rgba(37, 99, 235, 0.55);
+}
+
+.calendar-summary-overview-icon {
+  width: 3rem;
+  height: 3rem;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.35rem;
+  color: #1d4ed8;
+  background: rgba(37, 99, 235, 0.18);
+  box-shadow: inset 0 0 0 1px rgba(37, 99, 235, 0.12);
+}
+
+.calendar-summary-overview-card.is-week .calendar-summary-overview-icon {
+  background: rgba(16, 185, 129, 0.16);
+  color: #047857;
+  box-shadow: inset 0 0 0 1px rgba(16, 185, 129, 0.18);
+}
+
+.calendar-summary-overview-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+}
+
+.calendar-summary-overview-body .label {
+  font-size: 0.72rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  font-weight: 600;
+  color: #475569;
+}
+
+.calendar-summary-overview-body .value {
+  font-size: 1.75rem;
+  line-height: 1;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.calendar-summary-overview-body .description {
+  font-size: 0.78rem;
 }
 
 .calendar-summary-item {
