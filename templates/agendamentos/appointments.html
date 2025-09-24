@@ -59,6 +59,20 @@
             <i class="bi bi-calendar3 me-1"></i> Agendamento
           </button>
         </li>
+        <li class="nav-item" role="presentation">
+          <button
+            class="nav-link"
+            id="calendar-tab-vet-agenda"
+            data-bs-toggle="tab"
+            data-bs-target="#calendar-pane-vet-agenda"
+            type="button"
+            role="tab"
+            aria-controls="calendar-pane-vet-agenda"
+            aria-selected="false"
+          >
+            <i class="bi bi-journal-medical me-1"></i> Agenda
+          </button>
+        </li>
       </ul>
 
       <div class="tab-content mt-3" id="appointments-calendar-content">
@@ -93,6 +107,44 @@
           {% with clinic_id = current_user.clinica_id, calendar_redirect_url = calendar_redirect_url %}
             {% include 'partials/schedule_toggle.html' %}
           {% endwith %}
+        </div>
+        <div
+          class="tab-pane fade pt-2"
+          id="calendar-pane-vet-agenda"
+          role="tabpanel"
+          aria-labelledby="calendar-tab-vet-agenda"
+          tabindex="0"
+          data-vet-agenda-pane
+          data-vet-agenda-has-vets="{{ 1 if (vet_schedule_vets or []) else 0 }}"
+          data-vet-agenda-url="{{ vet_schedule_tab_url or '' }}"
+        >
+          <div class="d-flex flex-column gap-3">
+            {% set _vet_schedule_vets = vet_schedule_vets or [] %}
+            {% if _vet_schedule_vets %}
+            <div>
+              <label for="vet-agenda-picker" class="form-label fw-semibold">Selecionar veterinário</label>
+              <select id="vet-agenda-picker" class="form-select" data-vet-agenda-picker>
+                {% for vet in _vet_schedule_vets %}
+                <option value="{{ vet.id }}"{% if vet_schedule_selected_id and vet.id == vet_schedule_selected_id %} selected{% endif %}>
+                  {{ vet.user.name }}
+                </option>
+                {% endfor %}
+              </select>
+            </div>
+            {% endif %}
+            <div data-vet-agenda-content class="position-relative">
+              <div class="text-center text-muted py-5" data-vet-agenda-status>
+                {% if vet_schedule_tab_url and _vet_schedule_vets %}
+                <div class="spinner-border text-primary mb-2" role="status" aria-hidden="true"></div>
+                <p class="mb-0">Carregando agenda do veterinário...</p>
+                {% elif not _vet_schedule_vets %}
+                <i class="bi bi-info-circle me-2"></i>Nenhum veterinário disponível para exibição.
+                {% else %}
+                <i class="bi bi-exclamation-circle me-2"></i>Selecione um veterinário para visualizar a agenda.
+                {% endif %}
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -313,6 +365,7 @@
 {% block scripts %}
 {{ super() }}
 <script type="module" src="{{ url_for('static', filename='appointments_table.js') }}"></script>
+<script type="module" src="{{ url_for('static', filename='appointments_vet.js') }}"></script>
 <script>
 document.addEventListener('DOMContentLoaded', () => {
   const vetField = {% if form %}document.getElementById('{{ form.veterinario_id.id }}'){% else %}null{% endif %};
@@ -348,13 +401,95 @@ document.addEventListener('DOMContentLoaded', () => {
   const calendarSummaryColumn = document.querySelector('[data-calendar-summary-column]');
   const calendarMainColumn = document.querySelector('[data-calendar-main-column]');
   const calendarTabButtons = document.querySelectorAll('#appointments-calendar-tabs [data-bs-toggle="tab"]');
+  const vetAgendaPane = document.querySelector('[data-vet-agenda-pane]');
+  const vetAgendaContent = vetAgendaPane ? vetAgendaPane.querySelector('[data-vet-agenda-content]') : null;
+  const vetAgendaStatus = vetAgendaPane ? vetAgendaPane.querySelector('[data-vet-agenda-status]') : null;
+  const vetAgendaPicker = vetAgendaPane ? vetAgendaPane.querySelector('[data-vet-agenda-picker]') : null;
+  const vetAgendaHasVets = vetAgendaPane ? vetAgendaPane.dataset.vetAgendaHasVets === '1' : false;
   const calendarActiveTabStorageKey = 'appointmentsCalendarActiveTab';
   const calendarMainColumnVisibleClasses = ['col-xl-8', 'col-xxl-9'];
   const calendarMainColumnFullWidthClasses = ['col-xl-12', 'col-xxl-12'];
   let activeCalendarSummaryVetId = null;
   let newAppointmentCollapseInstance = null;
+  let vetAgendaLoaded = false;
+
+  const vetAgendaLoadingHtml = '<div class="spinner-border text-primary mb-2" role="status" aria-hidden="true"></div><p class="mb-0">Carregando agenda do veterinário...</p>';
+  const vetAgendaErrorHtml = '<i class="bi bi-exclamation-triangle me-2"></i>Não foi possível carregar a agenda. Tente novamente.';
 
   const calendarSummaryWeekdays = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
+
+  function normalizeString(value) {
+    return typeof value === 'string' ? value.trim() : '';
+  }
+
+  function getVetAgendaUrl() {
+    if (!vetAgendaPane || !vetAgendaPane.dataset) {
+      return '';
+    }
+    return normalizeString(vetAgendaPane.dataset.vetAgendaUrl || '');
+  }
+
+  function setVetAgendaUrl(url) {
+    if (vetAgendaPane && vetAgendaPane.dataset) {
+      vetAgendaPane.dataset.vetAgendaUrl = normalizeString(url || '');
+    }
+  }
+
+  function showVetAgendaStatus(html) {
+    if (!vetAgendaStatus) {
+      return;
+    }
+    vetAgendaStatus.innerHTML = html;
+    vetAgendaStatus.classList.remove('d-none');
+  }
+
+  function hideVetAgendaStatus() {
+    if (!vetAgendaStatus) {
+      return;
+    }
+    vetAgendaStatus.classList.add('d-none');
+  }
+
+  async function loadVetAgenda(force = false) {
+    if (!vetAgendaPane || !vetAgendaContent) {
+      return;
+    }
+    const url = getVetAgendaUrl();
+    if (!url) {
+      if (vetAgendaHasVets) {
+        showVetAgendaStatus('<i class="bi bi-exclamation-circle me-2"></i>Selecione um veterinário para visualizar a agenda.');
+      }
+      return;
+    }
+    if (!force && vetAgendaLoaded) {
+      return;
+    }
+    showVetAgendaStatus(vetAgendaLoadingHtml);
+    try {
+      const response = await fetch(url, {
+        headers: {
+          'X-Requested-With': 'XMLHttpRequest',
+          'X-Partial': 'vet_schedule'
+        }
+      });
+      if (!response.ok) {
+        throw new Error('Resposta inválida');
+      }
+      const html = await response.text();
+      vetAgendaContent.innerHTML = html;
+      hideVetAgendaStatus();
+      vetAgendaLoaded = true;
+      if (typeof window.initVetSchedulePage === 'function') {
+        const root = vetAgendaContent.querySelector('[data-vet-schedule-root]');
+        if (root) {
+          window.initVetSchedulePage({ root });
+        }
+      }
+    } catch (error) {
+      showVetAgendaStatus(vetAgendaErrorHtml);
+      vetAgendaLoaded = false;
+    }
+  }
 
   function setCalendarSummaryVisibility(shouldShow) {
     if (calendarSummaryColumn) {
@@ -457,6 +592,9 @@ document.addEventListener('DOMContentLoaded', () => {
         const normalizedTarget = normalizeCalendarTabTarget(target);
         updateCalendarSummaryVisibilityFromTarget(normalizedTarget);
         storeCalendarActiveTab(normalizedTarget);
+        if (normalizedTarget === '#calendar-pane-vet-agenda' || normalizedTarget === 'calendar-pane-vet-agenda') {
+          loadVetAgenda();
+        }
       });
     });
 
@@ -484,6 +622,33 @@ document.addEventListener('DOMContentLoaded', () => {
     updateCalendarSummaryVisibilityFromTarget(activeCalendarTab.getAttribute('data-bs-target'));
   } else {
     updateCalendarSummaryVisibilityFromTarget('#calendar-pane-full');
+  }
+
+  if (vetAgendaPane && vetAgendaPane.classList.contains('show') && vetAgendaPane.classList.contains('active')) {
+    loadVetAgenda();
+  }
+
+  if (vetAgendaPicker) {
+    vetAgendaPicker.addEventListener('change', () => {
+      const selectedVetId = normalizeString(vetAgendaPicker.value || '');
+      const currentUrl = getVetAgendaUrl();
+      if (!currentUrl) {
+        return;
+      }
+      try {
+        const parsed = new URL(currentUrl, window.location.origin);
+        if (selectedVetId) {
+          parsed.searchParams.set('veterinario_id', selectedVetId);
+        } else {
+          parsed.searchParams.delete('veterinario_id');
+        }
+        setVetAgendaUrl(parsed.toString());
+      } catch (error) {
+        return;
+      }
+      vetAgendaLoaded = false;
+      loadVetAgenda(true);
+    });
   }
 
   function padNumber(value) {
