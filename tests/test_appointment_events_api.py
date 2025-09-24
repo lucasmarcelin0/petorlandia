@@ -80,6 +80,64 @@ def test_my_appointments_returns_events(client, monkeypatch):
     start_dt = datetime.fromisoformat(data[0]['start'])
     assert start_dt.tzinfo is not None
 
+
+def test_my_appointments_includes_exam_and_vaccine_for_tutor(client, monkeypatch):
+    with flask_app.app_context():
+        tutor_id, vet_user_id, clinic_id, appt_id, start_iso = create_basic_appointment()
+        animal = Animal.query.get(1)
+        vet = Veterinario.query.get(1)
+        exam = ExamAppointment(
+            id=2,
+            animal_id=animal.id,
+            specialist_id=vet.id,
+            requester_id=tutor_id,
+            scheduled_at=datetime(2024, 5, 1, 15, 0),
+            status='confirmed',
+        )
+        vaccine_date = date.today() + timedelta(days=1)
+        vaccine = Vacina(
+            id=3,
+            animal_id=animal.id,
+            nome='Raiva',
+            aplicada_em=vaccine_date,
+            aplicada_por=vet_user_id,
+        )
+        db.session.add_all([exam, vaccine])
+        db.session.commit()
+
+        exam_id = exam.id
+        vaccine_id = vaccine.id
+        exam_start_iso = to_timezone_aware(exam.scheduled_at).isoformat()
+        exam_end_iso = to_timezone_aware(
+            exam.scheduled_at + get_appointment_duration('exame')
+        ).isoformat()
+        vaccine_start = datetime.combine(
+            vaccine_date,
+            DEFAULT_VACCINE_EVENT_START_TIME,
+        ).replace(tzinfo=BR_TZ)
+        vaccine_end = vaccine_start + DEFAULT_VACCINE_EVENT_DURATION
+
+    fake_user = type('U', (), {'id': tutor_id, 'worker': None, 'role': 'adotante', 'is_authenticated': True})()
+    login(monkeypatch, fake_user)
+    resp = client.get('/api/my_appointments')
+    assert resp.status_code == 200
+    data = resp.get_json()
+    events = {event['id']: event for event in data}
+
+    assert f'appointment-{appt_id}' in events
+    assert f'exam-{exam_id}' in events
+    assert f'vaccine-{vaccine_id}' in events
+
+    exam_event = events[f'exam-{exam_id}']
+    assert exam_event['start'] == exam_start_iso
+    assert exam_event['end'] == exam_end_iso
+    assert exam_event['extendedProps']['eventType'] == 'exam'
+
+    vaccine_event = events[f'vaccine-{vaccine_id}']
+    assert vaccine_event['start'] == vaccine_start.isoformat()
+    assert vaccine_event['end'] == vaccine_end.isoformat()
+    assert vaccine_event['extendedProps']['eventType'] == 'vaccine'
+
 def test_clinic_appointments_returns_events(client, monkeypatch):
     with flask_app.app_context():
         tutor_id, vet_user_id, clinic_id, appt_id, start_iso = create_basic_appointment()
