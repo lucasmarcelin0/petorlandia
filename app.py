@@ -7751,16 +7751,26 @@ def appointments():
             else:
                 appointments_pending.append({'kind': 'exame', 'appt': ex})
 
-        upcoming_consultas = (
+        accepted_consultas_in_range = (
             Appointment.query.filter_by(veterinario_id=veterinario.id, status="accepted")
-            .filter(Appointment.scheduled_at >= upcoming_start)
+            .filter(Appointment.scheduled_at >= start_dt_utc)
             .filter(Appointment.scheduled_at < end_dt_utc)
             .order_by(Appointment.scheduled_at)
             .all()
         )
+        future_cutoff = max(now, upcoming_start) if upcoming_start else now
+        past_accepted_consultas = []
+        upcoming_consultas = []
+        for appt in accepted_consultas_in_range:
+            scheduled_at = appt.scheduled_at
+            if scheduled_at and scheduled_at >= future_cutoff:
+                upcoming_consultas.append(appt)
+            else:
+                past_accepted_consultas.append(appt)
+
         upcoming_exams = (
             ExamAppointment.query.filter_by(specialist_id=veterinario.id, status='confirmed')
-            .filter(ExamAppointment.scheduled_at >= upcoming_start)
+            .filter(ExamAppointment.scheduled_at >= future_cutoff)
             .filter(ExamAppointment.scheduled_at < end_dt_utc)
             .order_by(ExamAppointment.scheduled_at)
             .all()
@@ -7867,6 +7877,23 @@ def appointments():
                     'exam_summary': exam_summary,
                     'exam_blocks': relevant_blocks or [],
                     'exam_ids': exam_ids,
+                }
+            )
+
+        for appt in past_accepted_consultas:
+            if not appt.scheduled_at or not (start_dt_utc <= appt.scheduled_at < end_dt_utc):
+                continue
+            schedule_events.append(
+                {
+                    'kind': 'consulta_aceita',
+                    'timestamp': appt.scheduled_at,
+                    'animal': appt.animal,
+                    'consulta': appt.consulta,
+                    'consulta_id': appt.consulta_id,
+                    'appointment': appt,
+                    'exam_summary': [],
+                    'exam_blocks': [],
+                    'exam_ids': [],
                 }
             )
 
