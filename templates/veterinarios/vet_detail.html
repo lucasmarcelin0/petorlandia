@@ -1,28 +1,73 @@
 {% extends "layout.html" %}
 
 {% block main %}
-<div class="container mt-4">
-  <h2>{{ veterinario.user.name }}</h2>
-  <p><strong>CRMV:</strong> {{ veterinario.crmv }}</p>
-  {% if veterinario.clinica %}<p><strong>Clínica:</strong> {{ veterinario.clinica.nome }}</p>{% endif %}
-  {% if veterinario.specialties %}<p><strong>Especialidades:</strong> {{ veterinario.specialty_list }}</p>{% endif %}
+<div class="container py-4">
+  <div class="mb-4">
+    <h2 class="fw-bold text-gradient mb-1">{{ veterinario.user.name }}</h2>
+    <div class="text-muted">
+      <span class="d-inline-flex align-items-center me-3">
+        <i class="bi bi-hash me-1"></i> <strong>CRMV:</strong> {{ veterinario.crmv or 'Não informado' }}
+      </span>
+      {% if veterinario.clinica %}
+      <span class="d-inline-flex align-items-center me-3">
+        <i class="bi bi-hospital me-1"></i> <strong>Clínica:</strong> {{ veterinario.clinica.nome }}
+      </span>
+      {% endif %}
+      {% if veterinario.specialties %}
+      <span class="d-inline-flex align-items-center">
+        <i class="bi bi-award me-1"></i> <strong>Especialidades:</strong> {{ veterinario.specialty_list }}
+      </span>
+      {% endif %}
+    </div>
+  </div>
 
-  <h3>Agenda</h3>
-  <table class="table">
-    <thead>
-      <tr><th>Dia</th><th>Início</th><th>Fim</th></tr>
-    </thead>
-    <tbody>
-      {% for h in horarios %}
-        <tr>
-          <td>{{ h.dia_semana }}</td>
-          <td>{{ h.hora_inicio.strftime('%H:%M') }}</td>
-          <td>{{ h.hora_fim.strftime('%H:%M') }}</td>
-        </tr>
-      {% else %}
-        <tr><td colspan="3">Nenhum horário cadastrado.</td></tr>
-      {% endfor %}
-    </tbody>
-  </table>
+  <div class="row g-4 align-items-start">
+    <div class="col-12 col-xl-8">
+      <input type="hidden" value="{{ veterinario.id }}" data-switcher-vet class="d-none">
+      {% with
+        calendar_id='vet-shared-calendar-' ~ veterinario.id,
+        toggle_id='vet-agenda-toggle-' ~ veterinario.id,
+        clinic_id=veterinario.clinica_id,
+        calendar_redirect_url=calendar_redirect_url,
+        admin_selected_view='veterinario',
+        vets=[veterinario]
+      %}
+        {% include 'partials/schedule_toggle.html' %}
+      {% endwith %}
+    </div>
+    <div class="col-12 col-xl-4">
+      <div class="card shadow-sm h-100">
+        <div class="card-header bg-primary text-white">
+          <h5 class="mb-0"><i class="bi bi-clock-history me-2"></i> Horários fixos</h5>
+        </div>
+        <div class="card-body p-0">
+          <div class="table-responsive">
+            <table class="table table-striped mb-0">
+              <thead class="table-light">
+                <tr>
+                  <th scope="col">Dia</th>
+                  <th scope="col">Início</th>
+                  <th scope="col">Fim</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for h in horarios %}
+                <tr>
+                  <td>{{ h.dia_semana }}</td>
+                  <td>{{ h.hora_inicio.strftime('%H:%M') }}</td>
+                  <td>{{ h.hora_fim.strftime('%H:%M') }}</td>
+                </tr>
+                {% else %}
+                <tr>
+                  <td colspan="3" class="text-center py-4">Nenhum horário cadastrado.</td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
 </div>
 {% endblock %}

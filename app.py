@@ -3463,7 +3463,15 @@ def veterinarios():
 def vet_detail(veterinario_id):
     veterinario = Veterinario.query.get_or_404(veterinario_id)
     horarios = VetSchedule.query.filter_by(veterinario_id=veterinario_id).all()
-    return render_template('veterinarios/vet_detail.html', veterinario=veterinario, horarios=horarios)
+    calendar_redirect_url = url_for(
+        'appointments', view_as='veterinario', veterinario_id=veterinario.id
+    )
+    return render_template(
+        'veterinarios/vet_detail.html',
+        veterinario=veterinario,
+        horarios=horarios,
+        calendar_redirect_url=calendar_redirect_url,
+    )
 
 
 
