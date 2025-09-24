@@ -1,7 +1,671 @@
 {% extends "layout.html" %}
 
 {% block main %}
-  {% include "agendamentos/_vet_schedule_panel.html" %}
+<div class="container mt-4"
+     data-vet-schedule-root
+     data-vet-id="{{ veterinario.id }}"
+     data-appointments-base-url="{{ url_for('appointments') }}"
+     data-csrf-token="{{ csrf_token() if csrf_token is defined else '' }}">
+  <!-- Cabeçalho melhorado -->
+  <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-4">
+    <div>
+      <h2 class="mb-0"><i class="fas fa-calendar-alt me-2 text-primary"></i>Agenda – {{ veterinario.user.name }}</h2>
+      <p class="text-muted">Gerencie seus horários e consultas</p>
+    </div>
+    <div class="ms-auto">
+      {% if current_user.role == 'admin' %}
+      {% set preserve_params = ['start', 'end'] %}
+      {% set switcher_select_id = 'vet-agenda-picker' %}
+      {% set switcher_label_text = 'Pesquisar agenda' %}
+      {% set switcher_select_classes = 'form-select form-select-sm text-truncate' %}
+      {% set switcher_select_style = 'min-width: 220px;' %}
+      {% set switcher_form_classes = 'd-flex align-items-center justify-content-end gap-2 mb-2 flex-wrap' %}
+      {% set switcher_default_option_label = 'Selecione um usuário' %}
+      {% include 'partials/admin_agenda_switcher.html' %}
+      {% endif %}
+      <div class="d-flex flex-wrap justify-content-end gap-2">
+        <button class="btn btn-primary mb-1" onclick="toggleScheduleForm()">
+          <i class="fas fa-plus-circle me-1"></i>Adicionar Horário
+        </button>
+        <button class="btn btn-outline-primary mb-1" onclick="toggleAppointmentForm()">
+          <i class="fas fa-calendar-plus me-1"></i>Agendar Consulta
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Filtros com design melhorado -->
+  <div class="card mb-4 shadow-sm border-0">
+    <div class="card-header bg-primary bg-gradient text-white border-0 py-3 position-relative overflow-hidden">
+      <div class="d-flex align-items-center">
+        <div class="bg-white text-primary rounded-circle d-flex align-items-center justify-content-center me-3" style="width: 42px; height: 42px;">
+          <i class="fas fa-filter"></i>
+        </div>
+        <div>
+          <h5 class="mb-1 text-white">Filtrar Agenda</h5>
+          <small class="text-white-50">Selecione um período ou utilize os atalhos rápidos abaixo</small>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <form method="get" id="agenda-filter-form" class="row g-3 align-items-end">
+        {% for arg_key, arg_val in request.args.items() if arg_key not in ['start', 'end'] %}
+        <input type="hidden" name="{{ arg_key }}" value="{{ arg_val }}">
+        {% endfor %}
+        <div class="col-12 col-lg-4">
+          <label class="form-label fw-bold text-muted">Data Inicial</label>
+          <div class="input-group input-group-lg">
+            <span class="input-group-text bg-light text-secondary"><i class="fas fa-calendar-day"></i></span>
+            <input type="date" name="start" value="{{ start_dt.date() }}" class="form-control" aria-label="Data inicial">
+          </div>
+        </div>
+        <div class="col-12 col-lg-4">
+          <label class="form-label fw-bold text-muted">Data Final</label>
+          <div class="input-group input-group-lg">
+            <span class="input-group-text bg-light text-secondary"><i class="fas fa-calendar-check"></i></span>
+            <input type="date" name="end" value="{{ (end_dt - timedelta(days=1)).date() }}" class="form-control" aria-label="Data final">
+          </div>
+        </div>
+        <div class="col-12 col-lg-4 d-flex flex-column flex-sm-row gap-2 justify-content-lg-end align-self-end">
+          <button class="btn btn-primary flex-fill">
+            <i class="fas fa-search me-1"></i>Aplicar Filtro
+          </button>
+          <button type="button" class="btn btn-outline-secondary flex-fill" data-action="clear-dates">
+            <i class="fas fa-undo me-1"></i>Limpar
+          </button>
+        </div>
+        <div class="col-12">
+          <div class="d-flex flex-wrap gap-2">
+            <span class="text-muted me-2 align-self-center small fw-semibold text-uppercase">Atalhos rápidos:</span>
+            <button type="button" class="btn btn-sm btn-outline-primary" data-range="today">
+              <i class="fas fa-sun me-1"></i>Hoje
+            </button>
+            <button type="button" class="btn btn-sm btn-outline-primary" data-range="tomorrow">
+              <i class="fas fa-sunrise me-1"></i>Amanhã
+            </button>
+            <button type="button" class="btn btn-sm btn-outline-primary" data-range="week">
+              <i class="fas fa-calendar-week me-1"></i>Semana Atual
+            </button>
+            <button type="button" class="btn btn-sm btn-outline-primary" data-range="next7">
+              <i class="fas fa-calendar-plus me-1"></i>Próximos 7 dias
+            </button>
+            <button type="button" class="btn btn-sm btn-outline-primary" data-range="month">
+              <i class="fas fa-calendar-alt me-1"></i>Mês Atual
+            </button>
+          </div>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Formulário de Horário (modal) -->
+  <div class="modal fade" id="scheduleModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title" id="scheduleModalTitle">Adicionar Horário</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+        </div>
+        <div class="modal-body">
+          <form method="post" id="schedule-form">
+            {{ schedule_form.hidden_tag() }}
+            <div class="mb-3">
+              {{ schedule_form.veterinario_id.label(class="form-label fw-bold") }}
+              {{ schedule_form.veterinario_id(class="form-select") }}
+            </div>
+            <div class="mb-3">
+              {{ schedule_form.dias_semana.label(class="form-label fw-bold") }}
+              {{ schedule_form.dias_semana(class="form-select", multiple=True, size=7) }}
+              <div class="mt-2">
+                <button type="button" class="btn btn-sm btn-outline-secondary" onclick="selectDays('all')">Todos</button>
+                <button type="button" class="btn btn-sm btn-outline-secondary" onclick="selectDays('weekday')">Dias Úteis</button>
+                <button type="button" class="btn btn-sm btn-outline-secondary" onclick="selectDays('weekend')">Fins de Semana</button>
+                <button type="button" class="btn btn-sm btn-outline-secondary" onclick="selectDays('clear')">Limpar</button>
+              </div>
+            </div>
+            <div class="row">
+              <div class="col-md-6 mb-3">
+                {{ schedule_form.hora_inicio.label(class="form-label fw-bold") }}
+                {{ schedule_form.hora_inicio(class="form-control") }}
+              </div>
+              <div class="col-md-6 mb-3">
+                {{ schedule_form.hora_fim.label(class="form-label fw-bold") }}
+                {{ schedule_form.hora_fim(class="form-control") }}
+              </div>
+            </div>
+            <div class="row">
+              <div class="col-md-6 mb-3">
+                {{ schedule_form.intervalo_inicio.label(class="form-label fw-bold") }}
+                {{ schedule_form.intervalo_inicio(class="form-control") }}
+              </div>
+              <div class="col-md-6 mb-3">
+                {{ schedule_form.intervalo_fim.label(class="form-label fw-bold") }}
+                {{ schedule_form.intervalo_fim(class="form-control") }}
+              </div>
+            </div>
+          </form>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+          <button type="submit"
+                  form="schedule-form"
+                  class="btn btn-primary"
+                  name="{{ schedule_form.submit.name }}"
+                  value="Salvar Horário">Salvar Horário</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Formulário de Agendamento (modal) -->
+  <div class="modal fade" id="appointmentModalForm" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title">Agendar Consulta</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+        </div>
+        <div class="modal-body">
+          <form method="post" id="appointment-form">
+            {{ appointment_form.hidden_tag() }}
+            <div class="mb-3">
+              {{ appointment_form.animal_id.label(class="form-label fw-bold") }}
+              {{ appointment_form.animal_id(class="form-select") }}
+            </div>
+            <div class="mb-3 d-none">
+              {{ appointment_form.veterinario_id.label(class="form-label") }}
+              {{ appointment_form.veterinario_id(class="form-select") }}
+            </div>
+            <div class="row">
+              <div class="col-md-6 mb-3">
+                {{ appointment_form.date.label(class="form-label fw-bold") }}
+                {{ appointment_form.date(class="form-control", type="date", id="appointment-date") }}
+              </div>
+              <div class="col-md-6 mb-3">
+                {{ appointment_form.time.label(class="form-label fw-bold") }}
+                <select id="appointment-time" name="{{ appointment_form.time.name }}" class="form-select">
+                  <option value="">Selecione...</option>
+                </select>
+              </div>
+            </div>
+            <div class="mb-3">
+              {{ appointment_form.kind.label(class="form-label fw-bold") }}
+              {{ appointment_form.kind(class="form-select") }}
+            </div>
+            <div class="mb-3">
+              {{ appointment_form.reason.label(class="form-label fw-bold") }}
+              {{ appointment_form.reason(class="form-control", rows=3) }}
+            </div>
+          </form>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+          {{ appointment_form.submit(class="btn btn-primary", form="appointment-form", value="Agendar Consulta") }}
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Seção de Agendamentos Pendentes -->
+  <div class="card mb-4 border-warning">
+    <div class="card-header bg-warning text-dark">
+      <h5 class="mb-0"><i class="fas fa-clock me-2"></i>Agendamentos Pendentes</h5>
+    </div>
+    <div class="card-body p-0">
+      <div class="list-group list-group-flush">
+        {% for item in appointments_pending %}
+          {% set appt = item.appt %}
+          {% set can_respond = appt.time_left.total_seconds() > 0 %}
+          <div class="list-group-item d-flex justify-content-between align-items-center">
+            <div class="d-flex align-items-center">
+              <div class="me-3">
+                <i class="fas fa-clock {% if can_respond %}text-warning{% else %}text-secondary{% endif %} fa-2x"></i>
+              </div>
+              <div>
+                <h6 class="mb-0">{{ appt.scheduled_at|format_datetime_brazil('%d/%m/%Y %H:%M') }} - {{ appt.animal.name }}</h6>
+                <small class="text-muted">
+                  {{ appt.tutor.name if item.kind in ['consulta', 'retorno', 'banho_tosa', 'vacina'] else appt.animal.owner.name }}
+                  {% if item.kind == 'exame' %}
+                    <span class="badge bg-info ms-1">Exame</span>
+                  {% elif item.kind == 'banho_tosa' %}
+                    <span class="badge bg-primary ms-1">Banho e Tosa</span>
+                  {% elif item.kind == 'vacina' %}
+                    <span class="badge bg-success ms-1">Vacina</span>
+                  {% elif item.kind == 'retorno' %}
+                    <span class="badge bg-warning text-dark ms-1">Retorno</span>
+                  {% endif %}
+                </small>
+                <div class="mt-1">
+                  {% if can_respond %}
+                    <small class="text-muted"><i class="fas fa-hourglass-half me-1"></i>Tempo restante: {{ appt.time_left|format_timedelta }}</small>
+                  {% else %}
+                    <small class="text-muted"><i class="fas fa-exclamation-circle me-1"></i>Prazo expirado</small>
+                  {% endif %}
+                </div>
+              </div>
+            </div>
+            {% if can_respond %}
+              <div class="d-flex gap-2">
+                {% if item.kind in ['consulta', 'retorno', 'banho_tosa', 'vacina'] %}
+                <form method="POST" action="{{ url_for('update_appointment_status', appointment_id=appt.id) }}">
+                  <input type="hidden" name="status" value="accepted">
+                  <button type="submit" class="btn btn-success btn-sm"><i class="fas fa-check me-1"></i>Aceitar</button>
+                </form>
+                <form method="POST" action="{{ url_for('update_appointment_status', appointment_id=appt.id) }}">
+                  <input type="hidden" name="status" value="canceled">
+                  <button type="submit" class="btn btn-danger btn-sm"><i class="fas fa-times me-1"></i>Recusar</button>
+                </form>
+                {% else %}
+                <button type="button" class="btn btn-success btn-sm" onclick="responderAgendamentoExame({{ appt.id }}, 'confirmed')">
+                  <i class="fas fa-check me-1"></i>Aceitar
+                </button>
+                <button type="button" class="btn btn-danger btn-sm" onclick="responderAgendamentoExame({{ appt.id }}, 'canceled')">
+                  <i class="fas fa-times me-1"></i>Recusar
+                </button>
+                {% endif %}
+              </div>
+            {% endif %}
+          </div>
+        {% else %}
+          <div class="list-group-item text-center py-4">
+            <i class="fas fa-inbox fa-2x text-muted mb-2"></i>
+            <p class="text-muted mb-0">Não há agendamentos pendentes.</p>
+          </div>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+
+  <!-- Seção de Próximos Agendamentos -->
+  <div class="card mb-4 border-primary">
+    <div class="card-header bg-primary text-white">
+      <h5 class="mb-0"><i class="fas fa-calendar-check me-2"></i>Próximos Agendamentos</h5>
+    </div>
+    <div class="card-body p-0">
+      <div class="list-group list-group-flush">
+        {% for item in appointments_upcoming %}
+          {% set appt = item.appt %}
+          {% if item.kind == 'exame' %}
+          <div class="list-group-item list-group-item-action appointment-item" data-type="exame">
+            <div class="d-flex justify-content-between align-items-center">
+              <div class="d-flex align-items-center">
+                <div class="me-3">
+                  <i class="fas fa-flask fa-2x text-info"></i>
+                </div>
+                <div>
+                  <h6 class="mb-0">{{ appt.scheduled_at|format_datetime_brazil('%d/%m/%Y %H:%M') }} - {{ appt.animal.name }}</h6>
+                  <small class="text-muted">{{ appt.animal.owner.name }} <span class="badge bg-info ms-1">Exame</span></small>
+                </div>
+              </div>
+              <div class="btn-group">
+                <a href="{{ url_for('ficha_animal', animal_id=appt.animal_id) }}" class="btn btn-sm btn-outline-primary"><i class="fas fa-file-medical me-1"></i>Ficha</a>
+                <a href="{{ url_for('ficha_tutor', tutor_id=appt.animal.owner.id) }}" class="btn btn-sm btn-outline-secondary"><i class="fas fa-user me-1"></i>Tutor</a>
+              </div>
+            </div>
+          </div>
+          {% else %}
+          <div class="list-group-item list-group-item-action appointment-item"
+              data-id="{{ appt.id }}"
+              data-date="{{ appt.scheduled_at|format_datetime_brazil('%Y-%m-%d') }}"
+              data-time="{{ appt.scheduled_at|format_datetime_brazil('%H:%M') }}"
+              data-vet="{{ appt.veterinario.user.name }}"
+              data-vet-id="{{ appt.veterinario_id }}"
+              data-tutor="{{ appt.tutor.name }}"
+              data-tutor-id="{{ appt.tutor_id }}"
+              data-animal="{{ appt.animal.name }}"
+              data-animal-id="{{ appt.animal_id }}"
+              data-animal-url="{{ url_for('ficha_animal', animal_id=appt.animal_id) }}"
+              data-tutor-url="{{ url_for('ficha_tutor', tutor_id=appt.tutor_id) }}"
+              data-consulta-url="{{ url_for('consulta_direct', animal_id=appt.animal_id, appointment_id=appt.id) }}"
+              data-notes="{{ appt.notes or '' }}"
+              data-created-by="{{ appt.creator.name if appt.creator else '' }}"
+              data-created-at="{{ appt.created_at|format_datetime_brazil('%d/%m/%Y %H:%M') if appt.created_at else '' }}"
+              data-type="{{ item.kind }}">
+            <div class="d-flex justify-content-between align-items-center">
+              <div class="d-flex align-items-center">
+                <div class="me-3">
+                  <i class="fas fa-stethoscope fa-2x text-success"></i>
+                </div>
+                <div>
+                  <h6 class="mb-0">{{ appt.scheduled_at|format_datetime_brazil('%d/%m/%Y %H:%M') }} - {{ appt.animal.name }}</h6>
+                  <small class="text-muted">{{ appt.tutor.name if item.kind in ['consulta', 'retorno', 'banho_tosa', 'vacina'] else appt.animal.owner.name }}
+                    {% if item.kind == 'retorno' %}
+                      <span class="badge bg-warning text-dark ms-1">Retorno</span>
+                    {% elif item.kind == 'banho_tosa' %}
+                      <span class="badge bg-primary text-white ms-1">Banho e Tosa</span>
+                    {% elif item.kind == 'vacina' %}
+                      <span class="badge bg-success text-white ms-1">Vacina</span>
+                    {% endif %}
+                  </small>
+                </div>
+              </div>
+              <div class="btn-group">
+                <a href="{{ url_for('ficha_animal', animal_id=appt.animal_id) }}" class="btn btn-sm btn-outline-primary"><i class="fas fa-file-medical me-1"></i>Ficha</a>
+                <a href="{{ url_for('ficha_tutor', tutor_id=appt.tutor_id) }}" class="btn btn-sm btn-outline-secondary"><i class="fas fa-user me-1"></i>Tutor</a>
+                <a href="{{ url_for('consulta_direct', animal_id=appt.animal_id, appointment_id=appt.id) }}" class="btn btn-sm btn-outline-success"><i class="fas fa-play-circle me-1"></i>Iniciar</a>
+              </div>
+            </div>
+          </div>
+          {% endif %}
+        {% else %}
+          <div class="list-group-item text-center py-4">
+            <i class="fas fa-calendar-times fa-2x text-muted mb-2"></i>
+            <p class="text-muted mb-0">Nenhum agendamento encontrado.</p>
+          </div>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+
+  <!-- Consultas finalizadas, retornos e exames -->
+  <div class="card mb-4 border-secondary">
+    <div class="card-header bg-secondary text-white d-flex justify-content-between align-items-center">
+      <h5 class="mb-0"><i class="fas fa-history me-2"></i>Consultas e exames no período</h5>
+      <button id="toggle-past" class="btn btn-sm btn-light">
+        <i class="fas fa-chevron-down me-1"></i>Mostrar
+      </button>
+    </div>
+    <div class="card-body p-0 d-none" id="past-list">
+      <div class="list-group list-group-flush">
+        {% set finalizadas = schedule_events | selectattr('kind', 'equalto', 'consulta_finalizada') | list %}
+        {% set aceitas = schedule_events | selectattr('kind', 'equalto', 'consulta_aceita') | list %}
+        {% set consultas_passadas = finalizadas + aceitas %}
+        <div class="px-3 py-2 bg-light border-bottom fw-semibold text-uppercase small">Consultas finalizadas e aceitas</div>
+        {% if consultas_passadas %}
+          {% for event in consultas_passadas %}
+            {% if event.kind == 'consulta_finalizada' %}
+              {% set consulta = event.consulta %}
+              {% set animal = event.animal %}
+              {% set tutor = animal.owner %}
+              <div class="list-group-item list-group-item-action">
+                <div class="d-flex justify-content-between align-items-start gap-3">
+                  <div>
+                    <h6 class="mb-1">{{ event.timestamp|format_datetime_brazil('%d/%m/%Y %H:%M') }} – {{ animal.name }}</h6>
+                    <small class="text-muted d-block">Tutor: {{ tutor.name if tutor else '—' }}</small>
+                    {% if consulta.retorno_de_id %}
+                      <span class="badge bg-warning text-dark mt-1">Retorno da consulta #{{ consulta.retorno_de_id }}</span>
+                    {% endif %}
+                    {% if event.exam_summary %}
+                      <div class="mt-2">
+                        <small class="text-muted d-block">Exames solicitados:</small>
+                        <ul class="mb-0 small ps-3">
+                          {% for exame in event.exam_summary %}
+                            <li>
+                              {{ exame.nome }}
+                              {% if exame.status %}
+                                <span class="text-muted">({{ exame.status|replace('_', ' ')|capitalize }})</span>
+                              {% endif %}
+                              {% if exame.justificativa %}
+                                <span class="text-muted">– {{ exame.justificativa }}</span>
+                              {% endif %}
+                            </li>
+                          {% endfor %}
+                        </ul>
+                      </div>
+                    {% endif %}
+                  </div>
+                  <div class="d-flex flex-column align-items-end gap-2">
+                    <div class="btn-group">
+                      <a href="{{ url_for('ficha_animal', animal_id=animal.id) }}" class="btn btn-sm btn-outline-primary"><i class="fas fa-file-medical me-1"></i>Ficha</a>
+                      {% if tutor %}
+                      <a href="{{ url_for('ficha_tutor', tutor_id=tutor.id) }}" class="btn btn-sm btn-outline-secondary"><i class="fas fa-user me-1"></i>Tutor</a>
+                      {% endif %}
+                      <a href="{{ url_for('consulta_direct', animal_id=animal.id, c=consulta.id) }}" class="btn btn-sm btn-outline-success"><i class="fas fa-stethoscope me-1"></i>Detalhes</a>
+                    </div>
+                    <a href="{{ url_for('imprimir_consulta', consulta_id=consulta.id) }}" class="btn btn-sm btn-outline-dark" target="_blank"><i class="fas fa-print me-1"></i>Imprimir consulta</a>
+                  </div>
+                </div>
+              </div>
+            {% else %}
+              {% set appt = event.appointment %}
+              {% set animal = appt.animal %}
+              {% set tutor = appt.tutor or animal.owner %}
+              <div class="list-group-item list-group-item-action">
+                <div class="d-flex justify-content-between align-items-start gap-3">
+                  <div>
+                    <h6 class="mb-1">{{ event.timestamp|format_datetime_brazil('%d/%m/%Y %H:%M') }} – {{ animal.name }}</h6>
+                    <small class="text-muted d-block">Tutor: {{ tutor.name if tutor else '—' }}</small>
+                    <span class="badge bg-secondary mt-1">Consulta aceita e não finalizada</span>
+                  </div>
+                  <div class="btn-group">
+                    <a href="{{ url_for('ficha_animal', animal_id=animal.id) }}" class="btn btn-sm btn-outline-primary"><i class="fas fa-file-medical me-1"></i>Ficha</a>
+                    {% if tutor %}
+                    <a href="{{ url_for('ficha_tutor', tutor_id=tutor.id) }}" class="btn btn-sm btn-outline-secondary"><i class="fas fa-user me-1"></i>Tutor</a>
+                    {% endif %}
+                    <a href="{{ url_for('consulta_direct', animal_id=animal.id, appointment_id=appt.id) }}" class="btn btn-sm btn-outline-success"><i class="fas fa-play-circle me-1"></i>Iniciar</a>
+                  </div>
+                </div>
+              </div>
+            {% endif %}
+          {% endfor %}
+        {% else %}
+          <div class="list-group-item text-center py-4 text-muted">
+            <i class="fas fa-inbox me-2"></i>Nenhuma consulta finalizada ou aceita no período selecionado.
+          </div>
+        {% endif %}
+
+        {% set retornos = schedule_events | selectattr('kind', 'equalto', 'retorno') | list %}
+        <div class="px-3 py-2 bg-light border-bottom fw-semibold text-uppercase small mt-2">Retornos</div>
+        {% if retornos %}
+          {% for event in retornos %}
+            {% set appt = event.appointment %}
+            {% set animal = appt.animal %}
+            {% set tutor = animal.owner %}
+            <div class="list-group-item list-group-item-action">
+              <div class="d-flex justify-content-between align-items-start gap-3">
+                <div>
+                  <h6 class="mb-1">{{ event.timestamp|format_datetime_brazil('%d/%m/%Y %H:%M') }} – {{ animal.name }}</h6>
+                  <small class="text-muted d-block">Tutor: {{ tutor.name if tutor else '—' }}</small>
+                  <small class="text-muted d-block">Consulta de origem: #{{ event.consulta_id }}</small>
+                </div>
+                <div class="btn-group">
+                  <a href="{{ url_for('ficha_animal', animal_id=animal.id) }}" class="btn btn-sm btn-outline-primary"><i class="fas fa-file-medical me-1"></i>Ficha</a>
+                  {% if tutor %}
+                  <a href="{{ url_for('ficha_tutor', tutor_id=tutor.id) }}" class="btn btn-sm btn-outline-secondary"><i class="fas fa-user me-1"></i>Tutor</a>
+                  {% endif %}
+                  <a href="{{ url_for('consulta_direct', animal_id=animal.id, appointment_id=appt.id) }}" class="btn btn-sm btn-outline-success"><i class="fas fa-redo me-1"></i>Abrir retorno</a>
+                </div>
+              </div>
+            </div>
+          {% endfor %}
+        {% else %}
+          <div class="list-group-item text-center py-4 text-muted">
+            <i class="fas fa-calendar-times me-2"></i>Nenhum retorno agendado no período.
+          </div>
+        {% endif %}
+
+        {% set exames = schedule_events | selectattr('kind', 'equalto', 'exame') | list %}
+        <div class="px-3 py-2 bg-light border-bottom fw-semibold text-uppercase small mt-2">Exames</div>
+        {% if exames %}
+          {% for event in exames %}
+            {% set exam = event.exam %}
+            {% set animal = event.animal %}
+            {% set tutor = animal.owner %}
+            {% set especialista = exam.specialist.user if exam.specialist and exam.specialist.user else None %}
+            <div class="list-group-item list-group-item-action">
+              <div class="d-flex justify-content-between align-items-start gap-3">
+                <div>
+                  <h6 class="mb-1">{{ event.timestamp|format_datetime_brazil('%d/%m/%Y %H:%M') }} – {{ animal.name }}</h6>
+                  <small class="text-muted d-block">Tutor: {{ tutor.name if tutor else '—' }}</small>
+                  <small class="text-muted d-block">Especialista: {{ especialista.name if especialista else '—' }}</small>
+                  <small class="text-muted d-block">Status: {{ exam.status_display }}</small>
+                </div>
+                <div class="btn-group">
+                  <a href="{{ url_for('ficha_animal', animal_id=animal.id) }}" class="btn btn-sm btn-outline-primary"><i class="fas fa-file-medical me-1"></i>Ficha</a>
+                  {% if tutor %}
+                  <a href="{{ url_for('ficha_tutor', tutor_id=tutor.id) }}" class="btn btn-sm btn-outline-secondary"><i class="fas fa-user me-1"></i>Tutor</a>
+                  {% endif %}
+                </div>
+              </div>
+            </div>
+          {% endfor %}
+        {% else %}
+          <div class="list-group-item text-center py-4 text-muted">
+            <i class="fas fa-flask me-2"></i>Nenhum exame confirmado no período.
+          </div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  <!-- Seção de Horários Cadastrados -->
+  <div class="card mb-4">
+    <div class="card-header bg-light d-flex justify-content-between align-items-center">
+      <h5 class="mb-0"><i class="fas fa-business-time me-2"></i>Horários Cadastrados</h5>
+      <button class="btn btn-sm btn-outline-primary"
+              data-schedule-edit-toggle
+              onclick="toggleScheduleEdit()">
+        <i class="fas fa-edit me-1"></i>Editar horários
+      </button>
+    </div>
+    <div class="card-body">
+      <div class="row">
+        {% for grupo in horarios_grouped %}
+          <div class="col-md-6 col-lg-4 mb-3">
+            <div class="card h-100">
+              <div class="card-header py-2">
+                <h6 class="mb-0">{{ grupo.dia }}</h6>
+              </div>
+              <div class="card-body py-2">
+                {% for h in grupo.itens %}
+                  <div class="d-flex justify-content-between align-items-center mb-2">
+                    <div>
+                      <span class="badge bg-light text-dark">{{ h.hora_inicio.strftime('%H:%M') }} - {{ h.hora_fim.strftime('%H:%M') }}</span>
+                      {% if h.intervalo_inicio and h.intervalo_fim %}
+                        <small class="text-muted d-block">Intervalo: {{ h.intervalo_inicio.strftime('%H:%M') }} - {{ h.intervalo_fim.strftime('%H:%M') }}</small>
+                      {% endif %}
+                    </div>
+                    <div class="schedule-actions d-none">
+                      <button type="button" class="btn btn-sm btn-outline-primary edit-btn"
+                              data-id="{{ h.id }}"
+                              data-dia="{{ h.dia_semana }}"
+                              data-hora-inicio="{{ h.hora_inicio.strftime('%H:%M') }}"
+                              data-hora-fim="{{ h.hora_fim.strftime('%H:%M') }}"
+                              data-intervalo-inicio="{{ h.intervalo_inicio.strftime('%H:%M') if h.intervalo_inicio else '' }}"
+                              data-intervalo-fim="{{ h.intervalo_fim.strftime('%H:%M') if h.intervalo_fim else '' }}">
+                        <i class="fas fa-edit"></i>
+                      </button>
+                      <form method="post" action="{{ url_for('delete_vet_schedule', veterinario_id=veterinario.id, horario_id=h.id) }}" class="d-inline">
+                        {{ schedule_form.csrf_token }}
+                        <button type="submit" class="btn btn-sm btn-outline-danger" onclick="return confirm('Excluir este horário?');">
+                          <i class="fas fa-trash"></i>
+                        </button>
+                      </form>
+                    </div>
+                  </div>
+                {% endfor %}
+              </div>
+            </div>
+          </div>
+        {% else %}
+          <div class="col-12 text-center py-4">
+            <i class="fas fa-clock fa-2x text-muted mb-2"></i>
+            <p class="text-muted mb-0">Nenhum horário cadastrado.</p>
+          </div>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal de detalhes da consulta -->
+  <div class="modal fade" id="appointmentDetailModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title">Detalhes da Consulta</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+        </div>
+        <div class="modal-body">
+          <input type="hidden" id="modal-appt-id">
+          <div class="mb-3">
+            <label class="form-label fw-bold">Veterinário</label>
+            <input type="text" class="form-control" id="modal-vet" readonly>
+          </div>
+          <div class="mb-3">
+            <label class="form-label fw-bold">Tutor</label>
+            <input type="text" class="form-control" id="modal-tutor" readonly>
+          </div>
+          <div class="mb-3">
+            <label class="form-label fw-bold">Animal</label>
+            <input type="text" class="form-control" id="modal-animal" readonly>
+          </div>
+          <div class="row">
+            <div class="col-md-6 mb-3">
+              <label class="form-label fw-bold">Agendado por</label>
+              <input type="text" class="form-control" id="modal-created-by" readonly>
+            </div>
+            <div class="col-md-6 mb-3">
+              <label class="form-label fw-bold">Agendado em</label>
+              <input type="text" class="form-control" id="modal-created-at" readonly>
+            </div>
+          </div>
+          <div class="row">
+            <div class="col-md-6 mb-3">
+              <label class="form-label fw-bold">Data</label>
+              <input type="date" class="form-control" id="modal-date">
+            </div>
+            <div class="col-md-6 mb-3">
+              <label class="form-label fw-bold">Hora</label>
+              <select class="form-select" id="modal-time" data-placeholder="Selecione...">
+                <option value="">Selecione...</option>
+              </select>
+            </div>
+          </div>
+          <div class="mb-3">
+            <label class="form-label fw-bold">Comentários</label>
+            <textarea class="form-control" id="modal-notes" rows="3"></textarea>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <a id="modal-animal-link" class="btn btn-outline-primary" target="_blank"><i class="fas fa-file-medical me-1"></i>Ficha Animal</a>
+          <a id="modal-tutor-link" class="btn btn-outline-secondary" target="_blank"><i class="fas fa-user me-1"></i>Ficha Tutor</a>
+          <a id="modal-consulta-link" class="btn btn-outline-success" target="_blank"><i class="fas fa-play-circle me-1"></i>Iniciar Consulta</a>
+          <button type="button" class="btn btn-primary" id="modal-save-btn">Salvar Alterações</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+
+
+<style>
+  .appointment-item {
+    transition: all 0.2s ease;
+    cursor: pointer;
+  }
+  
+  .appointment-item:hover {
+    background-color: #f8f9fa !important;
+    transform: translateX(5px);
+  }
+  
+  .btn {
+    transition: all 0.2s ease;
+  }
+  
+  .badge {
+    font-size: 0.75em;
+  }
+  
+  @media (max-width: 768px) {
+    .btn-group .btn {
+      font-size: 0.75rem;
+      padding: 0.25rem 0.5rem;
+    }
+    
+    .d-flex.align-items-center {
+      flex-direction: column;
+      align-items: flex-start !important;
+    }
+    
+    .d-flex.align-items-center .me-3 {
+      margin-right: 0 !important;
+      margin-bottom: 0.5rem;
+    }
+  }
+</style>
 {% endblock %}
 
 {% block scripts %}
