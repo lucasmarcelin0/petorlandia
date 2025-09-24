@@ -78,14 +78,27 @@
                 aria-busy="false"
                 aria-hidden="true"
               >
-                <button
-                  type="button"
-                  class="tutor-calendar__day-detail-close"
-                  data-close-day-detail
-                  aria-label="Fechar detalhes do dia"
-                >
-                  <i class="bi bi-x-lg" aria-hidden="true"></i>
-                </button>
+                <div class="tutor-calendar__day-detail-controls" data-day-detail-controls>
+                  <button
+                    type="button"
+                    class="tutor-calendar__day-detail-back"
+                    data-back-to-day
+                    hidden
+                    aria-hidden="true"
+                    aria-label="Voltar para os agendamentos do dia"
+                  >
+                    <i class="bi bi-arrow-left-circle" aria-hidden="true"></i>
+                    <span class="tutor-calendar__day-detail-back-text">Agendamentos do dia</span>
+                  </button>
+                  <button
+                    type="button"
+                    class="tutor-calendar__day-detail-close"
+                    data-close-day-detail
+                    aria-label="Fechar detalhes do dia"
+                  >
+                    <i class="bi bi-x-lg" aria-hidden="true"></i>
+                  </button>
+                </div>
                 <div class="tutor-calendar__day-detail-content" data-day-detail-content>
                   <div class="tutor-calendar__day-detail-placeholder text-muted small">
                     Selecione um dia para ver os compromissos.
@@ -591,10 +604,47 @@
   box-shadow: 0 22px 40px rgba(99, 102, 241, 0.2);
 }
 
-#{{ component_id }} .tutor-calendar__day-detail-close {
+#{{ component_id }} .tutor-calendar__day-detail-controls {
   position: absolute;
   top: 1rem;
   right: 1rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  z-index: 2;
+}
+
+#{{ component_id }} .tutor-calendar__day-detail-back {
+  border: none;
+  background: rgba(99, 102, 241, 0.12);
+  color: #4338ca;
+  border-radius: 999px;
+  padding: 0.35rem 0.85rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  transition: background 0.2s ease, color 0.2s ease, transform 0.2s ease;
+}
+
+#{{ component_id }} .tutor-calendar__day-detail-back i {
+  font-size: 1rem;
+}
+
+#{{ component_id }} .tutor-calendar__day-detail-back:hover,
+#{{ component_id }} .tutor-calendar__day-detail-back:focus {
+  background: rgba(79, 70, 229, 0.18);
+  color: #312e81;
+  transform: translateY(-1px);
+}
+
+#{{ component_id }} .tutor-calendar__day-detail-back:focus {
+  outline: 0;
+  box-shadow: 0 0 0 0.2rem rgba(99, 102, 241, 0.25);
+}
+
+#{{ component_id }} .tutor-calendar__day-detail-close {
   border: none;
   background: rgba(15, 23, 42, 0.05);
   color: var(--bs-gray-700);
@@ -619,6 +669,10 @@
   box-shadow: 0 0 0 0.2rem rgba(99, 102, 241, 0.25);
 }
 
+#{{ component_id }} .tutor-calendar__day-detail-back-text {
+  white-space: nowrap;
+}
+
 #{{ component_id }} .tutor-calendar__day-detail-content {
   display: flex;
   flex-direction: column;
@@ -636,7 +690,7 @@
   justify-content: space-between;
   gap: 0.75rem;
   margin-bottom: 0.75rem;
-  padding-right: 2.25rem;
+  padding-right: clamp(2.5rem, 6vw, 9rem);
 }
 
 #{{ component_id }} .tutor-calendar__day-detail-date {
@@ -1360,6 +1414,8 @@ document.addEventListener('DOMContentLoaded', function() {
   const dayDetailContainer = root.querySelector('[data-day-detail]');
   const dayDetailLayer = root.querySelector('[data-day-detail-layer]');
   const dayDetailBackdrop = root.querySelector('[data-day-detail-backdrop]');
+  const dayDetailControls = root.querySelector('[data-day-detail-controls]');
+  const dayDetailBackBtn = root.querySelector('[data-back-to-day]');
   const dayDetailCloseBtn = root.querySelector('[data-close-day-detail]');
   const dayDetailContent = root.querySelector('[data-day-detail-content]');
   const monthLabelEl = root.querySelector('[data-month-label]');
@@ -1491,6 +1547,24 @@ document.addEventListener('DOMContentLoaded', function() {
       } catch (error) {
         focusTarget.focus();
       }
+    }
+    updateDayDetailControls();
+  }
+
+  function updateDayDetailControls() {
+    if (!dayDetailBackBtn) {
+      return;
+    }
+    const shouldShowBack = dayDetailMode === 'event';
+    if (shouldShowBack) {
+      dayDetailBackBtn.removeAttribute('hidden');
+      dayDetailBackBtn.setAttribute('aria-hidden', 'false');
+    } else {
+      dayDetailBackBtn.setAttribute('hidden', 'hidden');
+      dayDetailBackBtn.setAttribute('aria-hidden', 'true');
+    }
+    if (dayDetailControls) {
+      dayDetailControls.classList.toggle('has-back', shouldShowBack);
     }
   }
 
@@ -3253,7 +3327,8 @@ document.addEventListener('DOMContentLoaded', function() {
     if (!eventData) {
       return null;
     }
-    if (getEventBaseType(eventData) === 'appointment') {
+    const baseType = getEventBaseType(eventData);
+    if (baseType && ['appointment', 'exam', 'vaccine'].includes(baseType)) {
       const appointmentContent = buildAppointmentDetailBlock(eventData, displayLabel, dateKey);
       if (appointmentContent) {
         return appointmentContent;
@@ -3359,6 +3434,7 @@ document.addEventListener('DOMContentLoaded', function() {
     updateEventFocusHighlight();
 
     dayDetailContainer.setAttribute('aria-busy', 'false');
+    updateDayDetailControls();
 
     if (shouldOpen) {
       openDayDetail({ focus: shouldFocus, trigger: opts.trigger });
@@ -3420,6 +3496,7 @@ document.addEventListener('DOMContentLoaded', function() {
     updateEventFocusHighlight();
 
     dayDetailContainer.setAttribute('aria-busy', 'false');
+    updateDayDetailControls();
 
     if (shouldOpen) {
       openDayDetail({ focus: shouldFocus, trigger: opts.trigger });
@@ -3948,6 +4025,28 @@ document.addEventListener('DOMContentLoaded', function() {
     });
   });
 
+  if (dayDetailBackBtn) {
+    dayDetailBackBtn.addEventListener('click', function(event) {
+      event.preventDefault();
+      const targetDate = (dayDetailContainer && dayDetailContainer.dataset && dayDetailContainer.dataset.date)
+        || selectedDate
+        || null;
+      const trigger = lastDetailTrigger && typeof lastDetailTrigger.focus === 'function'
+        ? lastDetailTrigger
+        : null;
+      dayDetailMode = 'day';
+      focusedEventId = null;
+      const options = {
+        open: true,
+        focus: true,
+      };
+      if (trigger) {
+        options.trigger = trigger;
+      }
+      renderDayDetail(targetDate, options);
+    });
+  }
+
   dayDetailCloseBtn && dayDetailCloseBtn.addEventListener('click', function(event) {
     event.preventDefault();
     closeDayDetail({ restoreFocus: true });
@@ -4019,6 +4118,8 @@ document.addEventListener('DOMContentLoaded', function() {
       closeDayDetail({ restoreFocus: true });
     }
   });
+
+  updateDayDetailControls();
 
   function handleSharedEvents(event) {
     if (!event || !event.detail) {
