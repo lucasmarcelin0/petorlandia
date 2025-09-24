@@ -102,7 +102,7 @@
       </div>
     </div>
     <div class="col-12 col-xl-4 col-xxl-3" data-calendar-summary-column>
-      <div class="card calendar-summary-card border-0 shadow-sm h-100" data-calendar-summary-panel>
+      <div class="card calendar-summary-card border-0 shadow-sm h-100 is-loading" data-calendar-summary-panel>
         <div class="card-header bg-white border-0 pb-0">
           <div class="d-flex align-items-center justify-content-between gap-2">
             <h5 class="mb-0 fw-semibold">
@@ -115,12 +115,50 @@
           </p>
         </div>
         <div class="card-body">
-          <div class="text-muted small" data-calendar-summary-empty aria-live="polite">
-            Carregando estatísticas da agenda...
+          <div
+            class="calendar-summary-loading d-flex align-items-center gap-3 rounded-4 border border-dashed"
+            data-calendar-summary-loading
+            role="status"
+            aria-live="polite"
+          >
+            <div class="spinner-border text-primary" role="presentation" aria-hidden="true"></div>
+            <div>
+              <p class="mb-0 fw-semibold text-primary">Atualizando estatísticas</p>
+              <small class="text-muted">Aguarde enquanto buscamos as consultas desta visão.</small>
+            </div>
+          </div>
+          <div class="calendar-summary-overview row g-3 mt-1" data-calendar-summary-overview hidden>
+            <div class="col-12 col-sm-6">
+              <div class="calendar-summary-overview-card is-today">
+                <div class="calendar-summary-overview-icon" aria-hidden="true">
+                  <i class="bi bi-brightness-alt-high-fill"></i>
+                </div>
+                <div class="calendar-summary-overview-body">
+                  <span class="label">Hoje</span>
+                  <strong class="value" data-calendar-summary-overview-today>0</strong>
+                  <small class="description text-muted">Consultas previstas</small>
+                </div>
+              </div>
+            </div>
+            <div class="col-12 col-sm-6">
+              <div class="calendar-summary-overview-card is-week">
+                <div class="calendar-summary-overview-icon" aria-hidden="true">
+                  <i class="bi bi-calendar-week"></i>
+                </div>
+                <div class="calendar-summary-overview-body">
+                  <span class="label">Semana</span>
+                  <strong class="value" data-calendar-summary-overview-week>0</strong>
+                  <small class="description text-muted">Compromissos na semana</small>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="text-muted small mt-3" data-calendar-summary-empty aria-live="polite" role="status">
+            Nenhum compromisso encontrado para o período atual.
           </div>
           <ul
             role="list"
-            class="calendar-summary-list d-flex flex-column gap-3 mt-2"
+            class="calendar-summary-list d-flex flex-column gap-3 mt-3"
             data-calendar-summary-list
           ></ul>
         </div>
@@ -349,6 +387,18 @@ document.addEventListener('DOMContentLoaded', () => {
     : null;
   const calendarSummaryTotalBadge = calendarSummaryPanel
     ? calendarSummaryPanel.querySelector('[data-calendar-summary-total]')
+    : null;
+  const calendarSummaryOverview = calendarSummaryPanel
+    ? calendarSummaryPanel.querySelector('[data-calendar-summary-overview]')
+    : null;
+  const calendarSummaryOverviewToday = calendarSummaryPanel
+    ? calendarSummaryPanel.querySelector('[data-calendar-summary-overview-today]')
+    : null;
+  const calendarSummaryOverviewWeek = calendarSummaryPanel
+    ? calendarSummaryPanel.querySelector('[data-calendar-summary-overview-week]')
+    : null;
+  const calendarSummaryLoading = calendarSummaryPanel
+    ? calendarSummaryPanel.querySelector('[data-calendar-summary-loading]')
     : null;
   const calendarSummaryColumn = document.querySelector('[data-calendar-summary-column]');
   const calendarMainColumn = document.querySelector('[data-calendar-main-column]');
@@ -703,9 +753,23 @@ document.addEventListener('DOMContentLoaded', () => {
       return nameA.localeCompare(nameB, undefined, { numeric: true, sensitivity: 'base' });
     });
 
-    const totalEvents = rows.reduce((acc, item) => acc + item.total, 0);
+    const totals = rows.reduce((accumulator, item) => {
+      accumulator.totalEvents += item.total;
+      accumulator.totalToday += item.today;
+      accumulator.totalThisWeek += item.thisWeek;
+      return accumulator;
+    }, {
+      totalEvents: 0,
+      totalToday: 0,
+      totalThisWeek: 0,
+    });
 
-    return { rows, totalEvents };
+    return {
+      rows,
+      totalEvents: totals.totalEvents,
+      totalToday: totals.totalToday,
+      totalThisWeek: totals.totalThisWeek,
+    };
   }
 
   function getUpcomingSummaryDays(entry, limit = 4) {
@@ -743,11 +807,33 @@ document.addEventListener('DOMContentLoaded', () => {
     refreshCalendarSummaryActiveState();
   }
 
+  function setCalendarSummaryLoadingState(isLoading) {
+    if (!calendarSummaryPanel) {
+      return;
+    }
+    const shouldActivate = !!isLoading;
+    calendarSummaryPanel.classList.toggle('is-loading', shouldActivate);
+    calendarSummaryPanel.setAttribute('aria-busy', shouldActivate ? 'true' : 'false');
+    if (calendarSummaryLoading) {
+      calendarSummaryLoading.classList.toggle('d-none', !shouldActivate);
+    }
+    if (calendarSummaryList) {
+      calendarSummaryList.classList.toggle('is-disabled', shouldActivate);
+    }
+    if (calendarSummaryOverview) {
+      calendarSummaryOverview.classList.toggle('is-disabled', shouldActivate);
+    }
+    if (shouldActivate && calendarSummaryEmpty) {
+      calendarSummaryEmpty.classList.add('d-none');
+    }
+  }
+
   function renderCalendarSummary(events) {
     if (!calendarSummaryPanel || !calendarSummaryList) {
       return;
     }
-    const { rows, totalEvents } = computeSummaryMetrics(events);
+    const { rows, totalEvents, totalToday, totalThisWeek } = computeSummaryMetrics(events);
+    setCalendarSummaryLoadingState(false);
     if (calendarSummaryTotalBadge) {
       calendarSummaryTotalBadge.textContent = String(totalEvents);
     }
@@ -757,11 +843,23 @@ document.addEventListener('DOMContentLoaded', () => {
         calendarSummaryEmpty.classList.remove('d-none');
       }
       calendarSummaryPanel.classList.remove('has-data');
+      if (calendarSummaryOverview) {
+        calendarSummaryOverview.setAttribute('hidden', 'hidden');
+      }
       return;
     }
     calendarSummaryPanel.classList.add('has-data');
     if (calendarSummaryEmpty) {
       calendarSummaryEmpty.classList.add('d-none');
+    }
+    if (calendarSummaryOverview) {
+      calendarSummaryOverview.removeAttribute('hidden');
+      if (calendarSummaryOverviewToday) {
+        calendarSummaryOverviewToday.textContent = String(totalToday);
+      }
+      if (calendarSummaryOverviewWeek) {
+        calendarSummaryOverviewWeek.textContent = String(totalThisWeek);
+      }
     }
 
     rows.forEach(entry => {
@@ -845,13 +943,20 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   if (calendarSummaryPanel) {
+    setCalendarSummaryLoadingState(true);
     const initialEvents = Array.isArray(window.sharedCalendarEvents)
       ? window.sharedCalendarEvents
       : [];
-    renderCalendarSummary(initialEvents);
+    if (initialEvents.length) {
+      renderCalendarSummary(initialEvents);
+    }
     document.addEventListener('sharedCalendarEvents', event => {
       const items = (event && event.detail && event.detail.events) || [];
       renderCalendarSummary(items);
+    });
+    document.addEventListener('sharedCalendarEventsLoading', event => {
+      const isLoading = !!(event && event.detail && event.detail.loading);
+      setCalendarSummaryLoadingState(isLoading);
     });
   }
 
