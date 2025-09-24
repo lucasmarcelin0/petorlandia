@@ -35,27 +35,64 @@
   </div>
 
   <!-- Filtros com design melhorado -->
-  <div class="card mb-4">
-    <div class="card-header bg-light">
-      <h5 class="mb-0"><i class="fas fa-filter me-2"></i>Filtrar Agenda</h5>
+  <div class="card mb-4 shadow-sm border-0">
+    <div class="card-header bg-primary bg-gradient text-white border-0 py-3 position-relative overflow-hidden">
+      <div class="d-flex align-items-center">
+        <div class="bg-white text-primary rounded-circle d-flex align-items-center justify-content-center me-3" style="width: 42px; height: 42px;">
+          <i class="fas fa-filter"></i>
+        </div>
+        <div>
+          <h5 class="mb-1 text-white">Filtrar Agenda</h5>
+          <small class="text-white-50">Selecione um período ou utilize os atalhos rápidos abaixo</small>
+        </div>
+      </div>
     </div>
     <div class="card-body">
-      <form method="get" class="row g-3 align-items-end">
+      <form method="get" id="agenda-filter-form" class="row g-3 align-items-end">
         {% for arg_key, arg_val in request.args.items() if arg_key not in ['start', 'end'] %}
         <input type="hidden" name="{{ arg_key }}" value="{{ arg_val }}">
         {% endfor %}
-        <div class="col-md-3">
-          <label class="form-label fw-bold">Data Inicial</label>
-          <input type="date" name="start" value="{{ start_dt.date() }}" class="form-control">
+        <div class="col-12 col-lg-4">
+          <label class="form-label fw-bold text-muted">Data Inicial</label>
+          <div class="input-group input-group-lg">
+            <span class="input-group-text bg-light text-secondary"><i class="fas fa-calendar-day"></i></span>
+            <input type="date" name="start" value="{{ start_dt.date() }}" class="form-control" aria-label="Data inicial">
+          </div>
         </div>
-        <div class="col-md-3">
-          <label class="form-label fw-bold">Data Final</label>
-          <input type="date" name="end" value="{{ (end_dt - timedelta(days=1)).date() }}" class="form-control">
+        <div class="col-12 col-lg-4">
+          <label class="form-label fw-bold text-muted">Data Final</label>
+          <div class="input-group input-group-lg">
+            <span class="input-group-text bg-light text-secondary"><i class="fas fa-calendar-check"></i></span>
+            <input type="date" name="end" value="{{ (end_dt - timedelta(days=1)).date() }}" class="form-control" aria-label="Data final">
+          </div>
         </div>
-        <div class="col-md-3">
-          <button class="btn btn-primary w-100">
+        <div class="col-12 col-lg-4 d-flex flex-column flex-sm-row gap-2 justify-content-lg-end align-self-end">
+          <button class="btn btn-primary flex-fill">
             <i class="fas fa-search me-1"></i>Aplicar Filtro
           </button>
+          <button type="button" class="btn btn-outline-secondary flex-fill" data-action="clear-dates">
+            <i class="fas fa-undo me-1"></i>Limpar
+          </button>
+        </div>
+        <div class="col-12">
+          <div class="d-flex flex-wrap gap-2">
+            <span class="text-muted me-2 align-self-center small fw-semibold text-uppercase">Atalhos rápidos:</span>
+            <button type="button" class="btn btn-sm btn-outline-primary" data-range="today">
+              <i class="fas fa-sun me-1"></i>Hoje
+            </button>
+            <button type="button" class="btn btn-sm btn-outline-primary" data-range="tomorrow">
+              <i class="fas fa-sunrise me-1"></i>Amanhã
+            </button>
+            <button type="button" class="btn btn-sm btn-outline-primary" data-range="week">
+              <i class="fas fa-calendar-week me-1"></i>Semana Atual
+            </button>
+            <button type="button" class="btn btn-sm btn-outline-primary" data-range="next7">
+              <i class="fas fa-calendar-plus me-1"></i>Próximos 7 dias
+            </button>
+            <button type="button" class="btn btn-sm btn-outline-primary" data-range="month">
+              <i class="fas fa-calendar-alt me-1"></i>Mês Atual
+            </button>
+          </div>
         </div>
       </form>
     </div>
@@ -616,5 +653,79 @@
 
 {% block scripts %}
   {{ super() }}
+  <script>
+    document.addEventListener('DOMContentLoaded', function () {
+      const form = document.getElementById('agenda-filter-form');
+      if (!form) return;
+
+      const startInput = form.querySelector('input[name="start"]');
+      const endInput = form.querySelector('input[name="end"]');
+      const quickButtons = form.querySelectorAll('[data-range]');
+      const clearButton = form.querySelector('[data-action="clear-dates"]');
+
+      if (!startInput || !endInput) return;
+
+      const formatDate = (date) => {
+        const offsetDate = new Date(date.getTime() - date.getTimezoneOffset() * 60000);
+        return offsetDate.toISOString().split('T')[0];
+      };
+
+      const submitForm = () => {
+        if (typeof form.requestSubmit === 'function') {
+          form.requestSubmit();
+        } else {
+          form.submit();
+        }
+      };
+
+      const applyRange = (range) => {
+        const today = new Date();
+        let startDate = new Date(today);
+        let endDate = new Date(today);
+
+        switch (range) {
+          case 'today':
+            break;
+          case 'tomorrow':
+            startDate.setDate(startDate.getDate() + 1);
+            endDate = new Date(startDate);
+            break;
+          case 'week': {
+            const day = startDate.getDay();
+            const diff = day === 0 ? -6 : 1 - day;
+            startDate.setDate(startDate.getDate() + diff);
+            endDate = new Date(startDate);
+            endDate.setDate(startDate.getDate() + 6);
+            break;
+          }
+          case 'next7':
+            endDate.setDate(startDate.getDate() + 6);
+            break;
+          case 'month':
+            startDate = new Date(today.getFullYear(), today.getMonth(), 1);
+            endDate = new Date(today.getFullYear(), today.getMonth() + 1, 0);
+            break;
+          default:
+            return;
+        }
+
+        startInput.value = formatDate(startDate);
+        endInput.value = formatDate(endDate);
+        submitForm();
+      };
+
+      quickButtons.forEach((button) => {
+        button.addEventListener('click', () => applyRange(button.dataset.range));
+      });
+
+      if (clearButton) {
+        clearButton.addEventListener('click', () => {
+          startInput.value = '';
+          endInput.value = '';
+          submitForm();
+        });
+      }
+    });
+  </script>
   <script type="module" src="{{ url_for('static', filename='appointments_vet.js') }}"></script>
 {% endblock %}
