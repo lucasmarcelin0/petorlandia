@@ -1484,6 +1484,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
   const petsInitialLimit = 3;
   const petsPageSize = 9;
+  const sharedCalendarSourceId = 'tutor-calendar';
 
   let pets = [];
   let events = [];
@@ -1492,6 +1493,7 @@ document.addEventListener('DOMContentLoaded', function() {
   let currentFilter = 'all';
   let selectedDate = formatDateKey(new Date());
   let usingSharedCalendar = false;
+  let isFetchingLocalEvents = false;
   let isDayDetailOpen = false;
   let lastDetailTrigger = null;
   let dayDetailMode = 'day';
@@ -1930,6 +1932,7 @@ document.addEventListener('DOMContentLoaded', function() {
     });
     if (matched) {
       renderCalendar();
+      refreshSharedEventsFromLocal();
     }
   }
 
@@ -3758,6 +3761,124 @@ document.addEventListener('DOMContentLoaded', function() {
     });
   }
 
+  function toSharedEventObject(eventApi) {
+    if (!eventApi) {
+      return null;
+    }
+    const extended = Object.assign({}, eventApi.extendedProps || {});
+    const eventType = extended.eventType || extended.type || eventApi.type || null;
+    return {
+      id: eventApi.id || null,
+      title: eventApi.title || '',
+      start: eventApi.start ? eventApi.start.toISOString() : (eventApi.startStr || null),
+      end: eventApi.end ? eventApi.end.toISOString() : (eventApi.endStr || null),
+      allDay: !!eventApi.allDay,
+      type: eventType,
+      extendedProps: extended,
+    };
+  }
+
+  function normalizeSharedEventPayload(item) {
+    if (!item) {
+      return null;
+    }
+    if (item.raw) {
+      return normalizeSharedEventPayload(item.raw);
+    }
+    if (typeof item.start === 'string') {
+      const plain = Object.assign({
+        id: item.id || null,
+        title: item.title || '',
+        start: item.start || null,
+        end: item.end || null,
+        allDay: !!item.allDay,
+      }, item);
+      const extended = Object.assign({}, plain.extendedProps || {});
+      if (!plain.type) {
+        const derivedType = extended.eventType || extended.type;
+        if (derivedType) {
+          plain.type = derivedType;
+        }
+      }
+      plain.extendedProps = extended;
+      return plain;
+    }
+    if (item.start instanceof Date || item.end instanceof Date) {
+      return toSharedEventObject(item);
+    }
+    const fallback = Object.assign({
+      id: item.id || null,
+      title: item.title || '',
+      start: item.start || item.startStr || null,
+      end: item.end || item.endStr || null,
+      allDay: !!item.allDay,
+    }, item);
+    const extended = Object.assign({}, fallback.extendedProps || {});
+    if (!fallback.type) {
+      const derivedType = extended.eventType || extended.type;
+      if (derivedType) {
+        fallback.type = derivedType;
+      }
+    }
+    fallback.extendedProps = extended;
+    return fallback;
+  }
+
+  function prepareSharedEventsPayload(list) {
+    return (Array.isArray(list) ? list : [])
+      .map(normalizeSharedEventPayload)
+      .filter(Boolean);
+  }
+
+  function dispatchLocalSharedEvents(eventsList) {
+    if (typeof document === 'undefined') {
+      return;
+    }
+    const prepared = prepareSharedEventsPayload(eventsList);
+    if (typeof window !== 'undefined') {
+      window.sharedCalendarEvents = prepared;
+      window.sharedCalendarEventsSource = sharedCalendarSourceId;
+    }
+    document.dispatchEvent(new CustomEvent('sharedCalendarEvents', {
+      detail: {
+        events: prepared,
+        source: sharedCalendarSourceId,
+      },
+    }));
+  }
+
+  function dispatchLocalSharedLoading(isLoading) {
+    if (typeof window !== 'undefined') {
+      window.sharedCalendarIsLoading = !!isLoading;
+    }
+    document.dispatchEvent(new CustomEvent('sharedCalendarEventsLoading', {
+      detail: {
+        loading: !!isLoading,
+        source: sharedCalendarSourceId,
+      },
+    }));
+  }
+
+  function collectCurrentRawEvents() {
+    return events.map(function(eventItem) {
+      if (!eventItem) {
+        return null;
+      }
+      if (eventItem.raw) {
+        return eventItem.raw;
+      }
+      return eventItem;
+    }).filter(Boolean);
+  }
+
+  function refreshSharedEventsFromLocal() {
+    if (usingSharedCalendar) {
+      return;
+    }
+    const rawEvents = collectCurrentRawEvents();
+    dispatchLocalSharedEvents(rawEvents);
+  }
+
   function updateEvents(newEvents) {
     const normalized = (newEvents || []).map(normalizeEvent).filter(function(ev) {
       return ev && ev.date;
@@ -3768,6 +3889,14 @@ document.addEventListener('DOMContentLoaded', function() {
   }
 
   async function fetchEventsFromApi() {
+    if (isFetchingLocalEvents) {
+      return;
+    }
+    isFetchingLocalEvents = true;
+    const shouldDispatchLoading = !usingSharedCalendar;
+    if (shouldDispatchLoading) {
+      dispatchLocalSharedLoading(true);
+    }
     try {
       const response = await fetch(eventsUrl, {
         headers: {
@@ -3779,11 +3908,17 @@ document.addEventListener('DOMContentLoaded', function() {
         throw new Error('Não foi possível carregar eventos.');
       }
       const data = await response.json();
-      if (Array.isArray(data)) {
+      if (Array.isArray(data) && !usingSharedCalendar) {
+        dispatchLocalSharedEvents(data);
         updateEvents(data);
       }
     } catch (error) {
       console.error('Erro ao carregar eventos para o calendário experimental.', error);
+    } finally {
+      isFetchingLocalEvents = false;
+      if (shouldDispatchLoading) {
+        dispatchLocalSharedLoading(false);
+      }
     }
   }
 
@@ -4125,7 +4260,13 @@ document.addEventListener('DOMContentLoaded', function() {
     if (!event || !event.detail) {
       return;
     }
+    if (event.detail.source === sharedCalendarSourceId) {
+      return;
+    }
     usingSharedCalendar = true;
+    if (typeof window !== 'undefined') {
+      window.sharedCalendarEventsSource = event.detail.source || null;
+    }
     const shared = Array.isArray(event.detail.events) ? event.detail.events : [];
     updateEvents(shared);
   }
@@ -4145,8 +4286,13 @@ document.addEventListener('DOMContentLoaded', function() {
   });
 
   if (Array.isArray(window.sharedCalendarEvents) && window.sharedCalendarEvents.length) {
-    usingSharedCalendar = true;
-    updateEvents(window.sharedCalendarEvents);
+    const sharedSource = typeof window !== 'undefined' ? window.sharedCalendarEventsSource : null;
+    if (sharedSource === sharedCalendarSourceId) {
+      updateEvents(window.sharedCalendarEvents);
+    } else {
+      usingSharedCalendar = true;
+      updateEvents(window.sharedCalendarEvents);
+    }
   } else if (typeof window !== 'undefined' && window.sharedCalendar && typeof window.sharedCalendar.getEvents === 'function') {
     const existing = window.sharedCalendar.getEvents();
     if (Array.isArray(existing) && existing.length) {
