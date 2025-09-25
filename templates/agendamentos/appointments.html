@@ -367,15 +367,6 @@
     </div>
     <div class="card-body pt-0">
       {% include 'partials/exam_appointments_table.html' %}
-      <template data-initial-exam-appointments hidden>
-        {% for exam in exam_appointments %}
-        <div
-          data-exam-id="{{ exam.id }}"
-          data-exam-time="{{ exam.scheduled_at|format_datetime_brazil('%H:%M') }}"
-          data-exam-specialist="{{ exam.specialist.user.name if exam.specialist and exam.specialist.user else '' }}"
-        ></div>
-        {% endfor %}
-      </template>
     </div>
   </div>
   {% endif %}
