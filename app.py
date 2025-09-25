@@ -3461,8 +3461,73 @@ def veterinarios():
 
 @app.route('/veterinario/<int:veterinario_id>')
 def vet_detail(veterinario_id):
+    from models import Animal, User  # import local para evitar ciclos
+
     veterinario = Veterinario.query.get_or_404(veterinario_id)
-    horarios = VetSchedule.query.filter_by(veterinario_id=veterinario_id).all()
+    horarios = (
+        VetSchedule.query.filter_by(veterinario_id=veterinario_id)
+        .order_by(VetSchedule.dia_semana, VetSchedule.hora_inicio)
+        .all()
+    )
+
+    schedule_form = VetScheduleForm(prefix='schedule')
+    appointment_form = AppointmentForm(is_veterinario=True, prefix='appointment')
+
+    if current_user.role == 'admin':
+        agenda_veterinarios = (
+            Veterinario.query.join(User).order_by(User.name).all()
+        )
+        agenda_colaboradores = (
+            User.query.filter(User.worker == 'colaborador')
+            .order_by(User.name)
+            .all()
+        )
+        vet_choices = [(v.id, v.user.name) for v in agenda_veterinarios]
+        admin_selected_view = 'veterinario'
+        admin_selected_veterinario_id = veterinario.id
+        admin_selected_colaborador_id = None
+    else:
+        agenda_veterinarios = []
+        agenda_colaboradores = []
+        vet_choices = [(veterinario.id, veterinario.user.name)]
+        admin_selected_view = None
+        admin_selected_veterinario_id = None
+        admin_selected_colaborador_id = None
+
+    schedule_form.veterinario_id.choices = vet_choices
+    schedule_form.veterinario_id.data = veterinario.id
+
+    appointment_form.veterinario_id.choices = [
+        (veterinario.id, veterinario.user.name)
+    ]
+    appointment_form.veterinario_id.data = veterinario.id
+
+    if veterinario.clinica_id:
+        animals = (
+            Animal.query.filter_by(clinica_id=veterinario.clinica_id)
+            .order_by(Animal.name)
+            .all()
+        )
+    else:
+        animals = Animal.query.order_by(Animal.name).all()
+    appointment_form.animal_id.choices = [(a.id, a.name) for a in animals]
+
+    weekday_order = {
+        'Segunda': 0,
+        'Terça': 1,
+        'Quarta': 2,
+        'Quinta': 3,
+        'Sexta': 4,
+        'Sábado': 5,
+        'Domingo': 6,
+    }
+    horarios.sort(key=lambda h: weekday_order.get(h.dia_semana, 7))
+    horarios_grouped = []
+    for horario in horarios:
+        if not horarios_grouped or horarios_grouped[-1]['dia'] != horario.dia_semana:
+            horarios_grouped.append({'dia': horario.dia_semana, 'itens': []})
+        horarios_grouped[-1]['itens'].append(horario)
+
     calendar_redirect_url = url_for(
         'appointments', view_as='veterinario', veterinario_id=veterinario.id
     )
@@ -3470,7 +3535,15 @@ def vet_detail(veterinario_id):
         'veterinarios/vet_detail.html',
         veterinario=veterinario,
         horarios=horarios,
+        horarios_grouped=horarios_grouped,
         calendar_redirect_url=calendar_redirect_url,
+        schedule_form=schedule_form,
+        appointment_form=appointment_form,
+        agenda_veterinarios=agenda_veterinarios,
+        agenda_colaboradores=agenda_colaboradores,
+        admin_selected_view=admin_selected_view,
+        admin_selected_veterinario_id=admin_selected_veterinario_id,
+        admin_selected_colaborador_id=admin_selected_colaborador_id,
     )
 
 
