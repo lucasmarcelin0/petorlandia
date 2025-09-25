@@ -116,7 +116,12 @@
       </div>
     </div>
     <div class="col-12 col-xl-4 col-xxl-3" data-calendar-summary-column>
-      <div class="card calendar-summary-card border-0 shadow-sm h-100 is-loading" data-calendar-summary-panel>
+      <div
+        class="card calendar-summary-card border-0 shadow-sm h-100 is-loading"
+        data-calendar-summary-panel
+        data-calendar-summary-vets="{{ calendar_summary_vets|default([])|tojson }}"
+        data-calendar-summary-clinic-ids="{{ calendar_summary_clinic_ids|default([])|tojson }}"
+      >
         <div class="card-header bg-white border-0 pb-0">
           <div class="d-flex align-items-center justify-content-between gap-2">
             <h5 class="mb-0 fw-semibold">
@@ -879,6 +884,115 @@ document.addEventListener('DOMContentLoaded', () => {
     return normalized || null;
   }
 
+  function normalizeSummaryClinicId(value) {
+    if (value === undefined || value === null) {
+      return null;
+    }
+    if (typeof value === 'number' && Number.isFinite(value)) {
+      return String(value);
+    }
+    const normalized = String(value).trim();
+    if (!normalized) {
+      return null;
+    }
+    const parsed = Number.parseInt(normalized, 10);
+    if (!Number.isNaN(parsed)) {
+      return String(parsed);
+    }
+    return normalized;
+  }
+
+  function parseCalendarSummaryAttributeJSON(attributeName) {
+    if (!calendarSummaryPanel || !attributeName) {
+      return null;
+    }
+    const rawValue = calendarSummaryPanel.getAttribute(attributeName);
+    if (!rawValue) {
+      return null;
+    }
+    try {
+      return JSON.parse(rawValue);
+    } catch (error) {
+      return null;
+    }
+  }
+
+  function extractSummaryIds(attributeName, normalizer) {
+    if (typeof normalizer !== 'function') {
+      return [];
+    }
+    const parsed = parseCalendarSummaryAttributeJSON(attributeName);
+    const source = Array.isArray(parsed)
+      ? parsed
+      : (parsed === undefined || parsed === null ? [] : [parsed]);
+    const results = [];
+    source.forEach((item) => {
+      const normalized = normalizer(item);
+      if (Array.isArray(normalized)) {
+        normalized.forEach((value) => {
+          if (value) {
+            results.push(value);
+          }
+        });
+      } else if (normalized) {
+        results.push(normalized);
+      }
+    });
+    return results;
+  }
+
+  const calendarSummaryAllowedVetIds = (() => {
+    const ids = extractSummaryIds('data-calendar-summary-vets', (entry) => {
+      if (entry && typeof entry === 'object') {
+        const candidate = entry.id
+          ?? entry.vetId
+          ?? entry.veterinario_id
+          ?? entry.veterinarioId
+          ?? null;
+        return normalizeSummaryVetId(candidate);
+      }
+      return normalizeSummaryVetId(entry);
+    });
+    return new Set(ids.filter(Boolean));
+  })();
+
+  const calendarSummaryAllowedClinicIds = (() => {
+    const ids = extractSummaryIds('data-calendar-summary-clinic-ids', (entry) => {
+      if (entry && typeof entry === 'object') {
+        const candidate = entry.id
+          ?? entry.clinicId
+          ?? entry.clinica_id
+          ?? entry.clinicaId
+          ?? null;
+        return normalizeSummaryClinicId(candidate);
+      }
+      return normalizeSummaryClinicId(entry);
+    });
+    return new Set(ids.filter(Boolean));
+  })();
+
+  function isCalendarSummaryVetAllowed(vetId) {
+    const normalized = normalizeSummaryVetId(vetId);
+    if (!normalized) {
+      return false;
+    }
+    if (!(calendarSummaryAllowedVetIds instanceof Set) || calendarSummaryAllowedVetIds.size === 0) {
+      return true;
+    }
+    return calendarSummaryAllowedVetIds.has(normalized);
+  }
+
+  function isCalendarSummaryClinicAllowed(clinicId) {
+    const normalized = normalizeSummaryClinicId(clinicId);
+    if (!(calendarSummaryAllowedClinicIds instanceof Set) || calendarSummaryAllowedClinicIds.size === 0) {
+      return true;
+    }
+    if (!normalized) {
+      return false;
+    }
+    return calendarSummaryAllowedClinicIds.has(normalized);
+  }
+
   function formatSummaryDateKey(date) {
     if (!(date instanceof Date) || Number.isNaN(date.getTime())) {
       return '';
@@ -1035,6 +1149,16 @@ document.addEventListener('DOMContentLoaded', () => {
         || event.extendedProps.specialist_id,
       );
       if (!vetId) {
+        return;
+      }
+      if (!isCalendarSummaryVetAllowed(vetId)) {
+        return;
+      }
+      const eventClinicId = event.extendedProps.clinicId
+        || event.extendedProps.clinic_id
+        || event.extendedProps.clinicaId
+        || event.extendedProps.clinica_id;
+      if (!isCalendarSummaryClinicAllowed(eventClinicId)) {
         return;
       }
       const eventDate = startOfDay(parseSummaryDate(event.start || event.startStr || event.date || null));
