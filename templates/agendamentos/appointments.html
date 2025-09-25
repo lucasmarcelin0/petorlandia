@@ -30,41 +30,55 @@
   {% endif %}
   <div class="row g-4 align-items-stretch mb-4" id="appointments-calendar-overview">
     <div class="col-12 col-xl-8 col-xxl-9" data-calendar-main-column>
-      <ul
-        class="nav nav-pills calendar-tabs mb-3"
-        id="appointments-calendar-tabs"
-        role="tablist"
-        aria-label="Alternar entre o calendário e o agendamento"
-      >
-        <li class="nav-item" role="presentation">
-          <button
-            class="nav-link active"
-            id="calendar-tab-experimental"
-            data-bs-toggle="tab"
-            data-bs-target="#calendar-pane-experimental"
-            type="button"
-            role="tab"
-            aria-controls="calendar-pane-experimental"
-            aria-selected="true"
-          >
-            <i class="bi bi-layout-text-window-reverse me-1"></i> Calendário
-          </button>
-        </li>
-        <li class="nav-item" role="presentation">
-          <button
-            class="nav-link"
-            id="calendar-tab-full"
-            data-bs-toggle="tab"
-            data-bs-target="#calendar-pane-full"
-            type="button"
-            role="tab"
-            aria-controls="calendar-pane-full"
-            aria-selected="false"
-          >
-            <i class="bi bi-calendar3 me-1"></i> Agendamento
-          </button>
-        </li>
-      </ul>
+      <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3">
+        <ul
+          class="nav nav-pills calendar-tabs mb-0"
+          id="appointments-calendar-tabs"
+          role="tablist"
+          aria-label="Alternar entre o calendário e o agendamento"
+        >
+          <li class="nav-item" role="presentation">
+            <button
+              class="nav-link active"
+              id="calendar-tab-experimental"
+              data-bs-toggle="tab"
+              data-bs-target="#calendar-pane-experimental"
+              type="button"
+              role="tab"
+              aria-controls="calendar-pane-experimental"
+              aria-selected="true"
+            >
+              <i class="bi bi-layout-text-window-reverse me-1"></i> Calendário
+            </button>
+          </li>
+          <li class="nav-item" role="presentation">
+            <button
+              class="nav-link"
+              id="calendar-tab-full"
+              data-bs-toggle="tab"
+              data-bs-target="#calendar-pane-full"
+              type="button"
+              role="tab"
+              aria-controls="calendar-pane-full"
+              aria-selected="false"
+            >
+              <i class="bi bi-calendar3 me-1"></i> Agendamento
+            </button>
+          </li>
+        </ul>
+        <button
+          type="button"
+          class="btn btn-outline-secondary btn-sm d-flex align-items-center gap-2 calendar-summary-toggle"
+          data-calendar-summary-toggle
+          data-show-label="Mostrar resumo"
+          data-hide-label="Ocultar resumo"
+          aria-pressed="false"
+          aria-expanded="true"
+        >
+          <i class="bi bi-layout-sidebar-inset" data-calendar-summary-toggle-icon aria-hidden="true"></i>
+          <span data-calendar-summary-toggle-label>Ocultar resumo</span>
+        </button>
+      </div>
 
       <div class="tab-content mt-3" id="appointments-calendar-content">
         <div
@@ -127,6 +141,11 @@
               <small class="text-muted">Aguarde enquanto buscamos as consultas desta visão.</small>
             </div>
           </div>
+          <div
+            class="calendar-summary-filters d-flex flex-wrap align-items-center gap-2 mt-3 d-none"
+            data-calendar-summary-filters
+            aria-label="Filtrar agenda por profissional"
+          ></div>
           <div class="calendar-summary-overview row g-3 mt-1" data-calendar-summary-overview hidden>
             <div class="col-12 col-sm-6">
               <div class="calendar-summary-overview-card is-today">
@@ -549,6 +568,9 @@ document.addEventListener('DOMContentLoaded', () => {
   const calendarSummaryList = calendarSummaryPanel
     ? calendarSummaryPanel.querySelector('[data-calendar-summary-list]')
     : null;
+  const calendarSummaryFilters = calendarSummaryPanel
+    ? calendarSummaryPanel.querySelector('[data-calendar-summary-filters]')
+    : null;
   const calendarSummaryEmpty = calendarSummaryPanel
     ? calendarSummaryPanel.querySelector('[data-calendar-summary-empty]')
     : null;
@@ -567,12 +589,22 @@ document.addEventListener('DOMContentLoaded', () => {
   const calendarSummaryLoading = calendarSummaryPanel
     ? calendarSummaryPanel.querySelector('[data-calendar-summary-loading]')
     : null;
+  const calendarSummaryToggleButton = document.querySelector('[data-calendar-summary-toggle]');
+  const calendarSummaryToggleLabel = calendarSummaryToggleButton
+    ? calendarSummaryToggleButton.querySelector('[data-calendar-summary-toggle-label]')
+    : null;
+  const calendarSummaryToggleIcon = calendarSummaryToggleButton
+    ? calendarSummaryToggleButton.querySelector('[data-calendar-summary-toggle-icon]')
+    : null;
+  const calendarSummaryCollapsedStorageKey = 'appointmentsCalendarSummaryCollapsed';
   const calendarSummaryColumn = document.querySelector('[data-calendar-summary-column]');
   const calendarMainColumn = document.querySelector('[data-calendar-main-column]');
   const calendarTabButtons = document.querySelectorAll('#appointments-calendar-tabs [data-bs-toggle="tab"]');
   const calendarActiveTabStorageKey = 'appointmentsCalendarActiveTab';
   const calendarMainColumnVisibleClasses = ['col-xl-8', 'col-xxl-9'];
   const calendarMainColumnFullWidthClasses = ['col-xl-12', 'col-xxl-12'];
+  let calendarSummaryTabVisible = true;
+  let isCalendarSummaryCollapsed = getStoredCalendarSummaryCollapsed();
   let activeCalendarSummaryVetId = null;
   let newAppointmentCollapseInstance = null;
   let cachedScheduleDays = [];
@@ -582,28 +614,69 @@ document.addEventListener('DOMContentLoaded', () => {
 
   const calendarSummaryWeekdays = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
 
-  function setCalendarSummaryVisibility(shouldShow) {
+  if (calendarSummaryToggleButton && !calendarSummaryColumn) {
+    calendarSummaryToggleButton.classList.add('d-none');
+  }
+
+  function applyCalendarSummaryVisibilityState() {
+    const shouldDisplay = calendarSummaryTabVisible && !isCalendarSummaryCollapsed;
     if (calendarSummaryColumn) {
-      calendarSummaryColumn.classList.toggle('d-none', !shouldShow);
+      calendarSummaryColumn.classList.toggle('d-none', !shouldDisplay);
+      calendarSummaryColumn.setAttribute('aria-hidden', shouldDisplay ? 'false' : 'true');
     }
     if (calendarMainColumn) {
       calendarMainColumnVisibleClasses.forEach((className) => {
-        calendarMainColumn.classList.toggle(className, shouldShow);
+        calendarMainColumn.classList.toggle(className, shouldDisplay);
       });
       calendarMainColumnFullWidthClasses.forEach((className) => {
-        calendarMainColumn.classList.toggle(className, !shouldShow);
+        calendarMainColumn.classList.toggle(className, !shouldDisplay);
       });
     }
+    if (calendarSummaryPanel) {
+      calendarSummaryPanel.setAttribute('aria-hidden', shouldDisplay ? 'false' : 'true');
+    }
+    if (calendarSummaryToggleButton) {
+      calendarSummaryToggleButton.setAttribute('aria-expanded', shouldDisplay ? 'true' : 'false');
+    }
+  }
+
+  function updateCalendarSummaryToggleButtonState() {
+    if (!calendarSummaryToggleButton) {
+      return;
+    }
+    const showLabel = (calendarSummaryToggleButton.dataset && calendarSummaryToggleButton.dataset.showLabel)
+      || calendarSummaryToggleButton.getAttribute('data-show-label')
+      || 'Mostrar resumo';
+    const hideLabel = (calendarSummaryToggleButton.dataset && calendarSummaryToggleButton.dataset.hideLabel)
+      || calendarSummaryToggleButton.getAttribute('data-hide-label')
+      || 'Ocultar resumo';
+    const label = isCalendarSummaryCollapsed ? showLabel : hideLabel;
+    if (calendarSummaryToggleLabel) {
+      calendarSummaryToggleLabel.textContent = label;
+    } else {
+      calendarSummaryToggleButton.textContent = label;
+    }
+    if (calendarSummaryToggleIcon) {
+      calendarSummaryToggleIcon.classList.remove('bi-layout-sidebar', 'bi-layout-sidebar-inset');
+      calendarSummaryToggleIcon.classList.add(isCalendarSummaryCollapsed ? 'bi-layout-sidebar' : 'bi-layout-sidebar-inset');
+    }
+    calendarSummaryToggleButton.setAttribute('aria-pressed', isCalendarSummaryCollapsed ? 'true' : 'false');
+    calendarSummaryToggleButton.setAttribute('title', label);
+    const isAvailable = calendarSummaryTabVisible && !!calendarSummaryColumn;
+    calendarSummaryToggleButton.disabled = !isAvailable;
+    calendarSummaryToggleButton.setAttribute('aria-disabled', isAvailable ? 'false' : 'true');
+    calendarSummaryToggleButton.classList.toggle('disabled', !isAvailable);
   }
 
   function updateCalendarSummaryVisibilityFromTarget(targetSelector) {
     const normalized = typeof targetSelector === 'string'
       ? targetSelector.trim()
       : '';
-    const shouldShow = normalized === '#calendar-pane-experimental'
+    calendarSummaryTabVisible = normalized === '#calendar-pane-experimental'
       || normalized === 'calendar-pane-experimental'
       || normalized === '';
-    setCalendarSummaryVisibility(shouldShow);
+    applyCalendarSummaryVisibilityState();
+    updateCalendarSummaryToggleButtonState();
   }
 
   function normalizeCalendarTabTarget(value) {
@@ -612,6 +685,65 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     return value.trim();
   }
+
+  function getStoredCalendarSummaryCollapsed() {
+    if (typeof window === 'undefined' || !window.localStorage) {
+      return false;
+    }
+    try {
+      const stored = window.localStorage.getItem(calendarSummaryCollapsedStorageKey);
+      if (stored === null) {
+        return false;
+      }
+      if (stored === '1' || stored === 'true') {
+        return true;
+      }
+      if (stored === '0' || stored === 'false') {
+        return false;
+      }
+      return stored === 'collapsed';
+    } catch (error) {
+      return false;
+    }
+  }
+
+  function storeCalendarSummaryCollapsed(collapsed) {
+    if (typeof window === 'undefined' || !window.localStorage) {
+      return;
+    }
+    try {
+      if (collapsed) {
+        window.localStorage.setItem(calendarSummaryCollapsedStorageKey, '1');
+      } else {
+        window.localStorage.removeItem(calendarSummaryCollapsedStorageKey);
+      }
+    } catch (error) {
+      // Ignorado intencionalmente.
+    }
+  }
+
+  function setCalendarSummaryCollapsed(collapsed, options = {}) {
+    const shouldStore = options.store !== false;
+    const normalized = !!collapsed;
+    const stateChanged = isCalendarSummaryCollapsed !== normalized;
+    isCalendarSummaryCollapsed = normalized;
+    if (shouldStore && stateChanged) {
+      storeCalendarSummaryCollapsed(isCalendarSummaryCollapsed);
+    }
+    updateCalendarSummaryToggleButtonState();
+    applyCalendarSummaryVisibilityState();
+  }
+
+  if (calendarSummaryToggleButton) {
+    calendarSummaryToggleButton.addEventListener('click', () => {
+      if (!calendarSummaryTabVisible || !calendarSummaryColumn) {
+        return;
+      }
+      setCalendarSummaryCollapsed(!isCalendarSummaryCollapsed);
+    });
+  }
+
+  updateCalendarSummaryToggleButtonState();
 
   function getStoredCalendarActiveTab() {
     if (typeof window === 'undefined' || !window.localStorage) {
@@ -764,6 +896,34 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     const weekday = calendarSummaryWeekdays[date.getDay()] || '';
     return `${weekday} ${padNumber(date.getDate())}/${padNumber(date.getMonth() + 1)}`;
+  }
+
+  function getSummaryVetInitials(name, fallbackId) {
+    const normalizedName = typeof name === 'string' ? name.trim() : '';
+    if (normalizedName) {
+      const parts = normalizedName.split(/\s+/).filter(Boolean);
+      if (parts.length === 1) {
+        const word = parts[0];
+        if (word.length >= 2) {
+          return (word[0] + word[1]).toLocaleUpperCase('pt-BR');
+        }
+        return word.charAt(0).toLocaleUpperCase('pt-BR');
+      }
+      const first = parts[0] ? parts[0].charAt(0) : '';
+      const last = parts[parts.length - 1] ? parts[parts.length - 1].charAt(0) : '';
+      const combined = `${first}${last}`.trim();
+      if (combined) {
+        return combined.toLocaleUpperCase('pt-BR');
+      }
+    }
+    const fallback = fallbackId === undefined || fallbackId === null ? '' : String(fallbackId).trim();
+    if (fallback) {
+      if (fallback.length >= 2) {
+        return fallback.slice(-2).toUpperCase();
+      }
+      return fallback.toUpperCase();
+    }
+    return '';
   }
 
   function deriveSummaryVetName(event, fallbackId) {
@@ -971,11 +1131,40 @@ document.addEventListener('DOMContentLoaded', () => {
         element.classList.remove('is-active');
       }
     });
+    if (calendarSummaryFilters) {
+      const filterButtons = calendarSummaryFilters.querySelectorAll('[data-vet-id]');
+      filterButtons.forEach(button => {
+        const buttonVetId = normalizeSummaryVetId(
+          button && button.dataset ? button.dataset.vetId : null,
+        );
+        const isActive = Boolean(
+          activeCalendarSummaryVetId
+          && buttonVetId
+          && buttonVetId === activeCalendarSummaryVetId,
+        );
+        button.classList.toggle('is-active', isActive);
+        button.setAttribute('aria-pressed', isActive ? 'true' : 'false');
+      });
+    }
   }
 
   function setActiveCalendarSummaryItem(vetId) {
     activeCalendarSummaryVetId = vetId ? normalizeSummaryVetId(vetId) : null;
     refreshCalendarSummaryActiveState();
+  }
+
+  function handleCalendarSummarySelection(rawVetId) {
+    const normalizedVetId = normalizeSummaryVetId(rawVetId);
+    const isCurrentlyActive = Boolean(
+      activeCalendarSummaryVetId !== null
+      && normalizedVetId !== null
+      && normalizedVetId === activeCalendarSummaryVetId,
+    );
+    const nextActiveVetId = isCurrentlyActive ? null : normalizedVetId;
+    setActiveCalendarSummaryItem(nextActiveVetId);
+    if (typeof window.updateCalendarVetSelection === 'function') {
+      window.updateCalendarVetSelection(nextActiveVetId, { activate: true, refetch: true });
+    }
   }
 
   function setCalendarSummaryLoadingState(isLoading) {
@@ -997,6 +1186,64 @@ document.addEventListener('DOMContentLoaded', () => {
     if (shouldActivate && calendarSummaryEmpty) {
       calendarSummaryEmpty.classList.add('d-none');
     }
+    if (calendarSummaryFilters) {
+      calendarSummaryFilters.classList.toggle('is-disabled', shouldActivate);
+      const filterButtons = calendarSummaryFilters.querySelectorAll('button');
+      filterButtons.forEach(button => {
+        button.disabled = shouldActivate;
+      });
+    }
+  }
+
+  function clearCalendarSummaryFilters() {
+    if (!calendarSummaryFilters) {
+      return;
+    }
+    calendarSummaryFilters.innerHTML = '';
+    calendarSummaryFilters.classList.add('d-none');
+  }
+
+  function renderCalendarSummaryFilters(rows) {
+    if (!calendarSummaryFilters) {
+      return;
+    }
+    calendarSummaryFilters.innerHTML = '';
+    const entries = Array.isArray(rows) ? rows.filter(Boolean) : [];
+    if (!entries.length) {
+      calendarSummaryFilters.classList.add('d-none');
+      return;
+    }
+    calendarSummaryFilters.classList.remove('d-none');
+    calendarSummaryFilters.classList.remove('is-disabled');
+    entries.forEach(entry => {
+      const filterButton = document.createElement('button');
+      filterButton.type = 'button';
+      filterButton.classList.add('calendar-summary-filter');
+      decorateSummaryItemWithVet(filterButton, entry.vetId);
+      const normalizedId = normalizeSummaryVetId(entry.vetId);
+      if (normalizedId) {
+        filterButton.dataset.vetId = normalizedId;
+      }
+      const vetLabel = entry.vetName || `Profissional ${entry.vetId}`;
+      filterButton.setAttribute('aria-label', `Filtrar agenda por ${vetLabel}`);
+      filterButton.setAttribute('title', vetLabel);
+      filterButton.setAttribute('aria-pressed', 'false');
+      filterButton.disabled = false;
+
+      const icon = document.createElement('span');
+      icon.classList.add('calendar-summary-filter-icon');
+      icon.setAttribute('aria-hidden', 'true');
+      const initials = getSummaryVetInitials(vetLabel, entry.vetId);
+      icon.textContent = initials || '•';
+      filterButton.appendChild(icon);
+
+      const srLabel = document.createElement('span');
+      srLabel.classList.add('visually-hidden');
+      srLabel.textContent = vetLabel;
+      filterButton.appendChild(srLabel);
+
+      calendarSummaryFilters.appendChild(filterButton);
+    });
   }
 
   function renderCalendarSummary(events) {
@@ -1017,6 +1264,7 @@ document.addEventListener('DOMContentLoaded', () => {
       if (calendarSummaryOverview) {
         calendarSummaryOverview.setAttribute('hidden', 'hidden');
       }
+      clearCalendarSummaryFilters();
       return;
     }
     calendarSummaryPanel.classList.add('has-data');
@@ -1032,6 +1280,8 @@ document.addEventListener('DOMContentLoaded', () => {
         calendarSummaryOverviewWeek.textContent = String(totalThisWeek);
       }
     }
+
+    renderCalendarSummaryFilters(rows);
 
     rows.forEach(entry => {
       const item = document.createElement('li');
@@ -1144,17 +1394,20 @@ document.addEventListener('DOMContentLoaded', () => {
         return;
       }
       const rawVetId = targetItem.dataset ? targetItem.dataset.vetId : null;
-      const normalizedVetId = normalizeSummaryVetId(rawVetId);
-      const isCurrentlyActive = Boolean(
-        activeCalendarSummaryVetId !== null
-        && normalizedVetId !== null
-        && normalizedVetId === activeCalendarSummaryVetId,
-      );
-      const nextActiveVetId = isCurrentlyActive ? null : normalizedVetId;
-      setActiveCalendarSummaryItem(nextActiveVetId);
-      if (typeof window.updateCalendarVetSelection === 'function') {
-        window.updateCalendarVetSelection(nextActiveVetId, { activate: true, refetch: true });
+      handleCalendarSummarySelection(rawVetId);
+    });
+  }
+
+  if (calendarSummaryFilters) {
+    calendarSummaryFilters.addEventListener('click', event => {
+      const origin = event.target && typeof event.target.closest === 'function'
+        ? event.target.closest('[data-vet-id]')
+        : null;
+      if (!origin || !calendarSummaryFilters.contains(origin) || origin.disabled) {
+        return;
       }
+      const rawVetId = origin.dataset ? origin.dataset.vetId : null;
+      handleCalendarSummarySelection(rawVetId);
     });
   }
 
