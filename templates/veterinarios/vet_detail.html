@@ -52,6 +52,7 @@
     </div>
   </div>
 
+ 
   <section class="mb-4" aria-labelledby="vet-calendar-title-{{ veterinario.id }}">
     <div class="card shadow-sm border-0">
       <div class="card-header bg-primary bg-gradient text-white">
@@ -68,6 +69,7 @@
           veterinario_id=veterinario.id,
           clinica_id=veterinario.clinica_id
         ) %}
+ 
         {% with
           component_id='vet-calendar-inline-' ~ veterinario.id,
           events_url=vet_calendar_events_url,
@@ -76,7 +78,9 @@
         %}
           {% include 'partials/tutor_calendar.html' %}
         {% endwith %}
+ 
       </div>
+ 
     </div>
   </section>
 

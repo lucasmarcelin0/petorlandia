@@ -7591,6 +7591,8 @@ def appointments():
     admin_selected_veterinario_id = None
     admin_selected_colaborador_id = None
     selected_colaborador = None
+    calendar_summary_vets = []
+    calendar_summary_clinic_ids = []
 
     if current_user.role == 'admin':
         agenda_users = User.query.order_by(User.name).all()
@@ -8083,6 +8085,15 @@ def appointments():
             appointment_form.animal_id.choices = [(a.id, a.name) for a in animals]
             vets = Veterinario.query.filter_by(clinica_id=clinica_id).all()
             appointment_form.veterinario_id.choices = [(v.id, v.user.name) for v in vets]
+            calendar_summary_vets = [
+                {
+                    'id': v.id,
+                    'name': v.user.name if getattr(v, 'user', None) else None,
+                }
+                for v in vets
+                if getattr(v, 'id', None) is not None
+            ]
+            calendar_summary_clinic_ids = [clinica_id] if clinica_id else []
             if appointment_form.validate_on_submit():
                 scheduled_at_local = datetime.combine(
                     appointment_form.date.data, appointment_form.time.data
@@ -8230,6 +8241,8 @@ def appointments():
             admin_selected_view=admin_selected_view,
             admin_selected_veterinario_id=admin_selected_veterinario_id,
             admin_selected_colaborador_id=admin_selected_colaborador_id,
+            calendar_summary_vets=calendar_summary_vets,
+            calendar_summary_clinic_ids=calendar_summary_clinic_ids,
         )
 
 
