@@ -34,6 +34,7 @@
       %}
         {% include 'partials/schedule_toggle.html' %}
       {% endwith %}
+      {% include 'partials/appointment_form_section.html' %}
     </div>
     <div class="col-12 col-xl-4">
       <div class="card shadow-sm h-100">
@@ -69,5 +70,10 @@
       </div>
     </div>
   </div>
+  {% include 'partials/appointment_form_modals.html' %}
 </div>
+{% endblock %}
+
+{% block scripts %}
+{% include 'partials/appointment_form_scripts.html' %}
 {% endblock %}
