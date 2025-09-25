@@ -51,7 +51,7 @@
               <i class="bi bi-layout-text-window-reverse me-1"></i> Calendário
             </button>
           </li>
-          <li class="nav-item" role="presentation">
+          <li class="nav-item d-none" role="presentation">
             <button
               class="nav-link"
               id="calendar-tab-full"
@@ -107,6 +107,7 @@
           id="calendar-pane-full"
           role="tabpanel"
           aria-labelledby="calendar-tab-full"
+          aria-label="Agendamento"
           tabindex="0"
         >
           {% with clinic_id = current_user.clinica_id, calendar_redirect_url = calendar_redirect_url %}
@@ -605,6 +606,8 @@ document.addEventListener('DOMContentLoaded', () => {
   const calendarSummaryColumn = document.querySelector('[data-calendar-summary-column]');
   const calendarMainColumn = document.querySelector('[data-calendar-main-column]');
   const calendarTabButtons = document.querySelectorAll('#appointments-calendar-tabs [data-bs-toggle="tab"]');
+  const scheduleTabButton = document.getElementById('calendar-tab-full');
+  const scheduleTabPane = document.getElementById('calendar-pane-full');
   const calendarActiveTabStorageKey = 'appointmentsCalendarActiveTab';
   const calendarMainColumnVisibleClasses = ['col-xl-8', 'col-xxl-9'];
   const calendarMainColumnFullWidthClasses = ['col-xl-12', 'col-xxl-12'];
@@ -806,6 +809,48 @@ document.addEventListener('DOMContentLoaded', () => {
       return true;
     }
     return false;
+  }
+
+  function activateScheduleTab() {
+    const targetSelector = '#calendar-pane-full';
+    let wasShown = false;
+
+    if (scheduleTabButton) {
+      wasShown = showCalendarTab(scheduleTabButton);
+    }
+
+    if (!wasShown && scheduleTabPane) {
+      const tabContent = scheduleTabPane.closest('.tab-content');
+      if (tabContent) {
+        const activePane = tabContent.querySelector('.tab-pane.show.active');
+        if (activePane && activePane !== scheduleTabPane) {
+          activePane.classList.remove('show', 'active');
+          activePane.setAttribute('aria-hidden', 'true');
+        }
+      }
+
+      const activeTabButton = document.querySelector('#appointments-calendar-tabs .nav-link.active');
+      if (activeTabButton && activeTabButton !== scheduleTabButton) {
+        activeTabButton.classList.remove('active');
+        activeTabButton.setAttribute('aria-selected', 'false');
+      }
+
+      if (scheduleTabButton) {
+        scheduleTabButton.classList.add('active');
+        scheduleTabButton.setAttribute('aria-selected', 'true');
+      }
+
+      scheduleTabPane.classList.add('show', 'active');
+      scheduleTabPane.removeAttribute('aria-hidden');
+      wasShown = true;
+    }
+
+    if (wasShown) {
+      updateCalendarSummaryVisibilityFromTarget(targetSelector);
+      storeCalendarActiveTab(targetSelector);
+    }
+
+    return wasShown;
   }
 
   if (calendarTabButtons.length > 0) {
@@ -1552,7 +1597,13 @@ document.addEventListener('DOMContentLoaded', () => {
     scheduleToggleBtn.textContent = isShown ? scheduleToggleHideLabel : scheduleToggleShowLabel;
   }
 
-  function ensureNewAppointmentVisible() {
+  function ensureNewAppointmentVisible(options = {}) {
+    const opts = options && typeof options === 'object' ? options : {};
+
+    if (opts.activateScheduleTab !== false) {
+      activateScheduleTab();
+    }
+
     if (!newAppointmentCollapseEl || !window.bootstrap || !bootstrap.Collapse) {
       return;
     }
@@ -2488,7 +2539,7 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   if (newAppointmentForm) {
-    ensureNewAppointmentVisible();
+    ensureNewAppointmentVisible({ activateScheduleTab: false });
   }
 });
 </script>
