@@ -23,17 +23,54 @@
 
   <div class="row g-4 align-items-start">
     <div class="col-12 col-xl-8">
-      <input type="hidden" value="{{ veterinario.id }}" data-switcher-vet class="d-none">
-      {% with
-        calendar_id='vet-shared-calendar-' ~ veterinario.id,
-        toggle_id='vet-agenda-toggle-' ~ veterinario.id,
-        clinic_id=veterinario.clinica_id,
-        calendar_redirect_url=calendar_redirect_url,
-        admin_selected_view='veterinario',
-        vets=[veterinario]
-      %}
-        {% include 'partials/schedule_toggle.html' %}
-      {% endwith %}
+      {% set vet_calendar_events_url = url_for('api_vet_appointments', veterinario_id=veterinario.id) %}
+      {% set vet_calendar_pets_url = url_for(
+        'api_clinic_pets',
+        view_as='veterinario',
+        veterinario_id=veterinario.id,
+        clinica_id=veterinario.clinica_id
+      ) %}
+
+      <section class="mb-4" aria-labelledby="vet-calendar-title-{{ veterinario.id }}">
+        <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3 mb-3">
+          <div>
+            <h3 id="vet-calendar-title-{{ veterinario.id }}" class="h4 mb-0 fw-semibold text-gradient">
+              <i class="bi bi-calendar3 me-2"></i>Calendário de consultas
+            </h3>
+            <p class="text-muted small mb-0">Visualize os compromissos do profissional e acesse detalhes rapidamente.</p>
+          </div>
+        </div>
+        {% with
+          component_id='vet-calendar-inline-' ~ veterinario.id,
+          events_url=vet_calendar_events_url,
+          pets_url=vet_calendar_pets_url,
+          new_pet_url=url_for('novo_animal') if current_user.worker in ['colaborador', 'veterinario'] or current_user.role == 'admin' else None
+        %}
+          {% include 'partials/tutor_calendar.html' %}
+        {% endwith %}
+      </section>
+
+      <section aria-labelledby="vet-schedule-title-{{ veterinario.id }}">
+        <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3 mb-3">
+          <div>
+            <h3 id="vet-schedule-title-{{ veterinario.id }}" class="h4 mb-0 fw-semibold text-gradient">
+              <i class="bi bi-calendar2-check me-2"></i>Agendamento
+            </h3>
+            <p class="text-muted small mb-0">Alterne entre a agenda pessoal e da clínica para criar novas consultas.</p>
+          </div>
+        </div>
+        <input type="hidden" value="{{ veterinario.id }}" data-switcher-vet class="d-none">
+        {% with
+          calendar_id='vet-shared-calendar-' ~ veterinario.id,
+          toggle_id='vet-agenda-toggle-' ~ veterinario.id,
+          clinic_id=veterinario.clinica_id,
+          calendar_redirect_url=calendar_redirect_url,
+          admin_selected_view='veterinario',
+          vets=[veterinario]
+        %}
+          {% include 'partials/schedule_toggle.html' %}
+        {% endwith %}
+      </section>
     </div>
     <div class="col-12 col-xl-4">
       <div class="card shadow-sm h-100">
