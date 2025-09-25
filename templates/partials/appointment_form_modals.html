@@ -1,0 +1,80 @@
+<!-- Modal Editar Horário do Colaborador -->
+<div class="modal fade" id="scheduleEditModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title"><i class="bi bi-clock-history me-2"></i>Editar Horário</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+      </div>
+      <div class="modal-body">
+        <form
+          id="schedule-edit-form"
+          method="post"
+          action="{{ url_for('edit_vet_schedule_slot', veterinario_id=0, horario_id=0) }}"
+          data-action-template="{{ url_for('edit_vet_schedule_slot', veterinario_id=0, horario_id=0) }}"
+        >
+          <input type="hidden" name="schedule-csrf_token" value="{{ csrf_token() if csrf_token is defined else '' }}">
+          <input type="hidden" id="schedule-slot-id">
+          <input type="hidden" name="schedule-intervalo_inicio" id="schedule-interval-start">
+          <input type="hidden" name="schedule-intervalo_fim" id="schedule-interval-end">
+          <div class="mb-3">
+            <label for="schedule-vet" class="form-label fw-semibold">Colaborador</label>
+            <select id="schedule-vet" name="schedule-veterinario_id" class="form-select"></select>
+          </div>
+          <div class="row g-3">
+            <div class="col-md-6">
+              <label for="schedule-day" class="form-label fw-semibold">Dia da Semana</label>
+              <select id="schedule-day" name="schedule-dias_semana" class="form-select">
+                <option value="Segunda">Segunda</option>
+                <option value="Terça">Terça</option>
+                <option value="Quarta">Quarta</option>
+                <option value="Quinta">Quinta</option>
+                <option value="Sexta">Sexta</option>
+                <option value="Sábado">Sábado</option>
+                <option value="Domingo">Domingo</option>
+              </select>
+            </div>
+            <div class="col-md-3">
+              <label for="schedule-start" class="form-label fw-semibold">Início</label>
+              <input type="time" id="schedule-start" name="schedule-hora_inicio" class="form-control">
+            </div>
+            <div class="col-md-3">
+              <label for="schedule-end" class="form-label fw-semibold">Fim</label>
+              <input type="time" id="schedule-end" name="schedule-hora_fim" class="form-control">
+            </div>
+          </div>
+        </form>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+        <button
+          type="submit"
+          form="schedule-edit-form"
+          class="btn btn-primary"
+          name="schedule-submit"
+          value="Salvar"
+        >Salvar</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Modal Editar Consulta -->
+<div class="modal fade" id="appointmentEditModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-centered">
+    <div class="modal-content rounded-4 shadow-lg">
+      <div class="modal-header bg-light">
+        <h5 class="modal-title fw-bold">
+          <i class="bi bi-pencil-square me-2"></i> Editar Consulta
+        </h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+      </div>
+      <div class="modal-body">
+        <div class="text-center text-muted">
+          <i class="bi bi-hourglass-split fs-2 d-block mb-2"></i>
+          Carregando...
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
