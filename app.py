@@ -3459,98 +3459,18 @@ def veterinarios():
     return render_template('veterinarios/veterinarios.html', veterinarios=veterinarios)
 
 
-@app.route('/veterinario/<int:veterinario_id>', methods=['GET', 'POST'])
+@app.route('/veterinario/<int:veterinario_id>')
 def vet_detail(veterinario_id):
-    from models import Appointment
-
     veterinario = Veterinario.query.get_or_404(veterinario_id)
     horarios = VetSchedule.query.filter_by(veterinario_id=veterinario_id).all()
     calendar_redirect_url = url_for(
         'appointments', view_as='veterinario', veterinario_id=veterinario.id
     )
-    can_schedule = (
-        current_user.is_authenticated
-        and (
-            current_user.role == 'admin'
-            or current_user.worker in ['veterinario', 'colaborador']
-        )
-    )
-    appointments_url = url_for('vet_detail', veterinario_id=veterinario.id)
-    appointment_form = None
-
-    if request.method == 'POST' and not can_schedule:
-        abort(403)
-
-    if can_schedule:
-        appointment_form = AppointmentForm(is_veterinario=True, prefix='appointment')
-        appointment_form.veterinario_id.choices = [
-            (veterinario.id, veterinario.user.name)
-        ]
-        if request.method == 'GET':
-            appointment_form.veterinario_id.data = veterinario.id
-        if appointment_form.validate_on_submit():
-            if (
-                appointment_form.veterinario_id.data != veterinario.id
-                and current_user.role != 'admin'
-            ):
-                abort(403)
-            scheduled_at_local = datetime.combine(
-                appointment_form.date.data,
-                appointment_form.time.data,
-            )
-            if not is_slot_available(
-                appointment_form.veterinario_id.data,
-                scheduled_at_local,
-                kind=appointment_form.kind.data,
-            ):
-                flash(
-                    'Horário indisponível para o veterinário selecionado. Já existe uma consulta ou exame nesse intervalo.',
-                    'danger',
-                )
-            else:
-                animal = get_animal_or_404(appointment_form.animal_id.data)
-                tutor_id = animal.user_id
-                requires_plan = current_app.config.get(
-                    'REQUIRE_HEALTH_SUBSCRIPTION_FOR_APPOINTMENT', False
-                )
-                if requires_plan and not Appointment.has_active_subscription(
-                    animal.id, tutor_id
-                ):
-                    flash(
-                        'O animal não possui uma assinatura de plano de saúde ativa.',
-                        'danger',
-                    )
-                else:
-                    scheduled_at = (
-                        scheduled_at_local.replace(tzinfo=BR_TZ)
-                        .astimezone(timezone.utc)
-                        .replace(tzinfo=None)
-                    )
-                    current_vet = getattr(current_user, 'veterinario', None)
-                    same_user = current_vet and current_vet.id == veterinario.id
-                    appt = Appointment(
-                        animal_id=animal.id,
-                        tutor_id=tutor_id,
-                        veterinario_id=appointment_form.veterinario_id.data,
-                        scheduled_at=scheduled_at,
-                        clinica_id=veterinario.clinica_id or animal.clinica_id,
-                        notes=appointment_form.reason.data,
-                        kind=appointment_form.kind.data,
-                        status='accepted' if same_user else 'scheduled',
-                        created_by=current_user.id,
-                        created_at=datetime.utcnow(),
-                    )
-                    db.session.add(appt)
-                    db.session.commit()
-                    flash('Agendamento criado com sucesso.', 'success')
-            return redirect(appointments_url)
-
     return render_template(
         'veterinarios/vet_detail.html',
         veterinario=veterinario,
         horarios=horarios,
         calendar_redirect_url=calendar_redirect_url,
-        form=appointment_form,
     )
 
 
