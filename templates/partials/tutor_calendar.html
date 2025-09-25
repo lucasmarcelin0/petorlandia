@@ -1488,6 +1488,8 @@ document.addEventListener('DOMContentLoaded', function() {
 
   let pets = [];
   let events = [];
+  let allEvents = [];
+  let activeVetFilterId = null;
   let viewDate = new Date();
   let currentViewMode = 'month';
   let currentFilter = 'all';
@@ -1910,29 +1912,34 @@ document.addEventListener('DOMContentLoaded', function() {
       return;
     }
     const targetId = String(recordId);
-    let matched = false;
-    events.forEach(function(eventItem) {
-      if (!eventItem) {
-        return;
-      }
-      const ext = eventItem.raw && eventItem.raw.extendedProps ? eventItem.raw.extendedProps : null;
-      const eventRecordId = eventItem.recordId !== undefined && eventItem.recordId !== null
-        ? String(eventItem.recordId)
-        : (ext && ext.recordId !== undefined && ext.recordId !== null ? String(ext.recordId) : null);
-      if (!eventRecordId || eventRecordId !== targetId) {
-        return;
-      }
-      matched = true;
-      const typeKey = getEventBaseType(eventItem) || 'appointment';
-      const nextStatus = resolveStatusKey(statusValue, typeKey);
-      eventItem.status = nextStatus;
-      if (ext) {
-        ext.status = nextStatus;
-      }
-    });
-    if (matched) {
-      renderCalendar();
-      refreshSharedEventsFromLocal();
+    const applyStatusUpdate = function(list) {
+      let listMatched = false;
+      (Array.isArray(list) ? list : []).forEach(function(eventItem) {
+        if (!eventItem) {
+          return;
+        }
+        const ext = eventItem.raw && eventItem.raw.extendedProps ? eventItem.raw.extendedProps : null;
+        const eventRecordId = eventItem.recordId !== undefined && eventItem.recordId !== null
+          ? String(eventItem.recordId)
+          : (ext && ext.recordId !== undefined && ext.recordId !== null ? String(ext.recordId) : null);
+        if (!eventRecordId || eventRecordId !== targetId) {
+          return;
+        }
+        listMatched = true;
+        const typeKey = getEventBaseType(eventItem) || 'appointment';
+        const nextStatus = resolveStatusKey(statusValue, typeKey);
+        eventItem.status = nextStatus;
+        if (ext) {
+          ext.status = nextStatus;
+        }
+      });
+      return listMatched;
+    };
+
+    const matchedInEvents = applyStatusUpdate(events);
+    const matchedInAllEvents = applyStatusUpdate(allEvents);
+    if (matchedInEvents || matchedInAllEvents) {
+      refreshEventsView();
     }
   }
 
@@ -2131,6 +2138,60 @@ document.addEventListener('DOMContentLoaded', function() {
       normalized = normalized.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
     }
     return normalized;
+  }
+
+  function normalizeVetFilterId(value) {
+    if (typeof window !== 'undefined'
+      && window.calendarVetColorManager
+      && typeof window.calendarVetColorManager.normalize === 'function') {
+      return window.calendarVetColorManager.normalize(value);
+    }
+    if (value === undefined || value === null) {
+      return null;
+    }
+    if (typeof value === 'number' && Number.isFinite(value)) {
+      return String(value);
+    }
+    const normalized = String(value).trim();
+    return normalized || null;
+  }
+
+  function getEventVetId(eventData) {
+    if (!eventData) {
+      return null;
+    }
+    const raw = eventData.raw || {};
+    const ext = raw.extendedProps || {};
+    const candidate = ext.veterinarioId
+      || ext.veterinario_id
+      || ext.vetId
+      || ext.vet_id
+      || ext.veterinarianId
+      || ext.veterinarian_id
+      || ext.specialistId
+      || ext.specialist_id
+      || raw.veterinarioId
+      || raw.veterinario_id
+      || raw.vetId
+      || raw.vet_id
+      || raw.veterinarianId
+      || raw.veterinarian_id
+      || eventData.vetId
+      || eventData.veterinarioId
+      || eventData.veterinario_id
+      || null;
+    return normalizeVetFilterId(candidate);
+  }
+
+  function filterEventsByVet(list, vetId) {
+    const collection = Array.isArray(list) ? list : [];
+    const normalizedVetId = normalizeVetFilterId(vetId);
+    if (!normalizedVetId) {
+      return collection.slice();
+    }
+    return collection.filter(function(item) {
+      return getEventVetId(item) === normalizedVetId;
+    });
   }
 
   function canonicalizeEventTypeKey(value) {
@@ -3871,21 +3932,34 @@ document.addEventListener('DOMContentLoaded', function() {
     }).filter(Boolean);
   }
 
-  function refreshSharedEventsFromLocal() {
-    if (usingSharedCalendar) {
-      return;
-    }
+  function broadcastCurrentEvents() {
     const rawEvents = collectCurrentRawEvents();
     dispatchLocalSharedEvents(rawEvents);
   }
 
-  function updateEvents(newEvents) {
+  function refreshSharedEventsFromLocal() {
+    if (usingSharedCalendar) {
+      return;
+    }
+    broadcastCurrentEvents();
+  }
+
+  function refreshEventsView(options = {}) {
+    const shouldBroadcast = options.broadcast !== false;
+    events = filterEventsByVet(allEvents, activeVetFilterId);
+    renderCalendar();
+    renderPetList();
+    if (shouldBroadcast) {
+      broadcastCurrentEvents();
+    }
+  }
+
+  function updateEvents(newEvents, options = {}) {
     const normalized = (newEvents || []).map(normalizeEvent).filter(function(ev) {
       return ev && ev.date;
     });
-    events = normalized;
-    renderCalendar();
-    renderPetList();
+    allEvents = normalized;
+    refreshEventsView(options);
   }
 
   async function fetchEventsFromApi() {
@@ -3909,7 +3983,6 @@ document.addEventListener('DOMContentLoaded', function() {
       }
       const data = await response.json();
       if (Array.isArray(data) && !usingSharedCalendar) {
-        dispatchLocalSharedEvents(data);
         updateEvents(data);
       }
     } catch (error) {
@@ -4279,6 +4352,21 @@ document.addEventListener('DOMContentLoaded', function() {
   });
 
   updateDayDetailControls();
+
+  function handleVetFilterChange(event) {
+    if (!event) {
+      return;
+    }
+    const detail = event.detail || {};
+    const normalized = normalizeVetFilterId(detail.vetId);
+    if (normalized === activeVetFilterId) {
+      return;
+    }
+    activeVetFilterId = normalized;
+    refreshEventsView();
+  }
+
+  document.addEventListener('calendarVetFilterChange', handleVetFilterChange);
 
   function handleSharedEvents(event) {
     if (!event || !event.detail) {
