@@ -326,324 +326,6 @@ def get_consulta_or_404(consulta_id):
     return consulta
 
 
-def get_agenda_data(source, user_id):
-    """Return structured agenda information for the given ``source``.
-
-    Currently only the ``user`` source (veterinarian agenda) is supported.
-    The helper centralizes all database queries so both the synchronous
-    page render and the asynchronous fetch can reuse the same logic.
-    """
-
-    if source != 'user':
-        return None
-
-    veterinario = None
-    if user_id is not None:
-        veterinario = Veterinario.query.filter_by(user_id=user_id).first()
-        if veterinario is None:
-            veterinario = Veterinario.query.filter_by(id=user_id).first()
-    if veterinario is None:
-        veterinario_id = request.args.get('veterinario_id', type=int)
-        if veterinario_id:
-            veterinario = Veterinario.query.filter_by(id=veterinario_id).first()
-    if veterinario is None:
-        return None
-
-    now = datetime.utcnow()
-    today_start_local = datetime.now(BR_TZ).replace(
-        hour=0, minute=0, second=0, microsecond=0
-    )
-    today_start_utc = (
-        today_start_local.astimezone(timezone.utc).replace(tzinfo=None)
-    )
-
-    start_str = request.args.get('start')
-    end_str = request.args.get('end')
-    restrict_to_today = False
-    if start_str and end_str:
-        try:
-            start_dt = datetime.fromisoformat(start_str)
-            end_dt = datetime.fromisoformat(end_str) + timedelta(days=1)
-        except ValueError:
-            today = date.today()
-            start_dt = datetime.combine(
-                today - timedelta(days=today.weekday()),
-                datetime.min.time(),
-            )
-            end_dt = start_dt + timedelta(days=7)
-            restrict_to_today = True
-        else:
-            restrict_to_today = False
-    else:
-        today = date.today()
-        start_dt = datetime.combine(
-            today - timedelta(days=today.weekday()), datetime.min.time()
-        )
-        end_dt = start_dt + timedelta(days=7)
-        restrict_to_today = True
-
-    start_dt_utc, end_dt_utc = local_date_range_to_utc(start_dt, end_dt)
-    upcoming_start = start_dt_utc or today_start_utc
-    if restrict_to_today and today_start_utc:
-        upcoming_start = max(upcoming_start, today_start_utc)
-
-    pending_consultas = (
-        Appointment.query.filter_by(
-            veterinario_id=veterinario.id, status="scheduled"
-        )
-        .filter(Appointment.scheduled_at > now)
-        .order_by(Appointment.scheduled_at)
-        .all()
-    )
-
-    appointments_pending = []
-    for appt in pending_consultas:
-        appt.time_left = (appt.scheduled_at - timedelta(hours=2)) - now
-        kind = appt.kind or ('retorno' if appt.consulta_id else 'consulta')
-        if kind == 'general':
-            kind = 'consulta'
-        appointments_pending.append({'kind': kind, 'appt': appt})
-
-    exam_pending = (
-        ExamAppointment.query.filter_by(
-            specialist_id=veterinario.id, status='pending'
-        )
-        .filter(ExamAppointment.scheduled_at > now)
-        .order_by(ExamAppointment.scheduled_at)
-        .all()
-    )
-
-    vet_user_id = getattr(veterinario, "user_id", None)
-    for ex in exam_pending:
-        ex.time_left = ex.confirm_by - now
-        if ex.time_left.total_seconds() <= 0:
-            ex.status = 'canceled'
-            msg = Message(
-                sender_id=vet_user_id or getattr(current_user, "id", None),
-                receiver_id=ex.requester_id,
-                animal_id=ex.animal_id,
-                content=(
-                    "Especialista não aceitou exame para "
-                    f"{ex.animal.name}. Reagende com outro profissional."
-                ),
-            )
-            db.session.add(msg)
-            db.session.commit()
-        else:
-            appointments_pending.append({'kind': 'exame', 'appt': ex})
-
-    accepted_consultas_in_range = (
-        Appointment.query.filter_by(
-            veterinario_id=veterinario.id, status="accepted"
-        )
-        .filter(Appointment.scheduled_at >= start_dt_utc)
-        .filter(Appointment.scheduled_at < end_dt_utc)
-        .order_by(Appointment.scheduled_at)
-        .all()
-    )
-
-    future_cutoff = max(now, upcoming_start) if upcoming_start else now
-    past_accepted_consultas = []
-    upcoming_consultas = []
-    for appt in accepted_consultas_in_range:
-        scheduled_at = appt.scheduled_at
-        if scheduled_at and scheduled_at >= future_cutoff:
-            upcoming_consultas.append(appt)
-        else:
-            past_accepted_consultas.append(appt)
-
-    upcoming_exams = (
-        ExamAppointment.query.filter_by(
-            specialist_id=veterinario.id, status='confirmed'
-        )
-        .filter(ExamAppointment.scheduled_at >= future_cutoff)
-        .filter(ExamAppointment.scheduled_at < end_dt_utc)
-        .order_by(ExamAppointment.scheduled_at)
-        .all()
-    )
-
-    appointments_upcoming = []
-    for appt in upcoming_consultas:
-        kind = appt.kind or ('retorno' if appt.consulta_id else 'consulta')
-        if kind == 'general':
-            kind = 'consulta'
-        appointments_upcoming.append({'kind': kind, 'appt': appt})
-    for exam in upcoming_exams:
-        appointments_upcoming.append({'kind': 'exame', 'appt': exam})
-    appointments_upcoming.sort(key=lambda item: item['appt'].scheduled_at)
-
-    consulta_filters = [Consulta.status == 'finalizada']
-    scope_filters = []
-    if vet_user_id:
-        scope_filters.append(Consulta.created_by == vet_user_id)
-    if veterinario.clinica_id:
-        scope_filters.append(Consulta.clinica_id == veterinario.clinica_id)
-    if scope_filters:
-        consulta_filters.append(or_(*scope_filters))
-
-    consultas_finalizadas = (
-        Consulta.query.outerjoin(Appointment, Consulta.appointment)
-        .options(
-            joinedload(Consulta.animal).joinedload(Animal.owner),
-            joinedload(Consulta.veterinario),
-            joinedload(Consulta.appointment)
-            .joinedload(Appointment.animal)
-            .joinedload(Animal.owner),
-        )
-        .filter(*consulta_filters)
-        .filter(
-            or_(
-                and_(
-                    Appointment.id.isnot(None),
-                    Appointment.scheduled_at >= start_dt_utc,
-                    Appointment.scheduled_at < end_dt_utc,
-                ),
-                and_(
-                    Appointment.id.is_(None),
-                    Consulta.created_at >= start_dt_utc,
-                    Consulta.created_at < end_dt_utc,
-                ),
-            )
-        )
-        .all()
-    )
-
-    consulta_animal_ids = {c.animal_id for c in consultas_finalizadas}
-    exam_blocks_by_consulta = defaultdict(list)
-    exam_blocks_by_animal = defaultdict(list)
-    if consulta_animal_ids:
-        blocos_query = (
-            BlocoExames.query.options(joinedload(BlocoExames.exames))
-            .filter(BlocoExames.animal_id.in_(consulta_animal_ids))
-        )
-        for bloco in blocos_query.all():
-            exam_blocks_by_animal[bloco.animal_id].append(bloco)
-            consulta_ref = getattr(bloco, 'consulta_id', None)
-            if consulta_ref:
-                exam_blocks_by_consulta[consulta_ref].append(bloco)
-
-    schedule_events = []
-
-    def _consulta_timestamp(consulta_obj):
-        if consulta_obj.appointment and consulta_obj.appointment.scheduled_at:
-            return consulta_obj.appointment.scheduled_at
-        return consulta_obj.created_at
-
-    for consulta in consultas_finalizadas:
-        timestamp = _consulta_timestamp(consulta)
-        if not timestamp or not (start_dt_utc <= timestamp < end_dt_utc):
-            continue
-        relevant_blocks = exam_blocks_by_consulta.get(consulta.id)
-        if not relevant_blocks:
-            relevant_blocks = [
-                bloco
-                for bloco in exam_blocks_by_animal.get(consulta.animal_id, [])
-                if bloco.data_criacao
-                and timestamp
-                and bloco.data_criacao.date() == timestamp.date()
-            ]
-        exam_summary = []
-        exam_ids = []
-        for bloco in relevant_blocks or []:
-            for exame in bloco.exames:
-                exam_ids.append(exame.id)
-                exam_summary.append(
-                    {
-                        'nome': exame.nome,
-                        'status': exame.status,
-                        'justificativa': exame.justificativa,
-                        'bloco_id': bloco.id,
-                    }
-                )
-        schedule_events.append(
-            {
-                'kind': 'consulta_finalizada',
-                'timestamp': timestamp,
-                'animal': consulta.animal,
-                'consulta': consulta,
-                'consulta_id': consulta.id,
-                'appointment': consulta.appointment,
-                'exam_summary': exam_summary,
-                'exam_blocks': relevant_blocks or [],
-                'exam_ids': exam_ids,
-            }
-        )
-
-    for appt in past_accepted_consultas:
-        if not appt.scheduled_at or not (start_dt_utc <= appt.scheduled_at < end_dt_utc):
-            continue
-        schedule_events.append(
-            {
-                'kind': 'consulta_aceita',
-                'timestamp': appt.scheduled_at,
-                'animal': appt.animal,
-                'consulta': appt.consulta,
-                'consulta_id': appt.consulta_id,
-                'appointment': appt,
-                'exam_summary': [],
-                'exam_blocks': [],
-                'exam_ids': [],
-            }
-        )
-
-    for item in appointments_upcoming:
-        if item['kind'] == 'retorno':
-            appt = item['appt']
-            schedule_events.append(
-                {
-                    'kind': 'retorno',
-                    'timestamp': appt.scheduled_at,
-                    'animal': appt.animal,
-                    'appointment': appt,
-                    'consulta_id': appt.consulta_id,
-                    'exam_summary': [],
-                    'exam_blocks': [],
-                    'exam_ids': [],
-                }
-            )
-
-    for exam in upcoming_exams:
-        schedule_events.append(
-            {
-                'kind': 'exame',
-                'timestamp': exam.scheduled_at,
-                'animal': exam.animal,
-                'exam': exam,
-                'consulta_id': None,
-                'exam_summary': [],
-                'exam_blocks': [],
-                'exam_ids': [exam.id],
-            }
-        )
-
-    schedule_events.sort(
-        key=lambda event: event.get('timestamp') or datetime.min,
-        reverse=True,
-    )
-
-    session['exam_pending_seen_count'] = ExamAppointment.query.filter_by(
-        specialist_id=veterinario.id, status='pending'
-    ).count()
-    session['appointment_pending_seen_count'] = Appointment.query.filter(
-        Appointment.veterinario_id == veterinario.id,
-        Appointment.status == 'scheduled',
-        Appointment.scheduled_at >= now + timedelta(hours=2),
-    ).count()
-    clinic_pending_query = _clinic_pending_appointments_query(veterinario)
-    session['clinic_pending_seen_count'] = (
-        clinic_pending_query.count() if clinic_pending_query is not None else 0
-    )
-
-    return {
-        'veterinario': veterinario,
-        'appointments_pending': appointments_pending,
-        'appointments_upcoming': appointments_upcoming,
-        'schedule_events': schedule_events,
-        'start_dt': start_dt,
-        'end_dt': end_dt,
-    }
-
-
 MISSING_VET_PROFILE_MESSAGE = (
     "Para visualizar os convites de clínica, finalize seu cadastro de "
     "veterinário informando o CRMV e demais dados profissionais."
@@ -8095,24 +7777,261 @@ def appointments():
             if not horarios_grouped or horarios_grouped[-1]['dia'] != h.dia_semana:
                 horarios_grouped.append({'dia': h.dia_semana, 'itens': []})
             horarios_grouped[-1]['itens'].append(h)
-
-        agenda_payload = get_agenda_data('user', vet_user_id or veterinario.id)
-        if agenda_payload:
-            appointments_pending = agenda_payload['appointments_pending']
-            appointments_upcoming = agenda_payload['appointments_upcoming']
-            schedule_events = agenda_payload['schedule_events']
-            start_dt = agenda_payload['start_dt']
-            end_dt = agenda_payload['end_dt']
+        now = datetime.utcnow()
+        today_start_local = datetime.now(BR_TZ).replace(
+            hour=0, minute=0, second=0, microsecond=0
+        )
+        today_start_utc = (
+            today_start_local.astimezone(timezone.utc).replace(tzinfo=None)
+        )
+        start_str = request.args.get('start')
+        end_str = request.args.get('end')
+        if start_str and end_str:
+            start_dt = datetime.fromisoformat(start_str)
+            end_dt = datetime.fromisoformat(end_str) + timedelta(days=1)
+            restrict_to_today = False
         else:
             today = date.today()
-            start_dt = datetime.combine(
-                today - timedelta(days=today.weekday()),
-                datetime.min.time(),
-            )
+            start_dt = datetime.combine(today - timedelta(days=today.weekday()), datetime.min.time())
             end_dt = start_dt + timedelta(days=7)
-            appointments_pending = []
-            appointments_upcoming = []
-            schedule_events = []
+            restrict_to_today = True
+        start_dt_utc, end_dt_utc = local_date_range_to_utc(start_dt, end_dt)
+        upcoming_start = start_dt_utc or today_start_utc
+        if restrict_to_today and today_start_utc:
+            upcoming_start = max(upcoming_start, today_start_utc)
+
+        pending_consultas = (
+            Appointment.query.filter_by(veterinario_id=veterinario.id, status="scheduled")
+            .filter(Appointment.scheduled_at > now)
+            .order_by(Appointment.scheduled_at)
+            .all()
+        )
+        appointments_pending = []
+        for appt in pending_consultas:
+            appt.time_left = (appt.scheduled_at - timedelta(hours=2)) - now
+            kind = appt.kind or ('retorno' if appt.consulta_id else 'consulta')
+            if kind == 'general':
+                kind = 'consulta'
+            appointments_pending.append({'kind': kind, 'appt': appt})
+
+        from models import ExamAppointment, Message, BlocoExames
+
+        exam_pending = (
+            ExamAppointment.query.filter_by(specialist_id=veterinario.id, status='pending')
+            .filter(ExamAppointment.scheduled_at > now)
+            .order_by(ExamAppointment.scheduled_at)
+            .all()
+        )
+        for ex in exam_pending:
+            ex.time_left = ex.confirm_by - now
+            if ex.time_left.total_seconds() <= 0:
+                ex.status = 'canceled'
+                msg = Message(
+                    sender_id=vet_user_id or getattr(current_user, "id", None),
+                    receiver_id=ex.requester_id,
+                    animal_id=ex.animal_id,
+                    content=f"Especialista não aceitou exame para {ex.animal.name}. Reagende com outro profissional.",
+                )
+                db.session.add(msg)
+                db.session.commit()
+            else:
+                appointments_pending.append({'kind': 'exame', 'appt': ex})
+
+        accepted_consultas_in_range = (
+            Appointment.query.filter_by(veterinario_id=veterinario.id, status="accepted")
+            .filter(Appointment.scheduled_at >= start_dt_utc)
+            .filter(Appointment.scheduled_at < end_dt_utc)
+            .order_by(Appointment.scheduled_at)
+            .all()
+        )
+        future_cutoff = max(now, upcoming_start) if upcoming_start else now
+        past_accepted_consultas = []
+        upcoming_consultas = []
+        for appt in accepted_consultas_in_range:
+            scheduled_at = appt.scheduled_at
+            if scheduled_at and scheduled_at >= future_cutoff:
+                upcoming_consultas.append(appt)
+            else:
+                past_accepted_consultas.append(appt)
+
+        upcoming_exams = (
+            ExamAppointment.query.filter_by(specialist_id=veterinario.id, status='confirmed')
+            .filter(ExamAppointment.scheduled_at >= future_cutoff)
+            .filter(ExamAppointment.scheduled_at < end_dt_utc)
+            .order_by(ExamAppointment.scheduled_at)
+            .all()
+        )
+        appointments_upcoming = []
+        for appt in upcoming_consultas:
+            kind = appt.kind or ('retorno' if appt.consulta_id else 'consulta')
+            if kind == 'general':
+                kind = 'consulta'
+            appointments_upcoming.append({'kind': kind, 'appt': appt})
+        for exam in upcoming_exams:
+            appointments_upcoming.append({'kind': 'exame', 'appt': exam})
+        appointments_upcoming.sort(key=lambda x: x['appt'].scheduled_at)
+
+        consulta_filters = [Consulta.status == 'finalizada']
+        scope_filters = []
+        if vet_user_id:
+            scope_filters.append(Consulta.created_by == vet_user_id)
+        if veterinario.clinica_id:
+            scope_filters.append(Consulta.clinica_id == veterinario.clinica_id)
+        if scope_filters:
+            consulta_filters.append(or_(*scope_filters))
+
+        consultas_finalizadas = (
+            Consulta.query.outerjoin(Appointment, Consulta.appointment)
+            .options(
+                joinedload(Consulta.animal).joinedload(Animal.owner),
+                joinedload(Consulta.veterinario),
+                joinedload(Consulta.appointment)
+                .joinedload(Appointment.animal)
+                .joinedload(Animal.owner),
+            )
+            .filter(*consulta_filters)
+            .filter(
+                or_(
+                    and_(
+                        Appointment.id.isnot(None),
+                        Appointment.scheduled_at >= start_dt_utc,
+                        Appointment.scheduled_at < end_dt_utc,
+                    ),
+                    and_(
+                        Appointment.id.is_(None),
+                        Consulta.created_at >= start_dt_utc,
+                        Consulta.created_at < end_dt_utc,
+                    ),
+                )
+            )
+            .all()
+        )
+
+        consulta_animal_ids = {c.animal_id for c in consultas_finalizadas}
+        exam_blocks_by_consulta = defaultdict(list)
+        exam_blocks_by_animal = defaultdict(list)
+        if consulta_animal_ids:
+            blocos_query = (
+                BlocoExames.query.options(joinedload(BlocoExames.exames))
+                .filter(BlocoExames.animal_id.in_(consulta_animal_ids))
+            )
+            for bloco in blocos_query.all():
+                exam_blocks_by_animal[bloco.animal_id].append(bloco)
+                consulta_ref = getattr(bloco, 'consulta_id', None)
+                if consulta_ref:
+                    exam_blocks_by_consulta[consulta_ref].append(bloco)
+
+        schedule_events = []
+
+        def _consulta_timestamp(consulta_obj):
+            if consulta_obj.appointment and consulta_obj.appointment.scheduled_at:
+                return consulta_obj.appointment.scheduled_at
+            return consulta_obj.created_at
+
+        for consulta in consultas_finalizadas:
+            timestamp = _consulta_timestamp(consulta)
+            if not timestamp or not (start_dt_utc <= timestamp < end_dt_utc):
+                continue
+            relevant_blocks = exam_blocks_by_consulta.get(consulta.id)
+            if not relevant_blocks:
+                relevant_blocks = [
+                    bloco
+                    for bloco in exam_blocks_by_animal.get(consulta.animal_id, [])
+                    if bloco.data_criacao
+                    and timestamp
+                    and bloco.data_criacao.date() == timestamp.date()
+                ]
+            exam_summary = []
+            exam_ids = []
+            for bloco in relevant_blocks or []:
+                for exame in bloco.exames:
+                    exam_ids.append(exame.id)
+                    exam_summary.append(
+                        {
+                            'nome': exame.nome,
+                            'status': exame.status,
+                            'justificativa': exame.justificativa,
+                            'bloco_id': bloco.id,
+                        }
+                    )
+            schedule_events.append(
+                {
+                    'kind': 'consulta_finalizada',
+                    'timestamp': timestamp,
+                    'animal': consulta.animal,
+                    'consulta': consulta,
+                    'consulta_id': consulta.id,
+                    'appointment': consulta.appointment,
+                    'exam_summary': exam_summary,
+                    'exam_blocks': relevant_blocks or [],
+                    'exam_ids': exam_ids,
+                }
+            )
+
+        for appt in past_accepted_consultas:
+            if not appt.scheduled_at or not (start_dt_utc <= appt.scheduled_at < end_dt_utc):
+                continue
+            schedule_events.append(
+                {
+                    'kind': 'consulta_aceita',
+                    'timestamp': appt.scheduled_at,
+                    'animal': appt.animal,
+                    'consulta': appt.consulta,
+                    'consulta_id': appt.consulta_id,
+                    'appointment': appt,
+                    'exam_summary': [],
+                    'exam_blocks': [],
+                    'exam_ids': [],
+                }
+            )
+
+        for item in appointments_upcoming:
+            if item['kind'] == 'retorno':
+                appt = item['appt']
+                schedule_events.append(
+                    {
+                        'kind': 'retorno',
+                        'timestamp': appt.scheduled_at,
+                        'animal': appt.animal,
+                        'appointment': appt,
+                        'consulta_id': appt.consulta_id,
+                        'exam_summary': [],
+                        'exam_blocks': [],
+                        'exam_ids': [],
+                    }
+                )
+
+        for exam in upcoming_exams:
+            schedule_events.append(
+                {
+                    'kind': 'exame',
+                    'timestamp': exam.scheduled_at,
+                    'animal': exam.animal,
+                    'exam': exam,
+                    'consulta_id': None,
+                    'exam_summary': [],
+                    'exam_blocks': [],
+                    'exam_ids': [exam.id],
+                }
+            )
+
+        schedule_events.sort(
+            key=lambda event: event.get('timestamp') or datetime.min,
+            reverse=True,
+        )
+
+        session['exam_pending_seen_count'] = ExamAppointment.query.filter_by(
+            specialist_id=veterinario.id, status='pending'
+        ).count()
+        session['appointment_pending_seen_count'] = Appointment.query.filter(
+            Appointment.veterinario_id == veterinario.id,
+            Appointment.status == 'scheduled',
+            Appointment.scheduled_at >= now + timedelta(hours=2),
+        ).count()
+        clinic_pending_query = _clinic_pending_appointments_query(veterinario)
+        session['clinic_pending_seen_count'] = (
+            clinic_pending_query.count() if clinic_pending_query is not None else 0
+        )
 
         return render_template(
             'agendamentos/edit_vet_schedule.html',
@@ -8325,40 +8244,6 @@ def appointments():
             calendar_summary_vets=calendar_summary_vets,
             calendar_summary_clinic_ids=calendar_summary_clinic_ids,
         )
-
-
-@app.route('/agenda')
-@login_required
-def agenda_view():
-    source = request.args.get('source', 'clinic')
-    target_user_id = request.args.get('user_id', type=int)
-
-    if source == 'user':
-        if not (_is_admin() or current_user.worker == 'veterinario'):
-            abort(403)
-        if target_user_id is None:
-            target_user_id = current_user.id
-        data = get_agenda_data('user', target_user_id)
-        if data is None:
-            abort(404)
-        period_end = (
-            data['end_dt'] - timedelta(days=1)
-            if data.get('end_dt')
-            else None
-        )
-        context = dict(data)
-        context['period_end'] = period_end
-        context['timedelta'] = timedelta
-        html = render_template('partials/vet_agenda_summary.html', **context)
-        wants_json = (
-            request.accept_mimetypes.best == 'application/json'
-            or request.args.get('format') == 'json'
-        )
-        if wants_json:
-            return jsonify({'html': html})
-        return html
-
-    abort(400)
 
 
 @app.route('/appointments/calendar')
