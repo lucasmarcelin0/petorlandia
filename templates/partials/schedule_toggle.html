@@ -335,6 +335,20 @@ document.addEventListener('DOMContentLoaded', function() {
   let userButtonPrefersVet = preferUserVetSourceFlag && (initialVetId !== null);
   let calendar;
 
+  function dispatchVetSelectionChange(vetValue) {
+    if (typeof document === 'undefined') {
+      return;
+    }
+    const normalizedVet = normalizeVetColorKey(vetValue);
+    document.dispatchEvent(new CustomEvent('calendarVetFilterChange', {
+      detail: { vetId: normalizedVet },
+    }));
+  }
+
+  function notifyVetSelectionChange() {
+    dispatchVetSelectionChange(selectedVetId);
+  }
+
   if (adminInitialView === 'veterinario') {
     source = 'vet';
   } else if (adminInitialView === 'colaborador') {
@@ -345,6 +359,8 @@ document.addEventListener('DOMContentLoaded', function() {
   if (source === 'user' && selectedVetId !== null) {
     source = 'vet';
   }
+
+  notifyVetSelectionChange();
 
   function eventUrl() {
     if (source === 'clinic') {
@@ -559,6 +575,9 @@ document.addEventListener('DOMContentLoaded', function() {
       updateCollaboratorPickerValue(source);
     }
     const vetChanged = previousVetId !== numericVetId;
+    if (vetChanged) {
+      notifyVetSelectionChange();
+    }
     if (vetChanged && (shouldActivate || source === 'vet')) {
       addEvents({ refetch: false });
       if (shouldRefetch && calendar && typeof calendar.refetchEvents === 'function') {
@@ -711,6 +730,7 @@ document.addEventListener('DOMContentLoaded', function() {
           }
           source = 'user';
           selectedVetId = null;
+          notifyVetSelectionChange();
           if (preferUserVetSourceFlag) {
             const fallbackVet = lastKnownVetId !== null ? lastKnownVetId : initialVetId;
             userButtonPrefersVet = fallbackVet !== null;
@@ -718,6 +738,7 @@ document.addEventListener('DOMContentLoaded', function() {
         } else if (target === 'clinic') {
           source = 'clinic';
           selectedVetId = null;
+          notifyVetSelectionChange();
           if (preferUserVetSourceFlag) {
             const fallbackVet = lastKnownVetId !== null ? lastKnownVetId : initialVetId;
             userButtonPrefersVet = fallbackVet !== null;
@@ -736,6 +757,7 @@ document.addEventListener('DOMContentLoaded', function() {
       const rawValue = this.value;
       if (rawValue === 'clinic') {
         selectedVetId = null;
+        notifyVetSelectionChange();
         source = 'clinic';
         setActiveButton(source);
         addEvents({ refetch: true });
@@ -743,6 +765,7 @@ document.addEventListener('DOMContentLoaded', function() {
       }
       if (rawValue === 'user' || rawValue === '') {
         selectedVetId = null;
+        notifyVetSelectionChange();
         source = 'user';
         setActiveButton(source);
         addEvents({ refetch: true });
@@ -756,6 +779,7 @@ document.addEventListener('DOMContentLoaded', function() {
       }
       source = defaultSource;
       selectedVetId = null;
+      notifyVetSelectionChange();
       setActiveButton(source);
       addEvents({ refetch: true });
     });
@@ -770,6 +794,7 @@ document.addEventListener('DOMContentLoaded', function() {
         return;
       }
       selectedVetId = null;
+      notifyVetSelectionChange();
       if (selection && selection.id !== null) {
         selectedUserId = selection.id;
       } else {
