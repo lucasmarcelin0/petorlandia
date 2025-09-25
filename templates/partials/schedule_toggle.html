@@ -8,14 +8,24 @@
 ) %}
 {% set collaborator_select_default = 'clinic' if clinic_id else 'user' %}
 {% set prefer_user_vet_source = prefer_user_vet_source|default(admin_view_mode == 'veterinario') %}
+{% set show_user_button = current_user.is_authenticated and current_user.worker == 'veterinario' %}
+{% if show_user_button %}
+  {% set default_source = 'clinic' if clinic_id else 'user' %}
+{% else %}
+  {% set default_source = 'clinic' if clinic_id else 'clinic' %}
+{% endif %}
+{% set user_button_active = default_source == 'user' %}
+{% set clinic_button_active = default_source == 'clinic' %}
 
 <div class="card mb-4">
   <div class="card-header">
     <div class="d-flex flex-column flex-md-row align-items-center justify-content-center gap-2">
       <div class="btn-group" id="{{ toggle_id }}">
-        <button class="btn btn-outline-primary{% if not clinic_id %} active{% endif %}" data-source="user">Minha Agenda</button>
+        {% if show_user_button %}
+        <button class="btn btn-outline-primary{% if user_button_active %} active{% endif %}" data-source="user">Minha Agenda</button>
+        {% endif %}
         {% if clinic_id %}
-        <button class="btn btn-outline-primary{% if clinic_id %} active{% endif %}" data-source="clinic">Agenda da Clínica</button>
+        <button class="btn btn-outline-primary{% if clinic_button_active %} active{% endif %}" data-source="clinic">Agenda da Clínica</button>
         {% endif %}
       </div>
       {% if is_collaborator_view %}
@@ -46,6 +56,9 @@
       {% endif %}
     </div>
   </div>
+  {% if show_user_button %}
+  <div id="agenda-user" class="agenda-user-container px-3 pt-3 pb-0 d-none" aria-live="polite"></div>
+  {% endif %}
   <div class="card-body p-0">
     <div id="{{ calendar_id }}" data-calendar-redirect-url="{{ calendar_redirect_url|default('') }}"></div>
   </div>
@@ -86,7 +99,9 @@ document.addEventListener('DOMContentLoaded', function() {
   const csrfToken = '{{ csrf_token() if csrf_token is defined else '' }}';
   const clinicId = {{ clinic_id|default(none)|tojson }};
   const adminInitialView = {{ (admin_selected_view or '')|tojson }};
-  const defaultSource = {{ ('clinic' if clinic_id else 'user')|tojson }};
+  const defaultSource = {{ default_source|tojson }};
+  const showUserButtonFlag = {{ show_user_button|tojson }};
+  const agendaUserContainer = document.getElementById('agenda-user');
   const clinicFilters = (function() {
     if (typeof window === 'undefined') {
       return [];
@@ -334,6 +349,7 @@ document.addEventListener('DOMContentLoaded', function() {
   let lastKnownVetId = selectedVetId;
   let userButtonPrefersVet = preferUserVetSourceFlag && (initialVetId !== null);
   let calendar;
+  let userAgendaAbortController = null;
 
   function dispatchVetSelectionChange(vetValue) {
     if (typeof document === 'undefined') {
@@ -349,6 +365,110 @@ document.addEventListener('DOMContentLoaded', function() {
     dispatchVetSelectionChange(selectedVetId);
   }
 
+  function hideUserAgendaContainer() {
+    if (!showUserButtonFlag || !agendaUserContainer) {
+      return;
+    }
+    agendaUserContainer.classList.add('d-none');
+    agendaUserContainer.innerHTML = '';
+  }
+
+  function renderUserAgendaMessage(message, level = 'info') {
+    if (!showUserButtonFlag || !agendaUserContainer) {
+      return;
+    }
+    agendaUserContainer.innerHTML = '';
+    agendaUserContainer.classList.remove('d-none');
+    const alert = document.createElement('div');
+    alert.className = `alert alert-${level} mb-0`;
+    alert.setAttribute('role', 'alert');
+    alert.textContent = message;
+    agendaUserContainer.appendChild(alert);
+  }
+
+  function renderUserAgendaHtml(html) {
+    if (!showUserButtonFlag || !agendaUserContainer) {
+      return;
+    }
+    agendaUserContainer.classList.remove('d-none');
+    agendaUserContainer.innerHTML = html;
+  }
+
+  function showUserAgendaSpinner() {
+    if (!showUserButtonFlag || !agendaUserContainer) {
+      return;
+    }
+    agendaUserContainer.classList.remove('d-none');
+    agendaUserContainer.innerHTML = `
+      <div class="d-flex align-items-center gap-2 text-muted small">
+        <div class="spinner-border spinner-border-sm text-primary" role="status" aria-hidden="true"></div>
+        <span>Carregando agenda...</span>
+      </div>
+    `;
+  }
+
+  async function loadUserAgenda() {
+    if (!showUserButtonFlag || !agendaUserContainer) {
+      return;
+    }
+    if (userAgendaAbortController) {
+      userAgendaAbortController.abort();
+    }
+    const controller = new AbortController();
+    userAgendaAbortController = controller;
+    showUserAgendaSpinner();
+    try {
+      const response = await fetch('/agenda?source=user', {
+        headers: {
+          'X-Requested-With': 'XMLHttpRequest',
+          'Accept': 'text/html, application/json',
+        },
+        credentials: 'same-origin',
+        signal: controller.signal,
+      });
+      if (!response.ok) {
+        throw new Error('Não foi possível carregar sua agenda.');
+      }
+      const contentType = response.headers.get('Content-Type') || '';
+      let html = '';
+      if (contentType.includes('application/json')) {
+        const data = await response.json().catch(() => ({}));
+        html = (data && data.html) || '';
+      } else {
+        html = await response.text();
+      }
+      if (controller.signal.aborted) {
+        return;
+      }
+      if (html && html.trim()) {
+        renderUserAgendaHtml(html);
+      } else {
+        renderUserAgendaMessage('Nenhum compromisso encontrado para o período.', 'info');
+      }
+    } catch (error) {
+      if (controller.signal.aborted) {
+        return;
+      }
+      const fallback = (error && error.message) ? error.message : 'Não foi possível carregar sua agenda.';
+      renderUserAgendaMessage(fallback, 'danger');
+    } finally {
+      if (userAgendaAbortController === controller) {
+        userAgendaAbortController = null;
+      }
+    }
+  }
+
+  function handleSourceChange(newSource) {
+    if (!showUserButtonFlag || !agendaUserContainer) {
+      return;
+    }
+    if (newSource === 'user') {
+      loadUserAgenda();
+    } else {
+      hideUserAgendaContainer();
+    }
+  }
+
   if (adminInitialView === 'veterinario') {
     source = 'vet';
   } else if (adminInitialView === 'colaborador') {
@@ -361,6 +481,7 @@ document.addEventListener('DOMContentLoaded', function() {
   }
 
   notifyVetSelectionChange();
+  handleSourceChange(source);
 
   function eventUrl() {
     if (source === 'clinic') {
@@ -571,6 +692,7 @@ document.addEventListener('DOMContentLoaded', function() {
         selectedUserId = null;
       }
       setActiveButton(source);
+      handleSourceChange(source);
     } else {
       updateCollaboratorPickerValue(source);
     }
@@ -747,6 +869,7 @@ document.addEventListener('DOMContentLoaded', function() {
           source = target;
         }
         setActiveButton(source);
+        handleSourceChange(source);
         addEvents({ refetch: true });
       });
     });
@@ -759,6 +882,7 @@ document.addEventListener('DOMContentLoaded', function() {
         selectedVetId = null;
         notifyVetSelectionChange();
         source = 'clinic';
+        handleSourceChange(source);
         setActiveButton(source);
         addEvents({ refetch: true });
         return;
@@ -767,6 +891,7 @@ document.addEventListener('DOMContentLoaded', function() {
         selectedVetId = null;
         notifyVetSelectionChange();
         source = 'user';
+        handleSourceChange(source);
         setActiveButton(source);
         addEvents({ refetch: true });
         return;
@@ -780,6 +905,7 @@ document.addEventListener('DOMContentLoaded', function() {
       source = defaultSource;
       selectedVetId = null;
       notifyVetSelectionChange();
+      handleSourceChange(source);
       setActiveButton(source);
       addEvents({ refetch: true });
     });
@@ -801,6 +927,7 @@ document.addEventListener('DOMContentLoaded', function() {
         selectedUserId = null;
       }
       source = 'user';
+      handleSourceChange(source);
       setActiveButton(source);
       addEvents({ refetch: true });
     });
