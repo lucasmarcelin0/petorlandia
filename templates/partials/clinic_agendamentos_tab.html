@@ -34,13 +34,6 @@
         </form>
         <div id="appointments-table-container" data-appointments-container data-refresh-url="{{ request.url }}">
           {% include 'partials/appointments_table.html' %}
-          <template data-initial-appointments hidden>
-            {% for appt in appointments %}
-            <div data-appointment-id="{{ appt.id }}" data-appointment-time="{{ appt.scheduled_at|format_datetime_brazil('%H:%M') }}">
-              <a href="{{ url_for('edit_appointment', appointment_id=appt.id) }}"></a>
-            </div>
-            {% endfor %}
-          </template>
         </div>
       </div>
 
