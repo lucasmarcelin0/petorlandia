@@ -6,6 +6,7 @@
 {% set calendar_experimental_tab_id = calendar_experimental_tab_id|default('calendar-tab-experimental') %}
 {% set calendar_full_tab_id = calendar_full_tab_id|default('calendar-tab-full') %}
 {% set calendar_inline_component_id = calendar_inline_component_id|default('tutor-calendar-inline') %}
+{% set calendar_hide_experimental_tab = calendar_hide_experimental_tab|default(False) %}
 {% set calendar_pets_endpoint = calendar_pets_endpoint|default(url_for('api_my_pets')) %}
 {% set calendar_summary_toggle_show_label = calendar_summary_toggle_show_label|default('Mostrar resumo') %}
 {% set calendar_summary_toggle_hide_label = calendar_summary_toggle_hide_label|default('Ocultar resumo') %}
@@ -25,7 +26,7 @@
         aria-label="Alternar entre o calendário e o agendamento"
         data-calendar-tabs
       >
-        <li class="nav-item" role="presentation">
+        <li class="nav-item{% if calendar_hide_experimental_tab %} d-none{% endif %}" role="presentation">
           <button
             class="nav-link active"
             id="{{ calendar_experimental_tab_id }}"
