@@ -9,50 +9,44 @@
 {% set collaborator_select_default = 'clinic' if clinic_id else 'user' %}
 {% set prefer_user_vet_source = prefer_user_vet_source|default(admin_view_mode == 'veterinario') %}
 
-<div class="card mb-4">
-  <div class="card-header">
-    <div class="d-flex flex-column flex-md-row align-items-center justify-content-center gap-2">
-      <div class="btn-group" id="{{ toggle_id }}">
-        <button class="btn btn-outline-primary{% if not clinic_id %} active{% endif %}" data-source="user">Minha Agenda</button>
-        {% if clinic_id %}
-        <button class="btn btn-outline-primary{% if clinic_id %} active{% endif %}" data-source="clinic">Agenda da Clínica</button>
-        {% endif %}
-      </div>
-      {% if is_collaborator_view %}
-      <div class="w-100 w-md-auto">
-        <select
-          id="collaborator-schedule-picker"
-          class="form-select form-select-sm"
-          aria-label="Selecionar agenda"
-        >
-          <option value="user"{% if collaborator_select_default == 'user' %} selected{% endif %}>Minha agenda</option>
-          {% if clinic_id %}
-          <option value="clinic"{% if collaborator_select_default == 'clinic' %} selected{% endif %}>Agenda da clínica</option>
-          {% endif %}
-          {% if vet_options %}
-          {% for vet in vet_options %}
-          {% set vet_name = vet.user.name if vet.user else (vet.name if vet.name is defined else 'Veterinário #' ~ vet.id) %}
-          <option value="veterinario:{{ vet.id }}">{{ vet_name }}</option>
-          {% endfor %}
-          {% elif form is defined and form and form.veterinario_id is defined %}
-          {% for value, label in form.veterinario_id.choices %}
-          {% if value is not none and value != '' %}
-          <option value="veterinario:{{ value }}">{{ label }}</option>
-          {% endif %}
-          {% endfor %}
-          {% endif %}
-        </select>
-      </div>
+<div class="d-flex flex-column flex-md-row align-items-center justify-content-center gap-2 mb-3">
+  <div class="btn-group" id="{{ toggle_id }}">
+    <button class="btn btn-outline-primary{% if not clinic_id %} active{% endif %}" data-source="user">Minha Agenda</button>
+    {% if clinic_id %}
+    <button class="btn btn-outline-primary{% if clinic_id %} active{% endif %}" data-source="clinic">Agenda da Clínica</button>
+    {% endif %}
+  </div>
+  {% if is_collaborator_view %}
+  <div class="w-100 w-md-auto">
+    <select
+      id="collaborator-schedule-picker"
+      class="form-select form-select-sm"
+      aria-label="Selecionar agenda"
+    >
+      <option value="user"{% if collaborator_select_default == 'user' %} selected{% endif %}>Minha agenda</option>
+      {% if clinic_id %}
+      <option value="clinic"{% if collaborator_select_default == 'clinic' %} selected{% endif %}>Agenda da clínica</option>
       {% endif %}
-    </div>
+      {% if vet_options %}
+      {% for vet in vet_options %}
+      {% set vet_name = vet.user.name if vet.user else (vet.name if vet.name is defined else 'Veterinário #' ~ vet.id) %}
+      <option value="veterinario:{{ vet.id }}">{{ vet_name }}</option>
+      {% endfor %}
+      {% elif form is defined and form and form.veterinario_id is defined %}
+      {% for value, label in form.veterinario_id.choices %}
+      {% if value is not none and value != '' %}
+      <option value="veterinario:{{ value }}">{{ label }}</option>
+      {% endif %}
+      {% endfor %}
+      {% endif %}
+    </select>
   </div>
-  <div class="card-body p-0">
-    <div id="{{ calendar_id }}" data-calendar-redirect-url="{{ calendar_redirect_url|default('') }}"></div>
-  </div>
-  <div class="card-footer bg-light small text-muted text-center">
-    💡 Clique em um dia do calendário para iniciar um novo agendamento.
-  </div>
+  {% endif %}
 </div>
+<div id="{{ calendar_id }}" data-calendar-redirect-url="{{ calendar_redirect_url|default('') }}"></div>
+<p class="small text-muted text-center mt-3 mb-0">
+  💡 Clique em um dia do calendário para iniciar um novo agendamento.
+</p>
 
 {% if include_assets|default(True) %}
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.8/main.min.css">
