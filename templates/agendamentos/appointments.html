@@ -29,7 +29,7 @@
     {% endif %}
   {% endif %}
   <div class="row g-4 align-items-stretch mb-4" id="appointments-calendar-overview">
-    <div class="col-12 col-xl-8 col-xxl-9" data-calendar-main-column>
+    <div class="col-12 col-xl-12 col-xxl-12" data-calendar-main-column data-calendar-summary-default-collapsed="true">
       <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3">
         <ul
           class="nav nav-pills calendar-tabs mb-0"
@@ -72,11 +72,14 @@
           data-calendar-summary-toggle
           data-show-label="Mostrar resumo"
           data-hide-label="Ocultar resumo"
-          aria-pressed="false"
-          aria-expanded="true"
+          data-default-collapsed="true"
+          aria-pressed="true"
+          aria-expanded="false"
+          title="Mostrar resumo"
+          aria-disabled="false"
         >
-          <i class="bi bi-layout-sidebar-inset" data-calendar-summary-toggle-icon aria-hidden="true"></i>
-          <span data-calendar-summary-toggle-label>Ocultar resumo</span>
+          <i class="bi bi-layout-sidebar" data-calendar-summary-toggle-icon aria-hidden="true"></i>
+          <span data-calendar-summary-toggle-label>Mostrar resumo</span>
         </button>
       </div>
 
@@ -115,7 +118,7 @@
         </div>
       </div>
     </div>
-    <div class="col-12 col-xl-4 col-xxl-3" data-calendar-summary-column>
+    <div class="col-12 col-xl-4 col-xxl-3 d-none" data-calendar-summary-column aria-hidden="true">
       <div
         class="card calendar-summary-card border-0 shadow-sm h-100 is-loading"
         data-calendar-summary-panel
@@ -611,6 +614,42 @@ document.addEventListener('DOMContentLoaded', () => {
   const calendarMainColumnFullWidthClasses = ['col-xl-12', 'col-xxl-12'];
   let calendarSummaryTabVisible = true;
   let isCalendarSummaryCollapsed = getStoredCalendarSummaryCollapsed();
+  let calendarSummaryCollapsedStateStored = false;
+  if (typeof window !== 'undefined' && window.localStorage) {
+    try {
+      calendarSummaryCollapsedStateStored = window.localStorage.getItem(calendarSummaryCollapsedStorageKey) !== null;
+    } catch (error) {
+      calendarSummaryCollapsedStateStored = false;
+    }
+  }
+  const calendarSummaryDefaultCollapsed = (() => {
+    const candidates = [];
+    if (calendarMainColumn) {
+      if (calendarMainColumn.dataset && typeof calendarMainColumn.dataset.calendarSummaryDefaultCollapsed !== 'undefined') {
+        candidates.push(calendarMainColumn.dataset.calendarSummaryDefaultCollapsed);
+      }
+      candidates.push(calendarMainColumn.getAttribute('data-calendar-summary-default-collapsed'));
+    }
+    if (calendarSummaryToggleButton) {
+      if (calendarSummaryToggleButton.dataset && typeof calendarSummaryToggleButton.dataset.defaultCollapsed !== 'undefined') {
+        candidates.push(calendarSummaryToggleButton.dataset.defaultCollapsed);
+      }
+      candidates.push(calendarSummaryToggleButton.getAttribute('data-default-collapsed'));
+    }
+    return candidates.some((value) => {
+      if (value === null || typeof value === 'undefined') {
+        return false;
+      }
+      const normalized = String(value).trim().toLowerCase();
+      if (normalized === '') {
+        return true;
+      }
+      return normalized === 'true' || normalized === '1' || normalized === 'yes' || normalized === 'on';
+    });
+  })();
+  if (!calendarSummaryCollapsedStateStored && calendarSummaryDefaultCollapsed) {
+    isCalendarSummaryCollapsed = true;
+  }
   let activeCalendarSummaryVetId = null;
   let newAppointmentCollapseInstance = null;
   let cachedScheduleDays = [];
