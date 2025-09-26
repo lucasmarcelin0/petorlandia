@@ -96,13 +96,35 @@
   {% set schedule_toggle_clinic_id = veterinario.clinica_id %}
   {% set schedule_toggle_calendar_redirect_url = url_for('appointments', view_as='veterinario', veterinario_id=veterinario.id) %}
   {% set schedule_toggle_prefer_user_vet_source = True %}
-  {% include 'partials/calendar_layout.html' %}
+  {% set calendar_overview_id = 'vet-calendar-overview-' ~ veterinario.id %}
+  {% set calendar_tabs_id = 'vet-calendar-tabs-' ~ veterinario.id %}
+  {% set calendar_content_id = 'vet-calendar-content-' ~ veterinario.id %}
+  {% set calendar_experimental_tab_id = 'vet-calendar-tab-experimental-' ~ veterinario.id %}
+  {% set calendar_experimental_pane_id = 'vet-calendar-pane-experimental-' ~ veterinario.id %}
+  {% set calendar_full_tab_id = 'vet-calendar-tab-full-' ~ veterinario.id %}
+  {% set calendar_full_pane_id = 'vet-calendar-pane-full-' ~ veterinario.id %}
+  {% set calendar_hide_experimental_tab = True %}
+  {% set vet_calendar_collapse_id = 'vet-calendar-collapse-' ~ veterinario.id %}
+  <div class="collapse" id="{{ vet_calendar_collapse_id }}" data-calendar-collapse>
+    {% include 'partials/calendar_layout.html' %}
+  </div>
 
   <!-- Gerenciar horários e agendamento -->
   <div class="card border-0 shadow-lg rounded-4 mb-5">
     <div class="card-header bg-primary text-white rounded-top-4 d-flex justify-content-between align-items-center">
       <h5 class="mb-0"><i class="bi bi-clock-history me-2"></i> Gerenciar Horários</h5>
       <div class="d-flex align-items-center gap-2">
+        <button
+          class="btn btn-light btn-sm collapsed"
+          type="button"
+          data-bs-toggle="collapse"
+          data-bs-target="#{{ vet_calendar_collapse_id }}"
+          aria-expanded="false"
+          aria-controls="{{ vet_calendar_collapse_id }}"
+          data-calendar-tab-target="#{{ calendar_experimental_tab_id }}"
+        >
+          <i class="bi bi-layout-text-window-reverse me-1"></i> Calendário
+        </button>
         <button id="openScheduleModal" class="btn btn-light btn-sm" type="button">
           <i class="bi bi-pencil"></i> Editar Horário
         </button>
@@ -786,6 +808,41 @@
   {{ super() }}
   <script>
     document.addEventListener('DOMContentLoaded', function () {
+      const calendarToggleButtons = document.querySelectorAll('[data-calendar-tab-target]');
+
+      calendarToggleButtons.forEach((button) => {
+        const collapseSelector = button.dataset.bsTarget;
+        const tabSelector = button.dataset.calendarTabTarget;
+
+        if (!collapseSelector || !tabSelector) {
+          return;
+        }
+
+        const collapseElement = document.querySelector(collapseSelector);
+        const tabElement = document.querySelector(tabSelector);
+
+        if (!collapseElement || !tabElement) {
+          return;
+        }
+
+        const ensureCalendarTab = () => {
+          if (typeof bootstrap === 'undefined' || !bootstrap.Tab) {
+            return;
+          }
+
+          const tabInstance = bootstrap.Tab.getOrCreateInstance(tabElement);
+          tabInstance.show();
+        };
+
+        collapseElement.addEventListener('show.bs.collapse', ensureCalendarTab);
+
+        button.addEventListener('click', () => {
+          if (!collapseElement.classList.contains('show')) {
+            ensureCalendarTab();
+          }
+        });
+      });
+
       const form = document.getElementById('agenda-filter-form');
       if (!form) return;
 
