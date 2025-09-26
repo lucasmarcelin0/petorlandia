@@ -677,8 +677,15 @@
   box-shadow: 0 0 0 0.2rem rgba(99, 102, 241, 0.25);
 }
 
+#{{ component_id }} .tutor-calendar__day-detail-back {
+  max-width: min(220px, 60vw);
+}
+
 #{{ component_id }} .tutor-calendar__day-detail-back-text {
-  white-space: nowrap;
+  display: inline-block;
+  white-space: normal;
+  line-height: 1.2;
+  text-align: left;
 }
 
 #{{ component_id }} .tutor-calendar__day-detail-content {
