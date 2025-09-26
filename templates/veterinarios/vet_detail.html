@@ -42,16 +42,6 @@
         {% include 'partials/admin_agenda_switcher.html' %}
       {% endif %}
       <div class="d-flex flex-wrap justify-content-end gap-2">
-        <button
-          class="btn btn-outline-info mb-1 collapsed"
-          type="button"
-          data-bs-toggle="collapse"
-          data-bs-target="#vet-calendar-section-{{ veterinario.id }}"
-          aria-expanded="false"
-          aria-controls="vet-calendar-section-{{ veterinario.id }}"
-        >
-          <i class="bi bi-layout-text-window-reverse me-1"></i> Calendário
-        </button>
         <button class="btn btn-primary mb-1" onclick="toggleScheduleForm()">
           <i class="fas fa-plus-circle me-1"></i>Adicionar Horário
         </button>
@@ -62,12 +52,8 @@
     </div>
   </div>
 
-
-  <section
-    class="mb-4 collapse"
-    id="vet-calendar-section-{{ veterinario.id }}"
-    aria-labelledby="vet-calendar-title-{{ veterinario.id }}"
-  >
+ 
+  <section class="mb-4" aria-labelledby="vet-calendar-title-{{ veterinario.id }}">
     <div class="card shadow-sm border-0">
       <div class="card-header bg-primary bg-gradient text-white">
         <h3 id="vet-calendar-title-{{ veterinario.id }}" class="h5 mb-0">
