@@ -7593,6 +7593,7 @@ def appointments():
     selected_colaborador = None
     calendar_summary_vets = []
     calendar_summary_clinic_ids = []
+    calendar_redirect_url = None
 
     if current_user.role == 'admin':
         agenda_users = User.query.order_by(User.name).all()
@@ -7637,6 +7638,62 @@ def appointments():
         if not veterinario:
             abort(404)
         vet_user_id = getattr(veterinario, "user_id", None)
+        clinic_ids = []
+        if getattr(veterinario, "clinica_id", None):
+            clinic_ids.append(veterinario.clinica_id)
+        for clinica in getattr(veterinario, "clinicas", []) or []:
+            clinica_id = getattr(clinica, "id", None)
+            if clinica_id and clinica_id not in clinic_ids:
+                clinic_ids.append(clinica_id)
+        calendar_summary_clinic_ids = clinic_ids
+        if getattr(veterinario, "id", None) is not None:
+            calendar_summary_vets = [
+                {
+                    'id': veterinario.id,
+                    'name': veterinario.user.name
+                    if getattr(veterinario, "user", None)
+                    else None,
+                }
+            ]
+        include_colleagues = (
+            bool(clinic_ids)
+            and (
+                current_user.role == 'admin'
+                or len(clinic_ids) > 1
+            )
+        )
+        if include_colleagues:
+            if current_user.role == 'admin' and agenda_veterinarios:
+                colleagues_source = [
+                    v
+                    for v in agenda_veterinarios
+                    if getattr(v, 'clinica_id', None) in clinic_ids
+                ]
+            else:
+                colleagues_source = (
+                    Veterinario.query.filter(
+                        Veterinario.clinica_id.in_(clinic_ids)
+                    ).all()
+                    if clinic_ids
+                    else []
+                )
+            known_ids = {entry['id'] for entry in calendar_summary_vets}
+            for colleague in colleagues_source:
+                colleague_id = getattr(colleague, 'id', None)
+                if not colleague_id or colleague_id in known_ids:
+                    continue
+                calendar_summary_vets.append(
+                    {
+                        'id': colleague_id,
+                        'name': colleague.user.name
+                        if getattr(colleague, 'user', None)
+                        else None,
+                    }
+                )
+                known_ids.add(colleague_id)
+        calendar_redirect_url = url_for(
+            'appointments', view_as='veterinario', veterinario_id=veterinario.id
+        )
         query_args = request.args.to_dict()
         if current_user.role == 'admin':
             query_args['view_as'] = 'veterinario'
@@ -8050,6 +8107,9 @@ def appointments():
             start_dt=start_dt,
             end_dt=end_dt,
             timedelta=timedelta,
+            calendar_summary_vets=calendar_summary_vets,
+            calendar_summary_clinic_ids=calendar_summary_clinic_ids,
+            calendar_redirect_url=calendar_redirect_url,
         )
     else:
         if worker in ['colaborador', 'admin']:
