@@ -7567,8 +7567,7 @@ def appointments():
     from models import ExamAppointment, Veterinario, Clinica, User
 
     view_as = request.args.get('view_as')
-    actual_worker = current_user.worker
-    worker = actual_worker
+    worker = current_user.worker
 
     def _redirect_to_current_appointments():
         query_args = request.args.to_dict(flat=False)
@@ -7580,14 +7579,11 @@ def appointments():
         if current_user.role == 'admin' and view_as in allowed_views:
             worker = view_as
         elif current_user.role != 'admin':
-            user_allowed_views = {
-                'veterinario': {'veterinario', 'colaborador'},
-                'colaborador': {'colaborador'},
-            }.get(actual_worker, {'tutor'})
-            if view_as not in allowed_views or view_as not in user_allowed_views:
+            # Non-admin users can only request the view matching their own role.
+            user_view = worker if worker in allowed_views else 'tutor'
+            if view_as not in allowed_views or view_as != user_view:
                 flash('Você não tem permissão para acessar essa visão de agenda.', 'warning')
                 return redirect(url_for('appointments'))
-            worker = view_as
 
     agenda_users = []
     agenda_veterinarios = []
@@ -8059,9 +8055,6 @@ def appointments():
         if worker in ['colaborador', 'admin']:
             appointment_form = AppointmentForm(prefix='appointment')
             clinica_id = current_user.clinica_id
-            if not clinica_id and actual_worker == 'veterinario':
-                veterinario_profile = getattr(current_user, 'veterinario', None)
-                clinica_id = getattr(veterinario_profile, 'clinica_id', None)
             if current_user.role == 'admin' and worker == 'colaborador':
                 colaborador_id_arg = request.args.get('colaborador_id', type=int)
                 if colaborador_id_arg:
