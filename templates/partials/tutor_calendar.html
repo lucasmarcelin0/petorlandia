@@ -96,7 +96,8 @@
                     data-close-day-detail
                     aria-label="Fechar detalhes do dia"
                   >
-                    <i class="bi bi-x-lg" aria-hidden="true"></i>
+                    <span class="visually-hidden">Fechar detalhes do dia</span>
+                    <span class="tutor-calendar__day-detail-close-icon" aria-hidden="true">&times;</span>
                   </button>
                 </div>
                 <div class="tutor-calendar__day-detail-content" data-day-detail-content>
@@ -655,6 +656,13 @@
   align-items: center;
   justify-content: center;
   transition: background 0.2s ease, color 0.2s ease, transform 0.2s ease;
+}
+
+#{{ component_id }} .tutor-calendar__day-detail-close-icon {
+  display: block;
+  font-size: 1.15rem;
+  font-weight: 700;
+  line-height: 1;
 }
 
 #{{ component_id }} .tutor-calendar__day-detail-close:hover,
