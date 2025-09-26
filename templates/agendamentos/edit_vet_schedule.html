@@ -99,17 +99,17 @@
           <i class="bi bi-pencil"></i> Editar Horário
         </button>
         <button
-          class="btn btn-success btn-sm"
+          class="btn btn-success btn-sm collapsed"
           type="button"
           data-bs-toggle="collapse"
           data-bs-target="#newAppointmentForm"
-          aria-expanded="true"
+          aria-expanded="false"
         >
           <i class="bi bi-plus-circle"></i> Nova Consulta
         </button>
       </div>
     </div>
-    <div class="collapse show" id="newAppointmentForm">
+    <div class="collapse" id="newAppointmentForm">
       <div class="card-body p-4">
         <form method="POST" class="needs-validation" novalidate>
           {{ appointment_form.hidden_tag() }}
