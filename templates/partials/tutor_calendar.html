@@ -3497,9 +3497,29 @@ document.addEventListener('DOMContentLoaded', function() {
     if (!dayEvents.length) {
       const emptyState = document.createElement('div');
       emptyState.className = 'tutor-calendar__day-detail-empty';
-      emptyState.textContent = currentFilter === 'all'
+
+      const emptyMessage = document.createElement('p');
+      emptyMessage.className = 'mb-3';
+      emptyMessage.textContent = currentFilter === 'all'
         ? 'Nenhum compromisso cadastrado para este dia.'
         : 'Nenhum compromisso para este filtro neste dia.';
+      emptyState.appendChild(emptyMessage);
+
+      const scheduleHint = document.createElement('p');
+      scheduleHint.className = 'small text-muted mb-3';
+      scheduleHint.textContent = 'Você pode agendar um novo compromisso clicando no botão abaixo.';
+      emptyState.appendChild(scheduleHint);
+
+      const scheduleBtn = document.createElement('button');
+      scheduleBtn.type = 'button';
+      scheduleBtn.className = 'btn btn-primary btn-sm';
+      scheduleBtn.innerHTML = '<i class="bi bi-plus-circle me-1"></i> Agendar compromisso';
+      scheduleBtn.addEventListener('click', function() {
+        const slotDate = parseDateKey(targetDateKey) || targetDateKey;
+        dispatchSlot(slotDate, '09:00');
+      });
+      emptyState.appendChild(scheduleBtn);
+
       dayDetailContent.appendChild(emptyState);
     } else {
       const fragment = document.createDocumentFragment();
