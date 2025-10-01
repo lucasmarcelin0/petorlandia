@@ -39,7 +39,9 @@
         {% set switcher_select_style = 'min-width: 220px;' %}
         {% set switcher_form_classes = 'd-flex align-items-center justify-content-end gap-2 mb-2 flex-wrap' %}
         {% set switcher_default_option_label = 'Selecione um usuário' %}
+        {% set switcher_auto_submit_on_load = false %}
         {% include 'partials/admin_agenda_switcher.html' %}
+        {% set switcher_auto_submit_on_load = none %}
       {% endif %}
       <div class="d-flex flex-wrap justify-content-end gap-2">
         <button class="btn btn-primary mb-1" onclick="toggleScheduleForm()">
