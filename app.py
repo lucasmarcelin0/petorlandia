@@ -3472,6 +3472,7 @@ def vet_detail(veterinario_id):
 
     schedule_form = VetScheduleForm(prefix='schedule')
     appointment_form = AppointmentForm(is_veterinario=True, prefix='appointment')
+    admin_default_selection_value = ''
 
     if current_user.role == 'admin':
         agenda_veterinarios = (
@@ -3486,6 +3487,11 @@ def vet_detail(veterinario_id):
         admin_selected_view = 'veterinario'
         admin_selected_veterinario_id = veterinario.id
         admin_selected_colaborador_id = None
+        default_vet = getattr(current_user, 'veterinario', None)
+        if default_vet and getattr(default_vet, 'id', None):
+            admin_default_selection_value = f'veterinario:{default_vet.id}'
+        else:
+            admin_default_selection_value = f'veterinario:{veterinario.id}'
     else:
         agenda_veterinarios = []
         agenda_colaboradores = []
@@ -3544,6 +3550,7 @@ def vet_detail(veterinario_id):
         admin_selected_view=admin_selected_view,
         admin_selected_veterinario_id=admin_selected_veterinario_id,
         admin_selected_colaborador_id=admin_selected_colaborador_id,
+        admin_default_selection_value=admin_default_selection_value,
     )
 
 
@@ -7590,6 +7597,7 @@ def appointments():
     agenda_colaboradores = []
     admin_selected_veterinario_id = None
     admin_selected_colaborador_id = None
+    admin_default_selection_value = ''
     selected_colaborador = None
     calendar_summary_vets = []
     calendar_summary_clinic_ids = []
@@ -7605,6 +7613,9 @@ def appointments():
             .order_by(User.name)
             .all()
         )
+        default_vet = getattr(current_user, 'veterinario', None)
+        if default_vet and getattr(default_vet, 'id', None):
+            admin_default_selection_value = f'veterinario:{default_vet.id}'
 
     admin_selected_view = (
         worker
@@ -8301,6 +8312,7 @@ def appointments():
             admin_selected_view=admin_selected_view,
             admin_selected_veterinario_id=admin_selected_veterinario_id,
             admin_selected_colaborador_id=admin_selected_colaborador_id,
+            admin_default_selection_value=admin_default_selection_value,
             calendar_summary_vets=calendar_summary_vets,
             calendar_summary_clinic_ids=calendar_summary_clinic_ids,
         )
