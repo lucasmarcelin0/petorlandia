@@ -348,6 +348,75 @@ def _render_missing_vet_profile(form=None, profile_form=None):
     )
 
 
+def _build_vet_invites_context(response_form=None, vet_profile_form=None):
+    """Return context data for clinic invites within the messages page."""
+    show_clinic_invites = getattr(current_user, "worker", None) == "veterinario"
+
+    if not show_clinic_invites:
+        return {
+            "show_clinic_invites": False,
+            "clinic_invites": [],
+            "clinic_invite_form": None,
+            "vet_profile_form": None,
+            "missing_vet_profile": False,
+            "missing_vet_profile_message": MISSING_VET_PROFILE_MESSAGE,
+        }
+
+    if response_form is None:
+        response_form = ClinicInviteResponseForm()
+
+    vet_profile = getattr(current_user, "veterinario", None)
+    invites = []
+    missing_vet_profile = False
+
+    if vet_profile is None:
+        missing_vet_profile = True
+        if vet_profile_form is None:
+            vet_profile_form = VeterinarianProfileForm()
+    else:
+        invites = (
+            VetClinicInvite.query.options(
+                joinedload(VetClinicInvite.clinica).joinedload(Clinica.owner)
+            )
+            .filter_by(
+                veterinario_id=vet_profile.id,
+                status="pending",
+            )
+            .order_by(VetClinicInvite.created_at.desc())
+            .all()
+        )
+
+    return {
+        "show_clinic_invites": True,
+        "clinic_invites": invites,
+        "clinic_invite_form": response_form,
+        "vet_profile_form": vet_profile_form,
+        "missing_vet_profile": missing_vet_profile,
+        "missing_vet_profile_message": MISSING_VET_PROFILE_MESSAGE,
+    }
+
+
+def _render_messages_page(mensagens=None, **extra_context):
+    """Render the messages page with optional overrides for clinic invites."""
+    if mensagens is None:
+        mensagens = [
+            m for m in current_user.received_messages if m.sender is not None
+        ]
+
+    context_overrides = extra_context.copy()
+    response_form = context_overrides.pop("clinic_invite_form", None)
+    vet_profile_form = context_overrides.pop("vet_profile_form", None)
+
+    clinic_invite_context = _build_vet_invites_context(
+        response_form=response_form,
+        vet_profile_form=vet_profile_form,
+    )
+    clinic_invite_context.update(context_overrides)
+    clinic_invite_context["mensagens"] = mensagens
+
+    return render_template("mensagens/mensagens.html", **clinic_invite_context)
+
+
 def _ensure_veterinarian_profile(form=None):
     """Return veterinarian profile or render guidance message when missing."""
     worker = getattr(current_user, "worker", None)
@@ -1084,8 +1153,7 @@ def aceitar_interesse(message_id):
 @app.route('/mensagens')
 @login_required
 def mensagens():
-    mensagens_recebidas = [m for m in current_user.received_messages if m.sender is not None]
-    return render_template('mensagens/mensagens.html', mensagens=mensagens_recebidas)
+    return _render_messages_page()
 
 
 @app.route('/chat/<int:animal_id>', methods=['GET', 'POST'])
@@ -3035,7 +3103,7 @@ def create_clinic_veterinario(clinica_id):
 @login_required
 def clinic_invites():
     """List pending clinic invitations for the logged veterinarian."""
-    from models import VetClinicInvite, Veterinario
+    from models import Veterinario
 
     if getattr(current_user, "worker", None) != "veterinario":
         abort(403)
@@ -3044,6 +3112,11 @@ def clinic_invites():
     profile_form = VeterinarianProfileForm()
 
     vet_profile = getattr(current_user, "veterinario", None)
+    anchor_redirect = redirect(url_for('mensagens', _anchor='convites-clinica'))
+
+    if request.method == 'GET':
+        return anchor_redirect
+
     if vet_profile is None:
         if profile_form.validate_on_submit():
             crmv = profile_form.crmv.data
@@ -3063,31 +3136,14 @@ def clinic_invites():
                 db.session.add(vet)
                 db.session.commit()
                 flash('Cadastro de veterinário concluído com sucesso!', 'success')
-                return redirect(url_for('clinic_invites'))
-        return _render_missing_vet_profile(
-            form=response_form,
-            profile_form=profile_form,
+                return anchor_redirect
+        return _render_messages_page(
+            clinic_invite_form=response_form,
+            vet_profile_form=profile_form,
+            missing_vet_profile=True,
         )
 
-    invites = (
-        VetClinicInvite.query.options(
-            joinedload(VetClinicInvite.clinica).joinedload(Clinica.owner)
-        )
-        .filter_by(
-            veterinario_id=vet_profile.id,
-            status='pending',
-        )
-        .order_by(VetClinicInvite.created_at.desc())
-        .all()
-    )
-    return render_template(
-        'clinica/clinic_invites.html',
-        invites=invites,
-        form=response_form,
-        missing_vet_profile=False,
-        missing_vet_profile_message=MISSING_VET_PROFILE_MESSAGE,
-        vet_profile_form=None,
-    )
+    return anchor_redirect
 
 
 @app.route('/convites/<int:invite_id>/<string:action>', methods=['POST'])

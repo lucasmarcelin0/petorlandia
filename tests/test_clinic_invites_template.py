@@ -65,7 +65,7 @@ def extract_csrf_token(html: str, form_id: str) -> str:
     return snippet[value_start:value_end]
 
 
-def test_clinic_invites_template_renders_details(monkeypatch, app):
+def test_messages_page_renders_clinic_invites(monkeypatch, app):
     client = app.test_client()
     with app.app_context():
         db.drop_all()
@@ -96,10 +96,11 @@ def test_clinic_invites_template_renders_details(monkeypatch, app):
 
         login(monkeypatch, vet_user)
 
-        response = client.get('/convites/clinica')
+        response = client.get('/mensagens')
         assert response.status_code == 200
         html = response.get_data(as_text=True)
 
+        assert 'id="convites-clinica"' in html
         assert "Clínica Lua" in html
         assert "Rua das Flores, 123 - Centro" in html
         assert "Dra. Ana" in html
@@ -116,12 +117,13 @@ def test_clinic_invites_template_renders_details(monkeypatch, app):
 
         assert f'action="{accept_url}"' in html
         assert f'action="{decline_url}"' in html
+        assert html.count('name="csrf_token"') >= 2
 
         db.session.remove()
         db.drop_all()
 
 
-def test_clinic_invites_template_guides_user_without_profile(monkeypatch, app):
+def test_messages_page_guides_user_without_profile(monkeypatch, app):
     client = app.test_client()
     with app.app_context():
         db.drop_all()
@@ -138,7 +140,7 @@ def test_clinic_invites_template_guides_user_without_profile(monkeypatch, app):
 
         login(monkeypatch, vet_user)
 
-        response = client.get('/convites/clinica')
+        response = client.get('/mensagens')
         assert response.status_code == 200
         html = response.get_data(as_text=True)
 
@@ -170,7 +172,7 @@ def test_clinic_invites_allows_vet_profile_creation(monkeypatch, app):
 
         login(monkeypatch, vet_user)
 
-        response = client.get('/convites/clinica')
+        response = client.get('/mensagens')
         assert response.status_code == 200
         html = response.get_data(as_text=True)
         csrf_token = extract_csrf_token(html, "vet-profile-form")
@@ -186,7 +188,7 @@ def test_clinic_invites_allows_vet_profile_creation(monkeypatch, app):
         )
 
         assert post_response.status_code == 302
-        assert post_response.headers['Location'].endswith('/convites/clinica')
+        assert post_response.headers['Location'].endswith('/mensagens#convites-clinica')
 
         vet = Veterinario.query.filter_by(user_id=vet_user.id).first()
         assert vet is not None
@@ -195,11 +197,16 @@ def test_clinic_invites_allows_vet_profile_creation(monkeypatch, app):
         refreshed_user = User.query.get(vet_user.id)
         assert refreshed_user.phone == '(16) 4002-8922'
 
-        follow_response = client.get('/convites/clinica')
+        follow_response = client.get('/mensagens')
         assert follow_response.status_code == 200
         follow_html = follow_response.get_data(as_text=True)
         assert 'id="vet-profile-form"' not in follow_html
         assert "Nenhum convite por aqui" in follow_html
+
+        # GET on the legacy endpoint now redirects to mensagens
+        redirect_response = client.get('/convites/clinica')
+        assert redirect_response.status_code == 302
+        assert redirect_response.headers['Location'].endswith('/mensagens#convites-clinica')
 
         db.session.remove()
         db.drop_all()
