@@ -157,6 +157,86 @@ function getModalInstance(element) {
   return bootstrapGlobal.Modal.getOrCreateInstance(element);
 }
 
+function getCollapseController(element) {
+  const bootstrapGlobal = window?.bootstrap;
+  if (!element || !bootstrapGlobal?.Collapse) {
+    return null;
+  }
+  return bootstrapGlobal.Collapse.getOrCreateInstance(element, { toggle: false });
+}
+
+function showCollapseElement(element) {
+  if (!element) {
+    return;
+  }
+  const controller = getCollapseController(element);
+  if (controller) {
+    controller.show();
+    return;
+  }
+  element.classList.add('show');
+  element.style.height = 'auto';
+  element.removeAttribute('aria-hidden');
+}
+
+function hideCollapseElement(element) {
+  if (!element) {
+    return;
+  }
+  const controller = getCollapseController(element);
+  if (controller) {
+    controller.hide();
+    return;
+  }
+  element.classList.remove('show');
+  element.setAttribute('aria-hidden', 'true');
+  element.style.height = '0px';
+}
+
+function updateCollapseToggleState(button, expanded) {
+  if (!button) {
+    return;
+  }
+  if (expanded) {
+    button.classList.remove('collapsed');
+  } else {
+    button.classList.add('collapsed');
+  }
+  button.setAttribute('aria-expanded', expanded ? 'true' : 'false');
+}
+
+function focusFirstField(container) {
+  if (!container) {
+    return;
+  }
+  const focusTarget = container.querySelector('input, select, textarea');
+  if (!focusTarget) {
+    return;
+  }
+  window.setTimeout(() => {
+    try {
+      focusTarget.focus({ preventScroll: false });
+    } catch (error) {
+      focusTarget.focus();
+    }
+  }, 150);
+}
+
+function scrollIntoViewSmooth(element) {
+  if (!element) {
+    return;
+  }
+  window.setTimeout(() => {
+    try {
+      element.scrollIntoView({ behavior: 'smooth', block: 'start', inline: 'nearest' });
+    } catch (error) {
+      const rect = element.getBoundingClientRect();
+      const absoluteTop = rect.top + window.pageYOffset;
+      window.scrollTo({ top: Math.max(absoluteTop - 24, 0), behavior: 'smooth' });
+    }
+  }, 200);
+}
+
 function ensurePlaceholderOption(select, placeholder = DEFAULT_TIME_PLACEHOLDER) {
   if (!select) {
     return;
@@ -1176,6 +1256,101 @@ function bindAppointmentNotesWatcher() {
   });
 }
 
+async function applyCalendarSlotToNewAppointment(root, detail) {
+  const dateField = document.getElementById('appointment-date');
+  const timeSelect = document.getElementById('appointment-time');
+  if (!dateField) {
+    return;
+  }
+
+  const targetDate = (detail.date || '').trim();
+  const targetTime = (detail.time || '').trim();
+
+  if (targetDate) {
+    const previousValue = dateField.value;
+    dateField.value = targetDate;
+    if (dateField.value !== previousValue) {
+      dateField.dispatchEvent(new Event('change', { bubbles: true }));
+    } else {
+      dateField.dispatchEvent(new Event('input', { bubbles: true }));
+      dateField.dispatchEvent(new Event('change', { bubbles: true }));
+    }
+  }
+
+  if (!timeSelect) {
+    return;
+  }
+
+  const availableTimes = await updateAppointmentTimes({ root, dateInput: dateField, timeSelect });
+  const hasTimes = Array.isArray(availableTimes) && availableTimes.length > 0;
+  if (timeSelect.disabled && (hasTimes || targetTime)) {
+    timeSelect.disabled = false;
+  }
+
+  if (!targetTime) {
+    timeSelect.dataset.currentTime = '';
+    return;
+  }
+
+  let option = Array.from(timeSelect.options).find((item) => item.value === targetTime);
+  if (!option) {
+    option = document.createElement('option');
+    option.value = targetTime;
+    option.textContent = targetTime;
+    timeSelect.appendChild(option);
+  }
+  timeSelect.value = targetTime;
+  timeSelect.dataset.currentTime = targetTime;
+  timeSelect.dispatchEvent(new Event('change', { bubbles: true }));
+}
+
+function bindCalendarSlotHandler(root) {
+  if (!root || root.dataset.calendarSlotHandlerBound === 'true') {
+    return;
+  }
+
+  const calendarCollapseId = root.dataset?.calendarCollapseId || '';
+  const calendarCollapseEl = calendarCollapseId
+    ? document.getElementById(calendarCollapseId)
+    : null;
+  const calendarToggleBtn = calendarCollapseId
+    ? document.querySelector(`[data-bs-target="#${calendarCollapseId}"]`)
+    : null;
+  const newAppointmentCollapseEl = document.getElementById('newAppointmentForm');
+  const newAppointmentToggleBtn = document.querySelector('[data-bs-target="#newAppointmentForm"]');
+
+  const handler = async (event) => {
+    const detail = event.detail || {};
+    if (!detail.date) {
+      return;
+    }
+    const eventTarget = event.target;
+    if (eventTarget instanceof Node && !root.contains(eventTarget)) {
+      return;
+    }
+
+    if (calendarCollapseEl) {
+      hideCollapseElement(calendarCollapseEl);
+      updateCollapseToggleState(calendarToggleBtn, false);
+    }
+
+    showCollapseElement(newAppointmentCollapseEl);
+    updateCollapseToggleState(newAppointmentToggleBtn, true);
+
+    try {
+      await applyCalendarSlotToNewAppointment(root, detail);
+    } catch (error) {
+      console.warn('Não foi possível preencher o formulário com o horário selecionado.', error);
+    }
+
+    focusFirstField(newAppointmentCollapseEl);
+    scrollIntoViewSmooth(newAppointmentCollapseEl);
+  };
+
+  document.addEventListener('calendarSlotChosen', handler);
+  root.dataset.calendarSlotHandlerBound = 'true';
+}
+
 function bindPastToggle(root) {
   const toggleButton = document.getElementById('toggle-past');
   const pastList = document.getElementById('past-list');
@@ -1222,6 +1397,7 @@ export function initVetSchedulePage(options = {}) {
   bindAppointmentNotesWatcher();
   bindPastToggle(root);
   bindScheduleModalButton(root);
+  bindCalendarSlotHandler(root);
   initScheduleOverview(root);
   animateCards(root);
 

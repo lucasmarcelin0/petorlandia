@@ -3,6 +3,7 @@
 {% block main %}
 <div class="container mt-4"
      data-vet-schedule-root
+     data-calendar-collapse-id="{{ vet_calendar_collapse_id }}"
      data-vet-id="{{ veterinario.id }}"
      data-appointments-base-url="{{ url_for('appointments') }}"
      data-csrf-token="{{ csrf_token() if csrf_token is defined else '' }}">
@@ -102,13 +103,13 @@
           <div class="row g-3 mt-2">
             <div class="col-md-6">
               {{ appointment_form.date.label(class="form-label fw-semibold") }}
-              {{ appointment_form.date(class="form-control", type="date") }}
+              {{ appointment_form.date(class="form-control", type="date", id="appointment-date") }}
             </div>
             <div class="col-md-6">
               {{ appointment_form.time.label(class="form-label fw-semibold") }}
               {% set current_time = appointment_form.time.data.strftime('%H:%M') if appointment_form.time.data else '' %}
               <select
-                id="{{ appointment_form.time.id }}"
+                id="appointment-time"
                 name="{{ appointment_form.time.name }}"
                 class="form-select"
                 data-placeholder="Selecione um horário"
