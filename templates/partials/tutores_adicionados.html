@@ -104,12 +104,23 @@
 </div>
 
 <script>
-document.addEventListener('DOMContentLoaded', function() {
+(function() {
   const filterInput = document.getElementById('tutor-filter');
   const sortSelect = document.getElementById('tutor-sort');
   const container = document.getElementById('tutor-cards');
+
+  if (!filterInput || !sortSelect || !container) {
+    return;
+  }
+
   const cards = Array.from(container.querySelectorAll('[data-name]'));
   const sortStorageKey = 'tutorSortPreference';
+  const filterStorageKey = 'tutorFilterPreference';
+
+  const savedFilter = localStorage.getItem(filterStorageKey);
+  if (savedFilter !== null) {
+    filterInput.value = savedFilter;
+  }
 
   const savedSort = localStorage.getItem(sortStorageKey);
   if (savedSort && Array.from(sortSelect.options).some(option => option.value === savedSort)) {
@@ -120,7 +131,7 @@ document.addEventListener('DOMContentLoaded', function() {
     if (!card.dataset.dob) return 0;
     const diff = Date.now() - new Date(card.dataset.dob).getTime();
     return Math.floor(diff / (365.25 * 24 * 60 * 60 * 1000));
-    }
+  }
 
   function applyFilter() {
     const term = filterInput.value.toLowerCase();
@@ -157,11 +168,18 @@ document.addEventListener('DOMContentLoaded', function() {
     hidden.forEach(card => container.appendChild(card));
   }
 
-  filterInput.addEventListener('input', () => { applyFilter(); applySort(); });
+  filterInput.addEventListener('input', () => {
+    localStorage.setItem(filterStorageKey, filterInput.value);
+    applyFilter();
+    applySort();
+  });
+
   sortSelect.addEventListener('change', () => {
     localStorage.setItem(sortStorageKey, sortSelect.value);
     applySort();
   });
+
+  applyFilter();
   applySort();
-});
+})();
 </script>
