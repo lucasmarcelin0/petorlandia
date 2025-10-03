@@ -15,7 +15,6 @@
   data-url-edit-appointment="{{ url_for('edit_appointment', appointment_id=0) }}"
   data-url-status="{{ url_for('update_appointment_status', appointment_id=0) }}"
   data-url-delete-appointment="{{ url_for('delete_appointment', appointment_id=0) }}"
-  data-url-print-consulta="{{ url_for('imprimir_consulta', consulta_id=0) }}"
   data-can-start-consulta="{{ 'true' if current_user.worker in ['veterinario', 'colaborador'] else 'false' }}"
   data-can-manage-status="{{ 'true' if (current_user.worker in ['veterinario', 'colaborador']) or current_user.role == 'admin' else 'false' }}"
 >
@@ -1032,22 +1031,6 @@
   gap: 0.35rem;
 }
 
-#{{ component_id }} .tutor-calendar__appointment-status-detail {
-  margin-top: 0.75rem;
-}
-
-#{{ component_id }} .tutor-calendar__appointment-status-detail .badge {
-  font-size: 0.7rem;
-  letter-spacing: 0.03em;
-  text-transform: uppercase;
-}
-
-#{{ component_id }} .tutor-calendar__appointment-return-info {
-  margin-top: 0.5rem;
-  color: var(--bs-secondary-color, #6c757d);
-  font-size: 0.85rem;
-}
-
 #{{ component_id }} .tutor-calendar__appointment-actions .btn.is-loading {
   opacity: 0.65;
   pointer-events: none;
@@ -1473,7 +1456,6 @@ document.addEventListener('DOMContentLoaded', function() {
     editAppointment: root.dataset.urlEditAppointment || '',
     status: root.dataset.urlStatus || '',
     deleteAppointment: root.dataset.urlDeleteAppointment || '',
-    printConsulta: root.dataset.urlPrintConsulta || '',
   };
   const permissions = {
     canStartConsulta: root.dataset.canStartConsulta === 'true',
@@ -1494,11 +1476,6 @@ document.addEventListener('DOMContentLoaded', function() {
     accepted: 'Aceita',
   };
   const knownStatusKeys = Object.keys(statusLabels);
-  const consultaStatusLabels = {
-    finalizada: 'Finalizada',
-    in_progress: 'Em andamento',
-    draft: 'Rascunho',
-  };
   const statusActionConfig = [
     {
       status: 'completed',
@@ -1918,42 +1895,6 @@ document.addEventListener('DOMContentLoaded', function() {
       return null;
     }
     return appendQueryParam(base, 'appointment_id', appointmentId);
-  }
-
-  function buildConsultaDetailUrl(animalId, consultaId) {
-    const base = fillUrlWithId(urlTemplates.consulta, animalId);
-    if (!base) {
-      return null;
-    }
-    return consultaId ? appendQueryParam(base, 'c', consultaId) : base;
-  }
-
-  function buildConsultaPrintUrl(consultaId) {
-    return fillUrlWithId(urlTemplates.printConsulta, consultaId);
-  }
-
-  function deriveAppointmentStatusDetail(statusKey, consultaStatus) {
-    const status = statusKey ? String(statusKey) : '';
-    const consulta = consultaStatus ? String(consultaStatus) : '';
-    if (consulta === 'finalizada') {
-      if (status === 'accepted') {
-        return { label: 'Consulta finalizada e aceita', badgeClass: 'bg-success' };
-      }
-      return { label: 'Consulta finalizada', badgeClass: 'bg-success' };
-    }
-    if (status === 'accepted') {
-      return { label: 'Consulta aceita e não finalizada', badgeClass: 'bg-secondary' };
-    }
-    if (status === 'completed') {
-      return { label: 'Consulta finalizada', badgeClass: 'bg-success' };
-    }
-    if (status === 'canceled') {
-      return { label: 'Consulta cancelada', badgeClass: 'bg-danger' };
-    }
-    if (status === 'scheduled') {
-      return { label: 'Consulta agendada', badgeClass: 'bg-info text-dark' };
-    }
-    return null;
   }
 
   function updateEventFocusHighlight() {
@@ -3140,15 +3081,6 @@ document.addEventListener('DOMContentLoaded', function() {
     } else if (kindLabel) {
       kindLabel = humanizeLabel(kindLabel);
     }
-    const consultaId = ext.consultaId !== undefined && ext.consultaId !== null ? ext.consultaId : null;
-    const consultaStatusKey = ext.consultaStatus || null;
-    const consultaStatusLabel = consultaStatusKey
-      ? (consultaStatusLabels[consultaStatusKey] || humanizeLabel(consultaStatusKey))
-      : null;
-    const retornoDeId = ext.consultaRetornoDeId !== undefined && ext.consultaRetornoDeId !== null
-      ? ext.consultaRetornoDeId
-      : null;
-    const statusDetail = deriveAppointmentStatusDetail(statusKey, consultaStatusKey);
     const tutorName = ext.tutorName || null;
     const animalName = ext.animalName || getPetName(eventData.animalId) || derivePetNameFromTitle(eventData.title) || 'Paciente';
     const vetName = ext.vetName || ext.veterinarioName || deriveVetNameFromTitle(eventData.title) || '—';
@@ -3259,33 +3191,6 @@ document.addEventListener('DOMContentLoaded', function() {
       card.appendChild(peopleGrid);
     }
 
-    if (statusDetail && statusDetail.label) {
-      const statusWrapper = document.createElement('div');
-      statusWrapper.className = 'tutor-calendar__appointment-status-detail';
-      const badge = document.createElement('span');
-      const badgeClasses = ['badge'];
-      if (statusDetail.badgeClass) {
-        statusDetail.badgeClass.split(' ').forEach(function(token) {
-          if (token) {
-            badgeClasses.push(token);
-          }
-        });
-      } else {
-        badgeClasses.push('bg-secondary');
-      }
-      badge.className = badgeClasses.join(' ');
-      badge.textContent = statusDetail.label;
-      statusWrapper.appendChild(badge);
-      card.appendChild(statusWrapper);
-    }
-
-    if (retornoDeId !== null) {
-      const returnInfo = document.createElement('div');
-      returnInfo.className = 'tutor-calendar__appointment-return-info';
-      returnInfo.textContent = `Retorno da consulta #${retornoDeId}`;
-      card.appendChild(returnInfo);
-    }
-
     const infoList = document.createElement('dl');
     infoList.className = 'tutor-calendar__day-detail-info tutor-calendar__appointment-meta';
 
@@ -3301,15 +3206,6 @@ document.addEventListener('DOMContentLoaded', function() {
     appendDetailRow(infoList, 'ID', recordId);
     if (ext.clinicId !== undefined && ext.clinicId !== null) {
       appendDetailRow(infoList, 'Clínica', ext.clinicId);
-    }
-    if (consultaStatusLabel) {
-      appendDetailRow(infoList, 'Status da consulta', consultaStatusLabel);
-    }
-    if (consultaId !== null) {
-      appendDetailRow(infoList, 'Consulta vinculada', `#${consultaId}`);
-    }
-    if (retornoDeId !== null) {
-      appendDetailRow(infoList, 'Retorno da consulta', `#${retornoDeId}`);
     }
 
     card.appendChild(infoList);
@@ -3401,40 +3297,6 @@ document.addEventListener('DOMContentLoaded', function() {
         icon.setAttribute('aria-hidden', 'true');
         btn.appendChild(icon);
         btn.appendChild(document.createTextNode('Iniciar Consulta'));
-        appendActionElement(btn);
-      }
-    }
-
-    if (consultaId !== null && ext.animalId) {
-      const detailUrl = buildConsultaDetailUrl(ext.animalId, consultaId);
-      if (detailUrl) {
-        const btn = document.createElement('a');
-        btn.className = 'btn btn-sm btn-outline-success';
-        btn.href = detailUrl;
-        btn.title = 'Detalhes da consulta';
-        const icon = document.createElement('i');
-        icon.className = 'fa-solid fa-notes-medical me-1';
-        icon.setAttribute('aria-hidden', 'true');
-        btn.appendChild(icon);
-        btn.appendChild(document.createTextNode('Detalhes da consulta'));
-        appendActionElement(btn);
-      }
-    }
-
-    if (consultaId !== null) {
-      const printUrl = buildConsultaPrintUrl(consultaId);
-      if (printUrl) {
-        const btn = document.createElement('a');
-        btn.className = 'btn btn-sm btn-outline-dark';
-        btn.href = printUrl;
-        btn.target = '_blank';
-        btn.rel = 'noopener';
-        btn.title = 'Imprimir consulta';
-        const icon = document.createElement('i');
-        icon.className = 'fa-solid fa-print me-1';
-        icon.setAttribute('aria-hidden', 'true');
-        btn.appendChild(icon);
-        btn.appendChild(document.createTextNode('Imprimir consulta'));
         appendActionElement(btn);
       }
     }
