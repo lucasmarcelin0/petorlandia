@@ -7,6 +7,7 @@
 {% set calendar_full_tab_id = calendar_full_tab_id|default('calendar-tab-full') %}
 {% set calendar_inline_component_id = calendar_inline_component_id|default('tutor-calendar-inline') %}
 {% set calendar_hide_experimental_tab = calendar_hide_experimental_tab|default(False) %}
+{% set calendar_show_summary_toggle = calendar_show_summary_toggle|default(True) %}
 {% set calendar_pets_endpoint = calendar_pets_endpoint|default(url_for('api_my_pets')) %}
 {% set calendar_summary_toggle_show_label = calendar_summary_toggle_show_label|default('Mostrar resumo') %}
 {% set calendar_summary_toggle_hide_label = calendar_summary_toggle_hide_label|default('Ocultar resumo') %}
@@ -16,58 +17,68 @@
 {% set schedule_toggle_prefer_user_vet_source = schedule_toggle_prefer_user_vet_source|default(none) %}
 {% set schedule_toggle_include_assets = schedule_toggle_include_assets|default(True) %}
 
+{% set should_render_tab_nav = not calendar_hide_experimental_tab %}
+{% set should_render_summary_toggle = calendar_show_summary_toggle %}
+{% set should_render_header_controls = should_render_tab_nav or should_render_summary_toggle %}
+
 <div class="row g-4 align-items-stretch mb-4" id="{{ calendar_overview_id }}">
   <div class="col-12 col-xl-8 col-xxl-9" data-calendar-main-column>
-    <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3">
-      <ul
-        class="nav nav-pills calendar-tabs mb-0"
-        id="{{ calendar_tabs_id }}"
-        role="tablist"
-        aria-label="Alternar entre o calendário e o agendamento"
-        data-calendar-tabs
-      >
-        <li class="nav-item{% if calendar_hide_experimental_tab %} d-none{% endif %}" role="presentation">
-          <button
-            class="nav-link active"
-            id="{{ calendar_experimental_tab_id }}"
-            data-bs-toggle="tab"
-            data-bs-target="#{{ calendar_experimental_pane_id }}"
-            type="button"
-            role="tab"
-            aria-controls="{{ calendar_experimental_pane_id }}"
-            aria-selected="true"
+    {% if should_render_header_controls %}
+      <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3">
+        {% if should_render_tab_nav %}
+          <ul
+            class="nav nav-pills calendar-tabs mb-0"
+            id="{{ calendar_tabs_id }}"
+            role="tablist"
+            aria-label="Alternar entre o calendário e o agendamento"
+            data-calendar-tabs
           >
-            <i class="bi bi-layout-text-window-reverse me-1"></i> Calendário
-          </button>
-        </li>
-        <li class="nav-item" role="presentation">
+            <li class="nav-item" role="presentation">
+              <button
+                class="nav-link active"
+                id="{{ calendar_experimental_tab_id }}"
+                data-bs-toggle="tab"
+                data-bs-target="#{{ calendar_experimental_pane_id }}"
+                type="button"
+                role="tab"
+                aria-controls="{{ calendar_experimental_pane_id }}"
+                aria-selected="true"
+              >
+                <i class="bi bi-layout-text-window-reverse me-1"></i> Calendário
+              </button>
+            </li>
+            <li class="nav-item" role="presentation">
+              <button
+                class="nav-link"
+                id="{{ calendar_full_tab_id }}"
+                data-bs-toggle="tab"
+                data-bs-target="#{{ calendar_full_pane_id }}"
+                type="button"
+                role="tab"
+                aria-controls="{{ calendar_full_pane_id }}"
+                aria-selected="false"
+              >
+                <i class="bi bi-calendar3 me-1"></i> Agendamento
+              </button>
+            </li>
+          </ul>
+        {% endif %}
+        {% if should_render_summary_toggle %}
           <button
-            class="nav-link"
-            id="{{ calendar_full_tab_id }}"
-            data-bs-toggle="tab"
-            data-bs-target="#{{ calendar_full_pane_id }}"
             type="button"
-            role="tab"
-            aria-controls="{{ calendar_full_pane_id }}"
-            aria-selected="false"
+            class="btn btn-outline-secondary btn-sm d-flex align-items-center gap-2 calendar-summary-toggle"
+            data-calendar-summary-toggle
+            data-show-label="{{ calendar_summary_toggle_show_label }}"
+            data-hide-label="{{ calendar_summary_toggle_hide_label }}"
+            aria-pressed="false"
+            aria-expanded="true"
           >
-            <i class="bi bi-calendar3 me-1"></i> Agendamento
+            <i class="bi bi-layout-sidebar-inset" data-calendar-summary-toggle-icon aria-hidden="true"></i>
+            <span data-calendar-summary-toggle-label>{{ calendar_summary_toggle_hide_label }}</span>
           </button>
-        </li>
-      </ul>
-      <button
-        type="button"
-        class="btn btn-outline-secondary btn-sm d-flex align-items-center gap-2 calendar-summary-toggle"
-        data-calendar-summary-toggle
-        data-show-label="{{ calendar_summary_toggle_show_label }}"
-        data-hide-label="{{ calendar_summary_toggle_hide_label }}"
-        aria-pressed="false"
-        aria-expanded="true"
-      >
-        <i class="bi bi-layout-sidebar-inset" data-calendar-summary-toggle-icon aria-hidden="true"></i>
-        <span data-calendar-summary-toggle-label>{{ calendar_summary_toggle_hide_label }}</span>
-      </button>
-    </div>
+        {% endif %}
+      </div>
+    {% endif %}
 
     <div class="tab-content mt-3" id="{{ calendar_content_id }}">
       <div
