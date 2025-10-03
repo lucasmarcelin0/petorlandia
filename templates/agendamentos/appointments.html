@@ -474,21 +474,30 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   function ensureNewAppointmentVisible() {
-    if (!newAppointmentCollapseEl || !window.bootstrap || !bootstrap.Collapse) {
+    if (!newAppointmentCollapseEl) {
       return;
     }
-    if (!newAppointmentCollapseInstance) {
-      newAppointmentCollapseInstance = bootstrap.Collapse.getOrCreateInstance(
-        newAppointmentCollapseEl,
-        { toggle: false }
-      );
+
+    if (window.bootstrap && bootstrap.Collapse) {
+      if (!newAppointmentCollapseInstance) {
+        newAppointmentCollapseInstance = bootstrap.Collapse.getOrCreateInstance(
+          newAppointmentCollapseEl,
+          { toggle: false }
+        );
+      }
+      if (!newAppointmentCollapseEl.classList.contains('show')) {
+        newAppointmentCollapseInstance.show();
+      }
+    } else if (!newAppointmentCollapseEl.classList.contains('show')) {
+      newAppointmentCollapseEl.classList.add('show');
+      newAppointmentCollapseEl.style.height = 'auto';
+      newAppointmentCollapseEl.removeAttribute('aria-hidden');
     }
-    if (!newAppointmentCollapseEl.classList.contains('show')) {
-      newAppointmentCollapseInstance.show();
-    }
+
     if (newAppointmentToggleBtn) {
       newAppointmentToggleBtn.setAttribute('aria-expanded', 'true');
     }
+
     updateNewAppointmentToggleAria();
   }
 
