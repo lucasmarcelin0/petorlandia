@@ -452,6 +452,7 @@
           <div class="list-group-item list-group-item-action appointment-item"
               data-id="{{ appt.id }}"
               data-date="{{ appt.scheduled_at|format_datetime_brazil('%Y-%m-%d') }}"
+              data-date-label="{{ appt.scheduled_at|format_datetime_brazil('%d/%m/%Y') }}"
               data-time="{{ appt.scheduled_at|format_datetime_brazil('%H:%M') }}"
               data-vet="{{ appt.veterinario.user.name }}"
               data-vet-id="{{ appt.veterinario_id }}"
@@ -465,7 +466,15 @@
               data-notes="{{ appt.notes or '' }}"
               data-created-by="{{ appt.creator.name if appt.creator else '' }}"
               data-created-at="{{ appt.created_at|format_datetime_brazil('%d/%m/%Y %H:%M') if appt.created_at else '' }}"
-              data-type="{{ item.kind }}">
+              data-status="{{ appt.status }}"
+              data-status-label="{{ 'A fazer' if appt.status == 'scheduled' else 'Realizada' if appt.status == 'completed' else 'Cancelada' if appt.status == 'canceled' else 'Aceita' if appt.status == 'accepted' else appt.status|replace('_', ' ')|title }}"
+              data-type="{{ item.kind }}"
+              data-type-label="{{ {
+                'consulta': 'Consulta',
+                'retorno': 'Retorno',
+                'banho_tosa': 'Banho e Tosa',
+                'vacina': 'Vacina'
+              }[item.kind] if item.kind in ['consulta', 'retorno', 'banho_tosa', 'vacina'] else item.kind|replace('_', ' ')|title }}">
             <div class="d-flex justify-content-between align-items-center">
               <div class="d-flex align-items-center">
                 <div class="me-3">
@@ -722,43 +731,94 @@
         </div>
         <div class="modal-body">
           <input type="hidden" id="modal-appt-id">
-          <div class="mb-3">
-            <label class="form-label fw-bold">Veterinário</label>
-            <input type="text" class="form-control" id="modal-vet" readonly>
-          </div>
-          <div class="mb-3">
-            <label class="form-label fw-bold">Tutor</label>
-            <input type="text" class="form-control" id="modal-tutor" readonly>
-          </div>
-          <div class="mb-3">
-            <label class="form-label fw-bold">Animal</label>
-            <input type="text" class="form-control" id="modal-animal" readonly>
-          </div>
-          <div class="row">
-            <div class="col-md-6 mb-3">
-              <label class="form-label fw-bold">Agendado por</label>
-              <input type="text" class="form-control" id="modal-created-by" readonly>
+
+          <div class="appointment-modal-card">
+            <div class="appointment-modal-top">
+              <div class="appointment-modal-schedule">
+                <div class="appointment-modal-time-block">
+                  <span class="appointment-modal-icon is-time"><i class="fa-regular fa-clock"></i></span>
+                  <div>
+                    <span class="appointment-modal-subtitle">Horário</span>
+                    <span class="appointment-modal-value" id="modal-time-display">--:--</span>
+                  </div>
+                </div>
+                <div class="appointment-modal-time-block">
+                  <span class="appointment-modal-icon is-date"><i class="fa-regular fa-calendar"></i></span>
+                  <div>
+                    <span class="appointment-modal-subtitle">Data</span>
+                    <span class="appointment-modal-value" id="modal-date-display">--/--/----</span>
+                  </div>
+                </div>
+              </div>
+              <div class="appointment-modal-tags">
+                <span class="appointment-modal-pill" id="modal-kind-label">Consulta</span>
+                <span class="status-badge status-scheduled" id="modal-status-label">A fazer</span>
+              </div>
             </div>
-            <div class="col-md-6 mb-3">
-              <label class="form-label fw-bold">Agendado em</label>
-              <input type="text" class="form-control" id="modal-created-at" readonly>
+
+            <div class="appointment-modal-people">
+              <div class="appointment-modal-person">
+                <span class="appointment-modal-icon is-pet"><i class="fa-solid fa-paw"></i></span>
+                <div class="appointment-modal-person-info">
+                  <span class="appointment-modal-person-label">Paciente</span>
+                  <span class="appointment-modal-person-value" id="modal-animal-name">—</span>
+                </div>
+              </div>
+              <div class="appointment-modal-person">
+                <span class="appointment-modal-icon is-tutor"><i class="fa-solid fa-user"></i></span>
+                <div class="appointment-modal-person-info">
+                  <span class="appointment-modal-person-label">Tutor</span>
+                  <span class="appointment-modal-person-value" id="modal-tutor-name">—</span>
+                </div>
+              </div>
+              <div class="appointment-modal-person">
+                <span class="appointment-modal-icon is-vet"><i class="fa-solid fa-user-doctor"></i></span>
+                <div class="appointment-modal-person-info">
+                  <span class="appointment-modal-person-label">Veterinário</span>
+                  <span class="appointment-modal-person-value" id="modal-vet-name">—</span>
+                </div>
+              </div>
+            </div>
+
+            <dl class="appointment-modal-meta">
+              <div class="appointment-modal-meta-item">
+                <dt>Agendado por</dt>
+                <dd id="modal-created-by-text">Não informado</dd>
+              </div>
+              <div class="appointment-modal-meta-item">
+                <dt>Agendado em</dt>
+                <dd id="modal-created-at-text">Não informado</dd>
+              </div>
+            </dl>
+
+            <div class="appointment-modal-notes-display" id="modal-notes-display" hidden>
+              <span class="appointment-modal-icon is-note"><i class="fa-solid fa-note-sticky"></i></span>
+              <div>
+                <div class="appointment-modal-notes-title">Observações</div>
+                <p class="appointment-modal-notes-text" id="modal-notes-text"></p>
+              </div>
             </div>
           </div>
-          <div class="row">
-            <div class="col-md-6 mb-3">
-              <label class="form-label fw-bold">Data</label>
-              <input type="date" class="form-control" id="modal-date">
+
+          <div class="appointment-modal-editor mt-4">
+            <h6 class="appointment-modal-editor-title">Atualizar agendamento</h6>
+            <p class="appointment-modal-editor-subtitle">Escolha uma nova data, horário ou ajuste os comentários conforme necessário.</p>
+            <div class="row g-3">
+              <div class="col-md-6">
+                <label class="form-label">Data</label>
+                <input type="date" class="form-control" id="modal-date">
+              </div>
+              <div class="col-md-6">
+                <label class="form-label">Hora</label>
+                <select class="form-select" id="modal-time" data-placeholder="Selecione...">
+                  <option value="">Selecione...</option>
+                </select>
+              </div>
             </div>
-            <div class="col-md-6 mb-3">
-              <label class="form-label fw-bold">Hora</label>
-              <select class="form-select" id="modal-time" data-placeholder="Selecione...">
-                <option value="">Selecione...</option>
-              </select>
+            <div class="mt-3">
+              <label class="form-label">Comentários</label>
+              <textarea class="form-control" id="modal-notes" rows="3"></textarea>
             </div>
-          </div>
-          <div class="mb-3">
-            <label class="form-label fw-bold">Comentários</label>
-            <textarea class="form-control" id="modal-notes" rows="3"></textarea>
           </div>
         </div>
         <div class="modal-footer">
@@ -774,6 +834,7 @@
 </div>
 
 
+{% include 'partials/appointment_modal_styles.html' %}
 
 <style>
   .appointment-item {

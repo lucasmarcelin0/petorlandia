@@ -4,6 +4,113 @@ const ROOT_SELECTOR = '[data-vet-schedule-root]';
 const DEFAULT_TIME_PLACEHOLDER = 'Selecione...';
 const DEFAULT_SUCCESS_MESSAGE = 'Agendamento atualizado com sucesso.';
 
+const TYPE_LABELS = {
+  consulta: 'Consulta',
+  retorno: 'Retorno',
+  banho_tosa: 'Banho e Tosa',
+  vacina: 'Vacina'
+};
+
+const STATUS_LABELS = {
+  scheduled: 'A fazer',
+  completed: 'Realizada',
+  canceled: 'Cancelada',
+  accepted: 'Aceita'
+};
+
+function humanizeLabel(value) {
+  if (!value && value !== 0) {
+    return '';
+  }
+  return value
+    .toString()
+    .replace(/[_-]+/g, ' ')
+    .replace(/\b\w/g, (char) => char.toUpperCase());
+}
+
+function getTypeLabel(type) {
+  if (!type && type !== 0) {
+    return '';
+  }
+  const normalized = type.toString().trim().toLowerCase();
+  return TYPE_LABELS[normalized] || humanizeLabel(normalized);
+}
+
+function getStatusLabel(status) {
+  if (!status && status !== 0) {
+    return '';
+  }
+  const normalized = status.toString().trim().toLowerCase();
+  return STATUS_LABELS[normalized] || humanizeLabel(normalized);
+}
+
+function formatDateToBrazil(value) {
+  if (!value) {
+    return '';
+  }
+  const [year, month, day] = value.split('-');
+  if (!year || !month || !day) {
+    return value;
+  }
+  return `${day}/${month}/${year}`;
+}
+
+function updateTextContent(element, value, fallback = '—') {
+  if (!element) {
+    return;
+  }
+  const hasValue = value && value.toString().trim().length > 0;
+  element.textContent = hasValue ? value : fallback;
+}
+
+function updateModalTypePill(element, type, label) {
+  if (!element) {
+    return;
+  }
+  const normalizedType = (type || '').toString().trim().toLowerCase();
+  const displayLabel = label || getTypeLabel(normalizedType) || 'Consulta';
+  element.className = 'appointment-modal-pill';
+  element.hidden = false;
+  if (normalizedType) {
+    element.classList.add(`appointment-modal-pill--${normalizedType}`);
+  }
+  updateTextContent(element, displayLabel, 'Consulta');
+}
+
+function updateModalStatusBadge(element, status, label) {
+  if (!element) {
+    return;
+  }
+  const normalizedStatus = (status || '').toString().trim().toLowerCase();
+  const displayLabel = label || getStatusLabel(normalizedStatus) || '';
+  if (!displayLabel && !normalizedStatus) {
+    element.className = 'status-badge';
+    element.textContent = '';
+    element.hidden = true;
+    return;
+  }
+  element.hidden = false;
+  element.className = 'status-badge';
+  if (normalizedStatus) {
+    element.classList.add(`status-${normalizedStatus}`);
+  }
+  updateTextContent(element, displayLabel, '');
+}
+
+function updateModalNotesPreview(container, textElement, notes) {
+  if (!container || !textElement) {
+    return;
+  }
+  const hasNotes = notes && notes.toString().trim().length > 0;
+  if (hasNotes) {
+    container.hidden = false;
+    textElement.textContent = notes;
+  } else {
+    container.hidden = true;
+    textElement.textContent = '';
+  }
+}
+
 function getRootElement(root) {
   if (root instanceof HTMLElement) {
     return root;
@@ -254,6 +361,13 @@ async function populateAppointmentModalTimes({
   }
 
   const placeholderText = timeSelect?.dataset?.placeholder || DEFAULT_TIME_PLACEHOLDER;
+  const timeDisplay = document.getElementById('modal-time-display');
+  const setDisplay = (value) => {
+    if (!timeDisplay) {
+      return;
+    }
+    updateTextContent(timeDisplay, value || '', '--:--');
+  };
   const hasDateValue = Boolean(dateField?.value);
   const times = await updateAppointmentTimes({
     root,
@@ -270,6 +384,7 @@ async function populateAppointmentModalTimes({
       placeholderOption.textContent = placeholderText;
       placeholderOption.selected = true;
     }
+    setDisplay('');
     return times;
   }
 
@@ -278,12 +393,14 @@ async function populateAppointmentModalTimes({
       placeholderOption.textContent = 'Nenhum horário disponível';
       placeholderOption.selected = true;
     }
+    setDisplay('');
   } else if (placeholderOption) {
     placeholderOption.textContent = placeholderText;
   }
 
   const normalizedCurrent = (currentTime || '').trim();
   if (!normalizedCurrent) {
+    setDisplay(timeSelect.value || '');
     return times;
   }
 
@@ -292,6 +409,7 @@ async function populateAppointmentModalTimes({
     .find((option) => option.value === normalizedCurrent);
   if (existingOption) {
     existingOption.selected = true;
+    setDisplay(existingOption.value);
     return times;
   }
 
@@ -300,6 +418,7 @@ async function populateAppointmentModalTimes({
   fallbackOption.textContent = `${normalizedCurrent} (atual)`;
   fallbackOption.selected = true;
   timeSelect.appendChild(fallbackOption);
+  setDisplay(normalizedCurrent);
   return times;
 }
 
@@ -860,11 +979,17 @@ function bindAppointmentItems(root) {
       if (!appointmentId) {
         return;
       }
-      const vetField = document.getElementById('modal-vet');
-      const tutorField = document.getElementById('modal-tutor');
-      const animalField = document.getElementById('modal-animal');
-      const createdByField = document.getElementById('modal-created-by');
-      const createdAtField = document.getElementById('modal-created-at');
+      const vetNameEl = document.getElementById('modal-vet-name');
+      const tutorNameEl = document.getElementById('modal-tutor-name');
+      const animalNameEl = document.getElementById('modal-animal-name');
+      const createdByText = document.getElementById('modal-created-by-text');
+      const createdAtText = document.getElementById('modal-created-at-text');
+      const dateDisplay = document.getElementById('modal-date-display');
+      const timeDisplay = document.getElementById('modal-time-display');
+      const kindLabelEl = document.getElementById('modal-kind-label');
+      const statusLabelEl = document.getElementById('modal-status-label');
+      const notesPreviewContainer = document.getElementById('modal-notes-display');
+      const notesPreviewText = document.getElementById('modal-notes-text');
       const dateField = document.getElementById('modal-date');
       const timeField = document.getElementById('modal-time');
       const notesField = document.getElementById('modal-notes');
@@ -876,32 +1001,35 @@ function bindAppointmentItems(root) {
       if (idField) {
         idField.value = appointmentId;
       }
-      if (vetField) {
-        vetField.value = item.dataset.vet || '';
-      }
-      if (tutorField) {
-        tutorField.value = item.dataset.tutor || '';
-      }
-      if (animalField) {
-        animalField.value = item.dataset.animal || '';
-      }
-      if (createdByField) {
-        const createdBy = item.dataset.createdBy || '';
-        createdByField.value = createdBy || 'Não informado';
-      }
-      if (createdAtField) {
-        const createdAt = item.dataset.createdAt || '';
-        createdAtField.value = createdAt || 'Não informado';
-      }
+      updateTextContent(vetNameEl, item.dataset.vet || '', '—');
+      updateTextContent(tutorNameEl, item.dataset.tutor || '', '—');
+      updateTextContent(animalNameEl, item.dataset.animal || '', '—');
+      updateTextContent(createdByText, item.dataset.createdBy || '', 'Não informado');
+      updateTextContent(createdAtText, item.dataset.createdAt || '', 'Não informado');
+
+      const dateValue = item.dataset.date || '';
       if (dateField) {
-        dateField.value = item.dataset.date || '';
+        dateField.value = dateValue;
       }
+      updateTextContent(
+        dateDisplay,
+        item.dataset.dateLabel || formatDateToBrazil(dateValue),
+        '--/--/----'
+      );
+
       if (timeField) {
         ensurePlaceholderOption(timeField, timeField?.dataset?.placeholder || DEFAULT_TIME_PLACEHOLDER);
       }
+      const timeValue = item.dataset.time || '';
+      updateTextContent(timeDisplay, timeValue, '--:--');
+
       if (notesField) {
         notesField.value = item.dataset.notes || '';
       }
+      updateModalNotesPreview(notesPreviewContainer, notesPreviewText, item.dataset.notes || '');
+      updateModalTypePill(kindLabelEl, item.dataset.type || '', item.dataset.typeLabel || '');
+      updateModalStatusBadge(statusLabelEl, item.dataset.status || '', item.dataset.statusLabel || '');
+
       if (animalLink && item.dataset.animalUrl) {
         animalLink.href = item.dataset.animalUrl;
       }
@@ -923,7 +1051,7 @@ function bindAppointmentItems(root) {
       }
 
       if (timeField) {
-        populateAppointmentModalTimes({
+        const populateResult = populateAppointmentModalTimes({
           root,
           vetId: modalEl?.dataset?.vetId || getVetId(root),
           kind: modalEl?.dataset?.kind || '',
@@ -931,6 +1059,15 @@ function bindAppointmentItems(root) {
           timeSelect: timeField,
           currentTime: modalEl?.dataset?.currentTime || ''
         });
+        if (populateResult && typeof populateResult.then === 'function') {
+          populateResult.then(() => {
+            updateTextContent(
+              timeDisplay,
+              timeField.value || modalEl?.dataset?.currentTime || '',
+              '--:--'
+            );
+          });
+        }
       }
     });
   });
@@ -992,6 +1129,11 @@ function bindAppointmentEditDateWatcher(root) {
     const vetId = modalEl.dataset?.vetId || getVetId(root);
     const kind = modalEl.dataset?.kind || '';
     modalEl.dataset.currentTime = '';
+    updateTextContent(
+      document.getElementById('modal-date-display'),
+      dateInput.value ? formatDateToBrazil(dateInput.value) : '',
+      '--/--/----'
+    );
     populateAppointmentModalTimes({
       root,
       vetId,
@@ -1012,6 +1154,24 @@ function bindAppointmentEditTimeWatcher() {
   timeSelect.dataset.vetScheduleBound = 'true';
   timeSelect.addEventListener('change', () => {
     modalEl.dataset.currentTime = timeSelect.value || '';
+    updateTextContent(
+      document.getElementById('modal-time-display'),
+      timeSelect.value || '',
+      '--:--'
+    );
+  });
+}
+
+function bindAppointmentNotesWatcher() {
+  const notesField = document.getElementById('modal-notes');
+  const notesPreviewContainer = document.getElementById('modal-notes-display');
+  const notesPreviewText = document.getElementById('modal-notes-text');
+  if (!notesField || notesField.dataset.vetScheduleBound === 'true') {
+    return;
+  }
+  notesField.dataset.vetScheduleBound = 'true';
+  notesField.addEventListener('input', () => {
+    updateModalNotesPreview(notesPreviewContainer, notesPreviewText, notesField.value || '');
   });
 }
 
@@ -1057,6 +1217,7 @@ export function initVetSchedulePage(options = {}) {
   bindAppointmentDateWatcher(root);
   bindAppointmentEditDateWatcher(root);
   bindAppointmentEditTimeWatcher();
+  bindAppointmentNotesWatcher();
   bindPastToggle(root);
   bindScheduleModalButton(root);
   initScheduleOverview(root);
