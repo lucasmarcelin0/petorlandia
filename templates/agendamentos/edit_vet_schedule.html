@@ -507,10 +507,8 @@
     <div class="card-body p-0 d-none" id="past-list">
       <div class="list-group list-group-flush">
         {% set finalizadas = schedule_events | selectattr('kind', 'equalto', 'consulta_finalizada') | list %}
-        {% set finalizadas_sem_agendamento = finalizadas | selectattr('appointment', 'equalto', none) | list %}
-        {% set finalizadas_com_agendamento = finalizadas | rejectattr('appointment', 'equalto', none) | list %}
         {% set aceitas = schedule_events | selectattr('kind', 'equalto', 'consulta_aceita') | list %}
-        {% set consultas_passadas = finalizadas_com_agendamento + aceitas %}
+        {% set consultas_passadas = finalizadas + aceitas %}
         <div class="px-3 py-2 bg-light border-bottom fw-semibold text-uppercase small">Consultas finalizadas e aceitas</div>
         {% if consultas_passadas %}
           {% for event in consultas_passadas %}
@@ -582,56 +580,6 @@
         {% else %}
           <div class="list-group-item text-center py-4 text-muted">
             <i class="fas fa-inbox me-2"></i>Nenhuma consulta finalizada ou aceita no período selecionado.
-          </div>
-        {% endif %}
-
-        <div class="px-3 py-2 bg-light border-bottom fw-semibold text-uppercase small mt-2">Atendimentos sem agendamento finalizados</div>
-        {% if finalizadas_sem_agendamento %}
-          {% for event in finalizadas_sem_agendamento %}
-            {% set consulta = event.consulta %}
-            {% set animal = event.animal %}
-            {% set tutor = animal.owner %}
-            <div class="list-group-item list-group-item-action">
-              <div class="d-flex justify-content-between align-items-start gap-3">
-                <div>
-                  <h6 class="mb-1">{{ event.timestamp|format_datetime_brazil('%d/%m/%Y %H:%M') }} – {{ animal.name }}</h6>
-                  <small class="text-muted d-block">Tutor: {{ tutor.name if tutor else '—' }}</small>
-                  <span class="badge bg-info text-dark mt-1">Atendimento direto</span>
-                  {% if event.exam_summary %}
-                    <div class="mt-2">
-                      <small class="text-muted d-block">Exames solicitados:</small>
-                      <ul class="mb-0 small ps-3">
-                        {% for exame in event.exam_summary %}
-                          <li>
-                            {{ exame.nome }}
-                            {% if exame.status %}
-                              <span class="text-muted">({{ exame.status|replace('_', ' ')|capitalize }})</span>
-                            {% endif %}
-                            {% if exame.justificativa %}
-                              <span class="text-muted">– {{ exame.justificativa }}</span>
-                            {% endif %}
-                          </li>
-                        {% endfor %}
-                      </ul>
-                    </div>
-                  {% endif %}
-                </div>
-                <div class="d-flex flex-column align-items-end gap-2">
-                  <div class="btn-group">
-                    <a href="{{ url_for('ficha_animal', animal_id=animal.id) }}" class="btn btn-sm btn-outline-primary"><i class="fas fa-file-medical me-1"></i>Ficha</a>
-                    {% if tutor %}
-                    <a href="{{ url_for('ficha_tutor', tutor_id=tutor.id) }}" class="btn btn-sm btn-outline-secondary"><i class="fas fa-user me-1"></i>Tutor</a>
-                    {% endif %}
-                    <a href="{{ url_for('consulta_direct', animal_id=animal.id, c=consulta.id) }}" class="btn btn-sm btn-outline-success"><i class="fas fa-stethoscope me-1"></i>Detalhes</a>
-                  </div>
-                  <a href="{{ url_for('imprimir_consulta', consulta_id=consulta.id) }}" class="btn btn-sm btn-outline-dark" target="_blank"><i class="fas fa-print me-1"></i>Imprimir consulta</a>
-                </div>
-              </div>
-            </div>
-          {% endfor %}
-        {% else %}
-          <div class="list-group-item text-center py-4 text-muted">
-            <i class="fas fa-stethoscope me-2"></i>Nenhum atendimento sem agendamento finalizado no período selecionado.
           </div>
         {% endif %}
 
