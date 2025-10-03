@@ -3649,6 +3649,56 @@ def vet_detail(veterinario_id):
     calendar_redirect_url = url_for(
         'appointments', view_as='veterinario', veterinario_id=veterinario.id
     )
+    calendar_summary_vets = []
+    calendar_summary_clinic_ids = []
+
+    def add_summary_vet(vet):
+        if not vet:
+            return
+        vet_id = getattr(vet, 'id', None)
+        if not vet_id:
+            return
+        if any(entry.get('id') == vet_id for entry in calendar_summary_vets):
+            return
+        vet_name = None
+        vet_user = getattr(vet, 'user', None)
+        if vet_user is not None:
+            vet_name = getattr(vet_user, 'name', None)
+        calendar_summary_vets.append({'id': vet_id, 'name': vet_name})
+
+    add_summary_vet(veterinario)
+
+    clinic_ids = set()
+
+    primary_clinic_id = getattr(veterinario, 'clinica_id', None)
+    if primary_clinic_id:
+        clinic_ids.add(primary_clinic_id)
+
+    related_clinics = []
+    main_clinic = getattr(veterinario, 'clinica', None)
+    if main_clinic is not None:
+        related_clinics.append(main_clinic)
+    associated_clinics = getattr(veterinario, 'clinicas', None) or []
+    related_clinics.extend(clinic for clinic in associated_clinics if clinic)
+
+    for clinic in related_clinics:
+        clinic_id = getattr(clinic, 'id', None)
+        if clinic_id:
+            clinic_ids.add(clinic_id)
+        for colleague in getattr(clinic, 'veterinarios', []) or []:
+            add_summary_vet(colleague)
+        for colleague in getattr(clinic, 'veterinarios_associados', []) or []:
+            add_summary_vet(colleague)
+
+    if clinic_ids and len(calendar_summary_vets) == 1:
+        colleagues = (
+            Veterinario.query.filter(Veterinario.clinica_id.in_(clinic_ids)).all()
+        )
+        for colleague in colleagues:
+            add_summary_vet(colleague)
+
+    calendar_summary_clinic_ids = list(clinic_ids)
+
     return render_template(
         'veterinarios/vet_detail.html',
         veterinario=veterinario,
@@ -3663,6 +3713,8 @@ def vet_detail(veterinario_id):
         admin_selected_veterinario_id=admin_selected_veterinario_id,
         admin_selected_colaborador_id=admin_selected_colaborador_id,
         admin_default_selection_value=admin_default_selection_value,
+        calendar_summary_vets=calendar_summary_vets,
+        calendar_summary_clinic_ids=calendar_summary_clinic_ids,
     )
 
 

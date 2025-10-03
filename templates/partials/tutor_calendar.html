@@ -2,6 +2,8 @@
 {% set events_url = events_url|default(url_for('api_my_appointments')) %}
 {% set pets_url = pets_url|default(url_for('api_my_pets')) %}
 {% set new_pet_url = new_pet_url|default(url_for('novo_animal')) %}
+{% set calendar_summary_toggle_show_label = calendar_summary_toggle_show_label|default('Mostrar resumo por profissional') %}
+{% set calendar_summary_toggle_hide_label = calendar_summary_toggle_hide_label|default('Ocultar resumo por profissional') %}
 
 <section
   id="{{ component_id }}"
@@ -49,12 +51,12 @@
                   type="button"
                   class="btn btn-outline-secondary"
                   data-calendar-summary-toggle
-                  data-show-label="Mostrar resumo"
-                  data-hide-label="Ocultar resumo"
+                  data-show-label="{{ calendar_summary_toggle_show_label }}"
+                  data-hide-label="{{ calendar_summary_toggle_hide_label }}"
                   aria-pressed="false"
                 >
                   <i class="bi bi-layout-sidebar-inset" data-calendar-summary-toggle-icon aria-hidden="true"></i>
-                  <span class="visually-hidden" data-calendar-summary-toggle-label>Ocultar resumo</span>
+                  <span class="visually-hidden" data-calendar-summary-toggle-label>{{ calendar_summary_toggle_hide_label }}</span>
                 </button>
               </div>
             </div>

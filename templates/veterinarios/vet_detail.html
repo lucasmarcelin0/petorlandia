@@ -121,13 +121,13 @@
                 type="button"
                 class="btn btn-outline-secondary btn-sm d-flex align-items-center gap-2 calendar-summary-toggle"
                 data-calendar-summary-toggle
-                data-show-label="Mostrar resumo"
-                data-hide-label="Ocultar resumo"
+                data-show-label="Mostrar resumo por profissional"
+                data-hide-label="Ocultar resumo por profissional"
                 aria-pressed="false"
                 aria-expanded="true"
               >
                 <i class="bi bi-layout-sidebar-inset" data-calendar-summary-toggle-icon aria-hidden="true"></i>
-                <span data-calendar-summary-toggle-label>Ocultar resumo</span>
+                <span data-calendar-summary-toggle-label>Ocultar resumo por profissional</span>
               </button>
             </div>
 
@@ -168,8 +168,8 @@
             </div>
           </div>
           <div class="col-12 col-xl-4 col-xxl-3" data-calendar-summary-column>
-            {% set calendar_summary_vets = [{'id': veterinario.id, 'name': veterinario.user.name}] %}
-            {% set calendar_summary_clinic_ids = [veterinario.clinica_id] if veterinario.clinica_id else [] %}
+            {% set calendar_summary_vets = calendar_summary_vets if calendar_summary_vets else [{'id': veterinario.id, 'name': veterinario.user.name}] %}
+            {% set calendar_summary_clinic_ids = calendar_summary_clinic_ids if calendar_summary_clinic_ids else ([veterinario.clinica_id] if veterinario.clinica_id else []) %}
             {% set calendar_summary_storage_key = 'vetCalendarSummaryCollapsed-' ~ veterinario.id %}
             {% include 'partials/calendar_summary_panel.html' %}
           </div>
