@@ -93,10 +93,10 @@ export function setupAppointmentsCalendarSummary(options = {}) {
       calendarSummaryToggleButtons.forEach((button) => {
         const buttonShowLabel = (button.dataset && button.dataset.showLabel)
           || button.getAttribute('data-show-label')
-          || 'Mostrar resumo';
+          || 'Mostrar resumo por profissional';
         const buttonHideLabel = (button.dataset && button.dataset.hideLabel)
           || button.getAttribute('data-hide-label')
-          || 'Ocultar resumo';
+          || 'Ocultar resumo por profissional';
         const label = isCalendarSummaryCollapsed ? buttonShowLabel : buttonHideLabel;
         const labelElement = button.querySelector('[data-calendar-summary-toggle-label]');
         if (labelElement) {

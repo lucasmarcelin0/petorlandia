@@ -11,8 +11,8 @@
 {% set calendar_pets_endpoint = calendar_pets_endpoint|default(url_for('api_my_pets')) %}
 {% set calendar_events_endpoint = calendar_events_endpoint|default(url_for('api_my_appointments')) %}
 {% set calendar_new_pet_url = calendar_new_pet_url|default(url_for('novo_animal')) %}
-{% set calendar_summary_toggle_show_label = calendar_summary_toggle_show_label|default('Mostrar resumo') %}
-{% set calendar_summary_toggle_hide_label = calendar_summary_toggle_hide_label|default('Ocultar resumo') %}
+{% set calendar_summary_toggle_show_label = calendar_summary_toggle_show_label|default('Mostrar resumo por profissional') %}
+{% set calendar_summary_toggle_hide_label = calendar_summary_toggle_hide_label|default('Ocultar resumo por profissional') %}
 {% set summary_panel_template = summary_panel_template|default('partials/calendar_summary_panel.html') %}
 {% set schedule_toggle_clinic_id = schedule_toggle_clinic_id|default(none) %}
 {% set schedule_toggle_calendar_redirect_url = schedule_toggle_calendar_redirect_url|default('') %}
