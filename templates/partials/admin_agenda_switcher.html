@@ -139,16 +139,27 @@
             persistSelection(storedValue);
           }
           if (storedValue && storedValue !== select.value && findOptionByValue(storedValue)) {
+            let hasQuerySelection = false;
+            let paramView = '';
+            let paramVet = '';
+            let paramColab = '';
+            if (typeof window !== 'undefined') {
+              const params = new URLSearchParams(window.location.search || '');
+              paramView = params.get('view_as') || '';
+              paramVet = params.get('veterinario_id') || '';
+              paramColab = params.get('colaborador_id') || '';
+              hasQuerySelection = Boolean(paramView || paramVet || paramColab);
+            }
+            if (!hasQuerySelection) {
+              persistSelection(storedValue);
+              return;
+            }
             select.value = storedValue;
             updateHiddenInputs(storedValue);
             if (typeof window !== 'undefined') {
-              const params = new URLSearchParams(window.location.search || '');
               const targetView = viewInput.value || '';
               const targetVet = vetInput.value || '';
               const targetColab = colabInput.value || '';
-              const paramView = params.get('view_as') || '';
-              const paramVet = params.get('veterinario_id') || '';
-              const paramColab = params.get('colaborador_id') || '';
               if (paramView !== targetView || paramVet !== targetVet || paramColab !== targetColab) {
                 persistSelection(storedValue);
                 form.submit();
