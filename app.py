@@ -7704,6 +7704,10 @@ def appointments():
             veterinario = current_user.veterinario
         if not veterinario:
             abort(404)
+        if not isinstance(veterinario, Veterinario):
+            db_vet = Veterinario.query.get(getattr(veterinario, "id", None))
+            if db_vet is not None:
+                veterinario = db_vet
         vet_user_id = getattr(veterinario, "user_id", None)
         clinic_ids = []
         if getattr(veterinario, "clinica_id", None):
@@ -7729,6 +7733,7 @@ def appointments():
                 or len(clinic_ids) > 1
             )
         )
+        colleagues_source = []
         if include_colleagues:
             if current_user.role == 'admin' and agenda_veterinarios:
                 colleagues_source = [
@@ -7758,6 +7763,17 @@ def appointments():
                     }
                 )
                 known_ids.add(colleague_id)
+        eligible_vets = []
+        eligible_ids = set()
+        if getattr(veterinario, 'id', None) is not None:
+            eligible_vets.append(veterinario)
+            eligible_ids.add(veterinario.id)
+        for colleague in colleagues_source:
+            colleague_id = getattr(colleague, 'id', None)
+            if not colleague_id or colleague_id in eligible_ids:
+                continue
+            eligible_vets.append(colleague)
+            eligible_ids.add(colleague_id)
         calendar_redirect_url = url_for(
             'appointments', view_as='veterinario', veterinario_id=veterinario.id
         )
@@ -7775,9 +7791,26 @@ def appointments():
         schedule_form.veterinario_id.choices = [
             (v.id, v.user.name) for v in vets_for_choices
         ]
+        def _vet_display_name(vet_obj):
+            user = getattr(vet_obj, 'user', None)
+            return (
+                user.name
+                if getattr(user, 'name', None)
+                else f"Veterinário #{getattr(vet_obj, 'id', '')}"
+            )
+
         appointment_form.veterinario_id.choices = [
-            (veterinario.id, veterinario.user.name)
+            (vet.id, _vet_display_name(vet))
+            for vet in eligible_vets
+            if getattr(vet, 'id', None) is not None
+        ] or [
+            (veterinario.id, _vet_display_name(veterinario))
         ]
+        eligible_vet_map = {
+            vet.id: vet
+            for vet in eligible_vets
+            if getattr(vet, 'id', None) is not None
+        }
         if request.method == 'GET':
             schedule_form.veterinario_id.data = veterinario.id
             appointment_form.veterinario_id.data = veterinario.id
@@ -7865,14 +7898,34 @@ def appointments():
                         .astimezone(timezone.utc)
                         .replace(tzinfo=None)
                     )
+                    selected_vet = eligible_vet_map.get(
+                        appointment_form.veterinario_id.data
+                    )
+                    if selected_vet is None and appointment_form.veterinario_id.data:
+                        selected_vet = Veterinario.query.get(
+                            appointment_form.veterinario_id.data
+                        )
+                    if not selected_vet:
+                        flash(
+                            'Não foi possível identificar o veterinário selecionado.',
+                            'danger',
+                        )
+                        return redirect(appointments_url)
+                    selected_clinic_id = getattr(selected_vet, 'clinica_id', None)
+                    if not selected_clinic_id:
+                        for clinic in getattr(selected_vet, 'clinicas', []) or []:
+                            clinic_id = getattr(clinic, 'id', None)
+                            if clinic_id:
+                                selected_clinic_id = clinic_id
+                                break
                     current_vet = getattr(current_user, 'veterinario', None)
-                    same_user = current_vet and current_vet.id == veterinario.id
+                    same_user = current_vet and getattr(current_vet, 'id', None) == getattr(selected_vet, 'id', None)
                     appt = Appointment(
                         animal_id=animal.id,
                         tutor_id=tutor_id,
                         veterinario_id=appointment_form.veterinario_id.data,
                         scheduled_at=scheduled_at,
-                        clinica_id=veterinario.clinica_id or animal.clinica_id,
+                        clinica_id=selected_clinic_id or animal.clinica_id,
                         notes=appointment_form.reason.data,
                         kind=appointment_form.kind.data,
                         status='accepted' if same_user else 'scheduled',

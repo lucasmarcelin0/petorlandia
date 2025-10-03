@@ -104,6 +104,92 @@ def test_veterinarian_can_schedule_for_other_users_animal(client, monkeypatch):
         assert appt.status == 'accepted'
 
 
+def test_veterinarian_can_schedule_for_colleague(client, monkeypatch):
+    with flask_app.app_context():
+        clinic_primary = Clinica(id=1, nome='Clinica A')
+        clinic_secondary = Clinica(id=2, nome='Clinica B')
+        tutor = User(id=1, name='Tutor', email='tutor@test')
+        tutor.set_password('x')
+        vet_user = User(id=2, name='Vet', email='vet@test', worker='veterinario')
+        vet_user.set_password('x')
+        colleague_user = User(id=3, name='Especialista', email='colleague@test', worker='veterinario')
+        colleague_user.set_password('x')
+        animal = Animal(id=1, name='Rex', user_id=tutor.id, clinica_id=clinic_primary.id)
+        plan = HealthPlan(id=1, name='Basic', price=10.0)
+        db.session.add_all([
+            clinic_primary,
+            clinic_secondary,
+            tutor,
+            vet_user,
+            colleague_user,
+            animal,
+            plan,
+        ])
+        db.session.commit()
+
+        vet = Veterinario(id=1, user_id=vet_user.id, crmv='123', clinica_id=clinic_primary.id)
+        colleague = Veterinario(id=2, user_id=colleague_user.id, crmv='456', clinica_id=clinic_secondary.id)
+        db.session.add_all([vet, colleague])
+        db.session.commit()
+
+        vet.clinicas.append(clinic_secondary)
+        subscription = HealthSubscription(
+            animal_id=animal.id,
+            plan_id=plan.id,
+            user_id=tutor.id,
+            active=True,
+        )
+        colleague_schedule = VetSchedule(
+            id=1,
+            veterinario_id=colleague.id,
+            dia_semana='Quarta',
+            hora_inicio=time(9, 0),
+            hora_fim=time(17, 0),
+        )
+        db.session.add_all([subscription, colleague_schedule])
+        db.session.commit()
+
+        animal_id = animal.id
+        colleague_id = colleague.id
+        tutor_id = tutor.id
+        clinic_colleague_id = colleague.clinica_id
+        creator_id = vet_user.id
+        clinic_primary_id = clinic_primary.id
+
+    fake_vet = type('U', (), {
+        'id': creator_id,
+        'worker': 'veterinario',
+        'role': 'veterinario',
+        'name': 'Vet',
+        'is_authenticated': True,
+        'veterinario': type('V', (), {'id': 1, 'clinica_id': clinic_primary_id})()
+    })()
+
+    login(monkeypatch, fake_vet)
+
+    resp = client.post(
+        '/appointments',
+        data={
+            'appointment-animal_id': animal_id,
+            'appointment-veterinario_id': colleague_id,
+            'appointment-date': '2024-05-01',
+            'appointment-time': '10:00',
+            'appointment-kind': 'consulta',
+            'appointment-reason': 'Checkup',
+            'appointment-submit': True,
+        },
+    )
+    assert resp.status_code == 302
+
+    with flask_app.app_context():
+        appt = Appointment.query.one()
+        assert appt.veterinario_id == colleague_id
+        assert appt.status == 'scheduled'
+        assert appt.clinica_id == clinic_colleague_id
+        assert appt.created_by == creator_id
+        assert appt.tutor_id == tutor_id
+
+
 def test_tutor_sees_only_their_animals_in_form(client):
     with flask_app.app_context():
         tutor1 = User(id=1, name='Tutor1', email='t1@test')
