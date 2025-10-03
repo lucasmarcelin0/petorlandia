@@ -237,7 +237,7 @@
                     <div>
                       <strong>{{ s.user.name }}</strong>
                       {% if s.specialties %}
-                      <div class="small text-muted">{{ ', '.join(spec.nome for spec in s.specialties) }}</div>
+                      <div class="small text-muted">{{ s.specialties | map(attribute='nome') | join(', ') }}</div>
                       {% endif %}
                     </div>
                     {% if pode_editar %}
