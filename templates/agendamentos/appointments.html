@@ -540,6 +540,29 @@ document.addEventListener('DOMContentLoaded', () => {
     updateNewAppointmentToggleAria();
   }
 
+  function scrollNewAppointmentIntoView() {
+    if (!newAppointmentCollapseEl) {
+      return;
+    }
+
+    window.setTimeout(() => {
+      try {
+        newAppointmentCollapseEl.scrollIntoView({
+          behavior: 'smooth',
+          block: 'start',
+          inline: 'nearest',
+        });
+      } catch (error) {
+        const rect = newAppointmentCollapseEl.getBoundingClientRect();
+        const absoluteTop = rect.top + window.pageYOffset;
+        window.scrollTo({
+          top: Math.max(absoluteTop - 24, 0),
+          behavior: 'smooth',
+        });
+      }
+    }, 200);
+  }
+
   function focusFirstAppointmentField() {
     if (!newAppointmentCollapseEl) {
       return;
@@ -551,6 +574,33 @@ document.addEventListener('DOMContentLoaded', () => {
     window.setTimeout(() => {
       firstField.focus({ preventScroll: false });
     }, 150);
+  }
+
+  function openNewAppointmentWithDetail(detail) {
+    if (!detail || typeof detail !== 'object') {
+      detail = {};
+    }
+
+    ensureNewAppointmentVisible();
+
+    if (dateField && detail.date) {
+      dateField.value = detail.date;
+      dateField.dispatchEvent(new Event('change', { bubbles: true }));
+    }
+
+    if (timeField) {
+      if (detail.time) {
+        timeField.value = detail.time;
+        timeField.dataset.currentTime = detail.time;
+        timeField.dispatchEvent(new Event('change', { bubbles: true }));
+      } else if (timeField.dataset && 'currentTime' in timeField.dataset) {
+        timeField.dataset.currentTime = '';
+      }
+    }
+
+    handleVetChange();
+    focusFirstAppointmentField();
+    scrollNewAppointmentIntoView();
   }
 
   function setTimeFieldMessage(message, { disable = false } = {}) {
@@ -1389,20 +1439,7 @@ document.addEventListener('DOMContentLoaded', () => {
       return;
     }
 
-    ensureNewAppointmentVisible();
-
-    dateField.value = detail.date;
-    dateField.dispatchEvent(new Event('change', { bubbles: true }));
-
-    if (timeField && detail.time) {
-      timeField.value = detail.time;
-      timeField.dataset.currentTime = detail.time;
-      timeField.dispatchEvent(new Event('change', { bubbles: true }));
-    }
-
-    handleVetChange();
-
-    focusFirstAppointmentField();
+    openNewAppointmentWithDetail(detail);
   });
 
   timeField && timeField.addEventListener('change', () => {
