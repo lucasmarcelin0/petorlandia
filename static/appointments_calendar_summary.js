@@ -10,11 +10,15 @@ export function setupAppointmentsCalendarSummary(options = {}) {
 
   const initialize = () => {
     const calendarSummaryPanel = document.querySelector(summaryPanelSelector);
-    const calendarSummaryToggleButton = document.querySelector(summaryToggleSelector);
+    const calendarSummaryToggleButtons = Array.from(
+      document.querySelectorAll(summaryToggleSelector),
+    );
     const calendarSummaryColumn = document.querySelector(summaryColumnSelector);
     const calendarMainColumn = document.querySelector(mainColumnSelector);
-    if (calendarSummaryToggleButton && !calendarSummaryColumn) {
-      calendarSummaryToggleButton.classList.add('d-none');
+    if (calendarSummaryToggleButtons.length > 0 && !calendarSummaryColumn) {
+      calendarSummaryToggleButtons.forEach((button) => {
+        button.classList.add('d-none');
+      });
     }
     if (!calendarSummaryPanel) {
       return;
@@ -32,12 +36,6 @@ export function setupAppointmentsCalendarSummary(options = {}) {
     const calendarSummaryOverviewToday = calendarSummaryPanel.querySelector('[data-calendar-summary-overview-today]');
     const calendarSummaryOverviewWeek = calendarSummaryPanel.querySelector('[data-calendar-summary-overview-week]');
     const calendarSummaryLoading = calendarSummaryPanel.querySelector('[data-calendar-summary-loading]');
-    const calendarSummaryToggleLabel = calendarSummaryToggleButton
-      ? calendarSummaryToggleButton.querySelector('[data-calendar-summary-toggle-label]')
-      : null;
-    const calendarSummaryToggleIcon = calendarSummaryToggleButton
-      ? calendarSummaryToggleButton.querySelector('[data-calendar-summary-toggle-icon]')
-      : null;
     const calendarTabsElement = document.querySelector(calendarTabsSelector);
     const calendarTabButtons = calendarTabsElement
       ? calendarTabsElement.querySelectorAll('[data-bs-toggle="tab"]')
@@ -82,37 +80,40 @@ export function setupAppointmentsCalendarSummary(options = {}) {
       if (calendarSummaryPanel) {
         calendarSummaryPanel.setAttribute('aria-hidden', shouldDisplay ? 'false' : 'true');
       }
-      if (calendarSummaryToggleButton) {
-        calendarSummaryToggleButton.setAttribute('aria-expanded', shouldDisplay ? 'true' : 'false');
-      }
+      calendarSummaryToggleButtons.forEach((button) => {
+        button.setAttribute('aria-expanded', shouldDisplay ? 'true' : 'false');
+      });
     }
 
-    function updateCalendarSummaryToggleButtonState() {
-      if (!calendarSummaryToggleButton) {
+    function updateCalendarSummaryToggleButtonsState() {
+      if (calendarSummaryToggleButtons.length === 0) {
         return;
       }
-      const showLabel = (calendarSummaryToggleButton.dataset && calendarSummaryToggleButton.dataset.showLabel)
-        || calendarSummaryToggleButton.getAttribute('data-show-label')
-        || 'Mostrar resumo';
-      const hideLabel = (calendarSummaryToggleButton.dataset && calendarSummaryToggleButton.dataset.hideLabel)
-        || calendarSummaryToggleButton.getAttribute('data-hide-label')
-        || 'Ocultar resumo';
-      const label = isCalendarSummaryCollapsed ? showLabel : hideLabel;
-      if (calendarSummaryToggleLabel) {
-        calendarSummaryToggleLabel.textContent = label;
-      } else {
-        calendarSummaryToggleButton.textContent = label;
-      }
-      if (calendarSummaryToggleIcon) {
-        calendarSummaryToggleIcon.classList.remove('bi-layout-sidebar', 'bi-layout-sidebar-inset');
-        calendarSummaryToggleIcon.classList.add(isCalendarSummaryCollapsed ? 'bi-layout-sidebar' : 'bi-layout-sidebar-inset');
-      }
-      calendarSummaryToggleButton.setAttribute('aria-pressed', isCalendarSummaryCollapsed ? 'true' : 'false');
-      calendarSummaryToggleButton.setAttribute('title', label);
       const isAvailable = calendarSummaryTabVisible && !!calendarSummaryColumn;
-      calendarSummaryToggleButton.disabled = !isAvailable;
-      calendarSummaryToggleButton.setAttribute('aria-disabled', isAvailable ? 'false' : 'true');
-      calendarSummaryToggleButton.classList.toggle('disabled', !isAvailable);
+      calendarSummaryToggleButtons.forEach((button) => {
+        const buttonShowLabel = (button.dataset && button.dataset.showLabel)
+          || button.getAttribute('data-show-label')
+          || 'Mostrar resumo';
+        const buttonHideLabel = (button.dataset && button.dataset.hideLabel)
+          || button.getAttribute('data-hide-label')
+          || 'Ocultar resumo';
+        const label = isCalendarSummaryCollapsed ? buttonShowLabel : buttonHideLabel;
+        const labelElement = button.querySelector('[data-calendar-summary-toggle-label]');
+        if (labelElement) {
+          labelElement.textContent = label;
+        }
+        const iconElement = button.querySelector('[data-calendar-summary-toggle-icon]');
+        if (iconElement) {
+          iconElement.classList.remove('bi-layout-sidebar', 'bi-layout-sidebar-inset');
+          iconElement.classList.add(isCalendarSummaryCollapsed ? 'bi-layout-sidebar' : 'bi-layout-sidebar-inset');
+        }
+        button.setAttribute('aria-pressed', isCalendarSummaryCollapsed ? 'true' : 'false');
+        button.setAttribute('title', label);
+        button.setAttribute('aria-label', label);
+        button.disabled = !isAvailable;
+        button.setAttribute('aria-disabled', isAvailable ? 'false' : 'true');
+        button.classList.toggle('disabled', !isAvailable);
+      });
     }
 
     function updateCalendarSummaryVisibilityFromTarget(targetSelector) {
@@ -121,7 +122,7 @@ export function setupAppointmentsCalendarSummary(options = {}) {
         || normalized === 'calendar-pane-experimental'
         || normalized === '';
       applyCalendarSummaryVisibilityState();
-      updateCalendarSummaryToggleButtonState();
+      updateCalendarSummaryToggleButtonsState();
     }
 
     function normalizeCalendarTabTarget(value) {
@@ -175,18 +176,18 @@ export function setupAppointmentsCalendarSummary(options = {}) {
       if (shouldStore && stateChanged) {
         storeCalendarSummaryCollapsed(isCalendarSummaryCollapsed);
       }
-      updateCalendarSummaryToggleButtonState();
+      updateCalendarSummaryToggleButtonsState();
       applyCalendarSummaryVisibilityState();
     }
 
-    if (calendarSummaryToggleButton) {
-      calendarSummaryToggleButton.addEventListener('click', () => {
+    calendarSummaryToggleButtons.forEach((button) => {
+      button.addEventListener('click', () => {
         if (!calendarSummaryTabVisible || !calendarSummaryColumn) {
           return;
         }
         setCalendarSummaryCollapsed(!isCalendarSummaryCollapsed);
       });
-    }
+    });
 
     function getStoredCalendarActiveTab() {
       if (typeof window === 'undefined' || !window.localStorage) {
