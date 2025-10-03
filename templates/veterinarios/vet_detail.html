@@ -31,7 +31,7 @@
       </div>
     </div>
     <div class="ms-auto">
-      {% if current_user.role == 'admin' %}
+      {% if current_user.is_authenticated and current_user.role == 'admin' %}
         {% set preserve_params = ['start', 'end'] %}
         {% set switcher_select_id = 'vet-agenda-picker' %}
         {% set switcher_label_text = 'Pesquisar agenda' %}
@@ -78,77 +78,100 @@
           clinica_id=veterinario.clinica_id
         ) %}
 
-        <div class="d-flex flex-column flex-md-row align-items-md-center justify-content-between gap-3 mb-3">
-          <ul
-            class="nav nav-pills"
-            id="vet-agenda-tabs-{{ veterinario.id }}"
-            role="tablist"
-            aria-label="Alternar entre calendário e novo agendamento"
-          >
-            <li class="nav-item" role="presentation">
-              <button
-                class="nav-link active"
-                id="vet-agenda-tab-calendar-{{ veterinario.id }}"
-                data-bs-toggle="tab"
-                data-bs-target="#vet-agenda-pane-calendar-{{ veterinario.id }}"
-                type="button"
-                role="tab"
-                aria-controls="vet-agenda-pane-calendar-{{ veterinario.id }}"
-                aria-selected="true"
+        <div class="row g-4 align-items-stretch" id="vet-calendar-overview-{{ veterinario.id }}">
+          <div class="col-12 col-xl-8 col-xxl-9" data-calendar-main-column>
+            <div class="d-flex flex-column flex-md-row align-items-md-center justify-content-between gap-3 mb-3">
+              <ul
+                class="nav nav-pills mb-0"
+                id="vet-agenda-tabs-{{ veterinario.id }}"
+                role="tablist"
+                aria-label="Alternar entre calendário e novo agendamento"
+                data-calendar-tabs
               >
-                <i class="fas fa-calendar-week me-1"></i>Calendário
-              </button>
-            </li>
-            <li class="nav-item" role="presentation">
+                <li class="nav-item" role="presentation">
+                  <button
+                    class="nav-link active"
+                    id="vet-agenda-tab-calendar-{{ veterinario.id }}"
+                    data-bs-toggle="tab"
+                    data-bs-target="#vet-agenda-pane-calendar-{{ veterinario.id }}"
+                    type="button"
+                    role="tab"
+                    aria-controls="vet-agenda-pane-calendar-{{ veterinario.id }}"
+                    aria-selected="true"
+                  >
+                    <i class="fas fa-calendar-week me-1"></i>Calendário
+                  </button>
+                </li>
+                <li class="nav-item" role="presentation">
+                  <button
+                    class="nav-link"
+                    id="vet-agenda-tab-schedule-{{ veterinario.id }}"
+                    data-bs-toggle="tab"
+                    data-bs-target="#vet-agenda-pane-schedule-{{ veterinario.id }}"
+                    type="button"
+                    role="tab"
+                    aria-controls="vet-agenda-pane-schedule-{{ veterinario.id }}"
+                    aria-selected="false"
+                  >
+                    <i class="fas fa-calendar-plus me-1"></i>Novo agendamento
+                  </button>
+                </li>
+              </ul>
               <button
-                class="nav-link"
-                id="vet-agenda-tab-schedule-{{ veterinario.id }}"
-                data-bs-toggle="tab"
-                data-bs-target="#vet-agenda-pane-schedule-{{ veterinario.id }}"
                 type="button"
-                role="tab"
-                aria-controls="vet-agenda-pane-schedule-{{ veterinario.id }}"
-                aria-selected="false"
+                class="btn btn-outline-secondary btn-sm d-flex align-items-center gap-2 calendar-summary-toggle"
+                data-calendar-summary-toggle
+                data-show-label="Mostrar resumo"
+                data-hide-label="Ocultar resumo"
+                aria-pressed="false"
+                aria-expanded="true"
               >
-                <i class="fas fa-calendar-plus me-1"></i>Novo agendamento
+                <i class="bi bi-layout-sidebar-inset" data-calendar-summary-toggle-icon aria-hidden="true"></i>
+                <span data-calendar-summary-toggle-label>Ocultar resumo</span>
               </button>
-            </li>
-          </ul>
-        </div>
+            </div>
 
-        <div class="tab-content" id="vet-agenda-tabs-content-{{ veterinario.id }}">
-          <div
-            class="tab-pane fade show active"
-            id="vet-agenda-pane-calendar-{{ veterinario.id }}"
-            role="tabpanel"
-            aria-labelledby="vet-agenda-tab-calendar-{{ veterinario.id }}"
-          >
-            {% with
-              component_id='vet-calendar-inline-' ~ veterinario.id,
-              events_url=vet_calendar_events_url,
-              pets_url=vet_calendar_pets_url,
-              new_pet_url=url_for('novo_animal') if current_user.worker in ['colaborador', 'veterinario'] or current_user.role == 'admin' else None
-            %}
-              {% include 'partials/tutor_calendar.html' %}
-            {% endwith %}
+            <div class="tab-content mt-3" id="vet-agenda-tabs-content-{{ veterinario.id }}">
+              <div
+                class="tab-pane fade show active"
+                id="vet-agenda-pane-calendar-{{ veterinario.id }}"
+                role="tabpanel"
+                aria-labelledby="vet-agenda-tab-calendar-{{ veterinario.id }}"
+              >
+                {% with
+                  component_id='vet-calendar-inline-' ~ veterinario.id,
+                  events_url=vet_calendar_events_url,
+                  pets_url=vet_calendar_pets_url,
+                  new_pet_url=url_for('novo_animal') if current_user.is_authenticated and (current_user.worker in ['colaborador', 'veterinario'] or current_user.role == 'admin') else None
+                %}
+                  {% include 'partials/tutor_calendar.html' %}
+                {% endwith %}
+              </div>
+              <div
+                class="tab-pane fade"
+                id="vet-agenda-pane-schedule-{{ veterinario.id }}"
+                role="tabpanel"
+                aria-labelledby="vet-agenda-tab-schedule-{{ veterinario.id }}"
+              >
+                <input type="hidden" value="{{ veterinario.id }}" data-switcher-vet class="d-none">
+                {% with
+                  calendar_id='vet-shared-calendar-' ~ veterinario.id,
+                  toggle_id='vet-agenda-toggle-' ~ veterinario.id,
+                  clinic_id=veterinario.clinica_id,
+                  calendar_redirect_url=calendar_redirect_url,
+                  admin_selected_view=admin_selected_view or 'veterinario',
+                  vets=[veterinario]
+                %}
+                  {% include 'partials/schedule_toggle.html' %}
+                {% endwith %}
+              </div>
+            </div>
           </div>
-          <div
-            class="tab-pane fade"
-            id="vet-agenda-pane-schedule-{{ veterinario.id }}"
-            role="tabpanel"
-            aria-labelledby="vet-agenda-tab-schedule-{{ veterinario.id }}"
-          >
-            <input type="hidden" value="{{ veterinario.id }}" data-switcher-vet class="d-none">
-            {% with
-              calendar_id='vet-shared-calendar-' ~ veterinario.id,
-              toggle_id='vet-agenda-toggle-' ~ veterinario.id,
-              clinic_id=veterinario.clinica_id,
-              calendar_redirect_url=calendar_redirect_url,
-              admin_selected_view=admin_selected_view or 'veterinario',
-              vets=[veterinario]
-            %}
-              {% include 'partials/schedule_toggle.html' %}
-            {% endwith %}
+          <div class="col-12 col-xl-4 col-xxl-3" data-calendar-summary-column>
+            {% set calendar_summary_vets = [{'id': veterinario.id, 'name': veterinario.user.name}] %}
+            {% set calendar_summary_clinic_ids = [veterinario.clinica_id] if veterinario.clinica_id else [] %}
+            {% set calendar_summary_storage_key = 'vetCalendarSummaryCollapsed-' ~ veterinario.id %}
+            {% include 'partials/calendar_summary_panel.html' %}
           </div>
         </div>
       </div>

@@ -43,7 +43,19 @@ export function setupAppointmentsCalendarSummary(options = {}) {
       ? calendarTabsElement.querySelectorAll('[data-bs-toggle="tab"]')
       : document.querySelectorAll('#appointments-calendar-tabs [data-bs-toggle="tab"]');
 
-    const calendarSummaryCollapsedStorageKey = 'appointmentsCalendarSummaryCollapsed';
+    const calendarSummaryCollapsedStorageKey = (() => {
+      if (!calendarSummaryPanel) {
+        return 'appointmentsCalendarSummaryCollapsed';
+      }
+      const rawKey = calendarSummaryPanel.getAttribute('data-calendar-summary-storage-key');
+      if (typeof rawKey === 'string') {
+        const trimmed = rawKey.trim();
+        if (trimmed) {
+          return trimmed;
+        }
+      }
+      return 'appointmentsCalendarSummaryCollapsed';
+    })();
     const calendarActiveTabStorageKey = 'appointmentsCalendarActiveTab';
     const calendarMainColumnVisibleClasses = ['col-xl-8', 'col-xxl-9'];
     const calendarMainColumnFullWidthClasses = ['col-xl-12', 'col-xxl-12'];
