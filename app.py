@@ -7778,13 +7778,7 @@ def appointments():
                     else None,
                 }
             ]
-        include_colleagues = (
-            bool(clinic_ids)
-            and (
-                current_user.role == 'admin'
-                or len(clinic_ids) > 1
-            )
-        )
+        include_colleagues = bool(clinic_ids)
         if include_colleagues:
             if current_user.role == 'admin' and agenda_veterinarios:
                 colleagues_source = [
