@@ -706,6 +706,21 @@
   padding-right: clamp(2.5rem, 6vw, 9rem);
 }
 
+#{{ component_id }} .tutor-calendar__day-detail-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
+
+#{{ component_id }} .tutor-calendar__day-detail-actions-text {
+  font-size: 0.85rem;
+  color: var(--bs-gray-600);
+  flex: 1 1 auto;
+}
+
 #{{ component_id }} .tutor-calendar__day-detail-date {
   font-weight: 700;
   font-size: 1rem;
@@ -1653,6 +1668,37 @@ document.addEventListener('DOMContentLoaded', function() {
       return null;
     }
     return parsed;
+  }
+
+  function buildScheduleButton(dateKey) {
+    if (!dateKey) {
+      return null;
+    }
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'btn btn-primary btn-sm';
+    button.innerHTML = '<i class="bi bi-plus-circle me-1"></i> Agendar compromisso';
+    button.addEventListener('click', function() {
+      const parsed = parseDateKey(dateKey) || parseDate(dateKey);
+      const slotDate = parsed instanceof Date ? parsed : dateKey;
+      dispatchSlot(slotDate, '09:00');
+    });
+    return button;
+  }
+
+  function buildDayScheduleActions(dateKey) {
+    const button = buildScheduleButton(dateKey);
+    if (!button) {
+      return null;
+    }
+    const wrapper = document.createElement('div');
+    wrapper.className = 'tutor-calendar__day-detail-actions';
+    const hintText = document.createElement('span');
+    hintText.className = 'tutor-calendar__day-detail-actions-text';
+    hintText.textContent = 'Precisa adicionar outro compromisso neste dia?';
+    wrapper.appendChild(hintText);
+    wrapper.appendChild(button);
+    return wrapper;
   }
 
   function formatTime(date) {
@@ -3645,19 +3691,17 @@ document.addEventListener('DOMContentLoaded', function() {
       scheduleHint.textContent = 'Você pode agendar um novo compromisso clicando no botão abaixo.';
       emptyState.appendChild(scheduleHint);
 
-      const scheduleBtn = document.createElement('button');
-      scheduleBtn.type = 'button';
-      scheduleBtn.className = 'btn btn-primary btn-sm';
-      scheduleBtn.innerHTML = '<i class="bi bi-plus-circle me-1"></i> Agendar compromisso';
-      scheduleBtn.addEventListener('click', function() {
-        const slotDate = parseDateKey(targetDateKey) || targetDateKey;
-        closeDayDetail({ restoreFocus: false });
-        dispatchSlot(slotDate, '09:00');
-      });
-      emptyState.appendChild(scheduleBtn);
+      const scheduleBtn = buildScheduleButton(targetDateKey);
+      if (scheduleBtn) {
+        emptyState.appendChild(scheduleBtn);
+      }
 
       dayDetailContent.appendChild(emptyState);
     } else {
+      const actionsBar = buildDayScheduleActions(targetDateKey);
+      if (actionsBar) {
+        dayDetailContent.appendChild(actionsBar);
+      }
       const fragment = document.createDocumentFragment();
       dayEvents.forEach(function(eventItem) {
         fragment.appendChild(buildDayDetailCard(eventItem));
@@ -3846,7 +3890,6 @@ document.addEventListener('DOMContentLoaded', function() {
         selectedDate = iso;
         lastDetailTrigger = cell;
         renderDayDetail(iso, { open: true, focus: true, trigger: cell });
-        dispatchSlot(cellDate, '09:00');
       });
 
       calendarGrid.appendChild(cell);
@@ -3932,7 +3975,6 @@ document.addEventListener('DOMContentLoaded', function() {
         selectedDate = iso;
         lastDetailTrigger = card;
         renderDayDetail(iso, { open: true, focus: true, trigger: card });
-        dispatchSlot(dayDate, '09:00');
       });
 
       weekViewEl.appendChild(card);
