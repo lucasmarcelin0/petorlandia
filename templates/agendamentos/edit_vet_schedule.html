@@ -869,7 +869,34 @@
         }
       };
 
-      const applyRange = (range) => {
+      const STORAGE_KEY = 'agendaSelectedRange';
+
+      const saveSelectedRange = (range) => {
+        try {
+          window.localStorage.setItem(STORAGE_KEY, range);
+        } catch (error) {
+          console.error('Não foi possível salvar o atalho selecionado.', error);
+        }
+      };
+
+      const getSavedRange = () => {
+        try {
+          return window.localStorage.getItem(STORAGE_KEY);
+        } catch (error) {
+          console.error('Não foi possível recuperar o atalho selecionado.', error);
+          return null;
+        }
+      };
+
+      const clearSavedRange = () => {
+        try {
+          window.localStorage.removeItem(STORAGE_KEY);
+        } catch (error) {
+          console.error('Não foi possível limpar o atalho salvo.', error);
+        }
+      };
+
+      const calculateRangeValues = (range) => {
         const today = new Date();
         let startDate = new Date(today);
         let endDate = new Date(today);
@@ -897,15 +924,70 @@
             endDate = new Date(today.getFullYear(), today.getMonth() + 1, 0);
             break;
           default:
-            return;
+            return null;
         }
 
-        startInput.value = formatDate(startDate);
-        endInput.value = formatDate(endDate);
-        submitForm();
+        return {
+          start: formatDate(startDate),
+          end: formatDate(endDate),
+        };
+      };
+
+      const setActiveRange = (range) => {
+        quickButtons.forEach((button) => {
+          const isActive = button.dataset.range === range;
+          button.classList.toggle('btn-primary', isActive);
+          button.classList.toggle('btn-outline-primary', !isActive);
+          button.classList.toggle('text-white', isActive);
+          button.classList.toggle('active', isActive);
+          button.setAttribute('aria-pressed', isActive ? 'true' : 'false');
+        });
+      };
+
+      const findMatchingRange = () => {
+        const startValue = startInput.value;
+        const endValue = endInput.value;
+
+        if (!startValue || !endValue) {
+          return null;
+        }
+
+        for (const button of quickButtons) {
+          const values = calculateRangeValues(button.dataset.range);
+          if (!values) continue;
+          if (values.start === startValue && values.end === endValue) {
+            return button.dataset.range;
+          }
+        }
+
+        return null;
+      };
+
+      const applyRange = (range, { submit = true, persist = true } = {}) => {
+        const values = calculateRangeValues(range);
+        if (!values) return;
+
+        startInput.value = values.start;
+        endInput.value = values.end;
+
+        if (persist) {
+          saveSelectedRange(range);
+        }
+
+        setActiveRange(range);
+
+        if (submit) {
+          submitForm();
+        }
+      };
+
+      const updateActiveRangeFromInputs = () => {
+        const matchedRange = findMatchingRange();
+        setActiveRange(matchedRange);
       };
 
       quickButtons.forEach((button) => {
+        button.setAttribute('aria-pressed', 'false');
         button.addEventListener('click', () => applyRange(button.dataset.range));
       });
 
@@ -913,8 +995,28 @@
         clearButton.addEventListener('click', () => {
           startInput.value = '';
           endInput.value = '';
+          setActiveRange(null);
+          clearSavedRange();
           submitForm();
         });
+      }
+
+      startInput.addEventListener('change', updateActiveRangeFromInputs);
+      endInput.addEventListener('change', updateActiveRangeFromInputs);
+
+      const matchedRange = findMatchingRange();
+      if (matchedRange) {
+        setActiveRange(matchedRange);
+      } else {
+        const savedRange = getSavedRange();
+        const searchParams = new URLSearchParams(window.location.search);
+        const hasDateParams = searchParams.has('start') || searchParams.has('end');
+
+        if (savedRange && !hasDateParams) {
+          applyRange(savedRange, { persist: false });
+        } else {
+          setActiveRange(null);
+        }
       }
     });
   </script>
