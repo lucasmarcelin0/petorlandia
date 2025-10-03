@@ -8312,15 +8312,49 @@ def appointments():
                 clinica_id = clinica.id if clinica else None
             animals = Animal.query.filter_by(clinica_id=clinica_id).all()
             appointment_form.animal_id.choices = [(a.id, a.name) for a in animals]
+
+            clinic = Clinica.query.get(clinica_id) if clinica_id else None
             vets = Veterinario.query.filter_by(clinica_id=clinica_id).all()
-            appointment_form.veterinario_id.choices = [(v.id, v.user.name) for v in vets]
+            specialists = []
+            if clinic:
+                specialists = [
+                    vet
+                    for vet in getattr(clinic, 'veterinarios_associados', []) or []
+                    if getattr(vet, 'id', None) is not None
+                ]
+            combined_vets = unique_items_by_id(vets + specialists)
+
+            def _vet_sort_key(vet):
+                name = (
+                    getattr(getattr(vet, 'user', None), 'name', '')
+                    or ''
+                )
+                return name.lower()
+
+            combined_vets = sorted(
+                (vet for vet in combined_vets if getattr(vet, 'id', None) is not None),
+                key=_vet_sort_key,
+            )
+
+            clinic_vet_ids = {getattr(vet, 'id', None) for vet in vets if getattr(vet, 'id', None) is not None}
+            specialist_ids = {getattr(vet, 'id', None) for vet in specialists}
+
+            def _vet_label(vet):
+                base_name = getattr(getattr(vet, 'user', None), 'name', None)
+                label = base_name or f"Profissional #{getattr(vet, 'id', '—')}"
+                if getattr(vet, 'id', None) in specialist_ids and getattr(vet, 'id', None) not in clinic_vet_ids:
+                    return f"{label} (Especialista)"
+                return label
+
+            appointment_form.veterinario_id.choices = [
+                (vet.id, _vet_label(vet)) for vet in combined_vets
+            ]
             calendar_summary_vets = [
                 {
-                    'id': v.id,
-                    'name': v.user.name if getattr(v, 'user', None) else None,
+                    'id': vet.id,
+                    'name': _vet_label(vet),
                 }
-                for v in vets
-                if getattr(v, 'id', None) is not None
+                for vet in combined_vets
             ]
             calendar_summary_clinic_ids = [clinica_id] if clinica_id else []
             if appointment_form.validate_on_submit():
