@@ -26,8 +26,26 @@ function getAppointmentsBaseUrl(root) {
   return sanitizeBaseUrl(base);
 }
 
-function getVetId(root) {
-  return root?.dataset?.vetId || '';
+function getVetId(rootParam) {
+  const root = getRootElement(rootParam);
+  if (root) {
+    const { vetId, defaultVetId } = root.dataset || {};
+    if (vetId) {
+      return vetId;
+    }
+    if (defaultVetId) {
+      root.dataset.vetId = defaultVetId;
+      return defaultVetId;
+    }
+  }
+  const select = document.getElementById('appointment-veterinario_id');
+  if (select && select.value) {
+    if (root) {
+      root.dataset.vetId = select.value;
+    }
+    return select.value;
+  }
+  return '';
 }
 
 function getCsrfToken(root) {
@@ -196,7 +214,7 @@ export async function updateAppointmentTimes(options = {}) {
   const dateInput = options.dateInput || document.getElementById('appointment-date');
   const timeSelect = options.timeSelect || document.getElementById('appointment-time');
   const placeholder = options.placeholder ?? DEFAULT_TIME_PLACEHOLDER;
-  const vetId = options.veterinarianId || getVetId(root);
+  const vetId = options.vetId ?? options.veterinarianId ?? getVetId(root);
 
   if (!timeSelect) {
     return [];
@@ -241,6 +259,46 @@ function bindScheduleModalButton(root) {
   });
 }
 
+function bindVetSelectWatcher(rootParam, scheduleContext) {
+  const root = getRootElement(rootParam);
+  const vetSelect = document.getElementById('appointment-veterinario_id');
+  if (!root || !vetSelect || vetSelect.dataset.vetScheduleBound === 'true') {
+    return;
+  }
+
+  const dateField = document.getElementById('appointment-date');
+  const timeSelect = document.getElementById('appointment-time');
+
+  const handleVetChange = async () => {
+    const selectedVetId = (vetSelect.value || '').trim();
+    root.dataset.vetId = selectedVetId;
+    const context = root.__vetScheduleContext || scheduleContext || initScheduleOverview(root, { vetId: selectedVetId });
+    if (context && typeof context.setVetId === 'function') {
+      context.setVetId(selectedVetId, { reload: true });
+      scheduleContext = context;
+    }
+    if (timeSelect) {
+      ensurePlaceholderOption(timeSelect, timeSelect?.dataset?.placeholder || DEFAULT_TIME_PLACEHOLDER);
+      timeSelect.disabled = true;
+    }
+    if (dateField && dateField.value) {
+      const times = await updateAppointmentTimes({
+        root,
+        dateInput: dateField,
+        timeSelect,
+        vetId: selectedVetId
+      });
+      if (timeSelect) {
+        const hasTimes = Array.isArray(times) && times.length > 0;
+        timeSelect.disabled = !hasTimes;
+      }
+    }
+  };
+
+  vetSelect.dataset.vetScheduleBound = 'true';
+  vetSelect.addEventListener('change', handleVetChange);
+}
+
 async function populateAppointmentModalTimes({
   root,
   vetId,
@@ -259,7 +317,7 @@ async function populateAppointmentModalTimes({
     root,
     dateInput: dateField,
     timeSelect,
-    veterinarianId: vetId,
+    vetId,
     kind,
     placeholder: placeholderText
   });
@@ -303,11 +361,25 @@ async function populateAppointmentModalTimes({
   return times;
 }
 
-function initScheduleOverview(root) {
+function initScheduleOverview(rootParam, options = {}) {
+  const root = getRootElement(rootParam);
+  if (!root) {
+    return null;
+  }
+
+  const existingContext = root.__vetScheduleContext;
+  if (existingContext) {
+    if (Object.prototype.hasOwnProperty.call(options || {}, 'vetId') && typeof existingContext.setVetId === 'function') {
+      existingContext.setVetId(options.vetId, { reload: options.forceReload });
+    } else if (options?.forceReload && typeof existingContext.loadSchedule === 'function') {
+      existingContext.loadSchedule({ showLoading: true, vetId: options.vetId || existingContext.getVetId() });
+    }
+    return existingContext;
+  }
+
   const scheduleContainer = document.getElementById('schedule-overview');
-  const vetId = getVetId(root);
-  if (!scheduleContainer || !vetId) {
-    return;
+  if (!scheduleContainer) {
+    return null;
   }
 
   const dateField = document.getElementById('appointment-date');
@@ -320,6 +392,13 @@ function initScheduleOverview(root) {
   const prevBtn = document.querySelector('[data-schedule-week-prev]');
   const nextBtn = document.querySelector('[data-schedule-week-next]');
   const todayBtn = document.querySelector('[data-schedule-week-today]');
+  let activeVetId = options?.vetId ?? getVetId(root) ?? '';
+  if (!activeVetId) {
+    activeVetId = '';
+  }
+  if (root && activeVetId && root.dataset.vetId !== activeVetId) {
+    root.dataset.vetId = activeVetId;
+  }
 
   const shortFormatter = new Intl.DateTimeFormat('pt-BR', {
     weekday: 'short',
@@ -337,7 +416,8 @@ function initScheduleOverview(root) {
     currentStart: '',
     days: [],
     selectedSlotKey: '',
-    todayIso: new Date().toISOString().split('T')[0]
+    todayIso: new Date().toISOString().split('T')[0],
+    vetId: activeVetId
   };
 
   if (dateField && timeSelect) {
@@ -660,7 +740,7 @@ function initScheduleOverview(root) {
       return;
     }
     dateField.value = date;
-    const times = await updateAppointmentTimes({ root, dateInput: dateField, timeSelect });
+    const times = await updateAppointmentTimes({ root, dateInput: dateField, timeSelect, vetId: activeVetId });
     const hasTimes = Array.isArray(times) && times.length > 0;
     if (timeSelect.disabled && (hasTimes || time)) {
       timeSelect.disabled = false;
@@ -678,19 +758,38 @@ function initScheduleOverview(root) {
     timeSelect.dispatchEvent(new Event('change', { bubbles: true }));
   }
 
-  async function loadSchedule({ showLoading = true } = {}) {
+  async function loadSchedule({ showLoading = true, vetId: overrideVetId } = {}) {
+    const targetVetId = (overrideVetId ?? activeVetId || '').toString().trim();
+    if (!targetVetId) {
+      state.days = [];
+      if (showLoading) {
+        setScheduleEmptyState('Selecione um veterinário para visualizar a agenda.');
+      } else {
+        setScheduleEmptyState('Selecione um veterinário para visualizar a agenda.');
+      }
+      if (summaryBadge) {
+        summaryBadge.classList.remove('text-bg-success', 'text-bg-warning');
+        summaryBadge.classList.add('text-bg-light');
+        summaryBadge.textContent = 'Selecione um veterinário para consultar a agenda.';
+      }
+      if (weekLabel) {
+        weekLabel.textContent = 'Agenda indisponível.';
+      }
+      return;
+    }
     if (showLoading) {
       showScheduleLoading();
     }
     const start = state.currentStart || getWeekStart(dateField?.value || state.todayIso);
     state.currentStart = start;
     try {
-      const response = await fetch(`/api/specialist/${vetId}/weekly_schedule?start=${start}`);
+      const response = await fetch(`/api/specialist/${targetVetId}/weekly_schedule?start=${start}`);
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}`);
       }
       const days = await response.json();
       state.days = Array.isArray(days) ? days : [];
+      state.vetId = targetVetId;
       renderSchedule(state.days);
       setScheduleSummary(state.days);
       setWeekLabel(state.days);
@@ -750,7 +849,7 @@ function initScheduleOverview(root) {
     dateField.dataset.scheduleOverviewBound = 'true';
     dateField.addEventListener('change', async () => {
       state.currentStart = getWeekStart(dateField.value || state.todayIso);
-      const times = await updateAppointmentTimes({ root, dateInput: dateField, timeSelect });
+      const times = await updateAppointmentTimes({ root, dateInput: dateField, timeSelect, vetId: activeVetId });
       if (timeSelect) {
         const hasTimes = Array.isArray(times) && times.length > 0;
         timeSelect.disabled = !hasTimes;
@@ -777,8 +876,29 @@ function initScheduleOverview(root) {
   }
   updateToggleButtonLabel();
 
+  function setActiveVetId(newVetId, { reload = false } = {}) {
+    activeVetId = (newVetId || '').toString().trim();
+    state.vetId = activeVetId;
+    if (root) {
+      root.dataset.vetId = activeVetId;
+    }
+    if (reload) {
+      state.currentStart = getWeekStart(dateField?.value || state.todayIso);
+      loadSchedule({ showLoading: collapseEl ? collapseEl.classList.contains('show') : true, vetId: activeVetId });
+    }
+  }
+
   state.currentStart = getWeekStart(dateField?.value || state.todayIso);
-  loadSchedule({ showLoading: true });
+  loadSchedule({ showLoading: true, vetId: activeVetId });
+
+  const context = {
+    loadSchedule,
+    setVetId: setActiveVetId,
+    getVetId: () => activeVetId,
+    state
+  };
+  root.__vetScheduleContext = context;
+  return context;
 }
 
 export function toggleScheduleEdit(rootParam) {
@@ -977,7 +1097,10 @@ function bindAppointmentDateWatcher(root) {
     return;
   }
   dateInput.dataset.vetScheduleBound = 'true';
-  dateInput.addEventListener('change', (event) => updateAppointmentTimes({ root, dateInput: event.currentTarget || event.target }));
+  dateInput.addEventListener('change', (event) => {
+    const target = event.currentTarget || event.target;
+    updateAppointmentTimes({ root, dateInput: target, vetId: getVetId(root) });
+  });
 }
 
 function bindAppointmentEditDateWatcher(root) {
@@ -1050,6 +1173,9 @@ export function initVetSchedulePage(options = {}) {
     return root;
   }
   root.dataset.vetScheduleInitialized = 'true';
+  if (!root.dataset.vetId && root.dataset.defaultVetId) {
+    root.dataset.vetId = root.dataset.defaultVetId;
+  }
 
   bindScheduleEditButtons(root);
   bindAppointmentItems(root);
@@ -1059,12 +1185,13 @@ export function initVetSchedulePage(options = {}) {
   bindAppointmentEditTimeWatcher();
   bindPastToggle(root);
   bindScheduleModalButton(root);
-  initScheduleOverview(root);
+  const scheduleContext = initScheduleOverview(root);
+  bindVetSelectWatcher(root, scheduleContext);
   animateCards(root);
 
   const dateInput = document.getElementById('appointment-date');
   if (dateInput && dateInput.value) {
-    updateAppointmentTimes({ root, dateInput });
+    updateAppointmentTimes({ root, dateInput, vetId: getVetId(root) });
   }
 
   return root;

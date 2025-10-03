@@ -3,7 +3,8 @@
 {% block main %}
 <div class="container mt-4"
      data-vet-schedule-root
-     data-vet-id="{{ veterinario.id }}"
+     data-vet-id="{{ appointment_form.veterinario_id.data or veterinario.id }}"
+     data-default-vet-id="{{ appointment_form.veterinario_id.data or veterinario.id }}"
      data-appointments-base-url="{{ url_for('appointments') }}"
      data-csrf-token="{{ csrf_token() if csrf_token is defined else '' }}">
   <!-- Cabeçalho melhorado -->
@@ -88,7 +89,7 @@
             </div>
             <div class="col-md-6">
               {{ appointment_form.veterinario_id.label(class="form-label fw-semibold") }}
-              {{ appointment_form.veterinario_id(class="form-select") }}
+              {{ appointment_form.veterinario_id(class="form-select", data_vet_select="true") }}
             </div>
           </div>
 
