@@ -3654,6 +3654,7 @@ document.addEventListener('DOMContentLoaded', function() {
       scheduleBtn.innerHTML = '<i class="bi bi-plus-circle me-1"></i> Agendar compromisso';
       scheduleBtn.addEventListener('click', function() {
         const slotDate = parseDateKey(targetDateKey) || targetDateKey;
+        closeDayDetail({ restoreFocus: false });
         dispatchSlot(slotDate, '09:00');
       });
       emptyState.appendChild(scheduleBtn);
@@ -3759,6 +3760,7 @@ document.addEventListener('DOMContentLoaded', function() {
     if (!target) {
       return;
     }
+    closeDayDetail({ restoreFocus: false });
     const detail = {
       date: formatDateKey(target),
       time: timeHint || formatTime(target) || '09:00',

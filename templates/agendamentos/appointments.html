@@ -450,6 +450,10 @@ document.addEventListener('DOMContentLoaded', () => {
     ? newAppointmentCollapseEl.querySelector('form')
     : null;
   const appointmentsContainer = document.querySelector('[data-appointments-container]');
+  const calendarTabsEl = document.querySelector('[data-calendar-tabs]');
+  const scheduleTabButton = calendarTabsEl
+    ? calendarTabsEl.querySelector('[data-bs-target="#calendar-pane-full"]')
+    : document.querySelector('#appointments-calendar-tabs [data-bs-target="#calendar-pane-full"]');
   let newAppointmentCollapseInstance = null;
   let cachedScheduleDays = [];
   let selectedScheduleSlotKey = '';
@@ -471,6 +475,41 @@ document.addEventListener('DOMContentLoaded', () => {
     const isShown = scheduleCollapseEl.classList.contains('show');
     scheduleToggleBtn.setAttribute('aria-expanded', isShown ? 'true' : 'false');
     scheduleToggleBtn.textContent = isShown ? scheduleToggleHideLabel : scheduleToggleShowLabel;
+  }
+
+  function getBootstrapTabNamespace() {
+    if (window.bootstrap && window.bootstrap.Tab && typeof window.bootstrap.Tab.getOrCreateInstance === 'function') {
+      return window.bootstrap;
+    }
+    if (typeof bootstrap !== 'undefined'
+      && bootstrap
+      && bootstrap.Tab
+      && typeof bootstrap.Tab.getOrCreateInstance === 'function') {
+      return bootstrap;
+    }
+    return null;
+  }
+
+  function showScheduleTab() {
+    if (!scheduleTabButton) {
+      return false;
+    }
+    if (scheduleTabButton.classList.contains('active')) {
+      return true;
+    }
+    const namespace = getBootstrapTabNamespace();
+    if (namespace) {
+      const tabInstance = namespace.Tab.getOrCreateInstance(scheduleTabButton);
+      if (tabInstance && typeof tabInstance.show === 'function') {
+        tabInstance.show();
+        return true;
+      }
+    }
+    if (typeof scheduleTabButton.click === 'function') {
+      scheduleTabButton.click();
+      return true;
+    }
+    return false;
   }
 
   function ensureNewAppointmentVisible() {
@@ -1337,6 +1376,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!detail.date) {
       return;
     }
+    showScheduleTab();
     if (!dateField) {
       if (calendarRedirectUrl) {
         const targetUrl = new URL(calendarRedirectUrl, window.location.origin);
