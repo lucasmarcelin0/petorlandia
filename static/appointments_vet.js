@@ -1207,7 +1207,15 @@ if (typeof window !== 'undefined') {
   window.initVetSchedulePage = (options) => initVetSchedulePage(options);
 }
 
-document.addEventListener('DOMContentLoaded', () => {
+function onDocumentReady(callback) {
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', callback, { once: true });
+    return;
+  }
+  callback();
+}
+
+onDocumentReady(() => {
   initVetSchedulePage();
 });
 
