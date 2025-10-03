@@ -1,4 +1,5 @@
 import { fetchAvailableTimes, submitAppointmentUpdate } from './appointments_shared.js';
+import { setupAppointmentsCalendarSummary } from './appointments_calendar_summary.js';
 
 const ROOT_SELECTOR = '[data-vet-schedule-root]';
 const DEFAULT_TIME_PLACEHOLDER = 'Selecione...';
@@ -1046,6 +1047,7 @@ function animateCards(root) {
 
 export function initVetSchedulePage(options = {}) {
   const root = getRootElement(options.root);
+  setupAppointmentsCalendarSummary({ waitForDomContentLoaded: false });
   if (!root || root.dataset.vetScheduleInitialized === 'true') {
     return root;
   }

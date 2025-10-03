@@ -2,11 +2,15 @@
 {% set summary_description = summary_description|default('Totais diários e semanais por veterinário com base no calendário visível.') %}
 {% set summary_vets = calendar_summary_vets|default([], true) %}
 {% set summary_clinic_ids = calendar_summary_clinic_ids|default([], true) %}
+{% set summary_storage_key = calendar_summary_storage_key|default('', true) %}
 <div
   class="card calendar-summary-card border-0 shadow-sm h-100 is-loading"
   data-calendar-summary-panel
   data-calendar-summary-vets="{{ summary_vets|tojson }}"
   data-calendar-summary-clinic-ids="{{ summary_clinic_ids|tojson }}"
+  {% if summary_storage_key %}
+  data-calendar-summary-storage-key="{{ summary_storage_key }}"
+  {% endif %}
 >
   <div class="card-header bg-white border-0 pb-0">
     <div class="d-flex align-items-center justify-content-between gap-2">

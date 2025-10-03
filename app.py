@@ -307,7 +307,7 @@ def ensure_clinic_access(clinica_id):
         return
     if not current_user.is_authenticated:
         abort(404)
-    if current_user.role == 'admin':
+    if current_user.is_authenticated and current_user.role == 'admin':
         return
     if current_user_clinic_id() != clinica_id:
         abort(404)
@@ -1302,7 +1302,7 @@ def conversa_admin(user_id=None):
 
     form = MessageForm()
 
-    if current_user.role == 'admin':
+    if current_user.is_authenticated and current_user.role == 'admin':
         if user_id is None:
             flash('Selecione um usuário para conversar.', 'warning')
             return redirect(url_for('mensagens_admin'))
@@ -3586,7 +3586,7 @@ def vet_detail(veterinario_id):
     appointment_form = AppointmentForm(is_veterinario=True, prefix='appointment')
     admin_default_selection_value = ''
 
-    if current_user.role == 'admin':
+    if current_user.is_authenticated and current_user.role == 'admin':
         agenda_veterinarios = (
             Veterinario.query.join(User).order_by(User.name).all()
         )
