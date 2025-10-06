@@ -42,6 +42,7 @@ body {
 .header {
   display: flex;
   align-items: center;
+  justify-content: space-between;
   gap: 24px;
   padding-bottom: 18px;
   margin-bottom: 24px;
@@ -64,6 +65,8 @@ body {
   flex: 1;
   display: flex;
   flex-direction: column;
+  align-items: center;
+  text-align: center;
   gap: 6px;
 }
 
@@ -79,7 +82,12 @@ body {
   color: var(--muted-text);
   display: flex;
   flex-wrap: wrap;
+  justify-content: center;
   gap: 8px 16px;
+}
+
+.header-logo--right {
+  justify-content: flex-end;
 }
 
 .clinica-contato span::before {

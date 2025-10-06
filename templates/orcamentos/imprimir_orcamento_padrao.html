@@ -27,6 +27,9 @@
           {% if clinica.cnpj %}<span>CNPJ {{ clinica.cnpj }}</span>{% endif %}
         </div>
       </div>
+      <div class="header-logo header-logo--right">
+        {{ clinic_logo(clinica) }}
+      </div>
     </div>
   {% endif %}
 
