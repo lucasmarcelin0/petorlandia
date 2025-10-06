@@ -8151,22 +8151,59 @@ def appointments():
 
         if vet_user_id:
             pending_requested_exams = (
-                ExamAppointment.query.filter_by(requester_id=vet_user_id, status='pending')
-                .filter(ExamAppointment.specialist_id != veterinario.id)
-                .filter(ExamAppointment.scheduled_at > now)
+                ExamAppointment.query.filter(
+                    ExamAppointment.requester_id == vet_user_id,
+                    ExamAppointment.status.in_(['pending', 'confirmed']),
+                    ExamAppointment.specialist_id != veterinario.id,
+                    ExamAppointment.scheduled_at > now,
+                )
                 .order_by(ExamAppointment.scheduled_at)
                 .all()
             )
         else:
             pending_requested_exams = []
         exams_waiting_other_vets = []
+        status_styles = {
+            'pending': {
+                'badge_class': 'bg-warning text-dark',
+                'icon_class': 'text-warning',
+                'status_label': 'Aguardando confirmação',
+                'show_time_left': True,
+            },
+            'confirmed': {
+                'badge_class': 'bg-success',
+                'icon_class': 'text-success',
+                'status_label': 'Confirmado',
+                'show_time_left': False,
+            },
+        }
+        default_style = {
+            'badge_class': 'bg-secondary',
+            'icon_class': 'text-secondary',
+            'status_label': 'Status desconhecido',
+            'show_time_left': False,
+        }
         for ex in pending_requested_exams:
             if ex.confirm_by:
                 ex.time_left = ex.confirm_by - now
             else:
                 ex.time_left = timedelta(0)
-            if ex.time_left.total_seconds() > 0:
-                exams_waiting_other_vets.append(ex)
+            style = status_styles.get(ex.status, default_style)
+            include_exam = ex.status == 'confirmed'
+            if ex.status == 'pending':
+                include_exam = ex.time_left.total_seconds() > 0
+            if not include_exam:
+                continue
+            exams_waiting_other_vets.append(
+                {
+                    'exam': ex,
+                    'status': ex.status,
+                    'status_label': style['status_label'],
+                    'badge_class': style['badge_class'],
+                    'icon_class': style['icon_class'],
+                    'show_time_left': style['show_time_left'] and ex.time_left.total_seconds() > 0,
+                }
+            )
 
         accepted_consultas_in_range = (
             Appointment.query.filter(Appointment.status == 'accepted')
