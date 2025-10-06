@@ -22,6 +22,111 @@ const STATUS_LABELS = {
   accepted: 'Aceita'
 };
 
+function parseLocalDateTime(value) {
+  if (!value) {
+    return null;
+  }
+  const [datePart, timePart] = value.split('T');
+  if (!datePart || !timePart) {
+    return null;
+  }
+  const [year, month, day] = datePart.split('-').map((part) => Number.parseInt(part, 10));
+  const [hour, minute] = timePart.split(':').map((part) => Number.parseInt(part, 10));
+  if ([year, month, day, hour, minute].some((num) => Number.isNaN(num))) {
+    return null;
+  }
+  return new Date(year, month - 1, day, hour, minute);
+}
+
+function formatLocalDateTimeInput(date) {
+  if (!(date instanceof Date) || Number.isNaN(date.getTime())) {
+    return '';
+  }
+  const pad = (value) => value.toString().padStart(2, '0');
+  const year = date.getFullYear();
+  const month = pad(date.getMonth() + 1);
+  const day = pad(date.getDate());
+  const hours = pad(date.getHours());
+  const minutes = pad(date.getMinutes());
+  return `${year}-${month}-${day}T${hours}:${minutes}`;
+}
+
+function formatDateTimeForDisplay(value) {
+  const date = value instanceof Date ? value : parseLocalDateTime(value);
+  if (!date) {
+    return '';
+  }
+  try {
+    return new Intl.DateTimeFormat('pt-BR', {
+      dateStyle: 'short',
+      timeStyle: 'short'
+    }).format(date);
+  } catch (error) {
+    return date.toLocaleString('pt-BR');
+  }
+}
+
+function getExamDefaultConfirmHours(root) {
+  const resolvedRoot = getRootElement(root);
+  const raw = resolvedRoot?.dataset?.examDefaultConfirmHours;
+  if (raw === undefined) {
+    return null;
+  }
+  const hours = Number.parseFloat(raw);
+  return Number.isFinite(hours) && hours > 0 ? hours : null;
+}
+
+function formatHoursText(hours) {
+  if (!Number.isFinite(hours)) {
+    return '';
+  }
+  const formatter = new Intl.NumberFormat('pt-BR', {
+    minimumFractionDigits: Number.isInteger(hours) ? 0 : 1,
+    maximumFractionDigits: Number.isInteger(hours) ? 0 : 2
+  });
+  const formatted = formatter.format(hours);
+  const plural = Math.abs(hours - 1) < 1e-9 ? 'hora' : 'horas';
+  return `${formatted} ${plural}`;
+}
+
+function computeExamDefaultConfirmValue({ root, row }) {
+  const defaultHours = getExamDefaultConfirmHours(root);
+  if (!defaultHours) {
+    return '';
+  }
+  const requestedAt = row?.dataset?.examRequestedAt
+    ? parseLocalDateTime(row.dataset.examRequestedAt)
+    : null;
+  const scheduledAt = row?.dataset?.examScheduled
+    ? parseLocalDateTime(row.dataset.examScheduled)
+    : null;
+  const reference = requestedAt || scheduledAt || new Date();
+  if (!reference) {
+    return '';
+  }
+  const defaultMillis = reference.getTime() + defaultHours * 60 * 60 * 1000;
+  return formatLocalDateTimeInput(new Date(defaultMillis));
+}
+
+function updateExamRequesterDefaultPreview({ defaultValue, modalEl, row }) {
+  const previewEl = document.getElementById('exam-requester-default-preview');
+  if (!previewEl) {
+    return;
+  }
+  const requestDisplay = row?.dataset?.examRequestedAtDisplay || modalEl?.dataset?.examRequestedAtDisplay || '';
+  const parts = [];
+  if (requestDisplay) {
+    parts.push(`Solicitação registrada em ${requestDisplay}.`);
+  }
+  if (defaultValue) {
+    const formatted = formatDateTimeForDisplay(defaultValue);
+    if (formatted) {
+      parts.push(`Prazo sugerido: ${formatted}.`);
+    }
+  }
+  previewEl.textContent = parts.join(' ');
+}
+
 function humanizeLabel(value) {
   if (!value && value !== 0) {
     return '';
@@ -1213,14 +1318,22 @@ function openExamRequesterModal(row, root) {
   const specialistEl = document.getElementById('exam-requester-specialist');
   const scheduledEl = document.getElementById('exam-requester-scheduled');
   const statusLabel = document.getElementById('exam-requester-status-label');
+  const defaultButton = document.getElementById('exam-requester-apply-default');
 
   const examId = row.dataset.examId || '';
   const status = row.dataset.examStatus || '';
   const confirmBy = row.dataset.examConfirmBy || '';
 
+  const defaultValue = computeExamDefaultConfirmValue({ root, row });
+  const defaultHours = getExamDefaultConfirmHours(root);
+
   modalEl.dataset.examId = examId;
   modalEl.dataset.examStatus = status;
   modalEl.dataset.examConfirmBy = confirmBy;
+  modalEl.dataset.examDefaultConfirmBy = defaultValue || '';
+  modalEl.dataset.examDefaultConfirmHours = defaultHours?.toString() || '';
+  modalEl.dataset.examRequestedAt = row.dataset.examRequestedAt || '';
+  modalEl.dataset.examRequestedAtDisplay = row.dataset.examRequestedAtDisplay || '';
 
   if (idInput) {
     idInput.value = examId;
@@ -1236,9 +1349,26 @@ function openExamRequesterModal(row, root) {
   );
 
   if (confirmInput) {
-    confirmInput.value = confirmBy || '';
+    if (!confirmBy && defaultValue) {
+      confirmInput.value = defaultValue;
+    } else {
+      confirmInput.value = confirmBy || '';
+    }
     confirmInput.disabled = status === 'confirmed';
+    confirmInput.dataset.defaultValue = defaultValue || '';
   }
+
+  if (defaultButton) {
+    defaultButton.disabled = status === 'confirmed' || !defaultValue;
+    defaultButton.dataset.defaultValue = defaultValue || '';
+    defaultButton.dataset.defaultHours = defaultHours?.toString() || '';
+  }
+
+  updateExamRequesterDefaultPreview({
+    defaultValue: defaultValue || confirmInput?.value || '',
+    modalEl,
+    row
+  });
 
   if (statusSelect) {
     const current = status || 'pending';
@@ -1256,6 +1386,16 @@ function openExamRequesterModal(row, root) {
   const isConfirmed = status === 'confirmed';
   if (isConfirmed) {
     setExamRequesterFeedback('Este exame já foi confirmado pelo especialista.', 'info');
+  } else if (!confirmBy && defaultValue) {
+    const hoursLabel = formatHoursText(defaultHours ?? NaN);
+    const messageParts = [];
+    if (hoursLabel) {
+      messageParts.push(`Aplicamos automaticamente o prazo padrão (${hoursLabel}).`);
+    } else {
+      messageParts.push('Aplicamos automaticamente o prazo padrão.');
+    }
+    messageParts.push('Confirme ou ajuste o prazo antes de salvar.');
+    setExamRequesterFeedback(messageParts.join(' '), 'info');
   } else {
     setExamRequesterFeedback('');
   }
@@ -1290,6 +1430,43 @@ function bindExamRequesterRows(root) {
         event.preventDefault();
         openExamRequesterModal(row, root);
       }
+    });
+  });
+}
+
+function bindExamRequesterDefaultButton(root) {
+  const button = document.getElementById('exam-requester-apply-default');
+  if (!button || button.dataset.vetScheduleBound === 'true') {
+    return;
+  }
+  button.dataset.vetScheduleBound = 'true';
+  button.addEventListener('click', () => {
+    const { element: modalEl } = getModalElementById(EXAM_REQUESTER_MODAL_ID);
+    const confirmInput = document.getElementById('exam-requester-confirm-by');
+    if (!modalEl || !confirmInput || confirmInput.disabled) {
+      return;
+    }
+    const defaultValue = button.dataset.defaultValue || modalEl.dataset.examDefaultConfirmBy || '';
+    if (!defaultValue) {
+      return;
+    }
+    confirmInput.value = defaultValue;
+    confirmInput.dispatchEvent(new Event('input', { bubbles: true }));
+    confirmInput.dispatchEvent(new Event('change', { bubbles: true }));
+
+    const defaultHoursRaw = button.dataset.defaultHours || modalEl.dataset.examDefaultConfirmHours || '';
+    const defaultHours = Number.parseFloat(defaultHoursRaw);
+    const hoursLabel = formatHoursText(defaultHours);
+    if (hoursLabel) {
+      setExamRequesterFeedback(`Prazo padrão (${hoursLabel}) aplicado.`, 'info');
+    } else {
+      setExamRequesterFeedback('Prazo padrão aplicado.', 'info');
+    }
+
+    updateExamRequesterDefaultPreview({
+      defaultValue,
+      modalEl,
+      row: null
     });
   });
 }
@@ -1738,6 +1915,7 @@ export function initVetSchedulePage(options = {}) {
   bindAppointmentEditTimeWatcher();
   bindAppointmentNotesWatcher();
   bindExamRequesterRows(root);
+  bindExamRequesterDefaultButton(root);
   bindExamRequesterSave(root);
   bindPastToggle(root);
   bindScheduleModalButton(root);
