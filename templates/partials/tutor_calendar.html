@@ -1509,6 +1509,7 @@ document.addEventListener('DOMContentLoaded', function() {
   const weekdays = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
   const typeLabels = {
     appointment: 'Consulta',
+    consulta: 'Consulta',
     exam: 'Exame',
     vaccine: 'Vacina',
     grooming: 'Banho e Tosa',
@@ -2179,6 +2180,7 @@ document.addEventListener('DOMContentLoaded', function() {
     const rawTypeValue = raw.type || raw.eventType || raw.event_type || extended.eventType || extended.type || extended.event_type || '';
     const rawKindValue = extended.kind || raw.kind || raw.eventKind || raw.event_kind || '';
     const canonicalType = canonicalizeEventTypeKey(rawTypeValue);
+    const normalizedRawType = normalizeFilterValue(rawTypeValue);
     const normalizedKind = normalizeFilterValue(rawKindValue);
     let baseType = canonicalType && canonicalType !== 'all' ? canonicalType : '';
     if (!baseType) {
@@ -2194,6 +2196,9 @@ document.addEventListener('DOMContentLoaded', function() {
       category = 'vaccine';
     } else if (baseType === 'appointment' && (category === 'grooming' || isGroomingKind(normalizedKind))) {
       category = 'grooming';
+    }
+    if (normalizedRawType === 'consulta' && baseType === 'appointment' && category === 'appointment') {
+      category = 'consulta';
     }
     if (!category || category === 'all') {
       category = baseType || 'appointment';
@@ -2229,6 +2234,17 @@ document.addEventListener('DOMContentLoaded', function() {
       animalId: animalId,
       raw: raw,
     };
+  }
+
+  function isConsultaEvent(eventData) {
+    if (!eventData) {
+      return false;
+    }
+    const raw = eventData.raw || {};
+    const extended = raw.extendedProps || {};
+    const rawTypeValue = raw.type || raw.eventType || raw.event_type || extended.eventType || extended.type || extended.event_type || '';
+    const normalized = normalizeFilterValue(rawTypeValue);
+    return normalized === 'consulta';
   }
 
   function sortEventsByStart(a, b) {
@@ -3597,9 +3613,132 @@ document.addEventListener('DOMContentLoaded', function() {
     return fragment;
   }
 
+  function buildConsultaRecordBlock(eventData, displayLabel, dateKey) {
+    const card = buildDayDetailCard(eventData);
+    if (!card) {
+      return null;
+    }
+
+    const raw = eventData.raw || {};
+    const ext = raw.extendedProps || {};
+    const consultaId = ext.consultaId !== undefined && ext.consultaId !== null ? ext.consultaId : null;
+    const consultaStatusKey = ext.consultaStatus || null;
+    const animalId = ext.animalId || eventData.animalId || null;
+    const tutorId = ext.tutorId || null;
+
+    const infoList = card.querySelector('.tutor-calendar__day-detail-info');
+    if (infoList) {
+      if (consultaStatusKey) {
+        const consultaStatusLabel = consultaStatusLabels[consultaStatusKey] || humanizeLabel(consultaStatusKey);
+        appendDetailRow(infoList, 'Status da consulta', consultaStatusLabel);
+      }
+      if (consultaId !== null) {
+        appendDetailRow(infoList, 'Código da consulta', `#${consultaId}`);
+      }
+    }
+
+    const actionsWrapper = document.createElement('div');
+    actionsWrapper.className = 'tutor-calendar__appointment-actions';
+    const actionsTitle = document.createElement('div');
+    actionsTitle.className = 'tutor-calendar__appointment-actions-title';
+    actionsTitle.textContent = 'Ações rápidas';
+    const actionsGrid = document.createElement('div');
+    actionsGrid.className = 'tutor-calendar__appointment-actions-grid';
+
+    function appendActionElement(element) {
+      if (!element) {
+        return;
+      }
+      element.classList.add('tutor-calendar__appointment-action');
+      actionsGrid.appendChild(element);
+    }
+
+    if (animalId) {
+      const animalUrl = fillUrlWithId(urlTemplates.animalProfile, animalId);
+      if (animalUrl) {
+        const btn = document.createElement('a');
+        btn.className = 'btn btn-sm btn-outline-primary';
+        btn.href = animalUrl;
+        btn.title = 'Ficha do Animal';
+        const icon = document.createElement('i');
+        icon.className = 'fa-solid fa-file-medical me-1';
+        icon.setAttribute('aria-hidden', 'true');
+        btn.appendChild(icon);
+        btn.appendChild(document.createTextNode('Ficha do Animal'));
+        appendActionElement(btn);
+      }
+    }
+
+    if (tutorId) {
+      const tutorUrl = fillUrlWithId(urlTemplates.tutorProfile, tutorId);
+      if (tutorUrl) {
+        const btn = document.createElement('a');
+        btn.className = 'btn btn-sm btn-outline-secondary';
+        btn.href = tutorUrl;
+        btn.title = 'Ficha do Tutor';
+        const icon = document.createElement('i');
+        icon.className = 'fa-solid fa-user me-1';
+        icon.setAttribute('aria-hidden', 'true');
+        btn.appendChild(icon);
+        btn.appendChild(document.createTextNode('Ficha do Tutor'));
+        appendActionElement(btn);
+      }
+    }
+
+    if (consultaId !== null && animalId) {
+      const detailUrl = buildConsultaDetailUrl(animalId, consultaId);
+      if (detailUrl) {
+        const btn = document.createElement('a');
+        btn.className = 'btn btn-sm btn-outline-success';
+        btn.href = detailUrl;
+        btn.title = 'Detalhes da consulta';
+        const icon = document.createElement('i');
+        icon.className = 'fa-solid fa-notes-medical me-1';
+        icon.setAttribute('aria-hidden', 'true');
+        btn.appendChild(icon);
+        btn.appendChild(document.createTextNode('Detalhes da consulta'));
+        appendActionElement(btn);
+      }
+    }
+
+    if (consultaId !== null) {
+      const printUrl = buildConsultaPrintUrl(consultaId);
+      if (printUrl) {
+        const btn = document.createElement('a');
+        btn.className = 'btn btn-sm btn-outline-dark';
+        btn.href = printUrl;
+        btn.target = '_blank';
+        btn.rel = 'noopener';
+        btn.title = 'Imprimir consulta';
+        const icon = document.createElement('i');
+        icon.className = 'fa-solid fa-print me-1';
+        icon.setAttribute('aria-hidden', 'true');
+        btn.appendChild(icon);
+        btn.appendChild(document.createTextNode('Imprimir consulta'));
+        appendActionElement(btn);
+      }
+    }
+
+    if (actionsGrid.childNodes.length) {
+      actionsWrapper.appendChild(actionsTitle);
+      actionsWrapper.appendChild(actionsGrid);
+      card.appendChild(actionsWrapper);
+    }
+
+    const fragment = document.createDocumentFragment();
+    fragment.appendChild(card);
+    return fragment;
+  }
+
   function buildEventDetailContent(eventData, displayLabel, dateKey) {
     if (!eventData) {
       return null;
+    }
+    if (isConsultaEvent(eventData)) {
+      const consultaContent = buildConsultaRecordBlock(eventData, displayLabel, dateKey);
+      if (consultaContent) {
+        return consultaContent;
+      }
     }
     const baseType = getEventBaseType(eventData);
     if (baseType && ['appointment', 'exam', 'vaccine'].includes(baseType)) {
