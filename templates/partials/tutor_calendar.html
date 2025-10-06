@@ -84,12 +84,22 @@
               <aside
                 class="tutor-calendar__day-detail"
                 data-day-detail
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="{{ component_id }}-day-detail-heading"
                 aria-live="polite"
                 aria-label="Detalhes do dia selecionado"
                 tabindex="-1"
                 aria-busy="false"
                 aria-hidden="true"
               >
+                <h2
+                  class="visually-hidden"
+                  id="{{ component_id }}-day-detail-heading"
+                  data-day-detail-heading
+                >
+                  Detalhes do dia selecionado
+                </h2>
                 <div class="tutor-calendar__day-detail-controls" data-day-detail-controls>
                   <button
                     type="button"
@@ -1476,6 +1486,7 @@ document.addEventListener('DOMContentLoaded', function() {
   const dayDetailBackBtn = root.querySelector('[data-back-to-day]');
   const dayDetailCloseBtn = root.querySelector('[data-close-day-detail]');
   const dayDetailContent = root.querySelector('[data-day-detail-content]');
+  const dayDetailHeading = root.querySelector('[data-day-detail-heading]');
   const monthLabelEl = root.querySelector('[data-month-label]');
   const yearLabelEl = root.querySelector('[data-year-label]');
   const prevBtn = root.querySelector('[data-prev-month]');
@@ -1551,6 +1562,8 @@ document.addEventListener('DOMContentLoaded', function() {
   const petsPageSize = 9;
   const sharedCalendarSourceId = 'tutor-calendar';
 
+  const defaultDayDetailHeadingText = 'Detalhes do dia selecionado';
+
   let pets = [];
   let events = [];
   let allEvents = [];
@@ -1618,6 +1631,15 @@ document.addEventListener('DOMContentLoaded', function() {
       }
     }
     updateDayDetailControls();
+    updateDayDetailHeading();
+  }
+
+  function updateDayDetailHeading(text) {
+    if (!dayDetailHeading) {
+      return;
+    }
+    const value = typeof text === 'string' && text.trim() ? text : defaultDayDetailHeadingText;
+    dayDetailHeading.textContent = value;
   }
 
   function updateDayDetailControls() {
@@ -3801,6 +3823,7 @@ document.addEventListener('DOMContentLoaded', function() {
     selectedDate = targetDateKey;
 
     const displayLabel = formatDateLabel(targetDateKey);
+    updateDayDetailHeading(displayLabel || targetDateKey || defaultDayDetailHeadingText);
 
     const dayEvents = events.filter(function(event) {
       if (event.date !== targetDateKey) {
@@ -3895,6 +3918,19 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     const displayLabel = formatDateLabel(dateKey);
+    const focusedTypeKey = getEventCategoryKey(eventData);
+    const focusedBaseType = getEventBaseType(eventData);
+    const eventTypeLabel = typeLabels[focusedTypeKey] || typeLabels[focusedBaseType] || 'Evento';
+    let headingText = eventData.title;
+    if (!headingText) {
+      const labelParts = [eventTypeLabel];
+      const dateLabel = displayLabel || dateKey;
+      if (dateLabel) {
+        labelParts.push(`em ${dateLabel}`);
+      }
+      headingText = labelParts.join(' ');
+    }
+    updateDayDetailHeading(headingText);
 
     dayDetailContainer.dataset.date = dateKey || '';
     dayDetailContent.innerHTML = '';
@@ -3909,9 +3945,6 @@ document.addEventListener('DOMContentLoaded', function() {
 
     const typeEl = document.createElement('span');
     typeEl.className = 'tutor-calendar__day-detail-count';
-    const focusedTypeKey = getEventCategoryKey(eventData);
-    const focusedBaseType = getEventBaseType(eventData);
-    const eventTypeLabel = typeLabels[focusedTypeKey] || typeLabels[focusedBaseType] || 'Evento';
     typeEl.textContent = `Compromisso: ${eventTypeLabel}`;
     header.appendChild(typeEl);
 
