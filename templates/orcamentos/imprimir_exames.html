@@ -19,61 +19,66 @@
 <div class="document">
   {% if clinica %}
     <div class="header">
-      {{ clinic_logo(clinica) }}
-      <div class="clinica-nome">{{ clinica.nome }}</div>
-      {{ clinic_logo(clinica) }}
+      <div class="header-logo">
+        {{ clinic_logo(clinica) }}
+      </div>
+      <div class="header-info">
+        <div class="clinica-nome">{{ clinica.nome }}</div>
+        <div class="clinica-contato">
+          {% if clinica.endereco %}<span>{{ clinica.endereco }}</span>{% endif %}
+          {% if clinica.telefone %}<span>Tel.: {{ clinica.telefone }}</span>{% endif %}
+          {% if clinica.email %}<span>{{ clinica.email }}</span>{% endif %}
+          {% if clinica.cnpj %}<span>CNPJ {{ clinica.cnpj }}</span>{% endif %}
+        </div>
+      </div>
     </div>
   {% endif %}
 
-  <h2>Requisicao de Exames Complementares</h2>
+  <div class="document-title-group">
+    <h1 class="document-title">Requisição de Exames Complementares</h1>
+    <span class="document-tag">Diagnóstico</span>
+  </div>
 
-  <div class="top-info">
+  <div class="document-meta">
+    <span>Paciente: {{ animal.name }}</span>
+    {% if tutor and tutor.name %}<span>Responsável: {{ tutor.name }}</span>{% endif %}
+    {% if bloco.data_criacao %}<span>Solicitado em {{ bloco.data_criacao|format_datetime_brazil('%d/%m/%Y %H:%M') }}</span>{% endif %}
+  </div>
+
+  <div class="info-grid">
     {% if veterinario and (veterinario.name or (veterinario.veterinario and veterinario.veterinario.crmv)) %}
-      <div class="info-box">
-        <strong>Médico Veterinário</strong><br>
-        {% if veterinario.name %}
-          {{ veterinario.name }}<br>
-        {% endif %}
-        {% if veterinario.veterinario and veterinario.veterinario.crmv %}
-          CRMV: {{ veterinario.veterinario.crmv }}
-        {% endif %}
-      </div>
+      <section class="info-card">
+        <h3>Médico Veterinário</h3>
+        <ul class="info-list">
+          <li><span>Nome</span><span>{{ veterinario.name or '—' }}</span></li>
+          <li><span>CRMV</span><span>{{ veterinario.veterinario.crmv if veterinario.veterinario and veterinario.veterinario.crmv else '—' }}</span></li>
+        </ul>
+      </section>
     {% endif %}
 
     {% if animal.name or animal.species or animal.breed or animal.sex or animal.microchip_number %}
-      <div class="info-box">
-        <strong>Paciente</strong><br>
-        {% if animal.name %}
-          Nome: {{ animal.name }}<br>
-        {% endif %}
-        {% if animal.species %}
-          Espécie: {{ animal.species }}<br>
-        {% endif %}
-        {% if animal.breed %}
-          Raça: {{ animal.breed }}<br>
-        {% endif %}
-        {% if animal.sex %}
-          Sexo: {{ animal.sex }}<br>
-        {% endif %}
-        {% if animal.microchip_number %}
-          Microchip: {{ animal.microchip_number }}
-        {% endif %}
-      </div>
+      <section class="info-card">
+        <h3>Paciente</h3>
+        <ul class="info-list">
+          <li><span>Nome</span><span>{{ animal.name }}</span></li>
+          {% if animal.species %}<li><span>Espécie</span><span>{{ animal.species }}</span></li>{% endif %}
+          {% if animal.breed %}<li><span>Raça</span><span>{{ animal.breed }}</span></li>{% endif %}
+          {% if animal.sex %}<li><span>Sexo</span><span>{{ animal.sex }}</span></li>{% endif %}
+          {% if animal.microchip_number %}<li><span>Microchip</span><span>{{ animal.microchip_number }}</span></li>{% endif %}
+        </ul>
+      </section>
     {% endif %}
 
-    {% if tutor.name or tutor.cpf or tutor.address %}
-      <div class="info-box">
-        <strong>Responsável</strong><br>
-        {% if tutor.name %}
-          Nome: {{ tutor.name }}<br>
-        {% endif %}
-        {% if tutor.cpf %}
-          CPF: {{ tutor.cpf }}<br>
-        {% endif %}
-        {% if tutor.address %}
-          Endereço: {{ tutor.address }}
-        {% endif %}
-      </div>
+    {% if tutor.name or tutor.cpf or tutor.address or tutor.phone %}
+      <section class="info-card">
+        <h3>Responsável</h3>
+        <ul class="info-list">
+          <li><span>Nome</span><span>{{ tutor.name }}</span></li>
+          {% if tutor.cpf %}<li><span>CPF</span><span>{{ tutor.cpf }}</span></li>{% endif %}
+          {% if tutor.phone %}<li><span>Contato</span><span>{{ tutor.phone }}</span></li>{% endif %}
+          {% if tutor.address %}<li><span>Endereço</span><span>{{ tutor.address }}</span></li>{% endif %}
+        </ul>
+      </section>
     {% endif %}
   </div>
 
@@ -81,30 +86,37 @@
   <div class="exames">
     {% for exame in bloco.exames %}
       <div class="exame-item">
-        <strong>{{ exame.nome }}</strong><br>
-        <em style="color: #555;">{{ exame.justificativa }}</em>
+        <strong>{{ exame.nome }}</strong>
+        {% if exame.justificativa %}
+          <p class="prescricao-obs">{{ exame.justificativa }}</p>
+        {% endif %}
       </div>
     {% endfor %}
   </div>
 
   {% if bloco.observacoes_gerais %}
     <div class="section-title">Observações</div>
-    <div style="background-color: #f9f9f9; padding: 15px; border-radius: 4px; line-height: 1.6;">
+    <div class="note-block">
       {{ bloco.observacoes_gerais }}
     </div>
   {% endif %}
 
-  <div class="assinatura">
-    ___________________________________________<br>
-    <span>{{ veterinario.name if veterinario else '' }}</span>
-    <span>CRMV: {{ veterinario.veterinario.crmv if veterinario and veterinario.veterinario else '—' }}</span>
+  <div class="signature-block">
+    <div class="signature">
+      <div class="signature-line"></div>
+      <span>{{ veterinario.name if veterinario else '' }}</span>
+      <span>CRMV {{ veterinario.veterinario.crmv if veterinario and veterinario.veterinario else '—' }}</span>
+    </div>
   </div>
 
   <footer>
-    {{ clinica.nome }} – {{ clinica.endereco }}<br>
-    {% if clinica.telefone %}Telefone: {{ clinica.telefone }} • {% endif %}
-    {% if clinica.email %}Email: {{ clinica.email }} • {% endif %}
-    {% if clinica.cnpj %}CNPJ: {{ clinica.cnpj }}{% endif %}
+    {% if clinica %}
+      <span>{{ clinica.nome }}</span>
+      {% if clinica.endereco %}<span>{{ clinica.endereco }}</span>{% endif %}
+      {% if clinica.telefone %}<span>Tel.: {{ clinica.telefone }}</span>{% endif %}
+      {% if clinica.email %}<span>{{ clinica.email }}</span>{% endif %}
+      {% if clinica.cnpj %}<span>CNPJ {{ clinica.cnpj }}</span>{% endif %}
+    {% endif %}
   </footer>
 </div>
 
