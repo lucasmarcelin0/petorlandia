@@ -461,12 +461,12 @@
           <div class="list-group-item bg-light text-muted fw-semibold text-uppercase small">
             <i class="fas fa-user-clock me-2"></i>Exames aguardando outros profissionais
           </div>
-          {% for exam in exams_waiting_other_vets %}
-            {% set can_respond = exam.time_left.total_seconds() > 0 %}
+          {% for item in exams_waiting_other_vets %}
+            {% set exam = item.exam %}
             <div class="list-group-item d-flex justify-content-between align-items-center">
               <div class="d-flex align-items-center">
                 <div class="me-3">
-                  <i class="fas fa-flask text-warning fa-2x"></i>
+                  <i class="fas fa-flask fa-2x {{ item.icon_class }}"></i>
                 </div>
                 <div>
                   <h6 class="mb-0">{{ exam.scheduled_at|format_datetime_brazil('%d/%m/%Y %H:%M') }} - {{ exam.animal.name }}</h6>
@@ -478,16 +478,16 @@
                     {% endif %}
                   </small>
                   <div class="mt-1">
-                    {% if can_respond %}
+                    {% if item.show_time_left %}
                       <small class="text-muted"><i class="fas fa-hourglass-half me-1"></i>Tempo restante: {{ exam.time_left|format_timedelta }}</small>
-                    {% else %}
-                      <small class="text-muted"><i class="fas fa-exclamation-circle me-1"></i>Prazo expirado</small>
+                    {% elif exam.status == 'confirmed' %}
+                      <small class="text-muted"><i class="fas fa-check-circle text-success me-1"></i>Confirmado pelo especialista</small>
                     {% endif %}
                   </div>
                 </div>
               </div>
               <div class="text-end">
-                <span class="badge bg-warning text-dark">Aguardando confirmação</span>
+                <span class="badge {{ item.badge_class }}">{{ item.status_label }}</span>
               </div>
             </div>
           {% endfor %}
