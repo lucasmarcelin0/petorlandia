@@ -706,8 +706,10 @@ export function setupAppointmentsCalendarSummary(options = {}) {
         );
         if (activeCalendarSummaryVetId && elementVetId === activeCalendarSummaryVetId) {
           element.classList.add('is-active');
+          element.setAttribute('aria-pressed', 'true');
         } else {
           element.classList.remove('is-active');
+          element.setAttribute('aria-pressed', 'false');
         }
       });
       if (calendarSummaryFilters) {
@@ -865,6 +867,9 @@ export function setupAppointmentsCalendarSummary(options = {}) {
       rows.forEach((entry) => {
         const item = document.createElement('li');
         item.classList.add('calendar-summary-item');
+        item.setAttribute('role', 'button');
+        item.setAttribute('tabindex', '0');
+        item.setAttribute('aria-pressed', 'false');
         decorateSummaryItemWithVet(item, entry.vetId);
 
         const header = document.createElement('header');
@@ -973,6 +978,26 @@ export function setupAppointmentsCalendarSummary(options = {}) {
           return;
         }
         const rawVetId = targetItem.dataset ? targetItem.dataset.vetId : null;
+        handleCalendarSummarySelection(rawVetId);
+      });
+
+      calendarSummaryList.addEventListener('keydown', (event) => {
+        const { key } = event;
+        const isActivationKey = key === 'Enter'
+          || key === ' '
+          || key === 'Space'
+          || key === 'Spacebar';
+        if (!isActivationKey) {
+          return;
+        }
+        const origin = event.target && typeof event.target.closest === 'function'
+          ? event.target.closest('.calendar-summary-item')
+          : null;
+        if (!origin || !calendarSummaryList.contains(origin)) {
+          return;
+        }
+        event.preventDefault();
+        const rawVetId = origin.dataset ? origin.dataset.vetId : null;
         handleCalendarSummarySelection(rawVetId);
       });
     }
