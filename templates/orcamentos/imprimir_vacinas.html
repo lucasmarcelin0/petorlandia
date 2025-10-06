@@ -18,37 +18,60 @@
 <div class="document">
   {% if clinica %}
     <div class="header">
-      {{ clinic_logo(clinica) }}
-      <div class="clinica-nome">{{ clinica.nome }}</div>
-      {{ clinic_logo(clinica) }}
+      <div class="header-logo">
+        {{ clinic_logo(clinica) }}
+      </div>
+      <div class="header-info">
+        <div class="clinica-nome">{{ clinica.nome }}</div>
+        <div class="clinica-contato">
+          {% if clinica.endereco %}<span>{{ clinica.endereco }}</span>{% endif %}
+          {% if clinica.telefone %}<span>Tel.: {{ clinica.telefone }}</span>{% endif %}
+          {% if clinica.email %}<span>{{ clinica.email }}</span>{% endif %}
+          {% if clinica.cnpj %}<span>CNPJ {{ clinica.cnpj }}</span>{% endif %}
+        </div>
+      </div>
     </div>
   {% endif %}
 
-  <h2>Carteira de Vacinação</h2>
+  <div class="document-title-group">
+    <h1 class="document-title">Carteira de Vacinação</h1>
+    <span class="document-tag">Histórico de imunizações</span>
+  </div>
 
-  <div class="top-info">
-    <div class="info-box">
-      <strong>Paciente</strong><br>
-      Nome: {{ animal.name }}<br>
-      Espécie: {{ animal.species }}<br>
-      Raça: {{ animal.breed or '—' }}<br>
-      Nascimento: {{ animal.birth_date.strftime('%d/%m/%Y') if animal.birth_date else '—' }}
-    </div>
+  <div class="document-meta">
+    <span>Paciente: {{ animal.name }}</span>
+    <span>Responsável: {{ animal.owner.name }}</span>
+    {% if animal.birth_date %}<span>Nasc.: {{ animal.birth_date.strftime('%d/%m/%Y') }}</span>{% endif %}
+  </div>
 
-    <div class="info-box">
-      <strong>Responsável</strong><br>
-      Nome: {{ animal.owner.name }}<br>
-      CPF: {{ animal.owner.cpf or '—' }}<br>
-      Telefone: {{ animal.owner.phone or '—' }}
-    </div>
-
-    <div class="info-box">
-      <strong>Clínica</strong><br>
-      {{ clinica.nome if clinica else '—' }}<br>
-      Veterinário: {{ veterinario.name if veterinario else '—' }}<br>
-      CRMV: {{ veterinario.veterinario.crmv if veterinario and veterinario.veterinario else '—' }}<br>
-      Telefone: {{ clinica.telefone if clinica and clinica.telefone else '—' }}
-    </div>
+  <div class="info-grid">
+    <section class="info-card">
+      <h3>Paciente</h3>
+      <ul class="info-list">
+        <li><span>Espécie</span><span>{{ animal.species or '—' }}</span></li>
+        <li><span>Raça</span><span>{{ animal.breed or '—' }}</span></li>
+        {% if animal.sex %}<li><span>Sexo</span><span>{{ animal.sex }}</span></li>{% endif %}
+        {% if animal.microchip_number %}<li><span>Microchip</span><span>{{ animal.microchip_number }}</span></li>{% endif %}
+      </ul>
+    </section>
+    <section class="info-card">
+      <h3>Responsável</h3>
+      <ul class="info-list">
+        <li><span>Nome</span><span>{{ animal.owner.name }}</span></li>
+        <li><span>CPF</span><span>{{ animal.owner.cpf or '—' }}</span></li>
+        <li><span>Contato</span><span>{{ animal.owner.phone or '—' }}</span></li>
+        <li><span>Endereço</span><span>{{ animal.owner.address or '—' }}</span></li>
+      </ul>
+    </section>
+    <section class="info-card">
+      <h3>Clínica</h3>
+      <ul class="info-list">
+        <li><span>Nome</span><span>{{ clinica.nome if clinica else '—' }}</span></li>
+        <li><span>Veterinário</span><span>{{ veterinario.name if veterinario else '—' }}</span></li>
+        <li><span>CRMV</span><span>{{ veterinario.veterinario.crmv if veterinario and veterinario.veterinario else '—' }}</span></li>
+        <li><span>Telefone</span><span>{{ clinica.telefone if clinica and clinica.telefone else '—' }}</span></li>
+      </ul>
+    </section>
   </div>
 
   <table>
@@ -64,34 +87,37 @@
     </thead>
     <tbody>
       {% for vacina in animal.vacinas_ordenadas %}
-      <tr>
-        <td>{{ vacina.aplicada_em.strftime('%d/%m/%Y') if vacina.aplicada_em else '—' }}</td>
-        <td>{{ vacina.nome }}</td>
-        <td>{{ vacina.tipo or '—' }}</td>
-        <td>{{ vacina.lote or '—' }}</td>
-        <td>{{ vacina.veterinario or '—' }}</td>
-        <td>{{ vacina.proxima_dose.strftime('%d/%m/%Y') if vacina.proxima_dose else '—' }}</td>
-      </tr>
+        <tr>
+          <td>{{ vacina.aplicada_em.strftime('%d/%m/%Y') if vacina.aplicada_em else '—' }}</td>
+          <td>{{ vacina.nome }}</td>
+          <td>{{ vacina.tipo or '—' }}</td>
+          <td>{{ vacina.lote or '—' }}</td>
+          <td>{{ vacina.veterinario or '—' }}</td>
+          <td>{{ vacina.proxima_dose.strftime('%d/%m/%Y') if vacina.proxima_dose else '—' }}</td>
+        </tr>
       {% endfor %}
     </tbody>
   </table>
 
-  <div class="assinaturas">
-    <div>
-      ___________________________________________<br>
+  <div class="signature-grid">
+    <div class="signature">
+      <div class="signature-line"></div>
       <span>{{ veterinario.name if veterinario else 'Responsável pela Aplicação' }}</span>
-      <span>CRMV: {{ veterinario.veterinario.crmv if veterinario and veterinario.veterinario else '_________________________' }}</span>
+      <span>CRMV {{ veterinario.veterinario.crmv if veterinario and veterinario.veterinario else '_________________________' }}</span>
     </div>
-    <div>
-      ___________________________________________<br>
+    <div class="signature">
+      <div class="signature-line"></div>
       <span>Responsável pelo Animal</span>
     </div>
   </div>
 
   <footer>
-    Documento válido apenas com carimbo e assinatura do médico veterinário responsável.<br>
+    <span>Documento válido apenas com carimbo e assinatura do médico veterinário responsável.</span>
     {% if clinica %}
-      {{ clinica.nome }} • {{ clinica.endereco or '—' }} • {{ clinica.telefone or '—' }} • {{ clinica.email or '—' }}
+      <span>{{ clinica.nome }}</span>
+      {% if clinica.endereco %}<span>{{ clinica.endereco }}</span>{% endif %}
+      {% if clinica.telefone %}<span>Tel.: {{ clinica.telefone }}</span>{% endif %}
+      {% if clinica.email %}<span>{{ clinica.email }}</span>{% endif %}
     {% endif %}
   </footer>
 </div>
