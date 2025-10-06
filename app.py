@@ -8117,13 +8117,13 @@ def appointments():
             .order_by(Appointment.scheduled_at)
             .all()
         )
-        appointments_pending = []
+        appointments_pending_consults = []
         for appt in pending_consultas:
             appt.time_left = (appt.scheduled_at - timedelta(hours=2)) - now
             kind = appt.kind or ('retorno' if appt.consulta_id else 'consulta')
             if kind == 'general':
                 kind = 'consulta'
-            appointments_pending.append({'kind': kind, 'appt': appt})
+            appointments_pending_consults.append({'kind': kind, 'appt': appt})
 
         from models import ExamAppointment, Message, BlocoExames
 
@@ -8133,6 +8133,7 @@ def appointments():
             .order_by(ExamAppointment.scheduled_at)
             .all()
         )
+        exams_pending_to_accept = []
         for ex in exam_pending:
             ex.time_left = ex.confirm_by - now
             if ex.time_left.total_seconds() <= 0:
@@ -8146,7 +8147,26 @@ def appointments():
                 db.session.add(msg)
                 db.session.commit()
             else:
-                appointments_pending.append({'kind': 'exame', 'appt': ex})
+                exams_pending_to_accept.append(ex)
+
+        if vet_user_id:
+            pending_requested_exams = (
+                ExamAppointment.query.filter_by(requester_id=vet_user_id, status='pending')
+                .filter(ExamAppointment.specialist_id != veterinario.id)
+                .filter(ExamAppointment.scheduled_at > now)
+                .order_by(ExamAppointment.scheduled_at)
+                .all()
+            )
+        else:
+            pending_requested_exams = []
+        exams_waiting_other_vets = []
+        for ex in pending_requested_exams:
+            if ex.confirm_by:
+                ex.time_left = ex.confirm_by - now
+            else:
+                ex.time_left = timedelta(0)
+            if ex.time_left.total_seconds() > 0:
+                exams_waiting_other_vets.append(ex)
 
         accepted_consultas_in_range = (
             Appointment.query.filter(Appointment.status == 'accepted')
@@ -8356,7 +8376,9 @@ def appointments():
             admin_selected_veterinario_id=admin_selected_veterinario_id,
             admin_selected_colaborador_id=admin_selected_colaborador_id,
             horarios_grouped=horarios_grouped,
-            appointments_pending=appointments_pending,
+            appointments_pending_consults=appointments_pending_consults,
+            exams_pending_to_accept=exams_pending_to_accept,
+            exams_waiting_other_vets=exams_waiting_other_vets,
             appointments_upcoming=appointments_upcoming,
             schedule_events=schedule_events,
             start_dt=start_dt,

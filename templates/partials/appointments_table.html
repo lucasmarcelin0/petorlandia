@@ -1,5 +1,11 @@
 {% if appointments_grouped %}
-  {# Conteúdo removido intencionalmente. #}
+  <div class="d-none" data-appointments-metadata>
+    {% for day, appointments_on_day in appointments_grouped %}
+      {% for appt in appointments_on_day %}
+        <span data-appointment-id="{{ appt.id }}"></span>
+      {% endfor %}
+    {% endfor %}
+  </div>
 {% else %}
   <div class="empty-state">
     <span class="icon-circle bg-secondary text-white"><i class="fa-regular fa-calendar-xmark"></i></span>

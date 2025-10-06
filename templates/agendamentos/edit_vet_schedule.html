@@ -362,42 +362,44 @@
     <div class="card-header bg-warning text-dark">
       <h5 class="mb-0"><i class="fas fa-clock me-2"></i>Agendamentos Pendentes</h5>
     </div>
-    <div class="card-body p-0">
+  <div class="card-body p-0">
       <div class="list-group list-group-flush">
-        {% for item in appointments_pending %}
-          {% set appt = item.appt %}
-          {% set can_respond = appt.time_left.total_seconds() > 0 %}
-          <div class="list-group-item d-flex justify-content-between align-items-center">
-            <div class="d-flex align-items-center">
-              <div class="me-3">
-                <i class="fas fa-clock {% if can_respond %}text-warning{% else %}text-secondary{% endif %} fa-2x"></i>
-              </div>
-              <div>
-                <h6 class="mb-0">{{ appt.scheduled_at|format_datetime_brazil('%d/%m/%Y %H:%M') }} - {{ appt.animal.name }}</h6>
-                <small class="text-muted">
-                  {{ appt.tutor.name if item.kind in ['consulta', 'retorno', 'banho_tosa', 'vacina'] else appt.animal.owner.name }}
-                  {% if item.kind == 'exame' %}
-                    <span class="badge bg-info ms-1">Exame</span>
-                  {% elif item.kind == 'banho_tosa' %}
-                    <span class="badge bg-primary ms-1">Banho e Tosa</span>
-                  {% elif item.kind == 'vacina' %}
-                    <span class="badge bg-success ms-1">Vacina</span>
-                  {% elif item.kind == 'retorno' %}
-                    <span class="badge bg-warning text-dark ms-1">Retorno</span>
-                  {% endif %}
-                </small>
-                <div class="mt-1">
-                  {% if can_respond %}
-                    <small class="text-muted"><i class="fas fa-hourglass-half me-1"></i>Tempo restante: {{ appt.time_left|format_timedelta }}</small>
-                  {% else %}
-                    <small class="text-muted"><i class="fas fa-exclamation-circle me-1"></i>Prazo expirado</small>
-                  {% endif %}
+        {% if appointments_pending_consults or exams_pending_to_accept or exams_waiting_other_vets %}
+          {% if appointments_pending_consults %}
+          <div class="list-group-item bg-light text-muted fw-semibold text-uppercase small">
+            <i class="fas fa-stethoscope me-2"></i>Consultas e atendimentos
+          </div>
+          {% for item in appointments_pending_consults %}
+            {% set appt = item.appt %}
+            {% set can_respond = appt.time_left.total_seconds() > 0 %}
+            <div class="list-group-item d-flex justify-content-between align-items-center" data-appointment-id="{{ appt.id }}">
+              <div class="d-flex align-items-center">
+                <div class="me-3">
+                  <i class="fas fa-clock {% if can_respond %}text-warning{% else %}text-secondary{% endif %} fa-2x"></i>
+                </div>
+                <div>
+                  <h6 class="mb-0">{{ appt.scheduled_at|format_datetime_brazil('%d/%m/%Y %H:%M') }} - {{ appt.animal.name }}</h6>
+                  <small class="text-muted">
+                    {{ appt.tutor.name if item.kind in ['consulta', 'retorno', 'banho_tosa', 'vacina'] else appt.animal.owner.name }}
+                    {% if item.kind == 'banho_tosa' %}
+                      <span class="badge bg-primary ms-1">Banho e Tosa</span>
+                    {% elif item.kind == 'vacina' %}
+                      <span class="badge bg-success ms-1">Vacina</span>
+                    {% elif item.kind == 'retorno' %}
+                      <span class="badge bg-warning text-dark ms-1">Retorno</span>
+                    {% endif %}
+                  </small>
+                  <div class="mt-1">
+                    {% if can_respond %}
+                      <small class="text-muted"><i class="fas fa-hourglass-half me-1"></i>Tempo restante: {{ appt.time_left|format_timedelta }}</small>
+                    {% else %}
+                      <small class="text-muted"><i class="fas fa-exclamation-circle me-1"></i>Prazo expirado</small>
+                    {% endif %}
+                  </div>
                 </div>
               </div>
-            </div>
-            {% if can_respond %}
+              {% if can_respond %}
               <div class="d-flex gap-2">
-                {% if item.kind in ['consulta', 'retorno', 'banho_tosa', 'vacina'] %}
                 <form method="POST" action="{{ url_for('update_appointment_status', appointment_id=appt.id) }}">
                   <input type="hidden" name="status" value="accepted">
                   <button type="submit" class="btn btn-success btn-sm"><i class="fas fa-check me-1"></i>Aceitar</button>
@@ -406,23 +408,96 @@
                   <input type="hidden" name="status" value="canceled">
                   <button type="submit" class="btn btn-danger btn-sm"><i class="fas fa-times me-1"></i>Recusar</button>
                 </form>
-                {% else %}
-                <button type="button" class="btn btn-success btn-sm" onclick="responderAgendamentoExame({{ appt.id }}, 'confirmed')">
+              </div>
+              {% endif %}
+            </div>
+          {% endfor %}
+          {% endif %}
+
+          {% if exams_pending_to_accept %}
+          <div class="list-group-item bg-light text-muted fw-semibold text-uppercase small">
+            <i class="fas fa-vial me-2"></i>Exames aguardando sua aceitação
+          </div>
+          {% for exam in exams_pending_to_accept %}
+            {% set can_respond = exam.time_left.total_seconds() > 0 %}
+            <div class="list-group-item d-flex justify-content-between align-items-center">
+              <div class="d-flex align-items-center">
+                <div class="me-3">
+                  <i class="fas fa-flask {% if can_respond %}text-info{% else %}text-secondary{% endif %} fa-2x"></i>
+                </div>
+                <div>
+                  <h6 class="mb-0">{{ exam.scheduled_at|format_datetime_brazil('%d/%m/%Y %H:%M') }} - {{ exam.animal.name }}</h6>
+                  <small class="text-muted">
+                    {{ exam.animal.owner.name }}
+                    <span class="badge bg-info ms-1">Exame</span>
+                    {% if exam.requester %}
+                      <span class="badge bg-secondary ms-1">Solicitado por {{ exam.requester.name }}</span>
+                    {% endif %}
+                  </small>
+                  <div class="mt-1">
+                    {% if can_respond %}
+                      <small class="text-muted"><i class="fas fa-hourglass-half me-1"></i>Tempo restante: {{ exam.time_left|format_timedelta }}</small>
+                    {% else %}
+                      <small class="text-muted"><i class="fas fa-exclamation-circle me-1"></i>Prazo expirado</small>
+                    {% endif %}
+                  </div>
+                </div>
+              </div>
+              {% if can_respond %}
+              <div class="d-flex gap-2">
+                <button type="button" class="btn btn-success btn-sm" onclick="responderAgendamentoExame({{ exam.id }}, 'confirmed')">
                   <i class="fas fa-check me-1"></i>Aceitar
                 </button>
-                <button type="button" class="btn btn-danger btn-sm" onclick="responderAgendamentoExame({{ appt.id }}, 'canceled')">
+                <button type="button" class="btn btn-danger btn-sm" onclick="responderAgendamentoExame({{ exam.id }}, 'canceled')">
                   <i class="fas fa-times me-1"></i>Recusar
                 </button>
-                {% endif %}
               </div>
-            {% endif %}
+              {% endif %}
+            </div>
+          {% endfor %}
+          {% endif %}
+
+          {% if exams_waiting_other_vets %}
+          <div class="list-group-item bg-light text-muted fw-semibold text-uppercase small">
+            <i class="fas fa-user-clock me-2"></i>Exames aguardando outros profissionais
           </div>
+          {% for exam in exams_waiting_other_vets %}
+            {% set can_respond = exam.time_left.total_seconds() > 0 %}
+            <div class="list-group-item d-flex justify-content-between align-items-center">
+              <div class="d-flex align-items-center">
+                <div class="me-3">
+                  <i class="fas fa-flask text-warning fa-2x"></i>
+                </div>
+                <div>
+                  <h6 class="mb-0">{{ exam.scheduled_at|format_datetime_brazil('%d/%m/%Y %H:%M') }} - {{ exam.animal.name }}</h6>
+                  <small class="text-muted">
+                    {{ exam.animal.owner.name }}
+                    <span class="badge bg-info ms-1">Exame</span>
+                    {% if exam.specialist and exam.specialist.user %}
+                      <span class="badge bg-light text-dark border ms-1">Especialista: {{ exam.specialist.user.name }}</span>
+                    {% endif %}
+                  </small>
+                  <div class="mt-1">
+                    {% if can_respond %}
+                      <small class="text-muted"><i class="fas fa-hourglass-half me-1"></i>Tempo restante: {{ exam.time_left|format_timedelta }}</small>
+                    {% else %}
+                      <small class="text-muted"><i class="fas fa-exclamation-circle me-1"></i>Prazo expirado</small>
+                    {% endif %}
+                  </div>
+                </div>
+              </div>
+              <div class="text-end">
+                <span class="badge bg-warning text-dark">Aguardando confirmação</span>
+              </div>
+            </div>
+          {% endfor %}
+          {% endif %}
         {% else %}
           <div class="list-group-item text-center py-4">
             <i class="fas fa-inbox fa-2x text-muted mb-2"></i>
             <p class="text-muted mb-0">Não há agendamentos pendentes.</p>
           </div>
-        {% endfor %}
+        {% endif %}
       </div>
     </div>
   </div>
@@ -437,7 +512,7 @@
         {% for item in appointments_upcoming %}
           {% set appt = item.appt %}
           {% if item.kind == 'exame' %}
-          <div class="list-group-item list-group-item-action appointment-item" data-type="exame">
+          <div class="list-group-item list-group-item-action appointment-item" data-type="exame" data-appointment-id="{{ appt.id }}">
             <div class="d-flex justify-content-between align-items-center">
               <div class="d-flex align-items-center">
                 <div class="me-3">
@@ -456,6 +531,7 @@
           </div>
           {% else %}
           <div class="list-group-item list-group-item-action appointment-item"
+              data-appointment-id="{{ appt.id }}"
               data-id="{{ appt.id }}"
               data-date="{{ appt.scheduled_at|format_datetime_brazil('%Y-%m-%d') }}"
               data-date-label="{{ appt.scheduled_at|format_datetime_brazil('%d/%m/%Y') }}"
