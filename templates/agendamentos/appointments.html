@@ -115,8 +115,13 @@
         <div class="mt-4">
           <div class="d-flex flex-column flex-lg-row align-items-lg-center gap-3 mb-3">
             <div class="d-flex align-items-center flex-wrap gap-2">
-              <h6 class="fw-bold mb-0">
+              <h6 class="fw-bold mb-0" data-schedule-title>
                 <i class="bi bi-calendar3 me-2"></i>Disponibilidade do Veterinário
+                <span
+                  class="ms-2 text-primary fw-semibold d-none"
+                  data-schedule-vet-name
+                  aria-hidden="true"
+                ></span>
               </h6>
               <span
                 class="badge rounded-pill text-bg-light small fw-normal"
@@ -436,6 +441,10 @@ document.addEventListener('DOMContentLoaded', () => {
   const scheduleWeekPrevBtn = document.querySelector('[data-schedule-week-prev]');
   const scheduleWeekNextBtn = document.querySelector('[data-schedule-week-next]');
   const scheduleWeekTodayBtn = document.querySelector('[data-schedule-week-today]');
+  const scheduleTitleEl = document.querySelector('[data-schedule-title]');
+  const scheduleTitleVetNameEl = scheduleTitleEl
+    ? scheduleTitleEl.querySelector('[data-schedule-vet-name]')
+    : document.querySelector('[data-schedule-vet-name]');
   const scheduleToggleShowLabel = scheduleToggleBtn
     ? (scheduleToggleBtn.dataset && scheduleToggleBtn.dataset.showLabel)
       || scheduleToggleBtn.getAttribute('data-show-label')
@@ -525,6 +534,47 @@ document.addEventListener('DOMContentLoaded', () => {
       schedulePeriodFilter.disabled = !!disabled;
     }
   }
+
+  function findVetLabelById(value) {
+    const normalized = value ? String(value).trim() : '';
+    if (!normalized) {
+      return '';
+    }
+    const selects = [];
+    if (vetField) {
+      selects.push(vetField);
+    }
+    vetSelectElements.forEach((select) => {
+      if (select && !selects.includes(select)) {
+        selects.push(select);
+      }
+    });
+    for (const select of selects) {
+      const option = Array.from(select.options || []).find((opt) => String(opt.value).trim() === normalized);
+      if (option) {
+        return option.textContent.trim();
+      }
+    }
+    return '';
+  }
+
+  function setScheduleTitleVetName(vetId, { label } = {}) {
+    if (!scheduleTitleVetNameEl) {
+      return;
+    }
+    const resolvedLabel = (label && label.trim()) || findVetLabelById(vetId);
+    if (resolvedLabel) {
+      scheduleTitleVetNameEl.textContent = resolvedLabel;
+      scheduleTitleVetNameEl.classList.remove('d-none');
+      scheduleTitleVetNameEl.setAttribute('aria-hidden', 'false');
+    } else {
+      scheduleTitleVetNameEl.textContent = '';
+      scheduleTitleVetNameEl.classList.add('d-none');
+      scheduleTitleVetNameEl.setAttribute('aria-hidden', 'true');
+    }
+  }
+
+  setScheduleTitleVetName(currentVetId);
 
   function getBootstrapTabNamespace() {
     if (window.bootstrap && window.bootstrap.Tab && typeof window.bootstrap.Tab.getOrCreateInstance === 'function') {
@@ -889,17 +939,18 @@ document.addEventListener('DOMContentLoaded', () => {
       scheduleContainer.appendChild(col);
     }
 
-    function clearScheduleForNoVet() {
-      cachedScheduleDays = [];
-      selectedScheduleSlotKey = '';
-      setScheduleNavigationDisabled(true);
-      setScheduleEmptyState(selectVetPrompt, 'light');
-      setScheduleSummaryMessage(selectVetPrompt);
-      setScheduleWeekLabel(defaultWeekLabel || 'Aguardando seleção de profissional.');
-      if (timeField) {
-        setTimeFieldMessage(selectVetPrompt, { disable: true });
-      }
+  function clearScheduleForNoVet() {
+    cachedScheduleDays = [];
+    selectedScheduleSlotKey = '';
+    setScheduleNavigationDisabled(true);
+    setScheduleEmptyState(selectVetPrompt, 'light');
+    setScheduleSummaryMessage(selectVetPrompt);
+    setScheduleWeekLabel(defaultWeekLabel || 'Aguardando seleção de profissional.');
+    setScheduleTitleVetName('', { label: '' });
+    if (timeField) {
+      setTimeFieldMessage(selectVetPrompt, { disable: true });
     }
+  }
 
     function showScheduleLoading() {
       if (!scheduleContainer) {
@@ -1201,6 +1252,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
       const isEvent = payload && typeof payload === 'object' && 'target' in payload;
       const target = isEvent ? payload.target : null;
+      let vetLabelFromPayload = '';
+      if (payload && typeof payload === 'object' && 'vetLabel' in payload && payload.vetLabel !== undefined) {
+        vetLabelFromPayload = payload.vetLabel;
+      }
       let nextVetId;
 
       if (typeof payload === 'string' || typeof payload === 'number') {
@@ -1210,6 +1265,12 @@ document.addEventListener('DOMContentLoaded', () => {
       } else if (isEvent && payload.target && typeof payload.target.hasAttribute === 'function'
         && payload.target.hasAttribute('data-schedule-vet-select')) {
         nextVetId = payload.target.value;
+      }
+
+      if (isEvent && target && target.matches && target.matches('[data-schedule-vet-select]')) {
+        if (target.selectedOptions && target.selectedOptions.length) {
+          vetLabelFromPayload = vetLabelFromPayload || target.selectedOptions[0].textContent || '';
+        }
       }
 
       if (nextVetId !== undefined) {
@@ -1226,6 +1287,9 @@ document.addEventListener('DOMContentLoaded', () => {
       }
 
       syncVetSelectValues(currentVetId, { source: target });
+
+      const effectiveLabel = vetLabelFromPayload || findVetLabelById(currentVetId);
+      setScheduleTitleVetName(currentVetId, { label: effectiveLabel });
 
       const isVetChange = Boolean(target && typeof target.hasAttribute === 'function' && target.hasAttribute('data-schedule-vet-select'));
       const isDateChange = Boolean(target && target === dateField);
