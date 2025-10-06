@@ -280,6 +280,18 @@
   padding-right: 0;
 }
 
+@media (max-width: 575.98px) {
+  #{{ component_id }} .tutor-calendar__pet-list {
+    max-height: none;
+    overflow-y: visible;
+    padding-right: 0;
+  }
+
+  #{{ component_id }} [data-toggle-pets] {
+    display: none !important;
+  }
+}
+
 #{{ component_id }} .tutor-calendar__pet {
   display: flex;
   align-items: flex-start;
