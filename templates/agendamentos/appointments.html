@@ -68,7 +68,7 @@
             </div>
             <div class="col-md-6">
               {{ form.veterinario_id.label(class="form-label fw-semibold") }}
-              {{ form.veterinario_id(class="form-select") }}
+              {{ form.veterinario_id(class="form-select", **{'data-schedule-vet-select': 'true'}) }}
             </div>
           </div>
 
@@ -459,6 +459,14 @@ document.addEventListener('DOMContentLoaded', () => {
   let selectedScheduleSlotKey = '';
   const todayIso = new Date().toISOString().split('T')[0];
   let currentScheduleStart = (dateField && dateField.value) ? dateField.value : todayIso;
+  let currentVetId = vetField && vetField.value ? String(vetField.value).trim() : '';
+  const defaultScheduleSummary = scheduleSummaryEl
+    ? scheduleSummaryEl.textContent.trim()
+    : 'Selecione um profissional para visualizar a agenda.';
+  const defaultWeekLabel = scheduleWeekLabelEl
+    ? scheduleWeekLabelEl.textContent.trim()
+    : 'Aguardando seleção de profissional.';
+  const selectVetPrompt = defaultScheduleSummary || 'Selecione um profissional para visualizar a agenda.';
 
   function updateNewAppointmentToggleAria() {
     if (!newAppointmentCollapseEl || !newAppointmentToggleBtn) {
@@ -475,6 +483,19 @@ document.addEventListener('DOMContentLoaded', () => {
     const isShown = scheduleCollapseEl.classList.contains('show');
     scheduleToggleBtn.setAttribute('aria-expanded', isShown ? 'true' : 'false');
     scheduleToggleBtn.textContent = isShown ? scheduleToggleHideLabel : scheduleToggleShowLabel;
+  }
+
+  function setScheduleNavigationDisabled(disabled) {
+    [scheduleWeekPrevBtn, scheduleWeekNextBtn, scheduleWeekTodayBtn].forEach((btn) => {
+      if (!btn) {
+        return;
+      }
+      btn.disabled = !!disabled;
+      btn.setAttribute('aria-disabled', disabled ? 'true' : 'false');
+    });
+    if (schedulePeriodFilter) {
+      schedulePeriodFilter.disabled = !!disabled;
+    }
   }
 
   function getBootstrapTabNamespace() {
@@ -685,12 +706,23 @@ document.addEventListener('DOMContentLoaded', () => {
     timeField.dataset.currentTime = timeField.value;
   }
 
-  async function updateTimes() {
-    if (!vetField || !dateField || !timeField) return;
-    const vetId = vetField.value;
-    const date = dateField.value;
+  async function updateTimes(forcedVetId) {
+    if (!dateField || !timeField) {
+      return;
+    }
 
-    if (!vetId || !date) {
+    const vetSource = forcedVetId !== undefined
+      ? forcedVetId
+      : (vetField ? vetField.value : currentVetId);
+    const vetId = vetSource ? String(vetSource).trim() : '';
+    const date = dateField.value ? String(dateField.value).trim() : '';
+
+    if (!vetId) {
+      setTimeFieldMessage(selectVetPrompt, { disable: true });
+      return;
+    }
+
+    if (!date) {
       setTimeFieldMessage(timeFieldPlaceholder, { disable: true });
       return;
     }
@@ -827,6 +859,18 @@ document.addEventListener('DOMContentLoaded', () => {
       alert.textContent = message;
       col.appendChild(alert);
       scheduleContainer.appendChild(col);
+    }
+
+    function clearScheduleForNoVet() {
+      cachedScheduleDays = [];
+      selectedScheduleSlotKey = '';
+      setScheduleNavigationDisabled(true);
+      setScheduleEmptyState(selectVetPrompt, 'light');
+      setScheduleSummaryMessage(selectVetPrompt);
+      setScheduleWeekLabel(defaultWeekLabel || 'Aguardando seleção de profissional.');
+      if (timeField) {
+        setTimeFieldMessage(selectVetPrompt, { disable: true });
+      }
     }
 
     function showScheduleLoading() {
@@ -1078,27 +1122,35 @@ document.addEventListener('DOMContentLoaded', () => {
       refreshSlotSelection();
     }
 
-    async function loadSchedule({ showLoading = true } = {}) {
+    async function loadSchedule({ showLoading = true, vetId: requestedVetId } = {}) {
       if (!scheduleContainer) {
         return;
       }
-      if (!vetField || !vetField.value) {
-        cachedScheduleDays = [];
-        selectedScheduleSlotKey = '';
-        setScheduleEmptyState('Selecione um profissional para visualizar a agenda.', 'light');
-        setScheduleSummaryMessage('Selecione um profissional para visualizar a agenda.');
-        setScheduleWeekLabel('Aguardando seleção de profissional.');
+
+      const resolvedVetId = requestedVetId !== undefined
+        ? requestedVetId
+        : (currentVetId || (vetField ? vetField.value : ''));
+      const activeVetId = resolvedVetId ? String(resolvedVetId).trim() : '';
+
+      if (!activeVetId) {
+        clearScheduleForNoVet();
         return;
       }
+
+      currentVetId = activeVetId;
+      setScheduleNavigationDisabled(false);
+
       const start = normalizeIsoDate(currentScheduleStart)
         || (dateField && normalizeIsoDate(dateField.value))
         || todayIso;
       currentScheduleStart = start;
+
       if (showLoading) {
         showScheduleLoading();
       }
+
       try {
-        const response = await fetch(`/api/specialist/${vetField.value}/weekly_schedule?start=${start}`);
+        const response = await fetch(`/api/specialist/${activeVetId}/weekly_schedule?start=${start}`);
         if (!response.ok) {
           throw new Error(`HTTP ${response.status}`);
         }
@@ -1107,37 +1159,76 @@ document.addEventListener('DOMContentLoaded', () => {
         renderSchedule(cachedScheduleDays);
       } catch (error) {
         console.warn('Não foi possível carregar os horários disponíveis.', error);
+        setScheduleNavigationDisabled(false);
         setScheduleEmptyState('Não foi possível carregar a agenda no momento. Tente novamente.', 'danger');
         setScheduleSummaryMessage('Não foi possível carregar a agenda.');
         setScheduleWeekLabel('Erro ao carregar agenda.');
       }
     }
 
-    function handleVetChange(event) {
+    function handleVetChange(payload) {
       if (!vetField && !dateField && !timeField && !scheduleContainer) {
         return;
       }
-      const isVetChange = event && event.target === vetField;
+
+      const isEvent = payload && typeof payload === 'object' && 'target' in payload;
+      let nextVetId;
+
+      if (typeof payload === 'string' || typeof payload === 'number') {
+        nextVetId = payload;
+      } else if (payload && typeof payload === 'object' && 'vetId' in payload && payload.vetId !== undefined) {
+        nextVetId = payload.vetId;
+      } else if (isEvent && payload.target && typeof payload.target.hasAttribute === 'function'
+        && payload.target.hasAttribute('data-schedule-vet-select')) {
+        nextVetId = payload.target.value;
+      }
+
+      if (nextVetId !== undefined) {
+        currentVetId = nextVetId ? String(nextVetId).trim() : '';
+        if (vetField && (!isEvent || payload.target !== vetField) && vetField.value !== currentVetId) {
+          vetField.value = currentVetId;
+        }
+      } else if (vetField) {
+        currentVetId = vetField.value ? String(vetField.value).trim() : '';
+      }
+
+      const target = isEvent ? payload.target : null;
+      const isVetChange = Boolean(target && typeof target.hasAttribute === 'function' && target.hasAttribute('data-schedule-vet-select'));
+      const isDateChange = Boolean(target && target === dateField);
+
       if (isVetChange) {
         selectedScheduleSlotKey = '';
       }
+
+      if (!currentVetId) {
+        clearScheduleForNoVet();
+        if (typeof window.updateCalendarVetSelection === 'function') {
+          window.updateCalendarVetSelection('', { activate: false, refetch: true });
+        } else if (window.sharedCalendar && typeof window.sharedCalendar.refetchEvents === 'function') {
+          window.sharedCalendar.refetchEvents();
+        }
+        return;
+      }
+
       if (dateField && dateField.value) {
-        currentScheduleStart = normalizeIsoDate(dateField.value) || currentScheduleStart;
-      } else if (isVetChange && !vetField.value) {
+        currentScheduleStart = normalizeIsoDate(dateField.value) || currentScheduleStart || todayIso;
+      } else if (isVetChange || isDateChange) {
         currentScheduleStart = todayIso;
       }
+
       if (typeof updateTimes === 'function') {
-        updateTimes();
+        updateTimes(currentVetId);
       }
+
       const shouldShowLoading = !scheduleCollapseEl || scheduleCollapseEl.classList.contains('show');
-      loadSchedule({ showLoading: shouldShowLoading });
-      const vetIdValue = vetField ? vetField.value : null;
+      loadSchedule({ showLoading: shouldShowLoading, vetId: currentVetId });
+
       if (typeof window.updateCalendarVetSelection === 'function') {
-        window.updateCalendarVetSelection(vetIdValue, { activate: false, refetch: true });
+        window.updateCalendarVetSelection(currentVetId, { activate: false, refetch: true });
       } else if (window.sharedCalendar && typeof window.sharedCalendar.refetchEvents === 'function') {
         window.sharedCalendar.refetchEvents();
       }
-  }
+    }
 
   window.handleVetChange = handleVetChange;
 
