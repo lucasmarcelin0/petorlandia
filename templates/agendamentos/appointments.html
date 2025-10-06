@@ -414,7 +414,11 @@
 <script type="module" src="{{ url_for('static', filename='appointments_table.js') }}"></script>
 <script>
 document.addEventListener('DOMContentLoaded', () => {
-  const vetField = {% if form %}document.getElementById('{{ form.veterinario_id.id }}'){% else %}null{% endif %};
+  let vetField = {% if form %}document.getElementById('{{ form.veterinario_id.id }}'){% else %}null{% endif %};
+  const vetSelectElements = Array.from(document.querySelectorAll('[data-schedule-vet-select]'));
+  if (!vetField && vetSelectElements.length) {
+    [vetField] = vetSelectElements;
+  }
   const dateField = {% if form %}document.getElementById('{{ form.date.id }}'){% else %}null{% endif %};
   const timeField = {% if form %}document.getElementById('{{ form.time.id }}'){% else %}null{% endif %};
   const timeFieldPlaceholder = timeField && timeField.dataset && timeField.dataset.placeholder
@@ -459,7 +463,15 @@ document.addEventListener('DOMContentLoaded', () => {
   let selectedScheduleSlotKey = '';
   const todayIso = new Date().toISOString().split('T')[0];
   let currentScheduleStart = (dateField && dateField.value) ? dateField.value : todayIso;
-  let currentVetId = vetField && vetField.value ? String(vetField.value).trim() : '';
+  let currentVetId = '';
+  if (vetField && vetField.value) {
+    currentVetId = String(vetField.value).trim();
+  } else {
+    const initialVetSelect = vetSelectElements.find((select) => select && select.value);
+    if (initialVetSelect) {
+      currentVetId = String(initialVetSelect.value).trim();
+    }
+  }
   const defaultScheduleSummary = scheduleSummaryEl
     ? scheduleSummaryEl.textContent.trim()
     : 'Selecione um profissional para visualizar a agenda.';
@@ -467,6 +479,22 @@ document.addEventListener('DOMContentLoaded', () => {
     ? scheduleWeekLabelEl.textContent.trim()
     : 'Aguardando seleção de profissional.';
   const selectVetPrompt = defaultScheduleSummary || 'Selecione um profissional para visualizar a agenda.';
+
+  function syncVetSelectValues(value, { source = null } = {}) {
+    const normalizedValue = value ? String(value).trim() : '';
+    vetSelectElements.forEach((select) => {
+      if (!select || select === source) {
+        return;
+      }
+      const currentValue = select.value ? String(select.value).trim() : '';
+      if (currentValue !== normalizedValue) {
+        select.value = normalizedValue;
+      }
+    });
+    if ((!vetField || !vetField.isConnected) && vetSelectElements.length) {
+      vetField = vetSelectElements[0];
+    }
+  }
 
   function updateNewAppointmentToggleAria() {
     if (!newAppointmentCollapseEl || !newAppointmentToggleBtn) {
@@ -1172,6 +1200,7 @@ document.addEventListener('DOMContentLoaded', () => {
       }
 
       const isEvent = payload && typeof payload === 'object' && 'target' in payload;
+      const target = isEvent ? payload.target : null;
       let nextVetId;
 
       if (typeof payload === 'string' || typeof payload === 'number') {
@@ -1185,14 +1214,19 @@ document.addEventListener('DOMContentLoaded', () => {
 
       if (nextVetId !== undefined) {
         currentVetId = nextVetId ? String(nextVetId).trim() : '';
-        if (vetField && (!isEvent || payload.target !== vetField) && vetField.value !== currentVetId) {
-          vetField.value = currentVetId;
-        }
       } else if (vetField) {
         currentVetId = vetField.value ? String(vetField.value).trim() : '';
+      } else if (vetSelectElements.length) {
+        const fallbackSelect = vetSelectElements.find((select) => select && select.value);
+        currentVetId = fallbackSelect ? String(fallbackSelect.value).trim() : '';
       }
 
-      const target = isEvent ? payload.target : null;
+      if (!vetField && target && target.matches && target.matches('[data-schedule-vet-select]')) {
+        vetField = target;
+      }
+
+      syncVetSelectValues(currentVetId, { source: target });
+
       const isVetChange = Boolean(target && typeof target.hasAttribute === 'function' && target.hasAttribute('data-schedule-vet-select'));
       const isDateChange = Boolean(target && target === dateField);
 
@@ -1566,7 +1600,13 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  vetField && vetField.addEventListener('change', handleVetChange);
+  vetSelectElements.forEach((select) => {
+    if (!select || select.dataset.scheduleVetBound === 'true') {
+      return;
+    }
+    select.dataset.scheduleVetBound = 'true';
+    select.addEventListener('change', handleVetChange);
+  });
   dateField && dateField.addEventListener('change', handleVetChange);
   handleVetChange();
 
