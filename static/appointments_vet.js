@@ -520,6 +520,11 @@ function initScheduleOverview(root) {
   const prevBtn = document.querySelector('[data-schedule-week-prev]');
   const nextBtn = document.querySelector('[data-schedule-week-next]');
   const todayBtn = document.querySelector('[data-schedule-week-today]');
+  const scheduleTitleEl = document.querySelector('[data-schedule-title]');
+  const scheduleTitleVetNameEl = scheduleTitleEl
+    ? scheduleTitleEl.querySelector('[data-schedule-vet-name]')
+    : document.querySelector('[data-schedule-vet-name]');
+  const vetSelectElements = Array.from(document.querySelectorAll('[data-schedule-vet-select]'));
 
   const shortFormatter = new Intl.DateTimeFormat('pt-BR', {
     weekday: 'short',
@@ -546,6 +551,53 @@ function initScheduleOverview(root) {
       state.selectedSlotKey = `${dateField.value}T${initialTime}`;
     }
   }
+
+  function findVetLabelById(value) {
+    const normalized = value ? String(value).trim() : '';
+    if (!normalized) {
+      return '';
+    }
+    const selects = vetSelectElements.filter(Boolean);
+    const rootVetSelect = document.getElementById('schedule-veterinario_id');
+    if (rootVetSelect && !selects.includes(rootVetSelect)) {
+      selects.unshift(rootVetSelect);
+    }
+    for (const select of selects) {
+      const option = Array.from(select.options || []).find((opt) => String(opt.value).trim() === normalized);
+      if (option) {
+        return option.textContent.trim();
+      }
+    }
+    return '';
+  }
+
+  function setScheduleTitleVetName(vetValue, { label } = {}) {
+    if (!scheduleTitleVetNameEl) {
+      return;
+    }
+    const resolvedLabel = (label && label.trim()) || findVetLabelById(vetValue);
+    if (resolvedLabel) {
+      scheduleTitleVetNameEl.textContent = resolvedLabel;
+      scheduleTitleVetNameEl.classList.remove('d-none');
+      scheduleTitleVetNameEl.setAttribute('aria-hidden', 'false');
+    } else {
+      scheduleTitleVetNameEl.textContent = '';
+      scheduleTitleVetNameEl.classList.add('d-none');
+      scheduleTitleVetNameEl.setAttribute('aria-hidden', 'true');
+    }
+  }
+
+  setScheduleTitleVetName(vetId);
+
+  vetSelectElements.forEach((select) => {
+    if (!select || select.dataset.scheduleTitleBound === 'true') {
+      return;
+    }
+    select.dataset.scheduleTitleBound = 'true';
+    select.addEventListener('change', () => {
+      setScheduleTitleVetName(select.value);
+    });
+  });
 
   function formatIso(date) {
     if (!(date instanceof Date) || Number.isNaN(date.getTime())) {
