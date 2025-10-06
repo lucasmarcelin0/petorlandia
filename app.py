@@ -10092,8 +10092,6 @@ def update_exam_appointment_requester(appointment_id):
         time_left = appt.confirm_by - now
         time_left_seconds = time_left.total_seconds()
         if time_left_seconds > 0 and style.get('show_time_left'):
-            from helpers import format_timedelta
-
             time_left_display = format_timedelta(time_left)
 
     confirm_display = (
