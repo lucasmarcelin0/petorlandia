@@ -34,7 +34,7 @@ from itsdangerous import URLSafeTimedSerializer
 from jinja2 import TemplateNotFound
 import json
 import unicodedata
-from sqlalchemy import func, or_, exists, and_
+from sqlalchemy import func, or_, exists, and_, case
 from sqlalchemy.orm import joinedload
 
 # ----------------------------------------------------------------
@@ -283,6 +283,7 @@ from helpers import (
     appointments_to_events,
     exam_to_event,
     vaccine_to_event,
+    consulta_to_event,
     unique_items_by_id,
     to_timezone_aware,
     get_available_times,
@@ -2363,6 +2364,7 @@ def finalizar_consulta(consulta_id):
         return redirect(url_for('index'))
 
     consulta.status = 'finalizada'
+    consulta.finalizada_em = datetime.utcnow()
     appointment = consulta.appointment
     if appointment and appointment.status != 'completed':
         appointment.status = 'completed'
@@ -4314,6 +4316,7 @@ def update_consulta(consulta_id):
     else:
         # Salva, finaliza e cria nova automaticamente
         consulta.status = 'finalizada'
+        consulta.finalizada_em = datetime.utcnow()
         appointment = consulta.appointment
         if appointment and appointment.status != 'completed':
             appointment.status = 'completed'
@@ -8189,7 +8192,7 @@ def appointments():
         if scope_filters:
             consulta_filters.append(or_(*scope_filters))
 
-        consultas_finalizadas = (
+        consultas_query = (
             Consulta.query.outerjoin(Appointment, Consulta.appointment)
             .options(
                 joinedload(Consulta.animal).joinedload(Animal.owner),
@@ -8199,22 +8202,19 @@ def appointments():
                 .joinedload(Animal.owner),
             )
             .filter(*consulta_filters)
-            .filter(
-                or_(
-                    and_(
-                        Appointment.id.isnot(None),
-                        Appointment.scheduled_at >= start_dt_utc,
-                        Appointment.scheduled_at < end_dt_utc,
-                    ),
-                    and_(
-                        Appointment.id.is_(None),
-                        Consulta.created_at >= start_dt_utc,
-                        Consulta.created_at < end_dt_utc,
-                    ),
-                )
-            )
-            .all()
         )
+
+        consulta_timestamp_expr = case(
+            (Consulta.finalizada_em.isnot(None), Consulta.finalizada_em),
+            (Appointment.scheduled_at.isnot(None), Appointment.scheduled_at),
+            else_=Consulta.created_at,
+        )
+        if start_dt_utc is not None:
+            consultas_query = consultas_query.filter(consulta_timestamp_expr >= start_dt_utc)
+        if end_dt_utc is not None:
+            consultas_query = consultas_query.filter(consulta_timestamp_expr < end_dt_utc)
+
+        consultas_finalizadas = consultas_query.all()
 
         consulta_animal_ids = {c.animal_id for c in consultas_finalizadas}
         exam_blocks_by_consulta = defaultdict(list)
@@ -8233,6 +8233,8 @@ def appointments():
         schedule_events = []
 
         def _consulta_timestamp(consulta_obj):
+            if consulta_obj.finalizada_em:
+                return consulta_obj.finalizada_em
             if consulta_obj.appointment and consulta_obj.appointment.scheduled_at:
                 return consulta_obj.appointment.scheduled_at
             return consulta_obj.created_at
@@ -9309,6 +9311,29 @@ def api_my_appointments():
             if event:
                 _append_event(event)
 
+    def _extend_consulta_events(*, or_filters=None, and_filters=None):
+        query_obj = (
+            Consulta.query
+            .outerjoin(Consulta.animal)
+            .options(
+                joinedload(Consulta.animal).joinedload(Animal.owner),
+                joinedload(Consulta.veterinario),
+                joinedload(Consulta.clinica),
+            )
+            .filter(~Consulta.appointment.has())
+        )
+        and_conditions = [cond for cond in (and_filters or []) if cond is not None]
+        if and_conditions:
+            query_obj = query_obj.filter(*and_conditions)
+        or_conditions = [cond for cond in (or_filters or []) if cond is not None]
+        if or_conditions:
+            query_obj = query_obj.filter(or_(*or_conditions))
+        consulta_items = query_obj.order_by(Consulta.created_at).all()
+        for consulta in unique_items_by_id(consulta_items):
+            event = consulta_to_event(consulta)
+            if event:
+                _append_event(event)
+
     def _extend_for_tutor(tutor_id):
         if not tutor_id:
             return
@@ -9335,6 +9360,7 @@ def api_my_appointments():
                 Vacina.aplicada_em >= date.today(),
             ],
         )
+        _extend_consulta_events(or_filters=[Animal.user_id == tutor_id])
 
     def _extend_for_vet(vet_profile, clinic_ids=None):
         if not vet_profile:
@@ -9343,6 +9369,7 @@ def api_my_appointments():
         if not vet_id:
             return
         sanitized_clinic_ids = [cid for cid in (clinic_ids or []) if cid]
+        vet_user_id = getattr(vet_profile, 'user_id', None)
         exam_filters = [ExamAppointment.specialist_id == vet_id]
         exam_filters.append(ExamAppointment.status.in_(['pending', 'confirmed']))
         if sanitized_clinic_ids:
@@ -9367,6 +9394,14 @@ def api_my_appointments():
             vaccine_filters.append(Animal.clinica_id.in_(sanitized_clinic_ids))
         _extend_vaccine_events(and_filters=vaccine_filters)
 
+        consulta_filters = []
+        if vet_user_id:
+            consulta_filters.append(Consulta.created_by == vet_user_id)
+        if sanitized_clinic_ids:
+            consulta_filters.append(Consulta.clinica_id.in_(sanitized_clinic_ids))
+        if consulta_filters:
+            _extend_consulta_events(and_filters=consulta_filters)
+
     def _extend_for_clinics(clinic_ids):
         sanitized = [cid for cid in (clinic_ids or []) if cid]
         if not sanitized:
@@ -9387,6 +9422,7 @@ def api_my_appointments():
             Vacina.aplicada_em >= date.today(),
         ]
         _extend_vaccine_events(and_filters=vaccine_filters)
+        _extend_consulta_events(and_filters=[Consulta.clinica_id.in_(sanitized)])
 
     if context['mode'] == 'tutor':
         _extend_for_tutor(context.get('tutor_id'))
