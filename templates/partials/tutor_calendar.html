@@ -37,7 +37,7 @@
               <button type="button" class="btn btn-primary btn-sm" data-next-month aria-label="Próximo mês">
                 <i class="bi bi-chevron-right"></i>
               </button>
-              <div class="btn-group btn-group-sm tutor-calendar__view-toggle ms-2" role="group" aria-label="Alternar visualização">
+              <div class="btn-group btn-group-sm tutor-calendar__view-toggle ms-2 w-100" role="group" aria-label="Alternar visualização">
                 <button type="button" class="btn btn-outline-secondary active" data-view-mode="month" aria-pressed="true">
                   Mensal
                 </button>
@@ -399,6 +399,20 @@
   background: var(--bs-primary);
   color: #fff;
   border-color: var(--bs-primary);
+}
+
+@media (max-width: 575.98px) {
+  #{{ component_id }} .tutor-calendar__view-toggle {
+    display: flex;
+    flex-wrap: wrap;
+    width: 100%;
+  }
+
+  #{{ component_id }} .tutor-calendar__view-toggle .btn {
+    flex: 1 1 48%;
+    min-width: 0;
+    text-align: center;
+  }
 }
 
 #{{ component_id }} .tutor-calendar__weekdays {
