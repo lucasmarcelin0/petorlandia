@@ -8,6 +8,27 @@
   }
 }
 
+/* Botões responsivos na área de agendamentos */
+.button-action-group {
+  width: 100%;
+}
+
+.btn-stack-item {
+  width: 100%;
+  min-height: 44px;
+}
+
+@media (min-width: 768px) {
+  .button-action-group {
+    width: auto;
+    align-items: center;
+  }
+
+  .btn-stack-item {
+    width: auto;
+  }
+}
+
 /* Garante que tabelas sempre possam rolar em telas pequenas */
 .table-responsive {
   overflow-x: auto;
