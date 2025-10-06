@@ -4,6 +4,90 @@
 <div class="container mt-4">
   <h2>Agenda</h2>
   <div id="calendar"></div>
+
+  <div class="modal fade" id="eventDetailsModal" tabindex="-1" aria-labelledby="eventDetailsModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-scrollable">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title" id="eventDetailsModalLabel" data-event-field="title">Detalhes do evento</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+        </div>
+        <div class="modal-body">
+          <div class="mb-3">
+            <h6 class="fw-semibold mb-1">Tutor</h6>
+            <p class="mb-0" data-event-field="tutor">—</p>
+          </div>
+          <div class="mb-3">
+            <h6 class="fw-semibold mb-1">Pet</h6>
+            <p class="mb-0" data-event-field="pet">—</p>
+          </div>
+          <div class="mb-3">
+            <h6 class="fw-semibold mb-1">Clínica</h6>
+            <p class="mb-0" data-event-field="clinic">—</p>
+          </div>
+          <div class="mb-3">
+            <h6 class="fw-semibold mb-1">Status</h6>
+            <p class="mb-0" data-event-field="status">—</p>
+          </div>
+          <div class="mb-3">
+            <h6 class="fw-semibold mb-1">Notas</h6>
+            <p class="mb-0" data-event-field="notes" style="white-space: pre-wrap;">—</p>
+          </div>
+        </div>
+        <div class="modal-footer flex-wrap gap-2">
+          <a href="#" class="btn btn-primary d-none" data-event-link="edit" data-default-label="Editar">Editar</a>
+          <a href="#" class="btn btn-outline-secondary d-none" data-event-link="details" data-default-label="Ver detalhes">Ver detalhes</a>
+          <form id="eventCancelForm" class="d-none" method="POST" data-event-form="cancel" data-action-template="{{ url_for('update_appointment_status', appointment_id=999999999)|replace('999999999', '{id}') }}">
+            {% if csrf_token is defined %}
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            {% endif %}
+            <input type="hidden" name="status" value="canceled">
+            <button type="submit" class="btn btn-outline-danger">Cancelar</button>
+          </form>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="offcanvas offcanvas-bottom" tabindex="-1" id="eventDetailsOffcanvas" aria-labelledby="eventDetailsOffcanvasLabel">
+    <div class="offcanvas-header">
+      <h5 class="offcanvas-title" id="eventDetailsOffcanvasLabel" data-event-field="title">Detalhes do evento</h5>
+      <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Fechar"></button>
+    </div>
+    <div class="offcanvas-body">
+      <div class="mb-3">
+        <h6 class="fw-semibold mb-1">Tutor</h6>
+        <p class="mb-0" data-event-field="tutor">—</p>
+      </div>
+      <div class="mb-3">
+        <h6 class="fw-semibold mb-1">Pet</h6>
+        <p class="mb-0" data-event-field="pet">—</p>
+      </div>
+      <div class="mb-3">
+        <h6 class="fw-semibold mb-1">Clínica</h6>
+        <p class="mb-0" data-event-field="clinic">—</p>
+      </div>
+      <div class="mb-3">
+        <h6 class="fw-semibold mb-1">Status</h6>
+        <p class="mb-0" data-event-field="status">—</p>
+      </div>
+      <div class="mb-3">
+        <h6 class="fw-semibold mb-1">Notas</h6>
+        <p class="mb-0" data-event-field="notes" style="white-space: pre-wrap;">—</p>
+      </div>
+      <div class="d-flex flex-wrap gap-2 mt-3">
+        <a href="#" class="btn btn-primary d-none" data-event-link="edit" data-default-label="Editar">Editar</a>
+        <a href="#" class="btn btn-outline-secondary d-none" data-event-link="details" data-default-label="Ver detalhes">Ver detalhes</a>
+        <form id="eventCancelFormOffcanvas" class="d-none" method="POST" data-event-form="cancel" data-action-template="{{ url_for('update_appointment_status', appointment_id=999999999)|replace('999999999', '{id}') }}">
+          {% if csrf_token is defined %}
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          {% endif %}
+          <input type="hidden" name="status" value="canceled">
+          <button type="submit" class="btn btn-outline-danger">Cancelar</button>
+        </form>
+      </div>
+    </div>
+  </div>
 </div>
 {% endblock %}
 
@@ -65,6 +149,130 @@ document.addEventListener('DOMContentLoaded', function() {
       }
     }
 
+    var eventDetailsModalEl = document.getElementById('eventDetailsModal');
+    var eventDetailsOffcanvasEl = document.getElementById('eventDetailsOffcanvas');
+    var hasBootstrap = typeof bootstrap !== 'undefined' && bootstrap && typeof bootstrap.Modal === 'function';
+    var modalInstance = hasBootstrap && eventDetailsModalEl ? new bootstrap.Modal(eventDetailsModalEl) : null;
+    var offcanvasInstance = hasBootstrap && eventDetailsOffcanvasEl && typeof bootstrap.Offcanvas === 'function'
+      ? new bootstrap.Offcanvas(eventDetailsOffcanvasEl)
+      : null;
+    var mobileQuery = typeof window.matchMedia === 'function'
+      ? window.matchMedia('(max-width: 575.98px)')
+      : { matches: false };
+
+    function setEventField(field, value) {
+      var elements = document.querySelectorAll('[data-event-field="' + field + '"]');
+      var text = (value !== null && value !== undefined && String(value).trim() !== '') ? String(value) : '—';
+      elements.forEach(function(element) {
+        element.textContent = text;
+      });
+    }
+
+    function toggleEventLink(name, url, label) {
+      var links = document.querySelectorAll('[data-event-link="' + name + '"]');
+      links.forEach(function(link) {
+        if (url) {
+          link.classList.remove('d-none');
+          link.href = url;
+          var baseLabel = link.getAttribute('data-default-label') || link.textContent || '';
+          link.textContent = label || baseLabel;
+        } else {
+          link.classList.add('d-none');
+          link.removeAttribute('href');
+        }
+      });
+    }
+
+    function toggleCancelForms(recordId, shouldShow) {
+      var forms = document.querySelectorAll('[data-event-form="cancel"]');
+      forms.forEach(function(form) {
+        if (shouldShow && recordId) {
+          var template = form.getAttribute('data-action-template');
+          if (template) {
+            form.action = template.replace('{id}', recordId);
+          }
+          form.classList.remove('d-none');
+        } else {
+          form.classList.add('d-none');
+          form.removeAttribute('action');
+        }
+      });
+    }
+
+    function showEventDetails(info) {
+      var event = info.event;
+      var extended = event && event.extendedProps ? event.extendedProps : {};
+
+      setEventField('title', event && event.title ? event.title : 'Evento');
+      var tutorValue = extended.tutorName || extended.tutor || extended.tutor_name;
+      if (!tutorValue && extended.tutor && typeof extended.tutor === 'object') {
+        tutorValue = extended.tutor.name || extended.tutor.nome || '';
+      }
+      setEventField('tutor', tutorValue);
+
+      var petValue = extended.animalName || extended.petName || extended.pet || extended.animal_name;
+      if (!petValue && extended.animal && typeof extended.animal === 'object') {
+        petValue = extended.animal.name || extended.animal.nome || '';
+      }
+      setEventField('pet', petValue);
+
+      var clinicValue = extended.clinicaNome || extended.clinicName || extended.clinic_nome;
+      if (!clinicValue && extended.clinic && typeof extended.clinic === 'object') {
+        clinicValue = extended.clinic.name || extended.clinic.nome || '';
+      }
+      if (!clinicValue) {
+        clinicValue = extended.clinic || extended.clinic_id || extended.clinicId;
+      }
+      setEventField('clinic', clinicValue);
+      setEventField('status', extended.status || extended.consultaStatus || extended.consulta_status);
+      setEventField('notes', extended.notes);
+
+      var editUrl = extended.editUrl || extended.edit_url || null;
+      if (!editUrl) {
+        if (extended.eventType === 'appointment' && extended.recordId) {
+          editUrl = '/appointments/' + extended.recordId + '/edit';
+        } else if (extended.eventType === 'consulta' && extended.consultaId && extended.animalId) {
+          editUrl = '/consulta/' + extended.animalId + '?c=' + extended.consultaId;
+        }
+      }
+
+      var detailsUrl = extended.detailsUrl || extended.details_url || null;
+      if (!detailsUrl) {
+        if (extended.consultaId && extended.animalId) {
+          detailsUrl = '/consulta/' + extended.animalId + '?c=' + extended.consultaId;
+        } else if (extended.animalId) {
+          detailsUrl = '/consulta/' + extended.animalId;
+        } else if (event && event.url) {
+          detailsUrl = event.url;
+        }
+      }
+
+      var editLabel = 'Editar';
+      if (extended.eventType === 'consulta') {
+        editLabel = 'Ver consulta';
+      } else if (extended.eventType && extended.eventType !== 'appointment') {
+        editLabel = 'Abrir';
+      }
+
+      toggleEventLink('edit', editUrl, editLabel);
+      toggleEventLink('details', detailsUrl && detailsUrl !== editUrl ? detailsUrl : null, 'Ver detalhes');
+
+      var statusKey = extended.status || extended.consultaStatus || extended.consulta_status || '';
+      var normalizedStatus = String(statusKey).toLowerCase();
+      var canceledStates = ['canceled', 'cancelled', 'cancelada', 'cancelado'];
+      var canCancel = extended.eventType === 'appointment'
+        && extended.recordId
+        && canceledStates.indexOf(normalizedStatus) === -1;
+      toggleCancelForms(extended.recordId, canCancel);
+
+      var shouldUseOffcanvas = offcanvasInstance && mobileQuery.matches;
+      if (shouldUseOffcanvas) {
+        offcanvasInstance.show();
+      } else if (modalInstance) {
+        modalInstance.show();
+      }
+    }
+
     calendar = new FullCalendar.Calendar(calendarEl, {
       initialView: 'dayGridMonth',
       events: '/api/my_appointments',
@@ -72,6 +280,28 @@ document.addEventListener('DOMContentLoaded', function() {
       eventDurationEditable: true,
       eventDrop: persistEventChange,
       eventResize: persistEventChange,
+      eventClick: function(info) {
+        if (!info || !info.jsEvent || !info.event) {
+          return;
+        }
+
+        var jsEvent = info.jsEvent;
+        var hasModifier = jsEvent.ctrlKey || jsEvent.metaKey || jsEvent.shiftKey || jsEvent.altKey;
+        var hasUrl = !!(info.event.url);
+
+        if (hasUrl && hasModifier) {
+          return;
+        }
+
+        if (typeof jsEvent.preventDefault === 'function') {
+          jsEvent.preventDefault();
+        }
+        if (typeof jsEvent.stopPropagation === 'function') {
+          jsEvent.stopPropagation();
+        }
+
+        showEventDetails(info);
+      },
     });
     calendar.render();
   }
