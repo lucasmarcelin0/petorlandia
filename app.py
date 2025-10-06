@@ -8853,18 +8853,33 @@ def update_appointment_status(appointment_id):
     if current_user.role == 'admin':
         pass
     elif current_user.worker in ['veterinario', 'colaborador']:
-        if current_user.worker == 'veterinario':
-            veterinario = getattr(current_user, 'veterinario', None)
-            user_clinic = getattr(veterinario, 'clinica_id', None)
-        else:
-            user_clinic = getattr(current_user, 'clinica_id', None)
-
         appointment_clinic = appointment.clinica_id
         if appointment_clinic is None and appointment.veterinario:
             appointment_clinic = appointment.veterinario.clinica_id
 
-        if appointment_clinic != user_clinic:
-            abort(403)
+        if current_user.worker == 'veterinario':
+            veterinario = getattr(current_user, 'veterinario', None)
+            vet_id = getattr(veterinario, 'id', None)
+            if not (vet_id and appointment.veterinario_id == vet_id):
+                clinic_ids = set()
+                primary_clinic = getattr(veterinario, 'clinica_id', None)
+                if primary_clinic is not None:
+                    clinic_ids.add(primary_clinic)
+                clinic_ids.update(
+                    clinica_id
+                    for clinica_id in (
+                        getattr(clinica, 'id', None)
+                        for clinica in getattr(veterinario, 'clinicas', [])
+                    )
+                    if clinica_id is not None
+                )
+
+                if appointment_clinic not in clinic_ids:
+                    abort(403)
+        else:
+            user_clinic = getattr(current_user, 'clinica_id', None)
+            if appointment_clinic != user_clinic:
+                abort(403)
     elif appointment.tutor_id != current_user.id:
         abort(403)
 
