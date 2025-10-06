@@ -6,7 +6,8 @@
      data-calendar-collapse-id="{{ vet_calendar_collapse_id }}"
      data-vet-id="{{ veterinario.id }}"
      data-appointments-base-url="{{ url_for('appointments') }}"
-     data-csrf-token="{{ csrf_token() if csrf_token is defined else '' }}">
+     data-csrf-token="{{ csrf_token() if csrf_token is defined else '' }}"
+     data-exam-default-confirm-hours="{{ exam_confirm_default_hours }}">
   <!-- Cabeçalho melhorado -->
   <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-4">
     <div>
@@ -473,6 +474,8 @@
               data-exam-icon-class="{{ item.icon_class }}"
               data-exam-confirm-by="{{ exam.confirm_by|format_datetime_brazil('%Y-%m-%dT%H:%M') if exam.confirm_by else '' }}"
               data-exam-confirm-by-display="{{ exam.confirm_by|format_datetime_brazil('%d/%m/%Y %H:%M') if exam.confirm_by else '' }}"
+              data-exam-requested-at="{{ exam.request_time|format_datetime_brazil('%Y-%m-%dT%H:%M') if exam.request_time else '' }}"
+              data-exam-requested-at-display="{{ exam.request_time|format_datetime_brazil('%d/%m/%Y %H:%M') if exam.request_time else '' }}"
               data-exam-scheduled="{{ exam.scheduled_at|format_datetime_brazil('%Y-%m-%dT%H:%M') }}"
               data-exam-scheduled-display="{{ exam.scheduled_at|format_datetime_brazil('%d/%m/%Y %H:%M') }}"
               data-exam-animal="{{ exam.animal.name }}"
@@ -948,9 +951,24 @@
           </dl>
           <input type="hidden" id="exam-requester-id">
           <div class="mb-3">
-            <label for="exam-requester-confirm-by" class="form-label">Prazo para confirmação</label>
-            <input type="datetime-local" class="form-control" id="exam-requester-confirm-by">
-            <div class="form-text">Defina até quando o especialista deve responder.</div>
+            <div class="d-flex flex-column flex-lg-row gap-2 align-items-lg-end">
+              <div class="flex-grow-1">
+                <label for="exam-requester-confirm-by" class="form-label">Prazo para confirmação</label>
+                <input type="datetime-local" class="form-control" id="exam-requester-confirm-by">
+                {% set default_hours_label = 'hora' if exam_confirm_default_hours == 1 else 'horas' %}
+                <div class="form-text" id="exam-requester-default-hint">
+                  O prazo padrão é de {{ exam_confirm_default_hours }} {{ default_hours_label }} após a solicitação.
+                  <span id="exam-requester-default-preview" class="d-block"></span>
+                </div>
+              </div>
+              <button
+                type="button"
+                class="btn btn-outline-secondary btn-sm w-100 w-lg-auto mt-2 mt-lg-0"
+                id="exam-requester-apply-default"
+              >
+                <i class="bi bi-arrow-clockwise me-1"></i>Aplicar padrão
+              </button>
+            </div>
           </div>
           <div class="mb-3">
             <label for="exam-requester-status" class="form-label">Status da solicitação</label>

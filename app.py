@@ -8424,6 +8424,10 @@ def appointments():
             calendar_summary_vets=calendar_summary_vets,
             calendar_summary_clinic_ids=calendar_summary_clinic_ids,
             calendar_redirect_url=calendar_redirect_url,
+            exam_confirm_default_hours=current_app.config.get(
+                'EXAM_CONFIRM_DEFAULT_HOURS',
+                2,
+            ),
         )
     else:
         if worker in ['colaborador', 'admin']:
