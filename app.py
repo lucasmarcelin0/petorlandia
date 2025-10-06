@@ -283,6 +283,7 @@ from helpers import (
     appointments_to_events,
     exam_to_event,
     vaccine_to_event,
+    consulta_to_event,
     unique_items_by_id,
     to_timezone_aware,
     get_available_times,
@@ -9042,7 +9043,7 @@ def api_clinic_pets():
 @login_required
 def api_my_appointments():
     """Return the current user's appointments as calendar events."""
-    from models import Appointment, ExamAppointment, Vacina, Animal, Veterinario
+    from models import Appointment, ExamAppointment, Vacina, Animal, Veterinario, Consulta
 
     query = Appointment.query
     context = {
@@ -9227,6 +9228,29 @@ def api_my_appointments():
             if event:
                 _append_event(event)
 
+    def _extend_consulta_events(*, or_filters=None, and_filters=None):
+        query_obj = (
+            Consulta.query
+            .outerjoin(Consulta.animal)
+            .options(
+                joinedload(Consulta.animal).joinedload(Animal.owner),
+                joinedload(Consulta.veterinario),
+                joinedload(Consulta.clinica),
+            )
+            .filter(~Consulta.appointment.has())
+        )
+        and_conditions = [cond for cond in (and_filters or []) if cond is not None]
+        if and_conditions:
+            query_obj = query_obj.filter(*and_conditions)
+        or_conditions = [cond for cond in (or_filters or []) if cond is not None]
+        if or_conditions:
+            query_obj = query_obj.filter(or_(*or_conditions))
+        consulta_items = query_obj.order_by(Consulta.created_at).all()
+        for consulta in unique_items_by_id(consulta_items):
+            event = consulta_to_event(consulta)
+            if event:
+                _append_event(event)
+
     def _extend_for_tutor(tutor_id):
         if not tutor_id:
             return
@@ -9253,6 +9277,7 @@ def api_my_appointments():
                 Vacina.aplicada_em >= date.today(),
             ],
         )
+        _extend_consulta_events(or_filters=[Animal.user_id == tutor_id])
 
     def _extend_for_vet(vet_profile, clinic_ids=None):
         if not vet_profile:
@@ -9261,6 +9286,7 @@ def api_my_appointments():
         if not vet_id:
             return
         sanitized_clinic_ids = [cid for cid in (clinic_ids or []) if cid]
+        vet_user_id = getattr(vet_profile, 'user_id', None)
         exam_filters = [ExamAppointment.specialist_id == vet_id]
         exam_filters.append(ExamAppointment.status.in_(['pending', 'confirmed']))
         if sanitized_clinic_ids:
@@ -9285,6 +9311,14 @@ def api_my_appointments():
             vaccine_filters.append(Animal.clinica_id.in_(sanitized_clinic_ids))
         _extend_vaccine_events(and_filters=vaccine_filters)
 
+        consulta_filters = []
+        if vet_user_id:
+            consulta_filters.append(Consulta.created_by == vet_user_id)
+        if sanitized_clinic_ids:
+            consulta_filters.append(Consulta.clinica_id.in_(sanitized_clinic_ids))
+        if consulta_filters:
+            _extend_consulta_events(and_filters=consulta_filters)
+
     def _extend_for_clinics(clinic_ids):
         sanitized = [cid for cid in (clinic_ids or []) if cid]
         if not sanitized:
@@ -9305,6 +9339,7 @@ def api_my_appointments():
             Vacina.aplicada_em >= date.today(),
         ]
         _extend_vaccine_events(and_filters=vaccine_filters)
+        _extend_consulta_events(and_filters=[Consulta.clinica_id.in_(sanitized)])
 
     if context['mode'] == 'tutor':
         _extend_for_tutor(context.get('tutor_id'))

@@ -531,6 +531,74 @@ def vaccine_to_event(vaccine):
     )
 
 
+def consulta_to_event(consulta):
+    """Convert a direct ``Consulta`` record into a calendar event."""
+
+    if not consulta:
+        return None
+
+    start = getattr(consulta, 'created_at', None)
+    if not start:
+        return None
+
+    duration = get_appointment_duration('consulta')
+    end = start + duration if duration else None
+
+    animal = getattr(consulta, 'animal', None)
+    tutor = getattr(animal, 'owner', None) if animal else None
+    clinic = getattr(consulta, 'clinica', None)
+    vet_user = getattr(consulta, 'veterinario', None)
+    vet_profile = getattr(vet_user, 'veterinario', None) if vet_user else None
+
+    status_key = getattr(consulta, 'status', None)
+    status_map = {
+        'finalizada': 'completed',
+        'cancelada': 'canceled',
+        'cancelado': 'canceled',
+    }
+    event_status = status_map.get(status_key, 'scheduled')
+
+    extra_props = {
+        'status': event_status,
+        'consultaStatus': status_key,
+        'clinicId': getattr(consulta, 'clinica_id', None),
+        'animalId': getattr(consulta, 'animal_id', None),
+        'tutorId': getattr(tutor, 'id', None) if tutor else getattr(animal, 'user_id', None),
+        'tutorName': getattr(tutor, 'name', None),
+        'animalName': getattr(animal, 'name', None),
+        'consultaId': getattr(consulta, 'id', None),
+        'createdBy': getattr(consulta, 'created_by', None),
+        'vetName': getattr(vet_user, 'name', None),
+        'veterinarioId': getattr(vet_profile, 'id', None),
+        'clinicaNome': getattr(clinic, 'nome', None) if clinic else None,
+        'kind': 'consulta',
+    }
+
+    if tutor is None and animal and getattr(animal, 'owner', None):
+        extra_props['tutorName'] = getattr(animal.owner, 'name', None)
+        extra_props['tutorId'] = getattr(animal.owner, 'id', None)
+
+    title = getattr(consulta, 'queixa_principal', None)
+    if not title:
+        if animal and getattr(animal, 'name', None):
+            title = f"Consulta - {animal.name}"
+        else:
+            title = 'Consulta'
+
+    return _build_calendar_event(
+        event_id=f"consulta-{consulta.id}",
+        title=title,
+        start=start,
+        end=end,
+        event_type='consulta',
+        editable=False,
+        duration_editable=False,
+        record_id=None,
+        class_names=['calendar-event-consulta'],
+        extra_extended_props=extra_props,
+    )
+
+
 def appointments_to_events(appointments):
     """Convert a list of ``Appointment`` objects into event dicts."""
     events = []
