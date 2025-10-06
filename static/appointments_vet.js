@@ -505,8 +505,7 @@ async function populateAppointmentModalTimes({
 
 function initScheduleOverview(root) {
   const scheduleContainer = document.getElementById('schedule-overview');
-  const vetId = getVetId(root);
-  if (!scheduleContainer || !vetId) {
+  if (!scheduleContainer) {
     return;
   }
 
@@ -525,6 +524,7 @@ function initScheduleOverview(root) {
     ? scheduleTitleEl.querySelector('[data-schedule-vet-name]')
     : document.querySelector('[data-schedule-vet-name]');
   const vetSelectElements = Array.from(document.querySelectorAll('[data-schedule-vet-select]'));
+  const initialRootVetId = getVetId(root);
 
   const shortFormatter = new Intl.DateTimeFormat('pt-BR', {
     weekday: 'short',
@@ -538,6 +538,7 @@ function initScheduleOverview(root) {
   });
 
   const state = {
+    vetId: (initialRootVetId || '').trim(),
     period: (periodFilter && periodFilter.value) || 'all',
     currentStart: '',
     days: [],
@@ -545,11 +546,41 @@ function initScheduleOverview(root) {
     todayIso: new Date().toISOString().split('T')[0]
   };
 
+  function resolveInitialVetId() {
+    const datasetId = (root?.dataset?.vetId || '').trim();
+    if (datasetId) {
+      return datasetId;
+    }
+    for (const select of vetSelectElements) {
+      if (!select) {
+        continue;
+      }
+      const selectValue = (select.value || '').trim();
+      if (selectValue) {
+        return selectValue;
+      }
+      const selectedOption = Array.from(select.options || []).find(
+        (option) => option.selected && option.value
+      );
+      if (selectedOption) {
+        return (selectedOption.value || '').trim();
+      }
+    }
+    return '';
+  }
+
   if (dateField && timeSelect) {
     const initialTime = (timeSelect.dataset?.currentTime || timeSelect.value || '').trim();
     if (dateField.value && initialTime) {
       state.selectedSlotKey = `${dateField.value}T${initialTime}`;
     }
+  }
+
+  if (!state.vetId) {
+    state.vetId = resolveInitialVetId();
+  }
+  if (root) {
+    root.dataset.vetId = state.vetId || '';
   }
 
   function findVetLabelById(value) {
@@ -587,7 +618,7 @@ function initScheduleOverview(root) {
     }
   }
 
-  setScheduleTitleVetName(vetId);
+  setScheduleTitleVetName(state.vetId);
 
   vetSelectElements.forEach((select) => {
     if (!select || select.dataset.scheduleTitleBound === 'true') {
@@ -595,7 +626,29 @@ function initScheduleOverview(root) {
     }
     select.dataset.scheduleTitleBound = 'true';
     select.addEventListener('change', () => {
-      setScheduleTitleVetName(select.value);
+      const newVetId = (select.value || '').trim();
+      state.vetId = newVetId;
+      if (root) {
+        root.dataset.vetId = newVetId;
+      }
+      vetSelectElements.forEach((other) => {
+        if (other && other !== select) {
+          other.value = newVetId;
+        }
+      });
+      state.selectedSlotKey = '';
+      setScheduleTitleVetName(newVetId);
+      if (summaryBadge) {
+        summaryBadge.textContent = '';
+        summaryBadge.classList.remove('text-bg-success', 'text-bg-warning');
+        summaryBadge.classList.add('text-bg-light');
+      }
+      if (weekLabel) {
+        weekLabel.textContent = '';
+      }
+      state.currentStart = getWeekStart(dateField?.value || state.todayIso);
+      loadSchedule({ showLoading: true });
+      updateAppointmentTimes({ root, veterinarianId: newVetId, dateInput: dateField, timeSelect });
     });
   });
 
@@ -931,13 +984,33 @@ function initScheduleOverview(root) {
   }
 
   async function loadSchedule({ showLoading = true } = {}) {
+    if (!state.vetId) {
+      state.vetId = resolveInitialVetId();
+      if (root) {
+        root.dataset.vetId = state.vetId || '';
+      }
+    }
+    const activeVetId = (state.vetId || '').trim();
+    if (!activeVetId) {
+      state.days = [];
+      setScheduleEmptyState('Selecione um profissional para visualizar a agenda.');
+      if (summaryBadge) {
+        summaryBadge.textContent = 'Selecione um profissional para visualizar os horários.';
+        summaryBadge.classList.remove('text-bg-success', 'text-bg-warning');
+        summaryBadge.classList.add('text-bg-light');
+      }
+      if (weekLabel) {
+        weekLabel.textContent = 'Selecione um profissional para visualizar a agenda.';
+      }
+      return;
+    }
     if (showLoading) {
       showScheduleLoading();
     }
     const start = state.currentStart || getWeekStart(dateField?.value || state.todayIso);
     state.currentStart = start;
     try {
-      const response = await fetch(`/api/specialist/${vetId}/weekly_schedule?start=${start}`);
+      const response = await fetch(`/api/specialist/${activeVetId}/weekly_schedule?start=${start}`);
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}`);
       }
