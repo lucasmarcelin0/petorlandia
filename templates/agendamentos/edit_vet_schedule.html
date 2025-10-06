@@ -96,7 +96,7 @@
             </div>
             <div class="col-md-6">
               {{ appointment_form.veterinario_id.label(class="form-label fw-semibold") }}
-              {{ appointment_form.veterinario_id(class="form-select") }}
+              {{ appointment_form.veterinario_id(class="form-select", **{'data-schedule-vet-select': 'true'}) }}
             </div>
           </div>
 
