@@ -85,6 +85,29 @@ def test_schedule_exam_message_and_confirm_by(client, monkeypatch):
         assert 'Confirme' in msg.content
 
 
+def test_exam_requester_update_includes_time_left_display(client, monkeypatch):
+    with flask_app.app_context():
+        tutor_id, vet_user_id, animal_id, vet_id = setup_data()
+    fake_user = type('U', (), {'id': tutor_id, 'worker': None, 'role': 'adotante', 'is_authenticated': True, 'name': 'Tutor'})()
+    login(monkeypatch, fake_user)
+    schedule_resp = client.post(
+        f'/animal/{animal_id}/schedule_exam',
+        json={'specialist_id': vet_id, 'date': '2024-05-20', 'time': '09:00'},
+        headers={'Accept': 'application/json'}
+    )
+    assert schedule_resp.status_code == 200
+
+    resp = client.post(
+        '/exam_appointment/1/requester_update',
+        json={},
+        headers={'Accept': 'application/json'}
+    )
+    assert resp.status_code == 200
+    data = resp.get_json()
+    assert data['success']
+    assert data['exam']['time_left_display']
+
+
 def test_schedule_exam_rejects_outside_schedule(client, monkeypatch):
     with flask_app.app_context():
         tutor_id, vet_user_id, animal_id, vet_id = setup_data()
