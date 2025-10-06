@@ -422,7 +422,36 @@
           {% for item in pending_consults_waiting_others %}
             {% set appt = item.appt %}
             {% set can_respond = appt.time_left.total_seconds() > 0 %}
-            <div class="list-group-item d-flex justify-content-between align-items-center" data-appointment-id="{{ appt.id }}">
+            {% set status_label = 'A fazer' if appt.status == 'scheduled' else 'Realizada' if appt.status == 'completed' else 'Cancelada' if appt.status == 'canceled' else 'Aceita' if appt.status == 'accepted' else appt.status|replace('_', ' ')|title %}
+            {% set type_label = {
+              'consulta': 'Consulta',
+              'retorno': 'Retorno',
+              'banho_tosa': 'Banho e Tosa',
+              'vacina': 'Vacina'
+            }[item.kind] if item.kind in ['consulta', 'retorno', 'banho_tosa', 'vacina'] else item.kind|replace('_', ' ')|title %}
+            <div class="list-group-item list-group-item-action appointment-item"
+                data-appointment-id="{{ appt.id }}"
+                data-id="{{ appt.id }}"
+                data-date="{{ appt.scheduled_at|format_datetime_brazil('%Y-%m-%d') }}"
+                data-date-label="{{ appt.scheduled_at|format_datetime_brazil('%d/%m/%Y') }}"
+                data-time="{{ appt.scheduled_at|format_datetime_brazil('%H:%M') }}"
+                data-vet="{{ appt.veterinario.user.name }}"
+                data-vet-id="{{ appt.veterinario_id }}"
+                data-tutor="{{ appt.tutor.name if appt.tutor else (appt.animal.owner.name if appt.animal and appt.animal.owner else '') }}"
+                data-tutor-id="{{ appt.tutor_id if appt.tutor_id else (appt.animal.owner.id if appt.animal and appt.animal.owner else '') }}"
+                data-animal="{{ appt.animal.name if appt.animal else '' }}"
+                data-animal-id="{{ appt.animal_id if appt.animal_id else '' }}"
+                data-animal-url="{{ url_for('ficha_animal', animal_id=appt.animal_id) if appt.animal_id else '' }}"
+                data-tutor-url="{{ url_for('ficha_tutor', tutor_id=appt.tutor_id) if appt.tutor_id else (url_for('ficha_tutor', tutor_id=appt.animal.owner.id) if appt.animal and appt.animal.owner else '') }}"
+                data-consulta-url="{{ url_for('consulta_direct', animal_id=appt.animal_id, appointment_id=appt.id) }}"
+                data-notes="{{ (appt.notes or '')|e }}"
+                data-created-by="{{ appt.creator.name if appt.creator else '' }}"
+                data-created-at="{{ appt.created_at|format_datetime_brazil('%d/%m/%Y %H:%M') if appt.created_at else '' }}"
+                data-status="{{ appt.status }}"
+                data-status-label="{{ status_label }}"
+                data-type="{{ item.kind }}"
+                data-type-label="{{ type_label }}"
+                data-created-by-id="{{ appt.created_by if appt.created_by else '' }}">
               <div class="d-flex align-items-center">
                 <div class="me-3">
                   <i class="fas fa-user-clock {% if can_respond %}text-warning{% else %}text-secondary{% endif %} fa-2x"></i>
@@ -446,6 +475,7 @@
                     {% else %}
                       <small class="text-muted"><i class="fas fa-exclamation-circle me-1"></i>Prazo expirado</small>
                     {% endif %}
+                    <small class="text-muted d-block fst-italic mt-1">Clique para detalhes</small>
                   </div>
                 </div>
               </div>
