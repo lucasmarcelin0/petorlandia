@@ -6,8 +6,8 @@
 <div
   class="card calendar-summary-card border-0 shadow-sm h-100 is-loading"
   data-calendar-summary-panel
-  data-calendar-summary-vets="{{ summary_vets|tojson }}"
-  data-calendar-summary-clinic-ids="{{ summary_clinic_ids|tojson }}"
+  data-calendar-summary-vets='{{ summary_vets|tojson }}'
+  data-calendar-summary-clinic-ids='{{ summary_clinic_ids|tojson }}'
   {% if summary_storage_key %}
   data-calendar-summary-storage-key="{{ summary_storage_key }}"
   {% endif %}
