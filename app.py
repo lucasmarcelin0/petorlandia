@@ -8023,13 +8023,29 @@ def appointments():
                         .replace(tzinfo=None)
                     )
                     current_vet = getattr(current_user, 'veterinario', None)
-                    same_user = current_vet and current_vet.id == veterinario.id
+                    selected_vet_id = appointment_form.veterinario_id.data
+                    same_user = current_vet and current_vet.id == selected_vet_id
+                    selected_vet = next(
+                        (
+                            vet
+                            for vet in combined_vets
+                            if getattr(vet, 'id', None) == selected_vet_id
+                        ),
+                        None,
+                    )
+                    if not selected_vet and selected_vet_id:
+                        selected_vet = Veterinario.query.get(selected_vet_id)
+                    selected_clinic_id = (
+                        getattr(selected_vet, 'clinica_id', None)
+                        if selected_vet
+                        else None
+                    )
                     appt = Appointment(
                         animal_id=animal.id,
                         tutor_id=tutor_id,
-                        veterinario_id=appointment_form.veterinario_id.data,
+                        veterinario_id=selected_vet_id,
                         scheduled_at=scheduled_at,
-                        clinica_id=veterinario.clinica_id or animal.clinica_id,
+                        clinica_id=selected_clinic_id or animal.clinica_id,
                         notes=appointment_form.reason.data,
                         kind=appointment_form.kind.data,
                         status='accepted' if same_user else 'scheduled',
@@ -8081,9 +8097,20 @@ def appointments():
         if restrict_to_today and today_start_utc:
             upcoming_start = max(upcoming_start, today_start_utc)
 
+        appointment_scope_conditions = [
+            Appointment.veterinario_id == veterinario.id
+        ]
+        if vet_user_id:
+            appointment_scope_conditions.append(Appointment.created_by == vet_user_id)
+        if len(appointment_scope_conditions) == 1:
+            appointment_scope_filter = appointment_scope_conditions[0]
+        else:
+            appointment_scope_filter = or_(*appointment_scope_conditions)
+
         pending_consultas = (
-            Appointment.query.filter_by(veterinario_id=veterinario.id, status="scheduled")
+            Appointment.query.filter(Appointment.status == 'scheduled')
             .filter(Appointment.scheduled_at > now)
+            .filter(appointment_scope_filter)
             .order_by(Appointment.scheduled_at)
             .all()
         )
@@ -8119,9 +8146,10 @@ def appointments():
                 appointments_pending.append({'kind': 'exame', 'appt': ex})
 
         accepted_consultas_in_range = (
-            Appointment.query.filter_by(veterinario_id=veterinario.id, status="accepted")
+            Appointment.query.filter(Appointment.status == 'accepted')
             .filter(Appointment.scheduled_at >= start_dt_utc)
             .filter(Appointment.scheduled_at < end_dt_utc)
+            .filter(appointment_scope_filter)
             .order_by(Appointment.scheduled_at)
             .all()
         )
@@ -8304,11 +8332,12 @@ def appointments():
         session['exam_pending_seen_count'] = ExamAppointment.query.filter_by(
             specialist_id=veterinario.id, status='pending'
         ).count()
-        session['appointment_pending_seen_count'] = Appointment.query.filter(
-            Appointment.veterinario_id == veterinario.id,
-            Appointment.status == 'scheduled',
-            Appointment.scheduled_at >= now + timedelta(hours=2),
-        ).count()
+        session['appointment_pending_seen_count'] = (
+            Appointment.query.filter(Appointment.status == 'scheduled')
+            .filter(Appointment.scheduled_at >= now + timedelta(hours=2))
+            .filter(appointment_scope_filter)
+            .count()
+        )
         clinic_pending_query = _clinic_pending_appointments_query(veterinario)
         session['clinic_pending_seen_count'] = (
             clinic_pending_query.count() if clinic_pending_query is not None else 0
@@ -9042,7 +9071,15 @@ def api_clinic_pets():
 @login_required
 def api_my_appointments():
     """Return the current user's appointments as calendar events."""
-    from models import Appointment, ExamAppointment, Vacina, Animal, Veterinario
+    from models import (
+        Appointment,
+        ExamAppointment,
+        Vacina,
+        Animal,
+        Veterinario,
+        User,
+        Clinica,
+    )
 
     query = Appointment.query
     context = {
@@ -9127,37 +9164,77 @@ def api_my_appointments():
         else:
             context['mode'] = 'clinics'
 
+        def _creator_clinic_filter(clinic_ids):
+            sanitized = [cid for cid in (clinic_ids or []) if cid]
+            if not sanitized:
+                return None
+            return Appointment.creator.has(
+                or_(
+                    User.clinica_id.in_(sanitized),
+                    User.veterinario.has(
+                        or_(
+                            Veterinario.clinica_id.in_(sanitized),
+                            Veterinario.clinicas.any(Clinica.id.in_(sanitized)),
+                        )
+                    ),
+                )
+            )
+
         if view_as == 'veterinario':
             if not vet_id and getattr(current_user, 'veterinario', None):
                 vet_id = current_user.veterinario.id
+            filters = []
             if vet_id:
-                query = query.filter(Appointment.veterinario_id == vet_id)
+                filters.append(Appointment.veterinario_id == vet_id)
+                target_vet = target_vet or Veterinario.query.get(vet_id)
+            target_vet_user_id = getattr(target_vet, 'user_id', None) if target_vet else None
+            if target_vet_user_id:
+                filters.append(Appointment.created_by == target_vet_user_id)
+            if filters:
+                query = query.filter(or_(*filters) if len(filters) > 1 else filters[0])
         elif view_as == 'colaborador':
             clinic_ids = list(_accessible_clinic_ids())
             if clinic_id and clinic_id not in clinic_ids:
                 clinic_ids.append(clinic_id)
             if clinic_ids:
-                query = query.filter(Appointment.clinica_id.in_(clinic_ids))
+                creator_filter = _creator_clinic_filter(clinic_ids)
+                clinic_filters = [Appointment.clinica_id.in_(clinic_ids)]
+                if creator_filter is not None:
+                    clinic_filters.append(creator_filter)
+                query = query.filter(
+                    or_(*clinic_filters)
+                    if len(clinic_filters) > 1
+                    else clinic_filters[0]
+                )
         elif view_as == 'tutor':
             target_tutor_id = tutor_id or current_user.id
             query = query.filter(Appointment.tutor_id == target_tutor_id)
         else:
             clinic_ids = _accessible_clinic_ids()
             if clinic_ids:
+                creator_filter = _creator_clinic_filter(clinic_ids)
+                clinic_filters = [
+                    Appointment.clinica_id.in_(clinic_ids),
+                    Appointment.veterinario.has(
+                        Veterinario.clinica_id.in_(clinic_ids)
+                    ),
+                ]
+                if creator_filter is not None:
+                    clinic_filters.append(creator_filter)
                 query = query.filter(
-                    or_(
-                        Appointment.clinica_id.in_(clinic_ids),
-                        Appointment.veterinario.has(
-                            Veterinario.clinica_id.in_(clinic_ids)
-                        ),
-                    )
+                    or_(*clinic_filters)
+                    if len(clinic_filters) > 1
+                    else clinic_filters[0]
                 )
             if not context['clinic_ids']:
                 context['clinic_ids'] = [cid for cid in (clinic_ids or []) if cid]
             context['mode'] = context['mode'] or 'clinics'
     elif current_user.worker == 'veterinario' and getattr(current_user, 'veterinario', None):
-        query = query.filter_by(
-            veterinario_id=current_user.veterinario.id
+        query = query.filter(
+            or_(
+                Appointment.veterinario_id == current_user.veterinario.id,
+                Appointment.created_by == current_user.id,
+            )
         )
         vet_profile = current_user.veterinario
         context['mode'] = 'veterinario'
@@ -9172,7 +9249,12 @@ def api_my_appointments():
                 clinic_ids.append(clinic_id_value)
         context['clinic_ids'] = clinic_ids
     elif current_user.worker == 'colaborador' and current_user.clinica_id:
-        query = query.filter_by(clinica_id=current_user.clinica_id)
+        query = query.filter(
+            or_(
+                Appointment.clinica_id == current_user.clinica_id,
+                Appointment.created_by == current_user.id,
+            )
+        )
         context['mode'] = 'clinics'
         context['clinic_ids'] = [current_user.clinica_id]
     else:
@@ -9457,9 +9539,24 @@ def api_reschedule_appointment(appointment_id):
 def api_clinic_appointments(clinica_id):
     """Return appointments for a clinic as calendar events."""
     ensure_clinic_access(clinica_id)
+    from models import User, Clinica
+
+    creator_filter = Appointment.creator.has(
+        or_(
+            User.clinica_id == clinica_id,
+            User.veterinario.has(
+                or_(
+                    Veterinario.clinica_id == clinica_id,
+                    Veterinario.clinicas.any(Clinica.id == clinica_id),
+                )
+            ),
+        )
+    )
+
+    appt_filters = [Appointment.clinica_id == clinica_id, creator_filter]
     appts = (
         Appointment.query
-        .filter_by(clinica_id=clinica_id)
+        .filter(or_(*appt_filters))
         .order_by(Appointment.scheduled_at)
         .all()
     )
