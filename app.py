@@ -10010,6 +10010,118 @@ def update_exam_appointment(appointment_id):
     return jsonify({'success': True, 'html': html})
 
 
+@app.route('/exam_appointment/<int:appointment_id>/requester_update', methods=['POST'])
+@login_required
+def update_exam_appointment_requester(appointment_id):
+    from models import ExamAppointment
+    appt = ExamAppointment.query.get_or_404(appointment_id)
+    if current_user.id != appt.requester_id and current_user.role != 'admin':
+        abort(403)
+
+    data = request.get_json(silent=True) or {}
+    confirm_by_str = data.get('confirm_by')
+    status = data.get('status')
+    updated = False
+
+    if appt.status == 'confirmed' and any(
+        value is not None for value in (confirm_by_str, status)
+    ):
+        return jsonify({'success': False, 'message': 'Este exame já foi confirmado pelo especialista.'}), 400
+
+    if confirm_by_str is not None:
+        if not confirm_by_str:
+            appt.confirm_by = None
+            updated = True
+        else:
+            try:
+                confirm_local = datetime.strptime(confirm_by_str, '%Y-%m-%dT%H:%M')
+            except (TypeError, ValueError):
+                return jsonify({'success': False, 'message': 'Formato de data inválido.'}), 400
+            confirm_utc = (
+                confirm_local
+                .replace(tzinfo=BR_TZ)
+                .astimezone(timezone.utc)
+                .replace(tzinfo=None)
+            )
+            if appt.confirm_by != confirm_utc:
+                appt.confirm_by = confirm_utc
+                updated = True
+
+    if status is not None:
+        normalized_status = str(status).strip().lower()
+        allowed_statuses = {'pending', 'canceled'}
+        if normalized_status not in allowed_statuses:
+            return jsonify({'success': False, 'message': 'Status inválido.'}), 400
+        if normalized_status != appt.status:
+            appt.status = normalized_status
+            updated = True
+
+    if updated:
+        db.session.commit()
+
+    status_styles = {
+        'pending': {
+            'badge_class': 'bg-warning text-dark',
+            'icon_class': 'text-warning',
+            'status_label': 'Aguardando confirmação',
+            'show_time_left': True,
+        },
+        'confirmed': {
+            'badge_class': 'bg-success',
+            'icon_class': 'text-success',
+            'status_label': 'Confirmado',
+            'show_time_left': False,
+        },
+        'canceled': {
+            'badge_class': 'bg-secondary',
+            'icon_class': 'text-secondary',
+            'status_label': 'Cancelado',
+            'show_time_left': False,
+        },
+    }
+
+    style = status_styles.get(appt.status, status_styles['pending'])
+    now = datetime.utcnow()
+    time_left_seconds = None
+    time_left_display = None
+    if appt.confirm_by:
+        time_left = appt.confirm_by - now
+        time_left_seconds = time_left.total_seconds()
+        if time_left_seconds > 0 and style.get('show_time_left'):
+            from helpers import format_timedelta
+
+            time_left_display = format_timedelta(time_left)
+
+    confirm_display = (
+        appt.confirm_by.replace(tzinfo=timezone.utc).astimezone(BR_TZ).strftime('%d/%m/%Y %H:%M')
+        if appt.confirm_by
+        else None
+    )
+    confirm_local_value = (
+        appt.confirm_by.replace(tzinfo=timezone.utc).astimezone(BR_TZ).strftime('%Y-%m-%dT%H:%M')
+        if appt.confirm_by
+        else None
+    )
+
+    return jsonify({
+        'success': True,
+        'updated': updated,
+        'exam': {
+            'id': appt.id,
+            'status': appt.status,
+            'status_label': style['status_label'],
+            'badge_class': style['badge_class'],
+            'icon_class': style['icon_class'],
+            'confirm_by': appt.confirm_by.isoformat() if appt.confirm_by else None,
+            'confirm_by_display': confirm_display,
+            'confirm_by_value': confirm_local_value,
+            'show_time_left': bool(style.get('show_time_left') and time_left_seconds and time_left_seconds > 0),
+            'time_left_seconds': time_left_seconds,
+            'time_left_display': time_left_display,
+        },
+    })
+
+
 @app.route('/exam_appointment/<int:appointment_id>/delete', methods=['POST'])
 @login_required
 def delete_exam_appointment(appointment_id):

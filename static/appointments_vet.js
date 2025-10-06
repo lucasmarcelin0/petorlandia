@@ -5,6 +5,9 @@ const ROOT_SELECTOR = '[data-vet-schedule-root]';
 const DEFAULT_TIME_PLACEHOLDER = 'Selecione...';
 const DEFAULT_SUCCESS_MESSAGE = 'Agendamento atualizado com sucesso.';
 
+const EXAM_REQUESTER_ROW_SELECTOR = '[data-exam-requester-row]';
+const EXAM_REQUESTER_MODAL_ID = 'examRequesterModal';
+
 const TYPE_LABELS = {
   consulta: 'Consulta',
   retorno: 'Retorno',
@@ -155,6 +158,15 @@ function getModalInstance(element) {
     return null;
   }
   return bootstrapGlobal.Modal.getOrCreateInstance(element);
+}
+
+function getModalElementById(id) {
+  if (!id) {
+    return { element: null, modal: null };
+  }
+  const element = document.getElementById(id);
+  const modal = getModalInstance(element);
+  return { element, modal };
 }
 
 function getCollapseController(element) {
@@ -1156,6 +1168,211 @@ export async function responderAgendamentoExame(appointmentId, status) {
   }
 }
 
+function updateExamRequesterStatusBadge(element, label, badgeClass) {
+  if (!element) {
+    return;
+  }
+  const classes = ['badge'];
+  if (badgeClass) {
+    badgeClass
+      .split(/\s+/)
+      .filter(Boolean)
+      .forEach((cls) => classes.push(cls));
+  } else {
+    classes.push('bg-secondary');
+  }
+  element.className = classes.join(' ');
+  element.textContent = label && label.trim() ? label : '—';
+}
+
+function setExamRequesterFeedback(message = '', variant = 'danger') {
+  const feedbackEl = document.getElementById('exam-requester-feedback');
+  if (!feedbackEl) {
+    return;
+  }
+  const hasMessage = Boolean(message && message.trim());
+  feedbackEl.classList.toggle('d-none', !hasMessage);
+  feedbackEl.textContent = hasMessage ? message : '';
+  feedbackEl.className = `alert alert-${variant}`;
+  feedbackEl.setAttribute('role', 'alert');
+}
+
+function openExamRequesterModal(row, root) {
+  if (!row) {
+    return;
+  }
+  const { element: modalEl, modal } = getModalElementById(EXAM_REQUESTER_MODAL_ID);
+  if (!modalEl || !modal) {
+    return;
+  }
+
+  const confirmInput = document.getElementById('exam-requester-confirm-by');
+  const statusSelect = document.getElementById('exam-requester-status');
+  const idInput = document.getElementById('exam-requester-id');
+  const animalEl = document.getElementById('exam-requester-animal');
+  const specialistEl = document.getElementById('exam-requester-specialist');
+  const scheduledEl = document.getElementById('exam-requester-scheduled');
+  const statusLabel = document.getElementById('exam-requester-status-label');
+
+  const examId = row.dataset.examId || '';
+  const status = row.dataset.examStatus || '';
+  const confirmBy = row.dataset.examConfirmBy || '';
+
+  modalEl.dataset.examId = examId;
+  modalEl.dataset.examStatus = status;
+  modalEl.dataset.examConfirmBy = confirmBy;
+
+  if (idInput) {
+    idInput.value = examId;
+  }
+
+  updateTextContent(animalEl, row.dataset.examAnimal || '', '—');
+  updateTextContent(specialistEl, row.dataset.examSpecialist || '', '—');
+  updateTextContent(scheduledEl, row.dataset.examScheduledDisplay || '', '—');
+  updateExamRequesterStatusBadge(
+    statusLabel,
+    row.dataset.examStatusLabel || '',
+    row.dataset.examBadgeClass || ''
+  );
+
+  if (confirmInput) {
+    confirmInput.value = confirmBy || '';
+    confirmInput.disabled = status === 'confirmed';
+  }
+
+  if (statusSelect) {
+    const current = status || 'pending';
+    const optionExists = Array.from(statusSelect.options).some((option) => option.value === current);
+    if (!optionExists && current) {
+      const option = document.createElement('option');
+      option.value = current;
+      option.textContent = humanizeLabel(current);
+      statusSelect.appendChild(option);
+    }
+    statusSelect.value = current;
+    statusSelect.disabled = current === 'confirmed';
+  }
+
+  const isConfirmed = status === 'confirmed';
+  if (isConfirmed) {
+    setExamRequesterFeedback('Este exame já foi confirmado pelo especialista.', 'info');
+  } else {
+    setExamRequesterFeedback('');
+  }
+
+  modal.show();
+}
+
+function bindExamRequesterRows(root) {
+  if (!root) {
+    return;
+  }
+  const rows = root.querySelectorAll(EXAM_REQUESTER_ROW_SELECTOR);
+  rows.forEach((row) => {
+    if (row.dataset.vetScheduleBound === 'true') {
+      return;
+    }
+    row.dataset.vetScheduleBound = 'true';
+    if (!row.hasAttribute('tabindex')) {
+      row.setAttribute('tabindex', '0');
+    }
+    if (!row.hasAttribute('role')) {
+      row.setAttribute('role', 'button');
+    }
+    row.addEventListener('click', (event) => {
+      if (event.target.closest('button, a, input, select, textarea')) {
+        return;
+      }
+      openExamRequesterModal(row, root);
+    });
+    row.addEventListener('keydown', (event) => {
+      if (event.key === 'Enter' || event.key === ' ') {
+        event.preventDefault();
+        openExamRequesterModal(row, root);
+      }
+    });
+  });
+}
+
+function bindExamRequesterSave(root) {
+  const saveButton = document.getElementById('exam-requester-save');
+  if (!saveButton || saveButton.dataset.vetScheduleBound === 'true') {
+    return;
+  }
+  saveButton.dataset.vetScheduleBound = 'true';
+  saveButton.addEventListener('click', async () => {
+    const { element: modalEl, modal } = getModalElementById(EXAM_REQUESTER_MODAL_ID);
+    if (!modalEl) {
+      return;
+    }
+    const examId = modalEl.dataset.examId || '';
+    if (!examId) {
+      return;
+    }
+    const confirmInput = document.getElementById('exam-requester-confirm-by');
+    const statusSelect = document.getElementById('exam-requester-status');
+    const originalConfirm = modalEl.dataset.examConfirmBy || '';
+    const originalStatus = modalEl.dataset.examStatus || '';
+    const currentConfirm = confirmInput?.value || '';
+    const currentStatus = statusSelect?.value || '';
+
+    if (confirmInput?.disabled && statusSelect?.disabled) {
+      modal?.hide();
+      return;
+    }
+
+    if (currentConfirm === originalConfirm && currentStatus === originalStatus) {
+      modal?.hide();
+      return;
+    }
+
+    const payload = {};
+    if (confirmInput && !confirmInput.disabled) {
+      payload.confirm_by = confirmInput.value || null;
+    }
+    if (statusSelect && !statusSelect.disabled) {
+      payload.status = statusSelect.value || null;
+    }
+
+    setExamRequesterFeedback('');
+    saveButton.disabled = true;
+    const originalText = saveButton.innerHTML;
+    saveButton.innerHTML = '<span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>Salvando...';
+    try {
+      const response = await fetch(`/exam_appointment/${examId}/requester_update`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Accept: 'application/json',
+          'X-CSRFToken': getCsrfToken(root)
+        },
+        body: JSON.stringify(payload)
+      });
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => null);
+        const message = errorData?.message || 'Não foi possível atualizar o exame.';
+        setExamRequesterFeedback(message, 'danger');
+        return;
+      }
+      const data = await response.json();
+      if (!data?.success) {
+        setExamRequesterFeedback(data?.message || 'Não foi possível atualizar o exame.', 'danger');
+        return;
+      }
+      if (modal) {
+        modal.hide();
+      }
+      window.location.reload();
+    } catch (error) {
+      console.error('Erro ao atualizar solicitação de exame', error);
+      setExamRequesterFeedback('Erro inesperado ao salvar alterações.', 'danger');
+    } finally {
+      saveButton.disabled = false;
+      saveButton.innerHTML = originalText;
+    }
+  });
+}
+
 function bindScheduleEditButtons(root) {
   root.querySelectorAll('.edit-btn').forEach((button) => {
     if (button.dataset.vetScheduleBound === 'true') {
@@ -1520,6 +1737,8 @@ export function initVetSchedulePage(options = {}) {
   bindAppointmentEditDateWatcher(root);
   bindAppointmentEditTimeWatcher();
   bindAppointmentNotesWatcher();
+  bindExamRequesterRows(root);
+  bindExamRequesterSave(root);
   bindPastToggle(root);
   bindScheduleModalButton(root);
   bindCalendarSlotHandler(root);

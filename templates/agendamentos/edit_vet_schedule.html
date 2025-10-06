@@ -463,7 +463,21 @@
           </div>
           {% for item in exams_waiting_other_vets %}
             {% set exam = item.exam %}
-            <div class="list-group-item d-flex justify-content-between align-items-center">
+            <div
+              class="list-group-item d-flex justify-content-between align-items-center"
+              data-exam-requester-row
+              data-exam-id="{{ exam.id }}"
+              data-exam-status="{{ exam.status }}"
+              data-exam-status-label="{{ item.status_label }}"
+              data-exam-badge-class="{{ item.badge_class }}"
+              data-exam-icon-class="{{ item.icon_class }}"
+              data-exam-confirm-by="{{ exam.confirm_by|format_datetime_brazil('%Y-%m-%dT%H:%M') if exam.confirm_by else '' }}"
+              data-exam-confirm-by-display="{{ exam.confirm_by|format_datetime_brazil('%d/%m/%Y %H:%M') if exam.confirm_by else '' }}"
+              data-exam-scheduled="{{ exam.scheduled_at|format_datetime_brazil('%Y-%m-%dT%H:%M') }}"
+              data-exam-scheduled-display="{{ exam.scheduled_at|format_datetime_brazil('%d/%m/%Y %H:%M') }}"
+              data-exam-animal="{{ exam.animal.name }}"
+              data-exam-specialist="{{ exam.specialist.user.name if exam.specialist and exam.specialist.user else '' }}"
+            >
               <div class="d-flex align-items-center">
                 <div class="me-3">
                   <i class="fas fa-flask fa-2x {{ item.icon_class }}"></i>
@@ -911,6 +925,48 @@
         </div>
       </div>
     </div>
+</div>
+
+  <div class="modal fade" id="examRequesterModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title">Gerenciar solicitação de exame</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+        </div>
+        <div class="modal-body">
+          <div class="alert alert-danger d-none" id="exam-requester-feedback" role="alert"></div>
+          <dl class="row mb-4">
+            <dt class="col-sm-4">Paciente</dt>
+            <dd class="col-sm-8" id="exam-requester-animal">—</dd>
+            <dt class="col-sm-4">Especialista</dt>
+            <dd class="col-sm-8" id="exam-requester-specialist">—</dd>
+            <dt class="col-sm-4">Agendado para</dt>
+            <dd class="col-sm-8" id="exam-requester-scheduled">—</dd>
+            <dt class="col-sm-4">Status atual</dt>
+            <dd class="col-sm-8"><span class="badge bg-secondary" id="exam-requester-status-label">—</span></dd>
+          </dl>
+          <input type="hidden" id="exam-requester-id">
+          <div class="mb-3">
+            <label for="exam-requester-confirm-by" class="form-label">Prazo para confirmação</label>
+            <input type="datetime-local" class="form-control" id="exam-requester-confirm-by">
+            <div class="form-text">Defina até quando o especialista deve responder.</div>
+          </div>
+          <div class="mb-3">
+            <label for="exam-requester-status" class="form-label">Status da solicitação</label>
+            <select class="form-select" id="exam-requester-status">
+              <option value="pending">Aguardando confirmação</option>
+              <option value="confirmed" disabled>Confirmado</option>
+              <option value="canceled">Cancelar solicitação</option>
+            </select>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Fechar</button>
+          <button type="button" class="btn btn-primary" id="exam-requester-save">Salvar alterações</button>
+        </div>
+      </div>
+    </div>
   </div>
 
 </div>
@@ -927,6 +983,14 @@
   .appointment-item:hover {
     background-color: #f8f9fa !important;
     transform: translateX(5px);
+  }
+
+  [data-exam-requester-row] {
+    cursor: pointer;
+  }
+
+  [data-exam-requester-row]:hover {
+    background-color: #f8f9fa;
   }
   
   .btn {
