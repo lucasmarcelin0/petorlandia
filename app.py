@@ -7877,8 +7877,63 @@ def appointments():
         schedule_form.veterinario_id.choices = [
             (v.id, v.user.name) for v in vets_for_choices
         ]
+        clinic_vets = []
+        if clinic_ids:
+            clinic_vets = (
+                Veterinario.query.filter(
+                    Veterinario.clinica_id.in_(clinic_ids)
+                ).all()
+            )
+        associated_clinics = (
+            Clinica.query.filter(Clinica.id.in_(clinic_ids)).all()
+            if clinic_ids
+            else []
+        )
+        specialists = []
+        for clinica in associated_clinics:
+            specialists.extend(
+                vet
+                for vet in (getattr(clinica, 'veterinarios_associados', []) or [])
+                if getattr(vet, 'id', None) is not None
+            )
+        combined_vets = unique_items_by_id(clinic_vets + specialists + [veterinario])
+
+        def _vet_sort_key(vet):
+            name = getattr(getattr(vet, 'user', None), 'name', '') or ''
+            return name.lower()
+
+        combined_vets = sorted(
+            (
+                vet
+                for vet in combined_vets
+                if getattr(vet, 'id', None) is not None
+            ),
+            key=_vet_sort_key,
+        )
+
+        clinic_vet_ids = {
+            getattr(vet, 'id', None) for vet in clinic_vets if getattr(vet, 'id', None)
+        }
+        specialist_ids = {
+            getattr(vet, 'id', None)
+            for vet in specialists
+            if getattr(vet, 'id', None)
+        }
+
+        def _vet_label(vet):
+            base_name = getattr(getattr(vet, 'user', None), 'name', None)
+            label = base_name or f"Profissional #{getattr(vet, 'id', '—')}"
+            vet_id = getattr(vet, 'id', None)
+            if vet_id in specialist_ids and vet_id not in clinic_vet_ids:
+                return f"{label} (Especialista)"
+            return label
+
         appointment_form.veterinario_id.choices = [
-            (veterinario.id, veterinario.user.name)
+            (vet.id, _vet_label(vet)) for vet in combined_vets
+        ]
+        calendar_summary_vets = [
+            {'id': vet.id, 'name': _vet_label(vet)}
+            for vet in combined_vets
         ]
         if request.method == 'GET':
             schedule_form.veterinario_id.data = veterinario.id
