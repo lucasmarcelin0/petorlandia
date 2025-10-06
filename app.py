@@ -34,7 +34,7 @@ from itsdangerous import URLSafeTimedSerializer
 from jinja2 import TemplateNotFound
 import json
 import unicodedata
-from sqlalchemy import func, or_, exists, and_
+from sqlalchemy import func, or_, exists, and_, case
 from sqlalchemy.orm import joinedload
 
 # ----------------------------------------------------------------
@@ -2363,6 +2363,7 @@ def finalizar_consulta(consulta_id):
         return redirect(url_for('index'))
 
     consulta.status = 'finalizada'
+    consulta.finalizada_em = datetime.utcnow()
     appointment = consulta.appointment
     if appointment and appointment.status != 'completed':
         appointment.status = 'completed'
@@ -4314,6 +4315,7 @@ def update_consulta(consulta_id):
     else:
         # Salva, finaliza e cria nova automaticamente
         consulta.status = 'finalizada'
+        consulta.finalizada_em = datetime.utcnow()
         appointment = consulta.appointment
         if appointment and appointment.status != 'completed':
             appointment.status = 'completed'
@@ -8161,7 +8163,7 @@ def appointments():
         if scope_filters:
             consulta_filters.append(or_(*scope_filters))
 
-        consultas_finalizadas = (
+        consultas_query = (
             Consulta.query.outerjoin(Appointment, Consulta.appointment)
             .options(
                 joinedload(Consulta.animal).joinedload(Animal.owner),
@@ -8171,22 +8173,19 @@ def appointments():
                 .joinedload(Animal.owner),
             )
             .filter(*consulta_filters)
-            .filter(
-                or_(
-                    and_(
-                        Appointment.id.isnot(None),
-                        Appointment.scheduled_at >= start_dt_utc,
-                        Appointment.scheduled_at < end_dt_utc,
-                    ),
-                    and_(
-                        Appointment.id.is_(None),
-                        Consulta.created_at >= start_dt_utc,
-                        Consulta.created_at < end_dt_utc,
-                    ),
-                )
-            )
-            .all()
         )
+
+        consulta_timestamp_expr = case(
+            (Consulta.finalizada_em.isnot(None), Consulta.finalizada_em),
+            (Appointment.scheduled_at.isnot(None), Appointment.scheduled_at),
+            else_=Consulta.created_at,
+        )
+        if start_dt_utc is not None:
+            consultas_query = consultas_query.filter(consulta_timestamp_expr >= start_dt_utc)
+        if end_dt_utc is not None:
+            consultas_query = consultas_query.filter(consulta_timestamp_expr < end_dt_utc)
+
+        consultas_finalizadas = consultas_query.all()
 
         consulta_animal_ids = {c.animal_id for c in consultas_finalizadas}
         exam_blocks_by_consulta = defaultdict(list)
@@ -8205,6 +8204,8 @@ def appointments():
         schedule_events = []
 
         def _consulta_timestamp(consulta_obj):
+            if consulta_obj.finalizada_em:
+                return consulta_obj.finalizada_em
             if consulta_obj.appointment and consulta_obj.appointment.scheduled_at:
                 return consulta_obj.appointment.scheduled_at
             return consulta_obj.created_at
