@@ -8118,12 +8118,19 @@ def appointments():
             .all()
         )
         appointments_pending_consults = []
+        pending_consults_for_me = []
+        pending_consults_waiting_others = []
         for appt in pending_consultas:
             appt.time_left = (appt.scheduled_at - timedelta(hours=2)) - now
             kind = appt.kind or ('retorno' if appt.consulta_id else 'consulta')
             if kind == 'general':
                 kind = 'consulta'
-            appointments_pending_consults.append({'kind': kind, 'appt': appt})
+            item = {'kind': kind, 'appt': appt}
+            appointments_pending_consults.append(item)
+            if appt.veterinario_id == veterinario.id:
+                pending_consults_for_me.append(item)
+            else:
+                pending_consults_waiting_others.append(item)
 
         from models import ExamAppointment, Message, BlocoExames
 
@@ -8239,6 +8246,18 @@ def appointments():
         for exam in upcoming_exams:
             appointments_upcoming.append({'kind': 'exame', 'appt': exam})
         appointments_upcoming.sort(key=lambda x: x['appt'].scheduled_at)
+
+        appointments_upcoming_for_me = []
+        appointments_upcoming_requested = []
+        for item in appointments_upcoming:
+            if item['kind'] == 'exame':
+                appointments_upcoming_for_me.append(item)
+                continue
+            appt = item['appt']
+            if getattr(appt, 'veterinario_id', None) == veterinario.id:
+                appointments_upcoming_for_me.append(item)
+            elif vet_user_id and getattr(appt, 'created_by', None) == vet_user_id:
+                appointments_upcoming_requested.append(item)
 
         consulta_filters = [Consulta.status == 'finalizada']
         scope_filters = []
@@ -8414,9 +8433,13 @@ def appointments():
             admin_selected_colaborador_id=admin_selected_colaborador_id,
             horarios_grouped=horarios_grouped,
             appointments_pending_consults=appointments_pending_consults,
+            pending_consults_for_me=pending_consults_for_me,
+            pending_consults_waiting_others=pending_consults_waiting_others,
             exams_pending_to_accept=exams_pending_to_accept,
             exams_waiting_other_vets=exams_waiting_other_vets,
             appointments_upcoming=appointments_upcoming,
+            appointments_upcoming_for_me=appointments_upcoming_for_me,
+            appointments_upcoming_requested=appointments_upcoming_requested,
             schedule_events=schedule_events,
             start_dt=start_dt,
             end_dt=end_dt,
@@ -8954,6 +8977,7 @@ def update_appointment_status(appointment_id):
         or request.headers.get('X-Requested-With') == 'XMLHttpRequest'
         or (accept_json > 0 and accept_json > accept_html)
     )
+    redirect_url = request.referrer or url_for('appointments')
 
     status_value = request.form.get('status') or (request.get_json(silent=True) or {}).get('status')
     status = (status_value or '').strip().lower()
@@ -8963,7 +8987,22 @@ def update_appointment_status(appointment_id):
         if wants_json:
             return jsonify({'success': False, 'message': message}), 400
         flash(message, 'error')
-        return redirect(request.referrer or url_for('appointments'))
+        return redirect(redirect_url)
+
+    if status == 'accepted' and current_user.role != 'admin':
+        error_message = 'Somente o veterinário responsável pode aceitar este agendamento.'
+        if current_user.worker != 'veterinario':
+            if wants_json:
+                return jsonify({'success': False, 'message': error_message}), 403
+            flash(error_message, 'error')
+            return redirect(redirect_url)
+        veterinario = getattr(current_user, 'veterinario', None)
+        vet_id = getattr(veterinario, 'id', None)
+        if not (vet_id and appointment.veterinario_id == vet_id):
+            if wants_json:
+                return jsonify({'success': False, 'message': error_message}), 403
+            flash(error_message, 'error')
+            return redirect(redirect_url)
 
     should_enforce_deadline = False
     if status == 'accepted':
