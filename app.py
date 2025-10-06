@@ -9941,23 +9941,50 @@ def update_exam_appointment_status(appointment_id):
 def update_exam_appointment(appointment_id):
     from models import ExamAppointment
     appt = ExamAppointment.query.get_or_404(appointment_id)
+    if current_user.id != appt.requester_id and getattr(current_user, 'role', None) != 'admin':
+        abort(403)
     data = request.get_json(silent=True) or {}
     date_str = data.get('date')
     time_str = data.get('time')
-    specialist_id = data.get('specialist_id', appt.specialist_id)
-    if not date_str or not time_str:
-        return jsonify({'success': False, 'message': 'Dados incompletos.'}), 400
-    scheduled_at_local = datetime.strptime(f"{date_str} {time_str}", '%Y-%m-%d %H:%M')
-    scheduled_at = (
-        scheduled_at_local
-        .replace(tzinfo=BR_TZ)
-        .astimezone(timezone.utc)
-        .replace(tzinfo=None)
-    )
+    scheduled_at_str = data.get('scheduled_at')
+    confirm_by_str = data.get('confirm_by')
+    specialist_id = data.get('specialist_id')
+    if specialist_id is None:
+        specialist_id = appt.specialist_id
+    try:
+        specialist_id = int(specialist_id)
+    except (TypeError, ValueError):
+        specialist_id = appt.specialist_id
+
+    scheduled_at_local = None
+    if scheduled_at_str:
+        try:
+            scheduled_at_local = datetime.strptime(scheduled_at_str, '%Y-%m-%dT%H:%M')
+        except (TypeError, ValueError):
+            return jsonify({'success': False, 'message': 'Formato de data e hora inválido.'}), 400
+    elif date_str or time_str:
+        if not date_str or not time_str:
+            return jsonify({'success': False, 'message': 'Dados incompletos.'}), 400
+        try:
+            scheduled_at_local = datetime.strptime(f"{date_str} {time_str}", '%Y-%m-%d %H:%M')
+        except ValueError:
+            return jsonify({'success': False, 'message': 'Formato de data e hora inválido.'}), 400
+
+    scheduled_at = None
+    if scheduled_at_local:
+        scheduled_at = (
+            scheduled_at_local
+            .replace(tzinfo=BR_TZ)
+            .astimezone(timezone.utc)
+            .replace(tzinfo=None)
+        )
     duration = get_appointment_duration('exame')
-    if has_conflict_for_slot(
+    conflict_check_local = scheduled_at_local
+    if conflict_check_local is None and appt.scheduled_at:
+        conflict_check_local = appt.scheduled_at.replace(tzinfo=timezone.utc).astimezone(BR_TZ).replace(tzinfo=None)
+    if conflict_check_local and has_conflict_for_slot(
         specialist_id,
-        scheduled_at_local,
+        conflict_check_local,
         duration,
         exclude_exam_id=appointment_id,
     ):
@@ -9965,12 +9992,62 @@ def update_exam_appointment(appointment_id):
             'success': False,
             'message': 'Horário indisponível. Já existe uma consulta ou exame nesse intervalo.'
         }), 400
-    appt.specialist_id = specialist_id
-    appt.scheduled_at = scheduled_at
+
+    updates_applied = False
+    if specialist_id != appt.specialist_id:
+        appt.specialist_id = specialist_id
+        updates_applied = True
+    if scheduled_at is not None:
+        appt.scheduled_at = scheduled_at
+        updates_applied = True
+
+    if confirm_by_str is not None:
+        confirm_by_value = confirm_by_str.strip() if isinstance(confirm_by_str, str) else confirm_by_str
+        if confirm_by_value:
+            try:
+                confirm_by_local = datetime.strptime(str(confirm_by_value), '%Y-%m-%dT%H:%M')
+            except ValueError:
+                return jsonify({'success': False, 'message': 'Formato de prazo para confirmação inválido.'}), 400
+            appt.confirm_by = (
+                confirm_by_local
+                .replace(tzinfo=BR_TZ)
+                .astimezone(timezone.utc)
+                .replace(tzinfo=None)
+            )
+        else:
+            appt.confirm_by = None
+        updates_applied = True
+
+    if not updates_applied:
+        return jsonify({'success': False, 'message': 'Nenhuma alteração informada.'}), 400
+
     db.session.commit()
     appointments = ExamAppointment.query.filter_by(animal_id=appt.animal_id).order_by(ExamAppointment.scheduled_at.desc()).all()
     html = render_template('partials/historico_exam_appointments.html', appointments=appointments)
-    return jsonify({'success': True, 'html': html})
+    time_left_seconds = None
+    time_left_display = None
+    if appt.confirm_by:
+        time_left_delta = appt.confirm_by - datetime.utcnow()
+        time_left_seconds = int(time_left_delta.total_seconds())
+        if time_left_seconds > 0:
+            time_left_display = format_timedelta(time_left_delta)
+        else:
+            time_left_display = format_timedelta(timedelta())
+    response_exam = {
+        'id': appt.id,
+        'confirm_by': appt.confirm_by.isoformat() if appt.confirm_by else None,
+        'confirm_by_local': format_datetime_brazil(appt.confirm_by, '%Y-%m-%dT%H:%M') if appt.confirm_by else '',
+        'scheduled_at': appt.scheduled_at.isoformat() if appt.scheduled_at else None,
+        'scheduled_local': format_datetime_brazil(appt.scheduled_at, '%Y-%m-%dT%H:%M') if appt.scheduled_at else '',
+        'time_left_seconds': time_left_seconds,
+        'time_left_display': time_left_display,
+    }
+    return jsonify({
+        'success': True,
+        'message': 'Solicitação de exame atualizada com sucesso.',
+        'html': html,
+        'exam': response_exam,
+    })
 
 
 @app.route('/exam_appointment/<int:appointment_id>/delete', methods=['POST'])

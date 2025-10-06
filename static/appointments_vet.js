@@ -4,6 +4,8 @@ import { setupAppointmentsCalendarSummary } from './appointments_calendar_summar
 const ROOT_SELECTOR = '[data-vet-schedule-root]';
 const DEFAULT_TIME_PLACEHOLDER = 'Selecione...';
 const DEFAULT_SUCCESS_MESSAGE = 'Agendamento atualizado com sucesso.';
+const EXAM_WAITING_SELECTOR = '[data-exam-waiting-other]';
+const EXAM_REQUEST_MODAL_ID = 'examRequestEditModal';
 
 const TYPE_LABELS = {
   consulta: 'Consulta',
@@ -155,6 +157,39 @@ function getModalInstance(element) {
     return null;
   }
   return bootstrapGlobal.Modal.getOrCreateInstance(element);
+}
+
+function getExamRequestModalElements() {
+  const modalEl = document.getElementById(EXAM_REQUEST_MODAL_ID);
+  if (!modalEl) {
+    return null;
+  }
+  return {
+    modalEl,
+    modal: getModalInstance(modalEl),
+    idField: modalEl.querySelector('[data-exam-modal-id]'),
+    animalField: modalEl.querySelector('[data-exam-modal-animal]'),
+    ownerField: modalEl.querySelector('[data-exam-modal-owner]'),
+    specialistField: modalEl.querySelector('[data-exam-modal-specialist]'),
+    scheduledInput: modalEl.querySelector('[data-exam-scheduled-input]'),
+    confirmByInput: modalEl.querySelector('[data-exam-confirm-by-input]'),
+    errorAlert: modalEl.querySelector('[data-exam-modal-error]'),
+    saveButton: modalEl.querySelector('[data-exam-modal-save]')
+  };
+}
+
+function setExamModalError(elements, message) {
+  if (!elements?.errorAlert) {
+    return;
+  }
+  const alertEl = elements.errorAlert;
+  if (message) {
+    alertEl.textContent = message;
+    alertEl.classList.remove('d-none');
+  } else {
+    alertEl.textContent = '';
+    alertEl.classList.add('d-none');
+  }
 }
 
 function getCollapseController(element) {
@@ -1156,6 +1191,156 @@ export async function responderAgendamentoExame(appointmentId, status) {
   }
 }
 
+function openExamRequestModal(item, root) {
+  const elements = getExamRequestModalElements();
+  if (!elements?.modal || !item) {
+    return;
+  }
+  const { modalEl, modal, idField, animalField, ownerField, specialistField, scheduledInput, confirmByInput } = elements;
+  const dataset = item.dataset || {};
+  modalEl.dataset.examId = dataset.examId || '';
+  modalEl.dataset.specialistId = dataset.examSpecialistId || '';
+  modalEl.dataset.sourceExamId = dataset.examId || '';
+  if (idField) {
+    idField.value = dataset.examId || '';
+  }
+  updateTextContent(animalField, dataset.examAnimalName || '—', '—');
+  updateTextContent(ownerField, dataset.examOwnerName || '', '');
+  updateTextContent(specialistField, dataset.examSpecialistName || '—', '—');
+  if (scheduledInput) {
+    scheduledInput.value = dataset.examScheduledLocal || '';
+    scheduledInput.dataset.originalValue = dataset.examScheduledLocal || '';
+  }
+  if (confirmByInput) {
+    confirmByInput.value = dataset.examConfirmByLocal || '';
+    confirmByInput.dataset.originalValue = dataset.examConfirmByLocal || '';
+  }
+  setExamModalError(elements, '');
+  if (modal) {
+    modal.show();
+  }
+}
+
+function updateExamWaitingItem(root, examId, examData) {
+  if (!root || !examId || !examData) {
+    return;
+  }
+  const item = root.querySelector(`${EXAM_WAITING_SELECTOR}[data-exam-id="${examId}"]`);
+  if (!item) {
+    return;
+  }
+  if (Object.prototype.hasOwnProperty.call(examData, 'confirm_by')) {
+    item.dataset.examConfirmBy = examData.confirm_by || '';
+  }
+  if (Object.prototype.hasOwnProperty.call(examData, 'confirm_by_local')) {
+    item.dataset.examConfirmByLocal = examData.confirm_by_local || '';
+  }
+  if (Object.prototype.hasOwnProperty.call(examData, 'scheduled_at')) {
+    item.dataset.examScheduled = examData.scheduled_at || '';
+  }
+  if (Object.prototype.hasOwnProperty.call(examData, 'scheduled_local')) {
+    item.dataset.examScheduledLocal = examData.scheduled_local || '';
+  }
+  if (Object.prototype.hasOwnProperty.call(examData, 'time_left_seconds')) {
+    const seconds = Number(examData.time_left_seconds) || 0;
+    item.dataset.examTimeLeftSeconds = seconds.toString();
+    const timeLeftEl = item.querySelector('[data-exam-time-left]');
+    const timeLeftText = timeLeftEl?.querySelector('[data-exam-time-left-text]');
+    const iconEl = timeLeftEl?.querySelector('i');
+    if (timeLeftEl && timeLeftText && iconEl) {
+      if (seconds > 0) {
+        iconEl.className = 'fas fa-hourglass-half me-1';
+        timeLeftText.textContent = `Tempo restante: ${examData.time_left_display || ''}`;
+      } else {
+        iconEl.className = 'fas fa-exclamation-circle me-1';
+        timeLeftText.textContent = 'Prazo expirado';
+      }
+    }
+  }
+}
+
+async function saveExamRequestUpdate(root) {
+  const elements = getExamRequestModalElements();
+  if (!elements?.modalEl) {
+    return;
+  }
+  const { modalEl, modal, scheduledInput, confirmByInput, idField } = elements;
+  const examId = modalEl.dataset.examId || idField?.value || '';
+  if (!examId) {
+    setExamModalError(elements, 'Não foi possível identificar o exame selecionado.');
+    return;
+  }
+  const payload = {};
+  const scheduledValue = (scheduledInput?.value || '').trim();
+  const confirmByValue = (confirmByInput?.value || '').trim();
+  if (scheduledValue) {
+    payload.scheduled_at = scheduledValue;
+  }
+  if (confirmByValue) {
+    payload.confirm_by = confirmByValue;
+  }
+  const specialistId = modalEl.dataset.specialistId;
+  if (specialistId) {
+    payload.specialist_id = specialistId;
+  }
+  if (!payload.scheduled_at && !payload.confirm_by) {
+    setExamModalError(elements, 'Atualize ao menos o horário ou o prazo de confirmação.');
+    return;
+  }
+  setExamModalError(elements, '');
+  const csrfToken = getCsrfToken(root);
+  const endpoint = `/exam_appointment/${examId}/update`;
+  const result = await submitAppointmentUpdate(endpoint, payload, csrfToken, {
+    successMessage: 'Solicitação de exame atualizada com sucesso.',
+    fetchOptions: { headers: { Accept: 'application/json' } }
+  });
+  if (!result.success) {
+    setExamModalError(elements, result.message || 'Não foi possível salvar as alterações.');
+    return;
+  }
+  const updatedExam = result?.data?.exam || null;
+  updateExamWaitingItem(root, examId, updatedExam);
+  if (modal) {
+    modal.hide();
+  }
+  if (scheduledInput) {
+    scheduledInput.dataset.originalValue = scheduledValue;
+  }
+  if (confirmByInput) {
+    confirmByInput.dataset.originalValue = confirmByValue;
+  }
+  alert(result.message || 'Solicitação de exame atualizada com sucesso.');
+}
+
+function bindExamRequestAwaiting(root) {
+  const elements = getExamRequestModalElements();
+  if (!elements?.modalEl || !elements.modal) {
+    return;
+  }
+  root.querySelectorAll(EXAM_WAITING_SELECTOR).forEach((item) => {
+    if (item.dataset.vetScheduleExamBound === 'true') {
+      return;
+    }
+    item.dataset.vetScheduleExamBound = 'true';
+    const activate = (event) => {
+      if (event.type === 'keydown') {
+        const key = event.key || '';
+        if (key !== 'Enter' && key !== ' ' && key !== 'Spacebar') {
+          return;
+        }
+        event.preventDefault();
+      }
+      openExamRequestModal(item, root);
+    };
+    item.addEventListener('click', activate);
+    item.addEventListener('keydown', activate);
+  });
+  if (elements.saveButton && elements.saveButton.dataset.vetScheduleBound !== 'true') {
+    elements.saveButton.dataset.vetScheduleBound = 'true';
+    elements.saveButton.addEventListener('click', () => saveExamRequestUpdate(root));
+  }
+}
+
 function bindScheduleEditButtons(root) {
   root.querySelectorAll('.edit-btn').forEach((button) => {
     if (button.dataset.vetScheduleBound === 'true') {
@@ -1520,6 +1705,7 @@ export function initVetSchedulePage(options = {}) {
   bindAppointmentEditDateWatcher(root);
   bindAppointmentEditTimeWatcher();
   bindAppointmentNotesWatcher();
+  bindExamRequestAwaiting(root);
   bindPastToggle(root);
   bindScheduleModalButton(root);
   bindCalendarSlotHandler(root);

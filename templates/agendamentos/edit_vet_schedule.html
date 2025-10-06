@@ -463,7 +463,22 @@
           </div>
           {% for exam in exams_waiting_other_vets %}
             {% set can_respond = exam.time_left.total_seconds() > 0 %}
-            <div class="list-group-item d-flex justify-content-between align-items-center">
+            <div
+              class="list-group-item d-flex justify-content-between align-items-center exam-awaiting-other cursor-pointer"
+              data-exam-waiting-other="true"
+              data-exam-id="{{ exam.id }}"
+              data-exam-confirm-by="{{ exam.confirm_by.isoformat() if exam.confirm_by else '' }}"
+              data-exam-confirm-by-local="{{ exam.confirm_by|format_datetime_brazil('%Y-%m-%dT%H:%M') if exam.confirm_by else '' }}"
+              data-exam-scheduled="{{ exam.scheduled_at.isoformat() if exam.scheduled_at else '' }}"
+              data-exam-scheduled-local="{{ exam.scheduled_at|format_datetime_brazil('%Y-%m-%dT%H:%M') if exam.scheduled_at else '' }}"
+              data-exam-specialist-id="{{ exam.specialist_id }}"
+              data-exam-specialist-name="{{ exam.specialist.user.name if exam.specialist and exam.specialist.user else '' }}"
+              data-exam-animal-name="{{ exam.animal.name }}"
+              data-exam-owner-name="{{ exam.animal.owner.name }}"
+              data-exam-time-left-seconds="{{ exam.time_left.total_seconds()|int if exam.time_left else 0 }}"
+              role="button"
+              tabindex="0"
+            >
               <div class="d-flex align-items-center">
                 <div class="me-3">
                   <i class="fas fa-flask text-warning fa-2x"></i>
@@ -479,9 +494,15 @@
                   </small>
                   <div class="mt-1">
                     {% if can_respond %}
-                      <small class="text-muted"><i class="fas fa-hourglass-half me-1"></i>Tempo restante: {{ exam.time_left|format_timedelta }}</small>
+                      <small class="text-muted" data-exam-time-left>
+                        <i class="fas fa-hourglass-half me-1"></i>
+                        <span data-exam-time-left-text>Tempo restante: {{ exam.time_left|format_timedelta }}</span>
+                      </small>
                     {% else %}
-                      <small class="text-muted"><i class="fas fa-exclamation-circle me-1"></i>Prazo expirado</small>
+                      <small class="text-muted" data-exam-time-left>
+                        <i class="fas fa-exclamation-circle me-1"></i>
+                        <span data-exam-time-left-text>Prazo expirado</span>
+                      </small>
                     {% endif %}
                   </div>
                 </div>
@@ -908,6 +929,44 @@
           <a id="modal-tutor-link" class="btn btn-outline-secondary" target="_blank"><i class="fas fa-user me-1"></i>Ficha Tutor</a>
           <a id="modal-consulta-link" class="btn btn-outline-success" target="_blank"><i class="fas fa-play-circle me-1"></i>Iniciar Consulta</a>
           <button type="button" class="btn btn-primary" id="modal-save-btn">Salvar Alterações</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal fade" id="examRequestEditModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title">Editar solicitação de exame</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+        </div>
+        <div class="modal-body">
+          <input type="hidden" data-exam-modal-id>
+          <div class="mb-3">
+            <small class="text-muted text-uppercase">Paciente</small>
+            <div class="fw-semibold" data-exam-modal-animal>—</div>
+            <div class="text-muted small" data-exam-modal-owner>—</div>
+          </div>
+          <div class="mb-3">
+            <small class="text-muted text-uppercase">Especialista</small>
+            <div class="fw-semibold" data-exam-modal-specialist>—</div>
+          </div>
+          <div class="mb-3">
+            <label class="form-label" for="exam-request-scheduled">Data e horário agendados</label>
+            <input type="datetime-local" class="form-control" id="exam-request-scheduled" data-exam-scheduled-input>
+            <div class="form-text">Os horários são exibidos no fuso horário de Brasília.</div>
+          </div>
+          <div class="mb-3">
+            <label class="form-label" for="exam-request-confirm-by">Prazo para confirmação</label>
+            <input type="datetime-local" class="form-control" id="exam-request-confirm-by" data-exam-confirm-by-input>
+            <div class="form-text">Informe até quando o especialista pode confirmar este exame.</div>
+          </div>
+          <div class="alert alert-warning d-none" data-exam-modal-error role="alert"></div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
+          <button type="button" class="btn btn-primary" data-exam-modal-save>Salvar alterações</button>
         </div>
       </div>
     </div>
