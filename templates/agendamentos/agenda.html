@@ -70,6 +70,46 @@
 
 {% block scripts %}
 {{ super() }}
+<style>
+  #calendar .fc-toolbar.fc-header-toolbar {
+    gap: 0.5rem;
+  }
+
+  #calendar .fc-toolbar .fc-button {
+    min-height: 44px;
+  }
+
+  @media (max-width: 768px) {
+    #calendar .fc-toolbar.fc-header-toolbar {
+      flex-wrap: wrap;
+      justify-content: space-between;
+    }
+
+    #calendar .fc-toolbar .fc-button {
+      min-width: 44px;
+      padding: 0.5rem;
+    }
+
+    #calendar .fc-toolbar .fc-toolbar-chunk {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      flex-wrap: wrap;
+    }
+
+    #calendar .fc-daygrid-day-frame,
+    #calendar .fc-timegrid-slot,
+    #calendar .fc-list-event {
+      min-height: 44px;
+    }
+  }
+
+  @media (min-width: 769px) {
+    #calendar .fc-daygrid-body {
+      min-height: 600px;
+    }
+  }
+</style>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.8/main.min.css">
 <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.8/main.min.js"></script>
 <script>
@@ -218,8 +258,38 @@ document.addEventListener('DOMContentLoaded', function() {
       }
     }
 
+    var mobileBreakpoint = window.matchMedia('(max-width: 768px)');
+
+    function getDefaultMobileView() {
+      return 'listWeek';
+    }
+
+    function getDefaultDesktopView() {
+      return 'dayGridMonth';
+    }
+
+    function resolveInitialView() {
+      return mobileBreakpoint.matches ? getDefaultMobileView() : getDefaultDesktopView();
+    }
+
+    var mobileButtonText = {
+      dayGridMonth: '<i class="bi bi-calendar3" aria-hidden="true"></i><span class="visually-hidden">Mês</span>',
+      timeGridDay: '<i class="bi bi-clock" aria-hidden="true"></i><span class="visually-hidden">Dia</span>',
+      listWeek: '<i class="bi bi-list-task" aria-hidden="true"></i><span class="visually-hidden">Lista</span>',
+      today: '<i class="bi bi-calendar-event" aria-hidden="true"></i><span class="visually-hidden">Hoje</span>',
+    };
+
+    var desktopButtonText = {
+      dayGridMonth: 'Mês',
+      timeGridWeek: 'Semana',
+      timeGridDay: 'Dia',
+      listWeek: 'Lista',
+      today: 'Hoje',
+    };
+
     calendar = new FullCalendar.Calendar(calendarEl, {
-      initialView: 'dayGridMonth',
+      initialView: resolveInitialView(),
+      height: 'auto',
       events: '/api/my_appointments',
       editable: true,
       eventDurationEditable: true,
@@ -229,8 +299,82 @@ document.addEventListener('DOMContentLoaded', function() {
         updateCalendarEventVisibility(activeEventTypes);
       },
     });
+    calendar.setOption('customButtons', {
+      prevMobile: {
+        hint: 'Anterior',
+        text: '<i class="bi bi-chevron-left" aria-hidden="true"></i><span class="visually-hidden">Anterior</span>',
+        click: function() {
+          calendar.prev();
+        },
+      },
+      nextMobile: {
+        hint: 'Próximo',
+        text: '<i class="bi bi-chevron-right" aria-hidden="true"></i><span class="visually-hidden">Próximo</span>',
+        click: function() {
+          calendar.next();
+        },
+      },
+      todayMobile: {
+        hint: 'Hoje',
+        text: '<i class="bi bi-calendar-event" aria-hidden="true"></i><span class="visually-hidden">Hoje</span>',
+        click: function() {
+          calendar.today();
+        },
+      },
+    });
+
+    function applyResponsiveOptions() {
+      var isMobile = mobileBreakpoint.matches;
+
+      if (isMobile) {
+        calendar.setOption('headerToolbar', {
+          start: 'prevMobile todayMobile nextMobile',
+          center: '',
+          end: 'listWeek timeGridDay dayGridMonth',
+        });
+        calendar.setOption('buttonText', Object.assign({}, mobileButtonText));
+      } else {
+        calendar.setOption('headerToolbar', {
+          start: 'prev,next today',
+          center: 'title',
+          end: 'dayGridMonth timeGridWeek timeGridDay listWeek',
+        });
+        calendar.setOption('buttonText', Object.assign({}, desktopButtonText));
+      }
+    }
+
+    function syncViewToBreakpoint() {
+      if (!calendar) {
+        return;
+      }
+
+      var isMobile = mobileBreakpoint.matches;
+      var currentView = calendar.view ? calendar.view.type : null;
+
+      if (isMobile && currentView !== 'listWeek' && currentView !== 'timeGridDay') {
+        calendar.changeView(getDefaultMobileView());
+      }
+
+      if (!isMobile && (currentView === 'listWeek' || currentView === 'timeGridDay')) {
+        calendar.changeView(getDefaultDesktopView());
+      }
+    }
+
+    applyResponsiveOptions();
     calendar.render();
     updateCalendarEventVisibility(activeEventTypes);
+    syncViewToBreakpoint();
+
+    function handleBreakpointChange() {
+      applyResponsiveOptions();
+      syncViewToBreakpoint();
+    }
+
+    if (typeof mobileBreakpoint.addEventListener === 'function') {
+      mobileBreakpoint.addEventListener('change', handleBreakpointChange);
+    } else if (typeof mobileBreakpoint.addListener === 'function') {
+      mobileBreakpoint.addListener(handleBreakpointChange);
+    }
   }
 });
 </script>
