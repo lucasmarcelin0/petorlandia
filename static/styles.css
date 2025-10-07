@@ -121,6 +121,187 @@
   --schedule-btn-shadow: rgba(124, 58, 237, 0.45);
 }
 
+/* Cartões de agenda com visual consistente */
+.schedule-card {
+  --schedule-card-bg: #ffffff;
+  background: var(--schedule-card-bg);
+  border: 0;
+  border-radius: 1.25rem;
+  box-shadow: 0 24px 48px -32px rgba(30, 64, 175, 0.35);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+}
+
+.schedule-card__header {
+  --schedule-card-header-start: #4f46e5;
+  --schedule-card-header-end: #2563eb;
+  --schedule-card-header-text: #ffffff;
+  --schedule-card-header-subtitle: rgba(255, 255, 255, 0.78);
+  --schedule-card-header-icon-bg: rgba(255, 255, 255, 0.18);
+  background: linear-gradient(
+    135deg,
+    var(--schedule-card-header-start),
+    var(--schedule-card-header-end)
+  );
+  color: var(--schedule-card-header-text);
+  padding: 1.25rem 1.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+  position: relative;
+}
+
+.schedule-card__header::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(
+    circle at top right,
+    rgba(255, 255, 255, 0.18),
+    transparent 55%
+  );
+  pointer-events: none;
+}
+
+.schedule-card__header > * {
+  position: relative;
+  z-index: 1;
+}
+
+.schedule-card__header-icon {
+  width: 48px;
+  height: 48px;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--schedule-card-header-icon-bg);
+  color: inherit;
+  flex-shrink: 0;
+}
+
+.schedule-card__title {
+  margin: 0;
+  font-weight: 700;
+  font-size: 1.1rem;
+  color: inherit;
+}
+
+.schedule-card__subtitle {
+  margin: 0;
+  font-size: 0.875rem;
+  color: var(--schedule-card-header-subtitle);
+}
+
+.schedule-card__header--primary {
+  --schedule-card-header-start: #4338ca;
+  --schedule-card-header-end: #2563eb;
+}
+
+.schedule-card__header--success {
+  --schedule-card-header-start: #10b981;
+  --schedule-card-header-end: #047857;
+}
+
+.schedule-card__header--info {
+  --schedule-card-header-start: #38bdf8;
+  --schedule-card-header-end: #0ea5e9;
+}
+
+.schedule-card__header--warning {
+  --schedule-card-header-start: #fbbf24;
+  --schedule-card-header-end: #f97316;
+  --schedule-card-header-text: #1f2937;
+  --schedule-card-header-subtitle: rgba(31, 41, 55, 0.75);
+  --schedule-card-header-icon-bg: rgba(255, 255, 255, 0.7);
+}
+
+.schedule-card__header--secondary {
+  --schedule-card-header-start: #64748b;
+  --schedule-card-header-end: #475569;
+}
+
+.schedule-card__tag {
+  --schedule-card-tag-bg: rgba(15, 23, 42, 0.08);
+  --schedule-card-tag-color: #0f172a;
+  --schedule-card-tag-border: transparent;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.25rem 0.75rem;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  background: var(--schedule-card-tag-bg);
+  color: var(--schedule-card-tag-color);
+  border: 1px solid var(--schedule-card-tag-border);
+  line-height: 1;
+}
+
+.schedule-card__tag--primary {
+  --schedule-card-tag-bg: rgba(59, 130, 246, 0.25);
+  --schedule-card-tag-color: #1d4ed8;
+  --schedule-card-tag-border: rgba(59, 130, 246, 0.35);
+}
+
+.schedule-card__tag--success {
+  --schedule-card-tag-bg: rgba(16, 185, 129, 0.24);
+  --schedule-card-tag-color: #047857;
+  --schedule-card-tag-border: rgba(16, 185, 129, 0.35);
+}
+
+.schedule-card__tag--info {
+  --schedule-card-tag-bg: rgba(14, 165, 233, 0.24);
+  --schedule-card-tag-color: #0369a1;
+  --schedule-card-tag-border: rgba(14, 165, 233, 0.35);
+}
+
+.schedule-card__tag--warning {
+  --schedule-card-tag-bg: rgba(251, 191, 36, 0.25);
+  --schedule-card-tag-color: #92400e;
+  --schedule-card-tag-border: rgba(251, 191, 36, 0.45);
+}
+
+.schedule-card__tag--danger {
+  --schedule-card-tag-bg: rgba(248, 113, 113, 0.3);
+  --schedule-card-tag-color: #b91c1c;
+  --schedule-card-tag-border: rgba(248, 113, 113, 0.4);
+}
+
+.schedule-card__tag--secondary {
+  --schedule-card-tag-bg: rgba(100, 116, 139, 0.28);
+  --schedule-card-tag-color: #1e293b;
+  --schedule-card-tag-border: rgba(100, 116, 139, 0.35);
+}
+
+.schedule-card__tag--muted {
+  --schedule-card-tag-bg: rgba(148, 163, 184, 0.26);
+  --schedule-card-tag-color: #334155;
+  --schedule-card-tag-border: rgba(148, 163, 184, 0.45);
+}
+
+.schedule-card__tag--inverse {
+  --schedule-card-tag-bg: rgba(255, 255, 255, 0.2);
+  --schedule-card-tag-color: #ffffff;
+  --schedule-card-tag-border: rgba(255, 255, 255, 0.35);
+}
+
+@media (max-width: 576px) {
+  .schedule-card__header {
+    padding: 1.1rem 1.25rem;
+  }
+
+  .schedule-card__tag {
+    white-space: normal;
+  }
+}
+
 @media (max-width: 576px) {
   .schedule-toolbar {
     padding: 1rem 1.1rem;
