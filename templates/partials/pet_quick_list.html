@@ -2,21 +2,13 @@
 {% set pets_endpoint = pets_endpoint|default(url_for('api_clinic_pets')) %}
 {% set new_pet_url = new_pet_url|default(url_for('novo_animal')) %}
 {% set profile_url_template = profile_url_template|default(url_for('ficha_animal', animal_id=0)) %}
-{% set bare = bare|default(False) %}
-{% if bare %}
-  {% set wrapper_classes = 'd-flex flex-column h-100 w-100' %}
-  {% set body_classes = 'd-flex flex-column gap-3 h-100' %}
-{% else %}
-  {% set wrapper_classes = 'card shadow-sm border-0 h-100 w-100' %}
-  {% set body_classes = 'card-body d-flex flex-column gap-3' %}
-{% endif %}
 <div
   id="{{ component_id }}"
-  class="{{ wrapper_classes }}"
+  class="card shadow-sm border-0 h-100"
   data-pets-url="{{ pets_endpoint }}"
   data-profile-template="{{ profile_url_template }}"
 >
-  <div class="{{ body_classes }}">
+  <div class="card-body d-flex flex-column">
     <div class="d-flex justify-content-between align-items-start mb-3 flex-wrap gap-2">
       <div>
         <h3 class="h6 mb-1">Pacientes (Pets)</h3>
