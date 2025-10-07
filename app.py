@@ -8909,44 +8909,138 @@ def edit_vet_schedule_slot(veterinario_id, horario_id):
             if wants_json:
                 return json_response(False, status=403, message='Você não tem permissão para editar este horário.')
             abort(403)
-        dias = form.dias_semana.data
-        if not dias:
+        dias_submetidos = form.dias_semana.data or []
+        dias_unicos = []
+        vistos = set()
+        for dia in dias_submetidos:
+            if not dia:
+                continue
+            if dia not in vistos:
+                dias_unicos.append(dia)
+                vistos.add(dia)
+        if not dias_unicos:
             if wants_json:
                 return json_response(False, status=400, message='Selecione ao menos um dia da semana.')
             flash('Selecione ao menos um dia da semana.', 'danger')
             return redirect_response
-        dia = dias[0]
+
         inicio = form.hora_inicio.data
         fim = form.hora_fim.data
-        if has_schedule_conflict(novo_vet, dia, inicio, fim, exclude_id=horario.id):
-            if wants_json:
-                return json_response(False, status=400, message='Conflito de horário.')
-            flash('Conflito de horário.', 'danger')
-        else:
-            horario.veterinario_id = novo_vet
-            horario.dia_semana = dia
-            horario.hora_inicio = inicio
-            horario.hora_fim = fim
-            horario.intervalo_inicio = form.intervalo_inicio.data
-            horario.intervalo_fim = form.intervalo_fim.data
-            db.session.commit()
-            if wants_json:
-                return json_response(
-                    True,
-                    message='Horário atualizado com sucesso.',
-                    extra={
-                        'schedule': {
-                            'id': horario.id,
-                            'veterinario_id': horario.veterinario_id,
-                            'dia_semana': horario.dia_semana,
-                            'hora_inicio': horario.hora_inicio.strftime('%H:%M') if horario.hora_inicio else None,
-                            'hora_fim': horario.hora_fim.strftime('%H:%M') if horario.hora_fim else None,
-                            'intervalo_inicio': horario.intervalo_inicio.strftime('%H:%M') if horario.intervalo_inicio else None,
-                            'intervalo_fim': horario.intervalo_fim.strftime('%H:%M') if horario.intervalo_fim else None,
-                        }
-                    }
+        intervalo_inicio = form.intervalo_inicio.data
+        intervalo_fim = form.intervalo_fim.data
+
+        original_inicio = horario.hora_inicio
+        original_fim = horario.hora_fim
+        original_intervalo_inicio = horario.intervalo_inicio
+        original_intervalo_fim = horario.intervalo_fim
+
+        primary_day = horario.dia_semana if horario.dia_semana in dias_unicos else dias_unicos[0]
+        schedules_por_dia = {primary_day: horario}
+
+        for dia in dias_unicos:
+            if dia == primary_day:
+                continue
+            schedules_por_dia[dia] = (
+                VetSchedule.query.filter_by(
+                    veterinario_id=novo_vet,
+                    dia_semana=dia,
+                    hora_inicio=original_inicio,
+                    hora_fim=original_fim,
+                    intervalo_inicio=original_intervalo_inicio,
+                    intervalo_fim=original_intervalo_fim,
                 )
-            flash('Horário atualizado com sucesso.', 'success')
+                .order_by(VetSchedule.id.asc())
+                .first()
+            )
+
+        conflitos = []
+        for dia, schedule_obj in schedules_por_dia.items():
+            exclude_id = schedule_obj.id if schedule_obj else None
+            if has_schedule_conflict(novo_vet, dia, inicio, fim, exclude_id=exclude_id):
+                conflitos.append(dia)
+
+        if conflitos:
+            mensagem_conflito = 'Conflito de horário.'
+            if len(conflitos) == 1:
+                mensagem_conflito = f'Conflito de horário em {conflitos[0]}.'
+            else:
+                dias_texto = ', '.join(conflitos)
+                mensagem_conflito = f'Conflitos de horário nos dias: {dias_texto}.'
+            if wants_json:
+                return json_response(False, status=400, message=mensagem_conflito)
+            flash(mensagem_conflito, 'danger')
+            return redirect_response
+
+        horario.veterinario_id = novo_vet
+        horario.dia_semana = primary_day
+        horario.hora_inicio = inicio
+        horario.hora_fim = fim
+        horario.intervalo_inicio = intervalo_inicio
+        horario.intervalo_fim = intervalo_fim
+
+        processed_schedules = [horario]
+
+        for dia, schedule_obj in schedules_por_dia.items():
+            if dia == primary_day:
+                continue
+            if schedule_obj:
+                schedule_obj.veterinario_id = novo_vet
+                schedule_obj.dia_semana = dia
+                schedule_obj.hora_inicio = inicio
+                schedule_obj.hora_fim = fim
+                schedule_obj.intervalo_inicio = intervalo_inicio
+                schedule_obj.intervalo_fim = intervalo_fim
+                processed_schedules.append(schedule_obj)
+            else:
+                novo_horario = VetSchedule(
+                    veterinario_id=novo_vet,
+                    dia_semana=dia,
+                    hora_inicio=inicio,
+                    hora_fim=fim,
+                    intervalo_inicio=intervalo_inicio,
+                    intervalo_fim=intervalo_fim,
+                )
+                db.session.add(novo_horario)
+                processed_schedules.append(novo_horario)
+                schedules_por_dia[dia] = novo_horario
+
+        db.session.flush()
+        db.session.commit()
+
+        total_dias = len(dias_unicos)
+        if total_dias > 1:
+            mensagem_sucesso = f'Horários atualizados para {total_dias} dias.'
+        else:
+            mensagem_sucesso = 'Horário atualizado com sucesso.'
+
+        def serialize_schedule(record):
+            return {
+                'id': record.id,
+                'veterinario_id': record.veterinario_id,
+                'dia_semana': record.dia_semana,
+                'hora_inicio': record.hora_inicio.strftime('%H:%M') if record.hora_inicio else None,
+                'hora_fim': record.hora_fim.strftime('%H:%M') if record.hora_fim else None,
+                'intervalo_inicio': record.intervalo_inicio.strftime('%H:%M') if record.intervalo_inicio else None,
+                'intervalo_fim': record.intervalo_fim.strftime('%H:%M') if record.intervalo_fim else None,
+            }
+
+        if wants_json:
+            schedules_payload = []
+            vistos_ids = set()
+            for schedule in processed_schedules:
+                if schedule.id in vistos_ids:
+                    continue
+                vistos_ids.add(schedule.id)
+                schedules_payload.append(serialize_schedule(schedule))
+            return json_response(
+                True,
+                message=mensagem_sucesso,
+                extra={
+                    'schedules': schedules_payload,
+                    'processed_days': dias_unicos,
+                },
+            )
+        flash(mensagem_sucesso, 'success')
         return redirect_response
     if wants_json:
         errors = form.errors or {}
