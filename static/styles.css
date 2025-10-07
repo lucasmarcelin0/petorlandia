@@ -12,6 +12,10 @@
 .schedule-toolbar {
   --toolbar-gradient-start: #0d6efd;
   --toolbar-gradient-end: #6610f2;
+  --schedule-toolbar-radius: 999px;
+  --schedule-toolbar-gap: 0.55rem;
+  --schedule-toolbar-font-size: 0.95rem;
+  --schedule-toolbar-font-weight: 600;
   background: linear-gradient(135deg, var(--toolbar-gradient-start), var(--toolbar-gradient-end));
   padding: 1.1rem 1.5rem;
   display: flex;
@@ -63,15 +67,15 @@
   --schedule-btn-color: #ffffff;
   --schedule-btn-shadow: rgba(15, 23, 42, 0.18);
   border: none;
-  border-radius: 999px;
+  border-radius: var(--schedule-toolbar-radius, 999px);
   background: var(--schedule-btn-bg);
   color: var(--schedule-btn-color);
   padding: 0.55rem 1.5rem;
   display: inline-flex;
   align-items: center;
-  gap: 0.55rem;
-  font-weight: 600;
-  font-size: 0.95rem;
+  gap: var(--schedule-toolbar-gap, 0.55rem);
+  font-weight: var(--schedule-toolbar-font-weight, 600);
+  font-size: var(--schedule-toolbar-font-size, 0.95rem);
   letter-spacing: 0.01em;
   box-shadow: 0 12px 24px -18px var(--schedule-btn-shadow);
   transition: transform 0.2s ease, box-shadow 0.2s ease, background 0.2s ease, color 0.2s ease;
@@ -121,52 +125,36 @@
   --schedule-btn-shadow: rgba(124, 58, 237, 0.45);
 }
 
+/* Controles auxiliares da agenda */
 .schedule-action-btn {
-  --schedule-action-border: rgba(148, 163, 184, 0.45);
-  --schedule-action-bg: rgba(255, 255, 255, 0.86);
+  --schedule-action-bg: rgba(255, 255, 255, 0.9);
+  --schedule-action-border: rgba(15, 23, 42, 0.12);
   --schedule-action-color: #1f2937;
-  --schedule-action-hover-bg: rgba(15, 23, 42, 0.08);
-  --schedule-action-hover-color: #111827;
-  --schedule-action-focus-ring: rgba(37, 99, 235, 0.28);
-  --schedule-action-shadow: rgba(15, 23, 42, 0.28);
+  --schedule-action-hover-bg: rgba(255, 255, 255, 1);
+  --schedule-action-hover-border: rgba(59, 130, 246, 0.32);
+  --schedule-action-hover-color: #1d4ed8;
+  --schedule-action-shadow: 0 12px 26px -22px rgba(15, 23, 42, 0.3);
+  --schedule-action-focus-ring: rgba(99, 102, 241, 0.35);
+  --schedule-action-active-bg: var(--schedule-action-hover-bg);
+  --schedule-action-active-color: var(--schedule-action-hover-color);
+  --schedule-action-active-border: var(--schedule-action-hover-border);
+  --schedule-action-active-shadow: 0 14px 28px -20px rgba(99, 102, 241, 0.35);
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 0.5rem;
-  border-radius: 999px;
-  border: 1.5px solid var(--schedule-action-border);
+  gap: calc(var(--schedule-toolbar-gap, 0.55rem) - 0.2rem);
+  padding: 0.45rem 1.1rem;
+  border-radius: var(--schedule-toolbar-radius, 999px);
+  border: 1px solid var(--schedule-action-border);
   background: var(--schedule-action-bg);
   color: var(--schedule-action-color);
-  font-weight: 600;
+  font-weight: var(--schedule-toolbar-font-weight, 600);
   font-size: 0.9rem;
   letter-spacing: 0.01em;
-  padding: 0.45rem 1.15rem;
-  box-shadow: 0 12px 28px -22px var(--schedule-action-shadow);
-  transition: background 0.2s ease, color 0.2s ease, box-shadow 0.2s ease,
-    transform 0.2s ease, border-color 0.2s ease;
+  line-height: 1;
   text-decoration: none;
-}
-
-.schedule-action-btn:hover,
-.schedule-action-btn:focus {
-  background: var(--schedule-action-hover-bg);
-  color: var(--schedule-action-hover-color);
-  box-shadow: 0 16px 32px -20px var(--schedule-action-shadow);
-  transform: translateY(-1px);
-}
-
-.schedule-action-btn:focus-visible {
-  outline: none;
-  box-shadow: 0 0 0 0.22rem var(--schedule-action-focus-ring),
-    0 16px 32px -20px var(--schedule-action-shadow);
-}
-
-.schedule-action-btn:disabled,
-.schedule-action-btn[aria-disabled="true"] {
-  cursor: not-allowed;
-  opacity: 0.6;
-  box-shadow: none;
-  transform: none;
+  transition: background 0.2s ease, border-color 0.2s ease, color 0.2s ease,
+    box-shadow 0.2s ease, transform 0.2s ease;
 }
 
 .schedule-action-btn .bi,
@@ -176,259 +164,201 @@
   line-height: 1;
 }
 
-.schedule-action-btn--sm {
-  font-size: 0.82rem;
-  padding: 0.35rem 0.9rem;
-  gap: 0.4rem;
+.schedule-action-btn:hover,
+.schedule-action-btn:focus {
+  background: var(--schedule-action-hover-bg);
+  border-color: var(--schedule-action-hover-border);
+  color: var(--schedule-action-hover-color);
+  box-shadow: var(--schedule-action-shadow);
+  transform: translateY(-1px);
+  text-decoration: none;
 }
 
-.schedule-action-btn--primary {
-  --schedule-action-border: rgba(37, 99, 235, 0.32);
-  --schedule-action-bg: rgba(37, 99, 235, 0.12);
-  --schedule-action-hover-bg: rgba(37, 99, 235, 0.18);
-  --schedule-action-color: #1d4ed8;
-  --schedule-action-hover-color: #1e40af;
-  --schedule-action-focus-ring: rgba(37, 99, 235, 0.35);
-  --schedule-action-shadow: rgba(37, 99, 235, 0.45);
+.schedule-action-btn:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 0.2rem var(--schedule-action-focus-ring),
+    var(--schedule-action-shadow);
+}
+
+.schedule-action-btn:disabled,
+.schedule-action-btn[aria-disabled="true"] {
+  opacity: 0.65;
+  cursor: not-allowed;
+  box-shadow: none;
+  transform: none;
+}
+
+.schedule-action-btn--sm {
+  font-size: 0.8rem;
+  padding: 0.35rem 0.85rem;
+  gap: calc(var(--schedule-toolbar-gap, 0.55rem) - 0.3rem);
 }
 
 .schedule-action-btn--muted {
-  --schedule-action-border: rgba(100, 116, 139, 0.4);
-  --schedule-action-bg: rgba(241, 245, 249, 0.8);
-  --schedule-action-hover-bg: rgba(148, 163, 184, 0.22);
+  --schedule-action-bg: rgba(248, 250, 252, 0.9);
+  --schedule-action-border: rgba(148, 163, 184, 0.35);
   --schedule-action-color: #475569;
+  --schedule-action-hover-bg: rgba(226, 232, 240, 0.95);
+  --schedule-action-hover-border: rgba(148, 163, 184, 0.5);
   --schedule-action-hover-color: #1f2937;
-  --schedule-action-focus-ring: rgba(100, 116, 139, 0.32);
-  --schedule-action-shadow: rgba(100, 116, 139, 0.35);
+  --schedule-action-focus-ring: rgba(148, 163, 184, 0.4);
+  --schedule-action-active-bg: rgba(226, 232, 240, 1);
+  --schedule-action-active-color: #1f2937;
+  --schedule-action-active-border: rgba(148, 163, 184, 0.65);
+  --schedule-action-active-shadow: 0 12px 26px -20px rgba(100, 116, 139, 0.35);
+}
+
+.schedule-action-btn--primary {
+  --schedule-action-bg: rgba(37, 99, 235, 0.12);
+  --schedule-action-border: rgba(37, 99, 235, 0.28);
+  --schedule-action-color: #1d4ed8;
+  --schedule-action-hover-bg: rgba(37, 99, 235, 0.18);
+  --schedule-action-hover-border: rgba(37, 99, 235, 0.45);
+  --schedule-action-hover-color: #1e40af;
+  --schedule-action-focus-ring: rgba(59, 130, 246, 0.45);
+  --schedule-action-shadow: 0 14px 28px -20px rgba(37, 99, 235, 0.28);
+  --schedule-action-active-bg: linear-gradient(135deg, #2563eb, #7c3aed);
+  --schedule-action-active-color: #ffffff;
+  --schedule-action-active-border: rgba(37, 99, 235, 0.6);
+  --schedule-action-active-shadow: 0 18px 32px -18px rgba(59, 130, 246, 0.45);
 }
 
 .schedule-action-btn--success {
-  --schedule-action-border: rgba(16, 185, 129, 0.32);
   --schedule-action-bg: rgba(16, 185, 129, 0.12);
+  --schedule-action-border: rgba(16, 185, 129, 0.32);
+  --schedule-action-color: #047857;
   --schedule-action-hover-bg: rgba(16, 185, 129, 0.18);
-  --schedule-action-color: #059669;
-  --schedule-action-hover-color: #047857;
-  --schedule-action-focus-ring: rgba(16, 185, 129, 0.28);
-  --schedule-action-shadow: rgba(16, 185, 129, 0.35);
+  --schedule-action-hover-border: rgba(16, 185, 129, 0.48);
+  --schedule-action-hover-color: #065f46;
+  --schedule-action-focus-ring: rgba(16, 185, 129, 0.4);
+  --schedule-action-shadow: 0 14px 28px -20px rgba(16, 185, 129, 0.28);
+  --schedule-action-active-bg: linear-gradient(135deg, #22c55e, #0f766e);
+  --schedule-action-active-color: #ffffff;
+  --schedule-action-active-border: rgba(16, 185, 129, 0.55);
+  --schedule-action-active-shadow: 0 18px 32px -18px rgba(16, 185, 129, 0.45);
 }
 
 .schedule-action-btn--danger {
-  --schedule-action-border: rgba(248, 113, 113, 0.35);
   --schedule-action-bg: rgba(248, 113, 113, 0.14);
-  --schedule-action-hover-bg: rgba(248, 113, 113, 0.2);
-  --schedule-action-color: #dc2626;
-  --schedule-action-hover-color: #b91c1c;
-  --schedule-action-focus-ring: rgba(239, 68, 68, 0.3);
-  --schedule-action-shadow: rgba(239, 68, 68, 0.35);
+  --schedule-action-border: rgba(248, 113, 113, 0.35);
+  --schedule-action-color: #b91c1c;
+  --schedule-action-hover-bg: rgba(248, 113, 113, 0.22);
+  --schedule-action-hover-border: rgba(239, 68, 68, 0.5);
+  --schedule-action-hover-color: #991b1b;
+  --schedule-action-focus-ring: rgba(248, 113, 113, 0.4);
+  --schedule-action-shadow: 0 14px 28px -20px rgba(239, 68, 68, 0.3);
+  --schedule-action-active-bg: linear-gradient(135deg, #ef4444, #dc2626);
+  --schedule-action-active-color: #ffffff;
+  --schedule-action-active-border: rgba(239, 68, 68, 0.6);
+  --schedule-action-active-shadow: 0 18px 32px -18px rgba(239, 68, 68, 0.45);
 }
 
-.schedule-action-btn--dark {
-  --schedule-action-border: rgba(30, 41, 59, 0.45);
-  --schedule-action-bg: rgba(30, 41, 59, 0.12);
-  --schedule-action-hover-bg: rgba(30, 41, 59, 0.2);
-  --schedule-action-color: #111827;
-  --schedule-action-hover-color: #0f172a;
-  --schedule-action-focus-ring: rgba(30, 41, 59, 0.28);
-  --schedule-action-shadow: rgba(30, 41, 59, 0.38);
+.schedule-action-btn--ghost {
+  --schedule-action-bg: rgba(255, 255, 255, 0.65);
+  --schedule-action-border: rgba(255, 255, 255, 0.4);
+  --schedule-action-color: rgba(15, 23, 42, 0.85);
+  --schedule-action-hover-bg: rgba(255, 255, 255, 0.85);
+  --schedule-action-hover-border: rgba(255, 255, 255, 0.6);
+  --schedule-action-hover-color: rgba(15, 23, 42, 1);
+  --schedule-action-focus-ring: rgba(255, 255, 255, 0.45);
+  --schedule-action-active-bg: rgba(255, 255, 255, 0.95);
+  --schedule-action-active-color: rgba(15, 23, 42, 1);
+  --schedule-action-active-border: rgba(255, 255, 255, 0.75);
+  --schedule-action-active-shadow: 0 12px 26px -20px rgba(148, 163, 184, 0.25);
 }
 
-.schedule-action-btn.is-active {
-  --schedule-action-border: rgba(79, 70, 229, 0.65);
-  --schedule-action-bg: linear-gradient(135deg, #6366f1 0%, #2563eb 100%);
-  --schedule-action-hover-bg: linear-gradient(135deg, #4f46e5 0%, #1d4ed8 100%);
-  --schedule-action-color: #ffffff;
-  --schedule-action-hover-color: #f8fafc;
-  --schedule-action-shadow: rgba(79, 70, 229, 0.5);
+.schedule-action-btn.active,
+.schedule-action-btn.is-active,
+.schedule-action-btn[aria-expanded="true"] {
+  background: var(--schedule-action-active-bg);
+  color: var(--schedule-action-active-color);
+  border-color: var(--schedule-action-active-border);
+  box-shadow: var(--schedule-action-active-shadow);
+  transform: translateY(-1px);
 }
 
+.schedule-action-btn.active .bi,
 .schedule-action-btn.is-active .bi,
+.schedule-action-btn[aria-expanded="true"] .bi,
+.schedule-action-btn.active i,
 .schedule-action-btn.is-active i,
-.schedule-action-btn.is-active svg {
-  color: inherit;
+.schedule-action-btn[aria-expanded="true"] i,
+.schedule-action-btn.active svg,
+.schedule-action-btn.is-active svg,
+.schedule-action-btn[aria-expanded="true"] svg {
+  color: currentColor;
 }
 
 .schedule-chip {
-  --schedule-chip-bg: rgba(148, 163, 184, 0.18);
-  --schedule-chip-color: #334155;
-  --schedule-chip-border: rgba(148, 163, 184, 0.28);
+  --schedule-chip-bg: rgba(148, 163, 184, 0.15);
+  --schedule-chip-color: #1f2937;
+  --schedule-chip-border: rgba(148, 163, 184, 0.3);
   display: inline-flex;
   align-items: center;
-  gap: 0.4rem;
-  padding: 0.3rem 0.85rem;
-  border-radius: 999px;
+  gap: calc(var(--schedule-toolbar-gap, 0.55rem) - 0.25rem);
+  padding: 0.3rem 0.8rem;
+  border-radius: var(--schedule-toolbar-radius, 999px);
   background: var(--schedule-chip-bg);
   color: var(--schedule-chip-color);
   border: 1px solid var(--schedule-chip-border);
-  font-weight: 600;
+  font-weight: var(--schedule-toolbar-font-weight, 600);
   font-size: 0.75rem;
   letter-spacing: 0.03em;
   line-height: 1.1;
   white-space: nowrap;
-  backdrop-filter: blur(6px);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.3);
 }
 
 .schedule-chip .bi,
 .schedule-chip i,
 .schedule-chip svg {
-  font-size: 0.95rem;
+  font-size: 1rem;
+  line-height: 1;
 }
 
-.schedule-chip--light {
-  --schedule-chip-bg: rgba(241, 245, 249, 0.7);
-  --schedule-chip-color: #0f172a;
-  --schedule-chip-border: rgba(148, 163, 184, 0.3);
+.schedule-chip--subtle {
+  --schedule-chip-bg: rgba(236, 244, 255, 0.7);
+  --schedule-chip-border: rgba(148, 163, 184, 0.28);
+  --schedule-chip-color: #1d4ed8;
 }
 
 .schedule-chip--muted {
-  --schedule-chip-bg: rgba(148, 163, 184, 0.18);
+  --schedule-chip-bg: rgba(226, 232, 240, 0.65);
+  --schedule-chip-border: rgba(148, 163, 184, 0.4);
   --schedule-chip-color: #475569;
-  --schedule-chip-border: rgba(148, 163, 184, 0.32);
+}
+
+.schedule-chip--success {
+  --schedule-chip-bg: rgba(16, 185, 129, 0.16);
+  --schedule-chip-border: rgba(16, 185, 129, 0.4);
+  --schedule-chip-color: #065f46;
+}
+
+.schedule-chip--danger {
+  --schedule-chip-bg: rgba(248, 113, 113, 0.2);
+  --schedule-chip-border: rgba(239, 68, 68, 0.45);
+  --schedule-chip-color: #991b1b;
+}
+
+.schedule-chip--warning {
+  --schedule-chip-bg: rgba(251, 191, 36, 0.22);
+  --schedule-chip-border: rgba(245, 158, 11, 0.4);
+  --schedule-chip-color: #92400e;
 }
 
 .schedule-chip--info {
   --schedule-chip-bg: rgba(56, 189, 248, 0.18);
-  --schedule-chip-color: #075985;
-  --schedule-chip-border: rgba(56, 189, 248, 0.32);
-}
-
-.schedule-chip--success {
-  --schedule-chip-bg: rgba(16, 185, 129, 0.18);
-  --schedule-chip-color: #047857;
-  --schedule-chip-border: rgba(16, 185, 129, 0.32);
-}
-
-.schedule-chip--warning {
-  --schedule-chip-bg: rgba(245, 158, 11, 0.2);
-  --schedule-chip-color: #92400e;
-  --schedule-chip-border: rgba(245, 158, 11, 0.35);
-}
-
-.schedule-chip--danger {
-  --schedule-chip-bg: rgba(248, 113, 113, 0.22);
-  --schedule-chip-color: #b91c1c;
-  --schedule-chip-border: rgba(248, 113, 113, 0.35);
+  --schedule-chip-border: rgba(56, 189, 248, 0.38);
+  --schedule-chip-color: #0c4a6e;
 }
 
 .schedule-chip--dark {
-  --schedule-chip-bg: rgba(15, 23, 42, 0.22);
-  --schedule-chip-color: #e2e8f0;
+  --schedule-chip-bg: rgba(15, 23, 42, 0.28);
   --schedule-chip-border: rgba(15, 23, 42, 0.45);
-}
-
-.schedule-chip--outline {
-  --schedule-chip-bg: rgba(255, 255, 255, 0.05);
-  --schedule-chip-color: #1f2937;
-  --schedule-chip-border: rgba(148, 163, 184, 0.32);
-}
-
-.schedule-chip--subtle {
-  --schedule-chip-bg: rgba(255, 255, 255, 0.7);
-  --schedule-chip-color: #1f2937;
-  --schedule-chip-border: rgba(203, 213, 225, 0.65);
+  --schedule-chip-color: #f8fafc;
 }
 
 .schedule-chip + .schedule-chip {
   margin-left: 0.35rem;
-}
-
-.schedule-slot {
-  --schedule-slot-bg: rgba(255, 255, 255, 0.82);
-  --schedule-slot-border: rgba(148, 163, 184, 0.28);
-  --schedule-slot-color: #1f2937;
-  --schedule-slot-hover-bg: rgba(37, 99, 235, 0.16);
-  --schedule-slot-hover-color: #1d4ed8;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.35rem;
-  padding: 0.35rem 0.85rem;
-  border-radius: 999px;
-  border: 1.5px solid var(--schedule-slot-border);
-  background: var(--schedule-slot-bg);
-  color: var(--schedule-slot-color);
-  font-weight: 600;
-  font-size: 0.85rem;
-  letter-spacing: 0.02em;
-  transition: background 0.2s ease, color 0.2s ease, border-color 0.2s ease,
-    box-shadow 0.2s ease, transform 0.2s ease;
-  text-decoration: none;
-  box-shadow: 0 10px 24px -22px rgba(15, 23, 42, 0.28);
-}
-
-.schedule-slot .bi,
-.schedule-slot i,
-.schedule-slot svg {
-  font-size: 1.05rem;
-}
-
-.schedule-slot:hover,
-.schedule-slot:focus {
-  background: var(--schedule-slot-hover-bg);
-  color: var(--schedule-slot-hover-color);
-  transform: translateY(-1px);
-  box-shadow: 0 14px 28px -18px rgba(37, 99, 235, 0.28);
-}
-
-.schedule-slot:focus-visible {
-  outline: none;
-  box-shadow: 0 0 0 0.2rem rgba(37, 99, 235, 0.28),
-    0 14px 28px -18px rgba(37, 99, 235, 0.28);
-}
-
-.schedule-slot:disabled,
-.schedule-slot[aria-disabled="true"] {
-  cursor: not-allowed;
-  transform: none;
-  box-shadow: none;
-}
-
-.schedule-slot--available {
-  --schedule-slot-border: rgba(16, 185, 129, 0.35);
-  --schedule-slot-bg: rgba(16, 185, 129, 0.12);
-  --schedule-slot-hover-bg: rgba(16, 185, 129, 0.18);
-  --schedule-slot-color: #047857;
-  --schedule-slot-hover-color: #065f46;
-}
-
-.schedule-slot--booked {
-  --schedule-slot-border: rgba(248, 113, 113, 0.4);
-  --schedule-slot-bg: rgba(248, 113, 113, 0.18);
-  --schedule-slot-color: #b91c1c;
-  --schedule-slot-hover-bg: rgba(248, 113, 113, 0.22);
-  --schedule-slot-hover-color: #991b1b;
-  opacity: 0.7;
-}
-
-.schedule-slot--blocked {
-  --schedule-slot-border: rgba(148, 163, 184, 0.35);
-  --schedule-slot-bg: rgba(226, 232, 240, 0.8);
-  --schedule-slot-color: #475569;
-  --schedule-slot-hover-bg: rgba(203, 213, 225, 0.6);
-  --schedule-slot-hover-color: #334155;
-  opacity: 0.65;
-}
-
-.schedule-slot--booked:hover,
-.schedule-slot--booked:focus,
-.schedule-slot--blocked:hover,
-.schedule-slot--blocked:focus {
-  transform: none;
-}
-
-.schedule-slot--selected {
-  --schedule-slot-bg: linear-gradient(135deg, #34d399 0%, #059669 100%);
-  --schedule-slot-border: rgba(5, 150, 105, 0.65);
-  --schedule-slot-color: #ffffff;
-  --schedule-slot-hover-bg: linear-gradient(135deg, #22c55e 0%, #047857 100%);
-  --schedule-slot-hover-color: #f8fafc;
-  box-shadow: 0 16px 28px -16px rgba(5, 150, 105, 0.5);
-}
-
-.schedule-slot--selected .bi,
-.schedule-slot--selected i,
-.schedule-slot--selected svg {
-  color: inherit;
 }
 
 @media (max-width: 576px) {

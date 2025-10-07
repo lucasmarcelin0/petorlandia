@@ -487,8 +487,8 @@
                               </div>
                             </div>
                             <div class="btn-group">
-                              <a href="{{ url_for('ficha_animal', animal_id=appt.animal_id) }}" class="schedule-action-btn schedule-action-btn--primary schedule-action-btn--sm"><i class="fas fa-file-medical me-1"></i>Ficha</a>
-                              <a href="{{ url_for('ficha_tutor', tutor_id=appt.animal.owner.id) }}" class="schedule-action-btn schedule-action-btn--muted schedule-action-btn--sm"><i class="fas fa-user me-1"></i>Tutor</a>
+                              <a href="{{ url_for('ficha_animal', animal_id=appt.animal_id) }}" class="btn btn-sm btn-outline-primary"><i class="fas fa-file-medical me-1"></i>Ficha</a>
+                              <a href="{{ url_for('ficha_tutor', tutor_id=appt.animal.owner.id) }}" class="btn btn-sm btn-outline-secondary"><i class="fas fa-user me-1"></i>Tutor</a>
                             </div>
                           </div>
                         </div>
@@ -539,9 +539,9 @@
                               </div>
                             </div>
                             <div class="btn-group">
-                              <a href="{{ url_for('ficha_animal', animal_id=appt.animal_id) }}" class="schedule-action-btn schedule-action-btn--primary schedule-action-btn--sm"><i class="fas fa-file-medical me-1"></i>Ficha</a>
-                              <a href="{{ url_for('ficha_tutor', tutor_id=appt.tutor_id) }}" class="schedule-action-btn schedule-action-btn--muted schedule-action-btn--sm"><i class="fas fa-user me-1"></i>Tutor</a>
-                              <a href="{{ url_for('consulta_direct', animal_id=appt.animal_id, appointment_id=appt.id) }}" class="schedule-action-btn schedule-action-btn--success schedule-action-btn--sm"><i class="fas fa-play-circle me-1"></i>Iniciar</a>
+                              <a href="{{ url_for('ficha_animal', animal_id=appt.animal_id) }}" class="btn btn-sm btn-outline-primary"><i class="fas fa-file-medical me-1"></i>Ficha</a>
+                              <a href="{{ url_for('ficha_tutor', tutor_id=appt.tutor_id) }}" class="btn btn-sm btn-outline-secondary"><i class="fas fa-user me-1"></i>Tutor</a>
+                              <a href="{{ url_for('consulta_direct', animal_id=appt.animal_id, appointment_id=appt.id) }}" class="btn btn-sm btn-outline-success"><i class="fas fa-play-circle me-1"></i>Iniciar</a>
                             </div>
                           </div>
                         </div>
@@ -606,8 +606,8 @@
                             </div>
                             <div class="d-flex flex-column align-items-end gap-2">
                               <div class="btn-group">
-                                <a href="{{ url_for('ficha_animal', animal_id=appt.animal_id) }}" class="schedule-action-btn schedule-action-btn--primary schedule-action-btn--sm"><i class="fas fa-file-medical me-1"></i>Ficha</a>
-                                <a href="{{ url_for('ficha_tutor', tutor_id=appt.tutor_id) }}" class="schedule-action-btn schedule-action-btn--muted schedule-action-btn--sm"><i class="fas fa-user me-1"></i>Tutor</a>
+                                <a href="{{ url_for('ficha_animal', animal_id=appt.animal_id) }}" class="btn btn-sm btn-outline-primary"><i class="fas fa-file-medical me-1"></i>Ficha</a>
+                                <a href="{{ url_for('ficha_tutor', tutor_id=appt.tutor_id) }}" class="btn btn-sm btn-outline-secondary"><i class="fas fa-user me-1"></i>Tutor</a>
                               </div>
                               <span class="badge bg-success"><i class="fas fa-check me-1"></i>{{ status_label }}</span>
                             </div>
@@ -673,13 +673,13 @@
                           </div>
                           <div class="d-flex flex-column align-items-end gap-2">
                             <div class="btn-group">
-                              <a href="{{ url_for('ficha_animal', animal_id=animal.id) }}" class="schedule-action-btn schedule-action-btn--primary schedule-action-btn--sm"><i class="fas fa-file-medical me-1"></i>Ficha</a>
+                              <a href="{{ url_for('ficha_animal', animal_id=animal.id) }}" class="btn btn-sm btn-outline-primary"><i class="fas fa-file-medical me-1"></i>Ficha</a>
                               {% if tutor %}
-                              <a href="{{ url_for('ficha_tutor', tutor_id=tutor.id) }}" class="schedule-action-btn schedule-action-btn--muted schedule-action-btn--sm"><i class="fas fa-user me-1"></i>Tutor</a>
+                              <a href="{{ url_for('ficha_tutor', tutor_id=tutor.id) }}" class="btn btn-sm btn-outline-secondary"><i class="fas fa-user me-1"></i>Tutor</a>
                               {% endif %}
-                              <a href="{{ url_for('consulta_direct', animal_id=animal.id, c=consulta.id) }}" class="schedule-action-btn schedule-action-btn--success schedule-action-btn--sm"><i class="fas fa-stethoscope me-1"></i>Detalhes</a>
+                              <a href="{{ url_for('consulta_direct', animal_id=animal.id, c=consulta.id) }}" class="btn btn-sm btn-outline-success"><i class="fas fa-stethoscope me-1"></i>Detalhes</a>
                             </div>
-                            <a href="{{ url_for('imprimir_consulta', consulta_id=consulta.id) }}" class="schedule-action-btn schedule-action-btn--dark schedule-action-btn--sm" target="_blank"><i class="fas fa-print me-1"></i>Imprimir consulta</a>
+                            <a href="{{ url_for('imprimir_consulta', consulta_id=consulta.id) }}" class="btn btn-sm btn-outline-dark" target="_blank"><i class="fas fa-print me-1"></i>Imprimir consulta</a>
                           </div>
                         </div>
                       </div>
@@ -695,11 +695,11 @@
                             <span class="badge bg-secondary mt-1">Consulta aceita e não finalizada</span>
                           </div>
                           <div class="btn-group">
-                            <a href="{{ url_for('ficha_animal', animal_id=animal.id) }}" class="schedule-action-btn schedule-action-btn--primary schedule-action-btn--sm"><i class="fas fa-file-medical me-1"></i>Ficha</a>
+                            <a href="{{ url_for('ficha_animal', animal_id=animal.id) }}" class="btn btn-sm btn-outline-primary"><i class="fas fa-file-medical me-1"></i>Ficha</a>
                             {% if tutor %}
-                            <a href="{{ url_for('ficha_tutor', tutor_id=tutor.id) }}" class="schedule-action-btn schedule-action-btn--muted schedule-action-btn--sm"><i class="fas fa-user me-1"></i>Tutor</a>
+                            <a href="{{ url_for('ficha_tutor', tutor_id=tutor.id) }}" class="btn btn-sm btn-outline-secondary"><i class="fas fa-user me-1"></i>Tutor</a>
                             {% endif %}
-                            <a href="{{ url_for('consulta_direct', animal_id=animal.id, appointment_id=appt.id) }}" class="schedule-action-btn schedule-action-btn--success schedule-action-btn--sm"><i class="fas fa-play-circle me-1"></i>Iniciar</a>
+                            <a href="{{ url_for('consulta_direct', animal_id=animal.id, appointment_id=appt.id) }}" class="btn btn-sm btn-outline-success"><i class="fas fa-play-circle me-1"></i>Iniciar</a>
                           </div>
                         </div>
                       </div>
@@ -726,11 +726,11 @@
                           <small class="text-muted d-block">Consulta de origem: #{{ event.consulta_id }}</small>
                         </div>
                         <div class="btn-group">
-                          <a href="{{ url_for('ficha_animal', animal_id=animal.id) }}" class="schedule-action-btn schedule-action-btn--primary schedule-action-btn--sm"><i class="fas fa-file-medical me-1"></i>Ficha</a>
+                          <a href="{{ url_for('ficha_animal', animal_id=animal.id) }}" class="btn btn-sm btn-outline-primary"><i class="fas fa-file-medical me-1"></i>Ficha</a>
                           {% if tutor %}
-                          <a href="{{ url_for('ficha_tutor', tutor_id=tutor.id) }}" class="schedule-action-btn schedule-action-btn--muted schedule-action-btn--sm"><i class="fas fa-user me-1"></i>Tutor</a>
+                          <a href="{{ url_for('ficha_tutor', tutor_id=tutor.id) }}" class="btn btn-sm btn-outline-secondary"><i class="fas fa-user me-1"></i>Tutor</a>
                           {% endif %}
-                          <a href="{{ url_for('consulta_direct', animal_id=animal.id, appointment_id=appt.id) }}" class="schedule-action-btn schedule-action-btn--success schedule-action-btn--sm"><i class="fas fa-redo me-1"></i>Abrir retorno</a>
+                          <a href="{{ url_for('consulta_direct', animal_id=animal.id, appointment_id=appt.id) }}" class="btn btn-sm btn-outline-success"><i class="fas fa-redo me-1"></i>Abrir retorno</a>
                         </div>
                       </div>
                     </div>
@@ -758,9 +758,9 @@
                           <small class="text-muted d-block">Status: {{ exam.status_display }}</small>
                         </div>
                         <div class="btn-group">
-                          <a href="{{ url_for('ficha_animal', animal_id=animal.id) }}" class="schedule-action-btn schedule-action-btn--primary schedule-action-btn--sm"><i class="fas fa-file-medical me-1"></i>Ficha</a>
+                          <a href="{{ url_for('ficha_animal', animal_id=animal.id) }}" class="btn btn-sm btn-outline-primary"><i class="fas fa-file-medical me-1"></i>Ficha</a>
                           {% if tutor %}
-                          <a href="{{ url_for('ficha_tutor', tutor_id=tutor.id) }}" class="schedule-action-btn schedule-action-btn--muted schedule-action-btn--sm"><i class="fas fa-user me-1"></i>Tutor</a>
+                          <a href="{{ url_for('ficha_tutor', tutor_id=tutor.id) }}" class="btn btn-sm btn-outline-secondary"><i class="fas fa-user me-1"></i>Tutor</a>
                           {% endif %}
                         </div>
                       </div>
@@ -801,7 +801,7 @@
               <div class="card-header bg-light d-flex justify-content-between align-items-center">
                 <h5 class="mb-0"><i class="fas fa-business-time me-2"></i>Horários Cadastrados</h5>
                 <button
-                  class="schedule-action-btn schedule-action-btn--primary schedule-action-btn--sm"
+                  class="btn btn-sm btn-outline-primary"
                   data-schedule-edit-toggle
                   onclick="toggleScheduleEdit()"
                 >
@@ -831,7 +831,7 @@
                     <div class="d-flex justify-content-end gap-2">
                       <button
                         type="button"
-                        class="schedule-action-btn schedule-action-btn--muted"
+                        class="btn btn-outline-secondary"
                         onclick="toggleScheduleForm('close-inline')"
                       >
                         Cancelar
@@ -866,7 +866,7 @@
                               <div class="schedule-actions d-none">
                                 <button
                                   type="button"
-                                  class="schedule-action-btn schedule-action-btn--primary schedule-action-btn--sm edit-btn"
+                                  class="btn btn-sm btn-outline-primary edit-btn"
                                   data-id="{{ h.id }}"
                                   data-dia="{{ h.dia_semana }}"
                                   data-hora-inicio="{{ h.hora_inicio.strftime('%H:%M') }}"
@@ -885,7 +885,7 @@
                                   {{ schedule_form.csrf_token }}
                                   <button
                                     type="submit"
-                                    class="schedule-action-btn schedule-action-btn--danger schedule-action-btn--sm"
+                                    class="btn btn-sm btn-outline-danger"
                                     onclick="return confirm('Excluir este horário?');"
                                   >
                                     <i class="fas fa-trash"></i>
@@ -982,7 +982,8 @@
                 data-schedule-summary
                 aria-live="polite"
               >
-                Carregando agenda do profissional...
+                <i class="bi bi-info-circle"></i>
+                <span data-schedule-summary-label>Carregando agenda do profissional...</span>
               </span>
             </div>
             <div class="d-flex flex-wrap align-items-center gap-2 ms-lg-auto">
@@ -1026,6 +1027,7 @@
                 <button type="button" class="schedule-action-btn schedule-action-btn--muted schedule-action-btn--sm" data-schedule-week-prev>
                   <i class="bi bi-chevron-left"></i>
                   <span class="d-none d-sm-inline">Semana anterior</span>
+                  <span class="d-sm-none">Anterior</span>
                 </button>
                 <button type="button" class="schedule-action-btn schedule-action-btn--primary schedule-action-btn--sm" data-schedule-week-today>
                   <i class="bi bi-calendar-week"></i>
@@ -1034,6 +1036,7 @@
                 </button>
                 <button type="button" class="schedule-action-btn schedule-action-btn--muted schedule-action-btn--sm" data-schedule-week-next>
                   <span class="d-none d-sm-inline">Próxima semana</span>
+                  <span class="d-sm-none">Próxima</span>
                   <i class="bi bi-chevron-right"></i>
                 </button>
               </div>
@@ -1201,9 +1204,9 @@
           </div>
         </div>
         <div class="modal-footer">
-          <a id="modal-animal-link" class="schedule-action-btn schedule-action-btn--primary" target="_blank"><i class="fas fa-file-medical me-1"></i>Ficha Animal</a>
-          <a id="modal-tutor-link" class="schedule-action-btn schedule-action-btn--muted" target="_blank"><i class="fas fa-user me-1"></i>Ficha Tutor</a>
-          <a id="modal-consulta-link" class="schedule-action-btn schedule-action-btn--success" target="_blank"><i class="fas fa-play-circle me-1"></i>Iniciar Consulta</a>
+          <a id="modal-animal-link" class="btn btn-outline-primary" target="_blank"><i class="fas fa-file-medical me-1"></i>Ficha Animal</a>
+          <a id="modal-tutor-link" class="btn btn-outline-secondary" target="_blank"><i class="fas fa-user me-1"></i>Ficha Tutor</a>
+          <a id="modal-consulta-link" class="btn btn-outline-success" target="_blank"><i class="fas fa-play-circle me-1"></i>Iniciar Consulta</a>
           <button type="button" class="btn btn-primary" id="modal-save-btn">Salvar Alterações</button>
         </div>
       </div>
@@ -1243,7 +1246,7 @@
               </div>
               <button
                 type="button"
-                class="schedule-action-btn schedule-action-btn--muted schedule-action-btn--sm w-100 w-lg-auto mt-2 mt-lg-0"
+                class="btn btn-outline-secondary btn-sm w-100 w-lg-auto mt-2 mt-lg-0"
                 id="exam-requester-apply-default"
               >
                 <i class="bi bi-arrow-clockwise me-1"></i>Aplicar padrão
@@ -1260,7 +1263,7 @@
           </div>
         </div>
         <div class="modal-footer">
-          <button type="button" class="schedule-action-btn schedule-action-btn--muted" data-bs-dismiss="modal">Fechar</button>
+          <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Fechar</button>
           <button type="button" class="btn btn-primary" id="exam-requester-save">Salvar alterações</button>
         </div>
       </div>
@@ -1361,8 +1364,6 @@
             label.textContent = visible ? hideLabel : showLabel;
           }
 
-          filterToggle.classList.toggle('schedule-action-btn--primary', visible);
-          filterToggle.classList.toggle('schedule-action-btn--muted', !visible);
           filterToggle.classList.toggle('is-active', visible);
         };
 
@@ -1513,8 +1514,6 @@
       const setActiveRange = (range) => {
         quickButtons.forEach((button) => {
           const isActive = button.dataset.range === range;
-          button.classList.toggle('schedule-action-btn--primary', isActive);
-          button.classList.toggle('schedule-action-btn--muted', !isActive);
           button.classList.toggle('is-active', isActive);
           button.classList.toggle('active', isActive);
           button.setAttribute('aria-pressed', isActive ? 'true' : 'false');

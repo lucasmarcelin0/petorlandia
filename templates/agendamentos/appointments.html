@@ -144,7 +144,8 @@
                 data-schedule-summary
                 aria-live="polite"
               >
-                Selecione um profissional para visualizar a agenda.
+                <i class="bi bi-info-circle"></i>
+                <span data-schedule-summary-label>Selecione um profissional para visualizar a agenda.</span>
               </span>
             </div>
             <div class="d-flex flex-wrap align-items-center gap-2 ms-lg-auto">
@@ -193,6 +194,7 @@
                 >
                   <i class="bi bi-chevron-left"></i>
                   <span class="d-none d-sm-inline">Semana anterior</span>
+                  <span class="d-sm-none">Anterior</span>
                 </button>
                 <button
                   type="button"
@@ -211,6 +213,7 @@
                   aria-label="Próxima semana"
                 >
                   <span class="d-none d-sm-inline">Próxima semana</span>
+                  <span class="d-sm-none">Próxima</span>
                   <i class="bi bi-chevron-right"></i>
                 </button>
               </div>
@@ -358,7 +361,7 @@
                 </div>
                 <div class="mt-4">
                   <button
-                    class="schedule-action-btn schedule-action-btn--muted schedule-action-btn--sm"
+                    class="btn btn-outline-secondary btn-sm d-inline-flex align-items-center gap-2"
                     type="button"
                     data-bs-toggle="collapse"
                     data-bs-target="#scheduleIntervalCollapse"
@@ -408,7 +411,7 @@
           <i class="bi bi-shield-check me-1"></i>Alterações salvas atualizam instantaneamente o portal de agendamentos.
         </div>
         <div class="d-flex gap-2">
-          <button type="button" class="schedule-action-btn schedule-action-btn--muted" data-bs-dismiss="modal">Cancelar</button>
+          <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
           <button
             type="submit"
             form="schedule-edit-form"
@@ -469,6 +472,9 @@ document.addEventListener('DOMContentLoaded', () => {
   const scheduleCollapseEl = document.getElementById('scheduleOverviewCollapse');
   const scheduleToggleBtn = document.querySelector('[data-bs-target="#scheduleOverviewCollapse"]');
   const scheduleSummaryEl = document.querySelector('[data-schedule-summary]');
+  const scheduleSummaryLabelEl = scheduleSummaryEl
+    ? scheduleSummaryEl.querySelector('[data-schedule-summary-label]')
+    : null;
   const scheduleWeekLabelEl = document.querySelector('[data-schedule-week-label]');
   const schedulePeriodFilter = document.querySelector('[data-schedule-period-filter]');
   const scheduleWeekPrevBtn = document.querySelector('[data-schedule-week-prev]');
@@ -514,9 +520,11 @@ document.addEventListener('DOMContentLoaded', () => {
       currentVetId = String(initialVetSelect.value).trim();
     }
   }
-  const defaultScheduleSummary = scheduleSummaryEl
-    ? scheduleSummaryEl.textContent.trim()
-    : 'Selecione um profissional para visualizar a agenda.';
+  const defaultScheduleSummary = scheduleSummaryLabelEl
+    ? scheduleSummaryLabelEl.textContent.trim()
+    : scheduleSummaryEl
+      ? scheduleSummaryEl.textContent.trim()
+      : 'Selecione um profissional para visualizar a agenda.';
   const defaultWeekLabel = scheduleWeekLabelEl
     ? scheduleWeekLabelEl.textContent.trim()
     : 'Aguardando seleção de profissional.';
@@ -948,7 +956,11 @@ document.addEventListener('DOMContentLoaded', () => {
       if (!scheduleSummaryEl) {
         return;
       }
-      scheduleSummaryEl.textContent = message;
+      if (scheduleSummaryLabelEl) {
+        scheduleSummaryLabelEl.textContent = message;
+      } else {
+        scheduleSummaryEl.textContent = message;
+      }
     }
 
     function setScheduleWeekLabel(message) {
@@ -1020,7 +1032,7 @@ document.addEventListener('DOMContentLoaded', () => {
     function createSlotButton(time, status, { date }) {
       const button = document.createElement('button');
       button.type = 'button';
-      button.className = 'schedule-slot flex-shrink-0';
+      button.className = 'btn btn-sm rounded-pill d-inline-flex align-items-center gap-1 schedule-slot flex-shrink-0';
       button.dataset.scheduleSlot = time;
       button.dataset.scheduleDate = date;
       button.dataset.scheduleStatus = status;
@@ -1028,19 +1040,19 @@ document.addEventListener('DOMContentLoaded', () => {
       let iconClass = 'bi-clock';
       if (status === 'available') {
         iconClass = 'bi-check-circle';
-        button.classList.add('schedule-slot--available');
+        button.classList.add('btn-outline-success');
         button.setAttribute('aria-pressed', 'false');
         button.dataset.schedulePeriod = getPeriodFromTime(time);
         button.title = 'Selecionar horário disponível';
       } else if (status === 'booked') {
         iconClass = 'bi-x-circle';
-        button.classList.add('schedule-slot--booked');
+        button.classList.add('btn-outline-danger', 'opacity-75');
         button.disabled = true;
         button.setAttribute('aria-disabled', 'true');
         button.title = 'Horário indisponível';
       } else {
         iconClass = 'bi-slash-circle';
-        button.classList.add('schedule-slot--blocked');
+        button.classList.add('btn-outline-secondary', 'opacity-75');
         button.disabled = true;
         button.setAttribute('aria-disabled', 'true');
         button.title = 'Fora do expediente';
@@ -1073,7 +1085,9 @@ document.addEventListener('DOMContentLoaded', () => {
           return;
         }
         const isSelected = selectedScheduleSlotKey === button.dataset.scheduleSlotKey;
-        button.classList.toggle('schedule-slot--selected', isSelected);
+        button.classList.toggle('btn-outline-success', !isSelected);
+        button.classList.toggle('btn-success', isSelected);
+        button.classList.toggle('text-white', isSelected);
         button.setAttribute('aria-pressed', isSelected ? 'true' : 'false');
       });
       const cards = scheduleContainer.querySelectorAll('[data-schedule-day]');

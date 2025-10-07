@@ -732,6 +732,9 @@ function initScheduleOverview(root) {
   const dateField = document.getElementById('appointment-date');
   const timeSelect = document.getElementById('appointment-time');
   const summaryBadge = document.querySelector('[data-schedule-summary]');
+  const summaryBadgeLabel = summaryBadge
+    ? summaryBadge.querySelector('[data-schedule-summary-label]')
+    : null;
   const weekLabel = document.querySelector('[data-schedule-week-label]');
   const periodFilter = document.querySelector('[data-schedule-period-filter]');
   const collapseEl = document.getElementById('scheduleOverviewCollapse');
@@ -765,6 +768,34 @@ function initScheduleOverview(root) {
     selectedSlotKey: '',
     todayIso: new Date().toISOString().split('T')[0]
   };
+
+  const summaryBadgeVariants = [
+    'schedule-chip--subtle',
+    'schedule-chip--muted',
+    'schedule-chip--success',
+    'schedule-chip--warning',
+    'schedule-chip--danger',
+    'schedule-chip--info'
+  ];
+
+  function setSummaryBadge(message, variant = 'subtle') {
+    if (!summaryBadge) {
+      return;
+    }
+    summaryBadge.classList.remove(...summaryBadgeVariants);
+    if (variant) {
+      summaryBadge.classList.add(`schedule-chip--${variant}`);
+    }
+    if (summaryBadgeLabel) {
+      summaryBadgeLabel.textContent = message;
+    } else {
+      summaryBadge.textContent = message;
+    }
+  }
+
+  function clearSummaryBadge() {
+    setSummaryBadge('', 'subtle');
+  }
 
   function resolveInitialVetId() {
     const datasetId = (root?.dataset?.vetId || '').trim();
@@ -858,11 +889,7 @@ function initScheduleOverview(root) {
       });
       state.selectedSlotKey = '';
       setScheduleTitleVetName(newVetId);
-      if (summaryBadge) {
-        summaryBadge.textContent = '';
-        summaryBadge.classList.remove('text-bg-success', 'text-bg-warning');
-        summaryBadge.classList.add('text-bg-light');
-      }
+      clearSummaryBadge();
       if (weekLabel) {
         weekLabel.textContent = '';
       }
@@ -972,10 +999,8 @@ function initScheduleOverview(root) {
     if (!summaryBadge) {
       return;
     }
-    summaryBadge.classList.remove('text-bg-light', 'text-bg-success', 'text-bg-warning');
-    summaryBadge.classList.add('text-bg-light');
     if (!Array.isArray(days) || !days.length) {
-      summaryBadge.textContent = 'Sem horários disponíveis para o período selecionado.';
+      setSummaryBadge('Sem horários disponíveis para o período selecionado.', 'muted');
       return;
     }
     const now = new Date();
@@ -1005,14 +1030,10 @@ function initScheduleOverview(root) {
     }
     if (nextSlot) {
       const formattedDate = longFormatter.format(new Date(`${nextSlot.date}T00:00:00`));
-      summaryBadge.textContent = `Próximo horário livre: ${formattedDate} às ${nextSlot.time}`;
-      summaryBadge.classList.remove('text-bg-light');
-      summaryBadge.classList.add('text-bg-success');
-    } else {
-      summaryBadge.textContent = 'Sem horários livres nesta semana.';
-      summaryBadge.classList.remove('text-bg-light');
-      summaryBadge.classList.add('text-bg-warning');
+      setSummaryBadge(`Próximo horário livre: ${formattedDate} às ${nextSlot.time}`, 'success');
+      return;
     }
+    setSummaryBadge('Sem horários livres nesta semana.', 'warning');
   }
 
   function setWeekLabel(days) {
@@ -1214,11 +1235,7 @@ function initScheduleOverview(root) {
     if (!activeVetId) {
       state.days = [];
       setScheduleEmptyState('Selecione um profissional para visualizar a agenda.');
-      if (summaryBadge) {
-        summaryBadge.textContent = 'Selecione um profissional para visualizar os horários.';
-        summaryBadge.classList.remove('text-bg-success', 'text-bg-warning');
-        summaryBadge.classList.add('text-bg-light');
-      }
+      setSummaryBadge('Selecione um profissional para visualizar os horários.', 'subtle');
       if (weekLabel) {
         weekLabel.textContent = 'Selecione um profissional para visualizar a agenda.';
       }
@@ -1243,11 +1260,7 @@ function initScheduleOverview(root) {
       console.warn('Não foi possível carregar os horários disponíveis.', error);
       state.days = [];
       setScheduleEmptyState('Não foi possível carregar a agenda no momento. Tente novamente.', 'danger');
-      if (summaryBadge) {
-        summaryBadge.classList.remove('text-bg-success');
-        summaryBadge.classList.add('text-bg-warning');
-        summaryBadge.textContent = 'Erro ao carregar agenda.';
-      }
+      setSummaryBadge('Erro ao carregar agenda.', 'danger');
       if (weekLabel) {
         weekLabel.textContent = 'Erro ao carregar agenda.';
       }
