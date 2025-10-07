@@ -371,6 +371,131 @@ function isEvent(value) {
   return value && typeof value === 'object' && 'target' in value;
 }
 
+function getDaySelectionFeedbackElement(selectEl) {
+  if (!selectEl) {
+    return null;
+  }
+  const form = selectEl.closest('form');
+  if (form) {
+    const scoped = form.querySelector('[data-schedule-day-feedback]');
+    if (scoped) {
+      return scoped;
+    }
+  }
+  return document.querySelector('[data-schedule-day-feedback]');
+}
+
+function formatSelectedDaysMessage(selectedOptions) {
+  if (!Array.isArray(selectedOptions) || selectedOptions.length === 0) {
+    return 'Nenhum dia selecionado.';
+  }
+  const names = selectedOptions.map((option) => option.textContent || option.value).filter(Boolean);
+  const joined = names.join(', ');
+  if (selectedOptions.length === 1) {
+    return `1 dia selecionado: ${joined}.`;
+  }
+  return `Dias selecionados (${selectedOptions.length}): ${joined}.`;
+}
+
+function updateDaySelectionFeedback(selectEl) {
+  if (!selectEl) {
+    return;
+  }
+  const feedbackEl = getDaySelectionFeedbackElement(selectEl);
+  if (!feedbackEl) {
+    return;
+  }
+  const selectedOptions = Array.from(selectEl.selectedOptions || []);
+  feedbackEl.textContent = formatSelectedDaysMessage(selectedOptions);
+}
+
+function bindDaySelectionFeedback(selectEl) {
+  if (!selectEl || selectEl.dataset.scheduleDayFeedbackBound === 'true') {
+    return;
+  }
+  selectEl.dataset.scheduleDayFeedbackBound = 'true';
+  selectEl.addEventListener('change', () => updateDaySelectionFeedback(selectEl));
+  updateDaySelectionFeedback(selectEl);
+}
+
+function parseDatasetDays(dataset) {
+  const values = new Set();
+  if (!dataset) {
+    return values;
+  }
+  const addValue = (value) => {
+    if (!value) {
+      return;
+    }
+    const normalized = value.toString().trim();
+    if (normalized) {
+      values.add(normalized);
+    }
+  };
+  const potentialKeys = ['dias', 'diasSemana', 'diasSelecionados'];
+  potentialKeys.forEach((key) => {
+    const raw = dataset[key];
+    if (!raw) {
+      return;
+    }
+    if (Array.isArray(raw)) {
+      raw.forEach(addValue);
+      return;
+    }
+    const text = raw.toString().trim();
+    if (!text) {
+      return;
+    }
+    if (text.startsWith('[') || text.startsWith('{')) {
+      try {
+        const parsed = JSON.parse(text);
+        if (Array.isArray(parsed)) {
+          parsed.forEach(addValue);
+          return;
+        }
+      } catch (error) {
+        console.warn('Não foi possível interpretar os dias do dataset.', error);
+      }
+    }
+    text.split(/[;,]/).forEach((part) => addValue(part));
+  });
+  if (dataset.dia) {
+    addValue(dataset.dia);
+  }
+  return values;
+}
+
+function findMatchingScheduleDays(dataset, rootParam) {
+  const values = new Set();
+  if (!dataset) {
+    return values;
+  }
+  const root = getRootElement(rootParam) || document;
+  const normalize = (value) => (value ?? '').toString().trim();
+  const reference = {
+    start: normalize(dataset.horaInicio),
+    end: normalize(dataset.horaFim),
+    intervalStart: normalize(dataset.intervaloInicio),
+    intervalEnd: normalize(dataset.intervaloFim)
+  };
+  const buttons = root.querySelectorAll('.schedule-actions .edit-btn[data-vet-schedule-bound]');
+  buttons.forEach((button) => {
+    const btnData = button.dataset || {};
+    if (
+      normalize(btnData.horaInicio) === reference.start
+      && normalize(btnData.horaFim) === reference.end
+      && normalize(btnData.intervaloInicio) === reference.intervalStart
+      && normalize(btnData.intervaloFim) === reference.intervalEnd
+    ) {
+      const day = normalize(btnData.dia);
+      if (day) {
+        values.add(day);
+      }
+    }
+  });
+  return values;
+}
+
 export function selectDays(mode, selectEl = document.getElementById('schedule-dias_semana')) {
   if (isEvent(mode)) {
     mode.preventDefault();
@@ -393,6 +518,7 @@ export function selectDays(mode, selectEl = document.getElementById('schedule-di
     }
   });
   selectEl.dispatchEvent(new Event('change'));
+  updateDaySelectionFeedback(selectEl);
 }
 
 function resetScheduleForm(root) {
@@ -412,6 +538,8 @@ function resetScheduleForm(root) {
 
   if (daysSelect) {
     daysSelect.multiple = true;
+    bindDaySelectionFeedback(daysSelect);
+    updateDaySelectionFeedback(daysSelect);
   }
 
   if (titleEl) {
@@ -643,11 +771,17 @@ export function editSchedule(dataset, rootParam) {
   }
 
   if (daysSelect) {
-    daysSelect.multiple = false;
-    const targetDay = dataset?.dia;
+    daysSelect.multiple = true;
+    bindDaySelectionFeedback(daysSelect);
+    const selectedDays = parseDatasetDays(dataset);
+    if (selectedDays.size <= 1) {
+      findMatchingScheduleDays(dataset, root).forEach((day) => selectedDays.add(day));
+    }
+    const daysArray = Array.from(selectedDays);
     Array.from(daysSelect.options).forEach((option) => {
-      option.selected = option.value === targetDay;
+      option.selected = daysArray.includes(option.value);
     });
+    updateDaySelectionFeedback(daysSelect);
   }
 
   if (startField && dataset?.horaInicio) {

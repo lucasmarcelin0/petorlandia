@@ -6,6 +6,12 @@
 <div class="mb-3">
   {{ schedule_form.dias_semana.label(class="form-label fw-semibold") }}
   {{ schedule_form.dias_semana(class="form-select", multiple=True, size=7) }}
+  <div class="form-text text-muted" data-schedule-day-help>
+    Selecione um ou mais dias (use Ctrl/Cmd para seleção múltipla).
+  </div>
+  <div class="form-text" data-schedule-day-feedback>
+    Nenhum dia selecionado.
+  </div>
   <div class="mt-2 d-flex gap-2 flex-wrap">
     <button type="button" class="btn btn-sm btn-outline-secondary" onclick="selectDays('all')">Todos</button>
     <button type="button" class="btn btn-sm btn-outline-secondary" onclick="selectDays('weekday')">Dias úteis</button>
