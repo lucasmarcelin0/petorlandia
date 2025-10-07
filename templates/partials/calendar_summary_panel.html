@@ -1,8 +1,8 @@
 {% set summary_title = summary_title|default('Resumo por profissional') %}
 {% set summary_description = summary_description|default('Totais diários e semanais por veterinário com base no calendário visível.') %}
-{% set summary_vets = calendar_summary_vets|default([], true) %}
-{% set summary_clinic_ids = calendar_summary_clinic_ids|default([], true) %}
-{% set summary_storage_key = calendar_summary_storage_key|default('', true) %}
+{% set summary_vets = calendar_summary_vets %}
+{% set summary_clinic_ids = calendar_summary_clinic_ids %}
+{% set summary_storage_key = calendar_summary_storage_key %}
 <div
   class="card calendar-summary-card border-0 shadow-sm h-100 is-loading"
   data-calendar-summary-panel

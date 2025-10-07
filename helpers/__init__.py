@@ -11,6 +11,8 @@ from dateutil.relativedelta import relativedelta
 from sqlalchemy import case
 from zoneinfo import ZoneInfo
 
+from .calendar_summary import serialize_vet_for_summary
+
 
 BR_TZ = ZoneInfo("America/Sao_Paulo")
 
@@ -446,6 +448,22 @@ def appointment_to_event(appointment):
         'notes': getattr(appointment, 'notes', None),
     }
 
+    summary_entry = serialize_vet_for_summary(
+        vet,
+        clinic_ids=[getattr(appointment, 'clinica_id', None)],
+    )
+    if summary_entry:
+        extra_props.setdefault('vetName', summary_entry.get('label'))
+        if summary_entry.get('full_name'):
+            extra_props['vetFullName'] = summary_entry['full_name']
+        if summary_entry.get('specialty_text') is not None:
+            extra_props['vetSpecialtyList'] = summary_entry['specialty_text']
+            extra_props['vetSummarySpecialtyText'] = summary_entry['specialty_text']
+        extra_props['vetLabel'] = summary_entry.get('label')
+        extra_props['vetInitials'] = summary_entry.get('initials')
+        extra_props['vetSummaryIsSpecialist'] = summary_entry.get('is_specialist')
+        extra_props['vetIsSpecialist'] = summary_entry.get('is_specialist')
+
     consulta = getattr(appointment, 'consulta', None)
     if consulta:
         extra_props.update(
@@ -493,6 +511,22 @@ def exam_to_event(exam):
         'vetSpecialtyList': specialist_specialties,
         'vetIsSpecialist': bool(specialist),
     }
+
+    summary_entry = serialize_vet_for_summary(
+        specialist,
+        clinic_ids=[getattr(exam, 'clinica_id', None)],
+    )
+    if summary_entry:
+        extra_props.setdefault('vetName', summary_entry.get('label'))
+        if summary_entry.get('full_name'):
+            extra_props['vetFullName'] = summary_entry['full_name']
+        if summary_entry.get('specialty_text') is not None:
+            extra_props['vetSpecialtyList'] = summary_entry['specialty_text']
+            extra_props['vetSummarySpecialtyText'] = summary_entry['specialty_text']
+        extra_props['vetLabel'] = summary_entry.get('label')
+        extra_props['vetInitials'] = summary_entry.get('initials')
+        extra_props['vetSummaryIsSpecialist'] = summary_entry.get('is_specialist')
+        extra_props['vetIsSpecialist'] = summary_entry.get('is_specialist')
 
     return _build_calendar_event(
         event_id=f"exam-{exam.id}",
@@ -589,6 +623,22 @@ def consulta_to_event(consulta):
         'clinicaNome': getattr(clinic, 'nome', None) if clinic else None,
         'kind': 'consulta',
     }
+
+    summary_entry = serialize_vet_for_summary(
+        vet_profile,
+        clinic_ids=[getattr(consulta, 'clinica_id', None)],
+    )
+    if summary_entry:
+        extra_props.setdefault('vetName', summary_entry.get('label'))
+        if summary_entry.get('full_name'):
+            extra_props['vetFullName'] = summary_entry['full_name']
+        if summary_entry.get('specialty_text') is not None:
+            extra_props['vetSpecialtyList'] = summary_entry['specialty_text']
+            extra_props['vetSummarySpecialtyText'] = summary_entry['specialty_text']
+        extra_props['vetLabel'] = summary_entry.get('label')
+        extra_props['vetInitials'] = summary_entry.get('initials')
+        extra_props['vetSummaryIsSpecialist'] = summary_entry.get('is_specialist')
+        extra_props['vetIsSpecialist'] = summary_entry.get('is_specialist')
 
     if tutor is None and animal and getattr(animal, 'owner', None):
         extra_props['tutorName'] = getattr(animal.owner, 'name', None)

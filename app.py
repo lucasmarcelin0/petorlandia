@@ -290,6 +290,7 @@ from helpers import (
     get_weekly_schedule,
     get_appointment_duration,
     has_conflict_for_slot,
+    serialize_vet_for_summary,
 )
 from services import get_calendar_access_scope
 
@@ -3739,47 +3740,24 @@ def vet_detail(veterinario_id):
     )
     calendar_summary_vets = []
     calendar_summary_clinic_ids = []
+    clinic_ids: set[int] = set()
+    summary_seen_ids: set[int] = set()
 
-    def build_calendar_summary_entry(vet, *, label=None, is_specialist=None):
-        """Return a serializable mapping with vet summary metadata."""
-        if not vet:
-            return None
-        vet_id = getattr(vet, 'id', None)
-        if not vet_id:
-            return None
-        vet_user = getattr(vet, 'user', None)
-        vet_name = getattr(vet_user, 'name', None)
-        specialty_list = getattr(vet, 'specialty_list', None)
-        entry = {
-            'id': vet_id,
-            'name': label if label is not None else vet_name,
-            'full_name': vet_name,
-            'specialty_list': specialty_list,
-        }
-        if label is not None:
-            entry['label'] = label
-        if is_specialist is None:
-            is_specialist = bool(specialty_list)
-        entry['is_specialist'] = bool(is_specialist)
-        return entry
-
-    def add_summary_vet(vet, *, label=None, is_specialist=None):
-        if not vet:
+    def add_summary_vet(vet, *, label=None, force_specialist=False):
+        entry = serialize_vet_for_summary(vet, label=label, clinic_ids=clinic_ids)
+        if not entry:
             return
-        vet_id = getattr(vet, 'id', None)
-        if not vet_id:
+        vet_id = entry.get('id')
+        if vet_id in summary_seen_ids:
             return
-        if any(entry.get('id') == vet_id for entry in calendar_summary_vets):
+        if not calendar_access_scope.allows_veterinarian(entry):
             return
-        if not calendar_access_scope.allows_veterinarian(vet):
-            return
-        entry = build_calendar_summary_entry(vet, label=label, is_specialist=is_specialist)
-        if entry:
-            calendar_summary_vets.append(entry)
+        if force_specialist:
+            entry['is_specialist'] = True
+        summary_seen_ids.add(vet_id)
+        calendar_summary_vets.append(entry)
 
     add_summary_vet(veterinario)
-
-    clinic_ids = set()
 
     primary_clinic_id = getattr(veterinario, 'clinica_id', None)
     if primary_clinic_id:
@@ -3799,7 +3777,7 @@ def vet_detail(veterinario_id):
         for colleague in getattr(clinic, 'veterinarios', []) or []:
             add_summary_vet(colleague)
         for colleague in getattr(clinic, 'veterinarios_associados', []) or []:
-            add_summary_vet(colleague, is_specialist=True)
+            add_summary_vet(colleague, force_specialist=True)
 
     if clinic_ids and len(calendar_summary_vets) == 1:
         colleagues = (
@@ -7883,6 +7861,27 @@ def appointments():
     calendar_summary_vets = []
     calendar_summary_clinic_ids = []
     calendar_redirect_url = None
+    summary_seen_calendar_vet_ids: set[int] = set()
+
+    def add_calendar_summary_vet(
+        vet,
+        *,
+        label=None,
+        clinic_ids=None,
+        force_specialist=False,
+    ):
+        entry = serialize_vet_for_summary(vet, label=label, clinic_ids=clinic_ids)
+        if not entry:
+            return
+        vet_id = entry.get('id')
+        if vet_id in summary_seen_calendar_vet_ids:
+            return
+        if not calendar_access_scope.allows_veterinarian(entry):
+            return
+        if force_specialist:
+            entry['is_specialist'] = True
+        summary_seen_calendar_vet_ids.add(vet_id)
+        calendar_summary_vets.append(entry)
 
     if current_user.role == 'admin':
         agenda_users = User.query.order_by(User.name).all()
@@ -7939,55 +7938,6 @@ def appointments():
                 clinic_ids.append(clinica_id)
         clinic_ids = calendar_access_scope.filter_clinic_ids(clinic_ids)
         calendar_summary_clinic_ids = clinic_ids
-        if getattr(veterinario, "id", None) is not None:
-            calendar_summary_vets = [
-                {
-                    'id': veterinario.id,
-                    'name': veterinario.user.name
-                    if getattr(veterinario, "user", None)
-                    else None,
-                    'full_name': getattr(getattr(veterinario, 'user', None), 'name', None),
-                    'specialty_list': getattr(veterinario, 'specialty_list', None),
-                    'is_specialist': bool(getattr(veterinario, 'specialty_list', None)),
-                }
-            ]
-        include_colleagues = bool(clinic_ids) and calendar_access_scope.allows_all_veterinarians()
-        if include_colleagues:
-            if current_user.role == 'admin' and agenda_veterinarios:
-                colleagues_source = [
-                    v
-                    for v in agenda_veterinarios
-                    if getattr(v, 'clinica_id', None) in clinic_ids
-                ]
-            else:
-                colleagues_source = (
-                    Veterinario.query.filter(
-                        Veterinario.clinica_id.in_(clinic_ids)
-                    ).all()
-                    if clinic_ids
-                    else []
-                )
-            known_ids = {entry['id'] for entry in calendar_summary_vets}
-            for colleague in colleagues_source:
-                colleague_id = getattr(colleague, 'id', None)
-                if (
-                    not colleague_id
-                    or colleague_id in known_ids
-                    or not calendar_access_scope.allows_veterinarian(colleague)
-                ):
-                    continue
-                calendar_summary_vets.append(
-                    {
-                        'id': colleague_id,
-                        'name': colleague.user.name
-                        if getattr(colleague, 'user', None)
-                        else None,
-                        'full_name': getattr(getattr(colleague, 'user', None), 'name', None),
-                        'specialty_list': getattr(colleague, 'specialty_list', None),
-                        'is_specialist': bool(getattr(colleague, 'specialty_list', None)),
-                    }
-                )
-                known_ids.add(colleague_id)
         calendar_redirect_url = url_for(
             'appointments', view_as='veterinario', veterinario_id=veterinario.id
         )
@@ -8062,31 +8012,34 @@ def appointments():
         appointment_form.veterinario_id.choices = [
             (vet.id, _vet_label(vet)) for vet in combined_vets
         ]
-        calendar_summary_vets = [
-            {
-                'id': vet.id,
-                'name': _vet_label(vet),
-                'label': _vet_label(vet),
-                'full_name': getattr(getattr(vet, 'user', None), 'name', None),
-                'specialty_list': getattr(vet, 'specialty_list', None),
-                'is_specialist': getattr(vet, 'id', None) in specialist_ids
-                and getattr(vet, 'id', None) not in clinic_vet_ids,
-            }
-            for vet in combined_vets
-        ]
+        summary_seen_calendar_vet_ids.clear()
+        calendar_summary_vets = []
+        for vet in combined_vets:
+            vet_id = getattr(vet, 'id', None)
+            label = _vet_label(vet)
+            force_specialist = vet_id in specialist_ids and vet_id not in clinic_vet_ids
+            add_calendar_summary_vet(
+                vet,
+                label=label,
+                clinic_ids=clinic_ids,
+                force_specialist=force_specialist,
+            )
         calendar_summary_vets = calendar_access_scope.filter_veterinarians(calendar_summary_vets)
         if not calendar_summary_vets:
-            calendar_summary_vets = [
-                {
-                    'id': veterinario.id,
-                    'name': _vet_label(veterinario),
-                    'label': _vet_label(veterinario),
-                    'full_name': getattr(getattr(veterinario, 'user', None), 'name', None),
-                    'specialty_list': getattr(veterinario, 'specialty_list', None),
-                    'is_specialist': getattr(veterinario, 'id', None) in specialist_ids
-                    and getattr(veterinario, 'id', None) not in clinic_vet_ids,
-                }
-            ]
+            summary_seen_calendar_vet_ids.clear()
+            calendar_summary_vets = []
+            fallback_label = _vet_label(veterinario)
+            fallback_force_specialist = (
+                getattr(veterinario, 'id', None) in specialist_ids
+                and getattr(veterinario, 'id', None) not in clinic_vet_ids
+            )
+            add_calendar_summary_vet(
+                veterinario,
+                label=fallback_label,
+                clinic_ids=clinic_ids,
+                force_specialist=fallback_force_specialist,
+            )
+            calendar_summary_vets = calendar_access_scope.filter_veterinarians(calendar_summary_vets)
         if request.method == 'GET':
             schedule_form.veterinario_id.data = veterinario.id
             appointment_form.veterinario_id.data = veterinario.id
@@ -8676,20 +8629,41 @@ def appointments():
             appointment_form.veterinario_id.choices = [
                 (vet.id, _vet_label(vet)) for vet in combined_vets
             ]
-            calendar_summary_vets = [
-                {
-                    'id': vet.id,
-                    'name': _vet_label(vet),
-                    'label': _vet_label(vet),
-                    'full_name': getattr(getattr(vet, 'user', None), 'name', None),
-                    'specialty_list': getattr(vet, 'specialty_list', None),
-                    'is_specialist': getattr(vet, 'id', None) in specialist_ids
-                    and getattr(vet, 'id', None) not in clinic_vet_ids,
-                }
-                for vet in combined_vets
-            ]
+            summary_seen_calendar_vet_ids.clear()
+            calendar_summary_vets = []
+            helper_clinic_scope = [clinica_id] if clinica_id else None
+            for vet in combined_vets:
+                vet_id = getattr(vet, 'id', None)
+                label = _vet_label(vet)
+                force_specialist = vet_id in specialist_ids and vet_id not in clinic_vet_ids
+                add_calendar_summary_vet(
+                    vet,
+                    label=label,
+                    clinic_ids=helper_clinic_scope,
+                    force_specialist=force_specialist,
+                )
             calendar_summary_vets = calendar_access_scope.filter_veterinarians(calendar_summary_vets)
-            calendar_summary_clinic_ids = calendar_access_scope.filter_clinic_ids([clinica_id]) if clinica_id else []
+            calendar_summary_clinic_ids = (
+                calendar_access_scope.filter_clinic_ids([clinica_id])
+                if clinica_id
+                else []
+            )
+            if not calendar_summary_vets and combined_vets:
+                summary_seen_calendar_vet_ids.clear()
+                calendar_summary_vets = []
+                fallback_vet = combined_vets[0]
+                fallback_label = _vet_label(fallback_vet)
+                fallback_force_specialist = (
+                    getattr(fallback_vet, 'id', None) in specialist_ids
+                    and getattr(fallback_vet, 'id', None) not in clinic_vet_ids
+                )
+                add_calendar_summary_vet(
+                    fallback_vet,
+                    label=fallback_label,
+                    clinic_ids=helper_clinic_scope,
+                    force_specialist=fallback_force_specialist,
+                )
+                calendar_summary_vets = calendar_access_scope.filter_veterinarians(calendar_summary_vets)
             if appointment_form.validate_on_submit():
                 scheduled_at_local = datetime.combine(
                     appointment_form.date.data, appointment_form.time.data

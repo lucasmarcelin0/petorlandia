@@ -29,15 +29,6 @@
   </div>
 
   {% set calendar_pets_endpoint = url_for('api_clinic_pets', view_as='veterinario', veterinario_id=veterinario.id) %}
-  {% set calendar_summary_vets = calendar_summary_vets if calendar_summary_vets else [{
-    'id': veterinario.id,
-    'name': veterinario.user.name,
-    'label': veterinario.user.name,
-    'full_name': veterinario.user.name,
-    'specialty_list': veterinario.specialty_list,
-    'is_specialist': veterinario.specialty_list|length > 0
-  }] %}
-  {% set calendar_summary_clinic_ids = calendar_summary_clinic_ids if calendar_summary_clinic_ids else ([veterinario.clinica_id] if veterinario.clinica_id else []) %}
   {% set schedule_toggle_clinic_id = veterinario.clinica_id %}
   {% set schedule_toggle_calendar_redirect_url = url_for('appointments', view_as='veterinario', veterinario_id=veterinario.id) %}
   {% set schedule_toggle_prefer_user_vet_source = True %}

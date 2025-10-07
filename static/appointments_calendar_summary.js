@@ -399,12 +399,7 @@ export function setupAppointmentsCalendarSummary(options = {}) {
     const calendarSummaryAllowedVetIds = (() => {
       const ids = extractSummaryIds('data-calendar-summary-vets', (entry) => {
         if (entry && typeof entry === 'object') {
-          const candidate = entry.id
-            ?? entry.vetId
-            ?? entry.veterinario_id
-            ?? entry.veterinarioId
-            ?? null;
-          return normalizeSummaryVetId(candidate);
+          return normalizeSummaryVetId(entry.id);
         }
         return normalizeSummaryVetId(entry);
       });
@@ -419,39 +414,25 @@ export function setupAppointmentsCalendarSummary(options = {}) {
         if (!item || typeof item !== 'object') {
           return;
         }
-        const normalizedId = normalizeSummaryVetId(
-          item.id
-            ?? item.vetId
-            ?? item.veterinario_id
-            ?? item.veterinarioId
-            ?? null,
-        );
+        const normalizedId = normalizeSummaryVetId(item.id);
         if (!normalizedId) {
           return;
         }
-        const rawSpecialty = item.specialty_list ?? item.specialtyList ?? null;
-        const specialtyList = typeof rawSpecialty === 'string' ? rawSpecialty.trim() : rawSpecialty;
-        const isSpecialist = (() => {
-          if (typeof item.is_specialist === 'boolean') {
-            return item.is_specialist;
-          }
-          if (typeof item.isSpecialist === 'boolean') {
-            return item.isSpecialist;
-          }
-          if (typeof item.specialist === 'boolean') {
-            return item.specialist;
-          }
-          return typeof specialtyList === 'string' && specialtyList.trim().length > 0;
-        })();
+        const rawLabel = typeof item.label === 'string' ? item.label.trim() : '';
+        const rawFullName = typeof item.full_name === 'string' ? item.full_name.trim() : '';
+        const rawInitials = typeof item.initials === 'string' ? item.initials.trim() : '';
+        const rawSpecialtyText = typeof item.specialty_text === 'string'
+          ? item.specialty_text.trim()
+          : '';
+        const isSpecialist = typeof item.is_specialist === 'boolean'
+          ? item.is_specialist
+          : Boolean(rawSpecialtyText);
         map.set(normalizedId, {
           vetId: normalizedId,
-          label: item.label ?? item.name ?? item.vetName ?? null,
-          fullName: item.full_name
-            ?? item.fullName
-            ?? item.vetFullName
-            ?? item.name
-            ?? null,
-          specialtyList: typeof specialtyList === 'string' ? specialtyList : null,
+          label: rawLabel || rawFullName || null,
+          fullName: rawFullName || rawLabel || null,
+          initials: rawInitials || '',
+          specialtyText: rawSpecialtyText || '',
           isSpecialist,
         });
       });
@@ -492,7 +473,7 @@ export function setupAppointmentsCalendarSummary(options = {}) {
       return calendarSummaryVetMetadata.get(normalized) || null;
     }
 
-    function normalizeSummarySpecialtyList(value) {
+    function normalizeSummarySpecialtyText(value) {
       if (Array.isArray(value)) {
         return value
           .map((item) => (typeof item === 'string' ? item.trim() : item))
@@ -520,8 +501,11 @@ export function setupAppointmentsCalendarSummary(options = {}) {
         if (metadata.fullName) {
           next.fullName = metadata.fullName;
         }
-        if (metadata.specialtyList !== undefined) {
-          next.specialtyList = normalizeSummarySpecialtyList(metadata.specialtyList);
+        if (metadata.initials) {
+          next.initials = metadata.initials;
+        }
+        if (metadata.specialtyText !== undefined) {
+          next.specialtyText = normalizeSummarySpecialtyText(metadata.specialtyText);
         }
         if (typeof metadata.isSpecialist === 'boolean') {
           next.isSpecialist = metadata.isSpecialist;
@@ -544,13 +528,39 @@ export function setupAppointmentsCalendarSummary(options = {}) {
           ?? fallbackId
           ?? null,
       );
-      const specialtyList = normalizeSummarySpecialtyList(
-        extended.vetSpecialtyList
+      const specialtyText = normalizeSummarySpecialtyText(
+        extended.vetSummarySpecialtyText
+          ?? extended.vetSpecialtyText
+          ?? extended.vetSpecialtyList
           ?? extended.vetSpecialties
-          ?? extended.specialty_list
+          ?? extended.specialty_text
           ?? extended.specialtyList,
       );
+      const rawLabel = typeof extended.vetLabel === 'string' ? extended.vetLabel.trim() : '';
+      const rawNameFallback = typeof extended.vetName === 'string' ? extended.vetName.trim() : '';
+      const label = rawLabel || rawNameFallback || null;
+      const fullName = (() => {
+        if (typeof extended.vetFullName === 'string' && extended.vetFullName.trim()) {
+          return extended.vetFullName.trim();
+        }
+        if (typeof extended.veterinarioFullName === 'string' && extended.veterinarioFullName.trim()) {
+          return extended.veterinarioFullName.trim();
+        }
+        if (typeof extended.veterinarianName === 'string' && extended.veterinarianName.trim()) {
+          return extended.veterinarianName.trim();
+        }
+        return label;
+      })();
+      const initials = (() => {
+        if (typeof extended.vetInitials === 'string' && extended.vetInitials.trim()) {
+          return extended.vetInitials.trim();
+        }
+        return getSummaryVetInitials(fullName || label, normalizedId);
+      })();
       const isSpecialist = (() => {
+        if (typeof extended.vetSummaryIsSpecialist === 'boolean') {
+          return extended.vetSummaryIsSpecialist;
+        }
         if (typeof extended.vetIsSpecialist === 'boolean') {
           return extended.vetIsSpecialist;
         }
@@ -560,7 +570,7 @@ export function setupAppointmentsCalendarSummary(options = {}) {
         if (typeof extended.specialist === 'boolean') {
           return extended.specialist;
         }
-        if (specialtyList) {
+        if (specialtyText) {
           return true;
         }
         if (extended.specialistId) {
@@ -570,13 +580,10 @@ export function setupAppointmentsCalendarSummary(options = {}) {
       })();
       return {
         vetId: normalizedId,
-        label: extended.vetLabel ?? extended.vetName ?? null,
-        fullName: extended.vetFullName
-          ?? extended.veterinarioFullName
-          ?? extended.veterinarianName
-          ?? extended.vetName
-          ?? null,
-        specialtyList,
+        label,
+        fullName,
+        initials,
+        specialtyText,
         isSpecialist,
       };
     }
@@ -770,8 +777,11 @@ export function setupAppointmentsCalendarSummary(options = {}) {
           || storedMetadata.fullName
           || resolvedLabel
           || name;
-        const resolvedSpecialtyList = normalizeSummarySpecialtyList(
-          eventMetadata.specialtyList ?? storedMetadata.specialtyList,
+        const resolvedInitials = eventMetadata.initials
+          || storedMetadata.initials
+          || getSummaryVetInitials(resolvedFullName || resolvedLabel || name, vetId);
+        const resolvedSpecialtyText = normalizeSummarySpecialtyText(
+          eventMetadata.specialtyText ?? storedMetadata.specialtyText,
         );
         const resolvedIsSpecialist = (() => {
           if (typeof eventMetadata.isSpecialist === 'boolean') {
@@ -780,34 +790,39 @@ export function setupAppointmentsCalendarSummary(options = {}) {
           if (typeof storedMetadata.isSpecialist === 'boolean') {
             return storedMetadata.isSpecialist;
           }
-          return !!resolvedSpecialtyList;
+          return !!resolvedSpecialtyText;
         })();
         updateCalendarSummaryVetMetadata(vetId, {
           label: resolvedLabel,
           fullName: resolvedFullName,
-          specialtyList: resolvedSpecialtyList,
+          initials: resolvedInitials,
+          specialtyText: resolvedSpecialtyText,
           isSpecialist: resolvedIsSpecialist,
         });
         const eventDate = startOfDay(parseSummaryDate(event.start || event.startStr || event.date || null));
         const dateKey = formatSummaryDateKey(eventDate);
         const summaryEntry = summaryMap.get(vetId) || {
           vetId,
-          vetName: resolvedLabel || name,
-          vetFullName: resolvedFullName || resolvedLabel || name,
-          specialtyList: resolvedSpecialtyList,
+          label: resolvedLabel || name,
+          fullName: resolvedFullName || resolvedLabel || name,
+          initials: resolvedInitials || '',
+          specialtyText: resolvedSpecialtyText,
           isSpecialist: resolvedIsSpecialist,
           total: 0,
           today: 0,
           thisWeek: 0,
           days: new Map(),
         };
-        summaryEntry.vetName = resolvedLabel || summaryEntry.vetName || name;
-        summaryEntry.vetFullName = resolvedFullName
-          || summaryEntry.vetFullName
-          || summaryEntry.vetName
+        summaryEntry.label = resolvedLabel || summaryEntry.label || name;
+        summaryEntry.fullName = resolvedFullName
+          || summaryEntry.fullName
+          || summaryEntry.label
           || name;
-        if (resolvedSpecialtyList !== undefined) {
-          summaryEntry.specialtyList = resolvedSpecialtyList;
+        if (resolvedInitials) {
+          summaryEntry.initials = resolvedInitials;
+        }
+        if (resolvedSpecialtyText !== undefined) {
+          summaryEntry.specialtyText = resolvedSpecialtyText;
         }
         if (typeof resolvedIsSpecialist === 'boolean') {
           summaryEntry.isSpecialist = resolvedIsSpecialist;
@@ -831,14 +846,20 @@ export function setupAppointmentsCalendarSummary(options = {}) {
       const rows = Array.from(summaryMap.values()).map((entry) => {
         const days = Array.from(entry.days.values());
         days.sort((a, b) => (a.date && b.date ? a.date - b.date : 0));
+        const specialtyText = normalizeSummarySpecialtyText(entry.specialtyText);
+        const label = entry.label || '';
+        const fullName = entry.fullName || label;
+        const initials = entry.initials
+          || getSummaryVetInitials(fullName || label, entry.vetId);
         return {
           vetId: entry.vetId,
-          vetName: entry.vetName,
-          vetFullName: entry.vetFullName || entry.vetName,
-          specialtyList: normalizeSummarySpecialtyList(entry.specialtyList),
+          label,
+          fullName,
+          initials,
+          specialtyText,
           isSpecialist: typeof entry.isSpecialist === 'boolean'
             ? entry.isSpecialist
-            : !!normalizeSummarySpecialtyList(entry.specialtyList),
+            : !!specialtyText,
           total: entry.total,
           today: entry.today,
           thisWeek: entry.thisWeek,
@@ -850,7 +871,7 @@ export function setupAppointmentsCalendarSummary(options = {}) {
         if (b.total !== a.total) {
           return b.total - a.total;
         }
-        return (a.vetName || '').localeCompare(b.vetName || '', 'pt-BR');
+        return (a.label || '').localeCompare(b.label || '', 'pt-BR');
       });
 
       let totalEvents = 0;
@@ -863,16 +884,17 @@ export function setupAppointmentsCalendarSummary(options = {}) {
       });
 
       const filters = rows.map((entry) => {
-        const specialtyList = normalizeSummarySpecialtyList(entry.specialtyList);
+        const specialtyList = normalizeSummarySpecialtyText(entry.specialtyText);
         const specialties = specialtyList
           ? specialtyList.split(',').map((item) => item.trim()).filter(Boolean)
           : [];
         const primarySpecialty = specialties.length ? specialties[0] : '';
         return {
           vetId: entry.vetId,
-          vetName: entry.vetName,
-          vetFullName: entry.vetFullName || entry.vetName,
-          specialtyList,
+          label: entry.label,
+          fullName: entry.fullName || entry.label,
+          initials: entry.initials,
+          specialtyText: specialtyList,
           specialties,
           primarySpecialty,
           isSpecialist: !!entry.isSpecialist,
@@ -1037,8 +1059,8 @@ export function setupAppointmentsCalendarSummary(options = {}) {
         if (normalizedId) {
           filterButton.dataset.vetId = normalizedId;
         }
-        const vetLabel = entry.vetName || entry.vetFullName || `Profissional ${entry.vetId}`;
-        const specialtyList = normalizeSummarySpecialtyList(entry.specialtyList);
+        const vetLabel = entry.label || entry.fullName || `Profissional ${entry.vetId}`;
+        const specialtyList = normalizeSummarySpecialtyText(entry.specialtyText);
         const isSpecialist = !!entry.isSpecialist;
         const ariaSegments = [`Filtrar agenda por ${vetLabel}`];
         if (isSpecialist) {
@@ -1054,7 +1076,8 @@ export function setupAppointmentsCalendarSummary(options = {}) {
         const icon = document.createElement('span');
         icon.classList.add('calendar-summary-filter-icon');
         icon.setAttribute('aria-hidden', 'true');
-        const initials = getSummaryVetInitials(entry.vetFullName || vetLabel, entry.vetId);
+        const initials = entry.initials
+          || getSummaryVetInitials(entry.fullName || vetLabel, entry.vetId);
         icon.textContent = initials || '•';
         filterButton.appendChild(icon);
 
@@ -1143,9 +1166,12 @@ export function setupAppointmentsCalendarSummary(options = {}) {
         nameWrapper.classList.add('calendar-summary-name');
         const bullet = document.createElement('span');
         bullet.classList.add('calendar-summary-bullet');
+        const bulletInitials = entry.initials
+          || getSummaryVetInitials(entry.fullName || entry.label, entry.vetId);
+        bullet.textContent = bulletInitials || '•';
         nameWrapper.appendChild(bullet);
         const nameText = document.createElement('span');
-        nameText.textContent = entry.vetName || `Profissional ${entry.vetId}`;
+        nameText.textContent = entry.label || entry.fullName || `Profissional ${entry.vetId}`;
         nameWrapper.appendChild(nameText);
         header.appendChild(nameWrapper);
 
