@@ -7,6 +7,14 @@ const DEFAULT_SUCCESS_MESSAGE = 'Agendamento atualizado com sucesso.';
 const SCHEDULE_EDIT_DEFAULT_LABEL = '<i class="fas fa-edit me-1"></i>Editar horários';
 const SCHEDULE_EDIT_CANCEL_LABEL = '<i class="fas fa-times me-1"></i>Cancelar Edição';
 
+const SCHEDULE_SELECTORS = {
+  wrapper: '[data-schedule-select-wrapper]',
+  input: '[data-schedule-select]',
+  bulkActions: '[data-schedule-bulk-actions]',
+  bulkDelete: '[data-schedule-bulk-delete]',
+  selectAll: '[data-schedule-select-all]'
+};
+
 const EXAM_REQUESTER_ROW_SELECTOR = '[data-exam-requester-row]';
 const EXAM_REQUESTER_MODAL_ID = 'examRequesterModal';
 
@@ -254,6 +262,168 @@ function getCsrfToken(root) {
   }
   const tokenInput = document.querySelector('input[name="csrf_token"]');
   return tokenInput ? tokenInput.value : '';
+}
+
+function getScheduleSelectInputs(root) {
+  return Array.from(root?.querySelectorAll(SCHEDULE_SELECTORS.input) || []);
+}
+
+function getScheduleSelectWrappers(root) {
+  return Array.from(root?.querySelectorAll(SCHEDULE_SELECTORS.wrapper) || []);
+}
+
+function getScheduleBulkActionsContainer(root) {
+  return root?.querySelector(SCHEDULE_SELECTORS.bulkActions) || null;
+}
+
+function getSelectedScheduleIds(root) {
+  return getScheduleSelectInputs(root)
+    .filter((checkbox) => checkbox.checked)
+    .map((checkbox) => checkbox.value)
+    .filter((value) => value !== undefined && value !== null && value !== '');
+}
+
+function updateScheduleSelectionState(root) {
+  const checkboxes = getScheduleSelectInputs(root);
+  const selectedCount = checkboxes.filter((checkbox) => checkbox.checked).length;
+  const bulkDeleteButton = root?.querySelector(SCHEDULE_SELECTORS.bulkDelete);
+  if (bulkDeleteButton) {
+    bulkDeleteButton.disabled = selectedCount === 0;
+  }
+  const selectAllButton = root?.querySelector(SCHEDULE_SELECTORS.selectAll);
+  if (selectAllButton) {
+    const total = checkboxes.length;
+    const allSelected = total > 0 && selectedCount === total;
+    selectAllButton.disabled = total === 0;
+    selectAllButton.dataset.scheduleSelectAllState = allSelected ? 'all' : 'partial';
+    selectAllButton.innerHTML = allSelected
+      ? '<i class="fas fa-times me-1"></i>Limpar seleção'
+      : '<i class="fas fa-check-double me-1"></i>Selecionar tudo';
+  }
+}
+
+function resetScheduleSelection(root) {
+  const checkboxes = getScheduleSelectInputs(root);
+  checkboxes.forEach((checkbox) => {
+    checkbox.checked = false;
+  });
+  updateScheduleSelectionState(root);
+}
+
+function setScheduleBulkActionsVisibility(root, visible) {
+  const wrappers = getScheduleSelectWrappers(root);
+  wrappers.forEach((wrapper) => {
+    wrapper.classList.toggle('d-none', !visible);
+  });
+  const bulkActions = getScheduleBulkActionsContainer(root);
+  if (bulkActions) {
+    bulkActions.classList.toggle('d-none', !visible);
+  }
+  if (visible) {
+    updateScheduleSelectionState(root);
+  }
+}
+
+async function handleScheduleBulkDelete(root) {
+  const button = root?.querySelector(SCHEDULE_SELECTORS.bulkDelete);
+  if (!button) {
+    return;
+  }
+  const selectedIds = getSelectedScheduleIds(root);
+  if (selectedIds.length === 0) {
+    return;
+  }
+  const vetId = getVetId(root);
+  if (!vetId) {
+    console.warn('Não foi possível identificar o veterinário para exclusão em lote.');
+    return;
+  }
+  const baseUrl = getAppointmentsBaseUrl(root);
+  const endpoint = `${baseUrl}/${vetId}/schedule/bulk_delete`;
+  const formData = new FormData();
+  selectedIds.forEach((id) => {
+    formData.append('schedule_ids', id);
+  });
+  const csrfToken = getCsrfToken(root);
+  if (csrfToken) {
+    formData.append('csrf_token', csrfToken);
+  }
+
+  const originalContent = button.innerHTML;
+  button.disabled = true;
+  button.innerHTML = '<span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>Excluindo...';
+
+  try {
+    const response = await fetch(endpoint, {
+      method: 'POST',
+      headers: {
+        'X-Requested-With': 'XMLHttpRequest',
+        Accept: 'application/json'
+      },
+      body: formData
+    });
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => null);
+      const message = errorData?.message || 'Não foi possível excluir os horários selecionados.';
+      throw new Error(message);
+    }
+    const data = await response.json();
+    if (!data?.success) {
+      const message = data?.message || 'Não foi possível excluir os horários selecionados.';
+      throw new Error(message);
+    }
+    window.location.reload();
+  } catch (error) {
+    console.error('Erro ao remover horários em lote', error);
+    alert(error?.message || 'Não foi possível excluir os horários selecionados.');
+  } finally {
+    button.innerHTML = originalContent;
+    button.disabled = false;
+  }
+}
+
+function bindScheduleSelection(root) {
+  const checkboxes = getScheduleSelectInputs(root);
+  checkboxes.forEach((checkbox) => {
+    if (checkbox.dataset.scheduleSelectBound === 'true') {
+      return;
+    }
+    checkbox.dataset.scheduleSelectBound = 'true';
+    checkbox.addEventListener('change', () => updateScheduleSelectionState(root));
+  });
+
+  const selectAllButton = root?.querySelector(SCHEDULE_SELECTORS.selectAll);
+  if (selectAllButton && selectAllButton.dataset.scheduleSelectBound !== 'true') {
+    selectAllButton.dataset.scheduleSelectBound = 'true';
+    selectAllButton.addEventListener('click', () => {
+      const inputs = getScheduleSelectInputs(root);
+      if (inputs.length === 0) {
+        return;
+      }
+      const shouldSelectAll = inputs.some((checkbox) => !checkbox.checked);
+      inputs.forEach((checkbox) => {
+        checkbox.checked = shouldSelectAll;
+      });
+      updateScheduleSelectionState(root);
+    });
+  }
+
+  const bulkDeleteButton = root?.querySelector(SCHEDULE_SELECTORS.bulkDelete);
+  if (bulkDeleteButton && bulkDeleteButton.dataset.scheduleSelectBound !== 'true') {
+    bulkDeleteButton.dataset.scheduleSelectBound = 'true';
+    bulkDeleteButton.addEventListener('click', () => {
+      if (bulkDeleteButton.disabled) {
+        return;
+      }
+      const confirmation = window.confirm('Excluir os horários selecionados?');
+      if (!confirmation) {
+        return;
+      }
+      handleScheduleBulkDelete(root);
+    });
+  }
+
+  updateScheduleSelectionState(root);
 }
 
 function getModalInstance(element) {
@@ -675,6 +845,8 @@ function focusScheduleFirstField(scope) {
 function showScheduleEditMode(root) {
   const actionContainers = root?.querySelectorAll('.schedule-actions') || [];
   actionContainers.forEach((container) => container.classList.remove('d-none'));
+  setScheduleBulkActionsVisibility(root, true);
+  bindScheduleSelection(root);
   const toggleButton = root?.querySelector('[data-schedule-edit-toggle]');
   if (toggleButton) {
     toggleButton.innerHTML = SCHEDULE_EDIT_CANCEL_LABEL;
@@ -700,6 +872,9 @@ function exitScheduleEditMode(root, { resetForm = true } = {}) {
       actionsWereVisible = true;
     }
   });
+
+  resetScheduleSelection(root);
+  setScheduleBulkActionsVisibility(root, false);
 
   const toggleButton = root?.querySelector('[data-schedule-edit-toggle]');
   if (toggleButton) {
@@ -1923,6 +2098,9 @@ function bindAppointmentItems(root) {
       if (event.target.closest('.btn')) {
         return;
       }
+      if (event.target.closest(SCHEDULE_SELECTORS.wrapper)) {
+        return;
+      }
       const appointmentId = item.dataset.id;
       if (!appointmentId) {
         return;
@@ -2255,6 +2433,7 @@ export function initVetSchedulePage(options = {}) {
   }
   root.dataset.vetScheduleInitialized = 'true';
 
+  bindScheduleSelection(root);
   bindScheduleEditButtons(root);
   bindAppointmentItems(root);
   bindAppointmentModalSave(root);

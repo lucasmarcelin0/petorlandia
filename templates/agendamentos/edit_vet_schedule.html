@@ -822,15 +822,34 @@
         >
           <div class="card-body p-4">
             <div class="card shadow-sm border-0">
-              <div class="card-header bg-light d-flex justify-content-between align-items-center">
+              <div class="card-header bg-light d-flex flex-wrap justify-content-between align-items-center gap-2">
                 <h5 class="mb-0"><i class="fas fa-business-time me-2"></i>Horários Cadastrados</h5>
-                <button
-                  class="btn btn-sm btn-outline-primary"
-                  data-schedule-edit-toggle
-                  onclick="toggleScheduleEdit(event)"
-                >
-                  <i class="fas fa-edit me-1"></i>Editar horários
-                </button>
+                <div class="d-flex align-items-center gap-2">
+                  <div class="d-flex align-items-center gap-2 d-none" data-schedule-bulk-actions>
+                    <button
+                      type="button"
+                      class="btn btn-sm btn-outline-danger"
+                      data-schedule-bulk-delete
+                      disabled
+                    >
+                      <i class="fas fa-trash-alt me-1"></i>Excluir selecionados
+                    </button>
+                    <button
+                      type="button"
+                      class="btn btn-sm btn-outline-secondary"
+                      data-schedule-select-all
+                    >
+                      <i class="fas fa-check-double me-1"></i>Selecionar tudo
+                    </button>
+                  </div>
+                  <button
+                    class="btn btn-sm btn-outline-primary"
+                    data-schedule-edit-toggle
+                    onclick="toggleScheduleEdit(event)"
+                  >
+                    <i class="fas fa-edit me-1"></i>Editar horários
+                  </button>
+                </div>
               </div>
               <div class="card-body">
                 <div
@@ -880,14 +899,27 @@
                         </div>
                         <div class="card-body py-2">
                           {% for h in grupo.itens %}
-                            <div class="d-flex justify-content-between align-items-center mb-2">
-                              <div>
+                            <div
+                              class="d-flex align-items-center mb-2"
+                              data-schedule-row
+                              data-schedule-id="{{ h.id }}"
+                            >
+                              <div class="form-check me-3 d-none" data-schedule-select-wrapper>
+                                <input
+                                  class="form-check-input"
+                                  type="checkbox"
+                                  value="{{ h.id }}"
+                                  data-schedule-select
+                                  aria-label="Selecionar horário das {{ h.hora_inicio.strftime('%H:%M') }} às {{ h.hora_fim.strftime('%H:%M') }}"
+                                />
+                              </div>
+                              <div class="flex-grow-1">
                                 <span class="badge bg-light text-dark">{{ h.hora_inicio.strftime('%H:%M') }} - {{ h.hora_fim.strftime('%H:%M') }}</span>
                                 {% if h.intervalo_inicio and h.intervalo_fim %}
                                   <small class="text-muted d-block">Intervalo: {{ h.intervalo_inicio.strftime('%H:%M') }} - {{ h.intervalo_fim.strftime('%H:%M') }}</small>
                                 {% endif %}
                               </div>
-                              <div class="schedule-actions d-none">
+                              <div class="schedule-actions d-none ms-3">
                                 <button
                                   type="button"
                                   class="btn btn-sm btn-outline-primary edit-btn"
