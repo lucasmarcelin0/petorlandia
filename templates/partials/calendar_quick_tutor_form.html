@@ -239,6 +239,105 @@
   if (!form) {
     return;
   }
+
+  const dobInput = document.getElementById('{{ form_id }}-dob');
+  if (dobInput && typeof window.flatpickr === 'function' && dobInput.dataset.fpInitialized !== 'true') {
+    const aplicarMascaraData = (valor) => {
+      const digitos = valor.replace(/\D/g, '');
+      let formatado = '';
+
+      if (digitos.length > 0) {
+        formatado = digitos.slice(0, 2);
+      }
+      if (digitos.length >= 3) {
+        formatado += '/' + digitos.slice(2, 4);
+      }
+      if (digitos.length >= 5) {
+        formatado += '/' + digitos.slice(4, 8);
+      }
+
+      return formatado;
+    };
+
+    const sincronizarDataDigitada = (instance) => {
+      const altInput = instance.altInput;
+      if (!altInput) {
+        return true;
+      }
+
+      const digitos = altInput.value.replace(/\D/g, '');
+      if (digitos.length === 8) {
+        const dia = digitos.slice(0, 2);
+        const mes = digitos.slice(2, 4);
+        const ano = digitos.slice(4, 8);
+        instance.setDate(`${ano}-${mes}-${dia}`, true, 'Y-m-d');
+        altInput.classList.remove('is-invalid');
+        return true;
+      }
+
+      if (digitos.length === 0) {
+        instance.clear();
+        altInput.classList.remove('is-invalid');
+        return true;
+      }
+
+      altInput.classList.add('is-invalid');
+      return false;
+    };
+
+    const picker = flatpickr(dobInput, {
+      locale: 'pt',
+      dateFormat: 'Y-m-d',
+      altInput: true,
+      altFormat: 'd/m/Y',
+      allowInput: true,
+      onReady: function(selectedDates, dateStr, instance) {
+        const alt = instance.altInput;
+        if (!alt) {
+          return;
+        }
+
+        alt.setAttribute('inputmode', 'numeric');
+        alt.setAttribute('placeholder', 'dd/mm/aaaa');
+
+        alt.addEventListener('input', () => {
+          const valorFormatado = aplicarMascaraData(alt.value);
+          if (valorFormatado !== alt.value) {
+            alt.value = valorFormatado;
+            alt.setSelectionRange(valorFormatado.length, valorFormatado.length);
+          }
+          if (alt.classList.contains('is-invalid')) {
+            sincronizarDataDigitada(instance);
+          }
+        });
+
+        const confirmarEntrada = () => sincronizarDataDigitada(instance);
+
+        alt.addEventListener('blur', confirmarEntrada);
+        alt.addEventListener('keydown', (event) => {
+          if (event.key === 'Enter') {
+            event.preventDefault();
+            if (confirmarEntrada()) {
+              instance.close();
+            }
+          }
+        });
+      }
+    });
+
+    form.addEventListener('submit', (event) => {
+      if (!sincronizarDataDigitada(picker)) {
+        event.preventDefault();
+        event.stopPropagation();
+        if (picker.altInput) {
+          picker.altInput.focus();
+        }
+      }
+    });
+
+    dobInput.dataset.fpInitialized = 'true';
+  }
+
   form.addEventListener('submit', function() {
     const submitBtn = form.querySelector('[data-submit-label]');
     if (submitBtn && !submitBtn.dataset.submitting) {
