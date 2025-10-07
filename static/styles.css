@@ -347,6 +347,29 @@
   transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease, background-color 0.15s ease;
 }
 
+.calendar-summary-filter--all {
+  min-width: 7.5rem;
+  width: auto;
+  padding: 0.45rem 0.95rem;
+  justify-content: center;
+  font-weight: 600;
+  font-size: 0.82rem;
+  color: #0f172a;
+  background: rgba(248, 250, 252, 0.95);
+  border-color: rgba(148, 163, 184, 0.45);
+  text-transform: none;
+  letter-spacing: 0.005em;
+}
+
+.calendar-summary-filter--all .calendar-summary-filter-label {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  line-height: 1.1;
+  white-space: nowrap;
+}
+
 .calendar-summary-filter .calendar-summary-filter-icon {
   display: inline-flex;
   align-items: center;
