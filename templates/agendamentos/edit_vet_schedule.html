@@ -1377,6 +1377,8 @@
 {% block scripts %}
   {{ super() }}
 
+  <script src="{{ url_for('static', filename='appointments_schedule_toolbar.js') }}"></script>
+
   <script>
     document.addEventListener('DOMContentLoaded', function () {
       const filterCard = document.getElementById('agenda-filter-card');

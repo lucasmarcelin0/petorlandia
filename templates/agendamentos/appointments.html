@@ -445,6 +445,7 @@
 
 {% block scripts %}
 {{ super() }}
+<script src="{{ url_for('static', filename='appointments_schedule_toolbar.js') }}"></script>
 <script type="module">
   import { setupAppointmentsCalendarSummary } from "{{ url_for('static', filename='appointments_calendar_summary.js') }}";
   setupAppointmentsCalendarSummary();
