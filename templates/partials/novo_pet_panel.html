@@ -1,0 +1,22 @@
+<div class="row g-4 align-items-start">
+  <div class="col-12 col-xl-5 d-flex flex-column gap-4">
+    <div class="card shadow-sm border-0 rounded-4 h-100">
+      <div class="card-body p-4">
+        <div class="mb-4">
+          <h3 class="fw-semibold mb-1">Cadastro de Animais</h3>
+          <p class="text-muted small mb-0">Associe rapidamente um novo pet a um tutor e visualize os registros existentes ao lado.</p>
+        </div>
+        {% include 'partials/animal_register_form.html' %}
+      </div>
+    </div>
+  </div>
+  <div class="col-12 col-xl-7">
+    <div class="d-flex flex-column gap-4">
+      <div id="animais-adicionados">
+        {% set compact = True %}
+        {% include 'partials/animais_adicionados.html' %}
+        {% set compact = None %}
+      </div>
+    </div>
+  </div>
+</div>
