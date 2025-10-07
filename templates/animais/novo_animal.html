@@ -2,24 +2,26 @@
 
 {% block main %}
   <div class="container-fluid py-4">
-    <div class="row g-4 align-items-start">
-      <div class="col-12 col-xl-5">
-        <div class="card shadow-sm border-0 rounded-4 h-100">
-          <div class="card-body p-4">
-            <div class="mb-4">
-              <h3 class="fw-semibold mb-1">Cadastro de Animais</h3>
-              <p class="text-muted small mb-0">Associe rapidamente um novo pet a um tutor e visualize os registros existentes ao lado.</p>
+    <div class="card shadow-sm border-0 rounded-4">
+      <div class="card-body p-4 d-flex flex-column gap-4">
+        <div class="d-flex flex-column gap-1">
+          <h3 class="fw-semibold mb-0">Cadastro de Animais</h3>
+          <p class="text-muted small mb-0">Associe rapidamente um novo pet a um tutor e visualize os registros existentes ao lado.</p>
+        </div>
+        <div class="row row-cols-1 row-cols-xl-2 g-4 align-items-stretch">
+          <div class="col d-flex">
+            <div class="d-flex flex-column gap-4 w-100 h-100 p-4 bg-body-tertiary rounded-4 border border-light-subtle">
+              {% include 'partials/animal_register_form.html' %}
             </div>
-            {% include 'partials/animal_register_form.html' %}
+          </div>
+          <div class="col d-flex">
+            <div class="d-flex flex-column w-100 h-100 p-4 bg-body-tertiary rounded-4 border border-light-subtle">
+              {% include 'partials/pet_quick_list.html' with bare=True %}
+            </div>
           </div>
         </div>
-      </div>
-      <div class="col-12 col-xl-7">
-        <div class="d-flex flex-column gap-4">
-          {% include 'partials/pet_quick_list.html' %}
-          <div id="animais-adicionados">
-            {% include 'partials/animais_adicionados.html' with compact=True %}
-          </div>
+        <div id="animais-adicionados">
+          {% include 'partials/animais_adicionados.html' with compact=True %}
         </div>
       </div>
     </div>
