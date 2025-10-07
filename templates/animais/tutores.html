@@ -69,7 +69,9 @@
 
     <div class="col-12 col-xl-8">
       <div id="tutores-adicionados">
-        {% include 'partials/tutores_adicionados.html' with compact=True %}
+        {% with compact=True %}
+          {% include 'partials/tutores_adicionados.html' %}
+        {% endwith %}
       </div>
     </div>
   </div>
