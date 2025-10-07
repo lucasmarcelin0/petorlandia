@@ -327,6 +327,117 @@ def get_consulta_or_404(consulta_id):
     return consulta
 
 
+def serialize_calendar_summary_vet(vet):
+    """Return a serialisable dictionary with vet metadata for the calendar summary."""
+
+    if not vet:
+        return None
+    vet_id = getattr(vet, 'id', None)
+    if not vet_id:
+        return None
+
+    user = getattr(vet, 'user', None)
+    name = getattr(user, 'name', None) if user is not None else None
+    avatar_url = None
+    if user is not None:
+        avatar_url = (
+            getattr(user, 'profile_photo', None)
+            or getattr(user, 'avatar_url', None)
+            or getattr(user, 'avatarUrl', None)
+        )
+
+    specialties = []
+    seen = set()
+    for specialty in getattr(vet, 'specialties', []) or []:
+        if not specialty:
+            continue
+        specialty_id = getattr(specialty, 'id', None)
+        specialty_name = (
+            getattr(specialty, 'nome', None)
+            or getattr(specialty, 'name', None)
+        )
+        if specialty_name is not None:
+            specialty_name = str(specialty_name).strip()
+        if not specialty_name:
+            continue
+        fingerprint = (
+            f"{specialty_id}:{specialty_name.lower()}"
+            if specialty_name
+            else str(specialty_id)
+        )
+        if fingerprint in seen:
+            continue
+        seen.add(fingerprint)
+        specialties.append(
+            {
+                'id': specialty_id,
+                'name': specialty_name,
+            }
+        )
+
+    return {
+        'id': vet_id,
+        'name': name,
+        'avatarUrl': avatar_url,
+        'specialties': specialties,
+    }
+
+
+def append_calendar_summary_vet(collection, vet):
+    """Append ``vet`` metadata to ``collection`` when not already present."""
+
+    if collection is None:
+        return None
+    entry = serialize_calendar_summary_vet(vet)
+    if not entry:
+        return None
+
+    existing_entry = None
+    for item in collection:
+        if item.get('id') == entry['id']:
+            existing_entry = item
+            break
+
+    if existing_entry is None:
+        collection.append(entry)
+        return entry
+
+    if entry.get('name') and not existing_entry.get('name'):
+        existing_entry['name'] = entry['name']
+    if entry.get('avatarUrl') and not existing_entry.get('avatarUrl'):
+        existing_entry['avatarUrl'] = entry['avatarUrl']
+
+    if entry.get('specialties'):
+        existing_specialties = existing_entry.get('specialties') or []
+        existing_entry['specialties'] = existing_specialties
+        existing_ids = {
+            spec.get('id')
+            for spec in existing_specialties
+            if spec and spec.get('id') is not None
+        }
+        existing_names = {
+            (spec.get('name') or '').lower()
+            for spec in existing_specialties
+            if spec and spec.get('name')
+        }
+        for specialty in entry['specialties']:
+            if not specialty:
+                continue
+            spec_id = specialty.get('id')
+            spec_name = specialty.get('name') or ''
+            if spec_id is not None and spec_id in existing_ids:
+                continue
+            if spec_name and spec_name.lower() in existing_names:
+                continue
+            existing_specialties.append(specialty)
+            if spec_id is not None:
+                existing_ids.add(spec_id)
+            if spec_name:
+                existing_names.add(spec_name.lower())
+
+    return existing_entry
+
+
 MISSING_VET_PROFILE_MESSAGE = (
     "Para visualizar os convites de clínica, finalize seu cadastro de "
     "veterinário informando o CRMV e demais dados profissionais."
@@ -7873,7 +7984,6 @@ def appointments():
                     if clinic_ids
                     else []
                 )
-            known_ids = {entry['id'] for entry in calendar_summary_vets}
             for colleague in colleagues_source:
                 colleague_id = getattr(colleague, 'id', None)
                 if not colleague_id or colleague_id in known_ids:
