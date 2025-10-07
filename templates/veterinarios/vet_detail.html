@@ -186,31 +186,30 @@
   </section>
 
   <section class="mb-4" aria-labelledby="vet-hours-title-{{ veterinario.id }}">
-    <div class="card shadow-sm border-0">
-      <div class="card-header bg-secondary text-white d-flex justify-content-between align-items-center">
-        <div>
-          <h3 id="vet-hours-title-{{ veterinario.id }}" class="h5 mb-0">
-            <i class="fas fa-clock me-2"></i>Horários fixos
-          </h3>
-          <small class="text-white-50">Visualize os períodos padrão de atendimento.</small>
-        </div>
-        <button class="btn btn-sm btn-outline-light" type="button" data-schedule-edit-toggle onclick="toggleScheduleEdit()">
+    <div class="card mb-4" style="opacity: 1; transform: translateY(0px); transition: opacity 0.5s, transform 0.5s;">
+      <div class="card-header bg-light d-flex justify-content-between align-items-center">
+        <h5 id="vet-hours-title-{{ veterinario.id }}" class="mb-0">
+          <i class="fas fa-business-time me-2"></i>Horários Cadastrados
+        </h5>
+        <button class="btn btn-sm btn-outline-primary" type="button" data-schedule-edit-toggle onclick="toggleScheduleEdit()">
           <i class="fas fa-edit me-1"></i>Editar horários
         </button>
       </div>
       <div class="card-body">
-        <div class="row g-3">
+        <div class="row">
           {% for grupo in horarios_grouped %}
-          <div class="col-md-6 col-lg-4">
-            <div class="card h-100 border-0 shadow-sm">
-              <div class="card-header bg-light fw-semibold">{{ grupo.dia }}</div>
-              <div class="card-body">
+          <div class="col-md-6 col-lg-4 mb-3">
+            <div class="card h-100" style="opacity: 1; transform: translateY(0px); transition: opacity 0.5s, transform 0.5s;">
+              <div class="card-header py-2">
+                <h6 class="mb-0">{{ grupo.dia }}</h6>
+              </div>
+              <div class="card-body py-2">
                 {% for h in grupo.itens %}
-                <div class="d-flex justify-content-between align-items-center mb-3">
+                <div class="d-flex justify-content-between align-items-center mb-2">
                   <div>
-                    <span class="badge bg-primary-subtle text-primary fw-semibold">{{ h.hora_inicio.strftime('%H:%M') }} – {{ h.hora_fim.strftime('%H:%M') }}</span>
+                    <span class="badge bg-light text-dark">{{ h.hora_inicio.strftime('%H:%M') }} - {{ h.hora_fim.strftime('%H:%M') }}</span>
                     {% if h.intervalo_inicio and h.intervalo_fim %}
-                    <small class="text-muted d-block">Intervalo: {{ h.intervalo_inicio.strftime('%H:%M') }} – {{ h.intervalo_fim.strftime('%H:%M') }}</small>
+                    <small class="text-muted d-block">Intervalo: {{ h.intervalo_inicio.strftime('%H:%M') }} - {{ h.intervalo_fim.strftime('%H:%M') }}</small>
                     {% endif %}
                   </div>
                   <div class="schedule-actions d-none">
@@ -220,7 +219,8 @@
                             data-hora-inicio="{{ h.hora_inicio.strftime('%H:%M') }}"
                             data-hora-fim="{{ h.hora_fim.strftime('%H:%M') }}"
                             data-intervalo-inicio="{{ h.intervalo_inicio.strftime('%H:%M') if h.intervalo_inicio else '' }}"
-                            data-intervalo-fim="{{ h.intervalo_fim.strftime('%H:%M') if h.intervalo_fim else '' }}">
+                            data-intervalo-fim="{{ h.intervalo_fim.strftime('%H:%M') if h.intervalo_fim else '' }}"
+                            data-vet-schedule-bound="true">
                       <i class="fas fa-edit"></i>
                     </button>
                     <form method="post"
@@ -239,7 +239,7 @@
           </div>
           {% else %}
           <div class="col-12 text-center py-4">
-            <i class="fas fa-inbox fa-2x text-muted mb-2"></i>
+            <i class="fas fa-clock fa-2x text-muted mb-2"></i>
             <p class="text-muted mb-0">Nenhum horário cadastrado.</p>
           </div>
           {% endfor %}
