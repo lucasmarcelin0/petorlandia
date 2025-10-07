@@ -490,6 +490,130 @@ export function toggleScheduleForm(rootParam) {
   modal.show();
 }
 
+function getScheduleInlineContainer(root) {
+  return root?.querySelector('[data-schedule-inline-container]') || null;
+}
+
+function isInlineContainerVisible(container) {
+  if (!container) {
+    return false;
+  }
+  if (container.dataset.visible === 'true') {
+    return true;
+  }
+  return !container.classList.contains('d-none');
+}
+
+function isScheduleModalOpen() {
+  const modalEl = document.getElementById('scheduleModal');
+  return Boolean(modalEl && modalEl.classList.contains('show'));
+}
+
+function focusElement(element) {
+  if (!element || typeof element.focus !== 'function') {
+    return;
+  }
+  const performFocus = () => {
+    try {
+      element.focus({ preventScroll: true });
+    } catch (error) {
+      element.focus();
+    }
+  };
+  if (typeof window !== 'undefined' && typeof window.requestAnimationFrame === 'function') {
+    window.requestAnimationFrame(performFocus);
+  } else {
+    setTimeout(performFocus, 0);
+  }
+}
+
+function focusScheduleFirstField(scope) {
+  const searchRoot = scope instanceof HTMLElement ? scope : document.getElementById('schedule-form');
+  if (!searchRoot) {
+    return;
+  }
+  const selectors = [
+    'input:not([type="hidden"]):not([disabled]):not([tabindex="-1"])',
+    'select:not([disabled]):not([tabindex="-1"])',
+    'textarea:not([disabled]):not([tabindex="-1"])'
+  ];
+  const focusable = searchRoot.querySelector(selectors.join(', '));
+  if (!focusable) {
+    return;
+  }
+  focusElement(focusable);
+}
+
+function showScheduleEditMode(root) {
+  const actionContainers = root?.querySelectorAll('.schedule-actions') || [];
+  actionContainers.forEach((container) => container.classList.remove('d-none'));
+  const toggleButton = root?.querySelector('[data-schedule-edit-toggle]');
+  if (toggleButton) {
+    toggleButton.innerHTML = SCHEDULE_EDIT_CANCEL_LABEL;
+    toggleButton.setAttribute('aria-pressed', 'true');
+  }
+  toggleScheduleForm(root);
+  const form = document.getElementById('schedule-form');
+  const inlineContainer = getScheduleInlineContainer(root);
+  if (inlineContainer && form && inlineContainer.contains(form)) {
+    focusScheduleFirstField(form);
+    return;
+  }
+  const modalEl = document.getElementById('scheduleModal');
+  focusScheduleFirstField(modalEl || form);
+}
+
+function exitScheduleEditMode(root, { resetForm = true } = {}) {
+  const actionContainers = root?.querySelectorAll('.schedule-actions') || [];
+  let actionsWereVisible = false;
+  actionContainers.forEach((container) => {
+    if (!container.classList.contains('d-none')) {
+      container.classList.add('d-none');
+      actionsWereVisible = true;
+    }
+  });
+
+  const toggleButton = root?.querySelector('[data-schedule-edit-toggle]');
+  if (toggleButton) {
+    toggleButton.innerHTML = SCHEDULE_EDIT_DEFAULT_LABEL;
+    toggleButton.setAttribute('aria-pressed', 'false');
+  }
+
+  const inlineContainer = getScheduleInlineContainer(root);
+  const inlineVisible = isInlineContainerVisible(inlineContainer);
+  const modalOpen = isScheduleModalOpen();
+  const wasActive = actionsWereVisible || inlineVisible || modalOpen;
+
+  if (!resetForm || !wasActive) {
+    return wasActive;
+  }
+
+  resetScheduleForm(root);
+
+  if (modalOpen) {
+    const modalEl = document.getElementById('scheduleModal');
+    const modalInstance = getModalInstance(modalEl);
+    if (modalInstance) {
+      modalInstance.hide();
+    }
+  }
+
+  return wasActive;
+}
+
+function isScheduleEditActive(root) {
+  const actionContainers = root?.querySelectorAll('.schedule-actions') || [];
+  const actionsVisible = Array.from(actionContainers).some((container) => !container.classList.contains('d-none'));
+  if (actionsVisible) {
+    return true;
+  }
+  const inlineContainer = getScheduleInlineContainer(root);
+  if (isInlineContainerVisible(inlineContainer)) {
+    return true;
+  }
+  return isScheduleModalOpen();
+}
+
 export function editSchedule(dataset, rootParam) {
   const root = getRootElement(rootParam);
   const modalEl = document.getElementById('scheduleModal');
@@ -630,23 +754,12 @@ function bindScheduleCollapse(root) {
     return;
   }
   collapse.dataset.vetScheduleBound = 'true';
-  const hideScheduleActions = () => {
-    const actionContainers = root.querySelectorAll('.schedule-actions');
-    actionContainers.forEach((container) => container.classList.add('d-none'));
-    const toggleButton = root.querySelector('[data-schedule-edit-toggle]');
-    if (toggleButton) {
-      toggleButton.innerHTML = SCHEDULE_EDIT_DEFAULT_LABEL;
-    }
+  const handleCollapseTransition = () => {
+    exitScheduleEditMode(root, { resetForm: true });
   };
 
-  collapse.addEventListener('show.bs.collapse', () => {
-    resetScheduleForm(root);
-    hideScheduleActions();
-  });
-  collapse.addEventListener('hidden.bs.collapse', () => {
-    resetScheduleForm(root);
-    hideScheduleActions();
-  });
+  collapse.addEventListener('show.bs.collapse', handleCollapseTransition);
+  collapse.addEventListener('hidden.bs.collapse', handleCollapseTransition);
 }
 
 async function populateAppointmentModalTimes({
@@ -1327,25 +1440,22 @@ function initScheduleOverview(root) {
 }
 
 export function toggleScheduleEdit(rootParam) {
-  if (isEvent(rootParam)) {
-    rootParam.preventDefault();
+  const isParamEvent = isEvent(rootParam);
+  const event = isParamEvent ? rootParam : null;
+  if (event) {
+    event.preventDefault();
   }
-  const root = getRootElement(rootParam);
+  const rootFromEvent = event?.currentTarget?.closest?.(ROOT_SELECTOR)
+    || event?.target?.closest?.(ROOT_SELECTOR);
+  const root = rootFromEvent || getRootElement(isParamEvent ? undefined : rootParam);
   if (!root) {
     return;
   }
-  const actionContainers = root.querySelectorAll('.schedule-actions');
-  if (!actionContainers.length) {
-    return;
-  }
-  actionContainers.forEach((container) => container.classList.toggle('d-none'));
-  const anyVisible = Array.from(actionContainers).some((container) => !container.classList.contains('d-none'));
-  const toggleButton = root.querySelector('[data-schedule-edit-toggle]');
-  if (toggleButton) {
-    toggleButton.innerHTML = anyVisible ? SCHEDULE_EDIT_CANCEL_LABEL : SCHEDULE_EDIT_DEFAULT_LABEL;
-  }
-  if (!anyVisible) {
-    resetScheduleForm(root);
+
+  if (isScheduleEditActive(root)) {
+    exitScheduleEditMode(root, { resetForm: true });
+  } else {
+    showScheduleEditMode(root);
   }
 }
 
