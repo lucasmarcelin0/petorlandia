@@ -8421,6 +8421,9 @@ def appointments():
             clinic_pending_query.count() if clinic_pending_query is not None else 0
         )
 
+        species_list = list_species()
+        breed_list = list_breeds()
+
         return render_template(
             'agendamentos/edit_vet_schedule.html',
             schedule_form=schedule_form,
@@ -8451,6 +8454,8 @@ def appointments():
                 'EXAM_CONFIRM_DEFAULT_HOURS',
                 2,
             ),
+            species_list=species_list,
+            breed_list=breed_list,
         )
     else:
         if worker in ['colaborador', 'admin']:
