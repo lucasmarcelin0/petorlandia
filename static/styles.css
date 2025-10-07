@@ -13,6 +13,22 @@
   width: 100%;
 }
 
+.card-header-responsive {
+  text-align: left;
+}
+
+.card-header-responsive .card-header-actions {
+  width: 100%;
+}
+
+.card-header-responsive .card-header-title {
+  font-size: 1.05rem;
+}
+
+.card-header-responsive .card-header-subtitle {
+  line-height: 1.4;
+}
+
 .btn-stack-item {
   width: 100%;
   min-height: 44px;
@@ -26,6 +42,15 @@
 
   .btn-stack-item {
     width: auto;
+  }
+
+  .card-header-responsive {
+    text-align: inherit;
+  }
+
+  .card-header-responsive .card-header-actions {
+    width: auto;
+    justify-content: flex-end;
   }
 }
 
