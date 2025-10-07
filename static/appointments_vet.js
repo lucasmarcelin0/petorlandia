@@ -4,6 +4,8 @@ import { setupAppointmentsCalendarSummary } from './appointments_calendar_summar
 const ROOT_SELECTOR = '[data-vet-schedule-root]';
 const DEFAULT_TIME_PLACEHOLDER = 'Selecione...';
 const DEFAULT_SUCCESS_MESSAGE = 'Agendamento atualizado com sucesso.';
+const SCHEDULE_EDIT_DEFAULT_LABEL = '<i class="fas fa-edit me-1"></i>Editar horários';
+const SCHEDULE_EDIT_CANCEL_LABEL = '<i class="fas fa-times me-1"></i>Cancelar Edição';
 
 const EXAM_REQUESTER_ROW_SELECTOR = '[data-exam-requester-row]';
 const EXAM_REQUESTER_MODAL_ID = 'examRequesterModal';
@@ -393,6 +395,30 @@ export function selectDays(mode, selectEl = document.getElementById('schedule-di
   selectEl.dispatchEvent(new Event('change'));
 }
 
+function resetScheduleForm(root) {
+  const inlineContainer = root?.querySelector('[data-schedule-inline-container]');
+  const form = document.getElementById('schedule-form');
+  const daysSelect = document.getElementById('schedule-dias_semana');
+  const titleEl = document.getElementById('scheduleModalTitle');
+
+  if (inlineContainer) {
+    inlineContainer.classList.add('d-none');
+    inlineContainer.dataset.visible = 'false';
+  }
+
+  if (form) {
+    form.reset();
+  }
+
+  if (daysSelect) {
+    daysSelect.multiple = true;
+  }
+
+  if (titleEl) {
+    titleEl.textContent = 'Adicionar Horário';
+  }
+}
+
 export function toggleScheduleForm(rootParam) {
   const isParamEvent = isEvent(rootParam);
   if (isParamEvent) {
@@ -417,15 +443,7 @@ export function toggleScheduleForm(rootParam) {
     if (!inlineContainer) {
       return false;
     }
-    inlineContainer.classList.add('d-none');
-    inlineContainer.dataset.visible = 'false';
-    form.reset();
-    if (daysSelect) {
-      daysSelect.multiple = true;
-    }
-    if (titleEl) {
-      titleEl.textContent = 'Adicionar Horário';
-    }
+    resetScheduleForm(root);
     return true;
   };
 
@@ -597,9 +615,37 @@ function bindScheduleModalButton(root) {
     return;
   }
   scheduleButton.dataset.vetScheduleBound = 'bound';
+  if (scheduleButton.hasAttribute('data-bs-toggle')) {
+    return;
+  }
   scheduleButton.addEventListener('click', (event) => {
     event.preventDefault();
     toggleScheduleForm(root);
+  });
+}
+
+function bindScheduleCollapse(root) {
+  const collapse = root?.querySelector('[data-schedule-manage-collapse]');
+  if (!collapse || collapse.dataset.vetScheduleBound === 'true') {
+    return;
+  }
+  collapse.dataset.vetScheduleBound = 'true';
+  const hideScheduleActions = () => {
+    const actionContainers = root.querySelectorAll('.schedule-actions');
+    actionContainers.forEach((container) => container.classList.add('d-none'));
+    const toggleButton = root.querySelector('[data-schedule-edit-toggle]');
+    if (toggleButton) {
+      toggleButton.innerHTML = SCHEDULE_EDIT_DEFAULT_LABEL;
+    }
+  };
+
+  collapse.addEventListener('show.bs.collapse', () => {
+    resetScheduleForm(root);
+    hideScheduleActions();
+  });
+  collapse.addEventListener('hidden.bs.collapse', () => {
+    resetScheduleForm(root);
+    hideScheduleActions();
   });
 }
 
@@ -1296,26 +1342,10 @@ export function toggleScheduleEdit(rootParam) {
   const anyVisible = Array.from(actionContainers).some((container) => !container.classList.contains('d-none'));
   const toggleButton = root.querySelector('[data-schedule-edit-toggle]');
   if (toggleButton) {
-    toggleButton.innerHTML = anyVisible
-      ? '<i class="fas fa-times me-1"></i>Cancelar Edição'
-      : '<i class="fas fa-edit me-1"></i>Editar horários';
+    toggleButton.innerHTML = anyVisible ? SCHEDULE_EDIT_CANCEL_LABEL : SCHEDULE_EDIT_DEFAULT_LABEL;
   }
   if (!anyVisible) {
-    const inlineContainer = root.querySelector('[data-schedule-inline-container]');
-    if (inlineContainer) {
-      inlineContainer.classList.add('d-none');
-      inlineContainer.dataset.visible = 'false';
-      const form = document.getElementById('schedule-form');
-      const daysSelect = document.getElementById('schedule-dias_semana');
-      const titleEl = document.getElementById('scheduleModalTitle');
-      form?.reset();
-      if (daysSelect) {
-        daysSelect.multiple = true;
-      }
-      if (titleEl) {
-        titleEl.textContent = 'Adicionar Horário';
-      }
-    }
+    resetScheduleForm(root);
   }
 }
 
@@ -1992,6 +2022,7 @@ export function initVetSchedulePage(options = {}) {
   bindExamRequesterDefaultButton(root);
   bindExamRequesterSave(root);
   bindPastToggle(root);
+  bindScheduleCollapse(root);
   bindScheduleModalButton(root);
   bindCalendarSlotHandler(root);
   initScheduleOverview(root);
