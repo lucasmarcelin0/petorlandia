@@ -1,6 +1,6 @@
-<div class="row g-3 data-idade" data-prefixo="{{ prefixo }}">
-  <div class="col-md-4">
-    <label class="form-label">Data de Nascimento</label>
+<div class="row g-3 align-items-end data-idade" data-prefixo="{{ prefixo }}">
+  <div class="col-12 col-sm-6 col-lg-4">
+    <label class="form-label" for="{{ prefixo }}_dob">Data de Nascimento</label>
     <input type="hidden"
            name="{{ nome_data or 'date_of_birth' }}"
            id="{{ prefixo }}_dob_iso"
@@ -11,22 +11,26 @@
       class="form-control"
       id="{{ prefixo }}_dob"
       value="{{ valor_data or '' }}"
+      placeholder="dd/mm/aaaa"
+      autocomplete="off"
       data-dob
     >
   </div>
-  <div class="col-md-2">
-    <label class="form-label">Idade</label>
-    <div class="input-group">
+  <div class="col-12 col-sm-6 col-lg-2">
+    <label class="form-label" for="{{ prefixo }}_age">Idade</label>
+    <div class="input-group shadow-sm">
       <input
         type="number"
         min="0"
-        class="form-control"
+        class="form-control text-center"
         id="{{ prefixo }}_age"
         name="{{ nome_idade or 'age' }}"
         value="{{ valor_idade or '' }}"
         data-age
       >
-      <span class="input-group-text" id="{{ prefixo }}_age_unit" data-age-unit>{{ valor_unidade or '' }}</span>
+      <span class="input-group-text bg-body-tertiary fw-semibold"
+            id="{{ prefixo }}_age_unit"
+            data-age-unit>{{ valor_unidade or 'anos' }}</span>
     </div>
   </div>
 </div>
@@ -42,8 +46,10 @@
     const hiddenInput = wrapper.querySelector('[data-dob-iso]');
     if (!dobInput || !ageInput) return;
 
-    // Máscara de input dd/mm/yyyy
-    Inputmask("99/99/9999").mask(dobInput);
+    // Máscara de input dd/mm/yyyy (ignora se Inputmask não estiver carregado)
+    if (typeof Inputmask !== 'undefined') {
+      Inputmask("99/99/9999").mask(dobInput);
+    }
 
     // Função utilitária para formatar datas no padrão YYYY-MM-DD
     const formatISO = (d) => {
