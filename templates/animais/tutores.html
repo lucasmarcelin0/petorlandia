@@ -81,6 +81,7 @@
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
 <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
 <script src="https://cdn.jsdelivr.net/npm/flatpickr/dist/l10n/pt.js"></script>
+<script src="{{ url_for('static', filename='js/date_mask.js') }}"></script>
 
 <!-- Script geral -->
 <script>
@@ -173,80 +174,38 @@
       ageInput.value = Math.max(idade, 0);
     };
 
-    const aplicarMascaraData = (valor) => {
-      const digitos = valor.replace(/\D/g, "");
-      let formatado = "";
-
-      if (digitos.length > 0) {
-        formatado = digitos.slice(0, 2);
-      }
-      if (digitos.length >= 3) {
-        formatado += "/" + digitos.slice(2, 4);
-      }
-      if (digitos.length >= 5) {
-        formatado += "/" + digitos.slice(4, 8);
-      }
-
-      return formatado;
-    };
-
-    const sincronizarDataDigitada = (instance) => {
-      const altInput = instance.altInput;
-      if (!altInput) return;
-
-      const digitos = altInput.value.replace(/\D/g, "");
-      if (digitos.length === 8) {
-        const dia = digitos.slice(0, 2);
-        const mes = digitos.slice(2, 4);
-        const ano = digitos.slice(4, 8);
-        instance.setDate(`${ano}-${mes}-${dia}`, true, "Y-m-d");
-      } else if (digitos.length === 0) {
-        instance.clear();
-        atualizarIdade(null);
-      }
-    };
-
     const picker = flatpickr(dobInput, {
       locale: "pt",
       dateFormat: "Y-m-d",       // valor REAL enviado ao backend
       altInput: true,
       altFormat: "d/m/Y",        // valor VISUAL ao usuário
       allowInput: true,
-      onReady: function(selectedDates, dateStr, instance) {
-        const alt = instance.altInput;
-        if (!alt) return;
-
-        alt.addEventListener("input", () => {
-          const valorFormatado = aplicarMascaraData(alt.value);
-          if (valorFormatado !== alt.value) {
-            alt.value = valorFormatado;
-            // Ajusta o cursor ao final ao aplicar a máscara
-            alt.setSelectionRange(valorFormatado.length, valorFormatado.length);
-          }
-        });
-
-        const confirmarEntrada = () => sincronizarDataDigitada(instance);
-        alt.addEventListener("blur", confirmarEntrada);
-        alt.addEventListener("keydown", (event) => {
-          if (event.key === "Enter") {
-            event.preventDefault();
-            confirmarEntrada();
-            instance.close();
-          }
-        });
+      onReady(selectedDates, dateStr, instance) {
+        if (window.DateMaskUtils) {
+          window.DateMaskUtils.syncMaskedInput(instance, {
+            onDateSync: atualizarIdade,
+            onClear: () => atualizarIdade(null),
+          });
+        }
 
         if (selectedDates.length) {
           atualizarIdade(selectedDates[0]);
+        } else {
+          atualizarIdade(null);
         }
       },
-      onChange: function(selectedDates) {
-        atualizarIdade(selectedDates[0]);
+      onChange(selectedDates) {
+        atualizarIdade(selectedDates[0] || null);
       }
     });
 
     ageInput.addEventListener("input", () => {
       const idade = parseInt(ageInput.value, 10);
       if (Number.isNaN(idade)) {
+        if (ageInput.value.trim() === "") {
+          picker.clear();
+          atualizarIdade(null);
+        }
         return;
       }
 
