@@ -135,66 +135,96 @@
     </div>
 
     <div class="col-12">
-      <div class="card shadow-sm border-0 h-100">
-        <div class="card-body">
-          <div class="d-flex justify-content-between align-items-start mb-3 flex-wrap gap-2">
-            <div>
-              <h3 class="h6 mb-1">Pacientes (Pets)</h3>
-              <span class="text-muted small" data-pet-subtitle>Dados reais da clínica</span>
-            </div>
-            {% if new_pet_url %}
-            <a class="btn btn-primary btn-sm" href="{{ new_pet_url }}">
-              <i class="bi bi-plus-circle me-1"></i> Novo pet
-            </a>
-            {% endif %}
-          </div>
-          <div class="tutor-calendar__pet-filters" data-pet-filters>
-            <div class="tutor-calendar__pet-filter-control tutor-calendar__pet-filter-control--search">
-              <div class="input-group input-group-sm">
-                <span class="input-group-text">
-                  <i class="bi bi-search"></i>
-                </span>
-                <input
-                  type="search"
-                  class="form-control"
-                  data-pet-filter-search
-                  placeholder="Buscar por nome, tutor ou detalhes"
-                  aria-label="Buscar pets"
-                />
+      <div class="row g-4 align-items-stretch">
+        <div class="col-12 col-xl-6">
+          <div class="card shadow-sm border-0 h-100">
+            <div class="card-body d-flex flex-column">
+              <div class="d-flex justify-content-between align-items-start mb-3 flex-wrap gap-2">
+                <div>
+                  <h3 class="h6 mb-1">Pacientes (Pets)</h3>
+                  <span class="text-muted small" data-pet-subtitle>Dados reais da clínica</span>
+                </div>
+                {% if new_pet_url %}
+                <a class="btn btn-primary btn-sm" href="{{ new_pet_url }}">
+                  <i class="bi bi-plus-circle me-1"></i> Novo pet
+                </a>
+                {% endif %}
+              </div>
+              <p class="text-muted small mb-3">
+                Filtre pacientes recentes e acesse rapidamente a ficha ou cadastre um novo pet quando necessário.
+              </p>
+              <div class="tutor-calendar__pet-filters" data-pet-filters>
+                <div class="tutor-calendar__pet-filter-control tutor-calendar__pet-filter-control--search">
+                  <div class="input-group input-group-sm">
+                    <span class="input-group-text">
+                      <i class="bi bi-search"></i>
+                    </span>
+                    <input
+                      type="search"
+                      class="form-control"
+                      data-pet-filter-search
+                      placeholder="Buscar por nome, tutor ou detalhes"
+                      aria-label="Buscar pets"
+                    />
+                  </div>
+                </div>
+                <div class="tutor-calendar__pet-filter-control">
+                  <select class="form-select form-select-sm" data-pet-filter-species aria-label="Filtrar por espécie">
+                    <option value="">Todas as espécies</option>
+                  </select>
+                </div>
+                <div class="tutor-calendar__pet-filter-control">
+                  <select class="form-select form-select-sm" data-pet-filter-breed aria-label="Filtrar por raça" disabled>
+                    <option value="">Todas as raças</option>
+                  </select>
+                </div>
+                <div class="tutor-calendar__pet-filter-actions">
+                  <button type="button" class="btn btn-outline-secondary btn-sm w-100" data-pet-filter-clear disabled>
+                    <i class="bi bi-x-circle me-1"></i> Limpar filtros
+                  </button>
+                </div>
+              </div>
+              <div class="tutor-calendar__pet-list flex-grow-1" data-pet-list aria-live="polite">
+                <div class="text-muted small">Carregando pets...</div>
+              </div>
+              <div class="d-flex flex-column flex-sm-row gap-2 mt-3">
+                <button
+                  type="button"
+                  class="btn btn-outline-secondary btn-sm w-100 flex-sm-fill d-none"
+                  data-toggle-pets
+                  aria-expanded="false"
+                  aria-hidden="true"
+                >
+                  <i class="bi bi-plus-circle me-1"></i> Ver mais pets
+                </button>
+                <button type="button" class="btn btn-outline-primary btn-sm w-100 flex-sm-fill" data-refresh-pets>
+                  <i class="bi bi-arrow-clockwise me-1"></i> Atualizar lista
+                </button>
               </div>
             </div>
-            <div class="tutor-calendar__pet-filter-control">
-              <select class="form-select form-select-sm" data-pet-filter-species aria-label="Filtrar por espécie">
-                <option value="">Todas as espécies</option>
-              </select>
-            </div>
-            <div class="tutor-calendar__pet-filter-control">
-              <select class="form-select form-select-sm" data-pet-filter-breed aria-label="Filtrar por raça" disabled>
-                <option value="">Todas as raças</option>
-              </select>
-            </div>
-            <div class="tutor-calendar__pet-filter-actions">
-              <button type="button" class="btn btn-outline-secondary btn-sm w-100" data-pet-filter-clear disabled>
-                <i class="bi bi-x-circle me-1"></i> Limpar filtros
-              </button>
-            </div>
           </div>
-          <div class="tutor-calendar__pet-list" data-pet-list aria-live="polite">
-            <div class="text-muted small">Carregando pets...</div>
-          </div>
-          <div class="d-flex flex-column flex-sm-row gap-2 mt-3">
-            <button
-              type="button"
-              class="btn btn-outline-secondary btn-sm w-100 flex-sm-fill d-none"
-              data-toggle-pets
-              aria-expanded="false"
-              aria-hidden="true"
-            >
-              <i class="bi bi-plus-circle me-1"></i> Ver mais pets
-            </button>
-            <button type="button" class="btn btn-outline-primary btn-sm w-100 flex-sm-fill" data-refresh-pets>
-              <i class="bi bi-arrow-clockwise me-1"></i> Atualizar lista
-            </button>
+        </div>
+        <div class="col-12 col-xl-6">
+          <div class="card shadow-sm border-0 h-100">
+            <div class="card-body d-flex flex-column">
+              <div class="d-flex justify-content-between align-items-start flex-wrap gap-2 mb-3">
+                <div>
+                  <h3 class="h6 mb-1">Tutores</h3>
+                  <span class="text-muted small">Cadastre um novo responsável com endereço completo sem sair da agenda.</span>
+                </div>
+                <a class="btn btn-outline-primary btn-sm" href="{{ url_for('tutores') }}" target="_blank" rel="noopener">
+                  <i class="bi bi-box-arrow-up-right me-1"></i> Ver todos
+                </a>
+              </div>
+              {% with
+                form_id=component_id ~ '-quick-tutor-form',
+                show_intro=False,
+                include_address=True,
+                address_prefix=component_id ~ '-quick-tutor-address'
+              %}
+                {% include 'partials/calendar_quick_tutor_form.html' %}
+              {% endwith %}
+            </div>
           </div>
         </div>
       </div>
