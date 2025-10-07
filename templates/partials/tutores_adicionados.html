@@ -1,7 +1,12 @@
-<div class="container d-flex justify-content-center my-5">
-  <div style="width: 100%; max-width: 700px;">
-    <div class="d-flex justify-content-between align-items-center mb-3">
-      <h4 class="mb-0">👥 Tutores</h4>
+{% set compact = compact|default(False) %}
+{% set card_block %}
+<div class="card shadow-sm border-0 rounded-4 h-100 d-flex flex-column">
+  <div class="card-header bg-white border-0 pb-0">
+    <div class="d-flex justify-content-between align-items-start flex-wrap gap-2">
+      <div>
+        <h4 class="mb-1">👥 Tutores</h4>
+        <p class="text-muted small mb-0">Filtre, ordene e acesse os tutores da clínica com rapidez.</p>
+      </div>
       {% if scope is defined %}
       <div class="btn-group btn-group-sm">
         <a href="{{ url_for('tutores', scope='all') }}" class="btn btn-outline-primary {% if scope != 'mine' %}active{% endif %}">Todos</a>
@@ -9,11 +14,15 @@
       </div>
       {% endif %}
     </div>
-    <div class="row mb-3">
-      <div class="col-md-8">
+  </div>
+  <div class="card-body p-4 flex-grow-1 d-flex flex-column">
+    <div class="row g-3 align-items-end mb-4">
+      <div class="col-12 col-lg-7">
+        <label for="tutor-filter" class="form-label small text-muted mb-1">Buscar</label>
         <input type="text" id="tutor-filter" class="form-control" placeholder="Buscar por nome, CPF, telefone...">
       </div>
-      <div class="col-md-4">
+      <div class="col-12 col-lg-5">
+        <label for="tutor-sort" class="form-label small text-muted mb-1">Ordenar por</label>
         <select id="tutor-sort" class="form-select">
           <option value="name_asc">Nome (A-Z)</option>
           <option value="name_desc">Nome (Z-A)</option>
@@ -24,33 +33,29 @@
         </select>
       </div>
     </div>
-    <div id="tutor-cards" class="row g-3">
+    <div id="tutor-cards" class="row g-3 flex-grow-1">
       {% if tutores_adicionados %}
         {% for tutor in tutores_adicionados %}
         <div class="col-md-6 d-flex" data-name="{{ tutor.name|lower }}" data-date="{{ tutor.created_at.isoformat() if tutor.created_at else '' }}" data-cpf="{{ tutor.cpf or '' }}" data-phone="{{ tutor.phone or '' }}" {% if tutor.date_of_birth %}data-dob="{{ tutor.date_of_birth.isoformat() }}"{% endif %}>
-<div class="card shadow-sm rounded-4 h-100 flex-fill position-relative">
-  {% if tutor.worker|lower == 'veterinario' %}
-    <span class="badge bg-success position-absolute top-0 end-0 m-2">Veterinário</span>
-  {% endif %}
+          <div class="card shadow-sm rounded-4 h-100 flex-fill position-relative border-0">
+            {% if tutor.worker|lower == 'veterinario' %}
+            <span class="badge bg-success position-absolute top-0 end-0 m-2">Veterinário</span>
+            {% endif %}
             <div class="card-body d-flex flex-column justify-content-between">
-              <div>
-                <h5 class="card-title">{{ tutor.name }}</h5>
+              <div class="mb-3">
+                <h5 class="card-title mb-1">{{ tutor.name }}</h5>
                 <p class="mb-1"><strong>Email:</strong> {{ tutor.email }}</p>
                 {% if tutor.cpf %}
-                  <p class="mb-1"><strong>CPF:</strong> {{ tutor.cpf }}</p>
+                <p class="mb-1"><strong>CPF:</strong> {{ tutor.cpf }}</p>
                 {% endif %}
                 {% if tutor.worker|lower == 'veterinario' and tutor.veterinario.specialties %}
-                  <p class="mb-1"><strong>Especialidades:</strong> {{ tutor.veterinario.specialty_list }}</p>
+                <p class="mb-0"><strong>Especialidades:</strong> {{ tutor.veterinario.specialty_list }}</p>
                 {% endif %}
               </div>
-              <div class="d-flex flex-wrap gap-2 mt-3">
-                <a href="{{ url_for('ficha_tutor', tutor_id=tutor.id) }}" class="btn btn-sm btn-outline-dark w-100">
-                  📋 Ver Ficha
-                </a>
+              <div class="d-flex flex-wrap gap-2">
+                <a href="{{ url_for('ficha_tutor', tutor_id=tutor.id) }}" class="btn btn-sm btn-outline-dark flex-fill">📋 Ver Ficha</a>
                 {% if tutor.worker|lower == 'veterinario' %}
-                <a href="{{ url_for('edit_vet_specialties', veterinario_id=tutor.veterinario.id) }}" class="btn btn-sm btn-outline-primary w-100">
-                  🩺 Especialidades
-                </a>
+                <a href="{{ url_for('edit_vet_specialties', veterinario_id=tutor.veterinario.id) }}" class="btn btn-sm btn-outline-primary flex-fill">🩺 Especialidades</a>
                 {% endif %}
               </div>
             </div>
@@ -58,17 +63,19 @@
         </div>
         {% endfor %}
       {% else %}
-        <div class="text-center text-muted mt-4">
+      <div class="col-12">
+        <div class="text-center text-muted py-5 border rounded-4" style="border-style: dashed;">
           Nenhum tutor associado à clínica ainda.
         </div>
+      </div>
       {% endif %}
     </div>
-
-    <!-- Paginação -->
-    {% if pagination and pagination.pages > 1 %}
-    <div class="d-flex justify-content-center mt-4">
+  </div>
+  {% if pagination and pagination.pages > 1 %}
+  <div class="card-footer bg-white border-0 pt-0">
+    <div class="d-flex justify-content-center">
       <nav>
-        <ul class="pagination">
+        <ul class="pagination mb-0">
           {% if pagination.has_prev %}
           <li class="page-item">
             <a class="page-link" href="{{ url_for('tutores', page=pagination.prev_num, scope=scope) }}">Anterior</a>
@@ -99,9 +106,22 @@
         </ul>
       </nav>
     </div>
-    {% endif %}
+  </div>
+  {% endif %}
+</div>
+{% endset %}
+
+{% if compact %}
+  {{ card_block }}
+{% else %}
+<div class="container my-5">
+  <div class="row justify-content-center">
+    <div class="col-lg-10 col-xl-9">
+      {{ card_block }}
+    </div>
   </div>
 </div>
+{% endif %}
 
 <script>
 (function() {
