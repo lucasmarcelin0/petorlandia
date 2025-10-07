@@ -1,5 +1,10 @@
 {% set form_id = form_id|default('calendar-quick-tutor-form') %}
-{% set heading_id = heading_id|default(form_id ~ '-heading') %}
+{% set show_intro = show_intro|default(True) %}
+{% if show_intro %}
+  {% set header_id = heading_id|default(form_id ~ '-heading') %}
+{% else %}
+  {% set header_id = heading_id if heading_id is defined else None %}
+{% endif %}
 
 <form
   id="{{ form_id }}"
@@ -7,16 +12,18 @@
   action="{{ url_for('tutores') }}"
   class="js-tutor-form"
   data-sync="true"
-  aria-labelledby="{{ heading_id }}"
+  {% if header_id %}aria-labelledby="{{ header_id }}"{% endif %}
 >
+  {% if show_intro %}
   <div class="d-flex flex-column flex-md-row align-items-md-center gap-2 mb-3">
-    <h5 id="{{ heading_id }}" class="mb-0">
+    <h5 id="{{ header_id }}" class="mb-0">
       <i class="bi bi-person-plus me-2"></i> Cadastro rápido de tutor
     </h5>
     <span class="text-muted small">
       Preencha os dados essenciais para registrar um tutor sem sair da agenda.
     </span>
   </div>
+  {% endif %}
   <div class="row g-3">
     <div class="col-md-6">
       <label for="{{ form_id }}-name" class="form-label">Nome <span class="text-danger">*</span></label>
