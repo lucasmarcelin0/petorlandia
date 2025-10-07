@@ -1,6 +1,11 @@
 {% extends "layout.html" %}
 {% from 'components/photo_cropper.html' import photo_cropper %}
 
+{% block register_dependencies %}
+  {{ super() }}
+  {% set page_requires.tutor_search = true %}
+{% endblock %}
+
 {% block main %}
 <div class="container mt-4">
   <ul class="nav nav-tabs mb-4 rounded shadow-sm bg-white pet-nav" id="clinicTabs" role="tablist">
