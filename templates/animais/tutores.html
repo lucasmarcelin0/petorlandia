@@ -157,33 +157,103 @@
   const dobInput = document.getElementById("date_of_birth");
   const ageInput = document.getElementById("age");
 
-  flatpickr(dobInput, {
-    locale: "pt",
-    dateFormat: "Y-m-d",       // valor REAL enviado ao backend
-    altInput: true,
-    altFormat: "d/m/Y",        // valor VISUAL ao usuário
-    allowInput: true,
-    onChange: function(selectedDates) {
-      if (selectedDates.length) {
-        const dob = selectedDates[0];
-        const today = new Date();
-        let age = today.getFullYear() - dob.getFullYear();
-        const m = today.getMonth() - dob.getMonth();
-        if (m < 0 || (m === 0 && today.getDate() < dob.getDate())) {
-          age--;
-        }
-        ageInput.value = age;
+  if (dobInput && ageInput) {
+    const atualizarIdade = (date) => {
+      if (!date) {
+        ageInput.value = "";
+        return;
       }
-    }
-  });
 
-  ageInput.addEventListener("input", () => {
-    const age = parseInt(ageInput.value);
-    if (!isNaN(age)) {
-      const today = new Date();
-      const estimatedDOB = new Date(today.getFullYear() - age, today.getMonth(), today.getDate());
-      dobInput._flatpickr.setDate(estimatedDOB);  // sincroniza no flatpickr
-    }
-  });
+      const hoje = new Date();
+      let idade = hoje.getFullYear() - date.getFullYear();
+      const mes = hoje.getMonth() - date.getMonth();
+      if (mes < 0 || (mes === 0 && hoje.getDate() < date.getDate())) {
+        idade--;
+      }
+      ageInput.value = Math.max(idade, 0);
+    };
+
+    const aplicarMascaraData = (valor) => {
+      const digitos = valor.replace(/\D/g, "");
+      let formatado = "";
+
+      if (digitos.length > 0) {
+        formatado = digitos.slice(0, 2);
+      }
+      if (digitos.length >= 3) {
+        formatado += "/" + digitos.slice(2, 4);
+      }
+      if (digitos.length >= 5) {
+        formatado += "/" + digitos.slice(4, 8);
+      }
+
+      return formatado;
+    };
+
+    const sincronizarDataDigitada = (instance) => {
+      const altInput = instance.altInput;
+      if (!altInput) return;
+
+      const digitos = altInput.value.replace(/\D/g, "");
+      if (digitos.length === 8) {
+        const dia = digitos.slice(0, 2);
+        const mes = digitos.slice(2, 4);
+        const ano = digitos.slice(4, 8);
+        instance.setDate(`${ano}-${mes}-${dia}`, true, "Y-m-d");
+      } else if (digitos.length === 0) {
+        instance.clear();
+        atualizarIdade(null);
+      }
+    };
+
+    const picker = flatpickr(dobInput, {
+      locale: "pt",
+      dateFormat: "Y-m-d",       // valor REAL enviado ao backend
+      altInput: true,
+      altFormat: "d/m/Y",        // valor VISUAL ao usuário
+      allowInput: true,
+      onReady: function(selectedDates, dateStr, instance) {
+        const alt = instance.altInput;
+        if (!alt) return;
+
+        alt.addEventListener("input", () => {
+          const valorFormatado = aplicarMascaraData(alt.value);
+          if (valorFormatado !== alt.value) {
+            alt.value = valorFormatado;
+            // Ajusta o cursor ao final ao aplicar a máscara
+            alt.setSelectionRange(valorFormatado.length, valorFormatado.length);
+          }
+        });
+
+        const confirmarEntrada = () => sincronizarDataDigitada(instance);
+        alt.addEventListener("blur", confirmarEntrada);
+        alt.addEventListener("keydown", (event) => {
+          if (event.key === "Enter") {
+            event.preventDefault();
+            confirmarEntrada();
+            instance.close();
+          }
+        });
+
+        if (selectedDates.length) {
+          atualizarIdade(selectedDates[0]);
+        }
+      },
+      onChange: function(selectedDates) {
+        atualizarIdade(selectedDates[0]);
+      }
+    });
+
+    ageInput.addEventListener("input", () => {
+      const idade = parseInt(ageInput.value, 10);
+      if (Number.isNaN(idade)) {
+        return;
+      }
+
+      const hoje = new Date();
+      const dataEstimativa = new Date(hoje.getFullYear() - idade, hoje.getMonth(), hoje.getDate());
+      picker.setDate(dataEstimativa, true);
+    });
+  }
 </script>
 {% endblock %}
