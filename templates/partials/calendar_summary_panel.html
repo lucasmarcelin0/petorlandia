@@ -1,12 +1,89 @@
 {% set summary_title = summary_title|default('Resumo por profissional') %}
 {% set summary_description = summary_description|default('Totais diários e semanais por veterinário com base no calendário visível.') %}
 {% set summary_vets = calendar_summary_vets|default([], true) %}
+{% if summary_vets %}
+  {% if summary_vets is mapping %}
+    {% set summary_vet_list = [summary_vets] %}
+  {% elif summary_vets is iterable and summary_vets is not string %}
+    {% set summary_vet_list = summary_vets|list %}
+  {% else %}
+    {% set summary_vet_list = [summary_vets] %}
+  {% endif %}
+{% else %}
+  {% set summary_vet_list = [] %}
+{% endif %}
+{% set sanitized_vets = namespace(items=[]) %}
+{% for vet in summary_vet_list if vet %}
+  {% set vet_id = vet.id
+    or vet.vet_id
+    or vet.veterinario_id
+    or vet.veterinarioId
+    or vet.veterinarian_id
+    or vet.veterinarianId %}
+  {% set vet_full_name = vet.full_name
+    if vet.full_name is defined
+    else (vet.fullName if vet.fullName is defined else None) %}
+  {% set vet_label = vet.label
+    if vet.label is defined
+    else (vet.name if vet.name is defined else None) %}
+  {% if not vet_label and vet_full_name %}
+    {% set vet_label = vet_full_name %}
+  {% endif %}
+  {% if not vet_full_name and vet_label %}
+    {% set vet_full_name = vet_label %}
+  {% endif %}
+  {% set vet_display = vet_label if vet_label else 'Profissional ' ~ loop.index %}
+  {% set vet_title = vet_full_name if vet_full_name else vet_display %}
+  {% set raw_specialty = none %}
+  {% if vet.specialty_list is defined and vet.specialty_list %}
+    {% set raw_specialty = vet.specialty_list %}
+  {% elif vet.specialtyList is defined and vet.specialtyList %}
+    {% set raw_specialty = vet.specialtyList %}
+  {% endif %}
+  {% if raw_specialty is string %}
+    {% set specialty_text = raw_specialty|trim %}
+  {% elif raw_specialty is sequence %}
+    {% set specialty_text = raw_specialty|join(', ') %}
+  {% elif raw_specialty is not none %}
+    {% set specialty_text = raw_specialty|string %}
+  {% else %}
+    {% set specialty_text = '' %}
+  {% endif %}
+  {% if vet.is_specialist is defined %}
+    {% set is_specialist = vet.is_specialist %}
+  {% elif vet.isSpecialist is defined %}
+    {% set is_specialist = vet.isSpecialist %}
+  {% elif vet.specialist is defined %}
+    {% set is_specialist = vet.specialist %}
+  {% else %}
+    {% set is_specialist = specialty_text is string and specialty_text|length > 0 %}
+  {% endif %}
+  {% set primary_specialty = '' %}
+  {% if vet.primary_specialty is defined and vet.primary_specialty %}
+    {% set primary_specialty = vet.primary_specialty %}
+  {% elif vet.primarySpecialty is defined and vet.primarySpecialty %}
+    {% set primary_specialty = vet.primarySpecialty %}
+  {% endif %}
+  {% set sanitized_vets.items = sanitized_vets.items + [{
+    'id': vet_id,
+    'label': vet_display,
+    'name': vet_display,
+    'full_name': vet_title,
+    'vetName': vet_display,
+    'vetFullName': vet_title,
+    'specialty_list': specialty_text,
+    'is_specialist': is_specialist,
+    'primary_specialty': primary_specialty,
+    'primarySpecialty': primary_specialty
+  }] %}
+{% endfor %}
+{% set summary_vet_entries = sanitized_vets.items %}
 {% set summary_clinic_ids = calendar_summary_clinic_ids|default([], true) %}
 {% set summary_storage_key = calendar_summary_storage_key|default('', true) %}
 <div
   class="card calendar-summary-card border-0 shadow-sm h-100 is-loading"
   data-calendar-summary-panel
-  data-calendar-summary-vets='{{ summary_vets|tojson }}'
+  data-calendar-summary-vets='{{ summary_vet_entries|tojson }}'
   data-calendar-summary-clinic-ids='{{ summary_clinic_ids|tojson }}'
   {% if summary_storage_key %}
   data-calendar-summary-storage-key="{{ summary_storage_key }}"
@@ -37,12 +114,82 @@
       </div>
     </div>
     <div
-      class="calendar-summary-filters d-flex flex-wrap align-items-center gap-2 mt-3 d-none"
+      class="calendar-summary-filters d-flex flex-wrap align-items-center gap-2 mt-3{% if not summary_vet_entries %} d-none{% endif %}"
       data-calendar-summary-filters
       data-calendar-summary-all-label="Toda a clínica"
       data-calendar-summary-all-vet-id=""
       aria-label="Filtrar agenda por profissional"
-    ></div>
+    >
+      {% if summary_vet_entries %}
+        {% set all_label = 'Toda a clínica' %}
+        <button
+          type="button"
+          class="calendar-summary-filter calendar-summary-filter--all"
+          data-vet-id=""
+          aria-pressed="false"
+          aria-label="Mostrar agenda de {{ all_label.lower() }}"
+          title="{{ all_label }}"
+        >
+          <span class="calendar-summary-filter-label">{{ all_label }}</span>
+        </button>
+        {% for vet in summary_vet_entries %}
+          {% set vet_id = vet.id %}
+          {% set vet_display = vet.label if vet.label is defined and vet.label else (vet.name if vet.name is defined and vet.name else 'Profissional ' ~ loop.index) %}
+          {% set vet_title = vet.full_name if vet.full_name is defined and vet.full_name else vet_display %}
+          {% set specialty_text = (vet.specialty_list if vet.specialty_list is defined else '')|trim %}
+          {% set is_specialist = vet.is_specialist if vet.is_specialist is defined else False %}
+          {% set primary_specialty = '' %}
+          {% if vet.primary_specialty is defined and vet.primary_specialty %}
+            {% set primary_specialty = vet.primary_specialty %}
+          {% elif vet.primarySpecialty is defined and vet.primarySpecialty %}
+            {% set primary_specialty = vet.primarySpecialty %}
+          {% endif %}
+          {% set name_source = (vet_title or '')|trim %}
+          {% set name_parts = name_source.split() %}
+          {% set part_count = name_parts|length %}
+          {% if part_count >= 1 %}
+            {% set first_part = name_parts[0] %}
+            {% set last_part = name_parts[-1] if part_count > 1 else name_parts[0] %}
+            {% if part_count > 1 and first_part and last_part %}
+              {% set initials_text = (first_part[0] ~ last_part[0])|upper %}
+            {% else %}
+              {% set initials_text = first_part[:2]|upper %}
+            {% endif %}
+          {% else %}
+            {% set initials_text = '•' %}
+          {% endif %}
+          {% set aria_label = 'Filtrar agenda por ' ~ vet_display %}
+          {% if is_specialist %}
+            {% if specialty_text %}
+              {% set aria_label = aria_label ~ ', especialista em ' ~ specialty_text %}
+            {% else %}
+              {% set aria_label = aria_label ~ ', especialista' %}
+            {% endif %}
+          {% endif %}
+          <button
+            type="button"
+            class="calendar-summary-filter has-label"
+            data-vet-id="{{ vet_id if vet_id is not none else '' }}"
+            aria-pressed="false"
+            aria-label="{{ aria_label }}"
+            title="{{ vet_title }}"
+          >
+            <span class="calendar-summary-filter-icon" aria-hidden="true">{{ initials_text }}</span>
+            <span class="calendar-summary-filter-content">
+              <span class="calendar-summary-filter-name">{{ vet_display }}</span>
+              {% if is_specialist %}
+                <span class="calendar-summary-filter-badge badge rounded-pill" aria-hidden="true"{% if specialty_text %} title="{{ specialty_text }}"{% endif %}>
+                  {{ primary_specialty if primary_specialty else 'Especialista' }}
+                </span>
+                <span class="visually-hidden">
+                  {% if specialty_text %}Especialista em {{ specialty_text }}{% else %}Especialista{% endif %}
+                </span>
+              {% endif %}
+            </span>
+          </button>
+        {% endfor %}
+      {% endif %}
+    </div>
     <div class="calendar-summary-overview row g-3 mt-1" data-calendar-summary-overview hidden>
       <div class="col-12 col-sm-6">
         <div class="calendar-summary-overview-card is-today">
