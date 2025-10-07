@@ -244,15 +244,6 @@
     </div>
   </div>
 
-  <div class="card border-0 shadow-lg rounded-4 mb-5">
-    <div class="card-header bg-success text-white rounded-top-4 d-flex align-items-center">
-      <h5 class="mb-0"><i class="bi bi-syringe me-2"></i> Agenda de Vacinas</h5>
-    </div>
-    <div class="card-body">
-      {% include 'partials/vaccine_appointments_table.html' %}
-    </div>
-  </div>
-
   <div id="appointmentsList" data-appointments-container data-refresh-url="{{ request.url }}">
     {% include 'partials/appointments_table.html' %}
   </div>
