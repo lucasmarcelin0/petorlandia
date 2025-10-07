@@ -5796,69 +5796,75 @@ def criar_tutor_ajax():
 
 
 # app.py  – dentro da rota /novo_animal
+def _get_recent_animais(scope, page, clinic_id=None, user=None):
+    """Return paginated animals for the quick registration panels."""
+
+    user = user or current_user
+    clinic_id = clinic_id if clinic_id is not None else current_user_clinic_id()
+
+    if scope == 'mine':
+        query = Animal.query.filter(Animal.removido_em == None)
+        if clinic_id:
+            query = query.filter(Animal.clinica_id == clinic_id)
+        consultas_exist = (
+            db.session.query(Consulta.id)
+            .filter(
+                Consulta.animal_id == Animal.id,
+                Consulta.created_by == getattr(user, 'id', None),
+            )
+        )
+        pagination = (
+            query.filter(
+                or_(
+                    Animal.added_by_id == getattr(user, 'id', None),
+                    consultas_exist.exists(),
+                )
+            )
+            .order_by(Animal.date_added.desc())
+            .paginate(page=page, per_page=9)
+        )
+    elif clinic_id:
+        last_appt = (
+            db.session.query(
+                Appointment.animal_id,
+                func.max(Appointment.scheduled_at).label('last_at')
+            )
+            .filter(Appointment.clinica_id == clinic_id)
+            .group_by(Appointment.animal_id)
+            .subquery()
+        )
+
+        pagination = (
+            Animal.query
+            .outerjoin(last_appt, Animal.id == last_appt.c.animal_id)
+            .filter(Animal.removido_em == None)
+            .filter(
+                or_(
+                    Animal.clinica_id == clinic_id,
+                    last_appt.c.last_at != None
+                )
+            )
+            .order_by(func.coalesce(last_appt.c.last_at, Animal.date_added).desc())
+            .paginate(page=page, per_page=9)
+        )
+    else:
+        pagination = (
+            Animal.query
+            .filter_by(added_by_id=getattr(user, 'id', None))
+            .filter(Animal.removido_em == None)
+            .order_by(Animal.date_added.desc())
+            .paginate(page=page, per_page=9)
+        )
+
+    return pagination.items, pagination
+
+
 @app.route('/novo_animal', methods=['GET', 'POST'])
 @login_required
 def novo_animal():
     if current_user.worker not in ['veterinario', 'colaborador']:
         flash('Apenas veterinários ou colaboradores podem cadastrar animais.', 'danger')
         return redirect(url_for('index'))
-
-    def fetch_animais(scope, page):
-        clinic_id = current_user_clinic_id()
-        if scope == 'mine':
-            query = Animal.query.filter(Animal.removido_em == None)
-            if clinic_id:
-                query = query.filter(Animal.clinica_id == clinic_id)
-            consultas_exist = (
-                db.session.query(Consulta.id)
-                .filter(
-                    Consulta.animal_id == Animal.id,
-                    Consulta.created_by == current_user.id,
-                )
-            )
-            pagination = (
-                query.filter(
-                    or_(
-                        Animal.added_by_id == current_user.id,
-                        consultas_exist.exists(),
-                    )
-                )
-                .order_by(Animal.date_added.desc())
-                .paginate(page=page, per_page=9)
-            )
-        elif clinic_id:
-            last_appt = (
-                db.session.query(
-                    Appointment.animal_id,
-                    func.max(Appointment.scheduled_at).label('last_at')
-                )
-                .filter(Appointment.clinica_id == clinic_id)
-                .group_by(Appointment.animal_id)
-                .subquery()
-            )
-
-            pagination = (
-                Animal.query
-                .outerjoin(last_appt, Animal.id == last_appt.c.animal_id)
-                .filter(Animal.removido_em == None)
-                .filter(
-                    or_(
-                        Animal.clinica_id == clinic_id,
-                        last_appt.c.last_at != None
-                    )
-                )
-                .order_by(func.coalesce(last_appt.c.last_at, Animal.date_added).desc())
-                .paginate(page=page, per_page=9)
-            )
-        else:
-            pagination = (
-                Animal.query
-                .filter_by(added_by_id=current_user.id)
-                .filter(Animal.removido_em == None)
-                .order_by(Animal.date_added.desc())
-                .paginate(page=page, per_page=9)
-            )
-        return pagination.items, pagination
 
     if request.method == 'POST':
         tutor_id = request.form.get('tutor_id', type=int)
@@ -5945,7 +5951,7 @@ def novo_animal():
         if prefers_json or is_ajax:
             scope = request.args.get('scope', 'all')
             page = request.args.get('page', 1, type=int)
-            animais_adicionados, pagination = fetch_animais(scope, page)
+            animais_adicionados, pagination = _get_recent_animais(scope, page)
             html = render_template(
                 'partials/animais_adicionados.html',
                 animais_adicionados=animais_adicionados,
@@ -5964,7 +5970,7 @@ def novo_animal():
     # GET: lista de animais adicionados para exibição
     page = request.args.get('page', 1, type=int)
     scope = request.args.get('scope', 'all')
-    animais_adicionados, pagination = fetch_animais(scope, page)
+    animais_adicionados, pagination = _get_recent_animais(scope, page)
 
     # Lista de espécies e raças para os <select> do formulário
     species_list = list_species()
@@ -8562,6 +8568,42 @@ def appointments():
         species_list = list_species()
         breed_list = list_breeds()
 
+        pet_scope = request.args.get('pet_scope', 'all')
+        pet_page = request.args.get('pet_page', 1, type=int)
+        clinic_scope_id = (
+            veterinario.clinica_id
+            if getattr(veterinario, 'clinica_id', None)
+            else current_user_clinic_id()
+        )
+        novo_pet_animais, novo_pet_pagination = _get_recent_animais(
+            pet_scope,
+            pet_page,
+            clinic_id=clinic_scope_id,
+        )
+
+        def build_vet_animals_url(scope=None, page=None, **extra):
+            base_args = request.args.to_dict()
+            if 'view_as' not in base_args:
+                base_args['view_as'] = 'veterinario'
+            base_args['veterinario_id'] = veterinario.id
+
+            scope_value = scope if scope is not None else None
+            page_value = page if page is not None else None
+
+            if scope_value is not None:
+                base_args['pet_scope'] = scope_value
+                if page is None:
+                    base_args.pop('pet_page', None)
+
+            if page_value is not None:
+                if page_value:
+                    base_args['pet_page'] = page_value
+                else:
+                    base_args.pop('pet_page', None)
+
+            base_args.update(extra)
+            return url_for('appointments', **base_args)
+
         return render_template(
             'agendamentos/edit_vet_schedule.html',
             schedule_form=schedule_form,
@@ -8594,6 +8636,10 @@ def appointments():
             ),
             species_list=species_list,
             breed_list=breed_list,
+            novo_pet_animais=novo_pet_animais,
+            novo_pet_pagination=novo_pet_pagination,
+            novo_pet_scope=pet_scope,
+            build_novo_pet_url=build_vet_animals_url,
         )
     else:
         if worker in ['colaborador', 'admin']:

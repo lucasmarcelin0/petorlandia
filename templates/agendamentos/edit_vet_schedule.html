@@ -1076,22 +1076,18 @@
       </div>
     </div>
     <div class="collapse" id="vetNewPetForm" data-bs-parent="#{{ schedule_collapse_group_id }}">
-      <div class="card-body bg-light p-4 h-100">
-        <div class="row justify-content-center align-items-stretch h-100">
-          <div class="col-lg-10 col-xl-8 col-xxl-7 h-100">
-            <div class="card shadow-lg border-0 rounded-4 overflow-hidden h-100">
-              <div class="card-body p-4 p-lg-5 d-flex flex-column h-100">
-                <div class="text-center text-md-start mb-4">
-                  <h3 class="fw-semibold mb-2">🐾 Cadastrar novo pet</h3>
-                  <p class="text-muted mb-0">Preencha as informações do animal para vinculá-lo rapidamente ao tutor.</p>
-                </div>
-                {% with species_list=species_list, breed_list=breed_list %}
-                  {% include 'partials/animal_register_form.html' %}
-                {% endwith %}
-              </div>
-            </div>
-          </div>
-        </div>
+      <div class="card-body bg-light p-4">
+        {% with
+          species_list=species_list,
+          breed_list=breed_list,
+          animais_adicionados=novo_pet_animais,
+          pagination=novo_pet_pagination,
+          scope=novo_pet_scope,
+          wrap_in_container=False,
+          build_animals_url=build_novo_pet_url
+        %}
+          {% include 'partials/novo_pet_panel.html' %}
+        {% endwith %}
       </div>
     </div>
       </div>
