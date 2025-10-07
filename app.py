@@ -2538,6 +2538,9 @@ def imprimir_consulta(consulta_id):
 
 
 
+TUTOR_SEARCH_LIMIT = 50
+
+
 @app.route('/buscar_tutores', methods=['GET'])
 def buscar_tutores():
     raw_query = request.args.get('q', '')
@@ -2556,14 +2559,7 @@ def buscar_tutores():
             sanitized = func.replace(sanitized, char, '')
         return sanitized
 
-    # Junta resultados de múltiplos campos evitando duplicados
-    encontrados = {}
-
-    def adicionar_usuarios(usuarios):
-        for usuario in usuarios:
-            encontrados[usuario.id] = usuario
-
-    campos_texto = [
+    text_columns = [
         User.name,
         User.email,
         User.worker,
@@ -2571,24 +2567,6 @@ def buscar_tutores():
         User.cpf,
         User.rg,
         User.phone,
-    ]
-
-    for campo in campos_texto:
-        adicionar_usuarios(User.query.filter(campo.ilike(like_query)).all())
-
-    # Busca por dados numéricos removendo formatação
-    if numeric_like:
-        campos_numericos = [
-            sanitize_expression(User.cpf, ['.', '-', '/', ' ']),
-            sanitize_expression(User.rg, ['.', '-', '/', ' ']),
-            sanitize_expression(User.phone, ['(', ')', '-', ' ']),
-        ]
-
-        for campo in campos_numericos:
-            adicionar_usuarios(User.query.filter(campo.ilike(numeric_like)).all())
-
-    # Campos de endereço vinculados ao tutor
-    campos_endereco = [
         Endereco.cep,
         Endereco.rua,
         Endereco.numero,
@@ -2598,23 +2576,34 @@ def buscar_tutores():
         Endereco.estado,
     ]
 
-    for campo in campos_endereco:
-        adicionar_usuarios(
-            User.query.join(User.endereco, isouter=True)
-            .filter(campo.ilike(like_query))
-            .all()
-        )
+    digit_columns = [
+        sanitize_expression(User.cpf, ['.', '-', '/', ' ']),
+        sanitize_expression(User.rg, ['.', '-', '/', ' ']),
+        sanitize_expression(User.phone, ['(', ')', '-', ' ']),
+        sanitize_expression(Endereco.cep, ['-', ' ']),
+    ]
+
+    filters = [column.ilike(like_query) for column in text_columns]
 
     if numeric_like:
-        adicionar_usuarios(
-            User.query.join(User.endereco, isouter=True)
-            .filter(sanitize_expression(Endereco.cep, ['-', ' ']).ilike(numeric_like))
-            .all()
+        filters.extend(column.ilike(numeric_like) for column in digit_columns)
+
+    tutores = (
+        User.query.outerjoin(Endereco)
+        .options(
+            joinedload(User.endereco),
+            joinedload(User.veterinario).joinedload(Veterinario.specialties),
         )
+        .filter(or_(*filters))
+        .distinct()
+        .order_by(User.name)
+        .limit(TUTOR_SEARCH_LIMIT)
+        .all()
+    )
 
     resultados = []
 
-    for tutor in encontrados.values():
+    for tutor in tutores:
         address_summary = (
             tutor.address
             or (tutor.endereco.full if getattr(tutor, 'endereco', None) else '')
