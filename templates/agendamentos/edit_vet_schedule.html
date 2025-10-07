@@ -123,8 +123,25 @@
         >
           <div class="card-body border-top p-4">
             <div class="d-flex flex-column gap-4">
+              <button
+                type="button"
+                class="btn btn-outline-primary align-self-start d-inline-flex align-items-center gap-2"
+                id="agenda-filter-toggle"
+                aria-controls="agenda-filter-card"
+                aria-expanded="false"
+                data-label-show="Mostrar filtros"
+                data-label-hide="Ocultar filtros"
+              >
+                <i class="fas fa-filter"></i>
+                <span data-state-label class="fw-semibold">Mostrar filtros</span>
+              </button>
+
               <!-- Filtros com design melhorado -->
-              <div class="card shadow-sm border-0 h-100">
+              <div
+                class="card shadow-sm border-0 h-100 d-none"
+                id="agenda-filter-card"
+                data-default-visible="false"
+              >
                 <div class="card-header bg-primary bg-gradient text-white border-0 py-3 position-relative overflow-hidden">
                   <div class="d-flex align-items-center">
                     <div class="bg-white text-primary rounded-circle d-flex align-items-center justify-content-center me-3" style="width: 42px; height: 42px;">
@@ -1248,6 +1265,70 @@
 
   <script>
     document.addEventListener('DOMContentLoaded', function () {
+      const filterCard = document.getElementById('agenda-filter-card');
+      const filterToggle = document.getElementById('agenda-filter-toggle');
+
+      if (filterCard && filterToggle) {
+        const FILTER_VISIBILITY_KEY = 'agendaFilterCardVisible';
+
+        const readStoredVisibility = () => {
+          try {
+            return window.localStorage.getItem(FILTER_VISIBILITY_KEY);
+          } catch (error) {
+            console.error('Não foi possível recuperar a preferência dos filtros.', error);
+            return null;
+          }
+        };
+
+        const writeStoredVisibility = (value) => {
+          try {
+            window.localStorage.setItem(FILTER_VISIBILITY_KEY, value);
+          } catch (error) {
+            console.error('Não foi possível salvar a preferência dos filtros.', error);
+          }
+        };
+
+        const parseStoredVisibility = (value) => {
+          if (value === 'true') return true;
+          if (value === 'false') return false;
+          return null;
+        };
+
+        const updateToggleAppearance = (visible) => {
+          const label = filterToggle.querySelector('[data-state-label]');
+          const showLabel = filterToggle.dataset.labelShow || 'Mostrar filtros';
+          const hideLabel = filterToggle.dataset.labelHide || 'Ocultar filtros';
+
+          if (label) {
+            label.textContent = visible ? hideLabel : showLabel;
+          }
+
+          filterToggle.classList.toggle('btn-primary', visible);
+          filterToggle.classList.toggle('btn-outline-primary', !visible);
+        };
+
+        const applyFilterVisibility = (visible, { persist = false } = {}) => {
+          filterCard.classList.toggle('d-none', !visible);
+          filterToggle.setAttribute('aria-expanded', visible ? 'true' : 'false');
+          updateToggleAppearance(visible);
+
+          if (persist) {
+            writeStoredVisibility(String(visible));
+          }
+        };
+
+        const storedVisibility = parseStoredVisibility(readStoredVisibility());
+        const defaultVisible = filterCard.dataset.defaultVisible === 'true';
+        const initialVisible = storedVisibility !== null ? storedVisibility : defaultVisible;
+
+        applyFilterVisibility(initialVisible);
+
+        filterToggle.addEventListener('click', () => {
+          const isVisible = !filterCard.classList.contains('d-none');
+          applyFilterVisibility(!isVisible, { persist: true });
+        });
+      }
+
       const calendarToggleButtons = document.querySelectorAll('[data-calendar-tab-target]');
 
       calendarToggleButtons.forEach((button) => {
