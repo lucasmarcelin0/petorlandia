@@ -105,7 +105,36 @@
         tutors.forEach((tutor) => {
           const li = document.createElement('li');
           li.className = 'list-group-item list-group-item-action';
-          li.textContent = `${tutor.name} (${tutor.email})`;
+
+          const nameLine = document.createElement('div');
+          nameLine.className = 'fw-semibold';
+          nameLine.textContent = tutor.name || 'Tutor sem nome';
+          li.appendChild(nameLine);
+
+          const detailsLine = tutor.details || [
+            tutor.email,
+            tutor.phone,
+            tutor.cpf ? `CPF: ${tutor.cpf}` : null,
+            tutor.rg ? `RG: ${tutor.rg}` : null,
+            tutor.worker,
+          ]
+            .filter(Boolean)
+            .join(' • ');
+
+          if (detailsLine) {
+            const detailsEl = document.createElement('div');
+            detailsEl.className = 'small text-muted';
+            detailsEl.textContent = detailsLine;
+            li.appendChild(detailsEl);
+          }
+
+          if (tutor.address_summary) {
+            const addressEl = document.createElement('div');
+            addressEl.className = 'small text-muted';
+            addressEl.textContent = tutor.address_summary;
+            li.appendChild(addressEl);
+          }
+
           li.addEventListener('click', () => handleTutorSelected(tutor));
           resultsContainer.appendChild(li);
         });

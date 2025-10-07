@@ -2540,34 +2540,118 @@ def imprimir_consulta(consulta_id):
 
 @app.route('/buscar_tutores', methods=['GET'])
 def buscar_tutores():
-    query = request.args.get('q', '').strip()
+    raw_query = request.args.get('q', '')
+    query = raw_query.strip()
 
     if not query:
         return jsonify([])
 
-    query = f"%{query}%"
+    like_query = f"%{query}%"
+    numeric_query = re.sub(r'\D', '', query)
+    numeric_like = f"%{numeric_query}%" if numeric_query else None
 
-    # Filtra por campos individualmente e junta os resultados (sem usar or_)
-    nome_matches = User.query.filter(User.name.ilike(query)).all()
-    email_matches = User.query.filter(User.email.ilike(query)).all()
-    cpf_matches = User.query.filter(User.cpf.ilike(query)).all()
-    rg_matches = User.query.filter(User.rg.ilike(query)).all()
-    phone_matches = User.query.filter(User.phone.ilike(query)).all()
+    def sanitize_expression(expr, characters):
+        sanitized = expr
+        for char in characters:
+            sanitized = func.replace(sanitized, char, '')
+        return sanitized
 
-    # Junta os resultados e remove duplicados (por ID)
-    todos = {user.id: user for user in (
-        nome_matches + email_matches + cpf_matches + rg_matches + phone_matches
-    )}.values()
+    # Junta resultados de múltiplos campos evitando duplicados
+    encontrados = {}
 
-    resultados = [
-        {
-            'id': tutor.id,
-            'name': tutor.name,
-            'email': tutor.email,
-            'specialties': ', '.join(s.nome for s in tutor.veterinario.specialties) if getattr(tutor, 'veterinario', None) else ''
-        }
-        for tutor in todos
+    def adicionar_usuarios(usuarios):
+        for usuario in usuarios:
+            encontrados[usuario.id] = usuario
+
+    campos_texto = [
+        User.name,
+        User.email,
+        User.worker,
+        User.address,
+        User.cpf,
+        User.rg,
+        User.phone,
     ]
+
+    for campo in campos_texto:
+        adicionar_usuarios(User.query.filter(campo.ilike(like_query)).all())
+
+    # Busca por dados numéricos removendo formatação
+    if numeric_like:
+        campos_numericos = [
+            sanitize_expression(User.cpf, ['.', '-', '/', ' ']),
+            sanitize_expression(User.rg, ['.', '-', '/', ' ']),
+            sanitize_expression(User.phone, ['(', ')', '-', ' ']),
+        ]
+
+        for campo in campos_numericos:
+            adicionar_usuarios(User.query.filter(campo.ilike(numeric_like)).all())
+
+    # Campos de endereço vinculados ao tutor
+    campos_endereco = [
+        Endereco.cep,
+        Endereco.rua,
+        Endereco.numero,
+        Endereco.complemento,
+        Endereco.bairro,
+        Endereco.cidade,
+        Endereco.estado,
+    ]
+
+    for campo in campos_endereco:
+        adicionar_usuarios(
+            User.query.join(User.endereco, isouter=True)
+            .filter(campo.ilike(like_query))
+            .all()
+        )
+
+    if numeric_like:
+        adicionar_usuarios(
+            User.query.join(User.endereco, isouter=True)
+            .filter(sanitize_expression(Endereco.cep, ['-', ' ']).ilike(numeric_like))
+            .all()
+        )
+
+    resultados = []
+
+    for tutor in encontrados.values():
+        address_summary = (
+            tutor.address
+            or (tutor.endereco.full if getattr(tutor, 'endereco', None) else '')
+        )
+        detalhes = [
+            valor
+            for valor in [
+                tutor.email,
+                tutor.phone,
+                f"CPF: {tutor.cpf}" if tutor.cpf else '',
+                f"RG: {tutor.rg}" if tutor.rg else '',
+                tutor.worker,
+            ]
+            if valor
+        ]
+
+        resultados.append(
+            {
+                'id': tutor.id,
+                'name': tutor.name,
+                'email': tutor.email,
+                'cpf': tutor.cpf,
+                'rg': tutor.rg,
+                'phone': tutor.phone,
+                'worker': tutor.worker,
+                'address_summary': address_summary,
+                'details': ' • '.join(detalhes),
+                'specialties': ', '.join(
+                    s.nome for s in tutor.veterinario.specialties
+                )
+                if getattr(tutor, 'veterinario', None)
+                else '',
+            }
+        )
+
+    # Ordena por nome para facilitar a leitura
+    resultados.sort(key=lambda item: item['name'] or '')
 
     return jsonify(resultados)
 
