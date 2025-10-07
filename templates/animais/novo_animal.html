@@ -18,7 +18,9 @@
         <div class="d-flex flex-column gap-4">
           {% include 'partials/pet_quick_list.html' %}
           <div id="animais-adicionados">
-            {% include 'partials/animais_adicionados.html' with compact=True %}
+            {% set compact = True %}
+            {% include 'partials/animais_adicionados.html' %}
+            {% set compact = None %}
           </div>
         </div>
       </div>
