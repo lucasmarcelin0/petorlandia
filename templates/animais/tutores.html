@@ -8,14 +8,8 @@
   <div class="card mb-4">
     <div class="card-body">
       <h5 class="card-title mb-3">🔍 Buscar Tutor</h5>
-      {% with
-        id_prefix='tutor-list',
-        label='Buscar Tutor',
-        placeholder='Digite nome, e-mail, CPF ou telefone',
-        redirect_template='/ficha_tutor/{id}'
-      %}
-        {% include 'components/tutor_search.html' %}
-      {% endwith %}
+      <input id="busca-tutor" class="form-control" placeholder="Digite nome, e‑mail, CPF ou telefone">
+      <ul id="lista-tutores" class="list-group mt-2 d-none"></ul>
     </div>
   </div>
 
@@ -88,11 +82,44 @@
 
 <!-- Script geral -->
 <script>
-  if (document.readyState !== 'loading') {
-    window.TutorSearch?.initAll();
-  } else {
-    document.addEventListener('DOMContentLoaded', () => window.TutorSearch?.initAll());
-  }
+  const inputTutor = document.getElementById('busca-tutor');
+  const listaTutor = document.getElementById('lista-tutores');
+
+  inputTutor.addEventListener('input', async () => {
+    const q = inputTutor.value.trim();
+    if (q.length < 2) {
+      listaTutor.classList.add('d-none');
+      listaTutor.innerHTML = '';
+      return;
+    }
+
+    const res = await fetch(`/buscar_tutores?q=${encodeURIComponent(q)}`);
+    const data = await res.json();
+
+    listaTutor.innerHTML = '';
+    if (data.length) {
+      data.forEach(t => {
+        const li = document.createElement('li');
+        li.className = 'list-group-item list-group-item-action';
+        let texto = `${t.name} (${t.email})`;
+        if (t.specialties) {
+          texto += ` – ${t.specialties}`;
+        }
+        li.textContent = texto;
+        li.onclick = () => window.location = `/ficha_tutor/${t.id}`;
+        listaTutor.appendChild(li);
+      });
+      listaTutor.classList.remove('d-none');
+    } else {
+      listaTutor.classList.add('d-none');
+    }
+  });
+
+  document.addEventListener('click', e => {
+    if (!inputTutor.contains(e.target) && !listaTutor.contains(e.target)) {
+      listaTutor.classList.add('d-none');
+    }
+  });
 
   // Flatpickr + Sincronização idade
   const dobInput = document.getElementById("date_of_birth");
