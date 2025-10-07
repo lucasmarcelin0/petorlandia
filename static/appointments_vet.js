@@ -536,10 +536,10 @@ export async function updateAppointmentTimes(options = {}) {
 
 function bindScheduleModalButton(root) {
   const scheduleButton = document.getElementById('openScheduleModal');
-  if (!scheduleButton || scheduleButton.dataset.vetScheduleBound === 'true') {
+  if (!scheduleButton || scheduleButton.dataset.vetScheduleBound === 'bound') {
     return;
   }
-  scheduleButton.dataset.vetScheduleBound = 'true';
+  scheduleButton.dataset.vetScheduleBound = 'bound';
   scheduleButton.addEventListener('click', (event) => {
     event.preventDefault();
     toggleScheduleForm(root);
