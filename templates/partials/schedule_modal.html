@@ -7,41 +7,7 @@
         </div>
         <div class="modal-body">
           <form method="post" id="schedule-form">
-            {{ schedule_form.hidden_tag() }}
-            <div class="mb-3">
-              {{ schedule_form.veterinario_id.label(class="form-label fw-semibold") }}
-              {{ schedule_form.veterinario_id(class="form-select") }}
-            </div>
-            <div class="mb-3">
-              {{ schedule_form.dias_semana.label(class="form-label fw-semibold") }}
-              {{ schedule_form.dias_semana(class="form-select", multiple=True, size=7) }}
-              <div class="mt-2 d-flex gap-2 flex-wrap">
-                <button type="button" class="btn btn-sm btn-outline-secondary" onclick="selectDays('all')">Todos</button>
-                <button type="button" class="btn btn-sm btn-outline-secondary" onclick="selectDays('weekday')">Dias úteis</button>
-                <button type="button" class="btn btn-sm btn-outline-secondary" onclick="selectDays('weekend')">Fins de semana</button>
-                <button type="button" class="btn btn-sm btn-outline-secondary" onclick="selectDays('clear')">Limpar</button>
-              </div>
-            </div>
-            <div class="row g-3">
-              <div class="col-md-6">
-                {{ schedule_form.hora_inicio.label(class="form-label fw-semibold") }}
-                {{ schedule_form.hora_inicio(class="form-control") }}
-              </div>
-              <div class="col-md-6">
-                {{ schedule_form.hora_fim.label(class="form-label fw-semibold") }}
-                {{ schedule_form.hora_fim(class="form-control") }}
-              </div>
-            </div>
-            <div class="row g-3">
-              <div class="col-md-6">
-                {{ schedule_form.intervalo_inicio.label(class="form-label fw-semibold") }}
-                {{ schedule_form.intervalo_inicio(class="form-control") }}
-              </div>
-              <div class="col-md-6">
-                {{ schedule_form.intervalo_fim.label(class="form-label fw-semibold") }}
-                {{ schedule_form.intervalo_fim(class="form-control") }}
-              </div>
-            </div>
+            {% include 'partials/schedule_form_body.html' %}
           </form>
         </div>
         <div class="modal-footer">
