@@ -1,3 +1,14 @@
+/* Campos de data + idade */
+.data-idade .input-group-text {
+  min-width: 72px;
+  justify-content: center;
+  text-transform: lowercase;
+}
+
+.data-idade .form-control[data-age] {
+  font-weight: 600;
+}
+
 /* Estilos adicionais para responsividade */
 @media (max-width: 576px) {
   .form-control, .form-select {
