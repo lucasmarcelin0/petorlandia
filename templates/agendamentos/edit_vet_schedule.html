@@ -14,9 +14,6 @@
       <h2 class="mb-0"><i class="fas fa-calendar-alt me-2 text-primary"></i>Agenda – {{ veterinario.user.name }}</h2>
       <p class="text-muted">Gerencie seus horários e consultas</p>
     </div>
-    <!-- Sugestões de melhorias mobile: considerar tornar tabelas relacionadas roláveis horizontalmente por padrão,
-         revisar espaçamentos verticais em formulários longos e reduzir tamanhos de tipografia em títulos secundários
-         para evitar quebras de linha excessivas em dispositivos abaixo de 360px. -->
     <div class="ms-auto d-flex flex-column gap-2">
       {% if current_user.role == 'admin' %}
       {% set preserve_params = ['start', 'end'] %}
@@ -58,19 +55,11 @@
   <!-- Gerenciar horários e agendamento -->
   {% set schedule_collapse_group_id = 'vet-schedule-collapse-group-' ~ veterinario.id %}
   <div class="card border-0 shadow-lg rounded-4 mb-5" id="{{ schedule_collapse_group_id }}">
-    <div class="card-header bg-primary text-white rounded-top-4 d-flex flex-column flex-lg-row gap-3 align-items-lg-center card-header-responsive">
-      <div class="d-flex flex-column gap-1 w-100">
-        <h5 class="mb-0 d-flex align-items-center gap-2 card-header-title">
-          <i class="bi bi-clock-history"></i>
-          <span>Gerenciar Horários</span>
-        </h5>
-        <p class="card-header-subtitle text-white-75 small mb-0 d-lg-none">
-          Acesse ações rápidas sem comprometer o espaço na tela pequena.
-        </p>
-      </div>
-      <div class="button-action-group card-header-actions d-flex flex-column flex-sm-row flex-lg-row gap-2 ms-lg-auto">
+    <div class="card-header bg-primary text-white rounded-top-4 d-flex justify-content-between align-items-center">
+      <h5 class="mb-0"><i class="bi bi-clock-history me-2"></i> Gerenciar Horários</h5>
+      <div class="d-flex flex-wrap align-items-center gap-2 justify-content-end">
         <button
-          class="btn btn-light btn-sm btn-stack-item collapsed"
+          class="btn btn-light btn-sm collapsed"
           type="button"
           data-bs-toggle="collapse"
           data-bs-target="#{{ vet_calendar_collapse_id }}"
@@ -80,11 +69,11 @@
         >
           <i class="bi bi-layout-text-window-reverse me-1"></i> Calendário
         </button>
-        <button id="openScheduleModal" class="btn btn-light btn-sm btn-stack-item" type="button">
+        <button id="openScheduleModal" class="btn btn-light btn-sm" type="button">
           <i class="bi bi-pencil"></i> Editar Horário
         </button>
         <button
-          class="btn btn-success btn-sm btn-stack-item collapsed"
+          class="btn btn-success btn-sm collapsed"
           type="button"
           data-bs-toggle="collapse"
           data-bs-target="#newAppointmentForm"
@@ -93,7 +82,7 @@
           <i class="bi bi-plus-circle"></i> Nova Consulta
         </button>
         <button
-          class="btn btn-light btn-sm btn-stack-item collapsed"
+          class="btn btn-light btn-sm collapsed"
           type="button"
           data-bs-toggle="collapse"
           data-bs-target="#vetNewTutorForm"
@@ -103,7 +92,7 @@
           <i class="bi bi-person-plus"></i> Novo Tutor
         </button>
         <button
-          class="btn btn-primary btn-sm btn-stack-item collapsed"
+          class="btn btn-primary btn-sm collapsed"
           type="button"
           data-bs-toggle="collapse"
           data-bs-target="#vetNewPetForm"
