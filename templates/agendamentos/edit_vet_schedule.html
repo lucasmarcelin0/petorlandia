@@ -29,18 +29,14 @@
   </div>
 
   {% set calendar_pets_endpoint = url_for('api_clinic_pets', view_as='veterinario', veterinario_id=veterinario.id) %}
-  {% if not calendar_summary_vets %}
-    {% set _specialties = [] %}
-    {% for specialty in veterinario.specialties %}
-      {% set _specialties = _specialties + [{'id': specialty.id, 'name': specialty.nome}] %}
-    {% endfor %}
-    {% set calendar_summary_vets = [{
-      'id': veterinario.id,
-      'name': veterinario.user.name if veterinario.user else None,
-      'avatarUrl': veterinario.user.profile_photo if veterinario.user and veterinario.user.profile_photo else None,
-      'specialties': _specialties,
-    }] %}
-  {% endif %}
+  {% set calendar_summary_vets = [{
+    'id': veterinario.id,
+    'name': veterinario.user.name,
+    'label': veterinario.user.name,
+    'full_name': veterinario.user.name,
+    'specialty_list': veterinario.specialty_list,
+    'is_specialist': veterinario.specialty_list|length > 0
+  }] %}
   {% set calendar_summary_clinic_ids = [veterinario.clinica_id] if veterinario.clinica_id else [] %}
   {% set schedule_toggle_clinic_id = veterinario.clinica_id %}
   {% set schedule_toggle_calendar_redirect_url = url_for('appointments', view_as='veterinario', veterinario_id=veterinario.id) %}
@@ -61,7 +57,7 @@
   <div class="card border-0 shadow-lg rounded-4 mb-5" id="{{ schedule_collapse_group_id }}">
     <div class="card-header bg-primary text-white rounded-top-4 d-flex justify-content-between align-items-center">
       <h5 class="mb-0"><i class="bi bi-clock-history me-2"></i> Gerenciar Horários</h5>
-      <div class="d-flex align-items-center gap-2">
+      <div class="d-flex flex-wrap align-items-center gap-2 justify-content-end">
         <button
           class="btn btn-light btn-sm collapsed"
           type="button"
@@ -84,6 +80,26 @@
           aria-expanded="false"
         >
           <i class="bi bi-plus-circle"></i> Nova Consulta
+        </button>
+        <button
+          class="btn btn-light btn-sm collapsed"
+          type="button"
+          data-bs-toggle="collapse"
+          data-bs-target="#vetNewTutorForm"
+          aria-expanded="false"
+          aria-controls="vetNewTutorForm"
+        >
+          <i class="bi bi-person-plus"></i> Novo Tutor
+        </button>
+        <button
+          class="btn btn-primary btn-sm collapsed"
+          type="button"
+          data-bs-toggle="collapse"
+          data-bs-target="#vetNewPetForm"
+          aria-expanded="false"
+          aria-controls="vetNewPetForm"
+        >
+          <i class="bi bi-plus-circle"></i> Novo Pet
         </button>
       </div>
     </div>
@@ -242,6 +258,18 @@
             <div id="schedule-overview" class="row row-cols-1 row-cols-md-2 row-cols-lg-3 g-3 small"></div>
           </div>
         </div>
+      </div>
+    </div>
+    <div class="collapse" id="vetNewTutorForm" data-bs-parent="#{{ schedule_collapse_group_id }}">
+      <div class="card-body p-4">
+        {% include 'partials/calendar_quick_tutor_form.html' %}
+      </div>
+    </div>
+    <div class="collapse" id="vetNewPetForm" data-bs-parent="#{{ schedule_collapse_group_id }}">
+      <div class="card-body p-4">
+        {% with species_list=species_list, breed_list=breed_list %}
+          {% include 'partials/animal_register_form.html' %}
+        {% endwith %}
       </div>
     </div>
   </div>

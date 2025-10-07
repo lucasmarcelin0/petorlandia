@@ -429,6 +429,7 @@ def appointment_to_event(appointment):
     vet = getattr(appointment, 'veterinario', None)
     vet_user = getattr(vet, 'user', None)
 
+    vet_specialty_list = getattr(vet, 'specialty_list', None)
     extra_props = {
         'kind': getattr(appointment, 'kind', None),
         'clinicId': getattr(appointment, 'clinica_id', None),
@@ -439,6 +440,9 @@ def appointment_to_event(appointment):
         'tutorName': getattr(tutor, 'name', None),
         'animalName': getattr(animal, 'name', None),
         'vetName': getattr(vet_user, 'name', None),
+        'vetFullName': getattr(vet_user, 'name', None),
+        'vetSpecialtyList': vet_specialty_list,
+        'vetIsSpecialist': bool(vet_specialty_list),
         'notes': getattr(appointment, 'notes', None),
     }
 
@@ -477,10 +481,17 @@ def exam_to_event(exam):
         title = f"{title} - {exam.specialist.user.name}"
     end_time = exam.scheduled_at + get_appointment_duration('exame')
 
+    specialist = getattr(exam, 'specialist', None)
+    specialist_user = getattr(specialist, 'user', None)
+    specialist_specialties = getattr(specialist, 'specialty_list', None)
     extra_props = {
         'status': getattr(exam, 'status', None),
         'animalId': getattr(exam, 'animal_id', None),
         'specialistId': getattr(exam, 'specialist_id', None),
+        'vetName': getattr(specialist_user, 'name', None),
+        'vetFullName': getattr(specialist_user, 'name', None),
+        'vetSpecialtyList': specialist_specialties,
+        'vetIsSpecialist': bool(specialist),
     }
 
     return _build_calendar_event(
@@ -558,6 +569,8 @@ def consulta_to_event(consulta):
     }
     event_status = status_map.get(status_key, 'scheduled')
 
+    vet_full_name = getattr(vet_user, 'name', None)
+    vet_profile_specialties = getattr(vet_profile, 'specialty_list', None)
     extra_props = {
         'status': event_status,
         'consultaStatus': status_key,
@@ -568,7 +581,10 @@ def consulta_to_event(consulta):
         'animalName': getattr(animal, 'name', None),
         'consultaId': getattr(consulta, 'id', None),
         'createdBy': getattr(consulta, 'created_by', None),
-        'vetName': getattr(vet_user, 'name', None),
+        'vetName': vet_full_name,
+        'vetFullName': vet_full_name,
+        'vetSpecialtyList': vet_profile_specialties,
+        'vetIsSpecialist': bool(vet_profile_specialties),
         'veterinarioId': getattr(vet_profile, 'id', None),
         'clinicaNome': getattr(clinic, 'nome', None) if clinic else None,
         'kind': 'consulta',
