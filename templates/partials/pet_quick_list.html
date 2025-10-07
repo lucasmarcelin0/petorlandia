@@ -1,0 +1,828 @@
+{% set component_id = component_id|default('pet-quick-list') %}
+{% set pets_endpoint = pets_endpoint|default(url_for('api_clinic_pets')) %}
+{% set new_pet_url = new_pet_url|default(url_for('novo_animal')) %}
+{% set profile_url_template = profile_url_template|default(url_for('ficha_animal', animal_id=0)) %}
+<div
+  id="{{ component_id }}"
+  class="card shadow-sm border-0 h-100"
+  data-pets-url="{{ pets_endpoint }}"
+  data-profile-template="{{ profile_url_template }}"
+>
+  <div class="card-body d-flex flex-column">
+    <div class="d-flex justify-content-between align-items-start mb-3 flex-wrap gap-2">
+      <div>
+        <h3 class="h6 mb-1">Pacientes (Pets)</h3>
+        <span class="text-muted small" data-pet-subtitle>Dados reais da clínica</span>
+      </div>
+      {% if new_pet_url %}
+      <a class="btn btn-primary btn-sm" href="{{ new_pet_url }}">
+        <i class="bi bi-plus-circle me-1"></i> Novo pet
+      </a>
+      {% endif %}
+    </div>
+    <p class="text-muted small mb-3">
+      Filtre pacientes recentes e acesse rapidamente a ficha ou cadastre um novo pet quando necessário.
+    </p>
+    <div class="tutor-calendar__pet-filters" data-pet-filters>
+      <div class="tutor-calendar__pet-filter-control tutor-calendar__pet-filter-control--search">
+        <div class="input-group input-group-sm">
+          <span class="input-group-text">
+            <i class="bi bi-search"></i>
+          </span>
+          <input
+            type="search"
+            class="form-control"
+            data-pet-filter-search
+            placeholder="Buscar por nome, tutor ou detalhes"
+            aria-label="Buscar pets"
+          />
+        </div>
+      </div>
+      <div class="tutor-calendar__pet-filter-control">
+        <select class="form-select form-select-sm" data-pet-filter-species aria-label="Filtrar por espécie">
+          <option value="">Todas as espécies</option>
+        </select>
+      </div>
+      <div class="tutor-calendar__pet-filter-control">
+        <select class="form-select form-select-sm" data-pet-filter-breed aria-label="Filtrar por raça" disabled>
+          <option value="">Todas as raças</option>
+        </select>
+      </div>
+      <div class="tutor-calendar__pet-filter-actions">
+        <button type="button" class="btn btn-outline-secondary btn-sm w-100" data-pet-filter-clear disabled>
+          <i class="bi bi-x-circle me-1"></i> Limpar filtros
+        </button>
+      </div>
+    </div>
+    <div class="tutor-calendar__pet-list flex-grow-1" data-pet-list aria-live="polite">
+      <div class="text-muted small">Carregando pets...</div>
+    </div>
+    <div class="d-flex flex-column flex-sm-row gap-2 mt-3">
+      <button
+        type="button"
+        class="btn btn-outline-secondary btn-sm w-100 flex-sm-fill d-none"
+        data-toggle-pets
+        aria-expanded="false"
+        aria-hidden="true"
+      >
+        <i class="bi bi-plus-circle me-1"></i> Ver mais pets
+      </button>
+      <button type="button" class="btn btn-outline-primary btn-sm w-100 flex-sm-fill" data-refresh-pets>
+        <i class="bi bi-arrow-clockwise me-1"></i> Atualizar lista
+      </button>
+    </div>
+  </div>
+</div>
+
+<style>
+#{{ component_id }} .tutor-calendar__pet-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  align-items: center;
+}
+
+#{{ component_id }} .tutor-calendar__pet-filter-control {
+  flex: 1 1 200px;
+  min-width: 200px;
+}
+
+#{{ component_id }} .tutor-calendar__pet-filter-control--search {
+  flex: 2 1 260px;
+  min-width: 240px;
+}
+
+#{{ component_id }} .tutor-calendar__pet-filter-control .input-group-text {
+  background: rgba(99, 102, 241, 0.12);
+  border-color: rgba(99, 102, 241, 0.25);
+  color: #4338ca;
+}
+
+#{{ component_id }} .tutor-calendar__pet-filter-control .form-control,
+#{{ component_id }} .tutor-calendar__pet-filter-control .form-select {
+  border-radius: 0.75rem;
+}
+
+#{{ component_id }} .tutor-calendar__pet-filter-actions {
+  flex: 0 0 auto;
+  min-width: 160px;
+}
+
+#{{ component_id }} .tutor-calendar__pet-filter-actions .btn {
+  border-radius: 999px;
+}
+
+#{{ component_id }} .tutor-calendar__pet-filter-actions .btn:disabled {
+  opacity: 0.6;
+}
+
+#{{ component_id }} .tutor-calendar__pet-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 0.75rem;
+  max-height: 320px;
+  overflow-y: auto;
+  padding-right: 0.25rem;
+  align-content: start;
+  transition: max-height 0.3s ease;
+}
+
+#{{ component_id }} .tutor-calendar__pet-list.is-expanded {
+  max-height: none;
+  overflow: visible;
+  padding-right: 0;
+}
+
+#{{ component_id }} .tutor-calendar__pet {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  padding: 0.9rem;
+  border-radius: 0.9rem;
+  border: 1px solid rgba(99, 102, 241, 0.15);
+  background: var(--bs-body-bg, #fff);
+  box-shadow: 0 4px 16px rgba(15, 23, 42, 0.04);
+  color: inherit;
+  text-decoration: none;
+  transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+}
+
+#{{ component_id }} .tutor-calendar__pet.tutor-calendar__pet--link {
+  cursor: pointer;
+}
+
+#{{ component_id }} .tutor-calendar__pet.tutor-calendar__pet--link:hover {
+  border-color: rgba(99, 102, 241, 0.35);
+  box-shadow: 0 8px 22px rgba(15, 23, 42, 0.08);
+  text-decoration: none;
+  transform: translateY(-1px);
+}
+
+#{{ component_id }} .tutor-calendar__pet.tutor-calendar__pet--link:focus-visible {
+  border-color: rgba(99, 102, 241, 0.5);
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.25), 0 8px 22px rgba(15, 23, 42, 0.08);
+  outline: 0;
+  text-decoration: none;
+  transform: translateY(-1px);
+}
+
+#{{ component_id }} .tutor-calendar__pet-avatar {
+  width: 48px;
+  height: 48px;
+  border-radius: 0.75rem;
+  background: rgba(99, 102, 241, 0.12);
+  color: #4338ca;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 1rem;
+  overflow: hidden;
+}
+
+#{{ component_id }} .tutor-calendar__pet-avatar.has-image {
+  background: rgba(15, 23, 42, 0.08);
+  padding: 0;
+}
+
+#{{ component_id }} .tutor-calendar__pet-avatar.has-image img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+#{{ component_id }} .tutor-calendar__pet-content {
+  flex: 1;
+  min-width: 0;
+}
+
+#{{ component_id }} .tutor-calendar__pet-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.35rem;
+}
+
+#{{ component_id }} .tutor-calendar__pet-name {
+  font-size: 0.95rem;
+}
+
+#{{ component_id }} .tutor-calendar__pet-detail {
+  font-size: 0.85rem;
+}
+
+#{{ component_id }} .tutor-calendar__pet-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+}
+
+#{{ component_id }} .tutor-calendar__pet-meta-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+@media (max-width: 575.98px) {
+  #{{ component_id }} .tutor-calendar__pet-list {
+    max-height: none;
+    overflow-y: visible;
+    padding-right: 0;
+  }
+
+  #{{ component_id }} [data-toggle-pets] {
+    display: none !important;
+  }
+
+  #{{ component_id }} .tutor-calendar__pet-filter-control,
+  #{{ component_id }} .tutor-calendar__pet-filter-actions {
+    min-width: 100%;
+  }
+}
+</style>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+  const root = document.getElementById('{{ component_id }}');
+  if (!root) {
+    return;
+  }
+
+  const petsUrl = root.dataset.petsUrl || '';
+  const profileTemplate = root.dataset.profileTemplate || '';
+  const petListEl = root.querySelector('[data-pet-list]');
+  const subtitleEl = root.querySelector('[data-pet-subtitle]');
+  const toggleBtn = root.querySelector('[data-toggle-pets]');
+  const refreshBtn = root.querySelector('[data-refresh-pets]');
+  const searchInput = root.querySelector('[data-pet-filter-search]');
+  const speciesSelect = root.querySelector('[data-pet-filter-species]');
+  const breedSelect = root.querySelector('[data-pet-filter-breed]');
+  const clearBtn = root.querySelector('[data-pet-filter-clear]');
+
+  const INITIAL_LIMIT = 3;
+  const PAGE_SIZE = 9;
+  const state = {
+    allPets: [],
+    filteredPets: [],
+    limit: INITIAL_LIMIT,
+    isLoading: false,
+    hasError: false,
+    filters: {
+      search: '',
+      species: '',
+      breed: '',
+    },
+  };
+
+  function normalizeFilterValue(value) {
+    if (value === undefined || value === null) {
+      return '';
+    }
+    let normalized = String(value).trim().toLowerCase();
+    if (typeof normalized.normalize === 'function') {
+      normalized = normalized.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+    }
+    return normalized;
+  }
+
+  function normalizeSearch(value) {
+    if (value === undefined || value === null) {
+      return '';
+    }
+    let normalized = String(value);
+    if (typeof normalized.normalize === 'function') {
+      normalized = normalized.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+    }
+    return normalized.toLowerCase();
+  }
+
+  function formatDate(value) {
+    if (!value) {
+      return '';
+    }
+    const parsed = new Date(value);
+    if (Number.isNaN(parsed.getTime())) {
+      return '';
+    }
+    return parsed.toLocaleDateString('pt-BR', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+    });
+  }
+
+  function hasActiveFilters() {
+    return Boolean(state.filters.search || state.filters.species || state.filters.breed);
+  }
+
+  function updateSubtitle(total, visible, filtered) {
+    if (!subtitleEl) {
+      return;
+    }
+    const baseLabel = 'Dados reais da clínica';
+    const totalCount = Number(total) || 0;
+    const visibleCount = Number(visible) || 0;
+    const filteredCount = filtered === undefined ? totalCount : (Number(filtered) || 0);
+
+    if (!totalCount) {
+      subtitleEl.textContent = `${baseLabel} • Nenhum pet cadastrado ainda.`;
+      return;
+    }
+
+    if (!filteredCount) {
+      const totalLabel = totalCount === 1 ? '1 pet no total' : `${totalCount} pets no total`;
+      subtitleEl.textContent = `${baseLabel} • Nenhum pet encontrado com os filtros selecionados (${totalLabel}).`;
+      return;
+    }
+
+    const totalLabel = totalCount === 1 ? '1 pet no total' : `${totalCount} pets no total`;
+    const pluralVisible = visibleCount === 1 ? 'pet' : 'pets';
+    const pluralFiltered = filteredCount === 1 ? 'pet' : 'pets';
+
+    if (!hasActiveFilters()) {
+      if (visibleCount >= filteredCount) {
+        subtitleEl.textContent = `${baseLabel} • Exibindo ${filteredCount} ${pluralFiltered} da clínica.`;
+      } else {
+        subtitleEl.textContent = `${baseLabel} • Últimos ${visibleCount} ${pluralVisible} cadastrados (${totalLabel}).`;
+      }
+      return;
+    }
+
+    if (visibleCount < filteredCount) {
+      subtitleEl.textContent = `${baseLabel} • ${filteredCount} ${pluralFiltered} encontrados (${totalLabel}), exibindo ${visibleCount}.`;
+    } else {
+      subtitleEl.textContent = `${baseLabel} • ${filteredCount} ${pluralFiltered} encontrados (${totalLabel}).`;
+    }
+  }
+
+  function fillSelect(select, options, placeholder) {
+    if (!select) {
+      return;
+    }
+    const prev = select.value;
+    select.innerHTML = '';
+    const defaultOption = document.createElement('option');
+    defaultOption.value = '';
+    defaultOption.textContent = placeholder;
+    select.appendChild(defaultOption);
+
+    options.sort((a, b) => a.label.localeCompare(b.label, 'pt-BR', { sensitivity: 'base' }));
+
+    options.forEach(option => {
+      const opt = document.createElement('option');
+      opt.value = option.value;
+      opt.textContent = option.label;
+      select.appendChild(opt);
+    });
+
+    if (prev && options.some(option => option.value === prev)) {
+      select.value = prev;
+    } else {
+      select.value = '';
+    }
+  }
+
+  function updateSpeciesOptions() {
+    if (!speciesSelect) {
+      return;
+    }
+    const map = new Map();
+    state.allPets.forEach(pet => {
+      if (!pet || !pet._speciesKey) {
+        return;
+      }
+      if (!map.has(pet._speciesKey)) {
+        map.set(pet._speciesKey, pet.species || 'Outra');
+      }
+    });
+    const options = Array.from(map.entries()).map(([value, label]) => ({ value, label }));
+    const previous = state.filters.species;
+    fillSelect(speciesSelect, options, 'Todas as espécies');
+    if (previous && !options.some(option => option.value === previous)) {
+      state.filters.species = '';
+      speciesSelect.value = '';
+    } else if (previous) {
+      speciesSelect.value = previous;
+    }
+  }
+
+  function updateBreedOptions() {
+    if (!breedSelect) {
+      return;
+    }
+    const map = new Map();
+    state.allPets.forEach(pet => {
+      if (!pet || !pet._breedKey) {
+        return;
+      }
+      if (state.filters.species && pet._speciesKey !== state.filters.species) {
+        return;
+      }
+      if (!map.has(pet._breedKey)) {
+        map.set(pet._breedKey, pet.breed || 'Outra');
+      }
+    });
+    const options = Array.from(map.entries()).map(([value, label]) => ({ value, label }));
+    fillSelect(breedSelect, options, 'Todas as raças');
+    breedSelect.disabled = !options.length;
+    if (state.filters.breed && !options.some(option => option.value === state.filters.breed)) {
+      state.filters.breed = '';
+      breedSelect.value = '';
+    }
+  }
+
+  function updateFilterInputs() {
+    if (searchInput) {
+      searchInput.value = state.filters.search;
+    }
+    if (speciesSelect) {
+      speciesSelect.value = state.filters.species;
+    }
+    if (breedSelect) {
+      breedSelect.value = state.filters.breed;
+      breedSelect.disabled = breedSelect.options.length <= 1;
+    }
+    if (clearBtn) {
+      clearBtn.disabled = !hasActiveFilters();
+    }
+  }
+
+  function applyFilters() {
+    const searchTerm = normalizeSearch(state.filters.search).trim();
+    state.filteredPets = state.allPets.filter(pet => {
+      if (!pet) {
+        return false;
+      }
+      if (state.filters.species && pet._speciesKey !== state.filters.species) {
+        return false;
+      }
+      if (state.filters.breed && pet._breedKey !== state.filters.breed) {
+        return false;
+      }
+      if (searchTerm) {
+        if (!pet._searchIndex) {
+          return false;
+        }
+        return pet._searchIndex.indexOf(searchTerm) !== -1;
+      }
+      return true;
+    });
+  }
+
+  function fillProfileUrl(id) {
+    if (!profileTemplate || id === undefined || id === null) {
+      return null;
+    }
+    const idStr = String(id);
+    if (!idStr) {
+      return null;
+    }
+    const pattern = /\/0(\/|$)/;
+    if (pattern.test(profileTemplate)) {
+      return profileTemplate.replace(pattern, `/${idStr}$1`);
+    }
+    return profileTemplate.replace('0', idStr);
+  }
+
+  function renderPetList() {
+    if (!petListEl) {
+      return;
+    }
+
+    const total = state.filteredPets.length;
+    if (!total) {
+      const message = state.allPets.length
+        ? 'Nenhum pet encontrado com os filtros selecionados.'
+        : 'Nenhum pet cadastrado até o momento.';
+      petListEl.innerHTML = `<div class="text-muted small tutor-calendar__empty">${message}</div>`;
+      petListEl.classList.remove('is-expanded');
+      updateSubtitle(state.allPets.length, 0, 0);
+      if (toggleBtn) {
+        toggleBtn.classList.add('d-none');
+        toggleBtn.setAttribute('aria-hidden', 'true');
+        toggleBtn.setAttribute('aria-expanded', 'false');
+        toggleBtn.removeAttribute('data-action');
+      }
+      return;
+    }
+
+    if (!state.limit || state.limit < INITIAL_LIMIT) {
+      state.limit = INITIAL_LIMIT;
+    }
+    if (state.limit > total) {
+      state.limit = total;
+    }
+
+    const visiblePets = state.filteredPets.slice(0, state.limit);
+
+    const fragment = document.createDocumentFragment();
+    visiblePets.forEach(pet => {
+      const petId = pet && pet.id !== undefined && pet.id !== null ? pet.id : null;
+      const profileUrl = fillProfileUrl(petId);
+      const elementTag = profileUrl ? 'a' : 'div';
+      const item = document.createElement(elementTag);
+      item.className = 'tutor-calendar__pet';
+      if (profileUrl) {
+        item.href = profileUrl;
+        item.classList.add('tutor-calendar__pet--link');
+        if (pet && pet.name) {
+          item.setAttribute('aria-label', `Abrir ficha do pet ${pet.name}`);
+          item.title = `Abrir ficha de ${pet.name}`;
+        }
+      }
+
+      const avatar = document.createElement('div');
+      avatar.className = 'tutor-calendar__pet-avatar';
+      if (pet.image) {
+        const img = document.createElement('img');
+        img.src = pet.image;
+        img.loading = 'lazy';
+        img.alt = pet.name ? `Foto de ${pet.name}` : 'Foto do pet';
+        avatar.classList.add('has-image');
+        avatar.appendChild(img);
+      } else {
+        const initial = (pet.name || 'Pet').trim().charAt(0).toUpperCase() || 'P';
+        avatar.textContent = initial;
+      }
+
+      const content = document.createElement('div');
+      content.className = 'tutor-calendar__pet-content';
+
+      const heading = document.createElement('div');
+      heading.className = 'tutor-calendar__pet-heading';
+
+      const nameEl = document.createElement('div');
+      nameEl.className = 'tutor-calendar__pet-name fw-semibold text-truncate';
+      nameEl.textContent = pet.name || 'Pet sem nome';
+      heading.appendChild(nameEl);
+
+      const detailEl = document.createElement('div');
+      detailEl.className = 'tutor-calendar__pet-detail text-muted small';
+      const species = pet.species || '';
+      const breed = pet.breed || '';
+      const details = [species, breed].filter(Boolean).join(' • ');
+      detailEl.textContent = details || 'Sem detalhes adicionais';
+
+      content.appendChild(heading);
+      content.appendChild(detailEl);
+
+      const metaParts = [];
+      if (pet.tutor_name) {
+        metaParts.push({ icon: 'bi-person-heart', text: `Tutor: ${pet.tutor_name}` });
+      }
+      if (pet.age_display) {
+        metaParts.push({ icon: 'bi-hourglass', text: pet.age_display });
+      }
+      const formattedDate = formatDate(pet.dateAdded || pet.date_added);
+      if (formattedDate) {
+        metaParts.push({ icon: 'bi-calendar-plus', text: `Adicionado em ${formattedDate}` });
+      }
+
+      if (metaParts.length) {
+        const metaEl = document.createElement('div');
+        metaEl.className = 'tutor-calendar__pet-meta text-muted small';
+        metaParts.forEach(part => {
+          const span = document.createElement('span');
+          span.className = 'tutor-calendar__pet-meta-item';
+          if (part.icon) {
+            const icon = document.createElement('i');
+            icon.className = `bi ${part.icon}`;
+            icon.setAttribute('aria-hidden', 'true');
+            span.appendChild(icon);
+          }
+          span.appendChild(document.createTextNode(part.text));
+          metaEl.appendChild(span);
+        });
+        content.appendChild(metaEl);
+      }
+
+      item.appendChild(avatar);
+      item.appendChild(content);
+      fragment.appendChild(item);
+    });
+
+    petListEl.innerHTML = '';
+    petListEl.appendChild(fragment);
+
+    const shouldExpand = state.limit >= total && total > INITIAL_LIMIT;
+    petListEl.classList.toggle('is-expanded', shouldExpand);
+
+    const hasMore = total > state.limit;
+    if (toggleBtn) {
+      if (!hasMore && state.limit <= INITIAL_LIMIT) {
+        toggleBtn.classList.add('d-none');
+        toggleBtn.setAttribute('aria-hidden', 'true');
+        toggleBtn.setAttribute('aria-expanded', 'false');
+        toggleBtn.removeAttribute('data-action');
+      } else {
+        toggleBtn.classList.remove('d-none');
+        toggleBtn.setAttribute('aria-hidden', 'false');
+        if (hasMore) {
+          const remaining = total - state.limit;
+          const nextBatch = Math.min(remaining, PAGE_SIZE);
+          toggleBtn.dataset.action = 'more';
+          toggleBtn.setAttribute('aria-expanded', 'false');
+          toggleBtn.innerHTML = `<i class="bi bi-plus-circle me-1"></i> Ver mais ${nextBatch} ${nextBatch === 1 ? 'pet' : 'pets'}`;
+        } else {
+          toggleBtn.dataset.action = 'collapse';
+          toggleBtn.setAttribute('aria-expanded', 'true');
+          toggleBtn.innerHTML = '<i class="bi bi-chevron-up me-1"></i> Mostrar menos';
+        }
+      }
+    }
+
+    updateSubtitle(state.allPets.length, visiblePets.length, total);
+    if (clearBtn) {
+      clearBtn.disabled = !hasActiveFilters();
+    }
+  }
+
+  function showLoadingState() {
+    state.isLoading = true;
+    state.hasError = false;
+    if (petListEl) {
+      petListEl.innerHTML = '<div class="text-muted small">Carregando pets...</div>';
+      petListEl.classList.remove('is-expanded');
+    }
+    if (refreshBtn) {
+      refreshBtn.disabled = true;
+    }
+    if (clearBtn) {
+      clearBtn.disabled = true;
+    }
+    if (toggleBtn) {
+      toggleBtn.classList.add('d-none');
+      toggleBtn.setAttribute('aria-hidden', 'true');
+      toggleBtn.setAttribute('aria-expanded', 'false');
+      toggleBtn.removeAttribute('data-action');
+    }
+    if (subtitleEl) {
+      subtitleEl.textContent = 'Carregando pets da clínica...';
+    }
+  }
+
+  function showErrorState(message) {
+    state.hasError = true;
+    if (petListEl) {
+      petListEl.innerHTML = `<div class="text-muted small">${message}</div>`;
+      petListEl.classList.remove('is-expanded');
+    }
+    if (refreshBtn) {
+      refreshBtn.disabled = false;
+    }
+    if (clearBtn) {
+      clearBtn.disabled = true;
+    }
+    if (toggleBtn) {
+      toggleBtn.classList.add('d-none');
+      toggleBtn.setAttribute('aria-hidden', 'true');
+      toggleBtn.setAttribute('aria-expanded', 'false');
+      toggleBtn.removeAttribute('data-action');
+    }
+    if (subtitleEl) {
+      subtitleEl.textContent = 'Não foi possível carregar os pets no momento.';
+    }
+  }
+
+  async function fetchPets() {
+    if (!petsUrl) {
+      showErrorState('Endpoint de pets não configurado.');
+      return;
+    }
+    showLoadingState();
+    state.limit = INITIAL_LIMIT;
+    try {
+      const response = await fetch(petsUrl, {
+        headers: {
+          'Accept': 'application/json',
+        },
+        credentials: 'same-origin',
+      });
+      if (!response.ok) {
+        throw new Error('Não foi possível carregar a lista de pets.');
+      }
+      const data = await response.json();
+      const normalized = Array.isArray(data) ? data.map(item => {
+        const pet = Object.assign({}, item);
+        const searchParts = [];
+        if (pet.name) searchParts.push(pet.name);
+        if (pet.tutor_name) searchParts.push(pet.tutor_name);
+        if (pet.species) searchParts.push(pet.species);
+        if (pet.breed) searchParts.push(pet.breed);
+        pet._speciesKey = normalizeFilterValue(pet.species);
+        pet._breedKey = normalizeFilterValue(pet.breed);
+        pet._searchIndex = normalizeSearch(searchParts.join(' '));
+        pet.dateAdded = pet.dateAdded || pet.date_added || null;
+        return pet;
+      }) : [];
+      normalized.sort((a, b) => {
+        const aDate = a.dateAdded ? new Date(a.dateAdded) : null;
+        const bDate = b.dateAdded ? new Date(b.dateAdded) : null;
+        const aValid = aDate && !Number.isNaN(aDate.getTime());
+        const bValid = bDate && !Number.isNaN(bDate.getTime());
+        if (aValid && bValid) {
+          return bDate.getTime() - aDate.getTime();
+        }
+        if (aValid) {
+          return -1;
+        }
+        if (bValid) {
+          return 1;
+        }
+        const nameA = (a.name || '').toLowerCase();
+        const nameB = (b.name || '').toLowerCase();
+        return nameA.localeCompare(nameB, 'pt-BR');
+      });
+
+      state.allPets = normalized;
+      applyFilters();
+      updateSpeciesOptions();
+      updateBreedOptions();
+      updateFilterInputs();
+      renderPetList();
+    } catch (error) {
+      console.error('Erro ao carregar pets', error);
+      showErrorState('Não foi possível carregar os pets no momento.');
+    } finally {
+      state.isLoading = false;
+      if (refreshBtn) {
+        refreshBtn.disabled = false;
+      }
+    }
+  }
+
+  function resetFilters() {
+    state.filters.search = '';
+    state.filters.species = '';
+    state.filters.breed = '';
+    state.limit = INITIAL_LIMIT;
+    updateFilterInputs();
+    applyFilters();
+    updateBreedOptions();
+    renderPetList();
+  }
+
+  searchInput && searchInput.addEventListener('input', event => {
+    state.filters.search = event.target.value || '';
+    state.limit = INITIAL_LIMIT;
+    applyFilters();
+    renderPetList();
+    if (clearBtn) {
+      clearBtn.disabled = !hasActiveFilters();
+    }
+  });
+
+  speciesSelect && speciesSelect.addEventListener('change', event => {
+    state.filters.species = normalizeFilterValue(event.target.value);
+    if (!state.filters.species) {
+      state.filters.species = '';
+    }
+    state.filters.breed = '';
+    state.limit = INITIAL_LIMIT;
+    updateBreedOptions();
+    applyFilters();
+    renderPetList();
+    if (clearBtn) {
+      clearBtn.disabled = !hasActiveFilters();
+    }
+  });
+
+  breedSelect && breedSelect.addEventListener('change', event => {
+    state.filters.breed = normalizeFilterValue(event.target.value);
+    if (!state.filters.breed) {
+      state.filters.breed = '';
+    }
+    state.limit = INITIAL_LIMIT;
+    applyFilters();
+    renderPetList();
+    if (clearBtn) {
+      clearBtn.disabled = !hasActiveFilters();
+    }
+  });
+
+  clearBtn && clearBtn.addEventListener('click', () => {
+    if (!hasActiveFilters()) {
+      return;
+    }
+    resetFilters();
+  });
+
+  refreshBtn && refreshBtn.addEventListener('click', () => {
+    fetchPets();
+  });
+
+  toggleBtn && toggleBtn.addEventListener('click', () => {
+    const action = toggleBtn.dataset.action || 'more';
+    if (action === 'more') {
+      state.limit = Math.min(state.limit + PAGE_SIZE, state.filteredPets.length);
+    } else {
+      state.limit = INITIAL_LIMIT;
+    }
+    renderPetList();
+  });
+
+  fetchPets();
+});
+</script>
