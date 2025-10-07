@@ -67,6 +67,9 @@
       closeResults();
     };
 
+    let activeSearchController = null;
+    let lastQueryId = 0;
+
     tutorInput.addEventListener('input', async () => {
       enforceSelectionConsistency();
       hideValidationMessage();
@@ -78,13 +81,25 @@
         return;
       }
 
+      if (activeSearchController) {
+        activeSearchController.abort();
+      }
+
+      const currentQueryId = ++lastQueryId;
+      activeSearchController = new AbortController();
+
       try {
-        const response = await fetch(`${searchUrl}?q=${encodeURIComponent(query)}`);
+        const response = await fetch(`${searchUrl}?q=${encodeURIComponent(query)}`, {
+          signal: activeSearchController.signal,
+        });
         if (!response.ok) {
           throw new Error('Erro ao buscar tutores');
         }
 
         const tutors = await response.json();
+        if (currentQueryId !== lastQueryId) {
+          return;
+        }
         resultsContainer.innerHTML = '';
 
         tutors.forEach((tutor) => {
@@ -97,6 +112,9 @@
 
         resultsContainer.classList.toggle('d-none', tutors.length === 0);
       } catch (error) {
+        if (error.name === 'AbortError') {
+          return;
+        }
         console.error(error);
         resultsContainer.innerHTML = '';
         closeResults();
