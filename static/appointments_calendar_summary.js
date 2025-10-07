@@ -718,11 +718,14 @@ export function setupAppointmentsCalendarSummary(options = {}) {
           const buttonVetId = normalizeSummaryVetId(
             button && button.dataset ? button.dataset.vetId : null,
           );
-          const isActive = Boolean(
-            activeCalendarSummaryVetId
-            && buttonVetId
-            && buttonVetId === activeCalendarSummaryVetId,
-          );
+          const isAllButton = button.classList.contains('calendar-summary-filter--all');
+          const isActive = isAllButton
+            ? activeCalendarSummaryVetId === null
+            : Boolean(
+              activeCalendarSummaryVetId
+              && buttonVetId
+              && buttonVetId === activeCalendarSummaryVetId,
+            );
           button.classList.toggle('is-active', isActive);
           button.setAttribute('aria-pressed', isActive ? 'true' : 'false');
         });
@@ -736,15 +739,17 @@ export function setupAppointmentsCalendarSummary(options = {}) {
 
     function handleCalendarSummarySelection(rawVetId) {
       const normalizedVetId = normalizeSummaryVetId(rawVetId);
+      const isSelectingAll = normalizedVetId === null;
       const isCurrentlyActive = Boolean(
         activeCalendarSummaryVetId !== null
         && normalizedVetId !== null
         && normalizedVetId === activeCalendarSummaryVetId,
       );
-      const nextActiveVetId = isCurrentlyActive ? null : normalizedVetId;
+      const nextActiveVetId = isSelectingAll ? null : (isCurrentlyActive ? null : normalizedVetId);
       setActiveCalendarSummaryItem(nextActiveVetId);
       if (typeof window.updateCalendarVetSelection === 'function') {
-        window.updateCalendarVetSelection(nextActiveVetId, { activate: true, refetch: true });
+        const selectionVetId = isSelectingAll ? null : nextActiveVetId;
+        window.updateCalendarVetSelection(selectionVetId, { activate: true, refetch: true });
       }
     }
 
@@ -796,6 +801,31 @@ export function setupAppointmentsCalendarSummary(options = {}) {
       }
       calendarSummaryFilters.classList.remove('d-none');
       calendarSummaryFilters.classList.remove('is-disabled');
+
+      const allLabelRaw = calendarSummaryFilters.dataset
+        ? calendarSummaryFilters.dataset.calendarSummaryAllLabel
+        : null;
+      const normalizedAllLabel = typeof allLabelRaw === 'string' && allLabelRaw.trim()
+        ? allLabelRaw.trim()
+        : 'Toda a clínica';
+      const allVetIdRaw = calendarSummaryFilters.dataset
+        ? calendarSummaryFilters.dataset.calendarSummaryAllVetId
+        : '';
+      const normalizedAllVetId = normalizeSummaryVetId(allVetIdRaw);
+      const allButton = document.createElement('button');
+      allButton.type = 'button';
+      allButton.classList.add('calendar-summary-filter', 'calendar-summary-filter--all');
+      allButton.dataset.vetId = normalizedAllVetId || '';
+      allButton.setAttribute('aria-label', `Mostrar agenda de ${normalizedAllLabel.toLowerCase()}`);
+      allButton.setAttribute('title', normalizedAllLabel);
+      allButton.setAttribute('aria-pressed', 'false');
+      allButton.disabled = false;
+      const allLabelElement = document.createElement('span');
+      allLabelElement.classList.add('calendar-summary-filter-label');
+      allLabelElement.textContent = normalizedAllLabel;
+      allButton.appendChild(allLabelElement);
+      calendarSummaryFilters.appendChild(allButton);
+
       entries.forEach((entry) => {
         const filterButton = document.createElement('button');
         filterButton.type = 'button';
