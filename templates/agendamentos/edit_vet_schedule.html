@@ -954,6 +954,25 @@
       </button>
     </div>
     <div class="card-body">
+      <div class="schedule-inline-container border rounded-3 p-4 mb-4 d-none" data-schedule-inline-container>
+        <div class="d-flex justify-content-between align-items-start mb-3">
+          <div>
+            <h5 class="mb-1" id="scheduleModalTitle">Adicionar Horário</h5>
+            <p class="text-muted mb-0">Configure novos horários ou edite os existentes diretamente neste painel.</p>
+          </div>
+          <button type="button" class="btn-close" aria-label="Fechar" onclick="toggleScheduleForm('close-inline')"></button>
+        </div>
+        <form method="post" id="schedule-form" class="d-flex flex-column gap-3">
+          {% include 'partials/schedule_form_body.html' %}
+          <div class="d-flex justify-content-end gap-2">
+            <button type="button" class="btn btn-outline-secondary" onclick="toggleScheduleForm('close-inline')">Cancelar</button>
+            <button type="submit"
+                    class="btn btn-primary"
+                    name="{{ schedule_form.submit.name }}"
+                    value="Salvar Horário">Salvar Horário</button>
+          </div>
+        </form>
+      </div>
       <div class="row">
         {% for grupo in horarios_grouped %}
           <div class="col-md-6 col-lg-4 mb-3">
@@ -1223,7 +1242,6 @@
 
 {% block scripts %}
   {{ super() }}
-  {% include 'partials/schedule_modal.html' %}
 
   <script>
     document.addEventListener('DOMContentLoaded', function () {

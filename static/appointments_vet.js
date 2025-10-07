@@ -394,17 +394,53 @@ export function selectDays(mode, selectEl = document.getElementById('schedule-di
 }
 
 export function toggleScheduleForm(rootParam) {
-  if (isEvent(rootParam)) {
+  const isParamEvent = isEvent(rootParam);
+  if (isParamEvent) {
     rootParam.preventDefault();
   }
-  const root = getRootElement(rootParam);
+  const shouldCloseInline = rootParam === 'close-inline' || rootParam === 'close';
+  const normalizedRootParam = isParamEvent || shouldCloseInline ? undefined : rootParam;
+  const root = getRootElement(normalizedRootParam);
   const modalEl = document.getElementById('scheduleModal');
+  const inlineContainer = root?.querySelector('[data-schedule-inline-container]');
   const form = document.getElementById('schedule-form');
   const daysSelect = document.getElementById('schedule-dias_semana');
   const vetSelect = document.getElementById('schedule-veterinario_id');
   const titleEl = document.getElementById('scheduleModalTitle');
   const modal = getModalInstance(modalEl);
-  if (!modal || !form) {
+
+  if (!form) {
+    return;
+  }
+
+  const hideInlineContainer = () => {
+    if (!inlineContainer) {
+      return false;
+    }
+    inlineContainer.classList.add('d-none');
+    inlineContainer.dataset.visible = 'false';
+    form.reset();
+    if (daysSelect) {
+      daysSelect.multiple = true;
+    }
+    if (titleEl) {
+      titleEl.textContent = 'Adicionar Horário';
+    }
+    return true;
+  };
+
+  if (inlineContainer) {
+    const inlineVisible = inlineContainer.dataset.visible === 'true' || !inlineContainer.classList.contains('d-none');
+    if (shouldCloseInline) {
+      hideInlineContainer();
+      return;
+    }
+    if (inlineVisible && isParamEvent) {
+      if (hideInlineContainer()) {
+        return;
+      }
+    }
+  } else if (!modal) {
     return;
   }
 
@@ -424,13 +460,21 @@ export function toggleScheduleForm(rootParam) {
     titleEl.textContent = 'Adicionar Horário';
   }
 
+  if (inlineContainer) {
+    inlineContainer.classList.remove('d-none');
+    inlineContainer.dataset.visible = 'true';
+    if (typeof inlineContainer.scrollIntoView === 'function') {
+      inlineContainer.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+    return;
+  }
+
   modal.show();
 }
 
 export function editSchedule(dataset, rootParam) {
   const root = getRootElement(rootParam);
   const modalEl = document.getElementById('scheduleModal');
-  const modal = getModalInstance(modalEl);
   const form = document.getElementById('schedule-form');
   const titleEl = document.getElementById('scheduleModalTitle');
   const daysSelect = document.getElementById('schedule-dias_semana');
@@ -438,7 +482,9 @@ export function editSchedule(dataset, rootParam) {
   const endField = document.getElementById('schedule-hora_fim');
   const intervalStart = document.getElementById('schedule-intervalo_inicio');
   const intervalEnd = document.getElementById('schedule-intervalo_fim');
-  if (!modal || !form) {
+  const inlineContainer = root?.querySelector('[data-schedule-inline-container]');
+  const modal = getModalInstance(modalEl);
+  if (!form) {
     return;
   }
 
@@ -475,7 +521,18 @@ export function editSchedule(dataset, rootParam) {
     intervalEnd.value = dataset?.intervaloFim || '';
   }
 
-  modal.show();
+  if (inlineContainer) {
+    inlineContainer.classList.remove('d-none');
+    inlineContainer.dataset.visible = 'true';
+    if (typeof inlineContainer.scrollIntoView === 'function') {
+      inlineContainer.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+    return;
+  }
+
+  if (modal) {
+    modal.show();
+  }
 }
 
 export function toggleAppointmentForm(rootParam) {
@@ -1242,6 +1299,23 @@ export function toggleScheduleEdit(rootParam) {
     toggleButton.innerHTML = anyVisible
       ? '<i class="fas fa-times me-1"></i>Cancelar Edição'
       : '<i class="fas fa-edit me-1"></i>Editar horários';
+  }
+  if (!anyVisible) {
+    const inlineContainer = root.querySelector('[data-schedule-inline-container]');
+    if (inlineContainer) {
+      inlineContainer.classList.add('d-none');
+      inlineContainer.dataset.visible = 'false';
+      const form = document.getElementById('schedule-form');
+      const daysSelect = document.getElementById('schedule-dias_semana');
+      const titleEl = document.getElementById('scheduleModalTitle');
+      form?.reset();
+      if (daysSelect) {
+        daysSelect.multiple = true;
+      }
+      if (titleEl) {
+        titleEl.textContent = 'Adicionar Horário';
+      }
+    }
   }
 }
 
