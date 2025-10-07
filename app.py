@@ -3885,57 +3885,10 @@ def tutores():
         flash('Apenas veterinários ou colaboradores podem acessar esta página.', 'danger')
         return redirect(url_for('index'))
 
-    def fetch_tutores(scope, page):
-        clinic_id = current_user_clinic_id()
-        if scope == 'mine':
-            query = User.query.filter(User.created_at != None)
-            if clinic_id:
-                query = query.filter(User.clinica_id == clinic_id)
-            consultas_exist = (
-                db.session.query(Consulta.id)
-                .join(Animal, Consulta.animal_id == Animal.id)
-                .filter(
-                    Consulta.created_by == current_user.id,
-                    Animal.user_id == User.id,
-                )
-            )
-            pagination = (
-                query.filter(
-                    or_(
-                        User.added_by_id == current_user.id,
-                        consultas_exist.exists(),
-                    )
-                )
-                .order_by(User.created_at.desc())
-                .paginate(page=page, per_page=9)
-            )
-            return pagination.items, pagination
-        elif clinic_id:
-            last_appt = (
-                db.session.query(
-                    Appointment.tutor_id,
-                    func.max(Appointment.scheduled_at).label('last_at')
-                )
-                .filter(Appointment.clinica_id == clinic_id)
-                .group_by(Appointment.tutor_id)
-                .subquery()
-            )
-
-            pagination = (
-                User.query
-                .outerjoin(last_appt, User.id == last_appt.c.tutor_id)
-                .filter(
-                    or_(
-                        User.clinica_id == clinic_id,
-                        last_appt.c.last_at != None
-                    )
-                )
-                .order_by(func.coalesce(last_appt.c.last_at, User.created_at).desc())
-                .paginate(page=page, per_page=9)
-            )
-            return pagination.items, pagination
-        else:
-            return [], None
+    clinic_id = current_user_clinic_id()
+    scope = request.args.get('scope', 'all')
+    page = request.args.get('page', 1, type=int)
+    effective_user_id = getattr(current_user, 'id', None)
 
     # Criação de novo tutor
     if request.method == 'POST':
@@ -4011,12 +3964,17 @@ def tutores():
         if request.accept_mimetypes.accept_json:
             scope = request.args.get('scope', 'all')
             page = request.args.get('page', 1, type=int)
-            tutores_adicionados, pagination = fetch_tutores(scope, page)
+            tutores_adicionados, pagination, resolved_scope = _get_recent_tutores(
+                scope,
+                page,
+                clinic_id=clinic_id,
+                user_id=effective_user_id,
+            )
             html = render_template(
                 'partials/tutores_adicionados.html',
                 tutores_adicionados=tutores_adicionados,
                 pagination=pagination,
-                scope=scope
+                scope=resolved_scope,
             )
             return jsonify(message='Tutor criado com sucesso!', category='success', html=html)
 
@@ -4024,15 +3982,18 @@ def tutores():
         return redirect(url_for('ficha_tutor', tutor_id=novo.id))
 
     # — GET com paginação —
-    page = request.args.get('page', 1, type=int)
-    scope = request.args.get('scope', 'all')
-    tutores_adicionados, pagination = fetch_tutores(scope, page)
+    tutores_adicionados, pagination, resolved_scope = _get_recent_tutores(
+        scope,
+        page,
+        clinic_id=clinic_id,
+        user_id=effective_user_id,
+    )
 
     return render_template(
         'animais/tutores.html',
         tutores_adicionados=tutores_adicionados,
         pagination=pagination,
-        scope=scope
+        scope=resolved_scope
     )
 
 
@@ -6692,6 +6653,73 @@ def _get_recent_animais(scope, page, clinic_id=None, user_id=None):
     return pagination.items, pagination, resolved_scope
 
 
+def _get_recent_tutores(scope, page, clinic_id=None, user_id=None):
+    """Return recent tutors and pagination metadata for dashboards."""
+
+    resolved_scope = 'mine' if scope == 'mine' else 'all'
+    effective_user_id = user_id or getattr(current_user, 'id', None)
+
+    if resolved_scope == 'mine' and not effective_user_id:
+        resolved_scope = 'all'
+
+    if resolved_scope == 'mine' and effective_user_id:
+        base_query = User.query.filter(User.created_at != None)
+        if clinic_id:
+            base_query = base_query.filter(User.clinica_id == clinic_id)
+
+        consultas_exist = (
+            db.session.query(Consulta.id)
+            .join(Animal, Consulta.animal_id == Animal.id)
+            .filter(
+                Consulta.created_by == effective_user_id,
+                Animal.user_id == User.id,
+            )
+        )
+
+        pagination = (
+            base_query.filter(
+                or_(
+                    User.added_by_id == effective_user_id,
+                    consultas_exist.exists(),
+                )
+            )
+            .order_by(User.created_at.desc())
+            .paginate(page=page, per_page=9, error_out=False)
+        )
+        return pagination.items, pagination, resolved_scope
+
+    if clinic_id:
+        last_appt = (
+            db.session.query(
+                Appointment.tutor_id,
+                func.max(Appointment.scheduled_at).label('last_at'),
+            )
+            .filter(Appointment.clinica_id == clinic_id)
+            .group_by(Appointment.tutor_id)
+            .subquery()
+        )
+
+        pagination = (
+            User.query.outerjoin(last_appt, User.id == last_appt.c.tutor_id)
+            .filter(
+                or_(
+                    User.clinica_id == clinic_id,
+                    last_appt.c.last_at != None,
+                )
+            )
+            .order_by(func.coalesce(last_appt.c.last_at, User.created_at).desc())
+            .paginate(page=page, per_page=9, error_out=False)
+        )
+        return pagination.items, pagination, resolved_scope
+
+    pagination = (
+        User.query.filter(User.created_at != None)
+        .order_by(User.created_at.desc())
+        .paginate(page=page, per_page=9, error_out=False)
+    )
+    return pagination.items, pagination, resolved_scope
+
+
 @cache
 def list_rations():
     return TipoRacao.query.order_by(TipoRacao.marca.asc()).all()
@@ -8590,6 +8618,15 @@ def appointments():
             user_id=vet_user_id,
         )
 
+        tutor_scope_param = request.args.get('tutor_scope', 'all')
+        tutor_page = request.args.get('tutor_page', 1, type=int)
+        vet_tutores_adicionados, vet_tutores_pagination, vet_tutores_scope = _get_recent_tutores(
+            tutor_scope_param,
+            tutor_page,
+            clinic_id=vet_clinic_id,
+            user_id=vet_user_id,
+        )
+
         species_list = list_species()
         breed_list = list_breeds()
 
@@ -8628,6 +8665,9 @@ def appointments():
             vet_animais_adicionados=vet_animais_adicionados,
             vet_animais_pagination=vet_animais_pagination,
             vet_animais_scope=vet_animais_scope,
+            vet_tutores_adicionados=vet_tutores_adicionados,
+            vet_tutores_pagination=vet_tutores_pagination,
+            vet_tutores_scope=vet_tutores_scope,
         )
     else:
         if worker in ['colaborador', 'admin']:
