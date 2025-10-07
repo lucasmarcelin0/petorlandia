@@ -291,6 +291,7 @@ from helpers import (
     get_appointment_duration,
     has_conflict_for_slot,
 )
+from services import get_calendar_access_scope
 
 
 def current_user_clinic_id():
@@ -3578,6 +3579,7 @@ def vet_detail(veterinario_id):
     from models import Animal, User  # import local para evitar ciclos
 
     veterinario = Veterinario.query.get_or_404(veterinario_id)
+    calendar_access_scope = get_calendar_access_scope(current_user)
     horarios = (
         VetSchedule.query.filter_by(veterinario_id=veterinario_id)
         .order_by(VetSchedule.dia_semana, VetSchedule.hora_inicio)
@@ -3685,6 +3687,8 @@ def vet_detail(veterinario_id):
             return
         if any(entry.get('id') == vet_id for entry in calendar_summary_vets):
             return
+        if not calendar_access_scope.allows_veterinarian(vet):
+            return
         entry = build_calendar_summary_entry(vet, label=label, is_specialist=is_specialist)
         if entry:
             calendar_summary_vets.append(entry)
@@ -3720,7 +3724,11 @@ def vet_detail(veterinario_id):
         for colleague in colleagues:
             add_summary_vet(colleague)
 
-    calendar_summary_clinic_ids = list(clinic_ids)
+    calendar_summary_clinic_ids = calendar_access_scope.filter_clinic_ids(clinic_ids)
+    calendar_summary_vets = calendar_access_scope.filter_veterinarians(calendar_summary_vets)
+    if not calendar_summary_vets:
+        add_summary_vet(veterinario)
+        calendar_summary_vets = calendar_access_scope.filter_veterinarians(calendar_summary_vets)
 
     return render_template(
         'veterinarios/vet_detail.html',
@@ -7763,6 +7771,7 @@ def appointments():
 
     view_as = request.args.get('view_as')
     worker = current_user.worker
+    calendar_access_scope = get_calendar_access_scope(current_user)
 
     def _redirect_to_current_appointments():
         query_args = request.args.to_dict(flat=False)
@@ -7844,6 +7853,7 @@ def appointments():
             clinica_id = getattr(clinica, "id", None)
             if clinica_id and clinica_id not in clinic_ids:
                 clinic_ids.append(clinica_id)
+        clinic_ids = calendar_access_scope.filter_clinic_ids(clinic_ids)
         calendar_summary_clinic_ids = clinic_ids
         if getattr(veterinario, "id", None) is not None:
             calendar_summary_vets = [
@@ -7857,7 +7867,7 @@ def appointments():
                     'is_specialist': bool(getattr(veterinario, 'specialty_list', None)),
                 }
             ]
-        include_colleagues = bool(clinic_ids)
+        include_colleagues = bool(clinic_ids) and calendar_access_scope.allows_all_veterinarians()
         if include_colleagues:
             if current_user.role == 'admin' and agenda_veterinarios:
                 colleagues_source = [
@@ -7876,7 +7886,11 @@ def appointments():
             known_ids = {entry['id'] for entry in calendar_summary_vets}
             for colleague in colleagues_source:
                 colleague_id = getattr(colleague, 'id', None)
-                if not colleague_id or colleague_id in known_ids:
+                if (
+                    not colleague_id
+                    or colleague_id in known_ids
+                    or not calendar_access_scope.allows_veterinarian(colleague)
+                ):
                     continue
                 calendar_summary_vets.append(
                     {
@@ -7940,6 +7954,9 @@ def appointments():
             ),
             key=_vet_sort_key,
         )
+        combined_vets = calendar_access_scope.filter_veterinarians(combined_vets)
+        if not combined_vets:
+            combined_vets = [veterinario]
 
         clinic_vet_ids = {
             getattr(vet, 'id', None) for vet in clinic_vets if getattr(vet, 'id', None)
@@ -7973,6 +7990,19 @@ def appointments():
             }
             for vet in combined_vets
         ]
+        calendar_summary_vets = calendar_access_scope.filter_veterinarians(calendar_summary_vets)
+        if not calendar_summary_vets:
+            calendar_summary_vets = [
+                {
+                    'id': veterinario.id,
+                    'name': _vet_label(veterinario),
+                    'label': _vet_label(veterinario),
+                    'full_name': getattr(getattr(veterinario, 'user', None), 'name', None),
+                    'specialty_list': getattr(veterinario, 'specialty_list', None),
+                    'is_specialist': getattr(veterinario, 'id', None) in specialist_ids
+                    and getattr(veterinario, 'id', None) not in clinic_vet_ids,
+                }
+            ]
         if request.method == 'GET':
             schedule_form.veterinario_id.data = veterinario.id
             appointment_form.veterinario_id.data = veterinario.id
@@ -8547,6 +8577,7 @@ def appointments():
                 (vet for vet in combined_vets if getattr(vet, 'id', None) is not None),
                 key=_vet_sort_key,
             )
+            combined_vets = calendar_access_scope.filter_veterinarians(combined_vets)
 
             clinic_vet_ids = {getattr(vet, 'id', None) for vet in vets if getattr(vet, 'id', None) is not None}
             specialist_ids = {getattr(vet, 'id', None) for vet in specialists}
@@ -8573,7 +8604,8 @@ def appointments():
                 }
                 for vet in combined_vets
             ]
-            calendar_summary_clinic_ids = [clinica_id] if clinica_id else []
+            calendar_summary_vets = calendar_access_scope.filter_veterinarians(calendar_summary_vets)
+            calendar_summary_clinic_ids = calendar_access_scope.filter_clinic_ids([clinica_id]) if clinica_id else []
             if appointment_form.validate_on_submit():
                 scheduled_at_local = datetime.combine(
                     appointment_form.date.data, appointment_form.time.data

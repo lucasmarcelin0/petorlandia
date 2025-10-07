@@ -658,6 +658,7 @@ class ClinicStaff(db.Model):
     can_manage_staff = db.Column(db.Boolean, default=False)
     can_manage_schedule = db.Column(db.Boolean, default=False)
     can_manage_inventory = db.Column(db.Boolean, default=False)
+    can_view_full_calendar = db.Column(db.Boolean, default=True, nullable=False)
 
     clinic = db.relationship('Clinica', backref='staff_members')
     user = db.relationship('User', backref='clinic_roles')
