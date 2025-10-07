@@ -38,6 +38,10 @@
       clinica_id=request.args.get('clinica_id')
     ) %}
   {% endif %}
+  {% set pet_quick_list_endpoint = calendar_pets_endpoint %}
+  {% set pet_quick_list_component_id = 'appointments-pet-quick-list' %}
+  {% set pet_quick_list_new_pet_url = url_for('novo_animal') %}
+  {% set summary_panel_template = 'partials/appointments_summary_panel.html' %}
   {% set schedule_toggle_clinic_id = current_user.clinica_id %}
   {% set schedule_toggle_calendar_redirect_url = calendar_redirect_url %}
   {% include 'partials/calendar_layout.html' %}
