@@ -797,57 +797,78 @@
           data-schedule-manage-collapse
         >
           <div class="card-body p-4">
-            <div class="card shadow-sm border-0">
-              <div class="card-header bg-light d-flex justify-content-between align-items-center">
-                <h5 class="mb-0"><i class="fas fa-business-time me-2"></i>Horários Cadastrados</h5>
-                <button
-                  class="btn btn-sm btn-outline-primary"
-                  data-schedule-edit-toggle
-                  onclick="toggleScheduleEdit()"
-                >
-                  <i class="fas fa-edit me-1"></i>Editar horários
-                </button>
-              </div>
-              <div class="card-body">
-                <div
-                  class="schedule-inline-container border rounded-3 p-4 mb-4 d-none"
-                  data-schedule-inline-container
-                  data-visible="false"
-                >
-                  <div class="d-flex justify-content-between align-items-start mb-3">
-                    <div>
-                      <h5 class="mb-1" id="scheduleModalTitle">Adicionar Horário</h5>
-                      <p class="text-muted mb-0">Configure novos horários ou edite os existentes diretamente neste painel.</p>
-                    </div>
+              <div class="card shadow-sm border-0">
+                <div class="card-header bg-light d-flex flex-wrap align-items-center gap-2">
+                  <h5 class="mb-0 me-auto"><i class="fas fa-business-time me-2"></i>Horários Cadastrados</h5>
+                  <div
+                    class="d-flex flex-wrap align-items-center gap-2 d-none"
+                    data-schedule-bulk-actions
+                  >
                     <button
                       type="button"
-                      class="btn-close"
-                      aria-label="Fechar"
-                      onclick="toggleScheduleForm('close-inline')"
-                    ></button>
+                      class="btn btn-sm btn-outline-secondary"
+                      data-schedule-select-all
+                      aria-pressed="false"
+                    >
+                      <i class="fas fa-check-double me-1"></i>Selecionar tudo
+                    </button>
+                    <button
+                      type="button"
+                      class="btn btn-sm btn-danger"
+                      data-schedule-bulk-delete
+                      disabled
+                    >
+                      <i class="fas fa-trash-alt me-1"></i>Excluir selecionados
+                    </button>
                   </div>
-                  <form method="post" id="schedule-form" class="d-flex flex-column gap-3">
-                    {% include 'partials/schedule_form_body.html' %}
-                    <div class="d-flex justify-content-end gap-2">
+                  <button
+                    class="btn btn-sm btn-outline-primary"
+                    data-schedule-edit-toggle
+                    onclick="toggleScheduleEdit()"
+                  >
+                    <i class="fas fa-edit me-1"></i>Editar horários
+                  </button>
+                </div>
+                <div class="card-body">
+                  <div
+                    class="schedule-inline-container border rounded-3 p-4 mb-4 d-none"
+                    data-schedule-inline-container
+                    data-visible="false"
+                  >
+                    <div class="d-flex justify-content-between align-items-start mb-3">
+                      <div>
+                        <h5 class="mb-1" id="scheduleModalTitle">Adicionar Horário</h5>
+                        <p class="text-muted mb-0">Configure novos horários ou edite os existentes diretamente neste painel.</p>
+                      </div>
                       <button
                         type="button"
-                        class="btn btn-outline-secondary"
+                        class="btn-close"
+                        aria-label="Fechar"
                         onclick="toggleScheduleForm('close-inline')"
-                      >
-                        Cancelar
-                      </button>
-                      <button
-                        type="submit"
-                        class="btn btn-primary"
-                        name="{{ schedule_form.submit.name }}"
-                        value="Salvar Horário"
-                      >
-                        Salvar Horário
-                      </button>
+                      ></button>
                     </div>
-                  </form>
-                </div>
-                <div class="row">
+                    <form method="post" id="schedule-form" class="d-flex flex-column gap-3">
+                      {% include 'partials/schedule_form_body.html' %}
+                      <div class="d-flex justify-content-end gap-2">
+                        <button
+                          type="button"
+                          class="btn btn-outline-secondary"
+                          onclick="toggleScheduleForm('close-inline')"
+                        >
+                          Cancelar
+                        </button>
+                        <button
+                          type="submit"
+                          class="btn btn-primary"
+                          name="{{ schedule_form.submit.name }}"
+                          value="Salvar Horário"
+                        >
+                          Salvar Horário
+                        </button>
+                      </div>
+                    </form>
+                  </div>
+                  <div class="row">
                   {% for grupo in horarios_grouped %}
                     <div class="col-md-6 col-lg-4 mb-3">
                       <div class="card h-100" style="opacity: 1; transform: translateY(0px); transition: opacity 0.5s, transform 0.5s;">
@@ -856,14 +877,32 @@
                         </div>
                         <div class="card-body py-2">
                           {% for h in grupo.itens %}
-                            <div class="d-flex justify-content-between align-items-center mb-2">
-                              <div>
+                            <div
+                              class="d-flex align-items-center justify-content-between gap-3 mb-2"
+                              data-schedule-item
+                              data-schedule-id="{{ h.id }}"
+                            >
+                              <div class="d-flex align-items-center gap-2 flex-grow-1">
+                                <div
+                                  class="form-check mb-0 d-none"
+                                  data-schedule-select-wrapper
+                                >
+                                  {% set checkbox_id = 'schedule-select-' ~ h.id %}
+                                  <input
+                                    class="form-check-input"
+                                    type="checkbox"
+                                    value="{{ h.id }}"
+                                    id="{{ checkbox_id }}"
+                                    data-schedule-select
+                                    aria-label="Selecionar horário {{ h.hora_inicio.strftime('%H:%M') }} - {{ h.hora_fim.strftime('%H:%M') }}"
+                                  >
+                                </div>
                                 <span class="badge bg-light text-dark">{{ h.hora_inicio.strftime('%H:%M') }} - {{ h.hora_fim.strftime('%H:%M') }}</span>
                                 {% if h.intervalo_inicio and h.intervalo_fim %}
                                   <small class="text-muted d-block">Intervalo: {{ h.intervalo_inicio.strftime('%H:%M') }} - {{ h.intervalo_fim.strftime('%H:%M') }}</small>
                                 {% endif %}
                               </div>
-                              <div class="schedule-actions d-none">
+                              <div class="schedule-actions d-none d-flex gap-1">
                                 <button
                                   type="button"
                                   class="btn btn-sm btn-outline-primary edit-btn"
@@ -903,6 +942,7 @@
                       <p class="text-muted mb-0">Nenhum horário cadastrado.</p>
                     </div>
                   {% endfor %}
+                </div>
                 </div>
               </div>
             </div>
