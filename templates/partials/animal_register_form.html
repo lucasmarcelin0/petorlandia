@@ -58,7 +58,9 @@
       {% set prefixo = 'animal_reg' %}
       {% set nome_data = 'date_of_birth' %}
       {% set nome_idade = 'age' %}
-      {% include 'components/campo_data_idade.html' %}
+      <div class="col-12">
+        {% include 'components/campo_data_idade.html' %}
+      </div>
       <div class="col-md-6">
         <label class="form-label">Microchip</label>
         <input type="text" name="microchip_number" class="form-control">
