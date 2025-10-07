@@ -59,6 +59,11 @@
                       {{ staff_permission_forms[s.user.id].can_manage_inventory(class="form-check-input") }}
                       {{ staff_permission_forms[s.user.id].can_manage_inventory.label(class="form-check-label") }}
                     </div>
+                    <div class="form-check">
+                      {{ staff_permission_forms[s.user.id].can_view_full_calendar(class="form-check-input") }}
+                      {{ staff_permission_forms[s.user.id].can_view_full_calendar.label(class="form-check-label") }}
+                      <div class="form-text">Permite visualizar a agenda completa da clínica.</div>
+                    </div>
                     {{ staff_permission_forms[s.user.id].submit(class="btn btn-primary btn-sm mt-2") }}
                   </form>
                 </td>
@@ -151,6 +156,11 @@
                       <div class="form-check">
                         {{ vet_permission_forms[v.user.id].can_manage_inventory(class="form-check-input") }}
                         {{ vet_permission_forms[v.user.id].can_manage_inventory.label(class="form-check-label") }}
+                      </div>
+                      <div class="form-check">
+                        {{ vet_permission_forms[v.user.id].can_view_full_calendar(class="form-check-input") }}
+                        {{ vet_permission_forms[v.user.id].can_view_full_calendar.label(class="form-check-label") }}
+                        <div class="form-text">Permite visualizar a agenda completa da clínica.</div>
                       </div>
                       {{ vet_permission_forms[v.user.id].submit(class="btn btn-primary btn-sm mt-2") }}
                     </form>

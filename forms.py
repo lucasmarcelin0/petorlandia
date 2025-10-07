@@ -333,6 +333,7 @@ class ClinicStaffPermissionForm(FlaskForm):
     can_manage_staff = BooleanField('Funcionários')
     can_manage_schedule = BooleanField('Agenda')
     can_manage_inventory = BooleanField('Estoque')
+    can_view_full_calendar = BooleanField('Visualizar agenda completa da clínica', default=True)
     submit = SubmitField('Salvar')
 
 
