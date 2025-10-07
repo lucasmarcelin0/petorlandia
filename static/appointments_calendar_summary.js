@@ -411,6 +411,53 @@ export function setupAppointmentsCalendarSummary(options = {}) {
       return new Set(ids.filter(Boolean));
     })();
 
+    const calendarSummaryVetMetadata = (() => {
+      const parsed = parseCalendarSummaryAttributeJSON('data-calendar-summary-vets');
+      const entries = Array.isArray(parsed) ? parsed : (parsed ? [parsed] : []);
+      const map = new Map();
+      entries.forEach((item) => {
+        if (!item || typeof item !== 'object') {
+          return;
+        }
+        const normalizedId = normalizeSummaryVetId(
+          item.id
+            ?? item.vetId
+            ?? item.veterinario_id
+            ?? item.veterinarioId
+            ?? null,
+        );
+        if (!normalizedId) {
+          return;
+        }
+        const rawSpecialty = item.specialty_list ?? item.specialtyList ?? null;
+        const specialtyList = typeof rawSpecialty === 'string' ? rawSpecialty.trim() : rawSpecialty;
+        const isSpecialist = (() => {
+          if (typeof item.is_specialist === 'boolean') {
+            return item.is_specialist;
+          }
+          if (typeof item.isSpecialist === 'boolean') {
+            return item.isSpecialist;
+          }
+          if (typeof item.specialist === 'boolean') {
+            return item.specialist;
+          }
+          return typeof specialtyList === 'string' && specialtyList.trim().length > 0;
+        })();
+        map.set(normalizedId, {
+          vetId: normalizedId,
+          label: item.label ?? item.name ?? item.vetName ?? null,
+          fullName: item.full_name
+            ?? item.fullName
+            ?? item.vetFullName
+            ?? item.name
+            ?? null,
+          specialtyList: typeof specialtyList === 'string' ? specialtyList : null,
+          isSpecialist,
+        });
+      });
+      return map;
+    })();
+
     const calendarSummaryAllowedClinicIds = (() => {
       const ids = extractSummaryIds('data-calendar-summary-clinic-ids', (entry) => {
         if (entry && typeof entry === 'object') {
@@ -435,6 +482,103 @@ export function setupAppointmentsCalendarSummary(options = {}) {
         return true;
       }
       return calendarSummaryAllowedVetIds.has(normalized);
+    }
+
+    function getStoredCalendarSummaryVetMetadata(vetId) {
+      const normalized = normalizeSummaryVetId(vetId);
+      if (!normalized || !(calendarSummaryVetMetadata instanceof Map)) {
+        return null;
+      }
+      return calendarSummaryVetMetadata.get(normalized) || null;
+    }
+
+    function normalizeSummarySpecialtyList(value) {
+      if (Array.isArray(value)) {
+        return value
+          .map((item) => (typeof item === 'string' ? item.trim() : item))
+          .filter((item) => typeof item === 'string' && item.length)
+          .join(', ');
+      }
+      if (typeof value === 'string') {
+        const trimmed = value.trim();
+        return trimmed || null;
+      }
+      return null;
+    }
+
+    function updateCalendarSummaryVetMetadata(vetId, metadata) {
+      const normalized = normalizeSummaryVetId(vetId);
+      if (!normalized || !(calendarSummaryVetMetadata instanceof Map)) {
+        return;
+      }
+      const current = calendarSummaryVetMetadata.get(normalized) || {};
+      const next = { ...current };
+      if (metadata && typeof metadata === 'object') {
+        if (metadata.label) {
+          next.label = metadata.label;
+        }
+        if (metadata.fullName) {
+          next.fullName = metadata.fullName;
+        }
+        if (metadata.specialtyList !== undefined) {
+          next.specialtyList = normalizeSummarySpecialtyList(metadata.specialtyList);
+        }
+        if (typeof metadata.isSpecialist === 'boolean') {
+          next.isSpecialist = metadata.isSpecialist;
+        }
+      }
+      next.vetId = normalized;
+      calendarSummaryVetMetadata.set(normalized, next);
+    }
+
+    function extractEventVetMetadata(event, fallbackId) {
+      if (!event) {
+        return null;
+      }
+      const extended = event.extendedProps || {};
+      const normalizedId = normalizeSummaryVetId(
+        extended.veterinarioId
+          ?? extended.vetId
+          ?? extended.veterinarianId
+          ?? extended.specialistId
+          ?? fallbackId
+          ?? null,
+      );
+      const specialtyList = normalizeSummarySpecialtyList(
+        extended.vetSpecialtyList
+          ?? extended.vetSpecialties
+          ?? extended.specialty_list
+          ?? extended.specialtyList,
+      );
+      const isSpecialist = (() => {
+        if (typeof extended.vetIsSpecialist === 'boolean') {
+          return extended.vetIsSpecialist;
+        }
+        if (typeof extended.isSpecialist === 'boolean') {
+          return extended.isSpecialist;
+        }
+        if (typeof extended.specialist === 'boolean') {
+          return extended.specialist;
+        }
+        if (specialtyList) {
+          return true;
+        }
+        if (extended.specialistId) {
+          return true;
+        }
+        return null;
+      })();
+      return {
+        vetId: normalizedId,
+        label: extended.vetLabel ?? extended.vetName ?? null,
+        fullName: extended.vetFullName
+          ?? extended.veterinarioFullName
+          ?? extended.veterinarianName
+          ?? extended.vetName
+          ?? null,
+        specialtyList,
+        isSpecialist,
+      };
     }
 
     function isCalendarSummaryClinicAllowed(clinicId) {
@@ -617,16 +761,57 @@ export function setupAppointmentsCalendarSummary(options = {}) {
           return;
         }
         const name = deriveSummaryVetName(event, vetId);
+        const storedMetadata = getStoredCalendarSummaryVetMetadata(vetId) || {};
+        const eventMetadata = extractEventVetMetadata(event, vetId) || {};
+        const resolvedLabel = eventMetadata.label
+          || storedMetadata.label
+          || name;
+        const resolvedFullName = eventMetadata.fullName
+          || storedMetadata.fullName
+          || resolvedLabel
+          || name;
+        const resolvedSpecialtyList = normalizeSummarySpecialtyList(
+          eventMetadata.specialtyList ?? storedMetadata.specialtyList,
+        );
+        const resolvedIsSpecialist = (() => {
+          if (typeof eventMetadata.isSpecialist === 'boolean') {
+            return eventMetadata.isSpecialist;
+          }
+          if (typeof storedMetadata.isSpecialist === 'boolean') {
+            return storedMetadata.isSpecialist;
+          }
+          return !!resolvedSpecialtyList;
+        })();
+        updateCalendarSummaryVetMetadata(vetId, {
+          label: resolvedLabel,
+          fullName: resolvedFullName,
+          specialtyList: resolvedSpecialtyList,
+          isSpecialist: resolvedIsSpecialist,
+        });
         const eventDate = startOfDay(parseSummaryDate(event.start || event.startStr || event.date || null));
         const dateKey = formatSummaryDateKey(eventDate);
         const summaryEntry = summaryMap.get(vetId) || {
           vetId,
-          vetName: name,
+          vetName: resolvedLabel || name,
+          vetFullName: resolvedFullName || resolvedLabel || name,
+          specialtyList: resolvedSpecialtyList,
+          isSpecialist: resolvedIsSpecialist,
           total: 0,
           today: 0,
           thisWeek: 0,
           days: new Map(),
         };
+        summaryEntry.vetName = resolvedLabel || summaryEntry.vetName || name;
+        summaryEntry.vetFullName = resolvedFullName
+          || summaryEntry.vetFullName
+          || summaryEntry.vetName
+          || name;
+        if (resolvedSpecialtyList !== undefined) {
+          summaryEntry.specialtyList = resolvedSpecialtyList;
+        }
+        if (typeof resolvedIsSpecialist === 'boolean') {
+          summaryEntry.isSpecialist = resolvedIsSpecialist;
+        }
         summaryEntry.total += 1;
         if (dateKey === todayKey) {
           summaryEntry.today += 1;
@@ -649,6 +834,11 @@ export function setupAppointmentsCalendarSummary(options = {}) {
         return {
           vetId: entry.vetId,
           vetName: entry.vetName,
+          vetFullName: entry.vetFullName || entry.vetName,
+          specialtyList: normalizeSummarySpecialtyList(entry.specialtyList),
+          isSpecialist: typeof entry.isSpecialist === 'boolean'
+            ? entry.isSpecialist
+            : !!normalizeSummarySpecialtyList(entry.specialtyList),
           total: entry.total,
           today: entry.today,
           thisWeek: entry.thisWeek,
@@ -672,10 +862,22 @@ export function setupAppointmentsCalendarSummary(options = {}) {
         totalThisWeek += normalizeSummaryNumber(entry.thisWeek);
       });
 
-      const filters = rows.map((entry) => ({
-        vetId: entry.vetId,
-        vetName: entry.vetName,
-      }));
+      const filters = rows.map((entry) => {
+        const specialtyList = normalizeSummarySpecialtyList(entry.specialtyList);
+        const specialties = specialtyList
+          ? specialtyList.split(',').map((item) => item.trim()).filter(Boolean)
+          : [];
+        const primarySpecialty = specialties.length ? specialties[0] : '';
+        return {
+          vetId: entry.vetId,
+          vetName: entry.vetName,
+          vetFullName: entry.vetFullName || entry.vetName,
+          specialtyList,
+          specialties,
+          primarySpecialty,
+          isSpecialist: !!entry.isSpecialist,
+        };
+      });
 
       return {
         rows,
@@ -805,8 +1007,16 @@ export function setupAppointmentsCalendarSummary(options = {}) {
         if (normalizedId) {
           filterButton.dataset.vetId = normalizedId;
         }
-        const vetLabel = entry.vetName || `Profissional ${entry.vetId}`;
-        filterButton.setAttribute('aria-label', `Filtrar agenda por ${vetLabel}`);
+        const vetLabel = entry.vetName || entry.vetFullName || `Profissional ${entry.vetId}`;
+        const specialtyList = normalizeSummarySpecialtyList(entry.specialtyList);
+        const isSpecialist = !!entry.isSpecialist;
+        const ariaSegments = [`Filtrar agenda por ${vetLabel}`];
+        if (isSpecialist) {
+          ariaSegments.push(
+            specialtyList ? `especialista em ${specialtyList}` : 'especialista',
+          );
+        }
+        filterButton.setAttribute('aria-label', ariaSegments.join(', '));
         filterButton.setAttribute('title', vetLabel);
         filterButton.setAttribute('aria-pressed', 'false');
         filterButton.disabled = false;
@@ -814,14 +1024,38 @@ export function setupAppointmentsCalendarSummary(options = {}) {
         const icon = document.createElement('span');
         icon.classList.add('calendar-summary-filter-icon');
         icon.setAttribute('aria-hidden', 'true');
-        const initials = getSummaryVetInitials(vetLabel, entry.vetId);
+        const initials = getSummaryVetInitials(entry.vetFullName || vetLabel, entry.vetId);
         icon.textContent = initials || '•';
         filterButton.appendChild(icon);
 
-        const srLabel = document.createElement('span');
-        srLabel.classList.add('visually-hidden');
-        srLabel.textContent = vetLabel;
-        filterButton.appendChild(srLabel);
+        const content = document.createElement('span');
+        content.classList.add('calendar-summary-filter-content');
+        const nameElement = document.createElement('span');
+        nameElement.classList.add('calendar-summary-filter-name');
+        nameElement.textContent = vetLabel;
+        content.appendChild(nameElement);
+
+        if (isSpecialist) {
+          const badge = document.createElement('span');
+          badge.classList.add('calendar-summary-filter-badge', 'badge', 'rounded-pill');
+          badge.setAttribute('aria-hidden', 'true');
+          const badgeLabel = entry.primarySpecialty || 'Especialista';
+          badge.textContent = badgeLabel;
+          if (specialtyList && badgeLabel && badgeLabel !== specialtyList) {
+            badge.title = specialtyList;
+          }
+          content.appendChild(badge);
+
+          const srNote = document.createElement('span');
+          srNote.classList.add('visually-hidden');
+          srNote.textContent = specialtyList
+            ? `Especialista em ${specialtyList}`
+            : 'Especialista';
+          content.appendChild(srNote);
+        }
+
+        filterButton.classList.add('has-label');
+        filterButton.appendChild(content);
 
         calendarSummaryFilters.appendChild(filterButton);
       });
