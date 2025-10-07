@@ -154,19 +154,17 @@
 
               <!-- Filtros com design melhorado -->
               <div
-                class="card shadow-sm border-0 h-100 d-none"
+                class="card schedule-card h-100 d-none"
                 id="agenda-filter-card"
                 data-default-visible="false"
               >
-                <div class="card-header bg-primary bg-gradient text-white border-0 py-3 position-relative overflow-hidden">
-                  <div class="d-flex align-items-center">
-                    <div class="bg-white text-primary rounded-circle d-flex align-items-center justify-content-center me-3" style="width: 42px; height: 42px;">
-                      <i class="fas fa-filter"></i>
-                    </div>
-                    <div>
-                      <h5 class="mb-1 text-white">Filtrar Agenda</h5>
-                      <small class="text-white-50">Selecione um período ou utilize os atalhos rápidos abaixo</small>
-                    </div>
+                <div class="schedule-card__header schedule-card__header--primary">
+                  <div class="schedule-card__header-icon" aria-hidden="true">
+                    <i class="fas fa-filter" aria-hidden="true"></i>
+                  </div>
+                  <div class="flex-grow-1">
+                    <h5 class="schedule-card__title mb-1">Filtrar Agenda</h5>
+                    <p class="schedule-card__subtitle mb-0">Selecione um período ou utilize os atalhos rápidos abaixo</p>
                   </div>
                 </div>
                 <div class="card-body">
@@ -221,9 +219,18 @@
               </div>
 
               <!-- Agendamentos pendentes -->
-              <div class="card border-warning">
-                <div class="card-header bg-warning text-dark">
-                  <h5 class="mb-0"><i class="fas fa-clock me-2"></i>Agendamentos Pendentes</h5>
+              <div class="card schedule-card">
+                <div class="schedule-card__header schedule-card__header--warning">
+                  <div class="schedule-card__header-icon" aria-hidden="true">
+                    <i class="fas fa-clock" aria-hidden="true"></i>
+                  </div>
+                  <div class="flex-grow-1">
+                    <h5 class="schedule-card__title mb-1">Agendamentos Pendentes</h5>
+                    <p class="schedule-card__subtitle mb-0">Consultas e exames aguardando confirmação ou ação.</p>
+                  </div>
+                  <span class="schedule-card__tag schedule-card__tag--warning mt-2 mt-sm-0">
+                    <i class="fas fa-bell" aria-hidden="true"></i>Pendências
+                  </span>
                 </div>
                 <div class="card-body p-0">
                   <div class="list-group list-group-flush">
@@ -281,11 +288,11 @@
                                 <small class="text-muted">
                                   {{ display_tutor.name if display_tutor else '' }}
                                   {% if item.kind == 'banho_tosa' %}
-                                    <span class="badge bg-primary ms-1">Banho e Tosa</span>
+                                    <span class="schedule-card__tag schedule-card__tag--primary ms-2">Banho e Tosa</span>
                                   {% elif item.kind == 'vacina' %}
-                                    <span class="badge bg-success ms-1">Vacina</span>
+                                    <span class="schedule-card__tag schedule-card__tag--success ms-2">Vacina</span>
                                   {% elif item.kind == 'retorno' %}
-                                    <span class="badge bg-warning text-dark ms-1">Retorno</span>
+                                    <span class="schedule-card__tag schedule-card__tag--warning ms-2">Retorno</span>
                                   {% endif %}
                                 </small>
                                 <div class="mt-1">
@@ -359,13 +366,13 @@
                               <small class="text-muted">
                                 {{ appt.tutor.name if item.kind in ['consulta', 'retorno', 'banho_tosa', 'vacina'] else appt.animal.owner.name }}
                                 {% if item.kind == 'banho_tosa' %}
-                                  <span class="badge bg-primary ms-1">Banho e Tosa</span>
+                                  <span class="schedule-card__tag schedule-card__tag--primary ms-2">Banho e Tosa</span>
                                 {% elif item.kind == 'vacina' %}
-                                  <span class="badge bg-success ms-1">Vacina</span>
+                                  <span class="schedule-card__tag schedule-card__tag--success ms-2">Vacina</span>
                                 {% elif item.kind == 'retorno' %}
-                                  <span class="badge bg-warning text-dark ms-1">Retorno</span>
+                                  <span class="schedule-card__tag schedule-card__tag--warning ms-2">Retorno</span>
                                 {% endif %}
-                                <span class="badge bg-light text-dark border ms-1"><i class="fas fa-user-md me-1"></i>{{ appt.veterinario.user.name }}</span>
+                                <span class="schedule-card__tag schedule-card__tag--muted ms-2"><i class="fas fa-user-md me-1"></i>{{ appt.veterinario.user.name }}</span>
                               </small>
                               <div class="mt-1">
                                 {% if can_respond %}
@@ -379,9 +386,9 @@
                           </div>
                           <div class="text-end">
                             {% if can_respond %}
-                              <span class="badge bg-warning text-dark"><i class="fas fa-user-clock me-1"></i>Aguardando confirmação</span>
+                              <span class="schedule-card__tag schedule-card__tag--warning"><i class="fas fa-user-clock me-1"></i>Aguardando confirmação</span>
                             {% else %}
-                              <span class="badge bg-secondary"><i class="fas fa-hourglass-end me-1"></i>Prazo expirado</span>
+                              <span class="schedule-card__tag schedule-card__tag--secondary"><i class="fas fa-hourglass-end me-1"></i>Prazo expirado</span>
                             {% endif %}
                           </div>
                         </div>
@@ -445,7 +452,7 @@
                                 <small class="text-muted"><i class="fas fa-user-md me-1"></i>Especialista responsável: {{ exam.specialist.user.name if exam.specialist and exam.specialist.user else '—' }}</small>
                               </div>
                             </div>
-                            <span class="badge bg-secondary"><i class="fas fa-hourglass-half me-1"></i>Aguardando</span>
+                            <span class="schedule-card__tag schedule-card__tag--secondary"><i class="fas fa-hourglass-half me-1"></i>Aguardando</span>
                           </div>
                         </div>
                       {% endfor %}
@@ -461,9 +468,18 @@
               </div>
 
               <!-- Próximos agendamentos -->
-              <div class="card border-primary">
-                <div class="card-header bg-primary text-white">
-                  <h5 class="mb-0"><i class="fas fa-calendar-check me-2"></i>Próximos Agendamentos</h5>
+              <div class="card schedule-card">
+                <div class="schedule-card__header schedule-card__header--primary">
+                  <div class="schedule-card__header-icon" aria-hidden="true">
+                    <i class="fas fa-calendar-check" aria-hidden="true"></i>
+                  </div>
+                  <div class="flex-grow-1">
+                    <h5 class="schedule-card__title mb-1">Próximos Agendamentos</h5>
+                    <p class="schedule-card__subtitle mb-0">Veja o que está por vir e acesse rapidamente os detalhes.</p>
+                  </div>
+                  <span class="schedule-card__tag schedule-card__tag--primary mt-2 mt-sm-0">
+                    <i class="fas fa-arrow-right" aria-hidden="true"></i>Em breve
+                  </span>
                 </div>
                 <div class="card-body p-0">
                   <div class="list-group list-group-flush">
@@ -483,7 +499,7 @@
                               </div>
                               <div>
                                 <h6 class="mb-0">{{ appt.scheduled_at|format_datetime_brazil('%d/%m/%Y %H:%M') }} - {{ appt.animal.name }}</h6>
-                                <small class="text-muted">{{ appt.animal.owner.name }} <span class="badge bg-info ms-1">Exame</span></small>
+                                <small class="text-muted">{{ appt.animal.owner.name }} <span class="schedule-card__tag schedule-card__tag--info ms-2">Exame</span></small>
                               </div>
                             </div>
                             <div class="btn-group">
@@ -529,11 +545,11 @@
                                 <h6 class="mb-0">{{ appt.scheduled_at|format_datetime_brazil('%d/%m/%Y %H:%M') }} - {{ appt.animal.name }}</h6>
                                 <small class="text-muted">{{ appt.tutor.name if item.kind in ['consulta', 'retorno', 'banho_tosa', 'vacina'] else appt.animal.owner.name }}
                                   {% if item.kind == 'retorno' %}
-                                    <span class="badge bg-warning text-dark ms-1">Retorno</span>
+                                    <span class="schedule-card__tag schedule-card__tag--warning ms-2">Retorno</span>
                                   {% elif item.kind == 'banho_tosa' %}
-                                    <span class="badge bg-primary text-white ms-1">Banho e Tosa</span>
+                                    <span class="schedule-card__tag schedule-card__tag--primary ms-2">Banho e Tosa</span>
                                   {% elif item.kind == 'vacina' %}
-                                    <span class="badge bg-success text-white ms-1">Vacina</span>
+                                    <span class="schedule-card__tag schedule-card__tag--success ms-2">Vacina</span>
                                   {% endif %}
                                 </small>
                               </div>
@@ -594,13 +610,13 @@
                                 <small class="text-muted">
                                   {{ appt.tutor.name if item.kind in ['consulta', 'retorno', 'banho_tosa', 'vacina'] else appt.animal.owner.name }}
                                   {% if item.kind == 'retorno' %}
-                                    <span class="badge bg-warning text-dark ms-1">Retorno</span>
+                                    <span class="schedule-card__tag schedule-card__tag--warning ms-2">Retorno</span>
                                   {% elif item.kind == 'banho_tosa' %}
-                                    <span class="badge bg-primary text-white ms-1">Banho e Tosa</span>
+                                    <span class="schedule-card__tag schedule-card__tag--primary ms-2">Banho e Tosa</span>
                                   {% elif item.kind == 'vacina' %}
-                                    <span class="badge bg-success text-white ms-1">Vacina</span>
+                                    <span class="schedule-card__tag schedule-card__tag--success ms-2">Vacina</span>
                                   {% endif %}
-                                  <span class="badge bg-light text-dark border ms-1"><i class="fas fa-user-md me-1"></i>{{ appt.veterinario.user.name }}</span>
+                                  <span class="schedule-card__tag schedule-card__tag--muted ms-2"><i class="fas fa-user-md me-1"></i>{{ appt.veterinario.user.name }}</span>
                                 </small>
                               </div>
                             </div>
@@ -609,7 +625,7 @@
                                 <a href="{{ url_for('ficha_animal', animal_id=appt.animal_id) }}" class="btn btn-sm btn-outline-primary"><i class="fas fa-file-medical me-1"></i>Ficha</a>
                                 <a href="{{ url_for('ficha_tutor', tutor_id=appt.tutor_id) }}" class="btn btn-sm btn-outline-secondary"><i class="fas fa-user me-1"></i>Tutor</a>
                               </div>
-                              <span class="badge bg-success"><i class="fas fa-check me-1"></i>{{ status_label }}</span>
+                              <span class="schedule-card__tag schedule-card__tag--success"><i class="fas fa-check me-1"></i>{{ status_label }}</span>
                             </div>
                           </div>
                         </div>
@@ -625,10 +641,18 @@
                 </div>
               </div>
           <!-- Consultas finalizadas, retornos e exames -->
-          <div class="card border-secondary">
-            <div class="card-header bg-secondary text-white d-flex justify-content-between align-items-center">
-              <h5 class="mb-0"><i class="fas fa-history me-2"></i>Consultas e exames no período</h5>
-              <button id="toggle-past" class="btn btn-sm btn-light">
+          <div class="card schedule-card">
+            <div class="schedule-card__header schedule-card__header--secondary">
+              <div class="d-flex align-items-center gap-3 flex-grow-1 flex-wrap">
+                <div class="schedule-card__header-icon" aria-hidden="true">
+                  <i class="fas fa-history" aria-hidden="true"></i>
+                </div>
+                <div class="flex-grow-1">
+                  <h5 class="schedule-card__title mb-1">Consultas e exames no período</h5>
+                  <p class="schedule-card__subtitle mb-0">Acompanhe atendimentos concluídos, retornos e exames confirmados.</p>
+                </div>
+              </div>
+              <button id="toggle-past" class="btn btn-sm btn-light mt-3 mt-sm-0">
                 <i class="fas fa-chevron-down me-1"></i>Mostrar
               </button>
             </div>
@@ -650,7 +674,7 @@
                             <h6 class="mb-1">{{ event.timestamp|format_datetime_brazil('%d/%m/%Y %H:%M') }} – {{ animal.name }}</h6>
                             <small class="text-muted d-block">Tutor: {{ tutor.name if tutor else '—' }}</small>
                             {% if consulta.retorno_de_id %}
-                              <span class="badge bg-warning text-dark mt-1">Retorno da consulta #{{ consulta.retorno_de_id }}</span>
+                              <span class="schedule-card__tag schedule-card__tag--warning mt-2">Retorno da consulta #{{ consulta.retorno_de_id }}</span>
                             {% endif %}
                             {% if event.exam_summary %}
                               <div class="mt-2">
@@ -692,7 +716,7 @@
                           <div>
                             <h6 class="mb-1">{{ event.timestamp|format_datetime_brazil('%d/%m/%Y %H:%M') }} – {{ animal.name }}</h6>
                             <small class="text-muted d-block">Tutor: {{ tutor.name if tutor else '—' }}</small>
-                            <span class="badge bg-secondary mt-1">Consulta aceita e não finalizada</span>
+                            <span class="schedule-card__tag schedule-card__tag--secondary mt-2">Consulta aceita e não finalizada</span>
                           </div>
                           <div class="btn-group">
                             <a href="{{ url_for('ficha_animal', animal_id=animal.id) }}" class="btn btn-sm btn-outline-primary"><i class="fas fa-file-medical me-1"></i>Ficha</a>
