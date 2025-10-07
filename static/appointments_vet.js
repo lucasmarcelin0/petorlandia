@@ -534,15 +534,31 @@ export async function updateAppointmentTimes(options = {}) {
   return times;
 }
 
+const scheduleModalClickHandlers = new WeakMap();
+
 function bindScheduleModalButton(root) {
-  const scheduleButton = document.getElementById('openScheduleModal');
-  if (!scheduleButton || scheduleButton.dataset.vetScheduleBound === 'true') {
+  const resolvedRoot = getRootElement(root);
+  const buttons = Array.from(document.querySelectorAll('#openScheduleModal'));
+  if (buttons.length === 0) {
     return;
   }
-  scheduleButton.dataset.vetScheduleBound = 'true';
-  scheduleButton.addEventListener('click', (event) => {
-    event.preventDefault();
-    toggleScheduleForm(root);
+
+  buttons.forEach((button) => {
+    if (scheduleModalClickHandlers.has(button)) {
+      return;
+    }
+
+    const clickHandler = (event) => {
+      event.preventDefault();
+      const contextRoot =
+        button.closest(ROOT_SELECTOR) ||
+        resolvedRoot ||
+        getRootElement();
+      toggleScheduleForm(contextRoot);
+    };
+
+    scheduleModalClickHandlers.set(button, clickHandler);
+    button.addEventListener('click', clickHandler);
   });
 }
 
