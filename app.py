@@ -9085,6 +9085,108 @@ def edit_vet_schedule_slot(veterinario_id, horario_id):
     return redirect_response
 
 
+@app.route('/appointments/<int:veterinario_id>/schedule/bulk_delete', methods=['POST'])
+@login_required
+def bulk_delete_vet_schedule(veterinario_id):
+    from models import Veterinario, VetSchedule
+    from sqlalchemy.exc import SQLAlchemyError
+
+    wants_json = (
+        request.headers.get('X-Requested-With') == 'XMLHttpRequest'
+        or request.accept_mimetypes.best == 'application/json'
+    )
+
+    def json_response(success, status=200, message=None, extra=None):
+        if not wants_json:
+            abort(status)
+        payload = {'success': success}
+        if message:
+            payload['message'] = message
+        if extra:
+            payload.update(extra)
+        response = jsonify(payload)
+        response.status_code = status
+        return response
+
+    if not (
+        _is_admin()
+        or (
+            current_user.worker == 'veterinario'
+            and getattr(current_user, 'veterinario', None)
+            and current_user.veterinario.id == veterinario_id
+        )
+    ):
+        if wants_json:
+            return json_response(False, status=403, message='Você não tem permissão para excluir estes horários.')
+        abort(403)
+
+    Veterinario.query.get_or_404(veterinario_id)
+
+    raw_ids = request.form.getlist('schedule_ids')
+    if not raw_ids:
+        message = 'Nenhum horário selecionado.'
+        if wants_json:
+            return json_response(False, status=400, message=message)
+        flash(message, 'warning')
+        return redirect(request.referrer or url_for('appointments'))
+
+    schedule_ids = []
+    for raw_id in raw_ids:
+        try:
+            schedule_ids.append(int(raw_id))
+        except (TypeError, ValueError):
+            continue
+
+    unique_ids = list(dict.fromkeys(schedule_ids))
+    if not unique_ids:
+        message = 'Nenhum horário selecionado.'
+        if wants_json:
+            return json_response(False, status=400, message=message)
+        flash(message, 'warning')
+        return redirect(request.referrer or url_for('appointments'))
+
+    schedules = (
+        VetSchedule.query.filter(
+            VetSchedule.id.in_(unique_ids),
+            VetSchedule.veterinario_id == veterinario_id,
+        )
+        .order_by(VetSchedule.id.asc())
+        .all()
+    )
+
+    if len(schedules) != len(unique_ids):
+        message = 'Alguns horários selecionados não foram encontrados ou não pertencem a este profissional.'
+        if wants_json:
+            return json_response(False, status=400, message=message)
+        flash(message, 'warning')
+        return redirect(request.referrer or url_for('appointments'))
+
+    try:
+        for schedule in schedules:
+            db.session.delete(schedule)
+        db.session.commit()
+    except SQLAlchemyError:
+        db.session.rollback()
+        message = 'Não foi possível excluir os horários selecionados.'
+        if wants_json:
+            return json_response(False, status=500, message=message)
+        flash(message, 'danger')
+        return redirect(request.referrer or url_for('appointments'))
+
+    total = len(schedules)
+    removed_ids = [schedule.id for schedule in schedules]
+    if total == 1:
+        message = 'Horário removido com sucesso.'
+    else:
+        message = f'{total} horários removidos com sucesso.'
+
+    if wants_json:
+        return json_response(True, message=message, extra={'removed_ids': removed_ids})
+
+    flash(message, 'success')
+    return redirect(request.referrer or url_for('appointments'))
+
+
 @app.route('/appointments/<int:veterinario_id>/schedule/<int:horario_id>/delete', methods=['POST'])
 @login_required
 def delete_vet_schedule(veterinario_id, horario_id):
