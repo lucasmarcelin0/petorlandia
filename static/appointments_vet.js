@@ -272,10 +272,14 @@ function updateScheduleBulkActionsState(root) {
   const deleteButton = root?.querySelector('[data-schedule-bulk-delete]');
   const selectAllButton = root?.querySelector('[data-schedule-select-all]');
   const selectedCount = checkboxes.filter((checkbox) => checkbox.checked).length;
+
   if (deleteButton) {
-    deleteButton.disabled = selectedCount === 0 || deleteButton.dataset.loading === 'true';
-    deleteButton.setAttribute('aria-disabled', deleteButton.disabled ? 'true' : 'false');
+    const isLoading = deleteButton.dataset.loading === 'true';
+    const shouldDisable = selectedCount === 0 || isLoading;
+    deleteButton.disabled = shouldDisable;
+    deleteButton.setAttribute('aria-disabled', shouldDisable ? 'true' : 'false');
   }
+
   if (selectAllButton) {
     const allSelected = checkboxes.length > 0 && selectedCount === checkboxes.length;
     selectAllButton.setAttribute('aria-pressed', allSelected ? 'true' : 'false');
@@ -286,28 +290,10 @@ function updateScheduleBulkActionsState(root) {
 
 function clearScheduleSelections(root) {
   const checkboxes = getScheduleSelectionCheckboxes(root);
-  let changed = false;
   checkboxes.forEach((checkbox) => {
-    if (checkbox.checked) {
-      checkbox.checked = false;
-      changed = true;
-    }
+    checkbox.checked = false;
   });
-  if (changed) {
-    updateScheduleBulkActionsState(root);
-  } else {
-    const deleteButton = root?.querySelector('[data-schedule-bulk-delete]');
-    if (deleteButton) {
-      deleteButton.disabled = true;
-      deleteButton.setAttribute('aria-disabled', 'true');
-    }
-    const selectAllButton = root?.querySelector('[data-schedule-select-all]');
-    if (selectAllButton) {
-      selectAllButton.setAttribute('aria-pressed', 'false');
-      selectAllButton.classList.add('btn-outline-secondary');
-      selectAllButton.classList.remove('btn-secondary');
-    }
-  }
+  updateScheduleBulkActionsState(root);
 }
 
 function setScheduleSelectionVisibility(root, visible) {
@@ -315,9 +301,9 @@ function setScheduleSelectionVisibility(root, visible) {
   wrappers.forEach((wrapper) => {
     wrapper.classList.toggle('d-none', !visible);
   });
-  const bulkActions = getBulkActionsContainer(root);
-  if (bulkActions) {
-    bulkActions.classList.toggle('d-none', !visible);
+  const bulkContainer = getBulkActionsContainer(root);
+  if (bulkContainer) {
+    bulkContainer.classList.toggle('d-none', !visible);
   }
   if (!visible) {
     clearScheduleSelections(root);
@@ -338,6 +324,7 @@ async function submitScheduleBulkDelete({ root, button }) {
   if (!window.confirm('Excluir os horários selecionados?')) {
     return;
   }
+
   const vetId = getVetId(root);
   if (!vetId) {
     return;
@@ -350,12 +337,16 @@ async function submitScheduleBulkDelete({ root, button }) {
   if (csrfToken) {
     formData.append('csrf_token', csrfToken);
   }
+
+  let originalContent = '';
   if (button) {
+    originalContent = button.innerHTML;
     button.disabled = true;
     button.dataset.loading = 'true';
     button.setAttribute('aria-disabled', 'true');
     button.innerHTML = '<span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>Excluindo...';
   }
+
   let shouldReload = false;
   try {
     const response = await fetch(url, {
@@ -371,29 +362,29 @@ async function submitScheduleBulkDelete({ root, button }) {
       alert(message);
       return;
     }
-    let data = null;
     const contentType = response.headers.get('Content-Type') || '';
     if (contentType.includes('application/json')) {
-      data = await response.json().catch(() => null);
-    }
-    if (data?.success === false) {
-      const message = data?.message || 'Não foi possível excluir os horários selecionados.';
-      alert(message);
-      return;
+      const payload = await response.json().catch(() => null);
+      if (payload?.success === false) {
+        const message = payload?.message || 'Não foi possível excluir os horários selecionados.';
+        alert(message);
+        return;
+      }
     }
     shouldReload = true;
   } catch (error) {
-    console.error('Erro ao excluir horários selecionados.', error);
+    console.error('Erro ao excluir horários.', error);
     alert('Não foi possível excluir os horários selecionados.');
   } finally {
     if (!shouldReload && button) {
       button.disabled = false;
       button.dataset.loading = 'false';
       button.setAttribute('aria-disabled', button.disabled ? 'true' : 'false');
-      button.innerHTML = '<i class="fas fa-trash-alt me-1"></i>Excluir selecionados';
+      button.innerHTML = originalContent || '<i class="fas fa-trash-alt me-1"></i>Excluir selecionados';
       updateScheduleBulkActionsState(root);
     }
   }
+
   if (shouldReload) {
     window.location.reload();
   }
@@ -404,13 +395,11 @@ function bindScheduleBulkActions(root) {
     return;
   }
   const bulkContainer = getBulkActionsContainer(root);
-  if (!bulkContainer) {
-    return;
-  }
   const checkboxes = getScheduleSelectionCheckboxes(root);
-  if (!checkboxes.length) {
+  if (!bulkContainer || !checkboxes.length) {
     return;
   }
+
   checkboxes.forEach((checkbox) => {
     if (checkbox.dataset.vetScheduleBound === 'true') {
       return;
@@ -420,6 +409,7 @@ function bindScheduleBulkActions(root) {
       updateScheduleBulkActionsState(root);
     });
   });
+
   const selectAllButton = bulkContainer.querySelector('[data-schedule-select-all]');
   if (selectAllButton && selectAllButton.dataset.vetScheduleBound !== 'true') {
     selectAllButton.dataset.vetScheduleBound = 'true';
@@ -432,6 +422,7 @@ function bindScheduleBulkActions(root) {
       updateScheduleBulkActionsState(root);
     });
   }
+
   const deleteButton = bulkContainer.querySelector('[data-schedule-bulk-delete]');
   if (deleteButton && deleteButton.dataset.vetScheduleBound !== 'true') {
     deleteButton.dataset.vetScheduleBound = 'true';
@@ -440,6 +431,7 @@ function bindScheduleBulkActions(root) {
       submitScheduleBulkDelete({ root, button: deleteButton });
     });
   }
+
   updateScheduleBulkActionsState(root);
 }
 

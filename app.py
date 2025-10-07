@@ -8960,9 +8960,14 @@ def edit_vet_schedule_slot(veterinario_id, horario_id):
 @app.route('/appointments/<int:veterinario_id>/schedule/bulk_delete', methods=['POST'])
 @login_required
 def bulk_delete_vet_schedule(veterinario_id):
-    wants_json = 'application/json' in request.headers.get('Accept', '')
+    wants_json = (
+        request.headers.get('X-Requested-With') == 'XMLHttpRequest'
+        or request.accept_mimetypes.best == 'application/json'
+    )
 
     def json_response(success, status=200, message=None, extra=None):
+        if not wants_json:
+            abort(status)
         payload = {'success': success}
         if message:
             payload['message'] = message
@@ -8998,26 +9003,30 @@ def bulk_delete_vet_schedule(veterinario_id):
         if wants_json:
             return json_response(False, status=400, message=message)
         flash(message, 'danger')
-        return redirect(url_for('appointments'))
+        return redirect(url_for('appointments', view_as='veterinario', veterinario_id=veterinario_id))
 
     if not schedule_ids:
         message = 'Selecione ao menos um horário.'
         if wants_json:
             return json_response(False, status=400, message=message)
         flash(message, 'warning')
-        return redirect(url_for('appointments'))
+        return redirect(url_for('appointments', view_as='veterinario', veterinario_id=veterinario_id))
 
-    query = VetSchedule.query.filter(
-        VetSchedule.id.in_(schedule_ids),
-        VetSchedule.veterinario_id == veterinario_id
+    schedules = (
+        VetSchedule.query.filter(
+            VetSchedule.id.in_(schedule_ids),
+            VetSchedule.veterinario_id == veterinario_id,
+        )
+        .order_by(VetSchedule.id)
+        .all()
     )
-    schedules = query.all()
+
     if len(schedules) != len(schedule_ids):
         message = 'Um ou mais horários selecionados não foram encontrados.'
         if wants_json:
             return json_response(False, status=404, message=message)
         flash(message, 'danger')
-        return redirect(url_for('appointments'))
+        return redirect(url_for('appointments', view_as='veterinario', veterinario_id=veterinario_id))
 
     try:
         for schedule in schedules:
@@ -9030,13 +9039,14 @@ def bulk_delete_vet_schedule(veterinario_id):
         if wants_json:
             return json_response(False, status=500, message=message)
         flash(message, 'danger')
-        return redirect(url_for('appointments'))
+        return redirect(url_for('appointments', view_as='veterinario', veterinario_id=veterinario_id))
 
     message = 'Horários removidos com sucesso.'
+    redirect_target = request.referrer or url_for('appointments', view_as='veterinario', veterinario_id=veterinario_id)
     if wants_json:
         return json_response(True, message=message, extra={'deleted_ids': schedule_ids})
     flash(message, 'success')
-    return redirect(url_for('appointments'))
+    return redirect(redirect_target)
 
 
 @app.route('/appointments/<int:veterinario_id>/schedule/<int:horario_id>/delete', methods=['POST'])
