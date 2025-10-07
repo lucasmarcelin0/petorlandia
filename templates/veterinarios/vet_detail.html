@@ -168,7 +168,18 @@
             </div>
           </div>
           <div class="col-12 col-xl-4 col-xxl-3" data-calendar-summary-column>
-            {% set calendar_summary_vets = calendar_summary_vets if calendar_summary_vets else [{'id': veterinario.id, 'name': veterinario.user.name}] %}
+            {% if not calendar_summary_vets %}
+              {% set _specialties = [] %}
+              {% for specialty in veterinario.specialties %}
+                {% set _specialties = _specialties + [{'id': specialty.id, 'name': specialty.nome}] %}
+              {% endfor %}
+              {% set calendar_summary_vets = [{
+                'id': veterinario.id,
+                'name': veterinario.user.name if veterinario.user else None,
+                'avatarUrl': veterinario.user.profile_photo if veterinario.user and veterinario.user.profile_photo else None,
+                'specialties': _specialties,
+              }] %}
+            {% endif %}
             {% set calendar_summary_clinic_ids = calendar_summary_clinic_ids if calendar_summary_clinic_ids else ([veterinario.clinica_id] if veterinario.clinica_id else []) %}
             {% set calendar_summary_storage_key = 'vetCalendarSummaryCollapsed-' ~ veterinario.id %}
             {% include 'partials/calendar_summary_panel.html' %}

@@ -29,7 +29,18 @@
   </div>
 
   {% set calendar_pets_endpoint = url_for('api_clinic_pets', view_as='veterinario', veterinario_id=veterinario.id) %}
-  {% set calendar_summary_vets = [{'id': veterinario.id}] %}
+  {% if not calendar_summary_vets %}
+    {% set _specialties = [] %}
+    {% for specialty in veterinario.specialties %}
+      {% set _specialties = _specialties + [{'id': specialty.id, 'name': specialty.nome}] %}
+    {% endfor %}
+    {% set calendar_summary_vets = [{
+      'id': veterinario.id,
+      'name': veterinario.user.name if veterinario.user else None,
+      'avatarUrl': veterinario.user.profile_photo if veterinario.user and veterinario.user.profile_photo else None,
+      'specialties': _specialties,
+    }] %}
+  {% endif %}
   {% set calendar_summary_clinic_ids = [veterinario.clinica_id] if veterinario.clinica_id else [] %}
   {% set schedule_toggle_clinic_id = veterinario.clinica_id %}
   {% set schedule_toggle_calendar_redirect_url = url_for('appointments', view_as='veterinario', veterinario_id=veterinario.id) %}
