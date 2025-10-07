@@ -1218,6 +1218,8 @@
 
 {% block scripts %}
   {{ super() }}
+  {% include 'partials/schedule_modal.html' %}
+
   <script>
     document.addEventListener('DOMContentLoaded', function () {
       const calendarToggleButtons = document.querySelectorAll('[data-calendar-tab-target]');
