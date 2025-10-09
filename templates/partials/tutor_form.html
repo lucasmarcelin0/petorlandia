@@ -7,11 +7,32 @@
     <i class="bi bi-search me-1"></i> Buscar Tutor Existente
   </label>
   <div class="input-group">
+    <span class="input-group-text bg-light text-secondary"><i class="bi bi-search"></i></span>
     <input type="text" id="autocomplete-tutor" class="form-control"
            placeholder="Digite nome, e-mail, CPF, RG, telefone ou endereço"
            aria-label="Buscar tutor existente"
            aria-describedby="tutor-search-help">
-    <button class="btn btn-outline-secondary" type="button" id="clear-search">
+    <div class="dropdown" data-search-filter data-search-target="tutor-form">
+      <input type="hidden" id="tutor-form-sort" value="name_asc" data-sort-input data-target="tutor-form">
+      <button
+        class="btn btn-outline-secondary"
+        type="button"
+        data-bs-toggle="dropdown"
+        aria-expanded="false"
+        aria-label="Ordenar resultados"
+        data-sort-button
+        data-sort-default-label="Ordem alfabética"
+      >
+        <i class="bi bi-funnel"></i>
+        <span class="d-none d-md-inline small ms-1" data-sort-label>Ordem alfabética</span>
+      </button>
+      <ul class="dropdown-menu dropdown-menu-end shadow-sm">
+        <li><button class="dropdown-item active" type="button" data-sort-option data-sort-value="name_asc" data-sort-label="Ordem alfabética">Ordem alfabética (A-Z)</button></li>
+        <li><button class="dropdown-item" type="button" data-sort-option data-sort-value="recent_added" data-sort-label="Mais recentes">Últimos adicionados</button></li>
+        <li><button class="dropdown-item" type="button" data-sort-option data-sort-value="recent_attended" data-sort-label="Atendimentos recentes">Últimos com atendimento</button></li>
+      </ul>
+    </div>
+    <button class="btn btn-outline-secondary" type="button" id="clear-search" aria-label="Limpar busca">
       <i class="bi bi-x"></i>
     </button>
   </div>
@@ -205,38 +226,66 @@
       }
     }
 
+    const clearButton = document.getElementById('clear-search');
+    const autocompleteTutor = document.getElementById('autocomplete-tutor');
+    const resultsContainer = document.getElementById('autocomplete-results');
+    const sortInput = document.getElementById('tutor-form-sort');
+    const filterContainer = document.querySelector('[data-search-filter][data-search-target="tutor-form"]');
+
     // Limpar busca
-    document.getElementById('clear-search')?.addEventListener('click', () => {
-      document.getElementById('autocomplete-tutor').value = '';
-      document.getElementById('autocomplete-results').classList.add('d-none');
+    clearButton?.addEventListener('click', () => {
+      if (autocompleteTutor) {
+        autocompleteTutor.value = '';
+      }
+      resultsContainer?.classList.add('d-none');
     });
 
+    const triggerSearch = () => {
+      if (!autocompleteTutor) {
+        return;
+      }
+      const value = autocompleteTutor.value.trim();
+      if (value.length >= 3) {
+        autocompleteTutor.dispatchEvent(new Event('input'));
+      }
+    };
+
+    if (filterContainer) {
+      filterContainer.addEventListener('searchfilterchange', triggerSearch);
+    }
+
     // Auto-complete
-    const autocompleteTutor = document.getElementById('autocomplete-tutor');
     if (autocompleteTutor) {
       autocompleteTutor.addEventListener('input', debounce(async (e) => {
         const termo = e.target.value.trim();
-        const resultsContainer = document.getElementById('autocomplete-results');
-        
+        if (!resultsContainer) {
+          return;
+        }
+
         if (termo.length < 3) {
           resultsContainer.classList.add('d-none');
           return;
         }
-        
+
+        const params = new URLSearchParams({ q: termo });
+        if (sortInput && sortInput.value) {
+          params.set('sort', sortInput.value);
+        }
+
         try {
-          const response = await fetch(`/api/tutores/buscar?q=${encodeURIComponent(termo)}`);
+          const response = await fetch(`/buscar_tutores?${params.toString()}`);
           const tutores = await response.json();
-          
+
           if (tutores.length > 0) {
             resultsContainer.innerHTML = tutores.map(tutor => `
-              <li class="list-group-item list-group-item-action" 
+              <li class="list-group-item list-group-item-action"
                   data-tutor-id="${tutor.id}"
                   onclick="selecionarTutor(${tutor.id}, '${tutor.name}', '${tutor.email}')">
                 <div class="d-flex justify-content-between">
                   <span>${tutor.name}</span>
-                  <small class="text-muted">${tutor.email}</small>
+                  <small class="text-muted">${tutor.email || ''}</small>
                 </div>
-                <div class="d-flex gap-2 small">
+                <div class="d-flex flex-wrap gap-2 small text-muted">
                   <span>${tutor.phone || 'Sem telefone'}</span>
                   <span>${tutor.cpf ? 'CPF: ' + tutor.cpf : ''}</span>
                 </div>

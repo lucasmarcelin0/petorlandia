@@ -5,11 +5,13 @@ os.environ["SQLALCHEMY_DATABASE_URI"] = "sqlite:///:memory:"
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
+from datetime import datetime
+
 import pytest
 import flask_login.utils as login_utils
 
 from app import app as flask_app, db, TUTOR_SEARCH_LIMIT
-from models import User, Clinica
+from models import User, Clinica, Appointment, Animal, Veterinario
 
 
 @pytest.fixture
@@ -81,6 +83,134 @@ def test_buscar_tutores_respects_limit(app, monkeypatch):
     names = [item['name'] for item in data]
     assert names == sorted(names)
     assert f"Tutor {TUTOR_SEARCH_LIMIT:03d}" not in names
+
+
+def test_buscar_tutores_sort_recent_added(app, monkeypatch):
+    with app.app_context():
+        clinic = Clinica(nome='Clínica 1')
+        db.session.add(clinic)
+        db.session.flush()
+
+        staff = User(
+            name='Staff',
+            email='staff@example.com',
+            password_hash='hash',
+            clinica_id=clinic.id,
+            is_private=False,
+        )
+        tutor_old = User(
+            name='Tutor Antigo',
+            email='antigo@example.com',
+            password_hash='hash',
+            clinica_id=clinic.id,
+            is_private=False,
+            created_at=datetime(2023, 1, 1),
+        )
+        tutor_new = User(
+            name='Tutor Novo',
+            email='novo@example.com',
+            password_hash='hash',
+            clinica_id=clinic.id,
+            is_private=False,
+            created_at=datetime(2024, 1, 1),
+        )
+        db.session.add_all([staff, tutor_old, tutor_new])
+        db.session.commit()
+        staff_id = staff.id
+
+    login(monkeypatch, staff_id)
+    client = app.test_client()
+    response = client.get('/buscar_tutores', query_string={'q': 'Tutor', 'sort': 'recent_added'})
+    assert response.status_code == 200
+    data = response.get_json()
+    names = [item['name'] for item in data]
+    assert names[:2] == ['Tutor Novo', 'Tutor Antigo']
+
+
+def test_buscar_tutores_sort_recent_attended(app, monkeypatch):
+    with app.app_context():
+        clinic = Clinica(nome='Clínica 1')
+        db.session.add(clinic)
+        db.session.flush()
+
+        staff = User(
+            name='Staff',
+            email='staff@example.com',
+            password_hash='hash',
+            clinica_id=clinic.id,
+            is_private=False,
+        )
+
+        vet_user = User(
+            name='Vet',
+            email='vet@example.com',
+            password_hash='hash',
+            clinica_id=clinic.id,
+            worker='veterinario',
+            is_private=False,
+        )
+        db.session.add(vet_user)
+        db.session.flush()
+
+        vet = Veterinario(user_id=vet_user.id, crmv='12345', clinica_id=clinic.id)
+
+        tutor_one = User(
+            name='Tutor Um',
+            email='tutor1@example.com',
+            password_hash='hash',
+            clinica_id=clinic.id,
+            is_private=False,
+        )
+        tutor_two = User(
+            name='Tutor Dois',
+            email='tutor2@example.com',
+            password_hash='hash',
+            clinica_id=clinic.id,
+            is_private=False,
+        )
+        db.session.add_all([staff, vet, tutor_one, tutor_two])
+        db.session.flush()
+
+        animal_one = Animal(
+            name='Rex',
+            user_id=tutor_one.id,
+            clinica_id=clinic.id,
+        )
+        animal_two = Animal(
+            name='Mia',
+            user_id=tutor_two.id,
+            clinica_id=clinic.id,
+        )
+        db.session.add_all([animal_one, animal_two])
+        db.session.flush()
+
+        appt_one = Appointment(
+            animal_id=animal_one.id,
+            tutor_id=tutor_one.id,
+            veterinario_id=vet.id,
+            scheduled_at=datetime(2024, 1, 1, 9, 0, 0),
+            status='completed',
+            clinica_id=clinic.id,
+        )
+        appt_two = Appointment(
+            animal_id=animal_two.id,
+            tutor_id=tutor_two.id,
+            veterinario_id=vet.id,
+            scheduled_at=datetime(2024, 2, 1, 9, 0, 0),
+            status='completed',
+            clinica_id=clinic.id,
+        )
+        db.session.add_all([appt_one, appt_two])
+        db.session.commit()
+        staff_id = staff.id
+
+    login(monkeypatch, staff_id)
+    client = app.test_client()
+    response = client.get('/buscar_tutores', query_string={'q': 'Tutor', 'sort': 'recent_attended'})
+    assert response.status_code == 200
+    data = response.get_json()
+    names = [item['name'] for item in data]
+    assert names[:2] == ['Tutor Dois', 'Tutor Um']
 
 
 def test_buscar_tutores_hides_private_profiles_for_guests(app):
