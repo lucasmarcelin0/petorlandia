@@ -28,6 +28,7 @@ from flask import (
     redirect,
     url_for,
     current_app,
+    has_request_context,
 )
 from twilio.rest import Client
 from itsdangerous import URLSafeTimedSerializer
@@ -529,6 +530,87 @@ def _get_inbox_messages():
     ]
     mensagens.sort(key=lambda msg: msg.timestamp or datetime.min, reverse=True)
     return mensagens
+
+
+def _notify_admin_message(receiver, sender, message_content, conversation_url=None):
+    """Send an email notification when an administrator sends a message.
+
+    This keeps tutors and veterinarians informed even when they are
+    outside da plataforma, addressing the reported communication gap where
+    admin replies were silently stored without any alert.
+    """
+
+    if not receiver or not sender:
+        return
+
+    sender_role = (getattr(sender, "role", "") or "").lower()
+    if sender_role != "admin":
+        return
+
+    email = (getattr(receiver, "email", "") or "").strip()
+    if not email:
+        return
+
+    first_name_source = (getattr(receiver, "name", "") or "").strip()
+    if first_name_source:
+        first_name = first_name_source.split()[0]
+    else:
+        first_name = email.split("@")[0]
+
+    if conversation_url is None:
+        try:
+            relative_url = url_for("conversa_admin")
+            base_url = request.url_root.rstrip("/") if has_request_context() else ""
+            conversation_url = f"{base_url}{relative_url}" if base_url else relative_url
+        except Exception:  # pragma: no cover - defensive fallback
+            conversation_url = None
+
+    preview = (message_content or "").strip()
+    if len(preview) > 280:
+        preview = f"{preview[:277]}..."
+
+    lines = [
+        f"Olá {first_name},",
+        "",
+        "Você recebeu uma nova mensagem do administrador do PetOrlândia.",
+    ]
+    if preview:
+        lines.extend(["", preview])
+    if conversation_url:
+        lines.extend([
+            "",
+            "Acesse suas mensagens para responder:",
+            conversation_url,
+        ])
+    lines.extend(["", "Abraços,", "Equipe PetOrlândia"])
+
+    body = "\n".join(lines)
+
+    try:
+        mail_msg = MailMessage(
+            subject="Nova mensagem do administrador no PetOrlândia",
+            recipients=[email],
+            body=body,
+        )
+        mail.send(mail_msg)
+    except Exception as exc:  # pragma: no cover - only log the failure
+        current_app.logger.warning(
+            "Falha ao enviar notificação de mensagem para %s: %s", email, exc
+        )
+
+    try:
+        db.session.add(
+            Notification(
+                user_id=receiver.id,
+                message=body,
+                channel="email",
+                kind="admin_message",
+            )
+        )
+    except Exception as exc:  # pragma: no cover - logging only
+        current_app.logger.warning(
+            "Não foi possível registrar a notificação de mensagem: %s", exc
+        )
 
 
 def _render_messages_page(mensagens=None, **extra_context):
@@ -1836,6 +1918,11 @@ def conversa_admin(user_id=None):
             lida=False
         )
         db.session.add(nova_msg)
+        _notify_admin_message(
+            receiver=interlocutor,
+            sender=current_user,
+            message_content=form.content.data,
+        )
         db.session.commit()
         if is_admin:
             return redirect(url_for('conversa_admin', user_id=interlocutor.id))
@@ -1899,6 +1986,11 @@ def api_conversa_admin_message(user_id=None):
             lida=False,
         )
         db.session.add(nova_msg)
+        _notify_admin_message(
+            receiver=interlocutor,
+            sender=current_user,
+            message_content=form.content.data,
+        )
         db.session.commit()
         return render_template('components/message.html', msg=nova_msg)
     return '', 400
