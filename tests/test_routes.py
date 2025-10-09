@@ -21,9 +21,11 @@ from models import (
     Endereco,
     SavedAddress,
     AnimalDocumento,
+    Veterinario,
+    VeterinarianMembership,
 )
 from flask import url_for
-from datetime import datetime
+from datetime import datetime, timedelta
 from types import SimpleNamespace
 from urllib.parse import quote
 
@@ -90,6 +92,43 @@ def test_index_page(app):
     client = app.test_client()
     response = client.get('/')
     assert response.status_code == 200
+
+
+def test_index_hides_professional_area_when_membership_inactive(monkeypatch, app):
+    client = app.test_client()
+
+    with app.app_context():
+        db.drop_all()
+        db.create_all()
+
+        user = User(id=1, name='Vet', email='vet@test', worker='veterinario')
+        user.set_password('test')
+        vet_profile = Veterinario(id=1, user=user, crmv='CRMV123')
+        membership = VeterinarianMembership(
+            veterinario=vet_profile,
+            started_at=datetime.utcnow() - timedelta(days=60),
+            trial_ends_at=datetime.utcnow() - timedelta(days=30),
+            paid_until=None,
+        )
+
+        db.session.add_all([user, vet_profile, membership])
+        db.session.commit()
+
+        import flask_login.utils as login_utils
+
+        monkeypatch.setattr(login_utils, '_get_user', lambda: user)
+        monkeypatch.setattr(app_module, '_is_admin', lambda: False)
+
+        for idx, fn in enumerate(flask_app.template_context_processors[None]):
+            if fn.__name__ == 'inject_unread_count':
+                flask_app.template_context_processors[None][idx] = (
+                    lambda: {'unread_messages': 0}
+                )
+
+        response = client.get('/')
+        html = response.get_data(as_text=True)
+
+        assert 'Área profissional' not in html
 
 
 def test_register_page(app):
