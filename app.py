@@ -2729,6 +2729,10 @@ def buscar_tutores():
     if not query:
         return jsonify([])
 
+    clinic_id = current_user_clinic_id()
+    if not clinic_id and not _is_admin():
+        return jsonify([])
+
     like_query = f"%{query}%"
     numeric_query = re.sub(r'\D', '', query)
     numeric_like = f"%{numeric_query}%" if numeric_query else None
@@ -2770,13 +2774,20 @@ def buscar_tutores():
 
     visibility_clause = _user_visibility_clause(clinic_scope=current_user_clinic_id())
 
-    tutores = (
+    tutores_query = (
         User.query.outerjoin(Endereco)
         .options(
             joinedload(User.endereco),
             joinedload(User.veterinario).joinedload(Veterinario.specialties),
         )
         .filter(or_(*filters))
+    )
+
+    if not _is_admin():
+        tutores_query = tutores_query.filter(User.clinica_id == clinic_id)
+
+    tutores = (
+        tutores_query
         .filter(visibility_clause)
         .distinct()
         .order_by(User.name)
@@ -6863,12 +6874,7 @@ def _get_recent_animais(scope, page, clinic_id=None, user_id=None):
 
         pagination = (
             base_query.outerjoin(last_appt, Animal.id == last_appt.c.animal_id)
-            .filter(
-                or_(
-                    Animal.clinica_id == clinic_id,
-                    last_appt.c.last_at != None,
-                )
-            )
+            .filter(Animal.clinica_id == clinic_id)
             .order_by(func.coalesce(last_appt.c.last_at, Animal.date_added).desc())
             .paginate(page=page, per_page=9, error_out=False)
         )

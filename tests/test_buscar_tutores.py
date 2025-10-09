@@ -40,17 +40,35 @@ def login(monkeypatch, user):
     monkeypatch.setattr(login_utils, '_get_user', _load_user)
 
 
-def test_buscar_tutores_respects_limit(app):
+def test_buscar_tutores_respects_limit(app, monkeypatch):
     with app.app_context():
+        clinic = Clinica(nome='Clínica 1')
+        db.session.add(clinic)
+        db.session.flush()
+
+        staff = User(
+            name='Staff',
+            email='staff@example.com',
+            password_hash='hash',
+            clinica_id=clinic.id,
+        )
+        db.session.add(staff)
+        db.session.flush()
+
         for idx in range(TUTOR_SEARCH_LIMIT + 10):
             user = User(
                 name=f"Tutor {idx:03d}",
                 email=f"tutor{idx}@example.com",
                 password_hash="hash",
                 is_private=False,
+                clinica_id=clinic.id,
             )
             db.session.add(user)
         db.session.commit()
+
+        staff_id = staff.id
+
+    login(monkeypatch, staff_id)
 
     client = app.test_client()
     response = client.get('/buscar_tutores?q=Tutor')
@@ -90,9 +108,7 @@ def test_buscar_tutores_hides_private_profiles_for_guests(app):
     client = app.test_client()
     response = client.get('/buscar_tutores?q=Tutor')
     assert response.status_code == 200
-    names = {item['name'] for item in response.get_json()}
-    assert 'Tutor Público' in names
-    assert 'Tutor Privado' not in names
+    assert response.get_json() == []
 
 
 def test_buscar_tutores_shows_private_profiles_to_own_clinic(app, monkeypatch):
@@ -115,7 +131,14 @@ def test_buscar_tutores_shows_private_profiles_to_own_clinic(app, monkeypatch):
             clinica_id=clinic.id,
             is_private=True,
         )
-        db.session.add_all([staff, private_user])
+        outsider = User(
+            name='Tutor de Outra Clínica',
+            email='other@example.com',
+            password_hash='hash',
+            clinica_id=None,
+            is_private=False,
+        )
+        db.session.add_all([staff, private_user, outsider])
         db.session.commit()
         staff_id = staff.id
 
@@ -125,3 +148,45 @@ def test_buscar_tutores_shows_private_profiles_to_own_clinic(app, monkeypatch):
     assert response.status_code == 200
     names = {item['name'] for item in response.get_json()}
     assert 'Tutor Privado' in names
+    assert 'Tutor de Outra Clínica' not in names
+
+
+def test_buscar_tutores_ignores_other_clinics(app, monkeypatch):
+    with app.app_context():
+        clinic1 = Clinica(nome='Clínica 1')
+        clinic2 = Clinica(nome='Clínica 2')
+        db.session.add_all([clinic1, clinic2])
+        db.session.flush()
+
+        staff = User(
+            name='Staff',
+            email='staff@example.com',
+            password_hash='hash',
+            clinica_id=clinic1.id,
+        )
+        tutor_same = User(
+            name='Tutor da Clínica 1',
+            email='c1@example.com',
+            password_hash='hash',
+            clinica_id=clinic1.id,
+        )
+        tutor_other = User(
+            name='Tutor da Clínica 2',
+            email='c2@example.com',
+            password_hash='hash',
+            clinica_id=clinic2.id,
+        )
+        db.session.add_all([staff, tutor_same, tutor_other])
+        db.session.commit()
+
+        staff_id = staff.id
+
+    login(monkeypatch, staff_id)
+
+    client = app.test_client()
+    response = client.get('/buscar_tutores?q=Tutor')
+
+    assert response.status_code == 200
+    names = {item['name'] for item in response.get_json()}
+    assert 'Tutor da Clínica 1' in names
+    assert 'Tutor da Clínica 2' not in names
