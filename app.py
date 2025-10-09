@@ -34,7 +34,7 @@ from itsdangerous import URLSafeTimedSerializer
 from jinja2 import TemplateNotFound
 import json
 import unicodedata
-from sqlalchemy import func, or_, exists, and_, case
+from sqlalchemy import func, or_, exists, and_, case, true
 from sqlalchemy.orm import joinedload
 
 # ----------------------------------------------------------------
@@ -301,6 +301,97 @@ def current_user_clinic_id():
     if current_user.worker == 'veterinario' and getattr(current_user, 'veterinario', None):
         return current_user.veterinario.clinica_id
     return current_user.clinica_id
+
+
+def _collect_clinic_ids(viewer=None, clinic_scope=None):
+    """Return a set with clinic IDs derived from the viewer and scope hints."""
+    clinic_ids = set()
+
+    if clinic_scope:
+        if isinstance(clinic_scope, (list, tuple, set)):
+            clinic_ids.update(cid for cid in clinic_scope if cid)
+        else:
+            if clinic_scope:
+                clinic_ids.add(clinic_scope)
+
+    if viewer is None and current_user.is_authenticated:
+        viewer = current_user
+
+    if viewer:
+        viewer_clinic = getattr(viewer, 'clinica_id', None)
+        if viewer_clinic:
+            clinic_ids.add(viewer_clinic)
+
+        vet_profile = getattr(viewer, 'veterinario', None)
+        if vet_profile:
+            primary = getattr(vet_profile, 'clinica_id', None)
+            if primary:
+                clinic_ids.add(primary)
+            for clinic in getattr(vet_profile, 'clinicas', []) or []:
+                clinic_id = getattr(clinic, 'id', None)
+                if clinic_id:
+                    clinic_ids.add(clinic_id)
+
+    return clinic_ids
+
+
+def _user_visibility_clause(viewer=None, clinic_scope=None):
+    """Return a SQLAlchemy clause enforcing user privacy for listings."""
+    if viewer is None and current_user.is_authenticated:
+        viewer = current_user
+
+    if viewer and getattr(viewer, 'role', None) == 'admin':
+        return true()
+
+    clauses = [User.is_private.is_(False)]
+
+    if viewer:
+        viewer_id = getattr(viewer, 'id', None)
+        if viewer_id:
+            clauses.append(User.id == viewer_id)
+            clauses.append(User.added_by_id == viewer_id)
+
+    clinic_ids = _collect_clinic_ids(viewer=viewer, clinic_scope=clinic_scope)
+    if clinic_ids:
+        clauses.append(User.clinica_id.in_(list(clinic_ids)))
+
+    return or_(*clauses)
+
+
+def _can_view_user(user, viewer=None, clinic_scope=None):
+    """Return ``True`` if the viewer can see the given user respecting privacy."""
+    if user is None:
+        return False
+
+    if not user.is_private:
+        return True
+
+    if viewer is None and current_user.is_authenticated:
+        viewer = current_user
+
+    if viewer is None:
+        return False
+
+    if getattr(viewer, 'role', None) == 'admin':
+        return True
+
+    viewer_id = getattr(viewer, 'id', None)
+    if viewer_id and user.id == viewer_id:
+        return True
+
+    if viewer_id and user.added_by_id == viewer_id:
+        return True
+
+    clinic_ids = _collect_clinic_ids(viewer=viewer, clinic_scope=clinic_scope)
+    return bool(user.clinica_id and user.clinica_id in clinic_ids)
+
+
+def get_user_or_404(user_id, *, viewer=None, clinic_scope=None):
+    """Load a user enforcing privacy-aware visibility."""
+    user = User.query.get_or_404(user_id)
+    if not _can_view_user(user, viewer=viewer, clinic_scope=clinic_scope):
+        abort(404)
+    return user
 
 
 def ensure_clinic_access(clinica_id):
@@ -935,6 +1026,7 @@ def profile():
         current_user.name = form.name.data
         current_user.email = form.email.data
         current_user.phone = form.phone.data
+        current_user.is_private = form.is_private.data
         current_user.photo_rotation = form.photo_rotation.data
         current_user.photo_zoom = form.photo_zoom.data
         current_user.photo_offset_x = form.photo_offset_x.data
@@ -1308,7 +1400,7 @@ def chat_view(animal_id):
 @login_required
 def conversa(animal_id, user_id):
     animal = get_animal_or_404(animal_id)
-    outro_usuario = User.query.get_or_404(user_id)
+    outro_usuario = get_user_or_404(user_id)
     interesse_existente = Interest.query.filter_by(
         user_id=outro_usuario.id, animal_id=animal.id).first()
 
@@ -1359,7 +1451,7 @@ def api_conversa_message(animal_id, user_id):
     """Recebe uma nova mensagem da conversa e retorna o HTML renderizado."""
     form = MessageForm()
     get_animal_or_404(animal_id)
-    outro_usuario = User.query.get_or_404(user_id)
+    outro_usuario = get_user_or_404(user_id)
     if form.validate_on_submit():
         nova_msg = Message(
             sender_id=current_user.id,
@@ -1396,7 +1488,7 @@ def conversa_admin(user_id=None):
         if user_id is None:
             flash('Selecione um usuário para conversar.', 'warning')
             return redirect(url_for('mensagens_admin'))
-        interlocutor = User.query.get_or_404(user_id)
+        interlocutor = get_user_or_404(user_id)
         admin_ids = [u.id for u in User.query.filter_by(role='admin').all()]
         participant_id = interlocutor.id
     else:
@@ -1456,7 +1548,7 @@ def api_conversa_admin_message(user_id=None):
     if current_user.role == 'admin':
         if user_id is None:
             return '', 400
-        interlocutor = User.query.get_or_404(user_id)
+        interlocutor = get_user_or_404(user_id)
     else:
         interlocutor = admin_user
 
@@ -1595,7 +1687,7 @@ def deletar_animal(animal_id):
 @login_required
 def termo_interesse(animal_id, user_id):
     animal = get_animal_or_404(animal_id)
-    interessado = User.query.get_or_404(user_id)
+    interessado = get_user_or_404(user_id)
 
     if request.method == 'POST':
         # Verifica se já existe um interesse registrado
@@ -1764,7 +1856,7 @@ if not app.config.get("TESTING"):
 @login_required
 def termo_transferencia(animal_id, user_id):
     animal = get_animal_or_404(animal_id)
-    novo_dono = User.query.get_or_404(user_id)
+    novo_dono = get_user_or_404(user_id)
 
     if animal.owner.id != current_user.id:
         flash("Você não tem permissão para transferir esse animal.", "danger")
@@ -2676,6 +2768,8 @@ def buscar_tutores():
     if numeric_like:
         filters.extend(column.ilike(numeric_like) for column in digit_columns)
 
+    visibility_clause = _user_visibility_clause(clinic_scope=current_user_clinic_id())
+
     tutores = (
         User.query.outerjoin(Endereco)
         .options(
@@ -2683,6 +2777,7 @@ def buscar_tutores():
             joinedload(User.veterinario).joinedload(Veterinario.specialties),
         )
         .filter(or_(*filters))
+        .filter(visibility_clause)
         .distinct()
         .order_by(User.name)
         .limit(TUTOR_SEARCH_LIMIT)
@@ -3283,7 +3378,13 @@ def create_clinic_veterinario(clinica_id):
         return redirect(url_for('clinic_detail', clinica_id=clinica.id) + '#veterinarios')
 
     password = uuid.uuid4().hex[:8]
-    user = User(name=name, email=email, worker='veterinario')
+    user = User(
+        name=name,
+        email=email,
+        worker='veterinario',
+        is_private=True,
+        added_by=current_user,
+    )
     user.set_password(password)
     user.clinica_id = clinica.id
     db.session.add(user)
@@ -3944,7 +4045,7 @@ def edit_vet_specialties(veterinario_id):
 @app.route('/tutor/<int:tutor_id>')
 @login_required
 def obter_tutor(tutor_id):
-    tutor = User.query.get_or_404(tutor_id)
+    tutor = get_user_or_404(tutor_id)
     return jsonify({
         'id': tutor.id,
         'name': tutor.name,
@@ -3960,7 +4061,7 @@ def obter_tutor(tutor_id):
 @app.route('/tutor/<int:tutor_id>')
 @login_required
 def tutor_detail(tutor_id):
-    tutor   = User.query.get_or_404(tutor_id)
+    tutor   = get_user_or_404(tutor_id)
     animais = tutor.animais.order_by(Animal.name).all()
     return render_template('animais/tutor_detail.html', tutor=tutor, animais=animais)
 
@@ -3996,7 +4097,8 @@ def tutores():
             email=email.strip(),
             role='adotante',  # padrão inicial
             clinica_id=current_user_clinic_id(),
-            added_by=current_user
+            added_by=current_user,
+            is_private=True,
         )
         novo.set_password('123456789')  # ⚠️ Sugestão: depois trocar por um token de convite
 
@@ -4089,7 +4191,7 @@ def tutores():
 @app.route('/deletar_tutor/<int:tutor_id>', methods=['POST'])
 @login_required
 def deletar_tutor(tutor_id):
-    tutor = User.query.get_or_404(tutor_id)
+    tutor = get_user_or_404(tutor_id)
 
     if current_user.worker != 'veterinario':
         flash('Apenas veterinários podem excluir tutores.', 'danger')
@@ -4157,7 +4259,7 @@ def buscar_animais():
 @app.route('/update_tutor/<int:user_id>', methods=['POST'])
 @login_required
 def update_tutor(user_id):
-    user = User.query.get_or_404(user_id)
+    user = get_user_or_404(user_id)
 
     wants_json = 'application/json' in request.headers.get('Accept', '')
 
@@ -4282,7 +4384,7 @@ def ficha_tutor(tutor_id):
         return redirect(url_for('index'))
 
     # Dados do tutor
-    tutor = User.query.get_or_404(tutor_id)
+    tutor = get_user_or_404(tutor_id)
 
     # Lista de animais do tutor (com species e breed carregados)
     animais = Animal.query.options(
@@ -5847,7 +5949,9 @@ def criar_tutor_ajax():
         rg=request.form.get('rg'),
         email=email,
         role='adotante',
-        clinica_id=current_user.clinica_id
+        clinica_id=current_user_clinic_id(),
+        added_by=current_user,
+        is_private=True,
 
     )
 
@@ -5879,7 +5983,7 @@ def novo_animal():
 
     if request.method == 'POST':
         tutor_id = request.form.get('tutor_id', type=int)
-        tutor = User.query.get_or_404(tutor_id)
+        tutor = get_user_or_404(tutor_id)
 
         dob_str = request.form.get('date_of_birth')
         dob = None
@@ -6790,7 +6894,10 @@ def _get_recent_tutores(scope, page, clinic_id=None, user_id=None):
         resolved_scope = 'all'
 
     if resolved_scope == 'mine' and effective_user_id:
-        base_query = User.query.filter(User.created_at != None)
+        base_query = (
+            User.query.filter(User.created_at != None)
+            .filter(_user_visibility_clause(clinic_scope=clinic_id))
+        )
         if clinic_id:
             base_query = base_query.filter(User.clinica_id == clinic_id)
 
@@ -6834,6 +6941,7 @@ def _get_recent_tutores(scope, page, clinic_id=None, user_id=None):
                     last_appt.c.last_at != None,
                 )
             )
+            .filter(_user_visibility_clause(clinic_scope=clinic_id))
             .order_by(func.coalesce(last_appt.c.last_at, User.created_at).desc())
             .paginate(page=page, per_page=9, error_out=False)
         )
@@ -6841,6 +6949,7 @@ def _get_recent_tutores(scope, page, clinic_id=None, user_id=None):
 
     pagination = (
         User.query.filter(User.created_at != None)
+        .filter(_user_visibility_clause())
         .order_by(User.created_at.desc())
         .paginate(page=page, per_page=9, error_out=False)
     )
@@ -10105,7 +10214,7 @@ def api_user_appointments(user_id):
     if current_user.role != 'admin':
         abort(403)
 
-    user = User.query.get_or_404(user_id)
+    user = get_user_or_404(user_id)
     vet = getattr(user, 'veterinario', None)
 
     appointment_filters = [Appointment.tutor_id == user.id]
