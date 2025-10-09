@@ -1793,8 +1793,9 @@ def conversa_admin(user_id=None):
     form = MessageForm()
     promotion_form = None
     target_membership = None
+    is_admin = current_user.is_authenticated and (current_user.role or '').lower() == 'admin'
 
-    if current_user.is_authenticated and current_user.role == 'admin':
+    if is_admin:
         if user_id is None:
             flash('Selecione um usuário para conversar.', 'warning')
             return redirect(url_for('mensagens_admin'))
@@ -1828,12 +1829,12 @@ def conversa_admin(user_id=None):
         )
         db.session.add(nova_msg)
         db.session.commit()
-        if current_user.role == 'admin':
+        if is_admin:
             return redirect(url_for('conversa_admin', user_id=interlocutor.id))
         return redirect(url_for('conversa_admin'))
 
     for m in mensagens:
-        if current_user.role == 'admin':
+        if is_admin:
             if m.receiver_id in admin_ids and not m.lida:
                 m.lida = True
         else:
@@ -1848,6 +1849,7 @@ def conversa_admin(user_id=None):
         admin=interlocutor,
         promotion_form=promotion_form,
         target_membership=target_membership,
+        is_admin=is_admin,
     )
 
 
@@ -1860,7 +1862,9 @@ def api_conversa_admin_message(user_id=None):
     if not admin_user:
         abort(404)
 
-    if current_user.role == 'admin':
+    is_admin = current_user.is_authenticated and (current_user.role or '').lower() == 'admin'
+
+    if is_admin:
         if user_id is None:
             return '', 400
         interlocutor = get_user_or_404(user_id)
@@ -1884,7 +1888,7 @@ def api_conversa_admin_message(user_id=None):
 @app.route('/admin/users/<int:user_id>/promover_veterinario', methods=['POST'])
 @login_required
 def admin_promote_veterinarian(user_id):
-    if current_user.role != 'admin':
+    if not (current_user.is_authenticated and (current_user.role or '').lower() == 'admin'):
         abort(403)
 
     user = User.query.get_or_404(user_id)

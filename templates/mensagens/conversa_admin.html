@@ -2,7 +2,7 @@
 {% block main %}
 <h2>Conversa com o Administrador</h2>
 
-{% if current_user.role == 'admin' %}
+{% if is_admin %}
   <div class="card mb-4">
     <div class="card-body">
       <h3 class="h5">Status do usuário</h3>
@@ -53,7 +53,7 @@
     {% endfor %}
 </div>
 
-<form method="POST" class="js-msg-form" {% if current_user.role == 'admin' %}data-api="{{ url_for('api_conversa_admin_message', user_id=admin.id) }}"{% else %}data-api="{{ url_for('api_conversa_admin_message') }}"{% endif %}>
+<form method="POST" class="js-msg-form" {% if is_admin %}data-api="{{ url_for('api_conversa_admin_message', user_id=admin.id) }}"{% else %}data-api="{{ url_for('api_conversa_admin_message') }}"{% endif %}>
     {{ form.hidden_tag() }}
     <div class="input-group">
         {{ form.content(class="form-control", placeholder="Digite sua mensagem...") }}
