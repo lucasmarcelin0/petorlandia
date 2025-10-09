@@ -1391,8 +1391,7 @@ def list_animals():
     except Exception:
         breed_list = []
 
-    return render_template(
-        'animais/animals.html',
+    context = dict(
         animals=animals,
         page=page,
         total_pages=pagination.pages,
@@ -1406,6 +1405,26 @@ def list_animals():
         is_admin=_is_admin(),
         show_all=show_all
     )
+
+    if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+        html = render_template('animais/_animals_grid.html', **context)
+        return jsonify(
+            {
+                'html': html,
+                'pagination': {
+                    'page': page,
+                    'per_page': per_page,
+                    'total_pages': pagination.pages,
+                    'total_items': pagination.total,
+                    'has_next': pagination.has_next,
+                    'has_prev': pagination.has_prev,
+                    'next_page': pagination.next_num if pagination.has_next else None,
+                    'prev_page': pagination.prev_num if pagination.has_prev else None,
+                },
+            }
+        )
+
+    return render_template('animais/animals.html', **context)
 
 
 
