@@ -659,18 +659,10 @@ def veterinarian_membership():
 
     membership = ensure_veterinarian_membership(current_user.veterinario)
 
-    payment = None
     status = request.args.get('status')
-    payment_id = request.args.get('payment_id', type=int)
-    if payment_id:
-        payment = Payment.query.get(payment_id)
-        if not payment or payment.user_id != current_user.id:
-            payment = None
-        elif payment.status == PaymentStatus.PENDING and payment.mercado_pago_id:
-            _refresh_mp_status(payment)
 
     checkout_form = VeterinarianMembershipCheckoutForm()
-    price = Decimal(str(current_app.config.get('VETERINARIAN_MEMBERSHIP_PRICE', 199.90)))
+    price = Decimal(str(current_app.config.get('VETERINARIAN_MEMBERSHIP_PRICE', 60.00)))
     trial_days = current_app.config.get('VETERINARIAN_TRIAL_DAYS', 30)
 
     return render_template(
@@ -679,7 +671,6 @@ def veterinarian_membership():
         checkout_form=checkout_form,
         price=price,
         trial_days=trial_days,
-        payment=payment,
         status=status,
     )
 
@@ -700,90 +691,55 @@ def veterinarian_membership_checkout():
     if membership:
         membership.ensure_trial_dates(trial_days)
 
-    price = Decimal(str(current_app.config.get('VETERINARIAN_MEMBERSHIP_PRICE', 199.90)))
+    price = Decimal(str(current_app.config.get('VETERINARIAN_MEMBERSHIP_PRICE', 60.00)))
 
-    payment = Payment(
-        user_id=current_user.id,
-        method=PaymentMethod.PIX,
-        status=PaymentStatus.PENDING,
-        amount=price,
-    )
-    db.session.add(payment)
-    db.session.flush()
+    if membership and membership.id is None:
+        db.session.flush()
 
-    if membership:
-        if membership.id is None:
-            db.session.flush()
-        membership.last_payment_id = payment.id
-        db.session.add(membership)
+    reason_suffix = current_user.name.strip() if (current_user.name or '').strip() else current_user.email
+    reason = f'Assinatura Profissional PetOrlândia - {reason_suffix}'
 
-    if not payment.external_reference:
-        if membership and membership.id:
-            payment.external_reference = f'vet-membership-{membership.id}-{payment.id}'
-        else:
-            payment.external_reference = f'vet-membership-temp-{payment.id}'
-
-    payer = {
-        'email': current_user.email,
-    }
-    name = (current_user.name or '').strip()
-    if name:
-        parts = name.split()
-        payer['first_name'] = parts[0]
-        payer['last_name'] = ' '.join(parts[1:]) if len(parts) > 1 else parts[0]
-    if current_user.phone:
-        digits = re.sub(r"\D", "", current_user.phone)
-        if digits:
-            payer['phone'] = {'number': digits[-9:]}
-    if current_user.cpf:
-        doc = re.sub(r"\D", "", current_user.cpf)
-        if doc:
-            payer['identification'] = {'type': 'CPF', 'number': doc}
-
-    payer = {k: v for k, v in payer.items() if v}
-
-    preference_data = {
-        'items': [
-            {
-                'id': f'vet-membership-{membership.id if membership else "novo"}',
-                'title': 'Assinatura Profissional PetOrlândia',
-                'description': 'Acesso completo às ferramentas para veterinários',
-                'category_id': 'services',
-                'quantity': 1,
-                'unit_price': float(price),
-            }
-        ],
-        'external_reference': payment.external_reference,
-        'notification_url': url_for('notificacoes_mercado_pago', _external=True),
-        'back_urls': {
-            status: url_for('veterinarian_membership', payment_id=payment.id, status=status, _external=True)
-            for status in ('success', 'failure', 'pending')
+    preapproval_data = {
+        'reason': reason,
+        'back_url': url_for('veterinarian_membership', _external=True),
+        'payer_email': current_user.email,
+        'auto_recurring': {
+            'frequency': 1,
+            'frequency_type': 'months',
+            'transaction_amount': float(price),
+            'currency_id': 'BRL',
         },
-        'auto_return': 'approved',
-        'payer': payer,
-        'statement_descriptor': current_app.config.get('MERCADOPAGO_STATEMENT_DESCRIPTOR'),
     }
+
+    if membership and membership.id:
+        preapproval_data['external_reference'] = f'vet-membership-{membership.id}'
 
     try:
-        resp = mp_sdk().preference().create(preference_data)
+        resp = mp_sdk().preapproval().create(preapproval_data)
     except Exception:  # noqa: BLE001
         current_app.logger.exception('Erro de conexão com Mercado Pago para assinatura de veterinário')
         db.session.rollback()
         flash('Não foi possível iniciar o pagamento. Tente novamente em instantes.', 'danger')
         return redirect(url_for('veterinarian_membership'))
 
-    if resp.get('status') != 201:
+    if resp.get('status') not in {200, 201}:
         current_app.logger.error('MP error (HTTP %s): %s', resp.get('status'), resp)
         db.session.rollback()
         flash('Erro ao iniciar pagamento.', 'danger')
         return redirect(url_for('veterinarian_membership'))
 
-    pref = resp['response']
-    payment.transaction_id = str(pref['id'])
-    payment.init_point = pref.get('init_point')
+    init_point = (
+        resp.get('response', {}).get('init_point')
+        or resp.get('response', {}).get('sandbox_init_point')
+    )
+
+    if not init_point:
+        flash('Erro ao iniciar pagamento.', 'danger')
+        return redirect(url_for('veterinarian_membership'))
+
     db.session.commit()
 
-    return redirect(pref['init_point'])
+    return redirect(init_point)
 
 # ----------------------------------------------------------------
 # 7)  Login & serializer
