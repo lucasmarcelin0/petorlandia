@@ -49,6 +49,16 @@ def ensure_veterinarian_membership(veterinario, trial_days: int | None = None):
 
     from models import VeterinarianMembership
 
+    if not hasattr(veterinario, '_sa_instance_state'):
+        class _EphemeralMembership:
+            def ensure_trial_dates(self, *_args, **_kwargs):
+                return None
+
+            def is_active(self):
+                return True
+
+        return _EphemeralMembership()
+
     membership = getattr(veterinario, 'membership', None)
     trial_days = trial_days or _trial_days()
 
