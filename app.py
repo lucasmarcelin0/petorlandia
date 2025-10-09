@@ -3910,44 +3910,126 @@ def orcamentos(clinica_id):
 @login_required
 def dashboard_orcamentos():
     from collections import defaultdict
-    from models import Consulta, Orcamento, Payment, PaymentStatus
+    from admin import _is_admin
+    from models import (
+        Animal,
+        Clinica,
+        Consulta,
+        Orcamento,
+        Payment,
+        PaymentStatus,
+    )
 
-    consultas = Consulta.query.filter(Consulta.orcamento_items.any()).all()
+    is_admin = _is_admin()
+    requested_scope = request.args.get('scope', 'clinic')
+    requested_clinic_id = request.args.get('clinica_id', type=int)
+
+    if requested_scope == 'all' and not is_admin:
+        abort(403)
+
+    accessible_clinic_ids = _collect_clinic_ids()
+    default_clinic_id = current_user_clinic_id()
+
+    selected_clinic_id = None
+    is_global_scope = False
+
+    if is_admin:
+        if requested_scope == 'all':
+            is_global_scope = True
+        elif requested_clinic_id:
+            selected_clinic_id = requested_clinic_id
+        elif default_clinic_id:
+            selected_clinic_id = default_clinic_id
+        else:
+            is_global_scope = True
+    else:
+        if requested_clinic_id and requested_clinic_id not in accessible_clinic_ids:
+            abort(403)
+        selected_clinic_id = requested_clinic_id or default_clinic_id
+        if not selected_clinic_id and accessible_clinic_ids:
+            selected_clinic_id = sorted(accessible_clinic_ids)[0]
+        if not selected_clinic_id:
+            abort(403)
+
+    consulta_query = (
+        Consulta.query.options(
+            joinedload(Consulta.animal).joinedload(Animal.owner),
+        )
+        .filter(Consulta.orcamento_items.any())
+    )
+    if not is_global_scope:
+        consulta_query = consulta_query.filter(Consulta.clinica_id == selected_clinic_id)
+    consultas = consulta_query.all()
+
+    consulta_refs = {f'consulta-{consulta.id}' for consulta in consultas}
+    pagamentos_concluidos = {}
+    if consulta_refs:
+        pagamentos_concluidos = {
+            pagamento.external_reference: pagamento
+            for pagamento in Payment.query.filter(
+                Payment.external_reference.in_(consulta_refs),
+                Payment.status == PaymentStatus.COMPLETED,
+            )
+        }
+
     dados_consultas = []
+    total_por_cliente = defaultdict(lambda: {'total': 0.0, 'pagos': 0.0, 'pendentes': 0.0})
+    total_por_animal = defaultdict(lambda: {'total': 0.0, 'pagos': 0.0, 'pendentes': 0.0})
+
     for consulta in consultas:
-        pagamento = Payment.query.filter_by(
-            external_reference=f'consulta-{consulta.id}',
-            status=PaymentStatus.COMPLETED,
-        ).first()
+        cliente_nome = (
+            consulta.animal.owner.name
+            if consulta.animal and consulta.animal.owner
+            else 'N/A'
+        )
+        animal_nome = consulta.animal.name if consulta.animal else 'N/A'
+        total = float(consulta.total_orcamento or 0)
+        pago = pagamentos_concluidos.get(f'consulta-{consulta.id}') is not None
+        status = 'Pago' if pago else 'Pendente'
+
         dados_consultas.append(
             {
-                'cliente': consulta.animal.owner.name if consulta.animal and consulta.animal.owner else 'N/A',
-                'animal': consulta.animal.name if consulta.animal else 'N/A',
-                'total': float(consulta.total_orcamento),
-                'status': 'Pago' if pagamento else 'Pendente',
+                'cliente': cliente_nome,
+                'animal': animal_nome,
+                'total': total,
+                'status': status,
             }
         )
 
-    total_por_cliente = defaultdict(lambda: {'total': 0, 'pagos': 0, 'pendentes': 0})
-    total_por_animal = defaultdict(lambda: {'total': 0, 'pagos': 0, 'pendentes': 0})
-    for d in dados_consultas:
-        tc = total_por_cliente[d['cliente']]
-        tc['total'] += d['total']
-        if d['status'] == 'Pago':
-            tc['pagos'] += d['total']
+        total_por_cliente[cliente_nome]['total'] += total
+        total_por_animal[animal_nome]['total'] += total
+        if pago:
+            total_por_cliente[cliente_nome]['pagos'] += total
+            total_por_animal[animal_nome]['pagos'] += total
         else:
-            tc['pendentes'] += d['total']
-        ta = total_por_animal[d['animal']]
-        ta['total'] += d['total']
-        if d['status'] == 'Pago':
-            ta['pagos'] += d['total']
-        else:
-            ta['pendentes'] += d['total']
+            total_por_cliente[cliente_nome]['pendentes'] += total
+            total_por_animal[animal_nome]['pendentes'] += total
 
-    orcamentos = Orcamento.query.all()
+    orcamento_query = Orcamento.query.options(joinedload(Orcamento.clinica))
+    if not is_global_scope:
+        orcamento_query = orcamento_query.filter(Orcamento.clinica_id == selected_clinic_id)
     dados_orcamentos = [
-        {'descricao': o.descricao, 'total': float(o.total)} for o in orcamentos
+        {
+            'descricao': o.descricao,
+            'total': float(o.total or 0),
+            'clinica': o.clinica.nome if o.clinica else 'N/A',
+        }
+        for o in orcamento_query.all()
     ]
+
+    clinic_options = []
+    if is_admin:
+        clinic_options = Clinica.query.order_by(Clinica.nome).all()
+    elif accessible_clinic_ids:
+        clinic_options = (
+            Clinica.query.filter(Clinica.id.in_(accessible_clinic_ids))
+            .order_by(Clinica.nome)
+            .all()
+        )
+
+    selected_clinic = (
+        Clinica.query.get(selected_clinic_id) if selected_clinic_id else None
+    )
 
     return render_template(
         'orcamentos/dashboard_orcamentos.html',
@@ -3955,6 +4037,12 @@ def dashboard_orcamentos():
         clientes=total_por_cliente,
         animais=total_por_animal,
         orcamentos=dados_orcamentos,
+        is_admin=is_admin,
+        clinic_options=clinic_options,
+        selected_clinic=selected_clinic,
+        selected_clinic_id=selected_clinic_id,
+        selected_scope='all' if is_global_scope else 'clinic',
+        is_global_scope=is_global_scope,
     )
 
 
