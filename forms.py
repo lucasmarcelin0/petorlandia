@@ -369,6 +369,10 @@ class VeterinarianMembershipCheckoutForm(FlaskForm):
     submit = SubmitField('Ativar assinatura')
 
 
+class VeterinarianMembershipCancelTrialForm(FlaskForm):
+    submit = SubmitField('Cancelar avaliação gratuita')
+
+
 class VetScheduleForm(FlaskForm):
     veterinario_id = SelectField(
         'Veterinário',

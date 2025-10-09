@@ -2,23 +2,48 @@
 {% block main %}
 <h2>Conversa com o Administrador</h2>
 
-{% if is_admin %}
+{% if is_admin or target_membership %}
   <div class="card mb-4">
     <div class="card-body">
-      <h3 class="h5">Status do usuário</h3>
+      <h3 class="h5">
+        {% if is_admin %}
+          Status do usuário
+        {% else %}
+          Status da sua assinatura
+        {% endif %}
+      </h3>
       {% if target_membership %}
-        <p class="mb-1"><strong>Veterinário desde:</strong> {{ target_membership.started_at|format_datetime_brazil('%d/%m/%Y %H:%M') }}</p>
-        <p class="mb-1"><strong>Avaliação gratuita até:</strong> {{ target_membership.trial_ends_at|format_datetime_brazil('%d/%m/%Y %H:%M') }}</p>
+        {% if target_membership.started_at %}
+          <p class="mb-1"><strong>Veterinário desde:</strong> {{ target_membership.started_at|format_datetime_brazil('%d/%m/%Y %H:%M') }}</p>
+        {% endif %}
+        {% if target_membership.trial_ends_at %}
+          <p class="mb-1"><strong>Avaliação gratuita até:</strong> {{ target_membership.trial_ends_at|format_datetime_brazil('%d/%m/%Y %H:%M') }}</p>
+        {% endif %}
         {% if target_membership.has_valid_payment() %}
           <div class="alert alert-success mt-2 mb-0">
             Assinatura ativa até {{ target_membership.paid_until|format_datetime_brazil('%d/%m/%Y %H:%M') }}.
           </div>
+        {% elif target_membership.is_trial_active() %}
+          <div class="alert alert-warning mt-2">
+            {% if is_admin %}
+              Este usuário está aproveitando o período de avaliação gratuita. Para manter o acesso após o teste, oriente-o a realizar o pagamento dentro do prazo.
+            {% else %}
+              Parabéns! Você está aproveitando o período de avaliação gratuita. Aproveite bastante e, se tiver qualquer dúvida, mande uma mensagem por aqui. Para manter o acesso após o período de teste, realize o pagamento dentro do prazo.
+            {% endif %}
+            {% if can_cancel_trial and cancel_trial_form %}
+              <form method="post" action="{{ url_for('veterinarian_cancel_trial', membership_id=target_membership.id) }}" class="mt-2">
+                {{ cancel_trial_form.hidden_tag() }}
+                <button type="submit" class="btn btn-outline-danger btn-sm">{{ cancel_trial_form.submit.label.text }}</button>
+              </form>
+              <p class="text-muted small mb-0 mt-2">Ao cancelar, o acesso será interrompido imediatamente.</p>
+            {% endif %}
+          </div>
         {% else %}
-          <div class="alert alert-warning mt-2 mb-0">
-            Parabéns! Você está aproveitando o período de avaliação gratuita. Aproveite bastante e, se tiver qualquer dúvida, mande uma mensagem por aqui. Para manter o acesso após o período de teste, realize o pagamento dentro do prazo.
+          <div class="alert alert-danger mt-2 mb-0">
+            O período de avaliação gratuita terminou e não há pagamento ativo registrado.
           </div>
         {% endif %}
-      {% else %}
+      {% elif is_admin %}
         <p class="mb-3">Este usuário ainda não está cadastrado como veterinário.</p>
         {% if promotion_form %}
         <form method="post" action="{{ url_for('admin_promote_veterinarian', user_id=admin.id) }}" class="row g-2">
