@@ -10298,6 +10298,8 @@ def api_my_appointments():
     }
     is_vet = is_veterinarian(current_user)
 
+    is_vet = is_veterinarian(current_user)
+
     if current_user.role == 'admin':
         def _coerce_first_int(values):
             if values is None:
