@@ -135,3 +135,29 @@ def test_owner_toggle_limits_calendar_summary(client, monkeypatch):
     detail_ids = {entry['id'] for entry in detail_vets}
     assert detail_ids == {vet_id}
     assert clinic_id in detail_clinics
+
+
+def test_duplicate_memberships_respect_calendar_permission(client, monkeypatch):
+    with flask_app.app_context():
+        clinic, _, vet_user, vet, vet_two_user, vet_two = create_clinic_with_vets()
+        # Simulate stale duplicate membership rows where one still has the
+        # permission disabled.
+        duplicate = ClinicStaff(
+            clinic_id=clinic.id,
+            user_id=vet_user.id,
+            can_view_full_calendar=False,
+        )
+        db.session.add(duplicate)
+        db.session.commit()
+        vet_id = vet.id
+        vet_two_id = vet_two.id
+        clinic_id = clinic.id
+        vet_user_id = vet_user.id
+    login(monkeypatch, vet_user_id)
+    response = client.get('/appointments')
+    assert response.status_code == 200
+    vets, clinics = extract_calendar_summary(response.get_data(as_text=True))
+    vet_ids = {entry['id'] for entry in vets}
+    assert vet_id in vet_ids
+    assert vet_two_id in vet_ids, 'full calendar permission should include colleagues'
+    assert clinic_id in clinics

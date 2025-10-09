@@ -116,11 +116,23 @@ def get_calendar_access_scope(user: object) -> CalendarAccessScope:
         clinic.id for clinic in Clinica.query.filter_by(owner_id=user_id).all()
     }
 
-    restricted_memberships = [
-        membership
-        for membership in staff_memberships
-        if not membership.can_view_full_calendar and membership.clinic_id not in owned_clinic_ids
-    ]
+    memberships_by_clinic: dict[int, list[ClinicStaff]] = {}
+    for membership in staff_memberships:
+        clinic_id = getattr(membership, "clinic_id", None)
+        if clinic_id is None:
+            continue
+        memberships_by_clinic.setdefault(int(clinic_id), []).append(membership)
+
+    restricted_memberships = []
+    for clinic_id, memberships in memberships_by_clinic.items():
+        if clinic_id in owned_clinic_ids:
+            continue
+        # If any membership grants full calendar access for the clinic we treat
+        # the clinic as unrestricted, even if stale duplicate rows still exist
+        # with the flag disabled.
+        if any(getattr(m, "can_view_full_calendar", False) for m in memberships):
+            continue
+        restricted_memberships.extend(memberships)
 
     if not restricted_memberships:
         return CalendarAccessScope()
