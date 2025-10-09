@@ -651,31 +651,70 @@
 
   <script>
     document.addEventListener('DOMContentLoaded', () => {
-      document.querySelectorAll('.js-delivery-form').forEach(form => {
-        form.addEventListener('submit', async ev => {
-          ev.preventDefault();
-          const url = form.action;
-          const resp = await fetchOrQueue(url, {method: 'POST', headers: {'Accept': 'application/json'}});
-          if (resp && resp.ok) {
-            const data = await resp.json();
-            if (data.redirect) {
-              window.location.href = data.redirect;
-              return;
-            }
-            const toastEl = document.getElementById('actionToast');
-            toastEl.querySelector('.toast-body').textContent = data.message || 'Sucesso';
-            toastEl.classList.remove('bg-danger', 'bg-info', 'bg-success');
-            toastEl.classList.add('bg-' + (data.category || 'success'));
-            new bootstrap.Toast(toastEl).show();
-          } else if (resp) {
-            const toastEl = document.getElementById('actionToast');
-            toastEl.querySelector('.toast-body').textContent = 'Erro ao processar ação';
-            toastEl.classList.remove('bg-success', 'bg-info');
-            toastEl.classList.add('bg-danger');
-            new bootstrap.Toast(toastEl).show();
+      const refreshDeliverySections = async () => {
+        const container = document.getElementById('delivery-sections');
+        if (!container) return;
+        try {
+          const resp = await fetch('/delivery_requests', {
+            headers: {'X-Requested-With': 'XMLHttpRequest'}
+          });
+          if (!resp.ok) return;
+          const data = await resp.json();
+          if (data.html) {
+            container.innerHTML = data.html;
           }
+          if (data.counts) {
+            const mapping = {
+              'available-count': data.counts.available_total,
+              'doing-count': data.counts.doing,
+              'done-count': data.counts.done,
+              'canceled-count': data.counts.canceled,
+            };
+            Object.entries(mapping).forEach(([id, value]) => {
+              const el = document.getElementById(id);
+              if (el) {
+                el.textContent = value;
+              }
+            });
+          }
+          attachDeliveryFormListeners();
+        } catch (err) {
+          console.error('Erro ao atualizar entregas', err);
+        }
+      };
+
+      const attachDeliveryFormListeners = () => {
+        document.querySelectorAll('.js-delivery-form').forEach(form => {
+          if (form.dataset.deliveryListenerAttached === 'true') return;
+          form.dataset.deliveryListenerAttached = 'true';
+          form.addEventListener('submit', async ev => {
+            ev.preventDefault();
+            const url = form.action;
+            const resp = await fetchOrQueue(url, {method: 'POST', headers: {'Accept': 'application/json'}});
+            if (resp && resp.ok) {
+              const data = await resp.json();
+              if (data.redirect) {
+                window.location.href = data.redirect;
+                return;
+              }
+              const toastEl = document.getElementById('actionToast');
+              toastEl.querySelector('.toast-body').textContent = data.message || 'Sucesso';
+              toastEl.classList.remove('bg-danger', 'bg-info', 'bg-success');
+              toastEl.classList.add('bg-' + (data.category || 'success'));
+              new bootstrap.Toast(toastEl).show();
+              await refreshDeliverySections();
+            } else if (resp) {
+              const toastEl = document.getElementById('actionToast');
+              toastEl.querySelector('.toast-body').textContent = 'Erro ao processar ação';
+              toastEl.classList.remove('bg-success', 'bg-info');
+              toastEl.classList.add('bg-danger');
+              new bootstrap.Toast(toastEl).show();
+            }
+          });
         });
-      });
+      };
+
+      attachDeliveryFormListeners();
 
       document.querySelectorAll('.js-cart-form').forEach(form => {
         form.addEventListener('submit', async ev => {

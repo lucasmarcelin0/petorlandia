@@ -6782,14 +6782,25 @@ def list_delivery_requests():
         done     = base.filter_by(status="concluida").all()
         canceled = base.filter_by(status="cancelada").all()
 
-    return render_template(
-        "entregas/delivery_requests.html",
+    context = dict(
         available=available,
         doing=doing,
         done=done,
         canceled=canceled,
-        available_total=available_total   # novo badge
+        available_total=available_total,
     )
+
+    if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+        html = render_template("entregas/_delivery_sections.html", **context)
+        counts = {
+            "available_total": available_total,
+            "doing": len(doing),
+            "done": len(done),
+            "canceled": len(canceled),
+        }
+        return jsonify(html=html, counts=counts)
+
+    return render_template("entregas/delivery_requests.html", **context)
 
 
 @app.route("/api/delivery_counts")
