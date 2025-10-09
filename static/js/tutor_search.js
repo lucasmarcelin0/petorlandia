@@ -7,11 +7,14 @@
       searchUrl = '/buscar_tutores',
       minChars = 2,
       validationMessageId = null,
+      sortFieldId = null,
     } = options;
 
     const tutorInput = document.getElementById(inputId);
     const resultsContainer = document.getElementById(resultsId);
     const tutorIdField = document.getElementById(hiddenFieldId);
+    const sortField = sortFieldId ? document.getElementById(sortFieldId) : null;
+    const sortContainer = sortField ? sortField.closest('[data-search-filter]') : null;
 
     if (!tutorInput || !resultsContainer || !tutorIdField) {
       return null;
@@ -89,7 +92,13 @@
       activeSearchController = new AbortController();
 
       try {
-        const response = await fetch(`${searchUrl}?q=${encodeURIComponent(query)}`, {
+        const url = new URL(searchUrl, window.location.origin);
+        url.searchParams.set('q', query);
+        if (sortField && sortField.value) {
+          url.searchParams.set('sort', sortField.value);
+        }
+
+        const response = await fetch(url.toString(), {
           signal: activeSearchController.signal,
         });
         if (!response.ok) {
@@ -152,6 +161,14 @@
 
     tutorInput.addEventListener('focus', openResults);
     tutorInput.addEventListener('click', openResults);
+
+    if (sortContainer) {
+      sortContainer.addEventListener('searchfilterchange', () => {
+        if (normalize(tutorInput.value).length >= minChars) {
+          tutorInput.dispatchEvent(new Event('input'));
+        }
+      });
+    }
 
     document.addEventListener('click', (event) => {
       if (!resultsContainer.contains(event.target) && event.target !== tutorInput) {

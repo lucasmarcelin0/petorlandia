@@ -3289,6 +3289,11 @@ def buscar_tutores():
     if not clinic_id and not _is_admin():
         return jsonify([])
 
+    sort_param = (request.args.get('sort') or 'name_asc').strip().lower()
+    allowed_sorts = {'name_asc', 'recent_added', 'recent_attended'}
+    if sort_param not in allowed_sorts:
+        sort_param = 'name_asc'
+
     like_query = f"%{query}%"
     numeric_query = re.sub(r'\D', '', query)
     numeric_like = f"%{numeric_query}%" if numeric_query else None
@@ -3342,11 +3347,31 @@ def buscar_tutores():
     if not _is_admin():
         tutores_query = tutores_query.filter(User.clinica_id == clinic_id)
 
+    tutores_query = tutores_query.filter(visibility_clause).distinct()
+
+    order_columns = []
+    last_appt_subquery = None
+
+    if sort_param == 'recent_attended':
+        last_appt_query = db.session.query(
+            Appointment.tutor_id.label('tutor_id'),
+            func.max(Appointment.scheduled_at).label('last_at'),
+        )
+        if clinic_id:
+            last_appt_query = last_appt_query.filter(Appointment.clinica_id == clinic_id)
+        last_appt_subquery = last_appt_query.group_by(Appointment.tutor_id).subquery()
+        tutores_query = tutores_query.outerjoin(last_appt_subquery, User.id == last_appt_subquery.c.tutor_id)
+        order_columns.append(func.coalesce(last_appt_subquery.c.last_at, User.created_at).desc())
+        order_columns.append(func.lower(User.name))
+    elif sort_param == 'recent_added':
+        order_columns.append(User.created_at.desc())
+        order_columns.append(func.lower(User.name))
+    else:
+        order_columns.append(func.lower(User.name))
+
     tutores = (
         tutores_query
-        .filter(visibility_clause)
-        .distinct()
-        .order_by(User.name)
+        .order_by(*order_columns)
         .limit(TUTOR_SEARCH_LIMIT)
         .all()
     )
@@ -3389,8 +3414,8 @@ def buscar_tutores():
             }
         )
 
-    # Ordena por nome para facilitar a leitura
-    resultados.sort(key=lambda item: item['name'] or '')
+    if sort_param == 'name_asc':
+        resultados.sort(key=lambda item: (item['name'] or '').lower())
 
     return jsonify(resultados)
 

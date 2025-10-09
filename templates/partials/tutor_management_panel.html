@@ -10,7 +10,35 @@
       <span class="badge bg-primary-subtle text-primary-emphasis rounded-pill">🔍</span>
       <h6 class="mb-0">Buscar Tutor</h6>
     </div>
-    <input id="busca-tutor" class="form-control" placeholder="Digite nome, e-mail, CPF, RG, telefone ou endereço">
+    <div class="input-group">
+      <span class="input-group-text bg-light text-secondary"><i class="bi bi-search"></i></span>
+      <input
+        id="busca-tutor"
+        class="form-control"
+        placeholder="Digite nome, e-mail, CPF, RG, telefone ou endereço"
+        aria-label="Buscar tutor"
+      >
+      <div class="dropdown" data-search-filter data-search-target="tutor-panel">
+        <input type="hidden" id="tutor-panel-sort" value="name_asc" data-sort-input data-target="tutor-panel">
+        <button
+          class="btn btn-outline-secondary"
+          type="button"
+          data-bs-toggle="dropdown"
+          aria-expanded="false"
+          aria-label="Ordenar resultados"
+          data-sort-button
+          data-sort-default-label="Ordem alfabética"
+        >
+          <i class="bi bi-funnel"></i>
+          <span class="d-none d-md-inline small ms-1" data-sort-label>Ordem alfabética</span>
+        </button>
+        <ul class="dropdown-menu dropdown-menu-end shadow-sm">
+          <li><button class="dropdown-item active" type="button" data-sort-option data-sort-value="name_asc" data-sort-label="Ordem alfabética">Ordem alfabética (A-Z)</button></li>
+          <li><button class="dropdown-item" type="button" data-sort-option data-sort-value="recent_added" data-sort-label="Mais recentes">Últimos adicionados</button></li>
+          <li><button class="dropdown-item" type="button" data-sort-option data-sort-value="recent_attended" data-sort-label="Atendimentos recentes">Últimos com atendimento</button></li>
+        </ul>
+      </div>
+    </div>
     <ul id="lista-tutores" class="list-group shadow-sm mt-2 d-none"></ul>
     <p class="text-muted small mb-0 mt-2">Selecione para abrir a ficha do tutor.</p>
   </div>
@@ -71,8 +99,73 @@
 <script>
   const inputTutor = document.getElementById('busca-tutor');
   const listaTutor = document.getElementById('lista-tutores');
+  const sortInput = document.getElementById('tutor-panel-sort');
+  const filterContainer = document.querySelector('[data-search-filter][data-search-target="tutor-panel"]');
+
+  async function carregarTutores(query) {
+    const params = new URLSearchParams({ q: query });
+    if (sortInput && sortInput.value) {
+      params.set('sort', sortInput.value);
+    }
+    const response = await fetch(`/buscar_tutores?${params.toString()}`);
+    if (!response.ok) {
+      throw new Error('Erro ao buscar tutores');
+    }
+    return response.json();
+  }
 
   if (inputTutor && listaTutor) {
+    const renderResultados = (data) => {
+      listaTutor.innerHTML = '';
+      if (!data.length) {
+        listaTutor.classList.add('d-none');
+        return;
+      }
+
+      data.forEach(t => {
+        const li = document.createElement('li');
+        li.className = 'list-group-item list-group-item-action';
+
+        const nameLine = document.createElement('div');
+        nameLine.className = 'fw-semibold';
+        nameLine.textContent = t.name || 'Tutor sem nome';
+        li.appendChild(nameLine);
+
+        const details = t.details || [
+          t.email,
+          t.phone,
+          t.cpf ? `CPF: ${t.cpf}` : null,
+          t.rg ? `RG: ${t.rg}` : null,
+          t.worker,
+        ].filter(Boolean).join(' • ');
+
+        if (details) {
+          const detailsEl = document.createElement('div');
+          detailsEl.className = 'small text-muted';
+          detailsEl.textContent = details;
+          li.appendChild(detailsEl);
+        }
+
+        if (t.specialties) {
+          const specialtiesEl = document.createElement('div');
+          specialtiesEl.className = 'small text-muted';
+          specialtiesEl.textContent = `Especialidades: ${t.specialties}`;
+          li.appendChild(specialtiesEl);
+        }
+
+        if (t.address_summary) {
+          const addressEl = document.createElement('div');
+          addressEl.className = 'small text-muted';
+          addressEl.textContent = t.address_summary;
+          li.appendChild(addressEl);
+        }
+
+        li.onclick = () => window.location = `/ficha_tutor/${t.id}`;
+        listaTutor.appendChild(li);
+      });
+      listaTutor.classList.remove('d-none');
+    };
+
     inputTutor.addEventListener('input', async () => {
       const q = inputTutor.value.trim();
       if (q.length < 2) {
@@ -81,57 +174,23 @@
         return;
       }
 
-      const res = await fetch(`/buscar_tutores?q=${encodeURIComponent(q)}`);
-      const data = await res.json();
-
-      listaTutor.innerHTML = '';
-      if (data.length) {
-        data.forEach(t => {
-          const li = document.createElement('li');
-          li.className = 'list-group-item list-group-item-action';
-
-          const nameLine = document.createElement('div');
-          nameLine.className = 'fw-semibold';
-          nameLine.textContent = t.name || 'Tutor sem nome';
-          li.appendChild(nameLine);
-
-          const details = t.details || [
-            t.email,
-            t.phone,
-            t.cpf ? `CPF: ${t.cpf}` : null,
-            t.rg ? `RG: ${t.rg}` : null,
-            t.worker,
-          ].filter(Boolean).join(' • ');
-
-          if (details) {
-            const detailsEl = document.createElement('div');
-            detailsEl.className = 'small text-muted';
-            detailsEl.textContent = details;
-            li.appendChild(detailsEl);
-          }
-
-          if (t.specialties) {
-            const specialtiesEl = document.createElement('div');
-            specialtiesEl.className = 'small text-muted';
-            specialtiesEl.textContent = `Especialidades: ${t.specialties}`;
-            li.appendChild(specialtiesEl);
-          }
-
-          if (t.address_summary) {
-            const addressEl = document.createElement('div');
-            addressEl.className = 'small text-muted';
-            addressEl.textContent = t.address_summary;
-            li.appendChild(addressEl);
-          }
-
-          li.onclick = () => window.location = `/ficha_tutor/${t.id}`;
-          listaTutor.appendChild(li);
-        });
-        listaTutor.classList.remove('d-none');
-      } else {
+      try {
+        const data = await carregarTutores(q);
+        renderResultados(data);
+      } catch (error) {
+        console.error('Não foi possível buscar tutores.', error);
         listaTutor.classList.add('d-none');
       }
     });
+
+    if (filterContainer) {
+      filterContainer.addEventListener('searchfilterchange', () => {
+        const q = inputTutor.value.trim();
+        if (q.length >= 2) {
+          inputTutor.dispatchEvent(new Event('input'));
+        }
+      });
+    }
 
     document.addEventListener('click', e => {
       if (!inputTutor.contains(e.target) && !listaTutor.contains(e.target)) {
