@@ -294,6 +294,7 @@ from forms import (
     VetScheduleForm,
     VetSpecialtyForm,
     VeterinarianMembershipCheckoutForm,
+    VeterinarianMembershipCancelTrialForm,
     VeterinarianProfileForm,
     VeterinarianPromotionForm,
 )
@@ -740,6 +741,41 @@ def veterinarian_membership_checkout():
     db.session.commit()
 
     return redirect(init_point)
+
+
+@app.route('/veterinario/assinatura/<int:membership_id>/cancelar_avaliacao', methods=['POST'])
+@login_required
+def veterinarian_cancel_trial(membership_id):
+    from models import VeterinarianMembership
+
+    membership = VeterinarianMembership.query.get_or_404(membership_id)
+    form = VeterinarianMembershipCancelTrialForm()
+
+    if not form.validate_on_submit():
+        flash('Não foi possível cancelar a avaliação gratuita. Tente novamente.', 'danger')
+        return redirect(url_for('conversa_admin'))
+
+    is_admin = current_user.is_authenticated and (current_user.role or '').lower() == 'admin'
+    owns_membership = (
+        has_veterinarian_profile(current_user)
+        and membership.veterinario_id == current_user.veterinario.id
+    )
+
+    if not (is_admin or owns_membership):
+        abort(403)
+
+    if not membership.is_trial_active():
+        flash('O período de avaliação gratuita já havia sido encerrado.', 'info')
+    else:
+        membership.trial_ends_at = datetime.utcnow() - timedelta(seconds=1)
+        db.session.add(membership)
+        db.session.commit()
+        flash('Período de avaliação gratuita cancelado com sucesso.', 'success')
+
+    if is_admin and membership.veterinario and membership.veterinario.user:
+        return redirect(url_for('conversa_admin', user_id=membership.veterinario.user.id))
+
+    return redirect(url_for('conversa_admin'))
 
 # ----------------------------------------------------------------
 # 7)  Login & serializer
@@ -1749,6 +1785,7 @@ def conversa_admin(user_id=None):
     form = MessageForm()
     promotion_form = None
     target_membership = None
+    cancel_trial_form = VeterinarianMembershipCancelTrialForm()
     is_admin = current_user.is_authenticated and (current_user.role or '').lower() == 'admin'
 
     if is_admin:
@@ -1761,10 +1798,23 @@ def conversa_admin(user_id=None):
         promotion_form = VeterinarianPromotionForm()
         if has_veterinarian_profile(interlocutor):
             target_membership = ensure_veterinarian_membership(interlocutor.veterinario)
+            if target_membership and not hasattr(target_membership, 'is_trial_active'):
+                target_membership = None
+            elif target_membership and getattr(target_membership, 'id', None) is None:
+                db.session.flush()
     else:
         interlocutor = admin_user
         admin_ids = [u.id for u in User.query.filter_by(role='admin').all()]
         participant_id = current_user.id
+        if has_veterinarian_profile(current_user):
+            target_membership = getattr(current_user.veterinario, 'membership', None)
+            if target_membership:
+                trial_days = current_app.config.get('VETERINARIAN_TRIAL_DAYS', 30)
+                target_membership.ensure_trial_dates(trial_days)
+                if not hasattr(target_membership, 'is_trial_active'):
+                    target_membership = None
+                elif getattr(target_membership, 'id', None) is None:
+                    db.session.flush()
 
     mensagens = (
         Message.query
@@ -1798,6 +1848,15 @@ def conversa_admin(user_id=None):
                 m.lida = True
     db.session.commit()
 
+    can_cancel_trial = bool(
+        target_membership
+        and hasattr(target_membership, 'is_trial_active')
+        and hasattr(target_membership, 'has_valid_payment')
+        and getattr(target_membership, 'id', None)
+        and target_membership.is_trial_active()
+        and not target_membership.has_valid_payment()
+    )
+
     return render_template(
         'mensagens/conversa_admin.html',
         mensagens=mensagens,
@@ -1806,6 +1865,8 @@ def conversa_admin(user_id=None):
         promotion_form=promotion_form,
         target_membership=target_membership,
         is_admin=is_admin,
+        cancel_trial_form=cancel_trial_form,
+        can_cancel_trial=can_cancel_trial,
     )
 
 
