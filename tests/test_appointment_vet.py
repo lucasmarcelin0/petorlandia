@@ -117,6 +117,16 @@ def test_tutor_sees_only_their_animals_in_form(client):
         form = AppointmentForm(tutor=tutor1)
         assert (animal1.id, animal1.name) in form.animal_id.choices
         assert (animal2.id, animal2.name) not in form.animal_id.choices
+        assert form.tutor_id.choices == [(tutor1.id, tutor1.name)]
+        assert form.tutor_id.data == tutor1.id
+        assert form.animal_data == [
+            {
+                'id': animal1.id,
+                'name': animal1.name,
+                'tutor_id': tutor1.id,
+                'tutor_name': tutor1.name,
+            }
+        ]
 
 
 def test_veterinarian_sees_all_animals_in_form(client):
@@ -135,6 +145,30 @@ def test_veterinarian_sees_all_animals_in_form(client):
         form = AppointmentForm(is_veterinario=True)
         assert (animal1.id, animal1.name) in form.animal_id.choices
         assert (animal2.id, animal2.name) in form.animal_id.choices
+        assert form.tutor_id.choices == [
+            (0, 'Todos os tutores'),
+            (tutor1.id, tutor1.name),
+            (tutor2.id, tutor2.name),
+        ]
+        assert form.tutor_id.data == 0
+
+
+def test_veterinarian_form_respects_clinic_scope(client):
+    with flask_app.app_context():
+        clinic_a = Clinica(id=1, nome='Clínica A')
+        clinic_b = Clinica(id=2, nome='Clínica B')
+        tutor1 = User(id=1, name='Tutor1', email='t1@test')
+        tutor1.set_password('x')
+        tutor2 = User(id=2, name='Tutor2', email='t2@test')
+        tutor2.set_password('x')
+        animal1 = Animal(id=1, name='Rex', user_id=tutor1.id, clinica_id=clinic_a.id)
+        animal2 = Animal(id=2, name='Fido', user_id=tutor2.id, clinica_id=clinic_b.id)
+        db.session.add_all([clinic_a, clinic_b, tutor1, tutor2, animal1, animal2])
+        db.session.commit()
+
+        form = AppointmentForm(is_veterinario=True, clinic_ids=[clinic_a.id])
+        assert (animal1.id, animal1.name) in form.animal_id.choices
+        assert (animal2.id, animal2.name) not in form.animal_id.choices
 
 
 def test_appointment_form_has_extra_kind_choices(client):

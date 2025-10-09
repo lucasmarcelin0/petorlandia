@@ -455,6 +455,13 @@ class OrcamentoForm(FlaskForm):
 class AppointmentForm(FlaskForm):
     """Formulário para agendamento de consultas."""
 
+    tutor_id = SelectField(
+        'Tutor',
+        coerce=int,
+        validators=[Optional()],
+        default=0,
+    )
+
     animal_id = SelectField(
         'Animal',
         coerce=int,
@@ -499,18 +506,123 @@ class AppointmentForm(FlaskForm):
 
     submit = SubmitField('Agendar')
 
-    def __init__(self, tutor=None, is_veterinario=False, *args, **kwargs):
+    animal_data = None
+
+    def populate_animals(
+        self,
+        animals,
+        *,
+        restrict_tutors=False,
+        selected_tutor_id=None,
+        allow_all_option=True,
+    ):
+        """Populate animal choices and tutor selector metadata."""
+
+        def _normalize_tutor_name(name, tutor_id):
+            if name:
+                return name
+            if tutor_id:
+                return f'Tutor #{tutor_id}'
+            return 'Tutor não atribuído'
+
+        records = []
+        tutor_map = {}
+        for animal in animals:
+            tutor_id = getattr(animal, 'user_id', None)
+            owner = getattr(animal, 'owner', None)
+            tutor_name = getattr(owner, 'name', None)
+            animal_id = getattr(animal, 'id', None)
+            if animal_id is None:
+                continue
+            record = {
+                'id': animal_id,
+                'name': getattr(animal, 'name', None) or f'Animal #{animal_id}',
+                'tutor_id': tutor_id,
+                'tutor_name': _normalize_tutor_name(tutor_name, tutor_id),
+            }
+            records.append(record)
+            if tutor_id:
+                tutor_map[tutor_id] = _normalize_tutor_name(tutor_name, tutor_id)
+
+        records.sort(key=lambda item: ((item['name'] or '').lower(), item['id']))
+        self.animal_data = records
+        self.animal_id.choices = [
+            (item['id'], item['name']) for item in records
+        ]
+
+        if not hasattr(self, 'tutor_id'):
+            return
+
+        sorted_tutors = sorted(
+            tutor_map.items(),
+            key=lambda entry: (entry[1] or '').lower(),
+        )
+
+        choices = []
+        if allow_all_option and (not restrict_tutors or len(sorted_tutors) > 1):
+            choices.append((0, 'Todos os tutores'))
+        choices.extend(
+            (tutor_id, name or f'Tutor #{tutor_id}')
+            for tutor_id, name in sorted_tutors
+        )
+
+        if not choices:
+            if allow_all_option:
+                choices = [(0, 'Todos os tutores')]
+            else:
+                choices = [(0, 'Nenhum tutor disponível')]
+
+        self.tutor_id.choices = choices
+
+        available_ids = {choice[0] for choice in choices}
+        resolved_tutor_id = selected_tutor_id if selected_tutor_id in available_ids else None
+        if resolved_tutor_id is None:
+            if restrict_tutors and sorted_tutors:
+                resolved_tutor_id = sorted_tutors[0][0]
+            elif 0 in available_ids:
+                resolved_tutor_id = 0
+            elif sorted_tutors:
+                resolved_tutor_id = sorted_tutors[0][0]
+            else:
+                resolved_tutor_id = 0
+
+        self.tutor_id.data = resolved_tutor_id
+
+    def __init__(self, tutor=None, is_veterinario=False, clinic_ids=None, *args, **kwargs):
         super().__init__(*args, **kwargs)
         from models import Animal, Veterinario
 
-        if is_veterinario:
-            animals = Animal.query.all()
-        elif tutor is not None:
-            animals = Animal.query.filter_by(user_id=tutor.id).all()
-        else:
-            animals = Animal.query.all()
+        clinic_id_values = []
+        if clinic_ids is not None:
+            if isinstance(clinic_ids, (list, tuple, set)):
+                candidates = clinic_ids
+            else:
+                candidates = [clinic_ids]
+            for candidate in candidates:
+                try:
+                    value = int(candidate)
+                except (TypeError, ValueError):
+                    continue
+                if value and value not in clinic_id_values:
+                    clinic_id_values.append(value)
 
-        self.animal_id.choices = [(a.id, a.name) for a in animals]
+        query = Animal.query.filter(Animal.removido_em.is_(None))
+        if clinic_id_values:
+            query = query.filter(Animal.clinica_id.in_(clinic_id_values))
+
+        if tutor is not None:
+            query = query.filter(Animal.user_id == tutor.id)
+        animals = query.all()
+
+        restrict_tutors = tutor is not None
+        allow_all = not restrict_tutors
+        selected_tutor_id = tutor.id if tutor is not None else self.tutor_id.data
+        self.populate_animals(
+            animals,
+            restrict_tutors=restrict_tutors,
+            selected_tutor_id=selected_tutor_id,
+            allow_all_option=allow_all,
+        )
 
         veterinarios = Veterinario.query.all()
         self.veterinario_id.choices = [

@@ -2990,7 +2990,12 @@ def consulta_direct(animal_id):
         from models import Veterinario
 
         appointment_form = AppointmentForm()
-        appointment_form.animal_id.choices = [(animal.id, animal.name)]
+        appointment_form.populate_animals(
+            [animal],
+            restrict_tutors=True,
+            selected_tutor_id=getattr(animal, 'user_id', None),
+            allow_all_option=False,
+        )
         appointment_form.animal_id.data = animal.id
         vet_obj = None
         if consulta.veterinario and getattr(consulta.veterinario, "veterinario", None):
@@ -3094,7 +3099,12 @@ def finalizar_consulta(consulta_id):
 
     # Prepara formulário de retorno com dados padrão
     form = AppointmentForm()
-    form.animal_id.choices = [(consulta.animal.id, consulta.animal.name)]
+    form.populate_animals(
+        [consulta.animal],
+        restrict_tutors=True,
+        selected_tutor_id=getattr(consulta.animal, 'user_id', None),
+        allow_all_option=False,
+    )
     form.animal_id.data = consulta.animal.id
     from models import Veterinario
 
@@ -3125,7 +3135,12 @@ def agendar_retorno(consulta_id):
     from models import Veterinario
 
     form = AppointmentForm()
-    form.animal_id.choices = [(consulta.animal.id, consulta.animal.name)]
+    form.populate_animals(
+        [consulta.animal],
+        restrict_tutors=True,
+        selected_tutor_id=getattr(consulta.animal, 'user_id', None),
+        allow_all_option=False,
+    )
     vets = (
         Veterinario.query.filter_by(
             clinica_id=current_user_clinic_id()
@@ -4465,7 +4480,11 @@ def vet_detail(veterinario_id):
     )
 
     schedule_form = VetScheduleForm(prefix='schedule')
-    appointment_form = AppointmentForm(is_veterinario=True, prefix='appointment')
+    appointment_form = AppointmentForm(
+        is_veterinario=True,
+        clinic_ids=[veterinario.clinica_id] if veterinario.clinica_id else None,
+        prefix='appointment',
+    )
     admin_default_selection_value = ''
 
     if current_user.is_authenticated and current_user.role == 'admin':
@@ -4501,16 +4520,6 @@ def vet_detail(veterinario_id):
         (veterinario.id, veterinario.user.name)
     ]
     appointment_form.veterinario_id.data = veterinario.id
-
-    if veterinario.clinica_id:
-        animals = (
-            Animal.query.filter_by(clinica_id=veterinario.clinica_id)
-            .order_by(Animal.name)
-            .all()
-        )
-    else:
-        animals = Animal.query.order_by(Animal.name).all()
-    appointment_form.animal_id.choices = [(a.id, a.name) for a in animals]
 
     weekday_order = {
         'Segunda': 0,
@@ -9129,7 +9138,11 @@ def appointments():
             query_args['veterinario_id'] = veterinario.id
         appointments_url = url_for('appointments', **query_args)
         schedule_form = VetScheduleForm(prefix='schedule')
-        appointment_form = AppointmentForm(is_veterinario=True, prefix='appointment')
+        appointment_form = AppointmentForm(
+            is_veterinario=True,
+            clinic_ids=clinic_ids,
+            prefix='appointment',
+        )
         if _is_admin():
             vets_for_choices = agenda_veterinarios or Veterinario.query.all()
         else:
@@ -9776,7 +9789,6 @@ def appointments():
         )
     else:
         if worker in ['colaborador', 'admin']:
-            appointment_form = AppointmentForm(prefix='appointment')
             clinica_id = current_user.clinica_id
             if current_user.role == 'admin' and worker == 'colaborador':
                 colaborador_id_arg = request.args.get('colaborador_id', type=int)
@@ -9804,8 +9816,10 @@ def appointments():
             elif current_user.role == 'admin' and not clinica_id:
                 clinica = Clinica.query.first()
                 clinica_id = clinica.id if clinica else None
-            animals = Animal.query.filter_by(clinica_id=clinica_id).all()
-            appointment_form.animal_id.choices = [(a.id, a.name) for a in animals]
+            appointment_form = AppointmentForm(
+                prefix='appointment',
+                clinic_ids=[clinica_id] if clinica_id else None,
+            )
 
             clinic = Clinica.query.get(clinica_id) if clinica_id else None
             vets = Veterinario.query.filter_by(clinica_id=clinica_id).all()
