@@ -719,10 +719,79 @@ def register():
 
 
 
+def _normalizar_unidade_idade(unidade):
+    if not unidade:
+        return 'anos'
+    texto = unicodedata.normalize('NFKD', str(unidade))
+    texto = texto.encode('ASCII', 'ignore').decode('ASCII').strip().lower()
+    if texto.startswith('mes'):
+        return 'meses'
+    if texto.startswith('ano'):
+        return 'anos'
+    return 'anos'
+
+
+def _formatar_idade(numero, unidade):
+    if numero is None:
+        return ''
+    unidade_norm = _normalizar_unidade_idade(unidade)
+    if unidade_norm == 'meses':
+        sufixo = 'mês' if numero == 1 else 'meses'
+    else:
+        sufixo = 'ano' if numero == 1 else 'anos'
+    return f"{numero} {sufixo}"
+
+
+def _extrair_idade(unidade_texto):
+    if not unidade_texto:
+        return None, None
+    partes = str(unidade_texto).split()
+    numero = None
+    try:
+        numero = int(partes[0])
+    except (ValueError, IndexError):
+        numero = None
+    unidade = None
+    if len(partes) > 1:
+        unidade = _normalizar_unidade_idade(partes[1])
+    return numero, unidade
+
+
+def _preencher_idade_form(form, animal=None):
+    if not hasattr(form, 'age') or not hasattr(form, 'age_unit'):
+        return
+    if form.is_submitted():
+        return
+
+    numero = None
+    unidade = None
+
+    if animal and animal.date_of_birth:
+        delta = relativedelta(date.today(), animal.date_of_birth)
+        if delta.years > 0:
+            numero = delta.years
+            unidade = 'anos'
+        else:
+            numero = delta.months
+            unidade = 'meses'
+    elif animal and animal.age:
+        numero, unidade = _extrair_idade(animal.age)
+    elif form.age.data:
+        numero, unidade = _extrair_idade(form.age.data)
+
+    if numero is not None:
+        form.age.data = str(numero)
+    if unidade:
+        form.age_unit.data = unidade
+    elif not form.age_unit.data:
+        form.age_unit.data = 'anos'
+
+
 @app.route('/add-animal', methods=['GET', 'POST'])
 @login_required
 def add_animal():
     form = AnimalForm()
+    _preencher_idade_form(form)
 
     # Listas para o template
     try:
@@ -757,19 +826,30 @@ def add_animal():
         print("🔍 Breed ID:", breed_id)
 
         dob = form.date_of_birth.data
-        if not dob and form.age.data:
-            try:
-                age_years = int(form.age.data)
-                dob = date.today() - relativedelta(years=age_years)
-            except ValueError:
-                dob = None
+        idade_valor = (form.age.data or '').strip()
+        unidade_valor = _normalizar_unidade_idade(form.age_unit.data if hasattr(form, 'age_unit') else 'anos')
+        idade_numero = None
+        try:
+            idade_numero = int(idade_valor)
+        except (ValueError, TypeError):
+            idade_numero = None
+
+        if not dob and idade_numero is not None:
+            if unidade_valor == 'meses':
+                dob = date.today() - relativedelta(months=idade_numero)
+            else:
+                dob = date.today() - relativedelta(years=idade_numero)
+
+        idade_formatada = None if not idade_valor else idade_valor
+        if idade_numero is not None:
+            idade_formatada = _formatar_idade(idade_numero, unidade_valor)
 
         # Criação do animal
         animal = Animal(
             name=form.name.data,
             species_id=species_id,
             breed_id=breed_id,
-            age=form.age.data,
+            age=idade_formatada,
             date_of_birth=dob,
             sex=form.sex.data,
             description=form.description.data,
@@ -1057,6 +1137,7 @@ def editar_animal(animal_id):
         return redirect(url_for('profile'))
 
     form = AnimalForm(obj=animal)
+    _preencher_idade_form(form, animal)
 
     species_list = list_species()
     breed_list = list_breeds()
@@ -1066,7 +1147,6 @@ def editar_animal(animal_id):
 
     if form.validate_on_submit():
         animal.name = form.name.data
-        animal.age = form.age.data
         animal.sex = form.sex.data
         animal.description = form.description.data
         animal.modo = form.modo.data
@@ -1074,12 +1154,20 @@ def editar_animal(animal_id):
 
         # Data de nascimento calculada a partir da idade se necessário
         dob = form.date_of_birth.data
-        if not dob and form.age.data:
-            try:
-                age_years = int(form.age.data)
-                dob = date.today() - relativedelta(years=age_years)
-            except ValueError:
-                dob = None
+        idade_valor = (form.age.data or '').strip()
+        unidade_valor = _normalizar_unidade_idade(form.age_unit.data if hasattr(form, 'age_unit') else 'anos')
+        idade_numero = None
+        try:
+            idade_numero = int(idade_valor)
+        except (ValueError, TypeError):
+            idade_numero = None
+
+        if not dob and idade_numero is not None:
+            if unidade_valor == 'meses':
+                dob = date.today() - relativedelta(months=idade_numero)
+            else:
+                dob = date.today() - relativedelta(years=idade_numero)
+        animal.age = _formatar_idade(idade_numero, unidade_valor) if idade_numero is not None else (idade_valor or None)
         animal.date_of_birth = dob
 
         # Relacionamentos
@@ -4207,8 +4295,13 @@ def ficha_tutor(tutor_id):
 
     # Formulários para usar o photo_cropper no template
     tutor_form = EditProfileForm(obj=tutor)
-    animal_forms = {a.id: AnimalForm(obj=a) for a in animais}
+    animal_forms = {}
+    for a in animais:
+        form_obj = AnimalForm(obj=a)
+        _preencher_idade_form(form_obj, a)
+        animal_forms[a.id] = form_obj
     new_animal_form = AnimalForm()
+    _preencher_idade_form(new_animal_form)
 
     # Busca todas as espécies e raças
     species_list = list_species()
@@ -4292,6 +4385,8 @@ def update_animal(animal_id):
     # Data de nascimento ou idade
     dob_str = request.form.get('date_of_birth')
     age_input = request.form.get('age')
+    age_unit_input = request.form.get('age_unit')
+    idade_numero = None
     if dob_str:
         try:
             animal.date_of_birth = datetime.strptime(dob_str, '%Y-%m-%d').date()
@@ -4299,12 +4394,27 @@ def update_animal(animal_id):
             flash('Data de nascimento inválida.', 'warning')
     elif age_input:
         try:
-            age_years = int(age_input)
-            animal.date_of_birth = date.today() - relativedelta(years=age_years)
+            idade_numero = int(age_input)
+            unidade_norm = _normalizar_unidade_idade(age_unit_input)
+            if unidade_norm == 'meses':
+                animal.date_of_birth = date.today() - relativedelta(months=idade_numero)
+            else:
+                animal.date_of_birth = date.today() - relativedelta(years=idade_numero)
         except ValueError:
             flash('Idade inválida. Deve ser um número inteiro.', 'warning')
 
-    animal.age = None
+    if animal.date_of_birth:
+        delta = relativedelta(date.today(), animal.date_of_birth)
+        if delta.years > 0:
+            animal.age = _formatar_idade(delta.years, 'anos')
+        else:
+            animal.age = _formatar_idade(delta.months, 'meses')
+    elif idade_numero is not None:
+        animal.age = _formatar_idade(idade_numero, age_unit_input)
+    elif age_input:
+        animal.age = age_input
+    else:
+        animal.age = None
 
     # Upload de imagem
     if 'image' in request.files and request.files['image'].filename != '':
@@ -5773,6 +5883,8 @@ def novo_animal():
 
         dob_str = request.form.get('date_of_birth')
         dob = None
+        idade_numero = None
+        age_unit_input = request.form.get('age_unit')
         if dob_str:
             try:
                 dob = datetime.strptime(dob_str, '%Y-%m-%d').date()
@@ -5783,11 +5895,25 @@ def novo_animal():
             age_input = request.form.get('age')
             if age_input:
                 try:
-                    age_years = int(age_input)
-                    dob = date.today() - relativedelta(years=age_years)
+                    idade_numero = int(age_input)
+                    unidade_norm = _normalizar_unidade_idade(age_unit_input)
+                    if unidade_norm == 'meses':
+                        dob = date.today() - relativedelta(months=idade_numero)
+                    else:
+                        dob = date.today() - relativedelta(years=idade_numero)
                 except ValueError:
                     flash('Idade inválida. Deve ser um número inteiro.', 'warning')
                     return redirect(url_for('ficha_tutor', tutor_id=tutor.id))
+
+        idade_registrada = None
+        if dob:
+            delta = relativedelta(date.today(), dob)
+            if delta.years > 0:
+                idade_registrada = _formatar_idade(delta.years, 'anos')
+            else:
+                idade_registrada = _formatar_idade(delta.months, 'meses')
+        elif idade_numero is not None:
+            idade_registrada = _formatar_idade(idade_numero, age_unit_input)
 
         peso_str = request.form.get('peso')
         peso = float(peso_str) if peso_str else None
@@ -5816,6 +5942,7 @@ def novo_animal():
             breed_id=breed_id,
             sex=request.form.get('sex'),
             date_of_birth=dob,
+            age=idade_registrada,
             microchip_number=request.form.get('microchip_number'),
             peso=peso,
             health_plan=request.form.get('health_plan'),
