@@ -75,14 +75,52 @@
     <div class="collapse" id="newAppointmentForm">
       <div class="card-body p-4">
         {% if form %}
-        <form method="POST">
+        <form method="POST" data-appointment-form>
           {{ form.hidden_tag() }}
           <div class="row g-3">
-            <div class="col-md-6">
-              {{ form.animal_id.label(class="form-label fw-semibold") }}
-              {{ form.animal_id(class="form-select") }}
+            <div class="col-md-6 col-lg-4">
+              {{ form.tutor_id.label(class="form-label fw-semibold") }}
+              {{ form.tutor_id(class="form-select", **{'data-appointment-tutor-select': 'true'}) }}
+              {% for error in form.tutor_id.errors %}
+                <div class="invalid-feedback d-block">{{ error }}</div>
+              {% endfor %}
             </div>
-            <div class="col-md-6">
+            <div class="col-md-6 col-lg-4">
+              {{ form.animal_id.label(class="form-label fw-semibold", for=form.animal_id.id) }}
+              {% set animal_select_classes = 'form-select' %}
+              {% if form.animal_id.errors %}
+                {% set animal_select_classes = animal_select_classes + ' is-invalid' %}
+              {% endif %}
+              {% set animal_options = form.animal_data or [] %}
+              <select
+                id="{{ form.animal_id.id }}"
+                name="{{ form.animal_id.name }}"
+                class="{{ animal_select_classes }}"
+                data-appointment-animal-select
+              >
+                {% if not animal_options %}
+                  <option value="" selected disabled>Sem animais disponíveis</option>
+                {% endif %}
+                {% for option in animal_options %}
+                  {% set option_tutor_id = option.tutor_id if option.tutor_id is not none else '' %}
+                  <option
+                    value="{{ option.id }}"
+                    data-tutor-id="{{ option_tutor_id }}"
+                    data-tutor-name="{{ option.tutor_name }}"
+                    {% if form.animal_id.data == option.id %}selected{% endif %}
+                  >
+                    {{ option.name }}{% if option.tutor_name %} — {{ option.tutor_name }}{% endif %}
+                  </option>
+                {% endfor %}
+              </select>
+              {% for error in form.animal_id.errors %}
+                <div class="invalid-feedback d-block">{{ error }}</div>
+              {% endfor %}
+              <div class="form-text text-muted d-none" data-appointment-animal-empty>
+                Nenhum animal disponível para o tutor selecionado.
+              </div>
+            </div>
+            <div class="col-md-12 col-lg-4">
               {{ form.veterinario_id.label(class="form-label fw-semibold") }}
               {{ form.veterinario_id(class="form-select", **{'data-schedule-vet-select': 'true'}) }}
             </div>
@@ -451,6 +489,7 @@
   setupAppointmentsCalendarSummary();
 </script>
 <script type="module" src="{{ url_for('static', filename='appointments_table.js') }}"></script>
+<script type="module" src="{{ url_for('static', filename='appointments_new_consulta.js') }}"></script>
 <script>
 document.addEventListener('DOMContentLoaded', () => {
   let vetField = {% if form %}document.getElementById('{{ form.veterinario_id.id }}'){% else %}null{% endif %};
