@@ -953,6 +953,8 @@ def reset_password(token):
 @app.route('/painel')
 @login_required
 def painel_dashboard():
+    if not _is_admin():
+        abort(403)
     cards = [
         {"icon": "👤", "title": "Usuários", "description": f"Total: {User.query.count()}"},
         {"icon": "🐶", "title": "Animais", "description": f"Total: {Animal.query.count()}"},
