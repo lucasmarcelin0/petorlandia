@@ -296,6 +296,7 @@ from forms import (
     VetSpecialtyForm,
     VeterinarianMembershipCheckoutForm,
     VeterinarianMembershipCancelTrialForm,
+    VeterinarianMembershipRequestNewTrialForm,
     VeterinarianProfileForm,
     VeterinarianPromotionForm,
 )
@@ -853,6 +854,44 @@ def veterinarian_cancel_trial(membership_id):
         db.session.add(membership)
         db.session.commit()
         flash('Período de avaliação gratuita cancelado com sucesso.', 'success')
+
+    if is_admin and membership.veterinario and membership.veterinario.user:
+        return redirect(url_for('conversa_admin', user_id=membership.veterinario.user.id))
+
+    return redirect(url_for('conversa_admin'))
+
+
+@app.route('/veterinario/assinatura/<int:membership_id>/nova_avaliacao', methods=['POST'])
+@login_required
+def veterinarian_request_new_trial(membership_id):
+    from models import VeterinarianMembership
+
+    membership = VeterinarianMembership.query.get_or_404(membership_id)
+    form = VeterinarianMembershipRequestNewTrialForm()
+
+    if not form.validate_on_submit():
+        flash('Não foi possível iniciar uma nova avaliação gratuita. Tente novamente.', 'danger')
+        return redirect(url_for('conversa_admin'))
+
+    is_admin = current_user.is_authenticated and (current_user.role or '').lower() == 'admin'
+    owns_membership = (
+        has_veterinarian_profile(current_user)
+        and membership.veterinario_id == current_user.veterinario.id
+    )
+
+    if not (is_admin or owns_membership):
+        abort(403)
+
+    if membership.is_trial_active():
+        flash('A avaliação gratuita atual ainda está ativa.', 'info')
+    elif membership.has_valid_payment():
+        flash('Não é possível iniciar uma nova avaliação gratuita com uma assinatura ativa.', 'warning')
+    else:
+        trial_days = current_app.config.get('VETERINARIAN_TRIAL_DAYS', 30)
+        membership.restart_trial(trial_days)
+        db.session.add(membership)
+        db.session.commit()
+        flash('Novo período de avaliação gratuita iniciado com sucesso.', 'success')
 
     if is_admin and membership.veterinario and membership.veterinario.user:
         return redirect(url_for('conversa_admin', user_id=membership.veterinario.user.id))
@@ -1870,6 +1909,7 @@ def conversa_admin(user_id=None):
     promotion_form = None
     target_membership = None
     cancel_trial_form = VeterinarianMembershipCancelTrialForm()
+    request_new_trial_form = VeterinarianMembershipRequestNewTrialForm()
     is_admin = current_user.is_authenticated and (current_user.role or '').lower() == 'admin'
 
     if is_admin:
@@ -1946,6 +1986,15 @@ def conversa_admin(user_id=None):
         and not target_membership.has_valid_payment()
     )
 
+    can_request_new_trial = bool(
+        target_membership
+        and hasattr(target_membership, 'is_trial_active')
+        and hasattr(target_membership, 'has_valid_payment')
+        and getattr(target_membership, 'id', None)
+        and not target_membership.is_trial_active()
+        and not target_membership.has_valid_payment()
+    )
+
     return render_template(
         'mensagens/conversa_admin.html',
         mensagens=mensagens,
@@ -1956,6 +2005,8 @@ def conversa_admin(user_id=None):
         is_admin=is_admin,
         cancel_trial_form=cancel_trial_form,
         can_cancel_trial=can_cancel_trial,
+        request_new_trial_form=request_new_trial_form,
+        can_request_new_trial=can_request_new_trial,
     )
 
 

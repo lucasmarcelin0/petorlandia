@@ -39,9 +39,16 @@
             {% endif %}
           </div>
         {% else %}
-          <div class="alert alert-danger mt-2 mb-0">
+          <div class="alert alert-danger mt-2">
             O período de avaliação gratuita terminou e não há pagamento ativo registrado.
           </div>
+          {% if can_request_new_trial and request_new_trial_form %}
+            <form method="post" action="{{ url_for('veterinarian_request_new_trial', membership_id=target_membership.id) }}" class="mt-2">
+              {{ request_new_trial_form.hidden_tag() }}
+              <button type="submit" class="btn btn-outline-primary btn-sm">{{ request_new_trial_form.submit.label.text }}</button>
+            </form>
+            <p class="text-muted small mb-0">Ao solicitar, um novo período de avaliação gratuita será iniciado imediatamente.</p>
+          {% endif %}
         {% endif %}
       {% elif is_admin %}
         <p class="mb-3">Este usuário ainda não está cadastrado como veterinário.</p>

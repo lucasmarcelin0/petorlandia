@@ -770,6 +770,14 @@ class VeterinarianMembership(db.Model):
         if self.trial_ends_at is None:
             self.trial_ends_at = self.started_at + timedelta(days=trial_days)
 
+    def restart_trial(self, trial_days: int = 30) -> None:
+        """Start a fresh trial period from now."""
+
+        now = self._now()
+        self.started_at = now
+        self.trial_ends_at = now + timedelta(days=trial_days)
+        self.paid_until = None
+
     def is_trial_active(self) -> bool:
         if not self.trial_ends_at:
             return False
