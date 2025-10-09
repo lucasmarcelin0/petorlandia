@@ -3,6 +3,41 @@
 <div class="container mt-4">
   <h2>Dashboard de Orçamentos</h2>
 
+  {% if is_admin %}
+  <form method="get" class="row g-2 align-items-end mt-3 mb-4">
+    <div class="col-md-4">
+      <label class="form-label" for="scope">Visão</label>
+      <select class="form-select" id="scope" name="scope">
+        <option value="clinic" {% if selected_scope == 'clinic' %}selected{% endif %}>Por clínica</option>
+        <option value="all" {% if selected_scope == 'all' %}selected{% endif %}>Global</option>
+      </select>
+    </div>
+    <div class="col-md-5 col-lg-4">
+      <label class="form-label" for="clinica_id">Clínica</label>
+      <select class="form-select" id="clinica_id" name="clinica_id" {% if selected_scope == 'all' %}disabled{% endif %}>
+        <option value="">Selecione uma clínica</option>
+        {% for clinic in clinic_options %}
+        <option value="{{ clinic.id }}" {% if clinic.id == selected_clinic_id %}selected{% endif %}>{{ clinic.nome }}</option>
+        {% endfor %}
+      </select>
+      {% if selected_scope == 'all' %}
+      <input type="hidden" name="clinica_id" value="">
+      {% endif %}
+    </div>
+    <div class="col-md-3 col-lg-2">
+      <button type="submit" class="btn btn-primary w-100">Aplicar</button>
+    </div>
+  </form>
+  {% endif %}
+
+  {% if is_global_scope %}
+  <div class="alert alert-info">Exibindo dados de todas as clínicas.</div>
+  {% elif selected_clinic %}
+  <div class="alert alert-info">Exibindo dados da clínica <strong>{{ selected_clinic.nome }}</strong>.</div>
+  {% else %}
+  <div class="alert alert-warning">Nenhuma clínica foi selecionada. Ajuste os filtros para visualizar dados.</div>
+  {% endif %}
+
   <h4 class="mt-4">Resumo por Cliente</h4>
   <table class="table">
     <thead>
@@ -41,19 +76,26 @@
     </tbody>
   </table>
 
-  <h4 class="mt-4">Orçamentos da Clínica</h4>
+  <h4 class="mt-4">Orçamentos {% if is_global_scope %}por Clínica{% else %}da Clínica{% endif %}</h4>
   <table class="table">
     <thead>
-      <tr><th>Descrição</th><th>Total</th></tr>
+      <tr>
+        <th>Descrição</th>
+        {% if is_global_scope %}<th>Clínica</th>{% endif %}
+        <th>Total</th>
+      </tr>
     </thead>
     <tbody>
       {% for o in orcamentos %}
       <tr>
         <td>{{ o.descricao }}</td>
+        {% if is_global_scope %}<td>{{ o.clinica }}</td>{% endif %}
         <td>{{ '%.2f'|format(o.total) }}</td>
       </tr>
       {% else %}
-      <tr><td colspan="2">Nenhum orçamento encontrado.</td></tr>
+      <tr>
+        <td colspan="{% if is_global_scope %}3{% else %}2{% endif %}">Nenhum orçamento encontrado.</td>
+      </tr>
       {% endfor %}
     </tbody>
   </table>
