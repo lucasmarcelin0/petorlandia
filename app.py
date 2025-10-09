@@ -10292,6 +10292,8 @@ def api_my_appointments():
         'clinic_ids': [],
     }
 
+    is_vet = is_veterinarian(current_user)
+
     if current_user.role == 'admin':
         def _coerce_first_int(values):
             if values is None:
