@@ -4345,15 +4345,22 @@ def tutores():
 
     # Criação de novo tutor
     if request.method == 'POST':
+        wants_json = 'application/json' in request.headers.get('Accept', '')
         name = request.form.get('tutor_name') or request.form.get('name')
         email = request.form.get('tutor_email') or request.form.get('email')
 
         if not name or not email:
-            flash('Nome e e‑mail são obrigatórios.', 'warning')
+            message = 'Nome e e‑mail são obrigatórios.'
+            if wants_json:
+                return jsonify(success=False, message=message, category='warning')
+            flash(message, 'warning')
             return redirect(url_for('tutores'))
 
         if User.query.filter_by(email=email).first():
-            flash('Já existe um tutor com esse e‑mail.', 'warning')
+            message = 'Já existe um tutor com esse e‑mail.'
+            if wants_json:
+                return jsonify(success=False, message=message, category='warning')
+            flash(message, 'warning')
             return redirect(url_for('tutores'))
 
         novo = User(
@@ -4378,7 +4385,10 @@ def tutores():
             try:
                 novo.date_of_birth = datetime.strptime(date_str.strip(), '%Y-%m-%d').date()
             except ValueError:
-                flash('Data de nascimento inválida. Use o formato AAAA-MM-DD.', 'danger')
+                message = 'Data de nascimento inválida. Use o formato AAAA-MM-DD.'
+                if wants_json:
+                    return jsonify(success=False, message=message, category='danger')
+                flash(message, 'danger')
                 return redirect(url_for('tutores'))
 
         # Endereço
