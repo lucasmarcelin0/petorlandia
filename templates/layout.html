@@ -855,29 +855,100 @@
     });
   </script>
   <script>
+    const escapeHtml = (str) => {
+      const div = document.createElement('div');
+      div.textContent = str;
+      return div.innerHTML;
+    };
+
     document.addEventListener('DOMContentLoaded', () => {
       document.querySelectorAll('.js-msg-form').forEach(form => {
         form.addEventListener('submit', async ev => {
           ev.preventDefault();
+          const textarea = form.querySelector('textarea');
+          const rawContent = textarea ? textarea.value : '';
+          const content = rawContent.trim();
+          if (!content) {
+            return;
+          }
+
+          const submitBtn = form.querySelector('button[type="submit"]');
+          if (submitBtn) {
+            submitBtn.disabled = true;
+          }
+
           const api = form.dataset.api || form.action;
           const formData = new FormData(form);
-          const resp = await fetchOrQueue(api, {
-            method: 'POST',
-            body: formData,
-            headers: { 'Accept': 'text/html' }
-          });
+          if (textarea && textarea.name) {
+            formData.set(textarea.name, content);
+          }
+
+          let placeholder = null;
+          const container = document.getElementById('mensagens-container');
+          if (container) {
+            placeholder = document.createElement('div');
+            placeholder.className = 'mb-2 text-end js-msg-placeholder';
+            placeholder.innerHTML = `
+              <div class="p-2 rounded bg-info-subtle position-relative">
+                <small>Você:</small><br>
+                ${escapeHtml(content).replace(/\n/g, '<br>')}
+                <div class="text-muted small js-status">Enviando...</div>
+              </div>`;
+            container.insertAdjacentElement('beforeend', placeholder);
+            container.scrollTop = container.scrollHeight;
+          }
+
+          if (textarea) {
+            textarea.value = '';
+            textarea.dispatchEvent(new Event('input', { bubbles: true }));
+            textarea.focus();
+          }
+
+          let resp = null;
+          try {
+            resp = await fetchOrQueue(api, {
+              method: 'POST',
+              body: formData,
+              headers: { 'Accept': 'text/html' }
+            });
+          } catch (err) {
+            resp = null;
+          }
+
+          const enableButton = () => {
+            if (submitBtn) {
+              submitBtn.disabled = false;
+            }
+          };
+
           if (resp && resp.ok) {
             const html = await resp.text();
-            const container = document.getElementById('mensagens-container');
-            if (container) {
+            if (placeholder) {
+              placeholder.insertAdjacentHTML('afterend', html);
+              placeholder.remove();
+            } else if (container) {
               container.insertAdjacentHTML('beforeend', html);
               container.scrollTop = container.scrollHeight;
             }
-            const textarea = form.querySelector('textarea');
-            if (textarea) textarea.value = '';
-          } else if (resp) {
-            form.submit();
+          } else if (resp === null) {
+            if (placeholder) {
+              const status = placeholder.querySelector('.js-status');
+              if (status) {
+                status.textContent = 'Mensagem aguardando conexão...';
+              }
+              placeholder.dataset.status = 'queued';
+            }
+          } else {
+            if (placeholder) {
+              const status = placeholder.querySelector('.js-status');
+              if (status) {
+                status.textContent = 'Falha ao enviar. Tente novamente.';
+              }
+              placeholder.dataset.status = 'error';
+            }
           }
+
+          enableButton();
         });
       });
     });
