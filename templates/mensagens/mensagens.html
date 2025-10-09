@@ -130,8 +130,9 @@
 {% endif %}
 <h2>Minhas Mensagens Recebidas 📥</h2>
 
+<div id="messages-thread-container">
 {% if mensagens %}
-    <ul class="list-group mt-4">
+    <ul class="list-group mt-4" data-thread-list>
         {% set shown_keys = [] %}
         {% for msg in mensagens %}
             {% set key = msg.sender.id ~ "-" ~ (msg.animal.id if msg.animal else 'admin') %}
@@ -180,9 +181,153 @@
 {% else %}
     <p>Você ainda não recebeu mensagens.</p>
 {% endif %}
+</div>
+<div id="messages-thread-warning" class="alert alert-warning small mt-3 d-none" role="status" aria-live="polite">
+    Não foi possível atualizar as mensagens automaticamente. Mostramos as informações mais recentes carregadas.
+</div>
 
 <div class="mt-5 p-3 bg-light rounded text-center">
     <p class="mb-3">Vamos construir isso juntos! Caso tenha críticas, sugestões ou qualquer problema, fale diretamente com o administrador.</p>
     <a href="{{ url_for('conversa_admin') }}" class="btn btn-info">Falar com o Admin</a>
 </div>
+{% endblock %}
+
+{% block scripts %}
+{{ super() }}
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+    const container = document.getElementById('messages-thread-container');
+    if (!container) {
+        return;
+    }
+
+    const warning = document.getElementById('messages-thread-warning');
+    const endpoint = '{{ url_for('api_message_threads') }}';
+    const refreshInterval = 30000;
+
+    const formatDate = (isoString) => {
+        if (!isoString) {
+            return '';
+        }
+        const parsedDate = new Date(isoString);
+        if (Number.isNaN(parsedDate.getTime())) {
+            return '';
+        }
+        return new Intl.DateTimeFormat('pt-BR', {
+            day: '2-digit',
+            month: '2-digit',
+            year: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit',
+        }).format(parsedDate);
+    };
+
+    const buildThreadItem = (thread) => {
+        const listItem = document.createElement('li');
+        listItem.className = 'list-group-item d-flex justify-content-between align-items-center';
+
+        const infoWrapper = document.createElement('div');
+        infoWrapper.className = 'd-flex align-items-center';
+
+        if (thread.sender && thread.sender.profile_photo) {
+            const avatar = document.createElement('img');
+            avatar.src = thread.sender.profile_photo;
+            avatar.alt = 'Foto';
+            avatar.width = 50;
+            avatar.height = 50;
+            avatar.className = 'avatar me-3';
+            infoWrapper.appendChild(avatar);
+        } else {
+            const fallback = document.createElement('div');
+            fallback.className = 'rounded-circle bg-secondary me-3 d-flex justify-content-center align-items-center';
+            fallback.style.width = '50px';
+            fallback.style.height = '50px';
+            fallback.style.color = 'white';
+            fallback.textContent = thread.sender && thread.sender.initials ? thread.sender.initials : '?';
+            infoWrapper.appendChild(fallback);
+        }
+
+        const details = document.createElement('div');
+
+        const senderName = document.createElement('strong');
+        senderName.textContent = thread.sender ? thread.sender.name : 'Usuário';
+        details.appendChild(senderName);
+        details.appendChild(document.createElement('br'));
+
+        const conversationType = document.createElement('small');
+        conversationType.className = 'text-muted';
+        if (thread.animal) {
+            conversationType.textContent = `Sobre o animal: ${thread.animal.name}`;
+        } else {
+            conversationType.textContent = 'Conversa geral';
+        }
+        details.appendChild(conversationType);
+        details.appendChild(document.createElement('br'));
+
+        const timestamp = document.createElement('small');
+        timestamp.className = 'text-muted';
+        timestamp.textContent = formatDate(thread.last_message_at);
+        details.appendChild(timestamp);
+
+        infoWrapper.appendChild(details);
+
+        const actionLink = document.createElement('a');
+        actionLink.href = thread.conversation_url;
+        actionLink.className = 'btn btn-outline-primary btn-sm';
+        actionLink.appendChild(document.createTextNode('Ver Conversa'));
+
+        if (thread.unread_count > 0) {
+            const badge = document.createElement('span');
+            badge.className = 'badge bg-danger ms-2';
+            badge.textContent = thread.unread_count;
+            actionLink.appendChild(badge);
+        }
+
+        listItem.appendChild(infoWrapper);
+        listItem.appendChild(actionLink);
+
+        return listItem;
+    };
+
+    const renderThreads = (threads) => {
+        if (!Array.isArray(threads) || threads.length === 0) {
+            container.innerHTML = '<p>Você ainda não recebeu mensagens.</p>';
+            return;
+        }
+
+        const list = document.createElement('ul');
+        list.className = 'list-group mt-4';
+        list.setAttribute('data-thread-list', '');
+
+        threads.forEach((thread) => {
+            list.appendChild(buildThreadItem(thread));
+        });
+
+        container.innerHTML = '';
+        container.appendChild(list);
+    };
+
+    const loadThreads = async () => {
+        try {
+            const response = await fetch(endpoint, { headers: { Accept: 'application/json' } });
+            if (!response.ok) {
+                throw new Error('Request failed');
+            }
+            const payload = await response.json();
+            renderThreads(payload.threads || []);
+            if (warning) {
+                warning.classList.add('d-none');
+            }
+        } catch (error) {
+            if (warning) {
+                warning.classList.remove('d-none');
+            }
+        }
+    };
+
+    loadThreads();
+    const intervalId = window.setInterval(loadThreads, refreshInterval);
+    window.addEventListener('beforeunload', () => window.clearInterval(intervalId));
+});
+</script>
 {% endblock %}

@@ -519,12 +519,21 @@ def _build_vet_invites_context(response_form=None, vet_profile_form=None):
     }
 
 
+def _get_inbox_messages():
+    """Return received messages with sender information for current user."""
+    mensagens = [
+        m
+        for m in current_user.received_messages
+        if m.sender is not None
+    ]
+    mensagens.sort(key=lambda msg: msg.timestamp or datetime.min, reverse=True)
+    return mensagens
+
+
 def _render_messages_page(mensagens=None, **extra_context):
     """Render the messages page with optional overrides for clinic invites."""
     if mensagens is None:
-        mensagens = [
-            m for m in current_user.received_messages if m.sender is not None
-        ]
+        mensagens = _get_inbox_messages()
 
     context_overrides = extra_context.copy()
     response_form = context_overrides.pop("clinic_invite_form", None)
@@ -538,6 +547,67 @@ def _render_messages_page(mensagens=None, **extra_context):
     clinic_invite_context["mensagens"] = mensagens
 
     return render_template("mensagens/mensagens.html", **clinic_invite_context)
+
+
+def _serialize_message_threads(mensagens):
+    """Aggregate messages into conversation threads for the authenticated user."""
+    threads = {}
+
+    for mensagem in mensagens:
+        key = (mensagem.sender_id, mensagem.animal_id or None)
+        last_timestamp = mensagem.timestamp or datetime.min
+
+        thread = threads.get(key)
+        if thread is None or last_timestamp > thread["last_message_dt"]:
+            if mensagem.animal is not None:
+                conversation_url = url_for(
+                    "conversa", animal_id=mensagem.animal_id, user_id=mensagem.sender_id
+                )
+                animal_payload = {
+                    "id": mensagem.animal_id,
+                    "name": mensagem.animal.name,
+                }
+            else:
+                if current_user.role == "admin":
+                    conversation_url = url_for("conversa_admin", user_id=mensagem.sender_id)
+                else:
+                    conversation_url = url_for("conversa_admin", user_id=mensagem.sender_id)
+                animal_payload = None
+
+            sender_name = mensagem.sender.name or "Usuário"
+            sender_initial = sender_name.strip()[:1].upper() if sender_name.strip() else "?"
+
+            thread = {
+                "id": f"{mensagem.sender_id}-{mensagem.animal_id or 'admin'}",
+                "sender": {
+                    "id": mensagem.sender_id,
+                    "name": sender_name,
+                    "profile_photo": mensagem.sender.profile_photo,
+                    "initials": sender_initial,
+                },
+                "animal": animal_payload,
+                "last_message_dt": last_timestamp,
+                "last_message_at": last_timestamp.isoformat(),
+                "unread_count": 0,
+                "conversation_url": conversation_url,
+            }
+            threads[key] = thread
+        else:
+            if last_timestamp > thread["last_message_dt"]:
+                thread["last_message_dt"] = last_timestamp
+                thread["last_message_at"] = last_timestamp.isoformat()
+
+        if not mensagem.lida:
+            threads[key]["unread_count"] += 1
+
+    sorted_threads = sorted(
+        threads.values(), key=lambda thread: thread["last_message_dt"], reverse=True
+    )
+
+    for thread in sorted_threads:
+        thread.pop("last_message_dt", None)
+
+    return sorted_threads
 
 
 def _ensure_veterinarian_profile(form=None):
@@ -1565,6 +1635,15 @@ def aceitar_interesse(message_id):
 @login_required
 def mensagens():
     return _render_messages_page()
+
+
+@app.route('/api/messages/threads')
+@login_required
+def api_message_threads():
+    """Return aggregated conversation threads for the authenticated user."""
+    mensagens = _get_inbox_messages()
+    threads = _serialize_message_threads(mensagens)
+    return jsonify({"threads": threads})
 
 
 @app.route('/chat/<int:animal_id>', methods=['GET', 'POST'])
