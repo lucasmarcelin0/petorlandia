@@ -140,6 +140,7 @@ class EditProfileForm(FlaskForm):
     email = StringField('E-mail', validators=[DataRequired(), Email()])
     phone = StringField('Telefone', validators=[Optional(), Length(max=20)])
     address = StringField('Endereço', validators=[Optional(), Length(max=200)])
+    is_private = BooleanField('Manter perfil privado', default=True)
     profile_photo = FileField('Foto de Perfil', validators=[
     Optional(),
     FileAllowed(['jpg', 'jpeg', 'png', 'gif'], 'Somente imagens!')

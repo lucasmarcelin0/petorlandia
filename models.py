@@ -173,6 +173,7 @@ class User(UserMixin, db.Model):
 
     clinica_id = db.Column(db.Integer, db.ForeignKey('clinica.id'), nullable=True)
     clinica = db.relationship('Clinica', backref='usuarios', foreign_keys=[clinica_id])
+    is_private = db.Column(db.Boolean, nullable=False, default=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
 
