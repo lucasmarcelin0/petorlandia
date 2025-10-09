@@ -1,0 +1,67 @@
+{% extends "layout.html" %}
+{% block main %}
+<div class="container py-4">
+  <h1 class="mb-4">Assinatura de Veterinário</h1>
+
+  {% if status == 'success' %}
+    <div class="alert alert-success">Pagamento confirmado! Sua assinatura será atualizada em instantes.</div>
+  {% elif status == 'pending' %}
+    <div class="alert alert-info">Pagamento em análise. Assim que for aprovado você terá acesso completo.</div>
+  {% elif status == 'failure' %}
+    <div class="alert alert-danger">O pagamento não foi concluído. Tente novamente ou escolha outra forma de pagamento.</div>
+  {% endif %}
+
+  {% if membership %}
+    <div class="card mb-4">
+      <div class="card-body">
+        <h2 class="h5">Status atual</h2>
+        <dl class="row mb-0">
+          <dt class="col-sm-4">Veterinário desde</dt>
+          <dd class="col-sm-8">{{ membership.started_at|format_datetime_brazil('%d/%m/%Y %H:%M') }}</dd>
+
+          <dt class="col-sm-4">Fim do período de avaliação</dt>
+          <dd class="col-sm-8">{{ membership.trial_ends_at|format_datetime_brazil('%d/%m/%Y %H:%M') }}</dd>
+
+          <dt class="col-sm-4">Próxima cobrança</dt>
+          <dd class="col-sm-8">
+            {% if membership.paid_until %}
+              {{ membership.paid_until|format_datetime_brazil('%d/%m/%Y %H:%M') }}
+            {% else %}
+              <span class="text-muted">Nenhum pagamento registrado</span>
+            {% endif %}
+          </dd>
+        </dl>
+
+        {% if membership.is_trial_active() %}
+          <div class="alert alert-info mt-3">
+            <strong>Período de teste ativo.</strong> {{ membership.remaining_trial_days() }} dia(s) restante(s) antes da necessidade de pagamento.
+          </div>
+        {% elif membership.has_valid_payment() %}
+          <div class="alert alert-success mt-3">
+            Assinatura ativa até {{ membership.paid_until|format_datetime_brazil('%d/%m/%Y') }}.
+          </div>
+        {% else %}
+          <div class="alert alert-warning mt-3">
+            Sua assinatura está inativa. Efetue o pagamento para continuar utilizando as ferramentas de veterinário.
+          </div>
+        {% endif %}
+      </div>
+    </div>
+  {% endif %}
+
+  <div class="card">
+    <div class="card-body">
+      <h2 class="h5">Ativar ou renovar assinatura</h2>
+      <p class="mb-3">
+        Valor da assinatura: <strong>R$ {{ '%.2f'|format(price) }}</strong> por {{ trial_days }} dias.
+      </p>
+      <form method="post" action="{{ url_for('veterinarian_membership_checkout') }}">
+        {{ checkout_form.hidden_tag() }}
+        <button type="submit" class="btn btn-primary">
+          <i class="bi bi-cash-coin me-1"></i> Pagar com Mercado Pago
+        </button>
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}

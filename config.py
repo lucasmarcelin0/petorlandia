@@ -52,3 +52,11 @@ class Config:
         os.environ.get("EXAM_CONFIRM_DEFAULT_HOURS", "2")
     )
 
+    VETERINARIAN_TRIAL_DAYS = int(os.environ.get("VETERINARIAN_TRIAL_DAYS", "30"))
+    VETERINARIAN_MEMBERSHIP_PRICE = float(
+        os.environ.get("VETERINARIAN_MEMBERSHIP_PRICE", "199.90")
+    )
+    VETERINARIAN_MEMBERSHIP_BILLING_DAYS = int(
+        os.environ.get("VETERINARIAN_MEMBERSHIP_BILLING_DAYS", "30")
+    )
+

@@ -351,6 +351,24 @@ class InventoryItemForm(FlaskForm):
     submit = SubmitField('Adicionar')
 
 
+class VeterinarianPromotionForm(FlaskForm):
+    crmv = StringField(
+        'CRMV',
+        validators=[DataRequired(), Length(max=20)],
+        filters=[_strip_filter],
+    )
+    phone = StringField(
+        'Telefone profissional',
+        validators=[Optional(), Length(max=20)],
+        filters=[_strip_filter],
+    )
+    submit = SubmitField('Promover a Veterinário')
+
+
+class VeterinarianMembershipCheckoutForm(FlaskForm):
+    submit = SubmitField('Ativar assinatura')
+
+
 class VetScheduleForm(FlaskForm):
     veterinario_id = SelectField(
         'Veterinário',

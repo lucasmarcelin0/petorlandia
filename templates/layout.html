@@ -465,7 +465,7 @@
                                 </li>
                             {% endif %}
 
-                            {% if current_user.worker == 'veterinario' %}
+                            {% if is_active_veterinarian %}
                                 <li class="nav-item position-relative">
                                     <a class="nav-link" href="{{ url_for('appointments') }}">
                                         <i class="fas fa-calendar-alt me-1 text-success"></i> Agenda
@@ -508,7 +508,10 @@
                                 {% if current_user.veterinario or (current_user.clinica and current_user.worker == 'colaborador') %}
                                 <li><a class="dropdown-item" href="{{ url_for('minha_clinica') }}"><i class="fas fa-clinic-medical me-2 text-info"></i> Minha Clínica</a></li>
                                 {% endif %}
-                
+                                {% if has_veterinarian_profile_flag %}
+                                <li><a class="dropdown-item" href="{{ url_for('veterinarian_membership') }}"><i class="fas fa-credit-card me-2 text-success"></i> Assinatura de Veterinário</a></li>
+                                {% endif %}
+
                                 <li><a class="dropdown-item" href="{{ url_for('logout') }}"><i class="fas fa-sign-out-alt me-2 text-danger"></i> Sair</a></li>
                             </ul>
                         </li>

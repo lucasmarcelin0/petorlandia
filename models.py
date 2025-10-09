@@ -13,7 +13,7 @@ import enum
 from sqlalchemy import Enum, event
 from enum import Enum
 from sqlalchemy import Enum as PgEnum
-from sqlalchemy.orm import synonym
+from sqlalchemy.orm import synonym, object_session
 
 
 
@@ -738,6 +738,58 @@ class Veterinario(db.Model):
         return f"{self.user.name} (CRMV: {self.crmv})"
 
 
+class VeterinarianMembership(db.Model):
+    __tablename__ = 'veterinarian_membership'
+
+    id = db.Column(db.Integer, primary_key=True)
+    veterinario_id = db.Column(
+        db.Integer,
+        db.ForeignKey('veterinario.id', ondelete='CASCADE'),
+        nullable=False,
+        unique=True,
+    )
+    started_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    trial_ends_at = db.Column(db.DateTime, nullable=False)
+    paid_until = db.Column(db.DateTime, nullable=True)
+    last_payment_id = db.Column(db.Integer, db.ForeignKey('payment.id'), nullable=True)
+
+    veterinario = db.relationship(
+        'Veterinario',
+        backref=db.backref('membership', cascade='all, delete-orphan', uselist=False),
+    )
+    last_payment = db.relationship('Payment', foreign_keys=[last_payment_id])
+
+    def _now(self):
+        return datetime.utcnow()
+
+    def ensure_trial_dates(self, trial_days: int = 30) -> None:
+        """Guarantee that ``started_at`` and ``trial_ends_at`` are populated."""
+
+        if self.started_at is None:
+            self.started_at = self._now()
+        if self.trial_ends_at is None:
+            self.trial_ends_at = self.started_at + timedelta(days=trial_days)
+
+    def is_trial_active(self) -> bool:
+        if not self.trial_ends_at:
+            return False
+        return self._now() <= self.trial_ends_at
+
+    def has_valid_payment(self) -> bool:
+        if not self.paid_until:
+            return False
+        return self._now() <= self.paid_until
+
+    def is_active(self) -> bool:
+        return self.is_trial_active() or self.has_valid_payment()
+
+    def remaining_trial_days(self) -> int:
+        if not self.trial_ends_at:
+            return 0
+        delta = self.trial_ends_at - self._now()
+        return max(delta.days, 0)
+
+
 class VetSchedule(db.Model):
     __tablename__ = 'vet_schedule'
     id = db.Column(db.Integer, primary_key=True)
@@ -836,6 +888,27 @@ event.listen(Appointment, 'before_insert', Appointment._validate_subscription)
 event.listen(Appointment, 'before_update', Appointment._validate_subscription)
 event.listen(Appointment, 'before_insert', Appointment._set_clinica)
 event.listen(Appointment, 'before_update', Appointment._set_clinica)
+
+
+def _create_veterinarian_membership(mapper, connection, target):
+    """Ensure every veterinarian profile starts with a membership record."""
+
+    trial_days = current_app.config.get('VETERINARIAN_TRIAL_DAYS', 30)
+    session = object_session(target) or db.session
+
+    membership = getattr(target, 'membership', None)
+    if membership is None:
+        membership = VeterinarianMembership(
+            veterinario_id=target.id,
+            started_at=datetime.utcnow(),
+            trial_ends_at=datetime.utcnow() + timedelta(days=trial_days),
+        )
+        session.add(membership)
+    else:
+        membership.ensure_trial_dates(trial_days)
+
+
+event.listen(Veterinario, 'after_insert', _create_veterinarian_membership, propagate=True)
 
 # Agendamento de exames
 class ExamAppointment(db.Model):
@@ -1316,7 +1389,7 @@ class Payment(db.Model):
     )
 
     id       = db.Column(db.Integer, primary_key=True)
-    order_id = db.Column(db.Integer, db.ForeignKey("order.id"), nullable=False)
+    order_id = db.Column(db.Integer, db.ForeignKey("order.id"), nullable=True)
 
     # ✅ fica só esta definição
     order = db.relationship(

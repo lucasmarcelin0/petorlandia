@@ -262,34 +262,64 @@ def payment_status_label(value):
 # 6)  Forms e helpers
 # ----------------------------------------------------------------
 from forms import (
-    MessageForm, RegistrationForm, LoginForm, AnimalForm, EditProfileForm,
-    ResetPasswordRequestForm, ResetPasswordForm, OrderItemForm,
-    DeliveryRequestForm, AddToCartForm, SubscribePlanForm,
-    ProductUpdateForm, ProductPhotoForm, ChangePasswordForm,
-    DeleteAccountForm, ClinicForm, ClinicHoursForm,
-    ClinicInviteVeterinarianForm, ClinicInviteCancelForm, ClinicInviteResendForm, ClinicInviteResponseForm,
+    AddToCartForm,
+    AnimalForm,
+    AppointmentDeleteForm,
+    AppointmentForm,
+    CartAddressForm,
+    ChangePasswordForm,
+    ClinicAddSpecialistForm,
+    ClinicAddStaffForm,
+    ClinicForm,
+    ClinicHoursForm,
+    ClinicInviteCancelForm,
+    ClinicInviteResendForm,
+    ClinicInviteResponseForm,
+    ClinicInviteVeterinarianForm,
+    ClinicStaffPermissionForm,
+    DeleteAccountForm,
+    DeliveryRequestForm,
+    EditProfileForm,
+    InventoryItemForm,
+    LoginForm,
+    MessageForm,
+    OrcamentoForm,
+    OrderItemForm,
+    ProductPhotoForm,
+    ProductUpdateForm,
+    RegistrationForm,
+    ResetPasswordForm,
+    ResetPasswordRequestForm,
+    SubscribePlanForm,
+    VetScheduleForm,
+    VetSpecialtyForm,
+    VeterinarianMembershipCheckoutForm,
     VeterinarianProfileForm,
-    ClinicAddStaffForm, ClinicAddSpecialistForm, ClinicStaffPermissionForm, VetScheduleForm, VetSpecialtyForm, AppointmentForm, AppointmentDeleteForm,
-    InventoryItemForm, OrcamentoForm
+    VeterinarianPromotionForm,
 )
 from helpers import (
-    calcular_idade,
-    parse_data_nascimento,
-    is_slot_available,
-    clinicas_do_usuario,
-    has_schedule_conflict,
-    group_appointments_by_day,
-    group_vet_schedules_by_day,
     appointments_to_events,
-    exam_to_event,
-    vaccine_to_event,
+    calcular_idade,
+    clinicas_do_usuario,
     consulta_to_event,
-    unique_items_by_id,
-    to_timezone_aware,
+    ensure_veterinarian_membership,
+    exam_to_event,
+    get_appointment_duration,
     get_available_times,
     get_weekly_schedule,
-    get_appointment_duration,
+    grant_veterinarian_role,
+    group_appointments_by_day,
+    group_vet_schedules_by_day,
     has_conflict_for_slot,
+    has_schedule_conflict,
+    has_veterinarian_profile,
+    is_slot_available,
+    is_veterinarian,
+    parse_data_nascimento,
+    to_timezone_aware,
+    unique_items_by_id,
+    vaccine_to_event,
+    veterinarian_required,
 )
 from services import get_calendar_access_scope
 
@@ -298,8 +328,8 @@ def current_user_clinic_id():
     """Return the clinic ID associated with the current user, if any."""
     if not current_user.is_authenticated:
         return None
-    if current_user.worker == 'veterinario' and getattr(current_user, 'veterinario', None):
-        return current_user.veterinario.clinica_id
+    if has_veterinarian_profile(current_user):
+        return getattr(current_user.veterinario, 'clinica_id', None)
     return current_user.clinica_id
 
 
@@ -512,15 +542,178 @@ def _render_messages_page(mensagens=None, **extra_context):
 
 def _ensure_veterinarian_profile(form=None):
     """Return veterinarian profile or render guidance message when missing."""
-    worker = getattr(current_user, "worker", None)
-    if worker != "veterinario":
+    if not has_veterinarian_profile(current_user):
         abort(403)
 
-    vet_profile = getattr(current_user, "veterinario", None)
+    vet_profile = current_user.veterinario
     if vet_profile is None:
         return None, _render_missing_vet_profile(form=form)
 
+    membership = ensure_veterinarian_membership(vet_profile)
+    if membership and not membership.is_active():
+        flash('Sua assinatura de veterinário está inativa. Regularize para continuar.', 'warning')
+        return None, redirect(url_for('veterinarian_membership'))
+
     return vet_profile, None
+
+
+def _resolve_membership_from_payment(payment):
+    external = getattr(payment, 'external_reference', '') or ''
+    match = re.match(r'vet-membership-(\d+)', external)
+    if not match:
+        return None
+    membership_id = int(match.group(1))
+    return VeterinarianMembership.query.get(membership_id)
+
+
+def _sync_veterinarian_membership_payment(payment):
+    membership = _resolve_membership_from_payment(payment)
+    if not membership:
+        return
+
+    membership.last_payment_id = payment.id
+    if payment.status == PaymentStatus.COMPLETED:
+        cycle_days = current_app.config.get('VETERINARIAN_MEMBERSHIP_BILLING_DAYS', 30)
+        now = datetime.utcnow()
+        start_from = membership.paid_until if membership.paid_until and membership.paid_until > now else now
+        membership.paid_until = start_from + timedelta(days=cycle_days)
+        membership.ensure_trial_dates(current_app.config.get('VETERINARIAN_TRIAL_DAYS', 30))
+    db.session.add(membership)
+
+
+@app.route('/veterinario/assinatura')
+@login_required
+def veterinarian_membership():
+    if not has_veterinarian_profile(current_user):
+        abort(403)
+
+    membership = ensure_veterinarian_membership(current_user.veterinario)
+
+    payment = None
+    status = request.args.get('status')
+    payment_id = request.args.get('payment_id', type=int)
+    if payment_id:
+        payment = Payment.query.get(payment_id)
+        if not payment or payment.user_id != current_user.id:
+            payment = None
+        elif payment.status == PaymentStatus.PENDING and payment.mercado_pago_id:
+            _refresh_mp_status(payment)
+
+    checkout_form = VeterinarianMembershipCheckoutForm()
+    price = Decimal(str(current_app.config.get('VETERINARIAN_MEMBERSHIP_PRICE', 199.90)))
+    trial_days = current_app.config.get('VETERINARIAN_TRIAL_DAYS', 30)
+
+    return render_template(
+        'veterinarios/membership.html',
+        membership=membership,
+        checkout_form=checkout_form,
+        price=price,
+        trial_days=trial_days,
+        payment=payment,
+        status=status,
+    )
+
+
+@app.route('/veterinario/assinatura/checkout', methods=['POST'])
+@login_required
+def veterinarian_membership_checkout():
+    if not has_veterinarian_profile(current_user):
+        abort(403)
+
+    form = VeterinarianMembershipCheckoutForm()
+    if not form.validate_on_submit():
+        flash('Não foi possível iniciar a assinatura. Tente novamente.', 'danger')
+        return redirect(url_for('veterinarian_membership'))
+
+    membership = ensure_veterinarian_membership(current_user.veterinario)
+    trial_days = current_app.config.get('VETERINARIAN_TRIAL_DAYS', 30)
+    if membership:
+        membership.ensure_trial_dates(trial_days)
+
+    price = Decimal(str(current_app.config.get('VETERINARIAN_MEMBERSHIP_PRICE', 199.90)))
+
+    payment = Payment(
+        user_id=current_user.id,
+        method=PaymentMethod.PIX,
+        status=PaymentStatus.PENDING,
+        amount=price,
+    )
+    db.session.add(payment)
+    db.session.flush()
+
+    if membership:
+        if membership.id is None:
+            db.session.flush()
+        membership.last_payment_id = payment.id
+        db.session.add(membership)
+
+    if not payment.external_reference:
+        if membership and membership.id:
+            payment.external_reference = f'vet-membership-{membership.id}-{payment.id}'
+        else:
+            payment.external_reference = f'vet-membership-temp-{payment.id}'
+
+    payer = {
+        'email': current_user.email,
+    }
+    name = (current_user.name or '').strip()
+    if name:
+        parts = name.split()
+        payer['first_name'] = parts[0]
+        payer['last_name'] = ' '.join(parts[1:]) if len(parts) > 1 else parts[0]
+    if current_user.phone:
+        digits = re.sub(r"\D", "", current_user.phone)
+        if digits:
+            payer['phone'] = {'number': digits[-9:]}
+    if current_user.cpf:
+        doc = re.sub(r"\D", "", current_user.cpf)
+        if doc:
+            payer['identification'] = {'type': 'CPF', 'number': doc}
+
+    payer = {k: v for k, v in payer.items() if v}
+
+    preference_data = {
+        'items': [
+            {
+                'id': f'vet-membership-{membership.id if membership else "novo"}',
+                'title': 'Assinatura Profissional PetOrlândia',
+                'description': 'Acesso completo às ferramentas para veterinários',
+                'category_id': 'services',
+                'quantity': 1,
+                'unit_price': float(price),
+            }
+        ],
+        'external_reference': payment.external_reference,
+        'notification_url': url_for('notificacoes_mercado_pago', _external=True),
+        'back_urls': {
+            status: url_for('veterinarian_membership', payment_id=payment.id, status=status, _external=True)
+            for status in ('success', 'failure', 'pending')
+        },
+        'auto_return': 'approved',
+        'payer': payer,
+        'statement_descriptor': current_app.config.get('MERCADOPAGO_STATEMENT_DESCRIPTOR'),
+    }
+
+    try:
+        resp = mp_sdk().preference().create(preference_data)
+    except Exception:  # noqa: BLE001
+        current_app.logger.exception('Erro de conexão com Mercado Pago para assinatura de veterinário')
+        db.session.rollback()
+        flash('Não foi possível iniciar o pagamento. Tente novamente em instantes.', 'danger')
+        return redirect(url_for('veterinarian_membership'))
+
+    if resp.get('status') != 201:
+        current_app.logger.error('MP error (HTTP %s): %s', resp.get('status'), resp)
+        db.session.rollback()
+        flash('Erro ao iniciar pagamento.', 'danger')
+        return redirect(url_for('veterinarian_membership'))
+
+    pref = resp['response']
+    payment.transaction_id = str(pref['id'])
+    payment.init_point = pref.get('init_point')
+    db.session.commit()
+
+    return redirect(pref['init_point'])
 
 # ----------------------------------------------------------------
 # 7)  Login & serializer
@@ -567,12 +760,9 @@ def inject_unread_count():
 
 @app.context_processor
 def inject_pending_exam_count():
-    if (
-        current_user.is_authenticated
-        and getattr(current_user, 'worker', None) == 'veterinario'
-        and getattr(current_user, 'veterinario', None)
-    ):
+    if current_user.is_authenticated and is_veterinarian(current_user):
         from models import ExamAppointment
+
         pending = ExamAppointment.query.filter_by(
             specialist_id=current_user.veterinario.id, status='pending'
         ).count()
@@ -586,11 +776,8 @@ def inject_pending_exam_count():
 @app.context_processor
 def inject_pending_appointment_count():
     """Expose count of upcoming appointments requiring vet action."""
-    if (
-        current_user.is_authenticated
-        and getattr(current_user, "worker", None) == "veterinario"
-        and getattr(current_user, "veterinario", None)
-    ):
+
+    if current_user.is_authenticated and is_veterinarian(current_user):
         from models import Appointment
 
         now = datetime.utcnow()
@@ -623,10 +810,8 @@ def _clinic_pending_appointments_query(veterinario):
 @app.context_processor
 def inject_clinic_pending_appointment_count():
     """Expose count of scheduled appointments in the clinic excluding the current vet."""
-    if (
-        current_user.is_authenticated
-        and getattr(current_user, "worker", None) == "veterinario"
-    ):
+
+    if current_user.is_authenticated and is_veterinarian(current_user):
         pending_query = _clinic_pending_appointments_query(
             getattr(current_user, "veterinario", None)
         )
@@ -639,12 +824,29 @@ def inject_clinic_pending_appointment_count():
 
 
 @app.context_processor
+def inject_veterinarian_membership_context():
+    if not current_user.is_authenticated:
+        return dict(
+            is_active_veterinarian=False,
+            has_veterinarian_profile_flag=False,
+            current_veterinarian_membership=None,
+        )
+
+    has_profile = has_veterinarian_profile(current_user)
+    membership = None
+    if has_profile:
+        membership = ensure_veterinarian_membership(getattr(current_user, 'veterinario', None))
+
+    return dict(
+        is_active_veterinarian=has_profile and is_veterinarian(current_user),
+        has_veterinarian_profile_flag=has_profile,
+        current_veterinarian_membership=membership,
+    )
+
+
+@app.context_processor
 def inject_clinic_invite_count():
-    if (
-        current_user.is_authenticated
-        and getattr(current_user, 'worker', None) == 'veterinario'
-        and getattr(current_user, 'veterinario', None)
-    ):
+    if current_user.is_authenticated and has_veterinarian_profile(current_user):
         from models import VetClinicInvite
 
         pending = VetClinicInvite.query.filter_by(
@@ -1143,7 +1345,12 @@ def list_animals():
         query = query.filter_by(modo=modo)
     else:
         # Evita mostrar adotados para usuários não autorizados, exceto quando o admin opta por ver todos
-        if not show_all and (not current_user.is_authenticated or current_user.worker not in ['veterinario', 'colaborador']):
+        vet_authorized = current_user.is_authenticated and is_veterinarian(current_user)
+        collaborator = (
+            current_user.is_authenticated
+            and getattr(current_user, 'worker', None) == 'colaborador'
+        )
+        if not show_all and not (vet_authorized or collaborator):
             query = query.filter(Animal.modo != 'adotado')
 
     if species_id:
@@ -1157,13 +1364,14 @@ def list_animals():
 
     # Veterinários só podem ver animais perdidos, à venda ou para adoção,
     # ou então animais cadastrados pela própria clínica
-    if current_user.is_authenticated and current_user.worker == 'veterinario' and not show_all:
+    if current_user.is_authenticated and is_veterinarian(current_user) and not show_all:
         allowed = ['perdido', 'venda', 'doação']
-        if current_user.clinica_id:
+        clinic_id = getattr(current_user.veterinario, 'clinica_id', None) or current_user.clinica_id
+        if clinic_id:
             query = query.filter(
                 or_(
                     Animal.modo.in_(allowed),
-                    Animal.clinica_id == current_user.clinica_id
+                    Animal.clinica_id == clinic_id
                 )
             )
         else:
@@ -1294,6 +1502,8 @@ def editar_animal(animal_id):
 def enviar_mensagem(animal_id):
     animal = get_animal_or_404(animal_id)
     form = MessageForm()
+    promotion_form = None
+    target_membership = None
 
     if animal.user_id == current_user.id:
         flash("Você não pode enviar mensagem para si mesmo.", "warning")
@@ -1483,6 +1693,8 @@ def conversa_admin(user_id=None):
         return redirect(url_for('mensagens'))
 
     form = MessageForm()
+    promotion_form = None
+    target_membership = None
 
     if current_user.is_authenticated and current_user.role == 'admin':
         if user_id is None:
@@ -1491,6 +1703,9 @@ def conversa_admin(user_id=None):
         interlocutor = get_user_or_404(user_id)
         admin_ids = [u.id for u in User.query.filter_by(role='admin').all()]
         participant_id = interlocutor.id
+        promotion_form = VeterinarianPromotionForm()
+        if has_veterinarian_profile(interlocutor):
+            target_membership = ensure_veterinarian_membership(interlocutor.veterinario)
     else:
         interlocutor = admin_user
         admin_ids = [u.id for u in User.query.filter_by(role='admin').all()]
@@ -1532,7 +1747,9 @@ def conversa_admin(user_id=None):
         'mensagens/conversa_admin.html',
         mensagens=mensagens,
         form=form,
-        admin=interlocutor
+        admin=interlocutor,
+        promotion_form=promotion_form,
+        target_membership=target_membership,
     )
 
 
@@ -1564,6 +1781,46 @@ def api_conversa_admin_message(user_id=None):
         db.session.commit()
         return render_template('components/message.html', msg=nova_msg)
     return '', 400
+
+
+@app.route('/admin/users/<int:user_id>/promover_veterinario', methods=['POST'])
+@login_required
+def admin_promote_veterinarian(user_id):
+    if current_user.role != 'admin':
+        abort(403)
+
+    user = User.query.get_or_404(user_id)
+    form = VeterinarianPromotionForm()
+
+    if not form.validate_on_submit():
+        for field_errors in form.errors.values():
+            for error in field_errors:
+                flash(error, 'danger')
+        return redirect(url_for('conversa_admin', user_id=user.id))
+
+    crmv = form.crmv.data
+    existing = (
+        Veterinario.query.filter(
+            func.lower(Veterinario.crmv) == crmv.lower(),
+            Veterinario.user_id != user.id,
+        ).first()
+    )
+    if existing:
+        flash('Este CRMV já está associado a outro profissional.', 'danger')
+        return redirect(url_for('conversa_admin', user_id=user.id))
+
+    vet_profile = grant_veterinarian_role(
+        user,
+        crmv=crmv,
+        phone=form.phone.data or None,
+    )
+    membership = ensure_veterinarian_membership(vet_profile)
+    if membership:
+        membership.ensure_trial_dates(current_app.config.get('VETERINARIAN_TRIAL_DAYS', 30))
+
+    db.session.commit()
+    flash('Usuário promovido a veterinário. Período de avaliação iniciado.', 'success')
+    return redirect(url_for('conversa_admin', user_id=user.id))
 
 
 @app.route('/mensagens_admin')
@@ -2213,7 +2470,7 @@ def delete_document(animal_id, doc_id):
     if not (
         current_user.role == 'admin'
         or (
-            current_user.worker == 'veterinario'
+            is_veterinarian(current_user)
             and current_user.id == documento.veterinario_id
         )
     ):
@@ -2363,7 +2620,8 @@ def consulta_qr():
 @app.route('/consulta/<int:animal_id>')
 @login_required
 def consulta_direct(animal_id):
-    if current_user.worker not in ['veterinario', 'colaborador']:
+    worker_role = getattr(current_user, 'worker', None)
+    if not (is_veterinarian(current_user) or worker_role == 'colaborador'):
         abort(403)
 
     animal = get_animal_or_404(animal_id)
@@ -2392,7 +2650,7 @@ def consulta_direct(animal_id):
     edit_mode = False
 
     consulta = None
-    if current_user.worker == 'veterinario':
+    if is_veterinarian(current_user):
         consulta_created = False
         appointment_updated = False
 
@@ -2443,7 +2701,7 @@ def consulta_direct(animal_id):
         consulta = None
 
     historico = []
-    if current_user.worker == 'veterinario':
+    if is_veterinarian(current_user):
         historico = (
             Consulta.query
             .filter_by(animal_id=animal.id, status='finalizada', clinica_id=clinica_id)
@@ -2905,11 +3163,7 @@ def _user_can_manage_clinic(clinica):
         return True
     if current_user.id == clinica.owner_id:
         return True
-    if (
-        current_user.worker == 'veterinario'
-        and getattr(current_user, 'veterinario', None)
-        and current_user.veterinario.clinica_id == clinica.id
-    ):
+    if is_veterinarian(current_user) and current_user.veterinario.clinica_id == clinica.id:
         return True
     return False
 
@@ -3692,7 +3946,7 @@ def clinic_staff(clinica_id):
                 staff = ClinicStaff(clinic_id=clinic.id, user_id=user.id)
                 db.session.add(staff)
                 user.clinica_id = clinic.id
-                if user.worker == 'veterinario' and getattr(user, 'veterinario', None):
+                if has_veterinarian_profile(user):
                     user.veterinario.clinica_id = clinic.id
                     db.session.add(user.veterinario)
                 db.session.add(user)
@@ -3756,7 +4010,7 @@ def remove_funcionario(clinica_id, user_id):
     user = User.query.get(user_id)
     if user and user.clinica_id == clinica_id:
         user.clinica_id = None
-        if user.worker == 'veterinario' and getattr(user, 'veterinario', None):
+        if has_veterinarian_profile(user):
             user.veterinario.clinica_id = None
             db.session.add(user.veterinario)
         db.session.add(user)
@@ -3770,8 +4024,7 @@ def remove_funcionario(clinica_id, user_id):
 def delete_clinic_hour(clinica_id, horario_id):
     clinica = Clinica.query.get_or_404(clinica_id)
     pode_editar = _is_admin() or (
-        current_user.worker == 'veterinario'
-        and getattr(current_user, 'veterinario', None)
+        is_veterinarian(current_user)
         and current_user.veterinario.clinica_id == clinica_id
     ) or current_user.id == clinica.owner_id
     if not pode_editar:
@@ -4029,7 +4282,7 @@ def vet_detail(veterinario_id):
 def edit_vet_specialties(veterinario_id):
     # Apenas o próprio veterinário ou um administrador pode alterar especialidades
     is_owner = (
-        current_user.worker == 'veterinario'
+        is_veterinarian(current_user)
         and current_user.veterinario
         and current_user.veterinario.id == veterinario_id
     )
@@ -7778,6 +8031,9 @@ def notificacoes_mercado_pago():
             pay.status = status_map.get(status, PaymentStatus.PENDING)
             pay.mercado_pago_id = mp_id
 
+            if pay.external_reference and pay.external_reference.startswith('vet-membership-'):
+                _sync_veterinarian_membership_payment(pay)
+
             if pay.status == PaymentStatus.COMPLETED and pay.order_id:
                 if not DeliveryRequest.query.filter_by(order_id=pay.order_id).first():
                     db.session.add(DeliveryRequest(
@@ -7874,6 +8130,8 @@ def _refresh_mp_status(payment: Payment) -> None:
     new_status = mapping.get(mp["status"], PaymentStatus.PENDING)
     if new_status != payment.status:
         payment.status = new_status
+        if payment.external_reference and payment.external_reference.startswith('vet-membership-'):
+            _sync_veterinarian_membership_payment(payment)
         db.session.commit()
 
 
@@ -8134,7 +8392,10 @@ def appointments():
     from models import ExamAppointment, Veterinario, Clinica, User
 
     view_as = request.args.get('view_as')
-    worker = current_user.worker
+    worker = getattr(current_user, 'worker', None)
+    is_vet = is_veterinarian(current_user)
+    if worker == 'veterinario' and not is_vet:
+        worker = 'tutor'
     calendar_access_scope = get_calendar_access_scope(current_user)
 
     def _redirect_to_current_appointments():
@@ -8186,7 +8447,7 @@ def appointments():
 
     if request.method == 'POST' and worker not in ['veterinario', 'colaborador', 'admin']:
         abort(403)
-    if worker == 'veterinario':
+    if worker == 'veterinario' and is_vet:
         if current_user.role == 'admin':
             veterinario_id_arg = request.args.get(
                 'veterinario_id', type=int
@@ -9192,8 +9453,7 @@ def edit_vet_schedule_slot(veterinario_id, horario_id):
     if not (
         _is_admin()
         or (
-            current_user.worker == 'veterinario'
-            and getattr(current_user, 'veterinario', None)
+            is_veterinarian(current_user)
             and current_user.veterinario.id == veterinario_id
         )
     ):
@@ -9405,8 +9665,7 @@ def bulk_delete_vet_schedule(veterinario_id):
     if not (
         _is_admin()
         or (
-            current_user.worker == 'veterinario'
-            and getattr(current_user, 'veterinario', None)
+            is_veterinarian(current_user)
             and current_user.veterinario.id == veterinario_id
         )
     ):
@@ -9487,8 +9746,7 @@ def delete_vet_schedule(veterinario_id, horario_id):
     if not (
         _is_admin()
         or (
-            current_user.worker == 'veterinario'
-            and getattr(current_user, 'veterinario', None)
+            is_veterinarian(current_user)
             and current_user.veterinario.id == veterinario_id
         )
     ):
@@ -9511,14 +9769,16 @@ def pending_appointments():
 @app.route('/appointments/manage')
 @login_required
 def manage_appointments():
-    if current_user.role != 'admin' and current_user.worker not in ['veterinario', 'colaborador']:
+    is_vet = is_veterinarian(current_user)
+    is_collaborator = getattr(current_user, 'worker', None) == 'colaborador'
+    if current_user.role != 'admin' and not (is_vet or is_collaborator):
         flash('Acesso restrito.', 'danger')
         return redirect(url_for('index'))
     query = Appointment.query.order_by(Appointment.scheduled_at)
     if current_user.role != 'admin':
-        if current_user.worker == 'veterinario':
+        if is_vet:
             query = query.filter_by(clinica_id=current_user.veterinario.clinica_id)
-        elif current_user.worker == 'colaborador':
+        elif is_collaborator:
             query = query.filter_by(clinica_id=current_user.clinica_id)
     appointments = query.all()
     delete_form = AppointmentDeleteForm()
@@ -9529,8 +9789,10 @@ def manage_appointments():
 @login_required
 def edit_appointment(appointment_id):
     appointment = Appointment.query.get_or_404(appointment_id)
-    if current_user.worker in ['veterinario', 'colaborador']:
-        if current_user.worker == 'veterinario':
+    is_vet = is_veterinarian(current_user)
+    is_collaborator = getattr(current_user, 'worker', None) == 'colaborador'
+    if is_vet or is_collaborator:
+        if is_vet:
             user_clinic = current_user.veterinario.clinica_id
         else:
             user_clinic = current_user.clinica_id
@@ -9610,14 +9872,17 @@ def update_appointment_status(appointment_id):
     """Update the status of an appointment."""
     appointment = Appointment.query.get_or_404(appointment_id)
 
+    is_vet = is_veterinarian(current_user)
+    is_collaborator = getattr(current_user, 'worker', None) == 'colaborador'
+
     if current_user.role == 'admin':
         pass
-    elif current_user.worker in ['veterinario', 'colaborador']:
+    elif is_vet or is_collaborator:
         appointment_clinic = appointment.clinica_id
         if appointment_clinic is None and appointment.veterinario:
             appointment_clinic = appointment.veterinario.clinica_id
 
-        if current_user.worker == 'veterinario':
+        if is_vet:
             veterinario = getattr(current_user, 'veterinario', None)
             vet_id = getattr(veterinario, 'id', None)
             if not (vet_id and appointment.veterinario_id == vet_id):
@@ -9665,7 +9930,7 @@ def update_appointment_status(appointment_id):
 
     if status == 'accepted' and current_user.role != 'admin':
         error_message = 'Somente o veterinário responsável pode aceitar este agendamento.'
-        if current_user.worker != 'veterinario':
+        if not is_vet:
             if wants_json:
                 return jsonify({'success': False, 'message': error_message}), 403
             flash(error_message, 'error')
@@ -9684,7 +9949,7 @@ def update_appointment_status(appointment_id):
     elif status == 'canceled':
         should_enforce_deadline = (
             current_user.role != 'admin'
-            and current_user.worker not in {'veterinario', 'colaborador'}
+            and not (is_vet or is_collaborator)
         )
 
     if should_enforce_deadline and appointment.scheduled_at - datetime.utcnow() < timedelta(hours=2):
@@ -9718,10 +9983,13 @@ def update_appointment_status(appointment_id):
 def delete_appointment(appointment_id):
     appointment = Appointment.query.get_or_404(appointment_id)
 
+    is_vet = is_veterinarian(current_user)
+    is_collaborator = getattr(current_user, 'worker', None) == 'colaborador'
+
     if current_user.role == 'admin':
         pass
-    elif current_user.worker in ['veterinario', 'colaborador']:
-        if current_user.worker == 'veterinario':
+    elif is_vet or is_collaborator:
+        if is_vet:
             veterinario = getattr(current_user, 'veterinario', None)
             user_clinic = getattr(veterinario, 'clinica_id', None)
         else:
@@ -10022,7 +10290,7 @@ def api_my_appointments():
             if not context['clinic_ids']:
                 context['clinic_ids'] = [cid for cid in (clinic_ids or []) if cid]
             context['mode'] = context['mode'] or 'clinics'
-    elif current_user.worker == 'veterinario' and getattr(current_user, 'veterinario', None):
+    elif is_vet:
         query = query.filter(
             or_(
                 Appointment.veterinario_id == current_user.veterinario.id,
@@ -10289,8 +10557,11 @@ def api_reschedule_appointment(appointment_id):
 
     appointment = Appointment.query.get_or_404(appointment_id)
 
-    if current_user.worker in ['veterinario', 'colaborador']:
-        if current_user.worker == 'veterinario':
+    is_vet = is_veterinarian(current_user)
+    is_collaborator = getattr(current_user, 'worker', None) == 'colaborador'
+
+    if is_vet or is_collaborator:
+        if is_vet:
             user_clinic = current_user.veterinario.clinica_id
         else:
             user_clinic = current_user.clinica_id
@@ -10453,15 +10724,18 @@ def api_vet_appointments(veterinario_id):
     query = Appointment.query.filter_by(veterinario_id=veterinario_id)
     target_clinic_ids = []
 
+    is_vet = is_veterinarian(current_user)
+    is_collaborator = getattr(current_user, 'worker', None) == 'colaborador'
+
     if current_user.role == 'admin':
         if requested_clinic_ids:
             query = query.filter(Appointment.clinica_id.in_(requested_clinic_ids))
             target_clinic_ids = requested_clinic_ids
-    elif current_user.worker == 'veterinario':
+    elif is_vet:
         current_vet = getattr(current_user, 'veterinario', None)
         if not current_vet or current_vet.id != veterinario_id:
             abort(403)
-    elif current_user.worker == 'colaborador':
+    elif is_collaborator:
         collaborator_clinic_id = getattr(current_user, 'clinica_id', None)
         ensure_clinic_access(collaborator_clinic_id)
         if not collaborator_clinic_id:
