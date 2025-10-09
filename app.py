@@ -8212,6 +8212,11 @@ def appointments():
             if clinica_id and clinica_id not in clinic_ids:
                 clinic_ids.append(clinica_id)
         clinic_ids = calendar_access_scope.filter_clinic_ids(clinic_ids)
+        associated_clinics = (
+            Clinica.query.filter(Clinica.id.in_(clinic_ids)).all()
+            if clinic_ids
+            else []
+        )
         calendar_summary_clinic_ids = clinic_ids
         if getattr(veterinario, "id", None) is not None:
             calendar_summary_vets = [
@@ -8227,22 +8232,30 @@ def appointments():
             ]
         include_colleagues = bool(clinic_ids) and calendar_access_scope.allows_all_veterinarians()
         if include_colleagues:
+            colleagues_source = []
             if current_user.role == 'admin' and agenda_veterinarios:
-                colleagues_source = [
+                colleagues_source.extend(
                     v
                     for v in agenda_veterinarios
                     if getattr(v, 'clinica_id', None) in clinic_ids
-                ]
-            else:
-                colleagues_source = (
+                )
+            elif clinic_ids:
+                colleagues_source.extend(
                     Veterinario.query.filter(
                         Veterinario.clinica_id.in_(clinic_ids)
                     ).all()
-                    if clinic_ids
-                    else []
+                )
+            for clinica in associated_clinics:
+                owner_vet = getattr(getattr(clinica, 'owner', None), 'veterinario', None)
+                if owner_vet and getattr(owner_vet, 'id', None) is not None:
+                    colleagues_source.append(owner_vet)
+                colleagues_source.extend(
+                    vet
+                    for vet in (getattr(clinica, 'veterinarios_associados', []) or [])
+                    if getattr(vet, 'id', None) is not None
                 )
             known_ids = {entry['id'] for entry in calendar_summary_vets}
-            for colleague in colleagues_source:
+            for colleague in unique_items_by_id(colleagues_source):
                 colleague_id = getattr(colleague, 'id', None)
                 if (
                     not colleague_id
@@ -8286,11 +8299,10 @@ def appointments():
                     Veterinario.clinica_id.in_(clinic_ids)
                 ).all()
             )
-        associated_clinics = (
-            Clinica.query.filter(Clinica.id.in_(clinic_ids)).all()
-            if clinic_ids
-            else []
-        )
+        for clinica in associated_clinics:
+            owner_vet = getattr(getattr(clinica, 'owner', None), 'veterinario', None)
+            if owner_vet and getattr(owner_vet, 'id', None) is not None:
+                clinic_vets.append(owner_vet)
         specialists = []
         for clinica in associated_clinics:
             specialists.extend(
