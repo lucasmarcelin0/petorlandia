@@ -882,6 +882,25 @@ def veterinarian_request_new_trial(membership_id):
     if not (is_admin or owns_membership):
         abort(403)
 
+    if not is_admin:
+        admin_user = User.query.filter_by(role='admin').first()
+        if not admin_user:
+            flash('Não foi possível localizar um administrador. Tente novamente mais tarde.', 'danger')
+        else:
+            content = (
+                'Olá! Gostaria de solicitar a reativação da minha assinatura de veterinário '
+                f'(assinatura #{membership.id}).'
+            )
+            message = Message(
+                sender_id=current_user.id,
+                receiver_id=admin_user.id,
+                content=content,
+            )
+            db.session.add(message)
+            db.session.commit()
+            flash('Seu pedido foi enviado ao administrador. Aguarde a confirmação.', 'success')
+        return redirect(url_for('conversa_admin'))
+
     if membership.is_trial_active():
         flash('A avaliação gratuita atual ainda está ativa.', 'info')
     elif membership.has_valid_payment():

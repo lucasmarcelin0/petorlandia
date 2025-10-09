@@ -45,9 +45,17 @@
           {% if can_request_new_trial and request_new_trial_form %}
             <form method="post" action="{{ url_for('veterinarian_request_new_trial', membership_id=target_membership.id) }}" class="mt-2">
               {{ request_new_trial_form.hidden_tag() }}
-              <button type="submit" class="btn btn-outline-primary btn-sm">{{ request_new_trial_form.submit.label.text }}</button>
+              {% if is_admin %}
+                <button type="submit" class="btn btn-outline-primary btn-sm">{{ request_new_trial_form.submit.label.text }}</button>
+              {% else %}
+                <button type="submit" class="btn btn-outline-primary btn-sm">Solicitar nova avaliação ao administrador</button>
+              {% endif %}
             </form>
-            <p class="text-muted small mb-0">Ao solicitar, um novo período de avaliação gratuita será iniciado imediatamente.</p>
+            {% if is_admin %}
+              <p class="text-muted small mb-0">Ao iniciar, um novo período de avaliação gratuita será iniciado imediatamente.</p>
+            {% else %}
+              <p class="text-muted small mb-0">Ao solicitar, o administrador será avisado e poderá reativar manualmente a sua assinatura.</p>
+            {% endif %}
           {% endif %}
         {% endif %}
       {% elif is_admin %}

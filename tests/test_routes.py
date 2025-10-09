@@ -131,6 +131,84 @@ def test_index_hides_professional_area_when_membership_inactive(monkeypatch, app
         assert 'Área profissional' not in html
 
 
+def test_veterinarian_request_new_trial_requires_admin_for_activation(monkeypatch, app):
+    client = app.test_client()
+
+    with app.app_context():
+        db.drop_all()
+        db.create_all()
+
+        admin = User(id=1, name='Admin', email='admin@test', role='admin')
+        admin.set_password('secret')
+        vet_user = User(
+            id=2,
+            name='Vet',
+            email='vet@test',
+            role='veterinario',
+            worker='veterinario',
+        )
+        vet_user.set_password('test')
+        vet_profile = Veterinario(id=1, user=vet_user, crmv='CRMV123')
+        expired_started_at = datetime(2024, 1, 1, 12, 0, 0)
+        expired_trial_ends = datetime(2024, 1, 15, 12, 0, 0)
+        membership = VeterinarianMembership(
+            veterinario=vet_profile,
+            started_at=expired_started_at,
+            trial_ends_at=expired_trial_ends,
+            paid_until=None,
+        )
+
+        db.session.add_all([admin, vet_user, vet_profile, membership])
+        db.session.commit()
+        membership_id = membership.id
+        admin_id = admin.id
+        vet_user_id = vet_user.id
+
+        import flask_login.utils as login_utils
+
+        monkeypatch.setattr(login_utils, '_get_user', lambda: User.query.get(vet_user_id))
+
+    response = client.post(
+        f'/veterinario/assinatura/{membership_id}/nova_avaliacao',
+        data={'submit': '1'},
+        follow_redirects=False,
+    )
+
+    assert response.status_code == 302
+    assert response.headers['Location'].endswith('/conversa_admin')
+
+    with app.app_context():
+        unchanged_membership = VeterinarianMembership.query.get(membership_id)
+        assert unchanged_membership.started_at == expired_started_at
+        assert unchanged_membership.trial_ends_at == expired_trial_ends
+
+        admin = User.query.get(admin_id)
+        messages = Message.query.filter_by(
+            sender_id=vet_user_id,
+            receiver_id=admin_id,
+        ).all()
+        assert messages
+        assert any('reativa' in msg.content for msg in messages)
+
+        import flask_login.utils as login_utils
+
+        monkeypatch.setattr(login_utils, '_get_user', lambda: User.query.get(admin_id))
+
+    response = client.post(
+        f'/veterinario/assinatura/{membership_id}/nova_avaliacao',
+        data={'submit': '1'},
+        follow_redirects=False,
+    )
+
+    assert response.status_code == 302
+    assert response.headers['Location'].endswith(f'/conversa_admin/{vet_user_id}')
+
+    with app.app_context():
+        refreshed_membership = VeterinarianMembership.query.get(membership_id)
+        assert refreshed_membership.started_at > expired_started_at
+        assert refreshed_membership.trial_ends_at > expired_trial_ends
+
+
 def test_register_page(app):
     client = app.test_client()
     response = client.get('/register')
