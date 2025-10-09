@@ -4242,13 +4242,36 @@ def deletar_tutor(tutor_id):
 @app.route('/buscar_animais')
 @login_required
 def buscar_animais():
-    termo = request.args.get('q', '').lower()
-    animais = Animal.query.filter(
-        (Animal.name.ilike(f"%{termo}%")) |
-        (Animal.species.ilike(f"%{termo}%")) |
-        (Animal.breed.ilike(f"%{termo}%")) |
-        (Animal.microchip_number.ilike(f"%{termo}%"))
-    ).all()
+    termo = (request.args.get('q', '') or '').lower()
+    clinic_id = current_user_clinic_id()
+    is_admin = _is_admin()
+
+    if not is_admin and not clinic_id:
+        return jsonify([])
+
+    like_term = f"%{termo}%"
+
+    filters = [Animal.name.ilike(like_term)]
+
+    species_column = getattr(Animal.__table__.c, 'species', None)
+    if species_column is not None:
+        filters.append(species_column.ilike(like_term))
+
+    breed_column = getattr(Animal.__table__.c, 'breed', None)
+    if breed_column is not None:
+        filters.append(breed_column.ilike(like_term))
+
+    filters.append(Animal.microchip_number.ilike(like_term))
+
+    query = Animal.query.filter(or_(*filters))
+
+    visibility_clause = _user_visibility_clause(clinic_scope=clinic_id)
+    query = query.filter(Animal.owner.has(visibility_clause))
+
+    if not is_admin:
+        query = query.filter(Animal.clinica_id == clinic_id)
+
+    animais = query.all()
 
     return jsonify([{
         'id': a.id,
