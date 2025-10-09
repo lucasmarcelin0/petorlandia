@@ -325,6 +325,7 @@ from helpers import (
     veterinarian_required,
 )
 from services import get_calendar_access_scope
+from services.animal_search import search_animals
 
 
 def current_user_clinic_id():
@@ -4925,49 +4926,27 @@ def deletar_tutor(tutor_id):
 @app.route('/buscar_animais')
 @login_required
 def buscar_animais():
-    termo = (request.args.get('q', '') or '').lower()
+    term = (request.args.get('q', '') or '').strip()
     clinic_id = current_user_clinic_id()
     is_admin = _is_admin()
 
     if not is_admin and not clinic_id:
         return jsonify([])
 
-    like_term = f"%{termo}%"
-
-    filters = [Animal.name.ilike(like_term)]
-
-    species_column = getattr(Animal.__table__.c, 'species', None)
-    if species_column is not None:
-        filters.append(species_column.ilike(like_term))
-
-    breed_column = getattr(Animal.__table__.c, 'breed', None)
-    if breed_column is not None:
-        filters.append(breed_column.ilike(like_term))
-
-    filters.append(Animal.microchip_number.ilike(like_term))
-
-    query = Animal.query.filter(or_(*filters))
-
     visibility_clause = _user_visibility_clause(clinic_scope=clinic_id)
-    query = query.filter(Animal.owner.has(visibility_clause))
+    sort = request.args.get('sort')
+    tutor_id = request.args.get('tutor_id', type=int)
 
-    if not is_admin:
-        query = query.filter(Animal.clinica_id == clinic_id)
+    results = search_animals(
+        term=term,
+        clinic_scope=clinic_id,
+        is_admin=is_admin,
+        visibility_clause=visibility_clause,
+        sort=sort,
+        tutor_id=tutor_id,
+    )
 
-    animais = query.all()
-
-    return jsonify([{
-        'id': a.id,
-        'name': a.name,
-        'species': a.species,
-        'breed': a.breed,
-        'sex': a.sex,
-        'date_of_birth': a.date_of_birth.strftime('%Y-%m-%d') if a.date_of_birth else '',
-        'microchip_number': a.microchip_number,
-        'peso': a.peso,
-        'health_plan': a.health_plan,
-        'neutered': int(a.neutered) if a.neutered is not None else '',
-    } for a in animais])
+    return jsonify(results)
 
 
 
