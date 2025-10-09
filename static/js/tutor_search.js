@@ -8,6 +8,9 @@
       minChars = 2,
       validationMessageId = null,
       sortFieldId = null,
+      emptyStateMessage = 'Nenhum tutor encontrado.',
+      onSelect = null,
+      onClear = null,
     } = options;
 
     const tutorInput = document.getElementById(inputId);
@@ -20,6 +23,16 @@
       return null;
     }
 
+    const resolvedEmptyMessage = (
+      resultsContainer.dataset && resultsContainer.dataset.emptyMessage
+    )
+      ? resultsContainer.dataset.emptyMessage
+      : emptyStateMessage;
+
+    if (resultsContainer.dataset && !resultsContainer.dataset.emptyMessage && resolvedEmptyMessage) {
+      resultsContainer.dataset.emptyMessage = resolvedEmptyMessage;
+    }
+
     const validationMessage = validationMessageId
       ? document.getElementById(validationMessageId)
       : null;
@@ -27,6 +40,21 @@
     const normalize = (value) => (value || '').trim().toLowerCase();
 
     let selectedTutorName = '';
+    let currentTutor = null;
+
+    const dispatchTutorSelectionChange = (tutor) => {
+      if (!tutorIdField) {
+        return;
+      }
+      const detail = tutor ? { tutor: { ...tutor } } : { tutor: null };
+      tutorIdField.dispatchEvent(
+        new CustomEvent('tutorselectionchange', {
+          detail,
+          bubbles: true,
+        })
+      );
+      tutorIdField.dispatchEvent(new Event('change', { bubbles: true }));
+    };
 
     const hideValidationMessage = () => {
       if (validationMessage) {
@@ -43,6 +71,12 @@
     const clearTutorSelection = () => {
       tutorIdField.value = '';
       selectedTutorName = '';
+      currentTutor = null;
+      hideValidationMessage();
+      if (typeof onClear === 'function') {
+        onClear();
+      }
+      dispatchTutorSelectionChange(null);
     };
 
     const closeResults = () => {
@@ -66,8 +100,13 @@
       selectedTutorName = normalize(tutor.name);
       tutorInput.value = tutor.name;
       tutorIdField.value = tutor.id;
+      currentTutor = { ...tutor };
       hideValidationMessage();
       closeResults();
+      if (typeof onSelect === 'function') {
+        onSelect(tutor);
+      }
+      dispatchTutorSelectionChange(tutor);
     };
 
     let activeSearchController = null;
@@ -148,7 +187,15 @@
           resultsContainer.appendChild(li);
         });
 
-        resultsContainer.classList.toggle('d-none', tutors.length === 0);
+        const hasResults = tutors.length > 0;
+        if (!hasResults && resolvedEmptyMessage) {
+          const emptyItem = document.createElement('li');
+          emptyItem.className = 'list-group-item text-muted';
+          emptyItem.textContent = resolvedEmptyMessage;
+          resultsContainer.appendChild(emptyItem);
+        }
+
+        resultsContainer.classList.toggle('d-none', !hasResults && !resolvedEmptyMessage);
       } catch (error) {
         if (error.name === 'AbortError') {
           return;
@@ -182,6 +229,7 @@
       showValidationMessage,
       hasSelection: () => Boolean(tutorIdField.value),
       getTypedValue: () => tutorInput.value.trim(),
+      getSelectedTutor: () => currentTutor,
     };
   }
 

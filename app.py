@@ -4925,28 +4925,20 @@ def deletar_tutor(tutor_id):
 @app.route('/buscar_animais')
 @login_required
 def buscar_animais():
-    termo = (request.args.get('q', '') or '').lower()
+    from models import Animal, Appointment  # import local para evitar ciclos
+
+    termo_raw = (request.args.get('q', '') or '').strip()
     clinic_id = current_user_clinic_id()
     is_admin = _is_admin()
 
     if not is_admin and not clinic_id:
         return jsonify([])
 
-    like_term = f"%{termo}%"
+    tutor_filter = request.args.get('tutor_id', type=int)
+    sort_value = (request.args.get('sort') or '').strip()
+    animal_id_filter = request.args.get('animal_id', type=int)
 
-    filters = [Animal.name.ilike(like_term)]
-
-    species_column = getattr(Animal.__table__.c, 'species', None)
-    if species_column is not None:
-        filters.append(species_column.ilike(like_term))
-
-    breed_column = getattr(Animal.__table__.c, 'breed', None)
-    if breed_column is not None:
-        filters.append(breed_column.ilike(like_term))
-
-    filters.append(Animal.microchip_number.ilike(like_term))
-
-    query = Animal.query.filter(or_(*filters))
+    query = Animal.query
 
     visibility_clause = _user_visibility_clause(clinic_scope=clinic_id)
     query = query.filter(Animal.owner.has(visibility_clause))
@@ -4954,20 +4946,128 @@ def buscar_animais():
     if not is_admin:
         query = query.filter(Animal.clinica_id == clinic_id)
 
+    if animal_id_filter:
+        query = query.filter(Animal.id == animal_id_filter)
+    else:
+        normalized_term = termo_raw.lower()
+        like_term = f"%{normalized_term}%"
+        filters = [Animal.name.ilike(like_term)]
+
+        species_column = getattr(Animal.__table__.c, 'species', None)
+        if species_column is not None:
+            filters.append(species_column.ilike(like_term))
+
+        breed_column = getattr(Animal.__table__.c, 'breed', None)
+        if breed_column is not None:
+            filters.append(breed_column.ilike(like_term))
+
+        filters.append(Animal.microchip_number.ilike(like_term))
+        query = query.filter(or_(*filters))
+
+    if tutor_filter:
+        query = query.filter(Animal.user_id == tutor_filter)
+
+    query = query.options(joinedload(Animal.owner))
+
     animais = query.all()
 
-    return jsonify([{
-        'id': a.id,
-        'name': a.name,
-        'species': a.species,
-        'breed': a.breed,
-        'sex': a.sex,
-        'date_of_birth': a.date_of_birth.strftime('%Y-%m-%d') if a.date_of_birth else '',
-        'microchip_number': a.microchip_number,
-        'peso': a.peso,
-        'health_plan': a.health_plan,
-        'neutered': int(a.neutered) if a.neutered is not None else '',
-    } for a in animais])
+    animal_ids = [animal.id for animal in animais if animal.id is not None]
+    last_appointments = {}
+
+    if animal_ids:
+        last_rows = (
+            db.session.query(
+                Appointment.animal_id,
+                func.max(Appointment.scheduled_at),
+            )
+            .filter(Appointment.animal_id.in_(animal_ids))
+            .group_by(Appointment.animal_id)
+            .all()
+        )
+        last_appointments = {animal_id: last_at for animal_id, last_at in last_rows}
+
+    records = []
+    for animal in animais:
+        owner = getattr(animal, 'owner', None)
+        tutor_id = getattr(animal, 'user_id', None)
+        tutor_name = getattr(owner, 'name', None)
+        if tutor_name is None and tutor_id:
+            tutor_name = f'Tutor #{tutor_id}'
+        if tutor_name is None:
+            tutor_name = 'Tutor não atribuído'
+
+        species_attr = getattr(animal, 'species', None)
+        species_label = getattr(species_attr, 'name', None) if species_attr is not None else None
+        if species_label is None:
+            species_label = species_attr or ''
+
+        breed_attr = getattr(animal, 'breed', None)
+        breed_label = getattr(breed_attr, 'name', None) if breed_attr is not None else None
+        if breed_label is None:
+            breed_label = breed_attr or ''
+
+        last_attended_at = last_appointments.get(animal.id)
+        last_appointment_iso = last_attended_at.isoformat() if last_attended_at else None
+        last_appointment_display = format_datetime_brazil(last_attended_at) if last_attended_at else None
+
+        record = {
+            'id': animal.id,
+            'name': animal.name,
+            'species': species_label,
+            'species_name': species_label,
+            'breed': breed_label,
+            'breed_name': breed_label,
+            'sex': animal.sex,
+            'date_of_birth': animal.date_of_birth.strftime('%Y-%m-%d') if animal.date_of_birth else '',
+            'microchip_number': animal.microchip_number,
+            'peso': animal.peso,
+            'health_plan': animal.health_plan,
+            'neutered': int(animal.neutered) if animal.neutered is not None else '',
+            'tutor_id': tutor_id,
+            'tutor_name': tutor_name,
+            'age_display': getattr(animal, 'age_display', None),
+            'last_appointment': last_appointment_iso,
+            'last_appointment_display': last_appointment_display,
+            'created_at': animal.date_added.isoformat() if getattr(animal, 'date_added', None) else None,
+            'clinica_id': animal.clinica_id,
+        }
+
+        record['_sort_last'] = last_attended_at
+        record['_sort_added'] = getattr(animal, 'date_added', None)
+        records.append(record)
+
+    sort_key = sort_value.lower()
+    if sort_key == 'recent_attended':
+        records.sort(
+            key=lambda item: (
+                item.get('_sort_last') or datetime.min,
+                (item.get('name') or '').lower(),
+                item.get('id') or 0,
+            ),
+            reverse=True,
+        )
+    elif sort_key == 'recent_added':
+        records.sort(
+            key=lambda item: (
+                item.get('_sort_added') or datetime.min,
+                (item.get('name') or '').lower(),
+                item.get('id') or 0,
+            ),
+            reverse=True,
+        )
+    else:
+        records.sort(
+            key=lambda item: (
+                (item.get('name') or '').lower(),
+                item.get('id') or 0,
+            )
+        )
+
+    for item in records:
+        item.pop('_sort_last', None)
+        item.pop('_sort_added', None)
+
+    return jsonify(records)
 
 
 
