@@ -1,6 +1,6 @@
 import requests
 
-from flask import redirect, render_template, session
+from flask import abort, current_app, redirect, render_template, session
 from flask_login import current_user
 from functools import wraps
 
@@ -10,6 +10,8 @@ from itertools import groupby
 from dateutil.relativedelta import relativedelta
 from sqlalchemy import case
 from zoneinfo import ZoneInfo
+
+from extensions import db
 
 
 BR_TZ = ZoneInfo("America/Sao_Paulo")
@@ -33,6 +35,122 @@ if APPOINTMENT_KIND_DURATIONS:
 else:
     MAX_APPOINTMENT_DURATION_MINUTES = DEFAULT_APPOINTMENT_DURATION_MINUTES
 MAX_APPOINTMENT_DURATION = timedelta(minutes=MAX_APPOINTMENT_DURATION_MINUTES)
+
+
+def _trial_days():
+    return current_app.config.get('VETERINARIAN_TRIAL_DAYS', 30)
+
+
+def ensure_veterinarian_membership(veterinario, trial_days: int | None = None):
+    """Return an active membership for ``veterinario``, creating one when missing."""
+
+    if not veterinario:
+        return None
+
+    from models import VeterinarianMembership
+
+    membership = getattr(veterinario, 'membership', None)
+    trial_days = trial_days or _trial_days()
+
+    if membership is None:
+        membership = VeterinarianMembership(
+            veterinario=veterinario,
+            started_at=datetime.utcnow(),
+            trial_ends_at=datetime.utcnow() + timedelta(days=trial_days),
+        )
+        db.session.add(membership)
+    else:
+        membership.ensure_trial_dates(trial_days)
+    return membership
+
+
+def has_veterinarian_profile(user) -> bool:
+    return bool(
+        user
+        and getattr(user, 'worker', None) == 'veterinario'
+        and getattr(user, 'veterinario', None)
+    )
+
+
+def is_veterinarian(user=None, *, require_membership: bool = True) -> bool:
+    """Return ``True`` when ``user`` has veterinarian role and active membership."""
+
+    if user is None:
+        user = current_user if current_user.is_authenticated else None
+
+    if not has_veterinarian_profile(user):
+        return False
+
+    if not require_membership:
+        return True
+
+    membership = ensure_veterinarian_membership(user.veterinario)
+    if membership is None:
+        return False
+    return membership.is_active()
+
+
+def veterinarian_required(view=None, *, require_membership: bool = True):
+    """Decorator enforcing veterinarian access with optional membership requirement."""
+
+    def decorator(func):
+        @wraps(func)
+        def wrapped(*args, **kwargs):
+            if not current_user.is_authenticated or not is_veterinarian(
+                current_user, require_membership=require_membership
+            ):
+                abort(403)
+            return func(*args, **kwargs)
+
+        return wrapped
+
+    if view is None:
+        return decorator
+    return decorator(view)
+
+
+def grant_veterinarian_role(user, *, crmv: str, phone: str | None = None, clinica=None):
+    """Assign veterinarian role, profile and membership to ``user``."""
+
+    if not user:
+        return None
+
+    from models import Veterinario
+
+    user.worker = 'veterinario'
+
+    vet_profile = getattr(user, 'veterinario', None)
+    if vet_profile is None:
+        vet_profile = Veterinario(user=user, crmv=crmv)
+        if clinica is not None:
+            vet_profile.clinica = clinica
+        db.session.add(vet_profile)
+    else:
+        if crmv:
+            vet_profile.crmv = crmv
+        if clinica is not None:
+            vet_profile.clinica = clinica
+
+    if phone:
+        user.phone = phone
+
+    ensure_veterinarian_membership(vet_profile)
+    return vet_profile
+
+
+def revoke_veterinarian_role(user):
+    """Remove veterinarian role and membership associations from ``user``."""
+
+    if not has_veterinarian_profile(user):
+        return
+
+    vet_profile = user.veterinario
+    membership = getattr(vet_profile, 'membership', None)
+    if membership:
+        db.session.delete(membership)
+
+    db.session.delete(vet_profile)
+    user.worker = None
 
 
 def get_appointment_duration_minutes(kind):
