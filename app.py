@@ -4405,7 +4405,9 @@ def tutores():
         if accessible_clinic_ids
         else None
     )
-    require_appointments = _is_specialist_veterinarian(getattr(current_user, 'veterinario', None))
+    vet_profile = getattr(current_user, 'veterinario', None)
+    require_appointments = _is_specialist_veterinarian(vet_profile)
+    veterinarian_scope_id = vet_profile.id if require_appointments and vet_profile else None
     scope = request.args.get('scope', 'all')
     page = request.args.get('page', 1, type=int)
     effective_user_id = getattr(current_user, 'id', None)
@@ -4501,6 +4503,7 @@ def tutores():
                 clinic_id=clinic_scope,
                 user_id=effective_user_id,
                 require_appointments=require_appointments,
+                veterinario_id=veterinarian_scope_id,
             )
             html = render_template(
                 'partials/tutores_adicionados.html',
@@ -4520,6 +4523,7 @@ def tutores():
         clinic_id=clinic_scope,
         user_id=effective_user_id,
         require_appointments=require_appointments,
+        veterinario_id=veterinarian_scope_id,
     )
 
     return render_template(
@@ -6353,7 +6357,9 @@ def novo_animal():
         if accessible_clinic_ids
         else None
     )
-    require_appointments = _is_specialist_veterinarian(getattr(current_user, 'veterinario', None))
+    vet_profile = getattr(current_user, 'veterinario', None)
+    require_appointments = _is_specialist_veterinarian(vet_profile)
+    veterinarian_scope_id = vet_profile.id if require_appointments and vet_profile else None
     current_user_id = getattr(current_user, 'id', None)
 
     if request.method == 'POST':
@@ -6464,6 +6470,7 @@ def novo_animal():
                 clinic_id=clinic_scope,
                 user_id=current_user_id,
                 require_appointments=require_appointments,
+                veterinario_id=veterinarian_scope_id,
             )
             html = render_template(
                 'partials/animais_adicionados.html',
@@ -6489,6 +6496,7 @@ def novo_animal():
         clinic_id=clinic_scope,
         user_id=current_user_id,
         require_appointments=require_appointments,
+        veterinario_id=veterinarian_scope_id,
     )
 
     # Lista de espécies e raças para os <select> do formulário
@@ -7266,7 +7274,14 @@ def _viewer_accessible_clinic_ids(viewer):
     return clinic_ids
 
 
-def _get_recent_animais(scope, page, clinic_id=None, user_id=None, require_appointments=False):
+def _get_recent_animais(
+    scope,
+    page,
+    clinic_id=None,
+    user_id=None,
+    require_appointments=False,
+    veterinario_id=None,
+):
     """Return recent animals and pagination metadata for dashboards."""
 
     resolved_scope = 'mine' if scope == 'mine' else 'all'
@@ -7291,6 +7306,10 @@ def _get_recent_animais(scope, page, clinic_id=None, user_id=None, require_appoi
                     Appointment.clinica_id.in_(clinic_ids),
                 )
             )
+            if veterinario_id:
+                appointment_exists = appointment_exists.filter(
+                    Appointment.veterinario_id == veterinario_id
+                )
             scoped_query = scoped_query.filter(appointment_exists.exists())
 
         consultas_exist = (
@@ -7312,14 +7331,19 @@ def _get_recent_animais(scope, page, clinic_id=None, user_id=None, require_appoi
         )
     elif clinic_ids:
         if require_appointments:
-            last_appt = (
+            last_appt_query = (
                 db.session.query(
                     Appointment.animal_id,
                     func.max(Appointment.scheduled_at).label('last_at'),
                 )
                 .filter(Appointment.clinica_id.in_(clinic_ids))
-                .group_by(Appointment.animal_id)
-                .subquery()
+            )
+            if veterinario_id:
+                last_appt_query = last_appt_query.filter(
+                    Appointment.veterinario_id == veterinario_id
+                )
+            last_appt = (
+                last_appt_query.group_by(Appointment.animal_id).subquery()
             )
 
             pagination = (
@@ -7357,7 +7381,14 @@ def _get_recent_animais(scope, page, clinic_id=None, user_id=None, require_appoi
     return pagination.items, pagination, resolved_scope
 
 
-def _get_recent_tutores(scope, page, clinic_id=None, user_id=None, require_appointments=False):
+def _get_recent_tutores(
+    scope,
+    page,
+    clinic_id=None,
+    user_id=None,
+    require_appointments=False,
+    veterinario_id=None,
+):
     """Return recent tutors and pagination metadata for dashboards."""
 
     resolved_scope = 'mine' if scope == 'mine' else 'all'
@@ -7383,6 +7414,10 @@ def _get_recent_tutores(scope, page, clinic_id=None, user_id=None, require_appoi
                     Appointment.clinica_id.in_(clinic_ids),
                 )
             )
+            if veterinario_id:
+                appointment_exists = appointment_exists.filter(
+                    Appointment.veterinario_id == veterinario_id
+                )
             base_query = base_query.filter(appointment_exists.exists())
 
         consultas_exist = (
@@ -7408,14 +7443,19 @@ def _get_recent_tutores(scope, page, clinic_id=None, user_id=None, require_appoi
 
     if clinic_ids:
         if require_appointments:
-            last_appt = (
+            last_appt_query = (
                 db.session.query(
                     Appointment.tutor_id,
                     func.max(Appointment.scheduled_at).label('last_at'),
                 )
                 .filter(Appointment.clinica_id.in_(clinic_ids))
-                .group_by(Appointment.tutor_id)
-                .subquery()
+            )
+            if veterinario_id:
+                last_appt_query = last_appt_query.filter(
+                    Appointment.veterinario_id == veterinario_id
+                )
+            last_appt = (
+                last_appt_query.group_by(Appointment.tutor_id).subquery()
             )
 
             pagination = (
@@ -9384,6 +9424,7 @@ def appointments():
             clinic_id=vet_clinic_scope,
             user_id=vet_user_id,
             require_appointments=require_vet_appointments,
+            veterinario_id=veterinario.id if require_vet_appointments else None,
         )
 
         tutor_scope_param = request.args.get('tutor_scope', 'all')
@@ -9394,6 +9435,7 @@ def appointments():
             clinic_id=vet_clinic_scope,
             user_id=vet_user_id,
             require_appointments=require_vet_appointments,
+            veterinario_id=veterinario.id if require_vet_appointments else None,
         )
 
         species_list = list_species()
