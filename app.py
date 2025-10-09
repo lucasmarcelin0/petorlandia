@@ -10285,6 +10285,7 @@ def api_my_appointments():
     )
 
     query = Appointment.query
+    is_vet = is_veterinarian(current_user)
     context = {
         'mode': None,
         'tutor_id': None,
