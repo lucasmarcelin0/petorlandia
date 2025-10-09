@@ -1,4 +1,5 @@
 from flask_wtf import FlaskForm
+from sqlalchemy import or_
 from wtforms import (
     StringField,
     TextAreaField,
@@ -13,7 +14,15 @@ from wtforms import (
     DateTimeField,
     TimeField,
 )
-from wtforms.validators import DataRequired, Email, EqualTo, Length, Optional, NumberRange
+from wtforms.validators import (
+    DataRequired,
+    Email,
+    EqualTo,
+    Length,
+    Optional,
+    NumberRange,
+    ValidationError,
+)
 from flask_wtf.file import FileField, FileAllowed
 
 
@@ -466,12 +475,14 @@ class AppointmentForm(FlaskForm):
         'Animal',
         coerce=int,
         validators=[DataRequired()],
+        validate_choice=False,
     )
 
     veterinario_id = SelectField(
         'Veterinário',
         coerce=int,
         validators=[DataRequired()],
+        validate_choice=False,
     )
 
     date = DateField(
@@ -589,10 +600,8 @@ class AppointmentForm(FlaskForm):
         self.tutor_id.data = resolved_tutor_id
 
     def __init__(self, tutor=None, is_veterinario=False, clinic_ids=None, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        from models import Animal, Veterinario
-
-        clinic_id_values = []
+        self._restricted_tutor_id = getattr(tutor, 'id', None)
+        self._clinic_scope_ids = []
         if clinic_ids is not None:
             if isinstance(clinic_ids, (list, tuple, set)):
                 candidates = clinic_ids
@@ -603,20 +612,54 @@ class AppointmentForm(FlaskForm):
                     value = int(candidate)
                 except (TypeError, ValueError):
                     continue
-                if value and value not in clinic_id_values:
-                    clinic_id_values.append(value)
+                if value and value not in self._clinic_scope_ids:
+                    self._clinic_scope_ids.append(value)
+        self._clinic_scope_ids = [cid for cid in self._clinic_scope_ids if cid]
+        self._is_veterinario_context = bool(is_veterinario)
+        super().__init__(*args, **kwargs)
+        from models import Animal, Veterinario, Clinica
 
-        query = Animal.query.filter(Animal.removido_em.is_(None))
-        if clinic_id_values:
-            query = query.filter(Animal.clinica_id.in_(clinic_id_values))
+        self._restricted_tutor_id = getattr(tutor, 'id', None)
 
-        if tutor is not None:
-            query = query.filter(Animal.user_id == tutor.id)
-        animals = query.all()
+        def _build_animal_query():
+            query = Animal.query.filter(Animal.removido_em.is_(None))
+            if self._clinic_scope_ids:
+                query = query.filter(Animal.clinica_id.in_(self._clinic_scope_ids))
+            if self._restricted_tutor_id is not None:
+                query = query.filter(Animal.user_id == self._restricted_tutor_id)
+            return query
 
-        restrict_tutors = tutor is not None
+        def _build_veterinarian_query():
+            query = Veterinario.query
+            if self._clinic_scope_ids:
+                query = query.filter(
+                    or_(
+                        Veterinario.clinica_id.in_(self._clinic_scope_ids),
+                        Veterinario.clinicas.any(Clinica.id.in_(self._clinic_scope_ids)),
+                    )
+                )
+            return query
+
+        self._animal_query_factory = _build_animal_query
+        self._veterinarian_query_factory = _build_veterinarian_query
+
+        selected_animal_id = self.animal_id.data
+        animal_query = self._animal_query_factory()
+        if selected_animal_id:
+            animals = animal_query.filter(Animal.id == selected_animal_id).all()
+        else:
+            animals = animal_query.all()
+
+        restrict_tutors = self._restricted_tutor_id is not None
         allow_all = not restrict_tutors
-        selected_tutor_id = tutor.id if tutor is not None else self.tutor_id.data
+        selected_tutor_id = None
+        if restrict_tutors:
+            selected_tutor_id = self._restricted_tutor_id
+        elif animals:
+            selected_tutor_id = getattr(animals[0], 'user_id', None)
+        else:
+            selected_tutor_id = self.tutor_id.data
+
         self.populate_animals(
             animals,
             restrict_tutors=restrict_tutors,
@@ -624,10 +667,70 @@ class AppointmentForm(FlaskForm):
             allow_all_option=allow_all,
         )
 
-        veterinarios = Veterinario.query.all()
+        selected_vet_id = self.veterinario_id.data
+        veterinarian_query = self._veterinarian_query_factory()
+        if selected_vet_id:
+            veterinarios = veterinarian_query.filter(Veterinario.id == selected_vet_id).all()
+        else:
+            veterinarios = veterinarian_query.all()
+
+        def _vet_label(vet):
+            return getattr(getattr(vet, 'user', None), 'name', None) or str(vet.id)
+
         self.veterinario_id.choices = [
-            (v.id, v.user.name if v.user else str(v.id)) for v in veterinarios
+            (v.id, _vet_label(v)) for v in veterinarios
         ]
+
+        if selected_vet_id and selected_vet_id not in {choice[0] for choice in self.veterinario_id.choices}:
+            vet = Veterinario.query.get(selected_vet_id)
+            if vet:
+                self.veterinario_id.choices.append((vet.id, _vet_label(vet)))
+
         if not self.kind.data:
             self.kind.data = 'consulta'
+
+    def _animal_lookup_query(self):
+        from models import Animal
+
+        query = Animal.query.filter(Animal.removido_em.is_(None))
+        if self._clinic_scope_ids:
+            query = query.filter(Animal.clinica_id.in_(self._clinic_scope_ids))
+        if self._restricted_tutor_id is not None:
+            query = query.filter(Animal.user_id == self._restricted_tutor_id)
+        return query
+
+    def _veterinarian_lookup_query(self):
+        from models import Veterinario, Clinica
+
+        query = Veterinario.query
+        if self._clinic_scope_ids:
+            query = query.filter(
+                or_(
+                    Veterinario.clinica_id.in_(self._clinic_scope_ids),
+                    Veterinario.clinicas.any(Clinica.id.in_(self._clinic_scope_ids)),
+                )
+            )
+        return query
+
+    def validate_animal_id(self, field):
+        if not field.data:
+            raise ValidationError('Selecione um animal válido.')
+
+        query = self._animal_lookup_query()
+        from models import Animal
+
+        animal = query.filter(Animal.id == field.data).first()
+        if not animal:
+            raise ValidationError('Selecione um animal válido para esta clínica.')
+
+    def validate_veterinario_id(self, field):
+        if not field.data:
+            raise ValidationError('Selecione um veterinário válido.')
+
+        query = self._veterinarian_lookup_query()
+        from models import Veterinario
+
+        veterinario = query.filter(Veterinario.id == field.data).first()
+        if not veterinario:
+            raise ValidationError('Selecione um veterinário válido para esta clínica.')
 
