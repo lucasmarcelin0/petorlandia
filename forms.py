@@ -106,6 +106,12 @@ class LoginForm(FlaskForm):
 class AnimalForm(FlaskForm):
     name = StringField('Nome do Animal', validators=[DataRequired()])
     age = StringField('Idade', validators=[DataRequired()])
+    age_unit = SelectField(
+        'Unidade da Idade',
+        choices=[('anos', 'anos'), ('meses', 'meses')],
+        default='anos',
+        validators=[DataRequired()],
+    )
     date_of_birth = DateField('Data de Nascimento', format='%Y-%m-%d', validators=[Optional()])
     sex = SelectField('Sexo', choices=[('Macho', 'Macho'), ('Fêmea', 'Fêmea')], validators=[DataRequired()])
     description = TextAreaField('Descrição', validators=[Optional(), Length(max=500)])

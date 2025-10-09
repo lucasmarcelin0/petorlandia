@@ -8,6 +8,7 @@ from flask import url_for, request, current_app
 from werkzeug.security import generate_password_hash, check_password_hash
 from datetime import datetime, date, timedelta
 from dateutil.relativedelta import relativedelta
+import unicodedata
 import enum
 from sqlalchemy import Enum, event
 from enum import Enum
@@ -294,24 +295,25 @@ class Animal(db.Model):
     def age_years(self):
         if self.date_of_birth:
             return relativedelta(date.today(), self.date_of_birth).years
-        try:
-            return int(self.age.split()[0])
-        except (ValueError, AttributeError, IndexError):
+        numero, unidade = _parse_age_value(self.age)
+        if numero is None:
             return None
+        if unidade == 'meses':
+            return 0
+        return numero
 
     @property
     def age_display(self):
         if self.date_of_birth:
             delta = relativedelta(date.today(), self.date_of_birth)
             if delta.years > 0:
-                return f"{delta.years} ano{'s' if delta.years != 1 else ''}"
-            return f"{delta.months} mes{'es' if delta.months != 1 else ''}"
+                return _format_age_label(delta.years, 'anos')
+            return _format_age_label(delta.months, 'meses')
         if self.age:
-            try:
-                years = int(self.age.split()[0])
-                return f"{years} ano{'s' if years != 1 else ''}"
-            except (ValueError, AttributeError, IndexError):
+            numero, unidade = _parse_age_value(self.age)
+            if numero is None:
                 return self.age
+            return _format_age_label(numero, unidade or 'anos')
         return None
 
     def __str__(self):
@@ -1414,3 +1416,40 @@ class PendingWebhook(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     mp_id = db.Column(db.BigInteger, unique=True)
     attempts = db.Column(db.Integer, default=0)
+def _normalize_age_unit(value):
+    if not value:
+        return None
+    text = unicodedata.normalize('NFKD', str(value))
+    text = text.encode('ASCII', 'ignore').decode('ASCII').strip().lower()
+    if text.startswith('mes'):
+        return 'meses'
+    if text.startswith('ano'):
+        return 'anos'
+    return text or None
+
+
+def _parse_age_value(age_text):
+    if not age_text:
+        return None, None
+    parts = str(age_text).split()
+    number = None
+    try:
+        number = int(parts[0])
+    except (ValueError, IndexError):
+        number = None
+    unit = None
+    if len(parts) > 1:
+        unit = _normalize_age_unit(parts[1])
+    return number, unit
+
+
+def _format_age_label(number, unit):
+    if number is None:
+        return ''
+    normalized = _normalize_age_unit(unit) or 'anos'
+    if normalized == 'meses':
+        suffix = 'mês' if number == 1 else 'meses'
+    else:
+        suffix = 'ano' if number == 1 else 'anos'
+    return f"{number} {suffix}"
+

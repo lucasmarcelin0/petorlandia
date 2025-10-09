@@ -16,21 +16,28 @@
       data-dob
     >
   </div>
-  <div class="col-12 col-sm-6 col-lg-2">
+  <div class="col-12 col-sm-6 col-lg-3 col-xl-2">
     <label class="form-label" for="{{ prefixo }}_age">Idade</label>
-    <div class="input-group shadow-sm">
+    <div class="input-group shadow-sm flex-nowrap">
       <input
         type="number"
         min="0"
         class="form-control text-center"
         id="{{ prefixo }}_age"
         name="{{ nome_idade or 'age' }}"
-        value="{{ valor_idade or '' }}"
+        value="{{ valor_idade if valor_idade is defined and valor_idade is not none else '' }}"
         data-age
       >
-      <span class="input-group-text bg-body-tertiary fw-semibold"
-            id="{{ prefixo }}_age_unit"
-            data-age-unit>{{ valor_unidade or 'anos' }}</span>
+      {% set unidade_atual = valor_unidade|lower if valor_unidade else 'anos' %}
+      <select class="form-select bg-body-tertiary fw-semibold"
+              id="{{ prefixo }}_age_unit"
+              name="{{ nome_unidade or 'age_unit' }}"
+              data-age-unit>
+        <option value="anos"
+                {% if unidade_atual in ['anos', 'ano'] %}selected{% endif %}>anos</option>
+        <option value="meses"
+                {% if unidade_atual in ['meses', 'mes', 'mês'] %}selected{% endif %}>meses</option>
+      </select>
     </div>
   </div>
 </div>
@@ -50,6 +57,36 @@
     if (typeof Inputmask !== 'undefined') {
       Inputmask("99/99/9999").mask(dobInput);
     }
+
+    const normalizarUnidade = (valor) => {
+      const texto = (valor || '').toString().trim().toLowerCase();
+      if (texto.startsWith('mes')) return 'meses';
+      if (texto.startsWith('ano')) return 'anos';
+      return 'anos';
+    };
+
+    const obterUnidadeAtual = () => {
+      if (!ageUnit) return 'anos';
+      if (ageUnit.tagName === 'SELECT') {
+        return normalizarUnidade(ageUnit.value);
+      }
+      return normalizarUnidade(ageUnit.dataset.unit || ageUnit.textContent);
+    };
+
+    const definirUnidade = (unidade, quantidade = null) => {
+      if (!ageUnit) return;
+      const valorNormalizado = normalizarUnidade(unidade);
+      if (ageUnit.tagName === 'SELECT') {
+        ageUnit.value = valorNormalizado;
+      } else {
+        ageUnit.dataset.unit = valorNormalizado;
+        if (valorNormalizado === 'meses') {
+          ageUnit.textContent = quantidade === 1 ? 'mês' : 'meses';
+        } else {
+          ageUnit.textContent = quantidade === 1 ? 'ano' : 'anos';
+        }
+      }
+    };
 
     // Função utilitária para formatar datas no padrão YYYY-MM-DD
     const formatISO = (d) => {
@@ -78,7 +115,7 @@
       }
     });
 
-    function atualizarIdade(dataNascimento) {
+    function atualizarIdade(dataNascimento, preferenciaUnidade = null) {
       const hoje = new Date();
       let anos = hoje.getFullYear() - dataNascimento.getFullYear();
       let meses = hoje.getMonth() - dataNascimento.getMonth();
@@ -89,13 +126,18 @@
         anos--;
         meses += 12;
       }
-      ageInput.value = anos > 0 ? anos : meses;
-      if (ageUnit) {
-        if (anos > 0) {
-          ageUnit.textContent = anos === 1 ? 'ano' : 'anos';
-        } else {
-          ageUnit.textContent = meses === 1 ? 'mês' : 'meses';
-        }
+      const totalMeses = Math.max(anos * 12 + meses, 0);
+      const unidadePreferida = preferenciaUnidade ? normalizarUnidade(preferenciaUnidade) : obterUnidadeAtual();
+
+      if (unidadePreferida === 'meses' && totalMeses > 0) {
+        ageInput.value = totalMeses;
+        definirUnidade('meses', totalMeses);
+      } else if (anos > 0) {
+        ageInput.value = anos;
+        definirUnidade('anos', anos);
+      } else {
+        ageInput.value = totalMeses;
+        definirUnidade('meses', totalMeses);
       }
       if (hiddenInput) hiddenInput.value = formatISO(dataNascimento);
     }
@@ -103,12 +145,22 @@
     // Quando o usuário digita a idade
     ageInput.addEventListener("input", () => {
       const idade = parseInt(ageInput.value);
-      if (!isNaN(idade) && idade > 0 && idade < 120) {
-        const hoje = new Date();
-        const estimada = new Date(hoje.getFullYear() - idade, hoje.getMonth(), hoje.getDate());
+      if (isNaN(idade) || idade < 0) return;
+
+      const unidade = obterUnidadeAtual();
+      const agora = new Date();
+
+      if (unidade === 'anos' && idade <= 120) {
+        const estimada = new Date(agora.getFullYear() - idade, agora.getMonth(), agora.getDate());
         fp.setDate(estimada, true);
         if (hiddenInput) hiddenInput.value = formatISO(estimada);
-        if (ageUnit) ageUnit.textContent = 'anos';
+        definirUnidade('anos', idade);
+      } else if (unidade === 'meses' && idade <= 1440) {
+        const estimada = new Date(agora.getFullYear(), agora.getMonth(), agora.getDate());
+        estimada.setMonth(estimada.getMonth() - idade);
+        fp.setDate(estimada, true);
+        if (hiddenInput) hiddenInput.value = formatISO(estimada);
+        definirUnidade('meses', idade);
       }
     });
 
@@ -120,6 +172,20 @@
         if (hiddenInput) hiddenInput.value = formatISO(parsed);
       }
     });
+
+    if (ageUnit && ageUnit.tagName === 'SELECT') {
+      ageUnit.addEventListener('change', () => {
+        const unidade = obterUnidadeAtual();
+        const parsed = parseData(dobInput.value);
+        if (parsed) {
+          atualizarIdade(parsed, unidade);
+        } else {
+          ageInput.dispatchEvent(new Event('input', { bubbles: true }));
+        }
+      });
+    }
+
+    definirUnidade(obterUnidadeAtual());
 
     function parseData(str) {
       const match = str.trim().match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
