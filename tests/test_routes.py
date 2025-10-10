@@ -288,6 +288,8 @@ def test_animals_page(monkeypatch, app):
             return self
         def filter_by(self, **kwargs):
             return self
+        def options(self, *args, **kwargs):
+            return self
         def order_by(self, *args, **kwargs):
             return self
         def paginate(self, page=None, per_page=None, error_out=True):
