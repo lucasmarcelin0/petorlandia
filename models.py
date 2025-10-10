@@ -122,14 +122,14 @@ class User(UserMixin, db.Model):
         foreign_keys='Message.sender_id',
         back_populates='sender',
         cascade='all, delete-orphan',
-        lazy=True,
+        lazy='selectin',
     )
     received_messages = db.relationship(
         'Message',
         foreign_keys='Message.receiver_id',
         back_populates='receiver',
         cascade='all, delete-orphan',
-        lazy=True,
+        lazy='selectin',
     )
 
     given_reviews = db.relationship(

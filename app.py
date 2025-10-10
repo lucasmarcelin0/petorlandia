@@ -539,13 +539,20 @@ def _build_vet_invites_context(response_form=None, vet_profile_form=None):
 
 def _get_inbox_messages():
     """Return received messages with sender information for current user."""
-    mensagens = [
-        m
-        for m in current_user.received_messages
-        if m.sender is not None
-    ]
-    mensagens.sort(key=lambda msg: msg.timestamp or datetime.min, reverse=True)
-    return mensagens
+    if not current_user.is_authenticated:
+        return []
+
+    mensagens = (
+        Message.query.options(
+            selectinload(Message.sender),
+            selectinload(Message.animal),
+        )
+        .filter_by(receiver_id=current_user.id)
+        .order_by(Message.timestamp.desc().nullslast())
+        .all()
+    )
+
+    return [mensagem for mensagem in mensagens if mensagem.sender is not None]
 
 
 def _notify_admin_message(receiver, sender, message_content, conversation_url=None):
