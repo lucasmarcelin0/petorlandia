@@ -111,7 +111,7 @@
                     data-tutor-name="{{ option.tutor_name }}"
                     {% if form.animal_id.data == option.id %}selected{% endif %}
                   >
-                    {{ option.name }}{% if option.tutor_name %} — {{ option.tutor_name }}{% endif %}
+                    {{ option.label or option.name }}
                   </option>
                 {% endfor %}
               </select>
