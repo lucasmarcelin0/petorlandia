@@ -36,7 +36,7 @@ from jinja2 import TemplateNotFound
 import json
 import unicodedata
 from sqlalchemy import func, or_, exists, and_, case, true, false
-from sqlalchemy.orm import joinedload
+from sqlalchemy.orm import joinedload, selectinload
 
 # ----------------------------------------------------------------
 # 1)  Alias único para “models”
@@ -1597,6 +1597,11 @@ def list_animals():
             query = query.filter(Animal.modo.in_(allowed))
 
     # Ordenação e paginação
+    query = query.options(
+        selectinload(Animal.species),
+        selectinload(Animal.breed),
+        selectinload(Animal.owner),
+    )
     query = query.order_by(Animal.date_added.desc())
     pagination = query.paginate(page=page, per_page=per_page, error_out=False)
     animals = pagination.items
