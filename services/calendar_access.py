@@ -162,7 +162,13 @@ def get_calendar_access_scope(user: object) -> CalendarAccessScope:
         if membership.clinic_id:
             clinic_scope.add(membership.clinic_id)
 
+    veterinarian_scope: Optional[Set[int]]
+    if owned_clinic_ids:
+        veterinarian_scope = None
+    else:
+        veterinarian_scope = {vet_id}
+
     return CalendarAccessScope(
         clinic_ids=clinic_scope or None,
-        veterinarian_ids={vet_id},
+        veterinarian_ids=veterinarian_scope,
     )

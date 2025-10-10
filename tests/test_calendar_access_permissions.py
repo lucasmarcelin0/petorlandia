@@ -245,6 +245,79 @@ def test_veterinarian_with_full_access_sees_colleagues(client, monkeypatch):
     assert clinic_id in clinics
 
 
+def test_clinic_owner_veterinarian_sees_colleagues_despite_other_restrictions(
+    client, monkeypatch
+):
+    with flask_app.app_context():
+        owned_clinic = Clinica(nome='Clínica Principal')
+        other_clinic = Clinica(nome='Clínica Secundária')
+        db.session.add_all([owned_clinic, other_clinic])
+        db.session.commit()
+
+        owner_user = User(
+            name='Owner Vet',
+            email='owner-vet@example.com',
+            password_hash='x',
+            worker='veterinario',
+        )
+        colleague_user = User(
+            name='Colleague Vet',
+            email='colleague-owner@example.com',
+            password_hash='x',
+            worker='veterinario',
+        )
+        db.session.add_all([owner_user, colleague_user])
+        db.session.commit()
+
+        owned_clinic.owner_id = owner_user.id
+        db.session.add(owned_clinic)
+        db.session.commit()
+
+        owner_vet = Veterinario(
+            user_id=owner_user.id,
+            crmv='OWN-1',
+            clinica_id=owned_clinic.id,
+        )
+        colleague_vet = Veterinario(
+            user_id=colleague_user.id,
+            crmv='COL-1',
+            clinica_id=owned_clinic.id,
+        )
+        db.session.add_all([owner_vet, colleague_vet])
+        db.session.commit()
+
+        owner_user.clinica_id = owned_clinic.id
+        db.session.add(owner_user)
+
+        db.session.add_all(
+            [
+                ClinicStaff(
+                    clinic_id=owned_clinic.id,
+                    user_id=owner_user.id,
+                    can_view_full_calendar=True,
+                ),
+                ClinicStaff(
+                    clinic_id=other_clinic.id,
+                    user_id=owner_user.id,
+                    can_view_full_calendar=False,
+                ),
+            ]
+        )
+        db.session.commit()
+
+        owner_id = owner_user.id
+        colleague_vet_id = colleague_vet.id
+        clinic_id = owned_clinic.id
+
+    login(monkeypatch, owner_id)
+    response = client.get('/appointments')
+    assert response.status_code == 200
+    vets, clinics = extract_calendar_summary(response.get_data(as_text=True))
+    vet_ids = {entry['id'] for entry in vets}
+    assert colleague_vet_id in vet_ids
+    assert clinic_id in clinics
+
+
 def test_owner_toggle_limits_calendar_summary(client, monkeypatch):
     with flask_app.app_context():
         clinic, owner, vet_user, vet, vet_two_user, vet_two = create_clinic_with_vets()
