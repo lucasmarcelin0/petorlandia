@@ -9167,11 +9167,6 @@ def appointments():
             query_args['veterinario_id'] = veterinario.id
         appointments_url = url_for('appointments', **query_args)
         schedule_form = VetScheduleForm(prefix='schedule')
-        appointment_form = AppointmentForm(
-            is_veterinario=True,
-            clinic_ids=clinic_ids,
-            prefix='appointment',
-        )
         if _is_admin():
             vets_for_choices = agenda_veterinarios or Veterinario.query.all()
         else:
@@ -9179,90 +9174,105 @@ def appointments():
         schedule_form.veterinario_id.choices = [
             (v.id, v.user.name) for v in vets_for_choices
         ]
-        clinic_vets = []
-        if clinic_ids:
+        appointment_form = None
+        combined_vets = []
+        clinic_vet_ids = set()
+        specialist_ids = set()
+        if not clinic_ids:
+            flash(
+                'Você precisa estar vinculado a uma clínica para agendar novas consultas.',
+                'warning',
+            )
+            if request.method == 'POST' and 'appointment-submit' in request.form:
+                return redirect(appointments_url)
+        else:
+            appointment_form = AppointmentForm(
+                is_veterinario=True,
+                clinic_ids=clinic_ids,
+                prefix='appointment',
+                require_clinic_scope=True,
+            )
             clinic_vets = (
                 Veterinario.query.filter(
                     Veterinario.clinica_id.in_(clinic_ids)
                 ).all()
+            ) if clinic_ids else []
+            for clinica in associated_clinics:
+                owner_vet = getattr(getattr(clinica, 'owner', None), 'veterinario', None)
+                if owner_vet and getattr(owner_vet, 'id', None) is not None:
+                    clinic_vets.append(owner_vet)
+            specialists = []
+            for clinica in associated_clinics:
+                specialists.extend(
+                    vet
+                    for vet in (getattr(clinica, 'veterinarios_associados', []) or [])
+                    if getattr(vet, 'id', None) is not None
+                )
+            combined_vets = unique_items_by_id(clinic_vets + specialists + [veterinario])
+
+            def _vet_sort_key(vet):
+                name = getattr(getattr(vet, 'user', None), 'name', '') or ''
+                return name.lower()
+
+            combined_vets = sorted(
+                (
+                    vet
+                    for vet in combined_vets
+                    if getattr(vet, 'id', None) is not None
+                ),
+                key=_vet_sort_key,
             )
-        for clinica in associated_clinics:
-            owner_vet = getattr(getattr(clinica, 'owner', None), 'veterinario', None)
-            if owner_vet and getattr(owner_vet, 'id', None) is not None:
-                clinic_vets.append(owner_vet)
-        specialists = []
-        for clinica in associated_clinics:
-            specialists.extend(
-                vet
-                for vet in (getattr(clinica, 'veterinarios_associados', []) or [])
-                if getattr(vet, 'id', None) is not None
-            )
-        combined_vets = unique_items_by_id(clinic_vets + specialists + [veterinario])
+            combined_vets = calendar_access_scope.filter_veterinarians(combined_vets)
+            if not combined_vets:
+                combined_vets = [veterinario]
 
-        def _vet_sort_key(vet):
-            name = getattr(getattr(vet, 'user', None), 'name', '') or ''
-            return name.lower()
-
-        combined_vets = sorted(
-            (
-                vet
-                for vet in combined_vets
-                if getattr(vet, 'id', None) is not None
-            ),
-            key=_vet_sort_key,
-        )
-        combined_vets = calendar_access_scope.filter_veterinarians(combined_vets)
-        if not combined_vets:
-            combined_vets = [veterinario]
-
-        clinic_vet_ids = {
-            getattr(vet, 'id', None) for vet in clinic_vets if getattr(vet, 'id', None)
-        }
-        specialist_ids = {
-            getattr(vet, 'id', None)
-            for vet in specialists
-            if getattr(vet, 'id', None)
-        }
-
-        def _vet_label(vet):
-            base_name = getattr(getattr(vet, 'user', None), 'name', None)
-            label = base_name or f"Profissional #{getattr(vet, 'id', '—')}"
-            vet_id = getattr(vet, 'id', None)
-            if vet_id in specialist_ids and vet_id not in clinic_vet_ids:
-                return f"{label} (Especialista)"
-            return label
-
-        appointment_form.veterinario_id.choices = [
-            (vet.id, _vet_label(vet)) for vet in combined_vets
-        ]
-        calendar_summary_vets = [
-            {
-                'id': vet.id,
-                'name': _vet_label(vet),
-                'label': _vet_label(vet),
-                'full_name': getattr(getattr(vet, 'user', None), 'name', None),
-                'specialty_list': getattr(vet, 'specialty_list', None),
-                'is_specialist': getattr(vet, 'id', None) in specialist_ids
-                and getattr(vet, 'id', None) not in clinic_vet_ids,
+            clinic_vet_ids = {
+                getattr(vet, 'id', None) for vet in clinic_vets if getattr(vet, 'id', None)
             }
-            for vet in combined_vets
-        ]
-        calendar_summary_vets = calendar_access_scope.filter_veterinarians(calendar_summary_vets)
-        if not calendar_summary_vets:
+            specialist_ids = {
+                getattr(vet, 'id', None)
+                for vet in specialists
+                if getattr(vet, 'id', None)
+            }
+
+            def _vet_label(vet):
+                base_name = getattr(getattr(vet, 'user', None), 'name', None)
+                label = base_name or f"Profissional #{getattr(vet, 'id', '—')}"
+                vet_id = getattr(vet, 'id', None)
+                if vet_id in specialist_ids and vet_id not in clinic_vet_ids:
+                    return f"{label} (Especialista)"
+                return label
+
+            appointment_form.veterinario_id.choices = [
+                (vet.id, _vet_label(vet)) for vet in combined_vets
+            ]
             calendar_summary_vets = [
                 {
-                    'id': veterinario.id,
-                    'name': _vet_label(veterinario),
-                    'label': _vet_label(veterinario),
-                    'full_name': getattr(getattr(veterinario, 'user', None), 'name', None),
-                    'specialty_list': getattr(veterinario, 'specialty_list', None),
-                    'is_specialist': getattr(veterinario, 'id', None) in specialist_ids
-                    and getattr(veterinario, 'id', None) not in clinic_vet_ids,
+                    'id': vet.id,
+                    'name': _vet_label(vet),
+                    'label': _vet_label(vet),
+                    'full_name': getattr(getattr(vet, 'user', None), 'name', None),
+                    'specialty_list': getattr(vet, 'specialty_list', None),
+                    'is_specialist': getattr(vet, 'id', None) in specialist_ids
+                    and getattr(vet, 'id', None) not in clinic_vet_ids,
                 }
+                for vet in combined_vets
             ]
-        if request.method == 'GET':
-            schedule_form.veterinario_id.data = veterinario.id
-            appointment_form.veterinario_id.data = veterinario.id
+            calendar_summary_vets = calendar_access_scope.filter_veterinarians(calendar_summary_vets)
+            if not calendar_summary_vets:
+                calendar_summary_vets = [
+                    {
+                        'id': veterinario.id,
+                        'name': _vet_label(veterinario),
+                        'label': _vet_label(veterinario),
+                        'full_name': getattr(getattr(veterinario, 'user', None), 'name', None),
+                        'specialty_list': getattr(veterinario, 'specialty_list', None),
+                        'is_specialist': getattr(veterinario, 'id', None) in specialist_ids
+                        and getattr(veterinario, 'id', None) not in clinic_vet_ids,
+                    }
+                ]
+            if request.method == 'GET':
+                appointment_form.veterinario_id.data = veterinario.id
         if schedule_form.submit.data and not _is_admin():
             raw_vet_id = request.form.get(schedule_form.veterinario_id.name)
             if raw_vet_id is None:
@@ -9314,7 +9324,7 @@ def appointments():
             else:
                 flash('Nenhum novo horário foi salvo.', 'info')
             return redirect(appointments_url)
-        if appointment_form.validate_on_submit():
+        if appointment_form and appointment_form.validate_on_submit():
             scheduled_at_local = datetime.combine(
                 appointment_form.date.data, appointment_form.time.data
             )
@@ -9845,63 +9855,73 @@ def appointments():
             elif current_user.role == 'admin' and not clinica_id:
                 clinica = Clinica.query.first()
                 clinica_id = clinica.id if clinica else None
-            appointment_form = AppointmentForm(
-                prefix='appointment',
-                clinic_ids=[clinica_id] if clinica_id else None,
-            )
-
-            clinic = Clinica.query.get(clinica_id) if clinica_id else None
-            vets = Veterinario.query.filter_by(clinica_id=clinica_id).all()
-            specialists = []
-            if clinic:
-                specialists = [
-                    vet
-                    for vet in getattr(clinic, 'veterinarios_associados', []) or []
-                    if getattr(vet, 'id', None) is not None
-                ]
-            combined_vets = unique_items_by_id(vets + specialists)
-
-            def _vet_sort_key(vet):
-                name = (
-                    getattr(getattr(vet, 'user', None), 'name', '')
-                    or ''
+            appointment_form = None
+            if not clinica_id:
+                flash(
+                    'Associe o colaborador a uma clínica para habilitar novos agendamentos.',
+                    'warning',
                 )
-                return name.lower()
+                if request.method == 'POST' and 'appointment-submit' in request.form:
+                    return _redirect_to_current_appointments()
+            else:
+                appointment_form = AppointmentForm(
+                    prefix='appointment',
+                    clinic_ids=[clinica_id],
+                    require_clinic_scope=True,
+                )
 
-            combined_vets = sorted(
-                (vet for vet in combined_vets if getattr(vet, 'id', None) is not None),
-                key=_vet_sort_key,
-            )
-            combined_vets = calendar_access_scope.filter_veterinarians(combined_vets)
+                clinic = Clinica.query.get(clinica_id) if clinica_id else None
+                vets = Veterinario.query.filter_by(clinica_id=clinica_id).all()
+                specialists = []
+                if clinic:
+                    specialists = [
+                        vet
+                        for vet in getattr(clinic, 'veterinarios_associados', []) or []
+                        if getattr(vet, 'id', None) is not None
+                    ]
+                combined_vets = unique_items_by_id(vets + specialists)
 
-            clinic_vet_ids = {getattr(vet, 'id', None) for vet in vets if getattr(vet, 'id', None) is not None}
-            specialist_ids = {getattr(vet, 'id', None) for vet in specialists}
+                def _vet_sort_key(vet):
+                    name = (
+                        getattr(getattr(vet, 'user', None), 'name', '')
+                        or ''
+                    )
+                    return name.lower()
 
-            def _vet_label(vet):
-                base_name = getattr(getattr(vet, 'user', None), 'name', None)
-                label = base_name or f"Profissional #{getattr(vet, 'id', '—')}"
-                if getattr(vet, 'id', None) in specialist_ids and getattr(vet, 'id', None) not in clinic_vet_ids:
-                    return f"{label} (Especialista)"
-                return label
+                combined_vets = sorted(
+                    (vet for vet in combined_vets if getattr(vet, 'id', None) is not None),
+                    key=_vet_sort_key,
+                )
+                combined_vets = calendar_access_scope.filter_veterinarians(combined_vets)
 
-            appointment_form.veterinario_id.choices = [
-                (vet.id, _vet_label(vet)) for vet in combined_vets
-            ]
-            calendar_summary_vets = [
-                {
-                    'id': vet.id,
-                    'name': _vet_label(vet),
-                    'label': _vet_label(vet),
-                    'full_name': getattr(getattr(vet, 'user', None), 'name', None),
-                    'specialty_list': getattr(vet, 'specialty_list', None),
-                    'is_specialist': getattr(vet, 'id', None) in specialist_ids
-                    and getattr(vet, 'id', None) not in clinic_vet_ids,
-                }
-                for vet in combined_vets
-            ]
-            calendar_summary_vets = calendar_access_scope.filter_veterinarians(calendar_summary_vets)
-            calendar_summary_clinic_ids = calendar_access_scope.filter_clinic_ids([clinica_id]) if clinica_id else []
-            if appointment_form.validate_on_submit():
+                clinic_vet_ids = {getattr(vet, 'id', None) for vet in vets if getattr(vet, 'id', None) is not None}
+                specialist_ids = {getattr(vet, 'id', None) for vet in specialists}
+
+                def _vet_label(vet):
+                    base_name = getattr(getattr(vet, 'user', None), 'name', None)
+                    label = base_name or f"Profissional #{getattr(vet, 'id', '—')}"
+                    if getattr(vet, 'id', None) in specialist_ids and getattr(vet, 'id', None) not in clinic_vet_ids:
+                        return f"{label} (Especialista)"
+                    return label
+
+                appointment_form.veterinario_id.choices = [
+                    (vet.id, _vet_label(vet)) for vet in combined_vets
+                ]
+                calendar_summary_vets = [
+                    {
+                        'id': vet.id,
+                        'name': _vet_label(vet),
+                        'label': _vet_label(vet),
+                        'full_name': getattr(getattr(vet, 'user', None), 'name', None),
+                        'specialty_list': getattr(vet, 'specialty_list', None),
+                        'is_specialist': getattr(vet, 'id', None) in specialist_ids
+                        and getattr(vet, 'id', None) not in clinic_vet_ids,
+                    }
+                    for vet in combined_vets
+                ]
+                calendar_summary_vets = calendar_access_scope.filter_veterinarians(calendar_summary_vets)
+                calendar_summary_clinic_ids = calendar_access_scope.filter_clinic_ids([clinica_id]) if clinica_id else []
+            if appointment_form and appointment_form.validate_on_submit():
                 scheduled_at_local = datetime.combine(
                     appointment_form.date.data, appointment_form.time.data
                 )

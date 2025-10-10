@@ -1,5 +1,5 @@
 from flask_wtf import FlaskForm
-from sqlalchemy import or_
+from sqlalchemy import or_, false
 from wtforms import (
     StringField,
     TextAreaField,
@@ -599,9 +599,17 @@ class AppointmentForm(FlaskForm):
 
         self.tutor_id.data = resolved_tutor_id
 
-    def __init__(self, tutor=None, is_veterinario=False, clinic_ids=None, *args, **kwargs):
+    def __init__(
+        self,
+        tutor=None,
+        is_veterinario=False,
+        clinic_ids=None,
+        *args,
+        **kwargs,
+    ):
         self._restricted_tutor_id = getattr(tutor, 'id', None)
         self._clinic_scope_ids = []
+        require_clinic_scope = kwargs.pop('require_clinic_scope', None)
         if clinic_ids is not None:
             if isinstance(clinic_ids, (list, tuple, set)):
                 candidates = clinic_ids
@@ -615,6 +623,9 @@ class AppointmentForm(FlaskForm):
                 if value and value not in self._clinic_scope_ids:
                     self._clinic_scope_ids.append(value)
         self._clinic_scope_ids = [cid for cid in self._clinic_scope_ids if cid]
+        if require_clinic_scope is None:
+            require_clinic_scope = bool(is_veterinario)
+        self._clinic_scope_required = bool(require_clinic_scope)
         self._is_veterinario_context = bool(is_veterinario)
         super().__init__(*args, **kwargs)
         from models import Animal, Veterinario, Clinica
@@ -623,6 +634,8 @@ class AppointmentForm(FlaskForm):
 
         def _build_animal_query():
             query = Animal.query.filter(Animal.removido_em.is_(None))
+            if self._clinic_scope_required and not self._clinic_scope_ids:
+                return query.filter(false())
             if self._clinic_scope_ids:
                 query = query.filter(Animal.clinica_id.in_(self._clinic_scope_ids))
             if self._restricted_tutor_id is not None:
@@ -693,6 +706,8 @@ class AppointmentForm(FlaskForm):
         from models import Animal
 
         query = Animal.query.filter(Animal.removido_em.is_(None))
+        if self._clinic_scope_required and not self._clinic_scope_ids:
+            return query.filter(false())
         if self._clinic_scope_ids:
             query = query.filter(Animal.clinica_id.in_(self._clinic_scope_ids))
         if self._restricted_tutor_id is not None:

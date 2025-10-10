@@ -129,7 +129,7 @@ def test_tutor_sees_only_their_animals_in_form(client):
         ]
 
 
-def test_veterinarian_sees_all_animals_in_form(client):
+def test_veterinarian_without_clinic_has_no_animals_in_form(client):
     with flask_app.app_context():
         tutor1 = User(id=1, name='Tutor1', email='t1@test')
         tutor1.set_password('x')
@@ -143,13 +143,9 @@ def test_veterinarian_sees_all_animals_in_form(client):
         db.session.add_all([tutor1, tutor2, animal1, animal2, vet_user, vet])
         db.session.commit()
         form = AppointmentForm(is_veterinario=True)
-        assert (animal1.id, animal1.name) in form.animal_id.choices
-        assert (animal2.id, animal2.name) in form.animal_id.choices
-        assert form.tutor_id.choices == [
-            (0, 'Todos os tutores'),
-            (tutor1.id, tutor1.name),
-            (tutor2.id, tutor2.name),
-        ]
+        assert form.animal_id.choices == []
+        assert form.animal_data == []
+        assert form.tutor_id.choices == [(0, 'Todos os tutores')]
         assert form.tutor_id.data == 0
 
 
@@ -169,6 +165,60 @@ def test_veterinarian_form_respects_clinic_scope(client):
         form = AppointmentForm(is_veterinario=True, clinic_ids=[clinic_a.id])
         assert (animal1.id, animal1.name) in form.animal_id.choices
         assert (animal2.id, animal2.name) not in form.animal_id.choices
+
+
+def test_veterinarian_without_clinic_cannot_schedule(client, monkeypatch):
+    with flask_app.app_context():
+        clinic = Clinica(id=99, nome='Clínica de Apoio')
+        tutor = User(id=50, name='Tutor Vetless', email='tutor@teste')
+        tutor.set_password('x')
+        vet_user = User(id=51, name='Vet Sem Clínica', email='vetless@teste', worker='veterinario')
+        vet_user.set_password('x')
+        animal = Animal(id=77, name='Thor', user_id=tutor.id, clinica_id=clinic.id)
+        vet = Veterinario(id=88, user_id=vet_user.id, crmv='555')
+        db.session.add_all([clinic, tutor, vet_user, animal, vet])
+        db.session.commit()
+        animal_id = animal.id
+        vet_id = vet.id
+        vet_user_id = vet_user.id
+
+    fake_vet = type('U', (), {
+        'id': vet_user_id,
+        'worker': 'veterinario',
+        'role': 'adotante',
+        'name': 'Vet Sem Clínica',
+        'is_authenticated': True,
+        'veterinario': type('V', (), {
+            'id': vet_id,
+            'user': type('WU', (), {'name': 'Vet Sem Clínica'})(),
+            'clinica_id': None,
+            'clinicas': [],
+        })(),
+    })()
+
+    login(monkeypatch, fake_vet)
+
+    resp = client.get('/appointments')
+    assert resp.status_code == 200
+    body = resp.get_data(as_text=True)
+    assert 'Vincule-se a uma clínica para habilitar o agendamento de novas consultas.' in body
+    assert 'Você precisa estar vinculado a uma clínica para agendar novas consultas.' in body
+
+    resp = client.post(
+        '/appointments',
+        data={
+            'appointment-animal_id': animal_id,
+            'appointment-veterinario_id': vet_id,
+            'appointment-date': '2024-05-01',
+            'appointment-time': '10:00',
+            'appointment-kind': 'consulta',
+            'appointment-reason': 'Checkup',
+            'appointment-submit': True,
+        },
+    )
+    assert resp.status_code == 302
+    with flask_app.app_context():
+        assert Appointment.query.count() == 0
 
 
 def test_appointment_form_has_extra_kind_choices(client):

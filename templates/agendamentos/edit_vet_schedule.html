@@ -97,16 +97,18 @@
                 <i class="bi bi-pencil"></i>
                 <span>Editar Horário</span>
               </button>
-              <button
-                class="schedule-toolbar-btn schedule-toolbar-btn--success collapsed"
-                type="button"
-                data-bs-toggle="collapse"
-                data-bs-target="#newAppointmentForm"
-                aria-expanded="false"
-              >
-                <i class="bi bi-plus-circle"></i>
-                <span>Nova Consulta</span>
-              </button>
+              {% if appointment_form %}
+                <button
+                  class="schedule-toolbar-btn schedule-toolbar-btn--success collapsed"
+                  type="button"
+                  data-bs-toggle="collapse"
+                  data-bs-target="#newAppointmentForm"
+                  aria-expanded="false"
+                >
+                  <i class="bi bi-plus-circle"></i>
+                  <span>Nova Consulta</span>
+                </button>
+              {% endif %}
               <button
                 class="schedule-toolbar-btn schedule-toolbar-btn--warning collapsed"
                 type="button"
@@ -967,6 +969,7 @@
 
     <div class="collapse" id="newAppointmentForm" data-bs-parent="#{{ schedule_collapse_group_id }}">
       <div class="card-body p-4">
+        {% if appointment_form %}
         <form method="POST" class="needs-validation" novalidate>
           {{ appointment_form.hidden_tag() }}
           <div class="row g-3">
@@ -1110,6 +1113,11 @@
             <div id="schedule-overview" class="row row-cols-1 row-cols-md-2 row-cols-lg-3 g-3 small"></div>
           </div>
         </div>
+        {% else %}
+        <div class="alert alert-info mb-0" role="status">
+          Vincule-se a uma clínica para habilitar o agendamento de novas consultas.
+        </div>
+        {% endif %}
       </div>
     </div>
     <div class="collapse" id="vetNewTutorForm" data-bs-parent="#{{ schedule_collapse_group_id }}">
