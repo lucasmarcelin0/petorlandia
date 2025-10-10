@@ -4359,8 +4359,16 @@ def clinic_staff(clinica_id):
                 db.session.add(staff)
                 user.clinica_id = clinic.id
                 if has_veterinarian_profile(user):
-                    user.veterinario.clinica_id = clinic.id
-                    db.session.add(user.veterinario)
+                    vet_profile = user.veterinario
+                    vet_profile.clinica_id = clinic.id
+                    # Garanta que o veterinário tenha uma assinatura ou período
+                    # de testes ativo para acessar as agendas da clínica.
+                    ensure_veterinarian_membership(vet_profile)
+                    db.session.add(vet_profile)
+                elif getattr(user, "worker", None) is None:
+                    # Garanta que colaboradores recém-adicionados apareçam nas visões
+                    # de agenda que dependem do papel ``colaborador``.
+                    user.worker = "colaborador"
                 db.session.add(user)
                 db.session.commit()
                 if request.accept_mimetypes.accept_json:
