@@ -1,8 +1,10 @@
 import json
 import os
 import re
+from datetime import datetime, timedelta, date
 from pathlib import Path
 import sys
+from types import SimpleNamespace
 
 import flask_login.utils as login_utils
 import pytest
@@ -16,7 +18,17 @@ os.environ.setdefault('SQLALCHEMY_DATABASE_URI', 'sqlite:///:memory:')
 DB_PATH = PROJECT_ROOT / 'tests' / 'calendar_access_test.sqlite'
 
 from app import app as flask_app, db
-from models import ClinicStaff, Clinica, User, Veterinario
+from models import (
+    Animal,
+    Appointment,
+    ClinicStaff,
+    Clinica,
+    ExamAppointment,
+    User,
+    Vacina,
+    Veterinario,
+)
+from services.calendar_access import CalendarAccessScope
 
 
 @pytest.fixture
@@ -82,6 +94,138 @@ def create_clinic_with_vets():
     vet_two_user.clinica_id = clinic.id
     db.session.commit()
     return clinic, owner, vet_user, vet, vet_two_user, vet_two
+
+
+def setup_vet_calendar_events(*, can_view_full_calendar=True):
+    clinic_a = Clinica(nome='Clínica Norte')
+    clinic_b = Clinica(nome='Clínica Sul')
+    viewer_user = User(
+        name='Viewer Vet',
+        email='viewer@example.com',
+        password_hash='x',
+        worker='veterinario',
+    )
+    colleague_user = User(
+        name='Colleague Vet',
+        email='colleague@example.com',
+        password_hash='x',
+        worker='veterinario',
+    )
+    tutor_user = User(
+        name='Tutor',
+        email='tutor@example.com',
+        password_hash='x',
+    )
+    db.session.add_all([clinic_a, clinic_b, viewer_user, colleague_user, tutor_user])
+    db.session.commit()
+
+    viewer_vet = Veterinario(user_id=viewer_user.id, crmv='CRMV-VIEW', clinica_id=clinic_a.id)
+    colleague_vet = Veterinario(user_id=colleague_user.id, crmv='CRMV-COL', clinica_id=clinic_a.id)
+    colleague_vet.clinicas.append(clinic_b)
+    db.session.add_all([viewer_vet, colleague_vet])
+    db.session.commit()
+
+    viewer_user.clinica_id = clinic_a.id
+    colleague_user.clinica_id = clinic_a.id
+    db.session.add_all([
+        ClinicStaff(
+            clinic_id=clinic_a.id,
+            user_id=viewer_user.id,
+            can_view_full_calendar=can_view_full_calendar,
+        ),
+        ClinicStaff(
+            clinic_id=clinic_b.id,
+            user_id=viewer_user.id,
+            can_view_full_calendar=can_view_full_calendar,
+        ),
+    ])
+    db.session.commit()
+
+    animal_a = Animal(name='Rex', user_id=tutor_user.id, clinica_id=clinic_a.id)
+    animal_b = Animal(name='Luna', user_id=tutor_user.id, clinica_id=clinic_b.id)
+    db.session.add_all([animal_a, animal_b])
+    db.session.commit()
+
+    now = datetime.utcnow()
+    appointment_a = Appointment(
+        animal_id=animal_a.id,
+        tutor_id=tutor_user.id,
+        veterinario_id=colleague_vet.id,
+        scheduled_at=now + timedelta(days=1),
+        clinica_id=clinic_a.id,
+    )
+    db.session.add(appointment_a)
+    db.session.flush()
+
+    colleague_vet.clinica_id = clinic_b.id
+    db.session.add(colleague_vet)
+    db.session.flush()
+
+    appointment_b = Appointment(
+        animal_id=animal_b.id,
+        tutor_id=tutor_user.id,
+        veterinario_id=colleague_vet.id,
+        scheduled_at=now + timedelta(days=1, hours=1),
+        clinica_id=clinic_b.id,
+    )
+    db.session.add(appointment_b)
+    db.session.flush()
+
+    colleague_vet.clinica_id = clinic_a.id
+    db.session.add(colleague_vet)
+    db.session.flush()
+
+    exam_a = ExamAppointment(
+        animal_id=animal_a.id,
+        specialist_id=colleague_vet.id,
+        requester_id=viewer_user.id,
+        scheduled_at=now + timedelta(days=2),
+        status='confirmed',
+    )
+    exam_b = ExamAppointment(
+        animal_id=animal_b.id,
+        specialist_id=colleague_vet.id,
+        requester_id=viewer_user.id,
+        scheduled_at=now + timedelta(days=2, hours=1),
+        status='confirmed',
+    )
+    vaccine_a = Vacina(
+        animal_id=animal_a.id,
+        nome='Vacina A',
+        aplicada=True,
+        aplicada_em=date.today(),
+        aplicada_por=colleague_user.id,
+    )
+    vaccine_b = Vacina(
+        animal_id=animal_b.id,
+        nome='Vacina B',
+        aplicada=True,
+        aplicada_em=date.today(),
+        aplicada_por=colleague_user.id,
+    )
+    db.session.add_all([
+        exam_a,
+        exam_b,
+        vaccine_a,
+        vaccine_b,
+    ])
+    db.session.commit()
+
+    return SimpleNamespace(
+        viewer_user=viewer_user,
+        viewer_vet=viewer_vet,
+        colleague_vet=colleague_vet,
+        clinic_a=clinic_a,
+        clinic_b=clinic_b,
+        animal_a=animal_a,
+        animal_b=animal_b,
+        appointment_a=appointment_a,
+        appointment_b=appointment_b,
+        exam_a=exam_a,
+        exam_b=exam_b,
+        vaccine_a=vaccine_a,
+        vaccine_b=vaccine_b,
+    )
 
 
 def test_veterinarian_with_full_access_sees_colleagues(client, monkeypatch):
@@ -161,3 +305,45 @@ def test_duplicate_memberships_respect_calendar_permission(client, monkeypatch):
     assert vet_id in vet_ids
     assert vet_two_id in vet_ids, 'full calendar permission should include colleagues'
     assert clinic_id in clinics
+
+
+def test_veterinarian_colleague_api_filters_by_scope(client, monkeypatch):
+    with flask_app.app_context():
+        data = setup_vet_calendar_events(can_view_full_calendar=True)
+        viewer_user_id = data.viewer_user.id
+        colleague_vet_id = data.colleague_vet.id
+        clinic_a_id = data.clinic_a.id
+        allowed_event_ids = {
+            f'appointment-{data.appointment_a.id}',
+            f'exam-{data.exam_a.id}',
+            f'vaccine-{data.vaccine_a.id}',
+        }
+        blocked_event_ids = {
+            f'appointment-{data.appointment_b.id}',
+            f'exam-{data.exam_b.id}',
+            f'vaccine-{data.vaccine_b.id}',
+        }
+
+    def _limited_scope(user):
+        assert user.id == viewer_user_id
+        return CalendarAccessScope(clinic_ids={clinic_a_id}, veterinarian_ids=None)
+
+    monkeypatch.setattr('app.get_calendar_access_scope', _limited_scope)
+    login(monkeypatch, viewer_user_id)
+    response = client.get(f'/api/vet_appointments/{colleague_vet_id}')
+    assert response.status_code == 200
+    events = response.get_json()
+    event_ids = {event['id'] for event in events}
+    assert event_ids == allowed_event_ids
+    assert not (event_ids & blocked_event_ids)
+
+
+def test_veterinarian_colleague_api_forbidden_without_permission(client, monkeypatch):
+    with flask_app.app_context():
+        data = setup_vet_calendar_events(can_view_full_calendar=False)
+        viewer_user_id = data.viewer_user.id
+        colleague_vet_id = data.colleague_vet.id
+
+    login(monkeypatch, viewer_user_id)
+    response = client.get(f'/api/vet_appointments/{colleague_vet_id}')
+    assert response.status_code == 403

@@ -11354,6 +11354,7 @@ def api_vet_appointments(veterinario_id):
     """Return appointments for a veterinarian as calendar events."""
     veterinario = Veterinario.query.get_or_404(veterinario_id)
 
+    calendar_access_scope = get_calendar_access_scope(current_user)
     vet_clinic_ids = set()
     primary_clinic_id = getattr(veterinario, 'clinica_id', None)
     if primary_clinic_id:
@@ -11380,12 +11381,39 @@ def api_vet_appointments(veterinario_id):
 
     if current_user.role == 'admin':
         if requested_clinic_ids:
-            query = query.filter(Appointment.clinica_id.in_(requested_clinic_ids))
-            target_clinic_ids = requested_clinic_ids
+            filtered_requested = calendar_access_scope.filter_clinic_ids(requested_clinic_ids)
+            if filtered_requested:
+                query = query.filter(Appointment.clinica_id.in_(filtered_requested))
+                target_clinic_ids = filtered_requested
+            else:
+                query = query.filter(false())
+                target_clinic_ids = []
     elif is_vet:
         current_vet = getattr(current_user, 'veterinario', None)
-        if not current_vet or current_vet.id != veterinario_id:
+        if not current_vet:
             abort(403)
+        if current_vet.id != veterinario_id:
+            if not calendar_access_scope.allows_veterinarian(veterinario):
+                abort(403)
+            candidate_clinic_ids = requested_clinic_ids or list(vet_clinic_ids)
+            if requested_clinic_ids and vet_clinic_ids:
+                candidate_clinic_ids = [
+                    clinic_id
+                    for clinic_id in requested_clinic_ids
+                    if clinic_id in vet_clinic_ids
+                ]
+            filtered_clinic_ids = calendar_access_scope.filter_clinic_ids(
+                candidate_clinic_ids
+            )
+            if filtered_clinic_ids:
+                query = query.filter(Appointment.clinica_id.in_(filtered_clinic_ids))
+                target_clinic_ids = filtered_clinic_ids
+            elif candidate_clinic_ids:
+                query = query.filter(false())
+                target_clinic_ids = []
+            elif requested_clinic_ids:
+                query = query.filter(false())
+                target_clinic_ids = []
     elif is_collaborator:
         collaborator_clinic_id = getattr(current_user, 'clinica_id', None)
         ensure_clinic_access(collaborator_clinic_id)
@@ -11393,8 +11421,15 @@ def api_vet_appointments(veterinario_id):
             abort(404)
         if vet_clinic_ids and collaborator_clinic_id not in vet_clinic_ids:
             abort(404)
-        query = query.filter(Appointment.clinica_id == collaborator_clinic_id)
-        target_clinic_ids = [collaborator_clinic_id]
+        authorized_clinics = calendar_access_scope.filter_clinic_ids(
+            [collaborator_clinic_id]
+        )
+        if authorized_clinics:
+            query = query.filter(Appointment.clinica_id.in_(authorized_clinics))
+            target_clinic_ids = authorized_clinics
+        else:
+            query = query.filter(false())
+            target_clinic_ids = []
     else:
         abort(403)
 
@@ -11407,12 +11442,14 @@ def api_vet_appointments(veterinario_id):
     ]
 
     if target_clinic_ids:
+        animal_clinic_filter = Animal.clinica_id.in_(target_clinic_ids)
+        specialist_clinic_filter = ExamAppointment.specialist.has(
+            Veterinario.clinica_id.in_(target_clinic_ids)
+        )
         exam_filters.append(
             or_(
-                Animal.clinica_id.in_(target_clinic_ids),
-                ExamAppointment.specialist.has(
-                    Veterinario.clinica_id.in_(target_clinic_ids)
-                ),
+                animal_clinic_filter,
+                and_(Animal.clinica_id.is_(None), specialist_clinic_filter),
             )
         )
 
