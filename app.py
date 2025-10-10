@@ -35,7 +35,7 @@ from itsdangerous import URLSafeTimedSerializer
 from jinja2 import TemplateNotFound
 import json
 import unicodedata
-from sqlalchemy import func, or_, exists, and_, case, true
+from sqlalchemy import func, or_, exists, and_, case, true, false
 from sqlalchemy.orm import joinedload
 
 # ----------------------------------------------------------------
@@ -377,7 +377,7 @@ def _user_visibility_clause(viewer=None, clinic_scope=None):
     if viewer and getattr(viewer, 'role', None) == 'admin':
         return true()
 
-    clauses = [User.is_private.is_(False)]
+    clauses = []
 
     if viewer:
         viewer_id = getattr(viewer, 'id', None)
@@ -389,6 +389,9 @@ def _user_visibility_clause(viewer=None, clinic_scope=None):
     if clinic_ids:
         clauses.append(User.clinica_id.in_(list(clinic_ids)))
 
+    if not clauses:
+        return false()
+
     return or_(*clauses)
 
 
@@ -396,9 +399,6 @@ def _can_view_user(user, viewer=None, clinic_scope=None):
     """Return ``True`` if the viewer can see the given user respecting privacy."""
     if user is None:
         return False
-
-    if not user.is_private:
-        return True
 
     if viewer is None and current_user.is_authenticated:
         viewer = current_user
@@ -3287,8 +3287,6 @@ def buscar_tutores():
         return jsonify([])
 
     clinic_id = current_user_clinic_id()
-    if not clinic_id and not _is_admin():
-        return jsonify([])
 
     sort_param = (request.args.get('sort') or 'name_asc').strip().lower()
     allowed_sorts = {'name_asc', 'recent_added', 'recent_attended'}

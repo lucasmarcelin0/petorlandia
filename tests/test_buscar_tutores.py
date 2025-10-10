@@ -320,3 +320,49 @@ def test_buscar_tutores_ignores_other_clinics(app, monkeypatch):
     names = {item['name'] for item in response.get_json()}
     assert 'Tutor da Clínica 1' in names
     assert 'Tutor da Clínica 2' not in names
+
+
+def test_buscar_tutores_veterinario_sem_clinica_ve_tutors_que_cadastrou(app, monkeypatch):
+    with app.app_context():
+        vet_user = User(
+            name='Vet Sem Clínica',
+            email='vet-sem-clinica@example.com',
+            password_hash='hash',
+            worker='veterinario',
+        )
+        db.session.add(vet_user)
+        db.session.flush()
+
+        tutor_proprio = User(
+            name='Tutor Proprio',
+            email='tutor-proprio@example.com',
+            password_hash='hash',
+            added_by_id=vet_user.id,
+        )
+
+        outra_clinica = Clinica(nome='Outra Clínica')
+        db.session.add(outra_clinica)
+        db.session.flush()
+
+        tutor_externo = User(
+            name='Tutor Externo',
+            email='tutor-externo@example.com',
+            password_hash='hash',
+            clinica_id=outra_clinica.id,
+        )
+
+        db.session.add_all([tutor_proprio, tutor_externo])
+        db.session.commit()
+
+        vet_user_id = vet_user.id
+
+    login(monkeypatch, vet_user_id)
+    client = app.test_client()
+    response = client.get('/buscar_tutores?q=Tutor')
+
+    assert response.status_code == 200
+
+    data = response.get_json()
+    names = [item['name'] for item in data]
+
+    assert names == ['Tutor Proprio']
