@@ -44,6 +44,8 @@ def test_veterinarian_can_schedule_for_other_users_animal(client, monkeypatch):
         clinic = Clinica(id=1, nome='Clinica')
         tutor = User(id=1, name='Tutor', email='tutor@test')
         tutor.set_password('x')
+        tutor.clinica_id = clinic.id
+        tutor.is_private = False
         vet_user = User(id=2, name='Vet', email='vet@test', worker='veterinario')
         vet_user.set_password('x')
         animal = Animal(id=1, name='Rex', user_id=tutor.id, clinica_id=clinic.id)
@@ -115,8 +117,9 @@ def test_tutor_sees_only_their_animals_in_form(client):
         db.session.add_all([tutor1, tutor2, animal1, animal2])
         db.session.commit()
         form = AppointmentForm(tutor=tutor1)
-        assert (animal1.id, animal1.name) in form.animal_id.choices
-        assert (animal2.id, animal2.name) not in form.animal_id.choices
+        expected_label = f"{animal1.name} — {tutor1.name}"
+        assert (animal1.id, expected_label) in form.animal_id.choices
+        assert (animal2.id, f"{animal2.name} — {tutor2.name}") not in form.animal_id.choices
         assert form.tutor_id.choices == [(tutor1.id, tutor1.name)]
         assert form.tutor_id.data == tutor1.id
         assert form.animal_data == [
@@ -125,6 +128,7 @@ def test_tutor_sees_only_their_animals_in_form(client):
                 'name': animal1.name,
                 'tutor_id': tutor1.id,
                 'tutor_name': tutor1.name,
+                'label': expected_label,
             }
         ]
 
@@ -163,8 +167,14 @@ def test_veterinarian_form_respects_clinic_scope(client):
         db.session.commit()
 
         form = AppointmentForm(is_veterinario=True, clinic_ids=[clinic_a.id])
-        assert (animal1.id, animal1.name) in form.animal_id.choices
-        assert (animal2.id, animal2.name) not in form.animal_id.choices
+        assert (
+            animal1.id,
+            f"{animal1.name} — {tutor1.name}",
+        ) in form.animal_id.choices
+        assert (
+            animal2.id,
+            f"{animal2.name} — {tutor2.name}",
+        ) not in form.animal_id.choices
 
 
 def test_veterinarian_without_clinic_cannot_schedule(client, monkeypatch):

@@ -538,6 +538,12 @@ class AppointmentForm(FlaskForm):
 
         records = []
         tutor_map = {}
+        def _compose_animal_label(name, tutor_display_name):
+            base_name = name or 'Animal sem nome'
+            if tutor_display_name:
+                return f"{base_name} — {tutor_display_name}"
+            return base_name
+
         for animal in animals:
             tutor_id = getattr(animal, 'user_id', None)
             owner = getattr(animal, 'owner', None)
@@ -545,20 +551,23 @@ class AppointmentForm(FlaskForm):
             animal_id = getattr(animal, 'id', None)
             if animal_id is None:
                 continue
+            normalized_tutor_name = _normalize_tutor_name(tutor_name, tutor_id)
+            animal_name = getattr(animal, 'name', None) or f'Animal #{animal_id}'
             record = {
                 'id': animal_id,
-                'name': getattr(animal, 'name', None) or f'Animal #{animal_id}',
+                'name': animal_name,
                 'tutor_id': tutor_id,
-                'tutor_name': _normalize_tutor_name(tutor_name, tutor_id),
+                'tutor_name': normalized_tutor_name,
+                'label': _compose_animal_label(animal_name, normalized_tutor_name),
             }
             records.append(record)
             if tutor_id:
-                tutor_map[tutor_id] = _normalize_tutor_name(tutor_name, tutor_id)
+                tutor_map[tutor_id] = normalized_tutor_name
 
         records.sort(key=lambda item: ((item['name'] or '').lower(), item['id']))
         self.animal_data = records
         self.animal_id.choices = [
-            (item['id'], item['name']) for item in records
+            (item['id'], item['label']) for item in records
         ]
 
         if not hasattr(self, 'tutor_id'):
