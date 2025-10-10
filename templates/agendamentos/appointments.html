@@ -59,15 +59,17 @@
             <i class="bi bi-pencil"></i>
             <span>Editar Horário</span>
           </button>
-          <button
-            class="schedule-toolbar-btn schedule-toolbar-btn--success"
-            type="button"
-            data-bs-toggle="collapse"
-            data-bs-target="#newAppointmentForm"
-          >
-            <i class="bi bi-plus-circle"></i>
-            <span>Nova Consulta</span>
-          </button>
+          {% if form %}
+            <button
+              class="schedule-toolbar-btn schedule-toolbar-btn--success"
+              type="button"
+              data-bs-toggle="collapse"
+              data-bs-target="#newAppointmentForm"
+            >
+              <i class="bi bi-plus-circle"></i>
+              <span>Nova Consulta</span>
+            </button>
+          {% endif %}
         </div>
       </nav>
     </div>
