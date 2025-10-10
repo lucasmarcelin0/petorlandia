@@ -133,6 +133,25 @@
         const cont=document.getElementById('tutores-adicionados');
         if(cont) cont.innerHTML=data.html;
       }
+      if (data && data.tutor && typeof document !== 'undefined') {
+        const tutorId = String(data.tutor.id);
+        const tutorLabel = data.tutor.display_name || data.tutor.name || `Tutor #${tutorId}`;
+        const selects = document.querySelectorAll('[data-appointment-tutor-select]');
+        selects.forEach((select) => {
+          if (!(select instanceof HTMLSelectElement)) return;
+          let option = Array.from(select.options).find((opt) => opt.value === tutorId);
+          if (!option) {
+            option = document.createElement('option');
+            option.value = tutorId;
+            select.appendChild(option);
+          }
+          option.textContent = tutorLabel;
+          option.dataset.tutorId = tutorId;
+          option.dataset.tutorName = tutorLabel;
+          select.value = tutorId;
+          select.dispatchEvent(new Event('change', { bubbles: true }));
+        });
+      }
       form.reset();
       const btn=form.querySelector('button[type="submit"]');
       if(btn && btn.dataset.original){

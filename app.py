@@ -4879,7 +4879,16 @@ def tutores():
                 pagination=pagination,
                 scope=resolved_scope,
             )
-            return jsonify(message='Tutor criado com sucesso!', category='success', html=html)
+            return jsonify(
+                message='Tutor criado com sucesso!',
+                category='success',
+                html=html,
+                tutor={
+                    'id': novo.id,
+                    'name': novo.name or f'Tutor #{novo.id}',
+                    'display_name': novo.name or f'Tutor #{novo.id}',
+                },
+            )
 
         flash('Tutor criado com sucesso!', 'success')
         return redirect(url_for('ficha_tutor', tutor_id=novo.id))
