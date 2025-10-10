@@ -428,15 +428,22 @@ def get_user_or_404(user_id, *, viewer=None, clinic_scope=None):
     return user
 
 
-def ensure_clinic_access(clinica_id):
+def ensure_clinic_access(clinica_id, *, viewer=None, clinic_scope=None):
     """Abort with 404 if the current user cannot access the given clinic."""
     if not clinica_id:
         return
-    if not current_user.is_authenticated:
+
+    if viewer is None and current_user.is_authenticated:
+        viewer = current_user
+
+    if viewer is None or not getattr(viewer, "is_authenticated", False):
         abort(404)
-    if current_user.is_authenticated and current_user.role == 'admin':
+
+    if getattr(viewer, "role", None) == "admin":
         return
-    if current_user_clinic_id() != clinica_id:
+
+    accessible_clinic_ids = _collect_clinic_ids(viewer=viewer, clinic_scope=clinic_scope)
+    if clinica_id not in accessible_clinic_ids:
         abort(404)
 
 
