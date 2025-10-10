@@ -338,12 +338,16 @@ def calcular_idade(data_nasc):
     informado, retorna uma string vazia.
     """
     hoje = date.today()
-    if data_nasc:
-        delta = relativedelta(hoje, data_nasc)
-        if delta.years > 0:
-            return delta.years
-        return delta.months
-    return ''
+    if not data_nasc:
+        return ''
+
+    if data_nasc > hoje:
+        return ''
+
+    delta = relativedelta(hoje, data_nasc)
+    if delta.years > 0:
+        return delta.years
+    return delta.months
 
 
 def apology(message, code=400):
