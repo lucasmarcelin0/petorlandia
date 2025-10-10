@@ -139,6 +139,26 @@ def test_collaborator_cannot_schedule_with_foreign_animal(client, monkeypatch):
         assert Appointment.query.count() == 0
 
 
+def test_collaborator_receives_404_when_viewing_foreign_animal_record(client, monkeypatch):
+    with flask_app.app_context():
+        ids = setup_clinic_data()
+        other_clinic = Clinica(id=4, nome='Clínica Externa 404')
+        other_tutor = User(id=60, name='Outro Tutor 404', email='outro404@test')
+        other_tutor.set_password('x')
+        other_tutor.clinica_id = other_clinic.id
+        other_tutor.is_private = False
+        foreign_animal = Animal(id=61, name='Shadow', user_id=other_tutor.id, clinica_id=other_clinic.id)
+        db.session.add_all([other_clinic, other_tutor, foreign_animal])
+        db.session.commit()
+        foreign_animal_id = foreign_animal.id
+
+    user = collaborator_user(ids['clinic_id'])
+    login(monkeypatch, user)
+
+    resp = client.get(f'/animal/{foreign_animal_id}/ficha')
+    assert resp.status_code == 404
+
+
 def test_collaborator_cannot_schedule_with_foreign_veterinarian(client, monkeypatch):
     with flask_app.app_context():
         ids = setup_clinic_data()

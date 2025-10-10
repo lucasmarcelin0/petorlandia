@@ -443,6 +443,20 @@ def ensure_clinic_access(clinica_id):
 def get_animal_or_404(animal_id):
     """Return animal if accessible to current user, otherwise 404."""
     animal = Animal.query.get_or_404(animal_id)
+    ensure_clinic_access(animal.clinica_id)
+
+    tutor_id = getattr(animal, "user_id", None)
+    if tutor_id:
+        visibility_clause = _user_visibility_clause()
+        tutor_visible = (
+            db.session.query(User.id)
+            .filter(User.id == tutor_id)
+            .filter(visibility_clause)
+            .first()
+        )
+        if not tutor_visible:
+            abort(404)
+
     return animal
 
 
