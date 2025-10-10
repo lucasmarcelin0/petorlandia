@@ -88,9 +88,9 @@
         {% set tem_posologia = item.dosagem or item.frequencia or item.duracao %}
         {% if tem_posologia %}
           <div class="prescricao-posologia">
-            {% if item.dosagem %}<span><strong>Dosagem:</strong> {{ item.dosagem }}</span>{% endif %}
-            {% if item.frequencia %}<span><strong>Frequência:</strong> {{ item.frequencia }}</span>{% endif %}
-            {% if item.duracao %}<span><strong>Duração:</strong> {{ item.duracao }}</span>{% endif %}
+            {% if item.dosagem %}<span>{{ item.dosagem }}</span>{% endif %}
+            {% if item.frequencia %}<span>{{ item.frequencia }}</span>{% endif %}
+            {% if item.duracao %}<span>{{ item.duracao }}</span>{% endif %}
           </div>
         {% endif %}
         {% if item.observacoes %}
