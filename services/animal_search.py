@@ -133,11 +133,16 @@ def search_animals(
         last_at_value = last_at.isoformat() if isinstance(last_at, datetime) else None
         species_name = _serialize_species(animal)
         breed_name = _serialize_breed(animal)
+        date_added = (
+            animal.date_added.isoformat() if getattr(animal, "date_added", None) else ""
+        )
+        age_years = getattr(animal, "age_years", None)
 
         serialized.append(
             {
                 "id": animal.id,
                 "name": animal.name,
+                "image": getattr(animal, "image", None),
                 "species": species_name,
                 "breed": breed_name,
                 "sex": animal.sex,
@@ -151,8 +156,10 @@ def search_animals(
                 "species_name": species_name,
                 "breed_name": breed_name,
                 "age_display": animal.age_display,
+                "age_years": age_years if age_years is not None else "",
                 "last_appointment_at": last_at_value,
                 "clinic_id": animal.clinica_id,
+                "date_added": date_added,
             }
         )
 

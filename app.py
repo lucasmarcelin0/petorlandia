@@ -3420,6 +3420,14 @@ def buscar_tutores():
             if valor
         ]
 
+        created_at = (
+            tutor.created_at.isoformat() if getattr(tutor, 'created_at', None) else ''
+        )
+        date_of_birth = (
+            tutor.date_of_birth.isoformat() if getattr(tutor, 'date_of_birth', None) else ''
+        )
+        vet = getattr(tutor, 'veterinario', None)
+
         resultados.append(
             {
                 'id': tutor.id,
@@ -3431,11 +3439,10 @@ def buscar_tutores():
                 'worker': tutor.worker,
                 'address_summary': address_summary,
                 'details': ' • '.join(detalhes),
-                'specialties': ', '.join(
-                    s.nome for s in tutor.veterinario.specialties
-                )
-                if getattr(tutor, 'veterinario', None)
-                else '',
+                'specialties': ', '.join(s.nome for s in vet.specialties) if vet else '',
+                'created_at': created_at,
+                'date_of_birth': date_of_birth,
+                'veterinario_id': vet.id if vet else None,
             }
         )
 
