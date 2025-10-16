@@ -41,6 +41,7 @@
       data-url-placeholder="__ID__"
       data-consulta-template="{{ url_for('consulta_direct', animal_id=0)|replace('/0', '/__ID__') }}"
       data-ficha-template="{{ url_for('ficha_animal', animal_id=0)|replace('/0/', '/__ID__/') }}"
+      data-cache-context="{{ (request.args.get('clinica_id') or current_user.clinica_id or '') ~ '::' ~ (scope|default('')) }}"
     >
       {% if animais_adicionados %}
         {% for animal in animais_adicionados %}
@@ -161,6 +162,9 @@
   let searchMode = false;
   let activeController = null;
   let debounceTimer = null;
+  const resultsCache = new Map();
+  let lastQuery = '';
+  let currentCacheContext = container.dataset.cacheContext || '';
 
   const NO_RESULTS_TEMPLATE = `
     <div class="col-12">
@@ -169,6 +173,27 @@
       </div>
     </div>
   `;
+
+  function invalidateCache() {
+    resultsCache.clear();
+    lastQuery = '';
+  }
+
+  const cacheObserver = new MutationObserver((mutations) => {
+    for (const mutation of mutations) {
+      if (mutation.type === 'attributes' && mutation.attributeName === 'data-cache-context') {
+        const newValue = container.dataset.cacheContext || '';
+        if (newValue !== currentCacheContext) {
+          currentCacheContext = newValue;
+          invalidateCache();
+        }
+      }
+    }
+  });
+
+  cacheObserver.observe(container, { attributes: true, attributeFilter: ['data-cache-context'] });
+  container.addEventListener('invalidate-cache', invalidateCache);
+  document.addEventListener('clinic:changed', invalidateCache);
 
   function togglePagination(shouldShow) {
     if (pagination) {
@@ -179,6 +204,58 @@
   function restoreOriginalCards() {
     container.innerHTML = '';
     originalNodes.forEach((node) => container.appendChild(node.cloneNode(true)));
+  }
+
+  function getNormalizedTerm(term) {
+    return term.trim().toLowerCase();
+  }
+
+  function matchesAnimalTerm(record, normalizedTerm) {
+    if (!normalizedTerm) {
+      return true;
+    }
+    const tokens = Array.isArray(record.searchTokens) ? record.searchTokens : [];
+    return tokens.some((token) => token.includes(normalizedTerm));
+  }
+
+  function handleImmediateResults(value) {
+    const rawQuery = value || '';
+    const normalizedTerm = getNormalizedTerm(rawQuery);
+
+    if (!normalizedTerm) {
+      if (searchMode) {
+        searchMode = false;
+        searchResults = [];
+        togglePagination(true);
+        restoreOriginalCards();
+        applySort();
+      }
+      lastQuery = '';
+      return true;
+    }
+
+    if (resultsCache.has(normalizedTerm)) {
+      searchMode = true;
+      togglePagination(false);
+      searchResults = resultsCache.get(normalizedTerm) || [];
+      lastQuery = normalizedTerm;
+      applySort();
+      return true;
+    }
+
+    if (lastQuery && normalizedTerm.startsWith(lastQuery) && resultsCache.has(lastQuery)) {
+      const baseResults = resultsCache.get(lastQuery) || [];
+      const filtered = baseResults.filter((record) => matchesAnimalTerm(record, normalizedTerm));
+      resultsCache.set(normalizedTerm, filtered);
+      searchMode = true;
+      togglePagination(false);
+      searchResults = filtered;
+      lastQuery = normalizedTerm;
+      applySort();
+      return true;
+    }
+
+    return false;
   }
 
   function buildUrl(template, id) {
@@ -408,17 +485,33 @@
   }
 
   function normalizeAnimal(record) {
+    const name = record.name || '';
+    const speciesName = record.species_name || record.species || '';
+    const breedName = record.breed_name || record.breed || '';
+    const tutorName = record.tutor_name || '';
+    const microchip = record.microchip_number || '';
+    const dateAdded = record.date_added || '';
+    const normalizedAge = normalizeAge(record.age_years);
+    const searchTokens = [name, speciesName, breedName, tutorName, microchip]
+      .map((value) => (value || '').toString().toLowerCase())
+      .filter((token) => token);
+
     return {
       ...record,
-      name: record.name || '',
-      species_name: record.species_name || record.species || '',
-      date_added: record.date_added || '',
-      age_years: normalizeAge(record.age_years),
+      name,
+      species_name: speciesName,
+      breed_name: breedName,
+      tutor_name: tutorName,
+      microchip_number: microchip,
+      date_added: dateAdded,
+      age_years: normalizedAge,
+      searchTokens,
     };
   }
 
   async function performSearch(term) {
     const query = term.trim();
+    const normalizedTerm = getNormalizedTerm(query);
 
     if (!query) {
       if (activeController) {
@@ -430,6 +523,7 @@
       togglePagination(true);
       restoreOriginalCards();
       applySort();
+      lastQuery = '';
       return;
     }
 
@@ -439,14 +533,17 @@
 
     searchMode = true;
     togglePagination(false);
-    container.innerHTML = `
-      <div class="col-12">
-        <div class="text-center text-muted py-5">Carregando resultados...</div>
-      </div>
-    `;
+    if (!resultsCache.has(normalizedTerm)) {
+      container.innerHTML = `
+        <div class="col-12">
+          <div class="text-center text-muted py-5">Carregando resultados...</div>
+        </div>
+      `;
+    }
 
     const params = new URLSearchParams({ q: query });
     activeController = new AbortController();
+    lastQuery = normalizedTerm;
 
     try {
       const response = await fetch(`/buscar_animais?${params.toString()}`, {
@@ -456,18 +553,28 @@
         throw new Error('Falha ao buscar animais');
       }
       const data = await response.json();
-      searchResults = Array.isArray(data) ? data.map(normalizeAnimal) : [];
+      const normalizedResults = Array.isArray(data) ? data.map(normalizeAnimal) : [];
+      resultsCache.set(normalizedTerm, normalizedResults);
+      searchResults = normalizedResults;
+      lastQuery = normalizedTerm;
       applySort();
     } catch (error) {
       if (error.name === 'AbortError') {
         return;
       }
       console.error(error);
-      searchMode = false;
-      searchResults = [];
-      restoreOriginalCards();
-      togglePagination(true);
-      applySort();
+      if (resultsCache.has(normalizedTerm)) {
+        searchResults = resultsCache.get(normalizedTerm) || [];
+        searchMode = true;
+        togglePagination(false);
+        applySort();
+      } else {
+        searchMode = false;
+        searchResults = [];
+        restoreOriginalCards();
+        togglePagination(true);
+        applySort();
+      }
     } finally {
       activeController = null;
     }
@@ -483,7 +590,9 @@
   }
 
   filterInput.addEventListener('input', () => {
-    localStorage.setItem(filterStorageKey, filterInput.value);
+    const value = filterInput.value;
+    localStorage.setItem(filterStorageKey, value);
+    handleImmediateResults(value);
     scheduleSearch();
   });
 
