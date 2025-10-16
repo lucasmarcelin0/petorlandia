@@ -36,6 +36,7 @@ export function setupAppointmentsCalendarSummary(options = {}) {
     const calendarSummaryOverviewToday = calendarSummaryPanel.querySelector('[data-calendar-summary-overview-today]');
     const calendarSummaryOverviewWeek = calendarSummaryPanel.querySelector('[data-calendar-summary-overview-week]');
     const calendarSummaryLoading = calendarSummaryPanel.querySelector('[data-calendar-summary-loading]');
+    const calendarSummaryModeSwitch = calendarSummaryPanel.querySelector('[data-calendar-summary-mode-switch]');
     const calendarTabsElement = document.querySelector(calendarTabsSelector);
     const calendarTabButtons = calendarTabsElement
       ? calendarTabsElement.querySelectorAll('[data-bs-toggle="tab"]')
@@ -62,6 +63,33 @@ export function setupAppointmentsCalendarSummary(options = {}) {
     let calendarSummaryTabVisible = true;
     let isCalendarSummaryCollapsed = getStoredCalendarSummaryCollapsed();
     let activeCalendarSummaryVetId = null;
+    const defaultSummaryModeRaw = calendarSummaryPanel.dataset
+      ? calendarSummaryPanel.dataset.calendarSummaryDefaultMode
+      : '';
+
+    function normalizeCalendarSummaryMode(value) {
+      return value === 'clinic' ? 'clinic' : 'vet';
+    }
+
+    function createEmptySummaryData() {
+      return {
+        rows: [],
+        filters: [],
+        totalEvents: 0,
+        totalToday: 0,
+        totalThisWeek: 0,
+      };
+    }
+
+    let lastCalendarSummaryData = {
+      vet: createEmptySummaryData(),
+      clinic: createEmptySummaryData(),
+    };
+
+    let activeCalendarSummaryMode = normalizeCalendarSummaryMode(defaultSummaryModeRaw);
+    if (calendarSummaryPanel) {
+      calendarSummaryPanel.setAttribute('data-calendar-summary-mode', activeCalendarSummaryMode);
+    }
 
     function applyCalendarSummaryVisibilityState() {
       const shouldDisplay = calendarSummaryTabVisible && !isCalendarSummaryCollapsed;
@@ -473,6 +501,50 @@ export function setupAppointmentsCalendarSummary(options = {}) {
       return new Set(ids.filter(Boolean));
     })();
 
+    const calendarSummaryClinicMetadata = (() => {
+      const parsed = parseCalendarSummaryAttributeJSON('data-calendar-summary-clinics');
+      const entries = Array.isArray(parsed) ? parsed : (parsed ? [parsed] : []);
+      const map = new Map();
+      entries.forEach((item) => {
+        if (!item || typeof item !== 'object') {
+          return;
+        }
+        const normalizedId = normalizeSummaryClinicId(
+          item.id
+            ?? item.clinicId
+            ?? item.clinica_id
+            ?? item.clinicaId
+            ?? null,
+        );
+        if (!normalizedId) {
+          return;
+        }
+        const rawLabel = item.label ?? item.name ?? item.full_name ?? item.fullName ?? null;
+        const label = typeof rawLabel === 'string' ? rawLabel.trim() : null;
+        const rawFullName = item.full_name ?? item.fullName ?? rawLabel ?? null;
+        const fullName = typeof rawFullName === 'string' ? rawFullName.trim() : null;
+        const isPrimary = (() => {
+          if (typeof item.is_primary === 'boolean') {
+            return item.is_primary;
+          }
+          if (typeof item.isPrimary === 'boolean') {
+            return item.isPrimary;
+          }
+          if (typeof item.primary === 'boolean') {
+            return item.primary;
+          }
+          return false;
+        })();
+        map.set(normalizedId, {
+          clinicId: normalizedId,
+          label,
+          fullName: fullName || label || null,
+          isPrimary,
+        });
+      });
+      return map;
+    })();
+
     function isCalendarSummaryVetAllowed(vetId) {
       const normalized = normalizeSummaryVetId(vetId);
       if (!normalized) {
@@ -531,6 +603,36 @@ export function setupAppointmentsCalendarSummary(options = {}) {
       calendarSummaryVetMetadata.set(normalized, next);
     }
 
+    function getStoredCalendarSummaryClinicMetadata(clinicId) {
+      const normalized = normalizeSummaryClinicId(clinicId);
+      if (!normalized || !(calendarSummaryClinicMetadata instanceof Map)) {
+        return null;
+      }
+      return calendarSummaryClinicMetadata.get(normalized) || null;
+    }
+
+    function updateCalendarSummaryClinicMetadata(clinicId, metadata) {
+      const normalized = normalizeSummaryClinicId(clinicId);
+      if (!normalized || !(calendarSummaryClinicMetadata instanceof Map)) {
+        return;
+      }
+      const current = calendarSummaryClinicMetadata.get(normalized) || {};
+      const next = { ...current };
+      if (metadata && typeof metadata === 'object') {
+        if (metadata.label) {
+          next.label = metadata.label;
+        }
+        if (metadata.fullName) {
+          next.fullName = metadata.fullName;
+        }
+        if (typeof metadata.isPrimary === 'boolean') {
+          next.isPrimary = metadata.isPrimary;
+        }
+      }
+      next.clinicId = normalized;
+      calendarSummaryClinicMetadata.set(normalized, next);
+    }
+
     function extractEventVetMetadata(event, fallbackId) {
       if (!event) {
         return null;
@@ -578,6 +680,66 @@ export function setupAppointmentsCalendarSummary(options = {}) {
           ?? null,
         specialtyList,
         isSpecialist,
+      };
+    }
+
+    function deriveSummaryClinicName(event, fallbackId) {
+      if (!event) {
+        return fallbackId ? `Clínica ${fallbackId}` : 'Clínica';
+      }
+      const extended = event.extendedProps || {};
+      const preferred = extended.clinicLabel
+        ?? extended.clinicName
+        ?? extended.clinic_name
+        ?? extended.clinicaNome
+        ?? extended.clinicaName
+        ?? extended.clinica
+        ?? null;
+      if (typeof preferred === 'string' && preferred.trim()) {
+        return preferred.trim();
+      }
+      if (fallbackId) {
+        return `Clínica ${fallbackId}`;
+      }
+      return 'Clínica';
+    }
+
+    function extractEventClinicMetadata(event, clinicId) {
+      if (!event) {
+        return null;
+      }
+      const extended = event.extendedProps || {};
+      const rawLabel = extended.clinicLabel
+        ?? extended.clinicName
+        ?? extended.clinic_name
+        ?? extended.clinicaNome
+        ?? extended.clinicaName
+        ?? null;
+      const label = typeof rawLabel === 'string' ? rawLabel.trim() : null;
+      const rawFullName = extended.clinicFullName
+        ?? extended.clinicFullname
+        ?? extended.clinicName
+        ?? extended.clinic_name
+        ?? extended.clinicaNome
+        ?? null;
+      const fullName = typeof rawFullName === 'string' ? rawFullName.trim() : null;
+      const isPrimary = (() => {
+        if (typeof extended.clinicPrimary === 'boolean') {
+          return extended.clinicPrimary;
+        }
+        if (typeof extended.isPrimaryClinic === 'boolean') {
+          return extended.isPrimaryClinic;
+        }
+        if (typeof extended.primaryClinic === 'boolean') {
+          return extended.primaryClinic;
+        }
+        return null;
+      })();
+      return {
+        clinicId: normalizeSummaryClinicId(clinicId),
+        label,
+        fullName: fullName || label || null,
+        isPrimary,
       };
     }
 
@@ -723,7 +885,8 @@ export function setupAppointmentsCalendarSummary(options = {}) {
     }
 
     function computeSummaryMetrics(events) {
-      const summaryMap = new Map();
+      const vetSummaryMap = new Map();
+      const clinicSummaryMap = new Map();
       const today = startOfDay(new Date());
       const todayKey = formatSummaryDateKey(today);
       const startOfWeek = today ? new Date(today) : null;
@@ -753,13 +916,15 @@ export function setupAppointmentsCalendarSummary(options = {}) {
         if (!isCalendarSummaryVetAllowed(vetId)) {
           return;
         }
-        const eventClinicId = event.extendedProps.clinicId
+        const rawClinicId = event.extendedProps.clinicId
           || event.extendedProps.clinic_id
           || event.extendedProps.clinicaId
           || event.extendedProps.clinica_id;
-        if (!isCalendarSummaryClinicAllowed(eventClinicId)) {
+        if (!isCalendarSummaryClinicAllowed(rawClinicId)) {
           return;
         }
+        const clinicId = normalizeSummaryClinicId(rawClinicId);
+
         const name = deriveSummaryVetName(event, vetId);
         const storedMetadata = getStoredCalendarSummaryVetMetadata(vetId) || {};
         const eventMetadata = extractEventVetMetadata(event, vetId) || {};
@@ -790,7 +955,7 @@ export function setupAppointmentsCalendarSummary(options = {}) {
         });
         const eventDate = startOfDay(parseSummaryDate(event.start || event.startStr || event.date || null));
         const dateKey = formatSummaryDateKey(eventDate);
-        const summaryEntry = summaryMap.get(vetId) || {
+        const vetEntry = vetSummaryMap.get(vetId) || {
           vetId,
           vetName: resolvedLabel || name,
           vetFullName: resolvedFullName || resolvedLabel || name,
@@ -801,34 +966,94 @@ export function setupAppointmentsCalendarSummary(options = {}) {
           thisWeek: 0,
           days: new Map(),
         };
-        summaryEntry.vetName = resolvedLabel || summaryEntry.vetName || name;
-        summaryEntry.vetFullName = resolvedFullName
-          || summaryEntry.vetFullName
-          || summaryEntry.vetName
+        vetEntry.vetName = resolvedLabel || vetEntry.vetName || name;
+        vetEntry.vetFullName = resolvedFullName
+          || vetEntry.vetFullName
+          || vetEntry.vetName
           || name;
         if (resolvedSpecialtyList !== undefined) {
-          summaryEntry.specialtyList = resolvedSpecialtyList;
+          vetEntry.specialtyList = resolvedSpecialtyList;
         }
         if (typeof resolvedIsSpecialist === 'boolean') {
-          summaryEntry.isSpecialist = resolvedIsSpecialist;
+          vetEntry.isSpecialist = resolvedIsSpecialist;
         }
-        summaryEntry.total += 1;
+        vetEntry.total += 1;
         if (dateKey === todayKey) {
-          summaryEntry.today += 1;
+          vetEntry.today += 1;
         }
         if (eventDate && startOfWeek && endOfWeek && eventDate >= startOfWeek && eventDate < endOfWeek) {
-          summaryEntry.thisWeek += 1;
+          vetEntry.thisWeek += 1;
         }
         if (eventDate) {
           const key = formatSummaryDateKey(eventDate);
-          const current = summaryEntry.days.get(key) || { date: eventDate, count: 0 };
+          const current = vetEntry.days.get(key) || { date: eventDate, count: 0 };
           current.count += 1;
-          summaryEntry.days.set(key, current);
+          vetEntry.days.set(key, current);
         }
-        summaryMap.set(vetId, summaryEntry);
+        vetSummaryMap.set(vetId, vetEntry);
+
+        if (clinicId) {
+          const storedClinicMetadata = getStoredCalendarSummaryClinicMetadata(clinicId) || {};
+          const eventClinicMetadata = extractEventClinicMetadata(event, clinicId) || {};
+          const resolvedClinicLabel = eventClinicMetadata.label
+            || storedClinicMetadata.label
+            || eventClinicMetadata.fullName
+            || storedClinicMetadata.fullName
+            || deriveSummaryClinicName(event, clinicId);
+          const resolvedClinicFullName = eventClinicMetadata.fullName
+            || storedClinicMetadata.fullName
+            || resolvedClinicLabel;
+          const resolvedClinicIsPrimary = (() => {
+            if (typeof eventClinicMetadata.isPrimary === 'boolean') {
+              return eventClinicMetadata.isPrimary;
+            }
+            if (typeof storedClinicMetadata.isPrimary === 'boolean') {
+              return storedClinicMetadata.isPrimary;
+            }
+            return null;
+          })();
+          updateCalendarSummaryClinicMetadata(clinicId, {
+            label: resolvedClinicLabel,
+            fullName: resolvedClinicFullName,
+            isPrimary: resolvedClinicIsPrimary,
+          });
+          const clinicEntry = clinicSummaryMap.get(clinicId) || {
+            clinicId,
+            clinicName: resolvedClinicLabel,
+            clinicFullName: resolvedClinicFullName || resolvedClinicLabel,
+            isPrimary: typeof resolvedClinicIsPrimary === 'boolean'
+              ? resolvedClinicIsPrimary
+              : !!storedClinicMetadata.isPrimary,
+            total: 0,
+            today: 0,
+            thisWeek: 0,
+            days: new Map(),
+          };
+          clinicEntry.clinicName = resolvedClinicLabel || clinicEntry.clinicName || deriveSummaryClinicName(event, clinicId);
+          clinicEntry.clinicFullName = resolvedClinicFullName
+            || clinicEntry.clinicFullName
+            || clinicEntry.clinicName;
+          if (typeof resolvedClinicIsPrimary === 'boolean') {
+            clinicEntry.isPrimary = resolvedClinicIsPrimary;
+          }
+          clinicEntry.total += 1;
+          if (dateKey === todayKey) {
+            clinicEntry.today += 1;
+          }
+          if (eventDate && startOfWeek && endOfWeek && eventDate >= startOfWeek && eventDate < endOfWeek) {
+            clinicEntry.thisWeek += 1;
+          }
+          if (eventDate) {
+            const clinicKey = formatSummaryDateKey(eventDate);
+            const clinicCurrent = clinicEntry.days.get(clinicKey) || { date: eventDate, count: 0 };
+            clinicCurrent.count += 1;
+            clinicEntry.days.set(clinicKey, clinicCurrent);
+          }
+          clinicSummaryMap.set(clinicId, clinicEntry);
+        }
       });
 
-      const rows = Array.from(summaryMap.values()).map((entry) => {
+      const vetRows = Array.from(vetSummaryMap.values()).map((entry) => {
         const days = Array.from(entry.days.values());
         days.sort((a, b) => (a.date && b.date ? a.date - b.date : 0));
         return {
@@ -846,23 +1071,23 @@ export function setupAppointmentsCalendarSummary(options = {}) {
         };
       });
 
-      rows.sort((a, b) => {
+      vetRows.sort((a, b) => {
         if (b.total !== a.total) {
           return b.total - a.total;
         }
         return (a.vetName || '').localeCompare(b.vetName || '', 'pt-BR');
       });
 
-      let totalEvents = 0;
-      let totalToday = 0;
-      let totalThisWeek = 0;
-      rows.forEach((entry) => {
-        totalEvents += normalizeSummaryNumber(entry.total);
-        totalToday += normalizeSummaryNumber(entry.today);
-        totalThisWeek += normalizeSummaryNumber(entry.thisWeek);
+      let vetTotalEvents = 0;
+      let vetTotalToday = 0;
+      let vetTotalThisWeek = 0;
+      vetRows.forEach((entry) => {
+        vetTotalEvents += normalizeSummaryNumber(entry.total);
+        vetTotalToday += normalizeSummaryNumber(entry.today);
+        vetTotalThisWeek += normalizeSummaryNumber(entry.thisWeek);
       });
 
-      const filters = rows.map((entry) => {
+      const vetFilters = vetRows.map((entry) => {
         const specialtyList = normalizeSummarySpecialtyList(entry.specialtyList);
         const specialties = specialtyList
           ? specialtyList.split(',').map((item) => item.trim()).filter(Boolean)
@@ -879,12 +1104,52 @@ export function setupAppointmentsCalendarSummary(options = {}) {
         };
       });
 
+      const clinicRows = Array.from(clinicSummaryMap.values()).map((entry) => {
+        const days = Array.from(entry.days.values());
+        days.sort((a, b) => (a.date && b.date ? a.date - b.date : 0));
+        return {
+          clinicId: entry.clinicId,
+          clinicName: entry.clinicName,
+          clinicFullName: entry.clinicFullName || entry.clinicName,
+          isPrimary: !!entry.isPrimary,
+          total: entry.total,
+          today: entry.today,
+          thisWeek: entry.thisWeek,
+          days,
+        };
+      });
+
+      clinicRows.sort((a, b) => {
+        if (b.total !== a.total) {
+          return b.total - a.total;
+        }
+        return (a.clinicName || '').localeCompare(b.clinicName || '', 'pt-BR');
+      });
+
+      let clinicTotalEvents = 0;
+      let clinicTotalToday = 0;
+      let clinicTotalThisWeek = 0;
+      clinicRows.forEach((entry) => {
+        clinicTotalEvents += normalizeSummaryNumber(entry.total);
+        clinicTotalToday += normalizeSummaryNumber(entry.today);
+        clinicTotalThisWeek += normalizeSummaryNumber(entry.thisWeek);
+      });
+
       return {
-        rows,
-        totalEvents,
-        totalToday,
-        totalThisWeek,
-        filters,
+        vet: {
+          rows: vetRows,
+          totalEvents: vetTotalEvents,
+          totalToday: vetTotalToday,
+          totalThisWeek: vetTotalThisWeek,
+          filters: vetFilters,
+        },
+        clinic: {
+          rows: clinicRows,
+          totalEvents: clinicTotalEvents,
+          totalToday: clinicTotalToday,
+          totalThisWeek: clinicTotalThisWeek,
+          filters: [],
+        },
       };
     }
 
@@ -901,8 +1166,14 @@ export function setupAppointmentsCalendarSummary(options = {}) {
       if (!calendarSummaryList) {
         return;
       }
+      const isVetMode = activeCalendarSummaryMode === 'vet';
       const items = calendarSummaryList.querySelectorAll('.calendar-summary-item');
       items.forEach((element) => {
+        if (!isVetMode) {
+          element.classList.remove('is-active');
+          element.setAttribute('aria-pressed', 'false');
+          return;
+        }
         const elementVetId = normalizeSummaryVetId(
           element && element.dataset ? element.dataset.vetId : null,
         );
@@ -917,6 +1188,11 @@ export function setupAppointmentsCalendarSummary(options = {}) {
       if (calendarSummaryFilters) {
         const filterButtons = calendarSummaryFilters.querySelectorAll('[data-vet-id]');
         filterButtons.forEach((button) => {
+          if (!isVetMode) {
+            button.classList.remove('is-active');
+            button.setAttribute('aria-pressed', 'false');
+            return;
+          }
           const buttonVetId = normalizeSummaryVetId(
             button && button.dataset ? button.dataset.vetId : null,
           );
@@ -935,11 +1211,19 @@ export function setupAppointmentsCalendarSummary(options = {}) {
     }
 
     function setActiveCalendarSummaryItem(vetId) {
+      if (activeCalendarSummaryMode !== 'vet') {
+        activeCalendarSummaryVetId = null;
+        refreshCalendarSummaryActiveState();
+        return;
+      }
       activeCalendarSummaryVetId = vetId ? normalizeSummaryVetId(vetId) : null;
       refreshCalendarSummaryActiveState();
     }
 
     function handleCalendarSummarySelection(rawVetId) {
+      if (activeCalendarSummaryMode !== 'vet') {
+        return;
+      }
       const normalizedVetId = normalizeSummaryVetId(rawVetId);
       const isSelectingAll = normalizedVetId === null;
       const isCurrentlyActive = Boolean(
@@ -980,6 +1264,17 @@ export function setupAppointmentsCalendarSummary(options = {}) {
         filterButtons.forEach((button) => {
           button.disabled = shouldActivate;
         });
+      }
+      if (calendarSummaryModeSwitch) {
+        const modeButtons = calendarSummaryModeSwitch.querySelectorAll('button');
+        modeButtons.forEach((button) => {
+          if (shouldActivate) {
+            button.disabled = true;
+          }
+        });
+        if (!shouldActivate) {
+          updateCalendarSummaryModeButtonsState();
+        }
       }
     }
 
@@ -1091,12 +1386,35 @@ export function setupAppointmentsCalendarSummary(options = {}) {
       });
     }
 
-    function renderCalendarSummary(events) {
+    function hasClinicSummaryData() {
+      const clinicData = lastCalendarSummaryData && lastCalendarSummaryData.clinic;
+      if (!clinicData) {
+        return false;
+      }
+      if (Array.isArray(clinicData.rows) && clinicData.rows.length > 0) {
+        return true;
+      }
+      return false;
+    }
+
+    function getSummaryDataForMode(mode) {
+      const normalized = normalizeCalendarSummaryMode(mode);
+      if (normalized === 'clinic') {
+        return lastCalendarSummaryData.clinic || createEmptySummaryData();
+      }
+      return lastCalendarSummaryData.vet || createEmptySummaryData();
+    }
+
+    function renderCalendarSummaryView(modeData, mode) {
       if (!calendarSummaryPanel || !calendarSummaryList) {
         return;
       }
-      const { rows, totalEvents, totalToday, totalThisWeek, filters } = computeSummaryMetrics(events);
-      setCalendarSummaryLoadingState(false);
+      const rows = Array.isArray(modeData?.rows) ? modeData.rows.filter(Boolean) : [];
+      const totalEvents = normalizeSummaryNumber(modeData?.totalEvents);
+      const totalToday = normalizeSummaryNumber(modeData?.totalToday);
+      const totalThisWeek = normalizeSummaryNumber(modeData?.totalThisWeek);
+      const filters = Array.isArray(modeData?.filters) ? modeData.filters.filter(Boolean) : [];
+
       if (calendarSummaryTotalBadge) {
         calendarSummaryTotalBadge.textContent = String(totalEvents);
       }
@@ -1126,15 +1444,30 @@ export function setupAppointmentsCalendarSummary(options = {}) {
         }
       }
 
-      renderCalendarSummaryFilters(filters);
+      if (mode === 'vet') {
+        renderCalendarSummaryFilters(filters);
+      } else {
+        clearCalendarSummaryFilters();
+      }
 
       rows.forEach((entry) => {
         const item = document.createElement('li');
         item.classList.add('calendar-summary-item');
-        item.setAttribute('role', 'button');
-        item.setAttribute('tabindex', '0');
-        item.setAttribute('aria-pressed', 'false');
-        decorateSummaryItemWithVet(item, entry.vetId);
+        if (mode === 'vet') {
+          item.setAttribute('role', 'button');
+          item.setAttribute('tabindex', '0');
+          item.setAttribute('aria-pressed', 'false');
+          decorateSummaryItemWithVet(item, entry.vetId);
+        } else {
+          item.classList.add('calendar-summary-item--clinic');
+          item.setAttribute('role', 'listitem');
+          item.setAttribute('aria-pressed', 'false');
+          item.removeAttribute('tabindex');
+          if (item.dataset) {
+            item.dataset.clinicId = entry.clinicId || '';
+            delete item.dataset.vetId;
+          }
+        }
 
         const header = document.createElement('header');
         header.classList.add('calendar-summary-header');
@@ -1145,7 +1478,11 @@ export function setupAppointmentsCalendarSummary(options = {}) {
         bullet.classList.add('calendar-summary-bullet');
         nameWrapper.appendChild(bullet);
         const nameText = document.createElement('span');
-        nameText.textContent = entry.vetName || `Profissional ${entry.vetId}`;
+        if (mode === 'vet') {
+          nameText.textContent = entry.vetName || `Profissional ${entry.vetId}`;
+        } else {
+          nameText.textContent = entry.clinicName || `Clínica ${entry.clinicId}`;
+        }
         nameWrapper.appendChild(nameText);
         header.appendChild(nameWrapper);
 
@@ -1211,6 +1548,85 @@ export function setupAppointmentsCalendarSummary(options = {}) {
       refreshCalendarSummaryActiveState();
     }
 
+    function renderCalendarSummaryForCurrentMode() {
+      const data = getSummaryDataForMode(activeCalendarSummaryMode);
+      renderCalendarSummaryView(data, activeCalendarSummaryMode);
+    }
+
+    function updateCalendarSummaryModeButtonsState() {
+      if (!calendarSummaryModeSwitch) {
+        return;
+      }
+      const clinicDataAvailable = hasClinicSummaryData();
+      const buttons = calendarSummaryModeSwitch.querySelectorAll('[data-calendar-summary-mode]');
+      buttons.forEach((button) => {
+        const mode = normalizeCalendarSummaryMode(button.dataset ? button.dataset.calendarSummaryMode : '');
+        const isActive = mode === activeCalendarSummaryMode;
+        button.classList.toggle('active', isActive);
+        button.classList.toggle('is-active', isActive);
+        button.setAttribute('aria-pressed', isActive ? 'true' : 'false');
+        if (mode === 'clinic') {
+          button.disabled = !clinicDataAvailable;
+          button.setAttribute('aria-disabled', clinicDataAvailable ? 'false' : 'true');
+        } else {
+          button.disabled = false;
+          button.setAttribute('aria-disabled', 'false');
+        }
+      });
+    }
+
+    function setCalendarSummaryMode(mode, options = {}) {
+      const { force = false, skipRender = false } = options || {};
+      const normalized = normalizeCalendarSummaryMode(mode);
+      if (!force && normalized === activeCalendarSummaryMode) {
+        return;
+      }
+      activeCalendarSummaryMode = normalized;
+      if (calendarSummaryPanel) {
+        calendarSummaryPanel.setAttribute('data-calendar-summary-mode', normalized);
+      }
+      updateCalendarSummaryModeButtonsState();
+      refreshCalendarSummaryActiveState();
+      if (!skipRender) {
+        renderCalendarSummaryForCurrentMode();
+      }
+    }
+
+    function renderCalendarSummary(events) {
+      if (!calendarSummaryPanel || !calendarSummaryList) {
+        return;
+      }
+      const metrics = computeSummaryMetrics(events);
+      lastCalendarSummaryData = {
+        vet: metrics && metrics.vet ? metrics.vet : createEmptySummaryData(),
+        clinic: metrics && metrics.clinic ? metrics.clinic : createEmptySummaryData(),
+      };
+      if (calendarSummaryModeSwitch && calendarSummaryModeSwitch.dataset) {
+        const hasClinic = hasClinicSummaryData();
+        calendarSummaryModeSwitch.dataset.calendarSummaryHasClinicSummary = hasClinic ? 'true' : 'false';
+      }
+      setCalendarSummaryLoadingState(false);
+      updateCalendarSummaryModeButtonsState();
+      renderCalendarSummaryForCurrentMode();
+    }
+
+    if (calendarSummaryModeSwitch) {
+      calendarSummaryModeSwitch.addEventListener('click', (event) => {
+        const button = event.target && typeof event.target.closest === 'function'
+          ? event.target.closest('[data-calendar-summary-mode]')
+          : null;
+        if (!button || !calendarSummaryModeSwitch.contains(button) || button.disabled) {
+          return;
+        }
+        const mode = normalizeCalendarSummaryMode(
+          button.dataset ? button.dataset.calendarSummaryMode : '',
+        );
+        setCalendarSummaryMode(mode);
+      });
+    }
+
+    setCalendarSummaryMode(activeCalendarSummaryMode, { force: true, skipRender: true });
+
     setCalendarSummaryCollapsed(isCalendarSummaryCollapsed, { store: false });
 
     setCalendarSummaryLoadingState(true);
@@ -1231,6 +1647,9 @@ export function setupAppointmentsCalendarSummary(options = {}) {
 
     if (calendarSummaryList) {
       calendarSummaryList.addEventListener('click', (event) => {
+        if (activeCalendarSummaryMode !== 'vet') {
+          return;
+        }
         const isTextNode = typeof Node !== 'undefined'
           && event.target
           && event.target.nodeType === Node.TEXT_NODE;
@@ -1246,6 +1665,9 @@ export function setupAppointmentsCalendarSummary(options = {}) {
       });
 
       calendarSummaryList.addEventListener('keydown', (event) => {
+        if (activeCalendarSummaryMode !== 'vet') {
+          return;
+        }
         const { key } = event;
         const isActivationKey = key === 'Enter'
           || key === ' '

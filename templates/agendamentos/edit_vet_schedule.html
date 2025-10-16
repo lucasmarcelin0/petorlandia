@@ -38,6 +38,13 @@
     'is_specialist': veterinario.specialty_list|length > 0
   }] %}
   {% set calendar_summary_clinic_ids = calendar_summary_clinic_ids if calendar_summary_clinic_ids else ([veterinario.clinica_id] if veterinario.clinica_id else []) %}
+  {% set calendar_summary_clinics = calendar_summary_clinics if calendar_summary_clinics else ([{
+    'id': veterinario.clinica.id,
+    'name': veterinario.clinica.nome,
+    'label': veterinario.clinica.nome,
+    'full_name': veterinario.clinica.nome,
+    'is_primary': True
+  }] if veterinario.clinica else []) %}
   {% set schedule_toggle_clinic_id = veterinario.clinica_id %}
   {% set schedule_toggle_calendar_redirect_url = url_for('appointments', view_as='veterinario', veterinario_id=veterinario.id) %}
   {% set schedule_toggle_prefer_user_vet_source = True %}
