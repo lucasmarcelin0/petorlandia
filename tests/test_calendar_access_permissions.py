@@ -380,6 +380,96 @@ def test_duplicate_memberships_respect_calendar_permission(client, monkeypatch):
     assert clinic_id in clinics
 
 
+def test_veterinarian_with_mixed_permissions_sees_allowed_colleagues(client, monkeypatch):
+    with flask_app.app_context():
+        unrestricted_clinic = Clinica(nome='Clínica Norte')
+        restricted_clinic = Clinica(nome='Clínica Sul')
+        db.session.add_all([unrestricted_clinic, restricted_clinic])
+        db.session.commit()
+
+        viewer_user = User(
+            name='Viewer Vet',
+            email='viewer-mixed@example.com',
+            password_hash='x',
+            worker='veterinario',
+        )
+        unrestricted_colleague_user = User(
+            name='Colleague Full',
+            email='colleague-full@example.com',
+            password_hash='x',
+            worker='veterinario',
+        )
+        restricted_colleague_user = User(
+            name='Colleague Restricted',
+            email='colleague-restricted@example.com',
+            password_hash='x',
+            worker='veterinario',
+        )
+        db.session.add_all([
+            viewer_user,
+            unrestricted_colleague_user,
+            restricted_colleague_user,
+        ])
+        db.session.commit()
+
+        viewer_vet = Veterinario(
+            user_id=viewer_user.id,
+            crmv='VIEW-MIXED',
+            clinica_id=unrestricted_clinic.id,
+        )
+        unrestricted_colleague_vet = Veterinario(
+            user_id=unrestricted_colleague_user.id,
+            crmv='COL-FULL',
+            clinica_id=unrestricted_clinic.id,
+        )
+        restricted_colleague_vet = Veterinario(
+            user_id=restricted_colleague_user.id,
+            crmv='COL-REST',
+            clinica_id=restricted_clinic.id,
+        )
+        db.session.add_all([
+            viewer_vet,
+            unrestricted_colleague_vet,
+            restricted_colleague_vet,
+        ])
+        db.session.commit()
+
+        viewer_user.clinica_id = unrestricted_clinic.id
+        viewer_vet.clinicas.append(restricted_clinic)
+        db.session.add_all([viewer_user, viewer_vet])
+        db.session.commit()
+
+        db.session.add_all(
+            [
+                ClinicStaff(
+                    clinic_id=unrestricted_clinic.id,
+                    user_id=viewer_user.id,
+                    can_view_full_calendar=True,
+                ),
+                ClinicStaff(
+                    clinic_id=restricted_clinic.id,
+                    user_id=viewer_user.id,
+                    can_view_full_calendar=False,
+                ),
+            ]
+        )
+        db.session.commit()
+
+        viewer_user_id = viewer_user.id
+        unrestricted_colleague_id = unrestricted_colleague_vet.id
+        restricted_colleague_id = restricted_colleague_vet.id
+        unrestricted_clinic_id = unrestricted_clinic.id
+
+    login(monkeypatch, viewer_user_id)
+    response = client.get('/appointments')
+    assert response.status_code == 200
+    vets, clinics = extract_calendar_summary(response.get_data(as_text=True))
+    vet_ids = {entry['id'] for entry in vets}
+    assert unrestricted_colleague_id in vet_ids
+    assert restricted_colleague_id not in vet_ids
+    assert unrestricted_clinic_id in clinics
+
+
 def test_veterinarian_colleague_api_filters_by_scope(client, monkeypatch):
     with flask_app.app_context():
         data = setup_vet_calendar_events(can_view_full_calendar=True)
