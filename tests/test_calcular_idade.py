@@ -1,4 +1,4 @@
-from datetime import date
+from datetime import date, datetime, time
 from dateutil.relativedelta import relativedelta
 
 import os
@@ -21,4 +21,14 @@ def test_calcular_idade_years():
 
 def test_calcular_idade_future_date():
     nasc = date.today() + relativedelta(days=1)
+    assert calcular_idade(nasc) == ''
+
+
+def test_calcular_idade_accepts_datetime_inputs():
+    nasc = datetime.combine(date.today() - relativedelta(years=1), time.min)
+    assert calcular_idade(nasc) == 1
+
+
+def test_calcular_idade_future_datetime():
+    nasc = datetime.combine(date.today() + relativedelta(days=1), time.min)
     assert calcular_idade(nasc) == ''

@@ -341,6 +341,9 @@ def calcular_idade(data_nasc):
     if not data_nasc:
         return ''
 
+    if isinstance(data_nasc, datetime):
+        data_nasc = data_nasc.date()
+
     if data_nasc > hoje:
         return ''
 
