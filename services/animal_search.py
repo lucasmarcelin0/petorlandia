@@ -5,11 +5,14 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Iterable, List, Optional
 
+from time import perf_counter
+
+from flask import current_app, has_app_context
 from sqlalchemy import func, or_, true
-from sqlalchemy.orm import joinedload
+from sqlalchemy.orm import contains_eager, load_only
 
 from extensions import db
-from models import Animal, Appointment
+from models import Animal, Appointment, User
 
 DEFAULT_LIMIT = 50
 VALID_SORTS = {"name_asc", "recent_added", "recent_attended"}
@@ -37,30 +40,6 @@ def _coerce_sort(value: Optional[str]) -> str:
     if value in VALID_SORTS:
         return value
     return "recent_added"
-
-
-def _serialize_species(animal: Animal) -> Optional[str]:
-    species = getattr(animal, "species", None)
-    if species is None:
-        return None
-    name = getattr(species, "name", None)
-    if name:
-        return name
-    if isinstance(species, str):
-        return species
-    return None
-
-
-def _serialize_breed(animal: Animal) -> Optional[str]:
-    breed = getattr(animal, "breed", None)
-    if breed is None:
-        return None
-    name = getattr(breed, "name", None)
-    if name:
-        return name
-    if isinstance(breed, str):
-        return breed
-    return None
 
 
 def search_animals(
@@ -94,11 +73,20 @@ def search_animals(
     last_appt = _build_last_appointment_subquery(clinic_scope)
 
     query = (
-        Animal.query.options(
-            joinedload(Animal.owner),
-            joinedload(Animal.species),
-            joinedload(Animal.breed),
+        db.session.query(Animal)
+        .options(
+            load_only(
+                Animal.id,
+                Animal.name,
+                Animal.image,
+                Animal.date_added,
+                Animal.date_of_birth,
+                Animal.age,
+                Animal.user_id,
+            ),
+            contains_eager(Animal.owner).load_only(User.id, User.name),
         )
+        .outerjoin(User, Animal.owner)
         .outerjoin(last_appt, Animal.id == last_appt.c.animal_id)
         .add_columns(last_appt.c.last_at.label("last_appointment_at"))
         .filter(clause)
@@ -124,42 +112,32 @@ def search_animals(
         query = query.order_by(Animal.date_added.desc())
 
     max_results = min(limit or DEFAULT_LIMIT, DEFAULT_LIMIT)
+    start_time = perf_counter()
     results: Iterable[tuple[Animal, Optional[datetime]]] = query.limit(max_results).all()
+    duration_ms = (perf_counter() - start_time) * 1000
+    if has_app_context():
+        current_app.logger.debug("search_animals fetched %d rows in %.2f ms", len(results), duration_ms)
 
     serialized: List[dict] = []
-    for animal, last_at in results:
+    for animal, _ in results:
         owner = getattr(animal, "owner", None)
         date_of_birth = animal.date_of_birth.strftime("%Y-%m-%d") if animal.date_of_birth else ""
-        last_at_value = last_at.isoformat() if isinstance(last_at, datetime) else None
-        species_name = _serialize_species(animal)
-        breed_name = _serialize_breed(animal)
         date_added = (
             animal.date_added.isoformat() if getattr(animal, "date_added", None) else ""
         )
-        age_years = getattr(animal, "age_years", None)
 
         serialized.append(
             {
                 "id": animal.id,
                 "name": animal.name,
                 "image": getattr(animal, "image", None),
-                "species": species_name,
-                "breed": breed_name,
-                "sex": animal.sex,
                 "date_of_birth": date_of_birth,
-                "microchip_number": animal.microchip_number,
-                "peso": animal.peso,
-                "health_plan": animal.health_plan,
-                "neutered": int(animal.neutered) if animal.neutered is not None else "",
-                "tutor_id": getattr(owner, "id", None),
-                "tutor_name": getattr(owner, "name", None),
-                "species_name": species_name,
-                "breed_name": breed_name,
                 "age_display": animal.age_display,
-                "age_years": age_years if age_years is not None else "",
-                "last_appointment_at": last_at_value,
-                "clinic_id": animal.clinica_id,
                 "date_added": date_added,
+                "tutor": {
+                    "id": getattr(owner, "id", None),
+                    "name": getattr(owner, "name", None),
+                },
             }
         )
 
