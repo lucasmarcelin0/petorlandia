@@ -64,13 +64,27 @@ def login(monkeypatch, user):
     monkeypatch.setattr(login_utils, '_get_user', _load_user)
 
 
+def _parse_json_attribute(match):
+    if not match:
+        return []
+    try:
+        parsed = json.loads(match.group(1))
+    except json.JSONDecodeError:
+        return []
+    if isinstance(parsed, list):
+        return parsed
+    return [parsed] if parsed is not None else []
+
+
 def extract_calendar_summary(html):
     vets_match = re.search(r"data-calendar-summary-vets='([^']*)'", html)
     assert vets_match, 'calendar summary vets metadata not found'
-    vets = json.loads(vets_match.group(1))
-    clinics_match = re.search(r"data-calendar-summary-clinic-ids='([^']*)'", html)
-    clinics = json.loads(clinics_match.group(1)) if clinics_match else []
-    return vets, clinics
+    vets = _parse_json_attribute(vets_match)
+    clinic_ids_match = re.search(r"data-calendar-summary-clinic-ids='([^']*)'", html)
+    clinic_ids = _parse_json_attribute(clinic_ids_match)
+    clinic_entries_match = re.search(r"data-calendar-summary-clinics='([^']*)'", html)
+    clinic_entries = _parse_json_attribute(clinic_entries_match)
+    return vets, clinic_ids, clinic_entries
 
 
 def create_clinic_with_vets():
@@ -238,11 +252,12 @@ def test_veterinarian_with_full_access_sees_colleagues(client, monkeypatch):
     login(monkeypatch, vet_user_id)
     response = client.get('/appointments')
     assert response.status_code == 200
-    vets, clinics = extract_calendar_summary(response.get_data(as_text=True))
+    vets, clinic_ids, clinic_entries = extract_calendar_summary(response.get_data(as_text=True))
     vet_ids = {entry['id'] for entry in vets}
     assert vet_id in vet_ids
     assert vet_two_id in vet_ids
-    assert clinic_id in clinics
+    assert clinic_id in set(clinic_ids)
+    assert any(entry.get('id') == clinic_id for entry in clinic_entries)
 
 
 def test_clinic_owner_veterinarian_sees_colleagues_despite_other_restrictions(
@@ -312,10 +327,11 @@ def test_clinic_owner_veterinarian_sees_colleagues_despite_other_restrictions(
     login(monkeypatch, owner_id)
     response = client.get('/appointments')
     assert response.status_code == 200
-    vets, clinics = extract_calendar_summary(response.get_data(as_text=True))
+    vets, clinic_ids, clinic_entries = extract_calendar_summary(response.get_data(as_text=True))
     vet_ids = {entry['id'] for entry in vets}
     assert colleague_vet_id in vet_ids
-    assert clinic_id in clinics
+    assert clinic_id in set(clinic_ids)
+    assert any(entry.get('id') == clinic_id for entry in clinic_entries)
 
 
 def test_owner_toggle_limits_calendar_summary(client, monkeypatch):
@@ -341,17 +357,19 @@ def test_owner_toggle_limits_calendar_summary(client, monkeypatch):
     login(monkeypatch, vet_user_id)
     appointments_response = client.get('/appointments')
     assert appointments_response.status_code == 200
-    vets, clinics = extract_calendar_summary(appointments_response.get_data(as_text=True))
+    vets, clinic_ids, clinic_entries = extract_calendar_summary(appointments_response.get_data(as_text=True))
     vet_ids = {entry['id'] for entry in vets}
     assert vet_id in vet_ids
     assert vet_two_id not in vet_ids
-    assert clinic_id in clinics
+    assert clinic_id in set(clinic_ids)
+    assert any(entry.get('id') == clinic_id for entry in clinic_entries)
     detail_response = client.get(f'/veterinario/{vet_id}')
     assert detail_response.status_code == 200
-    detail_vets, detail_clinics = extract_calendar_summary(detail_response.get_data(as_text=True))
+    detail_vets, detail_clinic_ids, detail_clinic_entries = extract_calendar_summary(detail_response.get_data(as_text=True))
     detail_ids = {entry['id'] for entry in detail_vets}
     assert detail_ids == {vet_id}
-    assert clinic_id in detail_clinics
+    assert clinic_id in set(detail_clinic_ids)
+    assert any(entry.get('id') == clinic_id for entry in detail_clinic_entries)
 
 
 def test_duplicate_memberships_respect_calendar_permission(client, monkeypatch):
@@ -373,11 +391,12 @@ def test_duplicate_memberships_respect_calendar_permission(client, monkeypatch):
     login(monkeypatch, vet_user_id)
     response = client.get('/appointments')
     assert response.status_code == 200
-    vets, clinics = extract_calendar_summary(response.get_data(as_text=True))
+    vets, clinic_ids, clinic_entries = extract_calendar_summary(response.get_data(as_text=True))
     vet_ids = {entry['id'] for entry in vets}
     assert vet_id in vet_ids
     assert vet_two_id in vet_ids, 'full calendar permission should include colleagues'
-    assert clinic_id in clinics
+    assert clinic_id in set(clinic_ids)
+    assert any(entry.get('id') == clinic_id for entry in clinic_entries)
 
 
 def test_veterinarian_with_mixed_permissions_sees_allowed_colleagues(client, monkeypatch):
@@ -463,11 +482,12 @@ def test_veterinarian_with_mixed_permissions_sees_allowed_colleagues(client, mon
     login(monkeypatch, viewer_user_id)
     response = client.get('/appointments')
     assert response.status_code == 200
-    vets, clinics = extract_calendar_summary(response.get_data(as_text=True))
+    vets, clinic_ids, clinic_entries = extract_calendar_summary(response.get_data(as_text=True))
     vet_ids = {entry['id'] for entry in vets}
     assert unrestricted_colleague_id in vet_ids
     assert restricted_colleague_id not in vet_ids
-    assert unrestricted_clinic_id in clinics
+    assert unrestricted_clinic_id in set(clinic_ids)
+    assert any(entry.get('id') == unrestricted_clinic_id for entry in clinic_entries)
 
 
 def test_veterinarian_colleague_api_filters_by_scope(client, monkeypatch):

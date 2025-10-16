@@ -1211,6 +1211,45 @@
   margin: 0;
 }
 
+.calendar-summary-mode-switch {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.calendar-summary-mode-switch .btn {
+  border-radius: 999px;
+  font-weight: 500;
+  transition: background-color 0.2s ease, color 0.2s ease, border-color 0.2s ease;
+}
+
+.calendar-summary-mode-switch .btn:not(.active):not(.is-active) {
+  color: #2563eb;
+  border-color: rgba(37, 99, 235, 0.35);
+  background-color: rgba(37, 99, 235, 0.08);
+}
+
+.calendar-summary-mode-switch .btn.active,
+.calendar-summary-mode-switch .btn.is-active {
+  color: #fff;
+  background-color: #2563eb;
+  border-color: #2563eb;
+  box-shadow: 0 0.25rem 0.5rem rgba(37, 99, 235, 0.18);
+}
+
+.calendar-summary-mode-switch .btn:disabled {
+  color: #94a3b8;
+  border-color: rgba(148, 163, 184, 0.45);
+  background-color: rgba(148, 163, 184, 0.12);
+  box-shadow: none;
+}
+
+.calendar-summary-item--clinic {
+  cursor: default;
+  --calendar-vet-color: #0ea5e9;
+}
+
 .calendar-summary-item .calendar-summary-day {
   display: inline-flex;
   align-items: center;

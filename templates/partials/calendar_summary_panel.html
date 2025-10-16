@@ -1,6 +1,7 @@
 {% set summary_title = summary_title|default('Resumo por profissional') %}
 {% set summary_description = summary_description|default('Totais diários e semanais por veterinário com base no calendário visível.') %}
 {% set summary_vets = calendar_summary_vets|default([], true) %}
+{% set summary_clinics = calendar_summary_clinics|default([], true) %}
 {% if summary_vets %}
   {% if summary_vets is mapping %}
     {% set summary_vet_list = [summary_vets] %}
@@ -79,12 +80,68 @@
 {% endfor %}
 {% set summary_vet_entries = sanitized_vets.items %}
 {% set summary_clinic_ids = calendar_summary_clinic_ids|default([], true) %}
+{% if summary_clinics %}
+  {% if summary_clinics is mapping %}
+    {% set summary_clinic_list = [summary_clinics] %}
+  {% elif summary_clinics is iterable and summary_clinics is not string %}
+    {% set summary_clinic_list = summary_clinics|list %}
+  {% else %}
+    {% set summary_clinic_list = [summary_clinics] %}
+  {% endif %}
+{% else %}
+  {% set summary_clinic_list = [] %}
+{% endif %}
+{% set sanitized_clinics = namespace(items=[]) %}
+{% for clinic in summary_clinic_list if clinic %}
+  {% set clinic_id = clinic.id
+    or clinic.clinic_id
+    or clinic.clinicId
+    or clinic.clinica_id
+    or clinic.clinicaId %}
+  {% set clinic_full_name = clinic.full_name
+    if clinic.full_name is defined
+    else (clinic.fullName if clinic.fullName is defined else (clinic.name if clinic.name is defined else (clinic.nome if clinic.nome is defined else None))) %}
+  {% set clinic_label = clinic.label
+    if clinic.label is defined
+    else (clinic.name if clinic.name is defined else (clinic.nome if clinic.nome is defined else None)) %}
+  {% if not clinic_label and clinic_full_name %}
+    {% set clinic_label = clinic_full_name %}
+  {% endif %}
+  {% if not clinic_full_name and clinic_label %}
+    {% set clinic_full_name = clinic_label %}
+  {% endif %}
+  {% if not clinic_label and clinic_id is not none %}
+    {% set clinic_label = 'Clínica ' ~ clinic_id %}
+  {% endif %}
+  {% if not clinic_full_name and clinic_id is not none %}
+    {% set clinic_full_name = 'Clínica ' ~ clinic_id %}
+  {% endif %}
+  {% set is_primary = false %}
+  {% if clinic.is_primary is defined %}
+    {% set is_primary = clinic.is_primary %}
+  {% elif clinic.isPrimary is defined %}
+    {% set is_primary = clinic.isPrimary %}
+  {% elif clinic.primary is defined %}
+    {% set is_primary = clinic.primary %}
+  {% endif %}
+  {% set sanitized_clinics.items = sanitized_clinics.items + [{
+    'id': clinic_id,
+    'label': clinic_label if clinic_label else (clinic_full_name if clinic_full_name else 'Clínica ' ~ loop.index),
+    'name': clinic_label if clinic_label else (clinic_full_name if clinic_full_name else 'Clínica ' ~ loop.index),
+    'full_name': clinic_full_name if clinic_full_name else (clinic_label if clinic_label else 'Clínica ' ~ loop.index),
+    'is_primary': is_primary
+  }] %}
+{% endfor %}
+{% set summary_clinic_entries = sanitized_clinics.items %}
+{% set has_clinic_summary = summary_clinic_entries|length > 0 or summary_clinic_ids|length > 0 %}
 {% set summary_storage_key = calendar_summary_storage_key|default('', true) %}
 <div
   class="card calendar-summary-card border-0 shadow-sm h-100 is-loading"
   data-calendar-summary-panel
   data-calendar-summary-vets='{{ summary_vet_entries|tojson }}'
   data-calendar-summary-clinic-ids='{{ summary_clinic_ids|tojson }}'
+  data-calendar-summary-clinics='{{ summary_clinic_entries|tojson }}'
+  data-calendar-summary-default-mode="{{ calendar_summary_default_mode|default('vet', true) }}"
   {% if summary_storage_key %}
   data-calendar-summary-storage-key="{{ summary_storage_key }}"
   {% endif %}
@@ -111,6 +168,31 @@
       <div>
         <p class="mb-0 fw-semibold text-primary">Atualizando estatísticas</p>
         <small class="text-muted">Aguarde enquanto buscamos as consultas desta visão.</small>
+      </div>
+    </div>
+    <div
+      class="calendar-summary-mode-switch mt-3"
+      data-calendar-summary-mode-switch
+      data-calendar-summary-has-clinic-summary="{{ 'true' if has_clinic_summary else 'false' }}"
+    >
+      <div class="btn-group btn-group-sm" role="group" aria-label="Exibir resumo por">
+        <button
+          type="button"
+          class="btn btn-outline-primary active"
+          data-calendar-summary-mode="vet"
+          aria-pressed="true"
+        >
+          Profissionais
+        </button>
+        <button
+          type="button"
+          class="btn btn-outline-primary"
+          data-calendar-summary-mode="clinic"
+          aria-pressed="false"
+          {% if not has_clinic_summary %}disabled aria-disabled="true"{% endif %}
+        >
+          Clínicas
+        </button>
       </div>
     </div>
     <div
