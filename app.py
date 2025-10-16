@@ -4654,7 +4654,6 @@ def vet_detail(veterinario_id):
     )
     calendar_summary_vets = []
     calendar_summary_clinic_ids = []
-    calendar_summary_clinics = []
 
     def build_calendar_summary_entry(vet, *, label=None, is_specialist=None):
         """Return a serializable mapping with vet summary metadata."""
@@ -4679,40 +4678,6 @@ def vet_detail(veterinario_id):
         entry['is_specialist'] = bool(is_specialist)
         return entry
 
-    def build_calendar_summary_clinic(clinic, *, is_primary=False):
-        if not clinic:
-            return None
-        clinic_id = getattr(clinic, 'id', None)
-        if not clinic_id:
-            return None
-        clinic_name = getattr(clinic, 'nome', None)
-        if not clinic_name:
-            clinic_name = getattr(clinic, 'name', None)
-        if not clinic_name:
-            clinic_name = f'Clínica {clinic_id}'
-        entry = {
-            'id': clinic_id,
-            'name': clinic_name,
-            'label': clinic_name,
-            'full_name': clinic_name,
-            'is_primary': bool(is_primary),
-        }
-        return entry
-
-    def add_summary_clinic(clinic, *, is_primary=False):
-        if not clinic:
-            return
-        clinic_id = getattr(clinic, 'id', None)
-        if not clinic_id:
-            return
-        if not calendar_access_scope.allows_clinic(clinic_id):
-            return
-        if any(entry.get('id') == clinic_id for entry in calendar_summary_clinics):
-            return
-        entry = build_calendar_summary_clinic(clinic, is_primary=is_primary)
-        if entry:
-            calendar_summary_clinics.append(entry)
-
     def add_summary_vet(vet, *, label=None, is_specialist=None):
         if not vet:
             return
@@ -4734,8 +4699,6 @@ def vet_detail(veterinario_id):
     primary_clinic_id = getattr(veterinario, 'clinica_id', None)
     if primary_clinic_id:
         clinic_ids.add(primary_clinic_id)
-        if getattr(veterinario, 'clinica', None):
-            add_summary_clinic(veterinario.clinica, is_primary=True)
 
     related_clinics = []
     main_clinic = getattr(veterinario, 'clinica', None)
@@ -4748,7 +4711,6 @@ def vet_detail(veterinario_id):
         clinic_id = getattr(clinic, 'id', None)
         if clinic_id:
             clinic_ids.add(clinic_id)
-            add_summary_clinic(clinic, is_primary=clinic_id == primary_clinic_id)
         for colleague in getattr(clinic, 'veterinarios', []) or []:
             add_summary_vet(colleague)
         for colleague in getattr(clinic, 'veterinarios_associados', []) or []:
@@ -4763,20 +4725,6 @@ def vet_detail(veterinario_id):
 
     calendar_summary_clinic_ids = calendar_access_scope.filter_clinic_ids(clinic_ids)
     calendar_summary_vets = calendar_access_scope.filter_veterinarians(calendar_summary_vets)
-    allowed_clinic_ids = set(calendar_summary_clinic_ids)
-    if allowed_clinic_ids:
-        calendar_summary_clinics = [
-            entry for entry in calendar_summary_clinics if entry.get('id') in allowed_clinic_ids
-        ]
-        if len(calendar_summary_clinics) < len(allowed_clinic_ids):
-            missing_ids = [cid for cid in allowed_clinic_ids if cid not in {c['id'] for c in calendar_summary_clinics}]
-            if missing_ids:
-                missing_clinics = Clinica.query.filter(Clinica.id.in_(missing_ids)).all()
-                for clinic in missing_clinics:
-                    add_summary_clinic(clinic, is_primary=getattr(clinic, 'id', None) == primary_clinic_id)
-                calendar_summary_clinics = [
-                    entry for entry in calendar_summary_clinics if entry.get('id') in allowed_clinic_ids
-                ]
     if not calendar_summary_vets:
         add_summary_vet(veterinario)
         calendar_summary_vets = calendar_access_scope.filter_veterinarians(calendar_summary_vets)
@@ -4797,7 +4745,6 @@ def vet_detail(veterinario_id):
         admin_default_selection_value=admin_default_selection_value,
         calendar_summary_vets=calendar_summary_vets,
         calendar_summary_clinic_ids=calendar_summary_clinic_ids,
-        calendar_summary_clinics=calendar_summary_clinics,
     )
 
 
@@ -9162,49 +9109,7 @@ def appointments():
     selected_colaborador = None
     calendar_summary_vets = []
     calendar_summary_clinic_ids = []
-    calendar_summary_clinics = []
     calendar_redirect_url = None
-
-    def add_summary_clinic(clinic, *, is_primary=False):
-        if not clinic:
-            return
-        clinic_id = getattr(clinic, 'id', None)
-        if not clinic_id:
-            return
-        if not calendar_access_scope.allows_clinic(clinic_id):
-            return
-        if any(entry.get('id') == clinic_id for entry in calendar_summary_clinics):
-            return
-        clinic_name = getattr(clinic, 'nome', None) or getattr(clinic, 'name', None)
-        if not clinic_name:
-            clinic_name = f'Clínica {clinic_id}'
-        entry = {
-            'id': clinic_id,
-            'name': clinic_name,
-            'label': clinic_name,
-            'full_name': clinic_name,
-            'is_primary': bool(is_primary),
-        }
-        calendar_summary_clinics.append(entry)
-
-    def finalize_calendar_summary_clinics():
-        nonlocal calendar_summary_clinics
-        allowed_ids = set(calendar_summary_clinic_ids or [])
-        if not allowed_ids:
-            return
-        calendar_summary_clinics = [
-            entry for entry in calendar_summary_clinics if entry.get('id') in allowed_ids
-        ]
-        missing_ids = [
-            cid for cid in allowed_ids if cid not in {entry['id'] for entry in calendar_summary_clinics}
-        ]
-        if missing_ids:
-            missing_clinics = Clinica.query.filter(Clinica.id.in_(missing_ids)).all()
-            for clinic in missing_clinics:
-                add_summary_clinic(clinic)
-            calendar_summary_clinics = [
-                entry for entry in calendar_summary_clinics if entry.get('id') in allowed_ids
-            ]
 
     if current_user.role == 'admin':
         agenda_users = User.query.order_by(User.name).all()
@@ -9253,16 +9158,12 @@ def appointments():
             abort(404)
         vet_user_id = getattr(veterinario, "user_id", None)
         clinic_ids = []
-        primary_clinic_id = getattr(veterinario, "clinica_id", None)
-        if primary_clinic_id:
-            clinic_ids.append(primary_clinic_id)
-            if getattr(veterinario, "clinica", None):
-                add_summary_clinic(veterinario.clinica, is_primary=True)
+        if getattr(veterinario, "clinica_id", None):
+            clinic_ids.append(veterinario.clinica_id)
         for clinica in getattr(veterinario, "clinicas", []) or []:
             clinica_id = getattr(clinica, "id", None)
             if clinica_id and clinica_id not in clinic_ids:
                 clinic_ids.append(clinica_id)
-            add_summary_clinic(clinica, is_primary=clinica_id == primary_clinic_id)
         clinic_ids = calendar_access_scope.filter_clinic_ids(clinic_ids)
         associated_clinics = (
             Clinica.query.filter(Clinica.id.in_(clinic_ids)).all()
@@ -9270,8 +9171,6 @@ def appointments():
             else []
         )
         calendar_summary_clinic_ids = clinic_ids
-        for clinica in associated_clinics:
-            add_summary_clinic(clinica, is_primary=clinica.id == primary_clinic_id)
         if getattr(veterinario, "id", None) is not None:
             calendar_summary_vets = [
                 {
@@ -9958,8 +9857,6 @@ def appointments():
         species_list = list_species()
         breed_list = list_breeds()
 
-        finalize_calendar_summary_clinics()
-
         return render_template(
             'agendamentos/edit_vet_schedule.html',
             schedule_form=schedule_form,
@@ -9985,7 +9882,6 @@ def appointments():
             timedelta=timedelta,
             calendar_summary_vets=calendar_summary_vets,
             calendar_summary_clinic_ids=calendar_summary_clinic_ids,
-            calendar_summary_clinics=calendar_summary_clinics,
             calendar_redirect_url=calendar_redirect_url,
             exam_confirm_default_hours=current_app.config.get(
                 'EXAM_CONFIRM_DEFAULT_HOURS',
@@ -10045,8 +9941,6 @@ def appointments():
                 )
 
                 clinic = Clinica.query.get(clinica_id) if clinica_id else None
-                if clinic:
-                    add_summary_clinic(clinic, is_primary=True)
                 vets = Veterinario.query.filter_by(clinica_id=clinica_id).all()
                 specialists = []
                 if clinic:
@@ -10229,8 +10123,6 @@ def appointments():
                 appointments_grouped=appointments_grouped,
             )
 
-        finalize_calendar_summary_clinics()
-
         return render_template(
             'agendamentos/appointments.html',
             appointments=appointments,
@@ -10249,7 +10141,6 @@ def appointments():
             admin_default_selection_value=admin_default_selection_value,
             calendar_summary_vets=calendar_summary_vets,
             calendar_summary_clinic_ids=calendar_summary_clinic_ids,
-            calendar_summary_clinics=calendar_summary_clinics,
         )
 
 
