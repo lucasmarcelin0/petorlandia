@@ -9,6 +9,7 @@ from urllib.parse import urlparse, parse_qs
 
 
 from datetime import datetime, timezone, date, timedelta, time
+from time import perf_counter
 from dateutil.relativedelta import relativedelta
 from zoneinfo import ZoneInfo
 from PIL import Image
@@ -36,7 +37,7 @@ from jinja2 import TemplateNotFound
 import json
 import unicodedata
 from sqlalchemy import func, or_, exists, and_, case, true, false
-from sqlalchemy.orm import joinedload, selectinload
+from sqlalchemy.orm import joinedload, selectinload, load_only
 
 # ----------------------------------------------------------------
 # 1)  Alias único para “models”
@@ -3363,8 +3364,33 @@ def buscar_tutores():
     tutores_query = (
         User.query.outerjoin(Endereco)
         .options(
-            joinedload(User.endereco),
-            joinedload(User.veterinario).joinedload(Veterinario.specialties),
+            load_only(
+                User.id,
+                User.name,
+                User.email,
+                User.phone,
+                User.cpf,
+                User.rg,
+                User.worker,
+                User.created_at,
+                User.date_of_birth,
+                User.is_private,
+                User.clinica_id,
+                User.added_by_id,
+            ),
+            joinedload(User.endereco).load_only(
+                Endereco.cep,
+                Endereco.rua,
+                Endereco.numero,
+                Endereco.complemento,
+                Endereco.bairro,
+                Endereco.cidade,
+                Endereco.estado,
+            ),
+            joinedload(User.veterinario)
+            .load_only(Veterinario.id)
+            .joinedload(Veterinario.specialties)
+            .load_only(Specialty.nome),
         )
         .filter(or_(*filters))
     )
@@ -3394,31 +3420,33 @@ def buscar_tutores():
     else:
         order_columns.append(func.lower(User.name))
 
+    start_time = perf_counter()
     tutores = (
         tutores_query
         .order_by(*order_columns)
         .limit(TUTOR_SEARCH_LIMIT)
         .all()
     )
+    duration_ms = (perf_counter() - start_time) * 1000
+    current_app.logger.debug(
+        "buscar_tutores fetched %d rows in %.2f ms", len(tutores), duration_ms
+    )
 
     resultados = []
 
     for tutor in tutores:
-        address_summary = (
-            tutor.address
-            or (tutor.endereco.full if getattr(tutor, 'endereco', None) else '')
-        )
-        detalhes = [
-            valor
-            for valor in [
-                tutor.email,
-                tutor.phone,
-                f"CPF: {tutor.cpf}" if tutor.cpf else '',
-                f"RG: {tutor.rg}" if tutor.rg else '',
-                tutor.worker,
-            ]
-            if valor
-        ]
+        endereco = getattr(tutor, 'endereco', None)
+        address_data = None
+        if endereco:
+            address_data = {
+                'cep': endereco.cep,
+                'rua': endereco.rua,
+                'numero': endereco.numero,
+                'complemento': endereco.complemento,
+                'bairro': endereco.bairro,
+                'cidade': endereco.cidade,
+                'estado': endereco.estado,
+            }
 
         created_at = (
             tutor.created_at.isoformat() if getattr(tutor, 'created_at', None) else ''
@@ -3427,6 +3455,7 @@ def buscar_tutores():
             tutor.date_of_birth.isoformat() if getattr(tutor, 'date_of_birth', None) else ''
         )
         vet = getattr(tutor, 'veterinario', None)
+        specialties = [s.nome for s in getattr(vet, 'specialties', [])] if vet else []
 
         resultados.append(
             {
@@ -3437,11 +3466,10 @@ def buscar_tutores():
                 'rg': tutor.rg,
                 'phone': tutor.phone,
                 'worker': tutor.worker,
-                'address_summary': address_summary,
-                'details': ' • '.join(detalhes),
-                'specialties': ', '.join(s.nome for s in vet.specialties) if vet else '',
                 'created_at': created_at,
                 'date_of_birth': date_of_birth,
+                'address': address_data,
+                'specialties': specialties,
                 'veterinario_id': vet.id if vet else None,
             }
         )

@@ -83,6 +83,25 @@ def test_buscar_tutores_respects_limit(app, monkeypatch):
     names = [item['name'] for item in data]
     assert names == sorted(names)
     assert f"Tutor {TUTOR_SEARCH_LIMIT:03d}" not in names
+    expected_keys = {
+        'id',
+        'name',
+        'email',
+        'cpf',
+        'rg',
+        'phone',
+        'worker',
+        'created_at',
+        'date_of_birth',
+        'address',
+        'specialties',
+        'veterinario_id',
+    }
+    assert set(data[0].keys()) == expected_keys
+    assert data[0]['address'] is None
+    assert isinstance(data[0]['specialties'], list)
+    assert 'details' not in data[0]
+    assert 'address_summary' not in data[0]
 
 
 def test_buscar_tutores_sort_recent_added(app, monkeypatch):
@@ -125,6 +144,7 @@ def test_buscar_tutores_sort_recent_added(app, monkeypatch):
     data = response.get_json()
     names = [item['name'] for item in data]
     assert names[:2] == ['Tutor Novo', 'Tutor Antigo']
+    assert isinstance(data[0]['specialties'], list)
 
 
 def test_buscar_tutores_sort_recent_attended(app, monkeypatch):
