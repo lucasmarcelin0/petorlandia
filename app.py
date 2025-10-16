@@ -9148,7 +9148,7 @@ def appointments():
                     'is_specialist': bool(getattr(veterinario, 'specialty_list', None)),
                 }
             ]
-        include_colleagues = bool(clinic_ids) and calendar_access_scope.allows_all_veterinarians()
+        include_colleagues = bool(clinic_ids) and calendar_access_scope.allows_any_other_veterinarian(veterinario)
         if include_colleagues:
             colleagues_source = []
             if current_user.role == 'admin' and agenda_veterinarios:
