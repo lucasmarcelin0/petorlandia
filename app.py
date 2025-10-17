@@ -9,7 +9,7 @@ from urllib.parse import urlparse, parse_qs
 
 
 from datetime import datetime, timezone, date, timedelta, time
-from time import perf_counter
+from time import perf_counter, sleep
 from dateutil.relativedelta import relativedelta
 from zoneinfo import ZoneInfo
 from PIL import Image
@@ -30,6 +30,7 @@ from flask import (
     url_for,
     current_app,
     has_request_context,
+    g,
 )
 from twilio.rest import Client
 from itsdangerous import URLSafeTimedSerializer
@@ -37,6 +38,7 @@ from jinja2 import TemplateNotFound
 import json
 import unicodedata
 from sqlalchemy import func, or_, exists, and_, case, true, false
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import joinedload, selectinload, load_only
 
 # ----------------------------------------------------------------
@@ -93,6 +95,87 @@ login.init_app(app)
 session_ext.init_app(app)
 babel.init_app(app)
 app.config.setdefault("BABEL_DEFAULT_LOCALE", "pt_BR")
+
+# ----------------------------------------------------------------
+# 3a)  Idempotent request guard
+# ----------------------------------------------------------------
+
+IDEMPOTENT_METHODS = {"POST", "PUT", "PATCH", "DELETE"}
+
+
+def _extract_idempotency_token() -> str | None:
+    token = request.headers.get("X-Idempotency-Key") or request.headers.get("x-idempotency-key")
+    if token:
+        token = str(token).strip()
+        if token:
+            return token
+    if request.form:
+        token = request.form.get("_idempotency_key")
+        if token:
+            token = str(token).strip()
+            if token:
+                return token
+    if request.is_json:
+        payload = request.get_json(silent=True) or {}
+        if isinstance(payload, dict):
+            token = payload.get("_idempotency_key")
+            if token:
+                token = str(token).strip()
+                if token:
+                    return token
+    return None
+
+
+@app.before_request
+def apply_request_idempotency():  # pragma: no cover - exercised via tests
+    if request.method.upper() not in IDEMPOTENT_METHODS:
+        return
+    token = _extract_idempotency_token()
+    if not token:
+        return
+    existing = RequestIdempotencyKey.query.filter_by(token=token).first()
+    if existing and existing.response_body is not None:
+        kwargs = {"status": existing.response_code or 200}
+        if existing.response_mimetype:
+            kwargs["mimetype"] = existing.response_mimetype
+        response = current_app.response_class(existing.response_body or "", **kwargs)
+        response.headers["X-Idempotent-Replay"] = "1"
+        response.headers.setdefault("X-Idempotency-Key", token)
+        return response
+    g.idempotency_token = token
+    g.idempotency_endpoint = request.endpoint or request.path
+
+
+@app.after_request
+def persist_idempotency_response(response):  # pragma: no cover - exercised via tests
+    token = getattr(g, "idempotency_token", None)
+    if not token:
+        return response
+    if request.method.upper() not in IDEMPOTENT_METHODS:
+        return response
+    if response.direct_passthrough or response.status_code >= 500:
+        return response
+    try:
+        record = RequestIdempotencyKey.query.filter_by(token=token).first()
+        if record and record.response_body is not None:
+            response.headers.setdefault("X-Idempotency-Key", token)
+            return response
+        if not record:
+            record = RequestIdempotencyKey(token=token)
+            db.session.add(record)
+        record.endpoint = getattr(g, "idempotency_endpoint", None) or request.endpoint or request.path
+        record.user_id = current_user.id if current_user.is_authenticated else None
+        record.response_code = response.status_code
+        record.response_body = response.get_data(as_text=True)
+        record.response_mimetype = response.mimetype
+        db.session.commit()
+        response.headers.setdefault("X-Idempotency-Key", token)
+    except IntegrityError:
+        db.session.rollback()
+    except Exception as exc:  # noqa: BLE001
+        db.session.rollback()
+        current_app.logger.exception("Failed to persist idempotency key %s: %s", token, exc)
+    return response
 
 # ----------------------------------------------------------------
 # 4)  AWS S3 helper (lazy)
@@ -1177,6 +1260,26 @@ def index():
 @app.route('/service-worker.js')
 def service_worker():
     return send_from_directory(app.static_folder, 'service-worker.js')
+
+
+@app.route('/_debug/delay', methods=['POST'])
+def debug_delay_endpoint():
+    if not (current_app.config.get('TESTING') or current_app.config.get('DEBUG')):
+        abort(404)
+    delay = 0.0
+    payload = request.get_json(silent=True)
+    if isinstance(payload, dict):
+        delay = payload.get('delay', delay)
+    if request.form:
+        delay = request.form.get('delay', delay)
+    try:
+        delay = float(delay or 0.0)
+    except (TypeError, ValueError):
+        delay = 0.0
+    delay = max(0.0, min(delay, 5.0))
+    sleep(delay)
+    current_app.config['_debug_delay_calls'] = current_app.config.get('_debug_delay_calls', 0) + 1
+    return jsonify({'message': 'ok', 'delay': delay, 'calls': current_app.config['_debug_delay_calls']})
 
 
 @app.route('/register', methods=['GET', 'POST'])

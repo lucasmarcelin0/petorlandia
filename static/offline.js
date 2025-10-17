@@ -1,8 +1,43 @@
 (function(){
   const KEY = 'offline-queue';
 
-  // Abort fetch requests if no response within given timeout (ms)
-  async function fetchWithTimeout(url, opts={}, timeout=2000){
+  const IDEMPOTENCY_FIELD = '_idempotency_key';
+
+  function createIdempotencyKey(){
+    if(typeof crypto !== 'undefined' && crypto.randomUUID){
+      return crypto.randomUUID();
+    }
+    return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+  }
+
+  function ensureFormToken(form){
+    if(!(form instanceof HTMLFormElement)) return null;
+    let input = form.querySelector(`input[name="${IDEMPOTENCY_FIELD}"]`);
+    if(!input){
+      input = document.createElement('input');
+      input.type = 'hidden';
+      input.name = IDEMPOTENCY_FIELD;
+      form.appendChild(input);
+    }
+    if(!input.value){
+      input.value = createIdempotencyKey();
+    }
+    return input.value;
+  }
+
+  function rotateFormToken(form){
+    if(!(form instanceof HTMLFormElement)) return;
+    const input = form.querySelector(`input[name="${IDEMPOTENCY_FIELD}"]`);
+    if(input){
+      input.value = createIdempotencyKey();
+    }
+  }
+
+  // Abort fetch requests only after a generous timeout (ms)
+  async function fetchWithTimeout(url, opts={}, timeout=60000){
+    if(!timeout){
+      return fetch(url, opts);
+    }
     const ctrl = new AbortController();
     const timer = setTimeout(() => ctrl.abort(), timeout);
     try {
@@ -47,15 +82,39 @@
 
   window.fetchOrQueue = async function(url, opts={}){
     const method = opts.method || 'POST';
-    const headers = opts.headers || {};
+    const headers = {...(opts.headers || {})};
+    let idempotencyKey = headers['X-Idempotency-Key'] || headers['x-idempotency-key'];
     let bodyData = null;
     if(opts.body instanceof FormData){
+      if(!opts.body.has(IDEMPOTENCY_FIELD)){
+        if(!idempotencyKey){
+          idempotencyKey = createIdempotencyKey();
+        }
+        opts.body.append(IDEMPOTENCY_FIELD, idempotencyKey);
+      } else if(!idempotencyKey){
+        idempotencyKey = opts.body.get(IDEMPOTENCY_FIELD);
+      }
       bodyData = {form:[...opts.body.entries()]};
     } else if(typeof opts.body === 'string'){
       bodyData = {text: opts.body};
     } else if(opts.body){
+      if(typeof opts.body === 'object' && opts.body !== null){
+        if(!('_idempotency_key' in opts.body)){
+          if(!idempotencyKey){
+            idempotencyKey = createIdempotencyKey();
+          }
+          opts.body._idempotency_key = idempotencyKey;
+        } else if(!idempotencyKey){
+          idempotencyKey = opts.body._idempotency_key;
+        }
+      }
       bodyData = {json: opts.body};
     }
+    if(!idempotencyKey){
+      idempotencyKey = createIdempotencyKey();
+    }
+    headers['X-Idempotency-Key'] = idempotencyKey;
+    opts = {...opts, headers};
     if(navigator.onLine){
       try {
         const resp = await fetchWithTimeout(url, opts);
@@ -70,7 +129,10 @@
   };
 
   window.addEventListener('online', sendQueued);
-  document.addEventListener('DOMContentLoaded', sendQueued);
+  document.addEventListener('DOMContentLoaded', () => {
+    document.querySelectorAll('form[data-sync]').forEach(ensureFormToken);
+    sendQueued();
+  });
 
   function showToast(message, category='success'){
     const toastEl = document.getElementById('actionToast');
@@ -104,7 +166,11 @@
     }
 
     ev.preventDefault();
+    const token = ensureFormToken(form);
     const data = new FormData(form);
+    if(token && !data.has(IDEMPOTENCY_FIELD)){
+      data.append(IDEMPOTENCY_FIELD, token);
+    }
     const resp = await window.fetchOrQueue(form.action, {method: form.method || 'POST', headers: {'Accept': 'application/json'}, body: data});
     if (resp) {
       let json = null;
@@ -119,6 +185,7 @@
         location.reload();
       }
     }
+    rotateFormToken(form);
   });
 
   document.addEventListener('form-sync-success', ev => {
