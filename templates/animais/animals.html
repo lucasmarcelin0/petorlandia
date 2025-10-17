@@ -1,4 +1,4 @@
-{% extends "layout.html" %}
+{% extends "base.html" %}
 {% set ns = namespace(items=[]) %}
 {% for a in animals %}
   {% set ns.items = ns.items + [{"@type": "Offer", "name": a.name, "description": a.description, "image": a.image}] %}

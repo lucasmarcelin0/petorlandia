@@ -1,0 +1,115 @@
+<nav class="navbar navbar-expand-lg fixed-top navbar-light">
+    <div class="container-fluid">
+        {% if current_user.is_authenticated and current_user.role == "admin" %}
+            <a href="{{ url_for('painel_admin.index') }}" class="navbar-brand">
+
+                <img src="{{ url_for('static', filename='pastorgato.png') }}" alt="Logo" class="logo-img">
+                <span>PetOrlândia</span>
+            </a>
+        {% else %}
+            <a href="{{ url_for('index') }}" class="navbar-brand">
+                <img src="{{ url_for('static', filename='pastorgato.png') }}" alt="Logo" class="logo-img">
+                <span>PetOrlândia</span>
+
+            </a>
+        {% endif %}
+
+        <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+            <span class="navbar-toggler-icon"></span>
+        </button>
+
+        <div class="collapse navbar-collapse justify-content-end" id="navbarNav">
+            <ul class="navbar-nav align-items-center gap-2">
+                {% if current_user.is_authenticated and current_user.role == "admin" %}
+                    <li class="nav-item">
+                        <a class="nav-link" href="{{ url_for('delivery_overview') }}">
+                        <i class="fas fa-chart-line me-1 text-primary"></i> Entregas
+                        </a>
+                    </li>
+                {% endif %}
+
+                <li class="nav-item">
+                    <a class="nav-link" href="{{ url_for('index') }}">
+                        <i class="fas fa-home me-1 text-primary"></i> Início
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="{{ url_for('loja') }}">
+                        <i class="fas fa-shopping-bag me-1 text-warning"></i> Loja
+                    </a>
+                </li>
+                    {% if current_user.is_authenticated %}
+                        {% if current_user.worker == 'delivery' %}
+                            <li class="nav-item">
+                                <a class="nav-link" href="{{ url_for('list_delivery_requests') }}">
+                                    <i class="fas fa-truck me-1 text-warning"></i> Solicitações
+                                </a>
+                            </li>
+                        {% endif %}
+
+                        {% if is_active_veterinarian %}
+                            <li class="nav-item position-relative">
+                                <a class="nav-link" href="{{ url_for('appointments') }}">
+                                    <i class="fas fa-calendar-alt me-1 text-success"></i> Agenda
+                                    {% set total_pending = pending_exam_count + pending_appointment_count + clinic_pending_appointment_count %}
+                                    {% if total_pending > 0 %}
+                                        <span class="badge rounded-pill bg-danger position-absolute top-0 start-100 translate-middle">{{ total_pending }}</span>
+                                    {% endif %}
+                                </a>
+                            </li>
+                        {% elif not current_user.worker or current_user.worker == 'tutor' %}
+                            <li class="nav-item">
+                                <a class="nav-link" href="{{ url_for('appointments') }}">
+                                    <i class="fas fa-calendar-alt me-1 text-success"></i> Agenda
+                                </a>
+                            </li>
+                        {% endif %}
+
+                    <li class="nav-item position-relative">
+                        {% if current_user.role == 'admin' %}
+                            <a class="nav-link" href="{{ url_for('mensagens_admin') }}">
+                        {% else %}
+                            <a class="nav-link" href="{{ url_for('mensagens') }}">
+                        {% endif %}
+                            <i class="fas fa-comments me-1 text-info"></i> Mensagens
+                            {% if unread_messages > 0 %}
+                                <span class="badge rounded-pill bg-danger position-absolute top-0 start-100 translate-middle">
+                                    {{ unread_messages }}
+                                </span>
+                            {% endif %}
+                        </a>
+                    </li>
+
+                    <li class="nav-item dropdown">
+                        <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown">
+                            <i class="fas fa-user-circle me-1 text-primary"></i> {{ current_user.name.split(' ')[0] }}
+                        </a>
+                        <ul class="dropdown-menu dropdown-menu-end">
+                            <li><a class="dropdown-item" href="{{ url_for('profile') }}"><i class="fas fa-user me-2 text-primary"></i> Meu Perfil</a></li>
+                            <li><a class="dropdown-item" href="{{ url_for('minhas_compras') }}"><i class="fas fa-box me-2 text-warning"></i> Minhas Compras</a></li>
+                            {% if current_user.veterinario or (current_user.clinica and current_user.worker == 'colaborador') %}
+                            <li><a class="dropdown-item" href="{{ url_for('minha_clinica') }}"><i class="fas fa-clinic-medical me-2 text-info"></i> Minha Clínica</a></li>
+                            {% endif %}
+                            {% if has_veterinarian_profile_flag %}
+                            <li><a class="dropdown-item" href="{{ url_for('veterinarian_membership') }}"><i class="fas fa-credit-card me-2 text-success"></i> Assinatura de Veterinário</a></li>
+                            {% endif %}
+
+                            <li><a class="dropdown-item" href="{{ url_for('logout') }}"><i class="fas fa-sign-out-alt me-2 text-danger"></i> Sair</a></li>
+                        </ul>
+                    </li>
+                {% else %}
+                    <li class="nav-item">
+                        <a class="nav-link" href="{{ url_for('register') }}">
+                        <i class="fas fa-user-plus me-1 text-success"></i> Registrar
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="{{ url_for('login_view') }}">
+                        <i class="fas fa-sign-in-alt me-1 text-primary"></i> Entrar
+                        </a>
+                    </li>
+                {% endif %}
+            </ul>
+        </div>
+    </div>
+</nav>
