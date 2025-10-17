@@ -1,117 +1,124 @@
 {% extends "layout.html" %}
+{% from 'macros/ui.html' import ui_card, ui_button %}
 
 {% block main %}
-<div class="container text-center">
+<div class="container text-center py-5">
 
     {% if current_user.is_authenticated %}
-        <!-- Área pessoal -->
-        <div class="card shadow-sm p-4 rounded-4 mt-5 mb-4" style="background: #f8f9fa;">
-            <h5 class="mb-4">Bem-vindo(a)! O que você deseja fazer hoje?</h5>
-
+        {% call ui_card(title="Bem-vindo(a)! O que você deseja fazer hoje?", variant='muted', extra_classes='shadow-sm mt-5 mb-4', padding='p-4') %}
             <div class="row justify-content-center g-4">
-                <!-- Lottie: Add Animal -->
                 <div class="col-md-3">
-                    <lottie-player src="https://assets5.lottiefiles.com/packages/lf20_ghs9bthn.json"
-                                   background="transparent" speed="1" style="height: 100px;" loop autoplay></lottie-player>
-                    <a href="{{ url_for('add_animal') }}" class="btn btn-outline-success rounded-pill shadow-sm px-4 py-2"
-                       data-bs-toggle="tooltip" title="Cadastre um novo animal na plataforma.">
-                        ➕ Cadastrar novo animal
-                    </a>
+                    <lottie-player
+                        class="lottie-illustration"
+                        src="https://assets5.lottiefiles.com/packages/lf20_ghs9bthn.json"
+                        background="transparent"
+                        speed="1"
+                        loop autoplay>
+                    </lottie-player>
+                    {{ ui_button(
+                        'Cadastrar novo animal',
+                        href=url_for('add_animal'),
+                        variant='success',
+                        outline=True,
+                        icon_html='➕',
+                        block=True,
+                        extra_classes='shadow-soft',
+                        attrs={'data-bs-toggle': 'tooltip', 'title': 'Cadastre um novo animal na plataforma.'}
+                    ) }}
                 </div>
-
-                <!-- Lottie: List Animals -->
                 <div class="col-md-3">
-                    <lottie-player src="https://assets4.lottiefiles.com/packages/lf20_qp1q7mct.json"
-                                   background="transparent" speed="1" style="height: 100px;" loop autoplay></lottie-player>
-                    <a href="{{ url_for('list_animals') }}" class="btn btn-outline-primary rounded-pill shadow-sm px-4 py-2"
-                       data-bs-toggle="tooltip" title="Veja todos os animais disponíveis.">
-                        📋 Ver todos os animais
-                    </a>
+                    <lottie-player
+                        class="lottie-illustration"
+                        src="https://assets4.lottiefiles.com/packages/lf20_qp1q7mct.json"
+                        background="transparent"
+                        speed="1"
+                        loop autoplay>
+                    </lottie-player>
+                    {{ ui_button(
+                        'Ver todos os animais',
+                        href=url_for('list_animals'),
+                        variant='primary',
+                        outline=True,
+                        icon_html='📋',
+                        block=True,
+                        extra_classes='shadow-soft',
+                        attrs={'data-bs-toggle': 'tooltip', 'title': 'Veja todos os animais disponíveis.'}
+                    ) }}
                 </div>
-
-                <!-- Lottie: Health -->
                 <div class="col-md-3">
-                    <lottie-player src="https://assets10.lottiefiles.com/packages/lf20_ksixj2kx.json"
-                                   background="transparent" speed="1" style="height: 100px;" loop autoplay></lottie-player>
-                    <a href="{{ url_for('plano_saude_overview') }}" class="btn btn-outline-info rounded-pill shadow-sm px-4 py-2"
-                       data-bs-toggle="tooltip" title="Conheça nosso plano de saúde para pets.">
-                        ❤️ Plano de Saúde Pet
-                    </a>
+                    <lottie-player
+                        class="lottie-illustration"
+                        src="https://assets10.lottiefiles.com/packages/lf20_ksixj2kx.json"
+                        background="transparent"
+                        speed="1"
+                        loop autoplay>
+                    </lottie-player>
+                    {{ ui_button(
+                        'Plano de Saúde Pet',
+                        href=url_for('plano_saude_overview'),
+                        variant='info',
+                        outline=True,
+                        icon_html='❤️',
+                        block=True,
+                        extra_classes='shadow-soft',
+                        attrs={'data-bs-toggle': 'tooltip', 'title': 'Conheça nosso plano de saúde para pets.'}
+                    ) }}
                 </div>
-
-                <!-- Lottie: Store -->
                 <div class="col-md-3">
-                    <lottie-player src="https://assets10.lottiefiles.com/packages/lf20_sGqAqL.json"
-                                   background="transparent" speed="1" style="height: 100px;" loop autoplay></lottie-player>
-                                   <a href="{{ url_for('loja') }}"
-                                   class="btn rounded-pill shadow-sm loja-pet-filled px-4 py-2"
-                                   data-bs-toggle="tooltip"
-                                   title="Acesse nossa loja para encontrar tudo que seu pet precisa.">
-                                   🛍️ Loja Pet
-                                </a>
-
-
+                    <lottie-player
+                        class="lottie-illustration"
+                        src="https://assets10.lottiefiles.com/packages/lf20_sGqAqL.json"
+                        background="transparent"
+                        speed="1"
+                        loop autoplay>
+                    </lottie-player>
+                    {{ ui_button(
+                        'Loja Pet',
+                        href=url_for('loja'),
+                        variant='primary',
+                        icon_html='🛍️',
+                        block=True,
+                        extra_classes='loja-pet-filled shadow-soft',
+                        attrs={'data-bs-toggle': 'tooltip', 'title': 'Acesse nossa loja para encontrar tudo que seu pet precisa.'}
+                    ) }}
                 </div>
             </div>
-        </div>
+        {% endcall %}
     {% else %}
-        <!-- Visitante não autenticado -->
-        <div class="card shadow-lg p-5 rounded-4 mt-5" style="background: white;">
+        {% call ui_card(variant='surface', extra_classes='shadow-lg mt-5', padding='p-5') %}
             <div class="text-center">
                 <img src="{{ url_for('static', filename='logo_pet.png') }}"
                      alt="Logo PetOrlândia"
                      class="mb-4 logo-img mx-auto">
             </div>
-
             <p class="lead">
                 PetOrlândia é um espaço completo para quem ama e cuida dos animais. Aqui você pode adotar, doar, agendar atendimentos veterinários e encontrar tudo o que seu pet precisa — com carinho, responsabilidade e praticidade.
             </p>
-            
-            <div class="d-flex justify-content-center gap-3 mt-4">
-                
-                <a href="{{ url_for('register') }}" class="btn btn-outline-success rounded-pill px-4 py-2">🧑 Criar Conta</a>
-               
-                <a href="{{ url_for('login_view') }}" class="btn btn-outline-primary rounded-pill px-4 py-2">🔐 Entrar</a>
+            <div class="d-flex flex-wrap justify-content-center gap-3 mt-4">
+                {{ ui_button('Criar Conta', href=url_for('register'), variant='success', outline=True, icon='bi bi-person-plus', extra_classes='shadow-soft') }}
+                {{ ui_button('Entrar', href=url_for('login_view'), variant='primary', outline=True, icon='bi bi-shield-lock', extra_classes='shadow-soft') }}
             </div>
-        </div>
+        {% endcall %}
     {% endif %}
 
     {% if current_user.is_authenticated and (current_user.worker == 'colaborador' or is_active_veterinarian) %}
-    <!-- Área profissional -->
-        <div class="card shadow-lg p-4 rounded-4 mb-5" style="background: #ffffff;">
-            <h5 class="mb-4">Área profissional</h5>
+        {% call ui_card(title='Área profissional', extra_classes='shadow-lg mb-5', padding='p-4') %}
             <div class="d-flex flex-wrap justify-content-center gap-3">
-                <a href="{{ url_for('novo_animal') }}" class="btn btn-outline-primary rounded-pill shadow-sm px-4 py-2"
-                   data-bs-toggle="tooltip" title="Gerencie os animais vinculados a tutores.">
-                    🐶 Animais
-                </a>
-
-                <a href="{{ url_for('tutores') }}" class="btn btn-outline-secondary rounded-pill shadow-sm px-4 py-2"
-                   data-bs-toggle="tooltip" title="Veja os tutores cadastrados.">
-                    👥 Tutores
-                </a>
-
+                {{ ui_button('Animais', href=url_for('novo_animal'), variant='primary', outline=True, icon_html='🐶', extra_classes='shadow-soft', attrs={'data-bs-toggle': 'tooltip', 'title': 'Gerencie os animais vinculados a tutores.'}) }}
+                {{ ui_button('Tutores', href=url_for('tutores'), variant='secondary', outline=True, icon_html='👥', extra_classes='shadow-soft', attrs={'data-bs-toggle': 'tooltip', 'title': 'Veja os tutores cadastrados.'}) }}
                 {% if current_user.worker == 'colaborador' or (is_active_veterinarian and current_user.veterinario) %}
-                <a href="{{ url_for('appointments') }}"
-                   class="btn btn-outline-warning rounded-pill shadow-sm px-4 py-2"
-                   data-bs-toggle="tooltip" title="Administre sua agenda de atendimentos.">
-                    🗓️ Agenda
-                </a>
+                    {{ ui_button('Agenda', href=url_for('appointments'), variant='warning', outline=True, icon_html='🗓️', extra_classes='shadow-soft', attrs={'data-bs-toggle': 'tooltip', 'title': 'Administre sua agenda de atendimentos.'}) }}
                 {% endif %}
             </div>
-        </div>
+        {% endcall %}
     {% endif %}
 
     {% if current_user.is_authenticated and current_user.worker == 'delivery' %}
-    <!-- Área de Entregas -->
-        <div class="card shadow-lg p-4 rounded-4 mb-5" style="background: #ffffff;">
-            <h5 class="mb-4">Área de Entregas</h5>
+        {% call ui_card(title='Área de Entregas', extra_classes='shadow-lg mb-5', padding='p-4') %}
             <div class="d-flex flex-wrap justify-content-center gap-3">
-                <a href="{{ url_for('list_delivery_requests') }}" class="btn btn-outline-secondary rounded-pill shadow-sm px-4 py-2">
-                    🚚 Solicitações
-                </a>
+                {{ ui_button('Solicitações', href=url_for('list_delivery_requests'), variant='secondary', outline=True, icon_html='🚚', extra_classes='shadow-soft') }}
             </div>
-        </div>
+        {% endcall %}
     {% endif %}
 </div>
 {% endblock %}

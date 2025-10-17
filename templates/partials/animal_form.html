@@ -1,26 +1,23 @@
 {% from 'components/photo_cropper.html' import photo_cropper %}
+{% from 'macros/ui.html' import ui_button, ui_form_group %}
 <form method="POST" action="{{ url_for('update_animal', animal_id=animal.id) }}"
       enctype="multipart/form-data"
-      class="needs-validation" novalidate data-sync data-validate="validarCadastroAnimal">
+      class="ui-form needs-validation" novalidate data-sync data-validate="validarCadastroAnimal">
 
   <h5 class="mb-3">🐾 Cadastro do Animal</h5>
 
   <div class="row g-4">
-    <!-- Foto e Nome -->
-    <div class="col-md-6">
-      <label for="animal-name" class="form-label">Foto e Nome do Animal</label>
-        <div class="d-flex align-items-center gap-3">
-          {{ photo_cropper(form.image, form.photo_rotation, form.photo_zoom, form.photo_offset_x, form.photo_offset_y, animal.image, 120, 'animal-image', 'animal') }}
-          <input id="animal-name" type="text" name="name" class="form-control"
-                 placeholder="Nome do animal" value="{{ animal.name or '' }}" required
-                 minlength="2" maxlength="50">
-          <div class="invalid-feedback">Por favor, insira um nome válido (2-50 caracteres).</div>
-        </div>
-    </div>
+    {% call ui_form_group(label='Foto e Nome do Animal', field_id='animal-name', required=True, extra_classes='col-md-6') %}
+      <div class="d-flex flex-wrap align-items-center gap-3">
+        {{ photo_cropper(form.image, form.photo_rotation, form.photo_zoom, form.photo_offset_x, form.photo_offset_y, animal.image, 120, 'animal-image', 'animal') }}
+        <input id="animal-name" type="text" name="name" class="form-control flex-grow-1"
+               placeholder="Nome do animal" value="{{ animal.name or '' }}" required
+               minlength="2" maxlength="50">
+        <div class="invalid-feedback">Por favor, insira um nome válido (2-50 caracteres).</div>
+      </div>
+    {% endcall %}
 
-    <!-- Espécie -->
-    <div class="col-md-6">
-      <label for="animal-species" class="form-label">Espécie</label>
+    {% call ui_form_group(label='Espécie', field_id='animal-species', required=True, extra_classes='col-md-6') %}
       <select id="animal-species" name="species_id" class="form-select" required>
         <option value="">Selecionar</option>
         {% for s in species_list %}
@@ -28,29 +25,25 @@
         {% endfor %}
       </select>
       <div class="invalid-feedback">Por favor, selecione uma espécie.</div>
-    </div>
+    {% endcall %}
 
-    <!-- Raça -->
-    <div class="col-md-6">
-      <label for="animal-breed" class="form-label">Raça</label>
+    {% call ui_form_group(label='Raça', field_id='animal-breed', extra_classes='col-md-6') %}
       <select id="animal-breed" name="breed_id" class="form-select">
         <option value="">Selecionar</option>
         {% for b in breed_list %}
           <option value="{{ b.id }}" {% if animal.breed_id == b.id %}selected{% endif %}>{{ b.name }}</option>
         {% endfor %}
       </select>
-    </div>
+    {% endcall %}
 
-    <!-- Sexo -->
-    <div class="col-md-6">
-      <label for="animal-sex" class="form-label">Sexo</label>
+    {% call ui_form_group(label='Sexo', field_id='animal-sex', required=True, extra_classes='col-md-6') %}
       <select id="animal-sex" name="sex" class="form-select" required>
         <option value="">Selecionar</option>
         <option value="Macho" {% if animal.sex == 'Macho' %}selected{% endif %}>Macho</option>
         <option value="Fêmea" {% if animal.sex == 'Fêmea' %}selected{% endif %}>Fêmea</option>
       </select>
       <div class="invalid-feedback">Por favor, selecione o sexo.</div>
-    </div>
+    {% endcall %}
 
     <!-- Data de nascimento / idade -->
     {% set prefixo = 'animal' %}
@@ -63,63 +56,50 @@
     {% set valor_unidade = animal_idade_unidade if animal_idade_unidade else '' %}
     {% include 'components/campo_data_idade.html' %}
 
-    <!-- Microchip -->
-    <div class="col-md-6">
-      <label for="animal-microchip" class="form-label">Microchip</label>
-      <input id="animal-microchip" type="text" name="microchip_number" class="form-control" 
-             value="{{ animal.microchip_number or '' }}" pattern="[0-9]{15}" 
+    {% call ui_form_group(label='Microchip', field_id='animal-microchip', extra_classes='col-md-6') %}
+      <input id="animal-microchip" type="text" name="microchip_number" class="form-control"
+             value="{{ animal.microchip_number or '' }}" pattern="[0-9]{15}"
              title="Número do microchip deve conter 15 dígitos">
       <div class="invalid-feedback">Por favor, insira um número de microchip válido (15 dígitos).</div>
-    </div>
+    {% endcall %}
 
-    <!-- Peso -->
-    <div class="col-md-6">
-      <label for="animal-peso" class="form-label">Peso (kg)</label>
-      <input id="animal-peso" type="number" name="peso" class="form-control" 
+    {% call ui_form_group(label='Peso (kg)', field_id='animal-peso', extra_classes='col-md-6') %}
+      <input id="animal-peso" type="number" name="peso" class="form-control"
              step="0.01" min="0.1" max="200" value="{{ '' if animal.peso is none else animal.peso }}">
       <div class="invalid-feedback">Por favor, insira um peso válido (0.1-200 kg).</div>
-    </div>
+    {% endcall %}
 
-    <!-- Plano de Saúde -->
-    <div class="col-md-6">
-      <label for="animal-health-plan" class="form-label">Plano de Saúde</label>
-      <input id="animal-health-plan" type="text" name="health_plan" class="form-control" 
+    {% call ui_form_group(label='Plano de Saúde', field_id='animal-health-plan', extra_classes='col-md-6') %}
+      <input id="animal-health-plan" type="text" name="health_plan" class="form-control"
              value="{{ animal.health_plan or '' }}" maxlength="100">
-    </div>
+    {% endcall %}
 
-    <!-- Descrição -->
-    <div class="col-md-12">
-      <label for="animal-description" class="form-label">Descrição</label>
-      <textarea id="animal-description" name="description" class="form-control" 
+    {% call ui_form_group(label='Descrição', field_id='animal-description', extra_classes='col-md-12') %}
+      <textarea id="animal-description" name="description" class="form-control"
                 rows="2" maxlength="500">{{ animal.description or '' }}</textarea>
-    </div>
+    {% endcall %}
 
-    <!-- Castrado -->
-    <div class="col-md-6">
-      <label for="animal-neutered" class="form-label">Castrado?</label>
+    {% call ui_form_group(label='Castrado?', field_id='animal-neutered', required=True, extra_classes='col-md-6') %}
       <select id="animal-neutered" name="neutered" class="form-select" required>
         <option value="">Selecionar</option>
         <option value="1" {% if animal.neutered %}selected{% endif %}>Sim</option>
         <option value="0" {% if animal.neutered == False %}selected{% endif %}>Não</option>
       </select>
       <div class="invalid-feedback">Por favor, informe se o animal é castrado.</div>
-    </div>
+    {% endcall %}
   </div>
 
-  <div class="mt-4 d-flex justify-content-between">
-    <button type="submit" class="btn btn-success">
-      <i class="bi bi-save me-1"></i> Salvar
-    </button>
+  <div class="mt-4 d-flex justify-content-end gap-3">
+    {{ ui_button('Salvar', type='submit', variant='success', icon='bi bi-save') }}
   </div>
 </form>
 
 <!-- Botão de deletar -->
 <form method="POST" action="{{ url_for('deletar_animal', animal_id=animal.id) }}"
-      onsubmit="return confirm('Tem certeza que deseja remover permanentemente este animal? Esta ação não pode ser desfeita.');" 
+      onsubmit="return confirm('Tem certeza que deseja remover permanentemente este animal? Esta ação não pode ser desfeita.');"
+
       class="mt-2">
-  <button type="submit" class="btn btn-outline-danger">
-    <i class="bi bi-trash me-1"></i> Remover Animal
-  </button>
+  {{ ui_button('Remover Animal', type='submit', variant='danger', outline=True, icon='bi bi-trash') }}
 </form>
 
 <!-- Scripts -->
