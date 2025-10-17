@@ -1,0 +1,102 @@
+{#
+  Macros de UI reutilizáveis alinhados ao sistema de design da PetOrlândia.
+  Tokens globais estão definidos em ``static/style.css`` e podem ser usados
+  em conjunto com os utilitários do Bootstrap.
+#}
+{% macro button(text, variant='primary', size='md', icon=None, outline=False, block=False, type='button', disabled=False, extra_classes='', **attrs) -%}
+  {%- set variant_class = 'btn-outline-' + variant if outline else 'btn-' + variant -%}
+  {%- set size_class = 'btn-' + size if size in ['sm', 'lg'] else '' -%}
+  {%- set classes = 'btn ' + variant_class -%}
+  {%- if size_class %}{% set classes = classes + ' ' + size_class %}{% endif -%}
+  {%- if block %}{% set classes = classes + ' w-100' %}{% endif -%}
+  {%- if extra_classes %}{% set classes = classes + ' ' + extra_classes %}{% endif -%}
+  <button type="{{ type }}" class="{{ classes }}"{% if disabled %} disabled{% endif %}{% for attr_name, attr_value in attrs.items() %} {{ attr_name }}="{{ attr_value }}"{% endfor %}>
+    {%- if icon %}<i class="{{ icon }}" aria-hidden="true"></i>{% endif -%}
+    <span class="btn__label">{{ text }}</span>
+  </button>
+{%- endmacro %}
+
+{% macro input(name, label='', type='text', value='', placeholder='', size='md', state=None, icon=None, help_text='', required=False, extra_classes='', wrapper_classes='mb-3', **attrs) -%}
+  {%- set size_class = {'sm': 'form-control-sm', 'lg': 'form-control-lg'}.get(size, '') -%}
+  {%- set state_class = 'is-' + state if state in ['valid', 'invalid'] else '' -%}
+  {%- set classes = 'form-control' -%}
+  {%- if size_class %}{% set classes = classes + ' ' + size_class %}{% endif -%}
+  {%- if state_class %}{% set classes = classes + ' ' + state_class %}{% endif -%}
+  {%- if extra_classes %}{% set classes = classes + ' ' + extra_classes %}{% endif -%}
+  {%- set input_id = attrs.get('id', name ~ '-input') -%}
+  <div class="{{ wrapper_classes }}">
+    {%- if label %}
+    <label class="form-label" for="{{ input_id }}">{{ label }}{% if required %}<span class="text-danger ms-1">*</span>{% endif %}</label>
+    {%- endif %}
+    {%- if icon %}<div class="input-group">{% endif %}
+      {%- if icon %}
+      <span class="input-group-text"><i class="{{ icon }}" aria-hidden="true"></i></span>
+      {%- endif %}
+      <input
+        name="{{ name }}"
+        type="{{ type }}"
+        class="{{ classes }}"
+        id="{{ input_id }}"
+        value="{{ value }}"
+        placeholder="{{ placeholder }}"{% if required %} required{% endif %}
+        {%- for attr_name, attr_value in attrs.items() if attr_name != 'id' %} {{ attr_name }}="{{ attr_value }}"{% endfor %}>
+    {%- if icon %}</div>{% endif %}
+    {%- if help_text %}
+    <div class="form-text">{{ help_text }}</div>
+    {%- endif %}
+  </div>
+{%- endmacro %}
+
+{% macro alert(message, variant='info', icon=None, dismissible=True, extra_classes='', **attrs) -%}
+  {%- set classes = ['alert', 'alert-' + variant] -%}
+  {%- if dismissible %}
+    {%- set classes = classes + ['alert-dismissible', 'fade', 'show'] -%}
+  {%- endif -%}
+  {%- if extra_classes %}
+    {%- set classes = classes + [extra_classes] -%}
+  {%- endif -%}
+  <div class="{{ ' '.join(classes) }}" role="alert"{% for attr_name, attr_value in attrs.items() %} {{ attr_name }}="{{ attr_value }}"{% endfor %}>
+    {%- if icon %}<i class="{{ icon }} me-2" aria-hidden="true"></i>{% endif -%}
+    {{ message }}
+    {%- if dismissible %}
+    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Fechar"></button>
+    {%- endif %}
+  </div>
+{%- endmacro %}
+
+{% macro badge(text, variant='primary', pill=True, extra_classes='', **attrs) -%}
+  {%- set classes = ['badge', 'text-bg-' + variant] -%}
+  {%- if pill %}
+    {%- set classes = classes + ['rounded-pill'] -%}
+  {%- endif -%}
+  {%- if extra_classes %}
+    {%- set classes = classes + [extra_classes] -%}
+  {%- endif -%}
+  <span class="{{ ' '.join(classes) }}"{% for attr_name, attr_value in attrs.items() %} {{ attr_name }}="{{ attr_value }}"{% endfor %}>{{ text }}</span>
+{%- endmacro %}
+
+{% macro badge_counter(count, variant='primary', sr_label='itens', **attrs) -%}
+  {{ badge(count, variant=variant, pill=True, extra_classes='ms-1 align-middle', **attrs) }}
+  <span class="visually-hidden">{{ count }} {{ sr_label }}</span>
+{%- endmacro %}
+
+{% macro card(title=None, body='', footer=None, variant='surface', padded=True, extra_classes='', **attrs) -%}
+  {%- set classes = ['card'] -%}
+  {%- if variant and variant != 'surface' %}
+    {%- set classes = classes + ['border-' + variant] -%}
+  {%- endif -%}
+  {%- if extra_classes %}
+    {%- set classes = classes + [extra_classes] -%}
+  {%- endif -%}
+  <div class="{{ ' '.join(classes) }}"{% for attr_name, attr_value in attrs.items() %} {{ attr_name }}="{{ attr_value }}"{% endfor %}>
+    {%- if title %}<div class="card-header">{{ title }}</div>{% endif -%}
+    <div class="card-body{% if not padded %} p-0{% endif %}">
+      {%- if caller is defined -%}
+        {{ caller() }}
+      {%- else -%}
+        {{ body }}
+      {%- endif -%}
+    </div>
+    {%- if footer %}<div class="card-footer">{{ footer }}</div>{% endif -%}
+  </div>
+{%- endmacro %}

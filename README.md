@@ -26,6 +26,37 @@ queued requests are automatically sent to the server.
 The file `static/offline.js` implements this behaviour and is cached by the
 service worker.
 
+## UI tokens & macros
+
+Global design tokens now live in `static/style.css`. The file exposes CSS
+custom properties grouped by theme (`--color-*`), typography (`--font-*`),
+spacing (`--space-*`) and elevation (`--shadow-*`). Import the stylesheet in
+custom layouts or standalone pages to keep typography, spacing and colours in
+sync with the main application:
+
+```html
+<link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+```
+
+Whenever you need a new component use the UI macros located in
+`templates/macros/ui.html`:
+
+```jinja
+{% from 'macros/ui.html' import button, input, card, alert, badge %}
+
+{{ button('Salvar', variant='success', icon='fas fa-check') }}
+{{ badge('Novo', variant='info') }}
+
+{% call card(title='Detalhes do Tutor') %}
+  {{ input('name', label='Nome completo', required=True) }}
+{% endcall %}
+
+{{ alert('Operação concluída com sucesso!', variant='success') }}
+```
+
+Each macro accepts `variant`, `size` and state parameters aligned with the
+Bootstrap utility classes so they blend naturally with existing pages.
+
 ## Mercado Pago
 
 To enable payment integration you must provide credentials from your Mercado
