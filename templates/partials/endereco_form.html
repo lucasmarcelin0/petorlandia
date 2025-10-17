@@ -148,13 +148,14 @@
 
 <!-- Toast para mensagens de erro -->
 <div class="position-fixed bottom-0 end-0 p-3" style="z-index: 11">
-  <div id="errorToast" class="toast align-items-center text-white bg-danger border-0" role="alert" aria-live="assertive" aria-atomic="true">
+  <div id="errorToast" class="toast align-items-center text-white bg-danger border-0" role="alert" aria-live="assertive" aria-atomic="true" aria-labelledby="errorToastTitle" aria-describedby="errorToastMessage">
+    <div class="visually-hidden" id="errorToastTitle">Erro no formulário de endereço</div>
     <div class="d-flex">
-      <div class="toast-body">
-        <i class="bi bi-exclamation-triangle-fill me-2"></i>
+      <div class="toast-body" id="errorToastMessage">
+        <i class="bi bi-exclamation-triangle-fill me-2" aria-hidden="true"></i>
         Por favor, preencha todos os campos obrigatórios.
       </div>
-      <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
+      <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Fechar alerta"></button>
     </div>
   </div>
 </div>
@@ -251,8 +252,16 @@ function buscarCep(trigger) {
 // Validação melhorada
 document.addEventListener("DOMContentLoaded", function() {
   document.addEventListener("DOMContentLoaded", function() {
-  const addressContainer = document.currentScript.closest(".card"); 
+  const addressContainer = document.currentScript.closest(".card");
   const form = addressContainer.closest("form"); // find the form wrapping this address partial
+  const errorToastEl = document.getElementById('errorToast');
+  const ensureErrorToastLabel = () => {
+    if (!errorToastEl) return;
+    const messageEl = document.getElementById('errorToastMessage');
+    const messageText = messageEl ? messageEl.textContent.trim() : '';
+    errorToastEl.setAttribute('aria-label', messageText ? `Erro: ${messageText}` : 'Erro no formulário de endereço');
+  };
+  ensureErrorToastLabel();
   if (!form) return;
 
   form.addEventListener("submit", function(e) {
@@ -271,7 +280,8 @@ document.addEventListener("DOMContentLoaded", function() {
 
     if (!isValid) {
       e.preventDefault();
-      const toast = new bootstrap.Toast(document.getElementById('errorToast'));
+      ensureErrorToastLabel();
+      const toast = new bootstrap.Toast(errorToastEl);
       toast.show();
     }
   });
@@ -308,7 +318,8 @@ document.addEventListener("DOMContentLoaded", function() {
       if (firstInvalid) firstInvalid.focus();
       
       // Toast de erro (substitui o alert)
-      const toast = new bootstrap.Toast(document.getElementById('errorToast'));
+      ensureErrorToastLabel();
+      const toast = new bootstrap.Toast(errorToastEl);
       toast.show();
     }
   });

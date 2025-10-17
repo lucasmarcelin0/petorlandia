@@ -73,11 +73,21 @@
   document.addEventListener('DOMContentLoaded', sendQueued);
 
   function showToast(message, category='success'){
+    if (typeof window.showAccessibleToast === 'function') {
+      window.showAccessibleToast(message, category);
+      return;
+    }
     const toastEl = document.getElementById('actionToast');
     if(!toastEl) return;
-    toastEl.querySelector('.toast-body').textContent = message;
+    const toastBody = toastEl.querySelector('.toast-body');
+    if (toastBody) {
+      toastBody.textContent = message;
+    }
     toastEl.classList.remove('bg-danger','bg-info','bg-success');
     toastEl.classList.add('bg-' + category);
+    const isCritical = category === 'danger';
+    toastEl.setAttribute('role', isCritical ? 'alert' : 'status');
+    toastEl.setAttribute('aria-live', isCritical ? 'assertive' : 'polite');
     bootstrap.Toast.getOrCreateInstance(toastEl).show();
   }
 
