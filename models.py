@@ -616,6 +616,22 @@ class Clinica(db.Model):
     )
 
 
+
+class RequestIdempotencyKey(db.Model):
+    __tablename__ = 'request_idempotency_keys'
+
+    id = db.Column(db.Integer, primary_key=True)
+    token = db.Column(db.String(64), unique=True, nullable=False)
+    endpoint = db.Column(db.String(255), nullable=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    response_code = db.Column(db.Integer, nullable=True)
+    response_body = db.Column(db.Text, nullable=True)
+    response_mimetype = db.Column(db.String(128), nullable=True)
+
+    user = db.relationship('User', backref=db.backref('request_idempotency_keys', lazy=True))
+
+
     @property
     def logo_url(self):
         """Return an absolute URL for the clinic logo.
