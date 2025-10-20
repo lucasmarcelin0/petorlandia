@@ -32,12 +32,13 @@
   {% endif %}
 {% endmacro %}
 
-{% macro ui_card(title=None, variant='surface', padding='p-4', extra_classes='', body_classes='', header_classes='') %}
+{% macro ui_card(title=None, variant='surface', padding='p-4', extra_classes='', body_classes='', header_classes='', attrs=None) %}
+  {% set attrs = attrs or {} %}
   {% set classes = ['card', 'ui-card', 'ui-card--' ~ variant] %}
   {% if extra_classes %}
     {% set classes = classes + [extra_classes] %}
   {% endif %}
-  <div class="{{ classes|join(' ') }}">
+  <div class="{{ classes|join(' ') }}"{% for name, value in attrs.items() if value is not none %} {{ name }}="{{ value }}"{% endfor %}>
     {% if title %}
       <div class="ui-card__header {{ header_classes }}">
         <h5 class="ui-card__title">{{ title }}</h5>
