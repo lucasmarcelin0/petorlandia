@@ -428,7 +428,12 @@
       document.getElementById('exam-time').innerHTML = '<option value="">Selecione...</option>';
       if (data.html) {
         const hist = document.getElementById('historico-agendamentos');
-        hist.innerHTML = data.html;
+        if (hist) {
+          hist.innerHTML = data.html;
+          if (typeof window.initBootstrapDropdowns === 'function') {
+            window.initBootstrapDropdowns(hist);
+          }
+        }
       }
       atualizarHorarios();
     } else {
@@ -445,7 +450,13 @@
     if (resp.ok) {
       const data = await resp.json();
       if (data.html) {
-        document.getElementById('historico-agendamentos').innerHTML = data.html;
+        const hist = document.getElementById('historico-agendamentos');
+        if (hist) {
+          hist.innerHTML = data.html;
+          if (typeof window.initBootstrapDropdowns === 'function') {
+            window.initBootstrapDropdowns(hist);
+          }
+        }
       }
       mostrarFeedback('Agendamento excluído.');
     } else {
@@ -481,7 +492,13 @@
     if (resp.ok) {
       const data = await resp.json();
       if (data.html) {
-        document.getElementById('historico-agendamentos').innerHTML = data.html;
+        const hist = document.getElementById('historico-agendamentos');
+        if (hist) {
+          hist.innerHTML = data.html;
+          if (typeof window.initBootstrapDropdowns === 'function') {
+            window.initBootstrapDropdowns(hist);
+          }
+        }
       }
       mostrarFeedback('Agendamento atualizado!');
       atualizarHorarios();
@@ -517,9 +534,14 @@
         mostrarFeedback('Solicitação de exames salva com sucesso!');
         if (data.html) {
           const container = document.getElementById('historico-exames');
-          container.innerHTML = data.html;
-          if (typeof bindSyncForms === 'function') {
-            bindSyncForms(container);
+          if (container) {
+            container.innerHTML = data.html;
+            if (typeof window.initBootstrapDropdowns === 'function') {
+              window.initBootstrapDropdowns(container);
+            }
+            if (typeof bindSyncForms === 'function') {
+              bindSyncForms(container);
+            }
           }
         }
         exames = [];

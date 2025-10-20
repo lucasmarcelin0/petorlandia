@@ -269,9 +269,14 @@ function salvarBlocoExames(blocoId, consultaId) {
       alert('Bloco de exames salvo!');
       if (data.html) {
         const container = document.getElementById('historico-exames');
-        container.innerHTML = data.html;
-        if (typeof bindSyncForms === 'function') {
-          bindSyncForms(container);
+        if (container) {
+          container.innerHTML = data.html;
+          if (typeof window.initBootstrapDropdowns === 'function') {
+            window.initBootstrapDropdowns(container);
+          }
+          if (typeof bindSyncForms === 'function') {
+            bindSyncForms(container);
+          }
         }
       }
     } else {

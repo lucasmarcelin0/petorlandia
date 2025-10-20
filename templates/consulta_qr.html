@@ -323,6 +323,9 @@ function bindSyncForms(root) {
           const container = sel.startsWith('#') ? document.querySelector(sel) : document.getElementById(sel);
           if (container) {
             container.innerHTML = data.html;
+            if (typeof window.initBootstrapDropdowns === 'function') {
+              window.initBootstrapDropdowns(container);
+            }
             bindSyncForms(container);
           }
         }
@@ -430,6 +433,9 @@ document.addEventListener('form-sync-success', function(ev) {
       const container = document.getElementById(form.dataset.target);
       if (container) {
         container.innerHTML = data.html;
+        if (typeof window.initBootstrapDropdowns === 'function') {
+          window.initBootstrapDropdowns(container);
+        }
         bindSyncForms(container);
       }
     }
@@ -450,6 +456,9 @@ document.addEventListener('form-sync-success', function(ev) {
       const container = document.getElementById('historico-consultas');
       if (container) {
         container.innerHTML = data.html;
+        if (typeof window.initBootstrapDropdowns === 'function') {
+          window.initBootstrapDropdowns(container);
+        }
         bindSyncForms(container);
       }
     }
@@ -477,15 +486,6 @@ document.addEventListener('form-sync-success', function(ev) {
   position: relative !important;
 }
 </style>
-
-<script>
-// Initialize dropdowns normally without interfering with Bootstrap's events
-document.addEventListener("DOMContentLoaded", function () {
-  document.querySelectorAll('.dropdown-toggle[data-bs-toggle="dropdown"]').forEach(trigger => {
-    bootstrap.Dropdown.getOrCreateInstance(trigger);
-  });
-});
-</script>
 
 <script>
 document.addEventListener('DOMContentLoaded', function () {

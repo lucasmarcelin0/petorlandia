@@ -515,9 +515,14 @@
         mostrarFeedback('Prescrição salva com sucesso!', 'success');
         if (data.html) {
           const container = document.getElementById('historico-prescricoes');
-          container.innerHTML = data.html;
-          if (typeof bindSyncForms === 'function') {
-            bindSyncForms(container);
+          if (container) {
+            container.innerHTML = data.html;
+            if (typeof window.initBootstrapDropdowns === 'function') {
+              window.initBootstrapDropdowns(container);
+            }
+            if (typeof bindSyncForms === 'function') {
+              bindSyncForms(container);
+            }
           }
         }
         prescricoes = [];

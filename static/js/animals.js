@@ -83,6 +83,9 @@ async function loadAnimals(params, { pushState = true } = {}) {
     }
 
     animalsContainer.innerHTML = data.html;
+    if (typeof window.initBootstrapDropdowns === 'function') {
+      window.initBootstrapDropdowns(animalsContainer);
+    }
     initializePopovers();
   } catch (error) {
     console.error(error);
