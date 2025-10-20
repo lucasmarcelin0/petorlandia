@@ -81,10 +81,12 @@ app.config.update(SESSION_PERMANENT=True, SESSION_TYPE="filesystem")
 @app.template_filter('date_now')
 def date_now(format_string='%Y-%m-%d'):
     return datetime.now(BR_TZ).strftime(format_string)
-# já existe no topo, logo depois das extensões:
+# Extensões registradas no módulo ``extensions`` permanecem agrupadas aqui
+# para deixar claro que todas compartilham o mesmo objeto ``app``.
 from extensions import db, migrate, mail, login, session as session_ext, babel
 from flask_login import login_user, logout_user, current_user, login_required
-from flask_mail import Message as MailMessage      #  ←  adicione esta linha
+# Alias explícito da mensagem de e-mail evita colisão com outros tipos "Message".
+from flask_mail import Message as MailMessage
 from werkzeug.utils import secure_filename
 from werkzeug.datastructures import FileStorage
 
