@@ -91,7 +91,7 @@
       {%- endfor -%}
     {%- endif -%}
     {%- if field is not none -%}
-      {{ field(class=classes | join(' '), id=field_id, placeholder=placeholder, type=type, value=value) }}
+      {{ field(class=classes | join(' '), id=field_id, placeholder=placeholder, type=type{% if value is not none %}, value=value{% endif %}) }}
     {%- else -%}
       <input type="{{ type }}" id="{{ field_id }}" class="{{ classes | join(' ') }}" placeholder="{{ placeholder }}" value="{{ value if value is not none else '' }}"{{ _render_attrs(input_attrs) }}>
     {%- endif -%}
