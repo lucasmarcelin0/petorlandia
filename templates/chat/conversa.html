@@ -1,11 +1,14 @@
 {% extends "layout.html" %}
+{% import 'macros/ui.html' as ui %}
 {% block main %}
-<h2>Chat sobre {{ animal.name }}</h2>
-<div id="messages" class="border p-3 mb-3 rounded" style="max-height:400px; overflow-y:auto;"></div>
-<form id="chat-form" class="input-group">
-    <input type="text" id="content" class="form-control" placeholder="Digite sua mensagem..." required>
-    <button class="btn btn-primary" type="submit">Enviar</button>
-</form>
+<div class="ui-chat">
+  <h2>Chat sobre {{ animal.name }}</h2>
+  <div id="messages" class="ui-chat__messages ui-scrollable ui-scrollable--md"></div>
+  <form id="chat-form" class="d-flex gap-2 align-items-start">
+    {{ ui.ui_input(id='content', placeholder='Digite sua mensagem...', wrapper_classes='flex-grow-1', input_attrs={'name': 'content', 'required': True}) }}
+    {{ ui.ui_button('Enviar', type='submit', variant='primary', extra_classes='align-self-stretch') }}
+  </form>
+</div>
 <script>
 const animalId = {{ animal.id }};
 const currentUserId = {{ current_user.id }};
@@ -16,12 +19,13 @@ async function loadMessages() {
     const container = document.getElementById('messages');
     container.innerHTML = '';
     msgs.forEach(m => {
+        const outgoing = m.sender_id === currentUserId;
         const wrapper = document.createElement('div');
-        wrapper.className = 'mb-2 ' + (m.sender_id === currentUserId ? 'text-end' : '');
-        wrapper.innerHTML = `<div class="p-2 rounded ${m.sender_id === currentUserId ? 'bg-info-subtle' : 'bg-light'}">
-            <small>${m.sender_id === currentUserId ? 'Você' : 'Eles'}:</small><br>
+        wrapper.className = 'd-flex flex-column mb-2 ' + (outgoing ? 'align-items-end' : 'align-items-start');
+        wrapper.innerHTML = `<div class="ui-chat__bubble ${outgoing ? 'ui-chat__bubble--outgoing text-end' : 'ui-chat__bubble--incoming'}">
+            <small>${outgoing ? 'Você' : 'Eles'}:</small><br>
             ${m.content}
-            <div class="text-muted small">${new Date(m.timestamp).toLocaleString()}</div>
+            <div class="ui-text-muted small mt-1">${new Date(m.timestamp).toLocaleString()}</div>
         </div>`;
         container.appendChild(wrapper);
     });

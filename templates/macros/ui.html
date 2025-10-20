@@ -1,102 +1,142 @@
-{#
-  Macros de UI reutilizáveis alinhados ao sistema de design da PetOrlândia.
-  Tokens globais estão definidos em ``static/style.css`` e podem ser usados
-  em conjunto com os utilitários do Bootstrap.
-#}
-{% macro button(text, variant='primary', size='md', icon=None, outline=False, block=False, type='button', disabled=False, extra_classes='', **attrs) -%}
-  {%- set variant_class = 'btn-outline-' + variant if outline else 'btn-' + variant -%}
-  {%- set size_class = 'btn-' + size if size in ['sm', 'lg'] else '' -%}
-  {%- set classes = 'btn ' + variant_class -%}
-  {%- if size_class %}{% set classes = classes + ' ' + size_class %}{% endif -%}
-  {%- if block %}{% set classes = classes + ' w-100' %}{% endif -%}
-  {%- if extra_classes %}{% set classes = classes + ' ' + extra_classes %}{% endif -%}
-  <button type="{{ type }}" class="{{ classes }}"{% if disabled %} disabled{% endif %}{% for attr_name, attr_value in attrs.items() %} {{ attr_name }}="{{ attr_value }}"{% endfor %}>
-    {%- if icon %}<i class="{{ icon }}" aria-hidden="true"></i>{% endif -%}
-    <span class="btn__label">{{ text }}</span>
-  </button>
-{%- endmacro %}
+{% macro _render_attrs(attrs) %}
+  {%- if attrs -%}
+    {%- for key, value in attrs.items() if value is not none -%}
+      {%- set attr_name = key.replace('_', '-') -%}
+      {%- if value is sameas(true) -%}
+ {{ ' ' ~ attr_name }}
+      {%- elif value is sameas(false) -%}
+      {%- else -%}
+ {{ ' ' ~ attr_name ~ '="' ~ value ~ '"' }}
+      {%- endif -%}
+    {%- endfor -%}
+  {%- endif -%}
+{% endmacro %}
 
-{% macro input(name, label='', type='text', value='', placeholder='', size='md', state=None, icon=None, help_text='', required=False, extra_classes='', wrapper_classes='mb-3', **attrs) -%}
-  {%- set size_class = {'sm': 'form-control-sm', 'lg': 'form-control-lg'}.get(size, '') -%}
-  {%- set state_class = 'is-' + state if state in ['valid', 'invalid'] else '' -%}
-  {%- set classes = 'form-control' -%}
-  {%- if size_class %}{% set classes = classes + ' ' + size_class %}{% endif -%}
-  {%- if state_class %}{% set classes = classes + ' ' + state_class %}{% endif -%}
-  {%- if extra_classes %}{% set classes = classes + ' ' + extra_classes %}{% endif -%}
-  {%- set input_id = attrs.get('id', name ~ '-input') -%}
-  <div class="{{ wrapper_classes }}">
-    {%- if label %}
-    <label class="form-label" for="{{ input_id }}">{{ label }}{% if required %}<span class="text-danger ms-1">*</span>{% endif %}</label>
-    {%- endif %}
-    {%- if icon %}<div class="input-group">{% endif %}
-      {%- if icon %}
-      <span class="input-group-text"><i class="{{ icon }}" aria-hidden="true"></i></span>
-      {%- endif %}
-      <input
-        name="{{ name }}"
-        type="{{ type }}"
-        class="{{ classes }}"
-        id="{{ input_id }}"
-        value="{{ value }}"
-        placeholder="{{ placeholder }}"{% if required %} required{% endif %}
-        {%- for attr_name, attr_value in attrs.items() if attr_name != 'id' %} {{ attr_name }}="{{ attr_value }}"{% endfor %}>
-    {%- if icon %}</div>{% endif %}
-    {%- if help_text %}
-    <div class="form-text">{{ help_text }}</div>
-    {%- endif %}
-  </div>
-{%- endmacro %}
+{% macro ui_button(text=None, variant='primary', size='md', type='button', href=None, icon=None, block=False, extra_classes='', attributes=None) %}
+  {%- set classes = ['ui-button', 'ui-button--' ~ variant] -%}
+  {%- if size != 'md' -%}
+    {%- set _ = classes.append('ui-button--' ~ size) -%}
+  {%- endif -%}
+  {%- if block -%}
+    {%- set _ = classes.append('ui-button--block') -%}
+  {%- endif -%}
+  {%- if extra_classes -%}
+    {%- for cls in extra_classes.split(' ') if cls -%}
+      {%- set _ = classes.append(cls) -%}
+    {%- endfor -%}
+  {%- endif -%}
+  {%- set content -%}
+    {%- if caller is defined -%}
+      {{ caller() | trim }}
+    {%- else -%}
+      {{ text }}
+    {%- endif -%}
+  {%- endset -%}
+  {%- set attr_string = _render_attrs(attributes) -%}
+  {%- if href -%}
+    <a href="{{ href }}" class="{{ classes | reject('equalto', '') | join(' ') }}"{{ attr_string }}>
+      {%- if icon -%}<i class="{{ icon }}"></i>{%- endif -%}
+      {{ content | safe }}
+    </a>
+  {%- else -%}
+    <button type="{{ type }}" class="{{ classes | reject('equalto', '') | join(' ') }}"{{ attr_string }}>
+      {%- if icon -%}<i class="{{ icon }}"></i>{%- endif -%}
+      {{ content | safe }}
+    </button>
+  {%- endif -%}
+{% endmacro %}
 
-{% macro alert(message, variant='info', icon=None, dismissible=True, extra_classes='', **attrs) -%}
-  {%- set classes = ['alert', 'alert-' + variant] -%}
-  {%- if dismissible %}
-    {%- set classes = classes + ['alert-dismissible', 'fade', 'show'] -%}
+{% macro ui_card(title=None, variant='surface', padded=True, extra_classes='', body_classes='', footer=None, attributes=None) %}
+  {%- set classes = ['ui-card'] -%}
+  {%- if variant -%}
+    {%- set _ = classes.append('ui-card--' ~ variant) -%}
   {%- endif -%}
-  {%- if extra_classes %}
-    {%- set classes = classes + [extra_classes] -%}
+  {%- if not padded -%}
+    {%- set _ = classes.append('ui-card--flush') -%}
   {%- endif -%}
-  <div class="{{ ' '.join(classes) }}" role="alert"{% for attr_name, attr_value in attrs.items() %} {{ attr_name }}="{{ attr_value }}"{% endfor %}>
-    {%- if icon %}<i class="{{ icon }} me-2" aria-hidden="true"></i>{% endif -%}
-    {{ message }}
-    {%- if dismissible %}
-    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Fechar"></button>
-    {%- endif %}
-  </div>
-{%- endmacro %}
-
-{% macro badge(text, variant='primary', pill=True, extra_classes='', **attrs) -%}
-  {%- set classes = ['badge', 'text-bg-' + variant] -%}
-  {%- if pill %}
-    {%- set classes = classes + ['rounded-pill'] -%}
+  {%- if extra_classes -%}
+    {%- for cls in extra_classes.split(' ') if cls -%}
+      {%- set _ = classes.append(cls) -%}
+    {%- endfor -%}
   {%- endif -%}
-  {%- if extra_classes %}
-    {%- set classes = classes + [extra_classes] -%}
-  {%- endif -%}
-  <span class="{{ ' '.join(classes) }}"{% for attr_name, attr_value in attrs.items() %} {{ attr_name }}="{{ attr_value }}"{% endfor %}>{{ text }}</span>
-{%- endmacro %}
-
-{% macro badge_counter(count, variant='primary', sr_label='itens', **attrs) -%}
-  {{ badge(count, variant=variant, pill=True, extra_classes='ms-1 align-middle', **attrs) }}
-  <span class="visually-hidden">{{ count }} {{ sr_label }}</span>
-{%- endmacro %}
-
-{% macro card(title=None, body='', footer=None, variant='surface', padded=True, extra_classes='', **attrs) -%}
-  {%- set classes = ['card'] -%}
-  {%- if variant and variant != 'surface' %}
-    {%- set classes = classes + ['border-' + variant] -%}
-  {%- endif -%}
-  {%- if extra_classes %}
-    {%- set classes = classes + [extra_classes] -%}
-  {%- endif -%}
-  <div class="{{ ' '.join(classes) }}"{% for attr_name, attr_value in attrs.items() %} {{ attr_name }}="{{ attr_value }}"{% endfor %}>
-    {%- if title %}<div class="card-header">{{ title }}</div>{% endif -%}
-    <div class="card-body{% if not padded %} p-0{% endif %}">
+  {%- set attr_string = _render_attrs(attributes) -%}
+  <div class="{{ classes | reject('equalto', '') | join(' ') }}"{{ attr_string }}>
+    {%- if title -%}
+      <div class="ui-card__header">{{ title }}</div>
+    {%- endif -%}
+    <div{% if body_classes %} class="{{ body_classes }}"{% endif %}>
       {%- if caller is defined -%}
         {{ caller() }}
-      {%- else -%}
-        {{ body }}
       {%- endif -%}
     </div>
-    {%- if footer %}<div class="card-footer">{{ footer }}</div>{% endif -%}
+    {%- if footer -%}
+      <div class="ui-card__footer">{{ footer }}</div>
+    {%- endif -%}
   </div>
-{%- endmacro %}
+{% endmacro %}
+
+{% macro ui_input(field=None, id=None, type='text', label=None, placeholder='', value=None, help_text=None, errors=None, extra_classes='', wrapper_classes='ui-field', input_attrs=None) %}
+  {%- set input_attrs = input_attrs or {} -%}
+  {%- set field_id = id or (field.id if field is not none else '') -%}
+  {%- set label_text = label if label is not none else (field.label.text if field and field.label is not none else '') -%}
+  {%- set field_errors = errors if errors is not none else (field.errors if field is not none else []) -%}
+  <div class="{{ wrapper_classes }}">
+    {%- if label_text -%}
+      <label for="{{ field_id }}" class="ui-label">{{ label_text }}</label>
+    {%- endif -%}
+    {%- set classes = ['ui-input'] -%}
+    {%- if extra_classes -%}
+      {%- for cls in extra_classes.split(' ') if cls -%}
+        {%- set _ = classes.append(cls) -%}
+      {%- endfor -%}
+    {%- endif -%}
+    {%- if field is not none -%}
+      {{ field(class=classes | join(' '), id=field_id, placeholder=placeholder, type=type, value=value) }}
+    {%- else -%}
+      <input type="{{ type }}" id="{{ field_id }}" class="{{ classes | join(' ') }}" placeholder="{{ placeholder }}" value="{{ value if value is not none else '' }}"{{ _render_attrs(input_attrs) }}>
+    {%- endif -%}
+    {%- if help_text -%}
+      <div class="ui-input__hint">{{ help_text }}</div>
+    {%- endif -%}
+    {%- for error in field_errors -%}
+      <div class="ui-input__error">{{ error }}</div>
+    {%- endfor -%}
+  </div>
+{% endmacro %}
+
+{% macro ui_modal(modal_id, title=None, close_label='Fechar', extra_classes='', attributes=None) %}
+  {%- set classes = ['ui-modal'] -%}
+  {%- if extra_classes -%}
+    {%- for cls in extra_classes.split(' ') if cls -%}
+      {%- set _ = classes.append(cls) -%}
+    {%- endfor -%}
+  {%- endif -%}
+  <div id="{{ modal_id }}" class="{{ classes | join(' ') }}"{{ _render_attrs(attributes) }}>
+    <div class="ui-modal__dialog">
+      <button type="button" class="ui-button ui-button--light ui-modal__close" data-modal-close="{{ modal_id }}">
+        <span aria-hidden="true">&times;</span>
+        <span class="visually-hidden">{{ close_label }}</span>
+      </button>
+      {%- if title -%}
+        <div class="ui-card__header">{{ title }}</div>
+      {%- endif -%}
+      <div class="ui-modal__body">
+        {%- if caller is defined -%}
+          {{ caller() }}
+        {%- endif -%}
+      </div>
+    </div>
+  </div>
+{% endmacro %}
+
+{% macro ui_list(items, bordered=False, item_class='') %}
+  {%- set classes = ['ui-list'] -%}
+  {%- if bordered -%}
+    {%- set _ = classes.append('ui-list--bordered') -%}
+  {%- endif -%}
+  <ul class="{{ classes | join(' ') }}">
+    {%- for item in items -%}
+      <li class="{{ item_class }}">{{ item }}</li>
+    {%- endfor -%}
+  </ul>
+{% endmacro %}

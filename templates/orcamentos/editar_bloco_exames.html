@@ -1,4 +1,5 @@
 {% extends 'base_consulta.html' %}
+{% import 'macros/ui.html' as ui %}
 
 {% block main %}
 <div class="container py-4">
@@ -6,49 +7,45 @@
 
   <div id="exames-container">
     {% for exame in bloco.exames %}
-    <div class="card mb-3 exame-card">
-      <div class="card-body">
-        <div class="mb-2 position-relative">
-          <label class="form-label">Nome do Exame</label>
-          <input type="text" class="form-control exame-nome" value="{{ exame.nome or '' }}" oninput="sugerirExames(this)">
-          <ul class="autocomplete-sugestoes list-group position-absolute w-100" style="z-index: 10;"></ul>
-        </div>
-        <div class="mb-2">
-          <label class="form-label">Justificativa</label>
-          <textarea class="form-control exame-justificativa" rows="2">{{ exame.justificativa or '' }}</textarea>
-        </div>
-        <div class="mb-2">
-          <label class="form-label">Status</label>
-          <select class="form-select exame-status">
-            <option value="pendente" {% if exame.status == 'pendente' %}selected{% endif %}>Pendente</option>
-            <option value="concluido" {% if exame.status == 'concluido' %}selected{% endif %}>Concluído</option>
-            <option value="cancelado" {% if exame.status == 'cancelado' %}selected{% endif %}>Cancelado</option>
-          </select>
-        </div>
-        <div class="mb-2">
-          <label class="form-label">Resultado</label>
-          <textarea class="form-control exame-resultado" rows="2">{{ exame.resultado or '' }}</textarea>
-        </div>
-        <div class="mb-2">
-          <label class="form-label">Data de Realização</label>
-          <input type="date" class="form-control exame-performed_at" value="{{ exame.performed_at.date() if exame.performed_at else '' }}">
-        </div>
-        <button type="button" class="btn btn-danger btn-sm btn-remover">🗑️ Remover</button>
+    {% call ui.ui_card(extra_classes='mb-3 exame-card', body_classes='d-grid gap-2') %}
+      <div class="ui-field position-relative">
+        <label class="ui-label">Nome do Exame</label>
+        <input type="text" class="ui-input exame-nome" value="{{ exame.nome or '' }}" oninput="sugerirExames(this)">
+        <ul class="autocomplete-sugestoes list-group position-absolute w-100 ui-overlay"></ul>
       </div>
-    </div>
+      <div class="ui-field">
+        <label class="ui-label">Justificativa</label>
+        <textarea class="ui-input exame-justificativa" rows="2">{{ exame.justificativa or '' }}</textarea>
+      </div>
+      <div class="ui-field">
+        <label class="ui-label">Status</label>
+        <select class="ui-input exame-status">
+          <option value="pendente" {% if exame.status == 'pendente' %}selected{% endif %}>Pendente</option>
+          <option value="concluido" {% if exame.status == 'concluido' %}selected{% endif %}>Concluído</option>
+          <option value="cancelado" {% if exame.status == 'cancelado' %}selected{% endif %}>Cancelado</option>
+        </select>
+      </div>
+      <div class="ui-field">
+        <label class="ui-label">Resultado</label>
+        <textarea class="ui-input exame-resultado" rows="2">{{ exame.resultado or '' }}</textarea>
+      </div>
+      <div class="ui-field">
+        <label class="ui-label">Data de Realização</label>
+        <input type="date" class="ui-input exame-performed_at" value="{{ exame.performed_at.date() if exame.performed_at else '' }}">
+      </div>
+      {{ ui.ui_button('🗑️ Remover', variant='danger', size='sm', type='button', extra_classes='btn-remover align-self-start') }}
+    {% endcall %}
     {% endfor %}
   </div>
 
-  <button type="button" class="btn btn-outline-primary mb-3" id="btn-adicionar">➕ Adicionar Exame</button>
+  {{ ui.ui_button('➕ Adicionar Exame', variant='primary', type='button', extra_classes='mb-3', attributes={'id': 'btn-adicionar'}) }}
 
-  <div class="mb-3">
-    <label class="form-label">Observações Gerais</label>
-    <textarea id="observacoes_gerais" class="form-control" rows="3">{{ bloco.observacoes_gerais or '' }}</textarea>
+  <div class="ui-field">
+    <label class="ui-label">Observações Gerais</label>
+    <textarea id="observacoes_gerais" class="ui-input" rows="3">{{ bloco.observacoes_gerais or '' }}</textarea>
   </div>
 
-  <button class="btn btn-success" id="btn-salvar" data-bloco-id="{{ bloco.id }}" data-consulta-id="{{ bloco.consulta_id }}">
-    💾 Salvar alterações
-  </button>
+  {{ ui.ui_button('💾 Salvar alterações', variant='secondary', attributes={'id': 'btn-salvar', 'data-bloco-id': bloco.id, 'data-consulta-id': bloco.consulta_id}) }}
 </div>
 {% endblock %}
 
@@ -82,35 +79,35 @@ function adicionarExame() {
   console.log("➕ Adicionando novo exame...");
   const container = document.getElementById('exames-container');
   const novo = document.createElement('div');
-  novo.classList.add('card', 'mb-3', 'exame-card');
+  novo.classList.add('ui-card', 'ui-card--surface', 'mb-3', 'exame-card');
   novo.innerHTML = `
-    <div class="card-body">
-      <div class="mb-2 position-relative">
-        <label class="form-label">Nome do Exame</label>
-        <input type="text" class="form-control exame-nome" oninput="sugerirExames(this)">
-        <ul class="autocomplete-sugestoes list-group position-absolute w-100" style="z-index: 10;"></ul>
+    <div class="d-grid gap-2">
+      <div class="ui-field position-relative">
+        <label class="ui-label">Nome do Exame</label>
+        <input type="text" class="ui-input exame-nome" oninput="sugerirExames(this)">
+        <ul class="autocomplete-sugestoes list-group position-absolute w-100 ui-overlay"></ul>
       </div>
-      <div class="mb-2">
-        <label class="form-label">Justificativa</label>
-        <textarea class="form-control exame-justificativa" rows="2"></textarea>
+      <div class="ui-field">
+        <label class="ui-label">Justificativa</label>
+        <textarea class="ui-input exame-justificativa" rows="2"></textarea>
       </div>
-      <div class="mb-2">
-        <label class="form-label">Status</label>
-        <select class="form-select exame-status">
+      <div class="ui-field">
+        <label class="ui-label">Status</label>
+        <select class="ui-input exame-status">
           <option value="pendente" selected>Pendente</option>
           <option value="concluido">Concluído</option>
           <option value="cancelado">Cancelado</option>
         </select>
       </div>
-      <div class="mb-2">
-        <label class="form-label">Resultado</label>
-        <textarea class="form-control exame-resultado" rows="2"></textarea>
+      <div class="ui-field">
+        <label class="ui-label">Resultado</label>
+        <textarea class="ui-input exame-resultado" rows="2"></textarea>
       </div>
-      <div class="mb-2">
-        <label class="form-label">Data de Realização</label>
-        <input type="date" class="form-control exame-performed_at">
+      <div class="ui-field">
+        <label class="ui-label">Data de Realização</label>
+        <input type="date" class="ui-input exame-performed_at">
       </div>
-      <button type="button" class="btn btn-danger btn-sm btn-remover">🗑️ Remover</button>
+      <button type="button" class="ui-button ui-button--danger ui-button--sm btn-remover align-self-start">🗑️ Remover</button>
     </div>
   `;
   container.appendChild(novo);
@@ -135,7 +132,7 @@ function sugerirExames(input) {
         li.textContent = item.nome;
         li.onclick = () => {
           input.value = item.nome;
-          const card = input.closest('.card-body');
+          const card = input.closest('.exame-card');
           card.querySelector('.exame-justificativa').value = item.justificativa || '';
           lista.innerHTML = '';
         };
