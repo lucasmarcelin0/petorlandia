@@ -1,4 +1,22 @@
-/* Campos de data + idade */
+/* ==========================================================================
+   Agenda - Tokens específicos
+   --------------------------------------------------------------------------
+   Estes tokens complementam o design system (ver style.css) com ajustes de
+   iluminação e sombras usados na agenda, chips e cartões.
+   ========================================================================== */
+:root {
+  --agenda-toolbar-overlay: rgba(var(--color-surface-rgb), 0.15);
+  --agenda-toolbar-highlight: rgba(var(--color-surface-rgb), 0.18);
+  --agenda-toolbar-shadow: var(--shadow-lg);
+  --agenda-card-radius: 1.25rem;
+  --agenda-card-border: rgba(var(--color-neutral-300-rgb), 0.35);
+  --agenda-chip-shadow: rgba(var(--color-neutral-900-rgb), 0.45);
+  --agenda-muted-surface: rgba(var(--color-neutral-100-rgb, 241, 245, 249), 0.85);
+}
+
+/* ==========================================================================
+   Agenda - Campos de data + idade
+   ========================================================================== */
 .data-idade .input-group {
   align-items: stretch;
 }
@@ -29,10 +47,12 @@
   }
 }
 
-/* Barra de ações da agenda */
+/* ==========================================================================
+   Agenda - Barra de ações
+   ========================================================================== */
 .schedule-toolbar {
-  --toolbar-gradient-start: #0d6efd;
-  --toolbar-gradient-end: #6610f2;
+  --toolbar-gradient-start: var(--color-primary);
+  --toolbar-gradient-end: var(--color-primary-strong);
   background: linear-gradient(135deg, var(--toolbar-gradient-start), var(--toolbar-gradient-end));
   padding: 1.1rem 1.5rem;
   display: flex;
@@ -42,7 +62,7 @@
   gap: 0.85rem;
   position: relative;
   overflow: hidden;
-  box-shadow: 0 18px 45px -35px rgba(79, 70, 229, 0.75);
+  box-shadow: var(--agenda-toolbar-shadow);
 }
 
 .schedule-toolbar::before,
@@ -50,7 +70,7 @@
   content: "";
   position: absolute;
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.15);
+  background: var(--agenda-toolbar-overlay);
   filter: blur(0);
   z-index: 0;
 }
@@ -67,6 +87,7 @@
   height: 220px;
   bottom: -150px;
   left: -60px;
+  background: var(--agenda-toolbar-highlight);
 }
 
 .schedule-toolbar-buttons {
@@ -80,9 +101,9 @@
 }
 
 .schedule-toolbar-btn {
-  --schedule-btn-bg: rgba(255, 255, 255, 0.22);
-  --schedule-btn-color: #ffffff;
-  --schedule-btn-shadow: rgba(15, 23, 42, 0.18);
+  --schedule-btn-bg: rgba(var(--color-surface-rgb), 0.22);
+  --schedule-btn-color: var(--color-surface);
+  --schedule-btn-shadow: rgba(var(--color-neutral-900-rgb), 0.18);
   border: none;
   border-radius: 999px;
   background: var(--schedule-btn-bg);
@@ -113,41 +134,43 @@
 
 .schedule-toolbar-btn:focus-visible {
   outline: 0;
-  box-shadow: 0 0 0 0.2rem rgba(255, 255, 255, 0.35), 0 16px 30px -16px var(--schedule-btn-shadow);
+  box-shadow: 0 0 0 0.2rem rgba(var(--color-surface-rgb), 0.35), 0 16px 30px -16px var(--schedule-btn-shadow);
 }
 
 .schedule-toolbar-btn--neutral {
-  --schedule-btn-bg: rgba(255, 255, 255, 0.22);
-  --schedule-btn-shadow: rgba(15, 23, 42, 0.25);
+  --schedule-btn-bg: rgba(var(--color-surface-rgb), 0.22);
+  --schedule-btn-shadow: rgba(var(--color-neutral-900-rgb), 0.25);
 }
 
 .schedule-toolbar-btn--info {
-  --schedule-btn-bg: linear-gradient(135deg, #38bdf8 0%, #60a5fa 100%);
-  --schedule-btn-shadow: rgba(56, 189, 248, 0.45);
+  --schedule-btn-bg: linear-gradient(135deg, var(--color-info) 0%, var(--color-primary) 100%);
+  --schedule-btn-shadow: rgba(var(--color-info-rgb), 0.45);
 }
 
 .schedule-toolbar-btn--success {
-  --schedule-btn-bg: linear-gradient(135deg, #34d399 0%, #10b981 100%);
-  --schedule-btn-shadow: rgba(16, 185, 129, 0.45);
+  --schedule-btn-bg: linear-gradient(135deg, rgba(var(--color-success-rgb), 0.9) 0%, var(--color-success) 100%);
+  --schedule-btn-shadow: rgba(var(--color-success-rgb), 0.45);
 }
 
 .schedule-toolbar-btn--warning {
-  --schedule-btn-bg: linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%);
-  --schedule-btn-color: #1f2937;
-  --schedule-btn-shadow: rgba(245, 158, 11, 0.35);
+  --schedule-btn-bg: linear-gradient(135deg, var(--color-warning) 0%, var(--color-warning-strong) 100%);
+  --schedule-btn-color: var(--color-neutral-900);
+  --schedule-btn-shadow: rgba(var(--color-warning-rgb), 0.35);
 }
 
 .schedule-toolbar-btn--primary {
-  --schedule-btn-bg: linear-gradient(135deg, #7c3aed 0%, #2563eb 100%);
-  --schedule-btn-shadow: rgba(124, 58, 237, 0.45);
+  --schedule-btn-bg: linear-gradient(135deg, var(--color-primary) 0%, var(--color-secondary) 100%);
+  --schedule-btn-shadow: rgba(var(--color-primary-rgb), 0.45);
 }
 
-/* Ações auxiliares da agenda */
+/* ==========================================================================
+   Agenda - Ações auxiliares
+   ========================================================================== */
 .schedule-action-btn {
-  --schedule-action-fg: #4338ca;
-  --schedule-action-bg: linear-gradient(135deg, rgba(79, 70, 229, 0.08), rgba(59, 130, 246, 0.12));
-  --schedule-action-border: rgba(99, 102, 241, 0.35);
-  --schedule-action-shadow: rgba(79, 70, 229, 0.2);
+  --schedule-action-fg: var(--color-primary);
+  --schedule-action-bg: linear-gradient(135deg, rgba(var(--color-primary-rgb), 0.12), rgba(var(--color-secondary-rgb), 0.16));
+  --schedule-action-border: rgba(var(--color-primary-rgb), 0.35);
+  --schedule-action-shadow: rgba(var(--color-primary-rgb), 0.2);
   border-radius: 999px;
   border: 1px solid var(--schedule-action-border);
   background: var(--schedule-action-bg);
@@ -171,7 +194,7 @@
   content: "";
   position: absolute;
   inset: 0;
-  background: radial-gradient(circle at top, rgba(255, 255, 255, 0.55), transparent 65%);
+  background: radial-gradient(circle at top, rgba(var(--color-surface-rgb), 0.55), transparent 65%);
   opacity: 0;
   pointer-events: none;
   transition: opacity 0.2s ease;
@@ -191,7 +214,7 @@
 
 .schedule-action-btn:focus-visible {
   outline: 0;
-  box-shadow: 0 0 0 0.2rem rgba(99, 102, 241, 0.25), 0 22px 40px -28px var(--schedule-action-shadow);
+  box-shadow: 0 0 0 0.2rem rgba(var(--color-primary-rgb), 0.25), 0 22px 40px -28px var(--schedule-action-shadow);
 }
 
 .schedule-action-btn .bi,
@@ -210,38 +233,38 @@
 }
 
 .schedule-action-btn--primary {
-  --schedule-action-fg: #1d4ed8;
-  --schedule-action-bg: linear-gradient(135deg, rgba(59, 130, 246, 0.18), rgba(99, 102, 241, 0.22));
-  --schedule-action-border: rgba(59, 130, 246, 0.45);
-  --schedule-action-shadow: rgba(59, 130, 246, 0.32);
+  --schedule-action-fg: var(--color-primary);
+  --schedule-action-bg: linear-gradient(135deg, rgba(var(--color-primary-rgb), 0.18), rgba(var(--color-secondary-rgb), 0.22));
+  --schedule-action-border: rgba(var(--color-primary-rgb), 0.45);
+  --schedule-action-shadow: rgba(var(--color-primary-rgb), 0.32);
 }
 
 .schedule-action-btn--muted {
-  --schedule-action-fg: #475569;
-  --schedule-action-bg: linear-gradient(135deg, rgba(148, 163, 184, 0.18), rgba(226, 232, 240, 0.4));
-  --schedule-action-border: rgba(148, 163, 184, 0.55);
-  --schedule-action-shadow: rgba(148, 163, 184, 0.28);
+  --schedule-action-fg: var(--color-neutral-700);
+  --schedule-action-bg: linear-gradient(135deg, rgba(var(--color-neutral-500-rgb), 0.18), rgba(var(--color-neutral-100-rgb), 0.4));
+  --schedule-action-border: rgba(var(--color-neutral-500-rgb), 0.55);
+  --schedule-action-shadow: rgba(var(--color-neutral-500-rgb), 0.28);
 }
 
 .schedule-action-btn--success {
-  --schedule-action-fg: #047857;
-  --schedule-action-bg: linear-gradient(135deg, rgba(52, 211, 153, 0.2), rgba(16, 185, 129, 0.24));
-  --schedule-action-border: rgba(16, 185, 129, 0.45);
-  --schedule-action-shadow: rgba(16, 185, 129, 0.32);
+  --schedule-action-fg: var(--color-success);
+  --schedule-action-bg: linear-gradient(135deg, rgba(var(--color-success-rgb), 0.18), rgba(var(--color-success-rgb), 0.24));
+  --schedule-action-border: rgba(var(--color-success-rgb), 0.45);
+  --schedule-action-shadow: rgba(var(--color-success-rgb), 0.32);
 }
 
 .schedule-action-btn--danger {
-  --schedule-action-fg: #b91c1c;
-  --schedule-action-bg: linear-gradient(135deg, rgba(248, 113, 113, 0.22), rgba(239, 68, 68, 0.28));
-  --schedule-action-border: rgba(239, 68, 68, 0.5);
-  --schedule-action-shadow: rgba(239, 68, 68, 0.32);
+  --schedule-action-fg: var(--color-danger);
+  --schedule-action-bg: linear-gradient(135deg, rgba(var(--color-danger-rgb), 0.22), rgba(var(--color-danger-rgb), 0.28));
+  --schedule-action-border: rgba(var(--color-danger-rgb), 0.5);
+  --schedule-action-shadow: rgba(var(--color-danger-rgb), 0.32);
 }
 
 .schedule-action-btn--neutral {
-  --schedule-action-fg: #64748b;
-  --schedule-action-bg: linear-gradient(135deg, rgba(226, 232, 240, 0.28), rgba(148, 163, 184, 0.2));
-  --schedule-action-border: rgba(203, 213, 225, 0.6);
-  --schedule-action-shadow: rgba(15, 23, 42, 0.18);
+  --schedule-action-fg: var(--color-neutral-700);
+  --schedule-action-bg: linear-gradient(135deg, rgba(var(--color-neutral-100-rgb), 0.28), rgba(var(--color-neutral-500-rgb), 0.2));
+  --schedule-action-border: rgba(var(--color-neutral-300-rgb), 0.6);
+  --schedule-action-shadow: rgba(var(--color-neutral-900-rgb), 0.18);
 }
 
 .schedule-action-btn:disabled,
@@ -257,11 +280,13 @@
   opacity: 0;
 }
 
-/* Chips informativos da agenda */
+/* ==========================================================================
+   Agenda - Chips informativos
+   ========================================================================== */
 .schedule-chip {
-  --schedule-chip-color: #475569;
-  --schedule-chip-bg: linear-gradient(135deg, rgba(226, 232, 240, 0.75), rgba(203, 213, 225, 0.55));
-  --schedule-chip-border: rgba(148, 163, 184, 0.45);
+  --schedule-chip-color: var(--color-neutral-700);
+  --schedule-chip-bg: linear-gradient(135deg, rgba(var(--color-neutral-100-rgb), 0.75), rgba(var(--color-neutral-300-rgb), 0.55));
+  --schedule-chip-border: rgba(var(--color-neutral-300-rgb), 0.45);
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -274,7 +299,7 @@
   color: var(--schedule-chip-color);
   background: var(--schedule-chip-bg);
   border: 1px solid var(--schedule-chip-border);
-  box-shadow: 0 10px 28px -24px rgba(15, 23, 42, 0.45);
+  box-shadow: 0 10px 28px -24px var(--agenda-chip-shadow);
 }
 
 .schedule-chip .bi,
@@ -285,45 +310,45 @@
 }
 
 .schedule-chip--muted {
-  --schedule-chip-color: #475569;
-  --schedule-chip-bg: linear-gradient(135deg, rgba(226, 232, 240, 0.8), rgba(226, 232, 240, 0.5));
-  --schedule-chip-border: rgba(148, 163, 184, 0.5);
+  --schedule-chip-color: var(--color-neutral-700);
+  --schedule-chip-bg: linear-gradient(135deg, rgba(var(--color-neutral-100-rgb), 0.8), rgba(var(--color-neutral-100-rgb), 0.5));
+  --schedule-chip-border: rgba(var(--color-neutral-300-rgb), 0.5);
 }
 
 .schedule-chip--primary {
-  --schedule-chip-color: #3730a3;
-  --schedule-chip-bg: linear-gradient(135deg, rgba(129, 140, 248, 0.28), rgba(99, 102, 241, 0.32));
-  --schedule-chip-border: rgba(79, 70, 229, 0.55);
+  --schedule-chip-color: var(--color-primary-strong);
+  --schedule-chip-bg: linear-gradient(135deg, rgba(var(--color-primary-rgb), 0.28), rgba(var(--color-primary-rgb), 0.32));
+  --schedule-chip-border: rgba(var(--color-primary-rgb), 0.55);
 }
 
 .schedule-chip--info {
-  --schedule-chip-color: #0369a1;
-  --schedule-chip-bg: linear-gradient(135deg, rgba(125, 211, 252, 0.28), rgba(56, 189, 248, 0.32));
-  --schedule-chip-border: rgba(56, 189, 248, 0.45);
+  --schedule-chip-color: var(--color-info-strong);
+  --schedule-chip-bg: linear-gradient(135deg, rgba(var(--color-info-rgb), 0.28), rgba(var(--color-info-rgb), 0.32));
+  --schedule-chip-border: rgba(var(--color-info-rgb), 0.45);
 }
 
 .schedule-chip--success {
-  --schedule-chip-color: #047857;
-  --schedule-chip-bg: linear-gradient(135deg, rgba(134, 239, 172, 0.28), rgba(74, 222, 128, 0.32));
-  --schedule-chip-border: rgba(34, 197, 94, 0.45);
+  --schedule-chip-color: var(--color-success);
+  --schedule-chip-bg: linear-gradient(135deg, rgba(var(--color-success-rgb), 0.28), rgba(var(--color-success-rgb), 0.32));
+  --schedule-chip-border: rgba(var(--color-success-rgb), 0.45);
 }
 
 .schedule-chip--danger {
-  --schedule-chip-color: #b91c1c;
-  --schedule-chip-bg: linear-gradient(135deg, rgba(248, 113, 113, 0.28), rgba(239, 68, 68, 0.32));
-  --schedule-chip-border: rgba(239, 68, 68, 0.5);
+  --schedule-chip-color: var(--color-danger);
+  --schedule-chip-bg: linear-gradient(135deg, rgba(var(--color-danger-rgb), 0.28), rgba(var(--color-danger-rgb), 0.32));
+  --schedule-chip-border: rgba(var(--color-danger-rgb), 0.5);
 }
 
 .schedule-chip--neutral {
-  --schedule-chip-color: #475569;
-  --schedule-chip-bg: linear-gradient(135deg, rgba(226, 232, 240, 0.6), rgba(148, 163, 184, 0.3));
-  --schedule-chip-border: rgba(203, 213, 225, 0.5);
+  --schedule-chip-color: var(--color-neutral-700);
+  --schedule-chip-bg: linear-gradient(135deg, rgba(var(--color-neutral-100-rgb), 0.6), rgba(var(--color-neutral-500-rgb), 0.3));
+  --schedule-chip-border: rgba(var(--color-neutral-300-rgb), 0.5);
 }
 
 .schedule-chip--warning {
-  --schedule-chip-color: #92400e;
-  --schedule-chip-bg: linear-gradient(135deg, rgba(251, 191, 36, 0.35), rgba(245, 158, 11, 0.32));
-  --schedule-chip-border: rgba(245, 158, 11, 0.45);
+  --schedule-chip-color: var(--color-warning-strong);
+  --schedule-chip-bg: linear-gradient(135deg, rgba(var(--color-warning-rgb), 0.35), rgba(var(--color-warning-rgb), 0.32));
+  --schedule-chip-border: rgba(var(--color-warning-rgb), 0.45);
 }
 
 .schedule-chip.text-white .bi,
@@ -332,7 +357,9 @@
   color: currentColor;
 }
 
-/* Botões de seleção de horários */
+/* ==========================================================================
+   Agenda - Botões de horários
+   ========================================================================== */
 .schedule-slot {
   --schedule-slot-icon-color: currentColor;
   gap: 0.45rem;
@@ -357,20 +384,22 @@
 }
 
 .schedule-slot--selected {
-  --schedule-action-fg: #ffffff;
-  --schedule-action-bg: linear-gradient(135deg, #34d399 0%, #10b981 100%);
-  --schedule-action-border: rgba(16, 185, 129, 0.75);
-  --schedule-action-shadow: rgba(16, 185, 129, 0.45);
+  --schedule-action-fg: var(--color-surface);
+  --schedule-action-bg: linear-gradient(135deg, var(--color-accent-emerald) 0%, var(--color-accent-green) 100%);
+  --schedule-action-border: rgba(var(--color-accent-green-rgb), 0.75);
+  --schedule-action-shadow: rgba(var(--color-accent-green-rgb), 0.45);
   opacity: 1;
 }
 
-/* Cartões de agenda com visual consistente */
+/* ==========================================================================
+   Agenda - Cartões
+   ========================================================================== */
 .schedule-card {
-  --schedule-card-bg: #ffffff;
+  --schedule-card-bg: var(--color-surface);
   background: var(--schedule-card-bg);
   border: 0;
-  border-radius: 1.25rem;
-  box-shadow: 0 24px 48px -32px rgba(30, 64, 175, 0.35);
+  border-radius: var(--agenda-card-radius);
+  box-shadow: 0 24px 48px -32px rgba(var(--color-primary-rgb), 0.35);
   overflow: hidden;
   display: flex;
   flex-direction: column;
@@ -378,11 +407,11 @@
 }
 
 .schedule-card__header {
-  --schedule-card-header-start: #4f46e5;
-  --schedule-card-header-end: #2563eb;
-  --schedule-card-header-text: #ffffff;
-  --schedule-card-header-subtitle: rgba(255, 255, 255, 0.78);
-  --schedule-card-header-icon-bg: rgba(255, 255, 255, 0.18);
+  --schedule-card-header-start: var(--color-accent-indigo);
+  --schedule-card-header-end: var(--color-accent-blue);
+  --schedule-card-header-text: var(--color-surface);
+  --schedule-card-header-subtitle: rgba(var(--color-surface-rgb), 0.78);
+  --schedule-card-header-icon-bg: rgba(var(--color-surface-rgb), 0.18);
   background: linear-gradient(
     135deg,
     var(--schedule-card-header-start),
@@ -404,7 +433,7 @@
   inset: 0;
   background: radial-gradient(
     circle at top right,
-    rgba(255, 255, 255, 0.18),
+    rgba(var(--color-surface-rgb), 0.18),
     transparent 55%
   );
   pointer-events: none;
@@ -441,36 +470,36 @@
 }
 
 .schedule-card__header--primary {
-  --schedule-card-header-start: #4338ca;
-  --schedule-card-header-end: #2563eb;
+  --schedule-card-header-start: var(--color-accent-indigo);
+  --schedule-card-header-end: var(--color-accent-blue);
 }
 
 .schedule-card__header--success {
-  --schedule-card-header-start: #10b981;
-  --schedule-card-header-end: #047857;
+  --schedule-card-header-start: var(--color-accent-green);
+  --schedule-card-header-end: var(--color-success-strong);
 }
 
 .schedule-card__header--info {
-  --schedule-card-header-start: #38bdf8;
-  --schedule-card-header-end: #0ea5e9;
+  --schedule-card-header-start: var(--color-info);
+  --schedule-card-header-end: var(--color-accent-sky);
 }
 
 .schedule-card__header--warning {
-  --schedule-card-header-start: #fbbf24;
-  --schedule-card-header-end: #f97316;
-  --schedule-card-header-text: #1f2937;
-  --schedule-card-header-subtitle: rgba(31, 41, 55, 0.75);
-  --schedule-card-header-icon-bg: rgba(255, 255, 255, 0.7);
+  --schedule-card-header-start: var(--color-accent-amber);
+  --schedule-card-header-end: var(--color-accent-orange);
+  --schedule-card-header-text: var(--color-neutral-900);
+  --schedule-card-header-subtitle: rgba(var(--color-neutral-900-rgb), 0.75);
+  --schedule-card-header-icon-bg: rgba(var(--color-surface-rgb), 0.7);
 }
 
 .schedule-card__header--secondary {
-  --schedule-card-header-start: #64748b;
-  --schedule-card-header-end: #475569;
+  --schedule-card-header-start: var(--color-neutral-500);
+  --schedule-card-header-end: var(--color-neutral-700);
 }
 
 .schedule-card__tag {
-  --schedule-card-tag-bg: rgba(15, 23, 42, 0.08);
-  --schedule-card-tag-color: #0f172a;
+  --schedule-card-tag-bg: rgba(var(--color-neutral-900-rgb), 0.08);
+  --schedule-card-tag-color: var(--color-neutral-900);
   --schedule-card-tag-border: transparent;
   display: inline-flex;
   align-items: center;
@@ -488,51 +517,51 @@
 }
 
 .schedule-card__tag--primary {
-  --schedule-card-tag-bg: rgba(59, 130, 246, 0.25);
-  --schedule-card-tag-color: #1d4ed8;
-  --schedule-card-tag-border: rgba(59, 130, 246, 0.35);
+  --schedule-card-tag-bg: rgba(var(--color-primary-rgb), 0.25);
+  --schedule-card-tag-color: var(--color-primary-strong);
+  --schedule-card-tag-border: rgba(var(--color-primary-rgb), 0.35);
 }
 
 .schedule-card__tag--success {
-  --schedule-card-tag-bg: rgba(16, 185, 129, 0.24);
-  --schedule-card-tag-color: #047857;
-  --schedule-card-tag-border: rgba(16, 185, 129, 0.35);
+  --schedule-card-tag-bg: rgba(var(--color-success-rgb), 0.24);
+  --schedule-card-tag-color: var(--color-success-strong);
+  --schedule-card-tag-border: rgba(var(--color-success-rgb), 0.35);
 }
 
 .schedule-card__tag--info {
-  --schedule-card-tag-bg: rgba(14, 165, 233, 0.24);
-  --schedule-card-tag-color: #0369a1;
-  --schedule-card-tag-border: rgba(14, 165, 233, 0.35);
+  --schedule-card-tag-bg: rgba(var(--color-accent-sky-rgb), 0.24);
+  --schedule-card-tag-color: var(--color-info-strong);
+  --schedule-card-tag-border: rgba(var(--color-accent-sky-rgb), 0.35);
 }
 
 .schedule-card__tag--warning {
-  --schedule-card-tag-bg: rgba(251, 191, 36, 0.25);
-  --schedule-card-tag-color: #92400e;
-  --schedule-card-tag-border: rgba(251, 191, 36, 0.45);
+  --schedule-card-tag-bg: rgba(var(--color-accent-amber-rgb), 0.25);
+  --schedule-card-tag-color: var(--color-warning-strong);
+  --schedule-card-tag-border: rgba(var(--color-accent-amber-rgb), 0.45);
 }
 
 .schedule-card__tag--danger {
-  --schedule-card-tag-bg: rgba(248, 113, 113, 0.3);
-  --schedule-card-tag-color: #b91c1c;
-  --schedule-card-tag-border: rgba(248, 113, 113, 0.4);
+  --schedule-card-tag-bg: rgba(var(--color-danger-rgb), 0.3);
+  --schedule-card-tag-color: var(--color-danger-strong);
+  --schedule-card-tag-border: rgba(var(--color-danger-rgb), 0.4);
 }
 
 .schedule-card__tag--secondary {
-  --schedule-card-tag-bg: rgba(100, 116, 139, 0.28);
-  --schedule-card-tag-color: #1e293b;
-  --schedule-card-tag-border: rgba(100, 116, 139, 0.35);
+  --schedule-card-tag-bg: rgba(var(--color-neutral-500-rgb), 0.28);
+  --schedule-card-tag-color: var(--color-neutral-900);
+  --schedule-card-tag-border: rgba(var(--color-neutral-500-rgb), 0.35);
 }
 
 .schedule-card__tag--muted {
-  --schedule-card-tag-bg: rgba(148, 163, 184, 0.26);
-  --schedule-card-tag-color: #334155;
-  --schedule-card-tag-border: rgba(148, 163, 184, 0.45);
+  --schedule-card-tag-bg: rgba(var(--color-neutral-500-rgb), 0.26);
+  --schedule-card-tag-color: var(--color-neutral-700);
+  --schedule-card-tag-border: rgba(var(--color-neutral-500-rgb), 0.45);
 }
 
 .schedule-card__tag--inverse {
-  --schedule-card-tag-bg: rgba(255, 255, 255, 0.2);
-  --schedule-card-tag-color: #ffffff;
-  --schedule-card-tag-border: rgba(255, 255, 255, 0.35);
+  --schedule-card-tag-bg: rgba(var(--color-surface-rgb), 0.2);
+  --schedule-card-tag-color: var(--color-surface);
+  --schedule-card-tag-border: rgba(var(--color-surface-rgb), 0.35);
 }
 
 @media (max-width: 576px) {
@@ -557,16 +586,20 @@
   }
 }
 
-/* Garante que tabelas sempre possam rolar em telas pequenas */
+/* ==========================================================================
+   Utilidades gerais
+   ========================================================================== */
 .table-responsive {
   overflow-x: auto;
 }
 
-/* Alternância entre calendário e agendamento */
+/* ==========================================================================
+   Agenda - Alternância calendário/agendamento
+   ========================================================================== */
 .calendar-tabs {
-  --calendar-tab-border: rgba(148, 163, 184, 0.18);
-  --calendar-tab-bg: rgba(15, 23, 42, 0.04);
-  background: linear-gradient(135deg, rgba(255, 255, 255, 0.95), rgba(241, 245, 249, 0.88));
+  --calendar-tab-border: rgba(var(--color-neutral-500-rgb), 0.18);
+  --calendar-tab-bg: rgba(var(--color-neutral-900-rgb), 0.04);
+  background: linear-gradient(135deg, rgba(var(--color-surface-rgb), 0.95), rgba(var(--color-neutral-100-rgb), 0.88));
   border-radius: 999px;
   border: 1px solid var(--calendar-tab-border);
   padding: 0.35rem;
@@ -575,7 +608,7 @@
   flex-wrap: wrap;
   align-items: center;
   position: relative;
-  box-shadow: 0 20px 40px -35px rgba(30, 64, 175, 0.55);
+  box-shadow: 0 20px 40px -35px rgba(var(--color-primary-rgb), 0.55);
 }
 
 .calendar-tabs .nav-item {
@@ -586,7 +619,7 @@
   border-radius: 999px;
   border: none;
   background: transparent;
-  color: #334155;
+  color: var(--color-neutral-700);
   font-weight: 600;
   padding: 0.65rem 1.25rem;
   display: inline-flex;
@@ -602,13 +635,13 @@
 }
 
 .calendar-tabs .nav-link:hover {
-  color: #1d4ed8;
-  background: rgba(37, 99, 235, 0.12);
+  color: var(--color-primary-strong);
+  background: rgba(var(--color-primary-rgb), 0.12);
 }
 
 .calendar-tabs .nav-link:focus-visible {
   outline: none;
-  box-shadow: 0 0 0 0.22rem rgba(59, 130, 246, 0.35);
+  box-shadow: 0 0 0 0.22rem rgba(var(--color-primary-rgb), 0.35);
 }
 
 .calendar-tabs .nav-link::after {
@@ -618,7 +651,7 @@
   bottom: 0.3rem;
   width: 0;
   height: 3px;
-  background: rgba(255, 255, 255, 0.92);
+  background: rgba(var(--color-surface-rgb), 0.92);
   border-radius: 999px;
   opacity: 0;
   transform: translateX(-50%);
@@ -626,9 +659,9 @@
 }
 
 .calendar-tabs .nav-link.active {
-  color: #ffffff;
-  background: linear-gradient(135deg, #2563eb 0%, #7c3aed 100%);
-  box-shadow: 0 14px 32px -24px rgba(37, 99, 235, 0.95);
+  color: var(--color-surface);
+  background: linear-gradient(135deg, var(--color-accent-blue) 0%, var(--color-accent-violet) 100%);
+  box-shadow: 0 14px 32px -24px rgba(var(--color-primary-rgb), 0.95);
 }
 
 .calendar-tabs .nav-link.active::after {
@@ -637,7 +670,7 @@
 }
 
 .calendar-tabs .nav-link.active:hover {
-  color: #ffffff;
+  color: var(--color-surface);
 }
 
 .calendar-tab-pane {
@@ -662,23 +695,25 @@
   }
 }
 
-/* Tipos de eventos no calendário compartilhado */
+/* ==========================================================================
+   Agenda - Tipos de eventos
+   ========================================================================== */
 .fc-event.calendar-event-appointment {
-  background-color: #4e73df;
-  border-color: #2e59d9;
-  color: #ffffff;
+  background-color: var(--color-primary);
+  border-color: var(--color-primary-strong);
+  color: var(--color-surface);
 }
 
 .fc-event.calendar-event-exam {
-  background-color: #f6c23e;
-  border-color: #dda20a;
-  color: #1f2d3d;
+  background-color: var(--color-warning);
+  border-color: var(--color-warning-strong);
+  color: var(--color-neutral-900);
 }
 
 .fc-event.calendar-event-vaccine {
-  background-color: #1cc88a;
-  border-color: #17a673;
-  color: #ffffff;
+  background-color: var(--color-accent-emerald);
+  border-color: var(--color-accent-green);
+  color: var(--color-surface);
 }
 
 .fc-event.calendar-event-exam .fc-event-title,
@@ -691,62 +726,64 @@
   color: inherit;
 }
 
-/* Paleta de cores para os eventos por veterinário */
+/* ==========================================================================
+   Agenda - Paleta por veterinário
+   ========================================================================== */
 .calendar-vet-color-0 {
-  --calendar-vet-color: #2563eb;
-  --calendar-vet-bg: rgba(37, 99, 235, 0.14);
-  --calendar-vet-soft: rgba(37, 99, 235, 0.08);
+  --calendar-vet-color: var(--color-accent-blue);
+  --calendar-vet-bg: rgba(var(--color-accent-blue-rgb), 0.14);
+  --calendar-vet-soft: rgba(var(--color-accent-blue-rgb), 0.08);
 }
 
 .calendar-vet-color-1 {
-  --calendar-vet-color: #f97316;
-  --calendar-vet-bg: rgba(249, 115, 22, 0.18);
-  --calendar-vet-soft: rgba(249, 115, 22, 0.1);
+  --calendar-vet-color: var(--color-accent-orange);
+  --calendar-vet-bg: rgba(var(--color-accent-orange-rgb), 0.18);
+  --calendar-vet-soft: rgba(var(--color-accent-orange-rgb), 0.1);
 }
 
 .calendar-vet-color-2 {
-  --calendar-vet-color: #16a34a;
-  --calendar-vet-bg: rgba(22, 163, 74, 0.16);
-  --calendar-vet-soft: rgba(22, 163, 74, 0.08);
+  --calendar-vet-color: var(--color-accent-green);
+  --calendar-vet-bg: rgba(var(--color-accent-green-rgb), 0.16);
+  --calendar-vet-soft: rgba(var(--color-accent-green-rgb), 0.08);
 }
 
 .calendar-vet-color-3 {
-  --calendar-vet-color: #8b5cf6;
-  --calendar-vet-bg: rgba(139, 92, 246, 0.18);
-  --calendar-vet-soft: rgba(139, 92, 246, 0.1);
+  --calendar-vet-color: var(--color-accent-lavender);
+  --calendar-vet-bg: rgba(var(--color-accent-lavender-rgb), 0.18);
+  --calendar-vet-soft: rgba(var(--color-accent-lavender-rgb), 0.1);
 }
 
 .calendar-vet-color-4 {
-  --calendar-vet-color: #f43f5e;
-  --calendar-vet-bg: rgba(244, 63, 94, 0.18);
-  --calendar-vet-soft: rgba(244, 63, 94, 0.1);
+  --calendar-vet-color: var(--color-accent-rose);
+  --calendar-vet-bg: rgba(var(--color-accent-rose-rgb), 0.18);
+  --calendar-vet-soft: rgba(var(--color-accent-rose-rgb), 0.1);
 }
 
 .calendar-vet-color-5 {
-  --calendar-vet-color: #0ea5e9;
-  --calendar-vet-bg: rgba(14, 165, 233, 0.18);
-  --calendar-vet-soft: rgba(14, 165, 233, 0.1);
+  --calendar-vet-color: var(--color-accent-sky);
+  --calendar-vet-bg: rgba(var(--color-accent-sky-rgb), 0.18);
+  --calendar-vet-soft: rgba(var(--color-accent-sky-rgb), 0.1);
 }
 
 .calendar-vet-color-6 {
-  --calendar-vet-color: #14b8a6;
-  --calendar-vet-bg: rgba(20, 184, 166, 0.18);
-  --calendar-vet-soft: rgba(20, 184, 166, 0.1);
+  --calendar-vet-color: var(--color-accent-teal);
+  --calendar-vet-bg: rgba(var(--color-accent-teal-rgb), 0.18);
+  --calendar-vet-soft: rgba(var(--color-accent-teal-rgb), 0.1);
 }
 
 .calendar-vet-color-7 {
-  --calendar-vet-color: #facc15;
-  --calendar-vet-bg: rgba(250, 204, 21, 0.24);
-  --calendar-vet-soft: rgba(250, 204, 21, 0.12);
+  --calendar-vet-color: var(--color-accent-lime);
+  --calendar-vet-bg: rgba(var(--color-accent-lime-rgb), 0.24);
+  --calendar-vet-soft: rgba(var(--color-accent-lime-rgb), 0.12);
 }
 
 .fc .fc-event.calendar-vet-assigned {
   position: relative;
-  border: 1px solid rgba(148, 163, 184, 0.35);
+  border: 1px solid rgba(var(--color-neutral-500-rgb), 0.35);
   border-radius: 0.75rem;
   overflow: hidden;
-  background-color: rgba(255, 255, 255, 0.94);
-  color: #1f2937;
+  background-color: rgba(var(--color-surface-rgb), 0.94);
+  color: var(--color-neutral-900);
   padding-left: 0.25rem;
   transition: box-shadow 0.2s ease, transform 0.2s ease;
 }
@@ -756,16 +793,16 @@
   position: absolute;
   inset: 0 auto 0 0;
   width: 6px;
-  background: var(--calendar-vet-color, #4e73df);
-  box-shadow: 0 0 0 1px rgba(15, 23, 42, 0.05);
+  background: var(--calendar-vet-color, var(--color-primary));
+  box-shadow: 0 0 0 1px rgba(var(--color-neutral-900-rgb), 0.05);
 }
 
 .fc .fc-event.calendar-vet-assigned .fc-event-main {
   padding-left: 0.75rem;
   background: linear-gradient(
     90deg,
-    var(--calendar-vet-bg, rgba(78, 115, 223, 0.15)) 0%,
-    rgba(255, 255, 255, 0.85) 65%
+    var(--calendar-vet-bg, rgba(var(--color-accent-blue-rgb), 0.15)) 0%,
+    rgba(var(--color-surface-rgb), 0.85) 65%
   );
 }
 
@@ -775,14 +812,14 @@
 }
 
 .fc .fc-event.calendar-vet-assigned:hover {
-  box-shadow: 0 16px 32px -22px rgba(15, 23, 42, 0.65);
+  box-shadow: 0 16px 32px -22px rgba(var(--color-neutral-900-rgb), 0.65);
   transform: translateY(-1px);
 }
 
 .calendar-summary-card {
-  background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+  background: linear-gradient(180deg, var(--color-surface) 0%, var(--color-neutral-surface) 100%);
   border-radius: 1rem;
-  border: 1px solid rgba(148, 163, 184, 0.2);
+  border: 1px solid rgba(var(--color-neutral-500-rgb), 0.2);
   position: relative;
 }
 
@@ -793,9 +830,9 @@
 .calendar-summary-loading {
   display: none;
   padding: 1rem 1.1rem;
-  background: rgba(59, 130, 246, 0.06);
+  background: rgba(var(--color-accent-blue-rgb), 0.06);
   border-radius: 0.9rem;
-  border-color: rgba(37, 99, 235, 0.35) !important;
+  border-color: rgba(var(--color-accent-blue-rgb), 0.35) !important;
 }
 
 .border-dashed {
@@ -834,8 +871,8 @@
 }
 
 .calendar-summary-total-badge {
-  background: rgba(37, 99, 235, 0.12);
-  color: #1d4ed8;
+  background: rgba(var(--color-primary-rgb), 0.12);
+  color: var(--color-primary-strong);
   font-weight: 600;
   border-radius: 999px;
   padding: 0.4rem 0.75rem;
@@ -859,12 +896,12 @@
 }
 
 .calendar-summary-filters::-webkit-scrollbar-thumb {
-  background-color: rgba(148, 163, 184, 0.55);
+  background-color: rgba(var(--color-neutral-500-rgb), 0.55);
   border-radius: 999px;
 }
 
 .calendar-summary-filters::-webkit-scrollbar-track {
-  background-color: rgba(148, 163, 184, 0.18);
+  background-color: rgba(var(--color-neutral-500-rgb), 0.18);
   border-radius: 999px;
 }
 
@@ -881,9 +918,9 @@
   min-height: 2.25rem;
   padding: 0.35rem 0.85rem;
   border-radius: 999px;
-  border: 1px solid rgba(148, 163, 184, 0.35);
-  background: rgba(241, 245, 249, 0.85);
-  color: var(--calendar-vet-color, #1d4ed8);
+  border: 1px solid rgba(var(--color-neutral-500-rgb), 0.35);
+  background: rgba(var(--color-neutral-100-rgb), 0.85);
+  color: var(--calendar-vet-color, var(--color-primary-strong));
   font-weight: 600;
   font-size: 0.85rem;
   letter-spacing: 0.01em;
@@ -912,9 +949,9 @@
   justify-content: center;
   font-weight: 600;
   font-size: 0.82rem;
-  color: #0f172a;
-  background: rgba(248, 250, 252, 0.95);
-  border-color: rgba(148, 163, 184, 0.45);
+  color: var(--color-neutral-900);
+  background: rgba(var(--color-neutral-100-rgb), 0.95);
+  border-color: rgba(var(--color-neutral-500-rgb), 0.45);
   text-transform: none;
   letter-spacing: 0.005em;
 }
@@ -935,10 +972,10 @@
   width: 1.9rem;
   height: 1.9rem;
   border-radius: 999px;
-  background-color: var(--calendar-vet-bg, rgba(37, 99, 235, 0.18));
-  color: var(--calendar-vet-color, #2563eb);
+  background-color: var(--calendar-vet-bg, rgba(var(--color-accent-blue-rgb), 0.18));
+  color: var(--calendar-vet-color, var(--color-accent-blue));
   text-transform: uppercase;
-  box-shadow: inset 0 0 0 1px rgba(148, 163, 184, 0.18);
+  box-shadow: inset 0 0 0 1px rgba(var(--color-neutral-500-rgb), 0.18);
   flex-shrink: 0;
 }
 
@@ -958,15 +995,15 @@
 .calendar-summary-filter-name {
   font-weight: 600;
   font-size: 0.85rem;
-  color: #0f172a;
+  color: var(--color-neutral-900);
   line-height: 1.1;
   word-break: break-word;
   white-space: normal;
 }
 
 .calendar-summary-filter-badge {
-  background-color: rgba(37, 99, 235, 0.12);
-  color: var(--calendar-vet-color, #1d4ed8);
+  background-color: rgba(var(--color-accent-blue-rgb), 0.12);
+  color: var(--calendar-vet-color, var(--color-primary-strong));
   font-size: 0.65rem;
   font-weight: 600;
   letter-spacing: 0.02em;
@@ -982,32 +1019,32 @@
 .calendar-summary-filter:hover:not(:disabled),
 .calendar-summary-filter:focus-visible {
   transform: translateY(-1px);
-  border-color: rgba(37, 99, 235, 0.45);
-  box-shadow: 0 12px 26px -24px rgba(15, 23, 42, 0.55);
+  border-color: rgba(var(--color-accent-blue-rgb), 0.45);
+  box-shadow: 0 12px 26px -24px rgba(var(--color-neutral-900-rgb), 0.55);
 }
 
 .calendar-summary-filter:hover:not(:disabled) .calendar-summary-filter-icon,
 .calendar-summary-filter:focus-visible .calendar-summary-filter-icon {
-  background-color: var(--calendar-vet-color, #2563eb);
-  color: #fff;
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.35);
+  background-color: var(--calendar-vet-color, var(--color-accent-blue));
+  color: var(--color-surface);
+  box-shadow: inset 0 0 0 1px rgba(var(--color-surface-rgb), 0.35);
 }
 
 .calendar-summary-filter:focus-visible {
-  outline: 2px solid var(--calendar-vet-color, #2563eb);
+  outline: 2px solid var(--calendar-vet-color, var(--color-accent-blue));
   outline-offset: 2px;
 }
 
 .calendar-summary-filter.is-active {
-  border-color: var(--calendar-vet-color, #2563eb);
-  background-color: var(--calendar-vet-soft, rgba(37, 99, 235, 0.14));
-  box-shadow: 0 14px 28px -24px rgba(37, 99, 235, 0.5);
+  border-color: var(--calendar-vet-color, var(--color-accent-blue));
+  background-color: var(--calendar-vet-soft, rgba(var(--color-accent-blue-rgb), 0.14));
+  box-shadow: 0 14px 28px -24px rgba(var(--color-accent-blue-rgb), 0.5);
 }
 
 .calendar-summary-filter.is-active .calendar-summary-filter-icon {
-  background-color: var(--calendar-vet-color, #2563eb);
-  color: #fff;
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.45);
+  background-color: var(--calendar-vet-color, var(--color-accent-blue));
+  color: var(--color-surface);
+  box-shadow: inset 0 0 0 1px rgba(var(--color-surface-rgb), 0.45);
 }
 
 .calendar-summary-filter:disabled {
@@ -1038,16 +1075,16 @@
   gap: 0.85rem;
   padding: 0.9rem 1rem;
   border-radius: 0.9rem;
-  background: linear-gradient(135deg, rgba(59, 130, 246, 0.08), rgba(59, 130, 246, 0.02));
-  border: 1px solid rgba(148, 163, 184, 0.24);
-  box-shadow: 0 12px 24px -24px rgba(15, 23, 42, 0.6);
+  background: linear-gradient(135deg, rgba(var(--color-accent-blue-rgb), 0.08), rgba(var(--color-accent-blue-rgb), 0.02));
+  border: 1px solid rgba(var(--color-neutral-500-rgb), 0.24);
+  box-shadow: 0 12px 24px -24px rgba(var(--color-neutral-900-rgb), 0.6);
   transition: transform 0.2s ease, box-shadow 0.2s ease;
   height: 100%;
 }
 
 .calendar-summary-overview-card:hover {
   transform: translateY(-1px);
-  box-shadow: 0 20px 32px -30px rgba(37, 99, 235, 0.55);
+  box-shadow: 0 20px 32px -30px rgba(var(--color-accent-blue-rgb), 0.55);
 }
 
 .calendar-summary-overview-icon {
@@ -1058,15 +1095,15 @@
   align-items: center;
   justify-content: center;
   font-size: 1.35rem;
-  color: #1d4ed8;
-  background: rgba(37, 99, 235, 0.18);
-  box-shadow: inset 0 0 0 1px rgba(37, 99, 235, 0.12);
+  color: var(--color-primary-strong);
+  background: rgba(var(--color-accent-blue-rgb), 0.18);
+  box-shadow: inset 0 0 0 1px rgba(var(--color-accent-blue-rgb), 0.12);
 }
 
 .calendar-summary-overview-card.is-week .calendar-summary-overview-icon {
-  background: rgba(16, 185, 129, 0.16);
-  color: #047857;
-  box-shadow: inset 0 0 0 1px rgba(16, 185, 129, 0.18);
+  background: rgba(var(--color-accent-green-rgb), 0.16);
+  color: var(--color-success-strong);
+  box-shadow: inset 0 0 0 1px rgba(var(--color-accent-green-rgb), 0.18);
 }
 
 .calendar-summary-overview-body {
@@ -1080,14 +1117,14 @@
   letter-spacing: 0.08em;
   text-transform: uppercase;
   font-weight: 600;
-  color: #475569;
+  color: var(--color-neutral-700);
 }
 
 .calendar-summary-overview-body .value {
   font-size: 1.75rem;
   line-height: 1;
   font-weight: 700;
-  color: #0f172a;
+  color: var(--color-neutral-900);
 }
 
 .calendar-summary-overview-body .description {
@@ -1097,9 +1134,9 @@
 .calendar-summary-item {
   border-radius: 0.9rem;
   padding: 0.95rem 1rem;
-  background: linear-gradient(135deg, var(--calendar-vet-soft, rgba(148, 163, 184, 0.12)), #ffffff);
-  border: 1px solid rgba(148, 163, 184, 0.18);
-  box-shadow: 0 16px 32px -26px rgba(15, 23, 42, 0.6);
+  background: linear-gradient(135deg, var(--calendar-vet-soft, rgba(var(--color-neutral-300-rgb), 0.12)), var(--color-surface));
+  border: 1px solid rgba(var(--color-neutral-500-rgb), 0.18);
+  box-shadow: 0 16px 32px -26px rgba(var(--color-neutral-900-rgb), 0.6);
   cursor: pointer;
   transition: transform 0.2s ease, box-shadow 0.2s ease;
   list-style: none;
@@ -1110,30 +1147,30 @@
 
 .calendar-summary-item:hover {
   transform: translateY(-2px);
-  box-shadow: 0 24px 36px -28px rgba(15, 23, 42, 0.65);
+  box-shadow: 0 24px 36px -28px rgba(var(--color-neutral-900-rgb), 0.65);
 }
 
 .calendar-summary-item.is-active {
-  border-color: var(--calendar-vet-color, #2563eb);
+  border-color: var(--calendar-vet-color, var(--color-accent-blue));
   box-shadow:
-    0 24px 42px -28px rgba(37, 99, 235, 0.45),
-    0 0 0 2px rgba(37, 99, 235, 0.25);
+    0 24px 42px -28px rgba(var(--color-accent-blue-rgb), 0.45),
+    0 0 0 2px rgba(var(--color-accent-blue-rgb), 0.25);
   background: linear-gradient(
     135deg,
-    rgba(255, 255, 255, 0.96) 0%,
-    var(--calendar-vet-soft, rgba(148, 163, 184, 0.18)) 55%,
-    rgba(37, 99, 235, 0.08) 100%
+    rgba(var(--color-surface-rgb), 0.96) 0%,
+    var(--calendar-vet-soft, rgba(var(--color-neutral-500-rgb), 0.18)) 55%,
+    rgba(var(--color-accent-blue-rgb), 0.08) 100%
   );
   transform: translateY(-2px);
 }
 
 .calendar-summary-item.is-active .calendar-summary-total {
-  background-color: rgba(37, 99, 235, 0.14);
-  color: #1d4ed8;
+  background-color: rgba(var(--color-accent-blue-rgb), 0.14);
+  color: var(--color-primary-strong);
 }
 
 .calendar-summary-item.is-active .calendar-summary-bullet {
-  box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.18);
+  box-shadow: 0 0 0 4px rgba(var(--color-accent-blue-rgb), 0.18);
 }
 
 .calendar-summary-item .calendar-summary-header {
@@ -1150,7 +1187,7 @@
   align-items: center;
   gap: 0.5rem;
   font-weight: 600;
-  color: #0f172a;
+  color: var(--color-neutral-900);
   flex: 1 1 auto;
   min-width: 0;
 }
@@ -1159,8 +1196,8 @@
   width: 0.75rem;
   height: 0.75rem;
   border-radius: 999px;
-  background-color: var(--calendar-vet-color, #2563eb);
-  box-shadow: 0 0 0 3px rgba(15, 23, 42, 0.05);
+  background-color: var(--calendar-vet-color, var(--color-accent-blue));
+  box-shadow: 0 0 0 3px rgba(var(--color-neutral-900-rgb), 0.05);
 }
 
 .calendar-summary-item .calendar-summary-total {
@@ -1169,16 +1206,16 @@
   gap: 0.35rem;
   padding: 0.2rem 0.75rem;
   border-radius: 999px;
-  background-color: rgba(255, 255, 255, 0.75);
+  background-color: rgba(var(--color-surface-rgb), 0.75);
   font-size: 0.8rem;
-  color: #475569;
+  color: var(--color-neutral-700);
   flex-shrink: 0;
   margin-left: auto;
 }
 
 .calendar-summary-item .calendar-summary-total .value {
   font-weight: 700;
-  color: var(--calendar-vet-color, #2563eb);
+  color: var(--calendar-vet-color, var(--color-accent-blue));
 }
 
 .calendar-summary-item .calendar-summary-metrics {
@@ -1186,7 +1223,7 @@
   flex-wrap: wrap;
   gap: 0.65rem 0.75rem;
   font-size: 0.86rem;
-  color: #475569;
+  color: var(--color-neutral-700);
   list-style: none;
   padding: 0;
   margin: 0;
@@ -1199,7 +1236,7 @@
 }
 
 .calendar-summary-item .calendar-summary-metrics strong {
-  color: var(--calendar-vet-color, #2563eb);
+  color: var(--calendar-vet-color, var(--color-accent-blue));
 }
 
 .calendar-summary-item .calendar-summary-days {
@@ -1215,8 +1252,8 @@
   display: inline-flex;
   align-items: center;
   gap: 0.35rem;
-  background-color: var(--calendar-vet-bg, rgba(37, 99, 235, 0.18));
-  color: var(--calendar-vet-color, #1d4ed8);
+  background-color: var(--calendar-vet-bg, rgba(var(--color-accent-blue-rgb), 0.18));
+  color: var(--calendar-vet-color, var(--color-primary-strong));
   border-radius: 999px;
   padding: 0.18rem 0.7rem;
   font-size: 0.76rem;
@@ -1299,17 +1336,17 @@
 }
 
 .prescricao-card {
-  border: 1px solid rgba(15, 23, 42, 0.08);
+  border: 1px solid rgba(var(--color-neutral-900-rgb), 0.08);
   border-radius: 0.85rem;
   padding: 1.25rem 1.35rem;
-  background: #ffffff;
-  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.08);
+  background: var(--color-surface);
+  box-shadow: 0 10px 30px rgba(var(--color-neutral-900-rgb), 0.08);
   transition: transform 0.2s ease, box-shadow 0.2s ease;
 }
 
 .prescricao-card:hover {
   transform: translateY(-2px);
-  box-shadow: 0 16px 36px rgba(15, 23, 42, 0.12);
+  box-shadow: 0 16px 36px rgba(var(--color-neutral-900-rgb), 0.12);
 }
 
 .prescricao-card__header {
@@ -1329,8 +1366,8 @@
   font-size: 0.72rem;
   text-transform: uppercase;
   letter-spacing: 0.08em;
-  background: rgba(59, 130, 246, 0.12);
-  color: #1d4ed8;
+  background: rgba(var(--color-accent-blue-rgb), 0.12);
+  color: var(--color-primary-strong);
   font-weight: 600;
 }
 
@@ -1338,7 +1375,7 @@
   margin: 0.35rem 0 0;
   font-size: 1rem;
   font-weight: 600;
-  color: #111827;
+  color: var(--color-neutral-900);
 }
 
 .prescricao-card__meta {
@@ -1347,7 +1384,7 @@
   align-items: flex-end;
   gap: 0.3rem;
   font-size: 0.78rem;
-  color: #6b7280;
+  color: var(--color-neutral-700);
 }
 
 .prescricao-card__list {
@@ -1361,7 +1398,7 @@
 
 .prescricao-card__item {
   padding-bottom: 0.95rem;
-  border-bottom: 1px dashed rgba(148, 163, 184, 0.6);
+  border-bottom: 1px dashed rgba(var(--color-neutral-500-rgb), 0.6);
 }
 
 .prescricao-card__item:last-child {
@@ -1373,7 +1410,7 @@
   display: flex;
   flex-direction: column;
   gap: 0.55rem;
-  color: #1f2937;
+  color: var(--color-neutral-900);
 }
 
 .prescricao-card__item-head strong {
@@ -1392,24 +1429,24 @@
   gap: 0.25rem;
   padding: 0.2rem 0.75rem;
   border-radius: 999px;
-  background: rgba(37, 99, 235, 0.12);
-  color: #1d4ed8;
+  background: rgba(var(--color-primary-rgb), 0.12);
+  color: var(--color-primary-strong);
   font-size: 0.75rem;
   font-weight: 600;
 }
 
 .prescricao-card__obs {
   margin: 0.35rem 0 0;
-  color: #4b5563;
+  color: var(--color-neutral-700);
   font-size: 0.92rem;
 }
 
 .prescricao-card__note {
   margin-top: 1.25rem;
   border-radius: 0.65rem;
-  background: rgba(37, 99, 235, 0.08);
+  background: rgba(var(--color-accent-blue-rgb), 0.08);
   padding: 0.85rem 1rem;
-  color: #1f2937;
+  color: var(--color-neutral-900);
 }
 
 .prescricao-card__note-label {
@@ -1417,7 +1454,7 @@
   font-size: 0.78rem;
   text-transform: uppercase;
   letter-spacing: 0.08em;
-  color: #1d4ed8;
+  color: var(--color-primary-strong);
   font-weight: 600;
   margin-bottom: 0.4rem;
 }
