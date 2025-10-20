@@ -17,15 +17,16 @@ depends_on = None
 
 
 def upgrade():
-    op.add_column('product', sa.Column('is_active', sa.Boolean(), nullable=True))
-    op.execute("UPDATE product SET is_active = TRUE")
-    op.alter_column(
+    op.add_column(
         'product',
-        'is_active',
-        existing_type=sa.Boolean(),
-        nullable=False,
-        server_default=sa.false(),
+        sa.Column(
+            'is_active',
+            sa.Boolean(),
+            nullable=False,
+            server_default=sa.false(),
+        ),
     )
+    op.execute("UPDATE product SET is_active = TRUE")
 
 
 def downgrade():
