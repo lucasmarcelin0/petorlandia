@@ -2927,7 +2927,7 @@ def editar_ficha_animal(animal_id):
         print(f"Consulta adicionada: {nova_consulta}")
         print(f"Medicação adicionada: {novo_medicamento}")
 
-        flash("Informacões adicionadas com sucesso (simulação).", "success")
+        flash("Informações adicionadas com sucesso (simulação).", "success")
         return redirect(url_for('ficha_animal', animal_id=animal.id))
 
     return render_template("editar_ficha.html", animal=animal)
