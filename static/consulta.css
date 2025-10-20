@@ -1,0 +1,86 @@
+body.consulta-layout {
+  background: linear-gradient(to bottom right, var(--color-light), var(--color-surface));
+}
+
+.btn-back {
+  color: var(--color-primary);
+  font-weight: var(--font-weight-medium);
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xs);
+  font-size: 1rem;
+  transition: color var(--transition-base);
+}
+
+.btn-back:hover {
+  text-decoration: underline;
+  color: var(--color-primary-emphasis);
+}
+
+.consulta-layout .btn {
+  transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
+}
+
+.consulta-layout .btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 15px rgba(0, 0, 0, 0.1);
+}
+
+.consulta-layout .table td {
+  vertical-align: middle;
+}
+
+.autocomplete-sugestoes,
+#sugestoes,
+.sugestoes {
+  z-index: 1000;
+  background-color: var(--color-surface);
+  border: 1px solid rgba(0, 0, 0, 0.08);
+}
+
+.autocomplete-sugestoes .list-group-item,
+.sugestoes .list-group-item,
+#sugestoes .list-group-item,
+#sugestoes li {
+  cursor: pointer;
+}
+
+.autocomplete-sugestoes .list-group-item:hover,
+.sugestoes .list-group-item:hover,
+#sugestoes .list-group-item:hover,
+#sugestoes li:hover {
+  background-color: rgba(78, 115, 223, 0.08);
+}
+
+.consulta-layout .modal-body {
+  max-height: 70vh;
+  overflow-y: auto;
+  flex: 1 1 auto;
+}
+
+.consulta-layout .modal-content {
+  display: flex;
+  flex-direction: column;
+  max-height: 90vh;
+}
+
+.consulta-layout .modal-dialog {
+  max-width: 700px;
+}
+
+.consulta-layout .modal-footer {
+  border-top: 1px solid rgba(0, 0, 0, 0.08);
+  padding: var(--space-md) calc(var(--space-lg) + var(--space-xs));
+}
+
+.consulta-layout .modal-footer .btn {
+  font-weight: var(--font-weight-medium);
+  font-size: 1rem;
+}
+
+@media (min-height: 600px) {
+  .consulta-layout .modal-body {
+    max-height: 75vh;
+  }
+}

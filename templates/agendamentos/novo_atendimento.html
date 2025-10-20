@@ -1,7 +1,23 @@
-{% extends 'base_consulta.html' %}
-{% block main %}
+{% extends 'base.html' %}
 
-<div class="container py-4">
+{% block styles %}
+  {{ super() }}
+  <link rel="stylesheet" href="{{ url_for('static', filename='consulta.css') }}">
+{% endblock %}
+
+{% block body_attributes %} class="consulta-layout"{% endblock %}
+
+{% block top_actions %}
+  <div class="container mt-3">
+    <a href="{{ url_for('index') }}" class="btn-back">
+      <i class="bi bi-arrow-left-circle"></i> Início
+    </a>
+  </div>
+{% endblock %}
+
+{% block main_classes %}container py-4{% endblock %}
+
+{% block main %}
   <h2 class="mb-4">🩺 Novo Atendimento Veterinário</h2>
 
   <div class="card">
@@ -9,7 +25,4 @@
       {% include 'partials/tutor_form.html' with context %}
     </div>
   </div>
-</div>
-
 {% endblock %}
-
