@@ -21,7 +21,7 @@ function initAddToCartButtons(root=document){
       btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>Adicionando...';
       setTimeout(() => {
         btn.disabled = false;
-        btn.innerHTML = '<i class="fa-solid fa-cart-plus me-2"></i>Adicionar ao carrinho';
+        btn.innerHTML = original;
       }, 1200);
     }, { once:false });
   });
@@ -50,6 +50,9 @@ function initDynamicProducts(){
         container.innerHTML = html;
         initQuantitySelectors(container);
         initAddToCartButtons(container);
+        if(typeof window.attachCartFormListeners === 'function'){
+          window.attachCartFormListeners(container);
+        }
         if(push){
           history.pushState(null, '', '/loja?' + params.toString());
         }
@@ -105,6 +108,9 @@ function initDynamicProducts(){
   // initialize on first load
   initQuantitySelectors();
   initAddToCartButtons();
+  if(typeof window.attachCartFormListeners === 'function'){
+    window.attachCartFormListeners();
+  }
   initChipScroll();
 }
 
