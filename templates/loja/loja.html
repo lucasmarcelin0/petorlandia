@@ -154,25 +154,9 @@
   .btn-cart-floating { border-radius:20px; box-shadow:0 12px 26px rgba(0,0,0,.22); }
 </style>
 
-<!-- Script para quantidade -->
-<script>
-document.addEventListener("DOMContentLoaded", () => {
-  document.querySelectorAll(".quantity-selector").forEach(selector => {
-    const minusBtn = selector.querySelector(".minus");
-    const plusBtn = selector.querySelector(".plus");
-    const input = selector.querySelector("input");
+{% endblock %}
 
-    minusBtn.addEventListener("click", () => {
-      let val = parseInt(input.value) || 1;
-      if (val > 1) input.value = val - 1;
-    });
-
-    plusBtn.addEventListener("click", () => {
-      let val = parseInt(input.value) || 1;
-      input.value = val + 1;
-    });
-  });
-});
-</script>
-
+{% block scripts %}
+  {{ super() }}
+  <script src="{{ url_for('static', filename='loja_dynamic.js') }}" defer></script>
 {% endblock %}
