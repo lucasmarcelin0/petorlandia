@@ -423,11 +423,12 @@
 
       const attachCartFormListeners = (root=document) => {
         const scope = root instanceof Element ? root : document;
+        const attachedFlag = 'attached';
         scope.querySelectorAll('.js-cart-form').forEach(form => {
-          if (form.dataset.cartListenerAttached === 'true') {
+          if (form.dataset.cartListenerAttached === attachedFlag) {
             return;
           }
-          form.dataset.cartListenerAttached = 'true';
+          form.dataset.cartListenerAttached = attachedFlag;
           form.addEventListener('submit', async ev => {
             ev.preventDefault();
             const resp = await fetchOrQueue(form.action, {
