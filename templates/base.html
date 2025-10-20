@@ -435,8 +435,36 @@
               body: new FormData(form),
               headers: {'Accept': 'application/json'}
             });
-            if (resp && resp.ok) {
-              const data = await resp.json();
+
+            if (!resp) {
+              const toastEl = document.getElementById('actionToast');
+              toastEl.querySelector('.toast-body').textContent = 'Não foi possível realizar a ação. Verifique sua conexão e tente novamente.';
+              toastEl.classList.remove('bg-success', 'bg-info');
+              toastEl.classList.add('bg-danger');
+              new bootstrap.Toast(toastEl).show();
+              return;
+            }
+
+            const contentType = resp.headers.get('Content-Type') || '';
+            let data = null;
+            if (contentType.includes('application/json')) {
+              try {
+                data = await resp.json();
+              } catch (err) {
+                console.warn('Resposta JSON inválida ao processar carrinho', err);
+              }
+            } else if (resp.redirected) {
+              window.location.href = resp.url;
+              return;
+            } else {
+              // Em caso de resposta inesperada, recarrega a página para manter o estado consistente
+              const text = await resp.text();
+              console.warn('Resposta não tratada ao processar carrinho', text);
+              window.location.reload();
+              return;
+            }
+
+            if (resp.ok && data) {
               if (data.redirect) {
                 window.location.href = data.redirect;
                 return;
@@ -458,7 +486,7 @@
               toastEl.classList.remove('bg-danger', 'bg-info', 'bg-success');
               toastEl.classList.add('bg-' + (data.category || 'success'));
               new bootstrap.Toast(toastEl).show();
-            } else if (resp) {
+            } else {
               const toastEl = document.getElementById('actionToast');
               toastEl.querySelector('.toast-body').textContent = 'Erro ao processar ação';
               toastEl.classList.remove('bg-success', 'bg-info');
