@@ -1,0 +1,84 @@
+.consulta-layout {
+  background: linear-gradient(to bottom right, var(--color-primary-soft), var(--color-surface));
+}
+
+.page-toolbar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  margin-top: var(--space-sm);
+}
+
+.page-toolbar:empty {
+  display: none;
+}
+
+.consulta-layout .btn-back {
+  color: var(--color-primary);
+  font-weight: var(--font-weight-medium);
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xs);
+  font-size: 1rem;
+  transition: color var(--transition-base);
+}
+
+.consulta-layout .btn-back:hover {
+  text-decoration: underline;
+  color: var(--color-primary-strong);
+}
+
+.consulta-layout .table td {
+  vertical-align: middle;
+}
+
+.consulta-layout .modal-body {
+  max-height: 70vh;
+  overflow-y: auto;
+}
+
+@media (min-height: 600px) {
+  .consulta-layout .modal-body {
+    max-height: 75vh;
+  }
+
+  .consulta-layout .modal-footer {
+    border-top: 1px solid var(--color-neutral-300);
+    padding: var(--space-md) calc(var(--space-lg) + 0.5rem);
+  }
+
+  .consulta-layout .modal-footer .btn {
+    font-weight: var(--font-weight-medium);
+    font-size: 1rem;
+  }
+
+  .consulta-layout .modal-dialog {
+    max-width: 700px;
+  }
+
+  .consulta-layout .modal-content {
+    max-height: 90vh;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .consulta-layout .modal-body {
+    flex: 1 1 auto;
+  }
+}
+
+.autocomplete-sugestoes,
+#sugestoes {
+  z-index: 1050;
+  background-color: var(--color-surface);
+  border: 1px solid rgba(var(--color-neutral-300-rgb), 0.9);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-sm);
+}
+
+.autocomplete-sugestoes .list-group-item:hover,
+#sugestoes .list-group-item:hover {
+  background-color: var(--color-primary-soft);
+  cursor: pointer;
+}
