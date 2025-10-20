@@ -8329,7 +8329,6 @@ def adicionar_carrinho(product_id):
             order_total=total_value,
             order_total_formatted=f"R$ {total_value:.2f}",
             order_quantity=total_qty,
-            reset_quantity=1,
         )
     return redirect(url_for("loja"))
 
