@@ -5454,7 +5454,8 @@ def update_consulta(consulta_id):
 
     if current_user.worker != 'veterinario':
         message = 'Apenas veterinários podem editar a consulta.'
-        flash(message, 'danger')
+        if not wants_json:
+            flash(message, 'danger')
         if wants_json:
             return jsonify(success=False, message=message, category='danger'), 403
         return redirect(url_for('index'))
@@ -5469,7 +5470,8 @@ def update_consulta(consulta_id):
     if request.args.get('edit') == '1':
         db.session.commit()
         message = 'Consulta atualizada com sucesso!'
-        flash(message, 'success')
+        if not wants_json:
+            flash(message, 'success')
 
     else:
         # Salva, finaliza e cria nova automaticamente
@@ -5490,7 +5492,8 @@ def update_consulta(consulta_id):
         db.session.commit()
 
         message = 'Consulta salva e movida para o histórico!'
-        flash(message, 'success')
+        if not wants_json:
+            flash(message, 'success')
 
     if wants_json:
         historico = (
