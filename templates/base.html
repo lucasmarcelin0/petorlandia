@@ -77,6 +77,29 @@
     });
 </script>
 
+<script>
+    document.addEventListener('DOMContentLoaded', () => {
+        if (!window.bootstrap || !window.bootstrap.Dropdown) {
+            return;
+        }
+
+        const Dropdown = window.bootstrap.Dropdown;
+
+        document.querySelectorAll('.nav-item.dropdown .dropdown-toggle').forEach(toggle => {
+            if (typeof Dropdown.getOrCreateInstance === 'function') {
+                Dropdown.getOrCreateInstance(toggle);
+                return;
+            }
+
+            if (typeof Dropdown.getInstance === 'function' && Dropdown.getInstance(toggle)) {
+                return;
+            }
+
+            new Dropdown(toggle);
+        });
+    });
+</script>
+
 <body>
     <nav class="navbar navbar-expand-lg fixed-top navbar-light">
         <div class="container-fluid">
