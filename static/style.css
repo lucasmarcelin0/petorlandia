@@ -1062,6 +1062,7 @@ footer {
   align-items: center;
   gap: var(--space-sm);
   padding: 1rem 1.35rem;
+  width: 100%;
   border-radius: calc(var(--radius-pill) + 18px);
   background: var(--color-surface);
   border: 2px solid rgba(var(--color-neutral-300-rgb), 0.7);
@@ -1103,17 +1104,21 @@ footer {
   flex-direction: column;
   align-items: flex-start;
   gap: 0.2rem;
+  min-width: 0;
+  width: 100%;
 }
 
 .quick-action__title {
   font-weight: var(--font-weight-semibold);
   font-size: 1.05rem;
+  overflow-wrap: anywhere;
 }
 
 .quick-action__subtitle {
   font-size: 0.85rem;
   color: rgba(var(--color-neutral-700-rgb), 0.92);
   line-height: 1.35;
+  overflow-wrap: anywhere;
 }
 
 .quick-action--primary {
