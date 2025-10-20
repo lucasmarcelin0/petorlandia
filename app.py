@@ -5143,7 +5143,8 @@ def update_tutor(user_id):
     # 🔐 Permissão: veterinários ou colaboradores
     if current_user.worker not in ['veterinario', 'colaborador']:
         message = 'Apenas veterinários ou colaboradores podem editar dados do tutor.'
-        flash(message, 'danger')
+        if not wants_json:
+            flash(message, 'danger')
         if wants_json:
             return jsonify(success=False, message=message, category='danger'), 403
         return redirect(request.referrer or url_for('index'))
@@ -5162,7 +5163,8 @@ def update_tutor(user_id):
             existing = User.query.filter(User.cpf == cpf_val, User.id != user.id).first()
             if existing:
                 message = 'CPF já cadastrado para outro tutor.'
-                flash(message, 'danger')
+                if not wants_json:
+                    flash(message, 'danger')
                 if wants_json:
                     return jsonify(success=False, message=message, category='danger'), 400
                 return redirect(request.referrer or url_for('index'))
@@ -5175,7 +5177,8 @@ def update_tutor(user_id):
             user.date_of_birth = datetime.strptime(date_str, '%Y-%m-%d').date()
         except ValueError:
             message = 'Data de nascimento inválida. Use o formato correto.'
-            flash(message, 'danger')
+            if not wants_json:
+                flash(message, 'danger')
             if wants_json:
                 return jsonify(success=False, message=message, category='danger'), 400
             return redirect(request.referrer or url_for('index'))
@@ -5224,7 +5227,8 @@ def update_tutor(user_id):
             user.endereco_id = endereco.id
     elif any(addr_fields.values()):
         message = 'Por favor, informe CEP, rua, cidade e estado.'
-        flash(message, 'warning')
+        if not wants_json:
+            flash(message, 'warning')
         if wants_json:
             return jsonify(success=False, message=message, category='warning'), 400
         return redirect(request.referrer or url_for('index'))
@@ -5236,13 +5240,15 @@ def update_tutor(user_id):
         db.session.rollback()
         print(f"❌ ERRO ao salvar tutor: {e}")
         message = f'Ocorreu um erro ao salvar: {str(e)}'
-        flash(message, 'danger')
+        if not wants_json:
+            flash(message, 'danger')
         if wants_json:
             return jsonify(success=False, message=message, category='danger'), 500
         return redirect(request.referrer or url_for('index'))
 
     message = 'Dados do tutor atualizados com sucesso!'
-    flash(message, 'success')
+    if not wants_json:
+        flash(message, 'success')
     if wants_json:
         return jsonify(success=True, message=message, tutor_name=user.name, category='success')
     return redirect(request.referrer or url_for('index'))
