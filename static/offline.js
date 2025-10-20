@@ -229,7 +229,12 @@
       ev.preventDefault();
       if(data.html){
         const cont=document.getElementById('animais-adicionados');
-        if(cont) cont.innerHTML=data.html;
+        if(cont) {
+          cont.innerHTML=data.html;
+          if (typeof window.initBootstrapDropdowns === 'function') {
+            window.initBootstrapDropdowns(cont);
+          }
+        }
       }
       form.reset();
       const btn=form.querySelector('button[type="submit"]');
@@ -252,6 +257,9 @@
       const container = document.getElementById(form.dataset.target);
       if (container) {
         container.innerHTML = data.html;
+        if (typeof window.initBootstrapDropdowns === 'function') {
+          window.initBootstrapDropdowns(container);
+        }
       }
     }
   });

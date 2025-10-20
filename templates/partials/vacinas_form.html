@@ -401,7 +401,13 @@
         if (data.success) {
           mostrarFeedback('Vacinas registradas com sucesso!');
           if (data.html) {
-            document.getElementById('historico-vacinas').innerHTML = data.html;
+            const historico = document.getElementById('historico-vacinas');
+            if (historico) {
+              historico.innerHTML = data.html;
+              if (typeof window.initBootstrapDropdowns === 'function') {
+                window.initBootstrapDropdowns(historico);
+              }
+            }
           }
           vacinas = [];
           renderVacinasTemp();

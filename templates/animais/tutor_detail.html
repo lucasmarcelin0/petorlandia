@@ -629,17 +629,4 @@ document.addEventListener('form-sync-success', function(ev) {
 {% block scripts %}
   {{ super() }}
   <script src="{{ url_for('static', filename='js/tutor_detail.js') }}"></script>
-  <script>
-    document.addEventListener('DOMContentLoaded', function () {
-      if (!window.bootstrap || !window.bootstrap.Dropdown) {
-        return;
-      }
-
-      document
-        .querySelectorAll('.nav-item.dropdown .dropdown-toggle')
-        .forEach(function (toggle) {
-          window.bootstrap.Dropdown.getOrCreateInstance(toggle);
-        });
-    });
-  </script>
 {% endblock %}

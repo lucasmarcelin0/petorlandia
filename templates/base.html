@@ -78,26 +78,39 @@
 </script>
 
 <script>
-    document.addEventListener('DOMContentLoaded', () => {
-        if (!window.bootstrap || !window.bootstrap.Dropdown) {
-            return;
+    (function () {
+        function initBootstrapDropdowns(root) {
+            if (!window.bootstrap || !window.bootstrap.Dropdown) {
+                return;
+            }
+
+            const Dropdown = window.bootstrap.Dropdown;
+            const scope = root && typeof root.querySelectorAll === 'function' ? root : document;
+            const toggles = scope.querySelectorAll('.dropdown-toggle[data-bs-toggle="dropdown"], .nav-item.dropdown .dropdown-toggle');
+
+            toggles.forEach(toggle => {
+                if (typeof Dropdown.getOrCreateInstance === 'function') {
+                    Dropdown.getOrCreateInstance(toggle);
+                    return;
+                }
+
+                if (typeof Dropdown.getInstance === 'function') {
+                    const instance = Dropdown.getInstance(toggle);
+                    if (instance) {
+                        return;
+                    }
+                }
+
+                new Dropdown(toggle);
+            });
         }
 
-        const Dropdown = window.bootstrap.Dropdown;
+        window.initBootstrapDropdowns = initBootstrapDropdowns;
 
-        document.querySelectorAll('.nav-item.dropdown .dropdown-toggle').forEach(toggle => {
-            if (typeof Dropdown.getOrCreateInstance === 'function') {
-                Dropdown.getOrCreateInstance(toggle);
-                return;
-            }
-
-            if (typeof Dropdown.getInstance === 'function' && Dropdown.getInstance(toggle)) {
-                return;
-            }
-
-            new Dropdown(toggle);
+        document.addEventListener('DOMContentLoaded', function () {
+            initBootstrapDropdowns(document);
         });
-    });
+    })();
 </script>
 
 <body class="app-body {% block body_classes %}{% endblock %}">
@@ -351,6 +364,9 @@
           const data = await resp.json();
           if (data.html) {
             container.innerHTML = data.html;
+            if (typeof window.initBootstrapDropdowns === 'function') {
+              window.initBootstrapDropdowns(container);
+            }
           }
           if (data.counts) {
             const mapping = {
@@ -664,6 +680,9 @@
                 const el = document.querySelector(target);
                 if (el) {
                   el.innerHTML = data.html;
+                  if (typeof window.initBootstrapDropdowns === 'function') {
+                    window.initBootstrapDropdowns(el);
+                  }
                 }
               }
             }

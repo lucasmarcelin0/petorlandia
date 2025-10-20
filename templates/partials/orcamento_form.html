@@ -142,6 +142,9 @@ async function finalizarBlocoOrcamento() {
       const historico = document.getElementById('historico-orcamentos');
       if (data.html) {
         historico.innerHTML = data.html;
+        if (typeof window.initBootstrapDropdowns === 'function') {
+          window.initBootstrapDropdowns(historico);
+        }
         if (typeof bindSyncForms === 'function') { bindSyncForms(historico); }
       }
     }
