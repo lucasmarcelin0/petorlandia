@@ -441,3 +441,328 @@ footer {
   max-height: 70vh;
   overflow-y: auto;
 }
+
+/*
+  ==================================================================
+  Design system helpers for template macros
+  ==================================================================
+*/
+
+.ui-button,
+.ui-button:visited {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-xxs);
+  border-radius: var(--radius-md);
+  border: none;
+  font-weight: var(--font-weight-medium);
+  padding: var(--space-xs) var(--space-md);
+  line-height: 1.2;
+  cursor: pointer;
+  transition: transform 0.2s ease, box-shadow 0.2s ease, background-color var(--transition-base);
+  text-decoration: none;
+  color: var(--color-surface);
+}
+
+.ui-button i,
+.ui-button svg {
+  margin-right: 0.25rem;
+}
+
+.ui-button:hover,
+.ui-button:focus-visible {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-navbar-strong);
+}
+
+.ui-button:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+.ui-button--primary {
+  background-color: var(--color-primary);
+}
+
+.ui-button--secondary {
+  background-color: var(--color-secondary);
+}
+
+.ui-button--danger {
+  background-color: var(--color-danger);
+}
+
+.ui-button--warning {
+  background-color: var(--color-warning);
+  color: #111;
+}
+
+.ui-button--info {
+  background-color: var(--color-info);
+}
+
+.ui-button--light {
+  background-color: var(--color-light);
+  color: var(--color-dark);
+  border: 1px solid rgba(0, 0, 0, 0.08);
+}
+
+.ui-button--outline {
+  background-color: transparent;
+  border: 1px solid currentColor;
+  color: var(--color-primary);
+}
+
+.ui-button--block {
+  width: 100%;
+}
+
+.ui-button--sm {
+  padding: var(--space-xxs) var(--space-sm);
+  font-size: 0.85rem;
+}
+
+.ui-button--lg {
+  padding: var(--space-sm) var(--space-xl);
+  font-size: 1.05rem;
+}
+
+.ui-card {
+  background-color: var(--color-surface);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-soft);
+  padding: var(--space-lg);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.ui-card:hover {
+  transform: translateY(-5px);
+  box-shadow: var(--shadow-elevated);
+}
+
+.ui-card--flush {
+  padding: 0;
+}
+
+.ui-card--muted {
+  background: linear-gradient(135deg, var(--color-light), var(--color-surface));
+}
+
+.ui-card--surface {
+  background-color: var(--color-surface);
+}
+
+.ui-card--accent {
+  background: linear-gradient(135deg, rgba(78, 115, 223, 0.08), var(--color-surface));
+}
+
+.ui-card__header {
+  margin-bottom: var(--space-sm);
+  font-weight: var(--font-weight-semibold);
+}
+
+.ui-card__footer {
+  margin-top: var(--space-md);
+  padding-top: var(--space-sm);
+  border-top: 1px solid rgba(0, 0, 0, 0.05);
+}
+
+.ui-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xxs);
+  margin-bottom: var(--space-md);
+}
+
+.ui-label {
+  font-weight: var(--font-weight-medium);
+  color: var(--color-dark);
+}
+
+.ui-input,
+.ui-input[type='text'],
+.ui-input[type='email'],
+.ui-input[type='password'],
+.ui-input[type='number'],
+.ui-input[type='search'],
+.ui-input[type='tel'],
+.ui-input[type='date'],
+.ui-input[type='time'],
+.ui-input[type='datetime-local'],
+.ui-input select,
+select.ui-input,
+textarea.ui-input {
+  width: 100%;
+  border-radius: var(--radius-md);
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  background-color: var(--color-surface);
+  padding: calc(var(--space-xs) + 2px) var(--space-sm);
+  transition: border-color var(--transition-base), box-shadow var(--transition-base);
+  font: inherit;
+  color: inherit;
+}
+
+.ui-input:focus {
+  outline: none;
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px rgba(78, 115, 223, 0.15);
+}
+
+.ui-input[readonly],
+.ui-input:disabled {
+  background-color: rgba(0, 0, 0, 0.04);
+  cursor: not-allowed;
+}
+
+.ui-input__hint {
+  font-size: 0.85rem;
+  color: rgba(0, 0, 0, 0.6);
+}
+
+.ui-input__error {
+  font-size: 0.85rem;
+  color: var(--color-danger);
+}
+
+.ui-checkbox {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-xs);
+  margin-bottom: var(--space-sm);
+}
+
+.ui-checkbox input[type='checkbox'] {
+  width: 1.1rem;
+  height: 1.1rem;
+  margin-top: 0.1rem;
+  accent-color: var(--color-primary);
+}
+
+.ui-checkbox__label {
+  font-weight: var(--font-weight-medium);
+  color: var(--color-dark);
+}
+
+.ui-modal {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background-color: rgba(0, 0, 0, 0.4);
+  backdrop-filter: blur(2px);
+  z-index: 1050;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-lg);
+}
+
+.ui-modal__dialog {
+  background-color: var(--color-surface);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-elevated);
+  max-width: 540px;
+  width: 100%;
+  padding: var(--space-lg);
+  position: relative;
+}
+
+.ui-modal__close {
+  position: absolute;
+  top: var(--space-sm);
+  right: var(--space-sm);
+}
+
+.ui-tooltip {
+  background: rgba(0, 0, 0, 0.8);
+  color: #fff;
+  padding: var(--space-xxs) var(--space-xs);
+  border-radius: var(--radius-sm);
+  font-size: 0.75rem;
+  box-shadow: var(--shadow-soft);
+}
+
+.ui-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+}
+
+.ui-list--bordered > li {
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  border-radius: var(--radius-md);
+  padding: var(--space-sm);
+  background-color: var(--color-surface);
+}
+
+.ui-scrollable {
+  overflow-y: auto;
+  scrollbar-color: var(--color-primary) #f1f1f1;
+  scrollbar-width: thin;
+}
+
+.ui-scrollable--sm {
+  max-height: 240px;
+}
+
+.ui-scrollable--md {
+  max-height: 360px;
+}
+
+.ui-scrollable--lg {
+  max-height: 480px;
+}
+
+.ui-surface-muted {
+  background-color: var(--color-light);
+}
+
+.ui-text-muted {
+  color: rgba(0, 0, 0, 0.55);
+}
+
+.ui-dashed {
+  border-style: dashed;
+}
+
+.ui-illustration {
+  height: 100px;
+  width: auto;
+}
+
+.ui-overlay {
+  z-index: 10;
+}
+
+.ui-chat {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+
+.ui-chat__messages {
+  background-color: var(--color-surface);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-soft);
+  padding: var(--space-sm);
+}
+
+.ui-chat__bubble {
+  display: inline-block;
+  padding: var(--space-xs) var(--space-sm);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-soft);
+  max-width: min(100%, 28rem);
+}
+
+.ui-chat__bubble--outgoing {
+  background: rgba(54, 185, 204, 0.2);
+  border: 1px solid rgba(54, 185, 204, 0.35);
+}
+
+.ui-chat__bubble--incoming {
+  background: rgba(242, 245, 249, 0.9);
+  border: 1px solid rgba(0, 0, 0, 0.04);
+}

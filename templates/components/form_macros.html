@@ -1,22 +1,16 @@
-{% macro render_field(field, type='text', label=None, placeholder='', classes='form-control') %}
-<div class="mb-3">
-  <label for="{{ field.id }}" class="form-label">{{ label if label is not none else field.label.text }}</label>
-  {{ field(class=classes, id=field.id, placeholder=placeholder, type=type) }}
-  {% for error in field.errors %}
-  <div class="text-danger">{{ error }}</div>
-  {% endfor %}
-</div>
+{% import 'macros/ui.html' as ui %}
+
+{% macro render_field(field, type='text', label=None, placeholder='', classes='') %}
+  {{ ui.ui_input(field=field, type=type, label=label, placeholder=placeholder, extra_classes=classes, errors=field.errors) }}
 {% endmacro %}
 
-{% macro render_checkbox(field, label=None, classes='form-check-input') %}
-<div class="mb-3 form-check">
-  {{ field(class=classes, id=field.id) }}
-  <label for="{{ field.id }}" class="form-check-label">{{ label if label is not none else field.label.text }}</label>
-</div>
+{% macro render_checkbox(field, label=None, classes='') %}
+  <label class="ui-checkbox">
+    {{ field(class=classes, id=field.id) }}
+    <span class="ui-checkbox__label">{{ label if label is not none else field.label.text }}</span>
+  </label>
 {% endmacro %}
 
-{% macro render_submit(field, classes='btn btn-primary w-100') %}
-<div class="d-grid">
-  {{ field(class=classes) }}
-</div>
+{% macro render_submit(field, classes='') %}
+  {{ ui.ui_button(text=field.label.text if field.label else field._value(), type='submit', block=True, extra_classes=classes, attributes={'name': field.name, 'value': field.data or field.label.text}) }}
 {% endmacro %}
