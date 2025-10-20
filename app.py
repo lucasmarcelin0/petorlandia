@@ -5328,7 +5328,8 @@ def update_animal(animal_id):
 
     if current_user.worker != 'veterinario':
         message = 'Apenas veterinários podem editar dados do animal.'
-        flash(message, 'danger')
+        if not wants_json:
+            flash(message, 'danger')
         if wants_json:
             return jsonify(success=False, message=message, category='danger'), 403
         return redirect(request.referrer or url_for('index'))
@@ -5347,7 +5348,8 @@ def update_animal(animal_id):
         try:
             animal.species_id = int(species_id)
         except ValueError:
-            flash('ID de espécie inválido.', 'warning')
+            if not wants_json:
+                flash('ID de espécie inválido.', 'warning')
 
     # Raça (relacional)
     breed_id = request.form.get('breed_id')
@@ -5355,7 +5357,8 @@ def update_animal(animal_id):
         try:
             animal.breed_id = int(breed_id)
         except ValueError:
-            flash('ID de raça inválido.', 'warning')
+            if not wants_json:
+                flash('ID de raça inválido.', 'warning')
 
     # Peso
     peso_valor = request.form.get('peso')
@@ -5363,7 +5366,8 @@ def update_animal(animal_id):
         try:
             animal.peso = float(peso_valor)
         except ValueError:
-            flash('Peso inválido. Deve ser um número.', 'warning')
+            if not wants_json:
+                flash('Peso inválido. Deve ser um número.', 'warning')
     else:
         animal.peso = None
 
@@ -5376,7 +5380,8 @@ def update_animal(animal_id):
         try:
             animal.date_of_birth = datetime.strptime(dob_str, '%Y-%m-%d').date()
         except ValueError:
-            flash('Data de nascimento inválida.', 'warning')
+            if not wants_json:
+                flash('Data de nascimento inválida.', 'warning')
     elif age_input:
         try:
             idade_numero = int(age_input)
@@ -5386,7 +5391,8 @@ def update_animal(animal_id):
             else:
                 animal.date_of_birth = date.today() - relativedelta(years=idade_numero)
         except ValueError:
-            flash('Idade inválida. Deve ser um número inteiro.', 'warning')
+            if not wants_json:
+                flash('Idade inválida. Deve ser um número inteiro.', 'warning')
 
     if animal.date_of_birth:
         delta = relativedelta(date.today(), animal.date_of_birth)
@@ -5431,13 +5437,15 @@ def update_animal(animal_id):
     except Exception as e:
         db.session.rollback()
         message = f'Ocorreu um erro ao salvar: {str(e)}'
-        flash(message, 'danger')
+        if not wants_json:
+            flash(message, 'danger')
         if wants_json:
             return jsonify(success=False, message=message, category='danger'), 500
         return redirect(request.referrer or url_for('index'))
 
     message = 'Dados do animal atualizados com sucesso!'
-    flash(message, 'success')
+    if not wants_json:
+        flash(message, 'success')
     if wants_json:
         return jsonify(success=True, message=message, animal_name=animal.name, category='success')
     return redirect(request.referrer or url_for('index'))
