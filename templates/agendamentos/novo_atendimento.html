@@ -1,4 +1,21 @@
-{% extends 'base_consulta.html' %}
+{% extends 'base.html' %}
+
+{% block styles %}
+  {{ super() }}
+  <link rel="stylesheet" href="{{ url_for('static', filename='consulta_layout.css') }}">
+{% endblock %}
+
+{% block body_classes %}consulta-layout{% endblock %}
+
+{% block page_toolbar %}
+  <a href="{{ url_for('index') }}" class="btn-back">
+    <i class="fas fa-arrow-left"></i>
+    Início
+  </a>
+{% endblock %}
+
+{% block main_container_classes %}container mt-4{% endblock %}
+
 {% block main %}
 
 <div class="container py-4">
