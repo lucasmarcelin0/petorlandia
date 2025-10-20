@@ -42,6 +42,12 @@ def test_login_page(app):
     client = app.test_client()
     response = client.get('/login')
     assert response.status_code == 200
+    html = response.get_data(as_text=True)
+    assert '<form' in html
+    assert 'name="email"' in html
+    assert 'name="password"' in html
+    assert '🔐 Entrar na PetOrlândia' in html
+    assert 'Esqueceu sua senha?' in html
 
 def test_login_invalid_credentials(monkeypatch, app):
     client = app.test_client()
