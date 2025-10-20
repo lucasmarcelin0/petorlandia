@@ -2,16 +2,43 @@
 function initQuantitySelectors(root=document){
   root.querySelectorAll('.quantity-selector').forEach(box => {
     const input = box.querySelector('.quantity-input');
-    box.querySelector('.minus')?.addEventListener('click', () => {
-      const v = parseInt(input.value || '1', 10);
-      input.value = Math.max(1, v - 1);
-    });
-    box.querySelector('.plus')?.addEventListener('click', () => {
-      const v = parseInt(input.value || '1', 10);
-      input.value = v + 1;
-    });
+    if (!input) {
+      return;
+    }
+    const current = parseInt(input.value || '1', 10);
+    if (Number.isNaN(current) || current < 1) {
+      input.value = '1';
+    }
   });
 }
+
+document.addEventListener('click', event => {
+  const btn = event.target.closest('.quantity-btn');
+  if (!btn) {
+    return;
+  }
+
+  const container = btn.closest('.quantity-selector');
+  if (!container) {
+    return;
+  }
+
+  const input = container.querySelector('.quantity-input');
+  if (!input) {
+    return;
+  }
+
+  const value = parseInt(input.value || '1', 10);
+  const current = Number.isNaN(value) ? 1 : value;
+
+  if (btn.classList.contains('minus')) {
+    input.value = Math.max(1, current - 1);
+  } else if (btn.classList.contains('plus')) {
+    input.value = current + 1;
+  }
+
+  input.dispatchEvent(new Event('change', { bubbles: true }));
+});
 
 function initAddToCartButtons(root=document){
   root.querySelectorAll('.js-add-to-cart').forEach(btn => {
