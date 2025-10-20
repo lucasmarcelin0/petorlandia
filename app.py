@@ -1,5 +1,5 @@
 # ───────────────────────────  app.py  ───────────────────────────
-import os, sys, pathlib, importlib, logging, uuid, re
+import os, sys, pathlib, importlib, logging, uuid, re, secrets
 from collections import defaultdict
 from io import BytesIO
 from concurrent.futures import ThreadPoolExecutor
