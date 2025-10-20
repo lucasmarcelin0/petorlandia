@@ -16,6 +16,15 @@
       <h2>{{ product.name }}</h2>
       <p>{{ product.description }}</p>
       <p class="h4 text-success">R$ {{ '%.2f'|format(product.price)|replace('.', ',') }}</p>
+      {% if is_admin %}
+      <p>
+        {% if product.is_active %}
+          <span class="badge bg-success">Ativo na loja</span>
+        {% else %}
+          <span class="badge bg-secondary">Inativo na loja</span>
+        {% endif %}
+      </p>
+      {% endif %}
       <form action="{{ url_for('adicionar_carrinho', product_id=product.id) }}" method="post" class="d-flex align-items-center gap-2 js-cart-form">
         {{ form.hidden_tag() }}
         {{ form.quantity(class="form-control w-auto", min="1") }}
@@ -49,6 +58,12 @@
       <div class="col-md-4 mb-3">
         {{ update_form.stock.label(class="form-label") }}
         {{ update_form.stock(class="form-control") }}
+      </div>
+      <div class="col-md-4 mb-3 d-flex align-items-end">
+        <div class="form-check">
+          {{ update_form.is_active(class="form-check-input") }}
+          {{ update_form.is_active.label(class="form-check-label") }}
+        </div>
       </div>
       <div class="col-md-4 mb-3">
         {{ update_form.mp_category_id.label(class="form-label") }}

@@ -420,9 +420,9 @@ class ProductAdmin(MyModelView):
         'image_upload': FileField('Imagem')
     }
 
-    form_columns = ['name', 'description', 'price', 'stock', 'image_upload']
+    form_columns = ['name', 'description', 'price', 'stock', 'is_active', 'image_upload']
 
-    column_list = ['image_url', 'name', 'price', 'stock']
+    column_list = ['image_url', 'name', 'price', 'stock', 'is_active']
     column_searchable_list = ('name',)
     column_sortable_list = ('name', 'price', 'stock', 'id')
     column_formatters = {

@@ -8109,7 +8109,7 @@ from flask_login import login_required
 
 
 def _build_loja_query(search_term: str, filtro: str):
-    query = Product.query
+    query = Product.query.filter_by(is_active=True)
     if search_term:
         like = f"%{search_term}%"
         query = query.filter(or_(Product.name.ilike(like), Product.description.ilike(like)))
@@ -8212,6 +8212,9 @@ def produto_detail(product_id):
     """Exibe detalhes do produto e permite edições para administradores."""
     product = Product.query.options(db.joinedload(Product.extra_photos)).get_or_404(product_id)
 
+    if not product.is_active and not _is_admin():
+        abort(404)
+
     update_form = ProductUpdateForm(obj=product, prefix='upd')
     photo_form = ProductPhotoForm(prefix='photo')
     form = AddToCartForm()
@@ -8223,6 +8226,7 @@ def produto_detail(product_id):
             product.price = float(update_form.price.data or 0)
             product.stock = update_form.stock.data
             product.mp_category_id = (update_form.mp_category_id.data or "others").strip()
+            product.is_active = bool(update_form.is_active.data)
             if update_form.image_upload.data:
                 file = update_form.image_upload.data
                 filename = secure_filename(file.filename)
@@ -8262,6 +8266,8 @@ def produto_detail(product_id):
 @login_required
 def adicionar_carrinho(product_id):
     product = Product.query.get_or_404(product_id)
+    if not product.is_active and not _is_admin():
+        abort(404)
     form = AddToCartForm()
     if not form.validate_on_submit():
         if 'application/json' in request.headers.get('Accept', ''):
