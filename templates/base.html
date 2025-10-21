@@ -421,6 +421,29 @@
 
       attachDeliveryFormListeners();
 
+      const randomIdempotencyKey = () => {
+        if (window.crypto && typeof window.crypto.randomUUID === 'function') {
+          return window.crypto.randomUUID();
+        }
+        return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+      };
+
+      const prepareCartFormIdempotency = (form) => {
+        if (!(form instanceof HTMLFormElement)) {
+          return null;
+        }
+        let input = form.querySelector('input[name="_idempotency_key"]');
+        if (!input) {
+          input = document.createElement('input');
+          input.type = 'hidden';
+          input.name = '_idempotency_key';
+          form.appendChild(input);
+        }
+        const newValue = randomIdempotencyKey();
+        input.value = newValue;
+        return newValue;
+      };
+
       const attachCartFormListeners = (root=document) => {
         const scope = root instanceof Element ? root : document;
         const attachedFlag = 'attached';
@@ -431,9 +454,14 @@
           form.dataset.cartListenerAttached = attachedFlag;
           form.addEventListener('submit', async ev => {
             ev.preventDefault();
+            const key = prepareCartFormIdempotency(form);
+            const formData = new FormData(form);
+            if (key && !formData.has('_idempotency_key')) {
+              formData.append('_idempotency_key', key);
+            }
             const resp = await fetchOrQueue(form.action, {
               method: form.method,
-              body: new FormData(form),
+              body: formData,
               headers: {'Accept': 'application/json'}
             });
 
