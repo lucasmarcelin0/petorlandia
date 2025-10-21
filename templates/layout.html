@@ -597,14 +597,37 @@
     </script>
 
     <script>
+        const TOAST_BG_CLASSES = ['bg-danger','bg-info','bg-success','bg-warning','bg-primary','bg-secondary','bg-dark','bg-light'];
+
+        function normalizeToastCategory(category) {
+            if (!category) {
+                return 'success';
+            }
+            const normalized = String(category).toLowerCase();
+            if (normalized === 'error') {
+                return 'danger';
+            }
+            const allowed = ['success','danger','warning','info','primary','secondary','dark','light'];
+            return allowed.includes(normalized) ? normalized : 'info';
+        }
+
+        function applyToastTone(toastEl, category) {
+            if (!toastEl) {
+                return;
+            }
+            TOAST_BG_CLASSES.forEach(cls => toastEl.classList.remove(cls));
+            toastEl.classList.add('bg-' + normalizeToastCategory(category));
+        }
+    </script>
+
+    <script>
         document.addEventListener('DOMContentLoaded', () => {
             const flashMessages = {{ flash_messages|tojson }};
             flashMessages.forEach(([category, message], idx) => {
                 setTimeout(() => {
                     const toastEl = document.getElementById('actionToast');
                     toastEl.querySelector('.toast-body').textContent = message;
-                    toastEl.classList.remove('bg-danger', 'bg-info', 'bg-success');
-                    toastEl.classList.add('bg-' + (category || 'success'));
+                    applyToastTone(toastEl, category || 'success');
                     new bootstrap.Toast(toastEl).show();
                 }, idx * 1000);
             });
@@ -699,15 +722,13 @@
               }
               const toastEl = document.getElementById('actionToast');
               toastEl.querySelector('.toast-body').textContent = data.message || 'Sucesso';
-              toastEl.classList.remove('bg-danger', 'bg-info', 'bg-success');
-              toastEl.classList.add('bg-' + (data.category || 'success'));
+              applyToastTone(toastEl, data.category || 'success');
               new bootstrap.Toast(toastEl).show();
               await refreshDeliverySections();
             } else if (resp) {
               const toastEl = document.getElementById('actionToast');
               toastEl.querySelector('.toast-body').textContent = 'Erro ao processar ação';
-              toastEl.classList.remove('bg-success', 'bg-info');
-              toastEl.classList.add('bg-danger');
+              applyToastTone(toastEl, 'danger');
               new bootstrap.Toast(toastEl).show();
             }
           });
@@ -744,14 +765,12 @@
             }
             const toastEl = document.getElementById('actionToast');
             toastEl.querySelector('.toast-body').textContent = data.message || 'Sucesso';
-            toastEl.classList.remove('bg-danger', 'bg-info', 'bg-success');
-            toastEl.classList.add('bg-' + (data.category || 'success'));
+            applyToastTone(toastEl, data.category || 'success');
             new bootstrap.Toast(toastEl).show();
           } else if (resp) {
             const toastEl = document.getElementById('actionToast');
             toastEl.querySelector('.toast-body').textContent = 'Erro ao processar ação';
-            toastEl.classList.remove('bg-success', 'bg-info');
-            toastEl.classList.add('bg-danger');
+            applyToastTone(toastEl, 'danger');
             new bootstrap.Toast(toastEl).show();
           }
         });
@@ -772,14 +791,12 @@
             }
             const toastEl = document.getElementById('actionToast');
             toastEl.querySelector('.toast-body').textContent = data.message || 'Sucesso';
-            toastEl.classList.remove('bg-danger', 'bg-info', 'bg-success');
-            toastEl.classList.add('bg-' + (data.category || 'success'));
+            applyToastTone(toastEl, data.category || 'success');
             new bootstrap.Toast(toastEl).show();
           } else if (resp) {
             const toastEl = document.getElementById('actionToast');
             toastEl.querySelector('.toast-body').textContent = 'Erro ao processar ação';
-            toastEl.classList.remove('bg-success', 'bg-info');
-            toastEl.classList.add('bg-danger');
+            applyToastTone(toastEl, 'danger');
             new bootstrap.Toast(toastEl).show();
           }
         });
@@ -804,14 +821,12 @@
             }
             const toastEl = document.getElementById('actionToast');
             toastEl.querySelector('.toast-body').textContent = data.message || 'Sucesso';
-            toastEl.classList.remove('bg-danger', 'bg-info', 'bg-success');
-            toastEl.classList.add('bg-' + (data.category || 'success'));
+            applyToastTone(toastEl, data.category || 'success');
             new bootstrap.Toast(toastEl).show();
           } else if (resp) {
             const toastEl = document.getElementById('actionToast');
             toastEl.querySelector('.toast-body').textContent = 'Erro ao processar ação';
-            toastEl.classList.remove('bg-success', 'bg-info');
-            toastEl.classList.add('bg-danger');
+            applyToastTone(toastEl, 'danger');
             new bootstrap.Toast(toastEl).show();
           }
         });
@@ -981,8 +996,7 @@
             if (data.message) {
               const toastEl = document.getElementById('actionToast');
               toastEl.querySelector('.toast-body').textContent = data.message;
-              toastEl.classList.remove('bg-danger', 'bg-info', 'bg-success');
-              toastEl.classList.add('bg-' + (data.category || 'success'));
+              applyToastTone(toastEl, data.category || 'success');
               new bootstrap.Toast(toastEl).show();
             }
           } else if (resp) {
@@ -990,8 +1004,7 @@
             try { data = await resp.json(); } catch(e) {}
             const toastEl = document.getElementById('actionToast');
             toastEl.querySelector('.toast-body').textContent = data.message || 'Erro ao processar ação';
-            toastEl.classList.remove('bg-success', 'bg-info');
-            toastEl.classList.add('bg-danger');
+            applyToastTone(toastEl, 'danger');
             new bootstrap.Toast(toastEl).show();
           } else {
             form.submit();

@@ -5003,9 +5003,9 @@ def update_tutor(user_id):
     # 🔐 Permissão: veterinários ou colaboradores
     if current_user.worker not in ['veterinario', 'colaborador']:
         message = 'Apenas veterinários ou colaboradores podem editar dados do tutor.'
-        flash(message, 'danger')
         if wants_json:
             return jsonify(success=False, message=message, category='danger'), 403
+        flash(message, 'danger')
         return redirect(request.referrer or url_for('index'))
 
     # 📋 Campos básicos (exceto CPF)
@@ -5022,9 +5022,9 @@ def update_tutor(user_id):
             existing = User.query.filter(User.cpf == cpf_val, User.id != user.id).first()
             if existing:
                 message = 'CPF já cadastrado para outro tutor.'
-                flash(message, 'danger')
                 if wants_json:
                     return jsonify(success=False, message=message, category='danger'), 400
+                flash(message, 'danger')
                 return redirect(request.referrer or url_for('index'))
         user.cpf = cpf_val
 
@@ -5035,9 +5035,9 @@ def update_tutor(user_id):
             user.date_of_birth = datetime.strptime(date_str, '%Y-%m-%d').date()
         except ValueError:
             message = 'Data de nascimento inválida. Use o formato correto.'
-            flash(message, 'danger')
             if wants_json:
                 return jsonify(success=False, message=message, category='danger'), 400
+            flash(message, 'danger')
             return redirect(request.referrer or url_for('index'))
 
     # 📸 Foto de perfil
@@ -5084,9 +5084,9 @@ def update_tutor(user_id):
             user.endereco_id = endereco.id
     elif any(addr_fields.values()):
         message = 'Por favor, informe CEP, rua, cidade e estado.'
-        flash(message, 'warning')
         if wants_json:
             return jsonify(success=False, message=message, category='warning'), 400
+        flash(message, 'warning')
         return redirect(request.referrer or url_for('index'))
 
     # 💾 Commit final
@@ -5096,15 +5096,15 @@ def update_tutor(user_id):
         db.session.rollback()
         print(f"❌ ERRO ao salvar tutor: {e}")
         message = f'Ocorreu um erro ao salvar: {str(e)}'
-        flash(message, 'danger')
         if wants_json:
             return jsonify(success=False, message=message, category='danger'), 500
+        flash(message, 'danger')
         return redirect(request.referrer or url_for('index'))
 
     message = 'Dados do tutor atualizados com sucesso!'
-    flash(message, 'success')
     if wants_json:
         return jsonify(success=True, message=message, tutor_name=user.name, category='success')
+    flash(message, 'success')
     return redirect(request.referrer or url_for('index'))
 
 
@@ -5179,12 +5179,19 @@ def update_animal(animal_id):
     animal = get_animal_or_404(animal_id)
 
     wants_json = 'application/json' in request.headers.get('Accept', '')
+    queued_messages = [] if wants_json else None
+
+    def queue_message(text, category='info'):
+        if wants_json:
+            queued_messages.append({'message': text, 'category': category})
+        else:
+            flash(text, category)
 
     if current_user.worker != 'veterinario':
         message = 'Apenas veterinários podem editar dados do animal.'
-        flash(message, 'danger')
         if wants_json:
             return jsonify(success=False, message=message, category='danger'), 403
+        flash(message, 'danger')
         return redirect(request.referrer or url_for('index'))
 
     # Campos básicos
@@ -5201,7 +5208,7 @@ def update_animal(animal_id):
         try:
             animal.species_id = int(species_id)
         except ValueError:
-            flash('ID de espécie inválido.', 'warning')
+            queue_message('ID de espécie inválido.', 'warning')
 
     # Raça (relacional)
     breed_id = request.form.get('breed_id')
@@ -5209,7 +5216,7 @@ def update_animal(animal_id):
         try:
             animal.breed_id = int(breed_id)
         except ValueError:
-            flash('ID de raça inválido.', 'warning')
+            queue_message('ID de raça inválido.', 'warning')
 
     # Peso
     peso_valor = request.form.get('peso')
@@ -5217,7 +5224,7 @@ def update_animal(animal_id):
         try:
             animal.peso = float(peso_valor)
         except ValueError:
-            flash('Peso inválido. Deve ser um número.', 'warning')
+            queue_message('Peso inválido. Deve ser um número.', 'warning')
     else:
         animal.peso = None
 
@@ -5230,7 +5237,7 @@ def update_animal(animal_id):
         try:
             animal.date_of_birth = datetime.strptime(dob_str, '%Y-%m-%d').date()
         except ValueError:
-            flash('Data de nascimento inválida.', 'warning')
+            queue_message('Data de nascimento inválida.', 'warning')
     elif age_input:
         try:
             idade_numero = int(age_input)
@@ -5240,7 +5247,7 @@ def update_animal(animal_id):
             else:
                 animal.date_of_birth = date.today() - relativedelta(years=idade_numero)
         except ValueError:
-            flash('Idade inválida. Deve ser um número inteiro.', 'warning')
+            queue_message('Idade inválida. Deve ser um número inteiro.', 'warning')
 
     if animal.date_of_birth:
         delta = relativedelta(date.today(), animal.date_of_birth)
@@ -5285,15 +5292,18 @@ def update_animal(animal_id):
     except Exception as e:
         db.session.rollback()
         message = f'Ocorreu um erro ao salvar: {str(e)}'
-        flash(message, 'danger')
         if wants_json:
             return jsonify(success=False, message=message, category='danger'), 500
+        flash(message, 'danger')
         return redirect(request.referrer or url_for('index'))
 
     message = 'Dados do animal atualizados com sucesso!'
-    flash(message, 'success')
     if wants_json:
-        return jsonify(success=True, message=message, animal_name=animal.name, category='success')
+        payload = dict(success=True, message=message, animal_name=animal.name, category='success')
+        if queued_messages:
+            payload['messages'] = queued_messages
+        return jsonify(payload)
+    flash(message, 'success')
     return redirect(request.referrer or url_for('index'))
 
 
