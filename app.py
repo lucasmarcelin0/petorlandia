@@ -8394,9 +8394,8 @@ def diminuir_item_carrinho(item_id):
             "order_total": total_value,
             "order_total_formatted": f"R$ {total_value:.2f}",
             "order_quantity": total_qty,
+            "cart_empty": total_qty == 0,
         }
-        if total_qty == 0:
-            payload["redirect"] = url_for("ver_carrinho")
         return jsonify(**payload)
     return redirect(url_for("ver_carrinho"))
 
