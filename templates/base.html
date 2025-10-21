@@ -444,6 +444,65 @@
         return newValue;
       };
 
+      const syncCartTotals = (formattedTotal) => {
+        if (!formattedTotal) {
+          return;
+        }
+        const text = 'Total:\u00A0' + formattedTotal;
+        document.querySelectorAll('[data-cart-total]').forEach(el => {
+          el.textContent = text;
+        });
+        const legacyTotalEl = document.getElementById('cartTotal');
+        if (legacyTotalEl && !legacyTotalEl.dataset.cartTotal) {
+          legacyTotalEl.textContent = text;
+        }
+      };
+
+      const syncCartQuantities = (orderQuantity) => {
+        if (orderQuantity === undefined) {
+          return;
+        }
+        const qty = Number.parseInt(orderQuantity, 10) || 0;
+        document.querySelectorAll('[data-cart-quantity-badge]').forEach(el => {
+          if (qty > 0) {
+            el.textContent = qty;
+            el.classList.remove('d-none');
+            el.setAttribute('aria-hidden', 'false');
+          } else {
+            el.textContent = '';
+            el.classList.add('d-none');
+            el.setAttribute('aria-hidden', 'true');
+          }
+        });
+        document.querySelectorAll('[data-cart-quantity-text]').forEach(el => {
+          el.textContent = qty;
+          if (el.dataset.cartQuantityToggle === 'hide-when-zero') {
+            el.classList.toggle('d-none', qty <= 0);
+          }
+        });
+      };
+
+      const updateCartItemDisplay = (form, data) => {
+        if (!data || data.item_quantity === undefined) {
+          return;
+        }
+        const itemContainer = form.closest('[data-cart-item-id]');
+        if (!itemContainer) {
+          return;
+        }
+        if (data.item_id && String(data.item_id) !== itemContainer.dataset.cartItemId) {
+          return;
+        }
+        if (data.item_quantity === 0) {
+          itemContainer.remove();
+          return;
+        }
+        const quantityEl = itemContainer.querySelector('[data-cart-item-quantity]');
+        if (quantityEl) {
+          quantityEl.textContent = data.item_quantity;
+        }
+      };
+
       const attachCartFormListeners = (root=document) => {
         const scope = root instanceof Element ? root : document;
         const attachedFlag = 'attached';
@@ -498,18 +557,9 @@
                 window.location.href = data.redirect;
                 return;
               }
-              const span = form.parentElement.querySelector('span');
-              if (span && data.item_quantity !== undefined) {
-                span.textContent = data.item_quantity;
-              }
-              if (data.item_quantity === 0) {
-                const li = form.closest('li');
-                li?.remove();
-              }
-              const totalEl = document.getElementById('cartTotal');
-              if (totalEl && data.order_total_formatted) {
-                totalEl.textContent = 'Total:\u00A0' + data.order_total_formatted;
-              }
+              updateCartItemDisplay(form, data);
+              syncCartTotals(data.order_total_formatted);
+              syncCartQuantities(data.order_quantity);
               const toastEl = document.getElementById('actionToast');
               toastEl.querySelector('.toast-body').textContent = data.message || 'Sucesso';
               toastEl.classList.remove('bg-danger', 'bg-info', 'bg-success');
