@@ -1,44 +1,77 @@
 // Dynamic interactions for loja page
 function initQuantitySelectors(root=document){
   root.querySelectorAll('.quantity-selector').forEach(box => {
+    if (box.dataset.quantityListenerAttached === 'true') {
+      return;
+    }
     const input = box.querySelector('.quantity-input');
     if (!input) {
       return;
     }
-    const current = parseInt(input.value || '1', 10);
-    if (Number.isNaN(current) || current < 1) {
-      input.value = '1';
-    }
+
+    const step = Number.parseInt(input.step || '1', 10) || 1;
+    const minValue = Number.parseInt(input.min || '1', 10) || 1;
+
+    const getSanitisedValue = () => {
+      const cleaned = input.value.replace(/[^\d]/g, '');
+      if (cleaned !== input.value) {
+        input.value = cleaned;
+      }
+      if (cleaned === '') {
+        return null;
+      }
+      return Math.max(minValue, Number.parseInt(cleaned, 10));
+    };
+
+    const commitValue = value => {
+      const next = Math.max(minValue, Number.parseInt(String(value), 10) || minValue);
+      input.value = String(next);
+      return next;
+    };
+
+    const update = delta => {
+      const current = getSanitisedValue();
+      const base = current === null ? minValue : current;
+      const nextValue = Math.max(minValue, base + delta);
+      commitValue(nextValue);
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+      input.dispatchEvent(new Event('change', { bubbles: true }));
+    };
+
+    const minusBtn = box.querySelector('.quantity-btn.minus');
+    const plusBtn = box.querySelector('.quantity-btn.plus');
+
+    minusBtn?.addEventListener('click', ev => {
+      ev.preventDefault();
+      update(-step);
+    });
+
+    plusBtn?.addEventListener('click', ev => {
+      ev.preventDefault();
+      update(step);
+    });
+
+    const handleInput = force => {
+      const current = getSanitisedValue();
+      if (current === null) {
+        if (force) {
+          commitValue(minValue);
+        }
+        return;
+      }
+      if (force) {
+        commitValue(current);
+      }
+    };
+
+    input.addEventListener('input', () => handleInput(false));
+    input.addEventListener('change', () => handleInput(true));
+    input.addEventListener('blur', () => handleInput(true));
+
+    handleInput(true);
+    box.dataset.quantityListenerAttached = 'true';
   });
 }
-
-document.addEventListener('click', event => {
-  const btn = event.target.closest('.quantity-btn');
-  if (!btn) {
-    return;
-  }
-
-  const container = btn.closest('.quantity-selector');
-  if (!container) {
-    return;
-  }
-
-  const input = container.querySelector('.quantity-input');
-  if (!input) {
-    return;
-  }
-
-  const value = parseInt(input.value || '1', 10);
-  const current = Number.isNaN(value) ? 1 : value;
-
-  if (btn.classList.contains('minus')) {
-    input.value = Math.max(1, current - 1);
-  } else if (btn.classList.contains('plus')) {
-    input.value = current + 1;
-  }
-
-  input.dispatchEvent(new Event('change', { bubbles: true }));
-});
 
 function initAddToCartButtons(root=document){
   root.querySelectorAll('.js-add-to-cart').forEach(btn => {

@@ -23,11 +23,10 @@
       <a href="{{ url_for('ver_carrinho') }}"
          class="btn btn-success btn-lg d-flex align-items-center position-relative">
         <i class="fa-solid fa-cart-shopping me-2"></i> Ver Carrinho
-        {% if cart_count and cart_count > 0 %}
-        <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger shadow">
-          {{ cart_count }}
+        <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger shadow {% if not cart_count %}d-none{% endif %}"
+              data-cart-count data-cart-count-empty-class="d-none">
+          {{ cart_count or 0 }}
         </span>
-        {% endif %}
       </a>
     </div>
   </div>
@@ -108,11 +107,10 @@
   <a href="{{ url_for('ver_carrinho') }}"
      class="btn btn-success btn-lg w-100 btn-cart-floating position-relative">
     <i class="fa-solid fa-cart-shopping me-2"></i> Ver Carrinho
-    {% if cart_count and cart_count > 0 %}
-    <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger shadow">
-      {{ cart_count }}
+    <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger shadow {% if not cart_count %}d-none{% endif %}"
+          data-cart-count data-cart-count-empty-class="d-none">
+      {{ cart_count or 0 }}
     </span>
-    {% endif %}
   </a>
 </div>
 

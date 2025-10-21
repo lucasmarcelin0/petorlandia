@@ -245,14 +245,14 @@
 
     <!-- Main Content -->
     {% block main_container %}
-    <main class="{% block main_container_classes %}container{% endblock %}">
+    <main class="{% block main_container_classes %}container{% endblock %} flex-grow-1">
         {% block main %}
         {% endblock %}
     </main>
     {% endblock %}
 
     <!-- Footer -->
-    <footer>
+    <footer class="site-footer">
         &copy; Lucas Marcelino • PetOrlândia 2025 <i class="fas fa-paw text-primary"></i>
     </footer>
     <div class="modal fade" id="confirmModal" tabindex="-1" aria-hidden="true">
@@ -421,6 +421,79 @@
 
       attachDeliveryFormListeners();
 
+      const randomIdempotencyKey = () => {
+        if (window.crypto && typeof window.crypto.randomUUID === 'function') {
+          return window.crypto.randomUUID();
+        }
+        return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+      };
+
+      const prepareCartFormIdempotency = (form) => {
+        if (!(form instanceof HTMLFormElement)) {
+          return null;
+        }
+        let input = form.querySelector('input[name="_idempotency_key"]');
+        if (!input) {
+          input = document.createElement('input');
+          input.type = 'hidden';
+          input.name = '_idempotency_key';
+          form.appendChild(input);
+        }
+        const newValue = randomIdempotencyKey();
+        input.value = newValue;
+        return newValue;
+      };
+
+      const updateCartTotalDisplays = (formattedTotal) => {
+        if (!formattedTotal) {
+          return;
+        }
+        document.querySelectorAll('[data-cart-total]').forEach(el => {
+          const prefix = el.dataset.cartTotalPrefix || '';
+          if (el instanceof HTMLInputElement) {
+            el.value = prefix + formattedTotal;
+          } else {
+            el.textContent = prefix + formattedTotal;
+          }
+        });
+      };
+
+      const updateCartCountDisplays = (quantity) => {
+        if (quantity === undefined) {
+          return;
+        }
+        document.querySelectorAll('[data-cart-count]').forEach(el => {
+          const hideClass = el.dataset.cartCountEmptyClass || 'd-none';
+          const showClass = el.dataset.cartCountVisibleClass || '';
+          el.textContent = quantity;
+          if (quantity > 0) {
+            el.classList.remove(hideClass);
+            if (showClass) {
+              el.classList.add(showClass);
+            }
+          } else {
+            el.classList.add(hideClass);
+            if (showClass) {
+              el.classList.remove(showClass);
+            }
+          }
+        });
+      };
+
+      const toggleCartEmptyState = (isEmpty) => {
+        if (isEmpty === undefined) {
+          return;
+        }
+        const itemsWrapper = document.getElementById('cartItemsWrapper');
+        const emptyState = document.getElementById('cartEmptyMessage');
+        if (itemsWrapper) {
+          itemsWrapper.classList.toggle('d-none', Boolean(isEmpty));
+        }
+        if (emptyState) {
+          emptyState.classList.toggle('d-none', !isEmpty);
+        }
+      };
+
       const attachCartFormListeners = (root=document) => {
         const scope = root instanceof Element ? root : document;
         const attachedFlag = 'attached';
@@ -431,9 +504,14 @@
           form.dataset.cartListenerAttached = attachedFlag;
           form.addEventListener('submit', async ev => {
             ev.preventDefault();
+            const key = prepareCartFormIdempotency(form);
+            const formData = new FormData(form);
+            if (key && !formData.has('_idempotency_key')) {
+              formData.append('_idempotency_key', key);
+            }
             const resp = await fetchOrQueue(form.action, {
               method: form.method,
-              body: new FormData(form),
+              body: formData,
               headers: {'Accept': 'application/json'}
             });
 
@@ -470,17 +548,22 @@
                 window.location.href = data.redirect;
                 return;
               }
-              const span = form.parentElement.querySelector('span');
-              if (span && data.item_quantity !== undefined) {
-                span.textContent = data.item_quantity;
+              const itemRow = form.closest('[data-cart-item-id]');
+              if (itemRow && data.item_quantity !== undefined) {
+                const quantityEl = itemRow.querySelector('[data-cart-item-quantity]');
+                if (quantityEl) {
+                  quantityEl.textContent = data.item_quantity;
+                }
+                if (data.item_quantity === 0) {
+                  itemRow.remove();
+                }
               }
-              if (data.item_quantity === 0) {
-                const li = form.closest('li');
-                li?.remove();
+              if (data.order_total_formatted) {
+                updateCartTotalDisplays(data.order_total_formatted);
               }
-              const totalEl = document.getElementById('cartTotal');
-              if (totalEl && data.order_total_formatted) {
-                totalEl.textContent = 'Total:\u00A0' + data.order_total_formatted;
+              if (data.order_quantity !== undefined) {
+                updateCartCountDisplays(data.order_quantity);
+                toggleCartEmptyState(data.order_quantity === 0);
               }
               const toastEl = document.getElementById('actionToast');
               toastEl.querySelector('.toast-body').textContent = data.message || 'Sucesso';
