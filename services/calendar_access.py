@@ -55,6 +55,31 @@ class CalendarAccessScope:
             return True
         return vet_id in self.veterinarian_ids
 
+    def allows_any_other_veterinarian(self, vet: VetLike | None = None) -> bool:
+        """Return ``True`` if the scope allows colleagues besides ``vet``.
+
+        When ``vet`` is ``None`` the method simply checks whether there is at
+        least one veterinarian id allowed by the scope. This mirrors
+        ``allows_all_veterinarians`` when the scope is unrestricted, but also
+        covers cases where only a subset of colleagues is available.
+        """
+
+        if self.veterinarian_ids is None:
+            return True
+
+        allowed = {value for value in self.veterinarian_ids if value is not None}
+        if not allowed:
+            return False
+
+        if vet is None:
+            return True
+
+        current_vet_id = self._normalize_vet_id(vet)
+        if current_vet_id is None:
+            return True
+
+        return any(vet_id != current_vet_id for vet_id in allowed)
+
     def allows_clinic(self, clinic_id: Optional[int]) -> bool:
         if clinic_id is None or self.clinic_ids is None:
             return True
@@ -123,14 +148,17 @@ def get_calendar_access_scope(user: object) -> CalendarAccessScope:
             continue
         memberships_by_clinic.setdefault(int(clinic_id), []).append(membership)
 
+    unrestricted_clinic_ids: Set[int] = set(owned_clinic_ids)
     restricted_memberships = []
     for clinic_id, memberships in memberships_by_clinic.items():
         if clinic_id in owned_clinic_ids:
+            unrestricted_clinic_ids.add(clinic_id)
             continue
         # If any membership grants full calendar access for the clinic we treat
         # the clinic as unrestricted, even if stale duplicate rows still exist
         # with the flag disabled.
         if any(getattr(m, "can_view_full_calendar", False) for m in memberships):
+            unrestricted_clinic_ids.add(clinic_id)
             continue
         restricted_memberships.extend(memberships)
 
@@ -167,6 +195,27 @@ def get_calendar_access_scope(user: object) -> CalendarAccessScope:
         veterinarian_scope = None
     else:
         veterinarian_scope = {vet_id}
+
+        def _add_veterinarian(candidate):
+            candidate_id = getattr(candidate, 'id', None)
+            if candidate_id is None:
+                return
+            try:
+                normalized = int(candidate_id)
+            except (TypeError, ValueError):
+                return
+            veterinarian_scope.add(normalized)
+
+        if unrestricted_clinic_ids:
+            clinics = Clinica.query.filter(Clinica.id.in_(unrestricted_clinic_ids)).all()
+            for clinic in clinics:
+                owner_vet = getattr(getattr(clinic, 'owner', None), 'veterinario', None)
+                if owner_vet:
+                    _add_veterinarian(owner_vet)
+                for colleague in getattr(clinic, 'veterinarios', []) or []:
+                    _add_veterinarian(colleague)
+                for specialist in getattr(clinic, 'veterinarios_associados', []) or []:
+                    _add_veterinarian(specialist)
 
     return CalendarAccessScope(
         clinic_ids=clinic_scope or None,

@@ -92,6 +92,7 @@ def test_buscar_animais_filters_by_clinic(app, monkeypatch):
         db.session.commit()
 
         staff_id = staff.id
+        tutor1_id = tutor1.id
 
     login(monkeypatch, staff_id)
 
@@ -103,13 +104,21 @@ def test_buscar_animais_filters_by_clinic(app, monkeypatch):
     assert len(data) == 1
 
     animal = data[0]
+    assert set(animal.keys()) == {
+        'id',
+        'name',
+        'image',
+        'date_of_birth',
+        'age_display',
+        'date_added',
+        'tutor',
+    }
     assert animal['name'] == "Paciente Clínica 1"
-    assert animal['tutor_name'] == "Tutor Clínica 1"
-    assert animal['species_name'] == "Canina"
-    assert animal['breed_name'] == "SRD"
     assert animal['age_display'] == "5 anos"
-    assert animal['microchip_number'] == "123"
-    assert animal['last_appointment_at'] is None
+    assert animal['date_of_birth'] == ""
+    assert animal['image'] is None
+    assert animal['tutor'] == {'id': tutor1_id, 'name': "Tutor Clínica 1"}
+    assert 'microchip_number' not in animal
 
 
 def test_buscar_animais_without_clinic_returns_empty(app, monkeypatch):
@@ -233,11 +242,7 @@ def test_buscar_animais_supports_sorting_by_recent_attended(app, monkeypatch):
     assert response.status_code == 200
     data = response.get_json()
     assert [item['name'] for item in data][:2] == ["Paciente B", "Paciente A"]
-
-    first_last_at = data[0]['last_appointment_at']
-    assert first_last_at is not None
-    first_last_dt = datetime.fromisoformat(first_last_at)
-    assert first_last_dt.replace(microsecond=0) == newer_value.replace(microsecond=0)
+    assert 'last_appointment_at' not in data[0]
 
 
 def test_buscar_animais_filters_by_tutor_id(app, monkeypatch):
@@ -292,4 +297,4 @@ def test_buscar_animais_filters_by_tutor_id(app, monkeypatch):
     assert response.status_code == 200
     data = response.get_json()
     assert [item['name'] for item in data] == ["Paciente 1"]
-    assert data[0]['tutor_id'] == tutor1_id
+    assert data[0]['tutor'] == {'id': tutor1_id, 'name': "Tutor 1"}

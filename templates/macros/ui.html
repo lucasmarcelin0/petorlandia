@@ -1,0 +1,69 @@
+{% macro ui_button(label, href=None, variant='primary', size='md', icon=None, icon_html=None, outline=False, block=False, extra_classes='', type='button', attrs=None) %}
+  {% set attrs = attrs or {} %}
+  {% set classes = ['btn', 'ui-btn'] %}
+  {% set classes = classes + ['ui-btn--' ~ variant] %}
+  {% if outline %}
+    {% set classes = classes + ['ui-btn--outline'] %}
+  {% endif %}
+  {% if size in ['sm', 'lg'] %}
+    {% set classes = classes + ['ui-btn--' ~ size] %}
+  {% endif %}
+  {% if block %}
+    {% set classes = classes + ['ui-btn--block'] %}
+  {% endif %}
+  {% if extra_classes %}
+    {% set classes = classes + [extra_classes] %}
+  {% endif %}
+  {% if href %}
+    <a href="{{ href }}" class="{{ classes|join(' ') }}"{% for name, value in attrs.items() %} {{ name }}="{{ value }}"{% endfor %}>
+  {% else %}
+    <button type="{{ type }}" class="{{ classes|join(' ') }}"{% for name, value in attrs.items() %} {{ name }}="{{ value }}"{% endfor %}>
+  {% endif %}
+      {% if icon_html %}
+        <span class="ui-btn__icon" aria-hidden="true">{{ icon_html|safe }}</span>
+      {% elif icon %}
+        <span class="ui-btn__icon" aria-hidden="true"><i class="{{ icon }}"></i></span>
+      {% endif %}
+      <span class="ui-btn__label">{{ label }}</span>
+  {% if href %}
+    </a>
+  {% else %}
+    </button>
+  {% endif %}
+{% endmacro %}
+
+{% macro ui_card(title=None, variant='surface', padding='p-4', extra_classes='', body_classes='', header_classes='', attrs=None) %}
+  {% set attrs = attrs or {} %}
+  {% set classes = ['card', 'ui-card', 'ui-card--' ~ variant] %}
+  {% if extra_classes %}
+    {% set classes = classes + [extra_classes] %}
+  {% endif %}
+  <div class="{{ classes|join(' ') }}"{% for name, value in attrs.items() if value is not none %} {{ name }}="{{ value }}"{% endfor %}>
+    {% if title %}
+      <div class="ui-card__header {{ header_classes }}">
+        <h5 class="ui-card__title">{{ title }}</h5>
+      </div>
+    {% endif %}
+    <div class="ui-card__body {{ padding }} {{ body_classes }}">
+      {{ caller() }}
+    </div>
+  </div>
+{% endmacro %}
+
+{% macro ui_form_group(label=None, field_id=None, required=False, hint=None, extra_classes='') %}
+  <div class="ui-form-group {{ extra_classes }}">
+    {% if label %}
+      <label class="ui-form-label"{% if field_id %} for="{{ field_id }}"{% endif %}>
+        {{ label|safe }}
+        {% if required %}
+          <span class="ui-form-required" aria-hidden="true">*</span>
+          <span class="visually-hidden">Campo obrigatório</span>
+        {% endif %}
+      </label>
+    {% endif %}
+    {{ caller() }}
+    {% if hint %}
+      <small class="ui-form-hint">{{ hint }}</small>
+    {% endif %}
+  </div>
+{% endmacro %}
