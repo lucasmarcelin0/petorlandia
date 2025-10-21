@@ -10,19 +10,31 @@ function initQuantitySelectors(root=document){
     }
 
     const step = Number.parseInt(input.step || '1', 10) || 1;
-    const normalise = () => {
-      const raw = Number.parseInt(input.value || '1', 10);
-      const valid = Number.isNaN(raw) ? 1 : Math.max(1, raw);
-      if (valid !== raw) {
-        input.value = String(valid);
+    const minValue = Number.parseInt(input.min || '1', 10) || 1;
+
+    const getSanitisedValue = () => {
+      const cleaned = input.value.replace(/[^\d]/g, '');
+      if (cleaned !== input.value) {
+        input.value = cleaned;
       }
+      if (cleaned === '') {
+        return null;
+      }
+      return Math.max(minValue, Number.parseInt(cleaned, 10));
+    };
+
+    const commitValue = value => {
+      const next = Math.max(minValue, Number.parseInt(String(value), 10) || minValue);
+      input.value = String(next);
+      return next;
     };
 
     const update = delta => {
-      normalise();
-      const raw = Number.parseInt(input.value || '1', 10);
-      const nextValue = Math.max(1, raw + delta);
-      input.value = String(nextValue);
+      const current = getSanitisedValue();
+      const base = current === null ? minValue : current;
+      const nextValue = Math.max(minValue, base + delta);
+      commitValue(nextValue);
+      input.dispatchEvent(new Event('input', { bubbles: true }));
       input.dispatchEvent(new Event('change', { bubbles: true }));
     };
 
@@ -39,10 +51,24 @@ function initQuantitySelectors(root=document){
       update(step);
     });
 
-    input.addEventListener('change', normalise);
-    input.addEventListener('input', normalise);
+    const handleInput = force => {
+      const current = getSanitisedValue();
+      if (current === null) {
+        if (force) {
+          commitValue(minValue);
+        }
+        return;
+      }
+      if (force) {
+        commitValue(current);
+      }
+    };
 
-    normalise();
+    input.addEventListener('input', () => handleInput(false));
+    input.addEventListener('change', () => handleInput(true));
+    input.addEventListener('blur', () => handleInput(true));
+
+    handleInput(true);
     box.dataset.quantityListenerAttached = 'true';
   });
 }
