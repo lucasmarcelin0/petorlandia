@@ -72,12 +72,20 @@
   window.addEventListener('online', sendQueued);
   document.addEventListener('DOMContentLoaded', sendQueued);
 
+  function normalizeCategory(category){
+    if (!category) return 'success';
+    const normalized = category.toLowerCase();
+    if (normalized === 'error') return 'danger';
+    const allowed = ['success','danger','warning','info','primary','secondary','dark','light'];
+    return allowed.includes(normalized) ? normalized : 'info';
+  }
+
   function showToast(message, category='success'){
     const toastEl = document.getElementById('actionToast');
     if(!toastEl) return;
     toastEl.querySelector('.toast-body').textContent = message;
-    toastEl.classList.remove('bg-danger','bg-info','bg-success');
-    toastEl.classList.add('bg-' + category);
+    toastEl.classList.remove('bg-danger','bg-info','bg-success','bg-warning','bg-primary','bg-secondary','bg-dark');
+    toastEl.classList.add('bg-' + normalizeCategory(category));
     bootstrap.Toast.getOrCreateInstance(toastEl).show();
   }
 
@@ -112,6 +120,16 @@
       if (json && json.message) {
         const category = json.category || (json.success === false || !resp.ok ? 'danger' : 'success');
         showToast(json.message, category);
+      }
+      if (json && Array.isArray(json.messages)) {
+        json.messages.forEach(entry => {
+          if (!entry) return;
+          if (typeof entry === 'string') {
+            showToast(entry, 'info');
+          } else if (entry.message) {
+            showToast(entry.message, entry.category || 'info');
+          }
+        });
       }
       const evt = new CustomEvent('form-sync-success', {detail: {form, data: json, response: resp}, cancelable: true});
       document.dispatchEvent(evt);
