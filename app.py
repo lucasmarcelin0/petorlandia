@@ -1,5 +1,6 @@
 # ───────────────────────────  app.py  ───────────────────────────
 import os, sys, pathlib, importlib, logging, uuid, re
+import requests
 from collections import defaultdict
 from io import BytesIO
 from concurrent.futures import ThreadPoolExecutor
@@ -755,6 +756,75 @@ def _sync_veterinarian_membership_payment(payment):
         membership.paid_until = start_from + timedelta(days=cycle_days)
         membership.ensure_trial_dates(current_app.config.get('VETERINARIAN_TRIAL_DAYS', 30))
     db.session.add(membership)
+
+
+# ----------------------------------------------------------------
+# CEP lookup API
+# ----------------------------------------------------------------
+
+
+@app.route('/api/cep/<cep>')
+def api_cep_lookup(cep: str):
+    """Lookup CEP information using a list of public providers.
+
+    The frontend calls this endpoint instead of contacting third-party
+    services directly, which avoids CORS issues in the browser and lets us
+    provide consistent error handling/fallbacks.
+    """
+
+    sanitized = re.sub(r'\D', '', cep or '')
+    if len(sanitized) != 8:
+        return jsonify(success=False, error='CEP inválido'), 400
+
+    providers = (
+        ('https://viacep.com.br/ws/{cep}/json/', 'viacep'),
+        ('https://brasilapi.com.br/api/cep/v1/{cep}', 'brasilapi'),
+    )
+
+    def _normalize(payload: dict, provider: str):
+        if not isinstance(payload, dict):
+            return None
+
+        if provider == 'viacep':
+            if payload.get('erro'):
+                return None
+            return {
+                'cep': payload.get('cep'),
+                'logradouro': payload.get('logradouro'),
+                'complemento': payload.get('complemento'),
+                'bairro': payload.get('bairro'),
+                'localidade': payload.get('localidade'),
+                'uf': payload.get('uf'),
+            }
+
+        if provider == 'brasilapi':
+            if payload.get('errors') or payload.get('message'):
+                return None
+            return {
+                'cep': payload.get('cep'),
+                'logradouro': payload.get('street') or payload.get('logradouro'),
+                'complemento': payload.get('complement'),
+                'bairro': payload.get('neighborhood') or payload.get('bairro'),
+                'localidade': payload.get('city') or payload.get('localidade'),
+                'uf': payload.get('state') or payload.get('uf'),
+            }
+
+        return None
+
+    for template, provider in providers:
+        url = template.format(cep=sanitized)
+        try:
+            response = requests.get(url, timeout=5)
+            response.raise_for_status()
+            payload = response.json()
+        except (requests.RequestException, ValueError):
+            continue
+
+        normalized = _normalize(payload, provider)
+        if normalized:
+            return jsonify(success=True, data=normalized)
+
+    return jsonify(success=False, error='CEP não encontrado'), 404
 
 
 @app.route('/veterinario/assinatura')

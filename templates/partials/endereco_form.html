@@ -204,16 +204,32 @@ function buscarCep(trigger) {
     loading.classList.remove("d-none");
   }
 
-  fetch(`https://viacep.com.br/ws/${cep}/json/`)
-    .then(res => {
-      if (!res.ok) throw new Error("Erro na requisição");
-      return res.json();
+  const cepEndpointTemplate = "{{ url_for('api_cep_lookup', cep='__CEP__') }}";
+  const requestUrl = cepEndpointTemplate.replace('__CEP__', cep);
+
+  fetch(requestUrl, { headers: { 'Accept': 'application/json' } })
+    .then(async res => {
+      let payload = null;
+      try {
+        payload = await res.json();
+      } catch (jsonError) {
+        console.warn('Resposta inválida da busca de CEP', jsonError);
+      }
+
+      if (!res.ok || !payload || payload.success === false || !payload.data) {
+        const message = payload && (payload.error || payload.message)
+          ? payload.error || payload.message
+          : 'CEP não encontrado';
+        throw new Error(message);
+      }
+
+      return payload.data;
     })
     .then(data => {
-      if (data.erro) {
-        throw new Error("CEP não encontrado");
+      if (!data) {
+        throw new Error('CEP não encontrado');
       }
-      
+
       // Preenche os campos
       const ruaField = addressCard.querySelector('#rua');
       const complementoField = addressCard.querySelector('#complemento');
@@ -238,7 +254,7 @@ function buscarCep(trigger) {
     })
     .catch(error => {
       console.error("Erro ao buscar CEP:", error);
-      alert(error.message);
+      alert(error.message || 'Erro ao buscar CEP. Tente novamente.');
     })
     .finally(() => {
       if (loading) {
