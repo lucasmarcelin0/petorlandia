@@ -151,6 +151,10 @@
         const cont=document.getElementById('tutores-adicionados');
         if(cont) cont.innerHTML=data.html;
       }
+      if (data.redirect_url) {
+        window.location.assign(data.redirect_url);
+        return;
+      }
       if (data && data.tutor && typeof document !== 'undefined') {
         const tutorId = String(data.tutor.id);
         const tutorLabel = data.tutor.display_name || data.tutor.name || `Tutor #${tutorId}`;
