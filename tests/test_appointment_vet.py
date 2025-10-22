@@ -115,8 +115,10 @@ def test_tutor_sees_only_their_animals_in_form(client):
         db.session.add_all([tutor1, tutor2, animal1, animal2])
         db.session.commit()
         form = AppointmentForm(tutor=tutor1)
-        assert (animal1.id, animal1.name) in form.animal_id.choices
-        assert (animal2.id, animal2.name) not in form.animal_id.choices
+        animal_choices = dict(form.animal_id.choices)
+        assert animal1.id in animal_choices
+        assert animal_choices[animal1.id] == f"{animal1.name} — {tutor1.name}"
+        assert animal2.id not in animal_choices
         assert form.tutor_id.choices == [(tutor1.id, tutor1.name)]
         assert form.tutor_id.data == tutor1.id
         assert form.animal_data == [
@@ -163,8 +165,10 @@ def test_veterinarian_form_respects_clinic_scope(client):
         db.session.commit()
 
         form = AppointmentForm(is_veterinario=True, clinic_ids=[clinic_a.id])
-        assert (animal1.id, animal1.name) in form.animal_id.choices
-        assert (animal2.id, animal2.name) not in form.animal_id.choices
+        animal_choices = dict(form.animal_id.choices)
+        assert animal1.id in animal_choices
+        assert animal_choices[animal1.id] == f"{animal1.name} — {tutor1.name}"
+        assert animal2.id not in animal_choices
 
 
 def test_veterinarian_without_clinic_cannot_schedule(client, monkeypatch):

@@ -555,10 +555,17 @@ class AppointmentForm(FlaskForm):
             if tutor_id:
                 tutor_map[tutor_id] = _normalize_tutor_name(tutor_name, tutor_id)
 
+        def _format_animal_label(item):
+            name = item.get('name') or f"Animal #{item.get('id', '—')}"
+            tutor_name = item.get('tutor_name')
+            if tutor_name:
+                return f"{name} — {tutor_name}"
+            return name
+
         records.sort(key=lambda item: ((item['name'] or '').lower(), item['id']))
         self.animal_data = records
         self.animal_id.choices = [
-            (item['id'], item['name']) for item in records
+            (item['id'], _format_animal_label(item)) for item in records
         ]
 
         if not hasattr(self, 'tutor_id'):
