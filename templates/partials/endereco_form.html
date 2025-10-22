@@ -231,10 +231,9 @@ function buscarCep(trigger) {
         estadoSelect.value = data.uf;
       }
 
-      // Foca no número (campo que geralmente não vem no CEP)
-      const numeroField = addressCard.querySelector('#numero');
-      if (numeroField) {
-        numeroField.focus();
+      // Mantém o foco no campo de logradouro para facilitar a edição após o preenchimento automático
+      if (ruaField) {
+        ruaField.focus();
       }
     })
     .catch(error => {
