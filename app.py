@@ -4900,6 +4900,7 @@ def tutores():
                     'name': novo.name or f'Tutor #{novo.id}',
                     'display_name': novo.name or f'Tutor #{novo.id}',
                 },
+                redirect_url=url_for('ficha_tutor', tutor_id=novo.id),
             )
 
         flash('Tutor criado com sucesso!', 'success')
