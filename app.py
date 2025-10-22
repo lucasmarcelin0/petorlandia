@@ -4697,6 +4697,7 @@ def vet_detail(veterinario_id):
         vet_id = getattr(vet, 'id', None)
         if not vet_id:
             return None
+        clinic_ids = calendar_access_scope.get_veterinarian_clinic_ids(vet)
         vet_user = getattr(vet, 'user', None)
         vet_name = getattr(vet_user, 'name', None)
         specialty_list = getattr(vet, 'specialty_list', None)
@@ -4705,6 +4706,7 @@ def vet_detail(veterinario_id):
             'name': label if label is not None else vet_name,
             'full_name': vet_name,
             'specialty_list': specialty_list,
+            'clinic_ids': clinic_ids,
         }
         if label is not None:
             entry['label'] = label
@@ -9157,6 +9159,9 @@ def appointments():
     calendar_summary_clinic_ids = []
     calendar_redirect_url = None
 
+    def _vet_clinic_ids(vet):
+        return calendar_access_scope.get_veterinarian_clinic_ids(vet)
+
     if current_user.role == 'admin':
         agenda_users = User.query.order_by(User.name).all()
         agenda_veterinarios = (
@@ -9227,9 +9232,10 @@ def appointments():
                     'full_name': getattr(getattr(veterinario, 'user', None), 'name', None),
                     'specialty_list': getattr(veterinario, 'specialty_list', None),
                     'is_specialist': bool(getattr(veterinario, 'specialty_list', None)),
+                    'clinic_ids': _vet_clinic_ids(veterinario),
                 }
             ]
-        include_colleagues = bool(clinic_ids) and calendar_access_scope.allows_all_veterinarians()
+        include_colleagues = bool(clinic_ids)
         if include_colleagues:
             colleagues_source = []
             if current_user.role == 'admin' and agenda_veterinarios:
@@ -9271,6 +9277,7 @@ def appointments():
                         'full_name': getattr(getattr(colleague, 'user', None), 'name', None),
                         'specialty_list': getattr(colleague, 'specialty_list', None),
                         'is_specialist': bool(getattr(colleague, 'specialty_list', None)),
+                        'clinic_ids': _vet_clinic_ids(colleague),
                     }
                 )
                 known_ids.add(colleague_id)
@@ -9371,6 +9378,7 @@ def appointments():
                     'specialty_list': getattr(vet, 'specialty_list', None),
                     'is_specialist': getattr(vet, 'id', None) in specialist_ids
                     and getattr(vet, 'id', None) not in clinic_vet_ids,
+                    'clinic_ids': _vet_clinic_ids(vet),
                 }
                 for vet in combined_vets
             ]
@@ -9385,6 +9393,7 @@ def appointments():
                         'specialty_list': getattr(veterinario, 'specialty_list', None),
                         'is_specialist': getattr(veterinario, 'id', None) in specialist_ids
                         and getattr(veterinario, 'id', None) not in clinic_vet_ids,
+                        'clinic_ids': _vet_clinic_ids(veterinario),
                     }
                 ]
             if request.method == 'GET':

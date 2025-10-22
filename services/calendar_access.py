@@ -22,6 +22,7 @@ class CalendarAccessScope:
 
     clinic_ids: Optional[Set[int]] = field(default=None)
     veterinarian_ids: Optional[Set[int]] = field(default=None)
+    full_access_clinic_ids: Optional[Set[int]] = field(default=None)
 
     def allows_all_clinics(self) -> bool:
         return self.clinic_ids is None
@@ -49,11 +50,69 @@ class CalendarAccessScope:
         except (TypeError, ValueError):
             return None
 
+    def _collect_vet_clinic_ids(self, vet: VetLike) -> Set[int]:
+        clinic_ids: Set[int] = set()
+        if vet is None:
+            return clinic_ids
+        if isinstance(vet, dict):
+            candidate_ids = vet.get("clinic_ids") or []
+            if isinstance(candidate_ids, (list, tuple, set)):
+                for clinic_id in candidate_ids:
+                    try:
+                        clinic_ids.add(int(clinic_id))
+                    except (TypeError, ValueError):
+                        continue
+            return clinic_ids
+
+        primary_clinic_id = getattr(vet, "clinica_id", None) or getattr(
+            vet, "clinic_id", None
+        )
+        if primary_clinic_id is not None:
+            try:
+                clinic_ids.add(int(primary_clinic_id))
+            except (TypeError, ValueError):
+                pass
+
+        primary_clinic = getattr(vet, "clinica", None)
+        if primary_clinic is not None:
+            clinic_id = getattr(primary_clinic, "id", None)
+            if clinic_id is not None:
+                try:
+                    clinic_ids.add(int(clinic_id))
+                except (TypeError, ValueError):
+                    pass
+
+        associated_clinics = getattr(vet, "clinicas", None) or []
+        for clinic in associated_clinics:
+            clinic_id = getattr(clinic, "id", None)
+            if clinic_id is None:
+                continue
+            try:
+                clinic_ids.add(int(clinic_id))
+            except (TypeError, ValueError):
+                continue
+
+        return clinic_ids
+
     def allows_veterinarian(self, vet: VetLike) -> bool:
         vet_id = self._normalize_vet_id(vet)
-        if vet_id is None or self.veterinarian_ids is None:
+        if vet_id is None:
             return True
-        return vet_id in self.veterinarian_ids
+        if self.veterinarian_ids is None:
+            return True
+        if vet_id in self.veterinarian_ids:
+            return True
+
+        full_access_clinic_ids = self.full_access_clinic_ids
+        if full_access_clinic_ids is None:
+            return True
+        if not full_access_clinic_ids:
+            return False
+
+        vet_clinic_ids = self._collect_vet_clinic_ids(vet)
+        if not vet_clinic_ids:
+            return False
+        return any(clinic_id in full_access_clinic_ids for clinic_id in vet_clinic_ids)
 
     def allows_clinic(self, clinic_id: Optional[int]) -> bool:
         if clinic_id is None or self.clinic_ids is None:
@@ -80,6 +139,11 @@ class CalendarAccessScope:
             seen.add(normalized)
             result.append(normalized)
         return result
+
+    def get_veterinarian_clinic_ids(self, vet: VetLike) -> List[int]:
+        """Return a sorted list of clinic IDs associated with ``vet``."""
+
+        return sorted(self._collect_vet_clinic_ids(vet))
 
 
 def _user_is_authenticated(user: object) -> bool:
@@ -123,14 +187,17 @@ def get_calendar_access_scope(user: object) -> CalendarAccessScope:
             continue
         memberships_by_clinic.setdefault(int(clinic_id), []).append(membership)
 
+    unrestricted_clinic_ids: Set[int] = set(owned_clinic_ids)
     restricted_memberships = []
     for clinic_id, memberships in memberships_by_clinic.items():
         if clinic_id in owned_clinic_ids:
+            unrestricted_clinic_ids.add(clinic_id)
             continue
         # If any membership grants full calendar access for the clinic we treat
         # the clinic as unrestricted, even if stale duplicate rows still exist
         # with the flag disabled.
         if any(getattr(m, "can_view_full_calendar", False) for m in memberships):
+            unrestricted_clinic_ids.add(clinic_id)
             continue
         restricted_memberships.extend(memberships)
 
@@ -168,7 +235,18 @@ def get_calendar_access_scope(user: object) -> CalendarAccessScope:
     else:
         veterinarian_scope = {vet_id}
 
+    full_access_clinic_ids: Optional[Set[int]]
+    if veterinarian_scope is None:
+        full_access_clinic_ids = None
+    else:
+        full_access_clinic_ids = unrestricted_clinic_ids - {
+            membership.clinic_id
+            for membership in restricted_memberships
+            if membership.clinic_id is not None
+        }
+
     return CalendarAccessScope(
         clinic_ids=clinic_scope or None,
         veterinarian_ids=veterinarian_scope,
+        full_access_clinic_ids=full_access_clinic_ids,
     )
