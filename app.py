@@ -5308,7 +5308,22 @@ def update_tutor(user_id):
 
     message = 'Dados do tutor atualizados com sucesso!'
     if wants_json:
-        return jsonify(success=True, message=message, tutor_name=user.name, category='success')
+        tutor_payload = {
+            'id': user.id,
+            'name': user.name,
+            'profile_photo': user.profile_photo,
+            'photo_offset_x': user.photo_offset_x,
+            'photo_offset_y': user.photo_offset_y,
+            'photo_rotation': user.photo_rotation,
+            'photo_zoom': user.photo_zoom,
+        }
+        return jsonify(
+            success=True,
+            message=message,
+            tutor_name=user.name,
+            tutor=tutor_payload,
+            category='success'
+        )
     flash(message, 'success')
     return redirect(request.referrer or url_for('index'))
 
