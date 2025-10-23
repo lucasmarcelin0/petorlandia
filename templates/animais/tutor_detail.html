@@ -108,7 +108,7 @@
 
         <div class="col-12 d-grid">
 
-          <button class="btn btn-primary">💾 Salvar Alterações</button>
+          <button class="btn btn-primary" data-loading-text="Salvando..." data-success-text="Alterações salvas!">💾 Salvar Alterações</button>
         </div>
       </form>
     </div>
@@ -565,26 +565,57 @@ document.addEventListener('DOMContentLoaded', () => {
   document.querySelectorAll('form[data-sync]').forEach(form => {
     form.addEventListener('submit', () => {
       const btn = form.querySelector('button[type="submit"]');
-      if (btn && !btn.querySelector('.spinner-border')) {
-        const sp = document.createElement('span');
-        sp.className = 'spinner-border spinner-border-sm ms-2';
-        sp.setAttribute('role', 'status');
-        btn.appendChild(sp);
-        btn.disabled = true;
+      if (!btn) return;
+
+      if (!btn.dataset.originalHtml) {
+        btn.dataset.originalHtml = btn.innerHTML;
       }
+
+      const loadingText = btn.dataset.loadingText || 'Salvando...';
+
+      btn.disabled = true;
+      btn.innerHTML = `
+        <span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+        <span>${loadingText}</span>
+      `;
     });
   });
 });
 
 document.addEventListener('form-sync-success', function(ev) {
-  const {form, data} = ev.detail || {};
+  const {form, data, response} = ev.detail || {};
   if (!form) return;
 
   const btn = form.querySelector('button[type="submit"]');
   if (btn) {
-    btn.querySelector('.spinner-border')?.remove();
-    btn.disabled = false;
-  }
+    const hadError = (data && data.success === false) || (response && !response.ok);
+    if (hadError) {
+      btn.disabled = false;
+      if (btn.dataset.resetTimeout) {
+        clearTimeout(Number(btn.dataset.resetTimeout));
+        delete btn.dataset.resetTimeout;
+      }
+      btn.innerHTML = btn.dataset.originalHtml || btn.innerHTML;
+    } else {
+      btn.disabled = false;
+      const successText = btn.dataset.successText || 'Salvo!';
+        btn.innerHTML = `
+          <span class="me-2">✅</span>
+          <span>${successText}</span>
+        `;
+
+        if (btn.dataset.resetTimeout) {
+          clearTimeout(Number(btn.dataset.resetTimeout));
+        }
+
+        const timeoutId = window.setTimeout(() => {
+          btn.innerHTML = btn.dataset.originalHtml || btn.innerHTML;
+          delete btn.dataset.resetTimeout;
+        }, 2000);
+
+        btn.dataset.resetTimeout = String(timeoutId);
+      }
+    }
 
 
   if (form.id === 'tutor-form') {
