@@ -1134,7 +1134,13 @@
                 compact=True,
                 tutores_adicionados=vet_tutores_adicionados,
                 pagination=vet_tutores_pagination,
-                scope=vet_tutores_scope
+                scope=vet_tutores_scope,
+                scope_param='tutor_scope',
+                search_param='tutor_search',
+                sort_param='tutor_sort',
+                page_param='tutor_page',
+                tutor_search=vet_tutor_search,
+                tutor_sort=vet_tutor_sort
               %}
                 {% include 'partials/tutores_adicionados.html' %}
               {% endwith %}
@@ -1151,7 +1157,9 @@
               <div class="card-body p-4 p-lg-5 d-flex flex-column h-100">
                 {% with animais_adicionados=vet_animais_adicionados,
                         pagination=vet_animais_pagination,
-                        scope=vet_animais_scope %}
+                        scope=vet_animais_scope,
+                        animal_search=vet_animal_search,
+                        animal_sort=vet_animal_sort %}
                   {% include 'partials/novo_pet_panel.html' %}
                 {% endwith %}
               </div>
