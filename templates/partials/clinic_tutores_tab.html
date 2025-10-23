@@ -1,1 +1,3 @@
-{% include 'partials/tutores_adicionados.html' %}
+{% with fetch_url=url_for('tutores') %}
+  {% include 'partials/tutores_adicionados.html' %}
+{% endwith %}

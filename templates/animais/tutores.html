@@ -13,7 +13,7 @@
   <div class="row g-4 mt-1">
     <div class="col-12">
       <div id="tutores-adicionados">
-        {% with compact=True %}
+        {% with compact=True, fetch_url=url_for('tutores') %}
           {% include 'partials/tutores_adicionados.html' %}
         {% endwith %}
       </div>
