@@ -8,10 +8,11 @@
 {% set current_search = animal_search if animal_search is defined else request.args.get(search_param, '') %}
 {% set current_sort = animal_sort if animal_sort is defined else request.args.get(sort_param, 'date_desc') %}
 {% set current_page = pagination.page if pagination else request.args.get(page_param, 1, type=int) %}
+{% set fetch_url = fetch_url|default(url_for('novo_animal')) %}
 {% set card_block %}
 <div class="card shadow-sm border-0 rounded-4 h-100 d-flex flex-column"
      data-listing-panel="animals"
-     data-fetch-url="{{ request.path }}"
+     data-fetch-url="{{ fetch_url }}"
      data-scope="{{ current_scope }}"
      data-page="{{ current_page }}"
      data-scope-param="{{ scope_param }}"

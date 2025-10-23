@@ -3,6 +3,7 @@
 {% set search_param = search_param|default('tutor_search') %}
 {% set sort_param = sort_param|default('tutor_sort') %}
 {% set page_param = page_param|default('page') %}
+{% set fetch_url = fetch_url|default(url_for('tutores')) %}
 {% set current_scope = scope|default('all') %}
 {% set current_search = tutor_search if tutor_search is defined else request.args.get(search_param, '') %}
 {% set current_sort = tutor_sort if tutor_sort is defined else request.args.get(sort_param, 'name_asc') %}
@@ -10,7 +11,7 @@
 {% macro render_card_block() %}
 <div class="card shadow-sm border-0 rounded-4 h-100 d-flex flex-column"
      data-listing-panel="tutors"
-     data-fetch-url="{{ request.path }}"
+     data-fetch-url="{{ fetch_url }}"
      data-scope="{{ current_scope }}"
      data-page="{{ current_page }}"
      data-scope-param="{{ scope_param }}"

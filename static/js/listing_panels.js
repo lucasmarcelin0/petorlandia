@@ -211,6 +211,7 @@
           Accept: 'application/json',
           'X-Requested-With': 'XMLHttpRequest',
         },
+        credentials: 'same-origin',
         signal: controller.signal,
       });
     } catch (error) {

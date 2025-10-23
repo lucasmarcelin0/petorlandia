@@ -5068,6 +5068,8 @@ def tutores():
                 search_param='tutor_search',
                 sort_param='tutor_sort',
                 page_param=request.args.get('page_param', 'page'),
+                fetch_url=url_for('tutores'),
+                compact=True,
             )
             return jsonify(
                 message='Tutor criado com sucesso!',
@@ -5110,6 +5112,8 @@ def tutores():
             search_param='tutor_search',
             sort_param='tutor_sort',
             page_param=request.args.get('page_param', 'page'),
+            fetch_url=url_for('tutores'),
+            compact=True,
         )
         return jsonify(html=html, scope=resolved_scope)
 
@@ -7062,6 +7066,8 @@ def novo_animal():
                 search_param='animal_search',
                 sort_param='animal_sort',
                 page_param=request.args.get('page_param', 'page'),
+                fetch_url=url_for('novo_animal'),
+                compact=True,
             )
             return jsonify(
                 message='Animal cadastrado com sucesso!',
@@ -7104,6 +7110,8 @@ def novo_animal():
             search_param='animal_search',
             sort_param='animal_sort',
             page_param=request.args.get('page_param', 'page'),
+            fetch_url=url_for('novo_animal'),
+            compact=True,
         )
         return jsonify(html=html, scope=scope)
 

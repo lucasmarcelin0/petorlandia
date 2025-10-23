@@ -1,1 +1,3 @@
-{% include 'partials/animais_adicionados.html' %}
+{% with fetch_url=url_for('novo_animal') %}
+  {% include 'partials/animais_adicionados.html' %}
+{% endwith %}
