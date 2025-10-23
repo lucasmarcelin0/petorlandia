@@ -7,7 +7,7 @@
 {% set current_search = tutor_search if tutor_search is defined else request.args.get(search_param, '') %}
 {% set current_sort = tutor_sort if tutor_sort is defined else request.args.get(sort_param, 'name_asc') %}
 {% set current_page = pagination.page if pagination else request.args.get(page_param, 1, type=int) %}
-{% set card_block %}
+{% macro render_card_block() %}
 <div class="card shadow-sm border-0 rounded-4 h-100 d-flex flex-column"
      data-listing-panel="tutors"
      data-fetch-url="{{ request.path }}"
@@ -172,15 +172,15 @@
   </div>
   {% endif %}
 </div>
-{% endset %}
+{% endmacro %}
 
 {% if compact %}
-  {{ card_block }}
+  {{ render_card_block() }}
 {% else %}
 <div class="container my-5">
   <div class="row justify-content-center">
     <div class="col-lg-10 col-xl-9">
-      {{ card_block }}
+      {{ render_card_block() }}
     </div>
   </div>
 </div>
