@@ -1,5 +1,77 @@
 (function(){
   const KEY = 'offline-queue';
+  const BUTTON_RESET_DELAY = 2000;
+
+  function getSubmitButton(form){
+    if(!form) return null;
+    return form.querySelector('button[type="submit"], button:not([type])');
+  }
+
+  function clearButtonTimer(button){
+    if(!button || !button.dataset.resetTimer) return;
+    clearTimeout(Number(button.dataset.resetTimer));
+    delete button.dataset.resetTimer;
+  }
+
+  function ensureOriginalLabel(button){
+    if(!button) return;
+    if(!button.dataset.original){
+      button.dataset.original = button.innerHTML;
+    }
+  }
+
+  function setButtonLoading(button){
+    if(!button) return;
+    ensureOriginalLabel(button);
+    clearButtonTimer(button);
+    if(button.dataset.loadingText){
+      button.innerHTML = button.dataset.loadingText;
+    }
+    button.disabled = true;
+    button.classList.add('is-loading');
+  }
+
+  function setButtonIdle(button){
+    if(!button) return;
+    clearButtonTimer(button);
+    button.disabled = false;
+    button.classList.remove('is-loading');
+    if(button.dataset.original){
+      button.innerHTML = button.dataset.original;
+    }
+  }
+
+  function setButtonSuccess(button){
+    if(!button) return;
+    ensureOriginalLabel(button);
+    clearButtonTimer(button);
+    button.disabled = false;
+    button.classList.remove('is-loading');
+    const successText = button.dataset.successText;
+    if(successText){
+      button.innerHTML = successText;
+      const delay = Number(button.dataset.successDelay || BUTTON_RESET_DELAY);
+      const timer = setTimeout(() => {
+        if(button.dataset.original){
+          button.innerHTML = button.dataset.original;
+        }
+        delete button.dataset.resetTimer;
+      }, Number.isFinite(delay) ? delay : BUTTON_RESET_DELAY);
+      button.dataset.resetTimer = String(timer);
+    } else if(button.dataset.original){
+      button.innerHTML = button.dataset.original;
+    }
+  }
+
+  function cacheBust(url){
+    if(!url) return url;
+    const separator = url.includes('?') ? '&' : '?';
+    return `${url}${separator}_=${Date.now()}`;
+  }
+
+  function coalesce(value, fallback){
+    return value == null ? fallback : value;
+  }
 
   // Abort fetch requests if no response within given timeout (ms)
   async function fetchWithTimeout(url, opts={}, timeout=2000){
@@ -94,6 +166,8 @@
     const form = ev.target;
     if (!form.matches('form[data-sync]')) return;
 
+    const submitButton = getSubmitButton(form);
+
     // Mensagem de confirmação para formulários de histórico
     if (form.classList.contains('delete-history-form')) {
       const msg = form.dataset.confirm || 'Excluir este registro?';
@@ -112,30 +186,50 @@
     }
 
     ev.preventDefault();
+    setButtonLoading(submitButton);
     const data = new FormData(form);
-    const resp = await window.fetchOrQueue(form.action, {method: form.method || 'POST', headers: {'Accept': 'application/json'}, body: data});
-    if (resp) {
-      let json = null;
-      try { json = await resp.json(); } catch(e) {}
-      if (json && json.message) {
-        const category = json.category || (json.success === false || !resp.ok ? 'danger' : 'success');
-        showToast(json.message, category);
-      }
-      if (json && Array.isArray(json.messages)) {
-        json.messages.forEach(entry => {
-          if (!entry) return;
-          if (typeof entry === 'string') {
-            showToast(entry, 'info');
-          } else if (entry.message) {
-            showToast(entry.message, entry.category || 'info');
-          }
-        });
-      }
-      const evt = new CustomEvent('form-sync-success', {detail: {form, data: json, response: resp}, cancelable: true});
-      document.dispatchEvent(evt);
-      if (!evt.defaultPrevented) {
-        location.reload();
-      }
+    let resp = null;
+    try {
+      resp = await window.fetchOrQueue(form.action, {method: form.method || 'POST', headers: {'Accept': 'application/json'}, body: data});
+    } catch (error) {
+      console.error('Erro ao enviar formulário:', error);
+      setButtonIdle(submitButton);
+      showToast('Não foi possível enviar o formulário. Tente novamente.', 'danger');
+      return;
+    }
+
+    if (!resp) {
+      setButtonIdle(submitButton);
+      showToast('Formulário salvo para sincronização quando voltar a ficar online.', 'info');
+      return;
+    }
+
+    let json = null;
+    try { json = await resp.json(); } catch(e) {}
+    if (json && json.message) {
+      const category = json.category || (json.success === false || !resp.ok ? 'danger' : 'success');
+      showToast(json.message, category);
+    }
+    if (json && Array.isArray(json.messages)) {
+      json.messages.forEach(entry => {
+        if (!entry) return;
+        if (typeof entry === 'string') {
+          showToast(entry, 'info');
+        } else if (entry.message) {
+          showToast(entry.message, entry.category || 'info');
+        }
+      });
+    }
+    const isSuccess = resp.ok && !(json && json.success === false);
+    if (isSuccess) {
+      setButtonSuccess(submitButton);
+    } else {
+      setButtonIdle(submitButton);
+    }
+    const evt = new CustomEvent('form-sync-success', {detail: {form, data: json, response: resp}, cancelable: true});
+    document.dispatchEvent(evt);
+    if (!evt.defaultPrevented) {
+      location.reload();
     }
   });
 
@@ -179,6 +273,39 @@
       if(btn && btn.dataset.original){
         btn.disabled=false;
         btn.innerHTML=btn.dataset.original;
+      }
+    } else if(form.id === 'tutor-form'){
+      const resp = detail.response;
+      if(!(resp && resp.ok) || (data && data.success === false)){
+        setButtonIdle(getSubmitButton(form));
+        return;
+      }
+      ev.preventDefault();
+      setButtonSuccess(getSubmitButton(form));
+      const tutor = data ? data.tutor : null;
+      if(tutor){
+        const preview = document.getElementById('preview-tutor');
+        if(preview){
+          if(tutor.profile_photo){
+            preview.src = cacheBust(tutor.profile_photo);
+            preview.classList.remove('d-none');
+          } else {
+            preview.classList.add('d-none');
+          }
+          if(typeof tutor.photo_offset_x !== 'undefined') preview.dataset.offsetX = coalesce(tutor.photo_offset_x, 0);
+          if(typeof tutor.photo_offset_y !== 'undefined') preview.dataset.offsetY = coalesce(tutor.photo_offset_y, 0);
+          if(typeof tutor.photo_rotation !== 'undefined') preview.dataset.rotation = coalesce(tutor.photo_rotation, 0);
+          if(typeof tutor.photo_zoom !== 'undefined') preview.dataset.zoom = coalesce(tutor.photo_zoom, 1);
+        }
+        const cropperPreview = document.querySelector('#profile_photo-preview img');
+        if(cropperPreview && tutor.profile_photo){
+          cropperPreview.src = cacheBust(tutor.profile_photo);
+        }
+        const animalsHeading = document.getElementById('animais-heading');
+        if(animalsHeading && tutor.name){
+          const firstName = tutor.name.trim().split(/\s+/)[0] || tutor.name.trim();
+          animalsHeading.textContent = `🐾 Animais de ${firstName}`;
+        }
       }
     } else if(form.classList.contains('js-animal-form')){
       ev.preventDefault();
