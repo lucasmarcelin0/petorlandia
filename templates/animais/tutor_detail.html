@@ -106,9 +106,11 @@
 
 
 
-        <div class="col-12 d-grid">
-
-          <button class="btn btn-primary" data-loading-text="Salvando..." data-success-text="Alterações salvas!">💾 Salvar Alterações</button>
+        <div class="col-12">
+          <div class="d-grid">
+            <button class="btn btn-primary" data-loading-text="Salvando..." data-success-text="Alterações salvas!">💾 Salvar Alterações</button>
+          </div>
+          <div class="alert alert-success mt-3 d-none form-status-message" role="alert" aria-live="polite"></div>
         </div>
       </form>
     </div>
@@ -567,6 +569,14 @@ document.addEventListener('DOMContentLoaded', () => {
       const btn = form.querySelector('button[type="submit"]');
       if (!btn) return;
 
+      const statusMessage = form.querySelector('.form-status-message');
+      if (statusMessage) {
+        statusMessage.classList.add('d-none');
+        statusMessage.textContent = '';
+        statusMessage.classList.remove('alert-danger');
+        statusMessage.classList.add('alert-success');
+      }
+
       if (!btn.dataset.originalHtml) {
         btn.dataset.originalHtml = btn.innerHTML;
       }
@@ -596,6 +606,13 @@ document.addEventListener('form-sync-success', function(ev) {
         delete btn.dataset.resetTimeout;
       }
       btn.innerHTML = btn.dataset.originalHtml || btn.innerHTML;
+      const statusMessage = form.querySelector('.form-status-message');
+      if (statusMessage) {
+        statusMessage.classList.remove('alert-success');
+        statusMessage.classList.add('alert-danger');
+        statusMessage.textContent = (data && data.message) ? data.message : 'Não foi possível salvar as alterações.';
+        statusMessage.classList.remove('d-none');
+      }
     } else {
       btn.disabled = false;
       const successText = btn.dataset.successText || 'Salvo!';
@@ -614,6 +631,13 @@ document.addEventListener('form-sync-success', function(ev) {
         }, 2000);
 
         btn.dataset.resetTimeout = String(timeoutId);
+        const statusMessage = form.querySelector('.form-status-message');
+        if (statusMessage) {
+          const message = (data && data.message) || successText;
+          statusMessage.textContent = message;
+          statusMessage.classList.remove('alert-danger', 'd-none');
+          statusMessage.classList.add('alert-success');
+        }
       }
     }
 
