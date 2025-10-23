@@ -6,6 +6,7 @@ from io import BytesIO
 from concurrent.futures import ThreadPoolExecutor
 from decimal import Decimal
 from urllib.parse import urlparse, parse_qs
+from typing import Optional, Set
 
 
 
@@ -11751,6 +11752,20 @@ def api_clinic_appointments(clinica_id):
     ensure_clinic_access(clinica_id)
     from models import User, Clinica
 
+    calendar_access_scope = get_calendar_access_scope(current_user)
+    full_calendar_clinic_ids = calendar_access_scope.full_access_clinic_ids
+    has_full_clinic_access = calendar_access_scope.allows_all_veterinarians()
+    if not has_full_clinic_access:
+        if full_calendar_clinic_ids is None:
+            has_full_clinic_access = True
+        else:
+            has_full_clinic_access = clinica_id in full_calendar_clinic_ids
+
+    allowed_veterinarian_ids: Optional[Set[int]] = None
+    if not has_full_clinic_access:
+        vet_scope = calendar_access_scope.veterinarian_ids or set()
+        allowed_veterinarian_ids = set(vet_scope)
+
     creator_filter = Appointment.creator.has(
         or_(
             User.clinica_id == clinica_id,
@@ -11770,6 +11785,14 @@ def api_clinic_appointments(clinica_id):
         .order_by(Appointment.scheduled_at)
         .all()
     )
+
+    if allowed_veterinarian_ids is not None:
+        appts = [
+            appt
+            for appt in appts
+            if getattr(appt, 'veterinario_id', None) in allowed_veterinarian_ids
+        ]
+
     events = appointments_to_events(appts)
 
     exam_query = ExamAppointment.query.outerjoin(ExamAppointment.animal)
@@ -11785,26 +11808,38 @@ def api_clinic_appointments(clinica_id):
         .order_by(ExamAppointment.scheduled_at)
         .all()
     )
+
+    if allowed_veterinarian_ids is not None:
+        exam_appointments = [
+            exam
+            for exam in exam_appointments
+            if getattr(exam, 'specialist_id', None) in allowed_veterinarian_ids
+        ]
+
     for exam in unique_items_by_id(exam_appointments):
         event = exam_to_event(exam)
         if event:
             events.append(event)
 
-    vaccine_query = Vacina.query.outerjoin(Vacina.animal)
-    vaccine_appointments = (
-        vaccine_query
-        .filter(
-            Animal.clinica_id == clinica_id,
-            Vacina.aplicada_em.isnot(None),
-            Vacina.aplicada_em >= date.today(),
+    vaccine_events: list[dict] = []
+    if has_full_clinic_access:
+        vaccine_query = Vacina.query.outerjoin(Vacina.animal)
+        vaccine_appointments = (
+            vaccine_query
+            .filter(
+                Animal.clinica_id == clinica_id,
+                Vacina.aplicada_em.isnot(None),
+                Vacina.aplicada_em >= date.today(),
+            )
+            .order_by(Vacina.aplicada_em)
+            .all()
         )
-        .order_by(Vacina.aplicada_em)
-        .all()
-    )
-    for vaccine in unique_items_by_id(vaccine_appointments):
-        event = vaccine_to_event(vaccine)
-        if event:
-            events.append(event)
+        for vaccine in unique_items_by_id(vaccine_appointments):
+            event = vaccine_to_event(vaccine)
+            if event:
+                vaccine_events.append(event)
+
+    events.extend(vaccine_events)
 
     return jsonify(events)
 
