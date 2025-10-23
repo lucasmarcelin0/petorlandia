@@ -37,21 +37,60 @@
       {% if tutores_adicionados %}
         {% for tutor in tutores_adicionados %}
         <div class="col-md-6 d-flex" data-name="{{ tutor.name|lower }}" data-date="{{ tutor.created_at.isoformat() if tutor.created_at else '' }}" data-cpf="{{ tutor.cpf or '' }}" data-phone="{{ tutor.phone or '' }}" {% if tutor.date_of_birth %}data-dob="{{ tutor.date_of_birth.isoformat() }}"{% endif %}>
-          <div class="card shadow-sm rounded-4 h-100 flex-fill position-relative border-0">
+          <div class="card shadow-sm rounded-4 h-100 flex-fill position-relative border-0 overflow-hidden">
             {% if tutor.worker|lower == 'veterinario' %}
             <span class="badge bg-success position-absolute top-0 end-0 m-2">Veterinário</span>
             {% endif %}
-            <div class="card-body d-flex flex-column justify-content-between">
-              <div class="mb-3">
-                <h5 class="card-title mb-1">{{ tutor.name }}</h5>
-                <p class="mb-1"><strong>Email:</strong> {{ tutor.email }}</p>
+
+            <div class="profile-card-media profile-card-media--tutor" style="--offset-x: {{ tutor.photo_offset_x or 0 }}px; --offset-y: {{ tutor.photo_offset_y or 0 }}px; --rotation: {{ tutor.photo_rotation or 0 }}deg; --zoom: {{ tutor.photo_zoom or 1 }};">
+              {% if tutor.profile_photo %}
+              <img src="{{ tutor.profile_photo }}" alt="Foto de {{ tutor.name }}" class="profile-card-photo" loading="lazy">
+              {% else %}
+              <div class="profile-card-placeholder">
+                {% set initial = (tutor.name or '?') %}
+                <span>{{ initial[:1]|upper }}</span>
+              </div>
+              {% endif %}
+            </div>
+
+            <div class="card-body d-flex flex-column gap-3">
+              <div>
+                <div class="d-flex justify-content-between align-items-start mb-2">
+                  <h5 class="card-title mb-0">{{ tutor.name }}</h5>
+                  {% if tutor.created_at %}
+                  <span class="badge text-bg-light border text-muted">Desde {{ tutor.created_at.strftime('%d/%m/%Y') }}</span>
+                  {% endif %}
+                </div>
+                <p class="text-muted small mb-0">Tutor cadastrado na clínica</p>
+              </div>
+
+              <ul class="list-unstyled profile-card-details mb-0">
+                <li>
+                  <i class="fa-solid fa-envelope"></i>
+                  <span>{{ tutor.email }}</span>
+                </li>
+                {% if tutor.phone %}
+                <li>
+                  <i class="fa-solid fa-phone"></i>
+                  <span>{{ tutor.phone }}</span>
+                </li>
+                {% endif %}
                 {% if tutor.cpf %}
-                <p class="mb-1"><strong>CPF:</strong> {{ tutor.cpf }}</p>
+                <li>
+                  <i class="fa-solid fa-id-card"></i>
+                  <span>{{ tutor.cpf }}</span>
+                </li>
                 {% endif %}
                 {% if tutor.worker|lower == 'veterinario' and tutor.veterinario and tutor.veterinario.specialties %}
-                <p class="mb-0"><strong>Especialidades:</strong> {{ tutor.veterinario.specialty_list }}</p>
+                <li>
+                  <i class="fa-solid fa-stethoscope"></i>
+                  <span>{{ tutor.veterinario.specialty_list }}</span>
+                </li>
                 {% endif %}
-              </div>
+              </ul>
+            </div>
+
+            <div class="card-footer bg-white border-0 pt-0 pb-4 px-4 mt-auto">
               <div class="d-flex flex-wrap gap-2">
                 <a href="{{ url_for('ficha_tutor', tutor_id=tutor.id) }}" class="btn btn-sm btn-outline-dark flex-fill">📋 Ver Ficha</a>
                 {% if tutor.worker|lower == 'veterinario' and tutor.veterinario %}
