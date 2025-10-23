@@ -296,6 +296,13 @@
           if(typeof tutor.photo_offset_y !== 'undefined') preview.dataset.offsetY = coalesce(tutor.photo_offset_y, 0);
           if(typeof tutor.photo_rotation !== 'undefined') preview.dataset.rotation = coalesce(tutor.photo_rotation, 0);
           if(typeof tutor.photo_zoom !== 'undefined') preview.dataset.zoom = coalesce(tutor.photo_zoom, 1);
+          if(typeof updateAvatarTransform === 'function'){
+            const offsetX = parseFloat(preview.dataset.offsetX) || 0;
+            const offsetY = parseFloat(preview.dataset.offsetY) || 0;
+            const rotation = parseFloat(preview.dataset.rotation) || 0;
+            const zoom = parseFloat(preview.dataset.zoom) || 1;
+            updateAvatarTransform(preview, offsetX, offsetY, rotation, zoom);
+          }
         }
         const cropperPreview = document.querySelector('#profile_photo-preview img');
         if(cropperPreview && tutor.profile_photo){
