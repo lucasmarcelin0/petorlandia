@@ -1,8 +1,16 @@
 document.addEventListener('DOMContentLoaded', () => {
   const triggers = Array.from(document.querySelectorAll('.nav-item.dropdown .dropdown-toggle'));
 
-  const closeAllDropdowns = () => {
+  if (!triggers.length || typeof bootstrap === 'undefined' || !bootstrap.Dropdown) {
+    return;
+  }
+
+  const closeOtherDropdowns = current => {
     triggers.forEach(trigger => {
+      if (trigger === current) {
+        return;
+      }
+
       const instance = bootstrap.Dropdown.getInstance(trigger);
       if (instance) {
         instance.hide();
@@ -11,24 +19,10 @@ document.addEventListener('DOMContentLoaded', () => {
   };
 
   triggers.forEach(trigger => {
-    trigger.addEventListener('click', event => {
-      event.preventDefault();
-      event.stopPropagation();
+    bootstrap.Dropdown.getOrCreateInstance(trigger);
 
-      const instance = bootstrap.Dropdown.getOrCreateInstance(trigger);
-      const isExpanded = trigger.getAttribute('aria-expanded') === 'true';
-
-      closeAllDropdowns();
-
-      if (!isExpanded) {
-        instance.show();
-      }
+    trigger.addEventListener('show.bs.dropdown', () => {
+      closeOtherDropdowns(trigger);
     });
-  });
-
-  document.addEventListener('click', event => {
-    if (!event.target.closest('.nav-item.dropdown')) {
-      closeAllDropdowns();
-    }
   });
 });
