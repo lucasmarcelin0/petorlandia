@@ -1,21 +1,19 @@
 {% extends "layout.html" %}
 {% block main %}
-<div class="container py-4">
+<div class="container py-4"
+     data-delivery-detail
+     data-status-url="{{ url_for('delivery_detail', req_id=req.id) }}"
+     data-poll-interval="15000">
 
   {# ========== Barra de resumo ========== #}
   <div class="alert alert-light shadow-sm border d-flex justify-content-between align-items-center mb-4">
     <div>
-      <strong>Pedido #{{ req.order_id }}</strong> — 
-      {{ items|length }} item{{ 's' if items|length > 1 else '' }} — 
+      <strong>Pedido #{{ req.order_id }}</strong> —
+      {{ items|length }} item{{ 's' if items|length > 1 else '' }} —
       <span class="text-success fw-bold">R$ {{ '%.2f' | format(total) }}</span>
     </div>
-    <span class="badge 
-      {% if req.status == 'pendente' %} bg-warning text-dark
-      {% elif req.status == 'em_andamento' %} bg-info
-      {% elif req.status == 'concluida' %} bg-success
-      {% elif req.status == 'cancelada' %} bg-danger
-      {% else %} bg-secondary {% endif %}">
-      {{ req.status|capitalize }}
+    <span class="badge {{ status_badge_class }}" data-status-badge>
+      {{ status_label }}
     </span>
   </div>
 
@@ -116,7 +114,7 @@
   <div class="card mb-4 shadow-sm">
     <div class="card-body">
       <h5 class="card-title">📅 Linha do Tempo</h5>
-      <ul class="list-group list-group-flush">
+      <ul class="list-group list-group-flush" data-timeline>
         <li class="list-group-item">🕐 Solicitado: {{ req.requested_at|format_datetime_brazil('%d/%m/%Y %H:%M') }}</li>
         {% if req.accepted_at %}
         <li class="list-group-item">🚚 Aceito: {{ req.accepted_at|format_datetime_brazil('%d/%m/%Y %H:%M') }}</li>
@@ -133,11 +131,15 @@
 
   {# ========== Entregador (visível para admin) ========== #}
   {% if role == 'admin' or delivery_worker %}
-  <div class="card shadow-sm">
+  <div class="card shadow-sm" data-worker-section>
     <div class="card-body">
       <h5 class="card-title">🚚 Entregador</h5>
-      <p class="mb-1 fw-bold">{{ delivery_worker.name }} (ID {{ delivery_worker.id }})</p>
-      {% if delivery_worker.email %}<p class="mb-0 text-muted">📧 {{ delivery_worker.email }}</p>{% endif %}
+      {% if delivery_worker %}
+        <p class="mb-1 fw-bold" data-worker-name>{{ delivery_worker.name }} (ID {{ delivery_worker.id }})</p>
+        {% if delivery_worker.email %}<p class="mb-0 text-muted" data-worker-email>📧 {{ delivery_worker.email }}</p>{% else %}<p class="mb-0 text-muted" data-worker-email></p>{% endif %}
+      {% else %}
+        <p class="mb-0 text-muted" data-worker-empty>Nenhum entregador atribuído.</p>
+      {% endif %}
     </div>
   </div>
   {% endif %}
@@ -156,4 +158,9 @@
   {% endif %}
 
 </div>
+{% endblock %}
+
+{% block scripts %}
+  {{ super() }}
+  <script type="module" src="{{ url_for('static', filename='js/delivery_detail.js') }}"></script>
 {% endblock %}

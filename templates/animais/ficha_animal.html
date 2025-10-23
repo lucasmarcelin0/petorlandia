@@ -1,7 +1,10 @@
 {% extends "layout.html" %}
 {% block main %}
 
-<div class="container py-4">
+<div class="container py-4"
+     data-animal-record
+     data-events-url="{{ events_url }}"
+     data-history-url="{{ history_url }}">
 
   {% if animal.removido_em %}
     <div class="alert alert-warning">
@@ -65,210 +68,39 @@
     <div class="tab-content" id="animalTabsContent">
       <div class="tab-pane fade show active" id="eventos" role="tabpanel" aria-labelledby="eventos-tab">
         <!-- PRÓXIMOS EVENTOS -->
-        <div class="card shadow-sm p-4 mb-4">
-          <h4 class="mb-3"><i class="bi bi-calendar-event text-primary me-2"></i>Próximos eventos</h4>
-
-          <h6 class="text-muted">💉 Vacinas Agendadas</h6>
-          {% if vacinas_agendadas %}
-            <ul class="list-group mb-3">
-              {% for v in vacinas_agendadas %}
-              <li class="list-group-item d-flex justify-content-between align-items-center">
-                <div>
-                  <strong>{{ v.nome }}</strong>
-                  {% if v.aplicada_em %} — {{ v.aplicada_em|format_datetime_brazil('%d/%m/%Y') }}{% endif %}
-                </div>
-              </li>
-              {% endfor %}
-            </ul>
-          {% else %}
-            <p class="text-muted">Nenhuma vacina agendada.</p>
-          {% endif %}
-
-          <h6 class="mt-3 text-muted">🔁 Retornos</h6>
-          {% if retornos %}
-            <ul class="list-group mb-3">
-              {% for r in retornos %}
-              <li class="list-group-item d-flex justify-content-between align-items-center">
-                <span>{{ r.scheduled_at|format_datetime_brazil('%d/%m/%Y %H:%M') }}</span>
-              </li>
-              {% endfor %}
-            </ul>
-          {% else %}
-            <p class="text-muted">Nenhum retorno agendado.</p>
-          {% endif %}
-
-          <h6 class="mt-3 text-muted">🧪 Exames</h6>
-          {% if exames_agendados %}
-            <ul class="list-group mb-3">
-              {% for ex in exames_agendados %}
-              <li class="list-group-item d-flex justify-content-between align-items-center">
-                <span>{{ ex.scheduled_at|format_datetime_brazil('%d/%m/%Y %H:%M') }}</span>
-                <span class="text-muted small">{{ ex.specialist.user.name }}</span>
-              </li>
-              {% endfor %}
-            </ul>
-          {% else %}
-            <p class="text-muted">Nenhum exame agendado.</p>
-          {% endif %}
+        <div class="card shadow-sm p-4 mb-4" data-events-card>
+          <div class="d-flex justify-content-between align-items-center mb-3">
+            <h4 class="mb-0"><i class="bi bi-calendar-event text-primary me-2"></i>Próximos eventos</h4>
+            <div class="spinner-border text-primary d-none" role="status" aria-hidden="true" data-events-loading></div>
+          </div>
+          <div data-events-container>
+            <p class="text-muted mb-0">Carregando próximos eventos...</p>
+          </div>
         </div>
+        <noscript>
+          <div class="alert alert-warning">Ative o JavaScript para visualizar os eventos mais recentes.</div>
+        </noscript>
       </div>
       <div class="tab-pane fade" id="historico" role="tabpanel" aria-labelledby="historico-tab">
         <!-- HISTÓRICO MÉDICO -->
-        <div class="card shadow-sm p-4 mb-4">
-          <h4 class="mb-3"><i class="bi bi-journal-medical text-success me-2"></i>Histórico Médico</h4>
-
-          <div class="accordion" id="historicoAccordion">
-
-            <!-- PRESCRIÇÕES -->
-            <div class="accordion-item">
-              <h2 class="accordion-header" id="headingPrescricoes">
-                <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapsePrescricoes" aria-expanded="false" aria-controls="collapsePrescricoes">
-                  💊 Prescrições
-                </button>
-              </h2>
-              <div id="collapsePrescricoes" class="accordion-collapse collapse" aria-labelledby="headingPrescricoes" data-bs-parent="#historicoAccordion">
-                <div class="accordion-body">
-                  {% if blocos_prescricao %}
-                    {% for bloco in blocos_prescricao[:3] %}
-                    <div class="card mb-2 shadow-sm">
-                      <div class="card-body d-flex justify-content-between align-items-center">
-                        <span class="text-dark">
-                          {{ bloco.data_criacao|format_datetime_brazil('%d/%m/%Y') }} — {{ bloco.prescricoes | length }} medicação(ões)
-                        </span>
-                        {% if current_user.worker == 'veterinario' %}
-                          <a href="{{ url_for('imprimir_bloco_prescricao', bloco_id=bloco.id) }}" class="btn btn-sm btn-outline-primary">🖨️ Imprimir</a>
-                        {% endif %}
-                      </div>
-                    </div>
-                    {% endfor %}
-                    {% if blocos_prescricao|length > 3 and 'historico_prescricoes' in current_app.view_functions %}
-                      <a href="{{ url_for('historico_prescricoes', animal_id=animal.id) }}" class="btn btn-sm btn-outline-dark">🔍 Ver todas</a>
-                    {% endif %}
-                  {% else %}
-                    <p class="text-muted">Nenhuma prescrição encontrada.</p>
-                  {% endif %}
-                </div>
-              </div>
-            </div>
-
-            <!-- EXAMES -->
-            <div class="accordion-item">
-              <h2 class="accordion-header" id="headingExames">
-                <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseExames" aria-expanded="false" aria-controls="collapseExames">
-                  🧪 Exames Solicitados
-                </button>
-              </h2>
-              <div id="collapseExames" class="accordion-collapse collapse" aria-labelledby="headingExames" data-bs-parent="#historicoAccordion">
-                <div class="accordion-body">
-                  {% if blocos_exames %}
-                    {% for bloco in blocos_exames[:3] %}
-                    <div class="card mb-2 shadow-sm">
-                      <div class="card-body d-flex justify-content-between align-items-center">
-                        <span class="text-dark">
-                          {{ bloco.data_criacao|format_datetime_brazil('%d/%m/%Y') }} — {{ bloco.exames | length }} exame(s)
-                        </span>
-                        {% if current_user.worker == 'veterinario' %}
-                          <a href="{{ url_for('imprimir_bloco_exames', bloco_id=bloco.id) }}" class="btn btn-sm btn-outline-primary">🖨️ Imprimir</a>
-                        {% endif %}
-                      </div>
-                    </div>
-                    {% endfor %}
-                    {% if blocos_exames|length > 3 and 'historico_exames' in current_app.view_functions %}
-                      <a href="{{ url_for('historico_exames', animal_id=animal.id) }}" class="btn btn-sm btn-outline-dark">🔍 Ver todas</a>
-                    {% endif %}
-                  {% else %}
-                    <p class="text-muted">Nenhum exame solicitado.</p>
-                  {% endif %}
-                </div>
-              </div>
-            </div>
-
-            <!-- CONSULTAS -->
-            <div class="accordion-item">
-              <h2 class="accordion-header" id="headingConsultas">
-                <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseConsultas" aria-expanded="false" aria-controls="collapseConsultas">
-                  📅 Consultas Veterinárias
-                </button>
-              </h2>
-              <div id="collapseConsultas" class="accordion-collapse collapse" aria-labelledby="headingConsultas" data-bs-parent="#historicoAccordion">
-                <div class="accordion-body">
-                  {% if consultas %}
-                    <ul class="list-group mb-2">
-                      {% for c in consultas[:3] %}
-                      <li class="list-group-item d-flex justify-content-between align-items-center">
-                        <span>{{ c.created_at|format_datetime_brazil('%d/%m/%Y') }}</span>
-                        <span class="text-muted small">{{ c.veterinario.name }}</span>
-                      </li>
-                      {% endfor %}
-                    </ul>
-                    {% if consultas|length > 3 and 'historico_consultas' in current_app.view_functions %}
-                      <a href="{{ url_for('historico_consultas', animal_id=animal.id) }}" class="btn btn-sm btn-outline-dark">🔍 Ver todas</a>
-                    {% endif %}
-                  {% else %}
-                    <p class="text-muted">Nenhuma consulta registrada.</p>
-                  {% endif %}
-                </div>
-              </div>
-            </div>
-
-            <!-- VACINAS -->
-            <div class="accordion-item">
-              <h2 class="accordion-header" id="headingVacinas">
-                <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseVacinas" aria-expanded="false" aria-controls="collapseVacinas">
-                  💉 Vacinas
-                </button>
-              </h2>
-              <div id="collapseVacinas" class="accordion-collapse collapse" aria-labelledby="headingVacinas" data-bs-parent="#historicoAccordion">
-                <div class="accordion-body">
-                  <h6 class="text-muted">💉 Doses Atrasadas</h6>
-                  {% if doses_atrasadas %}
-                    <ul class="list-group mb-2">
-                      {% for v in doses_atrasadas[:3] %}
-                      <li class="list-group-item d-flex justify-content-between align-items-center">
-                        <div>
-                          <strong>{{ v.nome }}</strong>
-                          {% if v.aplicada_em %} — {{ v.aplicada_em|format_datetime_brazil('%d/%m/%Y') }}{% endif %}
-                        </div>
-                      </li>
-                      {% endfor %}
-                    </ul>
-                  {% else %}
-                    <p class="text-muted">Nenhuma dose atrasada.</p>
-                  {% endif %}
-
-                  <h6 class="mt-3 text-muted">💉 Vacinas Aplicadas</h6>
-                  {% if vacinas_aplicadas %}
-                    <ul class="list-group mb-2">
-                      {% for v in vacinas_aplicadas[:3] %}
-                      <li class="list-group-item d-flex justify-content-between align-items-center">
-                        <div>
-                          <strong>{{ v.nome }}</strong> — {{ v.tipo or "Tipo não informado" }} em {{ v.aplicada_em|format_datetime_brazil('%d/%m/%Y') if v.aplicada_em else 'Data não registrada' }}
-                          {% if v.observacoes %}
-                            <br><em class="text-muted">Obs: {{ v.observacoes }}</em>
-                          {% endif %}
-                        </div>
-                      </li>
-                      {% endfor %}
-                    </ul>
-                  {% else %}
-                    <p class="text-muted">Nenhuma vacina registrada.</p>
-                  {% endif %}
-
-                  {% if (vacinas_agendadas|length > 3 or doses_atrasadas|length > 3 or vacinas_aplicadas|length > 3) and 'historico_vacinas' in current_app.view_functions %}
-                    <a href="{{ url_for('historico_vacinas', animal_id=animal.id) }}" class="btn btn-sm btn-outline-dark">🔍 Ver todas</a>
-                  {% endif %}
-                </div>
-              </div>
-            </div>
-
+        <div class="card shadow-sm p-4 mb-4" data-history-card>
+          <div class="d-flex justify-content-between align-items-center mb-3">
+            <h4 class="mb-0"><i class="bi bi-journal-medical text-success me-2"></i>Histórico Médico</h4>
+            <div class="spinner-border text-success d-none" role="status" aria-hidden="true" data-history-loading></div>
           </div>
-
-          <!-- DOCUMENTOS -->
-          <div class="mt-4">
-            {% include 'partials/documentos.html' %}
+          <div data-history-container>
+            <p class="text-muted mb-0">Selecione a aba para carregar o histórico completo.</p>
           </div>
         </div>
+        <noscript>
+          <div class="alert alert-warning">Ative o JavaScript para acessar o histórico médico.</div>
+        </noscript>
       </div>
+
+    </div>
+    <!-- DOCUMENTOS -->
+    <div class="mt-4">
+      {% include 'partials/documentos.html' %}
     </div>
   <!-- VOLTAR -->
   <h3>Ficha de {{ animal.name }}</h3>
@@ -317,5 +149,6 @@
 
 {% endblock %}
 {% block scripts %}
-  <script type="module" src="{{ url_for('static', filename='appointments_table.js') }}"></script>
+  {{ super() }}
+  <script type="module" src="{{ url_for('static', filename='js/animal_record.js') }}"></script>
 {% endblock %}

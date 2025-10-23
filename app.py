@@ -2211,34 +2211,71 @@ def mensagens_admin():
         flash('Acesso restrito.', 'danger')
         return redirect(url_for('index'))
 
+    wants_json = 'application/json' in request.headers.get('Accept', '')
+    page = max(request.args.get('page', type=int, default=1), 1)
+    per_page = request.args.get('per_page', type=int, default=10)
+    per_page = max(1, min(per_page or 10, 50))
+    kind = request.args.get('kind', 'animals')
+
     admin_ids = [u.id for u in User.query.filter_by(role='admin').all()]
 
-    all_msgs = (
-        Message.query
-        .filter((Message.sender_id.in_(admin_ids)) | (Message.receiver_id.in_(admin_ids)))
-        .order_by(Message.timestamp.desc())
-        .all()
-    )
-
-    # usuários que enviaram alguma mensagem geral para qualquer admin
-    users_contacted_admin = {
-        m.sender_id for m in all_msgs
-        if m.receiver_id in admin_ids and m.animal_id is None
-    }
-
-    latest_animais = {}
-    latest_geral = {}
-    for m in all_msgs:
-        other_id = m.sender_id if m.sender_id not in admin_ids else m.receiver_id
-        if m.animal_id:
-            if other_id not in latest_animais:
-                latest_animais[other_id] = m
+    def _build_query(target_kind):
+        query = (
+            Message.query
+            .options(
+                selectinload(Message.sender),
+                selectinload(Message.receiver),
+                selectinload(Message.animal),
+            )
+            .filter((Message.sender_id.in_(admin_ids)) | (Message.receiver_id.in_(admin_ids)))
+            .order_by(Message.timestamp.desc())
+        )
+        if target_kind == 'animals':
+            query = query.filter(Message.animal_id.isnot(None))
         else:
-            if other_id in users_contacted_admin and other_id not in latest_geral:
-                latest_geral[other_id] = m
+            query = query.filter(Message.animal_id.is_(None))
+        return query
 
-    mensagens_animais = list(latest_animais.values())
-    mensagens_gerais = list(latest_geral.values())
+    def _collect_threads(query):
+        seen = set()
+        threads = []
+        offset = 0
+        step = per_page * max(page, 2)
+        last_batch_size = 0
+        required = page * per_page
+        while len(threads) < required:
+            batch = query.offset(offset).limit(step).all()
+            last_batch_size = len(batch)
+            if not batch:
+                break
+            for message in batch:
+                other_id = (
+                    message.sender_id
+                    if message.sender_id not in admin_ids
+                    else message.receiver_id
+                )
+                key = (other_id, message.animal_id or 0)
+                if key in seen:
+                    continue
+                seen.add(key)
+                threads.append(message)
+            offset += step
+        start = (page - 1) * per_page
+        page_items = threads[start:start + per_page]
+        has_more = len(threads) > start + per_page
+        if not has_more and last_batch_size == step:
+            extra_batch = query.offset(offset).limit(per_page).all()
+            for message in extra_batch:
+                other_id = (
+                    message.sender_id
+                    if message.sender_id not in admin_ids
+                    else message.receiver_id
+                )
+                key = (other_id, message.animal_id or 0)
+                if key not in seen:
+                    has_more = True
+                    break
+        return page_items, has_more
 
     unread = (
         db.session.query(Message.sender_id, db.func.count())
@@ -2248,11 +2285,35 @@ def mensagens_admin():
     )
     unread_counts = {u[0]: u[1] for u in unread}
 
+    if wants_json:
+        query = _build_query(kind)
+        threads, has_more = _collect_threads(query)
+        html = render_template(
+            'mensagens/_admin_threads.html',
+            threads=threads,
+            unread_counts=unread_counts,
+            kind=kind,
+        )
+        next_page = page + 1 if has_more else None
+        return jsonify({
+            'success': True,
+            'html': html,
+            'next_page': next_page,
+            'kind': kind,
+            'page': page,
+        })
+
+    animais_threads, animais_has_more = _collect_threads(_build_query('animals'))
+    gerais_threads, gerais_has_more = _collect_threads(_build_query('general'))
+
     return render_template(
         'mensagens/mensagens_admin.html',
-        mensagens_animais=mensagens_animais,
-        mensagens_gerais=mensagens_gerais,
-        unread_counts=unread_counts
+        mensagens_animais=animais_threads,
+        mensagens_gerais=gerais_threads,
+        unread_counts=unread_counts,
+        animais_next=2 if animais_has_more else None,
+        gerais_next=2 if gerais_has_more else None,
+        per_page=per_page,
     )
 
 
@@ -2736,69 +2797,106 @@ def ficha_animal(animal_id):
     animal = get_animal_or_404(animal_id)
     tutor = animal.owner
 
-    consultas_query = Consulta.query.filter_by(
-        animal_id=animal.id,
-        status='finalizada',
-    )
-    if (
-        current_user.role != 'admin'
-        and current_user.worker in ['veterinario', 'colaborador']
-    ):
-        consultas_query = consultas_query.filter_by(
-            clinica_id=current_user_clinic_id()
+    wants_json = 'application/json' in request.headers.get('Accept', '')
+    section = request.args.get('section')
+
+    def _load_consultas():
+        consultas_query = Consulta.query.filter_by(
+            animal_id=animal.id,
+            status='finalizada',
         )
-    consultas = consultas_query.order_by(Consulta.created_at.desc()).all()
+        if (
+            current_user.role != 'admin'
+            and current_user.worker in ['veterinario', 'colaborador']
+        ):
+            consultas_query = consultas_query.filter_by(
+                clinica_id=current_user_clinic_id()
+            )
+        return consultas_query.order_by(Consulta.created_at.desc()).all()
 
-    blocos_prescricao = BlocoPrescricao.query.filter_by(animal_id=animal.id).all()
-    blocos_exames = BlocoExames.query.filter_by(animal_id=animal.id).all()
+    def _load_history_data():
+        consultas = _load_consultas()
+        blocos_prescricao = BlocoPrescricao.query.filter_by(
+            animal_id=animal.id
+        ).all()
+        blocos_exames = BlocoExames.query.filter_by(animal_id=animal.id).all()
+        vacinas_aplicadas = (
+            Vacina.query.filter_by(animal_id=animal.id, aplicada=True)
+            .order_by(Vacina.aplicada_em.desc())
+            .all()
+        )
+        doses_atrasadas = (
+            Vacina.query.filter_by(animal_id=animal.id, aplicada=False)
+            .filter(Vacina.aplicada_em < date.today())
+            .order_by(Vacina.aplicada_em)
+            .all()
+        )
+        return {
+            'consultas': consultas,
+            'blocos_prescricao': blocos_prescricao,
+            'blocos_exames': blocos_exames,
+            'vacinas_aplicadas': vacinas_aplicadas,
+            'doses_atrasadas': doses_atrasadas,
+        }
 
-    vacinas_aplicadas = (
-        Vacina.query.filter_by(animal_id=animal.id, aplicada=True)
-        .order_by(Vacina.aplicada_em.desc())
-        .all()
-    )
-    vacinas_agendadas = (
-        Vacina.query.filter_by(animal_id=animal.id, aplicada=False)
-        .filter(Vacina.aplicada_em >= date.today())
-        .order_by(Vacina.aplicada_em)
-        .all()
-    )
-    doses_atrasadas = (
-        Vacina.query.filter_by(animal_id=animal.id, aplicada=False)
-        .filter(Vacina.aplicada_em < date.today())
-        .order_by(Vacina.aplicada_em)
-        .all()
-    )
+    def _load_events_data():
+        now = datetime.utcnow()
+        vacinas_agendadas = (
+            Vacina.query.filter_by(animal_id=animal.id, aplicada=False)
+            .filter(Vacina.aplicada_em >= date.today())
+            .order_by(Vacina.aplicada_em)
+            .all()
+        )
+        retornos = (
+            Appointment.query.filter_by(animal_id=animal.id)
+            .filter(Appointment.scheduled_at >= now)
+            .filter(Appointment.status.in_(["scheduled", "accepted"]))
+            .filter(Appointment.consulta_id.isnot(None))
+            .order_by(Appointment.scheduled_at)
+            .all()
+        )
+        exames_agendados = (
+            ExamAppointment.query.filter_by(animal_id=animal.id)
+            .filter(ExamAppointment.scheduled_at >= now)
+            .filter(ExamAppointment.status.in_(["pending", "confirmed"]))
+            .order_by(ExamAppointment.scheduled_at)
+            .all()
+        )
+        return {
+            'vacinas_agendadas': vacinas_agendadas,
+            'retornos': retornos,
+            'exames_agendados': exames_agendados,
+        }
 
-    now = datetime.utcnow()
-    retornos = (
-        Appointment.query.filter_by(animal_id=animal.id)
-        .filter(Appointment.scheduled_at >= now)
-        .filter(Appointment.status.in_(["scheduled", "accepted"]))
-        .filter(Appointment.consulta_id.isnot(None))
-        .order_by(Appointment.scheduled_at)
-        .all()
-    )
-    exames_agendados = (
-        ExamAppointment.query.filter_by(animal_id=animal.id)
-        .filter(ExamAppointment.scheduled_at >= now)
-        .filter(ExamAppointment.status.in_(["pending", "confirmed"]))
-        .order_by(ExamAppointment.scheduled_at)
-        .all()
-    )
+    if wants_json or section:
+        current_section = section or 'events'
+        if current_section == 'events':
+            data = _load_events_data()
+            html = render_template(
+                'animais/_animal_events.html',
+                animal=animal,
+                **data,
+            )
+            return jsonify({'success': True, 'html': html, 'section': 'events'})
+        if current_section == 'history':
+            data = _load_history_data()
+            html = render_template(
+                'animais/_animal_history.html',
+                animal=animal,
+                tutor=tutor,
+                **data,
+            )
+            return jsonify({'success': True, 'html': html, 'section': 'history'})
+        return jsonify({'success': False, 'message': 'Seção inválida.'}), 400
 
+    events_url = url_for('ficha_animal', animal_id=animal.id, section='events')
+    history_url = url_for('ficha_animal', animal_id=animal.id, section='history')
     return render_template(
         'animais/ficha_animal.html',
         animal=animal,
         tutor=tutor,
-        consultas=consultas,
-        blocos_prescricao=blocos_prescricao,
-        blocos_exames=blocos_exames,
-        vacinas_aplicadas=vacinas_aplicadas,
-        vacinas_agendadas=vacinas_agendadas,
-        doses_atrasadas=doses_atrasadas,
-        retornos=retornos,
-        exames_agendados=exames_agendados,
+        events_url=events_url,
+        history_url=history_url,
     )
 @app.route('/animal/<int:animal_id>/documentos', methods=['POST'])
 @login_required
@@ -7409,6 +7507,63 @@ def delivery_detail(req_id):
     else:
         abort(403)
 
+    wants_json = 'application/json' in request.headers.get('Accept', '')
+
+    def _status_label_and_class(status):
+        mapping = {
+            'pendente': ('Pendente', 'bg-warning text-dark'),
+            'em_andamento': ('Em andamento', 'bg-info'),
+            'concluida': ('Concluída', 'bg-success'),
+            'cancelada': ('Cancelada', 'bg-danger'),
+        }
+        return mapping.get(status, (status.capitalize(), 'bg-secondary'))
+
+    if wants_json:
+        label, badge_class = _status_label_and_class(req.status or '')
+        timeline = []
+        if req.requested_at:
+            timeline.append({
+                'key': 'requested_at',
+                'label': 'Solicitado',
+                'timestamp': format_datetime_brazil(req.requested_at),
+            })
+        if req.accepted_at:
+            timeline.append({
+                'key': 'accepted_at',
+                'label': 'Aceito',
+                'timestamp': format_datetime_brazil(req.accepted_at),
+            })
+        if req.completed_at:
+            timeline.append({
+                'key': 'completed_at',
+                'label': 'Concluído',
+                'timestamp': format_datetime_brazil(req.completed_at),
+            })
+        if req.canceled_at:
+            timeline.append({
+                'key': 'canceled_at',
+                'label': 'Cancelado',
+                'timestamp': format_datetime_brazil(req.canceled_at),
+                'is_cancel': True,
+            })
+        worker_data = None
+        if req.worker:
+            worker_data = {
+                'id': req.worker.id,
+                'name': req.worker.name,
+                'email': req.worker.email,
+            }
+        return jsonify({
+            'success': True,
+            'status': req.status,
+            'status_label': label,
+            'badge_class': badge_class,
+            'timeline': timeline,
+            'worker': worker_data,
+        })
+
+    label, badge_class = _status_label_and_class(req.status or '')
+
     return render_template(
         "entregas/delivery_detail.html",
         req=req,
@@ -7418,6 +7573,8 @@ def delivery_detail(req_id):
         delivery_worker=req.worker,
         total=total,
         role=role,
+        status_label=label,
+        status_badge_class=badge_class,
     )
 
 
@@ -10552,15 +10709,46 @@ def manage_appointments():
     if current_user.role != 'admin' and not (is_vet or is_collaborator):
         flash('Acesso restrito.', 'danger')
         return redirect(url_for('index'))
+
+    wants_json = 'application/json' in request.headers.get('Accept', '')
+    page = max(request.args.get('page', type=int, default=1), 1)
+    per_page = request.args.get('per_page', type=int, default=20)
+    per_page = max(1, min(per_page or 20, 100))
+
     query = Appointment.query.order_by(Appointment.scheduled_at)
     if current_user.role != 'admin':
         if is_vet:
             query = query.filter_by(clinica_id=current_user.veterinario.clinica_id)
         elif is_collaborator:
             query = query.filter_by(clinica_id=current_user.clinica_id)
-    appointments = query.all()
+
+    pagination = query.paginate(page=page, per_page=per_page, error_out=False)
+    appointments = pagination.items
+
+    if wants_json:
+        delete_form = AppointmentDeleteForm()
+        items_html = render_template(
+            'agendamentos/_appointments_admin_items.html',
+            appointments=appointments,
+            delete_form=delete_form,
+        )
+        next_page = pagination.next_num if pagination.has_next else None
+        return jsonify({
+            'success': True,
+            'html': items_html,
+            'next_page': next_page,
+            'page': page,
+        })
+
     delete_form = AppointmentDeleteForm()
-    return render_template('agendamentos/appointments_admin.html', appointments=appointments, delete_form=delete_form)
+    next_page = pagination.next_num if pagination.has_next else None
+    return render_template(
+        'agendamentos/appointments_admin.html',
+        appointments=appointments,
+        delete_form=delete_form,
+        next_page=next_page,
+        per_page=per_page,
+    )
 
 
 @app.route('/appointments/<int:appointment_id>/edit', methods=['GET', 'POST'])
@@ -10761,6 +10949,7 @@ def update_appointment_status(appointment_id):
 def delete_appointment(appointment_id):
     appointment = Appointment.query.get_or_404(appointment_id)
 
+    wants_json = 'application/json' in request.headers.get('Accept', '')
     is_vet = is_veterinarian(current_user)
     is_collaborator = getattr(current_user, 'worker', None) == 'colaborador'
 
@@ -10781,9 +10970,22 @@ def delete_appointment(appointment_id):
             abort(403)
     else:
         abort(403)
-    db.session.delete(appointment)
-    db.session.commit()
-    flash('Agendamento removido.', 'success')
+    try:
+        db.session.delete(appointment)
+        db.session.commit()
+    except SQLAlchemyError:
+        db.session.rollback()
+        message = 'Não foi possível remover o agendamento.'
+        if wants_json:
+            return jsonify({'success': False, 'message': message}), 500
+        flash(message, 'danger')
+        return redirect(request.referrer or url_for('manage_appointments'))
+
+    message = 'Agendamento removido.'
+    if wants_json:
+        return jsonify({'success': True, 'message': message, 'appointment_id': appointment_id})
+
+    flash(message, 'success')
     return redirect(request.referrer or url_for('manage_appointments'))
 
 
