@@ -1,0 +1,34 @@
+{% for msg in threads %}
+  {% set other_user = msg.sender if msg.sender_id != current_user.id else msg.receiver %}
+  {% set animal = msg.animal if kind == 'animals' else None %}
+  {% set thread_key = other_user.id ~ '-' ~ (animal.id if animal else 0) %}
+  <li class="list-group-item d-flex justify-content-between align-items-center" data-thread-key="{{ thread_key }}">
+    <div class="d-flex align-items-center">
+      {% if other_user and other_user.profile_photo %}
+        <img src="{{ other_user.profile_photo }}" alt="Foto" class="avatar me-3" width="50" height="50">
+      {% else %}
+        <div class="rounded-circle bg-secondary me-3 d-flex justify-content-center align-items-center" style="width:50px;height:50px;color:white;">
+          {{ other_user.name[0] if other_user and other_user.name else '?' }}
+        </div>
+      {% endif %}
+      <div>
+        <strong>{{ other_user.name if other_user else 'Usuário desconhecido' }}</strong><br>
+        {% if animal %}
+          <small class="text-muted">Sobre o animal: {{ animal.name }}</small><br>
+        {% endif %}
+        <small class="text-muted">{{ msg.timestamp|format_datetime_brazil('%d/%m/%Y %H:%M') }}</small>
+      </div>
+    </div>
+    {% if kind == 'animals' and animal %}
+      {% set conversation_url = url_for('conversa', animal_id=animal.id, user_id=other_user.id) %}
+    {% else %}
+      {% set conversation_url = url_for('conversa_admin', user_id=other_user.id) %}
+    {% endif %}
+    <a href="{{ conversation_url }}" class="btn btn-outline-primary btn-sm">
+      Ver Conversa
+      {% if other_user and unread_counts.get(other_user.id) %}
+        <span class="badge bg-danger ms-2">{{ unread_counts[other_user.id] }}</span>
+      {% endif %}
+    </a>
+  </li>
+{% endfor %}
