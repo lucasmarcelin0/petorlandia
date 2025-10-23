@@ -1,6 +1,24 @@
 {% set compact = compact|default(False) %}
+{% set scope_param = scope_param|default('scope') %}
+{% set search_param = search_param|default('tutor_search') %}
+{% set sort_param = sort_param|default('tutor_sort') %}
+{% set page_param = page_param|default('page') %}
+{% set current_scope = scope|default('all') %}
+{% set current_search = tutor_search if tutor_search is defined else request.args.get(search_param, '') %}
+{% set current_sort = tutor_sort if tutor_sort is defined else request.args.get(sort_param, 'name_asc') %}
+{% set current_page = pagination.page if pagination else request.args.get(page_param, 1, type=int) %}
 {% set card_block %}
-<div class="card shadow-sm border-0 rounded-4 h-100 d-flex flex-column">
+<div class="card shadow-sm border-0 rounded-4 h-100 d-flex flex-column"
+     data-listing-panel="tutors"
+     data-fetch-url="{{ request.path }}"
+     data-scope="{{ current_scope }}"
+     data-page="{{ current_page }}"
+     data-scope-param="{{ scope_param }}"
+     data-search-param="{{ search_param }}"
+     data-sort-param="{{ sort_param }}"
+     data-page-param="{{ page_param }}"
+     data-storage-key="tutor"
+     data-default-sort="name_asc">
   <div class="card-header bg-white border-0 pb-0">
     <div class="d-flex justify-content-between align-items-start flex-wrap gap-2">
       <div>
@@ -9,8 +27,12 @@
       </div>
       {% if scope is defined %}
       <div class="btn-group btn-group-sm">
-        <a href="{{ url_for('tutores', scope='all') }}" class="btn btn-outline-primary {% if scope != 'mine' %}active{% endif %}">Todos</a>
-        <a href="{{ url_for('tutores', scope='mine') }}" class="btn btn-outline-primary {% if scope == 'mine' %}active{% endif %}">Meus</a>
+        <a href="{{ url_for('tutores', scope='all') }}"
+           class="btn btn-outline-primary {% if current_scope != 'mine' %}active{% endif %}"
+           data-scope-value="all">Todos</a>
+        <a href="{{ url_for('tutores', scope='mine') }}"
+           class="btn btn-outline-primary {% if current_scope == 'mine' %}active{% endif %}"
+           data-scope-value="mine">Meus</a>
       </div>
       {% endif %}
     </div>
@@ -19,17 +41,17 @@
     <div class="row g-3 align-items-end mb-4">
       <div class="col-12 col-lg-7">
         <label for="tutor-filter" class="form-label small text-muted mb-1">Buscar</label>
-        <input type="text" id="tutor-filter" class="form-control" placeholder="Buscar por nome, CPF, telefone...">
+        <input type="text" id="tutor-filter" class="form-control" placeholder="Buscar por nome, CPF, telefone..." value="{{ current_search }}">
       </div>
       <div class="col-12 col-lg-5">
         <label for="tutor-sort" class="form-label small text-muted mb-1">Ordenar por</label>
         <select id="tutor-sort" class="form-select">
-          <option value="name_asc">Nome (A-Z)</option>
-          <option value="name_desc">Nome (Z-A)</option>
-          <option value="date_desc">Data (recentes)</option>
-          <option value="date_asc">Data (antigos)</option>
-          <option value="age_desc">Idade (maior)</option>
-          <option value="age_asc">Idade (menor)</option>
+          <option value="name_asc" {% if current_sort == 'name_asc' %}selected{% endif %}>Nome (A-Z)</option>
+          <option value="name_desc" {% if current_sort == 'name_desc' %}selected{% endif %}>Nome (Z-A)</option>
+          <option value="date_desc" {% if current_sort == 'date_desc' %}selected{% endif %}>Data (recentes)</option>
+          <option value="date_asc" {% if current_sort == 'date_asc' %}selected{% endif %}>Data (antigos)</option>
+          <option value="age_desc" {% if current_sort == 'age_desc' %}selected{% endif %}>Idade (maior)</option>
+          <option value="age_asc" {% if current_sort == 'age_asc' %}selected{% endif %}>Idade (menor)</option>
         </select>
       </div>
     </div>
@@ -110,14 +132,15 @@
       {% endif %}
     </div>
   </div>
-  {% if pagination and pagination.pages > 1 %}
-  <div class="card-footer bg-white border-0 pt-0">
+  <div class="card-footer bg-white border-0 pt-0 {% if not pagination or pagination.pages <= 1 %}d-none{% endif %}"
+       data-tutor-pagination-container>
+    {% if pagination and pagination.pages > 1 %}
     <div class="d-flex justify-content-center">
-      <nav>
+      <nav data-tutor-pagination>
         <ul class="pagination mb-0">
           {% if pagination.has_prev %}
           <li class="page-item">
-            <a class="page-link" href="{{ url_for('tutores', page=pagination.prev_num, scope=scope) }}">Anterior</a>
+            <a class="page-link" href="{{ url_for('tutores', page=pagination.prev_num, scope=current_scope) }}" data-page="{{ pagination.prev_num }}">Anterior</a>
           </li>
           {% else %}
           <li class="page-item disabled"><span class="page-link">Anterior</span></li>
@@ -128,7 +151,7 @@
               {% if page_num == pagination.page %}
                 <li class="page-item active"><span class="page-link">{{ page_num }}</span></li>
               {% else %}
-                <li class="page-item"><a class="page-link" href="{{ url_for('tutores', page=page_num, scope=scope) }}">{{ page_num }}</a></li>
+                <li class="page-item"><a class="page-link" href="{{ url_for('tutores', page=page_num, scope=current_scope) }}" data-page="{{ page_num }}">{{ page_num }}</a></li>
               {% endif %}
             {% else %}
               <li class="page-item disabled"><span class="page-link">…</span></li>
@@ -137,7 +160,7 @@
 
           {% if pagination.has_next %}
           <li class="page-item">
-            <a class="page-link" href="{{ url_for('tutores', page=pagination.next_num, scope=scope) }}">Próxima</a>
+            <a class="page-link" href="{{ url_for('tutores', page=pagination.next_num, scope=current_scope) }}" data-page="{{ pagination.next_num }}">Próxima</a>
           </li>
           {% else %}
           <li class="page-item disabled"><span class="page-link">Próxima</span></li>
@@ -145,6 +168,7 @@
         </ul>
       </nav>
     </div>
+    {% endif %}
   </div>
   {% endif %}
 </div>
@@ -162,83 +186,3 @@
 </div>
 {% endif %}
 
-<script>
-(function() {
-  const filterInput = document.getElementById('tutor-filter');
-  const sortSelect = document.getElementById('tutor-sort');
-  const container = document.getElementById('tutor-cards');
-
-  if (!filterInput || !sortSelect || !container) {
-    return;
-  }
-
-  const cards = Array.from(container.querySelectorAll('[data-name]'));
-  const sortStorageKey = 'tutorSortPreference';
-  const filterStorageKey = 'tutorFilterPreference';
-
-  const savedFilter = localStorage.getItem(filterStorageKey);
-  if (savedFilter !== null) {
-    filterInput.value = savedFilter;
-  }
-
-  const savedSort = localStorage.getItem(sortStorageKey);
-  if (savedSort && Array.from(sortSelect.options).some(option => option.value === savedSort)) {
-    sortSelect.value = savedSort;
-  }
-
-  function getAge(card) {
-    if (!card.dataset.dob) return 0;
-    const diff = Date.now() - new Date(card.dataset.dob).getTime();
-    return Math.floor(diff / (365.25 * 24 * 60 * 60 * 1000));
-  }
-
-  function applyFilter() {
-    const term = filterInput.value.toLowerCase();
-    cards.forEach(card => {
-      const text = card.textContent.toLowerCase();
-      const cpf = (card.dataset.cpf || '').toLowerCase();
-      const phone = (card.dataset.phone || '').toLowerCase();
-      card.style.display = (text.includes(term) || cpf.includes(term) || phone.includes(term)) ? '' : 'none';
-    });
-  }
-
-  function applySort() {
-    const value = sortSelect.value;
-    const visible = cards.filter(card => card.style.display !== 'none');
-    const hidden = cards.filter(card => card.style.display === 'none');
-    visible.sort((a, b) => {
-      switch (value) {
-        case 'name_desc':
-          return b.dataset.name.localeCompare(a.dataset.name);
-        case 'date_asc':
-          return new Date(a.dataset.date) - new Date(b.dataset.date);
-        case 'date_desc':
-          return new Date(b.dataset.date) - new Date(a.dataset.date);
-        case 'age_asc':
-          return getAge(a) - getAge(b);
-        case 'age_desc':
-          return getAge(b) - getAge(a);
-        case 'name_asc':
-        default:
-          return a.dataset.name.localeCompare(b.dataset.name);
-      }
-    });
-    visible.forEach(card => container.appendChild(card));
-    hidden.forEach(card => container.appendChild(card));
-  }
-
-  filterInput.addEventListener('input', () => {
-    localStorage.setItem(filterStorageKey, filterInput.value);
-    applyFilter();
-    applySort();
-  });
-
-  sortSelect.addEventListener('change', () => {
-    localStorage.setItem(sortStorageKey, sortSelect.value);
-    applySort();
-  });
-
-  applyFilter();
-  applySort();
-})();
-</script>

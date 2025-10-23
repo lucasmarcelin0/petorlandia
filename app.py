@@ -37,7 +37,7 @@ from jinja2 import TemplateNotFound
 import json
 import unicodedata
 from sqlalchemy import func, or_, exists, and_, case, true, false
-from sqlalchemy.orm import joinedload, selectinload
+from sqlalchemy.orm import joinedload, selectinload, aliased
 
 # ----------------------------------------------------------------
 # 1)  Alias único para “models”
@@ -5047,6 +5047,8 @@ def tutores():
         if request.accept_mimetypes.accept_json:
             scope = request.args.get('scope', 'all')
             page = request.args.get('page', 1, type=int)
+            tutor_search = (request.args.get('tutor_search', '', type=str) or '').strip()
+            tutor_sort = (request.args.get('tutor_sort', 'name_asc', type=str) or 'name_asc').strip()
             tutores_adicionados, pagination, resolved_scope = _get_recent_tutores(
                 scope,
                 page,
@@ -5054,12 +5056,18 @@ def tutores():
                 user_id=effective_user_id,
                 require_appointments=require_appointments,
                 veterinario_id=veterinarian_scope_id,
+                search=tutor_search,
+                sort_option=tutor_sort,
             )
             html = render_template(
                 'partials/tutores_adicionados.html',
                 tutores_adicionados=tutores_adicionados,
                 pagination=pagination,
                 scope=resolved_scope,
+                scope_param=request.args.get('scope_param', 'scope'),
+                search_param='tutor_search',
+                sort_param='tutor_sort',
+                page_param=request.args.get('page_param', 'page'),
             )
             return jsonify(
                 message='Tutor criado com sucesso!',
@@ -5077,6 +5085,8 @@ def tutores():
         return redirect(url_for('ficha_tutor', tutor_id=novo.id))
 
     # — GET com paginação —
+    tutor_search = (request.args.get('tutor_search', '', type=str) or '').strip()
+    tutor_sort = (request.args.get('tutor_sort', 'name_asc', type=str) or 'name_asc').strip()
     tutores_adicionados, pagination, resolved_scope = _get_recent_tutores(
         scope,
         page,
@@ -5084,13 +5094,32 @@ def tutores():
         user_id=effective_user_id,
         require_appointments=require_appointments,
         veterinario_id=veterinarian_scope_id,
+        search=tutor_search,
+        sort_option=tutor_sort,
     )
+
+    if request.headers.get('X-Requested-With') == 'XMLHttpRequest' or (
+        request.accept_mimetypes['application/json'] > request.accept_mimetypes['text/html']
+    ):
+        html = render_template(
+            'partials/tutores_adicionados.html',
+            tutores_adicionados=tutores_adicionados,
+            pagination=pagination,
+            scope=resolved_scope,
+            scope_param=request.args.get('scope_param', 'scope'),
+            search_param='tutor_search',
+            sort_param='tutor_sort',
+            page_param=request.args.get('page_param', 'page'),
+        )
+        return jsonify(html=html, scope=resolved_scope)
 
     return render_template(
         'animais/tutores.html',
         tutores_adicionados=tutores_adicionados,
         pagination=pagination,
-        scope=resolved_scope
+        scope=resolved_scope,
+        tutor_search=tutor_search,
+        tutor_sort=tutor_sort,
     )
 
 
@@ -7012,6 +7041,8 @@ def novo_animal():
         if prefers_json or is_ajax:
             scope_param = request.args.get('scope', 'all')
             page = request.args.get('page', 1, type=int)
+            animal_search = (request.args.get('animal_search', '', type=str) or '').strip()
+            animal_sort = (request.args.get('animal_sort', 'date_desc', type=str) or 'date_desc').strip()
             animais_adicionados, pagination, scope = _get_recent_animais(
                 scope_param,
                 page,
@@ -7019,12 +7050,18 @@ def novo_animal():
                 user_id=current_user_id,
                 require_appointments=require_appointments,
                 veterinario_id=veterinarian_scope_id,
+                search=animal_search,
+                sort_option=animal_sort,
             )
             html = render_template(
                 'partials/animais_adicionados.html',
                 animais_adicionados=animais_adicionados,
                 pagination=pagination,
-                scope=scope
+                scope=scope,
+                scope_param=request.args.get('scope_param', 'scope'),
+                search_param='animal_search',
+                sort_param='animal_sort',
+                page_param=request.args.get('page_param', 'page'),
             )
             return jsonify(
                 message='Animal cadastrado com sucesso!',
@@ -7038,6 +7075,8 @@ def novo_animal():
     # GET: lista de animais adicionados para exibição
     page = request.args.get('page', 1, type=int)
     scope_param = request.args.get('scope', 'all')
+    animal_search = (request.args.get('animal_search', '', type=str) or '').strip()
+    animal_sort = (request.args.get('animal_sort', 'date_desc', type=str) or 'date_desc').strip()
     animais_adicionados, pagination, scope = _get_recent_animais(
         scope_param,
         page,
@@ -7045,11 +7084,28 @@ def novo_animal():
         user_id=current_user_id,
         require_appointments=require_appointments,
         veterinario_id=veterinarian_scope_id,
+        search=animal_search,
+        sort_option=animal_sort,
     )
 
     # Lista de espécies e raças para os <select> do formulário
     species_list = list_species()
     breed_list = list_breeds()
+
+    if request.headers.get('X-Requested-With') == 'XMLHttpRequest' or (
+        request.accept_mimetypes['application/json'] > request.accept_mimetypes['text/html']
+    ):
+        html = render_template(
+            'partials/animais_adicionados.html',
+            animais_adicionados=animais_adicionados,
+            pagination=pagination,
+            scope=scope,
+            scope_param=request.args.get('scope_param', 'scope'),
+            search_param='animal_search',
+            sort_param='animal_sort',
+            page_param=request.args.get('page_param', 'page'),
+        )
+        return jsonify(html=html, scope=scope)
 
     return render_template(
         'animais/novo_animal.html',
@@ -7057,7 +7113,9 @@ def novo_animal():
         pagination=pagination,
         species_list=species_list,
         breed_list=breed_list,
-        scope=scope
+        scope=scope,
+        animal_search=animal_search,
+        animal_sort=animal_sort,
     )
 
 
@@ -7888,8 +7946,12 @@ def _get_recent_animais(
     user_id=None,
     require_appointments=False,
     veterinario_id=None,
+    search=None,
+    sort_option=None,
 ):
     """Return recent animals and pagination metadata for dashboards."""
+
+    from models import Species, Breed
 
     resolved_scope = 'mine' if scope == 'mine' else 'all'
     effective_user_id = user_id or (getattr(current_user, 'id', None))
@@ -7900,10 +7962,68 @@ def _get_recent_animais(
 
     base_query = Animal.query.filter(Animal.removido_em == None)
 
+    search_value = (search or '').strip().lower()
+    sort_value = (sort_option or 'date_desc').strip().lower() or 'date_desc'
+    per_page = 9
+
+    species_alias = aliased(Species)
+    breed_alias = aliased(Breed)
+
+    def apply_search_filters(query):
+        if not search_value:
+            return query
+        term = f"%{search_value}%"
+        return (
+            query.outerjoin(species_alias, Animal.species)
+            .outerjoin(breed_alias, Animal.breed)
+            .filter(
+                or_(
+                    func.lower(func.coalesce(Animal.name, '')).like(term),
+                    func.lower(func.coalesce(Animal.description, '')).like(term),
+                    func.lower(func.coalesce(species_alias.name, '')).like(term),
+                    func.lower(func.coalesce(breed_alias.name, '')).like(term),
+                    func.lower(func.coalesce(Animal.modo, '')).like(term),
+                )
+            )
+        )
+
+    def apply_sorting(query, last_reference=None):
+        query = query.order_by(None)
+
+        name_column = func.lower(func.coalesce(Animal.name, ''))
+        age_expr = case(
+            (Animal.date_of_birth != None, Animal.date_of_birth),
+            else_=Animal.date_added,
+        )
+
+        if sort_value == 'name_asc':
+            return query.order_by(name_column.asc(), Animal.id.asc())
+        if sort_value == 'name_desc':
+            return query.order_by(name_column.desc(), Animal.id.asc())
+        if sort_value == 'date_asc':
+            if last_reference is not None:
+                return query.order_by(last_reference.asc(), Animal.id.asc())
+            return query.order_by(Animal.date_added.asc(), Animal.id.asc())
+        if sort_value == 'date_desc':
+            if last_reference is not None:
+                return query.order_by(last_reference.desc(), Animal.id.desc())
+            return query.order_by(Animal.date_added.desc(), Animal.id.desc())
+        if sort_value == 'age_asc':
+            return query.order_by(age_expr.desc(), Animal.date_added.desc(), Animal.id.desc())
+        if sort_value == 'age_desc':
+            return query.order_by(age_expr.asc(), Animal.date_added.desc(), Animal.id.desc())
+
+        # Fallback to recent first when sort option is unknown
+        if last_reference is not None:
+            return query.order_by(last_reference.desc(), Animal.id.desc())
+        return query.order_by(Animal.date_added.desc(), Animal.id.desc())
+
+    last_reference = None
+
     if resolved_scope == 'mine' and effective_user_id:
-        scoped_query = base_query
+        query = base_query
         if clinic_ids and not require_appointments:
-            scoped_query = scoped_query.filter(Animal.clinica_id.in_(clinic_ids))
+            query = query.filter(Animal.clinica_id.in_(clinic_ids))
 
         if require_appointments and clinic_ids:
             appointment_exists = (
@@ -7917,7 +8037,7 @@ def _get_recent_animais(
                 appointment_exists = appointment_exists.filter(
                     Appointment.veterinario_id == veterinario_id
                 )
-            scoped_query = scoped_query.filter(appointment_exists.exists())
+            query = query.filter(appointment_exists.exists())
 
         consultas_exist = (
             db.session.query(Consulta.id)
@@ -7926,15 +8046,12 @@ def _get_recent_animais(
                 Consulta.created_by == effective_user_id,
             )
         )
-        pagination = (
-            scoped_query.filter(
-                or_(
-                    Animal.added_by_id == effective_user_id,
-                    consultas_exist.exists(),
-                )
+
+        query = query.filter(
+            or_(
+                Animal.added_by_id == effective_user_id,
+                consultas_exist.exists(),
             )
-            .order_by(Animal.date_added.desc())
-            .paginate(page=page, per_page=9, error_out=False)
         )
     elif clinic_ids:
         if require_appointments:
@@ -7949,15 +8066,9 @@ def _get_recent_animais(
                 last_appt_query = last_appt_query.filter(
                     Appointment.veterinario_id == veterinario_id
                 )
-            last_appt = (
-                last_appt_query.group_by(Appointment.animal_id).subquery()
-            )
-
-            pagination = (
-                base_query.join(last_appt, Animal.id == last_appt.c.animal_id)
-                .order_by(last_appt.c.last_at.desc())
-                .paginate(page=page, per_page=9, error_out=False)
-            )
+            last_appt = last_appt_query.group_by(Appointment.animal_id).subquery()
+            query = base_query.join(last_appt, Animal.id == last_appt.c.animal_id)
+            last_reference = last_appt.c.last_at
         else:
             last_appt = (
                 db.session.query(
@@ -7968,22 +8079,19 @@ def _get_recent_animais(
                 .group_by(Appointment.animal_id)
                 .subquery()
             )
-
-            pagination = (
+            query = (
                 base_query.outerjoin(last_appt, Animal.id == last_appt.c.animal_id)
                 .filter(Animal.clinica_id.in_(clinic_ids))
-                .order_by(func.coalesce(last_appt.c.last_at, Animal.date_added).desc())
-                .paginate(page=page, per_page=9, error_out=False)
             )
+            last_reference = func.coalesce(last_appt.c.last_at, Animal.date_added)
     else:
-        scoped_query = base_query
+        query = base_query
         if effective_user_id:
-            scoped_query = scoped_query.filter(Animal.added_by_id == effective_user_id)
-        pagination = (
-            scoped_query
-            .order_by(Animal.date_added.desc())
-            .paginate(page=page, per_page=9, error_out=False)
-        )
+            query = query.filter(Animal.added_by_id == effective_user_id)
+
+    query = apply_search_filters(query)
+    query = apply_sorting(query, last_reference)
+    pagination = query.paginate(page=page, per_page=per_page, error_out=False)
 
     return pagination.items, pagination, resolved_scope
 
@@ -7995,6 +8103,8 @@ def _get_recent_tutores(
     user_id=None,
     require_appointments=False,
     veterinario_id=None,
+    search=None,
+    sort_option=None,
 ):
     """Return recent tutors and pagination metadata for dashboards."""
 
@@ -8004,6 +8114,44 @@ def _get_recent_tutores(
 
     if resolved_scope == 'mine' and not effective_user_id:
         resolved_scope = 'all'
+
+    search_value = (search or '').strip().lower()
+    sort_value = (sort_option or 'name_asc').strip().lower() or 'name_asc'
+    per_page = 9
+
+    def apply_search_filters(query):
+        if not search_value:
+            return query
+        term = f"%{search_value}%"
+        return query.filter(
+            or_(
+                func.lower(func.coalesce(User.name, '')).like(term),
+                func.lower(func.coalesce(User.email, '')).like(term),
+                func.lower(func.coalesce(User.cpf, '')).like(term),
+                func.lower(func.coalesce(User.phone, '')).like(term),
+            )
+        )
+
+    def apply_sorting(query):
+        query = query.order_by(None)
+        name_column = func.lower(func.coalesce(User.name, ''))
+        age_expr = case(
+            (User.date_of_birth != None, User.date_of_birth),
+            else_=User.created_at,
+        )
+
+        if sort_value == 'name_desc':
+            return query.order_by(name_column.desc(), User.id.asc())
+        if sort_value == 'date_desc':
+            return query.order_by(User.created_at.desc(), User.id.desc())
+        if sort_value == 'date_asc':
+            return query.order_by(User.created_at.asc(), User.id.asc())
+        if sort_value == 'age_desc':
+            return query.order_by(age_expr.asc(), User.created_at.desc(), User.id.desc())
+        if sort_value == 'age_asc':
+            return query.order_by(age_expr.desc(), User.created_at.desc(), User.id.desc())
+
+        return query.order_by(name_column.asc(), User.id.asc())
 
     if resolved_scope == 'mine' and effective_user_id:
         base_query = (
@@ -8036,73 +8184,41 @@ def _get_recent_tutores(
             )
         )
 
-        pagination = (
-            base_query.filter(
-                or_(
-                    User.added_by_id == effective_user_id,
-                    consultas_exist.exists(),
-                )
+        query = base_query.filter(
+            or_(
+                User.added_by_id == effective_user_id,
+                consultas_exist.exists(),
             )
-            .order_by(User.created_at.desc())
-            .paginate(page=page, per_page=9, error_out=False)
         )
-        return pagination.items, pagination, resolved_scope
-
-    if clinic_ids:
+    elif clinic_ids:
+        query = (
+            User.query.filter(User.created_at != None)
+            .filter(_user_visibility_clause(clinic_scope=clinic_ids))
+        )
         if require_appointments:
-            last_appt_query = (
-                db.session.query(
-                    Appointment.tutor_id,
-                    func.max(Appointment.scheduled_at).label('last_at'),
+            appointment_exists = (
+                db.session.query(Appointment.id)
+                .filter(
+                    Appointment.tutor_id == User.id,
+                    Appointment.clinica_id.in_(clinic_ids),
                 )
-                .filter(Appointment.clinica_id.in_(clinic_ids))
             )
             if veterinario_id:
-                last_appt_query = last_appt_query.filter(
+                appointment_exists = appointment_exists.filter(
                     Appointment.veterinario_id == veterinario_id
                 )
-            last_appt = (
-                last_appt_query.group_by(Appointment.tutor_id).subquery()
-            )
+            query = query.filter(appointment_exists.exists())
+        else:
+            query = query.filter(User.clinica_id.in_(clinic_ids))
+    else:
+        query = User.query.filter(User.created_at != None)
+        if effective_user_id:
+            query = query.filter(User.added_by_id == effective_user_id)
 
-            pagination = (
-                User.query.join(last_appt, User.id == last_appt.c.tutor_id)
-                .filter(_user_visibility_clause(clinic_scope=clinic_ids))
-                .order_by(last_appt.c.last_at.desc())
-                .paginate(page=page, per_page=9, error_out=False)
-            )
-            return pagination.items, pagination, resolved_scope
+    query = apply_search_filters(query)
+    query = apply_sorting(query)
+    pagination = query.paginate(page=page, per_page=per_page, error_out=False)
 
-        last_appt = (
-            db.session.query(
-                Appointment.tutor_id,
-                func.max(Appointment.scheduled_at).label('last_at'),
-            )
-            .filter(Appointment.clinica_id.in_(clinic_ids))
-            .group_by(Appointment.tutor_id)
-            .subquery()
-        )
-
-        pagination = (
-            User.query.outerjoin(last_appt, User.id == last_appt.c.tutor_id)
-            .filter(
-                or_(
-                    User.clinica_id.in_(clinic_ids),
-                    last_appt.c.last_at != None,
-                )
-            )
-            .filter(_user_visibility_clause(clinic_scope=clinic_ids))
-            .order_by(func.coalesce(last_appt.c.last_at, User.created_at).desc())
-            .paginate(page=page, per_page=9, error_out=False)
-        )
-        return pagination.items, pagination, resolved_scope
-
-    pagination = (
-        User.query.filter(User.created_at != None)
-        .filter(_user_visibility_clause())
-        .order_by(User.created_at.desc())
-        .paginate(page=page, per_page=9, error_out=False)
-    )
     return pagination.items, pagination, resolved_scope
 
 
@@ -10046,6 +10162,8 @@ def appointments():
         require_vet_appointments = _is_specialist_veterinarian(veterinario)
         pet_scope_param = request.args.get('scope', 'all')
         pet_page = request.args.get('page', 1, type=int)
+        pet_search = (request.args.get('animal_search', '', type=str) or '').strip()
+        pet_sort = (request.args.get('animal_sort', 'date_desc', type=str) or 'date_desc').strip()
         vet_animais_adicionados, vet_animais_pagination, vet_animais_scope = _get_recent_animais(
             pet_scope_param,
             pet_page,
@@ -10053,10 +10171,14 @@ def appointments():
             user_id=vet_user_id,
             require_appointments=require_vet_appointments,
             veterinario_id=veterinario.id if require_vet_appointments else None,
+            search=pet_search,
+            sort_option=pet_sort,
         )
 
         tutor_scope_param = request.args.get('tutor_scope', 'all')
         tutor_page = request.args.get('tutor_page', 1, type=int)
+        tutor_search = (request.args.get('tutor_search', '', type=str) or '').strip()
+        tutor_sort = (request.args.get('tutor_sort', 'name_asc', type=str) or 'name_asc').strip()
         vet_tutores_adicionados, vet_tutores_pagination, vet_tutores_scope = _get_recent_tutores(
             tutor_scope_param,
             tutor_page,
@@ -10064,6 +10186,8 @@ def appointments():
             user_id=vet_user_id,
             require_appointments=require_vet_appointments,
             veterinario_id=veterinario.id if require_vet_appointments else None,
+            search=tutor_search,
+            sort_option=tutor_sort,
         )
 
         species_list = list_species()
@@ -10104,9 +10228,13 @@ def appointments():
             vet_animais_adicionados=vet_animais_adicionados,
             vet_animais_pagination=vet_animais_pagination,
             vet_animais_scope=vet_animais_scope,
+            vet_animal_search=pet_search,
+            vet_animal_sort=pet_sort,
             vet_tutores_adicionados=vet_tutores_adicionados,
             vet_tutores_pagination=vet_tutores_pagination,
             vet_tutores_scope=vet_tutores_scope,
+            vet_tutor_search=tutor_search,
+            vet_tutor_sort=tutor_sort,
         )
     else:
         if worker in ['colaborador', 'admin']:
