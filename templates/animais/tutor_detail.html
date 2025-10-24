@@ -168,7 +168,15 @@
             <button type="button" class="btn btn-outline-warning btn-sm" data-bs-toggle="modal" data-bs-target="#modalEditarAnimal{{ a.id }}">
               ✏️ Editar
             </button>
-            <form action="{{ url_for('deletar_animal', animal_id=a.id) }}" method="POST" onsubmit="return confirm('Tem certeza que deseja remover este animal?')" style="display:inline;">
+            <form action="{{ url_for('deletar_animal', animal_id=a.id) }}"
+                  method="POST"
+                  class="js-animal-delete-form d-inline"
+                  data-sync
+                  data-confirm="Tem certeza que deseja remover este animal?"
+                  data-animal-id="{{ a.id }}"
+                  data-animal-name="{{ a.name }}"
+                  data-animal-species="{{ a.species }}"
+                  data-animal-breed="{{ a.breed }}">
               <button type="submit" class="btn btn-outline-danger btn-sm">
                 🗑️ Remover
               </button>
