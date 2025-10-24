@@ -670,6 +670,7 @@
       }
   </script>
   <script src="{{ url_for('static', filename='offline.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/form_feedback.js') }}" defer></script>
   <script src="{{ url_for('static', filename='photo_cropper.js') }}"></script>
   <script src="{{ url_for('static', filename='js/listing_panels.js') }}"></script>
 
@@ -714,23 +715,39 @@
           form.addEventListener('submit', async ev => {
             ev.preventDefault();
             const url = form.action;
-            const resp = await fetchOrQueue(url, {method: 'POST', headers: {'Accept': 'application/json'}});
-            if (resp && resp.ok) {
-              const data = await resp.json();
-              if (data.redirect) {
-                window.location.href = data.redirect;
-                return;
+            const handle = async () => {
+              const resp = await fetchOrQueue(url, {method: 'POST', headers: {'Accept': 'application/json'}});
+              if (!resp) {
+                const toastEl = document.getElementById('actionToast');
+                toastEl.querySelector('.toast-body').textContent = 'Ação salva para sincronização quando estiver online.';
+                applyToastTone(toastEl, 'info');
+                new bootstrap.Toast(toastEl).show();
+                return { success: true, message: 'Aguardando conexão para concluir o envio.', level: 'info', successText: 'Sincronizando…', resetDelay: 2500 };
               }
-              const toastEl = document.getElementById('actionToast');
-              toastEl.querySelector('.toast-body').textContent = data.message || 'Sucesso';
-              applyToastTone(toastEl, data.category || 'success');
-              new bootstrap.Toast(toastEl).show();
-              await refreshDeliverySections();
-            } else if (resp) {
+              if (resp.ok) {
+                const data = await resp.json();
+                if (data.redirect) {
+                  window.location.href = data.redirect;
+                  return { success: true, keepButton: true };
+                }
+                const toastEl = document.getElementById('actionToast');
+                toastEl.querySelector('.toast-body').textContent = data.message || 'Sucesso';
+                applyToastTone(toastEl, data.category || 'success');
+                new bootstrap.Toast(toastEl).show();
+                await refreshDeliverySections();
+                return { success: true, message: data.message, level: data.category };
+              }
               const toastEl = document.getElementById('actionToast');
               toastEl.querySelector('.toast-body').textContent = 'Erro ao processar ação';
               applyToastTone(toastEl, 'danger');
               new bootstrap.Toast(toastEl).show();
+              return { success: false, message: 'Erro ao processar ação', level: 'danger' };
+            };
+
+            if (window.FormFeedback && typeof window.FormFeedback.withSavingState === 'function') {
+              await window.FormFeedback.withSavingState(form, handle, { loadingText: form.dataset.loadingText || 'Processando...' });
+            } else {
+              await handle();
             }
           });
         });
@@ -741,38 +758,54 @@
       document.querySelectorAll('.js-cart-form').forEach(form => {
         form.addEventListener('submit', async ev => {
           ev.preventDefault();
-          const resp = await fetchOrQueue(form.action, {
-            method: form.method,
-            body: new FormData(form),
-            headers: {'Accept': 'application/json'}
-          });
-          if (resp && resp.ok) {
-            const data = await resp.json();
-            if (data.redirect) {
-              window.location.href = data.redirect;
-              return;
+          const handle = async () => {
+            const resp = await fetchOrQueue(form.action, {
+              method: form.method,
+              body: new FormData(form),
+              headers: {'Accept': 'application/json'}
+            });
+            if (!resp) {
+              const toastEl = document.getElementById('actionToast');
+              toastEl.querySelector('.toast-body').textContent = 'Ação salva para sincronização quando estiver online.';
+              applyToastTone(toastEl, 'info');
+              new bootstrap.Toast(toastEl).show();
+              return { success: true, message: 'Aguardando conexão para concluir o envio.', level: 'info', successText: 'Sincronizando…', resetDelay: 2500 };
             }
-            const span = form.parentElement.querySelector('span');
-            if (span && data.item_quantity !== undefined) {
-              span.textContent = data.item_quantity;
+            if (resp.ok) {
+              const data = await resp.json();
+              if (data.redirect) {
+                window.location.href = data.redirect;
+                return { success: true, keepButton: true };
+              }
+              const span = form.parentElement.querySelector('span');
+              if (span && data.item_quantity !== undefined) {
+                span.textContent = data.item_quantity;
+              }
+              if (data.item_quantity === 0) {
+                const li = form.closest('li');
+                li?.remove();
+              }
+              const totalEl = document.getElementById('cartTotal');
+              if (totalEl && data.order_total_formatted) {
+                totalEl.textContent = 'Total:\u00A0' + data.order_total_formatted;
+              }
+              const toastEl = document.getElementById('actionToast');
+              toastEl.querySelector('.toast-body').textContent = data.message || 'Sucesso';
+              applyToastTone(toastEl, data.category || 'success');
+              new bootstrap.Toast(toastEl).show();
+              return { success: true, message: data.message, level: data.category };
             }
-            if (data.item_quantity === 0) {
-              const li = form.closest('li');
-              li?.remove();
-            }
-            const totalEl = document.getElementById('cartTotal');
-            if (totalEl && data.order_total_formatted) {
-              totalEl.textContent = 'Total:\u00A0' + data.order_total_formatted;
-            }
-            const toastEl = document.getElementById('actionToast');
-            toastEl.querySelector('.toast-body').textContent = data.message || 'Sucesso';
-            applyToastTone(toastEl, data.category || 'success');
-            new bootstrap.Toast(toastEl).show();
-          } else if (resp) {
             const toastEl = document.getElementById('actionToast');
             toastEl.querySelector('.toast-body').textContent = 'Erro ao processar ação';
             applyToastTone(toastEl, 'danger');
             new bootstrap.Toast(toastEl).show();
+            return { success: false, message: 'Erro ao processar ação', level: 'danger' };
+          };
+
+          if (window.FormFeedback && typeof window.FormFeedback.withSavingState === 'function') {
+            await window.FormFeedback.withSavingState(form, handle, { loadingText: form.dataset.loadingText || 'Processando...' });
+          } else {
+            await handle();
           }
         });
       });
@@ -784,21 +817,39 @@
         form.addEventListener('submit', async ev => {
           ev.preventDefault();
           const li = form.closest('li');
-          const resp = await fetchOrQueue(form.action, {method: 'POST', headers: {'Accept': 'application/json'}});
-          if (resp && resp.ok) {
-            const data = await resp.json();
-            if (data.deleted || data.status) {
-              li?.remove();
+          const handle = async () => {
+            const resp = await fetchOrQueue(form.action, {method: 'POST', headers: {'Accept': 'application/json'}});
+            if (!resp) {
+              const toastEl = document.getElementById('actionToast');
+              toastEl.querySelector('.toast-body').textContent = 'Ação salva para sincronização quando estiver online.';
+              applyToastTone(toastEl, 'info');
+              new bootstrap.Toast(toastEl).show();
+              return { success: true, message: 'Aguardando conexão para concluir o envio.', level: 'info', successText: 'Sincronizando…', resetDelay: 2500 };
             }
+            if (resp.ok) {
+              const data = await resp.json();
+              if (data.deleted || data.status) {
+                li?.remove();
+              }
+              const toastEl = document.getElementById('actionToast');
+              toastEl.querySelector('.toast-body').textContent = data.message || 'Sucesso';
+              applyToastTone(toastEl, data.category || 'success');
+              new bootstrap.Toast(toastEl).show();
+              return { success: true, message: data.message, level: data.category };
+            }
+            let data = {};
+            try { data = await resp.json(); } catch (err) {}
             const toastEl = document.getElementById('actionToast');
-            toastEl.querySelector('.toast-body').textContent = data.message || 'Sucesso';
-            applyToastTone(toastEl, data.category || 'success');
-            new bootstrap.Toast(toastEl).show();
-          } else if (resp) {
-            const toastEl = document.getElementById('actionToast');
-            toastEl.querySelector('.toast-body').textContent = 'Erro ao processar ação';
+            toastEl.querySelector('.toast-body').textContent = data.message || 'Erro ao processar ação';
             applyToastTone(toastEl, 'danger');
             new bootstrap.Toast(toastEl).show();
+            return { success: false, message: data.message || 'Erro ao processar ação', level: 'danger' };
+          };
+
+          if (window.FormFeedback && typeof window.FormFeedback.withSavingState === 'function') {
+            await window.FormFeedback.withSavingState(form, handle, { loadingText: form.dataset.loadingText || 'Processando...' });
+          } else {
+            await handle();
           }
         });
       });
@@ -809,26 +860,44 @@
       document.querySelectorAll('.js-animal-status').forEach(form => {
         form.addEventListener('submit', async ev => {
           ev.preventDefault();
-          const resp = await fetchOrQueue(form.action, {
-            method: 'POST',
-            headers: {'Accept': 'application/json'},
-            body: new FormData(form)
-          });
-          if (resp && resp.ok) {
-            const data = await resp.json();
-            if (data.redirect) {
-              window.location.href = data.redirect;
-              return;
+          const handle = async () => {
+            const resp = await fetchOrQueue(form.action, {
+              method: 'POST',
+              headers: {'Accept': 'application/json'},
+              body: new FormData(form)
+            });
+            if (!resp) {
+              const toastEl = document.getElementById('actionToast');
+              toastEl.querySelector('.toast-body').textContent = 'Ação salva para sincronização quando estiver online.';
+              applyToastTone(toastEl, 'info');
+              new bootstrap.Toast(toastEl).show();
+              return { success: true, message: 'Aguardando conexão para concluir o envio.', level: 'info', successText: 'Sincronizando…', resetDelay: 2500 };
             }
+            if (resp.ok) {
+              const data = await resp.json();
+              if (data.redirect) {
+                window.location.href = data.redirect;
+                return { success: true, keepButton: true };
+              }
+              const toastEl = document.getElementById('actionToast');
+              toastEl.querySelector('.toast-body').textContent = data.message || 'Sucesso';
+              applyToastTone(toastEl, data.category || 'success');
+              new bootstrap.Toast(toastEl).show();
+              return { success: true, message: data.message, level: data.category };
+            }
+            let data = {};
+            try { data = await resp.json(); } catch (err) {}
             const toastEl = document.getElementById('actionToast');
-            toastEl.querySelector('.toast-body').textContent = data.message || 'Sucesso';
-            applyToastTone(toastEl, data.category || 'success');
-            new bootstrap.Toast(toastEl).show();
-          } else if (resp) {
-            const toastEl = document.getElementById('actionToast');
-            toastEl.querySelector('.toast-body').textContent = 'Erro ao processar ação';
+            toastEl.querySelector('.toast-body').textContent = data.message || 'Erro ao processar ação';
             applyToastTone(toastEl, 'danger');
             new bootstrap.Toast(toastEl).show();
+            return { success: false, message: data.message || 'Erro ao processar ação', level: 'danger' };
+          };
+
+          if (window.FormFeedback && typeof window.FormFeedback.withSavingState === 'function') {
+            await window.FormFeedback.withSavingState(form, handle, { loadingText: form.dataset.loadingText || 'Processando...' });
+          } else {
+            await handle();
           }
         });
       });
@@ -839,20 +908,23 @@
       document.querySelectorAll('.js-auth-form').forEach(form => {
         form.addEventListener('submit', async ev => {
           ev.preventDefault();
-          form.querySelectorAll('.text-danger').forEach(el => el.remove());
-          const resp = await fetch(form.action, {
-            method: form.method || 'POST',
-            body: new FormData(form),
-            headers: { 'Accept': 'application/json' }
-          });
-          if (resp && resp.ok) {
-            const data = await resp.json().catch(() => null);
-            if (data && data.redirect) {
-              window.location = data.redirect;
-              return;
+          const handle = async () => {
+            form.querySelectorAll('.text-danger').forEach(el => el.remove());
+            const resp = await fetch(form.action, {
+              method: form.method || 'POST',
+              body: new FormData(form),
+              headers: { 'Accept': 'application/json' }
+            });
+            if (resp.ok) {
+              const data = await resp.json().catch(() => null);
+              if (data && data.redirect) {
+                window.location = data.redirect;
+                return { success: true, keepButton: true };
+              }
+              window.location.reload();
+              return { success: true, keepButton: true };
             }
-            window.location.reload();
-          } else if (resp) {
+
             const data = await resp.json().catch(() => null);
             if (data && data.errors) {
               for (const [field, messages] of Object.entries(data.errors)) {
@@ -865,6 +937,14 @@
                 }
               }
             }
+            const message = (data && (data.message || data.error)) || 'Não foi possível concluir o acesso.';
+            return { success: false, message, level: 'danger' };
+          };
+
+          if (window.FormFeedback && typeof window.FormFeedback.withSavingState === 'function') {
+            await window.FormFeedback.withSavingState(form, handle, { loadingText: form.dataset.loadingText || 'Enviando...', errorMessage: 'Não foi possível concluir o acesso.' });
+          } else {
+            await handle();
           }
         });
       });
@@ -886,11 +966,6 @@
           const content = rawContent.trim();
           if (!content) {
             return;
-          }
-
-          const submitBtn = form.querySelector('button[type="submit"]');
-          if (submitBtn) {
-            submitBtn.disabled = true;
           }
 
           const api = form.dataset.api || form.action;
@@ -920,41 +995,41 @@
             textarea.focus();
           }
 
-          let resp = null;
-          try {
-            resp = await fetchOrQueue(api, {
-              method: 'POST',
-              body: formData,
-              headers: { 'Accept': 'text/html' }
-            });
-          } catch (err) {
-            resp = null;
-          }
-
-          const enableButton = () => {
-            if (submitBtn) {
-              submitBtn.disabled = false;
+          const handle = async () => {
+            let resp = null;
+            try {
+              resp = await fetchOrQueue(api, {
+                method: 'POST',
+                body: formData,
+                headers: { 'Accept': 'text/html' }
+              });
+            } catch (err) {
+              resp = null;
             }
-          };
 
-          if (resp && resp.ok) {
-            const html = await resp.text();
-            if (placeholder) {
-              placeholder.insertAdjacentHTML('afterend', html);
-              placeholder.remove();
-            } else if (container) {
-              container.insertAdjacentHTML('beforeend', html);
-              container.scrollTop = container.scrollHeight;
-            }
-          } else if (resp === null) {
-            if (placeholder) {
-              const status = placeholder.querySelector('.js-status');
-              if (status) {
-                status.textContent = 'Mensagem aguardando conexão...';
+            if (resp && resp.ok) {
+              const html = await resp.text();
+              if (placeholder) {
+                placeholder.insertAdjacentHTML('afterend', html);
+                placeholder.remove();
+              } else if (container) {
+                container.insertAdjacentHTML('beforeend', html);
+                container.scrollTop = container.scrollHeight;
               }
-              placeholder.dataset.status = 'queued';
+              return { success: true, message: 'Mensagem enviada com sucesso.', level: 'success', successText: 'Enviado!', resetDelay: 1800 };
             }
-          } else {
+
+            if (resp === null) {
+              if (placeholder) {
+                const status = placeholder.querySelector('.js-status');
+                if (status) {
+                  status.textContent = 'Mensagem aguardando conexão...';
+                }
+                placeholder.dataset.status = 'queued';
+              }
+              return { success: true, message: 'Mensagem será enviada assim que a conexão voltar.', level: 'info', successText: 'Sincronizando…', resetDelay: 2500 };
+            }
+
             if (placeholder) {
               const status = placeholder.querySelector('.js-status');
               if (status) {
@@ -962,9 +1037,14 @@
               }
               placeholder.dataset.status = 'error';
             }
-          }
+            return { success: false, message: 'Falha ao enviar a mensagem.', level: 'danger' };
+          };
 
-          enableButton();
+          if (window.FormFeedback && typeof window.FormFeedback.withSavingState === 'function') {
+            await window.FormFeedback.withSavingState(form, handle, { loadingText: form.dataset.loadingText || 'Enviando...' });
+          } else {
+            await handle();
+          }
         });
       });
     });
@@ -974,41 +1054,55 @@
       document.querySelectorAll('.js-staff-form').forEach(form => {
         form.addEventListener('submit', async ev => {
           ev.preventDefault();
-          const resp = await fetchOrQueue(form.action, {
-            method: 'POST',
-            headers: {'Accept': 'application/json'},
-            body: new FormData(form)
-          });
-          if (resp && resp.ok) {
-            const data = await resp.json();
-            if (data.redirect) {
-              window.location.href = data.redirect;
-              return;
+          const handle = async () => {
+            const resp = await fetchOrQueue(form.action, {
+              method: 'POST',
+              headers: {'Accept': 'application/json'},
+              body: new FormData(form)
+            });
+
+            if (!resp) {
+              form.submit();
+              return { success: true, keepButton: true };
             }
-            if (data.html) {
-              const target = form.dataset.target;
-              if (target) {
-                const el = document.querySelector(target);
-                if (el) {
-                  el.innerHTML = data.html;
+
+            if (resp.ok) {
+              const data = await resp.json();
+              if (data.redirect) {
+                window.location.href = data.redirect;
+                return { success: true, keepButton: true };
+              }
+              if (data.html) {
+                const target = form.dataset.target;
+                if (target) {
+                  const el = document.querySelector(target);
+                  if (el) {
+                    el.innerHTML = data.html;
+                  }
                 }
               }
+              if (data.message) {
+                const toastEl = document.getElementById('actionToast');
+                toastEl.querySelector('.toast-body').textContent = data.message;
+                applyToastTone(toastEl, data.category || 'success');
+                new bootstrap.Toast(toastEl).show();
+              }
+              return { success: true, message: data.message, level: data.category };
             }
-            if (data.message) {
-              const toastEl = document.getElementById('actionToast');
-              toastEl.querySelector('.toast-body').textContent = data.message;
-              applyToastTone(toastEl, data.category || 'success');
-              new bootstrap.Toast(toastEl).show();
-            }
-          } else if (resp) {
+
             let data = {};
             try { data = await resp.json(); } catch(e) {}
             const toastEl = document.getElementById('actionToast');
             toastEl.querySelector('.toast-body').textContent = data.message || 'Erro ao processar ação';
             applyToastTone(toastEl, 'danger');
             new bootstrap.Toast(toastEl).show();
+            return { success: false, message: data.message || 'Erro ao processar ação', level: 'danger' };
+          };
+
+          if (window.FormFeedback && typeof window.FormFeedback.withSavingState === 'function') {
+            await window.FormFeedback.withSavingState(form, handle, { loadingText: form.dataset.loadingText || 'Processando...' });
           } else {
-            form.submit();
+            await handle();
           }
         });
       });

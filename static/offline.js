@@ -22,6 +22,10 @@
 
   function setButtonLoading(button){
     if(!button) return;
+    if (window.FormFeedback && typeof window.FormFeedback.setLoading === 'function') {
+      window.FormFeedback.setLoading(button);
+      return;
+    }
     ensureOriginalLabel(button);
     clearButtonTimer(button);
     if(button.dataset.loadingText){
@@ -33,6 +37,10 @@
 
   function setButtonIdle(button){
     if(!button) return;
+    if (window.FormFeedback && typeof window.FormFeedback.setIdle === 'function') {
+      window.FormFeedback.setIdle(button);
+      return;
+    }
     clearButtonTimer(button);
     button.disabled = false;
     button.classList.remove('is-loading');
@@ -43,6 +51,10 @@
 
   function setButtonSuccess(button){
     if(!button) return;
+    if (window.FormFeedback && typeof window.FormFeedback.setSuccess === 'function') {
+      window.FormFeedback.setSuccess(button);
+      return;
+    }
     ensureOriginalLabel(button);
     clearButtonTimer(button);
     button.disabled = false;
