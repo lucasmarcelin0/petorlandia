@@ -1762,6 +1762,32 @@ def test_delivery_overview_shows_relatorio_racoes_link(monkeypatch, app):
         assert b'href="/relatorio/racoes"' in resp.data
 
 
+def test_relatorio_racoes_includes_navbar(app):
+    client = app.test_client()
+
+    with app.app_context():
+        db.drop_all()
+        db.create_all()
+
+        user = User(id=1, name='User', email='user@test.com')
+        user.set_password('secret')
+        db.session.add(user)
+        db.session.commit()
+
+    login_resp = client.post(
+        '/login',
+        data={'email': 'user@test.com', 'password': 'secret'},
+        follow_redirects=True,
+    )
+    assert login_resp.status_code == 200
+
+    response = client.get('/relatorio/racoes')
+    assert response.status_code == 200
+
+    html = response.get_data(as_text=True)
+    assert '<li class="nav-item dropdown"' in html or 'js/navbar-dropdown.js' in html
+
+
 def test_delivery_requests_hide_archived(monkeypatch, app):
     client = app.test_client()
     with app.app_context():
