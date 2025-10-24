@@ -571,84 +571,14 @@
 </script>
 
 <script>
-document.addEventListener('DOMContentLoaded', () => {
-  document.querySelectorAll('form[data-sync]').forEach(form => {
-    form.addEventListener('submit', () => {
-      const btn = form.querySelector('button[type="submit"]');
-      if (!btn) return;
-
-      const statusMessage = form.querySelector('.form-status-message');
-      if (statusMessage) {
-        statusMessage.classList.add('d-none');
-        statusMessage.textContent = '';
-        statusMessage.classList.remove('alert-danger');
-        statusMessage.classList.add('alert-success');
-      }
-
-      if (!btn.dataset.originalHtml) {
-        btn.dataset.originalHtml = btn.innerHTML;
-      }
-
-      const loadingText = btn.dataset.loadingText || 'Salvando...';
-
-      btn.disabled = true;
-      btn.innerHTML = `
-        <span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
-        <span>${loadingText}</span>
-      `;
-    });
-  });
-});
-
 document.addEventListener('form-sync-success', function(ev) {
   const {form, data, response} = ev.detail || {};
   if (!form) return;
 
-  const btn = form.querySelector('button[type="submit"]');
-  if (btn) {
-    const hadError = (data && data.success === false) || (response && !response.ok);
-    if (hadError) {
-      btn.disabled = false;
-      if (btn.dataset.resetTimeout) {
-        clearTimeout(Number(btn.dataset.resetTimeout));
-        delete btn.dataset.resetTimeout;
-      }
-      btn.innerHTML = btn.dataset.originalHtml || btn.innerHTML;
-      const statusMessage = form.querySelector('.form-status-message');
-      if (statusMessage) {
-        statusMessage.classList.remove('alert-success');
-        statusMessage.classList.add('alert-danger');
-        statusMessage.textContent = (data && data.message) ? data.message : 'Não foi possível salvar as alterações.';
-        statusMessage.classList.remove('d-none');
-      }
-    } else {
-      btn.disabled = false;
-      const successText = btn.dataset.successText || 'Salvo!';
-        btn.innerHTML = `
-          <span class="me-2">✅</span>
-          <span>${successText}</span>
-        `;
-
-        if (btn.dataset.resetTimeout) {
-          clearTimeout(Number(btn.dataset.resetTimeout));
-        }
-
-        const timeoutId = window.setTimeout(() => {
-          btn.innerHTML = btn.dataset.originalHtml || btn.innerHTML;
-          delete btn.dataset.resetTimeout;
-        }, 2000);
-
-        btn.dataset.resetTimeout = String(timeoutId);
-        const statusMessage = form.querySelector('.form-status-message');
-        if (statusMessage) {
-          const message = (data && data.message) || successText;
-          statusMessage.textContent = message;
-          statusMessage.classList.remove('alert-danger', 'd-none');
-          statusMessage.classList.add('alert-success');
-        }
-      }
-    }
-
+  const hadError = (data && data.success === false) || (response && !response.ok);
+  if (hadError) {
+    return;
+  }
 
   if (form.id === 'tutor-form') {
     ev.preventDefault();
