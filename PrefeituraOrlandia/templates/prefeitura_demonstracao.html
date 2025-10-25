@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Prefeitura de Orlândia | Governo Digital</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" integrity="sha512-u8fE7Gz6x7sRKqzZo4PMBVXsfS5aXoaZySUdkGFUTkOcJCIZy9FHn5Vf3L7hIwrKyYVJZZzKzbwM02K7oao2WQ==" crossorigin="anonymous" referrerpolicy="no-referrer" />
+    <link rel="stylesheet" href="{{ url_for('prefeitura_orlandia.static', filename='css/prefeitura_demonstracao.css') }}" />
+</head>
+<body>
+    <header class="po-navbar">
+        <div class="po-navbar__brand">
+            <img src="{{ url_for('prefeitura_orlandia.static', filename='images/BrasaoOrlandia.svg.png') }}" alt="Brasão de Orlândia" class="po-navbar__brand-image" />
+            <div class="po-navbar__title">
+                <span class="po-navbar__subtitle">Prefeitura Municipal de</span>
+                <strong>Orlândia</strong>
+            </div>
+        </div>
+        <nav class="po-navbar__links">
+            <a href="#inicio" class="po-navbar__link">Início</a>
+            <a href="#servicos" class="po-navbar__link">Serviços Digitais</a>
+            <a href="#destaques" class="po-navbar__link">Destaques</a>
+            <a href="#transparencia" class="po-navbar__link">Transparência</a>
+            <a href="#contato" class="po-navbar__link">Contato</a>
+        </nav>
+        <a class="po-navbar__action" href="#servicos">Acessar Portal</a>
+    </header>
+
+    <main>
+        <section id="inicio" class="po-hero">
+            <div class="po-hero__content">
+                <span class="po-chip">Governo Digital Integrado</span>
+                <h1>Serviços públicos ágeis e a um clique de distância.</h1>
+                <p>
+                    A Prefeitura de Orlândia apresenta uma plataforma moderna para aproximar cidadãos e gestão pública.
+                    Conecte-se a programas sociais, saúde, educação e transparência com experiências digitais personalizadas.
+                </p>
+                <div class="po-hero__actions">
+                    <a class="po-btn po-btn--primary" href="#servicos">Explorar serviços</a>
+                    <a class="po-btn po-btn--ghost" href="#transparencia">Ver indicadores</a>
+                </div>
+                <div class="po-hero__stats">
+                    <div class="po-stat">
+                        <strong>+85%</strong>
+                        <span>dos atendimentos resolvidos online</span>
+                    </div>
+                    <div class="po-stat">
+                        <strong>12k</strong>
+                        <span>cidadãos com cadastro digital ativo</span>
+                    </div>
+                    <div class="po-stat">
+                        <strong>24h</strong>
+                        <span>monitoramento integrado de saúde</span>
+                    </div>
+                </div>
+            </div>
+            <div class="po-hero__media">
+                <figure class="po-hero__card">
+                    <img src="{{ url_for('prefeitura_orlandia.static', filename='images/4164909925e4420cad674f89c436d901_Urinaria.jpg') }}" alt="Atendimento de saúde em Orlândia" />
+                    <figcaption>
+                        Pronto Atendimento Digital: triagem inteligente e teleconsultas para urgências.
+                    </figcaption>
+                </figure>
+                <figure class="po-hero__card po-hero__card--secondary">
+                    <img src="{{ url_for('prefeitura_orlandia.static', filename='images/2aff5b72d70b40daab5dd1f26115594d_rs.jpg') }}" alt="Vista aérea de Orlândia" />
+                    <figcaption>
+                        Monitoramento urbano garante gestão eficiente de infraestrutura e mobilidade.
+                    </figcaption>
+                </figure>
+            </div>
+        </section>
+
+        <section id="servicos" class="po-section po-section--light">
+            <div class="po-section__heading">
+                <span class="po-chip">Serviços Digitais</span>
+                <h2>Uma plataforma completa para facilitar a vida da população.</h2>
+                <p>
+                    Automatização, inteligência de dados e experiência do usuário inspiradas no sistema Pet Orlândia para transformar a prefeitura em referência digital.
+                </p>
+            </div>
+            <div class="po-grid">
+                {% for service in services %}
+                    <article class="po-card">
+                        <span class="po-card__icon"><i class="{{ service.icon }}" aria-hidden="true"></i></span>
+                        <h3>{{ service.title }}</h3>
+                        <p>{{ service.description }}</p>
+                    </article>
+                {% endfor %}
+            </div>
+        </section>
+
+        <section id="destaques" class="po-section">
+            <div class="po-section__heading">
+                <span class="po-chip">Destaques</span>
+                <h2>Projetos conectados às necessidades da cidade.</h2>
+                <p>Experiências reais apresentadas com recursos do ecossistema Pet Orlândia.</p>
+            </div>
+            <div class="po-carousel" data-po-carousel>
+                {% for highlight in highlights %}
+                    <article class="po-highlight">
+                        <figure class="po-highlight__media">
+                            <img src="{{ url_for('prefeitura_orlandia.static', filename=highlight.image) }}" alt="{{ highlight.title }}" />
+                        </figure>
+                        <div class="po-highlight__content">
+                            <h3>{{ highlight.title }}</h3>
+                            <p>{{ highlight.text }}</p>
+                            <button class="po-link" type="button" data-po-carousel-next>Saiba mais <i class="fa-solid fa-arrow-right"></i></button>
+                        </div>
+                    </article>
+                {% endfor %}
+            </div>
+        </section>
+
+        <section id="transparencia" class="po-section po-section--dark">
+            <div class="po-section__heading">
+                <span class="po-chip po-chip--dark">Transparência</span>
+                <h2>Dados acessíveis e gestão inteligente.</h2>
+                <p>Dashboards ao estilo do Pet Orlândia para acompanhar indicadores financeiros e sociais.</p>
+            </div>
+            <div class="po-grid po-grid--metrics">
+                <div class="po-metric">
+                    <strong>R$ 18 mi</strong>
+                    <span>investidos em saúde com atualização mensal</span>
+                </div>
+                <div class="po-metric">
+                    <strong>+220</strong>
+                    <span>obras catalogadas com status em tempo real</span>
+                </div>
+                <div class="po-metric">
+                    <strong>92%</strong>
+                    <span>de satisfação registrada nos atendimentos online</span>
+                </div>
+                <div class="po-metric">
+                    <strong>100%</strong>
+                    <span>dos contratos publicados no portal de transparência</span>
+                </div>
+            </div>
+        </section>
+
+        <section id="contato" class="po-section po-section--light">
+            <div class="po-contact">
+                <div class="po-contact__content">
+                    <span class="po-chip">Atendimento integrado</span>
+                    <h2>Vamos construir a transformação digital da sua cidade.</h2>
+                    <p>
+                        Compartilhe sua necessidade para receber uma apresentação personalizada. Nossa equipe adapta as soluções do Pet Orlândia para a realidade da sua prefeitura.
+                    </p>
+                    <ul class="po-contact__list">
+                        <li><i class="fa-solid fa-envelope"></i> contato@prefeitura.orlandia.sp.gov.br</li>
+                        <li><i class="fa-brands fa-whatsapp"></i> (16) 99999-0000</li>
+                        <li><i class="fa-solid fa-location-dot"></i> Paço Municipal, Praça dos Imigrantes, 50</li>
+                    </ul>
+                </div>
+                <form class="po-contact__form">
+                    <div class="po-form__group">
+                        <label for="po-nome">Nome completo</label>
+                        <input id="po-nome" type="text" placeholder="Digite seu nome" required />
+                    </div>
+                    <div class="po-form__group">
+                        <label for="po-email">E-mail</label>
+                        <input id="po-email" type="email" placeholder="nome@dominio.com" required />
+                    </div>
+                    <div class="po-form__group">
+                        <label for="po-orgao">Órgão público</label>
+                        <input id="po-orgao" type="text" placeholder="Secretaria, autarquia ou prefeitura" />
+                    </div>
+                    <div class="po-form__group po-form__group--full">
+                        <label for="po-mensagem">Mensagem</label>
+                        <textarea id="po-mensagem" rows="4" placeholder="Conte-nos como podemos ajudar"></textarea>
+                    </div>
+                    <button type="submit" class="po-btn po-btn--primary">Enviar proposta</button>
+                    <p class="po-form__disclaimer">Os dados são utilizados apenas para contato comercial. Inspirado na política de privacidade do Pet Orlândia.</p>
+                </form>
+            </div>
+        </section>
+    </main>
+
+    <footer class="po-footer">
+        <div class="po-footer__brand">
+            <img src="{{ url_for('prefeitura_orlandia.static', filename='images/BrasaoOrlandia.svg.png') }}" alt="Brasão de Orlândia" />
+            <div>
+                <strong>Prefeitura Municipal de Orlândia</strong>
+                <span>Inovação e cuidado com as pessoas.</span>
+            </div>
+        </div>
+        <div class="po-footer__links">
+            <a href="#inicio">Início</a>
+            <a href="#servicos">Serviços</a>
+            <a href="#destaques">Destaques</a>
+            <a href="#transparencia">Transparência</a>
+            <a href="#contato">Contato</a>
+        </div>
+        <p class="po-footer__note">Conteúdo demonstrativo inspirado no ecossistema Pet Orlândia.</p>
+    </footer>
+
+    <script src="{{ url_for('prefeitura_orlandia.static', filename='js/prefeitura_demonstracao.js') }}" defer></script>
+</body>
+</html>
