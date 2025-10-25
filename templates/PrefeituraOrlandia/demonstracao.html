@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Prefeitura de Orlândia • Demonstração</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='PrefeituraOrlandia/style.css') }}">
+</head>
+<body>
+    <a class="skip-link" href="#inicio">Ir para o conteúdo principal</a>
+
+    <header class="top-bar">
+        <div class="container">
+            <div class="brand">
+                <img src="{{ url_for('static', filename='uploads/clinicas/BrasaoOrlandia.svg.png') }}" alt="Brasão da Prefeitura de Orlândia">
+                <div>
+                    <span class="top-brand-title">Prefeitura Municipal</span>
+                    <strong class="top-brand-name">Orlândia - SP</strong>
+                </div>
+            </div>
+            <nav class="top-nav" aria-label="Navegação principal">
+                <a href="#inicio">Início</a>
+                <a href="#servicos">Serviços</a>
+                <a href="#noticias">Notícias</a>
+                <a href="#transparencia">Transparência</a>
+                <a href="#contato">Contato</a>
+            </nav>
+        </div>
+    </header>
+
+    <section class="hero" id="inicio" style="background-image: url('{{ url_for('static', filename='uploads/clinicas/2aff5b72d70b40daab5dd1f26115594d_rs.jpg') }}');">
+        <div class="overlay"></div>
+        <div class="container hero-content">
+            <div class="hero-text">
+                <p class="hero-eyebrow">Orlândia rumo ao futuro</p>
+                <h1>Portal oficial da Prefeitura Municipal</h1>
+                <p class="hero-description">
+                    Serviços, notícias e programas sociais que conectam a administração pública à população
+                    orlandina com transparência e eficiência.
+                </p>
+                <div class="hero-actions">
+                    <a class="btn primary" href="#servicos">Acessar serviços</a>
+                    <a class="btn ghost" href="#transparencia">Portal da Transparência</a>
+                </div>
+            </div>
+            <div class="hero-card" role="complementary">
+                <h2>Principais destaques</h2>
+                <ul>
+                    <li><strong>Protocolo Digital:</strong> solicite serviços sem sair de casa.</li>
+                    <li><strong>Agenda Cultural:</strong> confira eventos e atrações do município.</li>
+                    <li><strong>Saúde + Perto:</strong> acompanhamento em tempo real de consultas e exames.</li>
+                </ul>
+            </div>
+        </div>
+    </section>
+
+    <main>
+        <section class="services" id="servicos">
+            <div class="container">
+                <header class="section-header">
+                    <span class="eyebrow">Serviços ao cidadão</span>
+                    <h2>Atalhos rápidos</h2>
+                    <p>Principais serviços digitais que facilitam o dia a dia da população.</p>
+                </header>
+                <div class="grid">
+                    <article class="service-card">
+                        <h3>Saúde</h3>
+                        <p>Agende consultas, acompanhe exames e confira o calendário das unidades de saúde.</p>
+                        <a href="#" class="service-link">Cartão Saúde Digital</a>
+                    </article>
+                    <article class="service-card">
+                        <h3>Educação</h3>
+                        <p>Matrículas online, boletins escolares e informações sobre transporte estudantil.</p>
+                        <a href="#" class="service-link">Portal da Educação</a>
+                    </article>
+                    <article class="service-card">
+                        <h3>Tributos</h3>
+                        <p>Emita guias do IPTU, acompanhe certidões e fique em dia com as obrigações.</p>
+                        <a href="#" class="service-link">Serviços Tributários</a>
+                    </article>
+                    <article class="service-card">
+                        <h3>Assistência Social</h3>
+                        <p>Programas sociais, cadastro único e apoio para famílias em situação de vulnerabilidade.</p>
+                        <a href="#" class="service-link">Proteção Social</a>
+                    </article>
+                </div>
+            </div>
+        </section>
+
+        <section class="news" id="noticias">
+            <div class="container">
+                <header class="section-header">
+                    <span class="eyebrow">Notícias</span>
+                    <h2>Últimas atualizações</h2>
+                    <p>Destaques do governo municipal para manter o cidadão bem informado.</p>
+                </header>
+                <div class="grid">
+                    <article class="news-card">
+                        <div class="news-image">
+                            <img src="{{ url_for('static', filename='uploads/clinicas/4164909925e4420cad674f89c436d901_Urinaria.jpg') }}" alt="Vista aérea da cidade de Orlândia">
+                        </div>
+                        <div class="news-content">
+                            <span class="news-tag">Infraestrutura</span>
+                            <h3>Revitalização das avenidas centrais</h3>
+                            <p>Nova iluminação em LED e recapeamento completo nas principais vias para dar mais segurança à população.</p>
+                            <a href="#" class="news-link">Ler mais</a>
+                        </div>
+                    </article>
+                    <article class="news-card">
+                        <div class="news-image">
+                            <img src="{{ url_for('static', filename='uploads/produtos/racao.png') }}" alt="Ações de bem-estar animal em Orlândia">
+                        </div>
+                        <div class="news-content">
+                            <span class="news-tag">Bem-estar animal</span>
+                            <h3>Campanha de adoção responsável</h3>
+                            <p>Mutirões de castração e feiras de adoção fortalecem os cuidados com os animais do município.</p>
+                            <a href="#" class="news-link">Saiba mais</a>
+                        </div>
+                    </article>
+                    <article class="news-card">
+                        <div class="news-image">
+                            <img src="{{ url_for('static', filename='uploads/animals/1d0334bfca0d4382988c12c9ba4f0254_Urinaria.jpg') }}" alt="Pessoas utilizando serviços públicos">
+                        </div>
+                        <div class="news-content">
+                            <span class="news-tag">Serviços</span>
+                            <h3>Protocolo 100% digital</h3>
+                            <p>O atendimento digital agiliza respostas e garante transparência em todos os processos administrativos.</p>
+                            <a href="#" class="news-link">Detalhes</a>
+                        </div>
+                    </article>
+                </div>
+            </div>
+        </section>
+
+        <section class="transparency" id="transparencia">
+            <div class="container">
+                <div class="transparency-content">
+                    <header>
+                        <span class="eyebrow">Transparência</span>
+                        <h2>Gestão responsável e acessível</h2>
+                    </header>
+                    <p>
+                        Consulte contratos, licitações, relatórios fiscais e acompanhamento em tempo real das
+                        despesas públicas. Tudo organizado para facilitar o controle social e incentivar a
+                        participação popular nas decisões de Orlândia.
+                    </p>
+                    <div class="transparency-actions">
+                        <a href="#" class="btn primary">Portal da Transparência</a>
+                        <a href="#" class="btn ghost">Diário Oficial</a>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="contact" id="contato">
+            <div class="container contact-wrapper">
+                <div class="contact-info">
+                    <header>
+                        <span class="eyebrow">Fale conosco</span>
+                        <h2>Prefeitura de Orlândia</h2>
+                    </header>
+                    <p>Entre em contato pelos nossos canais oficiais ou faça uma visita presencial.</p>
+                    <ul class="contact-list">
+                        <li><strong>Telefone:</strong> (16) 3820-8000</li>
+                        <li><strong>Endereço:</strong> Praça dos Imigrantes, 75 - Centro, Orlândia/SP</li>
+                        <li><strong>Atendimento:</strong> Segunda a sexta, das 8h às 17h</li>
+                        <li><strong>E-mail:</strong> atendimento@orlandia.sp.gov.br</li>
+                    </ul>
+                </div>
+                <form class="contact-form">
+                    <div class="form-group">
+                        <label for="nome">Nome</label>
+                        <input id="nome" name="nome" type="text" placeholder="Digite seu nome" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="email">E-mail</label>
+                        <input id="email" name="email" type="email" placeholder="nome@exemplo.com" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="assunto">Assunto</label>
+                        <input id="assunto" name="assunto" type="text" placeholder="Qual é o tema da mensagem?">
+                    </div>
+                    <div class="form-group">
+                        <label for="mensagem">Mensagem</label>
+                        <textarea id="mensagem" name="mensagem" rows="4" placeholder="Escreva sua mensagem"></textarea>
+                    </div>
+                    <button type="submit" class="btn primary">Enviar mensagem</button>
+                </form>
+            </div>
+        </section>
+    </main>
+
+    <footer class="footer">
+        <div class="container">
+            <div class="footer-brand">
+                <img src="{{ url_for('static', filename='uploads/clinicas/BrasaoOrlandia.svg.png') }}" alt="Brasão de Orlândia">
+                <div>
+                    <strong>Prefeitura de Orlândia</strong>
+                    <span>Trabalhando hoje pelo futuro da nossa gente</span>
+                </div>
+            </div>
+            <p class="footer-copy">© {{ date_now('%Y') }} Prefeitura Municipal de Orlândia. Todos os direitos reservados.</p>
+        </div>
+    </footer>
+</body>
+</html>

@@ -588,6 +588,15 @@ def service_worker():
     return send_from_directory(app.static_folder, 'service-worker.js')
 
 
+@app.route('/prefeitura-demonstracao')
+def prefeitura_demonstracao():
+    """Página demonstrativa com identidade da Prefeitura de Orlândia."""
+    try:
+        return render_template('PrefeituraOrlandia/demonstracao.html')
+    except TemplateNotFound:  # pragma: no cover - render fallback
+        abort(404)
+
+
 @app.route('/register', methods=['GET', 'POST'])
 def register():
     form = RegistrationForm()
