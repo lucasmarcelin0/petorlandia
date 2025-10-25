@@ -1,0 +1,192 @@
+{% extends "layout.html" %}
+
+{% block head %}
+    {{ super() }}
+    <link rel="stylesheet" href="{{ url_for('static', filename='prefeitura/orlandia/style.css') }}">
+{% endblock %}
+
+{% block main %}
+<div class="prefeitura-orlandia-page">
+    <section class="hero" style="background-image: url('{{ url_for('static', filename='prefeitura/orlandia/orlandia.jpg') }}');">
+        <div class="hero__overlay"></div>
+        <div class="container position-relative">
+            <div class="row align-items-center g-4">
+                <div class="col-lg-7">
+                    <span class="hero__eyebrow">Prefeitura de Orlândia</span>
+                    <h1 class="hero__title">Programa integrado de bem-estar animal e zeladoria urbana</h1>
+                    <p class="hero__description">Transformamos as iniciativas municipais em uma experiência única para tutores, protetores e equipes técnicas, com dados confiáveis e comunicação ativa com a população.</p>
+                    <div class="hero__actions">
+                        <a class="btn btn-light btn-lg rounded-pill px-4" href="#mapa-de-acao">Conheça o plano</a>
+                        <a class="btn btn-outline-light btn-lg rounded-pill px-4" href="#contato">Fale com a equipe</a>
+                    </div>
+                </div>
+                <div class="col-lg-5">
+                    <div class="hero__card shadow-lg">
+                        <img class="hero__card-image" src="{{ url_for('static', filename='prefeitura/orlandia/cerp.png') }}" alt="Centro Empresarial de Orlândia">
+                        <div class="hero__card-body">
+                            <h2>Centro de Responsabilidade Pública</h2>
+                            <p>Monitoramento contínuo do bem-estar animal, iluminação pública e zeladoria com indicadores compartilhados entre secretarias.</p>
+                            <ul class="hero__pillars">
+                                <li>Protocolos digitais unificados</li>
+                                <li>Dashboards em tempo real</li>
+                                <li>Engajamento comunitário ativo</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section id="mapa-de-acao" class="section-spacing">
+        <div class="container">
+            <div class="section-header text-center">
+                <span class="section-eyebrow">Mapeamento estratégico</span>
+                <h2>Iniciativas integradas para Orlândia</h2>
+                <p class="text-muted">Conectamos zeladoria urbana, saúde animal e comunicação pública em fluxos que aceleram entregas para os cidadãos.</p>
+            </div>
+            <div class="row g-4">
+                <div class="col-md-4">
+                    <article class="initiative-card h-100">
+                        <div class="initiative-card__image">
+                            <img src="{{ url_for('static', filename='prefeitura/orlandia/Iluminacao.png') }}" alt="Equipe de iluminação pública em ação">
+                        </div>
+                        <div class="initiative-card__body">
+                            <h3>Iluminação inteligente</h3>
+                            <p>Ordem de serviço automatizada, rotas otimizadas e comunicação com moradores por WhatsApp e portal público.</p>
+                            <span class="badge rounded-pill text-bg-primary">Operações diárias</span>
+                        </div>
+                    </article>
+                </div>
+                <div class="col-md-4">
+                    <article class="initiative-card h-100">
+                        <div class="initiative-card__image">
+                            <img src="{{ url_for('static', filename='prefeitura/orlandia/cerp.png') }}" alt="Gestores analisando painéis de gestão">
+                        </div>
+                        <div class="initiative-card__body">
+                            <h3>Gestão integrada</h3>
+                            <p>Indicadores cruzam ocorrências, contratos e entregas de fornecedores com alertas preventivos para cada secretaria.</p>
+                            <span class="badge rounded-pill text-bg-success">Governança</span>
+                        </div>
+                    </article>
+                </div>
+                <div class="col-md-4">
+                    <article class="initiative-card h-100">
+                        <div class="initiative-card__image">
+                            <img src="{{ url_for('static', filename='prefeitura/orlandia/Pesquisadesatisfacao.png') }}" alt="Aplicativo de pesquisa de satisfação">
+                        </div>
+                        <div class="initiative-card__body">
+                            <h3>Pesquisa com cidadãos</h3>
+                            <p>Feedback contínuo sobre atendimento veterinário, iluminação e limpeza urbana com mapas de calor por bairro.</p>
+                            <span class="badge rounded-pill text-bg-warning">Escuta ativa</span>
+                        </div>
+                    </article>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section class="section-spacing bg-light" id="entregas">
+        <div class="container">
+            <div class="row align-items-center g-5">
+                <div class="col-lg-6">
+                    <div class="metric-card">
+                        <h3>Resultados acompanhados mensalmente</h3>
+                        <ul class="metric-list">
+                            <li>
+                                <span class="metric-value">92%</span>
+                                <span class="metric-label">Chamados de iluminação resolvidos em até 48h</span>
+                            </li>
+                            <li>
+                                <span class="metric-value">+1.200</span>
+                                <span class="metric-label">Atendimentos veterinários registradas em 2024</span>
+                            </li>
+                            <li>
+                                <span class="metric-value">37</span>
+                                <span class="metric-label">Protetores independentes integrados à rede</span>
+                            </li>
+                        </ul>
+                    </div>
+                </div>
+                <div class="col-lg-6">
+                    <div class="survey-card">
+                        <img src="{{ url_for('static', filename='prefeitura/orlandia/Pesquisadesatisfacao.png') }}" alt="Tela de pesquisa de satisfação" class="survey-card__image">
+                        <div class="survey-card__body">
+                            <h4>Pesquisa de satisfação digital</h4>
+                            <p>Resultados consolidados por bairro e por tipo de serviço permitem replanejar equipes com agilidade.</p>
+                            <div class="pill-group">
+                                <span class="pill">Dashboards interativos</span>
+                                <span class="pill">Exportação oficial</span>
+                                <span class="pill">Alertas imediatos</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section class="section-spacing" id="como-funciona">
+        <div class="container">
+            <div class="section-header text-center">
+                <span class="section-eyebrow">Passo a passo</span>
+                <h2>Como a parceria é implementada</h2>
+            </div>
+            <div class="timeline">
+                <div class="timeline__item">
+                    <div class="timeline__number">1</div>
+                    <div>
+                        <h3>Diagnóstico colaborativo</h3>
+                        <p>Mapeamento de equipes, contratos vigentes e demandas mais urgentes da população.</p>
+                    </div>
+                </div>
+                <div class="timeline__item">
+                    <div class="timeline__number">2</div>
+                    <div>
+                        <h3>Implantação assistida</h3>
+                        <p>Configuração de fluxos, treinamentos presenciais e disponibilização de portais digitais.</p>
+                    </div>
+                </div>
+                <div class="timeline__item">
+                    <div class="timeline__number">3</div>
+                    <div>
+                        <h3>Monitoramento contínuo</h3>
+                        <p>Auditorias mensais, análises de impacto e ajustes orçamentários com base em evidências.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section id="contato" class="section-spacing bg-gradient text-white">
+        <div class="container">
+            <div class="row align-items-center g-4">
+                <div class="col-lg-7">
+                    <h2 class="mb-3">Pronto para evoluir a experiência cidadã em Orlândia?</h2>
+                    <p class="lead mb-4">Nossa equipe dedica uma trilha personalizada para a prefeitura com cronograma, integrações e indicadores de sucesso.</p>
+                    <div class="contact-info">
+                        <div>
+                            <span class="contact-label">E-mail</span>
+                            <a href="mailto:contato@petorlandia.com">contato@petorlandia.com</a>
+                        </div>
+                        <div>
+                            <span class="contact-label">Telefone</span>
+                            <a href="tel:+551699999999">+55 (16) 99999-9999</a>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-lg-5">
+                    <div class="contact-card">
+                        <img src="{{ url_for('static', filename='prefeitura/orlandia/Iluminacao.png') }}" alt="Equipe da prefeitura de Orlândia" class="contact-card__image">
+                        <div class="contact-card__body">
+                            <h3>Canal direto com a equipe</h3>
+                            <p>Respondemos em até um dia útil com agenda de demonstração e materiais de apoio para o comitê gestor.</p>
+                            <a class="btn btn-light btn-lg rounded-pill px-4" href="mailto:contato@petorlandia.com">Agendar apresentação</a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+</div>
+{% endblock %}

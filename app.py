@@ -583,6 +583,11 @@ def index():
     return render_template('index.html')
 
 
+@app.route('/prefeitura')
+def prefeitura_page():
+    return render_template('prefeitura/orlandia/index.html')
+
+
 @app.route('/service-worker.js')
 def service_worker():
     return send_from_directory(app.static_folder, 'service-worker.js')
