@@ -1,0 +1,60 @@
+{% extends "layout.html" %}
+
+{% block main %}
+<div id="calendar"></div>
+<script>
+  document.addEventListener('DOMContentLoaded', function() {
+    const csrfToken = "{{ csrf_token() }}";
+    const calendarEl = document.getElementById('calendar');
+    const calendar = new FullCalendar.Calendar(calendarEl, {
+      initialView: 'dayGridMonth',
+      events: '/api/events',
+      selectable: true,
+      editable: true,
+      eventAdd: function(info) {
+        fetch('/api/events', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': csrfToken
+          },
+          body: JSON.stringify({
+            title: info.event.title,
+            start: info.event.start,
+            end: info.event.end
+          })
+        }).then(response => response.json())
+          .then(() => calendar.refetchEvents())
+          .catch(err => console.error('Erro ao adicionar evento:', err));
+      },
+      eventChange: function(info) {
+        fetch(`/api/events/${info.event.id}`, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': csrfToken
+          },
+          body: JSON.stringify({
+            title: info.event.title,
+            start: info.event.start,
+            end: info.event.end
+          })
+        }).then(response => response.json())
+          .then(() => calendar.refetchEvents())
+          .catch(err => console.error('Erro ao atualizar evento:', err));
+      },
+      eventRemove: function(info) {
+        fetch(`/api/events/${info.event.id}`, {
+          method: 'DELETE',
+          headers: {
+            'X-CSRFToken': csrfToken
+          }
+        }).then(response => response.json())
+          .then(() => calendar.refetchEvents())
+          .catch(err => console.error('Erro ao remover evento:', err));
+      }
+    });
+    calendar.render();
+  });
+</script>
+{% endblock %}
