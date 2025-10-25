@@ -100,6 +100,21 @@
                 {% endif %}
             </div>
         </div>
+
+        <!-- Área demonstrativa prefeitura -->
+        <div class="card shadow-lg p-4 rounded-4 mb-5" style="background: #ffffff;">
+            <div class="d-flex flex-column flex-md-row align-items-center justify-content-between gap-3">
+                <div class="text-md-start text-center">
+                    <h5 class="mb-2">Demonstração para a Prefeitura</h5>
+                    <p class="mb-0 text-muted">
+                        Explore ideias de melhorias e execuções personalizadas pensadas para o site da prefeitura de Orlândia.
+                    </p>
+                </div>
+                <a href="{{ url_for('prefeitura_demo') }}" class="btn btn-success rounded-pill px-4 py-2 shadow-sm">
+                    🚀 Ver proposta demonstrativa
+                </a>
+            </div>
+        </div>
     {% endif %}
 
     {% if current_user.is_authenticated and current_user.worker == 'delivery' %}
