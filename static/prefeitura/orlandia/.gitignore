@@ -1,0 +1,6 @@
+# Binary assets for the Orlândia prefeitura landing page live here but stay out of git history.
+# Place PNG/JPG/WebP files alongside style.css as needed for local deployments.
+*.png
+*.jpg
+*.jpeg
+*.webp
