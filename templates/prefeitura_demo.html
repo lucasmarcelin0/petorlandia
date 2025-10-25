@@ -1,197 +1,407 @@
-{% extends "layout.html" %}
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="utf-8">
+    <title>Prefeitura de Orlândia - Portal Demonstrativo</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <link rel="icon" type="image/png" href="{{ url_for('static', filename='pastorgato.png') }}">
 
-{% block main %}
-<div class="prefeitura-demo">
-    <section class="prefeitura-hero shadow-lg">
-        <div class="row g-0 align-items-stretch">
-            <div class="col-lg-7">
-                <div class="prefeitura-hero__content p-4 p-lg-5">
-                    <span class="prefeitura-badge">Prefeitura Municipal de Orlândia</span>
-                    <h1 class="display-6 fw-bold text-white mb-3">Um portal mais humano, com a força do que já existe hoje</h1>
-                    <p class="lead text-white-50 mb-4">
-                        O site atual da Prefeitura já oferece banners informativos, mosaicos de notícias e atalhos para os
-                        principais serviços. Nossa proposta parte dessas referências e adiciona camadas de usabilidade,
-                        acessibilidade e estética contemporânea para gerar confiança e facilitar o autoatendimento.
-                    </p>
-                    <div class="d-flex flex-wrap gap-3 align-items-center">
-                        <a href="https://www.orlandia.sp.gov.br/novo/" target="_blank" rel="noopener"
-                           class="btn btn-light text-dark fw-semibold px-4 py-2 rounded-pill shadow-sm">
-                            🌐 Visitar portal atual
-                        </a>
-                        <a href="#contato-prefeitura" class="btn btn-outline-light fw-semibold px-4 py-2 rounded-pill">
-                            📅 Planejar melhorias
-                        </a>
-                    </div>
-                    <div class="row g-3 mt-4">
-                        <div class="col-6 col-md-4">
-                            <div class="prefeitura-stat-card">
-                                <span class="prefeitura-stat-card__value">+40</span>
-                                <span class="prefeitura-stat-card__label">serviços digitais catalogados</span>
-                            </div>
-                        </div>
-                        <div class="col-6 col-md-4">
-                            <div class="prefeitura-stat-card">
-                                <span class="prefeitura-stat-card__value">24h</span>
-                                <span class="prefeitura-stat-card__label">disponibilidade e protocolos on-line</span>
-                            </div>
-                        </div>
-                        <div class="col-6 col-md-4">
-                            <div class="prefeitura-stat-card">
-                                <span class="prefeitura-stat-card__value">100%</span>
-                                <span class="prefeitura-stat-card__label">conteúdo responsivo e inclusivo</span>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-            <div class="col-lg-5">
-                <div class="prefeitura-hero__panel h-100 p-4 p-lg-5">
-                    <h3 class="fw-semibold mb-3">O que funciona hoje</h3>
-                    <p class="text-muted mb-4">
-                        Respeitamos a estrutura atual do site oficial, que destaca chamadas rápidas para saúde, educação,
-                        finanças e notícias. A nova camada visual mantém esses pilares, reorganizando os conteúdos para uma
-                        navegação mais fluida.
-                    </p>
-                    <ul class="prefeitura-upgrade-list mb-4">
-                        <li>Hero rotativo com campanhas públicas, avisos e banners temáticos.</li>
-                        <li>Grade de notícias e vídeos institucionais atualizada diariamente.</li>
-                        <li>Blocos com links para transparência, concursos e publicações oficiais.</li>
-                    </ul>
-                    <p class="text-muted mb-0">
-                        A proposta amplia essa base com hierarquia visual clara, tipografia elegante e componentes práticos
-                        para celulares e computadores.
-                    </p>
-                </div>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+
+    <link href="{{ url_for('static', filename='bootstrap.min.css') }}" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="{{ url_for('static', filename='styles.css') }}" rel="stylesheet">
+</head>
+<body class="prefeitura-modern-body">
+    <header class="prefeitura-header shadow-sm">
+        <div class="prefeitura-topbar">
+            <div class="container">
+                <span><i class="fa-solid fa-clock me-2"></i> Atendimento ao cidadão • 8h às 17h</span>
+                <nav class="prefeitura-topbar__links">
+                    <a href="#transparencia"><i class="fa-solid fa-scale-balanced"></i> Portal da Transparência</a>
+                    <a href="#noticias"><i class="fa-solid fa-newspaper"></i> Notícias</a>
+                    <a href="#campanhas"><i class="fa-solid fa-bullhorn"></i> Campanhas</a>
+                    <a href="#contato"><i class="fa-solid fa-phone"></i> Contatos</a>
+                </nav>
             </div>
         </div>
-    </section>
-
-    <section class="card border-0 shadow-sm rounded-4 p-4 p-lg-5">
-        <div class="d-flex flex-column flex-lg-row justify-content-between align-items-lg-center gap-3 mb-4">
-            <div>
-                <span class="prefeitura-badge mb-2">Acesso rápido</span>
-                <h2 class="fw-semibold mb-2">Painéis inspirados no site atual</h2>
-                <p class="text-muted mb-0">
-                    Os blocos já presentes na home são reorganizados em cartões responsivos para facilitar a leitura e o toque
-                    em telas menores, mantendo a linguagem visual pública e acolhedora.
-                </p>
-            </div>
-            <div class="text-lg-end">
-                <span class="text-success fw-semibold">Integração com Banco de Dados &bull; Design System modular</span>
-            </div>
-        </div>
-
-        <div class="row g-3 g-lg-4">
-            <div class="col-sm-6 col-lg-3">
-                <article class="prefeitura-service-card h-100">
-                    <div class="prefeitura-service-icon bg-success-subtle text-success">
-                        <i class="fa-solid fa-file-lines"></i>
-                    </div>
-                    <h3 class="h5 fw-semibold">Serviços ao cidadão</h3>
-                    <p class="text-muted mb-0">Reúne IPTU, certidões, protocolos e cartas de serviço com indicadores de status.</p>
-                </article>
-            </div>
-            <div class="col-sm-6 col-lg-3">
-                <article class="prefeitura-service-card h-100">
-                    <div class="prefeitura-service-icon bg-primary-subtle text-primary">
-                        <i class="fa-solid fa-landmark"></i>
-                    </div>
-                    <h3 class="h5 fw-semibold">Transparência</h3>
-                    <p class="text-muted mb-0">Filtros dinâmicos para licitações, contratos, diárias e relatórios contábeis.</p>
-                </article>
-            </div>
-            <div class="col-sm-6 col-lg-3">
-                <article class="prefeitura-service-card h-100">
-                    <div class="prefeitura-service-icon bg-warning-subtle text-warning">
-                        <i class="fa-solid fa-children"></i>
-                    </div>
-                    <h3 class="h5 fw-semibold">Programas sociais</h3>
-                    <p class="text-muted mb-0">Calendário de eventos, esportes, cultura e assistência com formulários simplificados.</p>
-                </article>
-            </div>
-            <div class="col-sm-6 col-lg-3">
-                <article class="prefeitura-service-card h-100">
-                    <div class="prefeitura-service-icon bg-info-subtle text-info">
-                        <i class="fa-solid fa-comments"></i>
-                    </div>
-                    <h3 class="h5 fw-semibold">Ouvidoria integrada</h3>
-                    <p class="text-muted mb-0">Atalhos para denúncias, solicitações e chat humanizado com protocolo automático.</p>
-                </article>
-            </div>
-        </div>
-    </section>
-
-    <section class="row g-4 align-items-stretch">
-        <div class="col-lg-5">
-            <div class="prefeitura-mosaic card border-0 shadow-sm rounded-4 h-100 p-4 p-lg-5">
-                <span class="prefeitura-badge mb-3">Experiência do usuário</span>
-                <h3 class="fw-semibold mb-3">Interações pensadas para qualquer dispositivo</h3>
-                <p class="text-muted">
-                    A nova camada de layout reforça os elementos de destaque do portal atual e apresenta melhorias que ampliam a
-                    sensação de proximidade da gestão com a população.
-                </p>
-                <ul class="prefeitura-upgrade-list">
-                    <li>Menu fixo enxuto com atalhos para serviços, notícias e canais de atendimento.</li>
-                    <li>Cards ilustrados com hierarquia tipográfica e contraste AA de acordo com o WCAG.</li>
-                    <li>Componentes reutilizáveis para notícias, galeria de fotos, boletins oficiais e pregões.</li>
-                </ul>
-                <p class="text-muted mb-0">
-                    Todo o conteúdo pode ser administrado via CMS ou integrado com sistemas internos existentes.
-                </p>
-            </div>
-        </div>
-        <div class="col-lg-7">
-            <div class="prefeitura-timeline card border-0 shadow-sm rounded-4 h-100 p-4 p-lg-5">
-                <span class="prefeitura-badge mb-3">Roadmap sugerido</span>
-                <h3 class="fw-semibold mb-4">Sequência de entregas em ciclos curtos</h3>
-                <div class="prefeitura-timeline__item">
-                    <div class="prefeitura-timeline__marker"></div>
-                    <div>
-                        <h4 class="h5 fw-semibold mb-1">1. Diagnóstico colaborativo</h4>
-                        <p class="text-muted mb-0">Inventário das páginas atuais, entrevistas com secretarias e definição de indicadores de sucesso.</p>
-                    </div>
-                </div>
-                <div class="prefeitura-timeline__item">
-                    <div class="prefeitura-timeline__marker"></div>
-                    <div>
-                        <h4 class="h5 fw-semibold mb-1">2. Protótipos navegáveis</h4>
-                        <p class="text-muted mb-0">Wireframes com as áreas mais acessadas (serviços, notícias, transparência) e testes com munícipes.</p>
-                    </div>
-                </div>
-                <div class="prefeitura-timeline__item">
-                    <div class="prefeitura-timeline__marker"></div>
-                    <div>
-                        <h4 class="h5 fw-semibold mb-1">3. Implementação modular</h4>
-                        <p class="text-muted mb-0">Desenvolvimento por componentes reutilizáveis, integrando APIs já utilizadas pela Prefeitura.</p>
-                    </div>
-                </div>
-                <div class="prefeitura-timeline__item mb-0">
-                    <div class="prefeitura-timeline__marker"></div>
-                    <div>
-                        <h4 class="h5 fw-semibold mb-1">4. Capacitação e métricas</h4>
-                        <p class="text-muted mb-0">Treinamento das equipes, monitoramento contínuo e ajustes orientados por dados de uso.</p>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </section>
-
-    <section id="contato-prefeitura" class="prefeitura-cta card border-0 shadow-lg rounded-4 p-4 p-lg-5">
-        <div class="row g-4 align-items-center">
-            <div class="col-lg-8">
-                <span class="prefeitura-badge mb-3">Colaboração contínua</span>
-                <h2 class="fw-bold mb-3">Vamos transformar o portal juntos</h2>
-                <p class="text-muted mb-0">
-                    Agendamos encontros para alinhar prioridades, conectar equipes técnicas e validar cada melhoria com base nas
-                    demandas reais dos cidadãos. O resultado é um site público moderno, confiável e fácil de manter.
-                </p>
-            </div>
-            <div class="col-lg-4 text-lg-end">
-                <a href="mailto:contato@petorlandia.com" class="btn btn-success px-4 py-3 rounded-pill fw-semibold shadow">
-                    ✉️ Falar com o time PetOrlândia
+        <nav class="navbar navbar-expand-lg navbar-light prefeitura-navbar" aria-label="Navegação principal do portal">
+            <div class="container">
+                <a class="navbar-brand" href="#inicio">
+                    <span class="prefeitura-navbar__brand-mark">
+                        <img src="{{ url_for('static', filename='orlandia-logo.svg') }}" alt="Brasão da Prefeitura de Orlândia">
+                    </span>
+                    <span class="prefeitura-navbar__brand-text">
+                        <span>Prefeitura Municipal</span>
+                        <strong>Orlândia</strong>
+                    </span>
                 </a>
+                <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#prefeituraNav" aria-controls="prefeituraNav" aria-expanded="false" aria-label="Alternar navegação">
+                    <span class="navbar-toggler-icon"></span>
+                </button>
+                <div class="collapse navbar-collapse" id="prefeituraNav">
+                    <ul class="navbar-nav ms-auto mb-2 mb-lg-0 align-items-lg-center">
+                        <li class="nav-item"><a class="nav-link" href="#inicio">Início</a></li>
+                        <li class="nav-item dropdown">
+                            <a class="nav-link dropdown-toggle" href="#servicos" id="menuServicos" role="button" data-bs-toggle="dropdown" aria-expanded="false">Serviços</a>
+                            <ul class="dropdown-menu" aria-labelledby="menuServicos">
+                                <li><a class="dropdown-item" href="#servicos">Cidadão Web</a></li>
+                                <li><a class="dropdown-item" href="#campanhas">Programas e campanhas</a></li>
+                                <li><a class="dropdown-item" href="#transparencia">Transparência municipal</a></li>
+                            </ul>
+                        </li>
+                        <li class="nav-item"><a class="nav-link" href="#noticias">Notícias</a></li>
+                        <li class="nav-item"><a class="nav-link" href="#transparencia">Transparência</a></li>
+                        <li class="nav-item"><a class="nav-link" href="#contato">Fale Conosco</a></li>
+                    </ul>
+                    <form class="prefeitura-navbar__search ms-lg-4 mt-3 mt-lg-0" role="search" action="#" method="get">
+                        <input type="search" name="q" placeholder="Buscar serviços e notícias" aria-label="Buscar serviços e notícias">
+                        <button type="submit"><i class="fa-solid fa-magnifying-glass"></i></button>
+                    </form>
+                </div>
+            </div>
+        </nav>
+    </header>
+
+    <main class="prefeitura-main">
+        <div class="container prefeitura-modern">
+            <section class="prefeitura-modern__hero shadow-lg" id="inicio">
+                <div class="row g-4 align-items-center">
+                    <div class="col-lg-6">
+                        <div class="prefeitura-modern__hero-copy">
+                            <span class="prefeitura-modern__badge">Prefeitura Municipal de Orlândia</span>
+                            <h1 class="display-6 fw-bold mb-2">Portal oficial com serviços, notícias e transparência</h1>
+                            <p class="lead mb-4">Organizamos o conteúdo existente no site atual em uma experiência responsiva, com menu inspirado na navegação oficial e destaque para serviços do cidadão.</p>
+                            <div class="prefeitura-modern__hero-actions">
+                                <a href="#servicos" class="btn btn-light text-primary fw-semibold">Serviços ao cidadão</a>
+                                <a href="#transparencia" class="btn btn-outline-light fw-semibold">Acesso à transparência</a>
+                            </div>
+                            <dl class="prefeitura-modern__metrics">
+                                <div>
+                                    <dt>12</dt>
+                                    <dd>secretarias em evidência</dd>
+                                </div>
+                                <div>
+                                    <dt>24h</dt>
+                                    <dd>serviços digitais ativos</dd>
+                                </div>
+                                <div>
+                                    <dt>+30</dt>
+                                    <dd>notícias atualizadas por mês</dd>
+                                </div>
+                            </dl>
+                            <ul class="prefeitura-modern__hero-list">
+                                <li>Menu reorganizado com as mesmas áreas do portal atual.</li>
+                                <li>Busca unificada para serviços, secretarias e notícias.</li>
+                                <li>Componentes responsivos com contraste adequado e acessibilidade.</li>
+                            </ul>
+                        </div>
+                    </div>
+                    <div class="col-lg-6">
+                        <div class="prefeitura-modern__hero-panel">
+                            <div class="prefeitura-modern__hero-panel__header">
+                                <span class="badge text-bg-light text-primary">Agenda do município</span>
+                                <span class="text-white-50">Atualizado 12/04</span>
+                            </div>
+                            <div class="prefeitura-modern__hero-panel__body">
+                                <div class="prefeitura-modern__hero-panel__item">
+                                    <i class="fa-solid fa-syringe"></i>
+                                    <div>
+                                        <strong>Campanha de vacinação contra a gripe</strong>
+                                        <span>Unidades básicas abertas das 8h às 17h com prioridade para idosos e profissionais de saúde.</span>
+                                    </div>
+                                </div>
+                                <div class="prefeitura-modern__hero-panel__item">
+                                    <i class="fa-solid fa-people-group"></i>
+                                    <div>
+                                        <strong>Mutirão de emprego no PAT</strong>
+                                        <span>Atendimento presencial no Paço Municipal nesta quarta-feira, das 9h às 16h.</span>
+                                    </div>
+                                </div>
+                                <div class="prefeitura-modern__hero-panel__item">
+                                    <i class="fa-solid fa-tree-city"></i>
+                                    <div>
+                                        <strong>Orlândia Mais Verde</strong>
+                                        <span>Cadastro aberto para adoção de praças e plantio de mudas em bairros.</span>
+                                    </div>
+                                </div>
+                            </div>
+                            <a href="#campanhas" class="btn btn-outline-light fw-semibold align-self-start px-4 py-2 rounded-pill">Ver campanhas em destaque</a>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <section class="prefeitura-modern__quick-links" id="servicos">
+                <div class="d-flex flex-column flex-lg-row justify-content-between align-items-lg-center gap-3 mb-4">
+                    <div>
+                        <span class="prefeitura-modern__badge mb-2">Serviços ao cidadão</span>
+                        <h2 class="fw-semibold mb-2">Atalhos inspirados na navegação oficial</h2>
+                        <p class="text-muted mb-0">Os serviços mais acessados continuam em evidência, agora organizados em cartões responsivos com ícones e cores do município.</p>
+                    </div>
+                    <div class="text-lg-end text-primary fw-semibold">Integração com sistemas existentes e atualização diária</div>
+                </div>
+
+                <div class="row row-cols-2 row-cols-md-3 row-cols-lg-6 g-3 g-lg-4">
+                    <div class="col">
+                        <a href="#transparencia" class="prefeitura-modern__quick-link">
+                            <i class="fa-solid fa-receipt"></i>
+                            <span>IPTU e tributos</span>
+                        </a>
+                    </div>
+                    <div class="col">
+                        <a href="#transparencia" class="prefeitura-modern__quick-link">
+                            <i class="fa-solid fa-user-check"></i>
+                            <span>Cidadão Web</span>
+                        </a>
+                    </div>
+                    <div class="col">
+                        <a href="#campanhas" class="prefeitura-modern__quick-link">
+                            <i class="fa-solid fa-stethoscope"></i>
+                            <span>Saúde e vacinação</span>
+                        </a>
+                    </div>
+                    <div class="col">
+                        <a href="#noticias" class="prefeitura-modern__quick-link">
+                            <i class="fa-solid fa-graduation-cap"></i>
+                            <span>Educação</span>
+                        </a>
+                    </div>
+                    <div class="col">
+                        <a href="#transparencia" class="prefeitura-modern__quick-link">
+                            <i class="fa-solid fa-landmark"></i>
+                            <span>Portal da Transparência</span>
+                        </a>
+                    </div>
+                    <div class="col">
+                        <a href="#contato" class="prefeitura-modern__quick-link">
+                            <i class="fa-solid fa-comments"></i>
+                            <span>Ouvidoria</span>
+                        </a>
+                    </div>
+                </div>
+            </section>
+
+            <div class="row g-4 align-items-start">
+                <div class="col-lg-8">
+                    <section class="prefeitura-modern__banners shadow-sm" id="campanhas">
+                        <header class="prefeitura-modern__section-header">
+                            <div>
+                                <span class="prefeitura-modern__badge">Campanhas oficiais</span>
+                                <h3 class="fw-semibold mb-0">Destaques da comunicação municipal</h3>
+                            </div>
+                            <a href="#" class="btn btn-sm btn-outline-primary rounded-pill">Todas as campanhas</a>
+                        </header>
+                        <div class="prefeitura-modern__banner-grid">
+                            <article class="prefeitura-modern__banner prefeitura-modern__banner--alerta">
+                                <div class="prefeitura-modern__banner-text">
+                                    <h4>Atenção: atualização de cadastro imobiliário</h4>
+                                    <p>Moradores podem revisar dados e emitir carnês atualizados diretamente pelo portal.</p>
+                                </div>
+                                <span class="prefeitura-modern__banner-action">Atualizar agora</span>
+                            </article>
+                            <article class="prefeitura-modern__banner prefeitura-modern__banner--pesquisa">
+                                <div class="prefeitura-modern__banner-text">
+                                    <h4>Pesquisa de satisfação do cidadão</h4>
+                                    <p>Queremos saber como melhorar os serviços municipais. Responda em poucos minutos.</p>
+                                </div>
+                                <span class="prefeitura-modern__banner-action">Participar</span>
+                            </article>
+                            <article class="prefeitura-modern__banner prefeitura-modern__banner--iluminacao">
+                                <div class="prefeitura-modern__banner-text">
+                                    <h4>Iluminação pública</h4>
+                                    <p>Registre pontos sem luz e acompanhe o protocolo na nova área de manutenção urbana.</p>
+                                </div>
+                                <span class="prefeitura-modern__banner-action">Registrar demanda</span>
+                            </article>
+                        </div>
+                    </section>
+
+                    <section class="prefeitura-modern__news shadow-sm" id="noticias">
+                        <header class="prefeitura-modern__section-header">
+                            <div>
+                                <span class="prefeitura-modern__badge">Notícias recentes</span>
+                                <h3 class="fw-semibold mb-0">Informações oficiais da Prefeitura</h3>
+                            </div>
+                            <a href="#" class="btn btn-sm btn-outline-primary rounded-pill">Mais notícias</a>
+                        </header>
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <article class="prefeitura-modern__news-card">
+                                    <div class="prefeitura-modern__news-thumb prefeitura-modern__news-thumb--educacao"></div>
+                                    <div class="prefeitura-modern__news-content">
+                                        <span class="prefeitura-modern__tag">Educação</span>
+                                        <h4>Novas vagas para cursos técnicos gratuitos</h4>
+                                        <p>Inscrições on-line abertas para turmas de tecnologia e gestão em parceria com o Centro Paula Souza.</p>
+                                        <span class="prefeitura-modern__news-meta">Publicado em 12/04</span>
+                                    </div>
+                                </article>
+                            </div>
+                            <div class="col-md-6">
+                                <article class="prefeitura-modern__news-card">
+                                    <div class="prefeitura-modern__news-thumb prefeitura-modern__news-thumb--saude"></div>
+                                    <div class="prefeitura-modern__news-content">
+                                        <span class="prefeitura-modern__tag">Saúde</span>
+                                        <h4>Mutirão de vacinação aos sábados</h4>
+                                        <p>Postos ampliam horário para atualizar carteiras de vacinação e aplicar doses de reforço.</p>
+                                        <span class="prefeitura-modern__news-meta">Publicado em 10/04</span>
+                                    </div>
+                                </article>
+                            </div>
+                            <div class="col-md-6">
+                                <article class="prefeitura-modern__news-card">
+                                    <div class="prefeitura-modern__news-thumb prefeitura-modern__news-thumb--obras"></div>
+                                    <div class="prefeitura-modern__news-content">
+                                        <span class="prefeitura-modern__tag">Infraestrutura</span>
+                                        <h4>Programa de recapeamento chega a novos bairros</h4>
+                                        <p>Mais de 20 km de vias recebem sinalização e pavimentação com prioridade para rotas escolares.</p>
+                                        <span class="prefeitura-modern__news-meta">Publicado em 08/04</span>
+                                    </div>
+                                </article>
+                            </div>
+                            <div class="col-md-6">
+                                <article class="prefeitura-modern__news-card">
+                                    <div class="prefeitura-modern__news-thumb prefeitura-modern__news-thumb--cultura"></div>
+                                    <div class="prefeitura-modern__news-content">
+                                        <span class="prefeitura-modern__tag">Cultura</span>
+                                        <h4>Festival de inverno confirmado</h4>
+                                        <p>Programação inclui shows regionais, oficinas artísticas e feira de economia criativa na praça central.</p>
+                                        <span class="prefeitura-modern__news-meta">Publicado em 05/04</span>
+                                    </div>
+                                </article>
+                            </div>
+                        </div>
+                    </section>
+                </div>
+
+                <aside class="col-lg-4">
+                    <section class="prefeitura-modern__sidebar shadow-sm" id="transparencia">
+                        <h3 class="fw-semibold">Transparência e acesso rápido</h3>
+                        <ul class="prefeitura-modern__sidebar-links">
+                            <li>
+                                <a href="#">
+                                    <span class="prefeitura-modern__sidebar-icon bg-primary"><i class="fa-solid fa-id-card"></i></span>
+                                    <div>
+                                        <strong>Cidadão Web</strong>
+                                        <small>Emissão de certidões, protocolos e acompanhamento de solicitações.</small>
+                                    </div>
+                                </a>
+                            </li>
+                            <li>
+                                <a href="#">
+                                    <span class="prefeitura-modern__sidebar-icon bg-success"><i class="fa-solid fa-scale-balanced"></i></span>
+                                    <div>
+                                        <strong>Portal da Transparência</strong>
+                                        <small>Receitas, despesas, contratos e relatórios fiscais atualizados.</small>
+                                    </div>
+                                </a>
+                            </li>
+                            <li>
+                                <a href="#">
+                                    <span class="prefeitura-modern__sidebar-icon bg-warning"><i class="fa-solid fa-bullhorn"></i></span>
+                                    <div>
+                                        <strong>Ouvidoria Municipal</strong>
+                                        <small>Envie solicitações, denúncias ou sugestões para as secretarias.</small>
+                                    </div>
+                                </a>
+                            </li>
+                            <li>
+                                <a href="#">
+                                    <span class="prefeitura-modern__sidebar-icon bg-info"><i class="fa-solid fa-book-open"></i></span>
+                                    <div>
+                                        <strong>Diário Oficial</strong>
+                                        <small>Publicações legais, decretos, licitações e comunicados oficiais.</small>
+                                    </div>
+                                </a>
+                            </li>
+                            <li>
+                                <a href="#">
+                                    <span class="prefeitura-modern__sidebar-icon bg-secondary"><i class="fa-solid fa-clipboard-list"></i></span>
+                                    <div>
+                                        <strong>Concursos e processos seletivos</strong>
+                                        <small>Editais em andamento, provas e resultados.</small>
+                                    </div>
+                                </a>
+                            </li>
+                        </ul>
+                    </section>
+
+                    <section class="prefeitura-modern__sidebar shadow-sm">
+                        <h3 class="fw-semibold">Boletins oficiais</h3>
+                        <div class="prefeitura-modern__doc-card">
+                            <div>
+                                <span class="prefeitura-modern__tag prefeitura-modern__tag--outline">PPA 2025-2028</span>
+                                <h4>Relatório de metas disponível</h4>
+                                <p>Documento interativo com indicadores de desempenho e execução orçamentária.</p>
+                            </div>
+                            <a href="#" class="btn btn-sm btn-outline-primary rounded-pill">Baixar PDF</a>
+                        </div>
+                        <div class="prefeitura-modern__doc-card">
+                            <div>
+                                <span class="prefeitura-modern__tag prefeitura-modern__tag--outline">Boletim Covid-19</span>
+                                <h4>Números atualizados semanalmente</h4>
+                                <p>Dados consolidados das unidades de saúde com histórico de vacinação.</p>
+                            </div>
+                            <a href="#" class="btn btn-sm btn-outline-primary rounded-pill">Consultar boletim</a>
+                        </div>
+                    </section>
+                </aside>
+            </div>
+
+            <section class="prefeitura-modern__cta shadow-lg" id="contato">
+                <div class="row g-4 align-items-center">
+                    <div class="col-lg-7">
+                        <span class="prefeitura-modern__badge mb-3">Fale com a Prefeitura</span>
+                        <h2 class="fw-bold mb-3">Canais oficiais de atendimento ao cidadão</h2>
+                        <p class="text-muted mb-4">Central de atendimento, Ouvidoria e Secretarias municipais continuam acessíveis pelos canais digitais e presenciais.</p>
+                        <div class="prefeitura-modern__contact-grid">
+                            <div class="prefeitura-modern__contact-card">
+                                <strong>Central telefônica</strong>
+                                <span>Segunda a sexta, 8h às 17h</span>
+                                <span class="fw-semibold text-primary">(16) 3820-0000</span>
+                            </div>
+                            <div class="prefeitura-modern__contact-card">
+                                <strong>Ouvidoria digital</strong>
+                                <span>Protocolos e acompanhamento on-line</span>
+                                <span class="fw-semibold text-primary">ouvidoria@orlandia.sp.gov.br</span>
+                            </div>
+                            <div class="prefeitura-modern__contact-card">
+                                <strong>Atendimento presencial</strong>
+                                <span>Paço Municipal • Praça Central</span>
+                                <span class="fw-semibold text-primary">8h às 17h</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-lg-5 text-lg-end">
+                        <div class="d-flex flex-column flex-lg-row justify-content-lg-end gap-3">
+                            <a href="#" class="btn btn-primary px-4 py-3">Acessar Ouvidoria</a>
+                            <a href="mailto:ouvidoria@orlandia.sp.gov.br" class="btn btn-outline-primary px-4 py-3">Enviar e-mail</a>
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </div>
+    </main>
+
+    <footer class="prefeitura-footer">
+        <div class="container d-flex flex-column flex-lg-row justify-content-between gap-3">
+            <div>
+                <strong>Prefeitura Municipal de Orlândia</strong>
+                <p class="mb-0 small">Portal demonstrativo inspirado no site oficial • orlandia.sp.gov.br</p>
+            </div>
+            <div class="d-flex flex-wrap gap-3 small">
+                <a href="#inicio">Início</a>
+                <a href="#servicos">Serviços</a>
+                <a href="#campanhas">Campanhas</a>
+                <a href="#noticias">Notícias</a>
+                <a href="#transparencia">Transparência</a>
+                <a href="#contato">Contato</a>
             </div>
         </div>
-    </section>
-</div>
-{% endblock %}
+    </footer>
+
+    <script src="{{ url_for('static', filename='bootstrap.bundle.min.js') }}"></script>
+</body>
+</html>
