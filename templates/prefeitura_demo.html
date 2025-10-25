@@ -1,80 +1,197 @@
 {% extends "layout.html" %}
 
 {% block main %}
-<div class="container py-5">
-    <div class="card shadow-lg rounded-4 border-0 overflow-hidden">
-        <div class="row g-0">
-            <div class="col-lg-5" style="background: linear-gradient(135deg, #1d976c 0%, #93f9b9 100%);">
-                <div class="h-100 d-flex flex-column justify-content-center text-white p-4 p-lg-5">
-                    <h1 class="fw-bold mb-3">Proposta Demonstrativa</h1>
-                    <p class="lead mb-0">
-                        Esta área apresenta conceitos de layout, usabilidade e serviços digitais pensados para modernizar o portal
-                        da Prefeitura Municipal de Orlândia. O objetivo é mostrar como podemos entregar experiências alinhadas às
-                        necessidades da gestão pública e da população.
-                    </p>
-                </div>
-            </div>
+<div class="prefeitura-demo">
+    <section class="prefeitura-hero shadow-lg">
+        <div class="row g-0 align-items-stretch">
             <div class="col-lg-7">
-                <div class="p-4 p-lg-5">
-                    <h2 class="fw-semibold">Destaques sugeridos</h2>
-                    <p class="text-muted">
-                        A seguir estão algumas ideias estruturadas em pilares de comunicação clara, acesso rápido a serviços e
-                        transparência administrativa.
+                <div class="prefeitura-hero__content p-4 p-lg-5">
+                    <span class="prefeitura-badge">Prefeitura Municipal de Orlândia</span>
+                    <h1 class="display-6 fw-bold text-white mb-3">Um portal mais humano, com a força do que já existe hoje</h1>
+                    <p class="lead text-white-50 mb-4">
+                        O site atual da Prefeitura já oferece banners informativos, mosaicos de notícias e atalhos para os
+                        principais serviços. Nossa proposta parte dessas referências e adiciona camadas de usabilidade,
+                        acessibilidade e estética contemporânea para gerar confiança e facilitar o autoatendimento.
                     </p>
-                    <div class="row g-4">
-                        <div class="col-12">
-                            <div class="d-flex align-items-start">
-                                <div class="me-3 display-6">📌</div>
-                                <div>
-                                    <h5 class="fw-semibold mb-1">Painéis de serviços inteligentes</h5>
-                                    <p class="mb-0 text-muted">Agrupamento de serviços essenciais (IPTU, certidões, agenda de saúde,
-                                        oportunidades de emprego) em painéis responsivos com indicadores visuais de status.</p>
-                                </div>
+                    <div class="d-flex flex-wrap gap-3 align-items-center">
+                        <a href="https://www.orlandia.sp.gov.br/novo/" target="_blank" rel="noopener"
+                           class="btn btn-light text-dark fw-semibold px-4 py-2 rounded-pill shadow-sm">
+                            🌐 Visitar portal atual
+                        </a>
+                        <a href="#contato-prefeitura" class="btn btn-outline-light fw-semibold px-4 py-2 rounded-pill">
+                            📅 Planejar melhorias
+                        </a>
+                    </div>
+                    <div class="row g-3 mt-4">
+                        <div class="col-6 col-md-4">
+                            <div class="prefeitura-stat-card">
+                                <span class="prefeitura-stat-card__value">+40</span>
+                                <span class="prefeitura-stat-card__label">serviços digitais catalogados</span>
                             </div>
                         </div>
-                        <div class="col-12">
-                            <div class="d-flex align-items-start">
-                                <div class="me-3 display-6">🗂️</div>
-                                <div>
-                                    <h5 class="fw-semibold mb-1">Portal de transparência acessível</h5>
-                                    <p class="mb-0 text-muted">Filtros intuitivos, buscas rápidas e visualizações em gráficos para
-                                        relatórios fiscais, licitações e contratos, reforçando a prestação de contas.</p>
-                                </div>
+                        <div class="col-6 col-md-4">
+                            <div class="prefeitura-stat-card">
+                                <span class="prefeitura-stat-card__value">24h</span>
+                                <span class="prefeitura-stat-card__label">disponibilidade e protocolos on-line</span>
                             </div>
                         </div>
-                        <div class="col-12">
-                            <div class="d-flex align-items-start">
-                                <div class="me-3 display-6">🤝</div>
-                                <div>
-                                    <h5 class="fw-semibold mb-1">Participação cidadã simplificada</h5>
-                                    <p class="mb-0 text-muted">Formulários de ouvidoria e solicitações com acompanhamento em tempo
-                                        real, permitindo comunicação transparente entre prefeitura e munícipes.</p>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="col-12">
-                            <div class="d-flex align-items-start">
-                                <div class="me-3 display-6">🌐</div>
-                                <div>
-                                    <h5 class="fw-semibold mb-1">Integração com redes e serviços externos</h5>
-                                    <p class="mb-0 text-muted">Widgets e APIs para notícias oficiais, clima, eventos culturais e
-                                        boletins epidemiológicos, mantendo o site sempre atualizado.</p>
-                                </div>
+                        <div class="col-6 col-md-4">
+                            <div class="prefeitura-stat-card">
+                                <span class="prefeitura-stat-card__value">100%</span>
+                                <span class="prefeitura-stat-card__label">conteúdo responsivo e inclusivo</span>
                             </div>
                         </div>
                     </div>
-                    <hr class="my-4">
-                    <h3 class="fw-semibold">Próximos passos</h3>
-                    <p class="text-muted">Disponibilizo esta proposta como ponto de partida para reuniões com os administradores.
-                        Podemos iterar sobre a identidade visual, fluxos de navegação e integrações técnicas conforme as diretrizes
-                        da prefeitura.</p>
-                    <a href="https://www.orlandia.sp.gov.br/novo/" target="_blank" rel="noopener"
-                       class="btn btn-outline-success rounded-pill px-4 py-2">
-                        🌐 Visitar site atual da prefeitura
-                    </a>
+                </div>
+            </div>
+            <div class="col-lg-5">
+                <div class="prefeitura-hero__panel h-100 p-4 p-lg-5">
+                    <h3 class="fw-semibold mb-3">O que funciona hoje</h3>
+                    <p class="text-muted mb-4">
+                        Respeitamos a estrutura atual do site oficial, que destaca chamadas rápidas para saúde, educação,
+                        finanças e notícias. A nova camada visual mantém esses pilares, reorganizando os conteúdos para uma
+                        navegação mais fluida.
+                    </p>
+                    <ul class="prefeitura-upgrade-list mb-4">
+                        <li>Hero rotativo com campanhas públicas, avisos e banners temáticos.</li>
+                        <li>Grade de notícias e vídeos institucionais atualizada diariamente.</li>
+                        <li>Blocos com links para transparência, concursos e publicações oficiais.</li>
+                    </ul>
+                    <p class="text-muted mb-0">
+                        A proposta amplia essa base com hierarquia visual clara, tipografia elegante e componentes práticos
+                        para celulares e computadores.
+                    </p>
                 </div>
             </div>
         </div>
-    </div>
+    </section>
+
+    <section class="card border-0 shadow-sm rounded-4 p-4 p-lg-5">
+        <div class="d-flex flex-column flex-lg-row justify-content-between align-items-lg-center gap-3 mb-4">
+            <div>
+                <span class="prefeitura-badge mb-2">Acesso rápido</span>
+                <h2 class="fw-semibold mb-2">Painéis inspirados no site atual</h2>
+                <p class="text-muted mb-0">
+                    Os blocos já presentes na home são reorganizados em cartões responsivos para facilitar a leitura e o toque
+                    em telas menores, mantendo a linguagem visual pública e acolhedora.
+                </p>
+            </div>
+            <div class="text-lg-end">
+                <span class="text-success fw-semibold">Integração com Banco de Dados &bull; Design System modular</span>
+            </div>
+        </div>
+
+        <div class="row g-3 g-lg-4">
+            <div class="col-sm-6 col-lg-3">
+                <article class="prefeitura-service-card h-100">
+                    <div class="prefeitura-service-icon bg-success-subtle text-success">
+                        <i class="fa-solid fa-file-lines"></i>
+                    </div>
+                    <h3 class="h5 fw-semibold">Serviços ao cidadão</h3>
+                    <p class="text-muted mb-0">Reúne IPTU, certidões, protocolos e cartas de serviço com indicadores de status.</p>
+                </article>
+            </div>
+            <div class="col-sm-6 col-lg-3">
+                <article class="prefeitura-service-card h-100">
+                    <div class="prefeitura-service-icon bg-primary-subtle text-primary">
+                        <i class="fa-solid fa-landmark"></i>
+                    </div>
+                    <h3 class="h5 fw-semibold">Transparência</h3>
+                    <p class="text-muted mb-0">Filtros dinâmicos para licitações, contratos, diárias e relatórios contábeis.</p>
+                </article>
+            </div>
+            <div class="col-sm-6 col-lg-3">
+                <article class="prefeitura-service-card h-100">
+                    <div class="prefeitura-service-icon bg-warning-subtle text-warning">
+                        <i class="fa-solid fa-children"></i>
+                    </div>
+                    <h3 class="h5 fw-semibold">Programas sociais</h3>
+                    <p class="text-muted mb-0">Calendário de eventos, esportes, cultura e assistência com formulários simplificados.</p>
+                </article>
+            </div>
+            <div class="col-sm-6 col-lg-3">
+                <article class="prefeitura-service-card h-100">
+                    <div class="prefeitura-service-icon bg-info-subtle text-info">
+                        <i class="fa-solid fa-comments"></i>
+                    </div>
+                    <h3 class="h5 fw-semibold">Ouvidoria integrada</h3>
+                    <p class="text-muted mb-0">Atalhos para denúncias, solicitações e chat humanizado com protocolo automático.</p>
+                </article>
+            </div>
+        </div>
+    </section>
+
+    <section class="row g-4 align-items-stretch">
+        <div class="col-lg-5">
+            <div class="prefeitura-mosaic card border-0 shadow-sm rounded-4 h-100 p-4 p-lg-5">
+                <span class="prefeitura-badge mb-3">Experiência do usuário</span>
+                <h3 class="fw-semibold mb-3">Interações pensadas para qualquer dispositivo</h3>
+                <p class="text-muted">
+                    A nova camada de layout reforça os elementos de destaque do portal atual e apresenta melhorias que ampliam a
+                    sensação de proximidade da gestão com a população.
+                </p>
+                <ul class="prefeitura-upgrade-list">
+                    <li>Menu fixo enxuto com atalhos para serviços, notícias e canais de atendimento.</li>
+                    <li>Cards ilustrados com hierarquia tipográfica e contraste AA de acordo com o WCAG.</li>
+                    <li>Componentes reutilizáveis para notícias, galeria de fotos, boletins oficiais e pregões.</li>
+                </ul>
+                <p class="text-muted mb-0">
+                    Todo o conteúdo pode ser administrado via CMS ou integrado com sistemas internos existentes.
+                </p>
+            </div>
+        </div>
+        <div class="col-lg-7">
+            <div class="prefeitura-timeline card border-0 shadow-sm rounded-4 h-100 p-4 p-lg-5">
+                <span class="prefeitura-badge mb-3">Roadmap sugerido</span>
+                <h3 class="fw-semibold mb-4">Sequência de entregas em ciclos curtos</h3>
+                <div class="prefeitura-timeline__item">
+                    <div class="prefeitura-timeline__marker"></div>
+                    <div>
+                        <h4 class="h5 fw-semibold mb-1">1. Diagnóstico colaborativo</h4>
+                        <p class="text-muted mb-0">Inventário das páginas atuais, entrevistas com secretarias e definição de indicadores de sucesso.</p>
+                    </div>
+                </div>
+                <div class="prefeitura-timeline__item">
+                    <div class="prefeitura-timeline__marker"></div>
+                    <div>
+                        <h4 class="h5 fw-semibold mb-1">2. Protótipos navegáveis</h4>
+                        <p class="text-muted mb-0">Wireframes com as áreas mais acessadas (serviços, notícias, transparência) e testes com munícipes.</p>
+                    </div>
+                </div>
+                <div class="prefeitura-timeline__item">
+                    <div class="prefeitura-timeline__marker"></div>
+                    <div>
+                        <h4 class="h5 fw-semibold mb-1">3. Implementação modular</h4>
+                        <p class="text-muted mb-0">Desenvolvimento por componentes reutilizáveis, integrando APIs já utilizadas pela Prefeitura.</p>
+                    </div>
+                </div>
+                <div class="prefeitura-timeline__item mb-0">
+                    <div class="prefeitura-timeline__marker"></div>
+                    <div>
+                        <h4 class="h5 fw-semibold mb-1">4. Capacitação e métricas</h4>
+                        <p class="text-muted mb-0">Treinamento das equipes, monitoramento contínuo e ajustes orientados por dados de uso.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section id="contato-prefeitura" class="prefeitura-cta card border-0 shadow-lg rounded-4 p-4 p-lg-5">
+        <div class="row g-4 align-items-center">
+            <div class="col-lg-8">
+                <span class="prefeitura-badge mb-3">Colaboração contínua</span>
+                <h2 class="fw-bold mb-3">Vamos transformar o portal juntos</h2>
+                <p class="text-muted mb-0">
+                    Agendamos encontros para alinhar prioridades, conectar equipes técnicas e validar cada melhoria com base nas
+                    demandas reais dos cidadãos. O resultado é um site público moderno, confiável e fácil de manter.
+                </p>
+            </div>
+            <div class="col-lg-4 text-lg-end">
+                <a href="mailto:contato@petorlandia.com" class="btn btn-success px-4 py-3 rounded-pill fw-semibold shadow">
+                    ✉️ Falar com o time PetOrlândia
+                </a>
+            </div>
+        </div>
+    </section>
 </div>
 {% endblock %}
