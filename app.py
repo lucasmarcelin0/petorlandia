@@ -93,6 +93,13 @@ babel.init_app(app)
 app.config.setdefault("BABEL_DEFAULT_LOCALE", "pt_BR")
 
 # ----------------------------------------------------------------
+# 3.1)  Blueprints adicionais
+# ----------------------------------------------------------------
+from PrefeituraOrlandia import prefeitura_bp
+
+app.register_blueprint(prefeitura_bp)
+
+# ----------------------------------------------------------------
 # 4)  AWS S3 helper (lazy)
 # ----------------------------------------------------------------
 import boto3
