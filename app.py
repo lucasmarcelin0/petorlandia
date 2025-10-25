@@ -1244,6 +1244,11 @@ def index():
     return render_template('index.html')
 
 
+@app.route('/prefeitura-demonstracao')
+def prefeitura_demo():
+    return render_template('prefeitura_demo.html')
+
+
 @app.route('/service-worker.js')
 def service_worker():
     return send_from_directory(app.static_folder, 'service-worker.js')
