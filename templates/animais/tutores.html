@@ -1,79 +1,79 @@
 {% extends 'layout.html' %}
 {% block main %}
-<div class="container py-4">
-
-  <h2 class="mb-4">👥 Tutores</h2>
-
-  <!-- 🔍 Busca de tutor -->
-  <div class="card mb-4">
-    <div class="card-body">
-      <h5 class="card-title mb-3">🔍 Buscar Tutor</h5>
-      <input id="busca-tutor" class="form-control" placeholder="Digite nome, e‑mail, CPF ou telefone">
-      <ul id="lista-tutores" class="list-group mt-2 d-none"></ul>
-    </div>
-  </div>
-
-  <hr>
-
-  <!-- ➕ Cadastro de novo tutor -->
-  <div class="card">
-    <div class="card-body">
-      <h5 class="card-title mb-3">➕ Cadastrar Novo Tutor</h5>
-
-      <form id="novo-tutor-form" method="POST" action="{{ url_for('tutores') }}" class="js-tutor-form" data-sync="true">
-        <div class="row">
-          <div class="mb-3 col-md-6">
-            <label class="form-label">Nome</label>
-            <input name="name" class="form-control" required>
-          </div>
-          <div class="mb-3 col-md-6">
-            <label class="form-label">E‑mail</label>
-            <input name="email" type="email" class="form-control" required>
-          </div>
-          <div class="mb-3 col-md-6">
-            <label class="form-label">Telefone</label>
-            <input name="phone" class="form-control">
+<div class="container-fluid py-4">
+  <div class="row g-4 align-items-start">
+    <div class="col-12 col-xl-4">
+      <div class="card shadow-sm border-0 rounded-4 h-100">
+        <div class="card-body p-4">
+          <div class="mb-4">
+            <h3 class="fw-semibold mb-1">Gestão de Tutores</h3>
+            <p class="text-muted small mb-0">Busque um tutor existente ou cadastre um novo sem sair desta tela.</p>
           </div>
 
+          <!-- 🔍 Busca de tutor -->
+          <div class="p-3 rounded-4 border bg-light-subtle mb-4">
+            <div class="d-flex align-items-center gap-2 mb-2">
+              <span class="badge bg-primary-subtle text-primary-emphasis rounded-pill">🔍</span>
+              <h6 class="mb-0">Buscar Tutor</h6>
+            </div>
+            <input id="busca-tutor" class="form-control" placeholder="Digite nome, e-mail, CPF, RG, telefone ou endereço">
+            <ul id="lista-tutores" class="list-group shadow-sm mt-2 d-none"></ul>
+            <p class="text-muted small mb-0 mt-2">Selecione para abrir a ficha do tutor.</p>
+          </div>
 
-          <div class="mb-3 col-md-6">
-            <label class="form-label">CPF</label>
-            <input name="cpf" class="form-control">
-          </div>
-          <div class="mb-3 col-md-6">
-            <label class="form-label">RG</label>
-            <input name="rg" class="form-control">
+          <!-- ➕ Cadastro de novo tutor -->
+          <div class="d-flex align-items-center gap-2 mb-3">
+            <span class="badge bg-success-subtle text-success-emphasis rounded-pill">➕</span>
+            <h5 class="fw-semibold mb-0">Cadastrar Novo Tutor</h5>
           </div>
 
-          <!-- Data e idade -->
-          <div class="mb-3 col-md-6">
-            <label class="form-label">Data de Nascimento</label>
-            <input id="date_of_birth" name="date_of_birth" type="text" class="form-control">
-          </div>
-          <div class="mb-3 col-md-6">
-            <label class="form-label">Idade</label>
-            <input id="age" type="number" class="form-control" min="0">
-          </div>
+          <form id="novo-tutor-form" method="POST" action="{{ url_for('tutores') }}" class="js-tutor-form" data-sync="true">
+            <div class="row g-3">
+              <div class="col-md-6">
+                <label class="form-label">Nome</label>
+                <input name="name" class="form-control" required>
+              </div>
+              <div class="col-md-6">
+                <label class="form-label">E-mail</label>
+                <input name="email" type="email" class="form-control" required>
+              </div>
+              <div class="col-md-6">
+                <label class="form-label">Telefone</label>
+                <input name="phone" class="form-control">
+              </div>
+              <div class="col-md-6">
+                <label class="form-label">CPF</label>
+                <input name="cpf" class="form-control">
+              </div>
+              <div class="col-md-6">
+                <label class="form-label">RG</label>
+                <input name="rg" class="form-control">
+              </div>
+              <div class="col-md-6">
+                <label class="form-label">Data de Nascimento</label>
+                <input id="date_of_birth" name="date_of_birth" type="text" class="form-control">
+              </div>
+              <div class="col-md-6">
+                <label class="form-label">Idade</label>
+                <input id="age" type="number" class="form-control" min="0">
+              </div>
+              <div class="col-12">
+                {% include "partials/endereco_form.html" %}
+              </div>
+            </div>
+            <button class="btn btn-success w-100 mt-4" data-original="💾 Salvar e abrir ficha">💾 Salvar e abrir ficha</button>
+          </form>
         </div>
+      </div>
+    </div>
 
-                  
-          <!-- Novo endereço com CEP -->
-          <div class="col-12">
-            {% include "partials/endereco_form.html" %}
-          </div>
-
-        <button class="btn btn-primary btn-lg" data-original="💾 Salvar e abrir ficha">💾 Salvar e abrir ficha</button>
-      </form>
+    <div class="col-12 col-xl-8">
+      <div id="tutores-adicionados">
+        {% include 'partials/tutores_adicionados.html' with compact=True %}
+      </div>
     </div>
   </div>
-
 </div>
-
-<div id="tutores-adicionados">
-{% include 'partials/tutores_adicionados.html' %}
-</div>
-
-
 
 <!-- ✨ Flatpickr CSS & JS -->
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
@@ -101,11 +101,41 @@
       data.forEach(t => {
         const li = document.createElement('li');
         li.className = 'list-group-item list-group-item-action';
-        let texto = `${t.name} (${t.email})`;
-        if (t.specialties) {
-          texto += ` – ${t.specialties}`;
+
+        const nameLine = document.createElement('div');
+        nameLine.className = 'fw-semibold';
+        nameLine.textContent = t.name || 'Tutor sem nome';
+        li.appendChild(nameLine);
+
+        const details = t.details || [
+          t.email,
+          t.phone,
+          t.cpf ? `CPF: ${t.cpf}` : null,
+          t.rg ? `RG: ${t.rg}` : null,
+          t.worker,
+        ].filter(Boolean).join(' • ');
+
+        if (details) {
+          const detailsEl = document.createElement('div');
+          detailsEl.className = 'small text-muted';
+          detailsEl.textContent = details;
+          li.appendChild(detailsEl);
         }
-        li.textContent = texto;
+
+        if (t.specialties) {
+          const specialtiesEl = document.createElement('div');
+          specialtiesEl.className = 'small text-muted';
+          specialtiesEl.textContent = `Especialidades: ${t.specialties}`;
+          li.appendChild(specialtiesEl);
+        }
+
+        if (t.address_summary) {
+          const addressEl = document.createElement('div');
+          addressEl.className = 'small text-muted';
+          addressEl.textContent = t.address_summary;
+          li.appendChild(addressEl);
+        }
+
         li.onclick = () => window.location = `/ficha_tutor/${t.id}`;
         listaTutor.appendChild(li);
       });

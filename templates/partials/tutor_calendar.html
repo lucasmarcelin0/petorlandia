@@ -2,6 +2,8 @@
 {% set events_url = events_url|default(url_for('api_my_appointments')) %}
 {% set pets_url = pets_url|default(url_for('api_my_pets')) %}
 {% set new_pet_url = new_pet_url|default(url_for('novo_animal')) %}
+{% set calendar_summary_toggle_show_label = calendar_summary_toggle_show_label|default('Mostrar resumo por profissional') %}
+{% set calendar_summary_toggle_hide_label = calendar_summary_toggle_hide_label|default('Ocultar resumo por profissional') %}
 
 <section
   id="{{ component_id }}"
@@ -15,6 +17,7 @@
   data-url-edit-appointment="{{ url_for('edit_appointment', appointment_id=0) }}"
   data-url-status="{{ url_for('update_appointment_status', appointment_id=0) }}"
   data-url-delete-appointment="{{ url_for('delete_appointment', appointment_id=0) }}"
+  data-url-print-consulta="{{ url_for('imprimir_consulta', consulta_id=0) }}"
   data-can-start-consulta="{{ 'true' if current_user.worker in ['veterinario', 'colaborador'] else 'false' }}"
   data-can-manage-status="{{ 'true' if (current_user.worker in ['veterinario', 'colaborador']) or current_user.role == 'admin' else 'false' }}"
 >
@@ -34,20 +37,29 @@
               <button type="button" class="btn btn-primary btn-sm" data-next-month aria-label="Próximo mês">
                 <i class="bi bi-chevron-right"></i>
               </button>
-              <div class="btn-group btn-group-sm tutor-calendar__view-toggle ms-2" role="group" aria-label="Alternar visualização">
+              <div class="btn-group btn-group-sm tutor-calendar__view-toggle ms-2 w-100" role="group" aria-label="Alternar visualização">
                 <button type="button" class="btn btn-outline-secondary active" data-view-mode="month" aria-pressed="true">
                   Mensal
                 </button>
                 <button type="button" class="btn btn-outline-secondary" data-view-mode="week" aria-pressed="false">
                   Semanal
                 </button>
+                <button type="button" class="btn btn-outline-secondary" data-today>
+                  Hoje
+                </button>
+                <button
+                  type="button"
+                  class="btn btn-outline-secondary d-flex align-items-center gap-1"
+                  data-calendar-summary-toggle
+                  data-show-label="{{ calendar_summary_toggle_show_label }}"
+                  data-hide-label="{{ calendar_summary_toggle_hide_label }}"
+                  aria-pressed="false"
+                >
+                  <i class="bi bi-layout-sidebar-inset" data-calendar-summary-toggle-icon aria-hidden="true"></i>
+                  <span class="fw-semibold" aria-hidden="true">Profissional</span>
+                  <span class="visually-hidden" data-calendar-summary-toggle-label>{{ calendar_summary_toggle_hide_label }}</span>
+                </button>
               </div>
-            </div>
-            <div class="d-flex flex-wrap gap-2">
-              <button type="button" class="btn btn-outline-secondary btn-sm" data-today>Hoje</button>
-              <button type="button" class="btn btn-success btn-sm" data-new-event>
-                <i class="bi bi-plus-circle me-1"></i> Novo agendamento
-              </button>
             </div>
           </div>
           <h3 class="h6 mb-3 mt-4">Filtros rápidos</h3>
@@ -72,20 +84,44 @@
               <aside
                 class="tutor-calendar__day-detail"
                 data-day-detail
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="{{ component_id }}-day-detail-heading"
                 aria-live="polite"
                 aria-label="Detalhes do dia selecionado"
                 tabindex="-1"
                 aria-busy="false"
                 aria-hidden="true"
               >
-                <button
-                  type="button"
-                  class="tutor-calendar__day-detail-close"
-                  data-close-day-detail
-                  aria-label="Fechar detalhes do dia"
+                <h2
+                  class="visually-hidden"
+                  id="{{ component_id }}-day-detail-heading"
+                  data-day-detail-heading
                 >
-                  <i class="bi bi-x-lg" aria-hidden="true"></i>
-                </button>
+                  Detalhes do dia selecionado
+                </h2>
+                <div class="tutor-calendar__day-detail-controls" data-day-detail-controls>
+                  <button
+                    type="button"
+                    class="tutor-calendar__day-detail-back"
+                    data-back-to-day
+                    hidden
+                    aria-hidden="true"
+                    aria-label="Voltar para os agendamentos do dia"
+                  >
+                    <i class="bi bi-arrow-left-circle" aria-hidden="true"></i>
+                    <span class="tutor-calendar__day-detail-back-text">Agendamentos do dia</span>
+                  </button>
+                  <button
+                    type="button"
+                    class="tutor-calendar__day-detail-close"
+                    data-close-day-detail
+                    aria-label="Fechar detalhes do dia"
+                  >
+                    <span class="visually-hidden">Fechar detalhes do dia</span>
+                    <span class="tutor-calendar__day-detail-close-icon" aria-hidden="true">&times;</span>
+                  </button>
+                </div>
                 <div class="tutor-calendar__day-detail-content" data-day-detail-content>
                   <div class="tutor-calendar__day-detail-placeholder text-muted small">
                     Selecione um dia para ver os compromissos.
@@ -99,66 +135,96 @@
     </div>
 
     <div class="col-12">
-      <div class="card shadow-sm border-0 h-100">
-        <div class="card-body">
-          <div class="d-flex justify-content-between align-items-start mb-3 flex-wrap gap-2">
-            <div>
-              <h3 class="h6 mb-1">Pacientes (Pets)</h3>
-              <span class="text-muted small" data-pet-subtitle>Dados reais da clínica</span>
-            </div>
-            {% if new_pet_url %}
-            <a class="btn btn-primary btn-sm" href="{{ new_pet_url }}">
-              <i class="bi bi-plus-circle me-1"></i> Novo pet
-            </a>
-            {% endif %}
-          </div>
-          <div class="tutor-calendar__pet-filters" data-pet-filters>
-            <div class="tutor-calendar__pet-filter-control tutor-calendar__pet-filter-control--search">
-              <div class="input-group input-group-sm">
-                <span class="input-group-text">
-                  <i class="bi bi-search"></i>
-                </span>
-                <input
-                  type="search"
-                  class="form-control"
-                  data-pet-filter-search
-                  placeholder="Buscar por nome, tutor ou detalhes"
-                  aria-label="Buscar pets"
-                />
+      <div class="row g-4 align-items-stretch">
+        <div class="col-12 col-xl-6">
+          <div class="card shadow-sm border-0 h-100">
+            <div class="card-body d-flex flex-column">
+              <div class="d-flex justify-content-between align-items-start mb-3 flex-wrap gap-2">
+                <div>
+                  <h3 class="h6 mb-1">Pacientes (Pets)</h3>
+                  <span class="text-muted small" data-pet-subtitle>Dados reais da clínica</span>
+                </div>
+                {% if new_pet_url %}
+                <a class="btn btn-primary btn-sm" href="{{ new_pet_url }}">
+                  <i class="bi bi-plus-circle me-1"></i> Novo pet
+                </a>
+                {% endif %}
+              </div>
+              <p class="text-muted small mb-3">
+                Filtre pacientes recentes e acesse rapidamente a ficha ou cadastre um novo pet quando necessário.
+              </p>
+              <div class="tutor-calendar__pet-filters" data-pet-filters>
+                <div class="tutor-calendar__pet-filter-control tutor-calendar__pet-filter-control--search">
+                  <div class="input-group input-group-sm">
+                    <span class="input-group-text">
+                      <i class="bi bi-search"></i>
+                    </span>
+                    <input
+                      type="search"
+                      class="form-control"
+                      data-pet-filter-search
+                      placeholder="Buscar por nome, tutor ou detalhes"
+                      aria-label="Buscar pets"
+                    />
+                  </div>
+                </div>
+                <div class="tutor-calendar__pet-filter-control">
+                  <select class="form-select form-select-sm" data-pet-filter-species aria-label="Filtrar por espécie">
+                    <option value="">Todas as espécies</option>
+                  </select>
+                </div>
+                <div class="tutor-calendar__pet-filter-control">
+                  <select class="form-select form-select-sm" data-pet-filter-breed aria-label="Filtrar por raça" disabled>
+                    <option value="">Todas as raças</option>
+                  </select>
+                </div>
+                <div class="tutor-calendar__pet-filter-actions">
+                  <button type="button" class="btn btn-outline-secondary btn-sm w-100" data-pet-filter-clear disabled>
+                    <i class="bi bi-x-circle me-1"></i> Limpar filtros
+                  </button>
+                </div>
+              </div>
+              <div class="tutor-calendar__pet-list flex-grow-1" data-pet-list aria-live="polite">
+                <div class="text-muted small">Carregando pets...</div>
+              </div>
+              <div class="d-flex flex-column flex-sm-row gap-2 mt-3">
+                <button
+                  type="button"
+                  class="btn btn-outline-secondary btn-sm w-100 flex-sm-fill d-none"
+                  data-toggle-pets
+                  aria-expanded="false"
+                  aria-hidden="true"
+                >
+                  <i class="bi bi-plus-circle me-1"></i> Ver mais pets
+                </button>
+                <button type="button" class="btn btn-outline-primary btn-sm w-100 flex-sm-fill" data-refresh-pets>
+                  <i class="bi bi-arrow-clockwise me-1"></i> Atualizar lista
+                </button>
               </div>
             </div>
-            <div class="tutor-calendar__pet-filter-control">
-              <select class="form-select form-select-sm" data-pet-filter-species aria-label="Filtrar por espécie">
-                <option value="">Todas as espécies</option>
-              </select>
-            </div>
-            <div class="tutor-calendar__pet-filter-control">
-              <select class="form-select form-select-sm" data-pet-filter-breed aria-label="Filtrar por raça" disabled>
-                <option value="">Todas as raças</option>
-              </select>
-            </div>
-            <div class="tutor-calendar__pet-filter-actions">
-              <button type="button" class="btn btn-outline-secondary btn-sm w-100" data-pet-filter-clear disabled>
-                <i class="bi bi-x-circle me-1"></i> Limpar filtros
-              </button>
-            </div>
           </div>
-          <div class="tutor-calendar__pet-list" data-pet-list aria-live="polite">
-            <div class="text-muted small">Carregando pets...</div>
-          </div>
-          <div class="d-flex flex-column flex-sm-row gap-2 mt-3">
-            <button
-              type="button"
-              class="btn btn-outline-secondary btn-sm w-100 flex-sm-fill d-none"
-              data-toggle-pets
-              aria-expanded="false"
-              aria-hidden="true"
-            >
-              <i class="bi bi-plus-circle me-1"></i> Ver mais pets
-            </button>
-            <button type="button" class="btn btn-outline-primary btn-sm w-100 flex-sm-fill" data-refresh-pets>
-              <i class="bi bi-arrow-clockwise me-1"></i> Atualizar lista
-            </button>
+        </div>
+        <div class="col-12 col-xl-6">
+          <div class="card shadow-sm border-0 h-100">
+            <div class="card-body d-flex flex-column">
+              <div class="d-flex justify-content-between align-items-start flex-wrap gap-2 mb-3">
+                <div>
+                  <h3 class="h6 mb-1">Tutores</h3>
+                  <span class="text-muted small">Cadastre um novo responsável com endereço completo sem sair da agenda.</span>
+                </div>
+                <a class="btn btn-outline-primary btn-sm" href="{{ url_for('tutores') }}" target="_blank" rel="noopener">
+                  <i class="bi bi-box-arrow-up-right me-1"></i> Ver todos
+                </a>
+              </div>
+              {% with
+                form_id=component_id ~ '-quick-tutor-form',
+                show_intro=False,
+                include_address=True,
+                address_prefix=component_id ~ '-quick-tutor-address'
+              %}
+                {% include 'partials/calendar_quick_tutor_form.html' %}
+              {% endwith %}
+            </div>
           </div>
         </div>
       </div>
@@ -252,6 +318,18 @@
   max-height: none;
   overflow: visible;
   padding-right: 0;
+}
+
+@media (max-width: 575.98px) {
+  #{{ component_id }} .tutor-calendar__pet-list {
+    max-height: none;
+    overflow-y: visible;
+    padding-right: 0;
+  }
+
+  #{{ component_id }} [data-toggle-pets] {
+    display: none !important;
+  }
 }
 
 #{{ component_id }} .tutor-calendar__pet {
@@ -373,6 +451,20 @@
   background: var(--bs-primary);
   color: #fff;
   border-color: var(--bs-primary);
+}
+
+@media (max-width: 575.98px) {
+  #{{ component_id }} .tutor-calendar__view-toggle {
+    display: flex;
+    flex-wrap: wrap;
+    width: 100%;
+  }
+
+  #{{ component_id }} .tutor-calendar__view-toggle .btn {
+    flex: 1 1 48%;
+    min-width: 0;
+    text-align: center;
+  }
 }
 
 #{{ component_id }} .tutor-calendar__weekdays {
@@ -591,10 +683,47 @@
   box-shadow: 0 22px 40px rgba(99, 102, 241, 0.2);
 }
 
-#{{ component_id }} .tutor-calendar__day-detail-close {
+#{{ component_id }} .tutor-calendar__day-detail-controls {
   position: absolute;
   top: 1rem;
   right: 1rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  z-index: 2;
+}
+
+#{{ component_id }} .tutor-calendar__day-detail-back {
+  border: none;
+  background: rgba(99, 102, 241, 0.12);
+  color: #4338ca;
+  border-radius: 999px;
+  padding: 0.35rem 0.85rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  transition: background 0.2s ease, color 0.2s ease, transform 0.2s ease;
+}
+
+#{{ component_id }} .tutor-calendar__day-detail-back i {
+  font-size: 1rem;
+}
+
+#{{ component_id }} .tutor-calendar__day-detail-back:hover,
+#{{ component_id }} .tutor-calendar__day-detail-back:focus {
+  background: rgba(79, 70, 229, 0.18);
+  color: #312e81;
+  transform: translateY(-1px);
+}
+
+#{{ component_id }} .tutor-calendar__day-detail-back:focus {
+  outline: 0;
+  box-shadow: 0 0 0 0.2rem rgba(99, 102, 241, 0.25);
+}
+
+#{{ component_id }} .tutor-calendar__day-detail-close {
   border: none;
   background: rgba(15, 23, 42, 0.05);
   color: var(--bs-gray-700);
@@ -607,6 +736,13 @@
   transition: background 0.2s ease, color 0.2s ease, transform 0.2s ease;
 }
 
+#{{ component_id }} .tutor-calendar__day-detail-close-icon {
+  display: block;
+  font-size: 1.15rem;
+  font-weight: 700;
+  line-height: 1;
+}
+
 #{{ component_id }} .tutor-calendar__day-detail-close:hover,
 #{{ component_id }} .tutor-calendar__day-detail-close:focus {
   background: rgba(99, 102, 241, 0.16);
@@ -617,6 +753,17 @@
 #{{ component_id }} .tutor-calendar__day-detail-close:focus {
   outline: 0;
   box-shadow: 0 0 0 0.2rem rgba(99, 102, 241, 0.25);
+}
+
+#{{ component_id }} .tutor-calendar__day-detail-back {
+  max-width: min(220px, 60vw);
+}
+
+#{{ component_id }} .tutor-calendar__day-detail-back-text {
+  display: inline-block;
+  white-space: normal;
+  line-height: 1.2;
+  text-align: left;
 }
 
 #{{ component_id }} .tutor-calendar__day-detail-content {
@@ -636,7 +783,22 @@
   justify-content: space-between;
   gap: 0.75rem;
   margin-bottom: 0.75rem;
-  padding-right: 2.25rem;
+  padding-right: clamp(2.5rem, 6vw, 9rem);
+}
+
+#{{ component_id }} .tutor-calendar__day-detail-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
+
+#{{ component_id }} .tutor-calendar__day-detail-actions-text {
+  font-size: 0.85rem;
+  color: var(--bs-gray-600);
+  flex: 1 1 auto;
 }
 
 #{{ component_id }} .tutor-calendar__day-detail-date {
@@ -960,6 +1122,22 @@
   align-items: center;
   justify-content: center;
   gap: 0.35rem;
+}
+
+#{{ component_id }} .tutor-calendar__appointment-status-detail {
+  margin-top: 0.75rem;
+}
+
+#{{ component_id }} .tutor-calendar__appointment-status-detail .badge {
+  font-size: 0.7rem;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+
+#{{ component_id }} .tutor-calendar__appointment-return-info {
+  margin-top: 0.5rem;
+  color: var(--bs-secondary-color, #6c757d);
+  font-size: 0.85rem;
 }
 
 #{{ component_id }} .tutor-calendar__appointment-actions .btn.is-loading {
@@ -1360,8 +1538,11 @@ document.addEventListener('DOMContentLoaded', function() {
   const dayDetailContainer = root.querySelector('[data-day-detail]');
   const dayDetailLayer = root.querySelector('[data-day-detail-layer]');
   const dayDetailBackdrop = root.querySelector('[data-day-detail-backdrop]');
+  const dayDetailControls = root.querySelector('[data-day-detail-controls]');
+  const dayDetailBackBtn = root.querySelector('[data-back-to-day]');
   const dayDetailCloseBtn = root.querySelector('[data-close-day-detail]');
   const dayDetailContent = root.querySelector('[data-day-detail-content]');
+  const dayDetailHeading = root.querySelector('[data-day-detail-heading]');
   const monthLabelEl = root.querySelector('[data-month-label]');
   const yearLabelEl = root.querySelector('[data-year-label]');
   const prevBtn = root.querySelector('[data-prev-month]');
@@ -1385,6 +1566,7 @@ document.addEventListener('DOMContentLoaded', function() {
     editAppointment: root.dataset.urlEditAppointment || '',
     status: root.dataset.urlStatus || '',
     deleteAppointment: root.dataset.urlDeleteAppointment || '',
+    printConsulta: root.dataset.urlPrintConsulta || '',
   };
   const permissions = {
     canStartConsulta: root.dataset.canStartConsulta === 'true',
@@ -1394,6 +1576,7 @@ document.addEventListener('DOMContentLoaded', function() {
   const weekdays = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
   const typeLabels = {
     appointment: 'Consulta',
+    consulta: 'Consulta',
     exam: 'Exame',
     vaccine: 'Vacina',
     grooming: 'Banho e Tosa',
@@ -1405,6 +1588,11 @@ document.addEventListener('DOMContentLoaded', function() {
     accepted: 'Aceita',
   };
   const knownStatusKeys = Object.keys(statusLabels);
+  const consultaStatusLabels = {
+    finalizada: 'Finalizada',
+    in_progress: 'Em andamento',
+    draft: 'Rascunho',
+  };
   const statusActionConfig = [
     {
       status: 'completed',
@@ -1428,14 +1616,20 @@ document.addEventListener('DOMContentLoaded', function() {
 
   const petsInitialLimit = 3;
   const petsPageSize = 9;
+  const sharedCalendarSourceId = 'tutor-calendar';
+
+  const defaultDayDetailHeadingText = 'Detalhes do dia selecionado';
 
   let pets = [];
   let events = [];
+  let allEvents = [];
+  let activeVetFilterId = null;
   let viewDate = new Date();
   let currentViewMode = 'month';
   let currentFilter = 'all';
   let selectedDate = formatDateKey(new Date());
   let usingSharedCalendar = false;
+  let isFetchingLocalEvents = false;
   let isDayDetailOpen = false;
   let lastDetailTrigger = null;
   let dayDetailMode = 'day';
@@ -1492,6 +1686,33 @@ document.addEventListener('DOMContentLoaded', function() {
         focusTarget.focus();
       }
     }
+    updateDayDetailControls();
+    updateDayDetailHeading();
+  }
+
+  function updateDayDetailHeading(text) {
+    if (!dayDetailHeading) {
+      return;
+    }
+    const value = typeof text === 'string' && text.trim() ? text : defaultDayDetailHeadingText;
+    dayDetailHeading.textContent = value;
+  }
+
+  function updateDayDetailControls() {
+    if (!dayDetailBackBtn) {
+      return;
+    }
+    const shouldShowBack = dayDetailMode === 'event';
+    if (shouldShowBack) {
+      dayDetailBackBtn.removeAttribute('hidden');
+      dayDetailBackBtn.setAttribute('aria-hidden', 'false');
+    } else {
+      dayDetailBackBtn.setAttribute('hidden', 'hidden');
+      dayDetailBackBtn.setAttribute('aria-hidden', 'true');
+    }
+    if (dayDetailControls) {
+      dayDetailControls.classList.toggle('has-back', shouldShowBack);
+    }
   }
 
   function parseDate(value) {
@@ -1540,6 +1761,37 @@ document.addEventListener('DOMContentLoaded', function() {
       return null;
     }
     return parsed;
+  }
+
+  function buildScheduleButton(dateKey) {
+    if (!dateKey) {
+      return null;
+    }
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'btn btn-primary btn-sm';
+    button.innerHTML = '<i class="bi bi-plus-circle me-1"></i> Agendar compromisso';
+    button.addEventListener('click', function() {
+      const parsed = parseDateKey(dateKey) || parseDate(dateKey);
+      const slotDate = parsed instanceof Date ? parsed : dateKey;
+      dispatchSlot(slotDate, '09:00');
+    });
+    return button;
+  }
+
+  function buildDayScheduleActions(dateKey) {
+    const button = buildScheduleButton(dateKey);
+    if (!button) {
+      return null;
+    }
+    const wrapper = document.createElement('div');
+    wrapper.className = 'tutor-calendar__day-detail-actions';
+    const hintText = document.createElement('span');
+    hintText.className = 'tutor-calendar__day-detail-actions-text';
+    hintText.textContent = 'Precisa adicionar outro compromisso neste dia?';
+    wrapper.appendChild(hintText);
+    wrapper.appendChild(button);
+    return wrapper;
   }
 
   function formatTime(date) {
@@ -1804,6 +2056,42 @@ document.addEventListener('DOMContentLoaded', function() {
     return appendQueryParam(base, 'appointment_id', appointmentId);
   }
 
+  function buildConsultaDetailUrl(animalId, consultaId) {
+    const base = fillUrlWithId(urlTemplates.consulta, animalId);
+    if (!base) {
+      return null;
+    }
+    return consultaId ? appendQueryParam(base, 'c', consultaId) : base;
+  }
+
+  function buildConsultaPrintUrl(consultaId) {
+    return fillUrlWithId(urlTemplates.printConsulta, consultaId);
+  }
+
+  function deriveAppointmentStatusDetail(statusKey, consultaStatus) {
+    const status = statusKey ? String(statusKey) : '';
+    const consulta = consultaStatus ? String(consultaStatus) : '';
+    if (consulta === 'finalizada') {
+      if (status === 'accepted') {
+        return { label: 'Consulta finalizada e aceita', badgeClass: 'bg-success' };
+      }
+      return { label: 'Consulta finalizada', badgeClass: 'bg-success' };
+    }
+    if (status === 'accepted') {
+      return { label: 'Consulta aceita e não finalizada', badgeClass: 'bg-secondary' };
+    }
+    if (status === 'completed') {
+      return { label: 'Consulta finalizada', badgeClass: 'bg-success' };
+    }
+    if (status === 'canceled') {
+      return { label: 'Consulta cancelada', badgeClass: 'bg-danger' };
+    }
+    if (status === 'scheduled') {
+      return { label: 'Consulta agendada', badgeClass: 'bg-info text-dark' };
+    }
+    return null;
+  }
+
   function updateEventFocusHighlight() {
     const activeKey = focusedEventId ? String(focusedEventId) : null;
     const nodes = root.querySelectorAll('[data-event-id]');
@@ -1834,28 +2122,34 @@ document.addEventListener('DOMContentLoaded', function() {
       return;
     }
     const targetId = String(recordId);
-    let matched = false;
-    events.forEach(function(eventItem) {
-      if (!eventItem) {
-        return;
-      }
-      const ext = eventItem.raw && eventItem.raw.extendedProps ? eventItem.raw.extendedProps : null;
-      const eventRecordId = eventItem.recordId !== undefined && eventItem.recordId !== null
-        ? String(eventItem.recordId)
-        : (ext && ext.recordId !== undefined && ext.recordId !== null ? String(ext.recordId) : null);
-      if (!eventRecordId || eventRecordId !== targetId) {
-        return;
-      }
-      matched = true;
-      const typeKey = getEventBaseType(eventItem) || 'appointment';
-      const nextStatus = resolveStatusKey(statusValue, typeKey);
-      eventItem.status = nextStatus;
-      if (ext) {
-        ext.status = nextStatus;
-      }
-    });
-    if (matched) {
-      renderCalendar();
+    const applyStatusUpdate = function(list) {
+      let listMatched = false;
+      (Array.isArray(list) ? list : []).forEach(function(eventItem) {
+        if (!eventItem) {
+          return;
+        }
+        const ext = eventItem.raw && eventItem.raw.extendedProps ? eventItem.raw.extendedProps : null;
+        const eventRecordId = eventItem.recordId !== undefined && eventItem.recordId !== null
+          ? String(eventItem.recordId)
+          : (ext && ext.recordId !== undefined && ext.recordId !== null ? String(ext.recordId) : null);
+        if (!eventRecordId || eventRecordId !== targetId) {
+          return;
+        }
+        listMatched = true;
+        const typeKey = getEventBaseType(eventItem) || 'appointment';
+        const nextStatus = resolveStatusKey(statusValue, typeKey);
+        eventItem.status = nextStatus;
+        if (ext) {
+          ext.status = nextStatus;
+        }
+      });
+      return listMatched;
+    };
+
+    const matchedInEvents = applyStatusUpdate(events);
+    const matchedInAllEvents = applyStatusUpdate(allEvents);
+    if (matchedInEvents || matchedInAllEvents) {
+      refreshEventsView();
     }
   }
 
@@ -1964,17 +2258,25 @@ document.addEventListener('DOMContentLoaded', function() {
     const rawTypeValue = raw.type || raw.eventType || raw.event_type || extended.eventType || extended.type || extended.event_type || '';
     const rawKindValue = extended.kind || raw.kind || raw.eventKind || raw.event_kind || '';
     const canonicalType = canonicalizeEventTypeKey(rawTypeValue);
+    const normalizedRawType = normalizeFilterValue(rawTypeValue);
     const normalizedKind = normalizeFilterValue(rawKindValue);
     let baseType = canonicalType && canonicalType !== 'all' ? canonicalType : '';
     if (!baseType) {
       baseType = 'appointment';
     }
-    if (baseType === 'grooming') {
+    if (isVaccineKind(normalizedKind)) {
+      baseType = 'vaccine';
+    } else if (baseType === 'grooming') {
       baseType = 'appointment';
     }
     let category = canonicalType && canonicalType !== 'all' ? canonicalType : baseType;
-    if (baseType === 'appointment' && (category === 'grooming' || isGroomingKind(normalizedKind))) {
+    if (isVaccineKind(normalizedKind)) {
+      category = 'vaccine';
+    } else if (baseType === 'appointment' && (category === 'grooming' || isGroomingKind(normalizedKind))) {
       category = 'grooming';
+    }
+    if (normalizedRawType === 'consulta' && baseType === 'appointment' && category === 'appointment') {
+      category = 'consulta';
     }
     if (!category || category === 'all') {
       category = baseType || 'appointment';
@@ -2010,6 +2312,17 @@ document.addEventListener('DOMContentLoaded', function() {
       animalId: animalId,
       raw: raw,
     };
+  }
+
+  function isConsultaEvent(eventData) {
+    if (!eventData) {
+      return false;
+    }
+    const raw = eventData.raw || {};
+    const extended = raw.extendedProps || {};
+    const rawTypeValue = raw.type || raw.eventType || raw.event_type || extended.eventType || extended.type || extended.event_type || '';
+    const normalized = normalizeFilterValue(rawTypeValue);
+    return normalized === 'consulta';
   }
 
   function sortEventsByStart(a, b) {
@@ -2052,6 +2365,60 @@ document.addEventListener('DOMContentLoaded', function() {
     return normalized;
   }
 
+  function normalizeVetFilterId(value) {
+    if (typeof window !== 'undefined'
+      && window.calendarVetColorManager
+      && typeof window.calendarVetColorManager.normalize === 'function') {
+      return window.calendarVetColorManager.normalize(value);
+    }
+    if (value === undefined || value === null) {
+      return null;
+    }
+    if (typeof value === 'number' && Number.isFinite(value)) {
+      return String(value);
+    }
+    const normalized = String(value).trim();
+    return normalized || null;
+  }
+
+  function getEventVetId(eventData) {
+    if (!eventData) {
+      return null;
+    }
+    const raw = eventData.raw || {};
+    const ext = raw.extendedProps || {};
+    const candidate = ext.veterinarioId
+      || ext.veterinario_id
+      || ext.vetId
+      || ext.vet_id
+      || ext.veterinarianId
+      || ext.veterinarian_id
+      || ext.specialistId
+      || ext.specialist_id
+      || raw.veterinarioId
+      || raw.veterinario_id
+      || raw.vetId
+      || raw.vet_id
+      || raw.veterinarianId
+      || raw.veterinarian_id
+      || eventData.vetId
+      || eventData.veterinarioId
+      || eventData.veterinario_id
+      || null;
+    return normalizeVetFilterId(candidate);
+  }
+
+  function filterEventsByVet(list, vetId) {
+    const collection = Array.isArray(list) ? list : [];
+    const normalizedVetId = normalizeVetFilterId(vetId);
+    if (!normalizedVetId) {
+      return collection.slice();
+    }
+    return collection.filter(function(item) {
+      return getEventVetId(item) === normalizedVetId;
+    });
+  }
+
   function canonicalizeEventTypeKey(value) {
     const normalized = normalizeFilterValue(value);
     switch (normalized) {
@@ -2091,6 +2458,15 @@ document.addEventListener('DOMContentLoaded', function() {
     return normalized === 'banho_tosa' || normalized === 'banho e tosa' || normalized === 'grooming';
   }
 
+  function isVaccineKind(value) {
+    const normalized = normalizeFilterValue(value);
+    return normalized === 'vacina'
+      || normalized === 'vacinas'
+      || normalized === 'vacinacao'
+      || normalized === 'imunizacao'
+      || normalized === 'vaccine';
+  }
+
   function getEventKindKey(eventData) {
     if (!eventData) {
       return '';
@@ -2117,7 +2493,11 @@ document.addEventListener('DOMContentLoaded', function() {
 
   function getEventBaseType(eventData) {
     const typeKey = eventData && eventData.type ? normalizeFilterValue(eventData.type) : '';
+    const kindKey = getEventKindKey(eventData);
     if (typeKey) {
+      if (typeKey === 'appointment' && isVaccineKind(kindKey)) {
+        return 'vaccine';
+      }
       return typeKey;
     }
     if (eventData && eventData.category) {
@@ -2126,7 +2506,9 @@ document.addEventListener('DOMContentLoaded', function() {
         return categoryKey;
       }
     }
-    const kindKey = getEventKindKey(eventData);
+    if (isVaccineKind(kindKey)) {
+      return 'vaccine';
+    }
     if (isGroomingKind(kindKey)) {
       return 'appointment';
     }
@@ -2145,6 +2527,9 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     const baseType = getEventBaseType(eventData);
     const kindKey = getEventKindKey(eventData);
+    if (isVaccineKind(kindKey)) {
+      return 'vaccine';
+    }
     if (baseType === 'appointment' && isGroomingKind(kindKey)) {
       return 'grooming';
     }
@@ -2854,7 +3239,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
     card.addEventListener('click', function(evt) {
       if (evt) {
-        const interactiveSelector = 'a, button, input, textarea, select, [role="button"], [data-ignore-card-click]';
+        const interactiveSelector = 'a, button, input, textarea, select, [data-ignore-card-click], [role="button"]:not(.tutor-calendar__day-detail-card)';
         if (evt.target && evt.target.closest(interactiveSelector)) {
           return;
         }
@@ -2906,6 +3291,15 @@ document.addEventListener('DOMContentLoaded', function() {
     } else if (kindLabel) {
       kindLabel = humanizeLabel(kindLabel);
     }
+    const consultaId = ext.consultaId !== undefined && ext.consultaId !== null ? ext.consultaId : null;
+    const consultaStatusKey = ext.consultaStatus || null;
+    const consultaStatusLabel = consultaStatusKey
+      ? (consultaStatusLabels[consultaStatusKey] || humanizeLabel(consultaStatusKey))
+      : null;
+    const retornoDeId = ext.consultaRetornoDeId !== undefined && ext.consultaRetornoDeId !== null
+      ? ext.consultaRetornoDeId
+      : null;
+    const statusDetail = deriveAppointmentStatusDetail(statusKey, consultaStatusKey);
     const tutorName = ext.tutorName || null;
     const animalName = ext.animalName || getPetName(eventData.animalId) || derivePetNameFromTitle(eventData.title) || 'Paciente';
     const vetName = ext.vetName || ext.veterinarioName || deriveVetNameFromTitle(eventData.title) || '—';
@@ -3016,6 +3410,33 @@ document.addEventListener('DOMContentLoaded', function() {
       card.appendChild(peopleGrid);
     }
 
+    if (statusDetail && statusDetail.label) {
+      const statusWrapper = document.createElement('div');
+      statusWrapper.className = 'tutor-calendar__appointment-status-detail';
+      const badge = document.createElement('span');
+      const badgeClasses = ['badge'];
+      if (statusDetail.badgeClass) {
+        statusDetail.badgeClass.split(' ').forEach(function(token) {
+          if (token) {
+            badgeClasses.push(token);
+          }
+        });
+      } else {
+        badgeClasses.push('bg-secondary');
+      }
+      badge.className = badgeClasses.join(' ');
+      badge.textContent = statusDetail.label;
+      statusWrapper.appendChild(badge);
+      card.appendChild(statusWrapper);
+    }
+
+    if (retornoDeId !== null) {
+      const returnInfo = document.createElement('div');
+      returnInfo.className = 'tutor-calendar__appointment-return-info';
+      returnInfo.textContent = `Retorno da consulta #${retornoDeId}`;
+      card.appendChild(returnInfo);
+    }
+
     const infoList = document.createElement('dl');
     infoList.className = 'tutor-calendar__day-detail-info tutor-calendar__appointment-meta';
 
@@ -3031,6 +3452,15 @@ document.addEventListener('DOMContentLoaded', function() {
     appendDetailRow(infoList, 'ID', recordId);
     if (ext.clinicId !== undefined && ext.clinicId !== null) {
       appendDetailRow(infoList, 'Clínica', ext.clinicId);
+    }
+    if (consultaStatusLabel) {
+      appendDetailRow(infoList, 'Status da consulta', consultaStatusLabel);
+    }
+    if (consultaId !== null) {
+      appendDetailRow(infoList, 'Consulta vinculada', `#${consultaId}`);
+    }
+    if (retornoDeId !== null) {
+      appendDetailRow(infoList, 'Retorno da consulta', `#${retornoDeId}`);
     }
 
     card.appendChild(infoList);
@@ -3122,6 +3552,40 @@ document.addEventListener('DOMContentLoaded', function() {
         icon.setAttribute('aria-hidden', 'true');
         btn.appendChild(icon);
         btn.appendChild(document.createTextNode('Iniciar Consulta'));
+        appendActionElement(btn);
+      }
+    }
+
+    if (consultaId !== null && ext.animalId) {
+      const detailUrl = buildConsultaDetailUrl(ext.animalId, consultaId);
+      if (detailUrl) {
+        const btn = document.createElement('a');
+        btn.className = 'btn btn-sm btn-outline-success';
+        btn.href = detailUrl;
+        btn.title = 'Detalhes da consulta';
+        const icon = document.createElement('i');
+        icon.className = 'fa-solid fa-notes-medical me-1';
+        icon.setAttribute('aria-hidden', 'true');
+        btn.appendChild(icon);
+        btn.appendChild(document.createTextNode('Detalhes da consulta'));
+        appendActionElement(btn);
+      }
+    }
+
+    if (consultaId !== null) {
+      const printUrl = buildConsultaPrintUrl(consultaId);
+      if (printUrl) {
+        const btn = document.createElement('a');
+        btn.className = 'btn btn-sm btn-outline-dark';
+        btn.href = printUrl;
+        btn.target = '_blank';
+        btn.rel = 'noopener';
+        btn.title = 'Imprimir consulta';
+        const icon = document.createElement('i');
+        icon.className = 'fa-solid fa-print me-1';
+        icon.setAttribute('aria-hidden', 'true');
+        btn.appendChild(icon);
+        btn.appendChild(document.createTextNode('Imprimir consulta'));
         appendActionElement(btn);
       }
     }
@@ -3227,11 +3691,135 @@ document.addEventListener('DOMContentLoaded', function() {
     return fragment;
   }
 
+  function buildConsultaRecordBlock(eventData, displayLabel, dateKey) {
+    const card = buildDayDetailCard(eventData);
+    if (!card) {
+      return null;
+    }
+
+    const raw = eventData.raw || {};
+    const ext = raw.extendedProps || {};
+    const consultaId = ext.consultaId !== undefined && ext.consultaId !== null ? ext.consultaId : null;
+    const consultaStatusKey = ext.consultaStatus || null;
+    const animalId = ext.animalId || eventData.animalId || null;
+    const tutorId = ext.tutorId || null;
+
+    const infoList = card.querySelector('.tutor-calendar__day-detail-info');
+    if (infoList) {
+      if (consultaStatusKey) {
+        const consultaStatusLabel = consultaStatusLabels[consultaStatusKey] || humanizeLabel(consultaStatusKey);
+        appendDetailRow(infoList, 'Status da consulta', consultaStatusLabel);
+      }
+      if (consultaId !== null) {
+        appendDetailRow(infoList, 'Código da consulta', `#${consultaId}`);
+      }
+    }
+
+    const actionsWrapper = document.createElement('div');
+    actionsWrapper.className = 'tutor-calendar__appointment-actions';
+    const actionsTitle = document.createElement('div');
+    actionsTitle.className = 'tutor-calendar__appointment-actions-title';
+    actionsTitle.textContent = 'Ações rápidas';
+    const actionsGrid = document.createElement('div');
+    actionsGrid.className = 'tutor-calendar__appointment-actions-grid';
+
+    function appendActionElement(element) {
+      if (!element) {
+        return;
+      }
+      element.classList.add('tutor-calendar__appointment-action');
+      actionsGrid.appendChild(element);
+    }
+
+    if (animalId) {
+      const animalUrl = fillUrlWithId(urlTemplates.animalProfile, animalId);
+      if (animalUrl) {
+        const btn = document.createElement('a');
+        btn.className = 'btn btn-sm btn-outline-primary';
+        btn.href = animalUrl;
+        btn.title = 'Ficha do Animal';
+        const icon = document.createElement('i');
+        icon.className = 'fa-solid fa-file-medical me-1';
+        icon.setAttribute('aria-hidden', 'true');
+        btn.appendChild(icon);
+        btn.appendChild(document.createTextNode('Ficha do Animal'));
+        appendActionElement(btn);
+      }
+    }
+
+    if (tutorId) {
+      const tutorUrl = fillUrlWithId(urlTemplates.tutorProfile, tutorId);
+      if (tutorUrl) {
+        const btn = document.createElement('a');
+        btn.className = 'btn btn-sm btn-outline-secondary';
+        btn.href = tutorUrl;
+        btn.title = 'Ficha do Tutor';
+        const icon = document.createElement('i');
+        icon.className = 'fa-solid fa-user me-1';
+        icon.setAttribute('aria-hidden', 'true');
+        btn.appendChild(icon);
+        btn.appendChild(document.createTextNode('Ficha do Tutor'));
+        appendActionElement(btn);
+      }
+    }
+
+    if (consultaId !== null && animalId) {
+      const detailUrl = buildConsultaDetailUrl(animalId, consultaId);
+      if (detailUrl) {
+        const btn = document.createElement('a');
+        btn.className = 'btn btn-sm btn-outline-success';
+        btn.href = detailUrl;
+        btn.title = 'Detalhes da consulta';
+        const icon = document.createElement('i');
+        icon.className = 'fa-solid fa-notes-medical me-1';
+        icon.setAttribute('aria-hidden', 'true');
+        btn.appendChild(icon);
+        btn.appendChild(document.createTextNode('Detalhes da consulta'));
+        appendActionElement(btn);
+      }
+    }
+
+    if (consultaId !== null) {
+      const printUrl = buildConsultaPrintUrl(consultaId);
+      if (printUrl) {
+        const btn = document.createElement('a');
+        btn.className = 'btn btn-sm btn-outline-dark';
+        btn.href = printUrl;
+        btn.target = '_blank';
+        btn.rel = 'noopener';
+        btn.title = 'Imprimir consulta';
+        const icon = document.createElement('i');
+        icon.className = 'fa-solid fa-print me-1';
+        icon.setAttribute('aria-hidden', 'true');
+        btn.appendChild(icon);
+        btn.appendChild(document.createTextNode('Imprimir consulta'));
+        appendActionElement(btn);
+      }
+    }
+
+    if (actionsGrid.childNodes.length) {
+      actionsWrapper.appendChild(actionsTitle);
+      actionsWrapper.appendChild(actionsGrid);
+      card.appendChild(actionsWrapper);
+    }
+
+    const fragment = document.createDocumentFragment();
+    fragment.appendChild(card);
+    return fragment;
+  }
+
   function buildEventDetailContent(eventData, displayLabel, dateKey) {
     if (!eventData) {
       return null;
     }
-    if (getEventBaseType(eventData) === 'appointment') {
+    if (isConsultaEvent(eventData)) {
+      const consultaContent = buildConsultaRecordBlock(eventData, displayLabel, dateKey);
+      if (consultaContent) {
+        return consultaContent;
+      }
+    }
+    const baseType = getEventBaseType(eventData);
+    if (baseType && ['appointment', 'exam', 'vaccine'].includes(baseType)) {
       const appointmentContent = buildAppointmentDetailBlock(eventData, displayLabel, dateKey);
       if (appointmentContent) {
         return appointmentContent;
@@ -3291,6 +3879,7 @@ document.addEventListener('DOMContentLoaded', function() {
     selectedDate = targetDateKey;
 
     const displayLabel = formatDateLabel(targetDateKey);
+    updateDayDetailHeading(displayLabel || targetDateKey || defaultDayDetailHeadingText);
 
     const dayEvents = events.filter(function(event) {
       if (event.date !== targetDateKey) {
@@ -3321,11 +3910,30 @@ document.addEventListener('DOMContentLoaded', function() {
     if (!dayEvents.length) {
       const emptyState = document.createElement('div');
       emptyState.className = 'tutor-calendar__day-detail-empty';
-      emptyState.textContent = currentFilter === 'all'
+
+      const emptyMessage = document.createElement('p');
+      emptyMessage.className = 'mb-3';
+      emptyMessage.textContent = currentFilter === 'all'
         ? 'Nenhum compromisso cadastrado para este dia.'
         : 'Nenhum compromisso para este filtro neste dia.';
+      emptyState.appendChild(emptyMessage);
+
+      const scheduleHint = document.createElement('p');
+      scheduleHint.className = 'small text-muted mb-3';
+      scheduleHint.textContent = 'Você pode agendar um novo compromisso clicando no botão abaixo.';
+      emptyState.appendChild(scheduleHint);
+
+      const scheduleBtn = buildScheduleButton(targetDateKey);
+      if (scheduleBtn) {
+        emptyState.appendChild(scheduleBtn);
+      }
+
       dayDetailContent.appendChild(emptyState);
     } else {
+      const actionsBar = buildDayScheduleActions(targetDateKey);
+      if (actionsBar) {
+        dayDetailContent.appendChild(actionsBar);
+      }
       const fragment = document.createDocumentFragment();
       dayEvents.forEach(function(eventItem) {
         fragment.appendChild(buildDayDetailCard(eventItem));
@@ -3337,6 +3945,7 @@ document.addEventListener('DOMContentLoaded', function() {
     updateEventFocusHighlight();
 
     dayDetailContainer.setAttribute('aria-busy', 'false');
+    updateDayDetailControls();
 
     if (shouldOpen) {
       openDayDetail({ focus: shouldFocus, trigger: opts.trigger });
@@ -3365,6 +3974,19 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     const displayLabel = formatDateLabel(dateKey);
+    const focusedTypeKey = getEventCategoryKey(eventData);
+    const focusedBaseType = getEventBaseType(eventData);
+    const eventTypeLabel = typeLabels[focusedTypeKey] || typeLabels[focusedBaseType] || 'Evento';
+    let headingText = eventData.title;
+    if (!headingText) {
+      const labelParts = [eventTypeLabel];
+      const dateLabel = displayLabel || dateKey;
+      if (dateLabel) {
+        labelParts.push(`em ${dateLabel}`);
+      }
+      headingText = labelParts.join(' ');
+    }
+    updateDayDetailHeading(headingText);
 
     dayDetailContainer.dataset.date = dateKey || '';
     dayDetailContent.innerHTML = '';
@@ -3379,9 +4001,6 @@ document.addEventListener('DOMContentLoaded', function() {
 
     const typeEl = document.createElement('span');
     typeEl.className = 'tutor-calendar__day-detail-count';
-    const focusedTypeKey = getEventCategoryKey(eventData);
-    const focusedBaseType = getEventBaseType(eventData);
-    const eventTypeLabel = typeLabels[focusedTypeKey] || typeLabels[focusedBaseType] || 'Evento';
     typeEl.textContent = `Compromisso: ${eventTypeLabel}`;
     header.appendChild(typeEl);
 
@@ -3398,6 +4017,7 @@ document.addEventListener('DOMContentLoaded', function() {
     updateEventFocusHighlight();
 
     dayDetailContainer.setAttribute('aria-busy', 'false');
+    updateDayDetailControls();
 
     if (shouldOpen) {
       openDayDetail({ focus: shouldFocus, trigger: opts.trigger });
@@ -3423,6 +4043,7 @@ document.addEventListener('DOMContentLoaded', function() {
     if (!target) {
       return;
     }
+    closeDayDetail({ restoreFocus: false });
     const detail = {
       date: formatDateKey(target),
       time: timeHint || formatTime(target) || '09:00',
@@ -3511,7 +4132,6 @@ document.addEventListener('DOMContentLoaded', function() {
         selectedDate = iso;
         lastDetailTrigger = cell;
         renderDayDetail(iso, { open: true, focus: true, trigger: cell });
-        dispatchSlot(cellDate, '09:00');
       });
 
       calendarGrid.appendChild(cell);
@@ -3597,7 +4217,6 @@ document.addEventListener('DOMContentLoaded', function() {
         selectedDate = iso;
         lastDetailTrigger = card;
         renderDayDetail(iso, { open: true, focus: true, trigger: card });
-        dispatchSlot(dayDate, '09:00');
       });
 
       weekViewEl.appendChild(card);
@@ -3659,16 +4278,155 @@ document.addEventListener('DOMContentLoaded', function() {
     });
   }
 
-  function updateEvents(newEvents) {
+  function toSharedEventObject(eventApi) {
+    if (!eventApi) {
+      return null;
+    }
+    const extended = Object.assign({}, eventApi.extendedProps || {});
+    const eventType = extended.eventType || extended.type || eventApi.type || null;
+    return {
+      id: eventApi.id || null,
+      title: eventApi.title || '',
+      start: eventApi.start ? eventApi.start.toISOString() : (eventApi.startStr || null),
+      end: eventApi.end ? eventApi.end.toISOString() : (eventApi.endStr || null),
+      allDay: !!eventApi.allDay,
+      type: eventType,
+      extendedProps: extended,
+    };
+  }
+
+  function normalizeSharedEventPayload(item) {
+    if (!item) {
+      return null;
+    }
+    if (item.raw) {
+      return normalizeSharedEventPayload(item.raw);
+    }
+    if (typeof item.start === 'string') {
+      const plain = Object.assign({
+        id: item.id || null,
+        title: item.title || '',
+        start: item.start || null,
+        end: item.end || null,
+        allDay: !!item.allDay,
+      }, item);
+      const extended = Object.assign({}, plain.extendedProps || {});
+      if (!plain.type) {
+        const derivedType = extended.eventType || extended.type;
+        if (derivedType) {
+          plain.type = derivedType;
+        }
+      }
+      plain.extendedProps = extended;
+      return plain;
+    }
+    if (item.start instanceof Date || item.end instanceof Date) {
+      return toSharedEventObject(item);
+    }
+    const fallback = Object.assign({
+      id: item.id || null,
+      title: item.title || '',
+      start: item.start || item.startStr || null,
+      end: item.end || item.endStr || null,
+      allDay: !!item.allDay,
+    }, item);
+    const extended = Object.assign({}, fallback.extendedProps || {});
+    if (!fallback.type) {
+      const derivedType = extended.eventType || extended.type;
+      if (derivedType) {
+        fallback.type = derivedType;
+      }
+    }
+    fallback.extendedProps = extended;
+    return fallback;
+  }
+
+  function prepareSharedEventsPayload(list) {
+    return (Array.isArray(list) ? list : [])
+      .map(normalizeSharedEventPayload)
+      .filter(Boolean);
+  }
+
+  function dispatchLocalSharedEvents(eventsList) {
+    if (typeof document === 'undefined') {
+      return;
+    }
+    const prepared = prepareSharedEventsPayload(eventsList);
+    if (typeof window !== 'undefined') {
+      window.sharedCalendarEvents = prepared;
+      window.sharedCalendarEventsSource = sharedCalendarSourceId;
+    }
+    document.dispatchEvent(new CustomEvent('sharedCalendarEvents', {
+      detail: {
+        events: prepared,
+        source: sharedCalendarSourceId,
+      },
+    }));
+  }
+
+  function dispatchLocalSharedLoading(isLoading) {
+    if (typeof window !== 'undefined') {
+      window.sharedCalendarIsLoading = !!isLoading;
+    }
+    document.dispatchEvent(new CustomEvent('sharedCalendarEventsLoading', {
+      detail: {
+        loading: !!isLoading,
+        source: sharedCalendarSourceId,
+      },
+    }));
+  }
+
+  function collectCurrentRawEvents() {
+    return events.map(function(eventItem) {
+      if (!eventItem) {
+        return null;
+      }
+      if (eventItem.raw) {
+        return eventItem.raw;
+      }
+      return eventItem;
+    }).filter(Boolean);
+  }
+
+  function broadcastCurrentEvents() {
+    const rawEvents = collectCurrentRawEvents();
+    dispatchLocalSharedEvents(rawEvents);
+  }
+
+  function refreshSharedEventsFromLocal() {
+    if (usingSharedCalendar) {
+      return;
+    }
+    broadcastCurrentEvents();
+  }
+
+  function refreshEventsView(options = {}) {
+    const shouldBroadcast = options.broadcast !== false;
+    events = filterEventsByVet(allEvents, activeVetFilterId);
+    renderCalendar();
+    renderPetList();
+    if (shouldBroadcast) {
+      broadcastCurrentEvents();
+    }
+  }
+
+  function updateEvents(newEvents, options = {}) {
     const normalized = (newEvents || []).map(normalizeEvent).filter(function(ev) {
       return ev && ev.date;
     });
-    events = normalized;
-    renderCalendar();
-    renderPetList();
+    allEvents = normalized;
+    refreshEventsView(options);
   }
 
   async function fetchEventsFromApi() {
+    if (isFetchingLocalEvents) {
+      return;
+    }
+    isFetchingLocalEvents = true;
+    const shouldDispatchLoading = !usingSharedCalendar;
+    if (shouldDispatchLoading) {
+      dispatchLocalSharedLoading(true);
+    }
     try {
       const response = await fetch(eventsUrl, {
         headers: {
@@ -3680,11 +4438,16 @@ document.addEventListener('DOMContentLoaded', function() {
         throw new Error('Não foi possível carregar eventos.');
       }
       const data = await response.json();
-      if (Array.isArray(data)) {
+      if (Array.isArray(data) && !usingSharedCalendar) {
         updateEvents(data);
       }
     } catch (error) {
       console.error('Erro ao carregar eventos para o calendário experimental.', error);
+    } finally {
+      isFetchingLocalEvents = false;
+      if (shouldDispatchLoading) {
+        dispatchLocalSharedLoading(false);
+      }
     }
   }
 
@@ -3842,7 +4605,31 @@ document.addEventListener('DOMContentLoaded', function() {
   });
 
   newEventBtn && newEventBtn.addEventListener('click', function() {
-    dispatchSlot(viewDate, '09:00');
+    const todayKey = formatDateKey(new Date());
+    let targetDateKey = selectedDate || todayKey;
+    let targetDate = parseDateKey(targetDateKey);
+
+    if (!targetDate) {
+      targetDateKey = formatDateKey(viewDate instanceof Date ? viewDate : new Date());
+      targetDate = parseDateKey(targetDateKey) || new Date();
+    }
+
+    selectedDate = targetDateKey;
+
+    if (currentViewMode === 'week') {
+      viewDate = getStartOfWeek(targetDate);
+    } else {
+      viewDate = new Date(targetDate.getFullYear(), targetDate.getMonth(), 1);
+    }
+
+    renderCalendar();
+    renderDayDetail(targetDateKey, {
+      open: true,
+      focus: true,
+      trigger: newEventBtn,
+    });
+
+    dispatchSlot(targetDate, '09:00');
   });
 
   refreshPetsBtn && refreshPetsBtn.addEventListener('click', function() {
@@ -3926,6 +4713,28 @@ document.addEventListener('DOMContentLoaded', function() {
     });
   });
 
+  if (dayDetailBackBtn) {
+    dayDetailBackBtn.addEventListener('click', function(event) {
+      event.preventDefault();
+      const targetDate = (dayDetailContainer && dayDetailContainer.dataset && dayDetailContainer.dataset.date)
+        || selectedDate
+        || null;
+      const trigger = lastDetailTrigger && typeof lastDetailTrigger.focus === 'function'
+        ? lastDetailTrigger
+        : null;
+      dayDetailMode = 'day';
+      focusedEventId = null;
+      const options = {
+        open: true,
+        focus: true,
+      };
+      if (trigger) {
+        options.trigger = trigger;
+      }
+      renderDayDetail(targetDate, options);
+    });
+  }
+
   dayDetailCloseBtn && dayDetailCloseBtn.addEventListener('click', function(event) {
     event.preventDefault();
     closeDayDetail({ restoreFocus: true });
@@ -3944,7 +4753,7 @@ document.addEventListener('DOMContentLoaded', function() {
       if (!card) {
         return;
       }
-      const interactiveSelector = 'a, button, input, textarea, select, [role="button"], [data-ignore-card-click]';
+      const interactiveSelector = 'a, button, input, textarea, select, [data-ignore-card-click], [role="button"]:not(.tutor-calendar__day-detail-card)';
       if (event.target && event.target.closest(interactiveSelector)) {
         return;
       }
@@ -3998,11 +4807,34 @@ document.addEventListener('DOMContentLoaded', function() {
     }
   });
 
+  updateDayDetailControls();
+
+  function handleVetFilterChange(event) {
+    if (!event) {
+      return;
+    }
+    const detail = event.detail || {};
+    const normalized = normalizeVetFilterId(detail.vetId);
+    if (normalized === activeVetFilterId) {
+      return;
+    }
+    activeVetFilterId = normalized;
+    refreshEventsView();
+  }
+
+  document.addEventListener('calendarVetFilterChange', handleVetFilterChange);
+
   function handleSharedEvents(event) {
     if (!event || !event.detail) {
       return;
     }
+    if (event.detail.source === sharedCalendarSourceId) {
+      return;
+    }
     usingSharedCalendar = true;
+    if (typeof window !== 'undefined') {
+      window.sharedCalendarEventsSource = event.detail.source || null;
+    }
     const shared = Array.isArray(event.detail.events) ? event.detail.events : [];
     updateEvents(shared);
   }
@@ -4022,8 +4854,13 @@ document.addEventListener('DOMContentLoaded', function() {
   });
 
   if (Array.isArray(window.sharedCalendarEvents) && window.sharedCalendarEvents.length) {
-    usingSharedCalendar = true;
-    updateEvents(window.sharedCalendarEvents);
+    const sharedSource = typeof window !== 'undefined' ? window.sharedCalendarEventsSource : null;
+    if (sharedSource === sharedCalendarSourceId) {
+      updateEvents(window.sharedCalendarEvents);
+    } else {
+      usingSharedCalendar = true;
+      updateEvents(window.sharedCalendarEvents);
+    }
   } else if (typeof window !== 'undefined' && window.sharedCalendar && typeof window.sharedCalendar.getEvents === 'function') {
     const existing = window.sharedCalendar.getEvents();
     if (Array.isArray(existing) && existing.length) {

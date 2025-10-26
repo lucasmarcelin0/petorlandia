@@ -320,12 +320,20 @@ class ClinicAddStaffForm(FlaskForm):
     submit = SubmitField('Adicionar')
 
 
+class ClinicAddSpecialistForm(FlaskForm):
+    """Form to associate an existing veterinarian as a clinic specialist."""
+
+    email = StringField('Email do especialista', validators=[DataRequired(), Email()])
+    submit = SubmitField('Adicionar especialista')
+
+
 class ClinicStaffPermissionForm(FlaskForm):
     can_manage_clients = BooleanField('Clientes')
     can_manage_animals = BooleanField('Animais')
     can_manage_staff = BooleanField('Funcionários')
     can_manage_schedule = BooleanField('Agenda')
     can_manage_inventory = BooleanField('Estoque')
+    can_view_full_calendar = BooleanField('Visualizar agenda completa da clínica', default=True)
     submit = SubmitField('Salvar')
 
 
