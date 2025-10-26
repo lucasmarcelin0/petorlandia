@@ -19,73 +19,104 @@
 <div class="document">
   {% if clinica %}
     <div class="header">
-      {{ clinic_logo(clinica) }}
-      <div class="clinica-nome">{{ clinica.nome }}</div>
-      {{ clinic_logo(clinica) }}
+      <div class="header-logo">
+        {{ clinic_logo(clinica) }}
+      </div>
+      <div class="header-info">
+        <div class="clinica-nome">{{ clinica.nome }}</div>
+        <div class="clinica-contato">
+          {% if clinica.endereco %}<span>{{ clinica.endereco }}</span>{% endif %}
+          {% if clinica.telefone %}<span>Tel.: {{ clinica.telefone }}</span>{% endif %}
+          {% if clinica.email %}<span>{{ clinica.email }}</span>{% endif %}
+          {% if clinica.cnpj %}<span>CNPJ {{ clinica.cnpj }}</span>{% endif %}
+        </div>
+      </div>
     </div>
   {% endif %}
 
-  <h2>Orçamento da Consulta</h2>
+  <div class="document-title-group">
+    <h1 class="document-title">Orçamento da Consulta</h1>
+    <span class="document-tag">Estimativa de custos</span>
+  </div>
 
-  <div class="top-info">
-    <div class="info-box">
-      <strong>Profissional Responsável</strong><br>
-      {{ veterinario.name }}<br>
-      CRMV: {{ veterinario.veterinario.crmv if veterinario.veterinario else '—' }}
-    </div>
+  <div class="document-meta">
+    <span>Paciente: {{ animal.name }}</span>
+    <span>Responsável: {{ tutor.name }}</span>
+    {% if veterinario and veterinario.name %}<span>Profissional: {{ veterinario.name }}</span>{% endif %}
+  </div>
 
-    <div class="info-box">
-      <strong>Paciente</strong><br>
-      Nome: {{ animal.name }}<br>
-      Espécie: {{ animal.species }}<br>
-      Raça: {{ animal.breed or '—' }}<br>
-      Sexo: {{ animal.sex or '—' }}<br>
-      Peso: {{ animal.peso or '—' }} kg<br>
-      Microchip: {{ animal.microchip_number or '—' }}
-    </div>
-
-    <div class="info-box">
-      <strong>Responsável</strong><br>
-      Nome: {{ tutor.name }}<br>
-      CPF: {{ tutor.cpf or '—' }}<br>
-      Endereço: {{ tutor.address or '—' }}
-    </div>
+  <div class="info-grid">
+    <section class="info-card">
+      <h3>Profissional Responsável</h3>
+      <ul class="info-list">
+        <li><span>Nome</span><span>{{ veterinario.name }}</span></li>
+        <li><span>CRMV</span><span>{{ veterinario.veterinario.crmv if veterinario.veterinario else '—' }}</span></li>
+      </ul>
+    </section>
+    <section class="info-card">
+      <h3>Paciente</h3>
+      <ul class="info-list">
+        <li><span>Espécie</span><span>{{ animal.species or '—' }}</span></li>
+        <li><span>Raça</span><span>{{ animal.breed or '—' }}</span></li>
+        <li><span>Sexo</span><span>{{ animal.sex or '—' }}</span></li>
+        <li><span>Peso</span><span>{{ animal.peso or '—' }} kg</span></li>
+        {% if animal.microchip_number %}<li><span>Microchip</span><span>{{ animal.microchip_number }}</span></li>{% endif %}
+      </ul>
+    </section>
+    <section class="info-card">
+      <h3>Responsável</h3>
+      <ul class="info-list">
+        <li><span>Nome</span><span>{{ tutor.name }}</span></li>
+        <li><span>CPF</span><span>{{ tutor.cpf or '—' }}</span></li>
+        <li><span>Contato</span><span>{{ tutor.phone or '—' }}</span></li>
+        <li><span>Endereço</span><span>{{ tutor.address or '—' }}</span></li>
+      </ul>
+    </section>
   </div>
 
   <table>
     <thead>
       <tr>
         <th>Descrição</th>
-        <th>Valor (R$)</th>
+        <th style="width: 140px; text-align: right;">Valor (R$)</th>
       </tr>
     </thead>
     <tbody>
       {% for item in itens %}
-      <tr>
-        <td>{{ item.descricao }}</td>
-        <td>{{ '%.2f'|format(item.valor) }}</td>
-      </tr>
+        <tr>
+          <td>{{ item.descricao }}</td>
+          <td style="text-align: right;">{{ '%.2f'|format(item.valor) }}</td>
+        </tr>
       {% endfor %}
+    </tbody>
+    <tfoot>
       <tr>
         <th>Total</th>
-        <th>{{ '%.2f'|format(total) }}</th>
+        <th style="text-align: right;">{{ '%.2f'|format(total) }}</th>
       </tr>
-    </tbody>
+    </tfoot>
   </table>
 
-  <div class="assinatura">
-    ___________________________________________<br>
-    <span>{{ veterinario.name }}</span>
-    <span>CRMV: {{ veterinario.veterinario.crmv if veterinario.veterinario else '—' }}</span>
+  <div class="note-block">
+    Este orçamento tem validade de 30 dias a partir da data de emissão e poderá sofrer ajustes conforme a evolução clínica do paciente.
+  </div>
+
+  <div class="signature-block">
+    <div class="signature">
+      <div class="signature-line"></div>
+      <span>{{ veterinario.name }}</span>
+      <span>CRMV {{ veterinario.veterinario.crmv if veterinario.veterinario else '—' }}</span>
+    </div>
   </div>
 
   {% if clinica %}
-  <footer>
-    {{ clinica.nome }} – {{ clinica.endereco }}<br>
-    {% if clinica.telefone %}Telefone: {{ clinica.telefone }} • {% endif %}
-    {% if clinica.email %}Email: {{ clinica.email }} • {% endif %}
-    {% if clinica.cnpj %}CNPJ: {{ clinica.cnpj }}{% endif %}
-  </footer>
+    <footer>
+      <span>{{ clinica.nome }}</span>
+      {% if clinica.endereco %}<span>{{ clinica.endereco }}</span>{% endif %}
+      {% if clinica.telefone %}<span>Tel.: {{ clinica.telefone }}</span>{% endif %}
+      {% if clinica.email %}<span>{{ clinica.email }}</span>{% endif %}
+      {% if clinica.cnpj %}<span>CNPJ {{ clinica.cnpj }}</span>{% endif %}
+    </footer>
   {% endif %}
 </div>
 

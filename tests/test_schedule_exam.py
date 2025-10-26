@@ -7,7 +7,8 @@ import pytest
 import flask_login.utils as login_utils
 from app import app as flask_app, db
 from models import User, Clinica, Animal, Veterinario, Specialty, VetSchedule, ExamAppointment, AgendaEvento, Message
-from datetime import datetime, time, date
+from datetime import datetime, time, date, timezone
+from zoneinfo import ZoneInfo
 from helpers import get_available_times
 
 
@@ -116,6 +117,63 @@ def test_update_exam_appointment_changes_time(client, monkeypatch):
     with flask_app.app_context():
         appt = ExamAppointment.query.get(1)
         assert appt.scheduled_at == datetime(2024, 5, 20, 13, 0)
+
+
+def test_update_exam_confirm_by_only(client, monkeypatch):
+    with flask_app.app_context():
+        tutor_id, vet_user_id, animal_id, vet_id = setup_data()
+    requester_user = type('U', (), {'id': tutor_id, 'worker': None, 'role': 'adotante', 'is_authenticated': True, 'name': 'Tutor'})()
+    login(monkeypatch, requester_user)
+    client.post(
+        f'/animal/{animal_id}/schedule_exam',
+        json={'specialist_id': vet_id, 'date': '2024-05-20', 'time': '09:00'},
+        headers={'Accept': 'application/json'}
+    )
+    resp = client.post(
+        '/exam_appointment/1/update',
+        json={'confirm_by': '2024-05-19T17:30'},
+        headers={'Accept': 'application/json'}
+    )
+    assert resp.status_code == 200
+    data = resp.get_json()
+    assert data['success']
+    assert data['exam']['confirm_by_local'] == '2024-05-19T17:30'
+    with flask_app.app_context():
+        appt = ExamAppointment.query.get(1)
+        expected = datetime(2024, 5, 19, 17, 30, tzinfo=ZoneInfo('America/Sao_Paulo')).astimezone(timezone.utc).replace(tzinfo=None)
+        assert appt.confirm_by == expected
+
+
+def test_update_exam_confirm_by_requires_requester(client, monkeypatch):
+    with flask_app.app_context():
+        tutor_id, vet_user_id, animal_id, vet_id = setup_data()
+        vet_obj = Veterinario.query.get(vet_id)
+    requester_user = type('U', (), {'id': tutor_id, 'worker': None, 'role': 'adotante', 'is_authenticated': True, 'name': 'Tutor'})()
+    login(monkeypatch, requester_user)
+    client.post(
+        f'/animal/{animal_id}/schedule_exam',
+        json={'specialist_id': vet_id, 'date': '2024-05-20', 'time': '09:00'},
+        headers={'Accept': 'application/json'}
+    )
+    specialist_user = type(
+        'U',
+        (),
+        {
+            'id': vet_user_id,
+            'worker': 'veterinario',
+            'role': None,
+            'is_authenticated': True,
+            'name': 'Vet',
+            'veterinario': vet_obj
+        }
+    )()
+    login(monkeypatch, specialist_user)
+    resp = client.post(
+        '/exam_appointment/1/update',
+        json={'confirm_by': '2024-05-19T18:00'},
+        headers={'Accept': 'application/json'}
+    )
+    assert resp.status_code == 403
 
 
 def test_delete_exam_appointment_removes_record(client, monkeypatch):
