@@ -8,7 +8,7 @@
   <div class="card mb-4">
     <div class="card-body">
       <h5 class="card-title mb-3">🔍 Buscar Tutor</h5>
-      <input id="busca-tutor" class="form-control" placeholder="Digite nome, e‑mail, CPF ou telefone">
+      <input id="busca-tutor" class="form-control" placeholder="Digite nome, e-mail, CPF, RG, telefone ou endereço">
       <ul id="lista-tutores" class="list-group mt-2 d-none"></ul>
     </div>
   </div>
@@ -84,6 +84,21 @@
 <script>
   const inputTutor = document.getElementById('busca-tutor');
   const listaTutor = document.getElementById('lista-tutores');
+  const tutorRedirectTemplate = {{ (url_for('ficha_tutor', tutor_id=0).rsplit('/', 1)[0])|tojson }};
+  const tutorSearchUrl = {{ url_for('buscar_tutores')|tojson }};
+
+  function buildTutorRedirectUrl(template, tutorId) {
+    if (!template) {
+      return '';
+    }
+
+    if (template.includes('{id}')) {
+      return template.replace('{id}', tutorId);
+    }
+
+    const normalized = template.endsWith('/') ? template : `${template}/`;
+    return `${normalized}${tutorId}`;
+  }
 
   inputTutor.addEventListener('input', async () => {
     const q = inputTutor.value.trim();
@@ -93,7 +108,7 @@
       return;
     }
 
-    const res = await fetch(`/buscar_tutores?q=${encodeURIComponent(q)}`);
+    const res = await fetch(`${tutorSearchUrl}?q=${encodeURIComponent(q)}`);
     const data = await res.json();
 
     listaTutor.innerHTML = '';
@@ -101,12 +116,47 @@
       data.forEach(t => {
         const li = document.createElement('li');
         li.className = 'list-group-item list-group-item-action';
-        let texto = `${t.name} (${t.email})`;
-        if (t.specialties) {
-          texto += ` – ${t.specialties}`;
+
+        const nameLine = document.createElement('div');
+        nameLine.className = 'fw-semibold';
+        nameLine.textContent = t.name || 'Tutor sem nome';
+        li.appendChild(nameLine);
+
+        const details = t.details || [
+          t.email,
+          t.phone,
+          t.cpf ? `CPF: ${t.cpf}` : null,
+          t.rg ? `RG: ${t.rg}` : null,
+          t.worker,
+        ].filter(Boolean).join(' • ');
+
+        if (details) {
+          const detailsEl = document.createElement('div');
+          detailsEl.className = 'small text-muted';
+          detailsEl.textContent = details;
+          li.appendChild(detailsEl);
         }
-        li.textContent = texto;
-        li.onclick = () => window.location = `/ficha_tutor/${t.id}`;
+
+        if (t.specialties) {
+          const specialtiesEl = document.createElement('div');
+          specialtiesEl.className = 'small text-muted';
+          specialtiesEl.textContent = `Especialidades: ${t.specialties}`;
+          li.appendChild(specialtiesEl);
+        }
+
+        if (t.address_summary) {
+          const addressEl = document.createElement('div');
+          addressEl.className = 'small text-muted';
+          addressEl.textContent = t.address_summary;
+          li.appendChild(addressEl);
+        }
+
+        li.onclick = () => {
+          const redirectUrl = buildTutorRedirectUrl(tutorRedirectTemplate, t.id);
+          if (redirectUrl) {
+            window.location = redirectUrl;
+          }
+        };
         listaTutor.appendChild(li);
       });
       listaTutor.classList.remove('d-none');
