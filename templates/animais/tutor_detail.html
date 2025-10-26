@@ -414,118 +414,8 @@
   </div>
 </div>
 
-<!-- Flatpickr CSS e JS -->
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
-<script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
-<script src="https://cdn.jsdelivr.net/npm/flatpickr/dist/l10n/pt.js"></script>
-
-
-
 
 <script>
-  const breedMap = {{ breed_map | tojson }};
-
-  function updateBreedOptions(animalId = null) {
-    const speciesSelect = animalId
-      ? document.getElementById(`species-select-${animalId}`)
-      : document.getElementById("species-select");
-
-    const breedSelect = animalId
-      ? document.getElementById(`breed-select-${animalId}`)
-      : document.getElementById("breed-select");
-
-    if (!speciesSelect || !breedSelect) return;
-
-    const selectedSpeciesId = speciesSelect.value.toString();
-    const breeds = breedMap[selectedSpeciesId] || [];
-
-    // Limpa opções anteriores
-    breedSelect.innerHTML = '<option value="">Selecione</option>';
-
-    // Adiciona raças da espécie
-    breeds.forEach(b => {
-      const option = document.createElement('option');
-      option.value = b.id;
-      option.textContent = b.name;
-      breedSelect.appendChild(option);
-    });
-  }
-
-
-
-  // ========== ANIMAL: Date <-> Age ==========
-  const animalDob = document.getElementById("animal_dob");
-  const animalAge = document.getElementById("animal_age");
-
-  if (animalDob && animalAge) {
-    flatpickr(animalDob, {
-      locale: "pt",
-      dateFormat: "Y-m-d",
-      altInput: true,
-      altFormat: "d/m/Y",
-      allowInput: false,
-      onChange: function (selectedDates) {
-        if (selectedDates.length) {
-          updateAgeFromDob(animalAge, selectedDates[0]);
-        }
-      }
-    });
-
-    animalAge.addEventListener("input", () => {
-      const age = parseInt(animalAge.value);
-      if (!isNaN(age)) {
-        const estimatedDOB = getDobFromAge(age);
-        animalDob._flatpickr.setDate(estimatedDOB);
-      }
-    });
-
-    window.addEventListener("DOMContentLoaded", () => {
-      if (animalDob.value) {
-        const parsedDob = new Date(animalDob.value);
-        if (!isNaN(parsedDob)) {
-          updateAgeFromDob(animalAge, parsedDob);
-        }
-      }
-    });
-  }
-
-  // ========== TUTOR: Date <-> Age ==========
-  const tutorDob = document.getElementById("tutor_dob");
-  const tutorAge = document.getElementById("tutor_age");
-
-  if (tutorDob && tutorAge) {
-    flatpickr(tutorDob, {
-      locale: "pt",
-      dateFormat: "Y-m-d",
-      altInput: true,
-      altFormat: "d/m/Y",
-      allowInput: true,
-      onChange: function (selectedDates) {
-        if (selectedDates.length) {
-          updateAgeFromDob(tutorAge, selectedDates[0]);
-        }
-      }
-    });
-
-    tutorAge.addEventListener("input", () => {
-      const age = parseInt(tutorAge.value);
-      if (!isNaN(age)) {
-        const estimatedDOB = getDobFromAge(age);
-        tutorDob._flatpickr.setDate(estimatedDOB);
-      }
-    });
-
-    window.addEventListener("DOMContentLoaded", () => {
-      if (tutorDob.value) {
-        const parsedDob = new Date(tutorDob.value);
-        if (!isNaN(parsedDob)) {
-          updateAgeFromDob(tutorAge, parsedDob);
-        }
-      }
-    });
-  }
-
-  // ========== Auxiliares ==========
   function updateAgeFromDob(targetInput, dob) {
     const today = new Date();
     let age = today.getFullYear() - dob.getFullYear();
@@ -541,6 +431,100 @@
     return new Date(today.getFullYear() - age, today.getMonth(), today.getDate());
   }
 
+  document.addEventListener('DOMContentLoaded', () => {
+    const breedMap = {{ breed_map | tojson }};
+
+    function updateBreedOptions(animalId = null) {
+      const speciesSelect = animalId
+        ? document.getElementById(`species-select-${animalId}`)
+        : document.getElementById("species-select");
+
+      const breedSelect = animalId
+        ? document.getElementById(`breed-select-${animalId}`)
+        : document.getElementById("breed-select");
+
+      if (!speciesSelect || !breedSelect) return;
+
+      const selectedSpeciesId = speciesSelect.value.toString();
+      const breeds = breedMap[selectedSpeciesId] || [];
+
+      breedSelect.innerHTML = '<option value="">Selecione</option>';
+      breeds.forEach(b => {
+        const option = document.createElement('option');
+        option.value = b.id;
+        option.textContent = b.name;
+        breedSelect.appendChild(option);
+      });
+    }
+
+    const animalDob = document.getElementById("animal_dob");
+    const animalAge = document.getElementById("animal_age");
+
+    if (animalDob && animalAge && typeof flatpickr === 'function') {
+      flatpickr(animalDob, {
+        locale: "pt",
+        dateFormat: "Y-m-d",
+        altInput: true,
+        altFormat: "d/m/Y",
+        allowInput: false,
+        onChange(selectedDates) {
+          if (selectedDates.length) {
+            updateAgeFromDob(animalAge, selectedDates[0]);
+          }
+        }
+      });
+
+      animalAge.addEventListener("input", () => {
+        const age = parseInt(animalAge.value);
+        if (!isNaN(age)) {
+          const estimatedDOB = getDobFromAge(age);
+          animalDob._flatpickr.setDate(estimatedDOB);
+        }
+      });
+
+      if (animalDob.value) {
+        const parsedDob = new Date(animalDob.value);
+        if (!isNaN(parsedDob)) {
+          updateAgeFromDob(animalAge, parsedDob);
+        }
+      }
+    }
+
+    const tutorDob = document.getElementById("tutor_dob");
+    const tutorAge = document.getElementById("tutor_age");
+
+    if (tutorDob && tutorAge && typeof flatpickr === 'function') {
+      flatpickr(tutorDob, {
+        locale: "pt",
+        dateFormat: "Y-m-d",
+        altInput: true,
+        altFormat: "d/m/Y",
+        allowInput: true,
+        onChange(selectedDates) {
+          if (selectedDates.length) {
+            updateAgeFromDob(tutorAge, selectedDates[0]);
+          }
+        }
+      });
+
+      tutorAge.addEventListener("input", () => {
+        const age = parseInt(tutorAge.value);
+        if (!isNaN(age)) {
+          const estimatedDOB = getDobFromAge(age);
+          tutorDob._flatpickr.setDate(estimatedDOB);
+        }
+      });
+
+      if (tutorDob.value) {
+        const parsedDob = new Date(tutorDob.value);
+        if (!isNaN(parsedDob)) {
+          updateAgeFromDob(tutorAge, parsedDob);
+        }
+      }
+    }
+
+    updateBreedOptions();
+  });
 </script>
 
 <script>

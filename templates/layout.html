@@ -1,4 +1,6 @@
 {% from 'components/logo.html' import clinic_logo %}
+{% set page_requires = namespace(tutor_search=false) %}
+{% block register_dependencies %}{% endblock %}
 <!DOCTYPE html>
 <html lang="pt-br">
 <head>
@@ -26,6 +28,8 @@
 
     <link href="{{ url_for('static', filename='images.css') }}" rel="stylesheet">
     <link href="{{ url_for('static', filename='styles.css') }}" rel="stylesheet">
+    <link href="{{ url_for('static', filename='css/forms.css') }}" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
 
     <style>
         :root {
@@ -415,7 +419,7 @@
     });
 </script>
 
-<body>
+<body{% if page_requires.tutor_search %} data-tutor-search="true"{% endif %}{% block body_attrs %}{% endblock %}>
     <nav class="navbar navbar-expand-lg fixed-top navbar-light">
         <div class="container-fluid">
             {% if current_user.is_authenticated and current_user.role == "admin" %}
@@ -461,17 +465,6 @@
                                 <li class="nav-item">
                                     <a class="nav-link" href="{{ url_for('list_delivery_requests') }}">
                                         <i class="fas fa-truck me-1 text-warning"></i> Solicitações
-                                    </a>
-                                </li>
-                            {% endif %}
-
-                            {% if current_user.worker == 'veterinario' %}
-                                <li class="nav-item position-relative">
-                                    <a class="nav-link" href="{{ url_for('clinic_invites') }}">
-                                        <i class="fas fa-envelope me-1 text-warning"></i> Convites
-                                        {% if pending_clinic_invites > 0 %}
-                                            <span class="badge rounded-pill bg-danger position-absolute top-0 start-100 translate-middle">{{ pending_clinic_invites }}</span>
-                                        {% endif %}
                                     </a>
                                 </li>
                             {% endif %}
@@ -898,10 +891,15 @@
       });
     });
   </script>
+  <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+  <script src="https://cdn.jsdelivr.net/npm/flatpickr/dist/l10n/pt.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/inputmask@5.0.8/dist/inputmask.min.js"></script>
   <script src="{{ url_for('static', filename='masks.js') }}"></script>
   <script src="{{ url_for('static', filename='avatar_helper.js') }}"></script>
   <script src="{{ url_for('static', filename='js/mobile.js') }}"></script>
+  {% if page_requires.tutor_search %}
+  <script src="{{ url_for('static', filename='js/tutor_search.js') }}"></script>
+  {% endif %}
   <!-- Page specific scripts -->
   {% block scripts %}{% endblock %}
 </body>

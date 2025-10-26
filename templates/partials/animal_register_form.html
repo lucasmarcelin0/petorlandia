@@ -4,11 +4,11 @@
 
     {% if not tutor %}
     <!-- 🔎 Tutor -->
-    <div class="mb-3 position-relative">
+    <div class="mb-3" data-combobox>
       <label for="autocomplete-tutor" class="form-label">👤 Tutor</label>
       <input type="text" id="autocomplete-tutor" class="form-control" placeholder="Digite nome ou e-mail do tutor">
       <input type="hidden" name="tutor_id" id="tutor_id">
-      <ul class="list-group position-absolute w-100 mt-1 d-none" id="tutor-results" style="z-index: 1000;"></ul>
+      <ul class="list-group combobox-list d-none" id="tutor-results"></ul>
       <div class="text-end mt-2">
         <a href="{{ url_for('tutores') }}" class="btn btn-sm btn-outline-secondary">
           ➕ Cadastrar novo tutor
@@ -85,11 +85,6 @@
     </div>
     </form>
 
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
-    <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
-    <script src="https://cdn.jsdelivr.net/npm/flatpickr/dist/l10n/pt.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/inputmask@5.0.8/dist/inputmask.min.js"></script>
-
     <script>
     function validarTutor() {
       {% if not tutor %}
@@ -117,11 +112,13 @@
     const tutorInput = document.getElementById('autocomplete-tutor');
     const tutorResults = document.getElementById('tutor-results');
     const tutorIdField = document.getElementById('tutor_id');
+    const tutorCombobox = tutorInput?.closest('[data-combobox]');
 
     tutorInput?.addEventListener('input', async () => {
       const q = tutorInput.value.trim();
       if (q.length < 2) {
         tutorResults.classList.add('d-none');
+        tutorCombobox?.classList.remove('is-open');
         tutorResults.innerHTML = '';
         return;
       }
@@ -136,10 +133,24 @@
           tutorInput.value = t.name;
           tutorIdField.value = t.id;
           tutorResults.classList.add('d-none');
+          tutorCombobox?.classList.remove('is-open');
         };
         tutorResults.appendChild(li);
       });
-      tutorResults.classList.toggle('d-none', data.length === 0);
+      if (data.length === 0) {
+        tutorResults.classList.add('d-none');
+        tutorCombobox?.classList.remove('is-open');
+      } else {
+        tutorResults.classList.remove('d-none');
+        tutorCombobox?.classList.add('is-open');
+      }
+    });
+
+    document.addEventListener('click', (event) => {
+      if (!tutorCombobox?.contains(event.target)) {
+        tutorResults.classList.add('d-none');
+        tutorCombobox?.classList.remove('is-open');
+      }
     });
   </script>
 

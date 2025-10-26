@@ -47,3 +47,8 @@ class Config:
     # Política padrão de retorno em dias para consultas
     DEFAULT_RETURN_DAYS = int(os.environ.get("DEFAULT_RETURN_DAYS", "7"))
 
+    # Prazo padrão (em horas) para confirmação de solicitações de exame
+    EXAM_CONFIRM_DEFAULT_HOURS = int(
+        os.environ.get("EXAM_CONFIRM_DEFAULT_HOURS", "2")
+    )
+

@@ -6,7 +6,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')
 import pytest
 import flask_login.utils as login_utils
 from app import app as flask_app, db
-from datetime import time
+from datetime import datetime, time, timedelta
 from models import (
     User,
     Animal,
@@ -142,3 +142,52 @@ def test_appointment_form_has_extra_kind_choices(client):
         form = AppointmentForm()
         assert ('banho_tosa', 'Banho e Tosa') in form.kind.choices
         assert ('vacina', 'Vacina') in form.kind.choices
+
+
+def test_specialist_can_accept_appointment_outside_primary_clinic(client, monkeypatch):
+    with flask_app.app_context():
+        clinic_primary = Clinica(id=1, nome='Clínica Principal')
+        clinic_partner = Clinica(id=2, nome='Clínica Parceira')
+        tutor = User(id=10, name='Tutor', email='tutor@teste')
+        tutor.set_password('x')
+        vet_user = User(id=11, name='Especialista', email='esp@teste', worker='veterinario')
+        vet_user.set_password('x')
+        animal = Animal(id=5, name='Bolt', user_id=tutor.id, clinica_id=clinic_partner.id)
+        vet = Veterinario(id=3, user_id=vet_user.id, crmv='999', clinica_id=clinic_primary.id)
+        scheduled_at = datetime.utcnow() + timedelta(hours=3)
+        appt = Appointment(
+            id=7,
+            animal_id=animal.id,
+            tutor_id=tutor.id,
+            veterinario_id=vet.id,
+            scheduled_at=scheduled_at,
+            clinica_id=clinic_partner.id,
+            status='scheduled',
+        )
+        db.session.add_all([clinic_primary, clinic_partner, tutor, vet_user, animal, vet, appt])
+        db.session.commit()
+        appointment_id = appt.id
+        vet_id = vet.id
+        vet_user_id = vet_user.id
+        clinic_primary_id = clinic_primary.id
+
+    fake_vet = type('U', (), {
+        'id': vet_user_id,
+        'worker': 'veterinario',
+        'role': 'adotante',
+        'name': 'Especialista',
+        'is_authenticated': True,
+        'veterinario': type('V', (), {
+            'id': vet_id,
+            'clinica_id': clinic_primary_id,
+            'clinicas': [],
+        })(),
+    })()
+
+    login(monkeypatch, fake_vet)
+
+    resp = client.post(f'/appointments/{appointment_id}/status', data={'status': 'accepted'})
+    assert resp.status_code == 302
+
+    with flask_app.app_context():
+        assert Appointment.query.get(appointment_id).status == 'accepted'
