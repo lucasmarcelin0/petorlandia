@@ -15,46 +15,74 @@
 <div class="document">
   {% if clinica %}
     <div class="header">
-      {{ clinic_logo(clinica) }}
-      <div class="clinica-nome">{{ clinica.nome }}</div>
-      {{ clinic_logo(clinica) }}
+      <div class="header-logo">
+        {{ clinic_logo(clinica) }}
+      </div>
+      <div class="header-info">
+        <div class="clinica-nome">{{ clinica.nome }}</div>
+        <div class="clinica-contato">
+          {% if clinica.endereco %}<span>{{ clinica.endereco }}</span>{% endif %}
+          {% if clinica.telefone %}<span>Tel.: {{ clinica.telefone }}</span>{% endif %}
+          {% if clinica.email %}<span>{{ clinica.email }}</span>{% endif %}
+          {% if clinica.cnpj %}<span>CNPJ {{ clinica.cnpj }}</span>{% endif %}
+        </div>
+      </div>
+      <div class="header-logo header-logo--right">
+        {{ clinic_logo(clinica) }}
+      </div>
     </div>
   {% endif %}
-  <h2>Orçamento</h2>
-  <div class="top-info">
-    <div class="info-box">
-      <strong>Profissional Responsável</strong><br>
-      {{ veterinario.name if veterinario else '' }}<br>
-      CRMV: {{ veterinario.veterinario.crmv if veterinario and veterinario.veterinario else '—' }}
-    </div>
+
+  <div class="document-title-group">
+    <h1 class="document-title">Orçamento</h1>
+    <span class="document-tag">Proposta comercial</span>
   </div>
+
+  <div class="info-grid">
+    <section class="info-card">
+      <h3>Profissional Responsável</h3>
+      <ul class="info-list">
+        <li><span>Nome</span><span>{{ veterinario.name if veterinario else '—' }}</span></li>
+        <li><span>CRMV</span><span>{{ veterinario.veterinario.crmv if veterinario and veterinario.veterinario else '—' }}</span></li>
+      </ul>
+    </section>
+  </div>
+
   <table>
     <thead>
       <tr>
         <th>Descrição</th>
-        <th>Valor (R$)</th>
+        <th style="width: 140px; text-align: right;">Valor (R$)</th>
       </tr>
     </thead>
     <tbody>
       {% for item in itens %}
-      <tr>
-        <td>{{ item.descricao }}</td>
-        <td>{{ '%.2f'|format(item.valor) }}</td>
-      </tr>
+        <tr>
+          <td>{{ item.descricao }}</td>
+          <td style="text-align: right;">{{ '%.2f'|format(item.valor) }}</td>
+        </tr>
       {% endfor %}
+    </tbody>
+    <tfoot>
       <tr>
         <th>Total</th>
-        <th>{{ '%.2f'|format(total) }}</th>
+        <th style="text-align: right;">{{ '%.2f'|format(total) }}</th>
       </tr>
-    </tbody>
+    </tfoot>
   </table>
+
+  <div class="note-block">
+    Valores válidos exclusivamente para os itens listados acima. Consulte a clínica para condições de pagamento e opções adicionais.
+  </div>
+
   {% if clinica %}
-  <footer>
-    {{ clinica.nome }} – {{ clinica.endereco }}<br>
-    {% if clinica.telefone %}Telefone: {{ clinica.telefone }} • {% endif %}
-    {% if clinica.email %}Email: {{ clinica.email }} • {% endif %}
-    {% if clinica.cnpj %}CNPJ: {{ clinica.cnpj }}{% endif %}
-  </footer>
+    <footer>
+      <span>{{ clinica.nome }}</span>
+      {% if clinica.endereco %}<span>{{ clinica.endereco }}</span>{% endif %}
+      {% if clinica.telefone %}<span>Tel.: {{ clinica.telefone }}</span>{% endif %}
+      {% if clinica.email %}<span>{{ clinica.email }}</span>{% endif %}
+      {% if clinica.cnpj %}<span>CNPJ {{ clinica.cnpj }}</span>{% endif %}
+    </footer>
   {% endif %}
 </div>
 </body>

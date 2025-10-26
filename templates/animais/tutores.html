@@ -8,8 +8,9 @@
   <div class="card mb-4">
     <div class="card-body">
       <h5 class="card-title mb-3">🔍 Buscar Tutor</h5>
-      <input id="busca-tutor" class="form-control" placeholder="Digite nome, e‑mail, CPF ou telefone">
-      <ul id="lista-tutores" class="list-group mt-2 d-none"></ul>
+      <input id="busca-tutor" class="form-control" placeholder="Digite nome, e‑mail, CPF ou telefone" aria-controls="lista-tutores">
+      <ul id="lista-tutores" class="list-group mt-2 d-none" role="listbox"></ul>
+      <span id="lista-tutores-status" class="visually-hidden" aria-live="polite" aria-atomic="true"></span>
     </div>
   </div>
 
@@ -81,45 +82,39 @@
 <script src="https://cdn.jsdelivr.net/npm/flatpickr/dist/l10n/pt.js"></script>
 
 <!-- Script geral -->
-<script>
+<script type="module">
+  import { setupTutorSearch } from "{{ url_for('static', filename='js/tutor_search.js') }}";
+
   const inputTutor = document.getElementById('busca-tutor');
   const listaTutor = document.getElementById('lista-tutores');
+  const listaStatus = document.getElementById('lista-tutores-status');
 
-  inputTutor.addEventListener('input', async () => {
-    const q = inputTutor.value.trim();
-    if (q.length < 2) {
-      listaTutor.classList.add('d-none');
-      listaTutor.innerHTML = '';
-      return;
-    }
-
-    const res = await fetch(`/buscar_tutores?q=${encodeURIComponent(q)}`);
-    const data = await res.json();
-
-    listaTutor.innerHTML = '';
-    if (data.length) {
-      data.forEach(t => {
-        const li = document.createElement('li');
-        li.className = 'list-group-item list-group-item-action';
-        let texto = `${t.name} (${t.email})`;
-        if (t.specialties) {
-          texto += ` – ${t.specialties}`;
+  if (inputTutor && listaTutor) {
+    const search = setupTutorSearch({
+      input: inputTutor,
+      resultsList: listaTutor,
+      statusElement: listaStatus,
+      formatTutor: (tutor) => {
+        let texto = tutor.name || '';
+        if (tutor.email) {
+          texto += ` (${tutor.email})`;
         }
-        li.textContent = texto;
-        li.onclick = () => window.location = `/ficha_tutor/${t.id}`;
-        listaTutor.appendChild(li);
-      });
-      listaTutor.classList.remove('d-none');
-    } else {
-      listaTutor.classList.add('d-none');
-    }
-  });
+        if (tutor.specialties) {
+          texto += ` – ${tutor.specialties}`;
+        }
+        return texto;
+      },
+      onTutorSelected: (tutor) => {
+        window.location = `/ficha_tutor/${tutor.id}`;
+      },
+    });
 
-  document.addEventListener('click', e => {
-    if (!inputTutor.contains(e.target) && !listaTutor.contains(e.target)) {
-      listaTutor.classList.add('d-none');
-    }
-  });
+    document.addEventListener('click', (event) => {
+      if (!inputTutor.contains(event.target) && !listaTutor.contains(event.target)) {
+        search.hideResults();
+      }
+    });
+  }
 
   // Flatpickr + Sincronização idade
   const dobInput = document.getElementById("date_of_birth");

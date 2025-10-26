@@ -462,6 +462,7 @@ class Consulta(db.Model):
 
     # Status da consulta (em andamento, finalizada, etc)
     status = db.Column(db.String(20), default='in_progress')
+    finalizada_em = db.Column(db.DateTime, nullable=True)
 
     # Consulta de retorno
     retorno_de_id = db.Column(db.Integer, db.ForeignKey('consulta.id'))

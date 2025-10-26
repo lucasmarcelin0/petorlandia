@@ -6,9 +6,10 @@
     <!-- 🔎 Tutor -->
     <div class="mb-3 position-relative">
       <label for="autocomplete-tutor" class="form-label">👤 Tutor</label>
-      <input type="text" id="autocomplete-tutor" class="form-control" placeholder="Digite nome ou e-mail do tutor">
+      <input type="text" id="autocomplete-tutor" class="form-control" placeholder="Digite nome ou e-mail do tutor" aria-controls="tutor-results">
       <input type="hidden" name="tutor_id" id="tutor_id">
-      <ul class="list-group position-absolute w-100 mt-1 d-none" id="tutor-results" style="z-index: 1000;"></ul>
+      <ul class="list-group position-absolute w-100 mt-1 d-none" id="tutor-results" style="z-index: 1000;" role="listbox"></ul>
+      <span id="tutor-results-status" class="visually-hidden" aria-live="polite" aria-atomic="true"></span>
       <div class="text-end mt-2">
         <a href="{{ url_for('tutores') }}" class="btn btn-sm btn-outline-secondary">
           ➕ Cadastrar novo tutor
@@ -114,33 +115,43 @@
       return true;
     }
 
+  </script>
+
+  <script type="module">
+    import { setupTutorSearch } from "{{ url_for('static', filename='js/tutor_search.js') }}";
+
     const tutorInput = document.getElementById('autocomplete-tutor');
     const tutorResults = document.getElementById('tutor-results');
+    const tutorStatus = document.getElementById('tutor-results-status');
     const tutorIdField = document.getElementById('tutor_id');
 
-    tutorInput?.addEventListener('input', async () => {
-      const q = tutorInput.value.trim();
-      if (q.length < 2) {
-        tutorResults.classList.add('d-none');
-        tutorResults.innerHTML = '';
-        return;
-      }
-      const res = await fetch(`/buscar_tutores?q=${encodeURIComponent(q)}`);
-      const data = await res.json();
-      tutorResults.innerHTML = '';
-      data.forEach(t => {
-        const li = document.createElement('li');
-        li.className = 'list-group-item list-group-item-action';
-        li.textContent = `${t.name} (${t.email})`;
-        li.onclick = () => {
-          tutorInput.value = t.name;
-          tutorIdField.value = t.id;
-          tutorResults.classList.add('d-none');
-        };
-        tutorResults.appendChild(li);
+    if (tutorInput && tutorResults) {
+      const search = setupTutorSearch({
+        input: tutorInput,
+        resultsList: tutorResults,
+        statusElement: tutorStatus,
+        onTutorSelected: (tutor) => {
+          tutorInput.value = tutor.name;
+          if (tutorIdField) {
+            tutorIdField.value = tutor.id;
+          }
+          search.hideResults();
+        },
       });
-      tutorResults.classList.toggle('d-none', data.length === 0);
-    });
+
+      tutorInput.addEventListener('input', () => {
+        if (tutorIdField) {
+          tutorIdField.value = '';
+        }
+      });
+
+      document.addEventListener('click', (event) => {
+        if (event.target === tutorInput || tutorResults.contains(event.target)) {
+          return;
+        }
+        search.hideResults();
+      });
+    }
   </script>
 
   <style>
