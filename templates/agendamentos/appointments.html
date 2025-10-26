@@ -234,14 +234,25 @@
 </section>
 
 <!-- Modal Editar Horário do Colaborador -->
-<div class="modal fade" id="scheduleEditModal" tabindex="-1" aria-hidden="true">
+<div
+  class="modal fade"
+  id="scheduleEditModal"
+  tabindex="-1"
+  role="dialog"
+  aria-labelledby="scheduleEditModalLabel"
+  aria-describedby="scheduleEditModalDescription"
+  aria-hidden="true"
+>
   <div class="modal-dialog">
     <div class="modal-content">
       <div class="modal-header">
-        <h5 class="modal-title"><i class="bi bi-clock-history me-2"></i>Editar Horário</h5>
+        <h5 class="modal-title" id="scheduleEditModalLabel"><i class="bi bi-clock-history me-2"></i>Editar Horário</h5>
         <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
       </div>
       <div class="modal-body">
+        <p class="text-muted small" id="scheduleEditModalDescription">
+          Utilize o formulário abaixo para atualizar o horário do colaborador selecionado.
+        </p>
         <form
           id="schedule-edit-form"
           method="post"
