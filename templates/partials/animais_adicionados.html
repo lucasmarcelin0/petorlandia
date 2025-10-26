@@ -97,11 +97,28 @@
 </div>
 
 <script>
-document.addEventListener('DOMContentLoaded', function() {
+(function() {
   const filterInput = document.getElementById('animal-filter');
   const sortSelect = document.getElementById('animal-sort');
   const container = document.getElementById('animal-cards');
+
+  if (!filterInput || !sortSelect || !container) {
+    return;
+  }
+
   const cards = Array.from(container.querySelectorAll('[data-name]'));
+  const sortStorageKey = 'animalSortPreference';
+  const filterStorageKey = 'animalFilterPreference';
+
+  const savedFilter = localStorage.getItem(filterStorageKey);
+  if (savedFilter !== null) {
+    filterInput.value = savedFilter;
+  }
+
+  const savedSort = localStorage.getItem(sortStorageKey);
+  if (savedSort && Array.from(sortSelect.options).some(option => option.value === savedSort)) {
+    sortSelect.value = savedSort;
+  }
 
   function getAge(card) {
     return parseInt(card.dataset.age) || 0;
@@ -140,8 +157,18 @@ document.addEventListener('DOMContentLoaded', function() {
     hidden.forEach(card => container.appendChild(card));
   }
 
-  filterInput.addEventListener('input', () => { applyFilter(); applySort(); });
-  sortSelect.addEventListener('change', applySort);
+  filterInput.addEventListener('input', () => {
+    localStorage.setItem(filterStorageKey, filterInput.value);
+    applyFilter();
+    applySort();
+  });
+
+  sortSelect.addEventListener('change', () => {
+    localStorage.setItem(sortStorageKey, sortSelect.value);
+    applySort();
+  });
+
+  applyFilter();
   applySort();
-});
+})();
 </script>
