@@ -1,0 +1,79 @@
+{% set summary_title = summary_title|default('Resumo por profissional') %}
+{% set summary_description = summary_description|default('Totais diários e semanais por veterinário com base no calendário visível.') %}
+{% set summary_vets = calendar_summary_vets|default([], true) %}
+{% set summary_clinic_ids = calendar_summary_clinic_ids|default([], true) %}
+{% set summary_storage_key = calendar_summary_storage_key|default('', true) %}
+<div
+  class="card calendar-summary-card border-0 shadow-sm h-100 is-loading"
+  data-calendar-summary-panel
+  data-calendar-summary-vets="{{ summary_vets|tojson }}"
+  data-calendar-summary-clinic-ids="{{ summary_clinic_ids|tojson }}"
+  {% if summary_storage_key %}
+  data-calendar-summary-storage-key="{{ summary_storage_key }}"
+  {% endif %}
+>
+  <div class="card-header bg-white border-0 pb-0">
+    <div class="d-flex align-items-center justify-content-between gap-2">
+      <h5 class="mb-0 fw-semibold">
+        <i class="bi bi-people-fill me-2"></i> {{ summary_title }}
+      </h5>
+      <span class="badge calendar-summary-total-badge" data-calendar-summary-total>0</span>
+    </div>
+    <p class="text-muted small mb-0">
+      {{ summary_description }}
+    </p>
+  </div>
+  <div class="card-body">
+    <div
+      class="calendar-summary-loading d-flex align-items-center gap-3 rounded-4 border border-dashed"
+      data-calendar-summary-loading
+      role="status"
+      aria-live="polite"
+    >
+      <div class="spinner-border text-primary" role="presentation" aria-hidden="true"></div>
+      <div>
+        <p class="mb-0 fw-semibold text-primary">Atualizando estatísticas</p>
+        <small class="text-muted">Aguarde enquanto buscamos as consultas desta visão.</small>
+      </div>
+    </div>
+    <div
+      class="calendar-summary-filters d-flex flex-wrap align-items-center gap-2 mt-3 d-none"
+      data-calendar-summary-filters
+      aria-label="Filtrar agenda por profissional"
+    ></div>
+    <div class="calendar-summary-overview row g-3 mt-1" data-calendar-summary-overview hidden>
+      <div class="col-12 col-sm-6">
+        <div class="calendar-summary-overview-card is-today">
+          <div class="calendar-summary-overview-icon" aria-hidden="true">
+            <i class="bi bi-brightness-alt-high-fill"></i>
+          </div>
+          <div class="calendar-summary-overview-body">
+            <span class="label">Hoje</span>
+            <strong class="value" data-calendar-summary-overview-today>0</strong>
+            <small class="description text-muted">Consultas previstas</small>
+          </div>
+        </div>
+      </div>
+      <div class="col-12 col-sm-6">
+        <div class="calendar-summary-overview-card is-week">
+          <div class="calendar-summary-overview-icon" aria-hidden="true">
+            <i class="bi bi-calendar-week"></i>
+          </div>
+          <div class="calendar-summary-overview-body">
+            <span class="label">Semana</span>
+            <strong class="value" data-calendar-summary-overview-week>0</strong>
+            <small class="description text-muted">Compromissos na semana</small>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="text-muted small mt-3" data-calendar-summary-empty aria-live="polite" role="status">
+      Nenhum compromisso encontrado para o período atual.
+    </div>
+    <ul
+      role="list"
+      class="calendar-summary-list d-flex flex-column gap-3 mt-3"
+      data-calendar-summary-list
+    ></ul>
+  </div>
+</div>

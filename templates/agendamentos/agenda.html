@@ -10,13 +10,111 @@
 {% block scripts %}
 {{ super() }}
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.8/main.min.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.8/list.min.css">
 <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.8/main.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.8/list.min.js"></script>
+<style>
+  #calendar {
+    margin-top: 1rem;
+  }
+
+  .fc .fc-toolbar button {
+    min-height: 44px;
+  }
+
+  @media (max-width: 768px) {
+    .fc .fc-toolbar-title {
+      font-size: 1rem;
+    }
+
+    .fc .fc-toolbar.fc-header-toolbar {
+      gap: 0.5rem;
+      flex-wrap: wrap;
+    }
+
+    .fc .fc-toolbar .fc-toolbar-chunk {
+      display: flex;
+      align-items: center;
+      gap: 0.25rem;
+    }
+
+    .fc .fc-toolbar button {
+      padding: 0.5rem;
+      min-width: 44px;
+    }
+
+    .fc .fc-toolbar .fc-button .fc-button-label {
+      font-size: 0;
+    }
+
+    .fc .fc-toolbar .fc-button .fc-icon {
+      margin: 0;
+    }
+
+    #calendar {
+      max-height: 75vh;
+    }
+  }
+
+  @media (min-width: 769px) {
+    #calendar {
+      min-height: 700px;
+    }
+
+    .fc .fc-daygrid-day-frame,
+    .fc .fc-timegrid-slot {
+      min-height: 44px;
+    }
+  }
+</style>
 <script>
 document.addEventListener('DOMContentLoaded', function() {
   var calendarEl = document.getElementById('calendar');
   if (calendarEl) {
     var csrfToken = '{{ csrf_token() if csrf_token is defined else '' }}';
     var calendar;
+    var mobileQuery = window.matchMedia('(max-width: 768px)');
+    var lastDesktopView = 'dayGridMonth';
+    var lastMobileView = 'listWeek';
+
+    function getInitialView() {
+      return mobileQuery.matches ? lastMobileView : lastDesktopView;
+    }
+
+    var desktopToolbar = {
+      start: 'prev,next today',
+      center: 'title',
+      end: 'dayGridMonth,timeGridWeek,timeGridDay,listWeek'
+    };
+
+    var mobileToolbar = {
+      start: 'prev,next today',
+      center: '',
+      end: 'timeGridDay listWeek dayGridMonth'
+    };
+
+    var desktopButtonText = {
+      today: 'Hoje',
+      dayGridMonth: 'Mês',
+      timeGridWeek: 'Semana',
+      timeGridDay: 'Dia',
+      listWeek: 'Lista'
+    };
+
+    var mobileButtonText = {
+      today: '📍',
+      dayGridMonth: '📆',
+      timeGridDay: '🕘',
+      listWeek: '🗒️'
+    };
+
+    function applyResponsiveOptions() {
+      var isMobile = mobileQuery.matches;
+      calendar.setOption('headerToolbar', isMobile ? mobileToolbar : desktopToolbar);
+      calendar.setOption('buttonText', isMobile ? Object.assign({}, desktopButtonText, mobileButtonText) : desktopButtonText);
+      calendar.setOption('height', 'auto');
+      calendar.setOption('contentHeight', isMobile ? 'auto' : 720);
+    }
 
     async function persistEventChange(info) {
       if (!calendar) {
@@ -66,14 +164,37 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     calendar = new FullCalendar.Calendar(calendarEl, {
-      initialView: 'dayGridMonth',
+      initialView: getInitialView(),
       events: '/api/my_appointments',
       editable: true,
       eventDurationEditable: true,
       eventDrop: persistEventChange,
       eventResize: persistEventChange,
+      datesSet: function(info) {
+        if (mobileQuery.matches) {
+          lastMobileView = info.view.type;
+        } else {
+          lastDesktopView = info.view.type;
+        }
+      }
     });
     calendar.render();
+    applyResponsiveOptions();
+
+    function handleViewportChange(event) {
+      applyResponsiveOptions();
+      if (event.matches) {
+        calendar.changeView(lastMobileView || 'listWeek');
+      } else {
+        calendar.changeView(lastDesktopView || 'dayGridMonth');
+      }
+    }
+
+    if (typeof mobileQuery.addEventListener === 'function') {
+      mobileQuery.addEventListener('change', handleViewportChange);
+    } else if (typeof mobileQuery.addListener === 'function') {
+      mobileQuery.addListener(handleViewportChange);
+    }
   }
 });
 </script>

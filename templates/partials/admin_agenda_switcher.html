@@ -8,7 +8,9 @@
   {% set _default_option_label = switcher_default_option_label|default('Minha agenda (admin)') %}
   {% set _select_id = switcher_select_id|default('admin-agenda-picker') %}
   {% set _preserve_params = preserve_params|default([]) %}
-  <form action="{{ url_for('appointments') }}" method="get" class="{{ _form_classes }}" data-admin-agenda-switcher>
+  {% set _default_selection_value = admin_default_selection_value|default('') %}
+  {% set _current_user_id = current_user.id if current_user.is_authenticated else '' %}
+  <form action="{{ url_for('appointments') }}" method="get" class="{{ _form_classes }}" data-admin-agenda-switcher data-admin-user-id="{{ _current_user_id }}"{% if _default_selection_value %} data-admin-default-selection="{{ _default_selection_value }}"{% endif %}>
     {% for param in _preserve_params %}
       {% set value = request.args.get(param) %}
       {% if value %}
@@ -78,9 +80,92 @@
             colabInput.value = id || '';
           }
         }
+        const formDataset = form.dataset || {};
+        const storageKey = (function() {
+          if (typeof window === 'undefined') {
+            return null;
+          }
+          const rawUserId = formDataset.adminUserId || '';
+          if (!rawUserId) {
+            return null;
+          }
+          return 'adminAgendaSelection:' + String(rawUserId);
+        })();
+        const defaultSelection = formDataset.adminDefaultSelection || '';
+
+        function findOptionByValue(value) {
+          if (value === undefined || value === null) {
+            return null;
+          }
+          const stringValue = String(value);
+          return Array.from(select.options || []).find(function(option) {
+            return option.value === stringValue;
+          }) || null;
+        }
+
+        function readStoredSelection() {
+          if (!storageKey || typeof window === 'undefined' || !window.localStorage) {
+            return null;
+          }
+          try {
+            return window.localStorage.getItem(storageKey);
+          } catch (error) {
+            return null;
+          }
+        }
+
+        function persistSelection(value) {
+          if (!storageKey || typeof window === 'undefined' || !window.localStorage) {
+            return;
+          }
+          try {
+            if (value) {
+              window.localStorage.setItem(storageKey, value);
+            } else {
+              window.localStorage.removeItem(storageKey);
+            }
+          } catch (error) {
+            /* Ignore storage errors. */
+          }
+        }
+
+        function applyInitialSelection() {
+          let storedValue = readStoredSelection();
+          const hasDefault = !!(defaultSelection && findOptionByValue(defaultSelection));
+          if (!storedValue && hasDefault) {
+            storedValue = defaultSelection;
+          } else if (storedValue && !findOptionByValue(storedValue)) {
+            storedValue = hasDefault ? defaultSelection : '';
+            persistSelection(storedValue);
+          }
+          if (storedValue && storedValue !== select.value && findOptionByValue(storedValue)) {
+            select.value = storedValue;
+            updateHiddenInputs(storedValue);
+            if (typeof window !== 'undefined') {
+              const params = new URLSearchParams(window.location.search || '');
+              const targetView = viewInput.value || '';
+              const targetVet = vetInput.value || '';
+              const targetColab = colabInput.value || '';
+              const paramView = params.get('view_as') || '';
+              const paramVet = params.get('veterinario_id') || '';
+              const paramColab = params.get('colaborador_id') || '';
+              if (paramView !== targetView || paramVet !== targetVet || paramColab !== targetColab) {
+                persistSelection(storedValue);
+                form.submit();
+                return;
+              }
+            }
+            persistSelection(storedValue);
+          } else if (hasDefault && storedValue !== defaultSelection) {
+            persistSelection(defaultSelection);
+          }
+        }
+
         updateHiddenInputs(select.value);
+        applyInitialSelection();
         select.addEventListener('change', function() {
           updateHiddenInputs(this.value);
+          persistSelection(this.value);
           if (window.handleVetChange) {
             window.handleVetChange();
           }
