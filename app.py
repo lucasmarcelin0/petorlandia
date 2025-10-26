@@ -7517,6 +7517,8 @@ def appointments():
         allowed_views = {'veterinario', 'colaborador', 'tutor'}
         if current_user.role == 'admin' and view_as in allowed_views:
             worker = view_as
+        elif current_user.worker == 'colaborador' and view_as == 'veterinario':
+            worker = 'veterinario'
         elif current_user.role != 'admin':
             # Non-admin users can only request the view matching their own role.
             user_view = worker if worker in allowed_views else 'tutor'
@@ -7541,6 +7543,14 @@ def appointments():
             .order_by(User.name)
             .all()
         )
+    elif current_user.worker == 'colaborador' and current_user.clinica_id:
+        agenda_veterinarios = (
+            Veterinario.query
+            .join(User)
+            .filter(Veterinario.clinica_id == current_user.clinica_id)
+            .order_by(User.name)
+            .all()
+        )
 
     admin_selected_view = (
         worker
@@ -7551,6 +7561,7 @@ def appointments():
     if request.method == 'POST' and worker not in ['veterinario', 'colaborador', 'admin']:
         abort(403)
     if worker == 'veterinario':
+        veterinario = None
         if current_user.role == 'admin':
             veterinario_id_arg = request.args.get(
                 'veterinario_id', type=int
@@ -7569,13 +7580,25 @@ def appointments():
             else:
                 abort(404)
             admin_selected_veterinario_id = veterinario.id
-        else:
+        elif current_user.worker == 'veterinario':
             veterinario = current_user.veterinario
+        else:
+            veterinario_id_arg = request.args.get('veterinario_id', type=int)
+            if veterinario_id_arg:
+                veterinario = Veterinario.query.get_or_404(
+                    veterinario_id_arg
+                )
+            elif agenda_veterinarios:
+                veterinario = agenda_veterinarios[0]
+            if current_user.worker == 'colaborador' and veterinario:
+                clinic_id = current_user.clinica_id
+                if clinic_id and veterinario.clinica_id and veterinario.clinica_id != clinic_id:
+                    abort(403)
         if not veterinario:
             abort(404)
         vet_user_id = getattr(veterinario, "user_id", None)
         query_args = request.args.to_dict()
-        if current_user.role == 'admin':
+        if current_user.role == 'admin' or current_user.worker == 'colaborador':
             query_args['view_as'] = 'veterinario'
             query_args['veterinario_id'] = veterinario.id
         appointments_url = url_for('appointments', **query_args)
@@ -7969,25 +7992,27 @@ def appointments():
         session['clinic_pending_seen_count'] = (
             clinic_pending_query.count() if clinic_pending_query is not None else 0
         )
+        context = {
+            'schedule_form': schedule_form,
+            'appointment_form': appointment_form,
+            'veterinario': veterinario,
+            'agenda_veterinarios': agenda_veterinarios,
+            'agenda_colaboradores': agenda_colaboradores,
+            'admin_selected_view': admin_selected_view,
+            'admin_selected_veterinario_id': admin_selected_veterinario_id,
+            'admin_selected_colaborador_id': admin_selected_colaborador_id,
+            'horarios_grouped': horarios_grouped,
+            'appointments_pending': appointments_pending,
+            'appointments_upcoming': appointments_upcoming,
+            'schedule_events': schedule_events,
+            'start_dt': start_dt,
+            'end_dt': end_dt,
+            'timedelta': timedelta,
+        }
+        if request.args.get('partial') == 'vet_schedule':
+            return render_template('agendamentos/_vet_schedule_panel.html', **context)
 
-        return render_template(
-            'agendamentos/edit_vet_schedule.html',
-            schedule_form=schedule_form,
-            appointment_form=appointment_form,
-            veterinario=veterinario,
-            agenda_veterinarios=agenda_veterinarios,
-            agenda_colaboradores=agenda_colaboradores,
-            admin_selected_view=admin_selected_view,
-            admin_selected_veterinario_id=admin_selected_veterinario_id,
-            admin_selected_colaborador_id=admin_selected_colaborador_id,
-            horarios_grouped=horarios_grouped,
-            appointments_pending=appointments_pending,
-            appointments_upcoming=appointments_upcoming,
-            schedule_events=schedule_events,
-            start_dt=start_dt,
-            end_dt=end_dt,
-            timedelta=timedelta,
-        )
+        return render_template('agendamentos/edit_vet_schedule.html', **context)
     else:
         if worker in ['colaborador', 'admin']:
             appointment_form = AppointmentForm(prefix='appointment')
@@ -8118,6 +8143,29 @@ def appointments():
             for vac in vaccine_appointments:
                 vac.scheduled_at = datetime.combine(vac.aplicada_em, time.min, tzinfo=BR_TZ)
             form = appointment_form
+
+            vet_schedule_vets = list(vets)
+            vet_schedule_selected = None
+            selected_vet_id_param = request.args.get('veterinario_id', type=int)
+            if selected_vet_id_param:
+                vet_schedule_selected = next(
+                    (v for v in vet_schedule_vets if v.id == selected_vet_id_param),
+                    None,
+                )
+                if vet_schedule_selected is None:
+                    vet_schedule_selected = Veterinario.query.get(selected_vet_id_param)
+            if vet_schedule_selected is None and vet_schedule_vets:
+                vet_schedule_selected = vet_schedule_vets[0]
+            vet_schedule_tab_url = None
+            vet_schedule_selected_id = None
+            if vet_schedule_selected:
+                vet_schedule_selected_id = vet_schedule_selected.id
+                vet_schedule_args = request.args.to_dict()
+                vet_schedule_args.pop('partial', None)
+                vet_schedule_args['view_as'] = 'veterinario'
+                vet_schedule_args['veterinario_id'] = vet_schedule_selected.id
+                vet_schedule_args['partial'] = 'vet_schedule'
+                vet_schedule_tab_url = url_for('appointments', **vet_schedule_args)
         else:
             tutor_user = current_user
             if current_user.role == 'admin' and worker == 'tutor':
@@ -8169,6 +8217,9 @@ def appointments():
             admin_selected_view=admin_selected_view,
             admin_selected_veterinario_id=admin_selected_veterinario_id,
             admin_selected_colaborador_id=admin_selected_colaborador_id,
+            vet_schedule_tab_url=locals().get('vet_schedule_tab_url'),
+            vet_schedule_vets=locals().get('vet_schedule_vets', []),
+            vet_schedule_selected_id=locals().get('vet_schedule_selected_id'),
         )
 
 
