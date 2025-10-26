@@ -1,0 +1,14 @@
+{% set _wrapper_classes = summary_panel_wrapper_classes|default('d-flex flex-column gap-4') %}
+<div class="{{ _wrapper_classes }}">
+  {% include 'partials/calendar_summary_panel.html' %}
+  <div id="novo-pet">
+    {% with
+      component_id = pet_quick_list_component_id|default('appointments-pet-quick-list'),
+      pets_endpoint = pet_quick_list_endpoint|default(calendar_pets_endpoint|default(url_for('api_clinic_pets'))),
+      new_pet_url = pet_quick_list_new_pet_url|default(calendar_new_pet_url|default(url_for('novo_animal'))),
+      profile_url_template = pet_quick_list_profile_url_template|default(url_for('ficha_animal', animal_id=0))
+    %}
+      {% include 'partials/pet_quick_list.html' %}
+    {% endwith %}
+  </div>
+</div>

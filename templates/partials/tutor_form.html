@@ -7,8 +7,8 @@
     <i class="bi bi-search me-1"></i> Buscar Tutor Existente
   </label>
   <div class="input-group">
-    <input type="text" id="autocomplete-tutor" class="form-control" 
-           placeholder="Digite nome, e-mail, CPF ou telefone"
+    <input type="text" id="autocomplete-tutor" class="form-control"
+           placeholder="Digite nome, e-mail, CPF, RG, telefone ou endereço"
            aria-label="Buscar tutor existente"
            aria-describedby="tutor-search-help">
     <button class="btn btn-outline-secondary" type="button" id="clear-search">
@@ -74,10 +74,10 @@
     <!-- Data de nascimento + Idade - Com cálculo automático -->
     <div class="col-md-6">
       <label for="tutor-date-of-birth" class="form-label">Data de Nascimento</label>
-      <input type="date" id="tutor-date-of-birth" name="date_of_birth" 
-            class="form-control" max="{{ '%Y-%m-%d' | date_now }}"
+      <input type="text" id="tutor-date-of-birth" name="date_of_birth"
+            class="form-control"
             value="{{ tutor.date_of_birth.strftime('%Y-%m-%d') if has_tutor and tutor.date_of_birth else '' }}"
-            onchange="calcularIdade()">
+            placeholder="dd/mm/aaaa" autocomplete="off">
       <div class="invalid-feedback">Por favor, insira uma data válida</div>
     </div>
 
@@ -129,6 +129,10 @@
 
 <!-- Scripts Aprimorados -->
 {% block scripts %}
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+<script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+<script src="https://cdn.jsdelivr.net/npm/flatpickr/dist/l10n/pt.js"></script>
+<script src="{{ url_for('static', filename='js/dob_age_helper.js') }}"></script>
 <script>
   document.addEventListener('DOMContentLoaded', () => {
     // Validação do formulário
@@ -158,28 +162,20 @@
       this.value = this.value.replace(/[^0-9A-Za-z]/g, '');
     });
 
-    // Cálculo de idade
-    function calcularIdadeTutor() {
-      const dataNasc = document.getElementById('tutor-date-of-birth').value;
-      const idadeInput = document.getElementById('tutor-age');
-      
-      if (dataNasc) {
-        const hoje = new Date();
-        const nascimento = new Date(dataNasc);
-        let idade = hoje.getFullYear() - nascimento.getFullYear();
-        const mes = hoje.getMonth() - nascimento.getMonth();
-        
-        if (mes < 0 || (mes === 0 && hoje.getDate() < nascimento.getDate())) {
-          idade--;
-        }
-        
-        idadeInput.value = `${idade} anos`;
-      } else {
-        idadeInput.value = '';
-      }
+    if (window.setupDobAgeSync) {
+      window.setupDobAgeSync({
+        dobSelector: '#tutor-date-of-birth',
+        ageSelector: '#tutor-age',
+        allowAgeInput: false,
+        formatAge: (years) => {
+          if (years == null) {
+            return '';
+          }
+          const label = years === 1 ? 'ano' : 'anos';
+          return `${years} ${label}`;
+        },
+      });
     }
-
-    document.getElementById('tutor-date-of-birth')?.addEventListener('change', calcularIdadeTutor);
 
     // Preview da imagem
 
@@ -275,35 +271,6 @@
     console.log(`Tutor selecionado: ${nome} (${email})`);
   }
 
-  function calcularIdade() {
-    const dataNascimento = document.getElementById('tutor-date-of-birth').value;
-    const campoIdade = document.getElementById('tutor-age');
-    
-    if (dataNascimento) {
-      const hoje = new Date();
-      const nascimento = new Date(dataNascimento);
-      let idade = hoje.getFullYear() - nascimento.getFullYear();
-      
-      // Ajuste para caso ainda não tenha feito aniversário este ano
-      const mesAtual = hoje.getMonth();
-      const mesNascimento = nascimento.getMonth();
-      
-      if (mesNascimento > mesAtual || 
-          (mesNascimento === mesAtual && hoje.getDate() < nascimento.getDate())) {
-        idade--;
-      }
-      
-      campoIdade.value = idade + " anos";
-    } else {
-      campoIdade.value = "";
-    }
-  }
-
-  // Calcular idade ao carregar a página se já existir data
-  document.addEventListener('DOMContentLoaded', function() {
-    if (document.getElementById('tutor-date-of-birth').value) {
-      calcularIdade();
-    }
-  });
+  
 </script>
 {% endblock %}
