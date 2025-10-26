@@ -229,6 +229,18 @@ export async function updateAppointmentTimes(options = {}) {
   return times;
 }
 
+function bindScheduleModalButton(root) {
+  const scheduleButton = document.getElementById('openScheduleModal');
+  if (!scheduleButton || scheduleButton.dataset.vetScheduleBound === 'true') {
+    return;
+  }
+  scheduleButton.dataset.vetScheduleBound = 'true';
+  scheduleButton.addEventListener('click', (event) => {
+    event.preventDefault();
+    toggleScheduleForm(root);
+  });
+}
+
 async function populateAppointmentModalTimes({
   root,
   vetId,
@@ -289,6 +301,484 @@ async function populateAppointmentModalTimes({
   fallbackOption.selected = true;
   timeSelect.appendChild(fallbackOption);
   return times;
+}
+
+function initScheduleOverview(root) {
+  const scheduleContainer = document.getElementById('schedule-overview');
+  const vetId = getVetId(root);
+  if (!scheduleContainer || !vetId) {
+    return;
+  }
+
+  const dateField = document.getElementById('appointment-date');
+  const timeSelect = document.getElementById('appointment-time');
+  const summaryBadge = document.querySelector('[data-schedule-summary]');
+  const weekLabel = document.querySelector('[data-schedule-week-label]');
+  const periodFilter = document.querySelector('[data-schedule-period-filter]');
+  const collapseEl = document.getElementById('scheduleOverviewCollapse');
+  const toggleBtn = document.querySelector('[data-bs-target="#scheduleOverviewCollapse"]');
+  const prevBtn = document.querySelector('[data-schedule-week-prev]');
+  const nextBtn = document.querySelector('[data-schedule-week-next]');
+  const todayBtn = document.querySelector('[data-schedule-week-today]');
+
+  const shortFormatter = new Intl.DateTimeFormat('pt-BR', {
+    weekday: 'short',
+    day: '2-digit',
+    month: '2-digit'
+  });
+  const longFormatter = new Intl.DateTimeFormat('pt-BR', {
+    weekday: 'long',
+    day: '2-digit',
+    month: 'long'
+  });
+
+  const state = {
+    period: (periodFilter && periodFilter.value) || 'all',
+    currentStart: '',
+    days: [],
+    selectedSlotKey: '',
+    todayIso: new Date().toISOString().split('T')[0]
+  };
+
+  if (dateField && timeSelect) {
+    const initialTime = (timeSelect.dataset?.currentTime || timeSelect.value || '').trim();
+    if (dateField.value && initialTime) {
+      state.selectedSlotKey = `${dateField.value}T${initialTime}`;
+    }
+  }
+
+  function formatIso(date) {
+    if (!(date instanceof Date) || Number.isNaN(date.getTime())) {
+      return '';
+    }
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  }
+
+  function getWeekStart(value) {
+    const base = value ? new Date(`${value}T00:00:00`) : new Date();
+    if (Number.isNaN(base.getTime())) {
+      return state.todayIso;
+    }
+    const day = base.getDay();
+    const diff = day === 0 ? -6 : 1 - day;
+    const monday = new Date(base);
+    monday.setDate(base.getDate() + diff);
+    return formatIso(monday);
+  }
+
+  function updateToggleButtonLabel() {
+    if (!toggleBtn) {
+      return;
+    }
+    const showLabel = toggleBtn.dataset?.showLabel || 'Mostrar agenda';
+    const hideLabel = toggleBtn.dataset?.hideLabel || 'Ocultar agenda';
+    const expanded = collapseEl ? collapseEl.classList.contains('show') : true;
+    toggleBtn.textContent = expanded ? hideLabel : showLabel;
+    toggleBtn.setAttribute('aria-expanded', expanded ? 'true' : 'false');
+  }
+
+  function showScheduleLoading() {
+    scheduleContainer.innerHTML = '';
+    const col = document.createElement('div');
+    col.className = 'col';
+    const loader = document.createElement('div');
+    loader.className = 'd-flex align-items-center justify-content-center py-5 text-muted gap-3';
+    loader.innerHTML = '<div class="spinner-border text-primary" role="status" aria-hidden="true"></div><span>Carregando horários...</span>';
+    col.appendChild(loader);
+    scheduleContainer.appendChild(col);
+  }
+
+  function setScheduleEmptyState(message, tone = 'light') {
+    scheduleContainer.innerHTML = '';
+    const col = document.createElement('div');
+    col.className = 'col';
+    const card = document.createElement('div');
+    card.className = 'card h-100 border-0';
+    card.classList.add(tone === 'danger' ? 'bg-danger-subtle' : 'bg-light-subtle');
+    const body = document.createElement('div');
+    body.className = 'card-body d-flex align-items-center justify-content-center text-center text-muted';
+    body.innerHTML = '<div><i class="bi bi-calendar-x fs-4 d-block mb-2"></i><p class="mb-0">' + message + '</p></div>';
+    card.appendChild(body);
+    col.appendChild(card);
+    scheduleContainer.appendChild(col);
+  }
+
+  function getPeriodFromTime(time) {
+    if (!time) {
+      return 'all';
+    }
+    const hour = parseInt(String(time).split(':')[0], 10);
+    if (Number.isNaN(hour)) {
+      return 'all';
+    }
+    if (hour < 12) {
+      return 'morning';
+    }
+    if (hour < 18) {
+      return 'afternoon';
+    }
+    return 'evening';
+  }
+
+  function filterSlotsByPeriod(slots) {
+    if (!Array.isArray(slots) || state.period === 'all') {
+      return Array.isArray(slots) ? slots : [];
+    }
+    return slots.filter((slot) => getPeriodFromTime(slot) === state.period);
+  }
+
+  function refreshSlotSelection() {
+    const buttons = scheduleContainer.querySelectorAll('.schedule-slot[data-schedule-status="available"]');
+    buttons.forEach((button) => {
+      const key = button.dataset?.scheduleSlotKey || '';
+      const isSelected = key === state.selectedSlotKey;
+      button.classList.toggle('active', isSelected);
+      button.classList.toggle('btn-success', isSelected);
+      button.classList.toggle('btn-outline-success', !isSelected);
+      button.classList.toggle('text-white', isSelected);
+      button.setAttribute('aria-pressed', isSelected ? 'true' : 'false');
+    });
+  }
+
+  function setScheduleSummary(days) {
+    if (!summaryBadge) {
+      return;
+    }
+    summaryBadge.classList.remove('text-bg-light', 'text-bg-success', 'text-bg-warning');
+    summaryBadge.classList.add('text-bg-light');
+    if (!Array.isArray(days) || !days.length) {
+      summaryBadge.textContent = 'Sem horários disponíveis para o período selecionado.';
+      return;
+    }
+    const now = new Date();
+    let nextSlot = null;
+    days.forEach((day) => {
+      const availableSlots = Array.isArray(day.available) ? day.available : [];
+      availableSlots.forEach((slot) => {
+        const slotDate = new Date(`${day.date}T${slot}`);
+        if (!nextSlot || (slotDate >= now && slotDate < nextSlot.dateObj)) {
+          nextSlot = {
+            date: day.date,
+            time: slot,
+            dateObj: slotDate
+          };
+        }
+      });
+    });
+    if (!nextSlot) {
+      const firstDay = days.find((day) => Array.isArray(day.available) && day.available.length);
+      if (firstDay) {
+        nextSlot = {
+          date: firstDay.date,
+          time: firstDay.available[0],
+          dateObj: new Date(`${firstDay.date}T${firstDay.available[0]}`)
+        };
+      }
+    }
+    if (nextSlot) {
+      const formattedDate = longFormatter.format(new Date(`${nextSlot.date}T00:00:00`));
+      summaryBadge.textContent = `Próximo horário livre: ${formattedDate} às ${nextSlot.time}`;
+      summaryBadge.classList.remove('text-bg-light');
+      summaryBadge.classList.add('text-bg-success');
+    } else {
+      summaryBadge.textContent = 'Sem horários livres nesta semana.';
+      summaryBadge.classList.remove('text-bg-light');
+      summaryBadge.classList.add('text-bg-warning');
+    }
+  }
+
+  function setWeekLabel(days) {
+    if (!weekLabel) {
+      return;
+    }
+    if (!Array.isArray(days) || !days.length) {
+      weekLabel.textContent = 'Agenda indisponível para este período.';
+      return;
+    }
+    const first = shortFormatter.format(new Date(`${days[0].date}T00:00:00`));
+    const last = shortFormatter.format(new Date(`${days[days.length - 1].date}T00:00:00`));
+    weekLabel.textContent = `Semana de ${first} a ${last}`;
+  }
+
+  function createSlotButton(time, status, options = {}) {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'btn btn-sm rounded-pill d-inline-flex align-items-center gap-1 schedule-slot flex-shrink-0';
+    button.dataset.scheduleSlot = time;
+    button.dataset.scheduleStatus = status;
+    if (options.date) {
+      button.dataset.scheduleDate = options.date;
+      button.dataset.scheduleSlotKey = `${options.date}T${time}`;
+    }
+    button.dataset.schedulePeriod = getPeriodFromTime(time);
+    if (status === 'available') {
+      button.classList.add('btn-outline-success');
+      button.innerHTML = '<i class="bi bi-check-circle"></i><span>' + time + '</span>';
+      button.title = 'Selecionar horário disponível';
+      button.addEventListener('click', () => {
+        const dateValue = options.date || state.todayIso;
+        state.selectedSlotKey = `${dateValue}T${time}`;
+        refreshSlotSelection();
+        handleSlotSelection(dateValue, time);
+      });
+    } else if (status === 'booked') {
+      button.classList.add('btn-outline-danger', 'opacity-75');
+      button.innerHTML = '<i class="bi bi-x-circle"></i><span>' + time + '</span>';
+      button.disabled = true;
+      button.setAttribute('aria-disabled', 'true');
+      button.title = 'Horário indisponível';
+    } else {
+      button.classList.add('btn-outline-secondary', 'opacity-75');
+      button.innerHTML = '<i class="bi bi-slash-circle"></i><span>' + time + '</span>';
+      button.disabled = true;
+      button.setAttribute('aria-disabled', 'true');
+      button.title = 'Fora do expediente';
+    }
+    return button;
+  }
+
+  function renderSchedule(days) {
+    scheduleContainer.innerHTML = '';
+    if (!Array.isArray(days) || !days.length) {
+      setScheduleEmptyState('Nenhum horário cadastrado para o período selecionado.');
+      return;
+    }
+
+    days.forEach((day) => {
+      const availableSlots = Array.isArray(day.available) ? day.available : [];
+      const bookedSlots = Array.isArray(day.booked) ? day.booked : [];
+      const offSlots = Array.isArray(day.not_working) ? day.not_working : [];
+      const availableCount = availableSlots.length;
+      const bookedCount = bookedSlots.length;
+      const offCount = offSlots.length;
+
+      const col = document.createElement('div');
+      col.className = 'col';
+      const card = document.createElement('div');
+      card.className = 'card h-100 shadow-sm position-relative border-1';
+      card.dataset.scheduleDay = day.date;
+      if (availableCount > 0) {
+        card.classList.add('border-success');
+      } else if (bookedCount > 0) {
+        card.classList.add('border-danger');
+      } else {
+        card.classList.add('border-secondary');
+      }
+
+      if (day.date === state.todayIso) {
+        const todayBadge = document.createElement('span');
+        todayBadge.className = 'badge text-bg-primary position-absolute top-0 end-0 translate-middle-y me-3 mt-3';
+        todayBadge.textContent = 'Hoje';
+        card.appendChild(todayBadge);
+      }
+
+      const body = document.createElement('div');
+      body.className = 'card-body d-flex flex-column';
+
+      const title = document.createElement('h6');
+      title.className = 'card-title fw-bold text-capitalize mb-1';
+      title.textContent = shortFormatter.format(new Date(`${day.date}T00:00:00`));
+      body.appendChild(title);
+
+      const subtitle = document.createElement('p');
+      subtitle.className = 'text-muted small text-capitalize mb-3';
+      subtitle.textContent = longFormatter.format(new Date(`${day.date}T00:00:00`));
+      body.appendChild(subtitle);
+
+      const statsRow = document.createElement('div');
+      statsRow.className = 'd-flex justify-content-between align-items-center text-muted small mb-2';
+      statsRow.innerHTML = `<span><i class="bi bi-check-circle-fill text-success me-1"></i>${availableCount} livre(s)</span>`
+        + `<span><i class="bi bi-x-circle-fill text-danger me-1"></i>${bookedCount} ocupado(s)</span>`;
+      body.appendChild(statsRow);
+
+      if (availableCount + bookedCount > 0) {
+        const progress = document.createElement('div');
+        progress.className = 'progress bg-light-subtle mb-3';
+        const availablePercent = Math.round((availableCount / Math.max(1, availableCount + bookedCount)) * 100);
+        const bookedPercent = Math.max(0, 100 - availablePercent);
+        const availableBar = document.createElement('div');
+        availableBar.className = 'progress-bar bg-success';
+        availableBar.style.width = `${availablePercent}%`;
+        availableBar.setAttribute('aria-label', `${availableCount} horário(s) livre(s)`);
+        progress.appendChild(availableBar);
+        if (bookedPercent > 0) {
+          const bookedBar = document.createElement('div');
+          bookedBar.className = 'progress-bar bg-danger';
+          bookedBar.style.width = `${bookedPercent}%`;
+          bookedBar.setAttribute('aria-label', `${bookedCount} horário(s) ocupado(s)`);
+          progress.appendChild(bookedBar);
+        }
+        body.appendChild(progress);
+      } else if (offCount === 0) {
+        const badge = document.createElement('span');
+        badge.className = 'badge text-bg-light text-muted align-self-start mb-3';
+        badge.textContent = 'Sem horários cadastrados.';
+        body.appendChild(badge);
+      }
+
+      const slotsWrapper = document.createElement('div');
+      slotsWrapper.className = 'd-flex flex-wrap gap-2';
+      const filteredAvailable = filterSlotsByPeriod(availableSlots);
+      if (filteredAvailable.length) {
+        filteredAvailable.forEach((slot) => {
+          slotsWrapper.appendChild(createSlotButton(slot, 'available', { date: day.date }));
+        });
+      } else if (availableSlots.length && state.period !== 'all') {
+        const info = document.createElement('div');
+        info.className = 'text-muted small fst-italic';
+        info.textContent = 'Sem horários no período selecionado.';
+        slotsWrapper.appendChild(info);
+      }
+      bookedSlots.forEach((slot) => {
+        slotsWrapper.appendChild(createSlotButton(slot, 'booked', { date: day.date }));
+      });
+      offSlots.forEach((slot) => {
+        slotsWrapper.appendChild(createSlotButton(slot, 'not_working', { date: day.date }));
+      });
+
+      if (!slotsWrapper.children.length) {
+        const fallback = document.createElement('div');
+        fallback.className = 'text-muted small fst-italic';
+        fallback.textContent = 'Fora do expediente.';
+        slotsWrapper.appendChild(fallback);
+      }
+
+      body.appendChild(slotsWrapper);
+      card.appendChild(body);
+      col.appendChild(card);
+      scheduleContainer.appendChild(col);
+    });
+
+    refreshSlotSelection();
+  }
+
+  async function handleSlotSelection(date, time) {
+    if (!dateField || !timeSelect) {
+      return;
+    }
+    dateField.value = date;
+    const times = await updateAppointmentTimes({ root, dateInput: dateField, timeSelect });
+    const hasTimes = Array.isArray(times) && times.length > 0;
+    if (timeSelect.disabled && (hasTimes || time)) {
+      timeSelect.disabled = false;
+    }
+    if (!hasTimes || !times.includes(time)) {
+      const existing = Array.from(timeSelect.options).find((option) => option.value === time);
+      if (!existing) {
+        const option = document.createElement('option');
+        option.value = time;
+        option.textContent = `${time}`;
+        timeSelect.appendChild(option);
+      }
+    }
+    timeSelect.value = time;
+    timeSelect.dispatchEvent(new Event('change', { bubbles: true }));
+  }
+
+  async function loadSchedule({ showLoading = true } = {}) {
+    if (showLoading) {
+      showScheduleLoading();
+    }
+    const start = state.currentStart || getWeekStart(dateField?.value || state.todayIso);
+    state.currentStart = start;
+    try {
+      const response = await fetch(`/api/specialist/${vetId}/weekly_schedule?start=${start}`);
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
+      const days = await response.json();
+      state.days = Array.isArray(days) ? days : [];
+      renderSchedule(state.days);
+      setScheduleSummary(state.days);
+      setWeekLabel(state.days);
+    } catch (error) {
+      console.warn('Não foi possível carregar os horários disponíveis.', error);
+      state.days = [];
+      setScheduleEmptyState('Não foi possível carregar a agenda no momento. Tente novamente.', 'danger');
+      if (summaryBadge) {
+        summaryBadge.classList.remove('text-bg-success');
+        summaryBadge.classList.add('text-bg-warning');
+        summaryBadge.textContent = 'Erro ao carregar agenda.';
+      }
+      if (weekLabel) {
+        weekLabel.textContent = 'Erro ao carregar agenda.';
+      }
+    }
+  }
+
+  function changeWeek(deltaDays) {
+    const startDate = new Date(`${state.currentStart || state.todayIso}T00:00:00`);
+    if (Number.isNaN(startDate.getTime())) {
+      state.currentStart = state.todayIso;
+    } else {
+      startDate.setDate(startDate.getDate() + deltaDays);
+      state.currentStart = formatIso(startDate);
+    }
+    loadSchedule({ showLoading: collapseEl ? collapseEl.classList.contains('show') : true });
+  }
+
+  if (periodFilter && periodFilter.dataset.vetScheduleBound !== 'true') {
+    periodFilter.dataset.vetScheduleBound = 'true';
+    periodFilter.addEventListener('change', () => {
+      state.period = periodFilter.value || 'all';
+      renderSchedule(state.days);
+    });
+  }
+
+  if (prevBtn && prevBtn.dataset.vetScheduleBound !== 'true') {
+    prevBtn.dataset.vetScheduleBound = 'true';
+    prevBtn.addEventListener('click', () => changeWeek(-7));
+  }
+
+  if (nextBtn && nextBtn.dataset.vetScheduleBound !== 'true') {
+    nextBtn.dataset.vetScheduleBound = 'true';
+    nextBtn.addEventListener('click', () => changeWeek(7));
+  }
+
+  if (todayBtn && todayBtn.dataset.vetScheduleBound !== 'true') {
+    todayBtn.dataset.vetScheduleBound = 'true';
+    todayBtn.addEventListener('click', () => {
+      state.currentStart = getWeekStart(state.todayIso);
+      loadSchedule({ showLoading: collapseEl ? collapseEl.classList.contains('show') : true });
+    });
+  }
+
+  if (dateField && dateField.dataset.scheduleOverviewBound !== 'true') {
+    dateField.dataset.scheduleOverviewBound = 'true';
+    dateField.addEventListener('change', async () => {
+      state.currentStart = getWeekStart(dateField.value || state.todayIso);
+      const times = await updateAppointmentTimes({ root, dateInput: dateField, timeSelect });
+      if (timeSelect) {
+        const hasTimes = Array.isArray(times) && times.length > 0;
+        timeSelect.disabled = !hasTimes;
+      }
+      loadSchedule({ showLoading: collapseEl ? collapseEl.classList.contains('show') : true });
+    });
+  }
+
+  if (timeSelect && timeSelect.dataset.scheduleOverviewBound !== 'true') {
+    timeSelect.dataset.scheduleOverviewBound = 'true';
+    timeSelect.addEventListener('change', () => {
+      if (dateField && dateField.value && timeSelect.value) {
+        state.selectedSlotKey = `${dateField.value}T${timeSelect.value}`;
+      } else {
+        state.selectedSlotKey = '';
+      }
+      refreshSlotSelection();
+    });
+  }
+
+  if (collapseEl && typeof collapseEl.addEventListener === 'function') {
+    collapseEl.addEventListener('shown.bs.collapse', updateToggleButtonLabel);
+    collapseEl.addEventListener('hidden.bs.collapse', updateToggleButtonLabel);
+  }
+  updateToggleButtonLabel();
+
+  state.currentStart = getWeekStart(dateField?.value || state.todayIso);
+  loadSchedule({ showLoading: true });
 }
 
 export function toggleScheduleEdit(rootParam) {
@@ -568,6 +1058,8 @@ export function initVetSchedulePage(options = {}) {
   bindAppointmentEditDateWatcher(root);
   bindAppointmentEditTimeWatcher();
   bindPastToggle(root);
+  bindScheduleModalButton(root);
+  initScheduleOverview(root);
   animateCards(root);
 
   const dateInput = document.getElementById('appointment-date');

@@ -1,0 +1,105 @@
+{% set calendar_overview_id = calendar_overview_id|default('appointments-calendar-overview') %}
+{% set calendar_tabs_id = calendar_tabs_id|default('appointments-calendar-tabs') %}
+{% set calendar_content_id = calendar_content_id|default('appointments-calendar-content') %}
+{% set calendar_experimental_pane_id = calendar_experimental_pane_id|default('calendar-pane-experimental') %}
+{% set calendar_full_pane_id = calendar_full_pane_id|default('calendar-pane-full') %}
+{% set calendar_experimental_tab_id = calendar_experimental_tab_id|default('calendar-tab-experimental') %}
+{% set calendar_full_tab_id = calendar_full_tab_id|default('calendar-tab-full') %}
+{% set calendar_inline_component_id = calendar_inline_component_id|default('tutor-calendar-inline') %}
+{% set calendar_hide_experimental_tab = calendar_hide_experimental_tab|default(False) %}
+{% set calendar_pets_endpoint = calendar_pets_endpoint|default(url_for('api_my_pets')) %}
+{% set calendar_summary_toggle_show_label = calendar_summary_toggle_show_label|default('Mostrar resumo') %}
+{% set calendar_summary_toggle_hide_label = calendar_summary_toggle_hide_label|default('Ocultar resumo') %}
+{% set summary_panel_template = summary_panel_template|default('partials/calendar_summary_panel.html') %}
+{% set schedule_toggle_clinic_id = schedule_toggle_clinic_id|default(none) %}
+{% set schedule_toggle_calendar_redirect_url = schedule_toggle_calendar_redirect_url|default('') %}
+{% set schedule_toggle_prefer_user_vet_source = schedule_toggle_prefer_user_vet_source|default(none) %}
+{% set schedule_toggle_include_assets = schedule_toggle_include_assets|default(True) %}
+
+<div class="row g-4 align-items-stretch mb-4" id="{{ calendar_overview_id }}">
+  <div class="col-12 col-xl-8 col-xxl-9" data-calendar-main-column>
+    <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3">
+      <ul
+        class="nav nav-pills calendar-tabs mb-0"
+        id="{{ calendar_tabs_id }}"
+        role="tablist"
+        aria-label="Alternar entre o calendário e o agendamento"
+        data-calendar-tabs
+      >
+        <li class="nav-item{% if calendar_hide_experimental_tab %} d-none{% endif %}" role="presentation">
+          <button
+            class="nav-link active"
+            id="{{ calendar_experimental_tab_id }}"
+            data-bs-toggle="tab"
+            data-bs-target="#{{ calendar_experimental_pane_id }}"
+            type="button"
+            role="tab"
+            aria-controls="{{ calendar_experimental_pane_id }}"
+            aria-selected="true"
+          >
+            <i class="bi bi-layout-text-window-reverse me-1"></i> Calendário
+          </button>
+        </li>
+        <li class="nav-item" role="presentation">
+          <button
+            class="nav-link"
+            id="{{ calendar_full_tab_id }}"
+            data-bs-toggle="tab"
+            data-bs-target="#{{ calendar_full_pane_id }}"
+            type="button"
+            role="tab"
+            aria-controls="{{ calendar_full_pane_id }}"
+            aria-selected="false"
+          >
+            <i class="bi bi-calendar3 me-1"></i> Agendamento
+          </button>
+        </li>
+      </ul>
+      <button
+        type="button"
+        class="btn btn-outline-secondary btn-sm d-flex align-items-center gap-2 calendar-summary-toggle"
+        data-calendar-summary-toggle
+        data-show-label="{{ calendar_summary_toggle_show_label }}"
+        data-hide-label="{{ calendar_summary_toggle_hide_label }}"
+        aria-pressed="false"
+        aria-expanded="true"
+      >
+        <i class="bi bi-layout-sidebar-inset" data-calendar-summary-toggle-icon aria-hidden="true"></i>
+        <span data-calendar-summary-toggle-label>{{ calendar_summary_toggle_hide_label }}</span>
+      </button>
+    </div>
+
+    <div class="tab-content mt-3" id="{{ calendar_content_id }}">
+      <div
+        class="tab-pane fade calendar-tab-pane show active pt-2"
+        id="{{ calendar_experimental_pane_id }}"
+        role="tabpanel"
+        aria-labelledby="{{ calendar_experimental_tab_id }}"
+        tabindex="0"
+      >
+        {% with component_id = calendar_inline_component_id, pets_url = calendar_pets_endpoint %}
+          {% include 'partials/tutor_calendar.html' %}
+        {% endwith %}
+      </div>
+      <div
+        class="tab-pane fade calendar-tab-pane pt-2"
+        id="{{ calendar_full_pane_id }}"
+        role="tabpanel"
+        aria-labelledby="{{ calendar_full_tab_id }}"
+        tabindex="0"
+      >
+        {% with
+          clinic_id = schedule_toggle_clinic_id,
+          calendar_redirect_url = schedule_toggle_calendar_redirect_url,
+          prefer_user_vet_source = schedule_toggle_prefer_user_vet_source,
+          include_assets = schedule_toggle_include_assets
+        %}
+          {% include 'partials/schedule_toggle.html' %}
+        {% endwith %}
+      </div>
+    </div>
+  </div>
+  <div class="col-12 col-xl-4 col-xxl-3" data-calendar-summary-column>
+    {% include summary_panel_template %}
+  </div>
+</div>

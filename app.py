@@ -3473,8 +3473,79 @@ def veterinarios():
 
 @app.route('/veterinario/<int:veterinario_id>')
 def vet_detail(veterinario_id):
+    from models import Animal, User  # import local para evitar ciclos
+
     veterinario = Veterinario.query.get_or_404(veterinario_id)
-    horarios = VetSchedule.query.filter_by(veterinario_id=veterinario_id).all()
+    horarios = (
+        VetSchedule.query.filter_by(veterinario_id=veterinario_id)
+        .order_by(VetSchedule.dia_semana, VetSchedule.hora_inicio)
+        .all()
+    )
+
+    schedule_form = VetScheduleForm(prefix='schedule')
+    appointment_form = AppointmentForm(is_veterinario=True, prefix='appointment')
+    admin_default_selection_value = ''
+
+    if current_user.role == 'admin':
+        agenda_veterinarios = (
+            Veterinario.query.join(User).order_by(User.name).all()
+        )
+        agenda_colaboradores = (
+            User.query.filter(User.worker == 'colaborador')
+            .order_by(User.name)
+            .all()
+        )
+        vet_choices = [(v.id, v.user.name) for v in agenda_veterinarios]
+        admin_selected_view = 'veterinario'
+        admin_selected_veterinario_id = veterinario.id
+        admin_selected_colaborador_id = None
+        default_vet = getattr(current_user, 'veterinario', None)
+        if default_vet and getattr(default_vet, 'id', None):
+            admin_default_selection_value = f'veterinario:{default_vet.id}'
+        else:
+            admin_default_selection_value = f'veterinario:{veterinario.id}'
+    else:
+        agenda_veterinarios = []
+        agenda_colaboradores = []
+        vet_choices = [(veterinario.id, veterinario.user.name)]
+        admin_selected_view = None
+        admin_selected_veterinario_id = None
+        admin_selected_colaborador_id = None
+
+    schedule_form.veterinario_id.choices = vet_choices
+    schedule_form.veterinario_id.data = veterinario.id
+
+    appointment_form.veterinario_id.choices = [
+        (veterinario.id, veterinario.user.name)
+    ]
+    appointment_form.veterinario_id.data = veterinario.id
+
+    if veterinario.clinica_id:
+        animals = (
+            Animal.query.filter_by(clinica_id=veterinario.clinica_id)
+            .order_by(Animal.name)
+            .all()
+        )
+    else:
+        animals = Animal.query.order_by(Animal.name).all()
+    appointment_form.animal_id.choices = [(a.id, a.name) for a in animals]
+
+    weekday_order = {
+        'Segunda': 0,
+        'Terça': 1,
+        'Quarta': 2,
+        'Quinta': 3,
+        'Sexta': 4,
+        'Sábado': 5,
+        'Domingo': 6,
+    }
+    horarios.sort(key=lambda h: weekday_order.get(h.dia_semana, 7))
+    horarios_grouped = []
+    for horario in horarios:
+        if not horarios_grouped or horarios_grouped[-1]['dia'] != horario.dia_semana:
+            horarios_grouped.append({'dia': horario.dia_semana, 'itens': []})
+        horarios_grouped[-1]['itens'].append(horario)
+
     calendar_redirect_url = url_for(
         'appointments', view_as='veterinario', veterinario_id=veterinario.id
     )
@@ -3482,7 +3553,16 @@ def vet_detail(veterinario_id):
         'veterinarios/vet_detail.html',
         veterinario=veterinario,
         horarios=horarios,
+        horarios_grouped=horarios_grouped,
         calendar_redirect_url=calendar_redirect_url,
+        schedule_form=schedule_form,
+        appointment_form=appointment_form,
+        agenda_veterinarios=agenda_veterinarios,
+        agenda_colaboradores=agenda_colaboradores,
+        admin_selected_view=admin_selected_view,
+        admin_selected_veterinario_id=admin_selected_veterinario_id,
+        admin_selected_colaborador_id=admin_selected_colaborador_id,
+        admin_default_selection_value=admin_default_selection_value,
     )
 
 
@@ -7529,7 +7609,11 @@ def appointments():
     agenda_colaboradores = []
     admin_selected_veterinario_id = None
     admin_selected_colaborador_id = None
+    admin_default_selection_value = ''
     selected_colaborador = None
+    calendar_summary_vets = []
+    calendar_summary_clinic_ids = []
+    calendar_redirect_url = None
 
     if current_user.role == 'admin':
         agenda_users = User.query.order_by(User.name).all()
@@ -7541,6 +7625,9 @@ def appointments():
             .order_by(User.name)
             .all()
         )
+        default_vet = getattr(current_user, 'veterinario', None)
+        if default_vet and getattr(default_vet, 'id', None):
+            admin_default_selection_value = f'veterinario:{default_vet.id}'
 
     admin_selected_view = (
         worker
@@ -7574,6 +7661,62 @@ def appointments():
         if not veterinario:
             abort(404)
         vet_user_id = getattr(veterinario, "user_id", None)
+        clinic_ids = []
+        if getattr(veterinario, "clinica_id", None):
+            clinic_ids.append(veterinario.clinica_id)
+        for clinica in getattr(veterinario, "clinicas", []) or []:
+            clinica_id = getattr(clinica, "id", None)
+            if clinica_id and clinica_id not in clinic_ids:
+                clinic_ids.append(clinica_id)
+        calendar_summary_clinic_ids = clinic_ids
+        if getattr(veterinario, "id", None) is not None:
+            calendar_summary_vets = [
+                {
+                    'id': veterinario.id,
+                    'name': veterinario.user.name
+                    if getattr(veterinario, "user", None)
+                    else None,
+                }
+            ]
+        include_colleagues = (
+            bool(clinic_ids)
+            and (
+                current_user.role == 'admin'
+                or len(clinic_ids) > 1
+            )
+        )
+        if include_colleagues:
+            if current_user.role == 'admin' and agenda_veterinarios:
+                colleagues_source = [
+                    v
+                    for v in agenda_veterinarios
+                    if getattr(v, 'clinica_id', None) in clinic_ids
+                ]
+            else:
+                colleagues_source = (
+                    Veterinario.query.filter(
+                        Veterinario.clinica_id.in_(clinic_ids)
+                    ).all()
+                    if clinic_ids
+                    else []
+                )
+            known_ids = {entry['id'] for entry in calendar_summary_vets}
+            for colleague in colleagues_source:
+                colleague_id = getattr(colleague, 'id', None)
+                if not colleague_id or colleague_id in known_ids:
+                    continue
+                calendar_summary_vets.append(
+                    {
+                        'id': colleague_id,
+                        'name': colleague.user.name
+                        if getattr(colleague, 'user', None)
+                        else None,
+                    }
+                )
+                known_ids.add(colleague_id)
+        calendar_redirect_url = url_for(
+            'appointments', view_as='veterinario', veterinario_id=veterinario.id
+        )
         query_args = request.args.to_dict()
         if current_user.role == 'admin':
             query_args['view_as'] = 'veterinario'
@@ -7987,6 +8130,9 @@ def appointments():
             start_dt=start_dt,
             end_dt=end_dt,
             timedelta=timedelta,
+            calendar_summary_vets=calendar_summary_vets,
+            calendar_summary_clinic_ids=calendar_summary_clinic_ids,
+            calendar_redirect_url=calendar_redirect_url,
         )
     else:
         if worker in ['colaborador', 'admin']:
@@ -8022,6 +8168,15 @@ def appointments():
             appointment_form.animal_id.choices = [(a.id, a.name) for a in animals]
             vets = Veterinario.query.filter_by(clinica_id=clinica_id).all()
             appointment_form.veterinario_id.choices = [(v.id, v.user.name) for v in vets]
+            calendar_summary_vets = [
+                {
+                    'id': v.id,
+                    'name': v.user.name if getattr(v, 'user', None) else None,
+                }
+                for v in vets
+                if getattr(v, 'id', None) is not None
+            ]
+            calendar_summary_clinic_ids = [clinica_id] if clinica_id else []
             if appointment_form.validate_on_submit():
                 scheduled_at_local = datetime.combine(
                     appointment_form.date.data, appointment_form.time.data
@@ -8169,6 +8324,9 @@ def appointments():
             admin_selected_view=admin_selected_view,
             admin_selected_veterinario_id=admin_selected_veterinario_id,
             admin_selected_colaborador_id=admin_selected_colaborador_id,
+            admin_default_selection_value=admin_default_selection_value,
+            calendar_summary_vets=calendar_summary_vets,
+            calendar_summary_clinic_ids=calendar_summary_clinic_ids,
         )
 
 

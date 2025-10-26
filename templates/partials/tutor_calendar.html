@@ -78,14 +78,28 @@
                 aria-busy="false"
                 aria-hidden="true"
               >
-                <button
-                  type="button"
-                  class="tutor-calendar__day-detail-close"
-                  data-close-day-detail
-                  aria-label="Fechar detalhes do dia"
-                >
-                  <i class="bi bi-x-lg" aria-hidden="true"></i>
-                </button>
+                <div class="tutor-calendar__day-detail-controls" data-day-detail-controls>
+                  <button
+                    type="button"
+                    class="tutor-calendar__day-detail-back"
+                    data-back-to-day
+                    hidden
+                    aria-hidden="true"
+                    aria-label="Voltar para os agendamentos do dia"
+                  >
+                    <i class="bi bi-arrow-left-circle" aria-hidden="true"></i>
+                    <span class="tutor-calendar__day-detail-back-text">Agendamentos do dia</span>
+                  </button>
+                  <button
+                    type="button"
+                    class="tutor-calendar__day-detail-close"
+                    data-close-day-detail
+                    aria-label="Fechar detalhes do dia"
+                  >
+                    <span class="visually-hidden">Fechar detalhes do dia</span>
+                    <span class="tutor-calendar__day-detail-close-icon" aria-hidden="true">&times;</span>
+                  </button>
+                </div>
                 <div class="tutor-calendar__day-detail-content" data-day-detail-content>
                   <div class="tutor-calendar__day-detail-placeholder text-muted small">
                     Selecione um dia para ver os compromissos.
@@ -591,10 +605,47 @@
   box-shadow: 0 22px 40px rgba(99, 102, 241, 0.2);
 }
 
-#{{ component_id }} .tutor-calendar__day-detail-close {
+#{{ component_id }} .tutor-calendar__day-detail-controls {
   position: absolute;
   top: 1rem;
   right: 1rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  z-index: 2;
+}
+
+#{{ component_id }} .tutor-calendar__day-detail-back {
+  border: none;
+  background: rgba(99, 102, 241, 0.12);
+  color: #4338ca;
+  border-radius: 999px;
+  padding: 0.35rem 0.85rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  transition: background 0.2s ease, color 0.2s ease, transform 0.2s ease;
+}
+
+#{{ component_id }} .tutor-calendar__day-detail-back i {
+  font-size: 1rem;
+}
+
+#{{ component_id }} .tutor-calendar__day-detail-back:hover,
+#{{ component_id }} .tutor-calendar__day-detail-back:focus {
+  background: rgba(79, 70, 229, 0.18);
+  color: #312e81;
+  transform: translateY(-1px);
+}
+
+#{{ component_id }} .tutor-calendar__day-detail-back:focus {
+  outline: 0;
+  box-shadow: 0 0 0 0.2rem rgba(99, 102, 241, 0.25);
+}
+
+#{{ component_id }} .tutor-calendar__day-detail-close {
   border: none;
   background: rgba(15, 23, 42, 0.05);
   color: var(--bs-gray-700);
@@ -607,6 +658,13 @@
   transition: background 0.2s ease, color 0.2s ease, transform 0.2s ease;
 }
 
+#{{ component_id }} .tutor-calendar__day-detail-close-icon {
+  display: block;
+  font-size: 1.15rem;
+  font-weight: 700;
+  line-height: 1;
+}
+
 #{{ component_id }} .tutor-calendar__day-detail-close:hover,
 #{{ component_id }} .tutor-calendar__day-detail-close:focus {
   background: rgba(99, 102, 241, 0.16);
@@ -617,6 +675,17 @@
 #{{ component_id }} .tutor-calendar__day-detail-close:focus {
   outline: 0;
   box-shadow: 0 0 0 0.2rem rgba(99, 102, 241, 0.25);
+}
+
+#{{ component_id }} .tutor-calendar__day-detail-back {
+  max-width: min(220px, 60vw);
+}
+
+#{{ component_id }} .tutor-calendar__day-detail-back-text {
+  display: inline-block;
+  white-space: normal;
+  line-height: 1.2;
+  text-align: left;
 }
 
 #{{ component_id }} .tutor-calendar__day-detail-content {
@@ -636,7 +705,7 @@
   justify-content: space-between;
   gap: 0.75rem;
   margin-bottom: 0.75rem;
-  padding-right: 2.25rem;
+  padding-right: clamp(2.5rem, 6vw, 9rem);
 }
 
 #{{ component_id }} .tutor-calendar__day-detail-date {
@@ -1360,6 +1429,8 @@ document.addEventListener('DOMContentLoaded', function() {
   const dayDetailContainer = root.querySelector('[data-day-detail]');
   const dayDetailLayer = root.querySelector('[data-day-detail-layer]');
   const dayDetailBackdrop = root.querySelector('[data-day-detail-backdrop]');
+  const dayDetailControls = root.querySelector('[data-day-detail-controls]');
+  const dayDetailBackBtn = root.querySelector('[data-back-to-day]');
   const dayDetailCloseBtn = root.querySelector('[data-close-day-detail]');
   const dayDetailContent = root.querySelector('[data-day-detail-content]');
   const monthLabelEl = root.querySelector('[data-month-label]');
@@ -1428,14 +1499,18 @@ document.addEventListener('DOMContentLoaded', function() {
 
   const petsInitialLimit = 3;
   const petsPageSize = 9;
+  const sharedCalendarSourceId = 'tutor-calendar';
 
   let pets = [];
   let events = [];
+  let allEvents = [];
+  let activeVetFilterId = null;
   let viewDate = new Date();
   let currentViewMode = 'month';
   let currentFilter = 'all';
   let selectedDate = formatDateKey(new Date());
   let usingSharedCalendar = false;
+  let isFetchingLocalEvents = false;
   let isDayDetailOpen = false;
   let lastDetailTrigger = null;
   let dayDetailMode = 'day';
@@ -1491,6 +1566,24 @@ document.addEventListener('DOMContentLoaded', function() {
       } catch (error) {
         focusTarget.focus();
       }
+    }
+    updateDayDetailControls();
+  }
+
+  function updateDayDetailControls() {
+    if (!dayDetailBackBtn) {
+      return;
+    }
+    const shouldShowBack = dayDetailMode === 'event';
+    if (shouldShowBack) {
+      dayDetailBackBtn.removeAttribute('hidden');
+      dayDetailBackBtn.setAttribute('aria-hidden', 'false');
+    } else {
+      dayDetailBackBtn.setAttribute('hidden', 'hidden');
+      dayDetailBackBtn.setAttribute('aria-hidden', 'true');
+    }
+    if (dayDetailControls) {
+      dayDetailControls.classList.toggle('has-back', shouldShowBack);
     }
   }
 
@@ -1834,28 +1927,34 @@ document.addEventListener('DOMContentLoaded', function() {
       return;
     }
     const targetId = String(recordId);
-    let matched = false;
-    events.forEach(function(eventItem) {
-      if (!eventItem) {
-        return;
-      }
-      const ext = eventItem.raw && eventItem.raw.extendedProps ? eventItem.raw.extendedProps : null;
-      const eventRecordId = eventItem.recordId !== undefined && eventItem.recordId !== null
-        ? String(eventItem.recordId)
-        : (ext && ext.recordId !== undefined && ext.recordId !== null ? String(ext.recordId) : null);
-      if (!eventRecordId || eventRecordId !== targetId) {
-        return;
-      }
-      matched = true;
-      const typeKey = getEventBaseType(eventItem) || 'appointment';
-      const nextStatus = resolveStatusKey(statusValue, typeKey);
-      eventItem.status = nextStatus;
-      if (ext) {
-        ext.status = nextStatus;
-      }
-    });
-    if (matched) {
-      renderCalendar();
+    const applyStatusUpdate = function(list) {
+      let listMatched = false;
+      (Array.isArray(list) ? list : []).forEach(function(eventItem) {
+        if (!eventItem) {
+          return;
+        }
+        const ext = eventItem.raw && eventItem.raw.extendedProps ? eventItem.raw.extendedProps : null;
+        const eventRecordId = eventItem.recordId !== undefined && eventItem.recordId !== null
+          ? String(eventItem.recordId)
+          : (ext && ext.recordId !== undefined && ext.recordId !== null ? String(ext.recordId) : null);
+        if (!eventRecordId || eventRecordId !== targetId) {
+          return;
+        }
+        listMatched = true;
+        const typeKey = getEventBaseType(eventItem) || 'appointment';
+        const nextStatus = resolveStatusKey(statusValue, typeKey);
+        eventItem.status = nextStatus;
+        if (ext) {
+          ext.status = nextStatus;
+        }
+      });
+      return listMatched;
+    };
+
+    const matchedInEvents = applyStatusUpdate(events);
+    const matchedInAllEvents = applyStatusUpdate(allEvents);
+    if (matchedInEvents || matchedInAllEvents) {
+      refreshEventsView();
     }
   }
 
@@ -1969,11 +2068,15 @@ document.addEventListener('DOMContentLoaded', function() {
     if (!baseType) {
       baseType = 'appointment';
     }
-    if (baseType === 'grooming') {
+    if (isVaccineKind(normalizedKind)) {
+      baseType = 'vaccine';
+    } else if (baseType === 'grooming') {
       baseType = 'appointment';
     }
     let category = canonicalType && canonicalType !== 'all' ? canonicalType : baseType;
-    if (baseType === 'appointment' && (category === 'grooming' || isGroomingKind(normalizedKind))) {
+    if (isVaccineKind(normalizedKind)) {
+      category = 'vaccine';
+    } else if (baseType === 'appointment' && (category === 'grooming' || isGroomingKind(normalizedKind))) {
       category = 'grooming';
     }
     if (!category || category === 'all') {
@@ -2052,6 +2155,60 @@ document.addEventListener('DOMContentLoaded', function() {
     return normalized;
   }
 
+  function normalizeVetFilterId(value) {
+    if (typeof window !== 'undefined'
+      && window.calendarVetColorManager
+      && typeof window.calendarVetColorManager.normalize === 'function') {
+      return window.calendarVetColorManager.normalize(value);
+    }
+    if (value === undefined || value === null) {
+      return null;
+    }
+    if (typeof value === 'number' && Number.isFinite(value)) {
+      return String(value);
+    }
+    const normalized = String(value).trim();
+    return normalized || null;
+  }
+
+  function getEventVetId(eventData) {
+    if (!eventData) {
+      return null;
+    }
+    const raw = eventData.raw || {};
+    const ext = raw.extendedProps || {};
+    const candidate = ext.veterinarioId
+      || ext.veterinario_id
+      || ext.vetId
+      || ext.vet_id
+      || ext.veterinarianId
+      || ext.veterinarian_id
+      || ext.specialistId
+      || ext.specialist_id
+      || raw.veterinarioId
+      || raw.veterinario_id
+      || raw.vetId
+      || raw.vet_id
+      || raw.veterinarianId
+      || raw.veterinarian_id
+      || eventData.vetId
+      || eventData.veterinarioId
+      || eventData.veterinario_id
+      || null;
+    return normalizeVetFilterId(candidate);
+  }
+
+  function filterEventsByVet(list, vetId) {
+    const collection = Array.isArray(list) ? list : [];
+    const normalizedVetId = normalizeVetFilterId(vetId);
+    if (!normalizedVetId) {
+      return collection.slice();
+    }
+    return collection.filter(function(item) {
+      return getEventVetId(item) === normalizedVetId;
+    });
+  }
+
   function canonicalizeEventTypeKey(value) {
     const normalized = normalizeFilterValue(value);
     switch (normalized) {
@@ -2091,6 +2248,15 @@ document.addEventListener('DOMContentLoaded', function() {
     return normalized === 'banho_tosa' || normalized === 'banho e tosa' || normalized === 'grooming';
   }
 
+  function isVaccineKind(value) {
+    const normalized = normalizeFilterValue(value);
+    return normalized === 'vacina'
+      || normalized === 'vacinas'
+      || normalized === 'vacinacao'
+      || normalized === 'imunizacao'
+      || normalized === 'vaccine';
+  }
+
   function getEventKindKey(eventData) {
     if (!eventData) {
       return '';
@@ -2117,7 +2283,11 @@ document.addEventListener('DOMContentLoaded', function() {
 
   function getEventBaseType(eventData) {
     const typeKey = eventData && eventData.type ? normalizeFilterValue(eventData.type) : '';
+    const kindKey = getEventKindKey(eventData);
     if (typeKey) {
+      if (typeKey === 'appointment' && isVaccineKind(kindKey)) {
+        return 'vaccine';
+      }
       return typeKey;
     }
     if (eventData && eventData.category) {
@@ -2126,7 +2296,9 @@ document.addEventListener('DOMContentLoaded', function() {
         return categoryKey;
       }
     }
-    const kindKey = getEventKindKey(eventData);
+    if (isVaccineKind(kindKey)) {
+      return 'vaccine';
+    }
     if (isGroomingKind(kindKey)) {
       return 'appointment';
     }
@@ -2145,6 +2317,9 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     const baseType = getEventBaseType(eventData);
     const kindKey = getEventKindKey(eventData);
+    if (isVaccineKind(kindKey)) {
+      return 'vaccine';
+    }
     if (baseType === 'appointment' && isGroomingKind(kindKey)) {
       return 'grooming';
     }
@@ -2854,7 +3029,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
     card.addEventListener('click', function(evt) {
       if (evt) {
-        const interactiveSelector = 'a, button, input, textarea, select, [role="button"], [data-ignore-card-click]';
+        const interactiveSelector = 'a, button, input, textarea, select, [data-ignore-card-click], [role="button"]:not(.tutor-calendar__day-detail-card)';
         if (evt.target && evt.target.closest(interactiveSelector)) {
           return;
         }
@@ -3231,7 +3406,8 @@ document.addEventListener('DOMContentLoaded', function() {
     if (!eventData) {
       return null;
     }
-    if (getEventBaseType(eventData) === 'appointment') {
+    const baseType = getEventBaseType(eventData);
+    if (baseType && ['appointment', 'exam', 'vaccine'].includes(baseType)) {
       const appointmentContent = buildAppointmentDetailBlock(eventData, displayLabel, dateKey);
       if (appointmentContent) {
         return appointmentContent;
@@ -3321,9 +3497,29 @@ document.addEventListener('DOMContentLoaded', function() {
     if (!dayEvents.length) {
       const emptyState = document.createElement('div');
       emptyState.className = 'tutor-calendar__day-detail-empty';
-      emptyState.textContent = currentFilter === 'all'
+
+      const emptyMessage = document.createElement('p');
+      emptyMessage.className = 'mb-3';
+      emptyMessage.textContent = currentFilter === 'all'
         ? 'Nenhum compromisso cadastrado para este dia.'
         : 'Nenhum compromisso para este filtro neste dia.';
+      emptyState.appendChild(emptyMessage);
+
+      const scheduleHint = document.createElement('p');
+      scheduleHint.className = 'small text-muted mb-3';
+      scheduleHint.textContent = 'Você pode agendar um novo compromisso clicando no botão abaixo.';
+      emptyState.appendChild(scheduleHint);
+
+      const scheduleBtn = document.createElement('button');
+      scheduleBtn.type = 'button';
+      scheduleBtn.className = 'btn btn-primary btn-sm';
+      scheduleBtn.innerHTML = '<i class="bi bi-plus-circle me-1"></i> Agendar compromisso';
+      scheduleBtn.addEventListener('click', function() {
+        const slotDate = parseDateKey(targetDateKey) || targetDateKey;
+        dispatchSlot(slotDate, '09:00');
+      });
+      emptyState.appendChild(scheduleBtn);
+
       dayDetailContent.appendChild(emptyState);
     } else {
       const fragment = document.createDocumentFragment();
@@ -3337,6 +3533,7 @@ document.addEventListener('DOMContentLoaded', function() {
     updateEventFocusHighlight();
 
     dayDetailContainer.setAttribute('aria-busy', 'false');
+    updateDayDetailControls();
 
     if (shouldOpen) {
       openDayDetail({ focus: shouldFocus, trigger: opts.trigger });
@@ -3398,6 +3595,7 @@ document.addEventListener('DOMContentLoaded', function() {
     updateEventFocusHighlight();
 
     dayDetailContainer.setAttribute('aria-busy', 'false');
+    updateDayDetailControls();
 
     if (shouldOpen) {
       openDayDetail({ focus: shouldFocus, trigger: opts.trigger });
@@ -3659,16 +3857,155 @@ document.addEventListener('DOMContentLoaded', function() {
     });
   }
 
-  function updateEvents(newEvents) {
+  function toSharedEventObject(eventApi) {
+    if (!eventApi) {
+      return null;
+    }
+    const extended = Object.assign({}, eventApi.extendedProps || {});
+    const eventType = extended.eventType || extended.type || eventApi.type || null;
+    return {
+      id: eventApi.id || null,
+      title: eventApi.title || '',
+      start: eventApi.start ? eventApi.start.toISOString() : (eventApi.startStr || null),
+      end: eventApi.end ? eventApi.end.toISOString() : (eventApi.endStr || null),
+      allDay: !!eventApi.allDay,
+      type: eventType,
+      extendedProps: extended,
+    };
+  }
+
+  function normalizeSharedEventPayload(item) {
+    if (!item) {
+      return null;
+    }
+    if (item.raw) {
+      return normalizeSharedEventPayload(item.raw);
+    }
+    if (typeof item.start === 'string') {
+      const plain = Object.assign({
+        id: item.id || null,
+        title: item.title || '',
+        start: item.start || null,
+        end: item.end || null,
+        allDay: !!item.allDay,
+      }, item);
+      const extended = Object.assign({}, plain.extendedProps || {});
+      if (!plain.type) {
+        const derivedType = extended.eventType || extended.type;
+        if (derivedType) {
+          plain.type = derivedType;
+        }
+      }
+      plain.extendedProps = extended;
+      return plain;
+    }
+    if (item.start instanceof Date || item.end instanceof Date) {
+      return toSharedEventObject(item);
+    }
+    const fallback = Object.assign({
+      id: item.id || null,
+      title: item.title || '',
+      start: item.start || item.startStr || null,
+      end: item.end || item.endStr || null,
+      allDay: !!item.allDay,
+    }, item);
+    const extended = Object.assign({}, fallback.extendedProps || {});
+    if (!fallback.type) {
+      const derivedType = extended.eventType || extended.type;
+      if (derivedType) {
+        fallback.type = derivedType;
+      }
+    }
+    fallback.extendedProps = extended;
+    return fallback;
+  }
+
+  function prepareSharedEventsPayload(list) {
+    return (Array.isArray(list) ? list : [])
+      .map(normalizeSharedEventPayload)
+      .filter(Boolean);
+  }
+
+  function dispatchLocalSharedEvents(eventsList) {
+    if (typeof document === 'undefined') {
+      return;
+    }
+    const prepared = prepareSharedEventsPayload(eventsList);
+    if (typeof window !== 'undefined') {
+      window.sharedCalendarEvents = prepared;
+      window.sharedCalendarEventsSource = sharedCalendarSourceId;
+    }
+    document.dispatchEvent(new CustomEvent('sharedCalendarEvents', {
+      detail: {
+        events: prepared,
+        source: sharedCalendarSourceId,
+      },
+    }));
+  }
+
+  function dispatchLocalSharedLoading(isLoading) {
+    if (typeof window !== 'undefined') {
+      window.sharedCalendarIsLoading = !!isLoading;
+    }
+    document.dispatchEvent(new CustomEvent('sharedCalendarEventsLoading', {
+      detail: {
+        loading: !!isLoading,
+        source: sharedCalendarSourceId,
+      },
+    }));
+  }
+
+  function collectCurrentRawEvents() {
+    return events.map(function(eventItem) {
+      if (!eventItem) {
+        return null;
+      }
+      if (eventItem.raw) {
+        return eventItem.raw;
+      }
+      return eventItem;
+    }).filter(Boolean);
+  }
+
+  function broadcastCurrentEvents() {
+    const rawEvents = collectCurrentRawEvents();
+    dispatchLocalSharedEvents(rawEvents);
+  }
+
+  function refreshSharedEventsFromLocal() {
+    if (usingSharedCalendar) {
+      return;
+    }
+    broadcastCurrentEvents();
+  }
+
+  function refreshEventsView(options = {}) {
+    const shouldBroadcast = options.broadcast !== false;
+    events = filterEventsByVet(allEvents, activeVetFilterId);
+    renderCalendar();
+    renderPetList();
+    if (shouldBroadcast) {
+      broadcastCurrentEvents();
+    }
+  }
+
+  function updateEvents(newEvents, options = {}) {
     const normalized = (newEvents || []).map(normalizeEvent).filter(function(ev) {
       return ev && ev.date;
     });
-    events = normalized;
-    renderCalendar();
-    renderPetList();
+    allEvents = normalized;
+    refreshEventsView(options);
   }
 
   async function fetchEventsFromApi() {
+    if (isFetchingLocalEvents) {
+      return;
+    }
+    isFetchingLocalEvents = true;
+    const shouldDispatchLoading = !usingSharedCalendar;
+    if (shouldDispatchLoading) {
+      dispatchLocalSharedLoading(true);
+    }
     try {
       const response = await fetch(eventsUrl, {
         headers: {
@@ -3680,11 +4017,16 @@ document.addEventListener('DOMContentLoaded', function() {
         throw new Error('Não foi possível carregar eventos.');
       }
       const data = await response.json();
-      if (Array.isArray(data)) {
+      if (Array.isArray(data) && !usingSharedCalendar) {
         updateEvents(data);
       }
     } catch (error) {
       console.error('Erro ao carregar eventos para o calendário experimental.', error);
+    } finally {
+      isFetchingLocalEvents = false;
+      if (shouldDispatchLoading) {
+        dispatchLocalSharedLoading(false);
+      }
     }
   }
 
@@ -3842,7 +4184,31 @@ document.addEventListener('DOMContentLoaded', function() {
   });
 
   newEventBtn && newEventBtn.addEventListener('click', function() {
-    dispatchSlot(viewDate, '09:00');
+    const todayKey = formatDateKey(new Date());
+    let targetDateKey = selectedDate || todayKey;
+    let targetDate = parseDateKey(targetDateKey);
+
+    if (!targetDate) {
+      targetDateKey = formatDateKey(viewDate instanceof Date ? viewDate : new Date());
+      targetDate = parseDateKey(targetDateKey) || new Date();
+    }
+
+    selectedDate = targetDateKey;
+
+    if (currentViewMode === 'week') {
+      viewDate = getStartOfWeek(targetDate);
+    } else {
+      viewDate = new Date(targetDate.getFullYear(), targetDate.getMonth(), 1);
+    }
+
+    renderCalendar();
+    renderDayDetail(targetDateKey, {
+      open: true,
+      focus: true,
+      trigger: newEventBtn,
+    });
+
+    dispatchSlot(targetDate, '09:00');
   });
 
   refreshPetsBtn && refreshPetsBtn.addEventListener('click', function() {
@@ -3926,6 +4292,28 @@ document.addEventListener('DOMContentLoaded', function() {
     });
   });
 
+  if (dayDetailBackBtn) {
+    dayDetailBackBtn.addEventListener('click', function(event) {
+      event.preventDefault();
+      const targetDate = (dayDetailContainer && dayDetailContainer.dataset && dayDetailContainer.dataset.date)
+        || selectedDate
+        || null;
+      const trigger = lastDetailTrigger && typeof lastDetailTrigger.focus === 'function'
+        ? lastDetailTrigger
+        : null;
+      dayDetailMode = 'day';
+      focusedEventId = null;
+      const options = {
+        open: true,
+        focus: true,
+      };
+      if (trigger) {
+        options.trigger = trigger;
+      }
+      renderDayDetail(targetDate, options);
+    });
+  }
+
   dayDetailCloseBtn && dayDetailCloseBtn.addEventListener('click', function(event) {
     event.preventDefault();
     closeDayDetail({ restoreFocus: true });
@@ -3944,7 +4332,7 @@ document.addEventListener('DOMContentLoaded', function() {
       if (!card) {
         return;
       }
-      const interactiveSelector = 'a, button, input, textarea, select, [role="button"], [data-ignore-card-click]';
+      const interactiveSelector = 'a, button, input, textarea, select, [data-ignore-card-click], [role="button"]:not(.tutor-calendar__day-detail-card)';
       if (event.target && event.target.closest(interactiveSelector)) {
         return;
       }
@@ -3998,11 +4386,34 @@ document.addEventListener('DOMContentLoaded', function() {
     }
   });
 
+  updateDayDetailControls();
+
+  function handleVetFilterChange(event) {
+    if (!event) {
+      return;
+    }
+    const detail = event.detail || {};
+    const normalized = normalizeVetFilterId(detail.vetId);
+    if (normalized === activeVetFilterId) {
+      return;
+    }
+    activeVetFilterId = normalized;
+    refreshEventsView();
+  }
+
+  document.addEventListener('calendarVetFilterChange', handleVetFilterChange);
+
   function handleSharedEvents(event) {
     if (!event || !event.detail) {
       return;
     }
+    if (event.detail.source === sharedCalendarSourceId) {
+      return;
+    }
     usingSharedCalendar = true;
+    if (typeof window !== 'undefined') {
+      window.sharedCalendarEventsSource = event.detail.source || null;
+    }
     const shared = Array.isArray(event.detail.events) ? event.detail.events : [];
     updateEvents(shared);
   }
@@ -4022,8 +4433,13 @@ document.addEventListener('DOMContentLoaded', function() {
   });
 
   if (Array.isArray(window.sharedCalendarEvents) && window.sharedCalendarEvents.length) {
-    usingSharedCalendar = true;
-    updateEvents(window.sharedCalendarEvents);
+    const sharedSource = typeof window !== 'undefined' ? window.sharedCalendarEventsSource : null;
+    if (sharedSource === sharedCalendarSourceId) {
+      updateEvents(window.sharedCalendarEvents);
+    } else {
+      usingSharedCalendar = true;
+      updateEvents(window.sharedCalendarEvents);
+    }
   } else if (typeof window !== 'undefined' && window.sharedCalendar && typeof window.sharedCalendar.getEvents === 'function') {
     const existing = window.sharedCalendar.getEvents();
     if (Array.isArray(existing) && existing.length) {
