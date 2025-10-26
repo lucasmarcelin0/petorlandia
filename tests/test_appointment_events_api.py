@@ -23,6 +23,7 @@ from models import (
     Appointment,
     ExamAppointment,
     Vacina,
+    Consulta,
 )
 from datetime import datetime, timedelta, date
 
@@ -79,6 +80,59 @@ def test_my_appointments_returns_events(client, monkeypatch):
     assert data[0]['extendedProps']['recordId'] == appt_id
     start_dt = datetime.fromisoformat(data[0]['start'])
     assert start_dt.tzinfo is not None
+
+
+def test_my_appointments_returns_consulta_without_appointment(client, monkeypatch):
+    with flask_app.app_context():
+        clinic = Clinica(id=1, nome='Clínica Central')
+        tutor = User(id=1, name='Tutor', email='t@test', worker=None)
+        tutor.set_password('x')
+        vet_user = User(id=2, name='Vet', email='v@test', worker='veterinario')
+        vet_user.set_password('x')
+        vet = Veterinario(id=1, user_id=vet_user.id, crmv='123', clinica_id=clinic.id)
+        animal = Animal(id=1, name='Rex', user_id=tutor.id, clinica_id=clinic.id)
+        db.session.add_all([clinic, tutor, vet_user, vet, animal])
+        db.session.commit()
+
+        consulta = Consulta(
+            id=1,
+            animal_id=animal.id,
+            created_by=vet_user.id,
+            clinica_id=clinic.id,
+            status='finalizada',
+            created_at=datetime(2024, 5, 5, 14, 30),
+        )
+        db.session.add(consulta)
+        db.session.commit()
+
+        consulta_id = consulta.id
+        start_iso = to_timezone_aware(consulta.created_at).isoformat()
+        clinic_id = clinic.id
+        vet_user_id = vet_user.id
+        vet_id = vet.id
+        animal_id = animal.id
+
+    fake_vet = type('U', (), {
+        'id': vet_user_id,
+        'worker': 'veterinario',
+        'role': 'adotante',
+        'is_authenticated': True,
+        'veterinario': type('V', (), {'id': vet_id, 'clinica_id': clinic_id})(),
+    })()
+
+    login(monkeypatch, fake_vet)
+    resp = client.get('/api/my_appointments')
+    assert resp.status_code == 200
+    data = resp.get_json()
+    assert len(data) == 1
+    event = data[0]
+    assert event['id'] == f'consulta-{consulta_id}'
+    assert event['start'] == start_iso
+    assert event['editable'] is False
+    assert event['extendedProps']['eventType'] == 'consulta'
+    assert event['extendedProps']['consultaId'] == consulta_id
+    assert event['extendedProps']['clinicId'] == clinic_id
+    assert event['extendedProps']['animalId'] == animal_id
 
 
 def test_my_appointments_includes_exam_and_vaccine_for_tutor(client, monkeypatch):
