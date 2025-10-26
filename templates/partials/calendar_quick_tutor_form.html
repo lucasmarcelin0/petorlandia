@@ -1,0 +1,448 @@
+{% set form_id = form_id|default('calendar-quick-tutor-form') %}
+{% set show_intro = show_intro|default(True) %}
+{% set include_address = include_address|default(False) %}
+{% set address_prefix = address_prefix|default(form_id ~ '-address') %}
+{% if show_intro %}
+  {% set header_id = heading_id|default(form_id ~ '-heading') %}
+{% else %}
+  {% set header_id = heading_id if heading_id is defined else None %}
+{% endif %}
+
+<form
+  id="{{ form_id }}"
+  method="POST"
+  action="{{ url_for('tutores') }}"
+  class="js-tutor-form"
+  data-sync="true"
+  {% if header_id %}aria-labelledby="{{ header_id }}"{% endif %}
+>
+  {% if show_intro %}
+  <div class="d-flex flex-column flex-md-row align-items-md-center gap-2 mb-3">
+    <h5 id="{{ header_id }}" class="mb-0">
+      <i class="bi bi-person-plus me-2"></i> Cadastro rápido de tutor
+    </h5>
+    <span class="text-muted small">
+      Preencha os dados essenciais para registrar um tutor sem sair da agenda.
+    </span>
+  </div>
+  {% endif %}
+  <div class="row g-3">
+    <div class="col-md-6">
+      <label for="{{ form_id }}-name" class="form-label">Nome <span class="text-danger">*</span></label>
+      <input
+        type="text"
+        class="form-control"
+        id="{{ form_id }}-name"
+        name="tutor_name"
+        placeholder="Nome completo"
+        required
+      >
+    </div>
+    <div class="col-md-6">
+      <label for="{{ form_id }}-email" class="form-label">E-mail <span class="text-danger">*</span></label>
+      <input
+        type="email"
+        class="form-control"
+        id="{{ form_id }}-email"
+        name="tutor_email"
+        placeholder="nome@email.com"
+        required
+      >
+    </div>
+    <div class="col-md-4">
+      <label for="{{ form_id }}-phone" class="form-label">Telefone</label>
+      <input
+        type="tel"
+        class="form-control"
+        id="{{ form_id }}-phone"
+        name="tutor_phone"
+        placeholder="(00) 00000-0000"
+        inputmode="tel"
+      >
+    </div>
+    <div class="col-md-4">
+      <label for="{{ form_id }}-cpf" class="form-label">CPF</label>
+      <input
+        type="text"
+        class="form-control"
+        id="{{ form_id }}-cpf"
+        name="tutor_cpf"
+        placeholder="000.000.000-00"
+        inputmode="numeric"
+      >
+    </div>
+    <div class="col-md-4">
+      <label for="{{ form_id }}-dob" class="form-label">Data de nascimento</label>
+      <input
+        type="date"
+        class="form-control"
+        id="{{ form_id }}-dob"
+        name="tutor_date_of_birth"
+      >
+    </div>
+    <div class="col-12">
+      <label for="{{ form_id }}-notes" class="form-label">Observações</label>
+      <textarea
+        id="{{ form_id }}-notes"
+        class="form-control"
+        name="tutor_notes"
+        rows="2"
+        placeholder="Informações adicionais importantes para a equipe"
+      ></textarea>
+    </div>
+  </div>
+  {% if include_address %}
+  <hr class="my-4">
+  <div class="mb-3">
+    <h6 class="fw-semibold mb-1">
+      <i class="bi bi-geo-alt me-2"></i> Endereço
+    </h6>
+    <p class="text-muted small mb-0">Informe o endereço completo do tutor como no cadastro tradicional.</p>
+  </div>
+  <div class="row g-3">
+    <div class="col-sm-6 col-lg-4">
+      <label for="{{ address_prefix }}-cep" class="form-label">CEP <span class="text-danger">*</span></label>
+      <div class="input-group">
+        <input
+          type="text"
+          class="form-control"
+          id="{{ address_prefix }}-cep"
+          name="cep"
+          placeholder="00000-000"
+          inputmode="numeric"
+          pattern="\d{5}-?\d{3}"
+          data-address-field="cep"
+          required
+        >
+        <button
+          type="button"
+          class="btn btn-outline-secondary"
+          data-address-lookup="{{ address_prefix }}"
+          aria-label="Buscar CEP automaticamente"
+        >
+          <i class="bi bi-search"></i>
+        </button>
+      </div>
+      <div class="form-text">Digite apenas números. A busca ViaCEP preenche os demais campos.</div>
+    </div>
+    <div class="col-sm-6 col-lg-8">
+      <label for="{{ address_prefix }}-rua" class="form-label">Logradouro <span class="text-danger">*</span></label>
+      <input
+        type="text"
+        class="form-control"
+        id="{{ address_prefix }}-rua"
+        name="rua"
+        placeholder="Rua, avenida..."
+        data-address-field="rua"
+        required
+      >
+    </div>
+    <div class="col-sm-6 col-lg-4">
+      <label for="{{ address_prefix }}-numero" class="form-label">Número</label>
+      <input
+        type="text"
+        class="form-control"
+        id="{{ address_prefix }}-numero"
+        name="numero"
+        placeholder="Nº"
+        data-address-field="numero"
+      >
+    </div>
+    <div class="col-sm-6 col-lg-4">
+      <label for="{{ address_prefix }}-complemento" class="form-label">Complemento</label>
+      <input
+        type="text"
+        class="form-control"
+        id="{{ address_prefix }}-complemento"
+        name="complemento"
+        placeholder="Apto, bloco, etc."
+        data-address-field="complemento"
+      >
+    </div>
+    <div class="col-sm-6 col-lg-4">
+      <label for="{{ address_prefix }}-bairro" class="form-label">Bairro</label>
+      <input
+        type="text"
+        class="form-control"
+        id="{{ address_prefix }}-bairro"
+        name="bairro"
+        placeholder="Bairro"
+        data-address-field="bairro"
+      >
+    </div>
+    <div class="col-sm-6 col-lg-6">
+      <label for="{{ address_prefix }}-cidade" class="form-label">Cidade <span class="text-danger">*</span></label>
+      <input
+        type="text"
+        class="form-control"
+        id="{{ address_prefix }}-cidade"
+        name="cidade"
+        placeholder="Cidade"
+        data-address-field="cidade"
+        required
+      >
+    </div>
+    <div class="col-sm-6 col-lg-3">
+      <label for="{{ address_prefix }}-estado" class="form-label">UF <span class="text-danger">*</span></label>
+      <select
+        id="{{ address_prefix }}-estado"
+        class="form-select"
+        name="estado"
+        data-address-field="estado"
+        required
+      >
+        <option value="">Selecione</option>
+        <option value="AC">AC - Acre</option>
+        <option value="AL">AL - Alagoas</option>
+        <option value="AP">AP - Amapá</option>
+        <option value="AM">AM - Amazonas</option>
+        <option value="BA">BA - Bahia</option>
+        <option value="CE">CE - Ceará</option>
+        <option value="DF">DF - Distrito Federal</option>
+        <option value="ES">ES - Espírito Santo</option>
+        <option value="GO">GO - Goiás</option>
+        <option value="MA">MA - Maranhão</option>
+        <option value="MT">MT - Mato Grosso</option>
+        <option value="MS">MS - Mato Grosso do Sul</option>
+        <option value="MG">MG - Minas Gerais</option>
+        <option value="PA">PA - Pará</option>
+        <option value="PB">PB - Paraíba</option>
+        <option value="PR">PR - Paraná</option>
+        <option value="PE">PE - Pernambuco</option>
+        <option value="PI">PI - Piauí</option>
+        <option value="RJ">RJ - Rio de Janeiro</option>
+        <option value="RN">RN - Rio Grande do Norte</option>
+        <option value="RS">RS - Rio Grande do Sul</option>
+        <option value="RO">RO - Rondônia</option>
+        <option value="RR">RR - Roraima</option>
+        <option value="SC">SC - Santa Catarina</option>
+        <option value="SP">SP - São Paulo</option>
+        <option value="SE">SE - Sergipe</option>
+        <option value="TO">TO - Tocantins</option>
+      </select>
+    </div>
+  </div>
+  {% endif %}
+  <div class="d-flex flex-column flex-sm-row gap-2 justify-content-end mt-4">
+    <a class="btn btn-outline-secondary" href="{{ url_for('tutores') }}" target="_blank" rel="noopener">
+      <i class="bi bi-box-arrow-up-right me-1"></i> Abrir página completa
+    </a>
+    <button type="submit" class="btn btn-primary" data-submit-label>
+      <i class="bi bi-save me-1"></i> Salvar tutor
+    </button>
+  </div>
+</form>
+
+<script>
+(function() {
+  const form = document.getElementById('{{ form_id }}');
+  if (!form) {
+    return;
+  }
+
+  const dobInput = document.getElementById('{{ form_id }}-dob');
+  if (dobInput && typeof window.flatpickr === 'function' && dobInput.dataset.fpInitialized !== 'true') {
+    const aplicarMascaraData = (valor) => {
+      const digitos = valor.replace(/\D/g, '');
+      let formatado = '';
+
+      if (digitos.length > 0) {
+        formatado = digitos.slice(0, 2);
+      }
+      if (digitos.length >= 3) {
+        formatado += '/' + digitos.slice(2, 4);
+      }
+      if (digitos.length >= 5) {
+        formatado += '/' + digitos.slice(4, 8);
+      }
+
+      return formatado;
+    };
+
+    const sincronizarDataDigitada = (instance) => {
+      const altInput = instance.altInput;
+      if (!altInput) {
+        return true;
+      }
+
+      const digitos = altInput.value.replace(/\D/g, '');
+      if (digitos.length === 8) {
+        const dia = digitos.slice(0, 2);
+        const mes = digitos.slice(2, 4);
+        const ano = digitos.slice(4, 8);
+        instance.setDate(`${ano}-${mes}-${dia}`, true, 'Y-m-d');
+        altInput.classList.remove('is-invalid');
+        return true;
+      }
+
+      if (digitos.length === 0) {
+        instance.clear();
+        altInput.classList.remove('is-invalid');
+        return true;
+      }
+
+      altInput.classList.add('is-invalid');
+      return false;
+    };
+
+    const picker = flatpickr(dobInput, {
+      locale: 'pt',
+      dateFormat: 'Y-m-d',
+      altInput: true,
+      altFormat: 'd/m/Y',
+      allowInput: true,
+      onReady: function(selectedDates, dateStr, instance) {
+        const alt = instance.altInput;
+        if (!alt) {
+          return;
+        }
+
+        alt.setAttribute('inputmode', 'numeric');
+        alt.setAttribute('placeholder', 'dd/mm/aaaa');
+
+        alt.addEventListener('input', () => {
+          const valorFormatado = aplicarMascaraData(alt.value);
+          if (valorFormatado !== alt.value) {
+            alt.value = valorFormatado;
+            alt.setSelectionRange(valorFormatado.length, valorFormatado.length);
+          }
+          if (alt.classList.contains('is-invalid')) {
+            sincronizarDataDigitada(instance);
+          }
+        });
+
+        const confirmarEntrada = () => sincronizarDataDigitada(instance);
+
+        alt.addEventListener('blur', confirmarEntrada);
+        alt.addEventListener('keydown', (event) => {
+          if (event.key === 'Enter') {
+            event.preventDefault();
+            if (confirmarEntrada()) {
+              instance.close();
+            }
+          }
+        });
+      }
+    });
+
+    form.addEventListener('submit', (event) => {
+      if (!sincronizarDataDigitada(picker)) {
+        event.preventDefault();
+        event.stopPropagation();
+        if (picker.altInput) {
+          picker.altInput.focus();
+        }
+      }
+    });
+
+    dobInput.dataset.fpInitialized = 'true';
+  }
+
+  form.addEventListener('submit', function() {
+    const submitBtn = form.querySelector('[data-submit-label]');
+    if (submitBtn && !submitBtn.dataset.submitting) {
+      submitBtn.dataset.submitting = 'true';
+      submitBtn.dataset.original = submitBtn.innerHTML;
+      submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span>Salvando...';
+      submitBtn.disabled = true;
+    }
+  });
+  {% if include_address %}
+  const cepInput = form.querySelector('[data-address-field="cep"]');
+  const lookupBtn = form.querySelector('[data-address-lookup="{{ address_prefix }}"]');
+  const addressFields = Array.from(form.querySelectorAll('[data-address-field]')).reduce(function(map, field) {
+    const key = field.dataset.addressField;
+    if (key) {
+      map[key] = field;
+    }
+    return map;
+  }, {});
+
+  function sanitizeCep(value) {
+    return (value || '').replace(/\D/g, '').slice(0, 8);
+  }
+
+  function fillAddressFields(data) {
+    if (!data) {
+      return;
+    }
+    if (addressFields.rua && data.logradouro) {
+      addressFields.rua.value = data.logradouro;
+    }
+    if (addressFields.complemento && data.complemento) {
+      addressFields.complemento.value = data.complemento;
+    }
+    if (addressFields.bairro && data.bairro) {
+      addressFields.bairro.value = data.bairro;
+    }
+    if (addressFields.cidade && data.localidade) {
+      addressFields.cidade.value = data.localidade;
+    }
+    if (addressFields.estado && data.uf) {
+      addressFields.estado.value = data.uf;
+    }
+    if (addressFields.numero) {
+      addressFields.numero.focus();
+    }
+  }
+
+  function lookupCep() {
+    if (!cepInput) {
+      return;
+    }
+    const raw = sanitizeCep(cepInput.value);
+    if (raw.length !== 8) {
+      return;
+    }
+    const previousValue = cepInput.value;
+    cepInput.value = raw.replace(/(\d{5})(\d{3})/, '$1-$2');
+    fetch(`https://viacep.com.br/ws/${raw}/json/`)
+      .then(function(response) {
+        if (!response.ok) {
+          throw new Error('Não foi possível buscar o CEP informado.');
+        }
+        return response.json();
+      })
+      .then(function(data) {
+        if (data && data.erro) {
+          throw new Error('CEP não encontrado.');
+        }
+        fillAddressFields(data);
+      })
+      .catch(function(error) {
+        console.error('Erro ao buscar CEP:', error);
+        cepInput.value = previousValue;
+      });
+  }
+
+  if (cepInput) {
+    cepInput.addEventListener('input', function(event) {
+      const value = sanitizeCep(event.target.value);
+      if (value.length <= 5) {
+        event.target.value = value;
+      } else {
+        event.target.value = value.replace(/(\d{5})(\d{0,3})/, '$1-$2');
+      }
+    });
+    cepInput.addEventListener('blur', lookupCep);
+  }
+
+  if (lookupBtn) {
+    lookupBtn.addEventListener('click', function(event) {
+      event.preventDefault();
+      lookupCep();
+    });
+  }
+
+  form.addEventListener('submit', function() {
+    if (!cepInput) {
+      return;
+    }
+    const raw = sanitizeCep(cepInput.value);
+    if (raw.length === 8) {
+      cepInput.value = raw;
+    }
+  });
+  {% endif %}
+})();
+</script>

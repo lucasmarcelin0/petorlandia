@@ -139,3 +139,36 @@ def test_collaborator_can_schedule_vacina(client, monkeypatch):
         assert appt.kind == 'vacina'
         assert appt.notes == 'Reforço anual'
         assert appt.status == 'scheduled'
+
+
+def test_collaborator_sees_associated_specialists(client, monkeypatch):
+    with flask_app.app_context():
+        clinic = Clinica(id=10, nome='Clínica Especialistas')
+        staff_user = User(id=20, name='Colab', email='colab@test', worker='colaborador')
+        staff_user.set_password('x')
+        vet_user = User(id=21, name='Dr Clínica', email='vet@test', worker='veterinario')
+        vet_user.set_password('x')
+        clinic_vet = Veterinario(id=30, user=vet_user, crmv='111', clinica=clinic)
+        specialist_user = User(id=22, name='Dr Especialista', email='esp@test', worker='veterinario')
+        specialist_user.set_password('x')
+        specialist = Veterinario(id=31, user=specialist_user, crmv='222')
+        clinic.veterinarios_associados.append(specialist)
+        db.session.add_all([clinic, staff_user, clinic_vet, specialist])
+        db.session.commit()
+        staff_user_id = staff_user.id
+        clinic_id = clinic.id
+
+    collaborator = type('U', (), {
+        'id': staff_user_id,
+        'worker': 'colaborador',
+        'role': 'adotante',
+        'is_authenticated': True,
+        'clinica_id': clinic_id,
+        'name': 'Colab',
+    })()
+
+    login(monkeypatch, collaborator)
+
+    resp = client.get('/appointments')
+    assert resp.status_code == 200
+    assert b'Dr Especialista (Especialista)' in resp.data

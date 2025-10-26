@@ -429,6 +429,7 @@ def appointment_to_event(appointment):
     vet = getattr(appointment, 'veterinario', None)
     vet_user = getattr(vet, 'user', None)
 
+    vet_specialty_list = getattr(vet, 'specialty_list', None)
     extra_props = {
         'kind': getattr(appointment, 'kind', None),
         'clinicId': getattr(appointment, 'clinica_id', None),
@@ -439,8 +440,21 @@ def appointment_to_event(appointment):
         'tutorName': getattr(tutor, 'name', None),
         'animalName': getattr(animal, 'name', None),
         'vetName': getattr(vet_user, 'name', None),
+        'vetFullName': getattr(vet_user, 'name', None),
+        'vetSpecialtyList': vet_specialty_list,
+        'vetIsSpecialist': bool(vet_specialty_list),
         'notes': getattr(appointment, 'notes', None),
     }
+
+    consulta = getattr(appointment, 'consulta', None)
+    if consulta:
+        extra_props.update(
+            {
+                'consultaId': getattr(consulta, 'id', None),
+                'consultaStatus': getattr(consulta, 'status', None),
+                'consultaRetornoDeId': getattr(consulta, 'retorno_de_id', None),
+            }
+        )
 
     return _build_calendar_event(
         event_id=f"appointment-{appointment.id}",
@@ -467,10 +481,17 @@ def exam_to_event(exam):
         title = f"{title} - {exam.specialist.user.name}"
     end_time = exam.scheduled_at + get_appointment_duration('exame')
 
+    specialist = getattr(exam, 'specialist', None)
+    specialist_user = getattr(specialist, 'user', None)
+    specialist_specialties = getattr(specialist, 'specialty_list', None)
     extra_props = {
         'status': getattr(exam, 'status', None),
         'animalId': getattr(exam, 'animal_id', None),
         'specialistId': getattr(exam, 'specialist_id', None),
+        'vetName': getattr(specialist_user, 'name', None),
+        'vetFullName': getattr(specialist_user, 'name', None),
+        'vetSpecialtyList': specialist_specialties,
+        'vetIsSpecialist': bool(specialist),
     }
 
     return _build_calendar_event(
@@ -517,6 +538,79 @@ def vaccine_to_event(vaccine):
         duration_editable=False,
         record_id=vaccine.id,
         class_names=['calendar-event-vaccine'],
+        extra_extended_props=extra_props,
+    )
+
+
+def consulta_to_event(consulta):
+    """Convert a direct ``Consulta`` record into a calendar event."""
+
+    if not consulta:
+        return None
+
+    start = getattr(consulta, 'created_at', None)
+    if not start:
+        return None
+
+    duration = get_appointment_duration('consulta')
+    end = start + duration if duration else None
+
+    animal = getattr(consulta, 'animal', None)
+    tutor = getattr(animal, 'owner', None) if animal else None
+    clinic = getattr(consulta, 'clinica', None)
+    vet_user = getattr(consulta, 'veterinario', None)
+    vet_profile = getattr(vet_user, 'veterinario', None) if vet_user else None
+
+    status_key = getattr(consulta, 'status', None)
+    status_map = {
+        'finalizada': 'completed',
+        'cancelada': 'canceled',
+        'cancelado': 'canceled',
+    }
+    event_status = status_map.get(status_key, 'scheduled')
+
+    vet_full_name = getattr(vet_user, 'name', None)
+    vet_profile_specialties = getattr(vet_profile, 'specialty_list', None)
+    extra_props = {
+        'status': event_status,
+        'consultaStatus': status_key,
+        'clinicId': getattr(consulta, 'clinica_id', None),
+        'animalId': getattr(consulta, 'animal_id', None),
+        'tutorId': getattr(tutor, 'id', None) if tutor else getattr(animal, 'user_id', None),
+        'tutorName': getattr(tutor, 'name', None),
+        'animalName': getattr(animal, 'name', None),
+        'consultaId': getattr(consulta, 'id', None),
+        'createdBy': getattr(consulta, 'created_by', None),
+        'vetName': vet_full_name,
+        'vetFullName': vet_full_name,
+        'vetSpecialtyList': vet_profile_specialties,
+        'vetIsSpecialist': bool(vet_profile_specialties),
+        'veterinarioId': getattr(vet_profile, 'id', None),
+        'clinicaNome': getattr(clinic, 'nome', None) if clinic else None,
+        'kind': 'consulta',
+    }
+
+    if tutor is None and animal and getattr(animal, 'owner', None):
+        extra_props['tutorName'] = getattr(animal.owner, 'name', None)
+        extra_props['tutorId'] = getattr(animal.owner, 'id', None)
+
+    title = getattr(consulta, 'queixa_principal', None)
+    if not title:
+        if animal and getattr(animal, 'name', None):
+            title = f"Consulta - {animal.name}"
+        else:
+            title = 'Consulta'
+
+    return _build_calendar_event(
+        event_id=f"consulta-{consulta.id}",
+        title=title,
+        start=start,
+        end=end,
+        event_type='consulta',
+        editable=False,
+        duration_editable=False,
+        record_id=None,
+        class_names=['calendar-event-consulta'],
         extra_extended_props=extra_props,
     )
 
@@ -659,25 +753,60 @@ def get_weekly_schedule(veterinario_id, start_date, days=7, day_start=time(8, 0)
     """
     from models import VetSchedule, Appointment, ExamAppointment
 
-    result = []
     step = timedelta(minutes=30)
     weekday_map = ['Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado', 'Domingo']
+
+    # Load all schedules for the veterinarian once and group them by weekday.
+    schedules_by_day = {}
+    vet_schedules = VetSchedule.query.filter_by(veterinario_id=veterinario_id).all()
+    for schedule in vet_schedules:
+        schedules_by_day.setdefault(schedule.dia_semana, []).append(schedule)
+
+    # Preload appointments/exams within the requested window so we can
+    # determine slot availability without issuing a query per slot.
+    range_start_local = datetime.combine(start_date, day_start)
+    range_end_local = datetime.combine(start_date + timedelta(days=days), day_end)
+    range_start_utc = range_start_local.replace(tzinfo=BR_TZ).astimezone(timezone.utc).replace(tzinfo=None)
+    range_end_utc = range_end_local.replace(tzinfo=BR_TZ).astimezone(timezone.utc).replace(tzinfo=None)
+
+    appointment_rows = (
+        Appointment.query
+        .filter_by(veterinario_id=veterinario_id)
+        .filter(Appointment.scheduled_at >= range_start_utc)
+        .filter(Appointment.scheduled_at < range_end_utc)
+        .with_entities(Appointment.scheduled_at)
+        .all()
+    )
+    exam_rows = (
+        ExamAppointment.query
+        .filter_by(specialist_id=veterinario_id)
+        .filter(ExamAppointment.scheduled_at >= range_start_utc)
+        .filter(ExamAppointment.scheduled_at < range_end_utc)
+        .with_entities(ExamAppointment.scheduled_at)
+        .all()
+    )
+
+    booked_datetimes = {
+        _to_utc_naive(row[0])
+        for row in appointment_rows + exam_rows
+        if row and row[0] is not None
+    }
+
+    result = []
 
     for i in range(days):
         dia = start_date + timedelta(days=i)
         dia_semana = weekday_map[dia.weekday()]
-        schedules = VetSchedule.query.filter_by(
-            veterinario_id=veterinario_id, dia_semana=dia_semana
-        ).all()
+        schedules = schedules_by_day.get(dia_semana, [])
 
         working_slots = set()
-        for s in schedules:
-            current = datetime.combine(dia, s.hora_inicio)
-            end = datetime.combine(dia, s.hora_fim)
+        for schedule in schedules:
+            current = datetime.combine(dia, schedule.hora_inicio)
+            end = datetime.combine(dia, schedule.hora_fim)
             while current < end:
-                if s.intervalo_inicio and s.intervalo_fim:
-                    intervalo_inicio = datetime.combine(dia, s.intervalo_inicio)
-                    intervalo_fim = datetime.combine(dia, s.intervalo_fim)
+                if schedule.intervalo_inicio and schedule.intervalo_fim:
+                    intervalo_inicio = datetime.combine(dia, schedule.intervalo_inicio)
+                    intervalo_fim = datetime.combine(dia, schedule.intervalo_fim)
                     if intervalo_inicio <= current < intervalo_fim:
                         current += step
                         continue
@@ -695,12 +824,8 @@ def get_weekly_schedule(veterinario_id, start_date, days=7, day_start=time(8, 0)
         booked = []
         for slot in working_slots:
             current_utc = slot.replace(tzinfo=BR_TZ).astimezone(timezone.utc).replace(tzinfo=None)
-            conflito = (
-                Appointment.query.filter_by(veterinario_id=veterinario_id, scheduled_at=current_utc).first()
-                or ExamAppointment.query.filter_by(specialist_id=veterinario_id, scheduled_at=current_utc).first()
-            )
             time_str = slot.strftime('%H:%M')
-            if conflito:
+            if current_utc in booked_datetimes:
                 booked.append(time_str)
             else:
                 available.append(time_str)

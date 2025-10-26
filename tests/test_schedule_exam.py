@@ -5,9 +5,9 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')
 
 import pytest
 import flask_login.utils as login_utils
-from app import app as flask_app, db
+from app import app as flask_app, db, BR_TZ
 from models import User, Clinica, Animal, Veterinario, Specialty, VetSchedule, ExamAppointment, AgendaEvento, Message
-from datetime import datetime, time, date
+from datetime import datetime, time, date, timezone
 from helpers import get_available_times
 
 
@@ -83,6 +83,29 @@ def test_schedule_exam_message_and_confirm_by(client, monkeypatch):
         msg = Message.query.filter_by(receiver_id=vet_user_id).first()
         assert msg is not None
         assert 'Confirme' in msg.content
+
+
+def test_exam_requester_update_includes_time_left_display(client, monkeypatch):
+    with flask_app.app_context():
+        tutor_id, vet_user_id, animal_id, vet_id = setup_data()
+    fake_user = type('U', (), {'id': tutor_id, 'worker': None, 'role': 'adotante', 'is_authenticated': True, 'name': 'Tutor'})()
+    login(monkeypatch, fake_user)
+    schedule_resp = client.post(
+        f'/animal/{animal_id}/schedule_exam',
+        json={'specialist_id': vet_id, 'date': '2024-05-20', 'time': '09:00'},
+        headers={'Accept': 'application/json'}
+    )
+    assert schedule_resp.status_code == 200
+
+    resp = client.post(
+        '/exam_appointment/1/requester_update',
+        json={},
+        headers={'Accept': 'application/json'}
+    )
+    assert resp.status_code == 200
+    data = resp.get_json()
+    assert data['success']
+    assert data['exam']['time_left_display']
 
 
 def test_schedule_exam_rejects_outside_schedule(client, monkeypatch):
@@ -251,3 +274,83 @@ def test_update_exam_appointment_blocks_overlap(client, monkeypatch):
     assert resp.status_code == 400
     data = resp.get_json()
     assert not data['success']
+
+
+def test_requester_can_update_exam_confirm_by(client, monkeypatch):
+    with flask_app.app_context():
+        tutor_id, vet_user_id, animal_id, vet_id = setup_data()
+    requester = type('U', (), {'id': tutor_id, 'worker': None, 'role': 'adotante', 'is_authenticated': True, 'name': 'Tutor'})()
+    login(monkeypatch, requester)
+    client.post(
+        f'/animal/{animal_id}/schedule_exam',
+        json={'specialist_id': vet_id, 'date': '2024-05-20', 'time': '09:00'},
+        headers={'Accept': 'application/json'}
+    )
+    resp = client.post(
+        '/exam_appointment/1/requester_update',
+        json={'confirm_by': '2024-05-21T12:30', 'status': 'pending'},
+        headers={'Accept': 'application/json'}
+    )
+    assert resp.status_code == 200
+    data = resp.get_json()
+    assert data['success']
+    with flask_app.app_context():
+        appt = ExamAppointment.query.get(1)
+        expected = datetime(2024, 5, 21, 12, 30, tzinfo=BR_TZ).astimezone(timezone.utc).replace(tzinfo=None)
+        assert appt.confirm_by == expected
+        assert appt.status == 'pending'
+
+
+def test_requester_can_cancel_pending_exam(client, monkeypatch):
+    with flask_app.app_context():
+        tutor_id, vet_user_id, animal_id, vet_id = setup_data()
+    requester = type('U', (), {'id': tutor_id, 'worker': None, 'role': 'adotante', 'is_authenticated': True, 'name': 'Tutor'})()
+    login(monkeypatch, requester)
+    client.post(
+        f'/animal/{animal_id}/schedule_exam',
+        json={'specialist_id': vet_id, 'date': '2024-05-20', 'time': '09:00'},
+        headers={'Accept': 'application/json'}
+    )
+    resp = client.post(
+        '/exam_appointment/1/requester_update',
+        json={'status': 'canceled'},
+        headers={'Accept': 'application/json'}
+    )
+    assert resp.status_code == 200
+    data = resp.get_json()
+    assert data['success']
+    with flask_app.app_context():
+        appt = ExamAppointment.query.get(1)
+        assert appt.status == 'canceled'
+
+
+def test_non_requester_cannot_update_exam_request(client, monkeypatch):
+    with flask_app.app_context():
+        tutor_id, vet_user_id, animal_id, vet_id = setup_data()
+        vet_obj = Veterinario.query.get(vet_id)
+    requester = type('U', (), {'id': tutor_id, 'worker': None, 'role': 'adotante', 'is_authenticated': True, 'name': 'Tutor'})()
+    login(monkeypatch, requester)
+    client.post(
+        f'/animal/{animal_id}/schedule_exam',
+        json={'specialist_id': vet_id, 'date': '2024-05-20', 'time': '09:00'},
+        headers={'Accept': 'application/json'}
+    )
+    specialist_user = type(
+        'U',
+        (),
+        {
+            'id': vet_user_id,
+            'worker': 'veterinario',
+            'role': None,
+            'is_authenticated': True,
+            'name': 'Vet',
+            'veterinario': vet_obj,
+        }
+    )()
+    login(monkeypatch, specialist_user)
+    resp = client.post(
+        '/exam_appointment/1/requester_update',
+        json={'status': 'canceled'},
+        headers={'Accept': 'application/json'}
+    )
+    assert resp.status_code == 403

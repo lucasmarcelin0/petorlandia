@@ -1,0 +1,37 @@
+{% set wrap_in_container = wrap_in_container if wrap_in_container is defined else True %}
+{% set container_class = container_class|default('container-fluid py-4') %}
+{% set row_class = row_class|default('row g-4 align-items-start') %}
+{% set form_col_class = form_col_class|default('col-12 col-xl-5 d-flex flex-column gap-4') %}
+{% set list_col_class = list_col_class|default('col-12 col-xl-7') %}
+{% set list_wrapper_class = list_wrapper_class|default('d-flex flex-column gap-4') %}
+{% set animais_container_id = animais_container_id|default('animais-adicionados') %}
+{% set build_animals_url = build_animals_url if build_animals_url is defined else None %}
+
+{% if wrap_in_container %}
+<div class="{{ container_class }}">
+{% endif %}
+  <div class="{{ row_class }}">
+    <div class="{{ form_col_class }}">
+      <div class="card shadow-sm border-0 rounded-4 h-100">
+        <div class="card-body p-4">
+          <div class="mb-4">
+            <h3 class="fw-semibold mb-1">Cadastro de Animais</h3>
+            <p class="text-muted small mb-0">Associe rapidamente um novo pet a um tutor e visualize os registros existentes ao lado.</p>
+          </div>
+          {% include 'partials/animal_register_form.html' %}
+        </div>
+      </div>
+    </div>
+    <div class="{{ list_col_class }}">
+      <div class="{{ list_wrapper_class }}">
+        <div id="{{ animais_container_id }}">
+          {% set compact = True %}
+          {% include 'partials/animais_adicionados.html' %}
+          {% set compact = None %}
+        </div>
+      </div>
+    </div>
+  </div>
+{% if wrap_in_container %}
+</div>
+{% endif %}
