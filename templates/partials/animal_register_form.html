@@ -6,9 +6,30 @@
     <!-- 🔎 Tutor -->
     <div class="mb-3 position-relative">
       <label for="autocomplete-tutor" class="form-label">👤 Tutor</label>
-      <input type="text" id="autocomplete-tutor" class="form-control" placeholder="Digite nome ou e-mail do tutor">
+      <div class="input-group shadow-sm rounded-3">
+        <span class="input-group-text bg-white text-muted border-end-0">
+          <i class="bi bi-search"></i>
+        </span>
+        <input type="text"
+               id="autocomplete-tutor"
+               class="form-control border-start-0"
+               placeholder="Digite nome ou e-mail do tutor"
+               autocomplete="off"
+               aria-label="Buscar tutor pelo nome ou e-mail"
+               aria-describedby="tutor-search-help"
+               aria-controls="tutor-results"
+               aria-expanded="false">
+        <button class="btn btn-outline-secondary" type="button" id="clear-tutor-search" aria-label="Limpar busca">
+          <i class="bi bi-x"></i>
+        </button>
+      </div>
+      <div id="tutor-search-help" class="form-text">Digite pelo menos 2 caracteres para iniciar a busca.</div>
+      <div id="tutor-search-status" class="mt-2 small text-muted d-none" aria-live="polite"></div>
       <input type="hidden" name="tutor_id" id="tutor_id">
-      <ul class="list-group position-absolute w-100 mt-1 d-none" id="tutor-results" style="z-index: 1000;"></ul>
+      <ul class="list-group position-absolute w-100 mt-1 d-none shadow"
+          id="tutor-results"
+          role="listbox"
+          style="z-index: 1000; max-height: 240px; overflow-y: auto;"></ul>
       <div class="text-end mt-2">
         <a href="{{ url_for('tutores') }}" class="btn btn-sm btn-outline-secondary">
           ➕ Cadastrar novo tutor
@@ -118,29 +139,166 @@
     const tutorResults = document.getElementById('tutor-results');
     const tutorIdField = document.getElementById('tutor_id');
 
-    tutorInput?.addEventListener('input', async () => {
-      const q = tutorInput.value.trim();
-      if (q.length < 2) {
-        tutorResults.classList.add('d-none');
+    if (tutorInput && tutorResults && tutorIdField) {
+      const tutorStatus = document.getElementById('tutor-search-status');
+      const clearTutorSearch = document.getElementById('clear-tutor-search');
+
+      let tutorResultsData = [];
+      let activeResultIndex = -1;
+      let searchTimeout;
+
+      const setStatusMessage = (message = '', state = 'idle') => {
+        if (!tutorStatus) return;
+        tutorStatus.textContent = message;
+        tutorStatus.classList.toggle('d-none', !message);
+        tutorStatus.dataset.state = state;
+      };
+
+      const resetResults = () => {
         tutorResults.innerHTML = '';
-        return;
-      }
-      const res = await fetch(`/buscar_tutores?q=${encodeURIComponent(q)}`);
-      const data = await res.json();
-      tutorResults.innerHTML = '';
-      data.forEach(t => {
-        const li = document.createElement('li');
-        li.className = 'list-group-item list-group-item-action';
-        li.textContent = `${t.name} (${t.email})`;
-        li.onclick = () => {
-          tutorInput.value = t.name;
-          tutorIdField.value = t.id;
-          tutorResults.classList.add('d-none');
-        };
-        tutorResults.appendChild(li);
+        tutorResults.classList.add('d-none');
+        tutorInput.setAttribute('aria-expanded', 'false');
+        tutorInput.removeAttribute('aria-activedescendant');
+        tutorResultsData = [];
+        activeResultIndex = -1;
+      };
+
+      const highlightResult = (index) => {
+        const items = tutorResults.querySelectorAll('[data-result-index]');
+        items.forEach(item => item.classList.remove('active'));
+        if (index >= 0 && items[index]) {
+          items[index].classList.add('active');
+          tutorInput.setAttribute('aria-activedescendant', items[index].id);
+          items[index].scrollIntoView({ block: 'nearest' });
+        } else {
+          tutorInput.removeAttribute('aria-activedescendant');
+        }
+      };
+
+      const selectTutor = (tutor) => {
+        tutorInput.value = tutor.name;
+        tutorIdField.value = tutor.id;
+        resetResults();
+        setStatusMessage(`${tutor.name} selecionado(a).`);
+      };
+
+      const renderResults = (data) => {
+        resetResults();
+        if (!data.length) {
+          setStatusMessage('Nenhum tutor encontrado.', 'empty');
+          return;
+        }
+
+        tutorResultsData = data;
+        const fragment = document.createDocumentFragment();
+        data.forEach((tutor, index) => {
+          const li = document.createElement('li');
+          li.className = 'list-group-item list-group-item-action';
+          li.id = `tutor-option-${tutor.id}`;
+          li.role = 'option';
+          li.dataset.resultIndex = index;
+          li.innerHTML = `
+            <div class="fw-semibold">${tutor.name}</div>
+            <div class="small text-muted">${tutor.email || 'Sem e-mail cadastrado'}</div>
+          `;
+          li.addEventListener('mousedown', (event) => {
+            // Prevent input blur before click handler runs
+            event.preventDefault();
+          });
+          li.addEventListener('click', () => selectTutor(tutor));
+          fragment.appendChild(li);
+        });
+
+        tutorResults.appendChild(fragment);
+        tutorResults.classList.remove('d-none');
+        tutorInput.setAttribute('aria-expanded', 'true');
+        highlightResult(-1);
+        setStatusMessage(`${data.length} tutor(es) encontrado(s).`);
+      };
+
+      const fetchTutors = async (query) => {
+        if (!query || query.length < 2) {
+          resetResults();
+          setStatusMessage('Digite pelo menos 2 caracteres para buscar.');
+          return;
+        }
+
+        setStatusMessage('Buscando tutores...', 'loading');
+
+        try {
+          const response = await fetch(`/buscar_tutores?q=${encodeURIComponent(query)}`);
+          if (!response.ok) {
+            throw new Error('Falha na busca');
+          }
+          const data = await response.json();
+          renderResults(data);
+        } catch (error) {
+          console.error('Erro ao buscar tutores:', error);
+          resetResults();
+          setStatusMessage('Não foi possível buscar tutores. Tente novamente.', 'error');
+        }
+      };
+
+      const handleInputChange = (event) => {
+        const query = event.target.value.trim();
+        clearTimeout(searchTimeout);
+        searchTimeout = setTimeout(() => fetchTutors(query), 250);
+      };
+
+      const handleKeyNavigation = (event) => {
+        if (!tutorResultsData.length) return;
+
+        if (event.key === 'ArrowDown') {
+          event.preventDefault();
+          activeResultIndex = (activeResultIndex + 1) % tutorResultsData.length;
+          highlightResult(activeResultIndex);
+        } else if (event.key === 'ArrowUp') {
+          event.preventDefault();
+          activeResultIndex = (activeResultIndex - 1 + tutorResultsData.length) % tutorResultsData.length;
+          highlightResult(activeResultIndex);
+        } else if (event.key === 'Enter') {
+          if (activeResultIndex >= 0) {
+            event.preventDefault();
+            selectTutor(tutorResultsData[activeResultIndex]);
+          }
+        } else if (event.key === 'Escape') {
+          resetResults();
+          setStatusMessage('Busca cancelada.');
+        }
+      };
+
+      tutorInput.addEventListener('input', handleInputChange);
+      tutorInput.addEventListener('keydown', handleKeyNavigation);
+      tutorInput.addEventListener('focus', () => {
+        if (tutorResultsData.length) {
+          tutorResults.classList.remove('d-none');
+          tutorInput.setAttribute('aria-expanded', 'true');
+        }
       });
-      tutorResults.classList.toggle('d-none', data.length === 0);
-    });
+      tutorInput.addEventListener('blur', () => {
+        setTimeout(() => {
+          tutorResults.classList.add('d-none');
+          tutorInput.setAttribute('aria-expanded', 'false');
+        }, 150);
+      });
+
+      clearTutorSearch?.addEventListener('click', () => {
+        tutorInput.value = '';
+        tutorIdField.value = '';
+        tutorInput.focus();
+        resetResults();
+        setStatusMessage('Busca limpa.');
+      });
+
+      document.addEventListener('click', (event) => {
+        if (!tutorResults.contains(event.target) && event.target !== tutorInput) {
+          tutorResults.classList.add('d-none');
+          tutorInput.setAttribute('aria-expanded', 'false');
+        }
+      });
+
+      setStatusMessage('Digite pelo menos 2 caracteres para buscar.');
+    }
   </script>
 
   <style>
@@ -148,5 +306,17 @@
       border-color: #198754;
       box-shadow: 0 0 0 0.2rem rgba(25, 135, 84, 0.25);
       transition: all 0.3s ease;
+    }
+
+    #tutor-results .list-group-item {
+      cursor: pointer;
+      transition: background-color 0.2s ease, color 0.2s ease;
+    }
+
+    #tutor-results .list-group-item.active,
+    #tutor-results .list-group-item:hover,
+    #tutor-results .list-group-item:focus {
+      background-color: #e9f5ef;
+      color: #0f5132;
     }
   </style>

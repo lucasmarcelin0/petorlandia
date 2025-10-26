@@ -34,7 +34,7 @@ from itsdangerous import URLSafeTimedSerializer
 from jinja2 import TemplateNotFound
 import json
 import unicodedata
-from sqlalchemy import func, or_, exists, and_
+from sqlalchemy import func, or_, exists, and_, case
 from sqlalchemy.orm import joinedload
 
 # ----------------------------------------------------------------
@@ -276,7 +276,7 @@ from forms import (
     DeleteAccountForm, ClinicForm, ClinicHoursForm,
     ClinicInviteVeterinarianForm, ClinicInviteCancelForm, ClinicInviteResendForm, ClinicInviteResponseForm,
     VeterinarianProfileForm,
-    ClinicAddStaffForm, ClinicStaffPermissionForm, VetScheduleForm, VetSpecialtyForm, AppointmentForm, AppointmentDeleteForm,
+    ClinicAddStaffForm, ClinicAddSpecialistForm, ClinicStaffPermissionForm, VetScheduleForm, VetSpecialtyForm, AppointmentForm, AppointmentDeleteForm,
     InventoryItemForm, OrcamentoForm
 )
 from helpers import (
@@ -290,6 +290,7 @@ from helpers import (
     appointments_to_events,
     exam_to_event,
     vaccine_to_event,
+    consulta_to_event,
     unique_items_by_id,
     to_timezone_aware,
     get_available_times,
@@ -314,7 +315,7 @@ def ensure_clinic_access(clinica_id):
         return
     if not current_user.is_authenticated:
         abort(404)
-    if current_user.role == 'admin':
+    if current_user.is_authenticated and current_user.role == 'admin':
         return
     if current_user_clinic_id() != clinica_id:
         abort(404)
@@ -353,6 +354,75 @@ def _render_missing_vet_profile(form=None, profile_form=None):
         missing_vet_profile_message=MISSING_VET_PROFILE_MESSAGE,
         vet_profile_form=profile_form,
     )
+
+
+def _build_vet_invites_context(response_form=None, vet_profile_form=None):
+    """Return context data for clinic invites within the messages page."""
+    show_clinic_invites = getattr(current_user, "worker", None) == "veterinario"
+
+    if not show_clinic_invites:
+        return {
+            "show_clinic_invites": False,
+            "clinic_invites": [],
+            "clinic_invite_form": None,
+            "vet_profile_form": None,
+            "missing_vet_profile": False,
+            "missing_vet_profile_message": MISSING_VET_PROFILE_MESSAGE,
+        }
+
+    if response_form is None:
+        response_form = ClinicInviteResponseForm()
+
+    vet_profile = getattr(current_user, "veterinario", None)
+    invites = []
+    missing_vet_profile = False
+
+    if vet_profile is None:
+        missing_vet_profile = True
+        if vet_profile_form is None:
+            vet_profile_form = VeterinarianProfileForm()
+    else:
+        invites = (
+            VetClinicInvite.query.options(
+                joinedload(VetClinicInvite.clinica).joinedload(Clinica.owner)
+            )
+            .filter_by(
+                veterinario_id=vet_profile.id,
+                status="pending",
+            )
+            .order_by(VetClinicInvite.created_at.desc())
+            .all()
+        )
+
+    return {
+        "show_clinic_invites": True,
+        "clinic_invites": invites,
+        "clinic_invite_form": response_form,
+        "vet_profile_form": vet_profile_form,
+        "missing_vet_profile": missing_vet_profile,
+        "missing_vet_profile_message": MISSING_VET_PROFILE_MESSAGE,
+    }
+
+
+def _render_messages_page(mensagens=None, **extra_context):
+    """Render the messages page with optional overrides for clinic invites."""
+    if mensagens is None:
+        mensagens = [
+            m for m in current_user.received_messages if m.sender is not None
+        ]
+
+    context_overrides = extra_context.copy()
+    response_form = context_overrides.pop("clinic_invite_form", None)
+    vet_profile_form = context_overrides.pop("vet_profile_form", None)
+
+    clinic_invite_context = _build_vet_invites_context(
+        response_form=response_form,
+        vet_profile_form=vet_profile_form,
+    )
+    clinic_invite_context.update(context_overrides)
+    clinic_invite_context["mensagens"] = mensagens
+
+    return render_template("mensagens/mensagens.html", **clinic_invite_context)
 
 
 def _ensure_veterinarian_profile(form=None):
@@ -1096,8 +1166,7 @@ def aceitar_interesse(message_id):
 @app.route('/mensagens')
 @login_required
 def mensagens():
-    mensagens_recebidas = [m for m in current_user.received_messages if m.sender is not None]
-    return render_template('mensagens/mensagens.html', mensagens=mensagens_recebidas)
+    return _render_messages_page()
 
 
 @app.route('/chat/<int:animal_id>', methods=['GET', 'POST'])
@@ -1246,7 +1315,7 @@ def conversa_admin(user_id=None):
 
     form = MessageForm()
 
-    if current_user.role == 'admin':
+    if current_user.is_authenticated and current_user.role == 'admin':
         if user_id is None:
             flash('Selecione um usuário para conversar.', 'warning')
             return redirect(url_for('mensagens_admin'))
@@ -2307,6 +2376,7 @@ def finalizar_consulta(consulta_id):
         return redirect(url_for('index'))
 
     consulta.status = 'finalizada'
+    consulta.finalizada_em = datetime.utcnow()
     appointment = consulta.appointment
     if appointment and appointment.status != 'completed':
         appointment.status = 'completed'
@@ -2661,6 +2731,7 @@ def clinic_detail(clinica_id):
     invite_cancel_form = ClinicInviteCancelForm(prefix='cancel_invite')
     invite_resend_form = ClinicInviteResendForm(prefix='resend_invite')
     staff_form = ClinicAddStaffForm()
+    specialist_form = ClinicAddSpecialistForm(prefix='specialist')
     if request.method == 'GET':
         hours_form.clinica_id.data = clinica.id
     pode_editar = _user_can_manage_clinic(clinica)
@@ -2685,6 +2756,30 @@ def clinic_detail(clinica_id):
                 db.session.commit()
                 flash('Funcionário adicionado. Defina as permissões.', 'success')
                 return redirect(url_for('clinic_detail', clinica_id=clinica.id) + '#veterinarios')
+
+    if specialist_form.submit.data and specialist_form.validate_on_submit():
+        if not (_is_admin() or current_user.id == clinica.owner_id):
+            abort(403)
+        email = specialist_form.email.data.strip().lower()
+        user = (
+            User.query
+            .filter(func.lower(User.email) == email)
+            .first()
+        )
+        vet_profile = getattr(user, 'veterinario', None) if user else None
+        if not vet_profile:
+            flash('Especialista não encontrado.', 'danger')
+        elif vet_profile in clinica.veterinarios_associados or vet_profile.clinica_id == clinica.id:
+            flash('Especialista já associado à clínica.', 'warning')
+        else:
+            clinica.veterinarios_associados.append(vet_profile)
+            staff = ClinicStaff.query.filter_by(clinic_id=clinica.id, user_id=user.id).first()
+            if not staff:
+                staff = ClinicStaff(clinic_id=clinica.id, user_id=user.id)
+                db.session.add(staff)
+            db.session.commit()
+            flash('Especialista associado com sucesso. Defina as permissões.', 'success')
+            return redirect(url_for('clinic_detail', clinica_id=clinica.id) + '#especialistas')
 
     if clinic_form.submit.data and clinic_form.validate_on_submit():
         if not pode_editar:
@@ -2764,6 +2859,12 @@ def clinic_detail(clinica_id):
         return redirect(url_for('clinic_detail', clinica_id=clinica.id))
     horarios = ClinicHours.query.filter_by(clinica_id=clinica_id).all()
     veterinarios = Veterinario.query.filter_by(clinica_id=clinica_id).all()
+    associated_vets = list(clinica.veterinarios_associados)
+    veterinarios_ids = {v.id for v in veterinarios}
+    specialists = [
+        v for v in associated_vets if v.id not in veterinarios_ids
+    ]
+    specialists.sort(key=lambda vet: (vet.user.name or '').lower())
     all_veterinarios = Veterinario.query.all()
     staff_members = ClinicStaff.query.filter(
         ClinicStaff.clinic_id == clinica.id,
@@ -2787,8 +2888,10 @@ def clinic_detail(clinica_id):
         form = ClinicStaffPermissionForm(prefix=f"perm_{s.user.id}", obj=s)
         staff_permission_forms[s.user.id] = form
 
+    vets_for_forms = unique_items_by_id(veterinarios + specialists)
+
     vet_permission_forms = {}
-    for v in veterinarios:
+    for v in vets_for_forms:
         staff = ClinicStaff.query.filter_by(clinic_id=clinica.id, user_id=v.user.id).first()
         if not staff:
             staff = ClinicStaff(clinic_id=clinica.id, user_id=v.user.id)
@@ -2807,7 +2910,7 @@ def clinic_detail(clinica_id):
             flash('Permissões atualizadas', 'success')
             return redirect(url_for('clinic_detail', clinica_id=clinica.id) + '#veterinarios')
 
-    for v in veterinarios:
+    for v in vets_for_forms:
         form = vet_permission_forms[v.user.id]
         if form.submit.data and form.validate_on_submit():
             if not (_is_admin() or current_user.id == clinica.owner_id):
@@ -2825,14 +2928,14 @@ def clinic_detail(clinica_id):
             return redirect(url_for('clinic_detail', clinica_id=clinica.id) + '#veterinarios')
 
     vet_schedule_forms = {}
-    for v in veterinarios:
+    for v in vets_for_forms:
         form = VetScheduleForm(prefix=f"schedule_{v.id}")
         form.veterinario_id.choices = [(v.id, v.user.name)]
         if request.method == 'GET':
             form.veterinario_id.data = v.id
         vet_schedule_forms[v.id] = form
 
-    for v in veterinarios:
+    for v in vets_for_forms:
         form = vet_schedule_forms[v.id]
         if form.submit.data and form.validate_on_submit():
             if not pode_editar:
@@ -2898,7 +3001,7 @@ def clinic_detail(clinica_id):
 
     grouped_vet_schedules = {
         v.id: group_vet_schedules_by_day(v.horarios)
-        for v in veterinarios
+        for v in vets_for_forms
     }
 
     orcamentos = Orcamento.query.filter_by(clinica_id=clinica_id).all()
@@ -2921,6 +3024,8 @@ def clinic_detail(clinica_id):
         vet_schedule_forms=vet_schedule_forms,
         staff_members=staff_members,
         staff_form=staff_form,
+        specialists=specialists,
+        specialist_form=specialist_form,
         staff_permission_forms=staff_permission_forms,
         vet_permission_forms=vet_permission_forms,
         appointments=appointments,
@@ -3047,7 +3152,7 @@ def create_clinic_veterinario(clinica_id):
 @login_required
 def clinic_invites():
     """List pending clinic invitations for the logged veterinarian."""
-    from models import VetClinicInvite, Veterinario
+    from models import Veterinario
 
     if getattr(current_user, "worker", None) != "veterinario":
         abort(403)
@@ -3056,6 +3161,11 @@ def clinic_invites():
     profile_form = VeterinarianProfileForm()
 
     vet_profile = getattr(current_user, "veterinario", None)
+    anchor_redirect = redirect(url_for('mensagens', _anchor='convites-clinica'))
+
+    if request.method == 'GET':
+        return anchor_redirect
+
     if vet_profile is None:
         if profile_form.validate_on_submit():
             crmv = profile_form.crmv.data
@@ -3075,31 +3185,14 @@ def clinic_invites():
                 db.session.add(vet)
                 db.session.commit()
                 flash('Cadastro de veterinário concluído com sucesso!', 'success')
-                return redirect(url_for('clinic_invites'))
-        return _render_missing_vet_profile(
-            form=response_form,
-            profile_form=profile_form,
+                return anchor_redirect
+        return _render_messages_page(
+            clinic_invite_form=response_form,
+            vet_profile_form=profile_form,
+            missing_vet_profile=True,
         )
 
-    invites = (
-        VetClinicInvite.query.options(
-            joinedload(VetClinicInvite.clinica).joinedload(Clinica.owner)
-        )
-        .filter_by(
-            veterinario_id=vet_profile.id,
-            status='pending',
-        )
-        .order_by(VetClinicInvite.created_at.desc())
-        .all()
-    )
-    return render_template(
-        'clinica/clinic_invites.html',
-        invites=invites,
-        form=response_form,
-        missing_vet_profile=False,
-        missing_vet_profile_message=MISSING_VET_PROFILE_MESSAGE,
-        vet_profile_form=None,
-    )
+    return anchor_redirect
 
 
 @app.route('/convites/<int:invite_id>/<string:action>', methods=['POST'])
@@ -3447,6 +3540,24 @@ def remove_veterinario(clinica_id, veterinario_id):
     return redirect(url_for('clinic_detail', clinica_id=clinica_id))
 
 
+@app.route('/clinica/<int:clinica_id>/especialista/<int:veterinario_id>/remove', methods=['POST'])
+@login_required
+def remove_specialist(clinica_id, veterinario_id):
+    clinica = Clinica.query.get_or_404(clinica_id)
+    if not (_is_admin() or current_user.id == clinica.owner_id):
+        abort(403)
+    vet = Veterinario.query.get_or_404(veterinario_id)
+    if vet not in clinica.veterinarios_associados:
+        abort(404)
+    clinica.veterinarios_associados.remove(vet)
+    staff = ClinicStaff.query.filter_by(clinic_id=clinica.id, user_id=vet.user_id).first()
+    if staff and vet.clinica_id != clinica.id:
+        db.session.delete(staff)
+    db.session.commit()
+    flash('Especialista removido da clínica.', 'success')
+    return redirect(url_for('clinic_detail', clinica_id=clinica_id) + '#especialistas')
+
+
 @app.route(
     '/clinica/<int:clinica_id>/veterinario/<int:veterinario_id>/schedule/<int:horario_id>/delete',
     methods=['POST'],
@@ -3457,7 +3568,10 @@ def delete_vet_schedule_clinic(clinica_id, veterinario_id, horario_id):
     if not (_is_admin() or current_user.id == clinica.owner_id):
         abort(403)
     horario = VetSchedule.query.get_or_404(horario_id)
-    if horario.veterinario_id != veterinario_id or horario.veterinario.clinica_id != clinica_id:
+    vet = horario.veterinario
+    if vet.id != veterinario_id:
+        abort(404)
+    if vet.clinica_id != clinica_id and vet not in clinica.veterinarios_associados:
         abort(404)
     db.session.delete(horario)
     db.session.commit()
@@ -3473,16 +3587,148 @@ def veterinarios():
 
 @app.route('/veterinario/<int:veterinario_id>')
 def vet_detail(veterinario_id):
+    from models import Animal, User  # import local para evitar ciclos
+
     veterinario = Veterinario.query.get_or_404(veterinario_id)
-    horarios = VetSchedule.query.filter_by(veterinario_id=veterinario_id).all()
+    horarios = (
+        VetSchedule.query.filter_by(veterinario_id=veterinario_id)
+        .order_by(VetSchedule.dia_semana, VetSchedule.hora_inicio)
+        .all()
+    )
+
+    schedule_form = VetScheduleForm(prefix='schedule')
+    appointment_form = AppointmentForm(is_veterinario=True, prefix='appointment')
+    admin_default_selection_value = ''
+
+    if current_user.is_authenticated and current_user.role == 'admin':
+        agenda_veterinarios = (
+            Veterinario.query.join(User).order_by(User.name).all()
+        )
+        agenda_colaboradores = (
+            User.query.filter(User.worker == 'colaborador')
+            .order_by(User.name)
+            .all()
+        )
+        vet_choices = [(v.id, v.user.name) for v in agenda_veterinarios]
+        admin_selected_view = 'veterinario'
+        admin_selected_veterinario_id = veterinario.id
+        admin_selected_colaborador_id = None
+        default_vet = getattr(current_user, 'veterinario', None)
+        if default_vet and getattr(default_vet, 'id', None):
+            admin_default_selection_value = f'veterinario:{default_vet.id}'
+        else:
+            admin_default_selection_value = f'veterinario:{veterinario.id}'
+    else:
+        agenda_veterinarios = []
+        agenda_colaboradores = []
+        vet_choices = [(veterinario.id, veterinario.user.name)]
+        admin_selected_view = None
+        admin_selected_veterinario_id = None
+        admin_selected_colaborador_id = None
+
+    schedule_form.veterinario_id.choices = vet_choices
+    schedule_form.veterinario_id.data = veterinario.id
+
+    appointment_form.veterinario_id.choices = [
+        (veterinario.id, veterinario.user.name)
+    ]
+    appointment_form.veterinario_id.data = veterinario.id
+
+    if veterinario.clinica_id:
+        animals = (
+            Animal.query.filter_by(clinica_id=veterinario.clinica_id)
+            .order_by(Animal.name)
+            .all()
+        )
+    else:
+        animals = Animal.query.order_by(Animal.name).all()
+    appointment_form.animal_id.choices = [(a.id, a.name) for a in animals]
+
+    weekday_order = {
+        'Segunda': 0,
+        'Terça': 1,
+        'Quarta': 2,
+        'Quinta': 3,
+        'Sexta': 4,
+        'Sábado': 5,
+        'Domingo': 6,
+    }
+    horarios.sort(key=lambda h: weekday_order.get(h.dia_semana, 7))
+    horarios_grouped = []
+    for horario in horarios:
+        if not horarios_grouped or horarios_grouped[-1]['dia'] != horario.dia_semana:
+            horarios_grouped.append({'dia': horario.dia_semana, 'itens': []})
+        horarios_grouped[-1]['itens'].append(horario)
+
     calendar_redirect_url = url_for(
         'appointments', view_as='veterinario', veterinario_id=veterinario.id
     )
+    calendar_summary_vets = []
+    calendar_summary_clinic_ids = []
+
+    def add_summary_vet(vet):
+        if not vet:
+            return
+        vet_id = getattr(vet, 'id', None)
+        if not vet_id:
+            return
+        if any(entry.get('id') == vet_id for entry in calendar_summary_vets):
+            return
+        vet_name = None
+        vet_user = getattr(vet, 'user', None)
+        if vet_user is not None:
+            vet_name = getattr(vet_user, 'name', None)
+        calendar_summary_vets.append({'id': vet_id, 'name': vet_name})
+
+    add_summary_vet(veterinario)
+
+    clinic_ids = set()
+
+    primary_clinic_id = getattr(veterinario, 'clinica_id', None)
+    if primary_clinic_id:
+        clinic_ids.add(primary_clinic_id)
+
+    related_clinics = []
+    main_clinic = getattr(veterinario, 'clinica', None)
+    if main_clinic is not None:
+        related_clinics.append(main_clinic)
+    associated_clinics = getattr(veterinario, 'clinicas', None) or []
+    related_clinics.extend(clinic for clinic in associated_clinics if clinic)
+
+    for clinic in related_clinics:
+        clinic_id = getattr(clinic, 'id', None)
+        if clinic_id:
+            clinic_ids.add(clinic_id)
+        for colleague in getattr(clinic, 'veterinarios', []) or []:
+            add_summary_vet(colleague)
+        for colleague in getattr(clinic, 'veterinarios_associados', []) or []:
+            add_summary_vet(colleague)
+
+    if clinic_ids and len(calendar_summary_vets) == 1:
+        colleagues = (
+            Veterinario.query.filter(Veterinario.clinica_id.in_(clinic_ids)).all()
+        )
+        for colleague in colleagues:
+            add_summary_vet(colleague)
+
+    calendar_summary_clinic_ids = list(clinic_ids)
+
     return render_template(
         'veterinarios/vet_detail.html',
         veterinario=veterinario,
         horarios=horarios,
+        horarios_grouped=horarios_grouped,
         calendar_redirect_url=calendar_redirect_url,
+        schedule_form=schedule_form,
+        appointment_form=appointment_form,
+        agenda_veterinarios=agenda_veterinarios,
+        agenda_colaboradores=agenda_colaboradores,
+        admin_selected_view=admin_selected_view,
+        admin_selected_veterinario_id=admin_selected_veterinario_id,
+        admin_selected_colaborador_id=admin_selected_colaborador_id,
+        admin_default_selection_value=admin_default_selection_value,
+        calendar_summary_vets=calendar_summary_vets,
+        calendar_summary_clinic_ids=calendar_summary_clinic_ids,
     )
 
 
@@ -4082,6 +4328,7 @@ def update_consulta(consulta_id):
     else:
         # Salva, finaliza e cria nova automaticamente
         consulta.status = 'finalizada'
+        consulta.finalizada_em = datetime.utcnow()
         appointment = consulta.appointment
         if appointment and appointment.status != 'completed':
             appointment.status = 'completed'
@@ -7529,7 +7776,11 @@ def appointments():
     agenda_colaboradores = []
     admin_selected_veterinario_id = None
     admin_selected_colaborador_id = None
+    admin_default_selection_value = ''
     selected_colaborador = None
+    calendar_summary_vets = []
+    calendar_summary_clinic_ids = []
+    calendar_redirect_url = None
 
     if current_user.role == 'admin':
         agenda_users = User.query.order_by(User.name).all()
@@ -7541,6 +7792,9 @@ def appointments():
             .order_by(User.name)
             .all()
         )
+        default_vet = getattr(current_user, 'veterinario', None)
+        if default_vet and getattr(default_vet, 'id', None):
+            admin_default_selection_value = f'veterinario:{default_vet.id}'
 
     admin_selected_view = (
         worker
@@ -7574,6 +7828,56 @@ def appointments():
         if not veterinario:
             abort(404)
         vet_user_id = getattr(veterinario, "user_id", None)
+        clinic_ids = []
+        if getattr(veterinario, "clinica_id", None):
+            clinic_ids.append(veterinario.clinica_id)
+        for clinica in getattr(veterinario, "clinicas", []) or []:
+            clinica_id = getattr(clinica, "id", None)
+            if clinica_id and clinica_id not in clinic_ids:
+                clinic_ids.append(clinica_id)
+        calendar_summary_clinic_ids = clinic_ids
+        if getattr(veterinario, "id", None) is not None:
+            calendar_summary_vets = [
+                {
+                    'id': veterinario.id,
+                    'name': veterinario.user.name
+                    if getattr(veterinario, "user", None)
+                    else None,
+                }
+            ]
+        include_colleagues = bool(clinic_ids)
+        if include_colleagues:
+            if current_user.role == 'admin' and agenda_veterinarios:
+                colleagues_source = [
+                    v
+                    for v in agenda_veterinarios
+                    if getattr(v, 'clinica_id', None) in clinic_ids
+                ]
+            else:
+                colleagues_source = (
+                    Veterinario.query.filter(
+                        Veterinario.clinica_id.in_(clinic_ids)
+                    ).all()
+                    if clinic_ids
+                    else []
+                )
+            known_ids = {entry['id'] for entry in calendar_summary_vets}
+            for colleague in colleagues_source:
+                colleague_id = getattr(colleague, 'id', None)
+                if not colleague_id or colleague_id in known_ids:
+                    continue
+                calendar_summary_vets.append(
+                    {
+                        'id': colleague_id,
+                        'name': colleague.user.name
+                        if getattr(colleague, 'user', None)
+                        else None,
+                    }
+                )
+                known_ids.add(colleague_id)
+        calendar_redirect_url = url_for(
+            'appointments', view_as='veterinario', veterinario_id=veterinario.id
+        )
         query_args = request.args.to_dict()
         if current_user.role == 'admin':
             query_args['view_as'] = 'veterinario'
@@ -7588,8 +7892,63 @@ def appointments():
         schedule_form.veterinario_id.choices = [
             (v.id, v.user.name) for v in vets_for_choices
         ]
+        clinic_vets = []
+        if clinic_ids:
+            clinic_vets = (
+                Veterinario.query.filter(
+                    Veterinario.clinica_id.in_(clinic_ids)
+                ).all()
+            )
+        associated_clinics = (
+            Clinica.query.filter(Clinica.id.in_(clinic_ids)).all()
+            if clinic_ids
+            else []
+        )
+        specialists = []
+        for clinica in associated_clinics:
+            specialists.extend(
+                vet
+                for vet in (getattr(clinica, 'veterinarios_associados', []) or [])
+                if getattr(vet, 'id', None) is not None
+            )
+        combined_vets = unique_items_by_id(clinic_vets + specialists + [veterinario])
+
+        def _vet_sort_key(vet):
+            name = getattr(getattr(vet, 'user', None), 'name', '') or ''
+            return name.lower()
+
+        combined_vets = sorted(
+            (
+                vet
+                for vet in combined_vets
+                if getattr(vet, 'id', None) is not None
+            ),
+            key=_vet_sort_key,
+        )
+
+        clinic_vet_ids = {
+            getattr(vet, 'id', None) for vet in clinic_vets if getattr(vet, 'id', None)
+        }
+        specialist_ids = {
+            getattr(vet, 'id', None)
+            for vet in specialists
+            if getattr(vet, 'id', None)
+        }
+
+        def _vet_label(vet):
+            base_name = getattr(getattr(vet, 'user', None), 'name', None)
+            label = base_name or f"Profissional #{getattr(vet, 'id', '—')}"
+            vet_id = getattr(vet, 'id', None)
+            if vet_id in specialist_ids and vet_id not in clinic_vet_ids:
+                return f"{label} (Especialista)"
+            return label
+
         appointment_form.veterinario_id.choices = [
-            (veterinario.id, veterinario.user.name)
+            (vet.id, _vet_label(vet)) for vet in combined_vets
+        ]
+        calendar_summary_vets = [
+            {'id': vet.id, 'name': _vet_label(vet)}
+            for vet in combined_vets
         ]
         if request.method == 'GET':
             schedule_form.veterinario_id.data = veterinario.id
@@ -7679,13 +8038,29 @@ def appointments():
                         .replace(tzinfo=None)
                     )
                     current_vet = getattr(current_user, 'veterinario', None)
-                    same_user = current_vet and current_vet.id == veterinario.id
+                    selected_vet_id = appointment_form.veterinario_id.data
+                    same_user = current_vet and current_vet.id == selected_vet_id
+                    selected_vet = next(
+                        (
+                            vet
+                            for vet in combined_vets
+                            if getattr(vet, 'id', None) == selected_vet_id
+                        ),
+                        None,
+                    )
+                    if not selected_vet and selected_vet_id:
+                        selected_vet = Veterinario.query.get(selected_vet_id)
+                    selected_clinic_id = (
+                        getattr(selected_vet, 'clinica_id', None)
+                        if selected_vet
+                        else None
+                    )
                     appt = Appointment(
                         animal_id=animal.id,
                         tutor_id=tutor_id,
-                        veterinario_id=appointment_form.veterinario_id.data,
+                        veterinario_id=selected_vet_id,
                         scheduled_at=scheduled_at,
-                        clinica_id=veterinario.clinica_id or animal.clinica_id,
+                        clinica_id=selected_clinic_id or animal.clinica_id,
                         notes=appointment_form.reason.data,
                         kind=appointment_form.kind.data,
                         status='accepted' if same_user else 'scheduled',
@@ -7737,19 +8112,37 @@ def appointments():
         if restrict_to_today and today_start_utc:
             upcoming_start = max(upcoming_start, today_start_utc)
 
+        appointment_scope_conditions = [
+            Appointment.veterinario_id == veterinario.id
+        ]
+        if vet_user_id:
+            appointment_scope_conditions.append(Appointment.created_by == vet_user_id)
+        if len(appointment_scope_conditions) == 1:
+            appointment_scope_filter = appointment_scope_conditions[0]
+        else:
+            appointment_scope_filter = or_(*appointment_scope_conditions)
+
         pending_consultas = (
-            Appointment.query.filter_by(veterinario_id=veterinario.id, status="scheduled")
+            Appointment.query.filter(Appointment.status == 'scheduled')
             .filter(Appointment.scheduled_at > now)
+            .filter(appointment_scope_filter)
             .order_by(Appointment.scheduled_at)
             .all()
         )
-        appointments_pending = []
+        appointments_pending_consults = []
+        pending_consults_for_me = []
+        pending_consults_waiting_others = []
         for appt in pending_consultas:
             appt.time_left = (appt.scheduled_at - timedelta(hours=2)) - now
             kind = appt.kind or ('retorno' if appt.consulta_id else 'consulta')
             if kind == 'general':
                 kind = 'consulta'
-            appointments_pending.append({'kind': kind, 'appt': appt})
+            item = {'kind': kind, 'appt': appt}
+            appointments_pending_consults.append(item)
+            if appt.veterinario_id == veterinario.id:
+                pending_consults_for_me.append(item)
+            else:
+                pending_consults_waiting_others.append(item)
 
         from models import ExamAppointment, Message, BlocoExames
 
@@ -7759,6 +8152,7 @@ def appointments():
             .order_by(ExamAppointment.scheduled_at)
             .all()
         )
+        exams_pending_to_accept = []
         for ex in exam_pending:
             ex.time_left = ex.confirm_by - now
             if ex.time_left.total_seconds() <= 0:
@@ -7772,12 +8166,69 @@ def appointments():
                 db.session.add(msg)
                 db.session.commit()
             else:
-                appointments_pending.append({'kind': 'exame', 'appt': ex})
+                exams_pending_to_accept.append(ex)
+
+        if vet_user_id:
+            pending_requested_exams = (
+                ExamAppointment.query.filter(
+                    ExamAppointment.requester_id == vet_user_id,
+                    ExamAppointment.status.in_(['pending', 'confirmed']),
+                    ExamAppointment.specialist_id != veterinario.id,
+                    ExamAppointment.scheduled_at > now,
+                )
+                .order_by(ExamAppointment.scheduled_at)
+                .all()
+            )
+        else:
+            pending_requested_exams = []
+        exams_waiting_other_vets = []
+        status_styles = {
+            'pending': {
+                'badge_class': 'bg-warning text-dark',
+                'icon_class': 'text-warning',
+                'status_label': 'Aguardando confirmação',
+                'show_time_left': True,
+            },
+            'confirmed': {
+                'badge_class': 'bg-success',
+                'icon_class': 'text-success',
+                'status_label': 'Confirmado',
+                'show_time_left': False,
+            },
+        }
+        default_style = {
+            'badge_class': 'bg-secondary',
+            'icon_class': 'text-secondary',
+            'status_label': 'Status desconhecido',
+            'show_time_left': False,
+        }
+        for ex in pending_requested_exams:
+            if ex.confirm_by:
+                ex.time_left = ex.confirm_by - now
+            else:
+                ex.time_left = timedelta(0)
+            style = status_styles.get(ex.status, default_style)
+            include_exam = ex.status == 'confirmed'
+            if ex.status == 'pending':
+                include_exam = ex.time_left.total_seconds() > 0
+            if not include_exam:
+                continue
+            exams_waiting_other_vets.append(
+                {
+                    'exam': ex,
+                    'status': ex.status,
+                    'status_label': style['status_label'],
+                    'badge_class': style['badge_class'],
+                    'icon_class': style['icon_class'],
+                    'show_time_left': style['show_time_left'] and ex.time_left.total_seconds() > 0,
+                }
+            )
 
         accepted_consultas_in_range = (
-            Appointment.query.filter_by(veterinario_id=veterinario.id, status="accepted")
+            Appointment.query.filter(Appointment.status == 'accepted')
             .filter(Appointment.scheduled_at >= start_dt_utc)
             .filter(Appointment.scheduled_at < end_dt_utc)
+            .filter(appointment_scope_filter)
             .order_by(Appointment.scheduled_at)
             .all()
         )
@@ -7808,6 +8259,18 @@ def appointments():
             appointments_upcoming.append({'kind': 'exame', 'appt': exam})
         appointments_upcoming.sort(key=lambda x: x['appt'].scheduled_at)
 
+        appointments_upcoming_for_me = []
+        appointments_upcoming_requested = []
+        for item in appointments_upcoming:
+            if item['kind'] == 'exame':
+                appointments_upcoming_for_me.append(item)
+                continue
+            appt = item['appt']
+            if getattr(appt, 'veterinario_id', None) == veterinario.id:
+                appointments_upcoming_for_me.append(item)
+            elif vet_user_id and getattr(appt, 'created_by', None) == vet_user_id:
+                appointments_upcoming_requested.append(item)
+
         consulta_filters = [Consulta.status == 'finalizada']
         scope_filters = []
         if vet_user_id:
@@ -7817,7 +8280,7 @@ def appointments():
         if scope_filters:
             consulta_filters.append(or_(*scope_filters))
 
-        consultas_finalizadas = (
+        consultas_query = (
             Consulta.query.outerjoin(Appointment, Consulta.appointment)
             .options(
                 joinedload(Consulta.animal).joinedload(Animal.owner),
@@ -7827,22 +8290,19 @@ def appointments():
                 .joinedload(Animal.owner),
             )
             .filter(*consulta_filters)
-            .filter(
-                or_(
-                    and_(
-                        Appointment.id.isnot(None),
-                        Appointment.scheduled_at >= start_dt_utc,
-                        Appointment.scheduled_at < end_dt_utc,
-                    ),
-                    and_(
-                        Appointment.id.is_(None),
-                        Consulta.created_at >= start_dt_utc,
-                        Consulta.created_at < end_dt_utc,
-                    ),
-                )
-            )
-            .all()
         )
+
+        consulta_timestamp_expr = case(
+            (Consulta.finalizada_em.isnot(None), Consulta.finalizada_em),
+            (Appointment.scheduled_at.isnot(None), Appointment.scheduled_at),
+            else_=Consulta.created_at,
+        )
+        if start_dt_utc is not None:
+            consultas_query = consultas_query.filter(consulta_timestamp_expr >= start_dt_utc)
+        if end_dt_utc is not None:
+            consultas_query = consultas_query.filter(consulta_timestamp_expr < end_dt_utc)
+
+        consultas_finalizadas = consultas_query.all()
 
         consulta_animal_ids = {c.animal_id for c in consultas_finalizadas}
         exam_blocks_by_consulta = defaultdict(list)
@@ -7861,6 +8321,8 @@ def appointments():
         schedule_events = []
 
         def _consulta_timestamp(consulta_obj):
+            if consulta_obj.finalizada_em:
+                return consulta_obj.finalizada_em
             if consulta_obj.appointment and consulta_obj.appointment.scheduled_at:
                 return consulta_obj.appointment.scheduled_at
             return consulta_obj.created_at
@@ -7960,15 +8422,19 @@ def appointments():
         session['exam_pending_seen_count'] = ExamAppointment.query.filter_by(
             specialist_id=veterinario.id, status='pending'
         ).count()
-        session['appointment_pending_seen_count'] = Appointment.query.filter(
-            Appointment.veterinario_id == veterinario.id,
-            Appointment.status == 'scheduled',
-            Appointment.scheduled_at >= now + timedelta(hours=2),
-        ).count()
+        session['appointment_pending_seen_count'] = (
+            Appointment.query.filter(Appointment.status == 'scheduled')
+            .filter(Appointment.scheduled_at >= now + timedelta(hours=2))
+            .filter(appointment_scope_filter)
+            .count()
+        )
         clinic_pending_query = _clinic_pending_appointments_query(veterinario)
         session['clinic_pending_seen_count'] = (
             clinic_pending_query.count() if clinic_pending_query is not None else 0
         )
+
+        species_list = list_species()
+        breed_list = list_breeds()
 
         return render_template(
             'agendamentos/edit_vet_schedule.html',
@@ -7981,12 +8447,27 @@ def appointments():
             admin_selected_veterinario_id=admin_selected_veterinario_id,
             admin_selected_colaborador_id=admin_selected_colaborador_id,
             horarios_grouped=horarios_grouped,
-            appointments_pending=appointments_pending,
+            appointments_pending_consults=appointments_pending_consults,
+            pending_consults_for_me=pending_consults_for_me,
+            pending_consults_waiting_others=pending_consults_waiting_others,
+            exams_pending_to_accept=exams_pending_to_accept,
+            exams_waiting_other_vets=exams_waiting_other_vets,
             appointments_upcoming=appointments_upcoming,
+            appointments_upcoming_for_me=appointments_upcoming_for_me,
+            appointments_upcoming_requested=appointments_upcoming_requested,
             schedule_events=schedule_events,
             start_dt=start_dt,
             end_dt=end_dt,
             timedelta=timedelta,
+            calendar_summary_vets=calendar_summary_vets,
+            calendar_summary_clinic_ids=calendar_summary_clinic_ids,
+            calendar_redirect_url=calendar_redirect_url,
+            exam_confirm_default_hours=current_app.config.get(
+                'EXAM_CONFIRM_DEFAULT_HOURS',
+                2,
+            ),
+            species_list=species_list,
+            breed_list=breed_list,
         )
     else:
         if worker in ['colaborador', 'admin']:
@@ -8020,8 +8501,51 @@ def appointments():
                 clinica_id = clinica.id if clinica else None
             animals = Animal.query.filter_by(clinica_id=clinica_id).all()
             appointment_form.animal_id.choices = [(a.id, a.name) for a in animals]
+
+            clinic = Clinica.query.get(clinica_id) if clinica_id else None
             vets = Veterinario.query.filter_by(clinica_id=clinica_id).all()
-            appointment_form.veterinario_id.choices = [(v.id, v.user.name) for v in vets]
+            specialists = []
+            if clinic:
+                specialists = [
+                    vet
+                    for vet in getattr(clinic, 'veterinarios_associados', []) or []
+                    if getattr(vet, 'id', None) is not None
+                ]
+            combined_vets = unique_items_by_id(vets + specialists)
+
+            def _vet_sort_key(vet):
+                name = (
+                    getattr(getattr(vet, 'user', None), 'name', '')
+                    or ''
+                )
+                return name.lower()
+
+            combined_vets = sorted(
+                (vet for vet in combined_vets if getattr(vet, 'id', None) is not None),
+                key=_vet_sort_key,
+            )
+
+            clinic_vet_ids = {getattr(vet, 'id', None) for vet in vets if getattr(vet, 'id', None) is not None}
+            specialist_ids = {getattr(vet, 'id', None) for vet in specialists}
+
+            def _vet_label(vet):
+                base_name = getattr(getattr(vet, 'user', None), 'name', None)
+                label = base_name or f"Profissional #{getattr(vet, 'id', '—')}"
+                if getattr(vet, 'id', None) in specialist_ids and getattr(vet, 'id', None) not in clinic_vet_ids:
+                    return f"{label} (Especialista)"
+                return label
+
+            appointment_form.veterinario_id.choices = [
+                (vet.id, _vet_label(vet)) for vet in combined_vets
+            ]
+            calendar_summary_vets = [
+                {
+                    'id': vet.id,
+                    'name': _vet_label(vet),
+                }
+                for vet in combined_vets
+            ]
+            calendar_summary_clinic_ids = [clinica_id] if clinica_id else []
             if appointment_form.validate_on_submit():
                 scheduled_at_local = datetime.combine(
                     appointment_form.date.data, appointment_form.time.data
@@ -8169,6 +8693,9 @@ def appointments():
             admin_selected_view=admin_selected_view,
             admin_selected_veterinario_id=admin_selected_veterinario_id,
             admin_selected_colaborador_id=admin_selected_colaborador_id,
+            admin_default_selection_value=admin_default_selection_value,
+            calendar_summary_vets=calendar_summary_vets,
+            calendar_summary_clinic_ids=calendar_summary_clinic_ids,
         )
 
 
@@ -8429,18 +8956,33 @@ def update_appointment_status(appointment_id):
     if current_user.role == 'admin':
         pass
     elif current_user.worker in ['veterinario', 'colaborador']:
-        if current_user.worker == 'veterinario':
-            veterinario = getattr(current_user, 'veterinario', None)
-            user_clinic = getattr(veterinario, 'clinica_id', None)
-        else:
-            user_clinic = getattr(current_user, 'clinica_id', None)
-
         appointment_clinic = appointment.clinica_id
         if appointment_clinic is None and appointment.veterinario:
             appointment_clinic = appointment.veterinario.clinica_id
 
-        if appointment_clinic != user_clinic:
-            abort(403)
+        if current_user.worker == 'veterinario':
+            veterinario = getattr(current_user, 'veterinario', None)
+            vet_id = getattr(veterinario, 'id', None)
+            if not (vet_id and appointment.veterinario_id == vet_id):
+                clinic_ids = set()
+                primary_clinic = getattr(veterinario, 'clinica_id', None)
+                if primary_clinic is not None:
+                    clinic_ids.add(primary_clinic)
+                clinic_ids.update(
+                    clinica_id
+                    for clinica_id in (
+                        getattr(clinica, 'id', None)
+                        for clinica in getattr(veterinario, 'clinicas', [])
+                    )
+                    if clinica_id is not None
+                )
+
+                if appointment_clinic not in clinic_ids:
+                    abort(403)
+        else:
+            user_clinic = getattr(current_user, 'clinica_id', None)
+            if appointment_clinic != user_clinic:
+                abort(403)
     elif appointment.tutor_id != current_user.id:
         abort(403)
 
@@ -8452,6 +8994,7 @@ def update_appointment_status(appointment_id):
         or request.headers.get('X-Requested-With') == 'XMLHttpRequest'
         or (accept_json > 0 and accept_json > accept_html)
     )
+    redirect_url = request.referrer or url_for('appointments')
 
     status_value = request.form.get('status') or (request.get_json(silent=True) or {}).get('status')
     status = (status_value or '').strip().lower()
@@ -8461,7 +9004,22 @@ def update_appointment_status(appointment_id):
         if wants_json:
             return jsonify({'success': False, 'message': message}), 400
         flash(message, 'error')
-        return redirect(request.referrer or url_for('appointments'))
+        return redirect(redirect_url)
+
+    if status == 'accepted' and current_user.role != 'admin':
+        error_message = 'Somente o veterinário responsável pode aceitar este agendamento.'
+        if current_user.worker != 'veterinario':
+            if wants_json:
+                return jsonify({'success': False, 'message': error_message}), 403
+            flash(error_message, 'error')
+            return redirect(redirect_url)
+        veterinario = getattr(current_user, 'veterinario', None)
+        vet_id = getattr(veterinario, 'id', None)
+        if not (vet_id and appointment.veterinario_id == vet_id):
+            if wants_json:
+                return jsonify({'success': False, 'message': error_message}), 403
+            flash(error_message, 'error')
+            return redirect(redirect_url)
 
     should_enforce_deadline = False
     if status == 'accepted':
@@ -8649,7 +9207,15 @@ def api_clinic_pets():
 @login_required
 def api_my_appointments():
     """Return the current user's appointments as calendar events."""
-    from models import Appointment, ExamAppointment, Vacina, Animal, Veterinario
+    from models import (
+        Appointment,
+        ExamAppointment,
+        Vacina,
+        Animal,
+        Veterinario,
+        User,
+        Clinica,
+    )
 
     query = Appointment.query
     context = {
@@ -8734,37 +9300,77 @@ def api_my_appointments():
         else:
             context['mode'] = 'clinics'
 
+        def _creator_clinic_filter(clinic_ids):
+            sanitized = [cid for cid in (clinic_ids or []) if cid]
+            if not sanitized:
+                return None
+            return Appointment.creator.has(
+                or_(
+                    User.clinica_id.in_(sanitized),
+                    User.veterinario.has(
+                        or_(
+                            Veterinario.clinica_id.in_(sanitized),
+                            Veterinario.clinicas.any(Clinica.id.in_(sanitized)),
+                        )
+                    ),
+                )
+            )
+
         if view_as == 'veterinario':
             if not vet_id and getattr(current_user, 'veterinario', None):
                 vet_id = current_user.veterinario.id
+            filters = []
             if vet_id:
-                query = query.filter(Appointment.veterinario_id == vet_id)
+                filters.append(Appointment.veterinario_id == vet_id)
+                target_vet = target_vet or Veterinario.query.get(vet_id)
+            target_vet_user_id = getattr(target_vet, 'user_id', None) if target_vet else None
+            if target_vet_user_id:
+                filters.append(Appointment.created_by == target_vet_user_id)
+            if filters:
+                query = query.filter(or_(*filters) if len(filters) > 1 else filters[0])
         elif view_as == 'colaborador':
             clinic_ids = list(_accessible_clinic_ids())
             if clinic_id and clinic_id not in clinic_ids:
                 clinic_ids.append(clinic_id)
             if clinic_ids:
-                query = query.filter(Appointment.clinica_id.in_(clinic_ids))
+                creator_filter = _creator_clinic_filter(clinic_ids)
+                clinic_filters = [Appointment.clinica_id.in_(clinic_ids)]
+                if creator_filter is not None:
+                    clinic_filters.append(creator_filter)
+                query = query.filter(
+                    or_(*clinic_filters)
+                    if len(clinic_filters) > 1
+                    else clinic_filters[0]
+                )
         elif view_as == 'tutor':
             target_tutor_id = tutor_id or current_user.id
             query = query.filter(Appointment.tutor_id == target_tutor_id)
         else:
             clinic_ids = _accessible_clinic_ids()
             if clinic_ids:
+                creator_filter = _creator_clinic_filter(clinic_ids)
+                clinic_filters = [
+                    Appointment.clinica_id.in_(clinic_ids),
+                    Appointment.veterinario.has(
+                        Veterinario.clinica_id.in_(clinic_ids)
+                    ),
+                ]
+                if creator_filter is not None:
+                    clinic_filters.append(creator_filter)
                 query = query.filter(
-                    or_(
-                        Appointment.clinica_id.in_(clinic_ids),
-                        Appointment.veterinario.has(
-                            Veterinario.clinica_id.in_(clinic_ids)
-                        ),
-                    )
+                    or_(*clinic_filters)
+                    if len(clinic_filters) > 1
+                    else clinic_filters[0]
                 )
             if not context['clinic_ids']:
                 context['clinic_ids'] = [cid for cid in (clinic_ids or []) if cid]
             context['mode'] = context['mode'] or 'clinics'
     elif current_user.worker == 'veterinario' and getattr(current_user, 'veterinario', None):
-        query = query.filter_by(
-            veterinario_id=current_user.veterinario.id
+        query = query.filter(
+            or_(
+                Appointment.veterinario_id == current_user.veterinario.id,
+                Appointment.created_by == current_user.id,
+            )
         )
         vet_profile = current_user.veterinario
         context['mode'] = 'veterinario'
@@ -8779,7 +9385,12 @@ def api_my_appointments():
                 clinic_ids.append(clinic_id_value)
         context['clinic_ids'] = clinic_ids
     elif current_user.worker == 'colaborador' and current_user.clinica_id:
-        query = query.filter_by(clinica_id=current_user.clinica_id)
+        query = query.filter(
+            or_(
+                Appointment.clinica_id == current_user.clinica_id,
+                Appointment.created_by == current_user.id,
+            )
+        )
         context['mode'] = 'clinics'
         context['clinic_ids'] = [current_user.clinica_id]
     else:
@@ -8834,6 +9445,29 @@ def api_my_appointments():
             if event:
                 _append_event(event)
 
+    def _extend_consulta_events(*, or_filters=None, and_filters=None):
+        query_obj = (
+            Consulta.query
+            .outerjoin(Consulta.animal)
+            .options(
+                joinedload(Consulta.animal).joinedload(Animal.owner),
+                joinedload(Consulta.veterinario),
+                joinedload(Consulta.clinica),
+            )
+            .filter(~Consulta.appointment.has())
+        )
+        and_conditions = [cond for cond in (and_filters or []) if cond is not None]
+        if and_conditions:
+            query_obj = query_obj.filter(*and_conditions)
+        or_conditions = [cond for cond in (or_filters or []) if cond is not None]
+        if or_conditions:
+            query_obj = query_obj.filter(or_(*or_conditions))
+        consulta_items = query_obj.order_by(Consulta.created_at).all()
+        for consulta in unique_items_by_id(consulta_items):
+            event = consulta_to_event(consulta)
+            if event:
+                _append_event(event)
+
     def _extend_for_tutor(tutor_id):
         if not tutor_id:
             return
@@ -8860,6 +9494,7 @@ def api_my_appointments():
                 Vacina.aplicada_em >= date.today(),
             ],
         )
+        _extend_consulta_events(or_filters=[Animal.user_id == tutor_id])
 
     def _extend_for_vet(vet_profile, clinic_ids=None):
         if not vet_profile:
@@ -8868,6 +9503,7 @@ def api_my_appointments():
         if not vet_id:
             return
         sanitized_clinic_ids = [cid for cid in (clinic_ids or []) if cid]
+        vet_user_id = getattr(vet_profile, 'user_id', None)
         exam_filters = [ExamAppointment.specialist_id == vet_id]
         exam_filters.append(ExamAppointment.status.in_(['pending', 'confirmed']))
         if sanitized_clinic_ids:
@@ -8892,6 +9528,14 @@ def api_my_appointments():
             vaccine_filters.append(Animal.clinica_id.in_(sanitized_clinic_ids))
         _extend_vaccine_events(and_filters=vaccine_filters)
 
+        consulta_filters = []
+        if vet_user_id:
+            consulta_filters.append(Consulta.created_by == vet_user_id)
+        if sanitized_clinic_ids:
+            consulta_filters.append(Consulta.clinica_id.in_(sanitized_clinic_ids))
+        if consulta_filters:
+            _extend_consulta_events(and_filters=consulta_filters)
+
     def _extend_for_clinics(clinic_ids):
         sanitized = [cid for cid in (clinic_ids or []) if cid]
         if not sanitized:
@@ -8912,6 +9556,7 @@ def api_my_appointments():
             Vacina.aplicada_em >= date.today(),
         ]
         _extend_vaccine_events(and_filters=vaccine_filters)
+        _extend_consulta_events(and_filters=[Consulta.clinica_id.in_(sanitized)])
 
     if context['mode'] == 'tutor':
         _extend_for_tutor(context.get('tutor_id'))
@@ -9064,9 +9709,24 @@ def api_reschedule_appointment(appointment_id):
 def api_clinic_appointments(clinica_id):
     """Return appointments for a clinic as calendar events."""
     ensure_clinic_access(clinica_id)
+    from models import User, Clinica
+
+    creator_filter = Appointment.creator.has(
+        or_(
+            User.clinica_id == clinica_id,
+            User.veterinario.has(
+                or_(
+                    Veterinario.clinica_id == clinica_id,
+                    Veterinario.clinicas.any(Clinica.id == clinica_id),
+                )
+            ),
+        )
+    )
+
+    appt_filters = [Appointment.clinica_id == clinica_id, creator_filter]
     appts = (
         Appointment.query
-        .filter_by(clinica_id=clinica_id)
+        .filter(or_(*appt_filters))
         .order_by(Appointment.scheduled_at)
         .all()
     )
@@ -9408,6 +10068,116 @@ def update_exam_appointment(appointment_id):
     appointments = ExamAppointment.query.filter_by(animal_id=appt.animal_id).order_by(ExamAppointment.scheduled_at.desc()).all()
     html = render_template('partials/historico_exam_appointments.html', appointments=appointments)
     return jsonify({'success': True, 'html': html})
+
+
+@app.route('/exam_appointment/<int:appointment_id>/requester_update', methods=['POST'])
+@login_required
+def update_exam_appointment_requester(appointment_id):
+    from models import ExamAppointment
+    appt = ExamAppointment.query.get_or_404(appointment_id)
+    if current_user.id != appt.requester_id and current_user.role != 'admin':
+        abort(403)
+
+    data = request.get_json(silent=True) or {}
+    confirm_by_str = data.get('confirm_by')
+    status = data.get('status')
+    updated = False
+
+    if appt.status == 'confirmed' and any(
+        value is not None for value in (confirm_by_str, status)
+    ):
+        return jsonify({'success': False, 'message': 'Este exame já foi confirmado pelo especialista.'}), 400
+
+    if confirm_by_str is not None:
+        if not confirm_by_str:
+            appt.confirm_by = None
+            updated = True
+        else:
+            try:
+                confirm_local = datetime.strptime(confirm_by_str, '%Y-%m-%dT%H:%M')
+            except (TypeError, ValueError):
+                return jsonify({'success': False, 'message': 'Formato de data inválido.'}), 400
+            confirm_utc = (
+                confirm_local
+                .replace(tzinfo=BR_TZ)
+                .astimezone(timezone.utc)
+                .replace(tzinfo=None)
+            )
+            if appt.confirm_by != confirm_utc:
+                appt.confirm_by = confirm_utc
+                updated = True
+
+    if status is not None:
+        normalized_status = str(status).strip().lower()
+        allowed_statuses = {'pending', 'canceled'}
+        if normalized_status not in allowed_statuses:
+            return jsonify({'success': False, 'message': 'Status inválido.'}), 400
+        if normalized_status != appt.status:
+            appt.status = normalized_status
+            updated = True
+
+    if updated:
+        db.session.commit()
+
+    status_styles = {
+        'pending': {
+            'badge_class': 'bg-warning text-dark',
+            'icon_class': 'text-warning',
+            'status_label': 'Aguardando confirmação',
+            'show_time_left': True,
+        },
+        'confirmed': {
+            'badge_class': 'bg-success',
+            'icon_class': 'text-success',
+            'status_label': 'Confirmado',
+            'show_time_left': False,
+        },
+        'canceled': {
+            'badge_class': 'bg-secondary',
+            'icon_class': 'text-secondary',
+            'status_label': 'Cancelado',
+            'show_time_left': False,
+        },
+    }
+
+    style = status_styles.get(appt.status, status_styles['pending'])
+    now = datetime.utcnow()
+    time_left_seconds = None
+    time_left_display = None
+    if appt.confirm_by:
+        time_left = appt.confirm_by - now
+        time_left_seconds = time_left.total_seconds()
+        if time_left_seconds > 0 and style.get('show_time_left'):
+            time_left_display = format_timedelta(time_left)
+
+    confirm_display = (
+        appt.confirm_by.replace(tzinfo=timezone.utc).astimezone(BR_TZ).strftime('%d/%m/%Y %H:%M')
+        if appt.confirm_by
+        else None
+    )
+    confirm_local_value = (
+        appt.confirm_by.replace(tzinfo=timezone.utc).astimezone(BR_TZ).strftime('%Y-%m-%dT%H:%M')
+        if appt.confirm_by
+        else None
+    )
+
+    return jsonify({
+        'success': True,
+        'updated': updated,
+        'exam': {
+            'id': appt.id,
+            'status': appt.status,
+            'status_label': style['status_label'],
+            'badge_class': style['badge_class'],
+            'icon_class': style['icon_class'],
+            'confirm_by': appt.confirm_by.isoformat() if appt.confirm_by else None,
+            'confirm_by_display': confirm_display,
+            'confirm_by_value': confirm_local_value,
+            'show_time_left': bool(style.get('show_time_left') and time_left_seconds and time_left_seconds > 0),
+            'time_left_seconds': time_left_seconds,
+            'time_left_display': time_left_display,
+        },
+    })
 
 
 @app.route('/exam_appointment/<int:appointment_id>/delete', methods=['POST'])
