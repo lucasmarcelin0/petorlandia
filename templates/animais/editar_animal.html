@@ -1,4 +1,4 @@
-{% extends "layout.html" %}
+{% extends "base.html" %}
 {% from 'components/photo_cropper.html' import photo_cropper %}
 
 {% block main %}
@@ -30,9 +30,29 @@
     {% set prefixo = 'animal' %}
     {% set nome_data = 'date_of_birth' %}
     {% set nome_idade = 'age' %}
+    {% set nome_unidade = 'age_unit' %}
     {% set valor_data = form.date_of_birth.data.strftime('%d/%m/%Y') if form.date_of_birth.data else (animal.date_of_birth.strftime('%d/%m/%Y') if animal.date_of_birth else '') %}
     {% set valor_data_iso = form.date_of_birth.data.strftime('%Y-%m-%d') if form.date_of_birth.data else (animal.date_of_birth.strftime('%Y-%m-%d') if animal.date_of_birth else '') %}
-    {% set valor_idade = form.age.data if form.age.data else (animal.age if animal.age else '') %}
+    {% if form.age.data is not none and form.age.data != '' %}
+      {% set valor_idade = form.age.data %}
+    {% elif animal.age %}
+      {% set partes_idade = animal.age.split(' ') %}
+      {% set valor_idade = partes_idade[0] %}
+    {% else %}
+      {% set valor_idade = '' %}
+    {% endif %}
+    {% if form.age_unit.data %}
+      {% set valor_unidade = form.age_unit.data %}
+    {% elif animal.age %}
+      {% set partes_unidade = animal.age.split(' ') %}
+      {% if partes_unidade|length > 1 %}
+        {% set valor_unidade = partes_unidade[1] %}
+      {% else %}
+        {% set valor_unidade = 'anos' %}
+      {% endif %}
+    {% else %}
+      {% set valor_unidade = 'anos' %}
+    {% endif %}
     {% include 'components/campo_data_idade.html' %}
     {% for error in form.age.errors %}
       <div class="invalid-feedback d-block">{{ error }}</div>

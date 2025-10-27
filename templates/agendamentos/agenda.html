@@ -1,14 +1,115 @@
-{% extends "layout.html" %}
+{% extends "base.html" %}
 
 {% block main %}
 <div class="container mt-4">
-  <h2>Agenda</h2>
+  <div
+    class="agenda-toolbar position-sticky bg-body pt-3 pb-3 mb-3"
+    style="top: 1rem; z-index: 1020;"
+  >
+    <div class="d-flex flex-column flex-md-row align-items-md-center gap-3 justify-content-between">
+      <div class="d-flex flex-column flex-md-row align-items-md-center gap-3 w-100">
+        <h2 class="mb-0">Agenda</h2>
+        <a
+          class="btn btn-primary ms-md-auto"
+          href="{{ url_for('appointments') }}"
+        >
+          Novo atendimento
+        </a>
+      </div>
+      <div class="d-flex flex-column flex-md-row align-items-md-center gap-2 w-100 w-md-auto">
+        <div class="dropdown d-md-none">
+          <button
+            class="btn btn-outline-secondary w-100 d-flex align-items-center justify-content-between"
+            type="button"
+            id="event-type-filter-menu"
+            data-bs-toggle="dropdown"
+            aria-expanded="false"
+          >
+            <span data-event-type-summary>Todos os eventos</span>
+            <i class="bi bi-sliders"></i>
+          </button>
+          <div class="dropdown-menu dropdown-menu-end p-3 shadow-sm" aria-labelledby="event-type-filter-menu">
+            <p class="text-muted text-uppercase fw-semibold small mb-2">Filtrar por tipo</p>
+            <div class="d-flex flex-column gap-2">
+              <div class="form-check">
+                <input class="form-check-input" type="checkbox" value="consulta" id="event-type-mobile-consulta" data-event-type-filter checked>
+                <label class="form-check-label" for="event-type-mobile-consulta">Consultas</label>
+              </div>
+              <div class="form-check">
+                <input class="form-check-input" type="checkbox" value="exame" id="event-type-mobile-exame" data-event-type-filter checked>
+                <label class="form-check-label" for="event-type-mobile-exame">Exames</label>
+              </div>
+              <div class="form-check">
+                <input class="form-check-input" type="checkbox" value="vacina" id="event-type-mobile-vacina" data-event-type-filter checked>
+                <label class="form-check-label" for="event-type-mobile-vacina">Vacinas</label>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div
+          class="btn-group d-none d-md-inline-flex flex-wrap"
+          role="group"
+          aria-label="Filtrar eventos por tipo"
+        >
+          <input type="checkbox" class="btn-check" id="event-type-consulta" value="consulta" data-event-type-filter checked>
+          <label class="btn btn-outline-secondary" for="event-type-consulta">Consultas</label>
+
+          <input type="checkbox" class="btn-check" id="event-type-exame" value="exame" data-event-type-filter checked>
+          <label class="btn btn-outline-secondary" for="event-type-exame">Exames</label>
+
+          <input type="checkbox" class="btn-check" id="event-type-vacina" value="vacina" data-event-type-filter checked>
+          <label class="btn btn-outline-secondary" for="event-type-vacina">Vacinas</label>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <div id="calendar"></div>
 </div>
 {% endblock %}
 
 {% block scripts %}
 {{ super() }}
+<style>
+  #calendar .fc-toolbar.fc-header-toolbar {
+    gap: 0.5rem;
+  }
+
+  #calendar .fc-toolbar .fc-button {
+    min-height: 44px;
+  }
+
+  @media (max-width: 768px) {
+    #calendar .fc-toolbar.fc-header-toolbar {
+      flex-wrap: wrap;
+      justify-content: space-between;
+    }
+
+    #calendar .fc-toolbar .fc-button {
+      min-width: 44px;
+      padding: 0.5rem;
+    }
+
+    #calendar .fc-toolbar .fc-toolbar-chunk {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      flex-wrap: wrap;
+    }
+
+    #calendar .fc-daygrid-day-frame,
+    #calendar .fc-timegrid-slot,
+    #calendar .fc-list-event {
+      min-height: 44px;
+    }
+  }
+
+  @media (min-width: 769px) {
+    #calendar .fc-daygrid-body {
+      min-height: 600px;
+    }
+  }
+</style>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.8/main.min.css">
 <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.8/main.min.js"></script>
 <script>
@@ -17,6 +118,98 @@ document.addEventListener('DOMContentLoaded', function() {
   if (calendarEl) {
     var csrfToken = '{{ csrf_token() if csrf_token is defined else '' }}';
     var calendar;
+    var eventTypeLabels = {
+      consulta: 'Consultas',
+      exame: 'Exames',
+      vacina: 'Vacinas',
+    };
+    var eventTypeGroups = {
+      consulta: ['appointment', 'consulta'],
+      exame: ['exam', 'exame'],
+      vacina: ['vaccine', 'vacina'],
+    };
+    var activeEventTypes = new Set();
+    var filterSummaryEl = document.querySelector('[data-event-type-summary]');
+    var filterInputs = Array.prototype.slice.call(document.querySelectorAll('[data-event-type-filter]'));
+
+    function syncActiveFiltersFromInputs() {
+      activeEventTypes.clear();
+      filterInputs.forEach(function(input) {
+        if (input.checked) {
+          activeEventTypes.add(input.value);
+        }
+      });
+    }
+
+    function updateFilterSummary() {
+      if (!filterSummaryEl) {
+        return;
+      }
+
+      if (activeEventTypes.size === 0 || activeEventTypes.size === Object.keys(eventTypeLabels).length) {
+        filterSummaryEl.textContent = 'Todos os eventos';
+        return;
+      }
+
+      var labels = Array.from(activeEventTypes).map(function(type) {
+        return eventTypeLabels[type] || type;
+      });
+      filterSummaryEl.textContent = labels.join(', ');
+    }
+
+    function mirrorFilterState(changedInput) {
+      filterInputs.forEach(function(input) {
+        if (input === changedInput) {
+          return;
+        }
+        if (input.value === changedInput.value) {
+          input.checked = changedInput.checked;
+        }
+      });
+    }
+
+    function updateCalendarEventVisibility(selectedTypes) {
+      if (!calendar) {
+        return;
+      }
+      var events = calendar.getEvents();
+      var allowAll = !selectedTypes || selectedTypes.size === 0 || selectedTypes.size === Object.keys(eventTypeLabels).length;
+      var allowedEventTypes = new Set();
+      if (!allowAll && selectedTypes) {
+        selectedTypes.forEach(function(type) {
+          var mapped = eventTypeGroups[type];
+          if (Array.isArray(mapped)) {
+            mapped.forEach(function(mappedType) {
+              allowedEventTypes.add(mappedType);
+            });
+          } else if (mapped) {
+            allowedEventTypes.add(mapped);
+          } else {
+            allowedEventTypes.add(type);
+          }
+        });
+      }
+      events.forEach(function(event) {
+        var eventType = event.extendedProps ? event.extendedProps.eventType : null;
+        var shouldDisplay = allowAll || (eventType && allowedEventTypes.has(eventType));
+        event.setProp('display', shouldDisplay ? 'auto' : 'none');
+      });
+    }
+
+    filterInputs.forEach(function(input) {
+      if (input.checked) {
+        activeEventTypes.add(input.value);
+      }
+      input.addEventListener('change', function(event) {
+        var target = event.currentTarget;
+        mirrorFilterState(target);
+        syncActiveFiltersFromInputs();
+        updateFilterSummary();
+        updateCalendarEventVisibility(activeEventTypes);
+      });
+    });
+
+    updateFilterSummary();
 
     async function persistEventChange(info) {
       if (!calendar) {
@@ -65,15 +258,123 @@ document.addEventListener('DOMContentLoaded', function() {
       }
     }
 
+    var mobileBreakpoint = window.matchMedia('(max-width: 768px)');
+
+    function getDefaultMobileView() {
+      return 'listWeek';
+    }
+
+    function getDefaultDesktopView() {
+      return 'dayGridMonth';
+    }
+
+    function resolveInitialView() {
+      return mobileBreakpoint.matches ? getDefaultMobileView() : getDefaultDesktopView();
+    }
+
+    var mobileButtonText = {
+      dayGridMonth: '<i class="bi bi-calendar3" aria-hidden="true"></i><span class="visually-hidden">Mês</span>',
+      timeGridDay: '<i class="bi bi-clock" aria-hidden="true"></i><span class="visually-hidden">Dia</span>',
+      listWeek: '<i class="bi bi-list-task" aria-hidden="true"></i><span class="visually-hidden">Lista</span>',
+      today: '<i class="bi bi-calendar-event" aria-hidden="true"></i><span class="visually-hidden">Hoje</span>',
+    };
+
+    var desktopButtonText = {
+      dayGridMonth: 'Mês',
+      timeGridWeek: 'Semana',
+      timeGridDay: 'Dia',
+      listWeek: 'Lista',
+      today: 'Hoje',
+    };
+
     calendar = new FullCalendar.Calendar(calendarEl, {
-      initialView: 'dayGridMonth',
+      initialView: resolveInitialView(),
+      height: 'auto',
       events: '/api/my_appointments',
       editable: true,
       eventDurationEditable: true,
       eventDrop: persistEventChange,
       eventResize: persistEventChange,
+      eventsSet: function() {
+        updateCalendarEventVisibility(activeEventTypes);
+      },
     });
+    calendar.setOption('customButtons', {
+      prevMobile: {
+        hint: 'Anterior',
+        text: '<i class="bi bi-chevron-left" aria-hidden="true"></i><span class="visually-hidden">Anterior</span>',
+        click: function() {
+          calendar.prev();
+        },
+      },
+      nextMobile: {
+        hint: 'Próximo',
+        text: '<i class="bi bi-chevron-right" aria-hidden="true"></i><span class="visually-hidden">Próximo</span>',
+        click: function() {
+          calendar.next();
+        },
+      },
+      todayMobile: {
+        hint: 'Hoje',
+        text: '<i class="bi bi-calendar-event" aria-hidden="true"></i><span class="visually-hidden">Hoje</span>',
+        click: function() {
+          calendar.today();
+        },
+      },
+    });
+
+    function applyResponsiveOptions() {
+      var isMobile = mobileBreakpoint.matches;
+
+      if (isMobile) {
+        calendar.setOption('headerToolbar', {
+          start: 'prevMobile todayMobile nextMobile',
+          center: '',
+          end: 'listWeek timeGridDay dayGridMonth',
+        });
+        calendar.setOption('buttonText', Object.assign({}, mobileButtonText));
+      } else {
+        calendar.setOption('headerToolbar', {
+          start: 'prev,next today',
+          center: 'title',
+          end: 'dayGridMonth timeGridWeek timeGridDay listWeek',
+        });
+        calendar.setOption('buttonText', Object.assign({}, desktopButtonText));
+      }
+    }
+
+    function syncViewToBreakpoint() {
+      if (!calendar) {
+        return;
+      }
+
+      var isMobile = mobileBreakpoint.matches;
+      var currentView = calendar.view ? calendar.view.type : null;
+
+      if (isMobile && currentView !== 'listWeek' && currentView !== 'timeGridDay') {
+        calendar.changeView(getDefaultMobileView());
+      }
+
+      if (!isMobile && (currentView === 'listWeek' || currentView === 'timeGridDay')) {
+        calendar.changeView(getDefaultDesktopView());
+      }
+    }
+
+    applyResponsiveOptions();
     calendar.render();
+    updateCalendarEventVisibility(activeEventTypes);
+    syncViewToBreakpoint();
+
+    function handleBreakpointChange() {
+      applyResponsiveOptions();
+      syncViewToBreakpoint();
+    }
+
+    if (typeof mobileBreakpoint.addEventListener === 'function') {
+      mobileBreakpoint.addEventListener('change', handleBreakpointChange);
+    } else if (typeof mobileBreakpoint.addListener === 'function') {
+      mobileBreakpoint.addListener(handleBreakpointChange);
+    }
   }
 });
 </script>

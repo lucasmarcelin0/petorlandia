@@ -1,6 +1,12 @@
         <div class="d-flex justify-content-between align-items-center mt-4">
           <h3 class="mb-0">Funcionários</h3>
         </div>
+        <div class="btn-group mt-3" role="group" aria-label="Navegação entre seções">
+          <button type="button" class="btn btn-outline-secondary btn-sm" data-section-target="staff-section">Equipe interna</button>
+          <button type="button" class="btn btn-outline-secondary btn-sm" data-section-target="vets-section">Veterinários</button>
+          <button type="button" class="btn btn-outline-secondary btn-sm" data-section-target="especialistas">Especialistas</button>
+        </div>
+        <section id="staff-section" class="mt-3">
         {% if current_user.id == clinica.owner_id %}
         <form method="post" class="mt-3 mb-4" id="add-staff-form">
           {{ staff_form.hidden_tag() }}
@@ -53,6 +59,11 @@
                       {{ staff_permission_forms[s.user.id].can_manage_inventory(class="form-check-input") }}
                       {{ staff_permission_forms[s.user.id].can_manage_inventory.label(class="form-check-label") }}
                     </div>
+                    <div class="form-check">
+                      {{ staff_permission_forms[s.user.id].can_view_full_calendar(class="form-check-input") }}
+                      {{ staff_permission_forms[s.user.id].can_view_full_calendar.label(class="form-check-label") }}
+                      <div class="form-text">Permite visualizar a agenda completa da clínica.</div>
+                    </div>
                     {{ staff_permission_forms[s.user.id].submit(class="btn btn-primary btn-sm mt-2") }}
                   </form>
                 </td>
@@ -66,6 +77,8 @@
             </tbody>
           </table>
         </div>
+        </section>
+        <section id="vets-section" class="mt-5">
         <h4 class="mt-4">Veterinários</h4>
         <div class="row row-cols-1 row-cols-md-3 g-2 mt-3 mb-3">
           <div class="col">
@@ -144,6 +157,11 @@
                         {{ vet_permission_forms[v.user.id].can_manage_inventory(class="form-check-input") }}
                         {{ vet_permission_forms[v.user.id].can_manage_inventory.label(class="form-check-label") }}
                       </div>
+                      <div class="form-check">
+                        {{ vet_permission_forms[v.user.id].can_view_full_calendar(class="form-check-input") }}
+                        {{ vet_permission_forms[v.user.id].can_view_full_calendar.label(class="form-check-label") }}
+                        <div class="form-text">Permite visualizar a agenda completa da clínica.</div>
+                      </div>
                       {{ vet_permission_forms[v.user.id].submit(class="btn btn-primary btn-sm mt-2") }}
                     </form>
                   </div>
@@ -203,6 +221,138 @@
               {% else %}
               <tr>
                 <td>Nenhum veterinário associado.</td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+
+        <h4 class="mt-4" id="especialistas">Especialistas</h4>
+        {% if current_user.id == clinica.owner_id %}
+        <form method="post" class="mt-3 mb-4">
+          {{ specialist_form.hidden_tag() }}
+          <div class="input-group">
+            {{ specialist_form.email(class="form-control", placeholder="Email do especialista") }}
+            {{ specialist_form.submit(class="btn btn-primary") }}
+          </div>
+        </form>
+        {% endif %}
+        <div class="table-responsive mb-4">
+          <table class="table table-striped">
+            <tbody>
+              {% for s in specialists %}
+              <tr>
+                <td>
+                  <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                      <strong>{{ s.user.name }}</strong>
+                      {% if s.specialties %}
+                      <div class="small text-muted">{{ s.specialties | map(attribute='nome') | join(', ') }}</div>
+                      {% endif %}
+                    </div>
+                    {% if pode_editar %}
+                    <div class="btn-group">
+                      <button class="btn btn-sm btn-outline-primary" onclick="toggleVetOptions({{ s.id }})">Horários</button>
+                      <button class="btn btn-sm btn-outline-secondary" onclick="toggleVetPerm({{ s.user.id }})">Permissões</button>
+                      <form method="post" action="{{ url_for('remove_specialist', clinica_id=clinica.id, veterinario_id=s.id) }}" class="d-inline">
+                        {{ vet_permission_forms[s.user.id].csrf_token }}
+                        <button type="submit" class="btn btn-sm btn-outline-danger">Remover</button>
+                      </form>
+                    </div>
+                    {% endif %}
+                  </div>
+                  <table class="table table-sm ms-3 mt-2">
+                    <tbody>
+                      {% for dia, horarios in grouped_vet_schedules.get(s.id, {}).items() %}
+                      <tr>
+                        <td>{{ dia }}: {{ ', '.join(horarios) }}</td>
+                      </tr>
+                      {% else %}
+                      <tr>
+                        <td>Sem horários cadastrados.</td>
+                      </tr>
+                      {% endfor %}
+                    </tbody>
+                  </table>
+                  {% if pode_editar %}
+                  <div id="vet-perms-{{ s.user.id }}" style="display:none;" class="mt-2">
+                    <form method="post">
+                      {{ vet_permission_forms[s.user.id].hidden_tag() }}
+                      <div class="form-check">
+                        {{ vet_permission_forms[s.user.id].can_manage_clients(class="form-check-input") }}
+                        {{ vet_permission_forms[s.user.id].can_manage_clients.label(class="form-check-label") }}
+                      </div>
+                      <div class="form-check">
+                        {{ vet_permission_forms[s.user.id].can_manage_animals(class="form-check-input") }}
+                        {{ vet_permission_forms[s.user.id].can_manage_animals.label(class="form-check-label") }}
+                      </div>
+                      <div class="form-check">
+                        {{ vet_permission_forms[s.user.id].can_manage_staff(class="form-check-input") }}
+                        {{ vet_permission_forms[s.user.id].can_manage_staff.label(class="form-check-label") }}
+                      </div>
+                      <div class="form-check">
+                        {{ vet_permission_forms[s.user.id].can_manage_schedule(class="form-check-input") }}
+                        {{ vet_permission_forms[s.user.id].can_manage_schedule.label(class="form-check-label") }}
+                      </div>
+                      <div class="form-check">
+                        {{ vet_permission_forms[s.user.id].can_manage_inventory(class="form-check-input") }}
+                        {{ vet_permission_forms[s.user.id].can_manage_inventory.label(class="form-check-label") }}
+                      </div>
+                      {{ vet_permission_forms[s.user.id].submit(class="btn btn-primary btn-sm mt-2") }}
+                    </form>
+                  </div>
+                  <div id="vet-options-{{ s.id }}" style="display:none;" class="mt-2">
+                    <table class="table table-sm ms-3 mb-3">
+                      <tbody>
+                        {% for h in s.horarios %}
+                        <tr>
+                          <td>
+                            {{ h.dia_semana }}: {{ h.hora_inicio.strftime('%H:%M') }} - {{ h.hora_fim.strftime('%H:%M') }}
+                            <form method="post" action="{{ url_for('delete_vet_schedule_clinic', clinica_id=clinica.id, veterinario_id=s.id, horario_id=h.id) }}" class="d-inline">
+                              {{ vet_schedule_forms[s.id].csrf_token }}
+                              <button type="submit" class="btn btn-sm btn-outline-danger ms-2">Excluir</button>
+                            </form>
+                          </td>
+                        </tr>
+                        {% else %}
+                        <tr>
+                          <td>Sem horários cadastrados.</td>
+                        </tr>
+                        {% endfor %}
+                      </tbody>
+                    </table>
+                    <form method="post" class="ms-3 mb-3">
+                      {{ vet_schedule_forms[s.id].hidden_tag() }}
+                      <div style="display:none;">{{ vet_schedule_forms[s.id].veterinario_id() }}</div>
+                      <div class="mb-2">
+                        {{ vet_schedule_forms[s.id].dias_semana.label }}
+                        {{ vet_schedule_forms[s.id].dias_semana(class="form-select", multiple=True, size=7) }}
+                      </div>
+                      <div class="mb-2">
+                        {{ vet_schedule_forms[s.id].hora_inicio.label }}
+                        {{ vet_schedule_forms[s.id].hora_inicio(class="form-control") }}
+                      </div>
+                      <div class="mb-2">
+                        {{ vet_schedule_forms[s.id].hora_fim.label }}
+                        {{ vet_schedule_forms[s.id].hora_fim(class="form-control") }}
+                      </div>
+                      <div class="mb-2">
+                        {{ vet_schedule_forms[s.id].intervalo_inicio.label }}
+                        {{ vet_schedule_forms[s.id].intervalo_inicio(class="form-control") }}
+                      </div>
+                      <div class="mb-2">
+                        {{ vet_schedule_forms[s.id].intervalo_fim.label }}
+                        {{ vet_schedule_forms[s.id].intervalo_fim(class="form-control") }}
+                      </div>
+                      {{ vet_schedule_forms[s.id].submit(class="btn btn-primary btn-sm") }}
+                    </form>
+                  </div>
+                  {% endif %}
+                </td>
+              </tr>
+              {% else %}
+              <tr>
+                <td>Nenhum especialista associado.</td>
               </tr>
               {% endfor %}
             </tbody>
@@ -297,11 +447,14 @@
           </form>
         </div>
         {% endif %}
-        <link rel="stylesheet" href="https://cdn.datatables.net/1.13.4/css/jquery.dataTables.min.css">
-        <script src="https://code.jquery.com/jquery-3.5.1.min.js"></script>
-        <script src="https://cdn.datatables.net/1.13.4/js/jquery.dataTables.min.js"></script>
         <script>
-          $(document).ready(function() {
-            $('#staff-list').DataTable();
+          document.querySelectorAll('[data-section-target]').forEach(btn => {
+            btn.addEventListener('click', () => {
+              const targetId = btn.getAttribute('data-section-target');
+              const section = document.getElementById(targetId);
+              if (section) {
+                section.scrollIntoView({ behavior: 'smooth', block: 'start' });
+              }
+            });
           });
         </script>

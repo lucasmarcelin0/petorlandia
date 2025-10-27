@@ -1,4 +1,4 @@
-{% extends 'layout.html' %}
+{% extends 'base.html' %}
 {% from 'components/photo_cropper.html' import photo_cropper %}
 {% block main %}
 <div class="container py-4">
@@ -418,6 +418,7 @@
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
 <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
 <script src="https://cdn.jsdelivr.net/npm/flatpickr/dist/l10n/pt.js"></script>
+<script src="{{ url_for('static', filename='js/date_mask.js') }}"></script>
 
 
 
@@ -458,34 +459,36 @@
   const animalAge = document.getElementById("animal_age");
 
   if (animalDob && animalAge) {
-    flatpickr(animalDob, {
+    const animalPicker = flatpickr(animalDob, {
       locale: "pt",
       dateFormat: "Y-m-d",
       altInput: true,
       altFormat: "d/m/Y",
       allowInput: false,
-      onChange: function (selectedDates) {
+      onReady(selectedDates) {
         if (selectedDates.length) {
           updateAgeFromDob(animalAge, selectedDates[0]);
+        } else {
+          updateAgeFromDob(animalAge, null);
         }
+      },
+      onChange(selectedDates) {
+        updateAgeFromDob(animalAge, selectedDates[0] || null);
       }
     });
 
     animalAge.addEventListener("input", () => {
-      const age = parseInt(animalAge.value);
-      if (!isNaN(age)) {
-        const estimatedDOB = getDobFromAge(age);
-        animalDob._flatpickr.setDate(estimatedDOB);
-      }
-    });
-
-    window.addEventListener("DOMContentLoaded", () => {
-      if (animalDob.value) {
-        const parsedDob = new Date(animalDob.value);
-        if (!isNaN(parsedDob)) {
-          updateAgeFromDob(animalAge, parsedDob);
+      const age = parseInt(animalAge.value, 10);
+      if (Number.isNaN(age)) {
+        if (animalAge.value.trim() === "") {
+          animalPicker.clear();
+          updateAgeFromDob(animalAge, null);
         }
+        return;
       }
+
+      const estimatedDOB = getDobFromAge(age);
+      animalPicker.setDate(estimatedDOB, true);
     });
   }
 
@@ -494,46 +497,60 @@
   const tutorAge = document.getElementById("tutor_age");
 
   if (tutorDob && tutorAge) {
-    flatpickr(tutorDob, {
+    const tutorPicker = flatpickr(tutorDob, {
       locale: "pt",
       dateFormat: "Y-m-d",
       altInput: true,
       altFormat: "d/m/Y",
       allowInput: true,
-      onChange: function (selectedDates) {
+      onReady(selectedDates, dateStr, instance) {
+        if (window.DateMaskUtils) {
+          window.DateMaskUtils.syncMaskedInput(instance, {
+            onDateSync: (date) => updateAgeFromDob(tutorAge, date),
+            onClear: () => updateAgeFromDob(tutorAge, null),
+          });
+        }
+
         if (selectedDates.length) {
           updateAgeFromDob(tutorAge, selectedDates[0]);
+        } else {
+          updateAgeFromDob(tutorAge, null);
         }
+      },
+      onChange(selectedDates) {
+        updateAgeFromDob(tutorAge, selectedDates[0] || null);
       }
     });
 
     tutorAge.addEventListener("input", () => {
-      const age = parseInt(tutorAge.value);
-      if (!isNaN(age)) {
-        const estimatedDOB = getDobFromAge(age);
-        tutorDob._flatpickr.setDate(estimatedDOB);
-      }
-    });
-
-    window.addEventListener("DOMContentLoaded", () => {
-      if (tutorDob.value) {
-        const parsedDob = new Date(tutorDob.value);
-        if (!isNaN(parsedDob)) {
-          updateAgeFromDob(tutorAge, parsedDob);
+      const age = parseInt(tutorAge.value, 10);
+      if (Number.isNaN(age)) {
+        if (tutorAge.value.trim() === "") {
+          tutorPicker.clear();
+          updateAgeFromDob(tutorAge, null);
         }
+        return;
       }
+
+      const estimatedDOB = getDobFromAge(age);
+      tutorPicker.setDate(estimatedDOB, true);
     });
   }
 
   // ========== Auxiliares ==========
   function updateAgeFromDob(targetInput, dob) {
+    if (!dob) {
+      targetInput.value = "";
+      return;
+    }
+
     const today = new Date();
     let age = today.getFullYear() - dob.getFullYear();
     const m = today.getMonth() - dob.getMonth();
     if (m < 0 || (m === 0 && today.getDate() < dob.getDate())) {
       age--;
     }
-    targetInput.value = age;
+    targetInput.value = Math.max(age, 0);
   }
 
   function getDobFromAge(age) {

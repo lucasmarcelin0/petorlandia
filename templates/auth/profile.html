@@ -1,4 +1,4 @@
-{% extends "layout.html" %}
+{% extends "base.html" %}
 {% from 'components/photo_cropper.html' import photo_cropper %}
 
 {% block main %}
@@ -61,6 +61,28 @@
           {{ field_row('Nome', form.name, 'name', current_user.name) }}
           {{ field_row('Email', form.email, 'email', current_user.email) }}
           {{ field_row('Telefone', form.phone, 'phone', current_user.phone) }}
+
+          <div class="mb-3">
+            <label class="form-label">Privacidade</label>
+            <div class="d-flex align-items-center">
+              <span id="is_private-display" class="me-2 text-muted">
+                {% if current_user.is_private %}
+                  Perfil privado — apenas você e a clínica que o cadastrou conseguem vê-lo.
+                {% else %}
+                  Perfil público — visível para outras clínicas da plataforma.
+                {% endif %}
+              </span>
+              <span class="{% if current_user.is_private %}text-warning{% else %}text-success{% endif %}">
+                {% if current_user.is_private %}🔒{% else %}🌐{% endif %}
+              </span>
+            </div>
+            <div class="form-check form-switch d-none mt-2" id="is_private-input">
+              {{ form.is_private(class="form-check-input") }}
+              <label class="form-check-label" for="{{ form.is_private.id }}">
+                Manter meu perfil privado
+              </label>
+            </div>
+          </div>
 
           {% if current_user.veterinario %}
           <div class="mb-3">
@@ -220,7 +242,7 @@
   }
 
 function toggleAll() {
-  ['name', 'email', 'phone', 'address'].forEach(toggleField);
+  ['name', 'email', 'phone', 'address', 'is_private'].forEach(toggleField);
   const campoFoto = document.getElementById('campo-upload-foto');
   const camposEndereco = document.getElementById('endereco-campos');
   if (campoFoto) campoFoto.classList.toggle('d-none');

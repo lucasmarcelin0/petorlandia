@@ -2,6 +2,85 @@
 {% block main %}
 <h2>Conversa com o Administrador</h2>
 
+{% if is_admin or target_membership %}
+  <div class="card mb-4">
+    <div class="card-body">
+      <h3 class="h5">
+        {% if is_admin %}
+          Status do usuário
+        {% else %}
+          Status da sua assinatura
+        {% endif %}
+      </h3>
+      {% if target_membership %}
+        {% if target_membership.started_at %}
+          <p class="mb-1"><strong>Veterinário desde:</strong> {{ target_membership.started_at|format_datetime_brazil('%d/%m/%Y %H:%M') }}</p>
+        {% endif %}
+        {% if target_membership.trial_ends_at %}
+          <p class="mb-1"><strong>Avaliação gratuita até:</strong> {{ target_membership.trial_ends_at|format_datetime_brazil('%d/%m/%Y %H:%M') }}</p>
+        {% endif %}
+        {% if target_membership.has_valid_payment() %}
+          <div class="alert alert-success mt-2 mb-0">
+            Assinatura ativa até {{ target_membership.paid_until|format_datetime_brazil('%d/%m/%Y %H:%M') }}.
+          </div>
+        {% elif target_membership.is_trial_active() %}
+          <div class="alert alert-warning mt-2">
+            {% if is_admin %}
+              Este usuário está aproveitando o período de avaliação gratuita. Para manter o acesso após o teste, oriente-o a realizar o pagamento dentro do prazo.
+            {% else %}
+              Parabéns! Você está aproveitando o período de avaliação gratuita. Aproveite bastante e, se tiver qualquer dúvida, mande uma mensagem por aqui. Para manter o acesso após o período de teste, realize o pagamento dentro do prazo.
+            {% endif %}
+            {% if can_cancel_trial and cancel_trial_form %}
+              <form method="post" action="{{ url_for('veterinarian_cancel_trial', membership_id=target_membership.id) }}" class="mt-2">
+                {{ cancel_trial_form.hidden_tag() }}
+                <button type="submit" class="btn btn-outline-danger btn-sm">{{ cancel_trial_form.submit.label.text }}</button>
+              </form>
+              <p class="text-muted small mb-0 mt-2">Ao cancelar, o acesso será interrompido imediatamente.</p>
+            {% endif %}
+          </div>
+        {% else %}
+          <div class="alert alert-danger mt-2">
+            O período de avaliação gratuita terminou e não há pagamento ativo registrado.
+          </div>
+          {% if can_request_new_trial and request_new_trial_form %}
+            <form method="post" action="{{ url_for('veterinarian_request_new_trial', membership_id=target_membership.id) }}" class="mt-2">
+              {{ request_new_trial_form.hidden_tag() }}
+              {% if is_admin %}
+                <button type="submit" class="btn btn-outline-primary btn-sm">{{ request_new_trial_form.submit.label.text }}</button>
+              {% else %}
+                <button type="submit" class="btn btn-outline-primary btn-sm">Solicitar nova avaliação ao administrador</button>
+              {% endif %}
+            </form>
+            {% if is_admin %}
+              <p class="text-muted small mb-0">Ao iniciar, um novo período de avaliação gratuita será iniciado imediatamente.</p>
+            {% else %}
+              <p class="text-muted small mb-0">Ao solicitar, o administrador será avisado e poderá reativar manualmente a sua assinatura.</p>
+            {% endif %}
+          {% endif %}
+        {% endif %}
+      {% elif is_admin %}
+        <p class="mb-3">Este usuário ainda não está cadastrado como veterinário.</p>
+        {% if promotion_form %}
+        <form method="post" action="{{ url_for('admin_promote_veterinarian', user_id=admin.id) }}" class="row g-2">
+          {{ promotion_form.hidden_tag() }}
+          <div class="col-md-4">
+            {{ promotion_form.crmv.label(class="form-label") }}
+            {{ promotion_form.crmv(class="form-control") }}
+          </div>
+          <div class="col-md-4">
+            {{ promotion_form.phone.label(class="form-label") }}
+            {{ promotion_form.phone(class="form-control") }}
+          </div>
+          <div class="col-md-4 d-flex align-items-end">
+            <button type="submit" class="btn btn-success w-100">{{ promotion_form.submit.label.text }}</button>
+          </div>
+        </form>
+        {% endif %}
+      {% endif %}
+    </div>
+  </div>
+{% endif %}
+
 <div id="mensagens-container" class="border p-3 mb-3 rounded" style="max-height: 400px; overflow-y: auto;">
     {% for msg in mensagens %}
         <div class="mb-2 {% if msg.sender_id == current_user.id %}text-end{% endif %}">
@@ -14,7 +93,7 @@
     {% endfor %}
 </div>
 
-<form method="POST" class="js-msg-form" {% if current_user.role == 'admin' %}data-api="{{ url_for('api_conversa_admin_message', user_id=admin.id) }}"{% else %}data-api="{{ url_for('api_conversa_admin_message') }}"{% endif %}>
+<form method="POST" class="js-msg-form" {% if is_admin %}data-api="{{ url_for('api_conversa_admin_message', user_id=admin.id) }}"{% else %}data-api="{{ url_for('api_conversa_admin_message') }}"{% endif %}>
     {{ form.hidden_tag() }}
     <div class="input-group">
         {{ form.content(class="form-control", placeholder="Digite sua mensagem...") }}

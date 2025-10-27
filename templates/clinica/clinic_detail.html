@@ -1,4 +1,4 @@
-{% extends "layout.html" %}
+{% extends "base.html" %}
 {% from 'components/photo_cropper.html' import photo_cropper %}
 
 {% block main %}
@@ -168,7 +168,8 @@ document.addEventListener('DOMContentLoaded', function() {
   const roleSelect = document.getElementById('staff-role');
   const list = document.getElementById('staff-list');
   if (!filterInput || !sortSelect || !list) return;
-  const items = Array.from(list.querySelectorAll('li[data-name]'));
+  const tbody = list.querySelector('tbody');
+  const items = Array.from(tbody ? tbody.querySelectorAll('tr[data-name]') : []);
 
   function applyFilter() {
     const term = filterInput.value.toLowerCase();
@@ -197,8 +198,9 @@ document.addEventListener('DOMContentLoaded', function() {
           return a.dataset.name.localeCompare(b.dataset.name);
       }
     });
-    visible.forEach(item => list.appendChild(item));
-    hidden.forEach(item => list.appendChild(item));
+    const target = tbody || list;
+    visible.forEach(item => target.appendChild(item));
+    hidden.forEach(item => target.appendChild(item));
   }
 
   filterInput.addEventListener('input', () => { applyFilter(); applySort(); });

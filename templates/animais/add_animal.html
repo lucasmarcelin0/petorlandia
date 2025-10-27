@@ -1,4 +1,4 @@
-{% extends "layout.html" %}
+{% extends "base.html" %}
 {% from 'components/photo_cropper.html' import photo_cropper %}
 
 {% block main %}
@@ -52,9 +52,11 @@
             {% set prefixo = 'animal' %}
             {% set nome_data = 'date_of_birth' %}
             {% set nome_idade = 'age' %}
+            {% set nome_unidade = 'age_unit' %}
             {% set valor_data = form.date_of_birth.data.strftime('%d/%m/%Y') if form.date_of_birth.data else '' %}
             {% set valor_data_iso = form.date_of_birth.data.strftime('%Y-%m-%d') if form.date_of_birth.data else '' %}
             {% set valor_idade = form.age.data if form.age.data else '' %}
+            {% set valor_unidade = form.age_unit.data if form.age_unit.data else 'anos' %}
             {% include 'components/campo_data_idade.html' %}
             {% for error in form.age.errors %}
                 <div class="invalid-feedback d-block">{{ error }}</div>

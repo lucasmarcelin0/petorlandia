@@ -1,5 +1,28 @@
 {% if appointments_grouped %}
-  {# Conteúdo removido intencionalmente. #}
+  <div class="d-none" data-appointments-metadata>
+    {% for day, appointments_on_day in appointments_grouped %}
+      {% for appt in appointments_on_day %}
+        <span data-appointment-id="{{ appt.id }}"></span>
+      {% endfor %}
+    {% endfor %}
+  </div>
+
+  {% for day, appointments_on_day in appointments_grouped %}
+    {% set first_appointment = appointments_on_day|first %}
+    {% set day_key = day.strftime('%Y-%m-%d') %}
+    {% set day_label = first_appointment.scheduled_at|format_datetime_brazil('%A, %d/%m/%Y') if first_appointment else day.strftime('%d/%m/%Y') %}
+    <div class="appointments-day-block" data-day="{{ day_key }}" data-day-label="{{ day_label }}">
+      <div class="day-header d-flex align-items-center gap-2" data-day="{{ day_key }}" data-day-label="{{ day_label }}">
+        <span class="icon-circle bg-primary text-white"><i class="fa-solid fa-calendar-day"></i></span>
+        {{ day_label }}
+      </div>
+      <div class="day-appointments">
+        {% for appt in appointments_on_day %}
+          {% include 'partials/_appointment_card.html' %}
+        {% endfor %}
+      </div>
+    </div>
+  {% endfor %}
 {% else %}
   <div class="empty-state">
     <span class="icon-circle bg-secondary text-white"><i class="fa-regular fa-calendar-xmark"></i></span>

@@ -1,4 +1,4 @@
-{% extends "layout.html" %}
+{% extends "base.html" %}
 
 {% block main %}
 <section class="container py-4" aria-labelledby="appointments-calendar-title">
@@ -28,133 +28,103 @@
       {% set calendar_redirect_url = url_for('appointments_calendar') %}
     {% endif %}
   {% endif %}
-  <div class="row g-4 align-items-stretch mb-4" id="appointments-calendar-overview">
-    <div class="col-12 col-xl-8 col-xxl-9" data-calendar-main-column>
-      <ul
-        class="nav nav-pills calendar-tabs mb-3"
-        id="appointments-calendar-tabs"
-        role="tablist"
-        aria-label="Alternar entre o calendário e o agendamento"
-      >
-        <li class="nav-item" role="presentation">
-          <button
-            class="nav-link active"
-            id="calendar-tab-experimental"
-            data-bs-toggle="tab"
-            data-bs-target="#calendar-pane-experimental"
-            type="button"
-            role="tab"
-            aria-controls="calendar-pane-experimental"
-            aria-selected="true"
-          >
-            <i class="bi bi-layout-text-window-reverse me-1"></i> Calendário
-          </button>
-        </li>
-        <li class="nav-item" role="presentation">
-          <button
-            class="nav-link"
-            id="calendar-tab-full"
-            data-bs-toggle="tab"
-            data-bs-target="#calendar-pane-full"
-            type="button"
-            role="tab"
-            aria-controls="calendar-pane-full"
-            aria-selected="false"
-          >
-            <i class="bi bi-calendar3 me-1"></i> Agendamento
-          </button>
-        </li>
-      </ul>
-
-      <div class="tab-content mt-3" id="appointments-calendar-content">
-        <div
-          class="tab-pane fade calendar-tab-pane show active pt-2"
-          id="calendar-pane-experimental"
-          role="tabpanel"
-          aria-labelledby="calendar-tab-experimental"
-          tabindex="0"
-        >
-          {% set calendar_pets_endpoint = url_for('api_my_pets') %}
-          {% if current_user.role == 'admin' or current_user.worker in ['veterinario', 'colaborador'] %}
-            {% set calendar_pets_endpoint = url_for(
-              'api_clinic_pets',
-              view_as=request.args.get('view_as'),
-              veterinario_id=request.args.get('veterinario_id'),
-              colaborador_id=request.args.get('colaborador_id'),
-              clinica_id=request.args.get('clinica_id')
-            ) %}
-          {% endif %}
-          {% with component_id = 'tutor-calendar-inline', pets_url = calendar_pets_endpoint %}
-            {% include 'partials/tutor_calendar.html' %}
-          {% endwith %}
-        </div>
-        <div
-          class="tab-pane fade calendar-tab-pane pt-2"
-          id="calendar-pane-full"
-          role="tabpanel"
-          aria-labelledby="calendar-tab-full"
-          tabindex="0"
-        >
-          {% with clinic_id = current_user.clinica_id, calendar_redirect_url = calendar_redirect_url %}
-            {% include 'partials/schedule_toggle.html' %}
-          {% endwith %}
-        </div>
-      </div>
-    </div>
-    <div class="col-12 col-xl-4 col-xxl-3" data-calendar-summary-column>
-      <div class="card calendar-summary-card border-0 shadow-sm h-100" data-calendar-summary-panel>
-        <div class="card-header bg-white border-0 pb-0">
-          <div class="d-flex align-items-center justify-content-between gap-2">
-            <h5 class="mb-0 fw-semibold">
-              <i class="bi bi-people-fill me-2"></i> Resumo por profissional
-            </h5>
-            <span class="badge calendar-summary-total-badge" data-calendar-summary-total>0</span>
-          </div>
-          <p class="text-muted small mb-0">
-            Totais diários e semanais por veterinário com base no calendário visível.
-          </p>
-        </div>
-        <div class="card-body">
-          <div class="text-muted small" data-calendar-summary-empty aria-live="polite">
-            Carregando estatísticas da agenda...
-          </div>
-          <ul
-            role="list"
-            class="calendar-summary-list d-flex flex-column gap-3 mt-2"
-            data-calendar-summary-list
-          ></ul>
-        </div>
-      </div>
-    </div>
-  </div>
+  {% set calendar_pets_endpoint = url_for('api_my_pets') %}
+  {% if current_user.role == 'admin' or current_user.worker in ['veterinario', 'colaborador'] %}
+    {% set calendar_pets_endpoint = url_for(
+      'api_clinic_pets',
+      view_as=request.args.get('view_as'),
+      veterinario_id=request.args.get('veterinario_id'),
+      colaborador_id=request.args.get('colaborador_id'),
+      clinica_id=request.args.get('clinica_id')
+    ) %}
+  {% endif %}
+  {% set pet_quick_list_endpoint = calendar_pets_endpoint %}
+  {% set pet_quick_list_component_id = 'appointments-pet-quick-list' %}
+  {% set pet_quick_list_new_pet_url = url_for('novo_animal') %}
+  {% set summary_panel_template = 'partials/appointments_summary_panel.html' %}
+  {% set schedule_toggle_clinic_id = current_user.clinica_id %}
+  {% set schedule_toggle_calendar_redirect_url = calendar_redirect_url %}
+  {% include 'partials/calendar_layout.html' %}
 
   <!-- Gerenciar horários (novo + editar) -->
   <div class="card border-0 shadow-lg rounded-4 mb-5">
-    <div class="card-header bg-primary text-white rounded-top-4 d-flex justify-content-between align-items-center">
-      <h5 class="mb-0"><i class="bi bi-clock-history me-2"></i> Gerenciar Horários</h5>
-      <div>
-        <button id="openScheduleModal" class="btn btn-light btn-sm me-2" type="button">
-          <i class="bi bi-pencil"></i> Editar Horário
-        </button>
-        <button class="btn btn-success btn-sm" data-bs-toggle="collapse" data-bs-target="#newAppointmentForm">
-          <i class="bi bi-plus-circle"></i> Nova Consulta
-        </button>
-      </div>
+    <div class="card-header border-0 p-0">
+      <nav class="schedule-toolbar rounded-top-4" aria-label="Ações rápidas da agenda">
+        <div class="schedule-toolbar-buttons">
+          <button
+            id="openScheduleModal"
+            class="schedule-toolbar-btn schedule-toolbar-btn--neutral"
+            type="button"
+          >
+            <i class="bi bi-pencil"></i>
+            <span>Editar Horário</span>
+          </button>
+          {% if form %}
+            <button
+              class="schedule-toolbar-btn schedule-toolbar-btn--success"
+              type="button"
+              data-bs-toggle="collapse"
+              data-bs-target="#newAppointmentForm"
+            >
+              <i class="bi bi-plus-circle"></i>
+              <span>Nova Consulta</span>
+            </button>
+          {% endif %}
+        </div>
+      </nav>
     </div>
 
     <div class="collapse" id="newAppointmentForm">
       <div class="card-body p-4">
         {% if form %}
-        <form method="POST">
+        <form method="POST" data-appointment-form>
           {{ form.hidden_tag() }}
           <div class="row g-3">
-            <div class="col-md-6">
-              {{ form.animal_id.label(class="form-label fw-semibold") }}
-              {{ form.animal_id(class="form-select") }}
+            <div class="col-md-6 col-lg-4">
+              {{ form.tutor_id.label(class="form-label fw-semibold") }}
+              {{ form.tutor_id(class="form-select", **{'data-appointment-tutor-select': 'true'}) }}
+              {% for error in form.tutor_id.errors %}
+                <div class="invalid-feedback d-block">{{ error }}</div>
+              {% endfor %}
             </div>
-            <div class="col-md-6">
+            <div class="col-md-6 col-lg-4">
+              {{ form.animal_id.label(class="form-label fw-semibold", for=form.animal_id.id) }}
+              {% set animal_select_classes = 'form-select' %}
+              {% if form.animal_id.errors %}
+                {% set animal_select_classes = animal_select_classes + ' is-invalid' %}
+              {% endif %}
+              {% set animal_options = form.animal_data or [] %}
+              <select
+                id="{{ form.animal_id.id }}"
+                name="{{ form.animal_id.name }}"
+                class="{{ animal_select_classes }}"
+                data-appointment-animal-select
+              >
+                {% if not animal_options %}
+                  <option value="" selected disabled>Sem animais disponíveis</option>
+                {% endif %}
+                {% for option in animal_options %}
+                  {% set option_tutor_id = option.tutor_id if option.tutor_id is not none else '' %}
+                  <option
+                    value="{{ option.id }}"
+                    data-tutor-id="{{ option_tutor_id }}"
+                    data-tutor-name="{{ option.tutor_name }}"
+                    {% if form.animal_id.data == option.id %}selected{% endif %}
+                  >
+                    {{ option.label or option.name }}
+                  </option>
+                {% endfor %}
+              </select>
+              {% for error in form.animal_id.errors %}
+                <div class="invalid-feedback d-block">{{ error }}</div>
+              {% endfor %}
+              <div class="form-text text-muted d-none" data-appointment-animal-empty>
+                Nenhum animal disponível para o tutor selecionado.
+              </div>
+            </div>
+            <div class="col-md-12 col-lg-4">
               {{ form.veterinario_id.label(class="form-label fw-semibold") }}
-              {{ form.veterinario_id(class="form-select") }}
+              {{ form.veterinario_id(class="form-select", **{'data-schedule-vet-select': 'true'}) }}
             </div>
           </div>
 
@@ -199,27 +169,106 @@
           </div>
         </form>
         <div class="mt-4">
-          <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2">
-            <h6 class="fw-bold mb-0">
-              <i class="bi bi-calendar3 me-2"></i>Disponibilidade do Veterinário
-            </h6>
-            <button
-              class="btn btn-outline-primary btn-sm"
-              type="button"
-              data-bs-toggle="collapse"
-              data-bs-target="#scheduleOverviewCollapse"
-              aria-expanded="true"
-              aria-controls="scheduleOverviewCollapse"
-            >
-              Alternar visualização
-            </button>
+          <div class="d-flex flex-column flex-lg-row align-items-lg-center gap-3 mb-3">
+            <div class="d-flex align-items-center flex-wrap gap-2">
+              <h6 class="fw-bold mb-0" data-schedule-title>
+                <i class="bi bi-calendar3 me-2"></i>Disponibilidade do Veterinário
+                <span
+                  class="ms-2 text-primary fw-semibold d-none"
+                  data-schedule-vet-name
+                  aria-hidden="true"
+                ></span>
+              </h6>
+              <span
+                class="schedule-chip schedule-chip--muted"
+                data-schedule-summary
+                aria-live="polite"
+              >
+                Selecione um profissional para visualizar a agenda.
+              </span>
+            </div>
+            <div class="d-flex flex-wrap align-items-center gap-2 ms-lg-auto">
+              <div class="d-flex align-items-center flex-wrap gap-2" data-schedule-legend>
+                <span class="schedule-chip schedule-chip--success">
+                  <i class="bi bi-check-circle-fill"></i>
+                  Disponível
+                </span>
+                <span class="schedule-chip schedule-chip--danger">
+                  <i class="bi bi-x-circle-fill"></i>
+                  Indisponível
+                </span>
+                <span class="schedule-chip schedule-chip--neutral">
+                  <i class="bi bi-slash-circle-fill"></i>
+                  Fora do expediente
+                </span>
+              </div>
+              <button
+                class="btn schedule-action-btn schedule-action-btn--primary btn-sm"
+                type="button"
+                data-bs-toggle="collapse"
+                data-bs-target="#scheduleOverviewCollapse"
+                aria-expanded="true"
+                aria-controls="scheduleOverviewCollapse"
+                data-show-label="Mostrar agenda"
+                data-hide-label="Ocultar agenda"
+              >
+                Ocultar agenda
+              </button>
+            </div>
+          </div>
+          <div class="d-flex flex-column flex-xl-row align-items-xl-center gap-3 mb-3">
+            <div class="d-flex align-items-center gap-2 small text-muted">
+              <i class="bi bi-calendar-week me-1"></i>
+              <span data-schedule-week-label aria-live="polite">
+                Aguardando seleção de profissional.
+              </span>
+            </div>
+            <div class="d-flex flex-wrap align-items-center gap-2 ms-xl-auto">
+              <div class="btn-group btn-group-sm" role="group" aria-label="Navegação da agenda semanal">
+                <button
+                  type="button"
+                  class="btn schedule-action-btn schedule-action-btn--muted"
+                  data-schedule-week-prev
+                  aria-label="Semana anterior"
+                >
+                  <i class="bi bi-chevron-left"></i>
+                  <span class="d-none d-sm-inline">Semana anterior</span>
+                </button>
+                <button
+                  type="button"
+                  class="btn schedule-action-btn schedule-action-btn--muted"
+                  data-schedule-week-today
+                  aria-label="Ir para semana atual"
+                >
+                  Hoje
+                </button>
+                <button
+                  type="button"
+                  class="btn schedule-action-btn schedule-action-btn--muted"
+                  data-schedule-week-next
+                  aria-label="Próxima semana"
+                >
+                  <span class="d-none d-sm-inline">Próxima semana</span>
+                  <i class="bi bi-chevron-right"></i>
+                </button>
+              </div>
+              <div class="d-flex align-items-center gap-2">
+                <label for="schedulePeriodFilter" class="form-label small text-muted mb-0">Período</label>
+                <select
+                  id="schedulePeriodFilter"
+                  class="form-select form-select-sm w-auto"
+                  data-schedule-period-filter
+                >
+                  <option value="all">Todos</option>
+                  <option value="morning">Manhã</option>
+                  <option value="afternoon">Tarde</option>
+                  <option value="evening">Noite</option>
+                </select>
+              </div>
+            </div>
           </div>
           <div class="collapse show" id="scheduleOverviewCollapse">
             <div id="schedule-overview" class="row row-cols-1 row-cols-md-2 row-cols-lg-3 g-3 small"></div>
-            <div class="mt-2 small">
-              <span class="badge bg-success me-1">&nbsp;</span> Disponível
-              <span class="badge bg-danger ms-2 me-1">&nbsp;</span> Indisponível
-            </div>
           </div>
         </div>
         {% endif %}
@@ -227,68 +276,187 @@
     </div>
   </div>
 
+  <div class="card border-0 shadow-lg rounded-4 mb-5">
+    <div class="card-header bg-info text-white rounded-top-4 d-flex align-items-center">
+      <h5 class="mb-0"><i class="bi bi-clipboard-pulse me-2"></i> Agenda de Exames</h5>
+    </div>
+    <div class="card-body">
+      {% if exam_appointments %}
+      <ul class="list-group list-group-flush">
+        {% for exam in exam_appointments %}
+        <li class="list-group-item d-flex justify-content-between align-items-start gap-3">
+          <div>
+            <div class="fw-semibold">{{ exam.scheduled_at|format_datetime_brazil('%d/%m/%Y %H:%M') }}</div>
+            <div class="small text-muted">Animal: {{ exam.animal.name if exam.animal else '—' }}</div>
+            <div class="small text-muted">Especialista: {{ exam.specialist.user.name if exam.specialist and exam.specialist.user else '—' }}</div>
+          </div>
+          <span class="badge align-self-center {% if exam.status_display == 'Aceito' %}bg-success{% elif exam.status_display == 'Cancelado' %}bg-danger{% elif exam.status_display == 'Prazo expirado' %}bg-secondary{% else %}bg-warning text-dark{% endif %}">{{ exam.status_display }}</span>
+        </li>
+        {% endfor %}
+      </ul>
+      {% else %}
+      <p class="text-muted mb-0">Nenhum exame agendado no momento.</p>
+      {% endif %}
+    </div>
+  </div>
+
   <div id="appointmentsList" data-appointments-container data-refresh-url="{{ request.url }}">
     {% include 'partials/appointments_table.html' %}
   </div>
+
 
 </section>
 
 <!-- Modal Editar Horário do Colaborador -->
 <div class="modal fade" id="scheduleEditModal" tabindex="-1" aria-hidden="true">
-  <div class="modal-dialog">
-    <div class="modal-content">
-      <div class="modal-header">
-        <h5 class="modal-title"><i class="bi bi-clock-history me-2"></i>Editar Horário</h5>
-        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+  <div class="modal-dialog modal-lg modal-dialog-centered">
+    <div class="modal-content border-0 shadow-lg rounded-4 overflow-hidden">
+      <div class="modal-header bg-primary text-white border-0 align-items-start">
+        <div>
+          <h5 class="modal-title fw-semibold d-flex align-items-center gap-2 mb-1">
+            <i class="bi bi-clock-history"></i>
+            Editar Horário do Colaborador
+          </h5>
+          <p class="mb-0 small text-white-50">Ajuste a disponibilidade de atendimento com rapidez e segurança.</p>
+        </div>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Fechar"></button>
       </div>
-      <div class="modal-body">
+      <div class="modal-body bg-light">
         <form
           id="schedule-edit-form"
+          class="needs-validation"
+          novalidate
           method="post"
           action="{{ url_for('edit_vet_schedule_slot', veterinario_id=0, horario_id=0) }}"
           data-action-template="{{ url_for('edit_vet_schedule_slot', veterinario_id=0, horario_id=0) }}"
         >
           <input type="hidden" name="schedule-csrf_token" value="{{ csrf_token() if csrf_token is defined else '' }}">
           <input type="hidden" id="schedule-slot-id">
-          <input type="hidden" name="schedule-intervalo_inicio" id="schedule-interval-start">
-          <input type="hidden" name="schedule-intervalo_fim" id="schedule-interval-end">
-          <div class="mb-3">
-            <label for="schedule-vet" class="form-label fw-semibold">Colaborador</label>
-            <select id="schedule-vet" name="schedule-veterinario_id" class="form-select"></select>
+          <div class="alert alert-primary d-flex align-items-start gap-3 small shadow-sm mb-4" role="status">
+            <i class="bi bi-info-circle-fill fs-5"></i>
+            <div>
+              Revise os dados antes de salvar. As alterações impactam imediatamente na agenda disponível para agendamentos.
+            </div>
           </div>
-          <div class="row g-3">
-            <div class="col-md-6">
-              <label for="schedule-day" class="form-label fw-semibold">Dia da Semana</label>
-              <select id="schedule-day" name="schedule-dias_semana" class="form-select">
-                <option value="Segunda">Segunda</option>
-                <option value="Terça">Terça</option>
-                <option value="Quarta">Quarta</option>
-                <option value="Quinta">Quinta</option>
-                <option value="Sexta">Sexta</option>
-                <option value="Sábado">Sábado</option>
-                <option value="Domingo">Domingo</option>
-              </select>
+          <div class="row g-4">
+            <div class="col-lg-5">
+              <div class="bg-white border rounded-3 shadow-sm p-3 h-100">
+                <label for="schedule-vet" class="form-label fw-semibold text-muted text-uppercase small">Colaborador</label>
+                <div class="input-group">
+                  <span class="input-group-text bg-light text-secondary">
+                    <i class="bi bi-person-badge"></i>
+                  </span>
+                  <select id="schedule-vet" name="schedule-veterinario_id" class="form-select"></select>
+                </div>
+                <p class="form-text small mt-2 mb-0">Selecione o profissional para aplicar o ajuste de disponibilidade.</p>
+              </div>
             </div>
-            <div class="col-md-3">
-              <label for="schedule-start" class="form-label fw-semibold">Início</label>
-              <input type="time" id="schedule-start" name="schedule-hora_inicio" class="form-control">
-            </div>
-            <div class="col-md-3">
-              <label for="schedule-end" class="form-label fw-semibold">Fim</label>
-              <input type="time" id="schedule-end" name="schedule-hora_fim" class="form-control">
+            <div class="col-lg-7">
+              <div class="bg-white border rounded-3 shadow-sm p-3">
+                <div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-3">
+                  <div>
+                    <span class="schedule-chip schedule-chip--primary">Disponibilidade semanal</span>
+                    <p class="small text-muted mb-0">Defina o dia, horário de início e término do atendimento.</p>
+                  </div>
+                  <div class="d-flex align-items-center gap-2">
+                    <span class="schedule-chip schedule-chip--info">
+                      <i class="bi bi-calendar-event"></i>
+                      Campos obrigatórios
+                    </span>
+                  </div>
+                </div>
+                <div class="row g-3">
+                  <div class="col-sm-6">
+                    <label for="schedule-day" class="form-label fw-semibold">Dia da Semana</label>
+                    <div class="input-group">
+                      <span class="input-group-text bg-light text-secondary"><i class="bi bi-calendar3"></i></span>
+                      <select id="schedule-day" name="schedule-dias_semana" class="form-select">
+                        <option value="Segunda">Segunda</option>
+                        <option value="Terça">Terça</option>
+                        <option value="Quarta">Quarta</option>
+                        <option value="Quinta">Quinta</option>
+                        <option value="Sexta">Sexta</option>
+                        <option value="Sábado">Sábado</option>
+                        <option value="Domingo">Domingo</option>
+                      </select>
+                    </div>
+                  </div>
+                  <div class="col-sm-3">
+                    <label for="schedule-start" class="form-label fw-semibold">Início</label>
+                    <div class="input-group">
+                      <span class="input-group-text bg-light text-secondary"><i class="bi bi-clock"></i></span>
+                      <input type="time" id="schedule-start" name="schedule-hora_inicio" class="form-control">
+                    </div>
+                  </div>
+                  <div class="col-sm-3">
+                    <label for="schedule-end" class="form-label fw-semibold">Fim</label>
+                    <div class="input-group">
+                      <span class="input-group-text bg-light text-secondary"><i class="bi bi-clock-history"></i></span>
+                      <input type="time" id="schedule-end" name="schedule-hora_fim" class="form-control">
+                    </div>
+                  </div>
+                </div>
+                <div class="mt-4">
+                  <button
+                    class="btn schedule-action-btn schedule-action-btn--muted btn-sm"
+                    type="button"
+                    data-bs-toggle="collapse"
+                    data-bs-target="#scheduleIntervalCollapse"
+                    aria-expanded="false"
+                    aria-controls="scheduleIntervalCollapse"
+                  >
+                    <i class="bi bi-arrow-repeat"></i>
+                    <span>Intervalo de atendimento opcional</span>
+                  </button>
+                  <div class="collapse mt-3" id="scheduleIntervalCollapse">
+                    <div class="row g-3">
+                      <div class="col-sm-6">
+                        <label for="schedule-interval-start" class="form-label fw-semibold">Início do intervalo</label>
+                        <div class="input-group">
+                          <span class="input-group-text bg-light text-secondary"><i class="bi bi-hourglass-split"></i></span>
+                          <input
+                            type="time"
+                            name="schedule-intervalo_inicio"
+                            id="schedule-interval-start"
+                            class="form-control"
+                          >
+                        </div>
+                      </div>
+                      <div class="col-sm-6">
+                        <label for="schedule-interval-end" class="form-label fw-semibold">Fim do intervalo</label>
+                        <div class="input-group">
+                          <span class="input-group-text bg-light text-secondary"><i class="bi bi-hourglass-bottom"></i></span>
+                          <input
+                            type="time"
+                            name="schedule-intervalo_fim"
+                            id="schedule-interval-end"
+                            class="form-control"
+                          >
+                        </div>
+                      </div>
+                    </div>
+                    <p class="form-text small mt-2 mb-0">Defina um período em que o colaborador ficará indisponível (por exemplo, horário de almoço).</p>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
         </form>
       </div>
-      <div class="modal-footer">
-        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
-        <button
-          type="submit"
-          form="schedule-edit-form"
-          class="btn btn-primary"
-          name="schedule-submit"
-          value="Salvar"
-        >Salvar</button>
+      <div class="modal-footer bg-white border-0 d-flex justify-content-between align-items-center">
+        <div class="small text-muted">
+          <i class="bi bi-shield-check me-1"></i>Alterações salvas atualizam instantaneamente o portal de agendamentos.
+        </div>
+        <div class="d-flex gap-2">
+          <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
+          <button
+            type="submit"
+            form="schedule-edit-form"
+            class="btn btn-primary"
+            name="schedule-submit"
+            value="Salvar"
+          >Salvar</button>
+        </div>
       </div>
     </div>
   </div>
@@ -317,10 +485,20 @@
 
 {% block scripts %}
 {{ super() }}
+<script src="{{ url_for('static', filename='appointments_schedule_toolbar.js') }}"></script>
+<script type="module">
+  import { setupAppointmentsCalendarSummary } from "{{ url_for('static', filename='appointments_calendar_summary.js') }}";
+  setupAppointmentsCalendarSummary();
+</script>
 <script type="module" src="{{ url_for('static', filename='appointments_table.js') }}"></script>
+<script type="module" src="{{ url_for('static', filename='appointments_new_consulta.js') }}"></script>
 <script>
 document.addEventListener('DOMContentLoaded', () => {
-  const vetField = {% if form %}document.getElementById('{{ form.veterinario_id.id }}'){% else %}null{% endif %};
+  let vetField = {% if form %}document.getElementById('{{ form.veterinario_id.id }}'){% else %}null{% endif %};
+  const vetSelectElements = Array.from(document.querySelectorAll('[data-schedule-vet-select]'));
+  if (!vetField && vetSelectElements.length) {
+    [vetField] = vetSelectElements;
+  }
   const dateField = {% if form %}document.getElementById('{{ form.date.id }}'){% else %}null{% endif %};
   const timeField = {% if form %}document.getElementById('{{ form.time.id }}'){% else %}null{% endif %};
   const timeFieldPlaceholder = timeField && timeField.dataset && timeField.dataset.placeholder
@@ -332,6 +510,26 @@ document.addEventListener('DOMContentLoaded', () => {
   const scheduleContainer = document.getElementById('schedule-overview');
   const scheduleCollapseEl = document.getElementById('scheduleOverviewCollapse');
   const scheduleToggleBtn = document.querySelector('[data-bs-target="#scheduleOverviewCollapse"]');
+  const scheduleSummaryEl = document.querySelector('[data-schedule-summary]');
+  const scheduleWeekLabelEl = document.querySelector('[data-schedule-week-label]');
+  const schedulePeriodFilter = document.querySelector('[data-schedule-period-filter]');
+  const scheduleWeekPrevBtn = document.querySelector('[data-schedule-week-prev]');
+  const scheduleWeekNextBtn = document.querySelector('[data-schedule-week-next]');
+  const scheduleWeekTodayBtn = document.querySelector('[data-schedule-week-today]');
+  const scheduleTitleEl = document.querySelector('[data-schedule-title]');
+  const scheduleTitleVetNameEl = scheduleTitleEl
+    ? scheduleTitleEl.querySelector('[data-schedule-vet-name]')
+    : document.querySelector('[data-schedule-vet-name]');
+  const scheduleToggleShowLabel = scheduleToggleBtn
+    ? (scheduleToggleBtn.dataset && scheduleToggleBtn.dataset.showLabel)
+      || scheduleToggleBtn.getAttribute('data-show-label')
+      || 'Mostrar agenda'
+    : 'Mostrar agenda';
+  const scheduleToggleHideLabel = scheduleToggleBtn
+    ? (scheduleToggleBtn.dataset && scheduleToggleBtn.dataset.hideLabel)
+      || scheduleToggleBtn.getAttribute('data-hide-label')
+      || 'Ocultar agenda'
+    : 'Ocultar agenda';
   const calendarContainer = document.querySelector('[data-calendar-redirect-url]');
   const calendarRedirectUrl = (calendarContainer && calendarContainer.dataset && calendarContainer.dataset.calendarRedirectUrl) || '';
   const newAppointmentCollapseEl = document.getElementById('newAppointmentForm');
@@ -340,546 +538,46 @@ document.addEventListener('DOMContentLoaded', () => {
     ? newAppointmentCollapseEl.querySelector('form')
     : null;
   const appointmentsContainer = document.querySelector('[data-appointments-container]');
-  const calendarSummaryPanel = document.querySelector('[data-calendar-summary-panel]');
-  const calendarSummaryList = calendarSummaryPanel
-    ? calendarSummaryPanel.querySelector('[data-calendar-summary-list]')
-    : null;
-  const calendarSummaryEmpty = calendarSummaryPanel
-    ? calendarSummaryPanel.querySelector('[data-calendar-summary-empty]')
-    : null;
-  const calendarSummaryTotalBadge = calendarSummaryPanel
-    ? calendarSummaryPanel.querySelector('[data-calendar-summary-total]')
-    : null;
-  const calendarSummaryColumn = document.querySelector('[data-calendar-summary-column]');
-  const calendarMainColumn = document.querySelector('[data-calendar-main-column]');
-  const calendarTabButtons = document.querySelectorAll('#appointments-calendar-tabs [data-bs-toggle="tab"]');
-  const calendarActiveTabStorageKey = 'appointmentsCalendarActiveTab';
-  const calendarMainColumnVisibleClasses = ['col-xl-8', 'col-xxl-9'];
-  const calendarMainColumnFullWidthClasses = ['col-xl-12', 'col-xxl-12'];
-  let activeCalendarSummaryVetId = null;
+  const calendarTabsEl = document.querySelector('[data-calendar-tabs]');
+  const scheduleTabButton = calendarTabsEl
+    ? calendarTabsEl.querySelector('[data-bs-target="#calendar-pane-full"]')
+    : document.querySelector('#appointments-calendar-tabs [data-bs-target="#calendar-pane-full"]');
   let newAppointmentCollapseInstance = null;
-
-  const calendarSummaryWeekdays = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
-
-  function setCalendarSummaryVisibility(shouldShow) {
-    if (calendarSummaryColumn) {
-      calendarSummaryColumn.classList.toggle('d-none', !shouldShow);
-    }
-    if (calendarMainColumn) {
-      calendarMainColumnVisibleClasses.forEach((className) => {
-        calendarMainColumn.classList.toggle(className, shouldShow);
-      });
-      calendarMainColumnFullWidthClasses.forEach((className) => {
-        calendarMainColumn.classList.toggle(className, !shouldShow);
-      });
-    }
-  }
-
-  function updateCalendarSummaryVisibilityFromTarget(targetSelector) {
-    const normalized = typeof targetSelector === 'string'
-      ? targetSelector.trim()
-      : '';
-    const shouldShow = normalized === '#calendar-pane-full'
-      || normalized === 'calendar-pane-full'
-      || normalized === '';
-    setCalendarSummaryVisibility(shouldShow);
-  }
-
-  function normalizeCalendarTabTarget(value) {
-    if (typeof value !== 'string') {
-      return '';
-    }
-    return value.trim();
-  }
-
-  function getStoredCalendarActiveTab() {
-    if (typeof window === 'undefined' || !window.localStorage) {
-      return '';
-    }
-    try {
-      const storedValue = window.localStorage.getItem(calendarActiveTabStorageKey);
-      return normalizeCalendarTabTarget(storedValue || '');
-    } catch (error) {
-      return '';
-    }
-  }
-
-  function storeCalendarActiveTab(target) {
-    if (typeof window === 'undefined' || !window.localStorage) {
-      return;
-    }
-    const normalized = normalizeCalendarTabTarget(target);
-    try {
-      if (normalized) {
-        window.localStorage.setItem(calendarActiveTabStorageKey, normalized);
-      } else {
-        window.localStorage.removeItem(calendarActiveTabStorageKey);
-      }
-    } catch (error) {
-      // Ignorado intencionalmente.
-    }
-  }
-
-  function showCalendarTab(button) {
-    if (!button) {
-      return false;
-    }
-    let bootstrapNamespace = null;
-    if (typeof window !== 'undefined'
-      && window.bootstrap
-      && window.bootstrap.Tab
-      && typeof window.bootstrap.Tab.getOrCreateInstance === 'function') {
-      bootstrapNamespace = window.bootstrap;
-    } else if (typeof bootstrap !== 'undefined'
-      && bootstrap
-      && bootstrap.Tab
-      && typeof bootstrap.Tab.getOrCreateInstance === 'function') {
-      bootstrapNamespace = bootstrap;
-    }
-    if (bootstrapNamespace) {
-      const tabInstance = bootstrapNamespace.Tab.getOrCreateInstance(button);
-      if (tabInstance && typeof tabInstance.show === 'function') {
-        tabInstance.show();
-        return true;
-      }
-    }
-    if (typeof button.click === 'function') {
-      button.click();
-      return true;
-    }
-    return false;
-  }
-
-  if (calendarTabButtons.length > 0) {
-    const calendarTabButtonsArray = Array.prototype.slice.call(calendarTabButtons);
-    const storedCalendarTabTarget = getStoredCalendarActiveTab();
-
-    calendarTabButtonsArray.forEach((button) => {
-      button.addEventListener('shown.bs.tab', (event) => {
-        const target = event && event.target
-          ? event.target.getAttribute('data-bs-target')
-          : '';
-        const normalizedTarget = normalizeCalendarTabTarget(target);
-        updateCalendarSummaryVisibilityFromTarget(normalizedTarget);
-        storeCalendarActiveTab(normalizedTarget);
-      });
-    });
-
-    if (storedCalendarTabTarget) {
-      const storedButton = calendarTabButtonsArray.find((button) => {
-        return normalizeCalendarTabTarget(button.getAttribute('data-bs-target')) === storedCalendarTabTarget;
-      });
-      if (storedButton) {
-        if (!storedButton.classList.contains('active')) {
-          const wasShown = showCalendarTab(storedButton);
-          if (!wasShown) {
-            updateCalendarSummaryVisibilityFromTarget(storedCalendarTabTarget);
-          }
-        } else {
-          updateCalendarSummaryVisibilityFromTarget(storedCalendarTabTarget);
-        }
-      } else {
-        storeCalendarActiveTab('');
-      }
-    }
-  }
-
-  const activeCalendarTab = document.querySelector('#appointments-calendar-tabs .nav-link.active[data-bs-target]');
-  if (activeCalendarTab) {
-    updateCalendarSummaryVisibilityFromTarget(activeCalendarTab.getAttribute('data-bs-target'));
+  let cachedScheduleDays = [];
+  let selectedScheduleSlotKey = '';
+  const todayIso = new Date().toISOString().split('T')[0];
+  let currentScheduleStart = (dateField && dateField.value) ? dateField.value : todayIso;
+  let currentVetId = '';
+  if (vetField && vetField.value) {
+    currentVetId = String(vetField.value).trim();
   } else {
-    updateCalendarSummaryVisibilityFromTarget('#calendar-pane-full');
+    const initialVetSelect = vetSelectElements.find((select) => select && select.value);
+    if (initialVetSelect) {
+      currentVetId = String(initialVetSelect.value).trim();
+    }
   }
+  const defaultScheduleSummary = scheduleSummaryEl
+    ? scheduleSummaryEl.textContent.trim()
+    : 'Selecione um profissional para visualizar a agenda.';
+  const defaultWeekLabel = scheduleWeekLabelEl
+    ? scheduleWeekLabelEl.textContent.trim()
+    : 'Aguardando seleção de profissional.';
+  const selectVetPrompt = defaultScheduleSummary || 'Selecione um profissional para visualizar a agenda.';
 
-  function padNumber(value) {
-    return String(value).padStart(2, '0');
-  }
-
-  function startOfDay(date) {
-    if (!(date instanceof Date) || Number.isNaN(date.getTime())) {
-      return null;
-    }
-    return new Date(date.getFullYear(), date.getMonth(), date.getDate());
-  }
-
-  function parseSummaryDate(value) {
-    if (!value) {
-      return null;
-    }
-    const parsed = new Date(value);
-    if (Number.isNaN(parsed.getTime())) {
-      return null;
-    }
-    return parsed;
-  }
-
-  function normalizeSummaryVetId(value) {
-    if (typeof window !== 'undefined'
-      && window.calendarVetColorManager
-      && typeof window.calendarVetColorManager.normalize === 'function') {
-      return window.calendarVetColorManager.normalize(value);
-    }
-    if (value === undefined || value === null) {
-      return null;
-    }
-    const normalized = String(value).trim();
-    return normalized || null;
-  }
-
-  function formatSummaryDateKey(date) {
-    if (!(date instanceof Date) || Number.isNaN(date.getTime())) {
-      return '';
-    }
-    return [
-      date.getFullYear(),
-      padNumber(date.getMonth() + 1),
-      padNumber(date.getDate()),
-    ].join('-');
-  }
-
-  function formatSummaryDayLabel(date) {
-    if (!(date instanceof Date) || Number.isNaN(date.getTime())) {
-      return '';
-    }
-    const weekday = calendarSummaryWeekdays[date.getDay()] || '';
-    return `${weekday} ${padNumber(date.getDate())}/${padNumber(date.getMonth() + 1)}`;
-  }
-
-  function deriveSummaryVetName(event, fallbackId) {
-    if (!event) {
-      return fallbackId ? `Profissional ${fallbackId}` : '';
-    }
-    const extended = event.extendedProps || {};
-    const preferredName = extended.veterinarioNome
-      || extended.veterinarioName
-      || extended.veterinarianName
-      || extended.vetName
-      || extended.nomeVeterinario;
-    if (preferredName) {
-      return preferredName;
-    }
-    const title = typeof event.title === 'string' ? event.title : '';
-    if (title.includes(' - ')) {
-      const possibleName = title.split(' - ').pop();
-      if (possibleName && possibleName.trim()) {
-        return possibleName.trim();
-      }
-    }
-    if (fallbackId) {
-      return `Profissional ${fallbackId}`;
-    }
-    return title || '';
-  }
-
-  function resolveSummaryColorClass(vetId) {
-    if (!vetId) {
-      return null;
-    }
-    if (typeof window !== 'undefined'
-      && window.calendarVetColorManager
-      && typeof window.calendarVetColorManager.getClass === 'function') {
-      return window.calendarVetColorManager.getClass(vetId);
-    }
-    return null;
-  }
-
-  function decorateSummaryItemWithVet(element, vetId) {
-    if (!element) {
-      return null;
-    }
-    const normalizedVetId = normalizeSummaryVetId(vetId);
-    if (!normalizedVetId) {
-      if (element.dataset) {
-        delete element.dataset.veterinarioId;
-        delete element.dataset.vetId;
-      }
-      element.removeAttribute('data-veterinario-id');
-      return null;
-    }
-
-    let colorClass = null;
-    if (typeof window !== 'undefined'
-      && window.calendarVetColorManager
-      && typeof window.calendarVetColorManager.applyClasses === 'function') {
-      colorClass = window.calendarVetColorManager.applyClasses(element, normalizedVetId, {
-        assignedClass: null,
-        clearWhenInvalid: true,
-      });
-    } else {
-      const classesToRemove = Array.from(element.classList).filter(cls => (
-        cls.startsWith('calendar-vet-color-') || cls.startsWith('calendar-vet-')
-      ));
-      classesToRemove.forEach(cls => element.classList.remove(cls));
-      element.classList.add(`calendar-vet-${normalizedVetId}`);
-      colorClass = resolveSummaryColorClass(normalizedVetId);
-      if (colorClass) {
-        element.classList.add(colorClass);
-      }
-      if (element.dataset) {
-        element.dataset.veterinarioId = normalizedVetId;
-      }
-      element.setAttribute('data-veterinario-id', normalizedVetId);
-    }
-
-    if (element.dataset) {
-      element.dataset.vetId = normalizedVetId;
-    }
-
-    return colorClass;
-  }
-
-  function computeSummaryMetrics(events) {
-    const summaryMap = new Map();
-    const today = startOfDay(new Date());
-    const todayKey = formatSummaryDateKey(today);
-    const startOfWeek = today ? new Date(today) : null;
-    if (startOfWeek) {
-      const weekDayIndex = (startOfWeek.getDay() + 6) % 7;
-      startOfWeek.setDate(startOfWeek.getDate() - weekDayIndex);
-    }
-    const endOfWeek = startOfWeek ? new Date(startOfWeek) : null;
-    if (endOfWeek) {
-      endOfWeek.setDate(endOfWeek.getDate() + 7);
-    }
-
-    (Array.isArray(events) ? events : []).forEach(event => {
-      if (!event || !event.extendedProps) {
+  function syncVetSelectValues(value, { source = null } = {}) {
+    const normalizedValue = value ? String(value).trim() : '';
+    vetSelectElements.forEach((select) => {
+      if (!select || select === source) {
         return;
       }
-      const vetId = normalizeSummaryVetId(
-        event.extendedProps.veterinarioId
-        || event.extendedProps.vetId
-        || event.extendedProps.veterinarianId
-        || event.extendedProps.specialistId
-        || event.extendedProps.specialist_id,
-      );
-      if (!vetId) {
-        return;
-      }
-      const eventDate = startOfDay(parseSummaryDate(event.start || event.startStr || event.date || null));
-      if (!eventDate) {
-        return;
-      }
-      const dateKey = formatSummaryDateKey(eventDate);
-      let entry = summaryMap.get(vetId);
-      if (!entry) {
-        entry = {
-          vetId,
-          vetName: deriveSummaryVetName(event, vetId),
-          total: 0,
-          today: 0,
-          thisWeek: 0,
-          byDate: new Map(),
-        };
-        summaryMap.set(vetId, entry);
-      } else if (!entry.vetName) {
-        entry.vetName = deriveSummaryVetName(event, vetId);
-      }
-      entry.total += 1;
-      if (todayKey && dateKey === todayKey) {
-        entry.today += 1;
-      }
-      if (startOfWeek && endOfWeek && eventDate >= startOfWeek && eventDate < endOfWeek) {
-        entry.thisWeek += 1;
-      }
-      const existing = entry.byDate.get(dateKey);
-      if (existing) {
-        existing.count += 1;
-      } else {
-        entry.byDate.set(dateKey, { count: 1, date: eventDate });
+      const currentValue = select.value ? String(select.value).trim() : '';
+      if (currentValue !== normalizedValue) {
+        select.value = normalizedValue;
       }
     });
-
-    const rows = Array.from(summaryMap.values());
-    rows.sort((a, b) => {
-      if (b.thisWeek !== a.thisWeek) {
-        return b.thisWeek - a.thisWeek;
-      }
-      if (b.total !== a.total) {
-        return b.total - a.total;
-      }
-      const nameA = a.vetName || a.vetId;
-      const nameB = b.vetName || b.vetId;
-      return nameA.localeCompare(nameB, undefined, { numeric: true, sensitivity: 'base' });
-    });
-
-    const totalEvents = rows.reduce((acc, item) => acc + item.total, 0);
-
-    return { rows, totalEvents };
-  }
-
-  function getUpcomingSummaryDays(entry, limit = 4) {
-    if (!entry || !entry.byDate) {
-      return [];
+    if ((!vetField || !vetField.isConnected) && vetSelectElements.length) {
+      vetField = vetSelectElements[0];
     }
-    const days = Array.from(entry.byDate.values())
-      .filter(item => item && item.date instanceof Date && !Number.isNaN(item.date.getTime()));
-    days.sort((a, b) => a.date - b.date);
-    const today = startOfDay(new Date());
-    const future = today ? days.filter(item => item.date >= today) : days;
-    const source = future.length ? future : days;
-    return source.slice(0, limit);
-  }
-
-  function refreshCalendarSummaryActiveState() {
-    if (!calendarSummaryList) {
-      return;
-    }
-    const items = calendarSummaryList.querySelectorAll('.calendar-summary-item');
-    items.forEach(element => {
-      const elementVetId = normalizeSummaryVetId(
-        element && element.dataset ? element.dataset.vetId : null,
-      );
-      if (activeCalendarSummaryVetId && elementVetId === activeCalendarSummaryVetId) {
-        element.classList.add('is-active');
-      } else {
-        element.classList.remove('is-active');
-      }
-    });
-  }
-
-  function setActiveCalendarSummaryItem(vetId) {
-    activeCalendarSummaryVetId = vetId ? normalizeSummaryVetId(vetId) : null;
-    refreshCalendarSummaryActiveState();
-  }
-
-  function renderCalendarSummary(events) {
-    if (!calendarSummaryPanel || !calendarSummaryList) {
-      return;
-    }
-    const { rows, totalEvents } = computeSummaryMetrics(events);
-    if (calendarSummaryTotalBadge) {
-      calendarSummaryTotalBadge.textContent = String(totalEvents);
-    }
-    calendarSummaryList.innerHTML = '';
-    if (!rows.length) {
-      if (calendarSummaryEmpty) {
-        calendarSummaryEmpty.classList.remove('d-none');
-      }
-      calendarSummaryPanel.classList.remove('has-data');
-      return;
-    }
-    calendarSummaryPanel.classList.add('has-data');
-    if (calendarSummaryEmpty) {
-      calendarSummaryEmpty.classList.add('d-none');
-    }
-
-    rows.forEach(entry => {
-      const item = document.createElement('li');
-      item.classList.add('calendar-summary-item');
-      decorateSummaryItemWithVet(item, entry.vetId);
-
-      const header = document.createElement('header');
-      header.classList.add('calendar-summary-header');
-
-      const nameWrapper = document.createElement('div');
-      nameWrapper.classList.add('calendar-summary-name');
-      const bullet = document.createElement('span');
-      bullet.classList.add('calendar-summary-bullet');
-      nameWrapper.appendChild(bullet);
-      const nameText = document.createElement('span');
-      nameText.textContent = entry.vetName || `Profissional ${entry.vetId}`;
-      nameWrapper.appendChild(nameText);
-      header.appendChild(nameWrapper);
-
-      const totalBadge = document.createElement('span');
-      totalBadge.classList.add('calendar-summary-total');
-      const totalLabel = document.createElement('span');
-      totalLabel.classList.add('label');
-      totalLabel.textContent = 'Total';
-      const totalValue = document.createElement('span');
-      totalValue.classList.add('value');
-      totalValue.textContent = String(entry.total);
-      totalBadge.appendChild(totalLabel);
-      totalBadge.appendChild(totalValue);
-      header.appendChild(totalBadge);
-
-      item.appendChild(header);
-
-      const metrics = document.createElement('ul');
-      metrics.classList.add('calendar-summary-metrics');
-      metrics.setAttribute('role', 'list');
-      const todayMetric = document.createElement('li');
-      todayMetric.classList.add('metric');
-      todayMetric.append('Hoje: ');
-      const todayValue = document.createElement('strong');
-      todayValue.textContent = String(entry.today);
-      todayMetric.appendChild(todayValue);
-      metrics.appendChild(todayMetric);
-
-      const weekMetric = document.createElement('li');
-      weekMetric.classList.add('metric');
-      weekMetric.append('Semana: ');
-      const weekValue = document.createElement('strong');
-      weekValue.textContent = String(entry.thisWeek);
-      weekMetric.appendChild(weekValue);
-      metrics.appendChild(weekMetric);
-
-      item.appendChild(metrics);
-
-      const upcomingDays = getUpcomingSummaryDays(entry);
-      if (upcomingDays.length) {
-        const dayList = document.createElement('ul');
-        dayList.classList.add('calendar-summary-days');
-        dayList.setAttribute('role', 'list');
-        upcomingDays.forEach(dayInfo => {
-          const dayItem = document.createElement('li');
-          dayItem.classList.add('calendar-summary-day');
-          const label = document.createElement('span');
-          label.classList.add('label');
-          label.textContent = formatSummaryDayLabel(dayInfo.date);
-          const count = document.createElement('span');
-          count.classList.add('count');
-          count.textContent = String(dayInfo.count);
-          dayItem.appendChild(label);
-          dayItem.appendChild(count);
-          dayList.appendChild(dayItem);
-        });
-        item.appendChild(dayList);
-      }
-
-      calendarSummaryList.appendChild(item);
-    });
-
-    refreshCalendarSummaryActiveState();
-  }
-
-  if (calendarSummaryPanel) {
-    const initialEvents = Array.isArray(window.sharedCalendarEvents)
-      ? window.sharedCalendarEvents
-      : [];
-    renderCalendarSummary(initialEvents);
-    document.addEventListener('sharedCalendarEvents', event => {
-      const items = (event && event.detail && event.detail.events) || [];
-      renderCalendarSummary(items);
-    });
-  }
-
-  if (calendarSummaryList) {
-    calendarSummaryList.addEventListener('click', event => {
-      const isTextNode = typeof Node !== 'undefined'
-        && event.target
-        && event.target.nodeType === Node.TEXT_NODE;
-      const origin = isTextNode ? event.target.parentElement : event.target;
-      const targetItem = origin && typeof origin.closest === 'function'
-        ? origin.closest('.calendar-summary-item')
-        : null;
-      if (!targetItem || !calendarSummaryList.contains(targetItem)) {
-        return;
-      }
-      const rawVetId = targetItem.dataset ? targetItem.dataset.vetId : null;
-      const normalizedVetId = normalizeSummaryVetId(rawVetId);
-      const isCurrentlyActive = Boolean(
-        activeCalendarSummaryVetId !== null
-        && normalizedVetId !== null
-        && normalizedVetId === activeCalendarSummaryVetId,
-      );
-      const nextActiveVetId = isCurrentlyActive ? null : normalizedVetId;
-      setActiveCalendarSummaryItem(nextActiveVetId);
-      if (typeof window.updateCalendarVetSelection === 'function') {
-        window.updateCalendarVetSelection(nextActiveVetId, { activate: true, refetch: true });
-      }
-    });
   }
 
   function updateNewAppointmentToggleAria() {
@@ -896,25 +594,147 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     const isShown = scheduleCollapseEl.classList.contains('show');
     scheduleToggleBtn.setAttribute('aria-expanded', isShown ? 'true' : 'false');
+    scheduleToggleBtn.textContent = isShown ? scheduleToggleHideLabel : scheduleToggleShowLabel;
+  }
+
+  function setScheduleNavigationDisabled(disabled) {
+    [scheduleWeekPrevBtn, scheduleWeekNextBtn, scheduleWeekTodayBtn].forEach((btn) => {
+      if (!btn) {
+        return;
+      }
+      btn.disabled = !!disabled;
+      btn.setAttribute('aria-disabled', disabled ? 'true' : 'false');
+    });
+    if (schedulePeriodFilter) {
+      schedulePeriodFilter.disabled = !!disabled;
+    }
+  }
+
+  function findVetLabelById(value) {
+    const normalized = value ? String(value).trim() : '';
+    if (!normalized) {
+      return '';
+    }
+    const selects = [];
+    if (vetField) {
+      selects.push(vetField);
+    }
+    vetSelectElements.forEach((select) => {
+      if (select && !selects.includes(select)) {
+        selects.push(select);
+      }
+    });
+    for (const select of selects) {
+      const option = Array.from(select.options || []).find((opt) => String(opt.value).trim() === normalized);
+      if (option) {
+        return option.textContent.trim();
+      }
+    }
+    return '';
+  }
+
+  function setScheduleTitleVetName(vetId, { label } = {}) {
+    if (!scheduleTitleVetNameEl) {
+      return;
+    }
+    const resolvedLabel = (label && label.trim()) || findVetLabelById(vetId);
+    if (resolvedLabel) {
+      scheduleTitleVetNameEl.textContent = resolvedLabel;
+      scheduleTitleVetNameEl.classList.remove('d-none');
+      scheduleTitleVetNameEl.setAttribute('aria-hidden', 'false');
+    } else {
+      scheduleTitleVetNameEl.textContent = '';
+      scheduleTitleVetNameEl.classList.add('d-none');
+      scheduleTitleVetNameEl.setAttribute('aria-hidden', 'true');
+    }
+  }
+
+  setScheduleTitleVetName(currentVetId);
+
+  function getBootstrapTabNamespace() {
+    if (window.bootstrap && window.bootstrap.Tab && typeof window.bootstrap.Tab.getOrCreateInstance === 'function') {
+      return window.bootstrap;
+    }
+    if (typeof bootstrap !== 'undefined'
+      && bootstrap
+      && bootstrap.Tab
+      && typeof bootstrap.Tab.getOrCreateInstance === 'function') {
+      return bootstrap;
+    }
+    return null;
+  }
+
+  function showScheduleTab() {
+    if (!scheduleTabButton) {
+      return false;
+    }
+    if (scheduleTabButton.classList.contains('active')) {
+      return true;
+    }
+    const namespace = getBootstrapTabNamespace();
+    if (namespace) {
+      const tabInstance = namespace.Tab.getOrCreateInstance(scheduleTabButton);
+      if (tabInstance && typeof tabInstance.show === 'function') {
+        tabInstance.show();
+        return true;
+      }
+    }
+    if (typeof scheduleTabButton.click === 'function') {
+      scheduleTabButton.click();
+      return true;
+    }
+    return false;
   }
 
   function ensureNewAppointmentVisible() {
-    if (!newAppointmentCollapseEl || !window.bootstrap || !bootstrap.Collapse) {
+    if (!newAppointmentCollapseEl) {
       return;
     }
-    if (!newAppointmentCollapseInstance) {
-      newAppointmentCollapseInstance = bootstrap.Collapse.getOrCreateInstance(
-        newAppointmentCollapseEl,
-        { toggle: false }
-      );
+
+    if (window.bootstrap && bootstrap.Collapse) {
+      if (!newAppointmentCollapseInstance) {
+        newAppointmentCollapseInstance = bootstrap.Collapse.getOrCreateInstance(
+          newAppointmentCollapseEl,
+          { toggle: false }
+        );
+      }
+      if (!newAppointmentCollapseEl.classList.contains('show')) {
+        newAppointmentCollapseInstance.show();
+      }
+    } else if (!newAppointmentCollapseEl.classList.contains('show')) {
+      newAppointmentCollapseEl.classList.add('show');
+      newAppointmentCollapseEl.style.height = 'auto';
+      newAppointmentCollapseEl.removeAttribute('aria-hidden');
     }
-    if (!newAppointmentCollapseEl.classList.contains('show')) {
-      newAppointmentCollapseInstance.show();
-    }
+
     if (newAppointmentToggleBtn) {
       newAppointmentToggleBtn.setAttribute('aria-expanded', 'true');
     }
+
     updateNewAppointmentToggleAria();
+  }
+
+  function scrollNewAppointmentIntoView() {
+    if (!newAppointmentCollapseEl) {
+      return;
+    }
+
+    window.setTimeout(() => {
+      try {
+        newAppointmentCollapseEl.scrollIntoView({
+          behavior: 'smooth',
+          block: 'start',
+          inline: 'nearest',
+        });
+      } catch (error) {
+        const rect = newAppointmentCollapseEl.getBoundingClientRect();
+        const absoluteTop = rect.top + window.pageYOffset;
+        window.scrollTo({
+          top: Math.max(absoluteTop - 24, 0),
+          behavior: 'smooth',
+        });
+      }
+    }, 200);
   }
 
   function focusFirstAppointmentField() {
@@ -928,6 +748,33 @@ document.addEventListener('DOMContentLoaded', () => {
     window.setTimeout(() => {
       firstField.focus({ preventScroll: false });
     }, 150);
+  }
+
+  function openNewAppointmentWithDetail(detail) {
+    if (!detail || typeof detail !== 'object') {
+      detail = {};
+    }
+
+    ensureNewAppointmentVisible();
+
+    if (dateField && detail.date) {
+      dateField.value = detail.date;
+      dateField.dispatchEvent(new Event('change', { bubbles: true }));
+    }
+
+    if (timeField) {
+      if (detail.time) {
+        timeField.value = detail.time;
+        timeField.dataset.currentTime = detail.time;
+        timeField.dispatchEvent(new Event('change', { bubbles: true }));
+      } else if (timeField.dataset && 'currentTime' in timeField.dataset) {
+        timeField.dataset.currentTime = '';
+      }
+    }
+
+    handleVetChange();
+    focusFirstAppointmentField();
+    scrollNewAppointmentIntoView();
   }
 
   function setTimeFieldMessage(message, { disable = false } = {}) {
@@ -1012,12 +859,23 @@ document.addEventListener('DOMContentLoaded', () => {
     timeField.dataset.currentTime = timeField.value;
   }
 
-  async function updateTimes() {
-    if (!vetField || !dateField || !timeField) return;
-    const vetId = vetField.value;
-    const date = dateField.value;
+  async function updateTimes(forcedVetId) {
+    if (!dateField || !timeField) {
+      return;
+    }
 
-    if (!vetId || !date) {
+    const vetSource = forcedVetId !== undefined
+      ? forcedVetId
+      : (vetField ? vetField.value : currentVetId);
+    const vetId = vetSource ? String(vetSource).trim() : '';
+    const date = dateField.value ? String(dateField.value).trim() : '';
+
+    if (!vetId) {
+      setTimeFieldMessage(selectVetPrompt, { disable: true });
+      return;
+    }
+
+    if (!date) {
       setTimeFieldMessage(timeFieldPlaceholder, { disable: true });
       return;
     }
@@ -1050,63 +908,498 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
-  function badge(text, cls) {
-    const span = document.createElement('span');
-    span.className = `badge ${cls} me-1 mb-1`;
-    span.textContent = text;
-    return span;
-  }
+    function normalizeIsoDate(value) {
+      if (!value) {
+        return '';
+      }
+      const raw = String(value).trim();
+      if (!raw) {
+        return '';
+      }
+      const normalized = raw.includes('T') ? raw.split('T')[0] : raw;
+      const date = new Date(`${normalized}T00:00:00`);
+      if (Number.isNaN(date.getTime())) {
+        return '';
+      }
+      return date.toISOString().split('T')[0];
+    }
 
-  async function loadSchedule() {
-    if (!vetField || !scheduleContainer) return;
-    const vetId = vetField.value;
-    if (!vetId) { scheduleContainer.innerHTML = ''; return; }
-    const start = dateField && dateField.value ? dateField.value : new Date().toISOString().split('T')[0];
-    const resp = await fetch(`/api/specialist/${vetId}/weekly_schedule?start=${start}`);
-    const days = await resp.json();
-    scheduleContainer.innerHTML = '';
-    days.forEach(day => {
+    function shiftIsoDate(base, amount) {
+      const normalized = normalizeIsoDate(base) || todayIso;
+      const reference = new Date(`${normalized}T00:00:00`);
+      reference.setDate(reference.getDate() + amount);
+      return reference.toISOString().split('T')[0];
+    }
+
+    function formatDateLabel(dateString, { variant = 'short', includeWeekday = true } = {}) {
+      const normalized = normalizeIsoDate(dateString);
+      if (!normalized) {
+        return '';
+      }
+      const date = new Date(`${normalized}T00:00:00`);
+      const options = variant === 'long'
+        ? { day: '2-digit', month: 'long' }
+        : { day: '2-digit', month: '2-digit' };
+      if (includeWeekday) {
+        options.weekday = variant === 'long' ? 'long' : 'short';
+      }
+      return date.toLocaleDateString('pt-BR', options);
+    }
+
+    function formatWeekRange(days) {
+      const normalizedStart = normalizeIsoDate(currentScheduleStart) || todayIso;
+      let rangeStart = normalizedStart;
+      let rangeEnd = shiftIsoDate(rangeStart, 6);
+      if (Array.isArray(days) && days.length) {
+        const firstDay = normalizeIsoDate(days[0].date) || rangeStart;
+        const lastDay = normalizeIsoDate(days[days.length - 1].date) || firstDay;
+        rangeStart = firstDay;
+        rangeEnd = lastDay;
+      }
+      const startLabel = formatDateLabel(rangeStart, { variant: 'short', includeWeekday: true }) || rangeStart;
+      const endLabel = formatDateLabel(rangeEnd, { variant: 'short', includeWeekday: true }) || rangeEnd;
+      return `Semana de ${startLabel} a ${endLabel}`;
+    }
+
+    function getPeriodFromTime(time) {
+      if (!time) {
+        return 'all';
+      }
+      const [hourPart] = time.split(':');
+      const hour = Number.parseInt(hourPart, 10);
+      if (Number.isNaN(hour)) {
+        return 'all';
+      }
+      if (hour < 12) {
+        return 'morning';
+      }
+      if (hour < 18) {
+        return 'afternoon';
+      }
+      return 'evening';
+    }
+
+    function filterSlotsByPeriod(slots, period) {
+      if (!Array.isArray(slots) || period === 'all') {
+        return Array.isArray(slots) ? [...slots] : [];
+      }
+      return slots.filter((slot) => getPeriodFromTime(slot) === period);
+    }
+
+    function setScheduleSummaryMessage(message) {
+      if (!scheduleSummaryEl) {
+        return;
+      }
+      scheduleSummaryEl.textContent = message;
+    }
+
+    function setScheduleWeekLabel(message) {
+      if (!scheduleWeekLabelEl) {
+        return;
+      }
+      scheduleWeekLabelEl.textContent = message;
+    }
+
+    function setScheduleEmptyState(message, tone = 'light') {
+      if (!scheduleContainer) {
+        return;
+      }
+      scheduleContainer.innerHTML = '';
       const col = document.createElement('div');
       col.className = 'col';
-      const card = document.createElement('div');
-      const cardClass = day.available.length ? 'border-success' : 'border-danger';
-      card.className = `card h-100 ${cardClass}`;
-      const body = document.createElement('div');
-      body.className = 'card-body';
-      const title = document.createElement('h6');
-      title.className = 'card-title fw-bold';
-      title.textContent = new Date(day.date).toLocaleDateString('pt-BR', { weekday: 'short', day: '2-digit', month: '2-digit' });
-      body.appendChild(title);
-      const slots = document.createElement('div');
-      day.available.forEach(t => slots.appendChild(badge(t, 'bg-success')));
-      day.booked.forEach(t => slots.appendChild(badge(t, 'bg-danger')));
-      day.not_working.forEach(t => slots.appendChild(badge(t, 'bg-danger')));
-      if (!slots.children.length) {
-        const span = document.createElement('span');
-        span.className = 'text-muted small';
-        span.textContent = 'Folga';
-        slots.appendChild(span);
-      }
-      body.appendChild(slots);
-      card.appendChild(body);
-      col.appendChild(card);
+      const alert = document.createElement('div');
+      alert.className = `alert alert-${tone} border-0 mb-0`;
+      alert.textContent = message;
+      col.appendChild(alert);
       scheduleContainer.appendChild(col);
-    });
+    }
+
+  function clearScheduleForNoVet() {
+    cachedScheduleDays = [];
+    selectedScheduleSlotKey = '';
+    setScheduleNavigationDisabled(true);
+    setScheduleEmptyState(selectVetPrompt, 'light');
+    setScheduleSummaryMessage(selectVetPrompt);
+    setScheduleWeekLabel(defaultWeekLabel || 'Aguardando seleção de profissional.');
+    setScheduleTitleVetName('', { label: '' });
+    if (timeField) {
+      setTimeFieldMessage(selectVetPrompt, { disable: true });
+    }
   }
 
-  function handleVetChange() {
-    if (!vetField && !dateField && !timeField && !scheduleContainer) {
-      return;
+    function showScheduleLoading() {
+      if (!scheduleContainer) {
+        return;
+      }
+      setScheduleSummaryMessage('Carregando agenda...');
+      setScheduleWeekLabel('Atualizando agenda...');
+      scheduleContainer.innerHTML = '';
+      const col = document.createElement('div');
+      col.className = 'col';
+      const wrapper = document.createElement('div');
+      wrapper.className = 'd-flex align-items-center justify-content-center text-muted py-4';
+      wrapper.innerHTML = '<div class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></div>Carregando agenda...';
+      col.appendChild(wrapper);
+      scheduleContainer.appendChild(col);
     }
-    updateTimes();
-    loadSchedule();
-    const vetIdValue = vetField ? vetField.value : null;
-    if (typeof window.updateCalendarVetSelection === 'function') {
-      window.updateCalendarVetSelection(vetIdValue, { activate: false, refetch: true });
-    } else if (window.sharedCalendar && typeof window.sharedCalendar.refetchEvents === 'function') {
-      window.sharedCalendar.refetchEvents();
+
+    function ensureTimeFieldOption(time) {
+      if (!timeField) {
+        return;
+      }
+      const options = Array.from(timeField.options || []);
+      let option = options.find((opt) => opt.value === time);
+      if (!option) {
+        option = document.createElement('option');
+        option.value = time;
+        option.textContent = time;
+        timeField.appendChild(option);
+      }
+      timeField.disabled = false;
+      timeField.value = time;
     }
-  }
+
+    function createSlotButton(time, status, { date }) {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'btn schedule-action-btn schedule-action-btn--sm schedule-slot flex-shrink-0';
+      button.dataset.scheduleSlot = time;
+      button.dataset.scheduleDate = date;
+      button.dataset.scheduleStatus = status;
+      button.dataset.scheduleSlotKey = `${date}T${time}`;
+      let iconClass = 'bi-clock';
+      if (status === 'available') {
+        iconClass = 'bi-check-circle';
+        button.classList.add('schedule-action-btn--success', 'schedule-slot--available');
+        button.setAttribute('aria-pressed', 'false');
+        button.dataset.schedulePeriod = getPeriodFromTime(time);
+        button.title = 'Selecionar horário disponível';
+      } else if (status === 'booked') {
+        iconClass = 'bi-x-circle';
+        button.classList.add('schedule-action-btn--danger', 'schedule-slot--booked');
+        button.disabled = true;
+        button.setAttribute('aria-disabled', 'true');
+        button.title = 'Horário indisponível';
+      } else {
+        iconClass = 'bi-slash-circle';
+        button.classList.add('schedule-action-btn--neutral', 'schedule-slot--off');
+        button.disabled = true;
+        button.setAttribute('aria-disabled', 'true');
+        button.title = 'Fora do expediente';
+      }
+      button.innerHTML = `<i class="bi ${iconClass}"></i><span>${time}</span>`;
+      if (status === 'available') {
+        button.addEventListener('click', () => {
+          selectedScheduleSlotKey = button.dataset.scheduleSlotKey;
+          ensureTimeFieldOption(time);
+          if (timeField) {
+            timeField.dispatchEvent(new Event('change', { bubbles: true }));
+          }
+          if (dateField && dateField.value !== date) {
+            dateField.value = date;
+            dateField.dispatchEvent(new Event('change', { bubbles: true }));
+          }
+          refreshSlotSelection();
+        });
+      }
+      return button;
+    }
+
+    function refreshSlotSelection() {
+      if (!scheduleContainer) {
+        return;
+      }
+      const buttons = scheduleContainer.querySelectorAll('[data-schedule-slot-key]');
+      buttons.forEach((button) => {
+        if (button.dataset.scheduleStatus !== 'available') {
+          return;
+        }
+        const isSelected = selectedScheduleSlotKey === button.dataset.scheduleSlotKey;
+        button.classList.toggle('schedule-slot--selected', isSelected);
+        button.setAttribute('aria-pressed', isSelected ? 'true' : 'false');
+      });
+      const cards = scheduleContainer.querySelectorAll('[data-schedule-day]');
+      cards.forEach((card) => {
+        const isSelectedDay = Boolean(selectedScheduleSlotKey) && selectedScheduleSlotKey.startsWith(`${card.dataset.scheduleDay}T`);
+        card.classList.toggle('border-primary', isSelectedDay);
+        card.classList.toggle('border-3', isSelectedDay);
+        card.classList.toggle('shadow', isSelectedDay);
+        card.classList.toggle('shadow-sm', !isSelectedDay);
+      });
+    }
+
+    function updateScheduleSummary(days) {
+      if (!scheduleSummaryEl) {
+        return;
+      }
+      if (!Array.isArray(days) || !days.length) {
+        setScheduleSummaryMessage('Nenhum horário disponível para o período selecionado.');
+        return;
+      }
+      const period = schedulePeriodFilter ? schedulePeriodFilter.value : 'all';
+      for (const day of days) {
+        const normalizedDate = normalizeIsoDate(day.date);
+        if (!normalizedDate) {
+          continue;
+        }
+        const availableSlots = filterSlotsByPeriod(Array.isArray(day.available) ? day.available : [], period);
+        if (availableSlots.length) {
+          const label = formatDateLabel(normalizedDate, { variant: 'long', includeWeekday: true }) || normalizedDate;
+          setScheduleSummaryMessage(`Próximo horário livre: ${label} às ${availableSlots[0]}`);
+          return;
+        }
+      }
+      setScheduleSummaryMessage('Nenhum horário disponível para o período selecionado.');
+    }
+
+    function updateScheduleWeekLabel(days) {
+      setScheduleWeekLabel(formatWeekRange(days));
+    }
+
+    function renderSchedule(days) {
+      if (!scheduleContainer) {
+        return;
+      }
+      const scheduleDays = Array.isArray(days) ? days : [];
+      scheduleContainer.innerHTML = '';
+      if (!scheduleDays.length) {
+        setScheduleEmptyState('Nenhuma disponibilidade encontrada para o período selecionado.', 'light');
+        updateScheduleSummary(scheduleDays);
+        updateScheduleWeekLabel(scheduleDays);
+        selectedScheduleSlotKey = '';
+        refreshSlotSelection();
+        return;
+      }
+      const period = schedulePeriodFilter ? schedulePeriodFilter.value : 'all';
+      scheduleDays.forEach((day) => {
+        const normalizedDate = normalizeIsoDate(day.date);
+        if (!normalizedDate) {
+          return;
+        }
+        const col = document.createElement('div');
+        col.className = 'col';
+        const card = document.createElement('div');
+        card.className = 'card h-100 shadow-sm position-relative border-1';
+        const availableCount = Array.isArray(day.available) ? day.available.length : 0;
+        const bookedCount = Array.isArray(day.booked) ? day.booked.length : 0;
+        const notWorkingCount = Array.isArray(day.not_working) ? day.not_working.length : 0;
+        const hasAvailability = availableCount > 0;
+        const baseBorderClass = hasAvailability
+          ? 'border-success'
+          : (bookedCount > 0 ? 'border-danger' : 'border-secondary');
+        card.classList.add(baseBorderClass);
+        card.dataset.scheduleDay = normalizedDate;
+        if (todayIso === normalizedDate) {
+          const todayBadge = document.createElement('span');
+          todayBadge.className = 'schedule-chip schedule-chip--primary position-absolute top-0 end-0 translate-middle-y me-3 mt-3';
+          todayBadge.textContent = 'Hoje';
+          card.appendChild(todayBadge);
+        }
+        const body = document.createElement('div');
+        body.className = 'card-body d-flex flex-column';
+        const title = document.createElement('h6');
+        title.className = 'card-title fw-bold text-capitalize mb-1';
+        title.textContent = formatDateLabel(normalizedDate, { variant: 'short', includeWeekday: true }) || normalizedDate;
+        body.appendChild(title);
+        const subtitle = document.createElement('p');
+        subtitle.className = 'text-muted small text-capitalize mb-3';
+        subtitle.textContent = formatDateLabel(normalizedDate, { variant: 'long', includeWeekday: true }) || '';
+        body.appendChild(subtitle);
+
+        const totalSlots = availableCount + bookedCount;
+        if (totalSlots > 0) {
+          const statsRow = document.createElement('div');
+          statsRow.className = 'd-flex justify-content-between align-items-center text-muted small mb-2';
+          statsRow.innerHTML = `<span><i class="bi bi-check-circle-fill text-success me-1"></i>${availableCount} livre(s)</span><span><i class="bi bi-x-circle-fill text-danger me-1"></i>${bookedCount} ocupado(s)</span>`;
+          body.appendChild(statsRow);
+
+          const progress = document.createElement('div');
+          progress.className = 'progress bg-light-subtle mb-3';
+          const availablePercent = Math.round((availableCount / totalSlots) * 100);
+          const bookedPercent = Math.max(0, 100 - availablePercent);
+          const availableBar = document.createElement('div');
+          availableBar.className = 'progress-bar bg-success';
+          availableBar.style.width = `${availablePercent}%`;
+          availableBar.setAttribute('aria-label', `${availableCount} horário(s) livre(s)`);
+          progress.appendChild(availableBar);
+          if (bookedPercent > 0) {
+            const bookedBar = document.createElement('div');
+            bookedBar.className = 'progress-bar bg-danger';
+            bookedBar.style.width = `${bookedPercent}%`;
+            bookedBar.setAttribute('aria-label', `${bookedCount} horário(s) ocupado(s)`);
+            progress.appendChild(bookedBar);
+          }
+          body.appendChild(progress);
+        } else if (!hasAvailability && notWorkingCount === 0) {
+          const badgeInfo = document.createElement('span');
+          badgeInfo.className = 'schedule-chip schedule-chip--neutral align-self-start mb-3';
+          badgeInfo.textContent = 'Sem horários cadastrados.';
+          body.appendChild(badgeInfo);
+        }
+
+        const slotsWrapper = document.createElement('div');
+        slotsWrapper.className = 'd-flex flex-wrap gap-2';
+        const availableSlots = Array.isArray(day.available) ? day.available : [];
+        const filteredAvailable = filterSlotsByPeriod(availableSlots, period);
+        if (filteredAvailable.length) {
+          filteredAvailable.forEach((slot) => {
+            slotsWrapper.appendChild(createSlotButton(slot, 'available', { date: normalizedDate }));
+          });
+        } else if (availableSlots.length && period !== 'all') {
+          const noPeriod = document.createElement('div');
+          noPeriod.className = 'text-muted small fst-italic';
+          noPeriod.textContent = 'Sem horários no período selecionado.';
+          slotsWrapper.appendChild(noPeriod);
+        }
+        (Array.isArray(day.booked) ? day.booked : []).forEach((slot) => {
+          slotsWrapper.appendChild(createSlotButton(slot, 'booked', { date: normalizedDate }));
+        });
+        (Array.isArray(day.not_working) ? day.not_working : []).forEach((slot) => {
+          slotsWrapper.appendChild(createSlotButton(slot, 'not_working', { date: normalizedDate }));
+        });
+        if (!slotsWrapper.children.length) {
+          const fallback = document.createElement('div');
+          fallback.className = 'text-muted small fst-italic';
+          fallback.textContent = 'Fora do expediente.';
+          slotsWrapper.appendChild(fallback);
+        }
+        body.appendChild(slotsWrapper);
+        card.appendChild(body);
+        col.appendChild(card);
+        scheduleContainer.appendChild(col);
+      });
+
+      updateScheduleSummary(scheduleDays);
+      updateScheduleWeekLabel(scheduleDays);
+      refreshSlotSelection();
+    }
+
+    async function loadSchedule({ showLoading = true, vetId: requestedVetId } = {}) {
+      if (!scheduleContainer) {
+        return;
+      }
+
+      const resolvedVetId = requestedVetId !== undefined
+        ? requestedVetId
+        : (currentVetId || (vetField ? vetField.value : ''));
+      const activeVetId = resolvedVetId ? String(resolvedVetId).trim() : '';
+
+      if (!activeVetId) {
+        clearScheduleForNoVet();
+        return;
+      }
+
+      currentVetId = activeVetId;
+      setScheduleNavigationDisabled(false);
+
+      const start = normalizeIsoDate(currentScheduleStart)
+        || (dateField && normalizeIsoDate(dateField.value))
+        || todayIso;
+      currentScheduleStart = start;
+
+      if (showLoading) {
+        showScheduleLoading();
+      }
+
+      try {
+        const response = await fetch(`/api/specialist/${activeVetId}/weekly_schedule?start=${start}`);
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}`);
+        }
+        const days = await response.json();
+        cachedScheduleDays = Array.isArray(days) ? days : [];
+        renderSchedule(cachedScheduleDays);
+      } catch (error) {
+        console.warn('Não foi possível carregar os horários disponíveis.', error);
+        setScheduleNavigationDisabled(false);
+        setScheduleEmptyState('Não foi possível carregar a agenda no momento. Tente novamente.', 'danger');
+        setScheduleSummaryMessage('Não foi possível carregar a agenda.');
+        setScheduleWeekLabel('Erro ao carregar agenda.');
+      }
+    }
+
+    function handleVetChange(payload) {
+      if (!vetField && !dateField && !timeField && !scheduleContainer) {
+        return;
+      }
+
+      const isEvent = payload && typeof payload === 'object' && 'target' in payload;
+      const target = isEvent ? payload.target : null;
+      let vetLabelFromPayload = '';
+      if (payload && typeof payload === 'object' && 'vetLabel' in payload && payload.vetLabel !== undefined) {
+        vetLabelFromPayload = payload.vetLabel;
+      }
+      let nextVetId;
+
+      if (typeof payload === 'string' || typeof payload === 'number') {
+        nextVetId = payload;
+      } else if (payload && typeof payload === 'object' && 'vetId' in payload && payload.vetId !== undefined) {
+        nextVetId = payload.vetId;
+      } else if (isEvent && payload.target && typeof payload.target.hasAttribute === 'function'
+        && payload.target.hasAttribute('data-schedule-vet-select')) {
+        nextVetId = payload.target.value;
+      }
+
+      if (isEvent && target && target.matches && target.matches('[data-schedule-vet-select]')) {
+        if (target.selectedOptions && target.selectedOptions.length) {
+          vetLabelFromPayload = vetLabelFromPayload || target.selectedOptions[0].textContent || '';
+        }
+      }
+
+      if (nextVetId !== undefined) {
+        currentVetId = nextVetId ? String(nextVetId).trim() : '';
+      } else if (vetField) {
+        currentVetId = vetField.value ? String(vetField.value).trim() : '';
+      } else if (vetSelectElements.length) {
+        const fallbackSelect = vetSelectElements.find((select) => select && select.value);
+        currentVetId = fallbackSelect ? String(fallbackSelect.value).trim() : '';
+      }
+
+      if (!vetField && target && target.matches && target.matches('[data-schedule-vet-select]')) {
+        vetField = target;
+      }
+
+      syncVetSelectValues(currentVetId, { source: target });
+
+      const effectiveLabel = vetLabelFromPayload || findVetLabelById(currentVetId);
+      setScheduleTitleVetName(currentVetId, { label: effectiveLabel });
+
+      const isVetChange = Boolean(target && typeof target.hasAttribute === 'function' && target.hasAttribute('data-schedule-vet-select'));
+      const isDateChange = Boolean(target && target === dateField);
+
+      if (isVetChange) {
+        selectedScheduleSlotKey = '';
+      }
+
+      if (!currentVetId) {
+        clearScheduleForNoVet();
+        if (typeof window.updateCalendarVetSelection === 'function') {
+          window.updateCalendarVetSelection('', { activate: false, refetch: true });
+        } else if (window.sharedCalendar && typeof window.sharedCalendar.refetchEvents === 'function') {
+          window.sharedCalendar.refetchEvents();
+        }
+        return;
+      }
+
+      if (dateField && dateField.value) {
+        currentScheduleStart = normalizeIsoDate(dateField.value) || currentScheduleStart || todayIso;
+      } else if (isVetChange || isDateChange) {
+        currentScheduleStart = todayIso;
+      }
+
+      if (typeof updateTimes === 'function') {
+        updateTimes(currentVetId);
+      }
+
+      const shouldShowLoading = !scheduleCollapseEl || scheduleCollapseEl.classList.contains('show');
+      loadSchedule({ showLoading: shouldShowLoading, vetId: currentVetId });
+
+      if (typeof window.updateCalendarVetSelection === 'function') {
+        window.updateCalendarVetSelection(currentVetId, { activate: false, refetch: true });
+      } else if (window.sharedCalendar && typeof window.sharedCalendar.refetchEvents === 'function') {
+        window.sharedCalendar.refetchEvents();
+      }
+    }
 
   window.handleVetChange = handleVetChange;
 
@@ -1120,6 +1413,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const scheduleEndInput = scheduleForm ? scheduleForm.querySelector('#schedule-end') : null;
   const scheduleIntervalStart = scheduleForm ? scheduleForm.querySelector('#schedule-interval-start') : null;
   const scheduleIntervalEnd = scheduleForm ? scheduleForm.querySelector('#schedule-interval-end') : null;
+  const scheduleIntervalCollapse = scheduleForm ? document.getElementById('scheduleIntervalCollapse') : null;
   const scheduleSlotInput = scheduleForm ? scheduleForm.querySelector('#schedule-slot-id') : null;
   const scheduleActionTemplate = scheduleForm
     ? (scheduleForm.dataset && scheduleForm.dataset.actionTemplate)
@@ -1221,6 +1515,15 @@ document.addEventListener('DOMContentLoaded', () => {
       scheduleIntervalEnd.value = context.intervaloFim || '';
     }
 
+    if (scheduleIntervalCollapse && window.bootstrap && typeof bootstrap.Collapse === 'function') {
+      const collapseInstance = bootstrap.Collapse.getOrCreateInstance(scheduleIntervalCollapse, { toggle: false });
+      if (context.intervaloInicio || context.intervaloFim) {
+        collapseInstance.show();
+      } else {
+        collapseInstance.hide();
+      }
+    }
+
     clearScheduleFeedback();
     updateScheduleFormAction();
   }
@@ -1305,7 +1608,7 @@ document.addEventListener('DOMContentLoaded', () => {
         return;
       }
 
-      const successMessage = (payload && payload.message) || 'Horário atualizado com sucesso.';
+      const successMessage = (payload && payload.message) || 'Horários atualizados com sucesso.';
       showScheduleFeedback('success', successMessage);
 
       try {
@@ -1385,6 +1688,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!detail.date) {
       return;
     }
+    showScheduleTab();
     if (!dateField) {
       if (calendarRedirectUrl) {
         const targetUrl = new URL(calendarRedirectUrl, window.location.origin);
@@ -1397,27 +1701,49 @@ document.addEventListener('DOMContentLoaded', () => {
       return;
     }
 
-    ensureNewAppointmentVisible();
-
-    dateField.value = detail.date;
-    dateField.dispatchEvent(new Event('change', { bubbles: true }));
-
-    if (timeField && detail.time) {
-      timeField.value = detail.time;
-      timeField.dataset.currentTime = detail.time;
-      timeField.dispatchEvent(new Event('change', { bubbles: true }));
-    }
-
-    handleVetChange();
-
-    focusFirstAppointmentField();
+    openNewAppointmentWithDetail(detail);
   });
 
   timeField && timeField.addEventListener('change', () => {
     timeField.dataset.currentTime = timeField.value;
   });
 
-  vetField && vetField.addEventListener('change', handleVetChange);
+  if (schedulePeriodFilter) {
+    schedulePeriodFilter.addEventListener('change', () => {
+      selectedScheduleSlotKey = '';
+      renderSchedule(cachedScheduleDays);
+    });
+  }
+
+  function navigateSchedule(offsetDays) {
+    currentScheduleStart = shiftIsoDate(currentScheduleStart, offsetDays);
+    selectedScheduleSlotKey = '';
+    const shouldShowLoading = !scheduleCollapseEl || scheduleCollapseEl.classList.contains('show');
+    loadSchedule({ showLoading: shouldShowLoading });
+  }
+
+  if (scheduleWeekPrevBtn) {
+    scheduleWeekPrevBtn.addEventListener('click', () => navigateSchedule(-7));
+  }
+  if (scheduleWeekNextBtn) {
+    scheduleWeekNextBtn.addEventListener('click', () => navigateSchedule(7));
+  }
+  if (scheduleWeekTodayBtn) {
+    scheduleWeekTodayBtn.addEventListener('click', () => {
+      currentScheduleStart = todayIso;
+      selectedScheduleSlotKey = '';
+      const shouldShowLoading = !scheduleCollapseEl || scheduleCollapseEl.classList.contains('show');
+      loadSchedule({ showLoading: shouldShowLoading });
+    });
+  }
+
+  vetSelectElements.forEach((select) => {
+    if (!select || select.dataset.scheduleVetBound === 'true') {
+      return;
+    }
+    select.dataset.scheduleVetBound = 'true';
+    select.addEventListener('change', handleVetChange);
+  });
   dateField && dateField.addEventListener('change', handleVetChange);
   handleVetChange();
 
