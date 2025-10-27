@@ -62,6 +62,7 @@ def test_owner_can_add_staff(monkeypatch, app):
         assert b"Permiss\xc3\xb5es do Funcion\xc3\xa1rio" in resp.data
         staff = ClinicStaff.query.filter_by(clinic_id=clinic.id, user_id=staff_user.id).first()
         assert staff is not None
+        assert staff_user.worker == "colaborador"
 
 
 def test_owner_can_add_staff_json(monkeypatch, app):
@@ -85,6 +86,7 @@ def test_owner_can_add_staff_json(monkeypatch, app):
         assert resp.status_code == 200
         assert resp.json['success'] is True
         assert "s@example.com" in resp.json['html']
+        assert staff_user.worker == "colaborador"
 
 
 def test_add_staff_forbidden_json(monkeypatch, app):
@@ -126,6 +128,8 @@ def test_veterinarian_added_as_staff_appears(monkeypatch, app):
         login(monkeypatch, owner)
         client.post(f"/clinica/{clinic.id}/funcionarios", data={"email": "v@example.com"})
         assert vet.clinica_id == clinic.id
+        assert vet.membership is not None
+        assert vet.membership.is_active()
         resp = client.get(f"/clinica/{clinic.id}")
         assert b"Vet" in resp.data
 

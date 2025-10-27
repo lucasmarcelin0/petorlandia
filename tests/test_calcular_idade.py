@@ -17,3 +17,8 @@ def test_calcular_idade_months():
 def test_calcular_idade_years():
     nasc = date.today() - relativedelta(years=2, months=5)
     assert calcular_idade(nasc) == 2
+
+
+def test_calcular_idade_future_date():
+    nasc = date.today() + relativedelta(days=1)
+    assert calcular_idade(nasc) == ''

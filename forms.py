@@ -1,4 +1,5 @@
 from flask_wtf import FlaskForm
+from sqlalchemy import or_, false
 from wtforms import (
     StringField,
     TextAreaField,
@@ -13,7 +14,15 @@ from wtforms import (
     DateTimeField,
     TimeField,
 )
-from wtforms.validators import DataRequired, Email, EqualTo, Length, Optional, NumberRange
+from wtforms.validators import (
+    DataRequired,
+    Email,
+    EqualTo,
+    Length,
+    Optional,
+    NumberRange,
+    ValidationError,
+)
 from flask_wtf.file import FileField, FileAllowed
 
 
@@ -106,6 +115,12 @@ class LoginForm(FlaskForm):
 class AnimalForm(FlaskForm):
     name = StringField('Nome do Animal', validators=[DataRequired()])
     age = StringField('Idade', validators=[DataRequired()])
+    age_unit = SelectField(
+        'Unidade da Idade',
+        choices=[('anos', 'anos'), ('meses', 'meses')],
+        default='anos',
+        validators=[DataRequired()],
+    )
     date_of_birth = DateField('Data de Nascimento', format='%Y-%m-%d', validators=[Optional()])
     sex = SelectField('Sexo', choices=[('Macho', 'Macho'), ('Fêmea', 'Fêmea')], validators=[DataRequired()])
     description = TextAreaField('Descrição', validators=[Optional(), Length(max=500)])
@@ -134,6 +149,7 @@ class EditProfileForm(FlaskForm):
     email = StringField('E-mail', validators=[DataRequired(), Email()])
     phone = StringField('Telefone', validators=[Optional(), Length(max=20)])
     address = StringField('Endereço', validators=[Optional(), Length(max=200)])
+    is_private = BooleanField('Manter perfil privado', default=True)
     profile_photo = FileField('Foto de Perfil', validators=[
     Optional(),
     FileAllowed(['jpg', 'jpeg', 'png', 'gif'], 'Somente imagens!')
@@ -320,12 +336,20 @@ class ClinicAddStaffForm(FlaskForm):
     submit = SubmitField('Adicionar')
 
 
+class ClinicAddSpecialistForm(FlaskForm):
+    """Form to associate an existing veterinarian as a clinic specialist."""
+
+    email = StringField('Email do especialista', validators=[DataRequired(), Email()])
+    submit = SubmitField('Adicionar especialista')
+
+
 class ClinicStaffPermissionForm(FlaskForm):
     can_manage_clients = BooleanField('Clientes')
     can_manage_animals = BooleanField('Animais')
     can_manage_staff = BooleanField('Funcionários')
     can_manage_schedule = BooleanField('Agenda')
     can_manage_inventory = BooleanField('Estoque')
+    can_view_full_calendar = BooleanField('Visualizar agenda completa da clínica', default=True)
     submit = SubmitField('Salvar')
 
 
@@ -334,6 +358,32 @@ class InventoryItemForm(FlaskForm):
     quantity = IntegerField('Quantidade', validators=[DataRequired(), NumberRange(min=0)])
     unit = StringField('Unidade', validators=[Optional(), Length(max=50)])
     submit = SubmitField('Adicionar')
+
+
+class VeterinarianPromotionForm(FlaskForm):
+    crmv = StringField(
+        'CRMV',
+        validators=[DataRequired(), Length(max=20)],
+        filters=[_strip_filter],
+    )
+    phone = StringField(
+        'Telefone profissional',
+        validators=[Optional(), Length(max=20)],
+        filters=[_strip_filter],
+    )
+    submit = SubmitField('Promover a Veterinário')
+
+
+class VeterinarianMembershipCheckoutForm(FlaskForm):
+    submit = SubmitField('Ativar assinatura')
+
+
+class VeterinarianMembershipCancelTrialForm(FlaskForm):
+    submit = SubmitField('Cancelar avaliação gratuita')
+
+
+class VeterinarianMembershipRequestNewTrialForm(FlaskForm):
+    submit = SubmitField('Iniciar nova avaliação gratuita')
 
 
 class VetScheduleForm(FlaskForm):
@@ -414,16 +464,25 @@ class OrcamentoForm(FlaskForm):
 class AppointmentForm(FlaskForm):
     """Formulário para agendamento de consultas."""
 
+    tutor_id = SelectField(
+        'Tutor',
+        coerce=int,
+        validators=[Optional()],
+        default=0,
+    )
+
     animal_id = SelectField(
         'Animal',
         coerce=int,
         validators=[DataRequired()],
+        validate_choice=False,
     )
 
     veterinario_id = SelectField(
         'Veterinário',
         coerce=int,
         validators=[DataRequired()],
+        validate_choice=False,
     )
 
     date = DateField(
@@ -458,23 +517,244 @@ class AppointmentForm(FlaskForm):
 
     submit = SubmitField('Agendar')
 
-    def __init__(self, tutor=None, is_veterinario=False, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        from models import Animal, Veterinario
+    animal_data = None
 
-        if is_veterinario:
-            animals = Animal.query.all()
-        elif tutor is not None:
-            animals = Animal.query.filter_by(user_id=tutor.id).all()
-        else:
-            animals = Animal.query.all()
+    def populate_animals(
+        self,
+        animals,
+        *,
+        restrict_tutors=False,
+        selected_tutor_id=None,
+        allow_all_option=True,
+    ):
+        """Populate animal choices and tutor selector metadata."""
 
-        self.animal_id.choices = [(a.id, a.name) for a in animals]
+        def _normalize_tutor_name(name, tutor_id):
+            if name:
+                return name
+            if tutor_id:
+                return f'Tutor #{tutor_id}'
+            return 'Tutor não atribuído'
 
-        veterinarios = Veterinario.query.all()
-        self.veterinario_id.choices = [
-            (v.id, v.user.name if v.user else str(v.id)) for v in veterinarios
+        records = []
+        tutor_map = {}
+        def _compose_animal_label(name, tutor_display_name):
+            base_name = name or 'Animal sem nome'
+            if tutor_display_name:
+                return f"{base_name} — {tutor_display_name}"
+            return base_name
+
+        for animal in animals:
+            tutor_id = getattr(animal, 'user_id', None)
+            owner = getattr(animal, 'owner', None)
+            tutor_name = getattr(owner, 'name', None)
+            animal_id = getattr(animal, 'id', None)
+            if animal_id is None:
+                continue
+            normalized_tutor_name = _normalize_tutor_name(tutor_name, tutor_id)
+            animal_name = getattr(animal, 'name', None) or f'Animal #{animal_id}'
+            record = {
+                'id': animal_id,
+                'name': animal_name,
+                'tutor_id': tutor_id,
+                'tutor_name': normalized_tutor_name,
+                'label': _compose_animal_label(animal_name, normalized_tutor_name),
+            }
+            records.append(record)
+            if tutor_id:
+                tutor_map[tutor_id] = normalized_tutor_name
+
+        records.sort(key=lambda item: ((item['name'] or '').lower(), item['id']))
+        self.animal_data = records
+        self.animal_id.choices = [
+            (item['id'], item['label']) for item in records
         ]
+
+        if not hasattr(self, 'tutor_id'):
+            return
+
+        sorted_tutors = sorted(
+            tutor_map.items(),
+            key=lambda entry: (entry[1] or '').lower(),
+        )
+
+        choices = []
+        if allow_all_option and (not restrict_tutors or len(sorted_tutors) > 1):
+            choices.append((0, 'Todos os tutores'))
+        choices.extend(
+            (tutor_id, name or f'Tutor #{tutor_id}')
+            for tutor_id, name in sorted_tutors
+        )
+
+        if not choices:
+            if allow_all_option:
+                choices = [(0, 'Todos os tutores')]
+            else:
+                choices = [(0, 'Nenhum tutor disponível')]
+
+        self.tutor_id.choices = choices
+
+        available_ids = {choice[0] for choice in choices}
+        resolved_tutor_id = selected_tutor_id if selected_tutor_id in available_ids else None
+        if resolved_tutor_id is None:
+            if restrict_tutors and sorted_tutors:
+                resolved_tutor_id = sorted_tutors[0][0]
+            elif 0 in available_ids:
+                resolved_tutor_id = 0
+            elif sorted_tutors:
+                resolved_tutor_id = sorted_tutors[0][0]
+            else:
+                resolved_tutor_id = 0
+
+        self.tutor_id.data = resolved_tutor_id
+
+    def __init__(
+        self,
+        tutor=None,
+        is_veterinario=False,
+        clinic_ids=None,
+        *args,
+        **kwargs,
+    ):
+        self._restricted_tutor_id = getattr(tutor, 'id', None)
+        self._clinic_scope_ids = []
+        require_clinic_scope = kwargs.pop('require_clinic_scope', None)
+        if clinic_ids is not None:
+            if isinstance(clinic_ids, (list, tuple, set)):
+                candidates = clinic_ids
+            else:
+                candidates = [clinic_ids]
+            for candidate in candidates:
+                try:
+                    value = int(candidate)
+                except (TypeError, ValueError):
+                    continue
+                if value and value not in self._clinic_scope_ids:
+                    self._clinic_scope_ids.append(value)
+        self._clinic_scope_ids = [cid for cid in self._clinic_scope_ids if cid]
+        if require_clinic_scope is None:
+            require_clinic_scope = bool(is_veterinario)
+        self._clinic_scope_required = bool(require_clinic_scope)
+        self._is_veterinario_context = bool(is_veterinario)
+        super().__init__(*args, **kwargs)
+        from models import Animal, Veterinario, Clinica
+
+        self._restricted_tutor_id = getattr(tutor, 'id', None)
+
+        def _build_animal_query():
+            query = Animal.query.filter(Animal.removido_em.is_(None))
+            if self._clinic_scope_required and not self._clinic_scope_ids:
+                return query.filter(false())
+            if self._clinic_scope_ids:
+                query = query.filter(Animal.clinica_id.in_(self._clinic_scope_ids))
+            if self._restricted_tutor_id is not None:
+                query = query.filter(Animal.user_id == self._restricted_tutor_id)
+            return query
+
+        def _build_veterinarian_query():
+            query = Veterinario.query
+            if self._clinic_scope_ids:
+                query = query.filter(
+                    or_(
+                        Veterinario.clinica_id.in_(self._clinic_scope_ids),
+                        Veterinario.clinicas.any(Clinica.id.in_(self._clinic_scope_ids)),
+                    )
+                )
+            return query
+
+        self._animal_query_factory = _build_animal_query
+        self._veterinarian_query_factory = _build_veterinarian_query
+
+        selected_animal_id = self.animal_id.data
+        animal_query = self._animal_query_factory()
+        if selected_animal_id:
+            animals = animal_query.filter(Animal.id == selected_animal_id).all()
+        else:
+            animals = animal_query.all()
+
+        restrict_tutors = self._restricted_tutor_id is not None
+        allow_all = not restrict_tutors
+        selected_tutor_id = None
+        if restrict_tutors:
+            selected_tutor_id = self._restricted_tutor_id
+        elif animals:
+            selected_tutor_id = getattr(animals[0], 'user_id', None)
+        else:
+            selected_tutor_id = self.tutor_id.data
+
+        self.populate_animals(
+            animals,
+            restrict_tutors=restrict_tutors,
+            selected_tutor_id=selected_tutor_id,
+            allow_all_option=allow_all,
+        )
+
+        selected_vet_id = self.veterinario_id.data
+        veterinarian_query = self._veterinarian_query_factory()
+        if selected_vet_id:
+            veterinarios = veterinarian_query.filter(Veterinario.id == selected_vet_id).all()
+        else:
+            veterinarios = veterinarian_query.all()
+
+        def _vet_label(vet):
+            return getattr(getattr(vet, 'user', None), 'name', None) or str(vet.id)
+
+        self.veterinario_id.choices = [
+            (v.id, _vet_label(v)) for v in veterinarios
+        ]
+
+        if selected_vet_id and selected_vet_id not in {choice[0] for choice in self.veterinario_id.choices}:
+            vet = Veterinario.query.get(selected_vet_id)
+            if vet:
+                self.veterinario_id.choices.append((vet.id, _vet_label(vet)))
+
         if not self.kind.data:
             self.kind.data = 'consulta'
+
+    def _animal_lookup_query(self):
+        from models import Animal
+
+        query = Animal.query.filter(Animal.removido_em.is_(None))
+        if self._clinic_scope_required and not self._clinic_scope_ids:
+            return query.filter(false())
+        if self._clinic_scope_ids:
+            query = query.filter(Animal.clinica_id.in_(self._clinic_scope_ids))
+        if self._restricted_tutor_id is not None:
+            query = query.filter(Animal.user_id == self._restricted_tutor_id)
+        return query
+
+    def _veterinarian_lookup_query(self):
+        from models import Veterinario, Clinica
+
+        query = Veterinario.query
+        if self._clinic_scope_ids:
+            query = query.filter(
+                or_(
+                    Veterinario.clinica_id.in_(self._clinic_scope_ids),
+                    Veterinario.clinicas.any(Clinica.id.in_(self._clinic_scope_ids)),
+                )
+            )
+        return query
+
+    def validate_animal_id(self, field):
+        if not field.data:
+            raise ValidationError('Selecione um animal válido.')
+
+        query = self._animal_lookup_query()
+        from models import Animal
+
+        animal = query.filter(Animal.id == field.data).first()
+        if not animal:
+            raise ValidationError('Selecione um animal válido para esta clínica.')
+
+    def validate_veterinario_id(self, field):
+        if not field.data:
+            raise ValidationError('Selecione um veterinário válido.')
+
+        query = self._veterinarian_lookup_query()
+        from models import Veterinario
+
+        veterinario = query.filter(Veterinario.id == field.data).first()
+        if not veterinario:
+            raise ValidationError('Selecione um veterinário válido para esta clínica.')
 

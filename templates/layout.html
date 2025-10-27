@@ -465,18 +465,7 @@
                                 </li>
                             {% endif %}
 
-                            {% if current_user.worker == 'veterinario' %}
-                                <li class="nav-item position-relative">
-                                    <a class="nav-link" href="{{ url_for('clinic_invites') }}">
-                                        <i class="fas fa-envelope me-1 text-warning"></i> Convites
-                                        {% if pending_clinic_invites > 0 %}
-                                            <span class="badge rounded-pill bg-danger position-absolute top-0 start-100 translate-middle">{{ pending_clinic_invites }}</span>
-                                        {% endif %}
-                                    </a>
-                                </li>
-                            {% endif %}
-
-                            {% if current_user.worker == 'veterinario' %}
+                            {% if is_active_veterinarian %}
                                 <li class="nav-item position-relative">
                                     <a class="nav-link" href="{{ url_for('appointments') }}">
                                         <i class="fas fa-calendar-alt me-1 text-success"></i> Agenda
@@ -519,7 +508,10 @@
                                 {% if current_user.veterinario or (current_user.clinica and current_user.worker == 'colaborador') %}
                                 <li><a class="dropdown-item" href="{{ url_for('minha_clinica') }}"><i class="fas fa-clinic-medical me-2 text-info"></i> Minha Clínica</a></li>
                                 {% endif %}
-                
+                                {% if has_veterinarian_profile_flag %}
+                                <li><a class="dropdown-item" href="{{ url_for('veterinarian_membership') }}"><i class="fas fa-credit-card me-2 text-success"></i> Assinatura de Veterinário</a></li>
+                                {% endif %}
+
                                 <li><a class="dropdown-item" href="{{ url_for('logout') }}"><i class="fas fa-sign-out-alt me-2 text-danger"></i> Sair</a></li>
                             </ul>
                         </li>
@@ -659,31 +651,70 @@
 
   <script>
     document.addEventListener('DOMContentLoaded', () => {
-      document.querySelectorAll('.js-delivery-form').forEach(form => {
-        form.addEventListener('submit', async ev => {
-          ev.preventDefault();
-          const url = form.action;
-          const resp = await fetchOrQueue(url, {method: 'POST', headers: {'Accept': 'application/json'}});
-          if (resp && resp.ok) {
-            const data = await resp.json();
-            if (data.redirect) {
-              window.location.href = data.redirect;
-              return;
-            }
-            const toastEl = document.getElementById('actionToast');
-            toastEl.querySelector('.toast-body').textContent = data.message || 'Sucesso';
-            toastEl.classList.remove('bg-danger', 'bg-info', 'bg-success');
-            toastEl.classList.add('bg-' + (data.category || 'success'));
-            new bootstrap.Toast(toastEl).show();
-          } else if (resp) {
-            const toastEl = document.getElementById('actionToast');
-            toastEl.querySelector('.toast-body').textContent = 'Erro ao processar ação';
-            toastEl.classList.remove('bg-success', 'bg-info');
-            toastEl.classList.add('bg-danger');
-            new bootstrap.Toast(toastEl).show();
+      const refreshDeliverySections = async () => {
+        const container = document.getElementById('delivery-sections');
+        if (!container) return;
+        try {
+          const resp = await fetch('/delivery_requests', {
+            headers: {'X-Requested-With': 'XMLHttpRequest'}
+          });
+          if (!resp.ok) return;
+          const data = await resp.json();
+          if (data.html) {
+            container.innerHTML = data.html;
           }
+          if (data.counts) {
+            const mapping = {
+              'available-count': data.counts.available_total,
+              'doing-count': data.counts.doing,
+              'done-count': data.counts.done,
+              'canceled-count': data.counts.canceled,
+            };
+            Object.entries(mapping).forEach(([id, value]) => {
+              const el = document.getElementById(id);
+              if (el) {
+                el.textContent = value;
+              }
+            });
+          }
+          attachDeliveryFormListeners();
+        } catch (err) {
+          console.error('Erro ao atualizar entregas', err);
+        }
+      };
+
+      const attachDeliveryFormListeners = () => {
+        document.querySelectorAll('.js-delivery-form').forEach(form => {
+          if (form.dataset.deliveryListenerAttached === 'true') return;
+          form.dataset.deliveryListenerAttached = 'true';
+          form.addEventListener('submit', async ev => {
+            ev.preventDefault();
+            const url = form.action;
+            const resp = await fetchOrQueue(url, {method: 'POST', headers: {'Accept': 'application/json'}});
+            if (resp && resp.ok) {
+              const data = await resp.json();
+              if (data.redirect) {
+                window.location.href = data.redirect;
+                return;
+              }
+              const toastEl = document.getElementById('actionToast');
+              toastEl.querySelector('.toast-body').textContent = data.message || 'Sucesso';
+              toastEl.classList.remove('bg-danger', 'bg-info', 'bg-success');
+              toastEl.classList.add('bg-' + (data.category || 'success'));
+              new bootstrap.Toast(toastEl).show();
+              await refreshDeliverySections();
+            } else if (resp) {
+              const toastEl = document.getElementById('actionToast');
+              toastEl.querySelector('.toast-body').textContent = 'Erro ao processar ação';
+              toastEl.classList.remove('bg-success', 'bg-info');
+              toastEl.classList.add('bg-danger');
+              new bootstrap.Toast(toastEl).show();
+            }
+          });
         });
-      });
+      };
+
+      attachDeliveryFormListeners();
 
       document.querySelectorAll('.js-cart-form').forEach(form => {
         form.addEventListener('submit', async ev => {
@@ -824,29 +855,100 @@
     });
   </script>
   <script>
+    const escapeHtml = (str) => {
+      const div = document.createElement('div');
+      div.textContent = str;
+      return div.innerHTML;
+    };
+
     document.addEventListener('DOMContentLoaded', () => {
       document.querySelectorAll('.js-msg-form').forEach(form => {
         form.addEventListener('submit', async ev => {
           ev.preventDefault();
+          const textarea = form.querySelector('textarea');
+          const rawContent = textarea ? textarea.value : '';
+          const content = rawContent.trim();
+          if (!content) {
+            return;
+          }
+
+          const submitBtn = form.querySelector('button[type="submit"]');
+          if (submitBtn) {
+            submitBtn.disabled = true;
+          }
+
           const api = form.dataset.api || form.action;
           const formData = new FormData(form);
-          const resp = await fetchOrQueue(api, {
-            method: 'POST',
-            body: formData,
-            headers: { 'Accept': 'text/html' }
-          });
+          if (textarea && textarea.name) {
+            formData.set(textarea.name, content);
+          }
+
+          let placeholder = null;
+          const container = document.getElementById('mensagens-container');
+          if (container) {
+            placeholder = document.createElement('div');
+            placeholder.className = 'mb-2 text-end js-msg-placeholder';
+            placeholder.innerHTML = `
+              <div class="p-2 rounded bg-info-subtle position-relative">
+                <small>Você:</small><br>
+                ${escapeHtml(content).replace(/\n/g, '<br>')}
+                <div class="text-muted small js-status">Enviando...</div>
+              </div>`;
+            container.insertAdjacentElement('beforeend', placeholder);
+            container.scrollTop = container.scrollHeight;
+          }
+
+          if (textarea) {
+            textarea.value = '';
+            textarea.dispatchEvent(new Event('input', { bubbles: true }));
+            textarea.focus();
+          }
+
+          let resp = null;
+          try {
+            resp = await fetchOrQueue(api, {
+              method: 'POST',
+              body: formData,
+              headers: { 'Accept': 'text/html' }
+            });
+          } catch (err) {
+            resp = null;
+          }
+
+          const enableButton = () => {
+            if (submitBtn) {
+              submitBtn.disabled = false;
+            }
+          };
+
           if (resp && resp.ok) {
             const html = await resp.text();
-            const container = document.getElementById('mensagens-container');
-            if (container) {
+            if (placeholder) {
+              placeholder.insertAdjacentHTML('afterend', html);
+              placeholder.remove();
+            } else if (container) {
               container.insertAdjacentHTML('beforeend', html);
               container.scrollTop = container.scrollHeight;
             }
-            const textarea = form.querySelector('textarea');
-            if (textarea) textarea.value = '';
-          } else if (resp) {
-            form.submit();
+          } else if (resp === null) {
+            if (placeholder) {
+              const status = placeholder.querySelector('.js-status');
+              if (status) {
+                status.textContent = 'Mensagem aguardando conexão...';
+              }
+              placeholder.dataset.status = 'queued';
+            }
+          } else {
+            if (placeholder) {
+              const status = placeholder.querySelector('.js-status');
+              if (status) {
+                status.textContent = 'Falha ao enviar. Tente novamente.';
+              }
+              placeholder.dataset.status = 'error';
+            }
           }
+
+          enableButton();
         });
       });
     });
@@ -902,6 +1004,7 @@
   <script src="{{ url_for('static', filename='masks.js') }}"></script>
   <script src="{{ url_for('static', filename='avatar_helper.js') }}"></script>
   <script src="{{ url_for('static', filename='js/mobile.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/search_filters.js') }}"></script>
   <!-- Page specific scripts -->
   {% block scripts %}{% endblock %}
 </body>
