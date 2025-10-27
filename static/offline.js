@@ -73,11 +73,21 @@
   document.addEventListener('DOMContentLoaded', sendQueued);
 
   function showToast(message, category='success'){
+    if (typeof window.showAccessibleToast === 'function') {
+      window.showAccessibleToast(message, category);
+      return;
+    }
     const toastEl = document.getElementById('actionToast');
     if(!toastEl) return;
-    toastEl.querySelector('.toast-body').textContent = message;
+    const toastBody = toastEl.querySelector('.toast-body');
+    if (toastBody) {
+      toastBody.textContent = message;
+    }
     toastEl.classList.remove('bg-danger','bg-info','bg-success');
     toastEl.classList.add('bg-' + category);
+    const isCritical = category === 'danger';
+    toastEl.setAttribute('role', isCritical ? 'alert' : 'status');
+    toastEl.setAttribute('aria-live', isCritical ? 'assertive' : 'polite');
     bootstrap.Toast.getOrCreateInstance(toastEl).show();
   }
 
@@ -132,6 +142,25 @@
       if(data.html){
         const cont=document.getElementById('tutores-adicionados');
         if(cont) cont.innerHTML=data.html;
+      }
+      if (data && data.tutor && typeof document !== 'undefined') {
+        const tutorId = String(data.tutor.id);
+        const tutorLabel = data.tutor.display_name || data.tutor.name || `Tutor #${tutorId}`;
+        const selects = document.querySelectorAll('[data-appointment-tutor-select]');
+        selects.forEach((select) => {
+          if (!(select instanceof HTMLSelectElement)) return;
+          let option = Array.from(select.options).find((opt) => opt.value === tutorId);
+          if (!option) {
+            option = document.createElement('option');
+            option.value = tutorId;
+            select.appendChild(option);
+          }
+          option.textContent = tutorLabel;
+          option.dataset.tutorId = tutorId;
+          option.dataset.tutorName = tutorLabel;
+          select.value = tutorId;
+          select.dispatchEvent(new Event('change', { bubbles: true }));
+        });
       }
       form.reset();
       const btn=form.querySelector('button[type="submit"]');

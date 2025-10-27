@@ -1,56 +1,82 @@
 {% if animal.blocos_prescricao %}
-<div class="card mb-3">
+<div class="prescricao-history card mb-3">
   <div class="card-body">
-    <h5 class="card-title">📜 Histórico de Prescrições</h5>
-
-    {% for bloco in animal.blocos_prescricao|reverse %}
-    <div class="border rounded p-3 mb-3">
-      <h6 class="text-muted">Prescrição feita em {{ bloco.data_criacao|format_datetime_brazil('%d/%m/%Y %H:%M') }}</h6>
-
-      <ul class="list-group list-group-flush mb-2">
-        {% for item in bloco.prescricoes %}
-        <li class="list-group-item">
-          <strong>{{ item.medicamento }}</strong> —
-          {% if item.dosagem or item.frequencia or item.duracao %}
-            {{ item.dosagem or '–' }}, {{ item.frequencia or '–' }}, por {{ item.duracao or '–' }}
-            {% if item.observacoes %}
-              <br><em>Obs:</em> {{ item.observacoes }}
-            {% endif %}
-          {% else %}
-            <em>{{ item.observacoes or '–' }}</em>
-          {% endif %}
-        </li>
-        {% endfor %}
-      </ul>
-
-      {% if bloco.instrucoes_gerais %}
-      <div class="alert alert-secondary py-2" role="alert">
-        <strong>Orientações e Cuidados:</strong> {{ bloco.instrucoes_gerais }}
-      </div>
-      {% endif %}
-
-      <!-- Botões de ação -->
-      <div class="d-flex flex-wrap gap-2">
-        <form method="POST"
-              action="{{ url_for('deletar_bloco_prescricao', bloco_id=bloco.id) }}"
-              class="d-inline delete-history-form" data-sync
-              data-target="historico-prescricoes"
-              data-confirm="Deseja mesmo excluir este bloco de prescrições?">
-          <button class="btn btn-danger btn-sm">🗑 Excluir</button>
-        </form>
-
-        <a href="{{ url_for('imprimir_bloco_prescricao', bloco_id=bloco.id) }}"
-           class="btn btn-outline-secondary btn-sm" target="_blank">
-          🖨 Imprimir
-        </a>
-
-        <a href="{{ url_for('editar_bloco_prescricao', bloco_id=bloco.id) }}"
-           class="btn btn-outline-primary btn-sm">
-          ✏️ Editar
-        </a>
-      </div>
+    <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3">
+      <h5 class="card-title mb-0">📜 Histórico de Prescrições</h5>
+      <span class="text-muted small">Visualize, imprima ou edite cada prescrição emitida para este paciente.</span>
     </div>
-    {% endfor %}
+
+    <div class="prescricao-history__grid">
+      {% for bloco in animal.blocos_prescricao|reverse %}
+        <article class="prescricao-card">
+          <header class="prescricao-card__header">
+            <div>
+              <span class="prescricao-card__tag">Prescrição</span>
+              <h6 class="prescricao-card__title">Emitida em {{ bloco.data_criacao|format_datetime_brazil('%d/%m/%Y %H:%M') }}</h6>
+            </div>
+            <div class="prescricao-card__meta">
+              <span>ID #{{ bloco.id }}</span>
+              {% if bloco.prescricoes and bloco.prescricoes[0].data_prescricao %}
+                <span>Atualizado em {{ bloco.prescricoes[0].data_prescricao|format_datetime_brazil('%d/%m/%Y') }}</span>
+              {% endif %}
+            </div>
+          </header>
+
+          <ul class="prescricao-card__list">
+            {% for item in bloco.prescricoes %}
+              <li class="prescricao-card__item">
+                <div class="prescricao-card__item-head">
+                  <strong>{{ item.medicamento }}</strong>
+                  {% if item.dosagem or item.frequencia or item.duracao %}
+                    <div class="prescricao-card__pill-group">
+                      {% if item.dosagem %}<span class="prescricao-card__pill">Dosagem: {{ item.dosagem }}</span>{% endif %}
+                      {% if item.frequencia %}<span class="prescricao-card__pill">Frequência: {{ item.frequencia }}</span>{% endif %}
+                      {% if item.duracao %}<span class="prescricao-card__pill">Duração: {{ item.duracao }}</span>{% endif %}
+                    </div>
+                  {% endif %}
+                </div>
+                {% set texto_livre = (not (item.dosagem or item.frequencia or item.duracao)) %}
+                {% if item.observacoes %}
+                  <p class="prescricao-card__obs">{{ item.observacoes }}</p>
+                {% elif texto_livre %}
+                  <p class="prescricao-card__obs text-muted">Posologia detalhada diretamente na consulta.</p>
+                {% endif %}
+              </li>
+            {% endfor %}
+          </ul>
+
+          {% if bloco.instrucoes_gerais %}
+            <div class="prescricao-card__note">
+              <span class="prescricao-card__note-label">Orientações gerais</span>
+              <p class="mb-0">{{ bloco.instrucoes_gerais }}</p>
+            </div>
+          {% endif %}
+
+          <footer class="prescricao-card__footer">
+            <form method="POST"
+                  action="{{ url_for('deletar_bloco_prescricao', bloco_id=bloco.id) }}"
+                  class="delete-history-form"
+                  data-sync
+                  data-target="historico-prescricoes"
+                  data-confirm="Deseja mesmo excluir este bloco de prescrições?">
+              <button class="btn btn-outline-danger btn-sm">
+                <i class="fas fa-trash-alt me-1"></i>Excluir
+              </button>
+            </form>
+            <div class="d-flex gap-2">
+              <a href="{{ url_for('imprimir_bloco_prescricao', bloco_id=bloco.id) }}"
+                 class="btn btn-outline-secondary btn-sm" target="_blank">
+                <i class="fas fa-print me-1"></i>Imprimir
+              </a>
+              <a href="{{ url_for('editar_bloco_prescricao', bloco_id=bloco.id) }}"
+                 class="btn btn-primary btn-sm">
+                <i class="fas fa-pen me-1"></i>Editar
+              </a>
+            </div>
+          </footer>
+        </article>
+      {% endfor %}
+    </div>
   </div>
 </div>
 {% else %}
