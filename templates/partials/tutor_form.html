@@ -1,99 +1,109 @@
 {% set has_tutor = tutor is defined and tutor %}
 {% from 'components/photo_cropper.html' import photo_cropper %}
+{% from 'macros/ui.html' import ui_button, ui_form_group %}
 
 <!-- 🔍 Busca de Tutor - Melhorado com acessibilidade e feedback visual -->
-<div class="mb-4 position-relative" id="tutor-search-box" {% if has_tutor %}style="display:none;"{% endif %}>
+<div class="mb-4 position-relative tutor-search-box{% if has_tutor %} is-hidden{% endif %}" id="tutor-search-box">
   <label for="autocomplete-tutor" class="form-label">
     <i class="bi bi-search me-1"></i> Buscar Tutor Existente
   </label>
   <div class="input-group">
-    <input type="text" id="autocomplete-tutor" class="form-control" 
-           placeholder="Digite nome, e-mail, CPF ou telefone"
+    <span class="input-group-text bg-light text-secondary"><i class="bi bi-search"></i></span>
+    <input type="text" id="autocomplete-tutor" class="form-control"
+           placeholder="Digite nome, e-mail, CPF, RG, telefone ou endereço"
            aria-label="Buscar tutor existente"
            aria-describedby="tutor-search-help">
-    <button class="btn btn-outline-secondary" type="button" id="clear-search">
+    <div class="dropdown" data-search-filter data-search-target="tutor-form">
+      <input type="hidden" id="tutor-form-sort" value="name_asc" data-sort-input data-target="tutor-form">
+      <button
+        class="btn btn-outline-secondary"
+        type="button"
+        data-bs-toggle="dropdown"
+        aria-expanded="false"
+        aria-label="Ordenar resultados"
+        data-sort-button
+        data-sort-default-label="Ordem alfabética"
+      >
+        <i class="bi bi-funnel"></i>
+        <span class="d-none d-md-inline small ms-1" data-sort-label>Ordem alfabética</span>
+      </button>
+      <ul class="dropdown-menu dropdown-menu-end shadow-sm">
+        <li><button class="dropdown-item active" type="button" data-sort-option data-sort-value="name_asc" data-sort-label="Ordem alfabética">Ordem alfabética (A-Z)</button></li>
+        <li><button class="dropdown-item" type="button" data-sort-option data-sort-value="recent_added" data-sort-label="Mais recentes">Últimos adicionados</button></li>
+        <li><button class="dropdown-item" type="button" data-sort-option data-sort-value="recent_attended" data-sort-label="Atendimentos recentes">Últimos com atendimento</button></li>
+      </ul>
+    </div>
+    <button class="btn btn-outline-secondary" type="button" id="clear-search" aria-label="Limpar busca">
       <i class="bi bi-x"></i>
     </button>
   </div>
   <div id="tutor-search-help" class="form-text">Busque tutores já cadastrados para vincular ao animal</div>
-  <ul class="list-group position-absolute w-100 mt-1 d-none shadow" 
-      id="autocomplete-results" style="z-index:1000; max-height:300px; overflow-y:auto;"></ul>
+  <ul class="list-group position-absolute w-100 mt-1 d-none shadow autocomplete-dropdown max-h-search-results overflow-auto z-overlay"
+      id="autocomplete-results"></ul>
 </div>
 
 <!-- 👤 Formulário de Tutor - Aprimorado com validação e organização -->
 <form id="tutor-form" method="POST" enctype="multipart/form-data"
       {% if has_tutor %}action="{{ url_for('update_tutor', user_id=tutor.id) }}"{% endif %}
-      class="needs-validation" novalidate data-sync>
+      class="ui-form needs-validation" novalidate data-sync>
   
   <h5 class="mb-4 d-flex align-items-center gap-2">
     <i class="bi bi-person-fill"></i> Cadastro do Tutor
   </h5>
 
   <div class="row g-3">
-    <!-- Foto + Nome -->
-    <div class="col-md-6">
-      <label class="form-label">Foto e Nome</label>
-      <div class="d-flex align-items-center gap-3">
+    {% call ui_form_group(label='Foto e Nome', field_id='tutor-name', required=True, extra_classes='col-md-6') %}
+      <div class="d-flex flex-wrap align-items-center gap-3">
         {{ photo_cropper(tutor_form.profile_photo, tutor_form.photo_rotation, tutor_form.photo_zoom,
                          tutor_form.photo_offset_x, tutor_form.photo_offset_y,
                          tutor.profile_photo if has_tutor else '', 120, 'profile_photo') }}
-        <input type="text" name="name" class="form-control" placeholder="Nome completo do tutor"
+        <input id="tutor-name" type="text" name="name" class="form-control flex-grow-1" placeholder="Nome completo do tutor"
                value="{{ tutor.name|default('', true) if has_tutor else '' }}" required minlength="3" maxlength="100">
         <div class="invalid-feedback">Por favor, insira um nome válido (3-100 caracteres)</div>
       </div>
-    </div>
+    {% endcall %}
 
-    <!-- Telefone - Aceita apenas números -->
-    <div class="col-md-6">
-      <label for="tutor-phone" class="form-label">Telefone</label>
-      <input type="tel" id="tutor-phone" name="phone" class="form-control" 
-             placeholder="Apenas números (ex: 99999999999)" 
+    {% call ui_form_group(label='Telefone', field_id='tutor-phone', extra_classes='col-md-6') %}
+      <input type="tel" id="tutor-phone" name="phone" class="form-control"
+             placeholder="Apenas números (ex: 99999999999)"
              pattern="[0-9]{10,11}"
              value="{{ tutor.phone|default('', true) if has_tutor else '' }}">
       <div class="invalid-feedback">Por favor, insira um telefone válido (10 ou 11 dígitos)</div>
-    </div>
+    {% endcall %}
 
-    <!-- CPF - Aceita apenas números -->
-    <div class="col-md-6">
-      <label for="tutor-cpf" class="form-label">CPF</label>
-      <input type="text" id="tutor-cpf" name="cpf" class="form-control" 
-             placeholder="Apenas números (ex: 12345678901)" 
+    {% call ui_form_group(label='CPF', field_id='tutor-cpf', extra_classes='col-md-6') %}
+      <input type="text" id="tutor-cpf" name="cpf" class="form-control"
+             placeholder="Apenas números (ex: 12345678901)"
              pattern="[0-9]{11}"
              value="{{ tutor.cpf|default('', true) if has_tutor else '' }}">
       <div class="invalid-feedback">Por favor, insira um CPF válido (11 dígitos)</div>
-    </div>
+    {% endcall %}
 
-        <div class="col-md-6">
-      <label for="tutor-rg" class="form-label">RG</label>
+    {% call ui_form_group(label='RG', field_id='tutor-rg', extra_classes='col-md-6') %}
       <input type="text" id="tutor-rg" name="rg" class="form-control"
              placeholder="Documento de identidade" pattern="[A-Za-z0-9]+"
              value="{{ tutor.rg|default('', true) if has_tutor else '' }}">
       <div class="invalid-feedback">Por favor, insira um RG válido (apenas letras ou números)</div>
-    </div>
+    {% endcall %}
     
-    <!-- Data de nascimento + Idade - Com cálculo automático -->
-    <div class="col-md-6">
-      <label for="tutor-date-of-birth" class="form-label">Data de Nascimento</label>
-      <input type="date" id="tutor-date-of-birth" name="date_of_birth" 
+    {% call ui_form_group(label='Data de Nascimento', field_id='tutor-date-of-birth', extra_classes='col-md-6') %}
+      <input type="date" id="tutor-date-of-birth" name="date_of_birth"
             class="form-control" max="{{ '%Y-%m-%d' | date_now }}"
             value="{{ tutor.date_of_birth.strftime('%Y-%m-%d') if has_tutor and tutor.date_of_birth else '' }}"
             onchange="calcularIdade()">
       <div class="invalid-feedback">Por favor, insira uma data válida</div>
-    </div>
+    {% endcall %}
 
-    <div class="col-md-6">
-      <label for="tutor-age" class="form-label">Idade</label>
+    {% call ui_form_group(label='Idade', field_id='tutor-age', extra_classes='col-md-6') %}
       <input type="text" id="tutor-age" class="form-control bg-light" disabled>
-    </div>
+    {% endcall %}
 
-    <!-- Email - Com validação robusta -->
-    <div class="col-md-12">
-      <label for="tutor-email" class="form-label">E-mail</label>
-      <input type="email" id="tutor-email" name="email" class="form-control" 
+    {% call ui_form_group(label='E-mail', field_id='tutor-email', required=True, extra_classes='col-md-12') %}
+      <input type="email" id="tutor-email" name="email" class="form-control"
              placeholder="exemplo@email.com" required
              value="{{ tutor.email|default('', true) if has_tutor else '' }}">
       <div class="invalid-feedback">Por favor, insira um e-mail válido</div>
-    </div>
+    {% endcall %}
 
     <!-- Endereço completo via CEP - Melhorado -->
     <div class="col-md-12">
@@ -107,22 +117,17 @@
 
     <!-- Adicionado por e data - Melhorado -->
     {% if has_tutor and tutor.added_by %}
-      <div class="col-md-12">
-        <label for="created-info" class="form-label">
-          <i class="bi bi-person-plus"></i> Adicionado por
-        </label>
+      {% call ui_form_group(label='<span class="d-inline-flex align-items-center gap-2"><i class="bi bi-person-plus"></i> Adicionado por</span>', field_id='created-info', extra_classes='col-md-12') %}
         <input type="text" id="created-info" class="form-control bg-light"
                data-nome="{{ tutor.added_by.name }}"
                data-created-at="{{ tutor.created_at.isoformat() if tutor.created_at else '' }}"
                disabled>
-      </div>
+      {% endcall %}
     {% endif %}
 
     <!-- Botão - Melhorado com feedback -->
     <div class="col-12 mt-3">
-      <button type="submit" class="btn btn-primary w-100 py-2">
-        <i class="bi bi-save me-2"></i> Salvar Tutor
-      </button>
+      {{ ui_button('Salvar Tutor', type='submit', variant='primary', block=True, icon='bi bi-save') }}
     </div>
   </div>
 </form>
@@ -205,38 +210,66 @@
       }
     }
 
+    const clearButton = document.getElementById('clear-search');
+    const autocompleteTutor = document.getElementById('autocomplete-tutor');
+    const resultsContainer = document.getElementById('autocomplete-results');
+    const sortInput = document.getElementById('tutor-form-sort');
+    const filterContainer = document.querySelector('[data-search-filter][data-search-target="tutor-form"]');
+
     // Limpar busca
-    document.getElementById('clear-search')?.addEventListener('click', () => {
-      document.getElementById('autocomplete-tutor').value = '';
-      document.getElementById('autocomplete-results').classList.add('d-none');
+    clearButton?.addEventListener('click', () => {
+      if (autocompleteTutor) {
+        autocompleteTutor.value = '';
+      }
+      resultsContainer?.classList.add('d-none');
     });
 
+    const triggerSearch = () => {
+      if (!autocompleteTutor) {
+        return;
+      }
+      const value = autocompleteTutor.value.trim();
+      if (value.length >= 3) {
+        autocompleteTutor.dispatchEvent(new Event('input'));
+      }
+    };
+
+    if (filterContainer) {
+      filterContainer.addEventListener('searchfilterchange', triggerSearch);
+    }
+
     // Auto-complete
-    const autocompleteTutor = document.getElementById('autocomplete-tutor');
     if (autocompleteTutor) {
       autocompleteTutor.addEventListener('input', debounce(async (e) => {
         const termo = e.target.value.trim();
-        const resultsContainer = document.getElementById('autocomplete-results');
-        
+        if (!resultsContainer) {
+          return;
+        }
+
         if (termo.length < 3) {
           resultsContainer.classList.add('d-none');
           return;
         }
-        
+
+        const params = new URLSearchParams({ q: termo });
+        if (sortInput && sortInput.value) {
+          params.set('sort', sortInput.value);
+        }
+
         try {
-          const response = await fetch(`/api/tutores/buscar?q=${encodeURIComponent(termo)}`);
+          const response = await fetch(`/buscar_tutores?${params.toString()}`);
           const tutores = await response.json();
-          
+
           if (tutores.length > 0) {
             resultsContainer.innerHTML = tutores.map(tutor => `
-              <li class="list-group-item list-group-item-action" 
+              <li class="list-group-item list-group-item-action"
                   data-tutor-id="${tutor.id}"
                   onclick="selecionarTutor(${tutor.id}, '${tutor.name}', '${tutor.email}')">
                 <div class="d-flex justify-content-between">
                   <span>${tutor.name}</span>
-                  <small class="text-muted">${tutor.email}</small>
+                  <small class="text-muted">${tutor.email || ''}</small>
                 </div>
-                <div class="d-flex gap-2 small">
+                <div class="d-flex flex-wrap gap-2 small text-muted">
                   <span>${tutor.phone || 'Sem telefone'}</span>
                   <span>${tutor.cpf ? 'CPF: ' + tutor.cpf : ''}</span>
                 </div>
@@ -267,8 +300,8 @@
 
   // Selecionar tutor na busca
   function selecionarTutor(id, nome, email) {
-    document.getElementById('tutor-search-box').style.display = 'none';
-    document.getElementById('tutor-form').style.display = 'block';
+    document.getElementById('tutor-search-box')?.classList.add('is-hidden');
+    document.getElementById('tutor-form')?.classList.remove('is-hidden');
     document.getElementById('autocomplete-results').classList.add('d-none');
     
     // Aqui você pode preencher os campos ou fazer o que for necessário

@@ -47,3 +47,16 @@ class Config:
     # Política padrão de retorno em dias para consultas
     DEFAULT_RETURN_DAYS = int(os.environ.get("DEFAULT_RETURN_DAYS", "7"))
 
+    # Prazo padrão (em horas) para confirmação de solicitações de exame
+    EXAM_CONFIRM_DEFAULT_HOURS = int(
+        os.environ.get("EXAM_CONFIRM_DEFAULT_HOURS", "2")
+    )
+
+    VETERINARIAN_TRIAL_DAYS = int(os.environ.get("VETERINARIAN_TRIAL_DAYS", "30"))
+    VETERINARIAN_MEMBERSHIP_PRICE = float(
+        os.environ.get("VETERINARIAN_MEMBERSHIP_PRICE", "60.00")
+    )
+    VETERINARIAN_MEMBERSHIP_BILLING_DAYS = int(
+        os.environ.get("VETERINARIAN_MEMBERSHIP_BILLING_DAYS", "30")
+    )
+

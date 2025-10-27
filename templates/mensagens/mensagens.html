@@ -1,9 +1,138 @@
 {% extends "layout.html" %}
 {% block main %}
+{% if show_clinic_invites %}
+<div id="convites-clinica" class="py-4">
+    <div class="row justify-content-center">
+        <div class="col-12 col-lg-10 col-xl-8">
+            <h2 class="h3 mb-4">Convites de Clínicas</h2>
+            {% if missing_vet_profile %}
+            <div class="card shadow-sm border-0">
+                <div class="card-body p-4 p-md-5" role="region" aria-labelledby="vet-profile-heading">
+                    <div class="row g-4 align-items-start">
+                        <div class="col-12 col-lg-5">
+                            <h3 id="vet-profile-heading" class="h5 mb-3">Complete seu cadastro de veterinário</h3>
+                            <p class="text-muted mb-3">{{ missing_vet_profile_message }}</p>
+                            <p class="text-muted small mb-0">Assim que finalizar, os convites das clínicas que chamaram você aparecerão aqui automaticamente.</p>
+                        </div>
+                        {% if vet_profile_form %}
+                        <div class="col-12 col-lg-7">
+                            <form id="vet-profile-form" method="post" action="{{ url_for('clinic_invites') }}" class="row g-3 needs-validation" novalidate>
+                                {{ vet_profile_form.hidden_tag() }}
+                                <div class="col-12 col-md-6">
+                                    <label for="{{ vet_profile_form.crmv.id }}" class="form-label">CRMV</label>
+                                    {{ vet_profile_form.crmv(class="form-control" + (' is-invalid' if vet_profile_form.crmv.errors else ''), placeholder="UF-00000") }}
+                                    {% if vet_profile_form.crmv.errors %}
+                                    <div class="invalid-feedback d-block">{{ vet_profile_form.crmv.errors[0] }}</div>
+                                    {% else %}
+                                    <div class="form-text">Informe o número completo, incluindo a UF quando houver.</div>
+                                    {% endif %}
+                                </div>
+                                <div class="col-12 col-md-6">
+                                    <label for="{{ vet_profile_form.phone.id }}" class="form-label">Telefone profissional <span class="text-muted">(opcional)</span></label>
+                                    {{ vet_profile_form.phone(class="form-control" + (' is-invalid' if vet_profile_form.phone.errors else ''), placeholder="(00) 00000-0000") }}
+                                    {% if vet_profile_form.phone.errors %}
+                                    <div class="invalid-feedback d-block">{{ vet_profile_form.phone.errors[0] }}</div>
+                                    {% else %}
+                                    <div class="form-text">Esse contato fica disponível para a clínica após a associação.</div>
+                                    {% endif %}
+                                </div>
+                                <div class="col-12">
+                                    <button type="submit" class="btn btn-primary">Salvar cadastro</button>
+                                </div>
+                            </form>
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+            {% elif clinic_invites %}
+            <div class="row gy-4">
+                {% for invite in clinic_invites %}
+                <div class="col-12">
+                    <article class="card shadow-sm h-100" aria-labelledby="invite-title-{{ invite.id }}">
+                        <div class="card-body">
+                            <div class="d-flex flex-column flex-md-row align-items-start gap-3">
+                                <div class="flex-shrink-0">
+                                    {% if invite.clinica.logo_url %}
+                                    <img src="{{ invite.clinica.logo_url }}"
+                                         alt="Logo da clínica {{ invite.clinica.nome }}"
+                                         class="rounded border"
+                                         style="width: 96px; height: 96px; object-fit: cover;">
+                                    {% else %}
+                                    <div class="bg-light border rounded d-flex align-items-center justify-content-center"
+                                         style="width: 96px; height: 96px;">
+                                        <span class="text-muted fw-semibold small text-center">Sem logo</span>
+                                    </div>
+                                    {% endif %}
+                                </div>
+                                <div class="flex-grow-1 w-100">
+                                    <header class="mb-2">
+                                        <h3 id="invite-title-{{ invite.id }}" class="h5 mb-2">{{ invite.clinica.nome }}</h3>
+                                        {% if invite.clinica.endereco %}
+                                        <p class="mb-1 text-muted">
+                                            <span class="me-1" aria-hidden="true">📍</span>
+                                            <span>{{ invite.clinica.endereco }}</span>
+                                        </p>
+                                        {% endif %}
+                                        {% if invite.clinica.owner %}
+                                        <p class="mb-0 text-muted">
+                                            <span class="me-1" aria-hidden="true">👤</span>
+                                            Proprietário: <span class="fw-semibold">{{ invite.clinica.owner.name }}</span>
+                                        </p>
+                                        {% endif %}
+                                    </header>
+                                    <p class="text-muted mb-3">
+                                        A clínica convidou você para integrar a equipe e atender pacientes pela plataforma.
+                                        {% if invite.created_at %}
+                                        Convite enviado em <span class="fw-semibold">{{ invite.created_at|datetime_brazil }}</span>.
+                                        {% endif %}
+                                    </p>
+                                    <div class="mt-auto">
+                                        <div class="d-flex flex-column flex-sm-row gap-2" role="group" aria-label="Ações para o convite da clínica {{ invite.clinica.nome }}">
+                                            <form method="post"
+                                                  action="{{ url_for('respond_clinic_invite', invite_id=invite.id, action='accept') }}"
+                                                  class="d-inline"
+                                                  aria-label="Aceitar convite da clínica {{ invite.clinica.nome }}">
+                                                {{ clinic_invite_form.hidden_tag() }}
+                                                <button type="submit" class="btn btn-primary w-100">Aceitar</button>
+                                            </form>
+                                            <form method="post"
+                                                  action="{{ url_for('respond_clinic_invite', invite_id=invite.id, action='decline') }}"
+                                                  class="d-inline"
+                                                  aria-label="Recusar convite da clínica {{ invite.clinica.nome }}">
+                                                {{ clinic_invite_form.hidden_tag() }}
+                                                <button type="submit" class="btn btn-outline-secondary w-100">Recusar</button>
+                                            </form>
+                                        </div>
+                                        <p class="text-muted small mt-3 mb-0">
+                                            Aceitar adiciona esta clínica ao seu perfil e libera os recursos dela. Recusar mantém tudo como está.
+                                        </p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </article>
+                </div>
+                {% endfor %}
+            </div>
+            {% else %}
+            <div class="card shadow-sm border-0">
+                <div class="card-body text-center py-5" role="status" aria-live="polite">
+                    <h3 class="h5">Nenhum convite por aqui</h3>
+                    <p class="text-muted mb-2">Quando uma clínica cadastrar seu e-mail para colaboração, você receberá um convite por e-mail e ele aparecerá aqui.</p>
+                    <p class="text-muted mb-0">Combine com a clínica qual endereço de e-mail você usa no PetOrlândia para que o convite chegue corretamente.</p>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endif %}
 <h2>Minhas Mensagens Recebidas 📥</h2>
 
+<div id="messages-thread-container">
 {% if mensagens %}
-    <ul class="list-group mt-4">
+    <ul class="list-group mt-4" data-thread-list>
         {% set shown_keys = [] %}
         {% for msg in mensagens %}
             {% set key = msg.sender.id ~ "-" ~ (msg.animal.id if msg.animal else 'admin') %}
@@ -52,9 +181,153 @@
 {% else %}
     <p>Você ainda não recebeu mensagens.</p>
 {% endif %}
+</div>
+<div id="messages-thread-warning" class="alert alert-warning small mt-3 d-none" role="status" aria-live="polite">
+    Não foi possível atualizar as mensagens automaticamente. Mostramos as informações mais recentes carregadas.
+</div>
 
 <div class="mt-5 p-3 bg-light rounded text-center">
     <p class="mb-3">Vamos construir isso juntos! Caso tenha críticas, sugestões ou qualquer problema, fale diretamente com o administrador.</p>
     <a href="{{ url_for('conversa_admin') }}" class="btn btn-info">Falar com o Admin</a>
 </div>
+{% endblock %}
+
+{% block scripts %}
+{{ super() }}
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+    const container = document.getElementById('messages-thread-container');
+    if (!container) {
+        return;
+    }
+
+    const warning = document.getElementById('messages-thread-warning');
+    const endpoint = '{{ url_for('api_message_threads') }}';
+    const refreshInterval = 30000;
+
+    const formatDate = (isoString) => {
+        if (!isoString) {
+            return '';
+        }
+        const parsedDate = new Date(isoString);
+        if (Number.isNaN(parsedDate.getTime())) {
+            return '';
+        }
+        return new Intl.DateTimeFormat('pt-BR', {
+            day: '2-digit',
+            month: '2-digit',
+            year: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit',
+        }).format(parsedDate);
+    };
+
+    const buildThreadItem = (thread) => {
+        const listItem = document.createElement('li');
+        listItem.className = 'list-group-item d-flex justify-content-between align-items-center';
+
+        const infoWrapper = document.createElement('div');
+        infoWrapper.className = 'd-flex align-items-center';
+
+        if (thread.sender && thread.sender.profile_photo) {
+            const avatar = document.createElement('img');
+            avatar.src = thread.sender.profile_photo;
+            avatar.alt = 'Foto';
+            avatar.width = 50;
+            avatar.height = 50;
+            avatar.className = 'avatar me-3';
+            infoWrapper.appendChild(avatar);
+        } else {
+            const fallback = document.createElement('div');
+            fallback.className = 'rounded-circle bg-secondary me-3 d-flex justify-content-center align-items-center';
+            fallback.style.width = '50px';
+            fallback.style.height = '50px';
+            fallback.style.color = 'white';
+            fallback.textContent = thread.sender && thread.sender.initials ? thread.sender.initials : '?';
+            infoWrapper.appendChild(fallback);
+        }
+
+        const details = document.createElement('div');
+
+        const senderName = document.createElement('strong');
+        senderName.textContent = thread.sender ? thread.sender.name : 'Usuário';
+        details.appendChild(senderName);
+        details.appendChild(document.createElement('br'));
+
+        const conversationType = document.createElement('small');
+        conversationType.className = 'text-muted';
+        if (thread.animal) {
+            conversationType.textContent = `Sobre o animal: ${thread.animal.name}`;
+        } else {
+            conversationType.textContent = 'Conversa geral';
+        }
+        details.appendChild(conversationType);
+        details.appendChild(document.createElement('br'));
+
+        const timestamp = document.createElement('small');
+        timestamp.className = 'text-muted';
+        timestamp.textContent = formatDate(thread.last_message_at);
+        details.appendChild(timestamp);
+
+        infoWrapper.appendChild(details);
+
+        const actionLink = document.createElement('a');
+        actionLink.href = thread.conversation_url;
+        actionLink.className = 'btn btn-outline-primary btn-sm';
+        actionLink.appendChild(document.createTextNode('Ver Conversa'));
+
+        if (thread.unread_count > 0) {
+            const badge = document.createElement('span');
+            badge.className = 'badge bg-danger ms-2';
+            badge.textContent = thread.unread_count;
+            actionLink.appendChild(badge);
+        }
+
+        listItem.appendChild(infoWrapper);
+        listItem.appendChild(actionLink);
+
+        return listItem;
+    };
+
+    const renderThreads = (threads) => {
+        if (!Array.isArray(threads) || threads.length === 0) {
+            container.innerHTML = '<p>Você ainda não recebeu mensagens.</p>';
+            return;
+        }
+
+        const list = document.createElement('ul');
+        list.className = 'list-group mt-4';
+        list.setAttribute('data-thread-list', '');
+
+        threads.forEach((thread) => {
+            list.appendChild(buildThreadItem(thread));
+        });
+
+        container.innerHTML = '';
+        container.appendChild(list);
+    };
+
+    const loadThreads = async () => {
+        try {
+            const response = await fetch(endpoint, { headers: { Accept: 'application/json' } });
+            if (!response.ok) {
+                throw new Error('Request failed');
+            }
+            const payload = await response.json();
+            renderThreads(payload.threads || []);
+            if (warning) {
+                warning.classList.add('d-none');
+            }
+        } catch (error) {
+            if (warning) {
+                warning.classList.remove('d-none');
+            }
+        }
+    };
+
+    loadThreads();
+    const intervalId = window.setInterval(loadThreads, refreshInterval);
+    window.addEventListener('beforeunload', () => window.clearInterval(intervalId));
+});
+</script>
 {% endblock %}

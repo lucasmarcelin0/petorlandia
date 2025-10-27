@@ -1,9 +1,34 @@
+{% from 'macros/ui.html' import ui_card %}
+
 {% if appointments_grouped %}
-  {# Conteúdo removido intencionalmente. #}
-{% else %}
-  <div class="empty-state">
-    <span class="icon-circle bg-secondary text-white"><i class="fa-regular fa-calendar-xmark"></i></span>
-    <h3>Nenhum agendamento encontrado</h3>
-    <p>Não há agendamentos para exibir no momento.</p>
+  <div class="d-none" data-appointments-metadata>
+    {% for day, appointments_on_day in appointments_grouped %}
+      {% for appt in appointments_on_day %}
+        <span data-appointment-id="{{ appt.id }}"></span>
+      {% endfor %}
+    {% endfor %}
   </div>
+
+  {% for day, appointments_on_day in appointments_grouped %}
+    {% set first_appointment = appointments_on_day|first %}
+    {% set day_key = day.strftime('%Y-%m-%d') %}
+    {% set day_label = first_appointment.scheduled_at|format_datetime_brazil('%A, %d/%m/%Y') if first_appointment else day.strftime('%d/%m/%Y') %}
+    {% call ui_card(variant='surface', extra_classes='appointments-day-block shadow-soft', padding='p-0', body_classes='p-0', attrs={'data-day': day_key, 'data-day-label': day_label}) %}
+      <div class="day-header d-flex align-items-center gap-2 px-4 py-3">
+        <span class="icon-circle icon-circle--primary"><i class="fa-solid fa-calendar-day"></i></span>
+        {{ day_label }}
+      </div>
+      <div class="day-appointments px-3 pb-3">
+        {% for appt in appointments_on_day %}
+          {% include 'partials/_appointment_card.html' %}
+        {% endfor %}
+      </div>
+    {% endcall %}
+  {% endfor %}
+{% else %}
+  {% call ui_card(variant='muted', extra_classes='ui-empty-state shadow-soft', padding='p-4') %}
+    <span class="icon-circle icon-circle--secondary"><i class="fa-regular fa-calendar-xmark"></i></span>
+    <h3 class="mt-3 mb-2">Nenhum agendamento encontrado</h3>
+    <p class="text-subtle mb-0">Não há agendamentos para exibir no momento.</p>
+  {% endcall %}
 {% endif %}

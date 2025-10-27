@@ -1,73 +1,424 @@
 {% extends "layout.html" %}
 
 {% block main %}
-<div class="container py-4">
-  <div class="mb-4">
-    <h2 class="fw-bold text-gradient mb-1">{{ veterinario.user.name }}</h2>
-    <div class="text-muted">
-      <span class="d-inline-flex align-items-center me-3">
-        <i class="bi bi-hash me-1"></i> <strong>CRMV:</strong> {{ veterinario.crmv or 'Não informado' }}
-      </span>
-      {% if veterinario.clinica %}
-      <span class="d-inline-flex align-items-center me-3">
-        <i class="bi bi-hospital me-1"></i> <strong>Clínica:</strong> {{ veterinario.clinica.nome }}
-      </span>
+<div class="container mt-4"
+     data-vet-schedule-root
+     data-vet-id="{{ veterinario.id }}"
+     data-appointments-base-url="{{ url_for('appointments') }}"
+     data-csrf-token="{{ csrf_token() if csrf_token is defined else '' }}">
+  <div class="d-flex flex-wrap justify-content-between align-items-start gap-3 mb-4">
+    <div>
+      <h2 class="mb-1 fw-bold text-gradient">
+        {{ veterinario.user.name }}
+      </h2>
+      <div class="text-muted small">
+        <span class="d-inline-flex align-items-center me-3">
+          <i class="fas fa-id-card me-1 text-primary"></i>
+          <strong>CRMV:</strong>&nbsp;{{ veterinario.crmv or 'Não informado' }}
+        </span>
+        {% if veterinario.clinica %}
+        <span class="d-inline-flex align-items-center me-3">
+          <i class="fas fa-clinic-medical me-1 text-primary"></i>
+          <strong>Clínica:</strong>&nbsp;{{ veterinario.clinica.nome }}
+        </span>
+        {% endif %}
+        {% if veterinario.specialties %}
+        <span class="d-inline-flex align-items-center">
+          <i class="fas fa-award me-1 text-primary"></i>
+          <strong>Especialidades:</strong>&nbsp;{{ veterinario.specialty_list }}
+        </span>
+        {% endif %}
+      </div>
+    </div>
+    <div class="ms-auto">
+      {% if current_user.is_authenticated and current_user.role == 'admin' %}
+        {% set preserve_params = ['start', 'end'] %}
+        {% set switcher_select_id = 'vet-agenda-picker' %}
+        {% set switcher_label_text = 'Pesquisar agenda' %}
+        {% set switcher_select_classes = 'form-select form-select-sm text-truncate' %}
+        {% set switcher_select_style = 'min-width: 220px;' %}
+        {% set switcher_form_classes = 'd-flex align-items-center justify-content-end gap-2 mb-2 flex-wrap' %}
+        {% set switcher_default_option_label = 'Selecione um usuário' %}
+        {% include 'partials/admin_agenda_switcher.html' %}
       {% endif %}
-      {% if veterinario.specialties %}
-      <span class="d-inline-flex align-items-center">
-        <i class="bi bi-award me-1"></i> <strong>Especialidades:</strong> {{ veterinario.specialty_list }}
-      </span>
-      {% endif %}
+      <div class="d-flex flex-wrap justify-content-end gap-2">
+        <button class="btn btn-primary mb-1" onclick="toggleScheduleForm()">
+          <i class="fas fa-plus-circle me-1"></i>Adicionar Horário
+        </button>
+        <button class="btn btn-outline-primary mb-1" onclick="toggleAppointmentForm()">
+          <i class="fas fa-calendar-plus me-1"></i>Agendar Consulta
+        </button>
+      </div>
     </div>
   </div>
-
-  <div class="row g-4 align-items-start">
-    <div class="col-12 col-xl-8">
-      <input type="hidden" value="{{ veterinario.id }}" data-switcher-vet class="d-none">
-      {% with
-        calendar_id='vet-shared-calendar-' ~ veterinario.id,
-        toggle_id='vet-agenda-toggle-' ~ veterinario.id,
-        clinic_id=veterinario.clinica_id,
-        calendar_redirect_url=calendar_redirect_url,
-        admin_selected_view='veterinario',
-        vets=[veterinario]
-      %}
-        {% include 'partials/schedule_toggle.html' %}
-      {% endwith %}
-    </div>
-    <div class="col-12 col-xl-4">
-      <div class="card shadow-sm h-100">
-        <div class="card-header bg-primary text-white">
-          <h5 class="mb-0"><i class="bi bi-clock-history me-2"></i> Horários fixos</h5>
+  <section class="mb-4" aria-labelledby="vet-agenda-title-{{ veterinario.id }}">
+    <div class="card schedule-card">
+      <div class="schedule-card__header schedule-card__header--primary">
+        <div class="d-flex flex-column flex-lg-row align-items-lg-center gap-3 flex-grow-1 flex-wrap">
+          <div class="schedule-card__header-icon" aria-hidden="true">
+            <i class="fas fa-calendar-alt" aria-hidden="true"></i>
+          </div>
+          <div class="flex-grow-1">
+            <h3 id="vet-agenda-title-{{ veterinario.id }}" class="h5 mb-1 schedule-card__title">
+              Agenda do veterinário
+            </h3>
+            <p class="schedule-card__subtitle mb-0">Visualize os compromissos e alterne rapidamente para novos agendamentos.</p>
+          </div>
         </div>
-        <div class="card-body p-0">
-          <div class="table-responsive">
-            <table class="table table-striped mb-0">
-              <thead class="table-light">
-                <tr>
-                  <th scope="col">Dia</th>
-                  <th scope="col">Início</th>
-                  <th scope="col">Fim</th>
-                </tr>
-              </thead>
-              <tbody>
-                {% for h in horarios %}
-                <tr>
-                  <td>{{ h.dia_semana }}</td>
-                  <td>{{ h.hora_inicio.strftime('%H:%M') }}</td>
-                  <td>{{ h.hora_fim.strftime('%H:%M') }}</td>
-                </tr>
-                {% else %}
-                <tr>
-                  <td colspan="3" class="text-center py-4">Nenhum horário cadastrado.</td>
-                </tr>
-                {% endfor %}
-              </tbody>
-            </table>
+        <div class="d-flex flex-wrap justify-content-end gap-2 mt-3 mt-lg-0">
+          <button class="btn btn-light mb-1" onclick="toggleScheduleForm()">
+            <i class="fas fa-plus-circle me-1"></i>Adicionar Horário
+          </button>
+          <button class="btn btn-outline-light mb-1" onclick="toggleAppointmentForm()">
+            <i class="fas fa-calendar-plus me-1"></i>Agendar Consulta
+          </button>
+        </div>
+      </div>
+      <div class="card-body">
+        {% set vet_calendar_events_url = url_for('api_vet_appointments', veterinario_id=veterinario.id) %}
+        {% set vet_calendar_pets_url = url_for(
+          'api_clinic_pets',
+          view_as='veterinario',
+          veterinario_id=veterinario.id,
+          clinica_id=veterinario.clinica_id
+        ) %}
+
+        <div class="row g-4 align-items-stretch" id="vet-calendar-overview-{{ veterinario.id }}">
+          <div class="col-12 col-xl-8 col-xxl-9" data-calendar-main-column>
+            <div class="d-flex flex-column flex-md-row align-items-md-center justify-content-between gap-3 mb-3">
+              <ul
+                class="nav nav-pills mb-0"
+                id="vet-agenda-tabs-{{ veterinario.id }}"
+                role="tablist"
+                aria-label="Alternar entre calendário e novo agendamento"
+                data-calendar-tabs
+              >
+                <li class="nav-item" role="presentation">
+                  <button
+                    class="nav-link active"
+                    id="vet-agenda-tab-calendar-{{ veterinario.id }}"
+                    data-bs-toggle="tab"
+                    data-bs-target="#vet-agenda-pane-calendar-{{ veterinario.id }}"
+                    type="button"
+                    role="tab"
+                    aria-controls="vet-agenda-pane-calendar-{{ veterinario.id }}"
+                    aria-selected="true"
+                  >
+                    <i class="fas fa-calendar-week me-1"></i>Calendário
+                  </button>
+                </li>
+                <li class="nav-item" role="presentation">
+                  <button
+                    class="nav-link"
+                    id="vet-agenda-tab-schedule-{{ veterinario.id }}"
+                    data-bs-toggle="tab"
+                    data-bs-target="#vet-agenda-pane-schedule-{{ veterinario.id }}"
+                    type="button"
+                    role="tab"
+                    aria-controls="vet-agenda-pane-schedule-{{ veterinario.id }}"
+                    aria-selected="false"
+                  >
+                    <i class="fas fa-calendar-plus me-1"></i>Novo agendamento
+                  </button>
+                </li>
+              </ul>
+              <button
+                type="button"
+                class="btn btn-outline-secondary btn-sm d-flex align-items-center gap-2 calendar-summary-toggle"
+                data-calendar-summary-toggle
+                data-show-label="Mostrar resumo por profissional"
+                data-hide-label="Ocultar resumo por profissional"
+                aria-pressed="false"
+                aria-expanded="true"
+              >
+                <i class="bi bi-layout-sidebar-inset" data-calendar-summary-toggle-icon aria-hidden="true"></i>
+                <span data-calendar-summary-toggle-label>Ocultar resumo por profissional</span>
+              </button>
+            </div>
+
+            <div class="tab-content mt-3" id="vet-agenda-tabs-content-{{ veterinario.id }}">
+              <div
+                class="tab-pane fade show active"
+                id="vet-agenda-pane-calendar-{{ veterinario.id }}"
+                role="tabpanel"
+                aria-labelledby="vet-agenda-tab-calendar-{{ veterinario.id }}"
+              >
+                {% with
+                  component_id='vet-calendar-inline-' ~ veterinario.id,
+                  events_url=vet_calendar_events_url,
+                  pets_url=vet_calendar_pets_url,
+                  new_pet_url=url_for('novo_animal') if current_user.is_authenticated and (current_user.worker in ['colaborador', 'veterinario'] or current_user.role == 'admin') else None
+                %}
+                  {% include 'partials/tutor_calendar.html' %}
+                {% endwith %}
+              </div>
+              <div
+                class="tab-pane fade"
+                id="vet-agenda-pane-schedule-{{ veterinario.id }}"
+                role="tabpanel"
+                aria-labelledby="vet-agenda-tab-schedule-{{ veterinario.id }}"
+              >
+                <input type="hidden" value="{{ veterinario.id }}" data-switcher-vet class="d-none">
+                {% with
+                  calendar_id='vet-shared-calendar-' ~ veterinario.id,
+                  toggle_id='vet-agenda-toggle-' ~ veterinario.id,
+                  clinic_id=veterinario.clinica_id,
+                  calendar_redirect_url=calendar_redirect_url,
+                  admin_selected_view=admin_selected_view or 'veterinario',
+                  vets=[veterinario]
+                %}
+                  {% include 'partials/schedule_toggle.html' %}
+                {% endwith %}
+              </div>
+            </div>
+          </div>
+          <div class="col-12 col-xl-4 col-xxl-3" data-calendar-summary-column>
+            {% set calendar_summary_vets = calendar_summary_vets if calendar_summary_vets else [{
+              'id': veterinario.id,
+              'name': veterinario.user.name,
+              'label': veterinario.user.name,
+              'full_name': veterinario.user.name,
+              'specialty_list': veterinario.specialty_list,
+              'is_specialist': veterinario.specialty_list|length > 0
+            }] %}
+            {% set calendar_summary_clinic_ids = calendar_summary_clinic_ids if calendar_summary_clinic_ids else ([veterinario.clinica_id] if veterinario.clinica_id else []) %}
+            {% set calendar_summary_storage_key = 'vetCalendarSummaryCollapsed-' ~ veterinario.id %}
+            {% include 'partials/calendar_summary_panel.html' %}
           </div>
         </div>
       </div>
     </div>
+  </section>
+
+  <section class="mb-4" aria-labelledby="vet-hours-title-{{ veterinario.id }}">
+    <div class="card mb-4" style="opacity: 1; transform: translateY(0px); transition: opacity 0.5s, transform 0.5s;">
+      <div class="card-header bg-light d-flex justify-content-between align-items-center">
+        <h5 id="vet-hours-title-{{ veterinario.id }}" class="mb-0">
+          <i class="fas fa-business-time me-2"></i>Horários Cadastrados
+        </h5>
+        <button class="btn btn-sm btn-outline-primary" type="button" data-schedule-edit-toggle onclick="toggleScheduleEdit()">
+          <i class="fas fa-edit me-1"></i>Editar horários
+        </button>
+      </div>
+      <div class="card-body">
+        <div class="row">
+          {% for grupo in horarios_grouped %}
+          <div class="col-md-6 col-lg-4 mb-3">
+            <div class="card h-100" style="opacity: 1; transform: translateY(0px); transition: opacity 0.5s, transform 0.5s;">
+              <div class="card-header py-2">
+                <h6 class="mb-0">{{ grupo.dia }}</h6>
+              </div>
+              <div class="card-body py-2">
+                {% for h in grupo.itens %}
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                  <div>
+                    <span class="badge bg-light text-dark">{{ h.hora_inicio.strftime('%H:%M') }} - {{ h.hora_fim.strftime('%H:%M') }}</span>
+                    {% if h.intervalo_inicio and h.intervalo_fim %}
+                    <small class="text-muted d-block">Intervalo: {{ h.intervalo_inicio.strftime('%H:%M') }} - {{ h.intervalo_fim.strftime('%H:%M') }}</small>
+                    {% endif %}
+                  </div>
+                  <div class="schedule-actions d-none">
+                    <button type="button" class="btn btn-sm btn-outline-primary edit-btn"
+                            data-id="{{ h.id }}"
+                            data-dia="{{ h.dia_semana }}"
+                            data-hora-inicio="{{ h.hora_inicio.strftime('%H:%M') }}"
+                            data-hora-fim="{{ h.hora_fim.strftime('%H:%M') }}"
+                            data-intervalo-inicio="{{ h.intervalo_inicio.strftime('%H:%M') if h.intervalo_inicio else '' }}"
+                            data-intervalo-fim="{{ h.intervalo_fim.strftime('%H:%M') if h.intervalo_fim else '' }}"
+                            data-vet-schedule-bound="true">
+                      <i class="fas fa-edit"></i>
+                    </button>
+                    <form method="post"
+                          action="{{ url_for('delete_vet_schedule', veterinario_id=veterinario.id, horario_id=h.id) }}"
+                          class="d-inline">
+                      {{ schedule_form.csrf_token }}
+                      <button type="submit" class="btn btn-sm btn-outline-danger" onclick="return confirm('Excluir este horário?');">
+                        <i class="fas fa-trash"></i>
+                      </button>
+                    </form>
+                  </div>
+                </div>
+                {% endfor %}
+              </div>
+            </div>
+          </div>
+          {% else %}
+          <div class="col-12 text-center py-4">
+            <i class="fas fa-clock fa-2x text-muted mb-2"></i>
+            <p class="text-muted mb-0">Nenhum horário cadastrado.</p>
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Modal: Adicionar/Editar horário -->
+  {% include 'partials/schedule_modal.html' %}
+
+  <!-- Modal: Agendar consulta -->
+  <div class="modal fade" id="appointmentModalForm" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title">Agendar Consulta</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+        </div>
+        <div class="modal-body">
+          <form method="post" id="appointment-form">
+            {{ appointment_form.hidden_tag() }}
+            <div class="mb-3">
+              {{ appointment_form.animal_id.label(class="form-label fw-semibold") }}
+              {{ appointment_form.animal_id(class="form-select") }}
+            </div>
+            <div class="mb-3 d-none">
+              {{ appointment_form.veterinario_id.label(class="form-label") }}
+              {{ appointment_form.veterinario_id(class="form-select") }}
+            </div>
+            <div class="row g-3">
+              <div class="col-md-6">
+                {{ appointment_form.date.label(class="form-label fw-semibold") }}
+                {{ appointment_form.date(class="form-control", type="date", id="appointment-date") }}
+              </div>
+              <div class="col-md-6">
+                {{ appointment_form.time.label(class="form-label fw-semibold") }}
+                <select id="appointment-time" name="{{ appointment_form.time.name }}" class="form-select">
+                  <option value="">Selecione...</option>
+                </select>
+              </div>
+            </div>
+            <div class="mb-3">
+              {{ appointment_form.kind.label(class="form-label fw-semibold") }}
+              {{ appointment_form.kind(class="form-select") }}
+            </div>
+            <div class="mb-3">
+              {{ appointment_form.reason.label(class="form-label fw-semibold") }}
+              {{ appointment_form.reason(class="form-control", rows=3) }}
+            </div>
+          </form>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+          {{ appointment_form.submit(class="btn btn-primary", form="appointment-form", value="Agendar Consulta") }}
+        </div>
+      </div>
+    </div>
   </div>
+
+  <!-- Modal: Detalhes da consulta (apenas leitura) -->
+  <div class="modal fade" id="appointmentDetailModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title">Detalhes da Consulta</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+        </div>
+        <div class="modal-body">
+          <input type="hidden" id="modal-appt-id">
+
+          <div class="appointment-modal-card">
+            <div class="appointment-modal-top">
+              <div class="appointment-modal-schedule">
+                <div class="appointment-modal-time-block">
+                  <span class="appointment-modal-icon is-time"><i class="fa-regular fa-clock"></i></span>
+                  <div>
+                    <span class="appointment-modal-subtitle">Horário</span>
+                    <span class="appointment-modal-value" id="modal-time-display">--:--</span>
+                  </div>
+                </div>
+                <div class="appointment-modal-time-block">
+                  <span class="appointment-modal-icon is-date"><i class="fa-regular fa-calendar"></i></span>
+                  <div>
+                    <span class="appointment-modal-subtitle">Data</span>
+                    <span class="appointment-modal-value" id="modal-date-display">--/--/----</span>
+                  </div>
+                </div>
+              </div>
+              <div class="appointment-modal-tags">
+                <span class="appointment-modal-pill" id="modal-kind-label">Consulta</span>
+                <span class="status-badge status-scheduled" id="modal-status-label">A fazer</span>
+              </div>
+            </div>
+
+            <div class="appointment-modal-people">
+              <div class="appointment-modal-person">
+                <span class="appointment-modal-icon is-pet"><i class="fa-solid fa-paw"></i></span>
+                <div class="appointment-modal-person-info">
+                  <span class="appointment-modal-person-label">Paciente</span>
+                  <span class="appointment-modal-person-value" id="modal-animal-name">—</span>
+                </div>
+              </div>
+              <div class="appointment-modal-person">
+                <span class="appointment-modal-icon is-tutor"><i class="fa-solid fa-user"></i></span>
+                <div class="appointment-modal-person-info">
+                  <span class="appointment-modal-person-label">Tutor</span>
+                  <span class="appointment-modal-person-value" id="modal-tutor-name">—</span>
+                </div>
+              </div>
+              <div class="appointment-modal-person">
+                <span class="appointment-modal-icon is-vet"><i class="fa-solid fa-user-doctor"></i></span>
+                <div class="appointment-modal-person-info">
+                  <span class="appointment-modal-person-label">Veterinário</span>
+                  <span class="appointment-modal-person-value" id="modal-vet-name">—</span>
+                </div>
+              </div>
+            </div>
+
+            <dl class="appointment-modal-meta">
+              <div class="appointment-modal-meta-item">
+                <dt>Agendado por</dt>
+                <dd id="modal-created-by-text">Não informado</dd>
+              </div>
+              <div class="appointment-modal-meta-item">
+                <dt>Agendado em</dt>
+                <dd id="modal-created-at-text">Não informado</dd>
+              </div>
+            </dl>
+
+            <div class="appointment-modal-notes-display" id="modal-notes-display" hidden>
+              <span class="appointment-modal-icon is-note"><i class="fa-solid fa-note-sticky"></i></span>
+              <div>
+                <div class="appointment-modal-notes-title">Observações</div>
+                <p class="appointment-modal-notes-text" id="modal-notes-text"></p>
+              </div>
+            </div>
+          </div>
+
+          <div class="appointment-modal-editor mt-4">
+            <h6 class="appointment-modal-editor-title">Atualizar agendamento</h6>
+            <p class="appointment-modal-editor-subtitle">Escolha uma nova data, horário ou ajuste os comentários conforme necessário.</p>
+            <div class="row g-3">
+              <div class="col-md-6">
+                <label class="form-label">Data</label>
+                <input type="date" class="form-control" id="modal-date">
+              </div>
+              <div class="col-md-6">
+                <label class="form-label">Hora</label>
+                <select class="form-select" id="modal-time" data-placeholder="Selecione...">
+                  <option value="">Selecione...</option>
+                </select>
+              </div>
+            </div>
+            <div class="mt-3">
+              <label class="form-label">Comentários</label>
+              <textarea class="form-control" id="modal-notes" rows="3"></textarea>
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <a id="modal-animal-link" class="btn btn-outline-primary" target="_blank"><i class="fas fa-file-medical me-1"></i>Ficha Animal</a>
+          <a id="modal-tutor-link" class="btn btn-outline-secondary" target="_blank"><i class="fas fa-user me-1"></i>Ficha Tutor</a>
+          <a id="modal-consulta-link" class="btn btn-outline-success" target="_blank"><i class="fas fa-play-circle me-1"></i>Iniciar</a>
+          <button type="button" class="btn btn-primary" id="modal-save-btn">Salvar alterações</button>
+        </div>
+      </div>
+    </div>
+  </div>
+  {% include 'partials/appointment_modal_styles.html' %}
 </div>
+{% endblock %}
+
+{% block scripts %}
+  {{ super() }}
+  <script type="module" src="{{ url_for('static', filename='appointments_vet.js') }}"></script>
 {% endblock %}

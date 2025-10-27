@@ -1,8 +1,13 @@
 <!-- partials/animais_adicionados.html -->
-<div class="container d-flex justify-content-center my-5">
-  <div style="width: 100%; max-width: 700px;">
-    <div class="d-flex justify-content-between align-items-center mb-3">
-      <h4 class="mb-0">🐾 Animais</h4>
+{% set compact = compact|default(False) %}
+{% set card_block %}
+<div class="card shadow-sm border-0 rounded-4 h-100 d-flex flex-column">
+  <div class="card-header bg-white border-0 pb-0">
+    <div class="d-flex justify-content-between align-items-start flex-wrap gap-2">
+      <div>
+        <h4 class="mb-1">🐾 Animais</h4>
+        <p class="text-muted small mb-0">Visualize, filtre e organize rapidamente os pets cadastrados.</p>
+      </div>
       {% if scope is defined %}
       <div class="btn-group btn-group-sm">
         <a href="{{ url_for('novo_animal', scope='all') }}" class="btn btn-outline-primary {% if scope != 'mine' %}active{% endif %}">Todos</a>
@@ -10,12 +15,15 @@
       </div>
       {% endif %}
     </div>
-
-    <div class="row mb-3">
-      <div class="col-md-8">
+  </div>
+  <div class="card-body p-4 flex-grow-1 d-flex flex-column">
+    <div class="row g-3 align-items-end mb-4">
+      <div class="col-12 col-lg-7">
+        <label for="animal-filter" class="form-label small text-muted mb-1">Buscar</label>
         <input type="text" id="animal-filter" class="form-control" placeholder="Buscar por nome, espécie...">
       </div>
-      <div class="col-md-4">
+      <div class="col-12 col-lg-5">
+        <label for="animal-sort" class="form-label small text-muted mb-1">Ordenar por</label>
         <select id="animal-sort" class="form-select">
           <option value="date_desc">Data (recentes)</option>
           <option value="date_asc">Data (antigos)</option>
@@ -27,43 +35,53 @@
       </div>
     </div>
 
-    <div id="animal-cards" class="row g-3">
+    <div
+      id="animal-cards"
+      class="row g-3 flex-grow-1"
+      data-url-placeholder="__ID__"
+      data-consulta-template="{{ url_for('consulta_direct', animal_id=0)|replace('/0', '/__ID__') }}"
+      data-ficha-template="{{ url_for('ficha_animal', animal_id=0)|replace('/0/', '/__ID__/') }}"
+      data-cache-context="{{ (request.args.get('clinica_id') or current_user.clinica_id or '') ~ '::' ~ (scope|default('')) }}"
+    >
       {% if animais_adicionados %}
         {% for animal in animais_adicionados %}
         <div class="col-md-6 d-flex" data-name="{{ animal.name|lower }}" data-date="{{ animal.date_added.isoformat() if animal.date_added else '' }}" data-age="{{ animal.age_years or 0 }}">
-          <div class="card shadow-sm rounded-4 h-100 flex-fill">
+          <div class="card shadow-sm rounded-4 h-100 flex-fill border-0">
             {% if animal.image %}
-              <img src="{{ animal.image }}" class="card-img card-img-top rounded-top-4" height="180" loading="lazy" alt="Foto de {{ animal.name }}">
+            <img src="{{ animal.image }}" class="card-img card-img-top rounded-top-4" height="180" loading="lazy" alt="Foto de {{ animal.name }}">
             {% else %}
-              <div class="d-flex align-items-center justify-content-center bg-light rounded-top-4" style="height: 180px;">
-                <span class="text-muted" style="font-size: 2rem;">🐾</span>
-              </div>
+            <div class="d-flex align-items-center justify-content-center bg-light rounded-top-4" style="height: 180px;">
+              <span class="text-muted" style="font-size: 2rem;">🐾</span>
+            </div>
             {% endif %}
             <div class="card-body d-flex flex-column justify-content-between">
-              <div>
-                <h5 class="card-title">{{ animal.name }}</h5>
+              <div class="mb-3">
+                <h5 class="card-title mb-1">{{ animal.name }}</h5>
                 <p class="mb-1"><strong>Espécie:</strong> {{ animal.species }}</p>
-                <p class="mb-1"><strong>Adicionado em:</strong> {{ animal.date_added|format_datetime_brazil('%d/%m/%Y') }}</p>
+                <p class="mb-0"><strong>Adicionado em:</strong> {{ animal.date_added|format_datetime_brazil('%d/%m/%Y') }}</p>
               </div>
-              <div class="d-flex flex-wrap gap-2 mt-3">
-                <a href="{{ url_for('consulta_direct', animal_id=animal.id) }}" class="btn btn-sm btn-outline-primary w-100">🩺 Consulta</a>
-                <a href="{{ url_for('ficha_animal', animal_id=animal.id) }}" class="btn btn-sm btn-outline-dark w-100">📋 Ficha</a>
+              <div class="d-flex flex-wrap gap-2">
+                <a href="{{ url_for('consulta_direct', animal_id=animal.id) }}" class="btn btn-sm btn-outline-primary flex-fill">🩺 Consulta</a>
+                <a href="{{ url_for('ficha_animal', animal_id=animal.id) }}" class="btn btn-sm btn-outline-dark flex-fill">📋 Ficha</a>
               </div>
             </div>
           </div>
         </div>
         {% endfor %}
       {% else %}
-        <div class="text-center text-muted mt-4">
+      <div class="col-12">
+        <div class="text-center text-muted py-5 border rounded-4" style="border-style: dashed;">
           Nenhum animal cadastrado para esta clínica ainda.
         </div>
+      </div>
       {% endif %}
     </div>
-
-    {% if pagination and pagination.pages > 1 %}
-    <div class="d-flex justify-content-center mt-4">
+  </div>
+  {% if pagination and pagination.pages > 1 %}
+  <div class="card-footer bg-white border-0 pt-0">
+    <div class="d-flex justify-content-center">
       <nav aria-label="Navegação de páginas">
-        <ul class="pagination">
+        <ul class="pagination mb-0">
           {% if pagination.has_prev %}
             <li class="page-item">
               <a class="page-link" href="{{ url_for('novo_animal', page=pagination.prev_num, scope=scope) }}">Anterior</a>
@@ -92,56 +110,501 @@
         </ul>
       </nav>
     </div>
-    {% endif %}
+  </div>
+  {% endif %}
+</div>
+{% endset %}
+
+{% if compact %}
+  {{ card_block }}
+{% else %}
+<div class="container my-5">
+  <div class="row justify-content-center">
+    <div class="col-lg-10 col-xl-9">
+      {{ card_block }}
+    </div>
   </div>
 </div>
+{% endif %}
 
 <script>
-document.addEventListener('DOMContentLoaded', function() {
+(function() {
   const filterInput = document.getElementById('animal-filter');
   const sortSelect = document.getElementById('animal-sort');
   const container = document.getElementById('animal-cards');
-  const cards = Array.from(container.querySelectorAll('[data-name]'));
 
-  function getAge(card) {
-    return parseInt(card.dataset.age) || 0;
+  if (!filterInput || !sortSelect || !container) {
+    return;
   }
 
-  function applyFilter() {
-    const term = filterInput.value.toLowerCase();
-    cards.forEach(card => {
-      const text = card.textContent.toLowerCase();
-      card.style.display = text.includes(term) ? '' : 'none';
+  const placeholder = container.dataset.urlPlaceholder || '__ID__';
+  const consultaTemplate = container.dataset.consultaTemplate || '';
+  const fichaTemplate = container.dataset.fichaTemplate || '';
+  const cardElement = filterInput.closest('.card');
+  const pagination = cardElement ? cardElement.querySelector('.card-footer') : null;
+
+  const originalNodes = Array.from(container.children).map((node) => node.cloneNode(true));
+  const sortStorageKey = 'animalSortPreference';
+  const filterStorageKey = 'animalFilterPreference';
+  const DEBOUNCE_DELAY = 250;
+
+  const savedFilter = localStorage.getItem(filterStorageKey);
+  if (savedFilter !== null) {
+    filterInput.value = savedFilter;
+  }
+
+  const savedSort = localStorage.getItem(sortStorageKey);
+  if (savedSort && Array.from(sortSelect.options).some((option) => option.value === savedSort)) {
+    sortSelect.value = savedSort;
+  }
+
+  let searchResults = [];
+  let searchMode = false;
+  let activeController = null;
+  let debounceTimer = null;
+  const resultsCache = new Map();
+  let lastQuery = '';
+  let currentCacheContext = container.dataset.cacheContext || '';
+
+  const NO_RESULTS_TEMPLATE = `
+    <div class="col-12">
+      <div class="text-center text-muted py-5 border rounded-4" style="border-style: dashed;">
+        Nenhum animal encontrado.
+      </div>
+    </div>
+  `;
+
+  function invalidateCache() {
+    resultsCache.clear();
+    lastQuery = '';
+  }
+
+  const cacheObserver = new MutationObserver((mutations) => {
+    for (const mutation of mutations) {
+      if (mutation.type === 'attributes' && mutation.attributeName === 'data-cache-context') {
+        const newValue = container.dataset.cacheContext || '';
+        if (newValue !== currentCacheContext) {
+          currentCacheContext = newValue;
+          invalidateCache();
+        }
+      }
+    }
+  });
+
+  cacheObserver.observe(container, { attributes: true, attributeFilter: ['data-cache-context'] });
+  container.addEventListener('invalidate-cache', invalidateCache);
+  document.addEventListener('clinic:changed', invalidateCache);
+
+  function togglePagination(shouldShow) {
+    if (pagination) {
+      pagination.classList.toggle('d-none', !shouldShow);
+    }
+  }
+
+  function restoreOriginalCards() {
+    container.innerHTML = '';
+    originalNodes.forEach((node) => container.appendChild(node.cloneNode(true)));
+  }
+
+  function getNormalizedTerm(term) {
+    return term.trim().toLowerCase();
+  }
+
+  function matchesAnimalTerm(record, normalizedTerm) {
+    if (!normalizedTerm) {
+      return true;
+    }
+    const tokens = Array.isArray(record.searchTokens) ? record.searchTokens : [];
+    return tokens.some((token) => token.includes(normalizedTerm));
+  }
+
+  function handleImmediateResults(value) {
+    const rawQuery = value || '';
+    const normalizedTerm = getNormalizedTerm(rawQuery);
+
+    if (!normalizedTerm) {
+      if (searchMode) {
+        searchMode = false;
+        searchResults = [];
+        togglePagination(true);
+        restoreOriginalCards();
+        applySort();
+      }
+      lastQuery = '';
+      return true;
+    }
+
+    if (resultsCache.has(normalizedTerm)) {
+      searchMode = true;
+      togglePagination(false);
+      searchResults = resultsCache.get(normalizedTerm) || [];
+      lastQuery = normalizedTerm;
+      applySort();
+      return true;
+    }
+
+    if (lastQuery && normalizedTerm.startsWith(lastQuery) && resultsCache.has(lastQuery)) {
+      const baseResults = resultsCache.get(lastQuery) || [];
+      const filtered = baseResults.filter((record) => matchesAnimalTerm(record, normalizedTerm));
+      resultsCache.set(normalizedTerm, filtered);
+      searchMode = true;
+      togglePagination(false);
+      searchResults = filtered;
+      lastQuery = normalizedTerm;
+      applySort();
+      return true;
+    }
+
+    return false;
+  }
+
+  function buildUrl(template, id) {
+    if (!template) {
+      return '#';
+    }
+    return template.split(placeholder).join(String(id));
+  }
+
+  function normalizeAge(value) {
+    if (value === '' || value === null || value === undefined) {
+      return null;
+    }
+    const numeric = Number(value);
+    return Number.isNaN(numeric) ? null : numeric;
+  }
+
+  function calculateAgeYears(dateString) {
+    if (!dateString) {
+      return 0;
+    }
+    const timestamp = Date.parse(dateString);
+    if (Number.isNaN(timestamp)) {
+      return 0;
+    }
+    const diff = Date.now() - timestamp;
+    const years = diff / (365.25 * 24 * 60 * 60 * 1000);
+    return Math.max(0, Math.floor(years));
+  }
+
+  function getAgeFromRecord(record) {
+    const normalized = normalizeAge(record.age_years);
+    if (normalized !== null) {
+      return normalized;
+    }
+    return calculateAgeYears(record.date_of_birth);
+  }
+
+  function parseDate(value) {
+    if (!value) {
+      return null;
+    }
+    const timestamp = Date.parse(value);
+    return Number.isNaN(timestamp) ? null : timestamp;
+  }
+
+  function formatBrazilianDate(value) {
+    const timestamp = parseDate(value);
+    if (timestamp === null) {
+      return '';
+    }
+    const date = new Date(timestamp);
+    try {
+      return date.toLocaleDateString('pt-BR');
+    } catch (error) {
+      return date.toISOString().split('T')[0];
+    }
+  }
+
+  function createAnimalCard(animal) {
+    const col = document.createElement('div');
+    col.className = 'col-md-6 d-flex';
+    col.dataset.name = (animal.name || '').toLowerCase();
+    col.dataset.date = animal.date_added || '';
+    col.dataset.age = String(getAgeFromRecord(animal));
+
+    const card = document.createElement('div');
+    card.className = 'card shadow-sm rounded-4 h-100 flex-fill border-0';
+
+    if (animal.image) {
+      const img = document.createElement('img');
+      img.src = animal.image;
+      img.className = 'card-img card-img-top rounded-top-4';
+      img.height = 180;
+      img.loading = 'lazy';
+      img.alt = `Foto de ${animal.name || 'animal'}`;
+      card.appendChild(img);
+    } else {
+      const placeholderWrapper = document.createElement('div');
+      placeholderWrapper.className = 'd-flex align-items-center justify-content-center bg-light rounded-top-4';
+      placeholderWrapper.style.height = '180px';
+      const icon = document.createElement('span');
+      icon.className = 'text-muted';
+      icon.style.fontSize = '2rem';
+      icon.textContent = '🐾';
+      placeholderWrapper.appendChild(icon);
+      card.appendChild(placeholderWrapper);
+    }
+
+    const body = document.createElement('div');
+    body.className = 'card-body d-flex flex-column justify-content-between';
+
+    const info = document.createElement('div');
+    info.className = 'mb-3';
+
+    const title = document.createElement('h5');
+    title.className = 'card-title mb-1';
+    title.textContent = animal.name || 'Animal sem nome';
+    info.appendChild(title);
+
+    const speciesEl = document.createElement('p');
+    speciesEl.className = 'mb-1';
+    const speciesStrong = document.createElement('strong');
+    speciesStrong.textContent = 'Espécie:';
+    speciesEl.appendChild(speciesStrong);
+    speciesEl.appendChild(document.createTextNode(` ${animal.species_name || ''}`));
+    info.appendChild(speciesEl);
+
+    const addedEl = document.createElement('p');
+    addedEl.className = 'mb-0';
+    const addedStrong = document.createElement('strong');
+    addedStrong.textContent = 'Adicionado em:';
+    addedEl.appendChild(addedStrong);
+    const formattedDate = formatBrazilianDate(animal.date_added);
+    addedEl.appendChild(document.createTextNode(` ${formattedDate || '-'}`));
+    info.appendChild(addedEl);
+
+    body.appendChild(info);
+
+    const actions = document.createElement('div');
+    actions.className = 'd-flex flex-wrap gap-2';
+
+    const consultaLink = document.createElement('a');
+    consultaLink.href = buildUrl(consultaTemplate, animal.id);
+    consultaLink.className = 'btn btn-sm btn-outline-primary flex-fill';
+    consultaLink.textContent = '🩺 Consulta';
+    actions.appendChild(consultaLink);
+
+    const fichaLink = document.createElement('a');
+    fichaLink.href = buildUrl(fichaTemplate, animal.id);
+    fichaLink.className = 'btn btn-sm btn-outline-dark flex-fill';
+    fichaLink.textContent = '📋 Ficha';
+    actions.appendChild(fichaLink);
+
+    body.appendChild(actions);
+    card.appendChild(body);
+    col.appendChild(card);
+
+    return col;
+  }
+
+  function renderSearchResults(results) {
+    container.innerHTML = '';
+    if (!results.length) {
+      container.innerHTML = NO_RESULTS_TEMPLATE;
+      return;
+    }
+    results.forEach((animal) => {
+      container.appendChild(createAnimalCard(animal));
     });
+  }
+
+  function compareStrings(a, b) {
+    return a.localeCompare(b, 'pt-BR', { sensitivity: 'base' });
+  }
+
+  function compareNumbers(a, b) {
+    return a - b;
+  }
+
+  function getCardDate(card) {
+    const timestamp = parseDate(card.dataset.date);
+    return timestamp === null ? 0 : timestamp;
+  }
+
+  function getCardAge(card) {
+    const value = Number(card.dataset.age);
+    return Number.isNaN(value) ? 0 : value;
+  }
+
+  function sortCards(cards, sortValue) {
+    return cards.sort((a, b) => {
+      switch (sortValue) {
+        case 'name_asc':
+          return compareStrings(a.dataset.name || '', b.dataset.name || '');
+        case 'name_desc':
+          return compareStrings(b.dataset.name || '', a.dataset.name || '');
+        case 'date_asc':
+          return compareNumbers(getCardDate(a), getCardDate(b));
+        case 'age_asc':
+          return compareNumbers(getCardAge(a), getCardAge(b));
+        case 'age_desc':
+          return compareNumbers(getCardAge(b), getCardAge(a));
+        case 'date_desc':
+        default:
+          return compareNumbers(getCardDate(b), getCardDate(a));
+      }
+    });
+  }
+
+  function getRecordDate(record) {
+    const timestamp = parseDate(record.date_added);
+    return timestamp === null ? 0 : timestamp;
+  }
+
+  function sortRecords(records, sortValue) {
+    const copy = [...records];
+    copy.sort((a, b) => {
+      switch (sortValue) {
+        case 'name_asc':
+          return compareStrings(a.name || '', b.name || '');
+        case 'name_desc':
+          return compareStrings(b.name || '', a.name || '');
+        case 'date_asc':
+          return compareNumbers(getRecordDate(a), getRecordDate(b));
+        case 'age_asc':
+          return compareNumbers(getAgeFromRecord(a), getAgeFromRecord(b));
+        case 'age_desc':
+          return compareNumbers(getAgeFromRecord(b), getAgeFromRecord(a));
+        case 'date_desc':
+        default:
+          return compareNumbers(getRecordDate(b), getRecordDate(a));
+      }
+    });
+    return copy;
   }
 
   function applySort() {
-    const value = sortSelect.value;
-    const visible = cards.filter(card => card.style.display !== 'none');
-    const hidden = cards.filter(card => card.style.display === 'none');
-    visible.sort((a, b) => {
-      switch (value) {
-        case 'name_asc':
-          return a.dataset.name.localeCompare(b.dataset.name);
-        case 'name_desc':
-          return b.dataset.name.localeCompare(a.dataset.name);
-        case 'date_asc':
-          return new Date(a.dataset.date) - new Date(b.dataset.date);
-        case 'age_asc':
-          return getAge(a) - getAge(b);
-        case 'age_desc':
-          return getAge(b) - getAge(a);
-        case 'date_desc':
-        default:
-          return new Date(b.dataset.date) - new Date(a.dataset.date);
-      }
-    });
-    visible.forEach(card => container.appendChild(card));
-    hidden.forEach(card => container.appendChild(card));
+    const sortValue = sortSelect.value;
+    if (searchMode) {
+      const sorted = sortRecords(searchResults, sortValue);
+      renderSearchResults(sorted);
+    } else {
+      const cards = Array.from(container.querySelectorAll('[data-name]'));
+      sortCards(cards, sortValue).forEach((card) => container.appendChild(card));
+    }
   }
 
-  filterInput.addEventListener('input', () => { applyFilter(); applySort(); });
-  sortSelect.addEventListener('change', applySort);
-  applySort();
-});
+  function normalizeAnimal(record) {
+    const name = record.name || '';
+    const speciesName = record.species_name || record.species || '';
+    const breedName = record.breed_name || record.breed || '';
+    const tutorName = record.tutor_name || '';
+    const microchip = record.microchip_number || '';
+    const dateAdded = record.date_added || '';
+    const normalizedAge = normalizeAge(record.age_years);
+    const searchTokens = [name, speciesName, breedName, tutorName, microchip]
+      .map((value) => (value || '').toString().toLowerCase())
+      .filter((token) => token);
+
+    return {
+      ...record,
+      name,
+      species_name: speciesName,
+      breed_name: breedName,
+      tutor_name: tutorName,
+      microchip_number: microchip,
+      date_added: dateAdded,
+      age_years: normalizedAge,
+      searchTokens,
+    };
+  }
+
+  async function performSearch(term) {
+    const query = term.trim();
+    const normalizedTerm = getNormalizedTerm(query);
+
+    if (!query) {
+      if (activeController) {
+        activeController.abort();
+        activeController = null;
+      }
+      searchMode = false;
+      searchResults = [];
+      togglePagination(true);
+      restoreOriginalCards();
+      applySort();
+      lastQuery = '';
+      return;
+    }
+
+    if (activeController) {
+      activeController.abort();
+    }
+
+    searchMode = true;
+    togglePagination(false);
+    if (!resultsCache.has(normalizedTerm)) {
+      container.innerHTML = `
+        <div class="col-12">
+          <div class="text-center text-muted py-5">Carregando resultados...</div>
+        </div>
+      `;
+    }
+
+    const params = new URLSearchParams({ q: query });
+    activeController = new AbortController();
+    lastQuery = normalizedTerm;
+
+    try {
+      const response = await fetch(`/buscar_animais?${params.toString()}`, {
+        signal: activeController.signal,
+      });
+      if (!response.ok) {
+        throw new Error('Falha ao buscar animais');
+      }
+      const data = await response.json();
+      const normalizedResults = Array.isArray(data) ? data.map(normalizeAnimal) : [];
+      resultsCache.set(normalizedTerm, normalizedResults);
+      searchResults = normalizedResults;
+      lastQuery = normalizedTerm;
+      applySort();
+    } catch (error) {
+      if (error.name === 'AbortError') {
+        return;
+      }
+      console.error(error);
+      if (resultsCache.has(normalizedTerm)) {
+        searchResults = resultsCache.get(normalizedTerm) || [];
+        searchMode = true;
+        togglePagination(false);
+        applySort();
+      } else {
+        searchMode = false;
+        searchResults = [];
+        restoreOriginalCards();
+        togglePagination(true);
+        applySort();
+      }
+    } finally {
+      activeController = null;
+    }
+  }
+
+  function scheduleSearch() {
+    if (debounceTimer) {
+      clearTimeout(debounceTimer);
+    }
+    debounceTimer = setTimeout(() => {
+      performSearch(filterInput.value);
+    }, DEBOUNCE_DELAY);
+  }
+
+  filterInput.addEventListener('input', () => {
+    const value = filterInput.value;
+    localStorage.setItem(filterStorageKey, value);
+    handleImmediateResults(value);
+    scheduleSearch();
+  });
+
+  sortSelect.addEventListener('change', () => {
+    localStorage.setItem(sortStorageKey, sortSelect.value);
+    applySort();
+  });
+
+  if (filterInput.value.trim()) {
+    performSearch(filterInput.value);
+  } else {
+    applySort();
+  }
+})();
 </script>
