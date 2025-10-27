@@ -8,11 +8,12 @@ from flask import url_for, request, current_app
 from werkzeug.security import generate_password_hash, check_password_hash
 from datetime import datetime, date, timedelta
 from dateutil.relativedelta import relativedelta
+import unicodedata
 import enum
 from sqlalchemy import Enum, event
 from enum import Enum
 from sqlalchemy import Enum as PgEnum
-from sqlalchemy.orm import synonym
+from sqlalchemy.orm import synonym, object_session
 
 
 
@@ -172,6 +173,7 @@ class User(UserMixin, db.Model):
 
     clinica_id = db.Column(db.Integer, db.ForeignKey('clinica.id'), nullable=True)
     clinica = db.relationship('Clinica', backref='usuarios', foreign_keys=[clinica_id])
+    is_private = db.Column(db.Boolean, nullable=False, default=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
 
@@ -294,24 +296,25 @@ class Animal(db.Model):
     def age_years(self):
         if self.date_of_birth:
             return relativedelta(date.today(), self.date_of_birth).years
-        try:
-            return int(self.age.split()[0])
-        except (ValueError, AttributeError, IndexError):
+        numero, unidade = _parse_age_value(self.age)
+        if numero is None:
             return None
+        if unidade == 'meses':
+            return 0
+        return numero
 
     @property
     def age_display(self):
         if self.date_of_birth:
             delta = relativedelta(date.today(), self.date_of_birth)
             if delta.years > 0:
-                return f"{delta.years} ano{'s' if delta.years != 1 else ''}"
-            return f"{delta.months} mes{'es' if delta.months != 1 else ''}"
+                return _format_age_label(delta.years, 'anos')
+            return _format_age_label(delta.months, 'meses')
         if self.age:
-            try:
-                years = int(self.age.split()[0])
-                return f"{years} ano{'s' if years != 1 else ''}"
-            except (ValueError, AttributeError, IndexError):
+            numero, unidade = _parse_age_value(self.age)
+            if numero is None:
                 return self.age
+            return _format_age_label(numero, unidade or 'anos')
         return None
 
     def __str__(self):
@@ -462,6 +465,7 @@ class Consulta(db.Model):
 
     # Status da consulta (em andamento, finalizada, etc)
     status = db.Column(db.String(20), default='in_progress')
+    finalizada_em = db.Column(db.DateTime, nullable=True)
 
     # Consulta de retorno
     retorno_de_id = db.Column(db.Integer, db.ForeignKey('consulta.id'))
@@ -657,6 +661,7 @@ class ClinicStaff(db.Model):
     can_manage_staff = db.Column(db.Boolean, default=False)
     can_manage_schedule = db.Column(db.Boolean, default=False)
     can_manage_inventory = db.Column(db.Boolean, default=False)
+    can_view_full_calendar = db.Column(db.Boolean, default=True, nullable=False)
 
     clinic = db.relationship('Clinica', backref='staff_members')
     user = db.relationship('User', backref='clinic_roles')
@@ -731,6 +736,66 @@ class Veterinario(db.Model):
 
     def __str__(self):
         return f"{self.user.name} (CRMV: {self.crmv})"
+
+
+class VeterinarianMembership(db.Model):
+    __tablename__ = 'veterinarian_membership'
+
+    id = db.Column(db.Integer, primary_key=True)
+    veterinario_id = db.Column(
+        db.Integer,
+        db.ForeignKey('veterinario.id', ondelete='CASCADE'),
+        nullable=False,
+        unique=True,
+    )
+    started_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    trial_ends_at = db.Column(db.DateTime, nullable=False)
+    paid_until = db.Column(db.DateTime, nullable=True)
+    last_payment_id = db.Column(db.Integer, db.ForeignKey('payment.id'), nullable=True)
+
+    veterinario = db.relationship(
+        'Veterinario',
+        backref=db.backref('membership', cascade='all, delete-orphan', uselist=False),
+    )
+    last_payment = db.relationship('Payment', foreign_keys=[last_payment_id])
+
+    def _now(self):
+        return datetime.utcnow()
+
+    def ensure_trial_dates(self, trial_days: int = 30) -> None:
+        """Guarantee that ``started_at`` and ``trial_ends_at`` are populated."""
+
+        if self.started_at is None:
+            self.started_at = self._now()
+        if self.trial_ends_at is None:
+            self.trial_ends_at = self.started_at + timedelta(days=trial_days)
+
+    def restart_trial(self, trial_days: int = 30) -> None:
+        """Start a fresh trial period from now."""
+
+        now = self._now()
+        self.started_at = now
+        self.trial_ends_at = now + timedelta(days=trial_days)
+        self.paid_until = None
+
+    def is_trial_active(self) -> bool:
+        if not self.trial_ends_at:
+            return False
+        return self._now() <= self.trial_ends_at
+
+    def has_valid_payment(self) -> bool:
+        if not self.paid_until:
+            return False
+        return self._now() <= self.paid_until
+
+    def is_active(self) -> bool:
+        return self.is_trial_active() or self.has_valid_payment()
+
+    def remaining_trial_days(self) -> int:
+        if not self.trial_ends_at:
+            return 0
+        delta = self.trial_ends_at - self._now()
+        return max(delta.days, 0)
 
 
 class VetSchedule(db.Model):
@@ -831,6 +896,27 @@ event.listen(Appointment, 'before_insert', Appointment._validate_subscription)
 event.listen(Appointment, 'before_update', Appointment._validate_subscription)
 event.listen(Appointment, 'before_insert', Appointment._set_clinica)
 event.listen(Appointment, 'before_update', Appointment._set_clinica)
+
+
+def _create_veterinarian_membership(mapper, connection, target):
+    """Ensure every veterinarian profile starts with a membership record."""
+
+    trial_days = current_app.config.get('VETERINARIAN_TRIAL_DAYS', 30)
+    session = object_session(target) or db.session
+
+    membership = getattr(target, 'membership', None)
+    if membership is None:
+        membership = VeterinarianMembership(
+            veterinario_id=target.id,
+            started_at=datetime.utcnow(),
+            trial_ends_at=datetime.utcnow() + timedelta(days=trial_days),
+        )
+        session.add(membership)
+    else:
+        membership.ensure_trial_dates(trial_days)
+
+
+event.listen(Veterinario, 'after_insert', _create_veterinarian_membership, propagate=True)
 
 # Agendamento de exames
 class ExamAppointment(db.Model):
@@ -1311,7 +1397,7 @@ class Payment(db.Model):
     )
 
     id       = db.Column(db.Integer, primary_key=True)
-    order_id = db.Column(db.Integer, db.ForeignKey("order.id"), nullable=False)
+    order_id = db.Column(db.Integer, db.ForeignKey("order.id"), nullable=True)
 
     # ✅ fica só esta definição
     order = db.relationship(
@@ -1412,3 +1498,40 @@ class PendingWebhook(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     mp_id = db.Column(db.BigInteger, unique=True)
     attempts = db.Column(db.Integer, default=0)
+def _normalize_age_unit(value):
+    if not value:
+        return None
+    text = unicodedata.normalize('NFKD', str(value))
+    text = text.encode('ASCII', 'ignore').decode('ASCII').strip().lower()
+    if text.startswith('mes'):
+        return 'meses'
+    if text.startswith('ano'):
+        return 'anos'
+    return text or None
+
+
+def _parse_age_value(age_text):
+    if not age_text:
+        return None, None
+    parts = str(age_text).split()
+    number = None
+    try:
+        number = int(parts[0])
+    except (ValueError, IndexError):
+        number = None
+    unit = None
+    if len(parts) > 1:
+        unit = _normalize_age_unit(parts[1])
+    return number, unit
+
+
+def _format_age_label(number, unit):
+    if number is None:
+        return ''
+    normalized = _normalize_age_unit(unit) or 'anos'
+    if normalized == 'meses':
+        suffix = 'mês' if number == 1 else 'meses'
+    else:
+        suffix = 'ano' if number == 1 else 'anos'
+    return f"{number} {suffix}"
+
