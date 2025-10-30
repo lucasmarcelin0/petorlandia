@@ -1,0 +1,2570 @@
+[
+  {
+    "function": "veterinarian_membership",
+    "routes": [
+      "/veterinario/assinatura"
+    ],
+    "methods": [],
+    "ensure_clinic_access": false,
+    "decorators": [
+      "app.route",
+      "login_required"
+    ],
+    "lineno": 656
+  },
+  {
+    "function": "veterinarian_membership_checkout",
+    "routes": [
+      "/veterinario/assinatura/checkout"
+    ],
+    "methods": [
+      "POST"
+    ],
+    "ensure_clinic_access": false,
+    "decorators": [
+      "app.route",
+      "login_required"
+    ],
+    "lineno": 680
+  },
+  {
+    "function": "painel_dashboard",
+    "routes": [
+      "/painel"
+    ],
+    "methods": [],
+    "ensure_clinic_access": false,
+    "decorators": [
+      "app.route",
+      "login_required"
+    ],
+    "lineno": 955
+  },
+  {
+    "function": "add_animal",
+    "routes": [
+      "/add-animal"
+    ],
+    "methods": [
+      "GET",
+      "POST"
+    ],
+    "ensure_clinic_access": false,
+    "decorators": [
+      "app.route",
+      "login_required"
+    ],
+    "lineno": 1111
+  },
+  {
+    "function": "logout",
+    "routes": [
+      "/logout"
+    ],
+    "methods": [],
+    "ensure_clinic_access": false,
+    "decorators": [
+      "app.route",
+      "login_required"
+    ],
+    "lineno": 1234
+  },
+  {
+    "function": "profile",
+    "routes": [
+      "/profile"
+    ],
+    "methods": [
+      "GET",
+      "POST"
+    ],
+    "ensure_clinic_access": false,
+    "decorators": [
+      "app.route",
+      "login_required"
+    ],
+    "lineno": 1241
+  },
+  {
+    "function": "change_password",
+    "routes": [
+      "/change_password"
+    ],
+    "methods": [
+      "GET",
+      "POST"
+    ],
+    "ensure_clinic_access": false,
+    "decorators": [
+      "app.route",
+      "login_required"
+    ],
+    "lineno": 1305
+  },
+  {
+    "function": "delete_account",
+    "routes": [
+      "/delete_account"
+    ],
+    "methods": [
+      "POST"
+    ],
+    "ensure_clinic_access": false,
+    "decorators": [
+      "app.route",
+      "login_required"
+    ],
+    "lineno": 1326
+  },
+  {
+    "function": "adotar_animal",
+    "routes": [
+      "/animal/<int:animal_id>/adotar"
+    ],
+    "methods": [
+      "POST"
+    ],
+    "ensure_clinic_access": false,
+    "decorators": [
+      "app.route",
+      "login_required"
+    ],
+    "lineno": 1460
+  },
+  {
+    "function": "editar_animal",
+    "routes": [
+      "/animal/<int:animal_id>/editar",
+      "/editar_animal/<int:animal_id>"
+    ],
+    "methods": [
+      "GET",
+      "POST"
+    ],
+    "ensure_clinic_access": false,
+    "decorators": [
+      "app.route",
+      "app.route",
+      "login_required"
+    ],
+    "lineno": 1477
+  },
+  {
+    "function": "enviar_mensagem",
+    "routes": [
+      "/mensagem/<int:animal_id>"
+    ],
+    "methods": [
+      "GET",
+      "POST"
+    ],
+    "ensure_clinic_access": false,
+    "decorators": [
+      "app.route",
+      "login_required"
+    ],
+    "lineno": 1547
+  },
+  {
+    "function": "aceitar_interesse",
+    "routes": [
+      "/mensagem/<int:message_id>/aceitar"
+    ],
+    "methods": [
+      "POST"
+    ],
+    "ensure_clinic_access": false,
+    "decorators": [
+      "app.route",
+      "login_required"
+    ],
+    "lineno": 1574
+  },
+  {
+    "function": "mensagens",
+    "routes": [
+      "/mensagens"
+    ],
+    "methods": [],
+    "ensure_clinic_access": false,
+    "decorators": [
+      "app.route",
+      "login_required"
+    ],
+    "lineno": 1592
+  },
+  {
+    "function": "api_message_threads",
+    "routes": [
+      "/api/messages/threads"
+    ],
+    "methods": [],
+    "ensure_clinic_access": false,
+    "decorators": [
+      "app.route",
+      "login_required"
+    ],
+    "lineno": 1598
+  },
+  {
+    "function": "chat_messages",
+    "routes": [
+      "/chat/<int:animal_id>"
+    ],
+    "methods": [
+      "GET",
+      "POST"
+    ],
+    "ensure_clinic_access": false,
+    "decorators": [
+      "app.route",
+      "login_required"
+    ],
+    "lineno": 1607
+  },
+  {
+    "function": "chat_view",
+    "routes": [
+      "/chat/<int:animal_id>/view"
+    ],
+    "methods": [],
+    "ensure_clinic_access": false,
+    "decorators": [
+      "app.route",
+      "login_required"
+    ],
+    "lineno": 1658
+  },
+  {
+    "function": "conversa",
+    "routes": [
+      "/conversa/<int:animal_id>/<int:user_id>"
+    ],
+    "methods": [
+      "GET",
+      "POST"
+    ],
+    "ensure_clinic_access": false,
+    "decorators": [
+      "app.route",
+      "login_required"
+    ],
+    "lineno": 1665
+  },
+  {
+    "function": "api_conversa_message",
+    "routes": [
+      "/api/conversa/<int:animal_id>/<int:user_id>"
+    ],
+    "methods": [
+      "POST"
+    ],
+    "ensure_clinic_access": false,
+    "decorators": [
+      "app.route",
+      "login_required"
+    ],
+    "lineno": 1714
+  },
+  {
+    "function": "conversa_admin",
+    "routes": [
+      "/conversa_admin",
+      "/conversa_admin/<int:user_id>"
+    ],
+    "methods": [
+      "GET",
+      "POST"
+    ],
+    "ensure_clinic_access": false,
+    "decorators": [
+      "app.route",
+      "app.route",
+      "login_required"
+    ],
+    "lineno": 1736
+  },
+  {
+    "function": "api_conversa_admin_message",
+    "routes": [
+      "/api/conversa_admin",
+      "/api/conversa_admin/<int:user_id>"
+    ],
+    "methods": [
+      "POST"
+    ],
+    "ensure_clinic_access": false,
+    "decorators": [
+      "app.route",
+      "app.route",
+      "login_required"
+    ],
+    "lineno": 1815
+  },
+  {
+    "function": "admin_promote_veterinarian",
+    "routes": [
+      "/admin/users/<int:user_id>/promover_veterinario"
+    ],
+    "methods": [
+      "POST"
+    ],
+    "ensure_clinic_access": false,
+    "decorators": [
+      "app.route",
+      "login_required"
+    ],
+    "lineno": 1846
+  },
+  {
+    "function": "mensagens_admin",
+    "routes": [
+      "/mensagens_admin"
+    ],
+    "methods": [],
+    "ensure_clinic_access": false,
+    "decorators": [
+      "app.route",
+      "login_required"
+    ],
+    "lineno": 1886
+  },
+  {
+    "function": "deletar_animal",
+    "routes": [
+      "/animal/<int:animal_id>/deletar"
+    ],
+    "methods": [
+      "POST"
+    ],
+    "ensure_clinic_access": false,
+    "decorators": [
+      "app.route",
+      "login_required"
+    ],
+    "lineno": 1971
+  },
+  {
+    "function": "termo_interesse",
+    "routes": [
+      "/termo/interesse/<int:animal_id>/<int:user_id>"
+    ],
+    "methods": [
+      "GET",
+      "POST"
+    ],
+    "ensure_clinic_access": false,
+    "decorators": [
+      "app.route",
+      "login_required"
+    ],
+    "lineno": 2003
+  },
+  {
+    "function": "termo_transferencia",
+    "routes": [
+      "/termo/transferencia/<int:animal_id>/<int:user_id>"
+    ],
+    "methods": [
+      "GET",
+      "POST"
+    ],
+    "ensure_clinic_access": false,
+    "decorators": [
+      "app.route",
+      "login_required"
+    ],
+    "lineno": 2172
+  },
+  {
+    "function": "termo_animal",
+    "routes": [
+      "/animal/<int:animal_id>/termo/<string:tipo>"
+    ],
+    "methods": [],
+    "ensure_clinic_access": false,
+    "decorators": [
+      "app.route",
+      "login_required"
+    ],
+    "lineno": 2233
+  },
+  {
+    "function": "gerar_termo",
+    "routes": [
+      "/termo/<int:animal_id>/<tipo>"
+    ],
+    "methods": [],
+    "ensure_clinic_access": false,
+    "decorators": [
+      "app.route",
+      "login_required"
+    ],
+    "lineno": 2258
+  },
+  {
+    "function": "plano_saude_overview",
+    "routes": [
+      "/plano-saude"
+    ],
+    "methods": [],
+    "ensure_clinic_access": false,
+    "decorators": [
+      "app.route",
+      "login_required"
+    ],
+    "lineno": 2278
+  },
+  {
+    "function": "planosaude_animal",
+    "routes": [
+      "/animal/<int:animal_id>/planosaude"
+    ],
+    "methods": [
+      "GET",
+      "POST"
+    ],
+    "ensure_clinic_access": false,
+    "decorators": [
+      "app.route",
+      "login_required"
+    ],
+    "lineno": 2307
+  },
+  {
+    "function": "contratar_plano",
+    "routes": [
+      "/plano-saude/<int:animal_id>/contratar"
+    ],
+    "methods": [
+      "POST"
+    ],
+    "ensure_clinic_access": false,
+    "decorators": [
+      "app.route",
+      "login_required"
+    ],
+    "lineno": 2352
+  },
+  {
+    "function": "ficha_animal",
+    "routes": [
+      "/animal/<int:animal_id>/ficha"
+    ],
+    "methods": [],
+    "ensure_clinic_access": false,
+    "decorators": [
+      "app.route",
+      "login_required"
+    ],
+    "lineno": 2413
+  },
+  {
+    "function": "upload_document",
+    "routes": [
+      "/animal/<int:animal_id>/documentos"
+    ],
+    "methods": [
+      "POST"
+    ],
+    "ensure_clinic_access": false,
+    "decorators": [
+      "app.route",
+      "login_required"
+    ],
+    "lineno": 2483
+  },
+  {
+    "function": "delete_document",
+    "routes": [
+      "/animal/<int:animal_id>/documentos/<int:doc_id>/delete"
+    ],
+    "methods": [
+      "POST"
+    ],
+    "ensure_clinic_access": false,
+    "decorators": [
+      "app.route",
+      "login_required"
+    ],
+    "lineno": 2525
+  },
+  {
+    "function": "editar_ficha_animal",
+    "routes": [
+      "/animal/<int:animal_id>/editar_ficha"
+    ],
+    "methods": [
+      "GET",
+      "POST"
+    ],
+    "ensure_clinic_access": false,
+    "decorators": [
+      "app.route",
+      "login_required"
+    ],
+    "lineno": 2559
+  },
+  {
+    "function": "generate_qr",
+    "routes": [
+      "/generate_qr/<int:animal_id>"
+    ],
+    "methods": [],
+    "ensure_clinic_access": false,
+    "decorators": [
+      "app.route",
+      "login_required"
+    ],
+    "lineno": 2580
+  },
+  {
+    "function": "consulta_qr",
+    "routes": [
+      "/consulta_qr"
+    ],
+    "methods": [
+      "GET"
+    ],
+    "ensure_clinic_access": false,
+    "decorators": [
+      "app.route",
+      "login_required"
+    ],
+    "lineno": 2612
+  },
+  {
+    "function": "consulta_direct",
+    "routes": [
+      "/consulta/<int:animal_id>"
+    ],
+    "methods": [],
+    "ensure_clinic_access": true,
+    "decorators": [
+      "app.route",
+      "login_required"
+    ],
+    "lineno": 2680
+  },
+  {
+    "function": "finalizar_consulta",
+    "routes": [
+      "/finalizar_consulta/<int:consulta_id>"
+    ],
+    "methods": [
+      "POST"
+    ],
+    "ensure_clinic_access": false,
+    "decorators": [
+      "app.route",
+      "login_required"
+    ],
+    "lineno": 2857
+  },
+  {
+    "function": "agendar_retorno",
+    "routes": [
+      "/agendar_retorno/<int:consulta_id>"
+    ],
+    "methods": [
+      "POST"
+    ],
+    "ensure_clinic_access": false,
+    "decorators": [
+      "app.route",
+      "login_required"
+    ],
+    "lineno": 2915
+  },
+  {
+    "function": "iniciar_retorno",
+    "routes": [
+      "/retorno/<int:appointment_id>/start"
+    ],
+    "methods": [
+      "POST"
+    ],
+    "ensure_clinic_access": false,
+    "decorators": [
+      "app.route",
+      "login_required"
+    ],
+    "lineno": 2969
+  },
+  {
+    "function": "deletar_consulta",
+    "routes": [
+      "/consulta/<int:consulta_id>/deletar"
+    ],
+    "methods": [
+      "POST"
+    ],
+    "ensure_clinic_access": false,
+    "decorators": [
+      "app.route",
+      "login_required"
+    ],
+    "lineno": 2988
+  },
+  {
+    "function": "imprimir_consulta",
+    "routes": [
+      "/imprimir_consulta/<int:consulta_id>"
+    ],
+    "methods": [],
+    "ensure_clinic_access": false,
+    "decorators": [
+      "app.route",
+      "login_required"
+    ],
+    "lineno": 3016
+  },
+  {
+    "function": "minha_clinica",
+    "routes": [
+      "/minha-clinica"
+    ],
+    "methods": [
+      "GET",
+      "POST"
+    ],
+    "ensure_clinic_access": false,
+    "decorators": [
+      "app.route",
+      "login_required"
+    ],
+    "lineno": 3166
+  },
+  {
+    "function": "clinic_detail",
+    "routes": [
+      "/clinica/<int:clinica_id>"
+    ],
+    "methods": [
+      "GET",
+      "POST"
+    ],
+    "ensure_clinic_access": false,
+    "decorators": [
+      "app.route",
+      "login_required"
+    ],
+    "lineno": 3265
+  },
+  {
+    "function": "cancel_clinic_invite",
+    "routes": [
+      "/clinica/<int:clinica_id>/convites/<int:invite_id>/cancel"
+    ],
+    "methods": [
+      "POST"
+    ],
+    "ensure_clinic_access": false,
+    "decorators": [
+      "app.route",
+      "login_required"
+    ],
+    "lineno": 3622
+  },
+  {
+    "function": "resend_clinic_invite",
+    "routes": [
+      "/clinica/<int:clinica_id>/convites/<int:invite_id>/resend"
+    ],
+    "methods": [
+      "POST"
+    ],
+    "ensure_clinic_access": false,
+    "decorators": [
+      "app.route",
+      "login_required"
+    ],
+    "lineno": 3648
+  },
+  {
+    "function": "create_clinic_veterinario",
+    "routes": [
+      "/clinica/<int:clinica_id>/veterinario"
+    ],
+    "methods": [
+      "POST"
+    ],
+    "ensure_clinic_access": false,
+    "decorators": [
+      "app.route",
+      "login_required"
+    ],
+    "lineno": 3681
+  },
+  {
+    "function": "clinic_invites",
+    "routes": [
+      "/convites/clinica"
+    ],
+    "methods": [
+      "GET",
+      "POST"
+    ],
+    "ensure_clinic_access": false,
+    "decorators": [
+      "app.route",
+      "login_required"
+    ],
+    "lineno": 3727
+  },
+  {
+    "function": "respond_clinic_invite",
+    "routes": [
+      "/convites/<int:invite_id>/<string:action>"
+    ],
+    "methods": [
+      "POST"
+    ],
+    "ensure_clinic_access": false,
+    "decorators": [
+      "app.route",
+      "login_required"
+    ],
+    "lineno": 3774
+  },
+  {
+    "function": "clinic_stock",
+    "routes": [
+      "/clinica/<int:clinica_id>/estoque"
+    ],
+    "methods": [
+      "GET",
+      "POST"
+    ],
+    "ensure_clinic_access": false,
+    "decorators": [
+      "app.route",
+      "login_required"
+    ],
+    "lineno": 3806
+  },
+  {
+    "function": "update_inventory_item",
+    "routes": [
+      "/estoque/item/<int:item_id>/atualizar"
+    ],
+    "methods": [
+      "POST"
+    ],
+    "ensure_clinic_access": false,
+    "decorators": [
+      "app.route",
+      "login_required"
+    ],
+    "lineno": 3845
+  },
+  {
+    "function": "novo_orcamento",
+    "routes": [
+      "/clinica/<int:clinica_id>/novo_orcamento"
+    ],
+    "methods": [
+      "GET",
+      "POST"
+    ],
+    "ensure_clinic_access": false,
+    "decorators": [
+      "app.route",
+      "login_required"
+    ],
+    "lineno": 3870
+  },
+  {
+    "function": "editar_orcamento",
+    "routes": [
+      "/orcamento/<int:orcamento_id>/editar"
+    ],
+    "methods": [
+      "GET",
+      "POST"
+    ],
+    "ensure_clinic_access": false,
+    "decorators": [
+      "app.route",
+      "login_required"
+    ],
+    "lineno": 3886
+  },
+  {
+    "function": "orcamentos",
+    "routes": [
+      "/clinica/<int:clinica_id>/orcamentos"
+    ],
+    "methods": [],
+    "ensure_clinic_access": false,
+    "decorators": [
+      "app.route",
+      "login_required"
+    ],
+    "lineno": 3901
+  },
+  {
+    "function": "dashboard_orcamentos",
+    "routes": [
+      "/dashboard/orcamentos"
+    ],
+    "methods": [],
+    "ensure_clinic_access": false,
+    "decorators": [
+      "app.route",
+      "login_required"
+    ],
+    "lineno": 3911
+  },
+  {
+    "function": "clinic_dashboard",
+    "routes": [
+      "/clinica/<int:clinica_id>/dashboard"
+    ],
+    "methods": [],
+    "ensure_clinic_access": false,
+    "decorators": [
+      "app.route",
+      "login_required"
+    ],
+    "lineno": 3963
+  },
+  {
+    "function": "clinic_staff",
+    "routes": [
+      "/clinica/<int:clinica_id>/funcionarios"
+    ],
+    "methods": [
+      "GET",
+      "POST"
+    ],
+    "ensure_clinic_access": false,
+    "decorators": [
+      "app.route",
+      "login_required"
+    ],
+    "lineno": 3984
+  },
+  {
+    "function": "clinic_staff_permissions",
+    "routes": [
+      "/clinica/<int:clinica_id>/funcionario/<int:user_id>/permissoes"
+    ],
+    "methods": [
+      "GET",
+      "POST"
+    ],
+    "ensure_clinic_access": false,
+    "decorators": [
+      "app.route",
+      "login_required"
+    ],
+    "lineno": 4027
+  },
+  {
+    "function": "remove_funcionario",
+    "routes": [
+      "/clinica/<int:clinica_id>/funcionario/<int:user_id>/remove"
+    ],
+    "methods": [
+      "POST"
+    ],
+    "ensure_clinic_access": false,
+    "decorators": [
+      "app.route",
+      "login_required"
+    ],
+    "lineno": 4062
+  },
+  {
+    "function": "delete_clinic_hour",
+    "routes": [
+      "/clinica/<int:clinica_id>/horario/<int:horario_id>/delete"
+    ],
+    "methods": [
+      "POST"
+    ],
+    "ensure_clinic_access": false,
+    "decorators": [
+      "app.route",
+      "login_required"
+    ],
+    "lineno": 4082
+  },
+  {
+    "function": "remove_veterinario",
+    "routes": [
+      "/clinica/<int:clinica_id>/veterinario/<int:veterinario_id>/remove"
+    ],
+    "methods": [
+      "POST"
+    ],
+    "ensure_clinic_access": false,
+    "decorators": [
+      "app.route",
+      "login_required"
+    ],
+    "lineno": 4099
+  },
+  {
+    "function": "remove_specialist",
+    "routes": [
+      "/clinica/<int:clinica_id>/especialista/<int:veterinario_id>/remove"
+    ],
+    "methods": [
+      "POST"
+    ],
+    "ensure_clinic_access": false,
+    "decorators": [
+      "app.route",
+      "login_required"
+    ],
+    "lineno": 4118
+  },
+  {
+    "function": "delete_vet_schedule_clinic",
+    "routes": [
+      "/clinica/<int:clinica_id>/veterinario/<int:veterinario_id>/schedule/<int:horario_id>/delete"
+    ],
+    "methods": [
+      "POST"
+    ],
+    "ensure_clinic_access": false,
+    "decorators": [
+      "app.route",
+      "login_required"
+    ],
+    "lineno": 4139
+  },
+  {
+    "function": "edit_vet_specialties",
+    "routes": [
+      "/admin/veterinario/<int:veterinario_id>/especialidades"
+    ],
+    "methods": [
+      "GET",
+      "POST"
+    ],
+    "ensure_clinic_access": false,
+    "decorators": [
+      "app.route",
+      "login_required"
+    ],
+    "lineno": 4340
+  },
+  {
+    "function": "obter_tutor",
+    "routes": [
+      "/tutor/<int:tutor_id>"
+    ],
+    "methods": [],
+    "ensure_clinic_access": false,
+    "decorators": [
+      "app.route",
+      "login_required"
+    ],
+    "lineno": 4369
+  },
+  {
+    "function": "tutor_detail",
+    "routes": [
+      "/tutor/<int:tutor_id>"
+    ],
+    "methods": [],
+    "ensure_clinic_access": false,
+    "decorators": [
+      "app.route",
+      "login_required"
+    ],
+    "lineno": 4385
+  },
+  {
+    "function": "tutores",
+    "routes": [
+      "/tutores"
+    ],
+    "methods": [
+      "GET",
+      "POST"
+    ],
+    "ensure_clinic_access": false,
+    "decorators": [
+      "app.route",
+      "login_required"
+    ],
+    "lineno": 4393
+  },
+  {
+    "function": "deletar_tutor",
+    "routes": [
+      "/deletar_tutor/<int:tutor_id>"
+    ],
+    "methods": [
+      "POST"
+    ],
+    "ensure_clinic_access": false,
+    "decorators": [
+      "app.route",
+      "login_required"
+    ],
+    "lineno": 4540
+  },
+  {
+    "function": "buscar_animais",
+    "routes": [
+      "/buscar_animais"
+    ],
+    "methods": [],
+    "ensure_clinic_access": false,
+    "decorators": [
+      "app.route",
+      "login_required"
+    ],
+    "lineno": 4580
+  },
+  {
+    "function": "update_tutor",
+    "routes": [
+      "/update_tutor/<int:user_id>"
+    ],
+    "methods": [
+      "POST"
+    ],
+    "ensure_clinic_access": false,
+    "decorators": [
+      "app.route",
+      "login_required"
+    ],
+    "lineno": 4631
+  },
+  {
+    "function": "ficha_tutor",
+    "routes": [
+      "/ficha_tutor/<int:tutor_id>"
+    ],
+    "methods": [],
+    "ensure_clinic_access": false,
+    "decorators": [
+      "app.route",
+      "login_required"
+    ],
+    "lineno": 4750
+  },
+  {
+    "function": "update_animal",
+    "routes": [
+      "/update_animal/<int:animal_id>"
+    ],
+    "methods": [
+      "POST"
+    ],
+    "ensure_clinic_access": false,
+    "decorators": [
+      "app.route",
+      "login_required"
+    ],
+    "lineno": 4811
+  },
+  {
+    "function": "update_consulta",
+    "routes": [
+      "/update_consulta/<int:consulta_id>"
+    ],
+    "methods": [
+      "POST"
+    ],
+    "ensure_clinic_access": false,
+    "decorators": [
+      "app.route",
+      "login_required"
+    ],
+    "lineno": 4937
+  },
+  {
+    "function": "salvar_racao",
+    "routes": [
+      "/animal/<int:animal_id>/racoes"
+    ],
+    "methods": [
+      "POST"
+    ],
+    "ensure_clinic_access": false,
+    "decorators": [
+      "app.route",
+      "login_required"
+    ],
+    "lineno": 5024
+  },
+  {
+    "function": "criar_tipo_racao",
+    "routes": [
+      "/tipo_racao"
+    ],
+    "methods": [
+      "POST"
+    ],
+    "ensure_clinic_access": false,
+    "decorators": [
+      "app.route",
+      "login_required"
+    ],
+    "lineno": 5107
+  },
+  {
+    "function": "alterar_tipo_racao",
+    "routes": [
+      "/tipo_racao/<int:tipo_id>"
+    ],
+    "methods": [
+      "DELETE",
+      "PUT"
+    ],
+    "ensure_clinic_access": false,
+    "decorators": [
+      "app.route",
+      "login_required"
+    ],
+    "lineno": 5153
+  },
+  {
+    "function": "alterar_racao",
+    "routes": [
+      "/racao/<int:racao_id>"
+    ],
+    "methods": [
+      "DELETE",
+      "PUT"
+    ],
+    "ensure_clinic_access": false,
+    "decorators": [
+      "app.route",
+      "login_required"
+    ],
+    "lineno": 5226
+  },
+  {
+    "function": "relatorio_racoes",
+    "routes": [
+      "/relatorio/racoes"
+    ],
+    "methods": [],
+    "ensure_clinic_access": false,
+    "decorators": [
+      "app.route",
+      "login_required"
+    ],
+    "lineno": 5271
+  },
+  {
+    "function": "historico_animal",
+    "routes": [
+      "/historico_animal/<int:animal_id>"
+    ],
+    "methods": [],
+    "ensure_clinic_access": false,
+    "decorators": [
+      "app.route",
+      "login_required"
+    ],
+    "lineno": 5300
+  },
+  {
+    "function": "detalhes_racao",
+    "routes": [
+      "/relatorio/racoes/<int:tipo_id>"
+    ],
+    "methods": [],
+    "ensure_clinic_access": false,
+    "decorators": [
+      "app.route",
+      "login_required"
+    ],
+    "lineno": 5309
+  },
+  {
+    "function": "criar_vacina_modelo",
+    "routes": [
+      "/vacina_modelo"
+    ],
+    "methods": [
+      "POST"
+    ],
+    "ensure_clinic_access": false,
+    "decorators": [
+      "app.route",
+      "login_required"
+    ],
+    "lineno": 5348
+  },
+  {
+    "function": "alterar_vacina_modelo",
+    "routes": [
+      "/vacina_modelo/<int:vacina_id>"
+    ],
+    "methods": [
+      "DELETE",
+      "PUT"
+    ],
+    "ensure_clinic_access": false,
+    "decorators": [
+      "app.route",
+      "login_required"
+    ],
+    "lineno": 5393
+  },
+  {
+    "function": "alterar_vacina",
+    "routes": [
+      "/vacina/<int:vacina_id>"
+    ],
+    "methods": [
+      "DELETE",
+      "PUT"
+    ],
+    "ensure_clinic_access": false,
+    "decorators": [
+      "app.route",
+      "login_required"
+    ],
+    "lineno": 5494
+  },
+  {
+    "function": "criar_prescricao",
+    "routes": [
+      "/consulta/<int:consulta_id>/prescricao"
+    ],
+    "methods": [
+      "POST"
+    ],
+    "ensure_clinic_access": false,
+    "decorators": [
+      "app.route",
+      "login_required"
+    ],
+    "lineno": 5593
+  },
+  {
+    "function": "deletar_prescricao",
+    "routes": [
+      "/prescricao/<int:prescricao_id>/deletar"
+    ],
+    "methods": [
+      "POST"
+    ],
+    "ensure_clinic_access": false,
+    "decorators": [
+      "app.route",
+      "login_required"
+    ],
+    "lineno": 5641
+  },
+  {
+    "function": "criar_medicamento",
+    "routes": [
+      "/medicamento"
+    ],
+    "methods": [
+      "POST"
+    ],
+    "ensure_clinic_access": false,
+    "decorators": [
+      "app.route",
+      "login_required"
+    ],
+    "lineno": 5685
+  },
+  {
+    "function": "alterar_medicamento",
+    "routes": [
+      "/medicamento/<int:med_id>"
+    ],
+    "methods": [
+      "DELETE",
+      "PUT"
+    ],
+    "ensure_clinic_access": false,
+    "decorators": [
+      "app.route",
+      "login_required"
+    ],
+    "lineno": 5727
+  },
+  {
+    "function": "salvar_prescricoes_lote",
+    "routes": [
+      "/consulta/<int:consulta_id>/prescricao/lote"
+    ],
+    "methods": [
+      "POST"
+    ],
+    "ensure_clinic_access": false,
+    "decorators": [
+      "app.route",
+      "login_required"
+    ],
+    "lineno": 5855
+  },
+  {
+    "function": "salvar_bloco_prescricao",
+    "routes": [
+      "/consulta/<int:consulta_id>/bloco_prescricao"
+    ],
+    "methods": [
+      "POST"
+    ],
+    "ensure_clinic_access": false,
+    "decorators": [
+      "app.route",
+      "login_required"
+    ],
+    "lineno": 5879
+  },
+  {
+    "function": "deletar_bloco_prescricao",
+    "routes": [
+      "/bloco_prescricao/<int:bloco_id>/deletar"
+    ],
+    "methods": [
+      "POST"
+    ],
+    "ensure_clinic_access": false,
+    "decorators": [
+      "app.route",
+      "login_required"
+    ],
+    "lineno": 5935
+  },
+  {
+    "function": "editar_bloco_prescricao",
+    "routes": [
+      "/bloco_prescricao/<int:bloco_id>/editar"
+    ],
+    "methods": [
+      "GET"
+    ],
+    "ensure_clinic_access": false,
+    "decorators": [
+      "app.route",
+      "login_required"
+    ],
+    "lineno": 5960
+  },
+  {
+    "function": "atualizar_bloco_prescricao",
+    "routes": [
+      "/bloco_prescricao/<int:bloco_id>/atualizar"
+    ],
+    "methods": [
+      "POST"
+    ],
+    "ensure_clinic_access": false,
+    "decorators": [
+      "app.route",
+      "login_required"
+    ],
+    "lineno": 5972
+  },
+  {
+    "function": "imprimir_bloco_prescricao",
+    "routes": [
+      "/bloco_prescricao/<int:bloco_id>/imprimir"
+    ],
+    "methods": [],
+    "ensure_clinic_access": false,
+    "decorators": [
+      "app.route",
+      "login_required"
+    ],
+    "lineno": 6018
+  },
+  {
+    "function": "salvar_bloco_exames",
+    "routes": [
+      "/animal/<int:animal_id>/bloco_exames"
+    ],
+    "methods": [
+      "POST"
+    ],
+    "ensure_clinic_access": false,
+    "decorators": [
+      "app.route",
+      "login_required"
+    ],
+    "lineno": 6046
+  },
+  {
+    "function": "buscar_exames",
+    "routes": [
+      "/buscar_exames"
+    ],
+    "methods": [],
+    "ensure_clinic_access": false,
+    "decorators": [
+      "app.route",
+      "login_required"
+    ],
+    "lineno": 6078
+  },
+  {
+    "function": "criar_exame_modelo",
+    "routes": [
+      "/exame_modelo"
+    ],
+    "methods": [
+      "POST"
+    ],
+    "ensure_clinic_access": false,
+    "decorators": [
+      "app.route",
+      "login_required"
+    ],
+    "lineno": 6089
+  },
+  {
+    "function": "alterar_exame_modelo",
+    "routes": [
+      "/exame_modelo/<int:exame_id>"
+    ],
+    "methods": [
+      "DELETE",
+      "PUT"
+    ],
+    "ensure_clinic_access": false,
+    "decorators": [
+      "app.route",
+      "login_required"
+    ],
+    "lineno": 6103
+  },
+  {
+    "function": "imprimir_bloco_exames",
+    "routes": [
+      "/imprimir_bloco_exames/<int:bloco_id>"
+    ],
+    "methods": [],
+    "ensure_clinic_access": false,
+    "decorators": [
+      "app.route",
+      "login_required"
+    ],
+    "lineno": 6124
+  },
+  {
+    "function": "deletar_bloco_exames",
+    "routes": [
+      "/bloco_exames/<int:bloco_id>/deletar"
+    ],
+    "methods": [
+      "POST"
+    ],
+    "ensure_clinic_access": false,
+    "decorators": [
+      "app.route",
+      "login_required"
+    ],
+    "lineno": 6151
+  },
+  {
+    "function": "editar_bloco_exames",
+    "routes": [
+      "/bloco_exames/<int:bloco_id>/editar"
+    ],
+    "methods": [
+      "GET"
+    ],
+    "ensure_clinic_access": false,
+    "decorators": [
+      "app.route",
+      "login_required"
+    ],
+    "lineno": 6177
+  },
+  {
+    "function": "alterar_exame",
+    "routes": [
+      "/exame/<int:exame_id>"
+    ],
+    "methods": [
+      "DELETE",
+      "PUT"
+    ],
+    "ensure_clinic_access": false,
+    "decorators": [
+      "app.route",
+      "login_required"
+    ],
+    "lineno": 6189
+  },
+  {
+    "function": "atualizar_bloco_exames",
+    "routes": [
+      "/bloco_exames/<int:bloco_id>/atualizar"
+    ],
+    "methods": [
+      "POST"
+    ],
+    "ensure_clinic_access": false,
+    "decorators": [
+      "app.route",
+      "login_required"
+    ],
+    "lineno": 6232
+  },
+  {
+    "function": "novo_atendimento",
+    "routes": [
+      "/novo_atendimento"
+    ],
+    "methods": [],
+    "ensure_clinic_access": false,
+    "decorators": [
+      "app.route",
+      "login_required"
+    ],
+    "lineno": 6292
+  },
+  {
+    "function": "criar_tutor_ajax",
+    "routes": [
+      "/criar_tutor_ajax"
+    ],
+    "methods": [
+      "POST"
+    ],
+    "ensure_clinic_access": false,
+    "decorators": [
+      "app.route",
+      "login_required"
+    ],
+    "lineno": 6303
+  },
+  {
+    "function": "novo_animal",
+    "routes": [
+      "/novo_animal"
+    ],
+    "methods": [
+      "GET",
+      "POST"
+    ],
+    "ensure_clinic_access": false,
+    "decorators": [
+      "app.route",
+      "login_required"
+    ],
+    "lineno": 6346
+  },
+  {
+    "function": "marcar_como_falecido",
+    "routes": [
+      "/animal/<int:animal_id>/marcar_falecido"
+    ],
+    "methods": [
+      "POST"
+    ],
+    "ensure_clinic_access": false,
+    "decorators": [
+      "app.route",
+      "login_required"
+    ],
+    "lineno": 6521
+  },
+  {
+    "function": "reverter_falecimento",
+    "routes": [
+      "/animal/<int:animal_id>/reverter_falecimento"
+    ],
+    "methods": [
+      "POST"
+    ],
+    "ensure_clinic_access": false,
+    "decorators": [
+      "app.route",
+      "login_required"
+    ],
+    "lineno": 6553
+  },
+  {
+    "function": "arquivar_animal",
+    "routes": [
+      "/animal/<int:animal_id>/arquivar"
+    ],
+    "methods": [
+      "POST"
+    ],
+    "ensure_clinic_access": false,
+    "decorators": [
+      "app.route",
+      "login_required"
+    ],
+    "lineno": 6576
+  },
+  {
+    "function": "create_order",
+    "routes": [
+      "/orders/new"
+    ],
+    "methods": [
+      "GET",
+      "POST"
+    ],
+    "ensure_clinic_access": false,
+    "decorators": [
+      "app.route",
+      "login_required"
+    ],
+    "lineno": 6626
+  },
+  {
+    "function": "request_delivery",
+    "routes": [
+      "/orders/<int:order_id>/request_delivery"
+    ],
+    "methods": [
+      "POST"
+    ],
+    "ensure_clinic_access": false,
+    "decorators": [
+      "app.route",
+      "login_required"
+    ],
+    "lineno": 6683
+  },
+  {
+    "function": "list_delivery_requests",
+    "routes": [
+      "/delivery_requests"
+    ],
+    "methods": [],
+    "ensure_clinic_access": false,
+    "decorators": [
+      "app.route",
+      "login_required"
+    ],
+    "lineno": 6727
+  },
+  {
+    "function": "api_delivery_counts",
+    "routes": [
+      "/api/delivery_counts"
+    ],
+    "methods": [],
+    "ensure_clinic_access": false,
+    "decorators": [
+      "app.route",
+      "login_required"
+    ],
+    "lineno": 6798
+  },
+  {
+    "function": "admin_delivery_detail",
+    "routes": [
+      "/admin/delivery/<int:req_id>"
+    ],
+    "methods": [],
+    "ensure_clinic_access": false,
+    "decorators": [
+      "app.route",
+      "login_required"
+    ],
+    "lineno": 6828
+  },
+  {
+    "function": "worker_delivery_detail",
+    "routes": [
+      "/worker/delivery/<int:req_id>"
+    ],
+    "methods": [],
+    "ensure_clinic_access": false,
+    "decorators": [
+      "app.route",
+      "login_required"
+    ],
+    "lineno": 6837
+  },
+  {
+    "function": "accept_delivery",
+    "routes": [
+      "/delivery_requests/<int:req_id>/accept"
+    ],
+    "methods": [
+      "POST"
+    ],
+    "ensure_clinic_access": false,
+    "decorators": [
+      "app.route",
+      "login_required"
+    ],
+    "lineno": 6852
+  },
+  {
+    "function": "complete_delivery",
+    "routes": [
+      "/delivery_requests/<int:req_id>/complete"
+    ],
+    "methods": [
+      "POST"
+    ],
+    "ensure_clinic_access": false,
+    "decorators": [
+      "app.route",
+      "login_required"
+    ],
+    "lineno": 6878
+  },
+  {
+    "function": "cancel_delivery",
+    "routes": [
+      "/delivery_requests/<int:req_id>/cancel"
+    ],
+    "methods": [
+      "POST"
+    ],
+    "ensure_clinic_access": false,
+    "decorators": [
+      "app.route",
+      "login_required"
+    ],
+    "lineno": 6895
+  },
+  {
+    "function": "buyer_cancel_delivery",
+    "routes": [
+      "/delivery_requests/<int:req_id>/buyer_cancel"
+    ],
+    "methods": [
+      "POST"
+    ],
+    "ensure_clinic_access": false,
+    "decorators": [
+      "app.route",
+      "login_required"
+    ],
+    "lineno": 6913
+  },
+  {
+    "function": "delivery_detail",
+    "routes": [
+      "/delivery/<int:req_id>"
+    ],
+    "methods": [],
+    "ensure_clinic_access": false,
+    "decorators": [
+      "app.route",
+      "login_required"
+    ],
+    "lineno": 6934
+  },
+  {
+    "function": "delivery_overview",
+    "routes": [
+      "/admin/delivery_overview"
+    ],
+    "methods": [],
+    "ensure_clinic_access": false,
+    "decorators": [
+      "app.route",
+      "login_required"
+    ],
+    "lineno": 6978
+  },
+  {
+    "function": "admin_set_delivery_status",
+    "routes": [
+      "/admin/delivery_requests/<int:req_id>/status/<status>"
+    ],
+    "methods": [
+      "POST"
+    ],
+    "ensure_clinic_access": false,
+    "decorators": [
+      "app.route",
+      "login_required"
+    ],
+    "lineno": 7046
+  },
+  {
+    "function": "admin_delete_delivery",
+    "routes": [
+      "/admin/delivery_requests/<int:req_id>/delete"
+    ],
+    "methods": [
+      "POST"
+    ],
+    "ensure_clinic_access": false,
+    "decorators": [
+      "app.route",
+      "login_required"
+    ],
+    "lineno": 7093
+  },
+  {
+    "function": "admin_archive_delivery",
+    "routes": [
+      "/admin/delivery_requests/<int:req_id>/archive"
+    ],
+    "methods": [
+      "POST"
+    ],
+    "ensure_clinic_access": false,
+    "decorators": [
+      "app.route",
+      "login_required"
+    ],
+    "lineno": 7108
+  },
+  {
+    "function": "admin_unarchive_delivery",
+    "routes": [
+      "/admin/delivery_requests/<int:req_id>/unarchive"
+    ],
+    "methods": [
+      "POST"
+    ],
+    "ensure_clinic_access": false,
+    "decorators": [
+      "app.route",
+      "login_required"
+    ],
+    "lineno": 7122
+  },
+  {
+    "function": "delivery_archive",
+    "routes": [
+      "/admin/delivery_archive"
+    ],
+    "methods": [],
+    "ensure_clinic_access": false,
+    "decorators": [
+      "app.route",
+      "login_required"
+    ],
+    "lineno": 7136
+  },
+  {
+    "function": "delivery_archive_user",
+    "routes": [
+      "/delivery_archive"
+    ],
+    "methods": [],
+    "ensure_clinic_access": false,
+    "decorators": [
+      "app.route",
+      "login_required"
+    ],
+    "lineno": 7158
+  },
+  {
+    "function": "loja",
+    "routes": [
+      "/loja"
+    ],
+    "methods": [],
+    "ensure_clinic_access": false,
+    "decorators": [
+      "app.route",
+      "login_required"
+    ],
+    "lineno": 7628
+  },
+  {
+    "function": "loja_data",
+    "routes": [
+      "/loja/data"
+    ],
+    "methods": [],
+    "ensure_clinic_access": false,
+    "decorators": [
+      "app.route",
+      "login_required"
+    ],
+    "lineno": 7663
+  },
+  {
+    "function": "produto_detail",
+    "routes": [
+      "/produto/<int:product_id>"
+    ],
+    "methods": [
+      "GET",
+      "POST"
+    ],
+    "ensure_clinic_access": false,
+    "decorators": [
+      "app.route",
+      "login_required"
+    ],
+    "lineno": 7706
+  },
+  {
+    "function": "adicionar_carrinho",
+    "routes": [
+      "/carrinho/adicionar/<int:product_id>"
+    ],
+    "methods": [
+      "POST"
+    ],
+    "ensure_clinic_access": false,
+    "decorators": [
+      "app.route",
+      "login_required"
+    ],
+    "lineno": 7758
+  },
+  {
+    "function": "aumentar_item_carrinho",
+    "routes": [
+      "/carrinho/increase/<int:item_id>"
+    ],
+    "methods": [
+      "POST"
+    ],
+    "ensure_clinic_access": false,
+    "decorators": [
+      "app.route",
+      "login_required"
+    ],
+    "lineno": 7811
+  },
+  {
+    "function": "diminuir_item_carrinho",
+    "routes": [
+      "/carrinho/decrease/<int:item_id>"
+    ],
+    "methods": [
+      "POST"
+    ],
+    "ensure_clinic_access": false,
+    "decorators": [
+      "app.route",
+      "login_required"
+    ],
+    "lineno": 7837
+  },
+  {
+    "function": "ver_carrinho",
+    "routes": [
+      "/carrinho"
+    ],
+    "methods": [
+      "GET",
+      "POST"
+    ],
+    "ensure_clinic_access": false,
+    "decorators": [
+      "app.route",
+      "login_required"
+    ],
+    "lineno": 7881
+  },
+  {
+    "function": "carrinho_salvar_endereco",
+    "routes": [
+      "/carrinho/salvar_endereco"
+    ],
+    "methods": [
+      "POST"
+    ],
+    "ensure_clinic_access": false,
+    "decorators": [
+      "app.route",
+      "login_required"
+    ],
+    "lineno": 7912
+  },
+  {
+    "function": "checkout_confirm",
+    "routes": [
+      "/checkout/confirm"
+    ],
+    "methods": [
+      "POST"
+    ],
+    "ensure_clinic_access": false,
+    "decorators": [
+      "app.route",
+      "login_required"
+    ],
+    "lineno": 7940
+  },
+  {
+    "function": "checkout",
+    "routes": [
+      "/checkout"
+    ],
+    "methods": [
+      "POST"
+    ],
+    "ensure_clinic_access": false,
+    "decorators": [
+      "app.route",
+      "login_required"
+    ],
+    "lineno": 8009
+  },
+  {
+    "function": "edit_order_address",
+    "routes": [
+      "/order/<int:order_id>/edit_address"
+    ],
+    "methods": [
+      "GET",
+      "POST"
+    ],
+    "ensure_clinic_access": false,
+    "decorators": [
+      "app.route",
+      "login_required"
+    ],
+    "lineno": 8458
+  },
+  {
+    "function": "minhas_compras",
+    "routes": [
+      "/minhas-compras"
+    ],
+    "methods": [],
+    "ensure_clinic_access": false,
+    "decorators": [
+      "app.route",
+      "login_required"
+    ],
+    "lineno": 8544
+  },
+  {
+    "function": "api_minhas_compras",
+    "routes": [
+      "/api/minhas-compras"
+    ],
+    "methods": [],
+    "ensure_clinic_access": false,
+    "decorators": [
+      "app.route",
+      "login_required"
+    ],
+    "lineno": 8567
+  },
+  {
+    "function": "pedido_detail",
+    "routes": [
+      "/pedido/<int:order_id>"
+    ],
+    "methods": [],
+    "ensure_clinic_access": false,
+    "decorators": [
+      "app.route",
+      "login_required"
+    ],
+    "lineno": 8587
+  },
+  {
+    "function": "appointment_confirmation",
+    "routes": [
+      "/appointments/<int:appointment_id>/confirmation"
+    ],
+    "methods": [],
+    "ensure_clinic_access": false,
+    "decorators": [
+      "app.route",
+      "login_required"
+    ],
+    "lineno": 8666
+  },
+  {
+    "function": "appointments",
+    "routes": [
+      "/appointments"
+    ],
+    "methods": [
+      "GET",
+      "POST"
+    ],
+    "ensure_clinic_access": false,
+    "decorators": [
+      "app.route",
+      "login_required"
+    ],
+    "lineno": 8675
+  },
+  {
+    "function": "appointments_calendar",
+    "routes": [
+      "/appointments/calendar"
+    ],
+    "methods": [],
+    "ensure_clinic_access": false,
+    "decorators": [
+      "app.route",
+      "login_required"
+    ],
+    "lineno": 9722
+  },
+  {
+    "function": "edit_vet_schedule_slot",
+    "routes": [
+      "/appointments/<int:veterinario_id>/schedule/<int:horario_id>/edit"
+    ],
+    "methods": [
+      "POST"
+    ],
+    "ensure_clinic_access": false,
+    "decorators": [
+      "app.route",
+      "login_required"
+    ],
+    "lineno": 9729
+  },
+  {
+    "function": "bulk_delete_vet_schedule",
+    "routes": [
+      "/appointments/<int:veterinario_id>/schedule/bulk_delete"
+    ],
+    "methods": [
+      "POST"
+    ],
+    "ensure_clinic_access": false,
+    "decorators": [
+      "app.route",
+      "login_required"
+    ],
+    "lineno": 9940
+  },
+  {
+    "function": "delete_vet_schedule",
+    "routes": [
+      "/appointments/<int:veterinario_id>/schedule/<int:horario_id>/delete"
+    ],
+    "methods": [
+      "POST"
+    ],
+    "ensure_clinic_access": false,
+    "decorators": [
+      "app.route",
+      "login_required"
+    ],
+    "lineno": 10041
+  },
+  {
+    "function": "pending_appointments",
+    "routes": [
+      "/appointments/pending"
+    ],
+    "methods": [],
+    "ensure_clinic_access": false,
+    "decorators": [
+      "app.route",
+      "login_required"
+    ],
+    "lineno": 10061
+  },
+  {
+    "function": "manage_appointments",
+    "routes": [
+      "/appointments/manage"
+    ],
+    "methods": [],
+    "ensure_clinic_access": false,
+    "decorators": [
+      "app.route",
+      "login_required"
+    ],
+    "lineno": 10067
+  },
+  {
+    "function": "edit_appointment",
+    "routes": [
+      "/appointments/<int:appointment_id>/edit"
+    ],
+    "methods": [
+      "GET",
+      "POST"
+    ],
+    "ensure_clinic_access": false,
+    "decorators": [
+      "app.route",
+      "login_required"
+    ],
+    "lineno": 10086
+  },
+  {
+    "function": "update_appointment_status",
+    "routes": [
+      "/appointments/<int:appointment_id>/status"
+    ],
+    "methods": [
+      "POST"
+    ],
+    "ensure_clinic_access": false,
+    "decorators": [
+      "app.route",
+      "login_required"
+    ],
+    "lineno": 10167
+  },
+  {
+    "function": "delete_appointment",
+    "routes": [
+      "/appointments/<int:appointment_id>/delete"
+    ],
+    "methods": [
+      "POST"
+    ],
+    "ensure_clinic_access": false,
+    "decorators": [
+      "app.route",
+      "login_required"
+    ],
+    "lineno": 10279
+  },
+  {
+    "function": "api_my_pets",
+    "routes": [
+      "/api/my_pets"
+    ],
+    "methods": [],
+    "ensure_clinic_access": false,
+    "decorators": [
+      "app.route",
+      "login_required"
+    ],
+    "lineno": 10338
+  },
+  {
+    "function": "api_clinic_pets",
+    "routes": [
+      "/api/clinic_pets"
+    ],
+    "methods": [],
+    "ensure_clinic_access": false,
+    "decorators": [
+      "app.route",
+      "login_required"
+    ],
+    "lineno": 10357
+  },
+  {
+    "function": "api_my_appointments",
+    "routes": [
+      "/api/my_appointments"
+    ],
+    "methods": [],
+    "ensure_clinic_access": false,
+    "decorators": [
+      "app.route",
+      "login_required"
+    ],
+    "lineno": 10429
+  },
+  {
+    "function": "api_user_appointments",
+    "routes": [
+      "/api/user_appointments/<int:user_id>"
+    ],
+    "methods": [],
+    "ensure_clinic_access": false,
+    "decorators": [
+      "app.route",
+      "login_required"
+    ],
+    "lineno": 10798
+  },
+  {
+    "function": "api_reschedule_appointment",
+    "routes": [
+      "/api/appointments/<int:appointment_id>/reschedule"
+    ],
+    "methods": [
+      "POST"
+    ],
+    "ensure_clinic_access": false,
+    "decorators": [
+      "app.route",
+      "login_required"
+    ],
+    "lineno": 10855
+  },
+  {
+    "function": "api_clinic_appointments",
+    "routes": [
+      "/api/clinic_appointments/<int:clinica_id>"
+    ],
+    "methods": [],
+    "ensure_clinic_access": true,
+    "decorators": [
+      "app.route",
+      "login_required"
+    ],
+    "lineno": 10937
+  },
+  {
+    "function": "api_vet_appointments",
+    "routes": [
+      "/api/vet_appointments/<int:veterinario_id>"
+    ],
+    "methods": [],
+    "ensure_clinic_access": true,
+    "decorators": [
+      "app.route",
+      "login_required"
+    ],
+    "lineno": 11002
+  },
+  {
+    "function": "schedule_exam",
+    "routes": [
+      "/animal/<int:animal_id>/schedule_exam"
+    ],
+    "methods": [
+      "POST"
+    ],
+    "ensure_clinic_access": false,
+    "decorators": [
+      "app.route",
+      "login_required"
+    ],
+    "lineno": 11160
+  },
+  {
+    "function": "update_exam_appointment_status",
+    "routes": [
+      "/exam_appointment/<int:appointment_id>/status"
+    ],
+    "methods": [
+      "POST"
+    ],
+    "ensure_clinic_access": false,
+    "decorators": [
+      "app.route",
+      "login_required"
+    ],
+    "lineno": 11232
+  },
+  {
+    "function": "update_exam_appointment",
+    "routes": [
+      "/exam_appointment/<int:appointment_id>/update"
+    ],
+    "methods": [
+      "POST"
+    ],
+    "ensure_clinic_access": false,
+    "decorators": [
+      "app.route",
+      "login_required"
+    ],
+    "lineno": 11269
+  },
+  {
+    "function": "update_exam_appointment_requester",
+    "routes": [
+      "/exam_appointment/<int:appointment_id>/requester_update"
+    ],
+    "methods": [
+      "POST"
+    ],
+    "ensure_clinic_access": false,
+    "decorators": [
+      "app.route",
+      "login_required"
+    ],
+    "lineno": 11306
+  },
+  {
+    "function": "delete_exam_appointment",
+    "routes": [
+      "/exam_appointment/<int:appointment_id>/delete"
+    ],
+    "methods": [
+      "POST"
+    ],
+    "ensure_clinic_access": false,
+    "decorators": [
+      "app.route",
+      "login_required"
+    ],
+    "lineno": 11416
+  },
+  {
+    "function": "animal_exam_appointments",
+    "routes": [
+      "/animal/<int:animal_id>/exam_appointments"
+    ],
+    "methods": [],
+    "ensure_clinic_access": false,
+    "decorators": [
+      "app.route",
+      "login_required"
+    ],
+    "lineno": 11429
+  },
+  {
+    "function": "criar_servico_clinica",
+    "routes": [
+      "/servico"
+    ],
+    "methods": [
+      "POST"
+    ],
+    "ensure_clinic_access": false,
+    "decorators": [
+      "app.route",
+      "login_required"
+    ],
+    "lineno": 11441
+  },
+  {
+    "function": "imprimir_orcamento",
+    "routes": [
+      "/imprimir_orcamento/<int:consulta_id>"
+    ],
+    "methods": [],
+    "ensure_clinic_access": false,
+    "decorators": [
+      "app.route",
+      "login_required"
+    ],
+    "lineno": 11462
+  },
+  {
+    "function": "imprimir_bloco_orcamento",
+    "routes": [
+      "/imprimir_bloco_orcamento/<int:bloco_id>"
+    ],
+    "methods": [],
+    "ensure_clinic_access": true,
+    "decorators": [
+      "app.route",
+      "login_required"
+    ],
+    "lineno": 11483
+  },
+  {
+    "function": "imprimir_orcamento_padrao",
+    "routes": [
+      "/orcamento/<int:orcamento_id>/imprimir"
+    ],
+    "methods": [],
+    "ensure_clinic_access": true,
+    "decorators": [
+      "app.route",
+      "login_required"
+    ],
+    "lineno": 11504
+  },
+  {
+    "function": "pagar_bloco_orcamento",
+    "routes": [
+      "/pagar_bloco_orcamento/<int:bloco_id>"
+    ],
+    "methods": [],
+    "ensure_clinic_access": true,
+    "decorators": [
+      "app.route",
+      "login_required"
+    ],
+    "lineno": 11519
+  },
+  {
+    "function": "pagar_orcamento",
+    "routes": [
+      "/consulta/<int:consulta_id>/pagar_orcamento"
+    ],
+    "methods": [],
+    "ensure_clinic_access": false,
+    "decorators": [
+      "app.route",
+      "login_required"
+    ],
+    "lineno": 11565
+  },
+  {
+    "function": "adicionar_orcamento_item",
+    "routes": [
+      "/consulta/<int:consulta_id>/orcamento_item"
+    ],
+    "methods": [
+      "POST"
+    ],
+    "ensure_clinic_access": false,
+    "decorators": [
+      "app.route",
+      "login_required"
+    ],
+    "lineno": 11611
+  },
+  {
+    "function": "deletar_orcamento_item",
+    "routes": [
+      "/consulta/orcamento_item/<int:item_id>"
+    ],
+    "methods": [
+      "DELETE"
+    ],
+    "ensure_clinic_access": true,
+    "decorators": [
+      "app.route",
+      "login_required"
+    ],
+    "lineno": 11658
+  },
+  {
+    "function": "salvar_bloco_orcamento",
+    "routes": [
+      "/consulta/<int:consulta_id>/bloco_orcamento"
+    ],
+    "methods": [
+      "POST"
+    ],
+    "ensure_clinic_access": false,
+    "decorators": [
+      "app.route",
+      "login_required"
+    ],
+    "lineno": 11671
+  },
+  {
+    "function": "deletar_bloco_orcamento",
+    "routes": [
+      "/bloco_orcamento/<int:bloco_id>/deletar"
+    ],
+    "methods": [
+      "POST"
+    ],
+    "ensure_clinic_access": true,
+    "decorators": [
+      "app.route",
+      "login_required"
+    ],
+    "lineno": 11691
+  },
+  {
+    "function": "editar_bloco_orcamento",
+    "routes": [
+      "/bloco_orcamento/<int:bloco_id>/editar"
+    ],
+    "methods": [
+      "GET"
+    ],
+    "ensure_clinic_access": true,
+    "decorators": [
+      "app.route",
+      "login_required"
+    ],
+    "lineno": 11707
+  },
+  {
+    "function": "atualizar_bloco_orcamento",
+    "routes": [
+      "/bloco_orcamento/<int:bloco_id>/atualizar"
+    ],
+    "methods": [
+      "POST"
+    ],
+    "ensure_clinic_access": true,
+    "decorators": [
+      "app.route",
+      "login_required"
+    ],
+    "lineno": 11717
+  }
+]
