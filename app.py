@@ -6516,9 +6516,13 @@ def salvar_bloco_prescricao(consulta_id):
         db.session.add(nova)
 
     db.session.commit()
+
+    # Recarrega o animal para garantir que as prescrições recém-criadas
+    # apareçam no histórico renderizado logo após o commit.
+    animal_atualizado = Animal.query.get(consulta.animal_id)
     historico_html = render_template(
         'partials/historico_prescricoes.html',
-        animal=consulta.animal
+        animal=animal_atualizado
     )
     return jsonify({
         'success': True,
