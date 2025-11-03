@@ -494,11 +494,9 @@
       return;
     }
     const btn = document.getElementById('btn-finalizar');
-    const originalHTML = btn.innerHTML;
-    btn.disabled = true;
-    btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2" role="status"></span>Salvando...';
+    const timeoutMessage = 'Não conseguimos confirmar o salvamento da prescrição. Verifique sua conexão e tente novamente.';
 
-    try {
+    async function executarSalvamento() {
       const instrucoes = document.getElementById('instrucoes-medicamentos')?.value || '';
       const response = await fetchOrQueue(`/consulta/{{ consulta.id }}/bloco_prescricao`, {
         method: 'POST',
@@ -511,7 +509,10 @@
 
       if (response) {
         const data = await response.json();
-        if (!response.ok || !data.success) throw new Error(data.message || 'Erro ao salvar prescrição');
+        if (!response.ok || !data.success) {
+          mostrarFeedback(data.message || 'Erro ao salvar prescrição', 'danger');
+          return { success: false };
+        }
         mostrarFeedback('Prescrição salva com sucesso!', 'success');
         if (data.html) {
           const container = document.getElementById('historico-prescricoes');
@@ -522,18 +523,35 @@
         }
         prescricoes = [];
         renderPrescricoesTemp();
-      } else {
-        // Offline: ação armazenada para sincronização futura sem exibir pop-up
-        prescricoes = [];
-        renderPrescricoesTemp();
+        return { success: true };
       }
+      // Offline: ação armazenada para sincronização futura sem exibir pop-up
+      prescricoes = [];
+      renderPrescricoesTemp();
+      return { success: true };
+    }
 
+    try {
+      if (window.FormFeedback && typeof window.FormFeedback.withSavingState === 'function') {
+        await window.FormFeedback.withSavingState(btn, executarSalvamento, {
+          loadingText: 'Salvando...',
+          loadingTimeout: 5000,
+          timeoutMessage,
+          timeoutLevel: 'warning',
+          errorMessage: 'Erro ao salvar prescrição',
+          onTimeout: () => {
+            mostrarFeedback(timeoutMessage, 'warning');
+          }
+        });
+      } else {
+        await executarSalvamento();
+      }
     } catch (err) {
+      if (err?.name === 'SavingStateTimeoutError') {
+        return;
+      }
       console.error('Erro:', err);
       mostrarFeedback(err.message || 'Erro ao salvar prescrição', 'danger');
-    } finally {
-      btn.disabled = false;
-      btn.innerHTML = originalHTML;
     }
   }
 

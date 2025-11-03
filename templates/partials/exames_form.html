@@ -497,44 +497,64 @@
     }
 
     const btn = document.getElementById('btn-finalizar-exames');
-    const originalHTML = btn.innerHTML;
-    btn.disabled = true;
-    btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2" role="status"></span>Salvando...';
+    const timeoutMessage = 'Não conseguimos confirmar o salvamento dos exames. Verifique sua conexão e tente novamente.';
 
-    const obsGerais = document.getElementById('observacoes-exames')?.value || '';
-
-    const resp = await fetchOrQueue(`/animal/{{ animal.id }}/bloco_exames`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
-      body: JSON.stringify({
-        exames: exames,
-        observacoes_gerais: obsGerais
-      })
-    });
-    if (resp) {
-      const data = await resp.json();
-      if (data.success) {
-        mostrarFeedback('Solicitação de exames salva com sucesso!');
-        if (data.html) {
-          const container = document.getElementById('historico-exames');
-          container.innerHTML = data.html;
-          if (typeof bindSyncForms === 'function') {
-            bindSyncForms(container);
+    async function executarSalvamento() {
+      const obsGerais = document.getElementById('observacoes-exames')?.value || '';
+      const resp = await fetchOrQueue(`/animal/{{ animal.id }}/bloco_exames`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+        body: JSON.stringify({
+          exames: exames,
+          observacoes_gerais: obsGerais
+        })
+      });
+      if (resp) {
+        const data = await resp.json();
+        if (data.success) {
+          mostrarFeedback('Solicitação de exames salva com sucesso!');
+          if (data.html) {
+            const container = document.getElementById('historico-exames');
+            container.innerHTML = data.html;
+            if (typeof bindSyncForms === 'function') {
+              bindSyncForms(container);
+            }
           }
+          exames = [];
+          renderExamesTemp();
+          return { success: true };
         }
-        exames = [];
-        renderExamesTemp();
-      } else {
         mostrarFeedback('Erro ao salvar exames.', 'danger');
+        return { success: false };
       }
-    } else {
       // Offline: mantém exames na fila sem mostrar notificação
       exames = [];
       renderExamesTemp();
+      return { success: true };
     }
 
-    btn.disabled = false;
-    btn.innerHTML = originalHTML;
+    try {
+      if (window.FormFeedback && typeof window.FormFeedback.withSavingState === 'function') {
+        await window.FormFeedback.withSavingState(btn, executarSalvamento, {
+          loadingText: 'Salvando...',
+          loadingTimeout: 5000,
+          timeoutMessage,
+          timeoutLevel: 'warning',
+          errorMessage: 'Erro ao salvar exames.',
+          onTimeout: () => {
+            mostrarFeedback(timeoutMessage, 'warning');
+          }
+        });
+      } else {
+        await executarSalvamento();
+      }
+    } catch (error) {
+      if (error?.name === 'SavingStateTimeoutError') {
+        return;
+      }
+      console.error('Erro ao salvar exames', error);
+      mostrarFeedback('Erro ao salvar exames.', 'danger');
+    }
   }
 </script>
 

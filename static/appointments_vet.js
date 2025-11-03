@@ -349,36 +349,79 @@ async function handleScheduleBulkDelete(root) {
     formData.append('csrf_token', csrfToken);
   }
 
-  const originalContent = button.innerHTML;
-  button.disabled = true;
-  button.innerHTML = '<span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>Excluindo...';
+  const timeoutMessage = 'Não conseguimos confirmar a exclusão. Verifique sua conexão e tente novamente.';
+  const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
+  let timedOut = false;
 
-  try {
-    const response = await fetch(endpoint, {
-      method: 'POST',
-      headers: {
-        'X-Requested-With': 'XMLHttpRequest',
-        Accept: 'application/json'
-      },
-      body: formData
-    });
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => null);
-      const message = errorData?.message || 'Não foi possível excluir os horários selecionados.';
-      throw new Error(message);
+  const executarExclusao = async () => {
+    try {
+      const response = await fetch(endpoint, {
+        method: 'POST',
+        headers: {
+          'X-Requested-With': 'XMLHttpRequest',
+          Accept: 'application/json'
+        },
+        body: formData,
+        signal: controller?.signal
+      });
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => null);
+        const message = errorData?.message || 'Não foi possível excluir os horários selecionados.';
+        alert(message);
+        return { success: false };
+      }
+      const data = await response.json();
+      if (!data?.success) {
+        const message = data?.message || 'Não foi possível excluir os horários selecionados.';
+        alert(message);
+        return { success: false };
+      }
+      window.location.reload();
+      return { success: true, keepButton: true };
+    } catch (error) {
+      if (error?.name === 'AbortError') {
+        if (!timedOut) {
+          alert(timeoutMessage);
+        }
+        return { success: false };
+      }
+      console.error('Erro ao remover horários em lote', error);
+      alert(error?.message || 'Não foi possível excluir os horários selecionados.');
+      return { success: false };
     }
-    const data = await response.json();
-    if (!data?.success) {
-      const message = data?.message || 'Não foi possível excluir os horários selecionados.';
-      throw new Error(message);
+  };
+
+  const helper = window.FormFeedback;
+  if (helper && typeof helper.withSavingState === 'function') {
+    try {
+      await helper.withSavingState(button, executarExclusao, {
+        loadingText: 'Excluindo...',
+        loadingTimeout: 5000,
+        timeoutMessage,
+        timeoutLevel: 'warning',
+        errorMessage: 'Não foi possível excluir os horários selecionados.',
+        onTimeout: () => {
+          timedOut = true;
+          controller?.abort();
+          alert(timeoutMessage);
+        }
+      });
+    } catch (error) {
+      if (error?.name !== 'SavingStateTimeoutError') {
+        console.error('Erro ao remover horários em lote', error);
+        alert(error?.message || 'Não foi possível excluir os horários selecionados.');
+      }
     }
-    window.location.reload();
-  } catch (error) {
-    console.error('Erro ao remover horários em lote', error);
-    alert(error?.message || 'Não foi possível excluir os horários selecionados.');
-  } finally {
-    button.innerHTML = originalContent;
-    button.disabled = false;
+  } else {
+    const originalContent = button.innerHTML;
+    button.disabled = true;
+    button.innerHTML = '<span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>Excluindo...';
+    try {
+      await executarExclusao();
+    } finally {
+      button.innerHTML = originalContent;
+      button.disabled = false;
+    }
   }
 }
 
@@ -2035,40 +2078,82 @@ function bindExamRequesterSave(root) {
     }
 
     setExamRequesterFeedback('');
-    saveButton.disabled = true;
-    const originalText = saveButton.innerHTML;
-    saveButton.innerHTML = '<span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>Salvando...';
-    try {
-      const response = await fetch(`/exam_appointment/${examId}/requester_update`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Accept: 'application/json',
-          'X-CSRFToken': getCsrfToken(root)
-        },
-        body: JSON.stringify(payload)
-      });
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => null);
-        const message = errorData?.message || 'Não foi possível atualizar o exame.';
-        setExamRequesterFeedback(message, 'danger');
-        return;
+    const timeoutMessage = 'Não conseguimos confirmar o salvamento das alterações. Verifique sua conexão e tente novamente.';
+    const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
+    let timedOut = false;
+
+    const executarSalvamento = async () => {
+      try {
+        const response = await fetch(`/exam_appointment/${examId}/requester_update`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Accept: 'application/json',
+            'X-CSRFToken': getCsrfToken(root)
+          },
+          body: JSON.stringify(payload),
+          signal: controller?.signal
+        });
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => null);
+          const message = errorData?.message || 'Não foi possível atualizar o exame.';
+          setExamRequesterFeedback(message, 'danger');
+          return { success: false };
+        }
+        const data = await response.json();
+        if (!data?.success) {
+          setExamRequesterFeedback(data?.message || 'Não foi possível atualizar o exame.', 'danger');
+          return { success: false };
+        }
+        if (modal) {
+          modal.hide();
+        }
+        window.location.reload();
+        return { success: true, keepButton: true };
+      } catch (error) {
+        if (error?.name === 'AbortError') {
+          if (!timedOut) {
+            setExamRequesterFeedback(timeoutMessage, 'warning');
+          }
+          return { success: false };
+        }
+        console.error('Erro ao atualizar solicitação de exame', error);
+        setExamRequesterFeedback('Erro inesperado ao salvar alterações.', 'danger');
+        return { success: false };
       }
-      const data = await response.json();
-      if (!data?.success) {
-        setExamRequesterFeedback(data?.message || 'Não foi possível atualizar o exame.', 'danger');
-        return;
+    };
+
+    const helper = window.FormFeedback;
+    if (helper && typeof helper.withSavingState === 'function') {
+      try {
+        await helper.withSavingState(saveButton, executarSalvamento, {
+          loadingText: 'Salvando...',
+          loadingTimeout: 5000,
+          timeoutMessage,
+          timeoutLevel: 'warning',
+          errorMessage: 'Não foi possível atualizar o exame.',
+          onTimeout: () => {
+            timedOut = true;
+            controller?.abort();
+            setExamRequesterFeedback(timeoutMessage, 'warning');
+          }
+        });
+      } catch (error) {
+        if (error?.name !== 'SavingStateTimeoutError') {
+          console.error('Erro ao atualizar solicitação de exame', error);
+          setExamRequesterFeedback('Erro inesperado ao salvar alterações.', 'danger');
+        }
       }
-      if (modal) {
-        modal.hide();
+    } else {
+      const originalText = saveButton.innerHTML;
+      saveButton.disabled = true;
+      saveButton.innerHTML = '<span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>Salvando...';
+      try {
+        await executarSalvamento();
+      } finally {
+        saveButton.disabled = false;
+        saveButton.innerHTML = originalText;
       }
-      window.location.reload();
-    } catch (error) {
-      console.error('Erro ao atualizar solicitação de exame', error);
-      setExamRequesterFeedback('Erro inesperado ao salvar alterações.', 'danger');
-    } finally {
-      saveButton.disabled = false;
-      saveButton.innerHTML = originalText;
     }
   });
 }

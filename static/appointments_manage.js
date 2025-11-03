@@ -49,21 +49,59 @@ function updateEmptyState(listElement, emptyMessage) {
   emptyMessage.classList.toggle(HIDDEN_CLASS, hasItems);
 }
 
-function disableWhileProcessing(button, action) {
+function disableWhileProcessing(button, action, options = {}) {
   if (!button) {
-    return action();
+    return Promise.resolve().then(() => action({ signal: null, timedOut: () => false }));
   }
   if (button.dataset.loading === 'true') {
     return Promise.resolve();
   }
   button.dataset.loading = 'true';
   button.disabled = true;
-  return Promise.resolve()
-    .then(action)
+
+  const timeoutMs = Number(options.timeout ?? 0);
+  const hasTimeout = Number.isFinite(timeoutMs) && timeoutMs > 0;
+  const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
+  let timedOut = false;
+  let timerId;
+
+  if (hasTimeout) {
+    timerId = window.setTimeout(() => {
+      timedOut = true;
+      if (controller) {
+        controller.abort();
+      }
+      if (typeof options.onTimeout === 'function') {
+        try {
+          options.onTimeout();
+        } catch (error) {
+          console.error('Erro ao executar callback de timeout', error);
+        }
+      }
+    }, timeoutMs);
+  }
+
+  const runAction = Promise.resolve()
+    .then(() => action({ signal: controller?.signal ?? null, timedOut: () => timedOut }))
+    .catch((error) => {
+      if (error?.name === 'AbortError' && !timedOut && typeof options.onTimeout === 'function') {
+        try {
+          options.onTimeout();
+        } catch (callbackError) {
+          console.error('Erro ao executar callback de timeout', callbackError);
+        }
+      }
+      throw error;
+    })
     .finally(() => {
+      if (timerId) {
+        window.clearTimeout(timerId);
+      }
       button.dataset.loading = 'false';
       button.disabled = false;
     });
+
+  return runAction;
 }
 
 function initAppointmentsAdmin() {
@@ -139,31 +177,44 @@ function initAppointmentsAdmin() {
     }
     const listItem = form.closest('[data-appointment-id]');
     const submitButton = form.querySelector('button[type="submit"]');
-    await disableWhileProcessing(submitButton, async () => {
-      try {
-        const response = await fetch(form.action, {
-          method: 'POST',
-          headers: {
-            Accept: 'application/json',
-          },
-          body: new FormData(form),
-        });
-        if (!response.ok) {
-          throw new Error('Não foi possível remover o agendamento.');
+    const timeoutMessage = 'Não conseguimos confirmar a exclusão. Verifique sua conexão e tente novamente.';
+    await disableWhileProcessing(
+      submitButton,
+      async ({ signal }) => {
+        try {
+          const response = await fetch(form.action, {
+            method: 'POST',
+            headers: {
+              Accept: 'application/json',
+            },
+            body: new FormData(form),
+            signal,
+          });
+          if (!response.ok) {
+            throw new Error('Não foi possível remover o agendamento.');
+          }
+          const data = await response.json();
+          if (!data.success) {
+            throw new Error(data.message || 'Não foi possível remover o agendamento.');
+          }
+          if (listItem) {
+            listItem.remove();
+          }
+          updateEmptyState(list, emptyMessage);
+          feedback.show('success', data.message || 'Agendamento removido.', 3000);
+        } catch (error) {
+          if (error?.name === 'AbortError') {
+            feedback.show('warning', timeoutMessage, 5000);
+            return;
+          }
+          feedback.show('danger', error.message || 'Não foi possível remover o agendamento.', 5000);
         }
-        const data = await response.json();
-        if (!data.success) {
-          throw new Error(data.message || 'Não foi possível remover o agendamento.');
-        }
-        if (listItem) {
-          listItem.remove();
-        }
-        updateEmptyState(list, emptyMessage);
-        feedback.show('success', data.message || 'Agendamento removido.', 3000);
-      } catch (error) {
-        feedback.show('danger', error.message || 'Não foi possível remover o agendamento.', 5000);
+      },
+      {
+        timeout: 5000,
+        onTimeout: () => feedback.show('warning', timeoutMessage, 5000),
       }
-    });
+    );
   }
 
   updateEmptyState(list, emptyMessage);

@@ -384,37 +384,58 @@
         return;
       }
       const btn = document.getElementById('btn-finalizar-vacinas');
-      const originalHTML = btn.innerHTML;
-      btn.disabled = true;
-      btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2" role="status"></span>Salvando...';
+      const timeoutMessage = 'Não conseguimos confirmar o registro das vacinas. Verifique sua conexão e tente novamente.';
 
-      const resp = await fetchOrQueue(`/animal/{{ animal.id }}/vacinas`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
-        body: JSON.stringify({
-          vacinas,
-          observacoes_gerais: obs
-        })
-      });
-      if (resp) {
-        const data = await resp.json();
-        if (data.success) {
-          mostrarFeedback('Vacinas registradas com sucesso!');
-          if (data.html) {
-            document.getElementById('historico-vacinas').innerHTML = data.html;
+      async function executarSalvamento() {
+        const resp = await fetchOrQueue(`/animal/{{ animal.id }}/vacinas`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+          body: JSON.stringify({
+            vacinas,
+            observacoes_gerais: obs
+          })
+        });
+        if (resp) {
+          const data = await resp.json();
+          if (data.success) {
+            mostrarFeedback('Vacinas registradas com sucesso!');
+            if (data.html) {
+              document.getElementById('historico-vacinas').innerHTML = data.html;
+            }
+            vacinas = [];
+            renderVacinasTemp();
+            return { success: true };
           }
-          vacinas = [];
-          renderVacinasTemp();
-        } else {
           mostrarFeedback('Erro ao salvar vacinas.', 'danger');
+          return { success: false };
         }
-      } else {
         // Offline: registra localmente sem exibir aviso
         vacinas = [];
         renderVacinasTemp();
+        return { success: true };
       }
 
-      btn.disabled = false;
-      btn.innerHTML = originalHTML;
+      try {
+        if (window.FormFeedback && typeof window.FormFeedback.withSavingState === 'function') {
+          await window.FormFeedback.withSavingState(btn, executarSalvamento, {
+            loadingText: 'Salvando...',
+            loadingTimeout: 5000,
+            timeoutMessage,
+            timeoutLevel: 'warning',
+            errorMessage: 'Erro ao salvar vacinas.',
+            onTimeout: () => {
+              mostrarFeedback(timeoutMessage, 'warning');
+            }
+          });
+        } else {
+          await executarSalvamento();
+        }
+      } catch (error) {
+        if (error?.name === 'SavingStateTimeoutError') {
+          return;
+        }
+        console.error('Erro ao salvar vacinas', error);
+        mostrarFeedback('Erro ao salvar vacinas.', 'danger');
+      }
     }
   </script>

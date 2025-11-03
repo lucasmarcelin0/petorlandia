@@ -2,6 +2,7 @@
   const DEFAULT_LOADING_TEXT = 'Salvando...';
   const DEFAULT_SUCCESS_TEXT = 'Salvo!';
   const DEFAULT_ERROR_TEXT = 'Não foi possível salvar as alterações.';
+  const DEFAULT_TIMEOUT_MESSAGE = 'A operação está demorando mais que o esperado. Verifique sua conexão e tente novamente.';
   const DEFAULT_SUCCESS_DELAY = 2000;
   const STATUS_VARIANTS = ['success', 'danger', 'warning', 'info'];
 
@@ -164,13 +165,56 @@
 
     setLoading(button, options.loadingText);
 
+    const timeoutMs = Number(options.loadingTimeout);
+    const hasTimeout = Number.isFinite(timeoutMs) && timeoutMs > 0;
+    const timeoutMessage = options.timeoutMessage || DEFAULT_TIMEOUT_MESSAGE;
+    const timeoutLevel = options.timeoutLevel || 'warning';
+    const actionPromise = Promise.resolve().then(() => action());
+    let timeoutId;
+    let timedOut = false;
     let result;
+
+    let racePromise = actionPromise;
+    if (hasTimeout) {
+      const timeoutError = new Error(timeoutMessage);
+      timeoutError.name = 'SavingStateTimeoutError';
+      racePromise = Promise.race([
+        actionPromise,
+        new Promise((_, reject) => {
+          timeoutId = window.setTimeout(() => {
+            timedOut = true;
+            reject(timeoutError);
+          }, timeoutMs);
+        })
+      ]);
+    }
+
     try {
-      result = await action();
+      result = await racePromise;
+      if (hasTimeout && timeoutId) {
+        window.clearTimeout(timeoutId);
+      }
     } catch (error) {
+      if (hasTimeout && timeoutId) {
+        window.clearTimeout(timeoutId);
+      }
+      if (timedOut && actionPromise && typeof actionPromise.catch === 'function') {
+        actionPromise.catch(() => {});
+      }
+      if (timedOut && typeof options.onTimeout === 'function') {
+        try {
+          options.onTimeout(error);
+        } catch (callbackError) {
+          console.error('Erro no callback onTimeout', callbackError);
+        }
+      }
       setIdle(button);
       if (form) {
-        showStatus(form, options.errorMessage || DEFAULT_ERROR_TEXT, 'danger');
+        if (timedOut) {
+          showStatus(form, timeoutMessage, timeoutLevel);
+        } else {
+          showStatus(form, options.errorMessage || DEFAULT_ERROR_TEXT, 'danger');
+        }
       }
       throw error;
     }
