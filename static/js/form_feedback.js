@@ -3,6 +3,8 @@
   const DEFAULT_SUCCESS_TEXT = 'Salvo!';
   const DEFAULT_ERROR_TEXT = 'Não foi possível salvar as alterações.';
   const DEFAULT_SUCCESS_DELAY = 2000;
+  const DEFAULT_LOADING_TIMEOUT = 5000;
+  const DEFAULT_TIMEOUT_MESSAGE = 'O tempo limite foi atingido. Reativamos o botão para que você possa tentar novamente.';
   const STATUS_VARIANTS = ['success', 'danger', 'warning', 'info'];
 
   function getButton(target) {
@@ -33,21 +35,102 @@
     delete button.dataset.resetTimeout;
   }
 
-  function setLoading(button, loadingText) {
+  function clearLoadingTimer(button) {
+    if (!button || !button.dataset.loadingTimeoutId) return;
+    clearTimeout(Number(button.dataset.loadingTimeoutId));
+    delete button.dataset.loadingTimeoutId;
+  }
+
+  function parseTimeout(value) {
+    if (value == null) return undefined;
+    if (typeof value === 'string') {
+      const trimmed = value.trim();
+      if (trimmed === '') return undefined;
+      const lowered = trimmed.toLowerCase();
+      if (['false', 'off', 'no', 'none', 'disabled', 'disable', '0'].includes(lowered)) {
+        return 0;
+      }
+    }
+    const numeric = Number(value);
+    return Number.isFinite(numeric) ? numeric : undefined;
+  }
+
+  function resolveLoadingTimeout(button, options = {}) {
+    const fromOptions = parseTimeout(options.loadingTimeout);
+    if (typeof fromOptions !== 'undefined') {
+      return fromOptions;
+    }
+    if (button && typeof button.dataset !== 'undefined') {
+      const fromButton = parseTimeout(button.dataset.loadingTimeout);
+      if (typeof fromButton !== 'undefined') {
+        return fromButton;
+      }
+    }
+    const form = options.form || (button && button.form instanceof HTMLFormElement ? button.form : null);
+    if (form && form.dataset) {
+      const fromForm = parseTimeout(form.dataset.loadingTimeout);
+      if (typeof fromForm !== 'undefined') {
+        return fromForm;
+      }
+    }
+    return DEFAULT_LOADING_TIMEOUT;
+  }
+
+  function resolveTimeoutMessage(button, form, options = {}) {
+    if (Object.prototype.hasOwnProperty.call(options, 'timeoutMessage')) {
+      return options.timeoutMessage;
+    }
+    if (button && typeof button.hasAttribute === 'function' && button.hasAttribute('data-timeout-message')) {
+      return button.dataset.timeoutMessage || '';
+    }
+    if (form && typeof form.hasAttribute === 'function' && form.hasAttribute('data-timeout-message')) {
+      return form.dataset.timeoutMessage || '';
+    }
+    return DEFAULT_TIMEOUT_MESSAGE;
+  }
+
+  function setLoading(button, loadingTextOrOptions, maybeOptions) {
     if (!button) return;
+    let options = maybeOptions || {};
+    let loadingText = loadingTextOrOptions;
+
+    if (loadingTextOrOptions && typeof loadingTextOrOptions === 'object' && !Array.isArray(loadingTextOrOptions)) {
+      options = loadingTextOrOptions;
+      loadingText = options.loadingText;
+    }
+
     ensureOriginal(button);
     clearResetTimer(button);
-    const text = loadingText || button.dataset.loadingText || DEFAULT_LOADING_TEXT;
+    clearLoadingTimer(button);
+    const form = options.form || (button.form instanceof HTMLFormElement ? button.form : null);
+    const text = loadingText || (options && options.loadingText) || button.dataset.loadingText || DEFAULT_LOADING_TEXT;
     button.disabled = true;
     button.setAttribute('aria-busy', 'true');
     button.innerHTML = `
       <span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
       <span>${text}</span>
     `;
+
+    const timeout = resolveLoadingTimeout(button, { ...options, form });
+    if (Number.isFinite(timeout) && timeout > 0) {
+      const timerId = window.setTimeout(() => {
+        delete button.dataset.loadingTimeoutId;
+        setIdle(button);
+        const message = resolveTimeoutMessage(button, form, options);
+        const detail = { button, form, message, reason: 'loading-timeout' };
+        if (form && message) {
+          showStatus(form, message, 'warning');
+        }
+        const event = new CustomEvent('form-feedback-timeout', { detail, bubbles: true });
+        button.dispatchEvent(event);
+      }, timeout);
+      button.dataset.loadingTimeoutId = String(timerId);
+    }
   }
 
   function setIdle(button) {
     if (!button) return;
+    clearLoadingTimer(button);
     clearResetTimer(button);
     button.disabled = false;
     button.removeAttribute('aria-busy');
@@ -59,6 +142,7 @@
   function setSuccess(button, successText, delay) {
     if (!button) return;
     ensureOriginal(button);
+    clearLoadingTimer(button);
     clearResetTimer(button);
     const text = successText || button.dataset.successText || DEFAULT_SUCCESS_TEXT;
     const timeout = Number.isFinite(delay)
@@ -162,7 +246,17 @@
       clearStatus(form);
     }
 
-    setLoading(button, options.loadingText);
+    const loadingOptions = { form };
+    if (typeof options.loadingText !== 'undefined') {
+      loadingOptions.loadingText = options.loadingText;
+    }
+    if (typeof options.loadingTimeout !== 'undefined') {
+      loadingOptions.loadingTimeout = options.loadingTimeout;
+    }
+    if (Object.prototype.hasOwnProperty.call(options, 'timeoutMessage')) {
+      loadingOptions.timeoutMessage = options.timeoutMessage;
+    }
+    setLoading(button, loadingOptions);
 
     let result;
     try {
@@ -200,7 +294,7 @@
     form.addEventListener('submit', () => {
       const button = getButton(form);
       if (!button) return;
-      setLoading(button);
+      setLoading(button, { form });
       clearStatus(form);
     });
   }

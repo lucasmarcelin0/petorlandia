@@ -1,6 +1,8 @@
 (function(){
   const KEY = 'offline-queue';
   const BUTTON_RESET_DELAY = 2000;
+  const DEFAULT_LOADING_TIMEOUT = 5000;
+  const DEFAULT_TIMEOUT_MESSAGE = 'O envio está demorando. Reativamos o botão para tentar novamente.';
 
   function getSubmitButton(form){
     if(!form) return null;
@@ -20,19 +22,86 @@
     }
   }
 
-  function setButtonLoading(button){
+  function parseTimeout(value){
+    if(value == null) return undefined;
+    if(typeof value === 'string'){
+      const trimmed = value.trim();
+      if(trimmed === '') return undefined;
+      const lowered = trimmed.toLowerCase();
+      if(['false','off','no','none','disabled','disable','0'].includes(lowered)){
+        return 0;
+      }
+    }
+    const numeric = Number(value);
+    return Number.isFinite(numeric) ? numeric : undefined;
+  }
+
+  function resolveLoadingTimeout(button, form){
+    const fromButton = button ? parseTimeout(button.dataset.loadingTimeout) : undefined;
+    if(typeof fromButton !== 'undefined') return fromButton;
+    const fromForm = form ? parseTimeout(form.dataset.loadingTimeout) : undefined;
+    if(typeof fromForm !== 'undefined') return fromForm;
+    return DEFAULT_LOADING_TIMEOUT;
+  }
+
+  function resolveTimeoutMessage(button, form){
+    if(button && typeof button.hasAttribute === 'function' && button.hasAttribute('data-timeout-message')){
+      return button.dataset.timeoutMessage || '';
+    }
+    if(form && typeof form.hasAttribute === 'function' && form.hasAttribute('data-timeout-message')){
+      return form.dataset.timeoutMessage || '';
+    }
+    return DEFAULT_TIMEOUT_MESSAGE;
+  }
+
+  function clearLoadingWatchdog(button){
+    if(!button || !button.dataset.loadingWatchdog) return;
+    clearTimeout(Number(button.dataset.loadingWatchdog));
+    delete button.dataset.loadingWatchdog;
+  }
+
+  function setButtonLoading(button, form){
     if(!button) return;
     if (window.FormFeedback && typeof window.FormFeedback.setLoading === 'function') {
-      window.FormFeedback.setLoading(button);
+      const options = { form };
+      const timeout = resolveLoadingTimeout(button, form);
+      if (typeof timeout !== 'undefined') {
+        options.loadingTimeout = timeout;
+      }
+      const message = resolveTimeoutMessage(button, form);
+      if (typeof message !== 'undefined') {
+        options.timeoutMessage = message;
+      }
+      window.FormFeedback.setLoading(button, options);
       return;
     }
     ensureOriginalLabel(button);
     clearButtonTimer(button);
+    clearLoadingWatchdog(button);
     if(button.dataset.loadingText){
       button.innerHTML = button.dataset.loadingText;
     }
     button.disabled = true;
     button.classList.add('is-loading');
+    const timeout = resolveLoadingTimeout(button, form);
+    if(Number.isFinite(timeout) && timeout > 0){
+      const timer = setTimeout(() => {
+        delete button.dataset.loadingWatchdog;
+        button.disabled = false;
+        button.classList.remove('is-loading');
+        if(button.dataset.original){
+          button.innerHTML = button.dataset.original;
+        }
+        const message = resolveTimeoutMessage(button, form);
+        if(message){
+          showToast(message, 'warning');
+        }
+        const detail = { button, form, message, reason: 'loading-timeout' };
+        const evt = new CustomEvent('form-feedback-timeout', { detail, bubbles: true });
+        button.dispatchEvent(evt);
+      }, timeout);
+      button.dataset.loadingWatchdog = String(timer);
+    }
   }
 
   function setButtonIdle(button){
@@ -42,6 +111,7 @@
       return;
     }
     clearButtonTimer(button);
+    clearLoadingWatchdog(button);
     button.disabled = false;
     button.classList.remove('is-loading');
     if(button.dataset.original){
@@ -57,6 +127,7 @@
     }
     ensureOriginalLabel(button);
     clearButtonTimer(button);
+    clearLoadingWatchdog(button);
     button.disabled = false;
     button.classList.remove('is-loading');
     const successText = button.dataset.successText;
@@ -195,7 +266,7 @@
     }
 
     ev.preventDefault();
-    setButtonLoading(submitButton);
+    setButtonLoading(submitButton, form);
     const data = new FormData(form);
     let resp = null;
     try {

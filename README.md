@@ -26,6 +26,26 @@ queued requests are automatically sent to the server.
 The file `static/offline.js` implements this behaviour and is cached by the
 service worker.
 
+### Ajustando o tempo limite do botão de envio
+
+Formulários que usam `FormFeedback` (incluindo o fluxo offline) agora ativam um
+watchdog de 5 segundos ao entrar no estado de carregamento. Caso nenhuma
+resposta chegue dentro desse intervalo, o botão é reativado automaticamente e um
+aviso é emitido para o usuário. Você pode ajustar esse comportamento de duas
+formas:
+
+* Adicione o atributo `data-loading-timeout` (em milissegundos) ao botão de
+  envio ou ao próprio formulário para alterar o tempo limite padrão. Use `0`,
+  `false` ou `off` para desativar o watchdog conscientemente quando operações
+  mais longas forem esperadas.
+* Opcionalmente defina `data-timeout-message` para personalizar a mensagem
+  exibida quando o tempo limite expirar. O valor padrão é "O tempo limite foi
+  atingido. Reativamos o botão para que você possa tentar novamente.".
+
+Ao usar a API programática, também é possível passar `loadingTimeout` e
+`timeoutMessage` nas opções de `FormFeedback.setLoading` ou
+`FormFeedback.withSavingState` para substituir os valores de forma dinâmica.
+
 ## Mercado Pago
 
 To enable payment integration you must provide credentials from your Mercado
