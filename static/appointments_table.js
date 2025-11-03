@@ -312,55 +312,101 @@ function attachAppointmentFormHandler(form, { url, row, modalBody, bsModal }) {
     }
     const token = form.querySelector('#csrf_token')?.value || '';
     const submitButton = form.querySelector('[type="submit"]');
-    if (submitButton) {
-      submitButton.disabled = true;
-    }
+    const timeoutMessage = 'Não conseguimos confirmar o salvamento. Verifique sua conexão e tente novamente.';
+    const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
+    let timedOut = false;
 
-    try {
-      const result = await submitAppointmentUpdate(url, payload, token, {
-        defaultErrorMessage: UPDATE_ERROR_MESSAGE,
-        successMessage: UPDATE_SUCCESS_MESSAGE
-      });
+    const executarAtualizacao = async () => {
+      try {
+        const result = await submitAppointmentUpdate(url, payload, token, {
+          defaultErrorMessage: UPDATE_ERROR_MESSAGE,
+          successMessage: UPDATE_SUCCESS_MESSAGE,
+          fetchOptions: { signal: controller?.signal }
+        });
 
-      if (!result.success || !result.data) {
-        showModalAlert(modalBody, 'danger', result.message || UPDATE_ERROR_MESSAGE);
-        return;
+        if (!result.success || !result.data) {
+          if (timedOut || controller?.signal?.aborted) {
+            showModalAlert(modalBody, 'warning', timeoutMessage);
+          } else {
+            showModalAlert(modalBody, 'danger', result.message || UPDATE_ERROR_MESSAGE);
+          }
+          return { success: false };
+        }
+
+        const data = result.data;
+        showModalAlert(modalBody, 'success', result.message || UPDATE_SUCCESS_MESSAGE);
+
+        let updated = false;
+        if (data.card_html) {
+          const newRow = parseHTML(data.card_html);
+          if (newRow) {
+            updated = updateAppointmentRow(row, newRow);
+          }
+        }
+        if (!updated) {
+          const container = findAppointmentsContainer(row);
+          if (container) {
+            updated = await refreshAppointmentsContainer(container);
+          }
+        }
+
+        if (window.sharedCalendar && typeof window.sharedCalendar.refetchEvents === 'function') {
+          try {
+            window.sharedCalendar.refetchEvents();
+          } catch (calendarError) {
+            console.warn('Não foi possível atualizar o calendário compartilhado.', calendarError);
+          }
+        }
+
+        window.setTimeout(() => {
+          bsModal.hide();
+        }, 1500);
+
+        return { success: true };
+      } catch (error) {
+        if (error?.name === 'AbortError') {
+          if (!timedOut) {
+            showModalAlert(modalBody, 'warning', timeoutMessage);
+          }
+          return { success: false };
+        }
+        console.error('Erro ao salvar agendamento', error);
+        showModalAlert(modalBody, 'danger', 'Erro ao salvar. Tente novamente.');
+        return { success: false };
       }
+    };
 
-      const data = result.data;
-      showModalAlert(modalBody, 'success', result.message || UPDATE_SUCCESS_MESSAGE);
-
-      let updated = false;
-      if (data.card_html) {
-        const newRow = parseHTML(data.card_html);
-        if (newRow) {
-          updated = updateAppointmentRow(row, newRow);
+    const helper = window.FormFeedback;
+    if (helper && typeof helper.withSavingState === 'function' && submitButton) {
+      try {
+        await helper.withSavingState(submitButton, executarAtualizacao, {
+          loadingText: 'Salvando...',
+          loadingTimeout: 5000,
+          timeoutMessage,
+          timeoutLevel: 'warning',
+          errorMessage: UPDATE_ERROR_MESSAGE,
+          onTimeout: () => {
+            timedOut = true;
+            controller?.abort();
+            showModalAlert(modalBody, 'warning', timeoutMessage);
+          }
+        });
+      } catch (error) {
+        if (error?.name !== 'SavingStateTimeoutError') {
+          console.error('Erro ao salvar agendamento', error);
+          showModalAlert(modalBody, 'danger', 'Erro ao salvar. Tente novamente.');
         }
       }
-      if (!updated) {
-        const container = findAppointmentsContainer(row);
-        if (container) {
-          updated = await refreshAppointmentsContainer(container);
-        }
-      }
-
-      if (window.sharedCalendar && typeof window.sharedCalendar.refetchEvents === 'function') {
-        try {
-          window.sharedCalendar.refetchEvents();
-        } catch (calendarError) {
-          console.warn('Não foi possível atualizar o calendário compartilhado.', calendarError);
-        }
-      }
-
-      setTimeout(() => {
-        bsModal.hide();
-      }, 1500);
-    } catch (error) {
-      console.error('Erro ao salvar agendamento', error);
-      showModalAlert(modalBody, 'danger', 'Erro ao salvar. Tente novamente.');
-    } finally {
+    } else {
       if (submitButton) {
-        submitButton.disabled = false;
+        submitButton.disabled = true;
+      }
+      try {
+        await executarAtualizacao();
+      } finally {
+        if (submitButton) {
+          submitButton.disabled = false;
+        }
       }
     }
   });
