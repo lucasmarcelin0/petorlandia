@@ -1,7 +1,7 @@
 """expand medicamento field length
 
 Revision ID: 3b4c5d6e7f80
-Revises: c4c9d1e2f3a4
+Revises: 9b42c9abf8bc
 Create Date: 2025-11-03 00:00:00.000000
 
 """
@@ -11,7 +11,7 @@ import sqlalchemy as sa
 
 # revision identifiers, used by Alembic.
 revision = '3b4c5d6e7f80'
-down_revision = 'c4c9d1e2f3a4'
+down_revision = '9b42c9abf8bc'
 branch_labels = None
 depends_on = None
 
