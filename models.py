@@ -572,9 +572,9 @@ class Prescricao(db.Model):
     bloco_id = db.Column(db.Integer, db.ForeignKey('bloco_prescricao.id'))  # pode manter se quiser blocos
 
     medicamento = db.Column(db.String(100), nullable=False)
-    dosagem = db.Column(db.String(100))
-    frequencia = db.Column(db.String(100))
-    duracao = db.Column(db.String(100))
+    dosagem = db.Column(db.Text)
+    frequencia = db.Column(db.Text)
+    duracao = db.Column(db.Text)
     observacoes = db.Column(db.Text)
     data_prescricao = db.Column(db.DateTime, default=datetime.utcnow)
 
