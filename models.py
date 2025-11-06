@@ -10,7 +10,7 @@ from datetime import datetime, date, timedelta
 from dateutil.relativedelta import relativedelta
 import unicodedata
 import enum
-from sqlalchemy import Enum, event
+from sqlalchemy import Enum, event, inspect
 from enum import Enum
 from sqlalchemy import Enum as PgEnum
 from sqlalchemy.orm import synonym, object_session
@@ -198,6 +198,28 @@ class User(UserMixin, db.Model):
 
 
 
+
+
+@event.listens_for(User, "after_insert")
+def ensure_veterinario_after_insert(mapper, connection, target):
+    """Garante que o ``Veterinario`` seja criado após inserir um ``User``."""
+
+    if target.worker == "veterinario" and target.veterinario is None:
+        db.session.add(Veterinario(user_id=target.id, crmv=""))
+
+
+@event.listens_for(User, "after_update")
+def ensure_veterinario_after_update(mapper, connection, target):
+    """Cria ou remove ``Veterinario`` ao atualizar um ``User``."""
+
+    if target.worker == "veterinario":
+        if target.veterinario is None:
+            db.session.add(Veterinario(user_id=target.id, crmv=""))
+    else:
+        history = inspect(target).attrs.worker.history
+        if "veterinario" in history.deleted:
+            if target.veterinario is not None and inspect(target.veterinario).persistent:
+                db.session.delete(target.veterinario)
 
 
 class VeterinarianAccess(db.Model):
