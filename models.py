@@ -10,10 +10,11 @@ from datetime import datetime, date, timedelta
 from dateutil.relativedelta import relativedelta
 import unicodedata
 import enum
-from sqlalchemy import Enum, event
+from sqlalchemy import Enum, event, func, case
 from enum import Enum
 from sqlalchemy import Enum as PgEnum
 from sqlalchemy.orm import synonym, object_session
+from sqlalchemy.ext.hybrid import hybrid_property
 
 
 
@@ -791,11 +792,50 @@ class VeterinarianMembership(db.Model):
     def is_active(self) -> bool:
         return self.is_trial_active() or self.has_valid_payment()
 
+    @hybrid_property
+    def is_active_flag(self) -> bool:
+        return self.is_active()
+
+    @is_active_flag.expression
+    def is_active_flag(cls):  # type: ignore[override]
+        return case(
+            (cls.trial_ends_at >= func.now(), True),
+            (cls.paid_until >= func.now(), True),
+            else_=False,
+        )
+
     def remaining_trial_days(self) -> int:
         if not self.trial_ends_at:
             return 0
         delta = self.trial_ends_at - self._now()
         return max(delta.days, 0)
+
+    @property
+    def status_label(self) -> str:
+        if self.has_valid_payment():
+            if self.paid_until:
+                return f"Ativo — pago até {self.paid_until.strftime('%d/%m/%Y')}"
+            return "Ativo — pagamento em dia"
+        if self.is_trial_active():
+            days = self.remaining_trial_days()
+            return (
+                "Período de teste ativo"
+                if days <= 0
+                else f"Teste ativo — {days} dia{'s' if days != 1 else ''} restantes"
+            )
+        return "Inativo"
+
+    @property
+    def last_payment_status(self):
+        if self.last_payment and self.last_payment.status:
+            return self.last_payment.status.value
+        return None
+
+    @property
+    def last_payment_amount(self):
+        if self.last_payment and self.last_payment.amount is not None:
+            return float(self.last_payment.amount)
+        return None
 
 
 class VetSchedule(db.Model):
