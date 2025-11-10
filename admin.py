@@ -24,17 +24,81 @@ def _is_admin():
 # --------------------------------------------------------------------------
 try:
     from models import (
-        Breed, Species, TipoRacao, ApresentacaoMedicamento, VacinaModelo, Consulta, Veterinario, Specialty,
-        Clinica, ClinicHours, VetSchedule, ClinicStaff, Prescricao, Medicamento, db, User, Animal, Message,
-        Transaction, Review, Favorite, AnimalPhoto, UserRole, ExameModelo,
-        Product, Order, OrderItem, DeliveryRequest, HealthPlan, HealthSubscription, PickupLocation, Endereco, Payment, PaymentMethod, PaymentStatus
+        Breed,
+        Species,
+        TipoRacao,
+        ApresentacaoMedicamento,
+        VacinaModelo,
+        Consulta,
+        Veterinario,
+        Specialty,
+        Clinica,
+        ClinicHours,
+        VetSchedule,
+        ClinicStaff,
+        Prescricao,
+        Medicamento,
+        db,
+        User,
+        Animal,
+        Message,
+        Transaction,
+        Review,
+        Favorite,
+        AnimalPhoto,
+        UserRole,
+        ExameModelo,
+        Product,
+        Order,
+        OrderItem,
+        DeliveryRequest,
+        HealthPlan,
+        HealthSubscription,
+        PickupLocation,
+        Endereco,
+        Payment,
+        PaymentMethod,
+        PaymentStatus,
+        VeterinarianMembership,
     )
 except ImportError:
     from .models import (
-        Breed, Species, TipoRacao, ApresentacaoMedicamento, VacinaModelo, Consulta, Veterinario, Specialty,
-        Clinica, ClinicHours, VetSchedule, ClinicStaff, Prescricao, Medicamento, db, User, Animal, Message,
-        Transaction, Review, Favorite, AnimalPhoto, UserRole, ExameModelo,
-        Product, Order, OrderItem, DeliveryRequest, HealthPlan, HealthSubscription, PickupLocation, Endereco, Payment, PaymentMethod, PaymentStatus
+        Breed,
+        Species,
+        TipoRacao,
+        ApresentacaoMedicamento,
+        VacinaModelo,
+        Consulta,
+        Veterinario,
+        Specialty,
+        Clinica,
+        ClinicHours,
+        VetSchedule,
+        ClinicStaff,
+        Prescricao,
+        Medicamento,
+        db,
+        User,
+        Animal,
+        Message,
+        Transaction,
+        Review,
+        Favorite,
+        AnimalPhoto,
+        UserRole,
+        ExameModelo,
+        Product,
+        Order,
+        OrderItem,
+        DeliveryRequest,
+        HealthPlan,
+        HealthSubscription,
+        PickupLocation,
+        Endereco,
+        Payment,
+        PaymentMethod,
+        PaymentStatus,
+        VeterinarianMembership,
     )
 
 
@@ -232,6 +296,67 @@ class VeterinarioAdmin(MyModelView):
     form_columns = ['user', 'crmv', 'clinica', 'specialties']
     column_list = ['id', 'user', 'crmv', 'clinica', 'specialty_list']
     column_labels = {'specialty_list': 'Especialidades'}
+
+
+class VeterinarianMembershipAdmin(MyModelView):
+    column_list = (
+        'veterinario',
+        'status_label',
+        'started_at',
+        'trial_ends_at',
+        'paid_until',
+        'last_payment_status',
+        'last_payment_amount',
+    )
+
+    column_labels = {
+        'veterinario': 'Veterinário',
+        'status_label': 'Status',
+        'started_at': 'Início',
+        'trial_ends_at': 'Fim do Teste',
+        'paid_until': 'Pago Até',
+        'last_payment_status': 'Status do Pagamento',
+        'last_payment_amount': 'Valor do Pagamento',
+    }
+
+    column_filters = (
+        'is_active_flag',
+        'trial_ends_at',
+        'paid_until',
+        'last_payment.status',
+        'last_payment.amount',
+    )
+
+    column_searchable_list = (
+        'veterinario.user.name',
+        'veterinario.crmv',
+    )
+
+    column_formatters = {
+        'status_label': lambda v, c, m, p: Markup(
+            '<span class="badge bg-{color}">{label}</span>'.format(
+                color='success' if m.is_active() else 'secondary',
+                label=m.status_label,
+            )
+        ),
+        'last_payment_status': lambda v, c, m, p: (
+            m.last_payment_status or '—'
+        ),
+        'last_payment_amount': lambda v, c, m, p: (
+            f"R$ {m.last_payment_amount:,.2f}".replace(',', 'X').replace('.', ',').replace('X', '.')
+            if m.last_payment_amount is not None else '—'
+        ),
+    }
+
+    column_default_sort = ('started_at', True)
+
+    form_columns = (
+        'veterinario',
+        'started_at',
+        'trial_ends_at',
+        'paid_until',
+        'last_payment',
+    )
 
 class ClinicaAdmin(MyModelView):
     form_extra_fields = {
@@ -532,12 +657,17 @@ def init_admin(app):
     ))
     admin.add_view(VetScheduleAdmin(
         VetSchedule, db.session,
-        name='Agenda do Veterinário', category='Cadastros',
+        name='Agenda do Veterinário', category='Veterinários',
         menu_icon_type='fa', menu_icon_value='fa-calendar'
+    ))
+    admin.add_view(VeterinarianMembershipAdmin(
+        VeterinarianMembership, db.session,
+        name='Assinaturas de Veterinários', category='Veterinários',
+        menu_icon_type='fa', menu_icon_value='fa-id-card'
     ))
     admin.add_view(VeterinarioAdmin(
         Veterinario, db.session,
-        name='Veterinários', category='Cadastros',
+        name='Veterinários', category='Veterinários',
         menu_icon_type='fa', menu_icon_value='fa-user-md'
     ))
     admin.add_view(ClinicStaffAdmin(
