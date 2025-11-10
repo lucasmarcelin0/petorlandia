@@ -1,14 +1,16 @@
 from flask_admin import Admin, BaseView, expose
 from flask_admin.contrib.sqla import ModelView
 from flask_admin.menu import MenuLink
-from flask import redirect, url_for, flash
+from flask import redirect, url_for, flash, current_app
 from flask_login import current_user, login_required
-from wtforms import SelectField, DateField, FileField
+from flask_wtf import FlaskForm
+from wtforms import SelectField, DateField, FileField, DecimalField, SubmitField
 from markupsafe import Markup
 import os
 import uuid
 from werkzeug.utils import secure_filename
 from sqlalchemy import func
+from decimal import Decimal
 
 def _is_admin():
     """Return True if the current user has the admin role."""
@@ -60,6 +62,7 @@ try:
         PaymentMethod,
         PaymentStatus,
         VeterinarianMembership,
+        VeterinarianSettings,
     )
 except ImportError:
     from .models import (
@@ -99,6 +102,7 @@ except ImportError:
         PaymentMethod,
         PaymentStatus,
         VeterinarianMembership,
+        VeterinarianSettings,
     )
 
 
@@ -172,6 +176,19 @@ class AdminDashboard(BaseView):
 
 from wtforms import validators
 
+
+class VeterinarianSettingsForm(FlaskForm):
+    membership_price = DecimalField(
+        'Valor da assinatura (R$)',
+        places=2,
+        rounding=None,
+        validators=[
+            validators.DataRequired(message='Informe o valor da assinatura.'),
+            validators.NumberRange(min=Decimal('0.01'), message='O valor deve ser maior que zero.'),
+        ],
+        render_kw={'min': '0', 'step': '0.01'},
+    )
+    submit = SubmitField('Salvar alterações')
 
 
 # ─── Subform de Endereco ----------------------------------------------------
@@ -357,6 +374,55 @@ class VeterinarianMembershipAdmin(MyModelView):
         'paid_until',
         'last_payment',
     )
+
+
+class VeterinarianSettingsView(BaseView):
+    def is_accessible(self):
+        return _is_admin()
+
+    def inaccessible_callback(self, name, **kwargs):
+        flash("Acesso restrito à administração.", "danger")
+        return redirect(url_for('login_view'))
+
+    @expose('/', methods=['GET', 'POST'])
+    @login_required
+    def index(self):
+        settings = VeterinarianSettings.load()
+        form = VeterinarianSettingsForm(obj=settings)
+
+        if not form.is_submitted():
+            if settings and settings.membership_price is not None:
+                form.membership_price.data = Decimal(settings.membership_price)
+            else:
+                default_price = Decimal(
+                    str(current_app.config.get('VETERINARIAN_MEMBERSHIP_PRICE', 60.00))
+                )
+                form.membership_price.data = default_price
+
+        if form.validate_on_submit():
+            price = form.membership_price.data
+            if price is not None:
+                price = price.quantize(Decimal('0.01'))
+
+            if settings is None:
+                settings = VeterinarianSettings(membership_price=price)
+            else:
+                settings.membership_price = price
+
+            db.session.add(settings)
+
+            try:
+                db.session.commit()
+            except Exception:  # noqa: BLE001
+                db.session.rollback()
+                current_app.logger.exception('Erro ao salvar configuração de assinatura de veterinário')
+                flash('Não foi possível salvar as configurações. Tente novamente.', 'danger')
+            else:
+                flash('Valor da assinatura atualizado com sucesso.', 'success')
+                return redirect(self.get_url('.index'))
+
+        return self.render('admin/veterinarian_settings.html', form=form, settings=settings)
+
 
 class ClinicaAdmin(MyModelView):
     form_extra_fields = {
@@ -659,6 +725,10 @@ def init_admin(app):
         VetSchedule, db.session,
         name='Agenda do Veterinário', category='Veterinários',
         menu_icon_type='fa', menu_icon_value='fa-calendar'
+    ))
+    admin.add_view(VeterinarianSettingsView(
+        name='Configurar Assinatura', category='Veterinários',
+        menu_icon_type='fa', menu_icon_value='fa-sliders-h'
     ))
     admin.add_view(VeterinarianMembershipAdmin(
         VeterinarianMembership, db.session,

@@ -8,6 +8,7 @@ from flask import url_for, request, current_app
 from werkzeug.security import generate_password_hash, check_password_hash
 from datetime import datetime, date, timedelta
 from dateutil.relativedelta import relativedelta
+from decimal import Decimal
 import unicodedata
 import enum
 from sqlalchemy import Enum, event, func, case
@@ -15,6 +16,7 @@ from enum import Enum
 from sqlalchemy import Enum as PgEnum
 from sqlalchemy.orm import synonym, object_session
 from sqlalchemy.ext.hybrid import hybrid_property
+from sqlalchemy.exc import OperationalError, ProgrammingError
 
 
 
@@ -837,6 +839,46 @@ class VeterinarianMembership(db.Model):
             return float(self.last_payment.amount)
         return None
 
+
+class VeterinarianSettings(db.Model):
+    __tablename__ = 'veterinarian_settings'
+
+    id = db.Column(db.Integer, primary_key=True)
+    membership_price = db.Column(db.Numeric(10, 2), nullable=False, default=Decimal('60.00'))
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
+    @classmethod
+    def load(cls):
+        """Return the singleton settings row, creating it if needed."""
+
+        try:
+            settings = cls.query.order_by(cls.id).first()
+        except (OperationalError, ProgrammingError):
+            db.session.rollback()
+            return None
+
+        if settings is None:
+            default_price = Decimal(str(current_app.config.get('VETERINARIAN_MEMBERSHIP_PRICE', 60.00)))
+            settings = cls(membership_price=default_price)
+            db.session.add(settings)
+            try:
+                db.session.commit()
+            except Exception:  # noqa: BLE001
+                db.session.rollback()
+                return None
+
+        return settings
+
+    @classmethod
+    def membership_price_amount(cls) -> Decimal:
+        """Return the configured membership price as a Decimal."""
+
+        settings = cls.load()
+        if settings and settings.membership_price is not None:
+            return Decimal(settings.membership_price)
+
+        return Decimal(str(current_app.config.get('VETERINARIAN_MEMBERSHIP_PRICE', 60.00)))
 
 class VetSchedule(db.Model):
     __tablename__ = 'vet_schedule'
