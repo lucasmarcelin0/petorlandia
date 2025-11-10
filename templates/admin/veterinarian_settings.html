@@ -1,0 +1,43 @@
+{% extends 'admin/master.html' %}
+
+{% block body %}
+<div class="container-fluid py-4">
+  <div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-4">
+    <h2 class="h3 mb-0">Configurações de Veterinários</h2>
+  </div>
+
+  <div class="row">
+    <div class="col-12 col-lg-6">
+      <div class="card shadow-sm border-0">
+        <div class="card-body">
+          <p class="text-muted mb-4">
+            Ajuste abaixo o valor cobrado mensalmente pela assinatura de veterinário. Esta alteração impacta imediatamente o fluxo de checkout pelo Mercado Pago.
+          </p>
+
+          <form method="post">
+            {{ form.hidden_tag() }}
+
+            <div class="mb-3">
+              <label class="form-label" for="membership_price">{{ form.membership_price.label }}</label>
+              <div class="input-group">
+                <span class="input-group-text">R$</span>
+                {{ form.membership_price(class_='form-control', id='membership_price') }}
+              </div>
+              {% if form.membership_price.errors %}
+                <div class="text-danger small mt-1">
+                  {% for error in form.membership_price.errors %}
+                    <div>{{ error }}</div>
+                  {% endfor %}
+                </div>
+              {% endif %}
+              <div class="form-text">Informe o valor com dois decimais. Ex.: 75,90.</div>
+            </div>
+
+            {{ form.submit(class_='btn btn-primary') }}
+          </form>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

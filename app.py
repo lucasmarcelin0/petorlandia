@@ -735,6 +735,12 @@ def _ensure_veterinarian_profile(form=None):
     return vet_profile, None
 
 
+def _get_veterinarian_membership_price() -> Decimal:
+    """Return the configured membership price for veterinarians."""
+
+    return VeterinarianSettings.membership_price_amount()
+
+
 def _resolve_membership_from_payment(payment):
     external = getattr(payment, 'external_reference', '') or ''
     match = re.match(r'vet-membership-(\d+)', external)
@@ -846,7 +852,7 @@ def veterinarian_membership():
     status = request.args.get('status')
 
     checkout_form = VeterinarianMembershipCheckoutForm()
-    price = Decimal(str(current_app.config.get('VETERINARIAN_MEMBERSHIP_PRICE', 60.00)))
+    price = _get_veterinarian_membership_price()
     trial_days = current_app.config.get('VETERINARIAN_TRIAL_DAYS', 30)
 
     return render_template(
@@ -882,7 +888,7 @@ def veterinarian_membership_checkout():
     if membership:
         membership.ensure_trial_dates(trial_days)
 
-    price = Decimal(str(current_app.config.get('VETERINARIAN_MEMBERSHIP_PRICE', 60.00)))
+    price = _get_veterinarian_membership_price()
 
     if membership and membership.id is None:
         db.session.flush()
