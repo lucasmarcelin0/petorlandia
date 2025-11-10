@@ -831,10 +831,17 @@ def api_cep_lookup(cep: str):
 @app.route('/veterinario/assinatura')
 @login_required
 def veterinarian_membership():
-    if not has_veterinarian_profile(current_user):
+    role = getattr(current_user, 'role', None)
+    role_lower = role.lower() if isinstance(role, str) else ''
+    is_admin = bool(current_user.is_authenticated and role_lower == 'admin')
+    has_profile = has_veterinarian_profile(current_user)
+
+    if not (is_admin or has_profile):
         abort(403)
 
-    membership = ensure_veterinarian_membership(current_user.veterinario)
+    membership = None
+    if has_profile:
+        membership = ensure_veterinarian_membership(current_user.veterinario)
 
     status = request.args.get('status')
 
@@ -855,7 +862,12 @@ def veterinarian_membership():
 @app.route('/veterinario/assinatura/checkout', methods=['POST'])
 @login_required
 def veterinarian_membership_checkout():
-    if not has_veterinarian_profile(current_user):
+    role = getattr(current_user, 'role', None)
+    role_lower = role.lower() if isinstance(role, str) else ''
+    is_admin = bool(current_user.is_authenticated and role_lower == 'admin')
+    has_profile = has_veterinarian_profile(current_user)
+
+    if not (is_admin or has_profile):
         abort(403)
 
     form = VeterinarianMembershipCheckoutForm()
@@ -863,7 +875,9 @@ def veterinarian_membership_checkout():
         flash('Não foi possível iniciar a assinatura. Tente novamente.', 'danger')
         return redirect(url_for('veterinarian_membership'))
 
-    membership = ensure_veterinarian_membership(current_user.veterinario)
+    membership = None
+    if has_profile:
+        membership = ensure_veterinarian_membership(current_user.veterinario)
     trial_days = current_app.config.get('VETERINARIAN_TRIAL_DAYS', 30)
     if membership:
         membership.ensure_trial_dates(trial_days)

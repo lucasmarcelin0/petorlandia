@@ -209,6 +209,30 @@ def test_veterinarian_request_new_trial_requires_admin_for_activation(monkeypatc
         assert refreshed_membership.trial_ends_at > expired_trial_ends
 
 
+def test_veterinarian_membership_route_allows_admin(monkeypatch, app):
+    client = app.test_client()
+
+    with app.app_context():
+        db.drop_all()
+        db.create_all()
+
+        admin = User(id=1, name='Admin', email='admin@test', role='admin')
+        admin.set_password('secret')
+
+        db.session.add(admin)
+        db.session.commit()
+
+        import flask_login.utils as login_utils
+
+        admin_id = admin.id
+
+        monkeypatch.setattr(login_utils, '_get_user', lambda: User.query.get(admin_id))
+
+    response = client.get('/veterinario/assinatura')
+
+    assert response.status_code == 200
+
+
 def test_register_page(app):
     client = app.test_client()
     response = client.get('/register')
