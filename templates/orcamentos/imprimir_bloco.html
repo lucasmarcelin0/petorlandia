@@ -48,6 +48,9 @@
       <span>Emitido em {{ bloco.data_criacao|format_datetime_brazil('%d/%m/%Y %H:%M') }}</span>
     {% endif %}
     <span>Identificador da prescrição: #{{ bloco.id }}</span>
+    {% if veterinario %}
+      <span>Salvo por {{ veterinario.name }}</span>
+    {% endif %}
   </div>
 
   <div class="info-grid">

@@ -6507,7 +6507,11 @@ def salvar_bloco_prescricao(consulta_id):
         return jsonify({'success': False, 'message': 'Nenhuma prescrição recebida.'}), 400
 
     # ⬇️ Aqui é onde a instrução geral precisa ser usada
-    bloco = BlocoPrescricao(animal_id=consulta.animal_id, instrucoes_gerais=instrucoes)
+    bloco = BlocoPrescricao(
+        animal_id=consulta.animal_id,
+        instrucoes_gerais=instrucoes,
+        saved_by=current_user,
+    )
     db.session.add(bloco)
     db.session.flush()  # Garante o ID do bloco
 
@@ -6630,6 +6634,7 @@ def atualizar_bloco_prescricao(bloco_id):
         db.session.add(nova)
 
     bloco.instrucoes_gerais = instrucoes
+    bloco.saved_by = current_user
     db.session.commit()
     return jsonify({'success': True})
 
@@ -6650,6 +6655,7 @@ def imprimir_bloco_prescricao(bloco_id):
     clinica = consulta.clinica if consulta and consulta.clinica else (
         veterinario.veterinario.clinica if veterinario and getattr(veterinario, "veterinario", None) else None
     )
+    profissional_responsavel = bloco.saved_by or veterinario
 
     return render_template(
         'orcamentos/imprimir_bloco.html',
@@ -6658,7 +6664,7 @@ def imprimir_bloco_prescricao(bloco_id):
         animal=animal,
         tutor=tutor,
         clinica=clinica,
-        veterinario=veterinario,
+        veterinario=profissional_responsavel,
     )
 
 
