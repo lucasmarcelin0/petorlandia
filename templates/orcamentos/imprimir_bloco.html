@@ -48,6 +48,9 @@
       <span>Emitido em {{ bloco.data_criacao|format_datetime_brazil('%d/%m/%Y %H:%M') }}</span>
     {% endif %}
     <span>Identificador da prescrição: #{{ bloco.id }}</span>
+    {% if salvo_por %}
+      <span>Salvo por {{ salvo_por.name }}</span>
+    {% endif %}
   </div>
 
   <div class="info-grid">
