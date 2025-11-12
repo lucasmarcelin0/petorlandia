@@ -33,7 +33,7 @@ from flask import (
     has_request_context,
 )
 from flask_cors import CORS
-from flask_socketio import SocketIO, emit
+from flask_socketio import SocketIO, emit, join_room
 from twilio.rest import Client
 from itsdangerous import URLSafeTimedSerializer
 from jinja2 import TemplateNotFound
@@ -208,24 +208,29 @@ def _nim_default_rows() -> list[list[bool]]:
     return [row.copy() for row in NIM_TEMPLATE_ROWS]
 
 
-nim_state = {
-    "rows": _nim_default_rows(),
-    "turn": 1,
-    "winner": None,
-}
+def _nim_default_state() -> dict:
+    return {
+        "rows": _nim_default_rows(),
+        "turn": 1,
+        "winner": None,
+    }
+
+
+nim_rooms = defaultdict(_nim_default_state)
 
 EASTER_EGG_STATIC_DIR = PROJECT_ROOT / "static" / "easter_egg"
 
 
-def _nim_payload() -> dict:
+def _nim_payload(room: str) -> dict:
+    state = nim_rooms[room]
     return {
-        "rows": [row.copy() for row in nim_state["rows"]],
-        "turn": nim_state["turn"],
-        "winner": nim_state["winner"],
+        "rows": [row.copy() for row in state["rows"]],
+        "turn": state["turn"],
+        "winner": state["winner"],
     }
 
 
-def _normalize_nim_payload(payload: dict | None) -> dict | None:
+def _normalize_nim_payload(payload: dict | None, current_state: dict) -> dict | None:
     if not isinstance(payload, dict):
         return None
 
@@ -239,11 +244,11 @@ def _normalize_nim_payload(payload: dict | None) -> dict | None:
             return None
         normalized_rows.append([bool(value) for value in row])
 
-    turn = payload.get("turn", nim_state["turn"])
+    turn = payload.get("turn", current_state["turn"])
     try:
         turn_int = int(turn)
     except (TypeError, ValueError):
-        turn_int = nim_state["turn"]
+        turn_int = current_state["turn"]
     if turn_int not in (1, 2):
         turn_int = 1
 
@@ -277,21 +282,32 @@ def secret_game_static(filename: str):
     return send_from_directory(str(EASTER_EGG_STATIC_DIR), filename)
 
 
+def _nim_room_from_request() -> str:
+    room = (request.args.get("room", "") or "").strip()
+    if not room:
+        return "lobby"
+    sanitized = "".join(ch for ch in room if ch.isalnum() or ch in {"_", "-"})
+    return sanitized[:32].upper() or "lobby"
+
+
 @socketio.on("connect")
 def nim_connect():  # pragma: no cover - exercised via browser
-    emit("update_state", _nim_payload())
+    room = _nim_room_from_request()
+    join_room(room)
+    emit("update_state", _nim_payload(room))
 
 
 @socketio.on("move")
 def nim_move(data):  # pragma: no cover - exercised via browser
-    global nim_state
-    normalized = _normalize_nim_payload(data)
+    room = _nim_room_from_request()
+    current_state = nim_rooms[room]
+    normalized = _normalize_nim_payload(data, current_state)
     if not normalized:
-        emit("update_state", _nim_payload())
+        emit("update_state", _nim_payload(room))
         return
 
-    nim_state = normalized
-    emit("update_state", _nim_payload(), broadcast=True)
+    nim_rooms[room] = normalized
+    emit("update_state", _nim_payload(room), room=room)
 
 
 def local_date_range_to_utc(start_dt, end_dt):
