@@ -33,7 +33,7 @@ from flask import (
     has_request_context,
 )
 from flask_cors import CORS
-from flask_socketio import SocketIO, emit, join_room, leave_room
+from flask_socketio import SocketIO, disconnect, emit, join_room, leave_room
 from twilio.rest import Client
 from itsdangerous import URLSafeTimedSerializer
 from jinja2 import TemplateNotFound
@@ -221,11 +221,13 @@ def _nim_default_state() -> dict:
         "player_emojis": ["🐾", "🐾"],
         "turn_origin_rows": _nim_default_rows(),
         "last_turn": None,
+        "alternate_rows": [False] * len(NIM_TEMPLATE_ROWS),
     }
 
 
 nim_rooms = defaultdict(_nim_default_state)
 nim_session_rooms: Dict[str, str] = {}
+nim_room_members: Dict[str, set[str]] = defaultdict(set)
 
 EASTER_EGG_STATIC_DIR = PROJECT_ROOT / "static" / "easter_egg"
 
@@ -243,6 +245,8 @@ def _nim_payload(room: str) -> dict:
         "stick_color": state.get("stick_color"),
         "player_emojis": list(state.get("player_emojis", [])),
         "last_turn": state.get("last_turn"),
+        "alternate_rows": list(state.get("alternate_rows", [])),
+        "turn_origin_rows": [row.copy() for row in state.get("turn_origin_rows", _nim_default_rows())],
     }
 
 
@@ -259,6 +263,134 @@ def _nim_copy_rows(rows: Iterable[Iterable[bool]]) -> list[list[bool]]:
             continue
         copied.append([bool(value) for value in row[: len(template_row)]])
     return copied
+
+
+def _nim_enforce_rules(current_state: dict, proposed_state: dict) -> dict | None:
+    """Validate the proposed state according to the house rules."""
+
+    proposed_rows = _nim_copy_rows(proposed_state.get("rows", []))
+    current_rows = _nim_copy_rows(current_state.get("rows", _nim_default_rows()))
+
+    origin_candidate = current_state.get("turn_origin_rows")
+    if (
+        not isinstance(origin_candidate, list)
+        or len(origin_candidate) != len(NIM_TEMPLATE_ROWS)
+    ):
+        baseline_rows = _nim_copy_rows(current_rows)
+    else:
+        baseline_rows = _nim_copy_rows(origin_candidate)
+
+    default_rows = _nim_default_rows()
+    is_reset = (
+        proposed_rows == default_rows
+        and proposed_state.get("turn") == 1
+        and proposed_state.get("winner") is None
+    )
+
+    restorations_from_current: list[tuple[int, int]] = []
+    for row_index, (current_row, next_row) in enumerate(zip(current_rows, proposed_rows)):
+        for stick_index, (current_value, next_value) in enumerate(zip(current_row, next_row)):
+            if not current_value and next_value:
+                restorations_from_current.append((row_index, stick_index))
+
+    if restorations_from_current and not is_reset:
+        return None
+
+    removed_by_row_turn: list[int] = [0] * len(NIM_TEMPLATE_ROWS)
+
+    for row_index, (baseline_row, next_row) in enumerate(zip(baseline_rows, proposed_rows)):
+        for stick_index, (baseline_value, next_value) in enumerate(zip(baseline_row, next_row)):
+            if baseline_value and not next_value:
+                removed_by_row_turn[row_index] += 1
+
+    total_removed_turn = sum(removed_by_row_turn)
+    rows_with_removals = [
+        index for index, count in enumerate(removed_by_row_turn) if count > 0
+    ]
+
+    current_turn = current_state.get("turn")
+    try:
+        current_turn_int = int(current_turn)
+    except (TypeError, ValueError):
+        current_turn_int = 1
+    if current_turn_int not in (1, 2):
+        current_turn_int = 1
+
+    next_turn = proposed_state.get("turn")
+    try:
+        next_turn_int = int(next_turn)
+    except (TypeError, ValueError):
+        next_turn_int = current_turn_int
+    if next_turn_int not in (1, 2):
+        next_turn_int = current_turn_int
+
+    proposed_state["turn"] = next_turn_int
+    turn_changed = current_turn_int != next_turn_int
+
+    current_alternates = current_state.get("alternate_rows")
+    if not isinstance(current_alternates, (list, tuple)):
+        normalized_alternates = [False] * len(NIM_TEMPLATE_ROWS)
+    else:
+        normalized_alternates = [
+            bool(current_alternates[index]) if index < len(current_alternates) else False
+            for index in range(len(NIM_TEMPLATE_ROWS))
+        ]
+
+    if is_reset:
+        proposed_state["rows"] = proposed_rows
+        proposed_state["has_played"] = False
+        proposed_state["turn"] = 1
+        proposed_state["winner"] = None
+        proposed_state["alternate_rows"] = [False] * len(NIM_TEMPLATE_ROWS)
+        return proposed_state
+
+    if total_removed_turn > 3:
+        return None
+
+    if len(rows_with_removals) > 1:
+        return None
+
+    if turn_changed and total_removed_turn == 0:
+        return None
+
+    for row_index, removed_count in enumerate(removed_by_row_turn):
+        if normalized_alternates[row_index] and removed_count > 1:
+            return None
+
+    # Update alternate row metadata based on the resulting board.
+    next_alternates = normalized_alternates.copy()
+    for row_index, row in enumerate(proposed_rows):
+        remaining = sum(1 for stick in row if stick)
+        if remaining <= 1:
+            next_alternates[row_index] = False
+            continue
+
+        if len(row) == 3:
+            left, middle, right = row
+            if left and right and not middle:
+                next_alternates[row_index] = True
+
+    proposed_state["rows"] = proposed_rows
+    proposed_state["alternate_rows"] = next_alternates
+
+    if turn_changed:
+        proposed_state["has_played"] = False
+    else:
+        proposed_state["has_played"] = total_removed_turn > 0
+
+    # Winner is only valid when the board is empty. With the misère rule, the
+    # winner corresponds to the opponent of the player who removed the last
+    # stick, so any inconsistent winner flag is cleared here.
+    all_taken = all(not any(row) for row in proposed_rows)
+    if not all_taken:
+        proposed_state["winner"] = None
+    else:
+        if turn_changed:
+            proposed_state["winner"] = next_turn_int
+        else:
+            proposed_state["winner"] = 1 if next_turn_int == 2 else 2
+
+    return proposed_state
 
 
 def _nim_player_name(state: dict, index: int) -> str:
@@ -305,44 +437,44 @@ def _nim_build_turn_summary(
     previous_player_name = _nim_player_name(next_state, prev_turn)
     next_player_name = _nim_player_name(next_state, next_turn)
 
+    message_parts = []
+    for segment in removed_segments:
+        count = segment["count"]
+        row_label = segment["row"]
+        noun = "palito" if count == 1 else "palitos"
+        message_parts.append(f"{count} {noun} da linha {row_label}")
+
+    if not message_parts:
+        removed_text = ""
+    elif len(message_parts) == 1:
+        removed_text = message_parts[0]
+    else:
+        removed_text = ", ".join(message_parts[:-1]) + " e " + message_parts[-1]
+
     if next_winner in (1, 2) and next_winner == prev_turn:
-        if total_removed:
-            message_parts = []
-            for segment in removed_segments:
-                count = segment["count"]
-                row_label = segment["row"]
-                noun = "palito" if count == 1 else "palitos"
-                message_parts.append(f"{count} {noun} da linha {row_label}")
-            removed_text = (
-                message_parts[0]
-                if len(message_parts) == 1
-                else ", ".join(message_parts[:-1]) + " e " + message_parts[-1]
-            ) if message_parts else "os últimos palitos"
+        if removed_text:
             message = (
                 f"{previous_player_name} removeu {removed_text} e venceu a partida!"
             )
         else:
             message = f"{previous_player_name} venceu a partida!"
-    elif total_removed:
-        message_parts = []
-        for segment in removed_segments:
-            count = segment["count"]
-            row_label = segment["row"]
-            noun = "palito" if count == 1 else "palitos"
-            message_parts.append(f"{count} {noun} da linha {row_label}")
-        removed_text = (
-            message_parts[0]
-            if len(message_parts) == 1
-            else ", ".join(message_parts[:-1]) + " e " + message_parts[-1]
-        )
-        if next_winner in (1, 2):
-            winner_name = _nim_player_name(next_state, next_winner)
-            message = f"{winner_name} venceu a partida!"
+    elif next_winner in (1, 2):
+        winner_name = _nim_player_name(next_state, next_winner)
+        if removed_text:
+            message = (
+                f"{previous_player_name} removeu {removed_text} e ficou sem jogadas. "
+                f"{winner_name} venceu a partida!"
+            )
         else:
+            message = f"{winner_name} venceu a partida!"
+    elif total_removed:
+        if removed_text:
             message = (
                 f"{previous_player_name} removeu {removed_text}. "
                 f"Agora é a vez de {next_player_name}."
             )
+        else:
+            message = f"{previous_player_name} passou a vez."
     elif total_restored:
         message = f"{previous_player_name} reiniciou o tabuleiro."
     elif prev_winner and not next_winner:
@@ -560,7 +692,20 @@ def _nim_room_from_request() -> str:
 @socketio.on("connect")
 def nim_connect():  # pragma: no cover - exercised via browser
     room = _nim_room_from_request()
+    members = nim_room_members[room]
+    if len(members) >= 2:
+        emit(
+            "room_full",
+            {
+                "message": "Sala cheia. Somente dois jogadores podem participar desta partida.",
+                "room": room,
+            },
+        )
+        disconnect()
+        return
+
     nim_session_rooms[request.sid] = room
+    members.add(request.sid)
     join_room(room)
     emit("update_state", _nim_payload(room))
 
@@ -577,11 +722,16 @@ def nim_move(data):  # pragma: no cover - exercised via browser
         emit("update_state", _nim_payload(room))
         return
 
-    last_turn_summary, next_origin_rows = _nim_turn_metadata(current_state, normalized)
-    normalized["turn_origin_rows"] = next_origin_rows
-    normalized["last_turn"] = last_turn_summary
+    enforced = _nim_enforce_rules(current_state, normalized)
+    if not enforced:
+        emit("update_state", _nim_payload(room))
+        return
 
-    nim_rooms[room] = normalized
+    last_turn_summary, next_origin_rows = _nim_turn_metadata(current_state, enforced)
+    enforced["turn_origin_rows"] = next_origin_rows
+    enforced["last_turn"] = last_turn_summary
+
+    nim_rooms[room] = enforced
     emit("update_state", _nim_payload(room), room=room)
 
 
@@ -589,6 +739,11 @@ def nim_move(data):  # pragma: no cover - exercised via browser
 def nim_disconnect():  # pragma: no cover - exercised via browser
     room = nim_session_rooms.pop(request.sid, None)
     if room:
+        members = nim_room_members.get(room)
+        if members and request.sid in members:
+            members.discard(request.sid)
+            if not members:
+                nim_room_members.pop(room, None)
         leave_room(room)
 
 

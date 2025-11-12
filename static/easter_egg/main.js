@@ -44,6 +44,7 @@
   ];
 
   const cloneRows = (rows) => rows.map((row) => row.slice());
+  const createZeroArray = (length) => Array.from({ length }, () => 0);
 
   const randomColor = () => `hsl(${Math.floor(Math.random() * 360)}, 70%, 68%)`;
   const randomGradient = () => {
@@ -81,6 +82,12 @@
     playerEmojis: [randomEmoji(), randomEmoji()],
     playerNames: DEFAULT_PLAYER_NAMES.slice(),
     lastTurn: null,
+    turnOriginRows: cloneRows(INITIAL_ROWS),
+    turnRemovalCount: 0,
+    turnRowRemovalCounts: createZeroArray(INITIAL_ROWS.length),
+    alternateRows: INITIAL_ROWS.map(() => false),
+    ruleMessage: null,
+    roomError: null,
   };
 
   const container = document.getElementById("root");
@@ -90,12 +97,61 @@
 
   document.body.classList.add("game-body");
 
-  const normalizeRows = (rows) =>
-    Array.isArray(rows)
-      ? rows.map((row) =>
-          Array.isArray(row) ? row.map((stick) => Boolean(stick)) : []
-        )
+  const normalizeRows = (rows, fallbackRows = INITIAL_ROWS) => {
+    const template = Array.isArray(fallbackRows)
+      ? cloneRows(fallbackRows)
       : cloneRows(INITIAL_ROWS);
+    if (!Array.isArray(rows)) {
+      return template;
+    }
+    return template.map((templateRow, rowIndex) => {
+      const sourceRow = Array.isArray(rows[rowIndex]) ? rows[rowIndex] : [];
+      return templateRow.map((_, stickIndex) => {
+        const value = sourceRow[stickIndex];
+        if (typeof value === "boolean") {
+          return value;
+        }
+        if (typeof value === "number") {
+          return value !== 0;
+        }
+        return Boolean(value);
+      });
+    });
+  };
+
+  const ensureBaseline = () => {
+    if (
+      !Array.isArray(state.turnOriginRows) ||
+      state.turnOriginRows.length !== state.rows.length
+    ) {
+      state.turnOriginRows = cloneRows(state.rows);
+    }
+  };
+
+  const recalcTurnProgress = () => {
+    const baseline = Array.isArray(state.turnOriginRows)
+      ? state.turnOriginRows
+      : [];
+    const counts = [];
+    let total = 0;
+
+    state.rows.forEach((row, rowIndex) => {
+      const baselineRow = Array.isArray(baseline[rowIndex])
+        ? baseline[rowIndex]
+        : [];
+      let rowCount = 0;
+      row.forEach((stick, stickIndex) => {
+        if (baselineRow[stickIndex] && !stick) {
+          rowCount += 1;
+        }
+      });
+      counts[rowIndex] = rowCount;
+      total += rowCount;
+    });
+
+    state.turnRowRemovalCounts = counts;
+    state.turnRemovalCount = total;
+  };
 
   const emitState = () => {
     socket.emit("move", {
@@ -123,6 +179,24 @@
     document.body.style.background = state.bgGradient;
     document.body.style.backgroundAttachment = "fixed";
     container.innerHTML = "";
+
+    if (state.roomError) {
+      const errorBox = document.createElement("div");
+      errorBox.className = "game-error";
+
+      const errorTitle = document.createElement("h2");
+      errorTitle.className = "game-error__title";
+      errorTitle.textContent = "Sala indisponível";
+      errorBox.appendChild(errorTitle);
+
+      const errorText = document.createElement("p");
+      errorText.className = "game-error__text";
+      errorText.textContent = state.roomError;
+      errorBox.appendChild(errorText);
+
+      container.appendChild(errorBox);
+      return;
+    }
 
     const wrapper = document.createElement("div");
     wrapper.className = "game-container";
@@ -158,6 +232,13 @@
       status.innerHTML = `Vez de ${activeName} <span class="emoji">${emoji}</span>`;
     }
     wrapper.appendChild(status);
+
+    if (typeof state.ruleMessage === "string" && state.ruleMessage.trim()) {
+      const ruleNotice = document.createElement("p");
+      ruleNotice.className = "rule-message";
+      ruleNotice.textContent = state.ruleMessage;
+      wrapper.appendChild(ruleNotice);
+    }
 
     if (
       state.lastTurn &&
@@ -258,6 +339,13 @@
       if (state.activeRow !== null && state.activeRow !== rowIndex) {
         rowEl.classList.add("stick-row--disabled");
       }
+      if (state.alternateRows[rowIndex]) {
+        rowEl.classList.add("stick-row--locked");
+        rowEl.setAttribute(
+          "title",
+          "Nesta linha, apenas um palito pode ser cortado por turno."
+        );
+      }
 
       row.forEach((stick, stickIndex) => {
         const stickEl = document.createElement("div");
@@ -269,7 +357,29 @@
         stickEl.addEventListener("click", () => {
           if (state.winner) return;
           if (!state.rows[rowIndex]?.[stickIndex]) return;
-          if (state.activeRow !== null && state.activeRow !== rowIndex) return;
+          if (state.activeRow !== null && state.activeRow !== rowIndex) {
+            state.ruleMessage = "Conclua esta linha antes de cortar outra.";
+            render();
+            return;
+          }
+
+          ensureBaseline();
+          recalcTurnProgress();
+
+          if (state.turnRemovalCount >= 3) {
+            state.ruleMessage = "Você já removeu três palitos neste turno.";
+            render();
+            return;
+          }
+
+          const rowRemovalCount = state.turnRowRemovalCounts[rowIndex] || 0;
+          const isAlternateRow = Boolean(state.alternateRows[rowIndex]);
+          if (isAlternateRow && rowRemovalCount >= 1) {
+            state.ruleMessage =
+              "Nesta linha, apenas um palito pode ser cortado por turno após retirar o do meio.";
+            render();
+            return;
+          }
 
           if (state.activeRow === null) {
             state.activeRow = rowIndex;
@@ -294,12 +404,33 @@
           }
 
           const updated = cloneRows(state.rows);
+          if (!updated[rowIndex] || updated[rowIndex][stickIndex] === false) {
+            return;
+          }
+
           updated[rowIndex][stickIndex] = false;
           state.rows = updated;
-          state.hasPlayed = true;
           if (!state.selectionRange) {
             state.selectionRange = { row: rowIndex, min: stickIndex, max: stickIndex };
           }
+
+          state.ruleMessage = null;
+
+          recalcTurnProgress();
+          state.hasPlayed = state.turnRemovalCount > 0;
+
+          const remaining = updated[rowIndex].filter(Boolean).length;
+          if (updated[rowIndex].length === 3) {
+            const [left, middle, right] = updated[rowIndex];
+            if (left && right && !middle) {
+              state.alternateRows[rowIndex] = true;
+            } else if (remaining <= 1) {
+              state.alternateRows[rowIndex] = false;
+            }
+          } else if (remaining <= 1) {
+            state.alternateRows[rowIndex] = false;
+          }
+
           emitState();
           render();
         });
@@ -327,13 +458,17 @@
       const nextRows = cloneRows(state.rows);
       const nextTurn = state.turn === 1 ? 2 : 1;
       const allTaken = nextRows.every((row) => row.every((stick) => !stick));
-      const winningPlayer = allTaken ? state.turn : null;
+      const winningPlayer = allTaken ? nextTurn : null;
 
       state.turn = nextTurn;
       state.winner = winningPlayer;
       state.hasPlayed = false;
       state.activeRow = null;
       state.selectionRange = null;
+      state.turnOriginRows = cloneRows(state.rows);
+      state.turnRemovalCount = 0;
+      state.turnRowRemovalCounts = createZeroArray(state.rows.length);
+      state.ruleMessage = null;
 
       emitState();
       render();
@@ -353,6 +488,11 @@
       state.bgGradient = randomGradient();
       state.stickColor = randomColor();
       state.playerEmojis = [randomEmoji(), randomEmoji()];
+      state.turnOriginRows = cloneRows(INITIAL_ROWS);
+      state.turnRemovalCount = 0;
+      state.turnRowRemovalCounts = createZeroArray(INITIAL_ROWS.length);
+      state.alternateRows = INITIAL_ROWS.map(() => false);
+      state.ruleMessage = null;
 
       emitState();
       render();
@@ -368,10 +508,11 @@
       return;
     }
 
-    const incomingRows = normalizeRows(data.rows);
-    if (incomingRows.length) {
-      state.rows = incomingRows;
-    }
+    state.roomError = null;
+
+    const previousTurn = state.turn;
+    const incomingRows = normalizeRows(data.rows, state.rows);
+    state.rows = incomingRows;
 
     const turnValue = Number.parseInt(data.turn, 10);
     if (turnValue === 1 || turnValue === 2) {
@@ -423,6 +564,35 @@
       state.hasPlayed
     );
 
+    const originSource = data.turn_origin_rows ?? data.turnOriginRows;
+    if (Array.isArray(originSource)) {
+      state.turnOriginRows = normalizeRows(
+        originSource,
+        state.turnOriginRows || state.rows
+      );
+    }
+
+    if (
+      !Array.isArray(state.turnOriginRows) ||
+      state.turnOriginRows.length !== state.rows.length ||
+      !state.hasPlayed ||
+      previousTurn !== state.turn
+    ) {
+      state.turnOriginRows = cloneRows(state.rows);
+    }
+
+    const alternateSource = data.alternate_rows ?? data.alternateRows;
+    if (Array.isArray(alternateSource)) {
+      state.alternateRows = state.rows.map((_, index) =>
+        Boolean(alternateSource[index])
+      );
+    } else if (
+      !Array.isArray(state.alternateRows) ||
+      state.alternateRows.length !== state.rows.length
+    ) {
+      state.alternateRows = state.rows.map(() => false);
+    }
+
     const incomingActiveRow = data.active_row ?? data.activeRow;
     const parsedActiveRow = Number.parseInt(incomingActiveRow, 10);
     if (
@@ -436,6 +606,9 @@
     }
 
     state.selectionRange = null;
+
+    recalcTurnProgress();
+    state.ruleMessage = null;
 
     let shouldEmitTheme = false;
 
@@ -513,6 +686,27 @@
     }
 
     render();
+  });
+
+  socket.on("room_full", (payload) => {
+    const message =
+      payload && typeof payload.message === "string"
+        ? payload.message.trim()
+        : "";
+    state.roomError =
+      message || "Sala cheia. Tente outra sala ou gere um novo código.";
+    render();
+  });
+
+  socket.on("disconnect", (reason) => {
+    if (!state.roomError && reason === "io server disconnect") {
+      state.roomError = "Conexão encerrada pelo servidor.";
+      render();
+    }
+  });
+
+  socket.on("connect", () => {
+    state.roomError = null;
   });
 
   render();
