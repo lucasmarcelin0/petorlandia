@@ -119,7 +119,7 @@
         React.createElement(
           "h1",
           { className: "text-3xl font-bold mb-4 text-white drop-shadow" },
-          "🎮 Jogo de Nim"
+          "🎮 Desafio Secreto"
         ),
         winner
           ? React.createElement(
