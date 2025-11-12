@@ -33,9 +33,32 @@
     </div>
   {% endif %}
 
+  {% set signature_user = printing_user or veterinario %}
+
   <div class="document-title-group">
     <h1 class="document-title">Orçamento</h1>
     <span class="document-tag">Proposta comercial</span>
+  </div>
+
+  <div class="print-attribution">
+    <div class="print-attribution__line">
+      <span class="print-attribution__label">Impresso por:</span>
+      <span class="print-attribution__value">{{ signature_user.name if signature_user else '—' }}</span>
+      {% if signature_user and signature_user.veterinario %}
+        <span class="print-attribution__value">CRMV {{ signature_user.veterinario.crmv }}</span>
+      {% elif signature_user and signature_user.worker == 'veterinario' %}
+        <span class="print-attribution__value">CRMV —</span>
+      {% endif %}
+    </div>
+    <div class="print-attribution__line">
+      <span class="print-attribution__label">Data/Hora:</span>
+      <span class="print-attribution__value">{{ printed_at|format_datetime_brazil('%d/%m/%Y %H:%M') if printed_at else date_now('%d/%m/%Y %H:%M') }}</span>
+    </div>
+    {% if veterinario and signature_user and veterinario.id != signature_user.id %}
+      <div class="print-attribution__note">
+        Profissional responsável registrado: {{ veterinario.name }}{% if veterinario.veterinario %} · CRMV {{ veterinario.veterinario.crmv }}{% endif %}
+      </div>
+    {% endif %}
   </div>
 
   <div class="info-grid">
@@ -74,6 +97,19 @@
   <div class="note-block">
     Valores válidos exclusivamente para os itens listados acima. Consulte a clínica para condições de pagamento e opções adicionais.
   </div>
+
+  <div class="signature-block">
+    <div class="signature">
+      <div class="signature-line"></div>
+      <span>{{ signature_user.name if signature_user else '—' }}</span>
+      <span>CRMV {{ signature_user.veterinario.crmv if signature_user and signature_user.veterinario else '—' }}</span>
+    </div>
+  </div>
+  {% if veterinario and signature_user and veterinario.id != signature_user.id %}
+    <div class="signature-disclaimer">
+      Profissional responsável registrado: {{ veterinario.name }}{% if veterinario.veterinario %} · CRMV {{ veterinario.veterinario.crmv }}{% endif %}
+    </div>
+  {% endif %}
 
   {% if clinica %}
     <footer>
