@@ -213,6 +213,7 @@ def _nim_default_state() -> dict:
         "rows": _nim_default_rows(),
         "turn": 1,
         "winner": None,
+        "players": {1: "Jogador 1", 2: "Jogador 2"},
     }
 
 
@@ -227,6 +228,7 @@ def _nim_payload(room: str) -> dict:
         "rows": [row.copy() for row in state["rows"]],
         "turn": state["turn"],
         "winner": state["winner"],
+        "players": dict(state.get("players", {})),
     }
 
 
@@ -267,7 +269,34 @@ def _normalize_nim_payload(payload: dict | None, current_state: dict) -> dict | 
         "rows": normalized_rows,
         "turn": turn_int,
         "winner": winner_int,
+        "players": _normalize_nim_players(payload.get("players"), current_state.get("players", {})),
     }
+
+
+def _normalize_nim_players(players: dict | None, current_players: dict | None) -> dict:
+    defaults = {1: "Jogador 1", 2: "Jogador 2"}
+    normalized: dict[int, str] = {}
+
+    if not isinstance(current_players, dict):
+        current_players = {}
+
+    if not isinstance(players, dict):
+        players = {}
+
+    for player_index in (1, 2):
+        fallback = current_players.get(player_index) or defaults[player_index]
+        value = (
+            players.get(player_index)
+            or players.get(str(player_index))
+            or fallback
+        )
+        text = str(value).strip()
+        text = " ".join(text.split())
+        if not text:
+            text = defaults[player_index]
+        normalized[player_index] = text[:40]
+
+    return normalized
 
 
 @app.route("/surpresa")

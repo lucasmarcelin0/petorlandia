@@ -57,6 +57,18 @@
     return emojis[Math.floor(Math.random() * emojis.length)];
   };
 
+  const DEFAULT_PLAYER_NAMES = ["Jogador 1", "Jogador 2"];
+
+  const sanitizeName = (value, fallback) => {
+    const text = (value || "").toString().trim();
+    const collapsed = text.replace(/\s+/g, " ");
+    const finalText = collapsed.slice(0, 40);
+    if (!finalText) {
+      return fallback;
+    }
+    return finalText;
+  };
+
   const state = {
     rows: cloneRows(INITIAL_ROWS),
     turn: 1,
@@ -66,6 +78,7 @@
     bgGradient: randomGradient(),
     stickColor: randomColor(),
     playerEmojis: [randomEmoji(), randomEmoji()],
+    playerNames: DEFAULT_PLAYER_NAMES.slice(),
   };
 
   const container = document.getElementById("root");
@@ -82,11 +95,15 @@
         )
       : cloneRows(INITIAL_ROWS);
 
-  const emitState = (rows, turn, winner) => {
+  const emitState = () => {
     socket.emit("move", {
-      rows: cloneRows(rows).map((row) => row.map(Boolean)),
-      turn,
-      winner,
+      rows: cloneRows(state.rows).map((row) => row.map(Boolean)),
+      turn: state.turn,
+      winner: state.winner,
+      players: {
+        1: sanitizeName(state.playerNames[0], DEFAULT_PLAYER_NAMES[0]),
+        2: sanitizeName(state.playerNames[1], DEFAULT_PLAYER_NAMES[1]),
+      },
     });
   };
 
@@ -112,14 +129,72 @@
 
     const status = document.createElement("p");
     status.className = "status-text";
+    const currentNames = [
+      sanitizeName(state.playerNames[0], DEFAULT_PLAYER_NAMES[0]),
+      sanitizeName(state.playerNames[1], DEFAULT_PLAYER_NAMES[1]),
+    ];
+
+    state.playerNames = currentNames;
+
     if (state.winner) {
       const emoji = state.playerEmojis[state.winner - 1] || "🐾";
-      status.innerHTML = `<span class="emoji">🏆</span>${emoji} Jogador ${state.winner} venceu!`;
+      const winnerName = currentNames[state.winner - 1] || `Jogador ${state.winner}`;
+      status.innerHTML = `<span class="emoji">🏆</span>${emoji} ${winnerName} venceu!`;
     } else {
       const emoji = state.playerEmojis[state.turn - 1] || "🐾";
-      status.innerHTML = `Vez do Jogador ${state.turn} <span class="emoji">${emoji}</span>`;
+      const activeName = currentNames[state.turn - 1] || `Jogador ${state.turn}`;
+      status.innerHTML = `Vez de ${activeName} <span class="emoji">${emoji}</span>`;
     }
     wrapper.appendChild(status);
+
+    const namesSection = document.createElement("div");
+    namesSection.className = "names-section";
+
+    currentNames.forEach((name, index) => {
+      const field = document.createElement("div");
+      field.className = "name-field";
+
+      const label = document.createElement("label");
+      label.className = "name-label";
+      label.textContent = `Jogador ${index + 1}`;
+      label.setAttribute("for", `player-name-${index}`);
+      field.appendChild(label);
+
+      const input = document.createElement("input");
+      input.className = "name-input";
+      input.type = "text";
+      input.id = `player-name-${index}`;
+      input.placeholder = `Nome do Jogador ${index + 1}`;
+      input.value = name;
+      input.maxLength = 40;
+
+      const applyUpdate = () => {
+        const updated = sanitizeName(input.value, DEFAULT_PLAYER_NAMES[index]);
+        if (state.playerNames[index] === updated) {
+          input.value = updated;
+          return;
+        }
+        const nextNames = state.playerNames.slice();
+        nextNames[index] = updated;
+        state.playerNames = nextNames;
+        input.value = updated;
+        emitState();
+        render();
+      };
+
+      input.addEventListener("blur", applyUpdate);
+      input.addEventListener("keydown", (event) => {
+        if (event.key === "Enter") {
+          event.preventDefault();
+          input.blur();
+        }
+      });
+
+      field.appendChild(input);
+      namesSection.appendChild(field);
+    });
+
+    wrapper.appendChild(namesSection);
 
     const board = document.createElement("div");
     board.className = "stick-board";
@@ -183,7 +258,7 @@
       state.hasPlayed = false;
       state.activeRow = null;
 
-      emitState(nextRows, nextTurn, winningPlayer);
+      emitState();
       render();
     });
     controls.appendChild(endTurnButton);
@@ -201,7 +276,7 @@
       state.stickColor = randomColor();
       state.playerEmojis = [randomEmoji(), randomEmoji()];
 
-      emitState(state.rows, 1, null);
+      emitState();
       render();
     });
     controls.appendChild(resetButton);
@@ -227,6 +302,24 @@
 
     const winnerValue = Number.parseInt(data.winner, 10);
     state.winner = winnerValue === 1 || winnerValue === 2 ? winnerValue : null;
+
+    const playersValue = data.players;
+    if (playersValue && typeof playersValue === "object") {
+      const updatedNames = [];
+      for (let i = 0; i < 2; i += 1) {
+        const key = i + 1;
+        const raw =
+          playersValue[key] ??
+          playersValue[String(key)] ??
+          playersValue[i] ??
+          playersValue[String(i)];
+        updatedNames[i] = sanitizeName(
+          raw,
+          DEFAULT_PLAYER_NAMES[i]
+        );
+      }
+      state.playerNames = updatedNames;
+    }
 
     state.hasPlayed = false;
     state.activeRow = null;
