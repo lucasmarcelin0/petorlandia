@@ -6,7 +6,7 @@ from io import BytesIO
 from concurrent.futures import ThreadPoolExecutor
 from decimal import Decimal
 from urllib.parse import urlparse, parse_qs
-from typing import Optional, Set
+from typing import Iterable, Optional, Set
 
 
 
@@ -216,6 +216,11 @@ def _nim_default_state() -> dict:
         "players": {1: "Jogador 1", 2: "Jogador 2"},
         "has_played": False,
         "active_row": None,
+        "bg_gradient": None,
+        "stick_color": None,
+        "player_emojis": ["🐾", "🐾"],
+        "turn_origin_rows": _nim_default_rows(),
+        "last_turn": None,
     }
 
 
@@ -233,7 +238,160 @@ def _nim_payload(room: str) -> dict:
         "players": dict(state.get("players", {})),
         "has_played": bool(state.get("has_played", False)),
         "active_row": state.get("active_row"),
+        "bg_gradient": state.get("bg_gradient"),
+        "stick_color": state.get("stick_color"),
+        "player_emojis": list(state.get("player_emojis", [])),
+        "last_turn": state.get("last_turn"),
     }
+
+
+def _nim_copy_rows(rows: Iterable[Iterable[bool]]) -> list[list[bool]]:
+    copied: list[list[bool]] = []
+    for index, template_row in enumerate(NIM_TEMPLATE_ROWS):
+        try:
+            row = rows[index]
+        except (TypeError, IndexError):
+            copied.append(template_row.copy())
+            continue
+        if not isinstance(row, (list, tuple)):
+            copied.append(template_row.copy())
+            continue
+        copied.append([bool(value) for value in row[: len(template_row)]])
+    return copied
+
+
+def _nim_player_name(state: dict, index: int) -> str:
+    players = state.get("players")
+    if isinstance(players, dict):
+        for key in (index, str(index)):
+            value = players.get(key)
+            if isinstance(value, str):
+                text = value.strip()
+                if text:
+                    return text
+    return f"Jogador {index}"
+
+
+def _nim_build_turn_summary(
+    previous_state: dict, next_state: dict, baseline_rows: list[list[bool]]
+) -> dict | None:
+    prev_turn = previous_state.get("turn", 1)
+    next_turn = next_state.get("turn", prev_turn)
+    prev_winner = previous_state.get("winner")
+    next_winner = next_state.get("winner")
+
+    removed_segments: list[dict[str, int]] = []
+    total_removed = 0
+    total_restored = 0
+
+    for index, (start_row, end_row) in enumerate(
+        zip(baseline_rows, next_state.get("rows", []))
+    ):
+        removed = 0
+        restored = 0
+        for start_value, end_value in zip(start_row, end_row):
+            start_bool = bool(start_value)
+            end_bool = bool(end_value)
+            if start_bool and not end_bool:
+                removed += 1
+            elif not start_bool and end_bool:
+                restored += 1
+        if removed:
+            removed_segments.append({"row": index + 1, "count": removed})
+            total_removed += removed
+        total_restored += restored
+
+    previous_player_name = _nim_player_name(next_state, prev_turn)
+    next_player_name = _nim_player_name(next_state, next_turn)
+
+    if next_winner in (1, 2) and next_winner == prev_turn:
+        if total_removed:
+            message_parts = []
+            for segment in removed_segments:
+                count = segment["count"]
+                row_label = segment["row"]
+                noun = "palito" if count == 1 else "palitos"
+                message_parts.append(f"{count} {noun} da linha {row_label}")
+            removed_text = (
+                message_parts[0]
+                if len(message_parts) == 1
+                else ", ".join(message_parts[:-1]) + " e " + message_parts[-1]
+            ) if message_parts else "os últimos palitos"
+            message = (
+                f"{previous_player_name} removeu {removed_text} e venceu a partida!"
+            )
+        else:
+            message = f"{previous_player_name} venceu a partida!"
+    elif total_removed:
+        message_parts = []
+        for segment in removed_segments:
+            count = segment["count"]
+            row_label = segment["row"]
+            noun = "palito" if count == 1 else "palitos"
+            message_parts.append(f"{count} {noun} da linha {row_label}")
+        removed_text = (
+            message_parts[0]
+            if len(message_parts) == 1
+            else ", ".join(message_parts[:-1]) + " e " + message_parts[-1]
+        )
+        if next_winner in (1, 2):
+            winner_name = _nim_player_name(next_state, next_winner)
+            message = f"{winner_name} venceu a partida!"
+        else:
+            message = (
+                f"{previous_player_name} removeu {removed_text}. "
+                f"Agora é a vez de {next_player_name}."
+            )
+    elif total_restored:
+        message = f"{previous_player_name} reiniciou o tabuleiro."
+    elif prev_winner and not next_winner:
+        message = "Uma nova partida foi iniciada."
+    else:
+        message = f"{previous_player_name} passou a vez."
+
+    return {
+        "player": int(prev_turn) if isinstance(prev_turn, int) else prev_turn,
+        "player_name": previous_player_name,
+        "next_player": int(next_turn) if isinstance(next_turn, int) else next_turn,
+        "next_player_name": next_player_name,
+        "removed": removed_segments,
+        "total_removed": total_removed,
+        "restored": total_restored,
+        "winner": int(next_winner)
+        if isinstance(next_winner, int) and next_winner in (1, 2)
+        else None,
+        "message": message,
+    }
+
+
+def _nim_turn_metadata(previous_state: dict, next_state: dict) -> tuple[dict | None, list[list[bool]]]:
+    baseline = previous_state.get("turn_origin_rows")
+    if not isinstance(baseline, list) or len(baseline) != len(NIM_TEMPLATE_ROWS):
+        baseline_rows = _nim_default_rows()
+    else:
+        baseline_rows = _nim_copy_rows(baseline)
+
+    prev_turn = previous_state.get("turn")
+    next_turn = next_state.get("turn")
+    prev_winner = previous_state.get("winner")
+    next_winner = next_state.get("winner")
+
+    turn_changed = prev_turn != next_turn
+    winner_declared = (next_winner and next_winner != prev_winner)
+    winner_cleared = prev_winner and not next_winner
+
+    last_turn_summary = previous_state.get("last_turn")
+    next_origin_rows = baseline_rows
+
+    if winner_cleared:
+        last_turn_summary = None
+        next_origin_rows = _nim_copy_rows(next_state.get("rows", _nim_default_rows()))
+    elif turn_changed or winner_declared:
+        summary = _nim_build_turn_summary(previous_state, next_state, baseline_rows)
+        last_turn_summary = summary
+        next_origin_rows = _nim_copy_rows(next_state.get("rows", _nim_default_rows()))
+
+    return last_turn_summary, next_origin_rows
 
 
 def _normalize_nim_payload(payload: dict | None, current_state: dict) -> dict | None:
@@ -295,6 +453,46 @@ def _normalize_nim_payload(payload: dict | None, current_state: dict) -> dict | 
     ):
         active_row_int = None
 
+    bg_gradient_value = payload.get("bg_gradient")
+    if bg_gradient_value is None:
+        bg_gradient_value = payload.get("bgGradient")
+    if bg_gradient_value is None:
+        bg_gradient = current_state.get("bg_gradient")
+    else:
+        bg_gradient_text = str(bg_gradient_value).strip()
+        bg_gradient = bg_gradient_text[:200] if bg_gradient_text else current_state.get("bg_gradient")
+
+    stick_color_value = payload.get("stick_color")
+    if stick_color_value is None:
+        stick_color_value = payload.get("stickColor")
+    if stick_color_value is None:
+        stick_color = current_state.get("stick_color")
+    else:
+        stick_color_text = str(stick_color_value).strip()
+        stick_color = stick_color_text[:50] if stick_color_text else current_state.get("stick_color")
+
+    player_emojis_value = payload.get("player_emojis")
+    if player_emojis_value is None:
+        player_emojis_value = payload.get("playerEmojis")
+    if isinstance(player_emojis_value, (list, tuple)):
+        normalized_emojis: list[str] = []
+        for index in range(2):
+            try:
+                raw = player_emojis_value[index]
+            except IndexError:
+                raw = ""
+            text = str(raw).strip()
+            normalized_emojis.append(text[:8] if text else "🐾")
+        player_emojis = normalized_emojis
+    else:
+        current_emojis = current_state.get("player_emojis")
+        if isinstance(current_emojis, (list, tuple)):
+            player_emojis = [str(value)[:8] for value in current_emojis[:2]]
+            if len(player_emojis) < 2:
+                player_emojis.extend(["🐾"] * (2 - len(player_emojis)))
+        else:
+            player_emojis = ["🐾", "🐾"]
+
     return {
         "rows": normalized_rows,
         "turn": turn_int,
@@ -302,6 +500,9 @@ def _normalize_nim_payload(payload: dict | None, current_state: dict) -> dict | 
         "players": _normalize_nim_players(payload.get("players"), current_state.get("players", {})),
         "has_played": has_played,
         "active_row": active_row_int,
+        "bg_gradient": bg_gradient,
+        "stick_color": stick_color,
+        "player_emojis": player_emojis,
     }
 
 
@@ -370,6 +571,10 @@ def nim_move(data):  # pragma: no cover - exercised via browser
     if not normalized:
         emit("update_state", _nim_payload(room))
         return
+
+    last_turn_summary, next_origin_rows = _nim_turn_metadata(current_state, normalized)
+    normalized["turn_origin_rows"] = next_origin_rows
+    normalized["last_turn"] = last_turn_summary
 
     nim_rooms[room] = normalized
     emit("update_state", _nim_payload(room), room=room)
