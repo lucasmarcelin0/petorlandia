@@ -43,6 +43,13 @@
 
   const cloneRows = (rows) => rows.map((row) => row.slice());
   const createZeroArray = (length) => Array.from({ length }, () => 0);
+  const isSplitRow = (row) =>
+    Array.isArray(row) &&
+    row.length === 3 &&
+    Boolean(row[0]) &&
+    Boolean(row[2]) &&
+    !row[1];
+  const computeAlternateRows = (rows) => rows.map((row) => isSplitRow(row));
 
   const randomColor = () => `hsl(${Math.floor(Math.random() * 360)}, 70%, 68%)`;
   const randomGradient = () => {
@@ -499,12 +506,16 @@
           recalcTurnProgress();
           state.hasPlayed = state.turnRemovalCount > 0;
 
-          const remaining = updated[rowIndex].filter(Boolean).length;
-          if (updated[rowIndex].length === 3) {
-            const [left, middle, right] = updated[rowIndex];
-            if (left && right && !middle) {
-              state.alternateRows[rowIndex] = true;
-            } else if (remaining <= 1) {
+          const nextRow = updated[rowIndex] || [];
+          const remaining = nextRow.filter(Boolean).length;
+          const baselineRow = Array.isArray(state.turnOriginRows[rowIndex])
+            ? state.turnOriginRows[rowIndex]
+            : [];
+          const baselineWasSplit = isSplitRow(baselineRow);
+          const nextIsSplit = isSplitRow(nextRow);
+
+          if (baselineWasSplit) {
+            if (!nextIsSplit || remaining <= 1) {
               state.alternateRows[rowIndex] = false;
             }
           } else if (remaining <= 1) {
@@ -546,6 +557,7 @@
       state.activeRow = null;
       state.selectionRange = null;
       state.turnOriginRows = cloneRows(state.rows);
+      state.alternateRows = computeAlternateRows(state.rows);
       state.turnRemovalCount = 0;
       state.turnRowRemovalCounts = createZeroArray(state.rows.length);
       state.ruleMessage = null;
