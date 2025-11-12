@@ -75,6 +75,7 @@
     winner: null,
     hasPlayed: false,
     activeRow: null,
+    selectionRange: null,
     bgGradient: randomGradient(),
     stickColor: randomColor(),
     playerEmojis: [randomEmoji(), randomEmoji()],
@@ -270,12 +271,34 @@
           if (!state.rows[rowIndex]?.[stickIndex]) return;
           if (state.activeRow !== null && state.activeRow !== rowIndex) return;
 
+          if (state.activeRow === null) {
+            state.activeRow = rowIndex;
+            state.selectionRange = { row: rowIndex, min: stickIndex, max: stickIndex };
+          } else if (state.selectionRange) {
+            if (state.selectionRange.row !== rowIndex) {
+              return;
+            }
+
+            const isAdjacentToMin = stickIndex === state.selectionRange.min - 1;
+            const isAdjacentToMax = stickIndex === state.selectionRange.max + 1;
+
+            if (!isAdjacentToMin && !isAdjacentToMax) {
+              return;
+            }
+
+            state.selectionRange = {
+              row: rowIndex,
+              min: isAdjacentToMin ? stickIndex : state.selectionRange.min,
+              max: isAdjacentToMax ? stickIndex : state.selectionRange.max,
+            };
+          }
+
           const updated = cloneRows(state.rows);
           updated[rowIndex][stickIndex] = false;
           state.rows = updated;
           state.hasPlayed = true;
-          if (state.activeRow === null) {
-            state.activeRow = rowIndex;
+          if (!state.selectionRange) {
+            state.selectionRange = { row: rowIndex, min: stickIndex, max: stickIndex };
           }
           emitState();
           render();
@@ -310,6 +333,7 @@
       state.winner = winningPlayer;
       state.hasPlayed = false;
       state.activeRow = null;
+      state.selectionRange = null;
 
       emitState();
       render();
@@ -325,6 +349,7 @@
       state.winner = null;
       state.hasPlayed = false;
       state.activeRow = null;
+      state.selectionRange = null;
       state.bgGradient = randomGradient();
       state.stickColor = randomColor();
       state.playerEmojis = [randomEmoji(), randomEmoji()];
@@ -409,6 +434,8 @@
     } else {
       state.activeRow = null;
     }
+
+    state.selectionRange = null;
 
     let shouldEmitTheme = false;
 
