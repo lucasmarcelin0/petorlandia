@@ -227,7 +227,9 @@ def _nim_default_state() -> dict:
 
 nim_rooms = defaultdict(_nim_default_state)
 nim_session_rooms: Dict[str, str] = {}
+nim_session_players: Dict[str, int] = {}
 nim_room_members: Dict[str, set[str]] = defaultdict(set)
+nim_room_players: Dict[str, dict[int, str]] = defaultdict(dict)
 
 EASTER_EGG_STATIC_DIR = PROJECT_ROOT / "static" / "easter_egg"
 
@@ -705,6 +707,29 @@ def nim_connect():  # pragma: no cover - exercised via browser
         return
 
     nim_session_rooms[request.sid] = room
+    players_map = nim_room_players[room]
+
+    # Clear out any stale seat assignments that might linger if a client
+    # disconnected without triggering ``nim_disconnect`` (for example when the
+    # server restarted).
+    for seat, occupant in list(players_map.items()):
+        if occupant not in members:
+            players_map.pop(seat, None)
+
+    assigned_seat = None
+    for candidate in (1, 2):
+        occupant = players_map.get(candidate)
+        if not occupant:
+            assigned_seat = candidate
+            break
+
+    if assigned_seat is None:
+        # Should not happen because the room is limited to two players, but
+        # default to seat ``1`` to avoid leaving the session without a slot.
+        assigned_seat = 1
+
+    players_map[assigned_seat] = request.sid
+    nim_session_players[request.sid] = assigned_seat
     members.add(request.sid)
     join_room(room)
     emit("update_state", _nim_payload(room))
@@ -717,8 +742,29 @@ def nim_move(data):  # pragma: no cover - exercised via browser
         room = _nim_room_from_request()
         nim_session_rooms[request.sid] = room
     current_state = nim_rooms[room]
+    player_seat = nim_session_players.get(request.sid)
     normalized = _normalize_nim_payload(data, current_state)
     if not normalized:
+        emit("update_state", _nim_payload(room))
+        return
+
+    current_turn = current_state.get("turn")
+    try:
+        current_turn_int = int(current_turn)
+    except (TypeError, ValueError):
+        current_turn_int = 1
+    if current_turn_int not in (1, 2):
+        current_turn_int = 1
+
+    board_changed = (
+        normalized.get("rows") != current_state.get("rows")
+        or normalized.get("turn") != current_turn_int
+        or normalized.get("winner") != current_state.get("winner")
+        or normalized.get("has_played") != current_state.get("has_played")
+        or normalized.get("active_row") != current_state.get("active_row")
+    )
+
+    if board_changed and player_seat != current_turn_int:
         emit("update_state", _nim_payload(room))
         return
 
@@ -738,12 +784,18 @@ def nim_move(data):  # pragma: no cover - exercised via browser
 @socketio.on("disconnect")
 def nim_disconnect():  # pragma: no cover - exercised via browser
     room = nim_session_rooms.pop(request.sid, None)
+    seat = nim_session_players.pop(request.sid, None)
     if room:
         members = nim_room_members.get(room)
         if members and request.sid in members:
             members.discard(request.sid)
             if not members:
                 nim_room_members.pop(room, None)
+        players = nim_room_players.get(room)
+        if players and seat in players and players.get(seat) == request.sid:
+            players.pop(seat, None)
+            if not players:
+                nim_room_players.pop(room, None)
         leave_room(room)
 
 
