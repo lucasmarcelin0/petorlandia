@@ -453,9 +453,8 @@
             Boolean(originRow[0]) &&
             Boolean(originRow[2]) &&
             !originRow[1];
-          const isAlternateRow =
-            Boolean(state.alternateRows[rowIndex]) || startedAsSplitRow;
-          if (isAlternateRow && rowRemovalCount >= 1) {
+          const shouldEnforceAlternateRule = startedAsSplitRow;
+          if (shouldEnforceAlternateRule && rowRemovalCount >= 1) {
             state.ruleMessage =
               "Nesta linha, apenas um palito pode ser cortado por turno após retirar o do meio.";
             render();
