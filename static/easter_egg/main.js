@@ -104,6 +104,11 @@
         1: sanitizeName(state.playerNames[0], DEFAULT_PLAYER_NAMES[0]),
         2: sanitizeName(state.playerNames[1], DEFAULT_PLAYER_NAMES[1]),
       },
+      has_played: Boolean(state.hasPlayed),
+      active_row:
+        typeof state.activeRow === "number" && Number.isFinite(state.activeRow)
+          ? state.activeRow
+          : null,
     });
   };
 
@@ -225,6 +230,7 @@
           if (state.activeRow === null) {
             state.activeRow = rowIndex;
           }
+          emitState();
           render();
         });
 
@@ -321,8 +327,41 @@
       state.playerNames = updatedNames;
     }
 
-    state.hasPlayed = false;
-    state.activeRow = null;
+    const normalizeBoolean = (value, fallback) => {
+      if (typeof value === "boolean") {
+        return value;
+      }
+      if (typeof value === "number") {
+        return value !== 0;
+      }
+      if (typeof value === "string") {
+        const normalized = value.trim().toLowerCase();
+        if (["1", "true", "yes", "on"].includes(normalized)) {
+          return true;
+        }
+        if (["0", "false", "no", "off", ""].includes(normalized)) {
+          return false;
+        }
+      }
+      return Boolean(fallback);
+    };
+
+    state.hasPlayed = normalizeBoolean(
+      data.has_played ?? data.hasPlayed,
+      state.hasPlayed
+    );
+
+    const incomingActiveRow = data.active_row ?? data.activeRow;
+    const parsedActiveRow = Number.parseInt(incomingActiveRow, 10);
+    if (
+      Number.isInteger(parsedActiveRow) &&
+      parsedActiveRow >= 0 &&
+      parsedActiveRow < state.rows.length
+    ) {
+      state.activeRow = parsedActiveRow;
+    } else {
+      state.activeRow = null;
+    }
 
     render();
   });
