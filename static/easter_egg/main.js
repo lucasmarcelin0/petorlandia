@@ -1,5 +1,36 @@
 (() => {
-  const socket = typeof io === "function" ? io() : null;
+  const sanitizeRoomCode = (value) =>
+    (value || "")
+      .toString()
+      .replace(/[^a-z0-9_-]/gi, "")
+      .slice(0, 32)
+      .toUpperCase();
+
+  const generateRoomCode = () => Math.random().toString(36).slice(2, 8).toUpperCase();
+
+  const ensureRoomCode = () => {
+    const url = new URL(window.location.href);
+    const params = url.searchParams;
+    const existing = sanitizeRoomCode(params.get("sala"));
+    if (existing) {
+      return existing;
+    }
+
+    const fresh = generateRoomCode();
+    params.set("sala", fresh);
+    url.search = params.toString();
+    window.history.replaceState(null, "", url.toString());
+    return fresh;
+  };
+
+  const roomCode = ensureRoomCode();
+
+  const socket =
+    typeof io === "function"
+      ? io({
+          query: { room: roomCode },
+        })
+      : null;
   if (!socket) {
     return;
   }
@@ -72,6 +103,12 @@
     title.className = "game-title";
     title.textContent = "🎮 Desafio Secreto";
     wrapper.appendChild(title);
+
+    const shareBox = document.createElement("div");
+    shareBox.className = "share-box";
+    const shareLink = `${window.location.origin}${window.location.pathname}?sala=${roomCode}`;
+    shareBox.innerHTML = `Convide alguém com este link:<br><code>${shareLink}</code>`;
+    wrapper.appendChild(shareBox);
 
     const status = document.createElement("p");
     status.className = "status-text";
