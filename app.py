@@ -576,8 +576,11 @@ def _normalize_nim_payload(payload: dict | None, current_state: dict) -> dict | 
     else:
         has_played = bool(has_played_raw)
 
+    has_active_row_key = "active_row" in payload or "activeRow" in payload
     active_row_value = payload.get("active_row")
-    if active_row_value is None:
+    if active_row_value is None and "active_row" not in payload:
+        active_row_value = payload.get("activeRow")
+    if active_row_value is None and not has_active_row_key:
         active_row_value = current_state.get("active_row")
     try:
         active_row_int = int(active_row_value)
