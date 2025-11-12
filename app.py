@@ -74,7 +74,7 @@ app = Flask(
 app.config.from_object("config.Config")
 app.config.setdefault("FRONTEND_URL", "http://127.0.0.1:5000")
 app.config.update(SESSION_PERMANENT=True, SESSION_TYPE="filesystem")
-CORS(app, resources={r"/nim*": {"origins": "*"}, r"/socket.io/*": {"origins": "*"}})
+CORS(app, resources={r"/surpresa*": {"origins": "*"}, r"/socket.io/*": {"origins": "*"}})
 socketio = SocketIO(app, cors_allowed_origins="*")
 
 # ----------------------------------------------------------------
@@ -214,7 +214,7 @@ nim_state = {
     "winner": None,
 }
 
-NIM_STATIC_DIR = PROJECT_ROOT / "static" / "nim"
+EASTER_EGG_STATIC_DIR = PROJECT_ROOT / "static" / "easter_egg"
 
 
 def _nim_payload() -> dict:
@@ -265,16 +265,16 @@ def _normalize_nim_payload(payload: dict | None) -> dict | None:
     }
 
 
-@app.route("/nim")
-def nim_game():
-    if not NIM_STATIC_DIR.exists():
+@app.route("/surpresa")
+def secret_game():
+    if not EASTER_EGG_STATIC_DIR.exists():
         abort(404)
-    return send_from_directory(str(NIM_STATIC_DIR), "index.html")
+    return send_from_directory(str(EASTER_EGG_STATIC_DIR), "index.html")
 
 
-@app.route("/nim/<path:filename>")
-def nim_static(filename: str):
-    return send_from_directory(str(NIM_STATIC_DIR), filename)
+@app.route("/surpresa/<path:filename>")
+def secret_game_static(filename: str):
+    return send_from_directory(str(EASTER_EGG_STATIC_DIR), filename)
 
 
 @socketio.on("connect")
