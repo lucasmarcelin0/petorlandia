@@ -19,6 +19,7 @@ coverage==7.9.2
 cryptography==45.0.5
 dnspython==2.7.0
 email_validator==2.2.0
+eventlet==0.36.1
 Flask==3.1.0
 Flask-Admin==1.6.1
 flask-babel==4.0.0
