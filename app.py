@@ -6821,6 +6821,8 @@ def imprimir_bloco_prescricao(bloco_id):
         clinica=clinica,
         veterinario=veterinario,
         salvo_por=salvo_por,
+        printing_user=current_user,
+        printed_at=datetime.now(BR_TZ),
     )
 
 
