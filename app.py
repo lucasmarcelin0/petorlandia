@@ -6,7 +6,7 @@ from io import BytesIO
 from concurrent.futures import ThreadPoolExecutor
 from decimal import Decimal
 from urllib.parse import urlparse, parse_qs
-from typing import Iterable, Optional, Set
+from typing import Iterable, Optional, Set, Dict
 
 
 
@@ -33,7 +33,7 @@ from flask import (
     has_request_context,
 )
 from flask_cors import CORS
-from flask_socketio import SocketIO, emit, join_room
+from flask_socketio import SocketIO, emit, join_room, leave_room
 from twilio.rest import Client
 from itsdangerous import URLSafeTimedSerializer
 from jinja2 import TemplateNotFound
@@ -225,6 +225,7 @@ def _nim_default_state() -> dict:
 
 
 nim_rooms = defaultdict(_nim_default_state)
+nim_session_rooms: Dict[str, str] = {}
 
 EASTER_EGG_STATIC_DIR = PROJECT_ROOT / "static" / "easter_egg"
 
@@ -559,13 +560,17 @@ def _nim_room_from_request() -> str:
 @socketio.on("connect")
 def nim_connect():  # pragma: no cover - exercised via browser
     room = _nim_room_from_request()
+    nim_session_rooms[request.sid] = room
     join_room(room)
     emit("update_state", _nim_payload(room))
 
 
 @socketio.on("move")
 def nim_move(data):  # pragma: no cover - exercised via browser
-    room = _nim_room_from_request()
+    room = nim_session_rooms.get(request.sid)
+    if not room:
+        room = _nim_room_from_request()
+        nim_session_rooms[request.sid] = room
     current_state = nim_rooms[room]
     normalized = _normalize_nim_payload(data, current_state)
     if not normalized:
@@ -578,6 +583,13 @@ def nim_move(data):  # pragma: no cover - exercised via browser
 
     nim_rooms[room] = normalized
     emit("update_state", _nim_payload(room), room=room)
+
+
+@socketio.on("disconnect")
+def nim_disconnect():  # pragma: no cover - exercised via browser
+    room = nim_session_rooms.pop(request.sid, None)
+    if room:
+        leave_room(room)
 
 
 def local_date_range_to_utc(start_dt, end_dt):
