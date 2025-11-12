@@ -27,6 +27,7 @@ Flask-Mail==0.10.0
 Flask-Migrate==4.1.0
 Flask-Session==0.8.0
 Flask-SQLAlchemy==3.1.1
+Flask-Cors==6.0.1
 flask-talisman==1.1.0
 Flask-WTF==1.2.2
 frozenlist==1.7.0
@@ -63,6 +64,7 @@ requests==2.32.3
 s3transfer==0.13.0
 six==1.17.0
 SQLAlchemy==2.0.41
+Flask-SocketIO==5.5.1
 twilio==9.5.1
 typing_extensions==4.12.2
 tzdata==2025.2

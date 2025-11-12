@@ -32,6 +32,8 @@ from flask import (
     current_app,
     has_request_context,
 )
+from flask_cors import CORS
+from flask_socketio import SocketIO, emit
 from twilio.rest import Client
 from itsdangerous import URLSafeTimedSerializer
 from jinja2 import TemplateNotFound
@@ -72,6 +74,8 @@ app = Flask(
 app.config.from_object("config.Config")
 app.config.setdefault("FRONTEND_URL", "http://127.0.0.1:5000")
 app.config.update(SESSION_PERMANENT=True, SESSION_TYPE="filesystem")
+CORS(app, resources={r"/nim*": {"origins": "*"}, r"/socket.io/*": {"origins": "*"}})
+socketio = SocketIO(app, cors_allowed_origins="*")
 
 # ----------------------------------------------------------------
 # 3)  Extensões
@@ -186,6 +190,108 @@ def upload_profile_photo_async(user_id, data, content_type, filename):
 # ----------------------------------------------------------------
 
 BR_TZ = ZoneInfo("America/Sao_Paulo")
+
+
+# ----------------------------------------------------------------
+# Nim game with Socket.IO
+# ----------------------------------------------------------------
+NIM_TEMPLATE_ROWS = [
+    [True, True, True],
+    [True, True, True],
+    [True, True, True],
+    [True, True],
+    [True, True],
+]
+
+
+def _nim_default_rows() -> list[list[bool]]:
+    return [row.copy() for row in NIM_TEMPLATE_ROWS]
+
+
+nim_state = {
+    "rows": _nim_default_rows(),
+    "turn": 1,
+    "winner": None,
+}
+
+NIM_STATIC_DIR = PROJECT_ROOT / "static" / "nim"
+
+
+def _nim_payload() -> dict:
+    return {
+        "rows": [row.copy() for row in nim_state["rows"]],
+        "turn": nim_state["turn"],
+        "winner": nim_state["winner"],
+    }
+
+
+def _normalize_nim_payload(payload: dict | None) -> dict | None:
+    if not isinstance(payload, dict):
+        return None
+
+    rows = payload.get("rows")
+    if not isinstance(rows, (list, tuple)) or len(rows) != len(NIM_TEMPLATE_ROWS):
+        return None
+
+    normalized_rows: list[list[bool]] = []
+    for index, row in enumerate(rows):
+        if not isinstance(row, (list, tuple)) or len(row) != len(NIM_TEMPLATE_ROWS[index]):
+            return None
+        normalized_rows.append([bool(value) for value in row])
+
+    turn = payload.get("turn", nim_state["turn"])
+    try:
+        turn_int = int(turn)
+    except (TypeError, ValueError):
+        turn_int = nim_state["turn"]
+    if turn_int not in (1, 2):
+        turn_int = 1
+
+    winner_value = payload.get("winner")
+    if winner_value in (None, "", "null"):
+        winner_int = None
+    else:
+        try:
+            winner_int = int(winner_value)
+        except (TypeError, ValueError):
+            winner_int = None
+        if winner_int not in (1, 2):
+            winner_int = None
+
+    return {
+        "rows": normalized_rows,
+        "turn": turn_int,
+        "winner": winner_int,
+    }
+
+
+@app.route("/nim")
+def nim_game():
+    if not NIM_STATIC_DIR.exists():
+        abort(404)
+    return send_from_directory(str(NIM_STATIC_DIR), "index.html")
+
+
+@app.route("/nim/<path:filename>")
+def nim_static(filename: str):
+    return send_from_directory(str(NIM_STATIC_DIR), filename)
+
+
+@socketio.on("connect")
+def nim_connect():  # pragma: no cover - exercised via browser
+    emit("update_state", _nim_payload())
+
+
+@socketio.on("move")
+def nim_move(data):  # pragma: no cover - exercised via browser
+    global nim_state
+    normalized = _normalize_nim_payload(data)
+    if not normalized:
+        emit("update_state", _nim_payload())
+        return
+
+    nim_state = normalized
+    emit("update_state", _nim_payload(), broadcast=True)
 
 
 def local_date_range_to_utc(start_dt, end_dt):
@@ -12677,4 +12783,4 @@ def atualizar_bloco_orcamento(bloco_id):
 if __name__ == "__main__":
     # Usa a porta 8080 se existir no ambiente (como no Docker), senão usa 5000
     port = int(os.environ.get("PORT", 5000))
-    app.run(host="0.0.0.0", port=port)
+    socketio.run(app, host="0.0.0.0", port=port)
