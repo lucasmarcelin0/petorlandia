@@ -31,9 +31,7 @@
           query: { room: roomCode },
         })
       : null;
-  if (!socket) {
-    return;
-  }
+  const supportsSocket = Boolean(socket);
 
   const INITIAL_ROWS = [
     [true, true, true],
@@ -88,6 +86,7 @@
     alternateRows: INITIAL_ROWS.map(() => false),
     ruleMessage: null,
     roomError: null,
+    mode: supportsSocket ? "online" : "local",
   };
 
   const container = document.getElementById("root");
@@ -96,6 +95,27 @@
   }
 
   document.body.classList.add("game-body");
+
+  const isOnlineMode = () => state.mode === "online" && supportsSocket;
+
+  const setMode = (mode) => {
+    if (mode === state.mode) {
+      return;
+    }
+    if (mode === "online" && !supportsSocket) {
+      return;
+    }
+
+    state.mode = mode;
+
+    if (mode !== "online") {
+      state.roomError = null;
+    } else {
+      emitState();
+    }
+
+    render();
+  };
 
   const normalizeRows = (rows, fallbackRows = INITIAL_ROWS) => {
     const template = Array.isArray(fallbackRows)
@@ -154,6 +174,10 @@
   };
 
   const emitState = () => {
+    if (!isOnlineMode()) {
+      return;
+    }
+
     socket.emit("move", {
       rows: cloneRows(state.rows).map((row) => row.map(Boolean)),
       turn: state.turn,
@@ -180,7 +204,7 @@
     document.body.style.backgroundAttachment = "fixed";
     container.innerHTML = "";
 
-    if (state.roomError) {
+    if (state.mode === "online" && state.roomError) {
       const errorBox = document.createElement("div");
       errorBox.className = "game-error";
 
@@ -207,10 +231,56 @@
     title.textContent = "🎮 Desafio Secreto";
     wrapper.appendChild(title);
 
+    const modeSwitch = document.createElement("div");
+    modeSwitch.className = "mode-switch";
+
+    const modeLabel = document.createElement("span");
+    modeLabel.className = "mode-switch__label";
+    modeLabel.textContent = "Modo de jogo:";
+    modeSwitch.appendChild(modeLabel);
+
+    const modeOptions = document.createElement("div");
+    modeOptions.className = "mode-switch__options";
+
+    const onlineOption = document.createElement("button");
+    onlineOption.type = "button";
+    onlineOption.className = "mode-switch__option";
+    if (state.mode === "online") {
+      onlineOption.classList.add("mode-switch__option--active");
+    }
+    onlineOption.disabled = !supportsSocket;
+    onlineOption.textContent = "Online";
+    onlineOption.addEventListener("click", () => {
+      setMode("online");
+    });
+    modeOptions.appendChild(onlineOption);
+
+    const localOption = document.createElement("button");
+    localOption.type = "button";
+    localOption.className = "mode-switch__option";
+    if (state.mode === "local") {
+      localOption.classList.add("mode-switch__option--active");
+    }
+    localOption.textContent = "Local";
+    localOption.addEventListener("click", () => {
+      setMode("local");
+    });
+    modeOptions.appendChild(localOption);
+
+    modeSwitch.appendChild(modeOptions);
+    wrapper.appendChild(modeSwitch);
+
     const shareBox = document.createElement("div");
     shareBox.className = "share-box";
-    const shareLink = `${window.location.origin}${window.location.pathname}?sala=${roomCode}`;
-    shareBox.innerHTML = `Convide alguém com este link:<br><code>${shareLink}</code>`;
+    if (isOnlineMode()) {
+      const shareLink = `${window.location.origin}${window.location.pathname}?sala=${roomCode}`;
+      shareBox.innerHTML = `Convide alguém com este link:<br><code>${shareLink}</code>`;
+    } else if (!supportsSocket) {
+      shareBox.textContent =
+        "Modo online indisponível. Continue jogando no modo local com seus amigos.";
+    } else {
+      shareBox.textContent = "Modo local: alternem os turnos jogando na mesma tela.";
+    }
     wrapper.appendChild(shareBox);
 
     const status = document.createElement("p");
@@ -488,6 +558,16 @@
     resetButton.className = "button button--secondary";
     resetButton.textContent = "Reiniciar";
     resetButton.addEventListener("click", () => {
+      const currentNames = [
+        sanitizeName(state.playerNames[0], DEFAULT_PLAYER_NAMES[0]),
+        sanitizeName(state.playerNames[1], DEFAULT_PLAYER_NAMES[1]),
+      ];
+      state.playerNames = [currentNames[1], currentNames[0]];
+
+      if (Array.isArray(state.playerEmojis) && state.playerEmojis.length >= 2) {
+        state.playerEmojis = [state.playerEmojis[1], state.playerEmojis[0]];
+      }
+
       state.rows = cloneRows(INITIAL_ROWS);
       state.turn = 1;
       state.winner = null;
@@ -496,12 +576,15 @@
       state.selectionRange = null;
       state.bgGradient = randomGradient();
       state.stickColor = randomColor();
-      state.playerEmojis = [randomEmoji(), randomEmoji()];
+      if (!Array.isArray(state.playerEmojis) || state.playerEmojis.length < 2) {
+        state.playerEmojis = [randomEmoji(), randomEmoji()];
+      }
       state.turnOriginRows = cloneRows(INITIAL_ROWS);
       state.turnRemovalCount = 0;
       state.turnRowRemovalCounts = createZeroArray(INITIAL_ROWS.length);
       state.alternateRows = INITIAL_ROWS.map(() => false);
       state.ruleMessage = null;
+      state.lastTurn = null;
 
       emitState();
       render();
@@ -512,211 +595,226 @@
     container.appendChild(wrapper);
   };
 
-  socket.on("update_state", (data) => {
-    if (!data) {
-      return;
-    }
+  if (supportsSocket) {
+    socket.on("update_state", (data) => {
+      if (!isOnlineMode()) {
+        return;
+      }
+      if (!data) {
+        return;
+      }
 
-    state.roomError = null;
+      state.roomError = null;
 
-    const previousTurn = state.turn;
-    const incomingRows = normalizeRows(data.rows, state.rows);
-    state.rows = incomingRows;
+      const previousTurn = state.turn;
+      const incomingRows = normalizeRows(data.rows, state.rows);
+      state.rows = incomingRows;
 
-    const turnValue = Number.parseInt(data.turn, 10);
-    if (turnValue === 1 || turnValue === 2) {
-      state.turn = turnValue;
-    }
+      const turnValue = Number.parseInt(data.turn, 10);
+      if (turnValue === 1 || turnValue === 2) {
+        state.turn = turnValue;
+      }
 
-    const winnerValue = Number.parseInt(data.winner, 10);
-    state.winner = winnerValue === 1 || winnerValue === 2 ? winnerValue : null;
+      const winnerValue = Number.parseInt(data.winner, 10);
+      state.winner = winnerValue === 1 || winnerValue === 2 ? winnerValue : null;
 
-    const playersValue = data.players;
-    if (playersValue && typeof playersValue === "object") {
-      const updatedNames = [];
-      for (let i = 0; i < 2; i += 1) {
-        const key = i + 1;
-        const raw =
-          playersValue[key] ??
-          playersValue[String(key)] ??
-          playersValue[i] ??
-          playersValue[String(i)];
-        updatedNames[i] = sanitizeName(
-          raw,
-          DEFAULT_PLAYER_NAMES[i]
+      const playersValue = data.players;
+      if (playersValue && typeof playersValue === "object") {
+        const updatedNames = [];
+        for (let i = 0; i < 2; i += 1) {
+          const key = i + 1;
+          const raw =
+            playersValue[key] ??
+            playersValue[String(key)] ??
+            playersValue[i] ??
+            playersValue[String(i)];
+          updatedNames[i] = sanitizeName(
+            raw,
+            DEFAULT_PLAYER_NAMES[i]
+          );
+        }
+        state.playerNames = updatedNames;
+      }
+
+      const normalizeBoolean = (value, fallback) => {
+        if (typeof value === "boolean") {
+          return value;
+        }
+        if (typeof value === "number") {
+          return value !== 0;
+        }
+        if (typeof value === "string") {
+          const normalized = value.trim().toLowerCase();
+          if (["1", "true", "yes", "on"].includes(normalized)) {
+            return true;
+          }
+          if (["0", "false", "no", "off", ""].includes(normalized)) {
+            return false;
+          }
+        }
+        return Boolean(fallback);
+      };
+
+      state.hasPlayed = normalizeBoolean(
+        data.has_played ?? data.hasPlayed,
+        state.hasPlayed
+      );
+
+      const originSource = data.turn_origin_rows ?? data.turnOriginRows;
+      if (Array.isArray(originSource)) {
+        state.turnOriginRows = normalizeRows(
+          originSource,
+          state.turnOriginRows || state.rows
         );
       }
-      state.playerNames = updatedNames;
-    }
 
-    const normalizeBoolean = (value, fallback) => {
-      if (typeof value === "boolean") {
-        return value;
+      if (
+        !Array.isArray(state.turnOriginRows) ||
+        state.turnOriginRows.length !== state.rows.length ||
+        !state.hasPlayed ||
+        previousTurn !== state.turn
+      ) {
+        state.turnOriginRows = cloneRows(state.rows);
       }
-      if (typeof value === "number") {
-        return value !== 0;
+
+      const alternateSource = data.alternate_rows ?? data.alternateRows;
+      if (Array.isArray(alternateSource)) {
+        state.alternateRows = state.rows.map((_, index) =>
+          Boolean(alternateSource[index])
+        );
+      } else if (
+        !Array.isArray(state.alternateRows) ||
+        state.alternateRows.length !== state.rows.length
+      ) {
+        state.alternateRows = state.rows.map(() => false);
       }
-      if (typeof value === "string") {
-        const normalized = value.trim().toLowerCase();
-        if (["1", "true", "yes", "on"].includes(normalized)) {
-          return true;
+
+      const incomingActiveRow = data.active_row ?? data.activeRow;
+      const parsedActiveRow = Number.parseInt(incomingActiveRow, 10);
+      if (
+        Number.isInteger(parsedActiveRow) &&
+        parsedActiveRow >= 0 &&
+        parsedActiveRow < state.rows.length
+      ) {
+        state.activeRow = parsedActiveRow;
+      } else {
+        state.activeRow = null;
+      }
+
+      state.selectionRange = null;
+
+      recalcTurnProgress();
+      state.ruleMessage = null;
+
+      let shouldEmitTheme = false;
+
+      const incomingGradient =
+        typeof data.bg_gradient === "string" ? data.bg_gradient.trim() : "";
+      if (incomingGradient) {
+        state.bgGradient = incomingGradient.slice(0, 200);
+      } else if (data.bg_gradient === null || typeof data.bg_gradient === "undefined") {
+        shouldEmitTheme = true;
+      }
+
+      const incomingStickColor =
+        typeof data.stick_color === "string" ? data.stick_color.trim() : "";
+      if (incomingStickColor) {
+        state.stickColor = incomingStickColor.slice(0, 50);
+      } else if (data.stick_color === null || typeof data.stick_color === "undefined") {
+        shouldEmitTheme = true;
+      }
+
+      if (Array.isArray(data.player_emojis) && data.player_emojis.length) {
+        const sanitized = [];
+        for (let i = 0; i < 2; i += 1) {
+          const raw = data.player_emojis[i];
+          const text = typeof raw === "string" ? raw.trim() : `${raw || ""}`;
+          sanitized.push(text.slice(0, 8) || "🐾");
         }
-        if (["0", "false", "no", "off", ""].includes(normalized)) {
-          return false;
-        }
+        state.playerEmojis = sanitized;
+      } else if (
+        data.player_emojis === null ||
+        typeof data.player_emojis === "undefined"
+      ) {
+        shouldEmitTheme = true;
       }
-      return Boolean(fallback);
-    };
 
-    state.hasPlayed = normalizeBoolean(
-      data.has_played ?? data.hasPlayed,
-      state.hasPlayed
-    );
-
-    const originSource = data.turn_origin_rows ?? data.turnOriginRows;
-    if (Array.isArray(originSource)) {
-      state.turnOriginRows = normalizeRows(
-        originSource,
-        state.turnOriginRows || state.rows
-      );
-    }
-
-    if (
-      !Array.isArray(state.turnOriginRows) ||
-      state.turnOriginRows.length !== state.rows.length ||
-      !state.hasPlayed ||
-      previousTurn !== state.turn
-    ) {
-      state.turnOriginRows = cloneRows(state.rows);
-    }
-
-    const alternateSource = data.alternate_rows ?? data.alternateRows;
-    if (Array.isArray(alternateSource)) {
-      state.alternateRows = state.rows.map((_, index) =>
-        Boolean(alternateSource[index])
-      );
-    } else if (
-      !Array.isArray(state.alternateRows) ||
-      state.alternateRows.length !== state.rows.length
-    ) {
-      state.alternateRows = state.rows.map(() => false);
-    }
-
-    const incomingActiveRow = data.active_row ?? data.activeRow;
-    const parsedActiveRow = Number.parseInt(incomingActiveRow, 10);
-    if (
-      Number.isInteger(parsedActiveRow) &&
-      parsedActiveRow >= 0 &&
-      parsedActiveRow < state.rows.length
-    ) {
-      state.activeRow = parsedActiveRow;
-    } else {
-      state.activeRow = null;
-    }
-
-    state.selectionRange = null;
-
-    recalcTurnProgress();
-    state.ruleMessage = null;
-
-    let shouldEmitTheme = false;
-
-    const incomingGradient =
-      typeof data.bg_gradient === "string" ? data.bg_gradient.trim() : "";
-    if (incomingGradient) {
-      state.bgGradient = incomingGradient.slice(0, 200);
-    } else if (data.bg_gradient === null || typeof data.bg_gradient === "undefined") {
-      shouldEmitTheme = true;
-    }
-
-    const incomingStickColor =
-      typeof data.stick_color === "string" ? data.stick_color.trim() : "";
-    if (incomingStickColor) {
-      state.stickColor = incomingStickColor.slice(0, 50);
-    } else if (data.stick_color === null || typeof data.stick_color === "undefined") {
-      shouldEmitTheme = true;
-    }
-
-    if (Array.isArray(data.player_emojis) && data.player_emojis.length) {
-      const sanitized = [];
-      for (let i = 0; i < 2; i += 1) {
-        const raw = data.player_emojis[i];
-        const text = typeof raw === "string" ? raw.trim() : `${raw || ""}`;
-        sanitized.push(text.slice(0, 8) || "🐾");
+      if (shouldEmitTheme) {
+        emitState();
       }
-      state.playerEmojis = sanitized;
-    } else if (
-      data.player_emojis === null ||
-      typeof data.player_emojis === "undefined"
-    ) {
-      shouldEmitTheme = true;
-    }
 
-    if (shouldEmitTheme) {
-      emitState();
-    }
-
-    if (Object.prototype.hasOwnProperty.call(data, "last_turn")) {
-      if (data.last_turn === null) {
-        state.lastTurn = null;
-      } else if (data.last_turn && typeof data.last_turn === "object") {
-        const summary = data.last_turn;
-        const sanitizedRemoved = Array.isArray(summary.removed)
-          ? summary.removed
-              .slice(0, 5)
-              .map((entry) => {
-                const rowValue = Number.parseInt(entry.row, 10);
-                const countValue = Number.parseInt(entry.count, 10);
-                if (!Number.isFinite(rowValue) || rowValue <= 0) {
-                  return null;
-                }
-                if (!Number.isFinite(countValue) || countValue <= 0) {
-                  return null;
-                }
-                return { row: rowValue, count: countValue };
-              })
-              .filter(Boolean)
-          : [];
-
-        const messageText =
-          typeof summary.message === "string"
-            ? summary.message.trim().slice(0, 200)
-            : "";
-
-        if (messageText || sanitizedRemoved.length) {
-          state.lastTurn = {
-            message: messageText,
-            removed: sanitizedRemoved,
-          };
-        } else {
+      if (Object.prototype.hasOwnProperty.call(data, "last_turn")) {
+        if (data.last_turn === null) {
           state.lastTurn = null;
+        } else if (data.last_turn && typeof data.last_turn === "object") {
+          const summary = data.last_turn;
+          const sanitizedRemoved = Array.isArray(summary.removed)
+            ? summary.removed
+                .slice(0, 5)
+                .map((entry) => {
+                  const rowValue = Number.parseInt(entry.row, 10);
+                  const countValue = Number.parseInt(entry.count, 10);
+                  if (!Number.isFinite(rowValue) || rowValue <= 0) {
+                    return null;
+                  }
+                  if (!Number.isFinite(countValue) || countValue <= 0) {
+                    return null;
+                  }
+                  return { row: rowValue, count: countValue };
+                })
+                .filter(Boolean)
+            : [];
+
+          const messageText =
+            typeof summary.message === "string"
+              ? summary.message.trim().slice(0, 200)
+              : "";
+
+          if (messageText || sanitizedRemoved.length) {
+            state.lastTurn = {
+              message: messageText,
+              removed: sanitizedRemoved,
+            };
+          } else {
+            state.lastTurn = null;
+          }
         }
       }
-    }
 
-    render();
-  });
-
-  socket.on("room_full", (payload) => {
-    const message =
-      payload && typeof payload.message === "string"
-        ? payload.message.trim()
-        : "";
-    state.roomError =
-      message || "Sala cheia. Tente outra sala ou gere um novo código.";
-    render();
-  });
-
-  socket.on("disconnect", (reason) => {
-    if (!state.roomError && reason === "io server disconnect") {
-      state.roomError = "Conexão encerrada pelo servidor.";
       render();
-    }
-  });
+    });
 
-  socket.on("connect", () => {
-    state.roomError = null;
-  });
+    socket.on("room_full", (payload) => {
+      if (state.mode !== "online") {
+        return;
+      }
+
+      const message =
+        payload && typeof payload.message === "string"
+          ? payload.message.trim()
+          : "";
+      state.roomError =
+        message || "Sala cheia. Tente outra sala ou gere um novo código.";
+      render();
+    });
+
+    socket.on("disconnect", (reason) => {
+      if (state.mode !== "online") {
+        return;
+      }
+
+      if (!state.roomError && reason === "io server disconnect") {
+        state.roomError = "Conexão encerrada pelo servidor.";
+        render();
+      }
+    });
+
+    socket.on("connect", () => {
+      if (state.mode === "online") {
+        state.roomError = null;
+      }
+    });
+  }
 
   render();
 })();
