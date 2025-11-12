@@ -561,14 +561,18 @@ class BlocoPrescricao(db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
     data_criacao = db.Column(db.DateTime, default=datetime.utcnow)
-    saved_by_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True)
+    saved_by_id = db.Column(
+        db.Integer,
+        db.ForeignKey('user.id', ondelete='SET NULL'),
+        nullable=True,
+    )
 
     prescricoes = db.relationship('Prescricao', backref='bloco', cascade='all, delete-orphan')
     instrucoes_gerais = db.Column(db.Text)
 
     animal_id = db.Column(db.Integer, db.ForeignKey('animal.id'), nullable=False)
     animal = db.relationship('Animal', back_populates='blocos_prescricao')
-    saved_by = db.relationship('User', foreign_keys=[saved_by_id])
+    saved_by = db.relationship('User', foreign_keys=[saved_by_id], passive_deletes=True)
 
 class Prescricao(db.Model):
     __tablename__ = 'prescricao'

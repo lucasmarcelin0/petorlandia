@@ -24,6 +24,7 @@ def upgrade():
             'user',
             ['saved_by_id'],
             ['id'],
+            ondelete='SET NULL',
         )
 
 
