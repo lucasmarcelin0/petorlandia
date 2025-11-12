@@ -71,6 +71,7 @@
   const state = {
     rows: cloneRows(INITIAL_ROWS),
     turn: 1,
+    startingPlayer: 1,
     winner: null,
     hasPlayed: false,
     activeRow: null,
@@ -186,6 +187,7 @@
         1: sanitizeName(state.playerNames[0], DEFAULT_PLAYER_NAMES[0]),
         2: sanitizeName(state.playerNames[1], DEFAULT_PLAYER_NAMES[1]),
       },
+      starting_player: state.startingPlayer,
       has_played: Boolean(state.hasPlayed),
       active_row:
         typeof state.activeRow === "number" && Number.isFinite(state.activeRow)
@@ -569,7 +571,8 @@
       }
 
       state.rows = cloneRows(INITIAL_ROWS);
-      state.turn = 1;
+      state.startingPlayer = state.startingPlayer === 1 ? 2 : 1;
+      state.turn = state.startingPlayer;
       state.winner = null;
       state.hasPlayed = false;
       state.activeRow = null;
@@ -617,6 +620,14 @@
 
       const winnerValue = Number.parseInt(data.winner, 10);
       state.winner = winnerValue === 1 || winnerValue === 2 ? winnerValue : null;
+
+      const startingValue = Number.parseInt(
+        data.starting_player ?? data.startingPlayer,
+        10,
+      );
+      if (startingValue === 1 || startingValue === 2) {
+        state.startingPlayer = startingValue;
+      }
 
       const playersValue = data.players;
       if (playersValue && typeof playersValue === "object") {

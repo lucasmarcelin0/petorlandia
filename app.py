@@ -219,6 +219,7 @@ def _nim_default_state() -> dict:
     return {
         "rows": _nim_default_rows(),
         "turn": 1,
+        "starting_player": 1,
         "winner": None,
         "players": {1: "Jogador 1", 2: "Jogador 2"},
         "has_played": False,
@@ -246,6 +247,7 @@ def _nim_payload(room: str) -> dict:
     return {
         "rows": [row.copy() for row in state["rows"]],
         "turn": state["turn"],
+        "starting_player": state.get("starting_player", 1),
         "winner": state["winner"],
         "players": dict(state.get("players", {})),
         "has_played": bool(state.get("has_played", False)),
@@ -280,6 +282,16 @@ def _nim_enforce_rules(current_state: dict, proposed_state: dict) -> dict | None
     proposed_rows = _nim_copy_rows(proposed_state.get("rows", []))
     current_rows = _nim_copy_rows(current_state.get("rows", _nim_default_rows()))
 
+    current_start = current_state.get("starting_player", 1)
+    try:
+        current_start_int = int(current_start)
+    except (TypeError, ValueError):
+        current_start_int = 1
+    if current_start_int not in (1, 2):
+        current_start_int = 1
+
+    proposed_state["starting_player"] = current_start_int
+
     origin_candidate = current_state.get("turn_origin_rows")
     if (
         not isinstance(origin_candidate, list)
@@ -290,10 +302,24 @@ def _nim_enforce_rules(current_state: dict, proposed_state: dict) -> dict | None
         baseline_rows = _nim_copy_rows(origin_candidate)
 
     default_rows = _nim_default_rows()
+
+    proposed_turn = proposed_state.get("turn")
+    try:
+        proposed_turn_int = int(proposed_turn)
+    except (TypeError, ValueError):
+        proposed_turn_int = None
+    if proposed_turn_int not in (1, 2):
+        proposed_turn_int = None
+
+    has_played_flag = proposed_state.get("has_played")
+    has_played_bool = bool(has_played_flag)
+
+    winner_flag = proposed_state.get("winner")
     is_reset = (
         proposed_rows == default_rows
-        and proposed_state.get("turn") == 1
-        and proposed_state.get("winner") is None
+        and (winner_flag is None or winner_flag == "")
+        and not has_played_bool
+        and proposed_turn_int in (1, 2)
     )
 
     restorations_from_current: list[tuple[int, int]] = []
@@ -346,11 +372,13 @@ def _nim_enforce_rules(current_state: dict, proposed_state: dict) -> dict | None
         ]
 
     if is_reset:
+        next_start = 2 if current_start_int == 1 else 1
         proposed_state["rows"] = proposed_rows
         proposed_state["has_played"] = False
-        proposed_state["turn"] = 1
+        proposed_state["turn"] = next_start
         proposed_state["winner"] = None
         proposed_state["alternate_rows"] = [False] * len(NIM_TEMPLATE_ROWS)
+        proposed_state["starting_player"] = next_start
         return proposed_state
 
     if total_removed_turn > 3:
@@ -399,6 +427,7 @@ def _nim_enforce_rules(current_state: dict, proposed_state: dict) -> dict | None
         else:
             proposed_state["winner"] = 1 if next_turn_int == 2 else 2
 
+    proposed_state["starting_player"] = current_start_int
     return proposed_state
 
 
@@ -638,6 +667,19 @@ def _normalize_nim_payload(payload: dict | None, current_state: dict) -> dict | 
         else:
             player_emojis = ["🐾", "🐾"]
 
+    starting_player_value = payload.get("starting_player")
+    if starting_player_value is None:
+        starting_player_value = payload.get("startingPlayer")
+    if starting_player_value is None:
+        starting_player = current_state.get("starting_player", 1)
+    else:
+        try:
+            starting_player = int(starting_player_value)
+        except (TypeError, ValueError):
+            starting_player = current_state.get("starting_player", 1)
+        if starting_player not in (1, 2):
+            starting_player = current_state.get("starting_player", 1) or 1
+
     return {
         "rows": normalized_rows,
         "turn": turn_int,
@@ -648,6 +690,7 @@ def _normalize_nim_payload(payload: dict | None, current_state: dict) -> dict | 
         "bg_gradient": bg_gradient,
         "stick_color": stick_color,
         "player_emojis": player_emojis,
+        "starting_player": starting_player,
     }
 
 
