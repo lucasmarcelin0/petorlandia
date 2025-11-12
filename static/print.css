@@ -145,6 +145,43 @@ body {
   gap: 6px;
 }
 
+.print-attribution {
+  border: 1px dashed var(--soft-border-color);
+  background: rgba(31, 122, 140, 0.06);
+  padding: 14px 18px;
+  border-radius: 10px;
+  margin-bottom: 28px;
+  display: grid;
+  gap: 8px;
+}
+
+.print-attribution__line {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: baseline;
+  font-size: 10.5pt;
+  color: var(--body-text);
+}
+
+.print-attribution__label {
+  font-weight: 600;
+  color: var(--primary-color);
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  font-size: 9pt;
+}
+
+.print-attribution__value {
+  font-weight: 500;
+  color: var(--secondary-color);
+}
+
+.print-attribution__note {
+  font-size: 9.6pt;
+  color: var(--muted-text);
+}
+
 .info-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
@@ -340,6 +377,13 @@ tr:nth-child(even) td {
 .signature span {
   display: block;
   margin-top: 4px;
+}
+
+.signature-disclaimer {
+  text-align: right;
+  font-size: 9.5pt;
+  color: var(--muted-text);
+  margin-top: 10px;
 }
 
 footer {

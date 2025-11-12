@@ -42,18 +42,41 @@
     <span class="document-tag">Estimativa de custos</span>
   </div>
 
+  {% set signature_user = printing_user or veterinario %}
+
   <div class="document-meta">
     <span>Paciente: {{ animal.name }}</span>
     <span>Responsável: {{ tutor.name }}</span>
     {% if veterinario and veterinario.name %}<span>Profissional: {{ veterinario.name }}</span>{% endif %}
   </div>
 
+  <div class="print-attribution">
+    <div class="print-attribution__line">
+      <span class="print-attribution__label">Impresso por:</span>
+      <span class="print-attribution__value">{{ signature_user.name if signature_user else '—' }}</span>
+      {% if signature_user and signature_user.veterinario %}
+        <span class="print-attribution__value">CRMV {{ signature_user.veterinario.crmv }}</span>
+      {% elif signature_user and signature_user.worker == 'veterinario' %}
+        <span class="print-attribution__value">CRMV —</span>
+      {% endif %}
+    </div>
+    <div class="print-attribution__line">
+      <span class="print-attribution__label">Data/Hora:</span>
+      <span class="print-attribution__value">{{ printed_at|format_datetime_brazil('%d/%m/%Y %H:%M') if printed_at else date_now('%d/%m/%Y %H:%M') }}</span>
+    </div>
+    {% if veterinario and signature_user and veterinario.id != signature_user.id %}
+      <div class="print-attribution__note">
+        Profissional responsável registrado: {{ veterinario.name }}{% if veterinario.veterinario %} · CRMV {{ veterinario.veterinario.crmv }}{% endif %}
+      </div>
+    {% endif %}
+  </div>
+
   <div class="info-grid">
     <section class="info-card">
       <h3>Profissional Responsável</h3>
       <ul class="info-list">
-        <li><span>Nome</span><span>{{ veterinario.name }}</span></li>
-        <li><span>CRMV</span><span>{{ veterinario.veterinario.crmv if veterinario.veterinario else '—' }}</span></li>
+        <li><span>Nome</span><span>{{ veterinario.name if veterinario else '—' }}</span></li>
+        <li><span>CRMV</span><span>{{ veterinario.veterinario.crmv if veterinario and veterinario.veterinario else '—' }}</span></li>
       </ul>
     </section>
     <section class="info-card">
@@ -107,10 +130,15 @@
   <div class="signature-block">
     <div class="signature">
       <div class="signature-line"></div>
-      <span>{{ veterinario.name }}</span>
-      <span>CRMV {{ veterinario.veterinario.crmv if veterinario.veterinario else '—' }}</span>
+      <span>{{ signature_user.name if signature_user else '—' }}</span>
+      <span>CRMV {{ signature_user.veterinario.crmv if signature_user and signature_user.veterinario else '—' }}</span>
     </div>
   </div>
+  {% if veterinario and signature_user and veterinario.id != signature_user.id %}
+    <div class="signature-disclaimer">
+      Profissional responsável registrado: {{ veterinario.name }}{% if veterinario.veterinario %} · CRMV {{ veterinario.veterinario.crmv }}{% endif %}
+    </div>
+  {% endif %}
 
   {% if clinica %}
     <footer>
