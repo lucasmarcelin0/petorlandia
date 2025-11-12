@@ -79,6 +79,7 @@
     stickColor: randomColor(),
     playerEmojis: [randomEmoji(), randomEmoji()],
     playerNames: DEFAULT_PLAYER_NAMES.slice(),
+    lastTurn: null,
   };
 
   const container = document.getElementById("root");
@@ -109,6 +110,11 @@
         typeof state.activeRow === "number" && Number.isFinite(state.activeRow)
           ? state.activeRow
           : null,
+      bg_gradient: typeof state.bgGradient === "string" ? state.bgGradient : null,
+      stick_color: typeof state.stickColor === "string" ? state.stickColor : null,
+      player_emojis: Array.isArray(state.playerEmojis)
+        ? state.playerEmojis.slice(0, 2).map((emoji) => `${emoji}`.slice(0, 8))
+        : null,
     });
   };
 
@@ -151,6 +157,47 @@
       status.innerHTML = `Vez de ${activeName} <span class="emoji">${emoji}</span>`;
     }
     wrapper.appendChild(status);
+
+    if (
+      state.lastTurn &&
+      typeof state.lastTurn === "object" &&
+      (state.lastTurn.message || (Array.isArray(state.lastTurn.removed) && state.lastTurn.removed.length))
+    ) {
+      const summaryBox = document.createElement("div");
+      summaryBox.className = "turn-summary";
+
+      if (state.lastTurn.message) {
+        const summaryText = document.createElement("p");
+        summaryText.className = "turn-summary__text";
+        summaryText.textContent = state.lastTurn.message;
+        summaryBox.appendChild(summaryText);
+      }
+
+      if (Array.isArray(state.lastTurn.removed) && state.lastTurn.removed.length) {
+        const detailList = document.createElement("ul");
+        detailList.className = "turn-summary__list";
+
+        state.lastTurn.removed.forEach((entry) => {
+          const count = Number.parseInt(entry.count, 10);
+          const rowLabel = Number.parseInt(entry.row, 10);
+          if (!Number.isFinite(count) || count <= 0 || !Number.isFinite(rowLabel) || rowLabel <= 0) {
+            return;
+          }
+          const listItem = document.createElement("li");
+          const noun = count === 1 ? "palito" : "palitos";
+          listItem.textContent = `${count} ${noun} na linha ${rowLabel}`;
+          detailList.appendChild(listItem);
+        });
+
+        if (detailList.childElementCount) {
+          summaryBox.appendChild(detailList);
+        }
+      }
+
+      if (summaryBox.childElementCount) {
+        wrapper.appendChild(summaryBox);
+      }
+    }
 
     const namesSection = document.createElement("div");
     namesSection.className = "names-section";
@@ -361,6 +408,81 @@
       state.activeRow = parsedActiveRow;
     } else {
       state.activeRow = null;
+    }
+
+    let shouldEmitTheme = false;
+
+    const incomingGradient =
+      typeof data.bg_gradient === "string" ? data.bg_gradient.trim() : "";
+    if (incomingGradient) {
+      state.bgGradient = incomingGradient.slice(0, 200);
+    } else if (data.bg_gradient === null || typeof data.bg_gradient === "undefined") {
+      shouldEmitTheme = true;
+    }
+
+    const incomingStickColor =
+      typeof data.stick_color === "string" ? data.stick_color.trim() : "";
+    if (incomingStickColor) {
+      state.stickColor = incomingStickColor.slice(0, 50);
+    } else if (data.stick_color === null || typeof data.stick_color === "undefined") {
+      shouldEmitTheme = true;
+    }
+
+    if (Array.isArray(data.player_emojis) && data.player_emojis.length) {
+      const sanitized = [];
+      for (let i = 0; i < 2; i += 1) {
+        const raw = data.player_emojis[i];
+        const text = typeof raw === "string" ? raw.trim() : `${raw || ""}`;
+        sanitized.push(text.slice(0, 8) || "🐾");
+      }
+      state.playerEmojis = sanitized;
+    } else if (
+      data.player_emojis === null ||
+      typeof data.player_emojis === "undefined"
+    ) {
+      shouldEmitTheme = true;
+    }
+
+    if (shouldEmitTheme) {
+      emitState();
+    }
+
+    if (Object.prototype.hasOwnProperty.call(data, "last_turn")) {
+      if (data.last_turn === null) {
+        state.lastTurn = null;
+      } else if (data.last_turn && typeof data.last_turn === "object") {
+        const summary = data.last_turn;
+        const sanitizedRemoved = Array.isArray(summary.removed)
+          ? summary.removed
+              .slice(0, 5)
+              .map((entry) => {
+                const rowValue = Number.parseInt(entry.row, 10);
+                const countValue = Number.parseInt(entry.count, 10);
+                if (!Number.isFinite(rowValue) || rowValue <= 0) {
+                  return null;
+                }
+                if (!Number.isFinite(countValue) || countValue <= 0) {
+                  return null;
+                }
+                return { row: rowValue, count: countValue };
+              })
+              .filter(Boolean)
+          : [];
+
+        const messageText =
+          typeof summary.message === "string"
+            ? summary.message.trim().slice(0, 200)
+            : "";
+
+        if (messageText || sanitizedRemoved.length) {
+          state.lastTurn = {
+            message: messageText,
+            removed: sanitizedRemoved,
+          };
+        } else {
+          state.lastTurn = null;
+        }
+      }
     }
 
     render();
