@@ -1,7 +1,17 @@
 (() => {
   const { useState, useEffect } = React;
   const { createRoot } = ReactDOM;
-  const { motion } = window["framer-motion"];
+  const framerMotionLib = window.framerMotion || window["framer-motion"];
+  const resolvedMotion =
+    (framerMotionLib && (framerMotionLib.motion || framerMotionLib)) || null;
+  const motion = resolvedMotion && resolvedMotion.div
+    ? resolvedMotion
+    : {
+        div: (props) => {
+          const { children, whileHover, whileTap, ...rest } = props;
+          return React.createElement("div", rest, children);
+        },
+      };
   const socket = io();
 
   const INITIAL_ROWS = [
