@@ -3591,6 +3591,8 @@ def imprimir_consulta(consulta_id):
         tutor=tutor,
         clinica=clinica,
         veterinario=veterinario,
+        printing_user=current_user,
+        printed_at=datetime.now(BR_TZ),
     )
 
 
@@ -12521,6 +12523,8 @@ def imprimir_orcamento(consulta_id):
         tutor=tutor,
         clinica=clinica,
         veterinario=veterinario,
+        printing_user=current_user,
+        printed_at=datetime.now(BR_TZ),
     )
 
 
@@ -12542,6 +12546,8 @@ def imprimir_bloco_orcamento(bloco_id):
         tutor=tutor,
         clinica=clinica,
         veterinario=veterinario,
+        printing_user=current_user,
+        printed_at=datetime.now(BR_TZ),
     )
 
 
@@ -12557,6 +12563,8 @@ def imprimir_orcamento_padrao(orcamento_id):
         clinica=orcamento.clinica,
         orcamento=orcamento,
         veterinario=current_user,
+        printing_user=current_user,
+        printed_at=datetime.now(BR_TZ),
     )
 
 
