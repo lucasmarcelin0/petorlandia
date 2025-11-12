@@ -214,6 +214,8 @@ def _nim_default_state() -> dict:
         "turn": 1,
         "winner": None,
         "players": {1: "Jogador 1", 2: "Jogador 2"},
+        "has_played": False,
+        "active_row": None,
     }
 
 
@@ -229,6 +231,8 @@ def _nim_payload(room: str) -> dict:
         "turn": state["turn"],
         "winner": state["winner"],
         "players": dict(state.get("players", {})),
+        "has_played": bool(state.get("has_played", False)),
+        "active_row": state.get("active_row"),
     }
 
 
@@ -265,11 +269,39 @@ def _normalize_nim_payload(payload: dict | None, current_state: dict) -> dict | 
         if winner_int not in (1, 2):
             winner_int = None
 
+    has_played_raw = payload.get("has_played")
+    if has_played_raw is None:
+        has_played_raw = current_state.get("has_played", False)
+    if isinstance(has_played_raw, str):
+        has_played_raw = has_played_raw.strip().lower()
+        if has_played_raw in {"1", "true", "yes", "on"}:
+            has_played = True
+        elif has_played_raw in {"0", "false", "no", "off", ""}:
+            has_played = False
+        else:
+            has_played = current_state.get("has_played", False)
+    else:
+        has_played = bool(has_played_raw)
+
+    active_row_value = payload.get("active_row")
+    if active_row_value is None:
+        active_row_value = current_state.get("active_row")
+    try:
+        active_row_int = int(active_row_value)
+    except (TypeError, ValueError):
+        active_row_int = None
+    if active_row_int is not None and not (
+        0 <= active_row_int < len(NIM_TEMPLATE_ROWS)
+    ):
+        active_row_int = None
+
     return {
         "rows": normalized_rows,
         "turn": turn_int,
         "winner": winner_int,
         "players": _normalize_nim_players(payload.get("players"), current_state.get("players", {})),
+        "has_played": has_played,
+        "active_row": active_row_int,
     }
 
 
@@ -312,7 +344,11 @@ def secret_game_static(filename: str):
 
 
 def _nim_room_from_request() -> str:
-    room = (request.args.get("room", "") or "").strip()
+    room = (
+        request.args.get("room", "")
+        or request.args.get("sala", "")
+        or ""
+    ).strip()
     if not room:
         return "lobby"
     sanitized = "".join(ch for ch in room if ch.isalnum() or ch in {"_", "-"})
