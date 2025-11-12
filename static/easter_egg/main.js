@@ -1,20 +1,20 @@
 (() => {
-  const { useState, useEffect } = React;
-  const { createRoot } = ReactDOM;
-  const { motion } = window["framer-motion"];
-  const socket = io();
+  const socket = typeof io === "function" ? io() : null;
+  if (!socket) {
+    return;
+  }
 
   const INITIAL_ROWS = [
     [true, true, true],
     [true, true, true],
     [true, true, true],
     [true, true],
-    [true, true]
+    [true, true],
   ];
 
   const cloneRows = (rows) => rows.map((row) => row.slice());
 
-  const randomColor = () => `hsl(${Math.floor(Math.random() * 360)}, 70%, 70%)`;
+  const randomColor = () => `hsl(${Math.floor(Math.random() * 360)}, 70%, 68%)`;
   const randomGradient = () => {
     const c1 = randomColor();
     const c2 = randomColor();
@@ -26,176 +26,176 @@
     return emojis[Math.floor(Math.random() * emojis.length)];
   };
 
-  function NimGame() {
-    const [rows, setRows] = useState(cloneRows(INITIAL_ROWS));
-    const [turn, setTurn] = useState(1);
-    const [winner, setWinner] = useState(null);
-    const [hasPlayed, setHasPlayed] = useState(false);
-    const [activeRow, setActiveRow] = useState(null);
-    const [bgGradient, setBgGradient] = useState(randomGradient);
-    const [stickColor, setStickColor] = useState(randomColor);
-    const [playerEmojis, setPlayerEmojis] = useState([randomEmoji(), randomEmoji()]);
-
-    useEffect(() => {
-      const handleUpdate = (data) => {
-        if (!data || !Array.isArray(data.rows)) {
-          return;
-        }
-        setRows(cloneRows(data.rows));
-        if (typeof data.turn === "number") {
-          setTurn(data.turn);
-        }
-        setWinner(Number.isInteger(data.winner) ? data.winner : null);
-        setHasPlayed(false);
-        setActiveRow(null);
-      };
-
-      socket.on("update_state", handleUpdate);
-      return () => {
-        socket.off("update_state", handleUpdate);
-      };
-    }, []);
-
-    const handleClick = (rowIndex, stickIndex) => {
-      if (winner) return;
-      if (!rows[rowIndex]?.[stickIndex]) return;
-      if (activeRow !== null && activeRow !== rowIndex) return;
-
-      setRows((prevRows) => {
-        const updated = prevRows.map((row) => row.slice());
-        updated[rowIndex][stickIndex] = false;
-        return updated;
-      });
-      setHasPlayed(true);
-      if (activeRow === null) {
-        setActiveRow(rowIndex);
-      }
-    };
-
-    const emitState = (nextRows, nextTurn, nextWinner) => {
-      const payload = {
-        rows: cloneRows(nextRows),
-        turn: nextTurn,
-        winner: nextWinner,
-      };
-      socket.emit("move", payload);
-    };
-
-    const endTurn = () => {
-      if (!hasPlayed || winner) return;
-      const nextRows = cloneRows(rows);
-      const nextTurn = turn === 1 ? 2 : 1;
-      const allTaken = nextRows.every((row) => row.every((stick) => !stick));
-      const winningPlayer = allTaken ? turn : null;
-
-      setTurn(nextTurn);
-      setWinner(winningPlayer);
-      setHasPlayed(false);
-      setActiveRow(null);
-
-      emitState(nextRows, nextTurn, winningPlayer);
-    };
-
-    const resetGame = () => {
-      const freshRows = cloneRows(INITIAL_ROWS);
-      setRows(freshRows);
-      setTurn(1);
-      setWinner(null);
-      setHasPlayed(false);
-      setActiveRow(null);
-      setBgGradient(randomGradient());
-      setStickColor(randomColor());
-      setPlayerEmojis([randomEmoji(), randomEmoji()]);
-      emitState(freshRows, 1, null);
-    };
-
-    return (
-      React.createElement(
-        "div",
-        {
-          className: "flex flex-col items-center p-6 min-h-screen transition-all duration-700",
-          style: { background: bgGradient },
-        },
-        React.createElement(
-          "h1",
-          { className: "text-3xl font-bold mb-4 text-white drop-shadow" },
-          "🎮 Desafio Secreto"
-        ),
-        winner
-          ? React.createElement(
-              "div",
-              { className: "text-xl font-semibold mb-4" },
-              "🏆 ",
-              playerEmojis[winner - 1] || "🐾",
-              " Jogador ",
-              winner,
-              " venceu!"
-            )
-          : React.createElement(
-              "div",
-              { className: "text-lg mb-4" },
-              "Vez do Jogador ",
-              turn,
-              " ",
-              playerEmojis[turn - 1]
-            ),
-        React.createElement(
-          "div",
-          { className: "flex flex-col gap-3" },
-          rows.map((row, rowIndex) =>
-            React.createElement(
-              "div",
-              {
-                key: `row-${rowIndex}`,
-                className: `flex justify-center gap-3 ${
-                  activeRow !== null && activeRow !== rowIndex ? "opacity-50" : ""
-                }`,
-              },
-              row.map((stick, stickIndex) =>
-                React.createElement(
-                  motion.div,
-                  {
-                    key: `stick-${rowIndex}-${stickIndex}`,
-                    whileHover: { scale: stick ? 1.1 : 1 },
-                    whileTap: { scale: 0.9 },
-                    className: `w-4 h-16 rounded-full cursor-pointer shadow-md transition-all duration-300 ${
-                      stick ? "" : "bg-gray-300 opacity-50"
-                    }`,
-                    style: { backgroundColor: stick ? stickColor : undefined },
-                    onClick: () => handleClick(rowIndex, stickIndex),
-                  }
-                )
-              )
-            )
-          )
-        ),
-        !winner &&
-          React.createElement(
-            "button",
-            {
-              onClick: endTurn,
-              disabled: !hasPlayed,
-              className: `mt-6 px-4 py-2 rounded-xl text-white transition-all ${
-                hasPlayed ? "bg-green-500 hover:bg-green-600" : "bg-gray-400 cursor-not-allowed"
-              }`,
-            },
-            "Finalizar Turno"
-          ),
-        React.createElement(
-          "button",
-          {
-            onClick: resetGame,
-            className: "mt-3 bg-blue-500 text-white px-4 py-2 rounded-xl hover:bg-blue-600",
-          },
-          "Reiniciar"
-        )
-      )
-    );
-  }
+  const state = {
+    rows: cloneRows(INITIAL_ROWS),
+    turn: 1,
+    winner: null,
+    hasPlayed: false,
+    activeRow: null,
+    bgGradient: randomGradient(),
+    stickColor: randomColor(),
+    playerEmojis: [randomEmoji(), randomEmoji()],
+  };
 
   const container = document.getElementById("root");
-  if (container) {
-    const root = createRoot(container);
-    root.render(React.createElement(NimGame));
+  if (!container) {
+    return;
   }
+
+  document.body.classList.add("game-body");
+
+  const normalizeRows = (rows) =>
+    Array.isArray(rows)
+      ? rows.map((row) =>
+          Array.isArray(row) ? row.map((stick) => Boolean(stick)) : []
+        )
+      : cloneRows(INITIAL_ROWS);
+
+  const emitState = (rows, turn, winner) => {
+    socket.emit("move", {
+      rows: cloneRows(rows).map((row) => row.map(Boolean)),
+      turn,
+      winner,
+    });
+  };
+
+  const render = () => {
+    document.body.style.background = state.bgGradient;
+    document.body.style.backgroundAttachment = "fixed";
+    container.innerHTML = "";
+
+    const wrapper = document.createElement("div");
+    wrapper.className = "game-container";
+    wrapper.style.setProperty("--stick-color", state.stickColor);
+
+    const title = document.createElement("h1");
+    title.className = "game-title";
+    title.textContent = "🎮 Desafio Secreto";
+    wrapper.appendChild(title);
+
+    const status = document.createElement("p");
+    status.className = "status-text";
+    if (state.winner) {
+      const emoji = state.playerEmojis[state.winner - 1] || "🐾";
+      status.innerHTML = `<span class="emoji">🏆</span>${emoji} Jogador ${state.winner} venceu!`;
+    } else {
+      const emoji = state.playerEmojis[state.turn - 1] || "🐾";
+      status.innerHTML = `Vez do Jogador ${state.turn} <span class="emoji">${emoji}</span>`;
+    }
+    wrapper.appendChild(status);
+
+    const board = document.createElement("div");
+    board.className = "stick-board";
+
+    state.rows.forEach((row, rowIndex) => {
+      const rowEl = document.createElement("div");
+      rowEl.className = "stick-row";
+      if (state.activeRow !== null && state.activeRow !== rowIndex) {
+        rowEl.classList.add("stick-row--disabled");
+      }
+
+      row.forEach((stick, stickIndex) => {
+        const stickEl = document.createElement("div");
+        stickEl.className = "stick";
+        if (!stick) {
+          stickEl.classList.add("stick--hidden");
+        }
+
+        stickEl.addEventListener("click", () => {
+          if (state.winner) return;
+          if (!state.rows[rowIndex]?.[stickIndex]) return;
+          if (state.activeRow !== null && state.activeRow !== rowIndex) return;
+
+          const updated = cloneRows(state.rows);
+          updated[rowIndex][stickIndex] = false;
+          state.rows = updated;
+          state.hasPlayed = true;
+          if (state.activeRow === null) {
+            state.activeRow = rowIndex;
+          }
+          render();
+        });
+
+        rowEl.appendChild(stickEl);
+      });
+
+      board.appendChild(rowEl);
+    });
+
+    wrapper.appendChild(board);
+
+    const controls = document.createElement("div");
+    controls.className = "controls";
+
+    const endTurnButton = document.createElement("button");
+    endTurnButton.className = "button button--primary";
+    endTurnButton.textContent = "Finalizar Turno";
+    endTurnButton.disabled = !state.hasPlayed || Boolean(state.winner);
+    endTurnButton.addEventListener("click", () => {
+      if (!state.hasPlayed || state.winner) {
+        return;
+      }
+
+      const nextRows = cloneRows(state.rows);
+      const nextTurn = state.turn === 1 ? 2 : 1;
+      const allTaken = nextRows.every((row) => row.every((stick) => !stick));
+      const winningPlayer = allTaken ? state.turn : null;
+
+      state.turn = nextTurn;
+      state.winner = winningPlayer;
+      state.hasPlayed = false;
+      state.activeRow = null;
+
+      emitState(nextRows, nextTurn, winningPlayer);
+      render();
+    });
+    controls.appendChild(endTurnButton);
+
+    const resetButton = document.createElement("button");
+    resetButton.className = "button button--secondary";
+    resetButton.textContent = "Reiniciar";
+    resetButton.addEventListener("click", () => {
+      state.rows = cloneRows(INITIAL_ROWS);
+      state.turn = 1;
+      state.winner = null;
+      state.hasPlayed = false;
+      state.activeRow = null;
+      state.bgGradient = randomGradient();
+      state.stickColor = randomColor();
+      state.playerEmojis = [randomEmoji(), randomEmoji()];
+
+      emitState(state.rows, 1, null);
+      render();
+    });
+    controls.appendChild(resetButton);
+
+    wrapper.appendChild(controls);
+    container.appendChild(wrapper);
+  };
+
+  socket.on("update_state", (data) => {
+    if (!data) {
+      return;
+    }
+
+    const incomingRows = normalizeRows(data.rows);
+    if (incomingRows.length) {
+      state.rows = incomingRows;
+    }
+
+    const turnValue = Number.parseInt(data.turn, 10);
+    if (turnValue === 1 || turnValue === 2) {
+      state.turn = turnValue;
+    }
+
+    const winnerValue = Number.parseInt(data.winner, 10);
+    state.winner = winnerValue === 1 || winnerValue === 2 ? winnerValue : null;
+
+    state.hasPlayed = false;
+    state.activeRow = null;
+
+    render();
+  });
+
+  render();
 })();
