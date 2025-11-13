@@ -1094,15 +1094,93 @@ def get_user_or_404(user_id, *, viewer=None, clinic_scope=None):
     return user
 
 
+def audit_clinic_access(
+    clinica_id,
+    *,
+    allow,
+    reason,
+    extra=None,
+):
+    """Register cross-clinic access attempts in a centralized log."""
+
+    if not clinica_id or not current_user.is_authenticated:
+        return
+
+    try:
+        current_clinic = current_user_clinic_id()
+    except Exception:  # noqa: BLE001
+        current_clinic = None
+
+    if current_clinic == clinica_id:
+        return
+
+    metadata = {
+        "event": "clinic_scope_access",
+        "reason": reason,
+        "allowed": bool(allow),
+        "target_clinic_id": clinica_id,
+        "current_clinic_id": current_clinic,
+        "user_id": getattr(current_user, "id", None),
+        "user_role": getattr(current_user, "role", None),
+        "user_email": getattr(current_user, "email", None),
+    }
+
+    if has_request_context():
+        view_args = dict(request.view_args or {})
+        forwarded = request.headers.get("X-Forwarded-For", "")
+        remote_addr = forwarded.split(",")[0].strip() if forwarded else request.remote_addr
+        metadata.update(
+            {
+                "request_endpoint": request.endpoint,
+                "request_path": request.path,
+                "request_method": request.method,
+                "blueprint": request.blueprint,
+                "remote_addr": remote_addr,
+                "request_view_args": view_args,
+                "session_clinica_id": session.get("clinica_id"),
+            }
+        )
+
+    if extra:
+        metadata.update(extra)
+
+    level = logging.INFO if allow else logging.WARNING
+    app.logger.log(
+        level,
+        "clinic_access_audit %s",
+        json.dumps(metadata, ensure_ascii=False),
+    )
+
+
 def ensure_clinic_access(clinica_id):
     """Abort with 404 if the current user cannot access the given clinic."""
     if not clinica_id:
         return
+
     if not current_user.is_authenticated:
+        audit_clinic_access(
+            clinica_id,
+            allow=False,
+            reason="ensure_clinic_access_unauthenticated",
+        )
         abort(404)
-    if current_user.is_authenticated and current_user.role == 'admin':
+
+    user_role = (getattr(current_user, "role", "") or "").lower()
+
+    if user_role == "admin":
+        audit_clinic_access(
+            clinica_id,
+            allow=True,
+            reason="ensure_clinic_access_admin_override",
+        )
         return
+
     if current_user_clinic_id() != clinica_id:
+        audit_clinic_access(
+            clinica_id,
+            allow=False,
+            reason="ensure_clinic_access_mismatch",
+        )
         abort(404)
 
 
@@ -4362,13 +4440,22 @@ def _user_can_manage_clinic(clinica):
     """Return True when the current user can manage the given clinic."""
     if not current_user.is_authenticated:
         return False
+    allowed = False
     if _is_admin():
-        return True
-    if current_user.id == clinica.owner_id:
-        return True
-    if is_veterinarian(current_user) and current_user.veterinario.clinica_id == clinica.id:
-        return True
-    return False
+        allowed = True
+    elif current_user.id == clinica.owner_id:
+        allowed = True
+    elif is_veterinarian(current_user) and current_user.veterinario.clinica_id == clinica.id:
+        allowed = True
+
+    if allowed:
+        audit_clinic_access(
+            clinica.id,
+            allow=True,
+            reason="manage_clinic_permission",
+            extra={"checker": "_user_can_manage_clinic"},
+        )
+    return allowed
 
 
 def _send_clinic_invite_email(clinica, veterinarian_user, inviter):
@@ -4421,6 +4508,11 @@ def clinic_detail(clinica_id):
             .filter(Clinica.id == clinica_id)
             .first_or_404()
         )
+    audit_clinic_access(
+        clinica.id,
+        allow=True,
+        reason="clinic_detail_view",
+    )
     from models import VetClinicInvite
 
     is_owner = current_user.id == clinica.owner_id if current_user.is_authenticated else False
@@ -4767,6 +4859,11 @@ def clinic_detail(clinica_id):
 def cancel_clinic_invite(clinica_id, invite_id):
     """Cancel a pending clinic invite."""
     clinica = Clinica.query.get_or_404(clinica_id)
+    audit_clinic_access(
+        clinica.id,
+        allow=True,
+        reason="cancel_clinic_invite",
+    )
     if not _user_can_manage_clinic(clinica):
         abort(403)
 
@@ -4793,6 +4890,11 @@ def cancel_clinic_invite(clinica_id, invite_id):
 def resend_clinic_invite(clinica_id, invite_id):
     """Resend a declined clinic invite."""
     clinica = Clinica.query.get_or_404(clinica_id)
+    audit_clinic_access(
+        clinica.id,
+        allow=True,
+        reason="resend_clinic_invite",
+    )
     if not _user_can_manage_clinic(clinica):
         abort(403)
 
@@ -4826,6 +4928,11 @@ def resend_clinic_invite(clinica_id, invite_id):
 def create_clinic_veterinario(clinica_id):
     """Create a new veterinarian linked to a clinic."""
     clinica = Clinica.query.get_or_404(clinica_id)
+    audit_clinic_access(
+        clinica.id,
+        allow=True,
+        reason="create_clinic_veterinario",
+    )
     if not (_is_admin() or current_user.id == clinica.owner_id):
         abort(403)
 
@@ -4950,6 +5057,11 @@ def respond_clinic_invite(invite_id, action):
 @login_required
 def clinic_stock(clinica_id):
     clinica = Clinica.query.get_or_404(clinica_id)
+    audit_clinic_access(
+        clinica.id,
+        allow=True,
+        reason="clinic_stock",
+    )
     is_owner = current_user.id == clinica.owner_id if current_user.is_authenticated else False
     staff = None
     if current_user.is_authenticated:
@@ -4990,6 +5102,12 @@ def clinic_stock(clinica_id):
 def update_inventory_item(item_id):
     item = ClinicInventoryItem.query.get_or_404(item_id)
     clinica = item.clinica
+    audit_clinic_access(
+        clinica.id,
+        allow=True,
+        reason="update_inventory_item",
+        extra={"inventory_item_id": item.id},
+    )
     is_owner = current_user.id == clinica.owner_id if current_user.is_authenticated else False
     staff = None
     if current_user.is_authenticated:
@@ -5014,6 +5132,11 @@ def update_inventory_item(item_id):
 @login_required
 def novo_orcamento(clinica_id):
     clinica = Clinica.query.get_or_404(clinica_id)
+    audit_clinic_access(
+        clinica.id,
+        allow=True,
+        reason="novo_orcamento",
+    )
     if current_user.clinica_id != clinica_id and not _is_admin():
         abort(403)
     form = OrcamentoForm()
@@ -5045,6 +5168,11 @@ def editar_orcamento(orcamento_id):
 @login_required
 def orcamentos(clinica_id):
     clinica = Clinica.query.get_or_404(clinica_id)
+    audit_clinic_access(
+        clinica.id,
+        allow=True,
+        reason="orcamentos_view",
+    )
     if current_user.clinica_id != clinica_id and not _is_admin():
         abort(403)
     lista = Orcamento.query.filter_by(clinica_id=clinica_id).all()
@@ -5195,6 +5323,11 @@ def dashboard_orcamentos():
 @login_required
 def clinic_dashboard(clinica_id):
     clinic = Clinica.query.get_or_404(clinica_id)
+    audit_clinic_access(
+        clinic.id,
+        allow=True,
+        reason="clinic_dashboard",
+    )
     if current_user.id == clinic.owner_id:
         staff = ClinicStaff(
             clinic_id=clinic.id,
@@ -5216,6 +5349,11 @@ def clinic_dashboard(clinica_id):
 @login_required
 def clinic_staff(clinica_id):
     clinic = Clinica.query.get_or_404(clinica_id)
+    audit_clinic_access(
+        clinic.id,
+        allow=True,
+        reason="clinic_staff",
+    )
     if current_user.id != clinic.owner_id:
         if request.accept_mimetypes.accept_json:
             return jsonify(success=False, message='Sem permissão'), 403
@@ -5267,6 +5405,12 @@ def clinic_staff(clinica_id):
 @login_required
 def clinic_staff_permissions(clinica_id, user_id):
     clinic = Clinica.query.get_or_404(clinica_id)
+    audit_clinic_access(
+        clinic.id,
+        allow=True,
+        reason="clinic_staff_permissions",
+        extra={"staff_user_id": user_id},
+    )
     if current_user.id != clinic.owner_id:
         if request.accept_mimetypes.accept_json:
             return jsonify(success=False, message='Sem permissão'), 403
@@ -5302,6 +5446,12 @@ def clinic_staff_permissions(clinica_id, user_id):
 @login_required
 def remove_funcionario(clinica_id, user_id):
     clinica = Clinica.query.get_or_404(clinica_id)
+    audit_clinic_access(
+        clinica.id,
+        allow=True,
+        reason="remove_funcionario",
+        extra={"staff_user_id": user_id},
+    )
     if not (_is_admin() or current_user.id == clinica.owner_id):
         abort(403)
     staff = ClinicStaff.query.filter_by(clinic_id=clinica_id, user_id=user_id).first_or_404()
@@ -5322,6 +5472,12 @@ def remove_funcionario(clinica_id, user_id):
 @login_required
 def delete_clinic_hour(clinica_id, horario_id):
     clinica = Clinica.query.get_or_404(clinica_id)
+    audit_clinic_access(
+        clinica.id,
+        allow=True,
+        reason="delete_clinic_hour",
+        extra={"schedule_id": horario_id},
+    )
     pode_editar = _is_admin() or (
         is_veterinarian(current_user)
         and current_user.veterinario.clinica_id == clinica_id
@@ -5339,6 +5495,12 @@ def delete_clinic_hour(clinica_id, horario_id):
 @login_required
 def remove_veterinario(clinica_id, veterinario_id):
     clinica = Clinica.query.get_or_404(clinica_id)
+    audit_clinic_access(
+        clinica.id,
+        allow=True,
+        reason="remove_veterinario",
+        extra={"veterinario_id": veterinario_id},
+    )
     if not (_is_admin() or current_user.id == clinica.owner_id):
         abort(403)
     vet = Veterinario.query.filter_by(id=veterinario_id, clinica_id=clinica_id).first_or_404()
@@ -5358,6 +5520,12 @@ def remove_veterinario(clinica_id, veterinario_id):
 @login_required
 def remove_specialist(clinica_id, veterinario_id):
     clinica = Clinica.query.get_or_404(clinica_id)
+    audit_clinic_access(
+        clinica.id,
+        allow=True,
+        reason="remove_specialist",
+        extra={"veterinario_id": veterinario_id},
+    )
     if not (_is_admin() or current_user.id == clinica.owner_id):
         abort(403)
     vet = Veterinario.query.get_or_404(veterinario_id)
@@ -5379,6 +5547,12 @@ def remove_specialist(clinica_id, veterinario_id):
 @login_required
 def delete_vet_schedule_clinic(clinica_id, veterinario_id, horario_id):
     clinica = Clinica.query.get_or_404(clinica_id)
+    audit_clinic_access(
+        clinica.id,
+        allow=True,
+        reason="delete_vet_schedule",
+        extra={"veterinario_id": veterinario_id, "schedule_id": horario_id},
+    )
     if not (_is_admin() or current_user.id == clinica.owner_id):
         abort(403)
     horario = VetSchedule.query.get_or_404(horario_id)
