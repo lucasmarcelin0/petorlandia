@@ -12,16 +12,19 @@ from app import app as flask_app, db  # noqa: E402
 from models import (  # noqa: E402
     ClassifiedTransaction,
     ClinicFinancialSnapshot,
+    ClinicTaxes,
     Clinica,
     Orcamento,
     OrcamentoItem,
     Order,
     OrderItem,
+    PJPayment,
     Product,
     ServicoClinica,
     User,
 )
 from services.finance import (  # noqa: E402
+    calculate_clinic_taxes,
     classify_transactions_for_month,
     generate_financial_snapshot,
     update_financial_snapshots_daily,
@@ -92,6 +95,19 @@ def _create_clinic_with_data():
         )
     )
     db.session.commit()
+
+    pj_payment = PJPayment(
+        clinic_id=clinic.id,
+        prestador_nome="Vet Serviços",
+        prestador_cnpj="12.345.678/0001-00",
+        nota_fiscal_numero="NF-001",
+        valor=Decimal('12000.00'),
+        data_servico=date(2024, 5, 12),
+        data_pagamento=date(2024, 5, 15),
+        status='pago',
+    )
+    db.session.add(pj_payment)
+    db.session.commit()
     return clinic
 
 
@@ -130,9 +146,9 @@ def test_classify_transactions_creates_service_and_product_entries(app):
         clinic = _create_clinic_with_data()
         records = classify_transactions_for_month(clinic.id, date(2024, 5, 10))
 
-        assert len(records) == 2
+        assert len(records) == 3
         stored = ClassifiedTransaction.query.order_by(ClassifiedTransaction.category).all()
-        assert len(stored) == 2
+        assert len(stored) == 3
 
         service = next(entry for entry in stored if entry.category == "receita_servico")
         assert service.origin == "service"
@@ -145,6 +161,11 @@ def test_classify_transactions_creates_service_and_product_entries(app):
         assert product.subcategory == "others"
         assert product.description == "Ração"
         assert product.month == date(2024, 5, 1)
+
+        pj_payment = next(entry for entry in stored if entry.category == "pagamento_pj")
+        assert pj_payment.origin == "vet_payment"
+        assert pj_payment.month == date(2024, 5, 1)
+        assert pj_payment.value == Decimal('12000.00')
 
 
 def test_classify_transactions_upserts_existing_rows(app):
@@ -162,10 +183,49 @@ def test_classify_transactions_upserts_existing_rows(app):
         classify_transactions_for_month(clinic.id, date(2024, 5, 10))
 
         entries = ClassifiedTransaction.query.all()
-        assert len(entries) == 2
+        assert len(entries) == 3
 
         service_entry = ClassifiedTransaction.query.filter_by(category="receita_servico").one()
         assert service_entry.value == Decimal('200.00')
 
         product_entry = ClassifiedTransaction.query.filter_by(category="receita_produto").one()
         assert product_entry.value == Decimal('150.00')
+        pj_entry = ClassifiedTransaction.query.filter_by(category="pagamento_pj").one()
+        assert pj_entry.value == Decimal('12000.00')
+
+
+def test_calculate_clinic_taxes_creates_record(app):
+    with app.app_context():
+        clinic = _create_clinic_with_data()
+        month = date(2024, 5, 10)
+        generate_financial_snapshot(clinic.id, month)
+
+        taxes = ClinicTaxes.query.filter_by(clinic_id=clinic.id, month=date(2024, 5, 1)).one()
+        assert taxes.iss_total == Decimal('6.03')
+        assert taxes.das_total == Decimal('13.23')
+        assert taxes.retencoes_pj == Decimal('600.00')
+        assert taxes.faixa_simples == 1
+        assert taxes.fator_r == Decimal('54.4218')
+        assert taxes.projecao_anual == Decimal('2646.00')
+
+
+def test_calculate_clinic_taxes_updates_existing_record(app):
+    with app.app_context():
+        clinic = _create_clinic_with_data()
+        month = date(2024, 5, 10)
+        generate_financial_snapshot(clinic.id, month)
+
+        service_item = OrcamentoItem.query.filter_by(clinica_id=clinic.id).one()
+        service_item.valor = Decimal('300.00')
+        order_item = OrderItem.query.first()
+        order_item.quantity = 3
+        db.session.commit()
+
+        generate_financial_snapshot(clinic.id, month)
+
+        taxes = ClinicTaxes.query.filter_by(clinic_id=clinic.id, month=date(2024, 5, 1)).one()
+        assert ClinicTaxes.query.count() == 1
+        assert taxes.iss_total == Decimal('15.00')
+        assert taxes.das_total == Decimal('27.00')
+        assert taxes.retencoes_pj == Decimal('600.00')
+        assert taxes.projecao_anual == Decimal('5400.00')

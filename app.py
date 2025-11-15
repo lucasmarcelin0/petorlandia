@@ -45,6 +45,7 @@ import unicodedata
 from sqlalchemy import func, or_, exists, and_, case, true, false, inspect, text
 from sqlalchemy.exc import ProgrammingError
 from sqlalchemy.orm import joinedload, selectinload, aliased
+from config_utils import normalize_database_uri
 
 # ----------------------------------------------------------------
 # 1)  Alias único para “models”

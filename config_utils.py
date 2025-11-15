@@ -36,6 +36,9 @@ def normalize_database_uri(uri: str | bytes | None) -> str | None:
     except ValueError:
         return uri
 
+    if parsed.scheme == "sqlite":
+        return uri
+
     sanitized = parsed._replace(
         netloc=_encode_netloc(parsed),
         path=_encode_path(parsed),

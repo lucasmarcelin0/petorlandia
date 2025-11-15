@@ -896,6 +896,30 @@ event.listen(ClinicFinancialSnapshot, 'before_insert', _sync_snapshot_totals)
 event.listen(ClinicFinancialSnapshot, 'before_update', _sync_snapshot_totals)
 
 
+class ClinicTaxes(db.Model):
+    __tablename__ = 'clinic_taxes'
+    __table_args__ = (
+        db.UniqueConstraint('clinic_id', 'month', name='uq_clinic_taxes_clinic_month'),
+    )
+
+    id = db.Column(db.Integer, primary_key=True)
+    clinic_id = db.Column(db.Integer, db.ForeignKey('clinica.id'), nullable=False, index=True)
+    month = db.Column(db.Date, nullable=False, index=True)
+    iss_total = db.Column(db.Numeric(14, 2), nullable=False, default=Decimal('0.00'))
+    das_total = db.Column(db.Numeric(14, 2), nullable=False, default=Decimal('0.00'))
+    retencoes_pj = db.Column(db.Numeric(14, 2), nullable=False, default=Decimal('0.00'))
+    fator_r = db.Column(db.Numeric(6, 4), nullable=False, default=Decimal('0.0000'))
+    faixa_simples = db.Column(db.Integer, nullable=True)
+    projecao_anual = db.Column(db.Numeric(14, 2), nullable=False, default=Decimal('0.00'))
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
+    clinic = db.relationship(
+        'Clinica',
+        backref=db.backref('tax_reports', cascade='all, delete-orphan', lazy=True),
+    )
+
+
 class ClassifiedTransaction(db.Model):
     __tablename__ = 'classified_transactions'
     __table_args__ = (
@@ -952,6 +976,8 @@ class PJPayment(db.Model):
         default=datetime.utcnow,
         onupdate=datetime.utcnow,
     )
+
+    clinica_id = synonym('clinic_id')
 
     clinic = db.relationship(
         'Clinica',

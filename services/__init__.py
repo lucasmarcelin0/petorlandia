@@ -3,6 +3,7 @@
 from .calendar_access import get_calendar_access_scope, CalendarAccessScope  # noqa: F401
 from .data_share import find_active_share, log_data_share_event  # noqa: F401
 from .finance import (  # noqa: F401
+    calculate_clinic_taxes,
     classify_transactions_for_month,
     generate_financial_snapshot,
     update_financial_snapshots_daily,
