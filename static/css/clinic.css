@@ -1,0 +1,116 @@
+.clinic-team-container .accordion-button {
+  font-weight: 600;
+}
+
+.team-card {
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  border-radius: 1rem;
+  box-shadow: 0 8px 20px rgba(15, 47, 91, 0.05);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.team-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 12px 24px rgba(15, 47, 91, 0.08);
+}
+
+.team-card-icon {
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.1rem;
+}
+
+.action-dropdown .btn-icon {
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  border-radius: 50%;
+  width: 36px;
+  height: 36px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #495057;
+  background-color: #fff;
+}
+
+.action-dropdown .btn-icon:hover {
+  background-color: #f8f9fa;
+}
+
+.schedule-summary {
+  background-color: #f8f9fb;
+  border: 1px dashed rgba(0, 0, 0, 0.08);
+  border-radius: 0.75rem;
+  padding: 0.75rem 1rem;
+}
+
+.invite-card .card-header {
+  background-color: #f8f9fa;
+}
+
+.invite-card .dropdown-menu form {
+  margin: 0;
+}
+
+.badge-soft-primary {
+  background-color: rgba(78, 115, 223, 0.15);
+  color: #4e73df;
+}
+
+.badge-soft-success {
+  background-color: rgba(28, 200, 138, 0.15);
+  color: #1cc88a;
+}
+
+.badge-soft-info {
+  background-color: rgba(54, 185, 204, 0.15);
+  color: #36b9cc;
+}
+
+.badge-soft-warning {
+  background-color: rgba(246, 194, 62, 0.2);
+  color: #c28700;
+}
+
+.badge-soft-danger {
+  background-color: rgba(231, 74, 59, 0.2);
+  color: #be2617;
+}
+
+.badge-soft-secondary {
+  background-color: rgba(133, 135, 150, 0.15);
+  color: #5a5c69;
+}
+
+.bg-primary-subtle {
+  background-color: rgba(78, 115, 223, 0.1) !important;
+}
+
+.bg-success-subtle {
+  background-color: rgba(28, 200, 138, 0.1) !important;
+}
+
+.bg-info-subtle {
+  background-color: rgba(54, 185, 204, 0.1) !important;
+}
+
+.team-card .badge {
+  text-transform: uppercase;
+  font-size: 0.7rem;
+}
+
+.clinic-team-container .offcanvas .list-group-item {
+  border: none;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+}
+
+.clinic-team-container .offcanvas .list-group-item:last-child {
+  border-bottom: none;
+}
+
+.clinic-team-container .offcanvas form button.btn-outline-danger {
+  min-width: 40px;
+}
