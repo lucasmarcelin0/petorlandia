@@ -31,7 +31,7 @@ def app():
 
 
 def _create_consulta_with_orcamento(*, clinic, vet, tutor, animal_name, valor):
-    animal = Animal(name=animal_name, owner=tutor)
+    animal = Animal(name=animal_name, owner=tutor, clinica=clinic)
     db.session.add(animal)
     db.session.flush()
 
@@ -57,6 +57,7 @@ def _create_consulta_with_orcamento(*, clinic, vet, tutor, animal_name, valor):
         orcamento=orcamento,
         descricao="Consulta",
         valor=valor,
+        clinica=clinic,
     )
     db.session.add(item)
 

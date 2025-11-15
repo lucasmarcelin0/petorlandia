@@ -564,6 +564,7 @@ class OrcamentoItem(db.Model):
     descricao = db.Column(db.String(120), nullable=False)
     valor = db.Column(db.Numeric(10, 2), nullable=False)
     servico_id = db.Column(db.Integer, db.ForeignKey('servico_clinica.id'))
+    clinica_id = db.Column(db.Integer, db.ForeignKey('clinica.id'), nullable=False)
 
     consulta = db.relationship(
         'Consulta',
@@ -578,6 +579,7 @@ class OrcamentoItem(db.Model):
         backref=db.backref('itens', cascade='all, delete-orphan')
     )
     servico = db.relationship('ServicoClinica')
+    clinica = db.relationship('Clinica', backref=db.backref('orcamento_items', cascade='all, delete-orphan'))
 
 
 
@@ -606,6 +608,7 @@ class BlocoPrescricao(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     data_criacao = db.Column(db.DateTime, default=datetime.utcnow)
     saved_by_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True)
+    clinica_id = db.Column(db.Integer, db.ForeignKey('clinica.id'), nullable=False)
 
     prescricoes = db.relationship('Prescricao', backref='bloco', cascade='all, delete-orphan')
     instrucoes_gerais = db.Column(db.Text)
@@ -613,6 +616,7 @@ class BlocoPrescricao(db.Model):
     animal_id = db.Column(db.Integer, db.ForeignKey('animal.id'), nullable=False)
     animal = db.relationship('Animal', back_populates='blocos_prescricao')
     saved_by = db.relationship('User', foreign_keys=[saved_by_id])
+    clinica = db.relationship('Clinica', backref=db.backref('blocos_prescricao', cascade='all, delete-orphan'))
 
 class Prescricao(db.Model):
     __tablename__ = 'prescricao'

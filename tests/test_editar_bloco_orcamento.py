@@ -26,7 +26,7 @@ def test_editar_bloco_orcamento(app):
         tutor.set_password('y')
         animal = Animal(name='Rex', owner=tutor, clinica=clinica)
         bloco = BlocoOrcamento(animal=animal, clinica=clinica)
-        item = OrcamentoItem(bloco=bloco, descricao='Consulta', valor=50)
+        item = OrcamentoItem(bloco=bloco, descricao='Consulta', valor=50, clinica=clinica)
         db.session.add_all([clinica, vet_user, vet, tutor, animal, bloco, item])
         db.session.commit()
         bloco_id = bloco.id
