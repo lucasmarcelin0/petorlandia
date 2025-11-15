@@ -1058,6 +1058,54 @@ def species_display(species) -> str:
     return _resolve_species_name(species) or "Espécie não informada"
 
 
+def _normalize_species_token(species: str | None) -> str | None:
+    name = _resolve_species_name(species)
+    if not name:
+        return None
+    normalized = unicodedata.normalize("NFKD", name)
+    without_accents = "".join(ch for ch in normalized if not unicodedata.combining(ch))
+    cleaned = re.sub(r"[^a-zA-Z0-9]+", "-", without_accents).strip("-")
+    token = cleaned.lower()
+    return token or None
+
+
+_SPECIES_VISUAL_TOKENS = {
+    "cao": "dog",
+    "cachorro": "dog",
+    "canino": "dog",
+    "gato": "cat",
+    "felino": "cat",
+    "gata": "cat",
+    "ave": "bird",
+    "passaro": "bird",
+    "canario": "bird",
+    "papagaio": "bird",
+    "coelho": "rabbit",
+    "lagarto": "reptile",
+    "jabuti": "reptile",
+    "tartaruga": "reptile",
+    "reptil": "reptile",
+    "hamster": "rodent",
+    "roedor": "rodent",
+}
+
+
+def _resolve_species_visual(species) -> str:
+    token = _normalize_species_token(species)
+    if not token:
+        return "default"
+    if token in _SPECIES_VISUAL_TOKENS:
+        return _SPECIES_VISUAL_TOKENS[token]
+    root = token.split("-")[0]
+    return _SPECIES_VISUAL_TOKENS.get(root, "default")
+
+
+@app.template_filter("species_visual_token")
+def species_visual_token_filter(species) -> str:
+    """Return a semantic token used to colorize and iconize species placeholders."""
+    return _resolve_species_visual(species)
+
+
 def _resolve_size_data(weight):
     try:
         value = float(weight)
