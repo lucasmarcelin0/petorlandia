@@ -10,11 +10,13 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')
 
 from app import app as flask_app, db  # noqa: E402
 from models import (  # noqa: E402
+    Animal,
     ClassifiedTransaction,
     ClinicFinancialSnapshot,
     ClinicNotification,
     ClinicTaxes,
     Clinica,
+    BlocoOrcamento,
     Orcamento,
     OrcamentoItem,
     Order,
@@ -111,6 +113,52 @@ def _create_clinic_with_data():
     db.session.add(pj_payment)
     db.session.commit()
     return clinic
+
+
+def _seed_budget_entries(clinic):
+    tutor = User(
+        name="Tutor",
+        email="tutor@example.com",
+        password_hash="hash",
+        clinica_id=clinic.id,
+    )
+    db.session.add(tutor)
+    db.session.commit()
+
+    animal = Animal(
+        name="Rex",
+        sex="M",
+        status="ativo",
+        user_id=tutor.id,
+        clinica_id=clinic.id,
+    )
+    db.session.add(animal)
+    db.session.commit()
+
+    bloco = BlocoOrcamento(
+        animal_id=animal.id,
+        clinica_id=clinic.id,
+        payment_status="draft",
+        data_criacao=datetime(2024, 5, 4, 9, 0, 0),
+    )
+    db.session.add(bloco)
+    db.session.commit()
+
+    db.session.add(
+        OrcamentoItem(
+            bloco_id=bloco.id,
+            clinica_id=clinic.id,
+            descricao="Pacote cirúrgico",
+            valor=Decimal('400.00'),
+        )
+    )
+    db.session.commit()
+    orcamento = Orcamento.query.filter_by(clinica_id=clinic.id).first()
+    orcamento.payment_status = "paid"
+    orcamento.paid_at = datetime(2024, 5, 6, 12, 0, 0)
+    db.session.commit()
+
+    return animal, bloco
 
 
 def test_generate_financial_snapshot_creates_record(app):
@@ -377,6 +425,44 @@ def test_contabilidade_pagamentos_auto_classifies_transactions(app):
             assert len(entries) == 4
             new_entry = ClassifiedTransaction.query.filter_by(value=Decimal('80.00')).one()
             assert new_entry.description == 'Retorno detalhado'
+
+
+def test_contabilidade_pagamentos_renders_budget_entries(app):
+    with app.app_context():
+        clinic = _create_clinic_with_data()
+        clinic_id = clinic.id
+        admin = User(name="Gestor", email="gestor@example.com", role="admin")
+        admin.set_password("secret")
+        db.session.add(admin)
+        _seed_budget_entries(clinic)
+        db.session.commit()
+
+        assert ClassifiedTransaction.query.count() == 0
+
+    client = app.test_client()
+    with client:
+        login_response = client.post(
+            '/login',
+            data={'email': 'gestor@example.com', 'password': 'secret'},
+            follow_redirects=True,
+        )
+        assert login_response.status_code == 200
+
+        response = client.get(
+            f'/contabilidade/pagamentos?clinica_id={clinic_id}&mes=2024-05',
+            follow_redirects=True,
+        )
+
+        assert response.status_code == 200
+        assert b'Or\xc3\xa7amentos vinculados' in response.data
+        assert b'Procedimentos de maio' in response.data
+        assert b'Rex (Bloco' in response.data
+        assert b'Sincronizado' in response.data
+        assert b'Sem link gerado' in response.data
+
+    with app.app_context():
+        entries = ClassifiedTransaction.query.all()
+        assert any(entry.category == 'pagamento_pj' for entry in entries)
 
 
 def test_cli_classify_transactions_history_backfills_data(app):
