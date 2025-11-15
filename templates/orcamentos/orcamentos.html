@@ -5,7 +5,9 @@
     <h2 class="mb-0">Orçamentos</h2>
     <div class="btn-group">
       <a href="{{ url_for('novo_orcamento', clinica_id=clinica.id) }}" class="btn btn-primary">Novo Orçamento</a>
+      {% if contabilidade_pagamentos_url %}
       <a href="{{ contabilidade_pagamentos_url }}" class="btn btn-outline-secondary">Ver na contabilidade</a>
+      {% endif %}
     </div>
   </div>
   <table class="table">

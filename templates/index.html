@@ -133,7 +133,8 @@
         {% set has_admin_role = current_user.role in ['admin', 'master'] %}
         {% set admin_worker_roles = ['gestor', 'administrador', 'admin_clinica', 'master'] %}
         {% set has_admin_worker = current_user.worker in admin_worker_roles %}
-        {% if has_admin_role or has_admin_worker or owned_clinics|length > 0 %}
+        {% set owner_with_access = owned_clinics|length > 0 and can_access_accounting %}
+        {% if has_admin_role or has_admin_worker or owner_with_access %}
         <div class="card shadow-lg p-4 rounded-4 mb-5 accounting-card" style="background: #ffffff;">
             <h5 class="mb-4 text-center">Contabilidade</h5>
             <div class="d-flex flex-wrap justify-content-center gap-3">
