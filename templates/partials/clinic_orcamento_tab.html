@@ -3,43 +3,125 @@
         <a href="{{ url_for('novo_orcamento', clinica_id=clinica.id) }}" class="btn btn-sm btn-primary">Novo Orçamento</a>
       </div>
 
-      <form class="row g-2 align-items-end mb-4" method="get" action="{{ url_for('clinic_detail', clinica_id=clinica.id) }}#orcamento">
-        <div class="col-md-4">
-          <label class="form-label" for="orcamento-search">Buscar</label>
-          <input type="text" id="orcamento-search" name="orcamento_search" class="form-control" placeholder="Tutor, paciente ou descrição" value="{{ orcamento_filters.search }}">
-        </div>
-        <div class="col-md-3">
-          <label class="form-label" for="orcamento-from">De</label>
-          <input type="date" id="orcamento-from" name="orcamento_from" class="form-control" value="{{ orcamento_filters.from }}">
-        </div>
-        <div class="col-md-3">
-          <label class="form-label" for="orcamento-to">Até</label>
-          <input type="date" id="orcamento-to" name="orcamento_to" class="form-control" value="{{ orcamento_filters.to }}">
-        </div>
-        <div class="col-md-2">
-          <label class="form-label" for="orcamento-status">Status</label>
-          <select id="orcamento-status" class="form-select" name="orcamento_status">
-            <option value="all" {% if orcamento_filters.status == 'all' %}selected{% endif %}>Todos</option>
-            {% for status, label in orcamento_status_labels.items() %}
-              <option value="{{ status }}" {% if orcamento_filters.status == status %}selected{% endif %}>{{ label }}</option>
-            {% endfor %}
-          </select>
-        </div>
-        {% if start %}
-        <input type="hidden" name="start" value="{{ start }}">
-        {% endif %}
-        {% if end %}
-        <input type="hidden" name="end" value="{{ end }}">
-        {% endif %}
-        <div class="col-12 d-flex gap-2 mt-2">
-          <button type="submit" class="btn btn-primary btn-sm">Aplicar filtros</button>
-          <a class="btn btn-outline-secondary btn-sm" href="{{ url_for('clinic_detail', clinica_id=clinica.id) }}#orcamento">Limpar</a>
-        </div>
-      </form>
+      <style>
+        .orcamento-filter-card .card-header {
+          background: var(--bs-light);
+        }
+        .orcamento-filter-card .input-group-text {
+          background: var(--bs-light);
+          color: var(--bs-primary);
+          border-color: var(--bs-border-color-translucent);
+        }
+        .orcamento-filter-card .form-label {
+          font-weight: 600;
+          font-size: 0.9rem;
+        }
+        .orcamento-table-wrapper {
+          max-height: 520px;
+          overflow: auto;
+        }
+        .table-sticky thead th {
+          position: sticky;
+          top: 0;
+          background: var(--bs-body-bg);
+          box-shadow: 0 2px 0 rgba(0, 0, 0, 0.04);
+          z-index: 1;
+        }
+        .status-badge {
+          font-size: 0.85rem;
+          letter-spacing: 0.03em;
+        }
+        .status-badge i {
+          font-size: 0.95rem;
+        }
+        .orcamento-empty-state img {
+          max-width: 130px;
+          opacity: 0.8;
+        }
+      </style>
 
-      <div class="table-responsive">
-        <table class="table align-middle">
-          <thead>
+      <div class="card shadow-sm mb-4 orcamento-filter-card">
+        <div class="card-header d-flex flex-wrap justify-content-between align-items-center gap-2">
+          <div class="d-flex align-items-center gap-2">
+            <div class="icon-wrapper text-primary"><i class="fas fa-sliders-h"></i></div>
+            <div>
+              <div class="fw-semibold">Filtros inteligentes</div>
+              <small class="text-muted">Combine busca, período e status para refinar os resultados.</small>
+            </div>
+          </div>
+          <div class="d-flex align-items-center gap-3 text-muted small">
+            <span><i class="fas fa-search me-1"></i>Busca</span>
+            <span><i class="far fa-calendar-alt me-1"></i>Período</span>
+            <span><i class="fas fa-flag me-1"></i>Status</span>
+          </div>
+        </div>
+        <div class="card-body">
+          <form class="row g-3" method="get" action="{{ url_for('clinic_detail', clinica_id=clinica.id) }}#orcamento">
+            <div class="col-12 col-lg-8">
+              <label class="form-label" for="orcamento-search">Buscar</label>
+              <div class="input-group">
+                <span class="input-group-text" aria-hidden="true"><i class="fas fa-search"></i></span>
+                <input type="text" id="orcamento-search" name="orcamento_search" class="form-control" placeholder="Tutor, paciente ou descrição" value="{{ orcamento_filters.search }}">
+              </div>
+            </div>
+            <div class="col-12 col-lg-4">
+              <label class="form-label" for="orcamento-status">Status</label>
+              <div class="input-group">
+                <span class="input-group-text" aria-hidden="true"><i class="fas fa-flag"></i></span>
+                <select id="orcamento-status" class="form-select" name="orcamento_status">
+                  <option value="all" {% if orcamento_filters.status == 'all' %}selected{% endif %}>Todos</option>
+                  {% for status, label in orcamento_status_labels.items() %}
+                    <option value="{{ status }}" {% if orcamento_filters.status == status %}selected{% endif %}>{{ label }}</option>
+                  {% endfor %}
+                </select>
+              </div>
+            </div>
+            <div class="col-12 col-md-6 col-lg-4">
+              <label class="form-label" for="orcamento-from">De</label>
+              <div class="input-group">
+                <span class="input-group-text" aria-hidden="true"><i class="fas fa-calendar-day"></i></span>
+                <input type="date" id="orcamento-from" name="orcamento_from" class="form-control" value="{{ orcamento_filters.from }}">
+              </div>
+            </div>
+            <div class="col-12 col-md-6 col-lg-4">
+              <label class="form-label" for="orcamento-to">Até</label>
+              <div class="input-group">
+                <span class="input-group-text" aria-hidden="true"><i class="fas fa-calendar-check"></i></span>
+                <input type="date" id="orcamento-to" name="orcamento_to" class="form-control" value="{{ orcamento_filters.to }}">
+              </div>
+            </div>
+            <div class="col-12 col-lg-4 d-flex gap-2 align-items-end">
+              {% if start %}
+              <input type="hidden" name="start" value="{{ start }}">
+              {% endif %}
+              {% if end %}
+              <input type="hidden" name="end" value="{{ end }}">
+              {% endif %}
+              <button type="submit" class="btn btn-primary flex-fill">
+                <i class="fas fa-filter me-1"></i>
+                Aplicar filtros
+              </button>
+              <a class="btn btn-outline-secondary" href="{{ url_for('clinic_detail', clinica_id=clinica.id) }}#orcamento">
+                <i class="fas fa-undo me-1"></i>
+                Limpar
+              </a>
+            </div>
+          </form>
+        </div>
+      </div>
+
+      {% set status_icons = {
+        'draft': 'fa-pen-to-square',
+        'sent': 'fa-paper-plane',
+        'approved': 'fa-circle-check',
+        'rejected': 'fa-circle-xmark',
+        'canceled': 'fa-ban'
+      } %}
+
+      {% if orcamentos %}
+      <div class="table-responsive orcamento-table-wrapper">
+        <table class="table table-striped table-hover align-middle table-sticky">
+          <thead class="table-light text-uppercase small">
             <tr>
               <th>Descrição</th>
               <th>Tutor / Paciente</th>
@@ -71,7 +153,12 @@
               </td>
               <td class="text-center">
                 {% set badge = orcamento_status_styles.get(o.status, 'secondary') %}
-                <span class="badge bg-{{ badge }}">{{ orcamento_status_labels.get(o.status, o.status|capitalize) }}</span>
+                {% set status_label = orcamento_status_labels.get(o.status, o.status|capitalize) %}
+                {% set status_icon = status_icons.get(o.status, 'fa-file-alt') %}
+                <span class="badge rounded-pill d-inline-flex align-items-center justify-content-center gap-2 px-3 py-2 status-badge bg-{{ badge }} text-uppercase">
+                  <i class="fas {{ status_icon }}" aria-hidden="true"></i>
+                  {{ status_label }}
+                </span>
               </td>
               <td class="text-center">
                 {% set updated = o.updated_at or o.created_at %}
@@ -113,14 +200,23 @@
                 </div>
               </td>
             </tr>
-            {% else %}
-            <tr>
-              <td colspan="6" class="text-center text-muted">Nenhum orçamento encontrado com os filtros atuais.</td>
-            </tr>
             {% endfor %}
           </tbody>
         </table>
       </div>
+      {% else %}
+      <div class="card border-0 shadow-sm text-center py-5 mt-3 orcamento-empty-state">
+        <div class="card-body">
+          <img src="{{ url_for('static', filename='pastorgato.png') }}" alt="Ilustração de orçamento" class="mb-3">
+          <h5 class="fw-semibold">Sem registros por aqui</h5>
+          <p class="text-muted mb-4">Ajuste os filtros ou cadastre um novo orçamento para visualizar os dados nesta aba.</p>
+          <a href="{{ url_for('novo_orcamento', clinica_id=clinica.id) }}" class="btn btn-outline-primary">
+            <i class="fas fa-plus me-1"></i>
+            Criar primeiro orçamento
+          </a>
+        </div>
+      </div>
+      {% endif %}
 
       {% if orcamentos_pagination.pages > 1 %}
       <nav aria-label="Paginação de orçamentos" class="mt-3">
