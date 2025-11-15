@@ -895,6 +895,33 @@ def _sync_snapshot_totals(_mapper, _connection, target):
 event.listen(ClinicFinancialSnapshot, 'before_insert', _sync_snapshot_totals)
 event.listen(ClinicFinancialSnapshot, 'before_update', _sync_snapshot_totals)
 
+
+class ClassifiedTransaction(db.Model):
+    __tablename__ = 'classified_transactions'
+    __table_args__ = (
+        db.UniqueConstraint('clinic_id', 'raw_id', name='uq_classified_raw_id'),
+    )
+
+    id = db.Column(db.Integer, primary_key=True)
+    clinic_id = db.Column(db.Integer, db.ForeignKey('clinica.id'), nullable=False, index=True)
+    date = db.Column(db.DateTime, nullable=False, index=True)
+    month = db.Column(db.Date, nullable=False, index=True)
+    origin = db.Column(db.String(50), nullable=False)
+    description = db.Column(db.String(255), nullable=False)
+    value = db.Column(db.Numeric(14, 2), nullable=False, default=Decimal('0.00'))
+    category = db.Column(db.String(80), nullable=False, index=True)
+    subcategory = db.Column(db.String(80), nullable=True)
+    raw_id = db.Column(db.String(80), nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+
+    clinic = db.relationship(
+        'Clinica',
+        backref=db.backref('classified_transactions', cascade='all, delete-orphan', lazy=True),
+    )
+
+    def __repr__(self):
+        return f"<{self.origin} {self.category} R$ {self.value}>"
+
 # Associação many-to-many entre veterinário e especialidade
 veterinario_especialidade = db.Table(
     'veterinario_especialidade',

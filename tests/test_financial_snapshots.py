@@ -10,6 +10,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')
 
 from app import app as flask_app, db  # noqa: E402
 from models import (  # noqa: E402
+    ClassifiedTransaction,
     ClinicFinancialSnapshot,
     Clinica,
     Orcamento,
@@ -17,9 +18,11 @@ from models import (  # noqa: E402
     Order,
     OrderItem,
     Product,
+    ServicoClinica,
     User,
 )
 from services.finance import (  # noqa: E402
+    classify_transactions_for_month,
     generate_financial_snapshot,
     update_financial_snapshots_daily,
 )
@@ -54,6 +57,10 @@ def _create_clinic_with_data():
     db.session.add(product)
     db.session.commit()
 
+    servico = ServicoClinica(descricao="Consulta", valor=Decimal('120.50'), clinica=clinic)
+    db.session.add(servico)
+    db.session.commit()
+
     order = Order(user_id=buyer.id, created_at=datetime(2024, 5, 10, 8, 0, 0))
     db.session.add(order)
     db.session.commit()
@@ -81,6 +88,7 @@ def _create_clinic_with_data():
             clinica_id=clinic.id,
             descricao="Consulta",
             valor=Decimal('120.50'),
+            servico_id=servico.id,
         )
     )
     db.session.commit()
@@ -115,3 +123,49 @@ def test_update_financial_snapshots_daily_handles_zero_data(app):
         assert snap.total_receitas_servicos == Decimal('0')
         assert snap.total_receitas_produtos == Decimal('0')
         assert snap.total_receitas_gerais == Decimal('0')
+
+
+def test_classify_transactions_creates_service_and_product_entries(app):
+    with app.app_context():
+        clinic = _create_clinic_with_data()
+        records = classify_transactions_for_month(clinic.id, date(2024, 5, 10))
+
+        assert len(records) == 2
+        stored = ClassifiedTransaction.query.order_by(ClassifiedTransaction.category).all()
+        assert len(stored) == 2
+
+        service = next(entry for entry in stored if entry.category == "receita_servico")
+        assert service.origin == "service"
+        assert service.subcategory == "Consulta"
+        assert service.month == date(2024, 5, 1)
+        assert service.value == Decimal('120.50')
+
+        product = next(entry for entry in stored if entry.category == "receita_produto")
+        assert product.origin == "product_sale"
+        assert product.subcategory == "others"
+        assert product.description == "Ração"
+        assert product.month == date(2024, 5, 1)
+
+
+def test_classify_transactions_upserts_existing_rows(app):
+    with app.app_context():
+        clinic = _create_clinic_with_data()
+        classify_transactions_for_month(clinic.id, date(2024, 5, 10))
+
+        # Update original data and re-run classification.
+        service_item = OrcamentoItem.query.filter_by(clinica_id=clinic.id).one()
+        service_item.valor = Decimal('200.00')
+        order_item = OrderItem.query.first()
+        order_item.quantity = 3
+        db.session.commit()
+
+        classify_transactions_for_month(clinic.id, date(2024, 5, 10))
+
+        entries = ClassifiedTransaction.query.all()
+        assert len(entries) == 2
+
+        service_entry = ClassifiedTransaction.query.filter_by(category="receita_servico").one()
+        assert service_entry.value == Decimal('200.00')
+
+        product_entry = ClassifiedTransaction.query.filter_by(category="receita_produto").one()
+        assert product_entry.value == Decimal('150.00')
