@@ -5070,11 +5070,19 @@ def clinic_detail(clinica_id):
     show_inventory = _is_admin() or is_owner or has_inventory_perm
     inventory_form = InventoryItemForm() if show_inventory else None
     inventory_items = []
+    inventory_movements = []
     if show_inventory:
         inventory_items = (
             ClinicInventoryItem.query
             .filter_by(clinica_id=clinica.id)
             .order_by(ClinicInventoryItem.name)
+            .all()
+        )
+        inventory_movements = (
+            ClinicInventoryMovement.query
+            .filter_by(clinica_id=clinica.id)
+            .order_by(ClinicInventoryMovement.created_at.desc())
+            .limit(10)
             .all()
         )
     hours_form = ClinicHoursForm()
@@ -5399,6 +5407,7 @@ def clinic_detail(clinica_id):
         next7_str=next7_str,
         now=now_dt,
         inventory_items=inventory_items,
+        inventory_movements=inventory_movements,
         inventory_form=inventory_form,
         show_inventory=show_inventory,
         invites_by_status=invites_by_status,
@@ -5605,13 +5614,27 @@ def clinic_stock(clinica_id):
 
     inventory_form = InventoryItemForm()
     if inventory_form.validate_on_submit():
+        min_qty = inventory_form.min_quantity.data
+        max_qty = inventory_form.max_quantity.data
         item = ClinicInventoryItem(
             clinica_id=clinica.id,
             name=inventory_form.name.data,
             quantity=inventory_form.quantity.data,
             unit=inventory_form.unit.data,
+            min_quantity=min_qty,
+            max_quantity=max_qty,
         )
         db.session.add(item)
+        if item.quantity:
+            db.session.add(
+                ClinicInventoryMovement(
+                    clinica_id=clinica.id,
+                    item=item,
+                    quantity_change=item.quantity,
+                    quantity_before=0,
+                    quantity_after=item.quantity,
+                )
+            )
         db.session.commit()
         flash('Item adicionado com sucesso.', 'success')
         return redirect(url_for('clinic_detail', clinica_id=clinica.id) + '#estoque')
@@ -5622,10 +5645,18 @@ def clinic_stock(clinica_id):
         .order_by(ClinicInventoryItem.name)
         .all()
     )
+    inventory_movements = (
+        ClinicInventoryMovement.query
+        .filter_by(clinica_id=clinica.id)
+        .order_by(ClinicInventoryMovement.created_at.desc())
+        .limit(10)
+        .all()
+    )
     return render_template(
         'clinica/clinic_stock.html',
         clinica=clinica,
         inventory_items=inventory_items,
+        inventory_movements=inventory_movements,
         inventory_form=inventory_form,
     )
 
@@ -5642,15 +5673,53 @@ def update_inventory_item(item_id):
     has_perm = staff.can_manage_inventory if staff else False
     if not (_is_admin() or is_owner or has_perm):
         abort(403)
-    try:
-        qty = int(request.form.get('quantity', item.quantity))
-    except (TypeError, ValueError):
-        qty = item.quantity
-    item.quantity = max(0, qty)
+    def _optional_nonnegative_int(value):
+        if value is None:
+            return None
+        if isinstance(value, str) and not value.strip():
+            return None
+        try:
+            return max(0, int(value))
+        except (TypeError, ValueError):
+            return None
+
+    wants_json = 'application/json' in request.headers.get('Accept', '')
+
+    old_quantity = item.quantity
+    qty = _optional_nonnegative_int(request.form.get('quantity'))
+    if qty is None:
+        qty = old_quantity
+    item.quantity = qty
+
+    new_min = _optional_nonnegative_int(request.form.get('min_quantity'))
+    new_max = _optional_nonnegative_int(request.form.get('max_quantity'))
+
+    if new_min is not None and new_max is not None and new_min > new_max:
+        message = 'O máximo deve ser maior ou igual ao mínimo.'
+        category = 'warning'
+        flash(message, category)
+        if wants_json:
+            return jsonify(success=False, message=message, category=category), 400
+        return redirect(url_for('clinic_detail', clinica_id=clinica.id) + '#estoque')
+
+    item.min_quantity = new_min
+    item.max_quantity = new_max
+
+    if item.quantity != old_quantity:
+        db.session.add(
+            ClinicInventoryMovement(
+                clinica_id=clinica.id,
+                item=item,
+                quantity_change=item.quantity - old_quantity,
+                quantity_before=old_quantity,
+                quantity_after=item.quantity,
+            )
+        )
+
     db.session.commit()
-    message = 'Quantidade atualizada.'
+    message = 'Item atualizado.'
     flash(message, 'success')
-    if 'application/json' in request.headers.get('Accept', ''):
+    if wants_json:
         return jsonify(success=True, message=message, category='success', quantity=item.quantity)
     return redirect(url_for('clinic_detail', clinica_id=clinica.id) + '#estoque')
 

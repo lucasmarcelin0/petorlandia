@@ -391,7 +391,22 @@ class InventoryItemForm(FlaskForm):
     name = StringField('Nome do item', validators=[DataRequired()])
     quantity = IntegerField('Quantidade', validators=[DataRequired(), NumberRange(min=0)])
     unit = StringField('Unidade', validators=[Optional(), Length(max=50)])
+    min_quantity = IntegerField('Quantidade mínima', validators=[Optional(), NumberRange(min=0)])
+    max_quantity = IntegerField('Quantidade máxima', validators=[Optional(), NumberRange(min=0)])
     submit = SubmitField('Adicionar')
+
+    def validate(self, **kwargs):  # type: ignore[override]
+        rv = super().validate(**kwargs)
+        if not rv:
+            return False
+        if (
+            self.min_quantity.data is not None
+            and self.max_quantity.data is not None
+            and self.min_quantity.data > self.max_quantity.data
+        ):
+            self.max_quantity.errors.append('O máximo deve ser maior ou igual ao mínimo.')
+            return False
+        return True
 
 
 class VeterinarianPromotionForm(FlaskForm):

@@ -804,8 +804,30 @@ class ClinicInventoryItem(db.Model):
     name = db.Column(db.String(120), nullable=False)
     quantity = db.Column(db.Integer, default=0)
     unit = db.Column(db.String(50))
+    min_quantity = db.Column(db.Integer, nullable=True)
+    max_quantity = db.Column(db.Integer, nullable=True)
 
     clinica = db.relationship('Clinica', backref='inventory_items')
+    movements = db.relationship(
+        'ClinicInventoryMovement',
+        back_populates='item',
+        cascade='all, delete-orphan',
+    )
+
+
+class ClinicInventoryMovement(db.Model):
+    __tablename__ = 'clinic_inventory_movement'
+
+    id = db.Column(db.Integer, primary_key=True)
+    clinica_id = db.Column(db.Integer, db.ForeignKey('clinica.id'), nullable=False)
+    item_id = db.Column(db.Integer, db.ForeignKey('clinic_inventory_item.id', ondelete='CASCADE'), nullable=False)
+    quantity_change = db.Column(db.Integer, nullable=False)
+    quantity_before = db.Column(db.Integer, nullable=False)
+    quantity_after = db.Column(db.Integer, nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+
+    clinica = db.relationship('Clinica', backref='inventory_movements')
+    item = db.relationship('ClinicInventoryItem', back_populates='movements')
 
 # Associação many-to-many entre veterinário e especialidade
 veterinario_especialidade = db.Table(

@@ -1,40 +1,113 @@
 <h3>Estoque da Clínica {{ clinica.nome }}</h3>
-<table class="table table-striped mt-3">
-  <thead>
-    <tr>
-      <th>Insumo</th>
-      <th style="width:180px;">Quantidade</th>
-      <th>Unidade</th>
-    </tr>
-  </thead>
-  <tbody>
-    {% for item in inventory_items %}
-    <tr>
-      <td>{{ item.name }}</td>
-      <td>
-        <form method="post" action="{{ url_for('update_inventory_item', item_id=item.id) }}" class="d-flex">
-          {% if csrf_token %}{{ csrf_token() }}{% endif %}
-          <input type="number" name="quantity" value="{{ item.quantity }}" min="0" class="form-control form-control-sm me-2">
-          <button class="btn btn-sm btn-primary">Salvar</button>
-        </form>
-      </td>
-      <td>{{ item.unit or '-' }}</td>
-    </tr>
-    {% else %}
-    <tr>
-      <td colspan="3" class="text-center">Nenhum item no estoque.</td>
-    </tr>
-    {% endfor %}
-  </tbody>
-</table>
+<div class="table-responsive mt-3">
+  <table class="table table-striped align-middle">
+    <thead>
+      <tr>
+        <th>Insumo</th>
+        <th style="width:420px;">Estoque e limites</th>
+        <th>Unidade</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for item in inventory_items %}
+      {% set below_min = item.min_quantity is not none and item.quantity < item.min_quantity %}
+      {% set above_max = item.max_quantity is not none and item.quantity > item.max_quantity %}
+      <tr>
+        <td>
+          <div class="d-flex align-items-center gap-2">
+            <strong>{{ item.name }}</strong>
+            {% if below_min %}
+              <span class="badge bg-danger">Abaixo do mínimo</span>
+            {% elif above_max %}
+              <span class="badge bg-warning text-dark">Acima do máximo</span>
+            {% endif %}
+          </div>
+          <div class="text-muted small mt-1">
+            Mínimo: {{ item.min_quantity if item.min_quantity is not none else '—' }} ·
+            Máximo: {{ item.max_quantity if item.max_quantity is not none else '—' }}
+          </div>
+        </td>
+        <td>
+          <form method="post" action="{{ url_for('update_inventory_item', item_id=item.id) }}">
+            {% if csrf_token %}{{ csrf_token() }}{% endif %}
+            <div class="row g-2 align-items-end">
+              <div class="col-12 col-md-4">
+                <label class="form-label small mb-1">Quantidade</label>
+                <input type="number" name="quantity" value="{{ item.quantity }}" min="0" class="form-control form-control-sm">
+              </div>
+              <div class="col-6 col-md-4">
+                <label class="form-label small mb-1">Mínimo</label>
+                <input type="number" name="min_quantity" value="{{ item.min_quantity if item.min_quantity is not none else '' }}" min="0" class="form-control form-control-sm">
+              </div>
+              <div class="col-6 col-md-4">
+                <label class="form-label small mb-1">Máximo</label>
+                <input type="number" name="max_quantity" value="{{ item.max_quantity if item.max_quantity is not none else '' }}" min="0" class="form-control form-control-sm">
+              </div>
+              <div class="col-12 text-end">
+                <button class="btn btn-sm btn-primary mt-2">Salvar</button>
+              </div>
+            </div>
+          </form>
+        </td>
+        <td>{{ item.unit or '-' }}</td>
+      </tr>
+      {% else %}
+      <tr>
+        <td colspan="3" class="text-center">Nenhum item no estoque.</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+{% if inventory_movements %}
+  <h5 class="mt-4">Últimas movimentações</h5>
+  <div class="table-responsive">
+    <table class="table table-sm">
+      <thead>
+        <tr>
+          <th>Data</th>
+          <th>Item</th>
+          <th>Alteração</th>
+          <th>Saldo final</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for movement in inventory_movements %}
+        <tr>
+          <td>{{ movement.created_at.strftime('%d/%m/%Y %H:%M') }}</td>
+          <td>{{ movement.item.name }}</td>
+          <td>
+            {% if movement.quantity_change > 0 %}
+              <span class="text-success">+{{ movement.quantity_change }}</span>
+            {% elif movement.quantity_change < 0 %}
+              <span class="text-danger">{{ movement.quantity_change }}</span>
+            {% else %}
+              {{ movement.quantity_change }}
+            {% endif %}
+          </td>
+          <td>{{ movement.quantity_after }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+{% else %}
+  <p class="text-muted mt-4">Ainda não há movimentações registradas.</p>
+{% endif %}
+
 <hr>
 <h4>Adicionar Item</h4>
 <form method="post" action="{{ url_for('clinic_stock', clinica_id=clinica.id) }}">
   {{ inventory_form.hidden_tag() }}
   <div class="row g-2">
-    <div class="col-md-5">{{ inventory_form.name(class="form-control", placeholder="Nome") }}</div>
-    <div class="col-md-3">{{ inventory_form.quantity(class="form-control", placeholder="Quantidade") }}</div>
+    <div class="col-md-4">{{ inventory_form.name(class="form-control", placeholder="Nome") }}</div>
+    <div class="col-md-2">{{ inventory_form.quantity(class="form-control", placeholder="Quantidade") }}</div>
     <div class="col-md-2">{{ inventory_form.unit(class="form-control", placeholder="Unidade") }}</div>
-    <div class="col-md-2">{{ inventory_form.submit(class="btn btn-success w-100") }}</div>
+    <div class="col-md-2">{{ inventory_form.min_quantity(class="form-control", placeholder="Qtd. mínima") }}</div>
+    <div class="col-md-2">{{ inventory_form.max_quantity(class="form-control", placeholder="Qtd. máxima") }}</div>
+  </div>
+  <div class="text-end mt-2">
+    {{ inventory_form.submit(class="btn btn-success") }}
   </div>
 </form>
