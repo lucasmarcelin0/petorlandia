@@ -1,3 +1,4 @@
+{% import 'partials/clinic_agenda_macros.html' as agenda_macros %}
       <h3 class="d-flex align-items-center gap-2">
         <span class="icon-circle bg-success text-white"><i class="fa-solid fa-calendar"></i></span>
         <span class="fw-semibold">Agendamentos</span>
@@ -9,70 +10,90 @@
       </div>
 
       <div id="list-container">
-        <form id="appointment-filter-form" method="get" action="{{ url_for('clinic_detail', clinica_id=clinica.id) }}" class="row g-3 align-items-end mb-3">
-          <div class="col-12 col-md-3">
-            <label for="start" class="form-label">Início</label>
-            <input type="date" id="start" name="start" class="form-control" value="{{ appointment_filters.start }}">
-          </div>
-          <div class="col-12 col-md-3">
-            <label for="end" class="form-label">Fim</label>
-            <input type="date" id="end" name="end" class="form-control" value="{{ appointment_filters.end }}">
-          </div>
-          <div class="col-12 col-md-3">
-            <label for="vet_id" class="form-label">Veterinário</label>
-            <select id="vet_id" name="vet_id" class="form-select">
-              <option value="">Todos os profissionais</option>
-              {% for option in appointment_vet_options %}
-              <option value="{{ option.id }}" {% if appointment_filters.vet_id == option.id|string %}selected{% endif %}>{{ option.name }}</option>
-              {% endfor %}
-            </select>
-          </div>
-          <div class="col-12 col-md-3">
-            <label for="status" class="form-label">Status</label>
-            <select id="status" name="status" class="form-select">
-              {% for option in appointment_status_options %}
-              <option value="{{ option.value }}" {% if appointment_filters.status == option.value %}selected{% endif %}>{{ option.label }}</option>
-              {% endfor %}
-            </select>
-          </div>
-          <div class="col-12 col-md-3">
-            <label for="type" class="form-label">Tipo</label>
-            <select id="type" name="type" class="form-select">
-              {% for option in appointment_type_options %}
-              <option value="{{ option.value }}" {% if appointment_filters.type == option.value %}selected{% endif %}>{{ option.label }}</option>
-              {% endfor %}
-            </select>
-          </div>
-          <div class="col-12 col-md-3">
-            <button type="submit" class="btn btn-primary w-100">
-              <i class="fa-solid fa-filter me-1"></i>Filtrar
-            </button>
-          </div>
-          <div class="col-12">
-            <div class="d-flex flex-wrap gap-2 align-items-center">
-              <span class="text-muted small fw-semibold text-uppercase">Período rápido:</span>
-              {% for quick in appointment_quick_ranges %}
-              <a href="{{ quick.url }}" class="btn btn-outline-secondary btn-sm d-flex align-items-center gap-1 {% if quick.active %}active{% endif %}" data-filter-params="{{ quick.query|urlencode }}">
-                {% if quick.icon %}<i class="{{ quick.icon }}"></i>{% endif %}
-                <span>{{ quick.label }}</span>
-              </a>
-              {% endfor %}
+        <form id="appointment-filter-form" method="get" action="{{ url_for('clinic_detail', clinica_id=clinica.id) }}" class="appointment-filter-form">
+          <div class="card appointment-filters-card border-0 shadow-sm">
+            <div class="card-header bg-white border-0">
+              <div class="d-flex align-items-center gap-3">
+                <div class="appointment-filters-card__icon" aria-hidden="true">
+                  <i class="bi bi-funnel"></i>
+                </div>
+                <div>
+                  <h4 class="h6 mb-1 fw-bold">Filtrar agenda</h4>
+                  <p class="text-muted small mb-0">Escolha o período e demais critérios principais para refinar a lista.</p>
+                </div>
+              </div>
+            </div>
+            <div class="card-body">
+              <div class="appointment-filters-grid">
+                <div class="appointment-filter-field">
+                  <label for="start" class="form-label small text-uppercase fw-semibold text-muted">Período</label>
+                  <div class="appointment-date-range">
+                    <div class="input-group input-group-sm">
+                      <span class="input-group-text"><i class="bi bi-calendar-event" aria-hidden="true"></i><span class="visually-hidden">Data inicial</span></span>
+                      <input type="date" id="start" name="start" class="form-control" value="{{ appointment_filters.start }}" aria-label="Data inicial">
+                    </div>
+                    <div class="input-group input-group-sm">
+                      <span class="input-group-text"><i class="bi bi-calendar-check" aria-hidden="true"></i><span class="visually-hidden">Data final</span></span>
+                      <input type="date" id="end" name="end" class="form-control" value="{{ appointment_filters.end }}" aria-label="Data final">
+                    </div>
+                  </div>
+                </div>
+                <div class="appointment-filter-field">
+                  <label for="vet_id" class="form-label small text-uppercase fw-semibold text-muted">Profissional</label>
+                  <select id="vet_id" name="vet_id" class="form-select form-select-sm">
+                    <option value="">Todos os profissionais</option>
+                    {% for option in appointment_vet_options %}
+                    <option value="{{ option.id }}" {% if appointment_filters.vet_id == option.id|string %}selected{% endif %}>{{ option.name }}</option>
+                    {% endfor %}
+                  </select>
+                </div>
+                <div class="appointment-filter-field">
+                  <label for="status" class="form-label small text-uppercase fw-semibold text-muted">Status</label>
+                  <select id="status" name="status" class="form-select form-select-sm">
+                    {% for option in appointment_status_options %}
+                    <option value="{{ option.value }}" {% if appointment_filters.status == option.value %}selected{% endif %}>{{ option.label }}</option>
+                    {% endfor %}
+                  </select>
+                </div>
+                <div class="appointment-filter-field">
+                  <label for="type" class="form-label small text-uppercase fw-semibold text-muted">Tipo</label>
+                  <select id="type" name="type" class="form-select form-select-sm">
+                    {% for option in appointment_type_options %}
+                    <option value="{{ option.value }}" {% if appointment_filters.type == option.value %}selected{% endif %}>{{ option.label }}</option>
+                    {% endfor %}
+                  </select>
+                </div>
+              </div>
+              <div class="appointment-filters-actions">
+                <button type="submit" class="btn btn-primary">
+                  <i class="fa-solid fa-filter me-2"></i>
+                  <span>Aplicar filtros</span>
+                </button>
+                <a href="{{ url_for('clinic_detail', clinica_id=clinica.id) }}#agendamentos" class="btn btn-outline-secondary">
+                  <i class="fa-solid fa-rotate-left me-2"></i>
+                  <span>Limpar</span>
+                </a>
+              </div>
             </div>
           </div>
-          <div class="col-12">
-            <div class="d-flex flex-wrap gap-2 align-items-center">
-              <span class="text-muted small fw-semibold text-uppercase">Status:</span>
-              {% for quick in appointment_status_quick_filters %}
-              <a href="{{ quick.url }}" class="badge rounded-pill quick-filter-badge {% if quick.active %}active text-bg-primary text-white{% else %}text-bg-light text-body{% endif %}" data-badge-variant="status" data-filter-params="{{ quick.query|urlencode }}">{{ quick.label }}</a>
-              {% endfor %}
-            </div>
-          </div>
-          <div class="col-12">
-            <div class="d-flex flex-wrap gap-2 align-items-center">
-              <span class="text-muted small fw-semibold text-uppercase">Tipo:</span>
-              {% for quick in appointment_type_quick_filters %}
-              <a href="{{ quick.url }}" class="badge rounded-pill quick-filter-badge {% if quick.active %}active text-bg-info text-white{% else %}text-bg-light text-body{% endif %}" data-badge-variant="type" data-filter-params="{{ quick.query|urlencode }}">{{ quick.label }}</a>
-              {% endfor %}
+
+          <div class="appointment-quick-filters">
+            <div class="accordion" id="appointmentQuickFilters">
+              <div class="accordion-item">
+                <h2 class="accordion-header" id="appointmentQuickFiltersHeading">
+                  <button class="accordion-button d-flex align-items-center gap-2" type="button" data-bs-toggle="collapse" data-bs-target="#appointmentQuickFiltersCollapse" aria-expanded="true" aria-controls="appointmentQuickFiltersCollapse" data-quick-filter-toggle>
+                    <i class="bi bi-lightning-charge-fill small" aria-hidden="true"></i>
+                    <span>Filtros rápidos</span>
+                  </button>
+                </h2>
+                <div id="appointmentQuickFiltersCollapse" class="accordion-collapse collapse show" aria-labelledby="appointmentQuickFiltersHeading" data-bs-parent="#appointmentQuickFilters">
+                  <div class="accordion-body d-flex flex-column gap-3">
+                    {{ agenda_macros.quick_filter_group('Período rápido', appointment_quick_ranges, 'secondary') }}
+                    {{ agenda_macros.quick_filter_group('Status', appointment_status_quick_filters, 'primary') }}
+                    {{ agenda_macros.quick_filter_group('Tipo', appointment_type_quick_filters, 'info') }}
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
         </form>

@@ -1,0 +1,22 @@
+{% macro quick_filter_group(title, items, variant='secondary', size='sm') %}
+  {% if items %}
+  <div class="appointment-quick-group">
+    <span class="appointment-quick-group__label text-muted small fw-semibold text-uppercase">{{ title }}</span>
+    <div class="appointment-quick-group__items">
+      {% for item in items %}
+      <a
+        href="{{ item.url }}"
+        class="btn btn-{{ size }} btn-outline-{{ variant }} appointment-quick-btn {% if item.active %}active{% endif %}"
+        data-filter-params="{{ item.query|urlencode }}"
+        aria-pressed="{{ 'true' if item.active else 'false' }}"
+      >
+        {% if item.icon %}
+        <i class="{{ item.icon }} appointment-quick-btn__icon" aria-hidden="true"></i>
+        {% endif %}
+        <span>{{ item.label }}</span>
+      </a>
+      {% endfor %}
+    </div>
+  </div>
+  {% endif %}
+{% endmacro %}

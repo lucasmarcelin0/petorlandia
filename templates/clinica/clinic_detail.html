@@ -141,6 +141,33 @@
 }
 
 document.addEventListener('DOMContentLoaded', function() {
+  const quickFiltersCollapseEl = document.getElementById('appointmentQuickFiltersCollapse');
+  const quickFiltersToggle = document.querySelector('[data-quick-filter-toggle]');
+  if (quickFiltersCollapseEl && typeof bootstrap !== 'undefined' && bootstrap.Collapse) {
+    const quickFiltersCollapse = bootstrap.Collapse.getOrCreateInstance(quickFiltersCollapseEl, { toggle: false });
+    const mediaQuery = window.matchMedia('(max-width: 576px)');
+    const syncQuickFiltersVisibility = () => {
+      if (mediaQuery.matches) {
+        quickFiltersCollapse.hide();
+        if (quickFiltersToggle) {
+          quickFiltersToggle.setAttribute('aria-expanded', 'false');
+        }
+      } else {
+        quickFiltersCollapse.show();
+        if (quickFiltersToggle) {
+          quickFiltersToggle.setAttribute('aria-expanded', 'true');
+        }
+      }
+    };
+    syncQuickFiltersVisibility();
+    const mediaHandler = () => syncQuickFiltersVisibility();
+    if (typeof mediaQuery.addEventListener === 'function') {
+      mediaQuery.addEventListener('change', mediaHandler);
+    } else if (typeof mediaQuery.addListener === 'function') {
+      mediaQuery.addListener(mediaHandler);
+    }
+  }
+
   const form = document.getElementById('appointment-filter-form');
   const container = document.getElementById('appointments-table-container');
   if (!form || !container) return;
@@ -167,6 +194,7 @@ document.addEventListener('DOMContentLoaded', function() {
       const datasetParams = new URLSearchParams(link.dataset.filterParams || '');
       if (!datasetParams.toString()) {
         link.classList.remove('active');
+        link.setAttribute('aria-pressed', 'false');
         return;
       }
       let matches = true;
@@ -180,19 +208,7 @@ document.addEventListener('DOMContentLoaded', function() {
         }
       });
       link.classList.toggle('active', matches);
-      const variant = link.dataset.badgeVariant;
-      if (variant === 'status' || variant === 'type') {
-        const activeClasses = variant === 'status'
-          ? ['text-bg-primary', 'text-white']
-          : ['text-bg-info', 'text-white'];
-        if (matches) {
-          link.classList.add(...activeClasses);
-          link.classList.remove('text-bg-light', 'text-body');
-        } else {
-          link.classList.remove(...activeClasses);
-          link.classList.add('text-bg-light', 'text-body');
-        }
-      }
+      link.setAttribute('aria-pressed', matches ? 'true' : 'false');
     });
   }
 
