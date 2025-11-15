@@ -37,6 +37,7 @@ from models import (
 
 ZERO = Decimal("0.00")
 _TABLE_COLUMN_CACHE: dict[str, set[str]] = {}
+REQUIRED_PJ_PAYMENT_COLUMNS = {"tipo_prestador", "plantao_horas"}
 MANUAL_ENTRY_MODEL_CANDIDATES = (
     "ClinicManualFinancialEntry",
     "ClinicManualEntry",
@@ -318,7 +319,8 @@ def _table_has_column(table_name: str, column_name: str) -> bool:
 def pj_payments_schema_is_ready() -> bool:
     """Return ``True`` when ``pj_payments`` already exposes the new columns."""
 
-    return _table_has_column('pj_payments', 'tipo_prestador')
+    columns = _get_table_columns('pj_payments')
+    return REQUIRED_PJ_PAYMENT_COLUMNS.issubset(columns)
 
 
 def _manual_entries_total(clinic_id: int, start_dt: datetime, end_dt: datetime) -> Decimal:
