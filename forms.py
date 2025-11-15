@@ -25,7 +25,13 @@ from wtforms.validators import (
     NumberRange,
     ValidationError,
 )
-from wtforms_sqlalchemy.fields import QuerySelectField
+# Some deployments might not have ``wtforms_sqlalchemy`` available. In that
+# case we fall back to the compatible field that ships with Flask-Admin to
+# avoid crashing the application when importing the forms module.
+try:  # pragma: no cover - import guard
+    from wtforms_sqlalchemy.fields import QuerySelectField
+except ImportError:  # pragma: no cover - executed only when optional dep missing
+    from flask_admin.contrib.sqla.fields import QuerySelectField
 from flask_wtf.file import FileField, FileAllowed
 from models import PLANTONISTA_ESCALA_STATUS_CHOICES
 
