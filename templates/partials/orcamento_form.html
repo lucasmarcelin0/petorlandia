@@ -116,6 +116,19 @@
       <label for="desconto-valor" class="form-label">Desconto (R$)</label>
       <input type="number" step="0.01" min="0" class="form-control" id="desconto-valor" placeholder="Ex: 50,00">
     </div>
+    <div class="col-md-4">
+      <label class="form-label">Totais</label>
+      <div class="border rounded p-2 bg-light">
+        <div class="d-flex justify-content-between">
+          <small class="text-muted">Total bruto</small>
+          <strong id="resumo-total-bruto">R$ 0,00</strong>
+        </div>
+        <div class="d-flex justify-content-between mt-1">
+          <small class="text-muted">Total com desconto</small>
+          <strong id="resumo-total-com-desconto">R$ 0,00</strong>
+        </div>
+      </div>
+    </div>
     <div class="col-12">
       <label for="observacoes-tutor" class="form-label">Observações para o tutor</label>
       <textarea id="observacoes-tutor" class="form-control" rows="2" placeholder="Mensagem que aparecerá para o tutor"></textarea>
@@ -136,6 +149,11 @@ const consultaId = {{ consulta.id }};
 const payerTypeLabels = { plan: 'Plano', particular: 'Particular' };
 let currentPayerType = '{{ default_payer_type }}';
 const discountContainer = document.getElementById('particular-extra-fields');
+const discountPercentInput = document.getElementById('desconto-percentual');
+const discountValueInput = document.getElementById('desconto-valor');
+const totalSummaryValue = document.getElementById('resumo-total-bruto');
+const totalWithDiscountSummary = document.getElementById('resumo-total-com-desconto');
+let isSyncingDiscounts = false;
 
 function toggleNovoServico() {
   const container = document.getElementById('novo-servico-container');
@@ -198,6 +216,8 @@ function updateOrcamentoTotal() {
     total += parseFloat(row.dataset.value || '0');
   });
   document.getElementById('orcamento-total').textContent = total.toFixed(2);
+  recalculateDiscountsAfterTotalChange();
+  updateTotalsSummary();
 }
 
 function bindPayerToggle() {
@@ -214,6 +234,78 @@ function bindPayerToggle() {
 function initPayerControls() {
   bindPayerToggle();
   applyPayerFilter();
+}
+
+function getOrcamentoTotal() {
+  const totalText = document.getElementById('orcamento-total')?.textContent || '0';
+  const parsed = parseFloat(totalText.replace(',', '.'));
+  return isNaN(parsed) ? 0 : parsed;
+}
+
+function formatCurrency(value) {
+  return `R$ ${value.toFixed(2)}`;
+}
+
+function updateTotalsSummary() {
+  if (!totalSummaryValue || !totalWithDiscountSummary) return;
+  const total = getOrcamentoTotal();
+  const discountRaw = parseFloat(discountValueInput?.value);
+  const discount = !isNaN(discountRaw) ? Math.min(discountRaw, total) : 0;
+  const totalComDesconto = Math.max(total - discount, 0);
+  totalSummaryValue.textContent = formatCurrency(total);
+  totalWithDiscountSummary.textContent = formatCurrency(totalComDesconto);
+}
+
+function updateDiscountFromPercent() {
+  if (!discountPercentInput || !discountValueInput) return;
+  const percent = parseFloat(discountPercentInput.value);
+  const total = getOrcamentoTotal();
+  if (isNaN(percent)) {
+    discountValueInput.value = '';
+    return;
+  }
+  const value = total * (percent / 100);
+  discountValueInput.value = value.toFixed(2);
+}
+
+function updateDiscountFromValue() {
+  if (!discountPercentInput || !discountValueInput) return;
+  const value = parseFloat(discountValueInput.value);
+  const total = getOrcamentoTotal();
+  if (isNaN(value) || total <= 0) {
+    discountPercentInput.value = '';
+    return;
+  }
+  const percent = (value / total) * 100;
+  discountPercentInput.value = percent.toFixed(2);
+}
+
+function handleDiscountInput(source) {
+  if (isSyncingDiscounts) return;
+  isSyncingDiscounts = true;
+  if (source === 'percent') {
+    updateDiscountFromPercent();
+  } else {
+    updateDiscountFromValue();
+  }
+  isSyncingDiscounts = false;
+  updateTotalsSummary();
+}
+
+function recalculateDiscountsAfterTotalChange() {
+  if (!discountPercentInput || !discountValueInput) return;
+  if (discountPercentInput.value) {
+    handleDiscountInput('percent');
+  } else if (discountValueInput.value) {
+    handleDiscountInput('value');
+  }
+  updateTotalsSummary();
+}
+
+function initDiscountControls() {
+  if (!discountPercentInput || !discountValueInput) return;
+  discountPercentInput.addEventListener('input', () => handleDiscountInput('percent'));
+  discountValueInput.addEventListener('input', () => handleDiscountInput('value'));
 }
 
 function toggleDiscountFields() {
@@ -244,12 +336,18 @@ function limparCamposDesconto() {
   document.getElementById('desconto-percentual').value = '';
   document.getElementById('desconto-valor').value = '';
   document.getElementById('observacoes-tutor').value = '';
+  updateTotalsSummary();
+}
+
+function initFormControls() {
+  initPayerControls();
+  initDiscountControls();
 }
 
 if (document.readyState === 'loading') {
-  document.addEventListener('DOMContentLoaded', initPayerControls);
+  document.addEventListener('DOMContentLoaded', initFormControls);
 } else {
-  initPayerControls();
+  initFormControls();
 }
 
 async function adicionarItemOrcamento() {
