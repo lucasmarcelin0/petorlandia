@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from datetime import date, datetime
-from decimal import Decimal
+from decimal import Decimal, ROUND_HALF_UP
 from typing import Iterable, List, Optional, Sequence, Tuple
 
 from dateutil.relativedelta import relativedelta
@@ -18,12 +18,14 @@ from models import (
     BlocoOrcamento,
     ClassifiedTransaction,
     ClinicFinancialSnapshot,
+    ClinicTaxes,
     Clinica,
     Consulta,
     Orcamento,
     OrcamentoItem,
     Order,
     OrderItem,
+    PJPayment,
     Product,
     ServicoClinica,
     User,
@@ -43,6 +45,7 @@ VET_PAYMENT_MODEL_CANDIDATES = (
     "ClinicVeterinarianPayment",
     "VeterinarianPayment",
     "VetPayment",
+    "PJPayment",
 )
 VET_PAYMENT_DATE_FIELDS = ("data_pagamento", "paid_at", "data", "created_at")
 VET_PAYMENT_AMOUNT_FIELDS = ("valor", "amount", "valor_total")
@@ -62,6 +65,28 @@ EXPENSE_NAME_FIELDS = ("nome", "descricao", "description", "item_name")
 EXPENSE_KIND_FIELDS = ("tipo", "category", "natureza", "kind")
 EXPENSE_COGS_FLAGS = ("eh_custo", "is_cogs", "is_inventory", "is_resale")
 
+REVENUE_CATEGORIES = ("receita_servico", "receita_produto")
+PAYROLL_CATEGORIES = (
+    "folha_pagamento",
+    "pro_labore",
+    "pagamento_pj",
+    "remuneracao",
+    "salario",
+)
+DEFAULT_ISS_RATE = Decimal("0.05")
+VET_WITHHOLDING_RATE = Decimal("0.05")
+PJ_WITHHOLDING_THRESHOLD = Decimal("10000.00")
+CURRENCY_PLACES = Decimal("0.01")
+FACTOR_PLACES = Decimal("0.0001")
+SIMPLIES_ANEXO_III_BRACKETS = (
+    (Decimal("180000"), Decimal("0.06"), Decimal("0")),
+    (Decimal("360000"), Decimal("0.112"), Decimal("9360")),
+    (Decimal("720000"), Decimal("0.135"), Decimal("17640")),
+    (Decimal("1800000"), Decimal("0.16"), Decimal("35640")),
+    (Decimal("3600000"), Decimal("0.21"), Decimal("125640")),
+    (Decimal("4800000"), Decimal("0.33"), Decimal("648000")),
+)
+
 
 def _log(message: str, *args) -> None:
     if has_app_context():
@@ -78,6 +103,45 @@ def _ensure_decimal(value) -> Decimal:
     if isinstance(value, Decimal):
         return value
     return Decimal(str(value))
+
+
+def _quantize_currency(value: Decimal) -> Decimal:
+    return _ensure_decimal(value).quantize(CURRENCY_PLACES, rounding=ROUND_HALF_UP)
+
+
+def _quantize_factor(value: Decimal) -> Decimal:
+    return _ensure_decimal(value).quantize(FACTOR_PLACES, rounding=ROUND_HALF_UP)
+
+
+def _normalize_percentage(value) -> Decimal:
+    rate = _ensure_decimal(value if value is not None else DEFAULT_ISS_RATE)
+    if rate > 1:
+        rate = rate / Decimal("100")
+    return rate
+
+
+def _clinic_is_simples(clinic: Clinica) -> bool:
+    regime = getattr(clinic, 'regime_tributario', None)
+    if regime is None:
+        return True
+    text = str(regime).strip().lower()
+    return text in {'simples', 'simples_nacional', 'sn', 'anexo_iii', 'anexo_v'}
+
+
+def _determine_simples_bracket(revenue_12m: Decimal) -> int | None:
+    revenue = _ensure_decimal(revenue_12m)
+    for idx, (limit, _rate, _deduction) in enumerate(SIMPLIES_ANEXO_III_BRACKETS, start=1):
+        if revenue <= limit:
+            return idx
+    return len(SIMPLIES_ANEXO_III_BRACKETS) if revenue > ZERO else None
+
+
+def _effective_simples_rate(revenue_12m: Decimal, faixa: int | None) -> Decimal:
+    revenue = _ensure_decimal(revenue_12m)
+    if not faixa or faixa < 1 or faixa > len(SIMPLIES_ANEXO_III_BRACKETS) or revenue <= ZERO:
+        return ZERO
+    _, nominal_rate, deduction = SIMPLIES_ANEXO_III_BRACKETS[faixa - 1]
+    return ((revenue * nominal_rate) - deduction) / revenue
 
 
 def _normalize_month(target: Optional[date | datetime | str]) -> date:
@@ -100,6 +164,40 @@ def _month_range(month_start: date) -> tuple[datetime, datetime]:
     range_start = datetime.combine(month_start, datetime.min.time())
     range_end = datetime.combine(month_start + relativedelta(months=1), datetime.min.time())
     return range_start, range_end
+
+
+def _classified_sum_for_month(clinic_id: int, month_start: date, categories: Sequence[str]) -> Decimal:
+    if not categories:
+        return ZERO
+    total = (
+        db.session.query(func.coalesce(func.sum(ClassifiedTransaction.value), 0))
+        .filter(ClassifiedTransaction.clinic_id == clinic_id)
+        .filter(ClassifiedTransaction.month == month_start)
+        .filter(ClassifiedTransaction.category.in_(list(categories)))
+        .scalar()
+    )
+    return _ensure_decimal(total)
+
+
+def _classified_sum_for_range(
+    clinic_id: int,
+    month_start: date,
+    categories: Sequence[str],
+    months: int = 12,
+) -> Decimal:
+    if not categories or months <= 0:
+        return ZERO
+    window_start = month_start - relativedelta(months=months - 1)
+    window_end = month_start + relativedelta(months=1)
+    total = (
+        db.session.query(func.coalesce(func.sum(ClassifiedTransaction.value), 0))
+        .filter(ClassifiedTransaction.clinic_id == clinic_id)
+        .filter(ClassifiedTransaction.month >= window_start)
+        .filter(ClassifiedTransaction.month < window_end)
+        .filter(ClassifiedTransaction.category.in_(list(categories)))
+        .scalar()
+    )
+    return _ensure_decimal(total)
 
 
 def _service_revenue_total(clinic_id: int, start_dt: datetime, end_dt: datetime) -> Decimal:
@@ -560,6 +658,85 @@ def classify_transactions_for_month(
     return records
 
 
+def _calculate_pj_withholding(clinic: Clinica, month_start: date) -> Decimal:
+    if not clinic or not clinic.id:
+        return ZERO
+    month_end = month_start + relativedelta(months=1)
+    total = ZERO
+    municipal_requirement = bool(getattr(clinic, 'retencao_pj_obrigatoria', False))
+    payments = PJPayment.query.filter(PJPayment.clinic_id == clinic.id).all()
+    for payment in payments:
+        reference_date = payment.data_pagamento or payment.data_servico
+        if not reference_date or reference_date < month_start or reference_date >= month_end:
+            continue
+        value = _ensure_decimal(payment.valor)
+        if value <= ZERO:
+            continue
+        requires_retention = (
+            municipal_requirement
+            or getattr(payment, 'retencao_obrigatoria', False)
+            or value >= PJ_WITHHOLDING_THRESHOLD
+        )
+        if not requires_retention:
+            continue
+        total += value * VET_WITHHOLDING_RATE
+    return _quantize_currency(total)
+
+
+def calculate_clinic_taxes(
+    clinic_id: int,
+    month: Optional[date | datetime | str] = None,
+) -> ClinicTaxes:
+    month_start = _normalize_month(month)
+    clinic = Clinica.query.get(clinic_id)
+    if clinic is None:
+        raise ValueError(f"Clinic {clinic_id} not found")
+
+    service_revenue = _classified_sum_for_month(clinic_id, month_start, ("receita_servico",))
+    monthly_revenue = _classified_sum_for_month(clinic_id, month_start, REVENUE_CATEGORIES)
+    revenue_12m = _classified_sum_for_range(clinic_id, month_start, REVENUE_CATEGORIES)
+    payroll_12m = _classified_sum_for_range(clinic_id, month_start, PAYROLL_CATEGORIES)
+
+    iss_rate = _normalize_percentage(getattr(clinic, 'aliquota_iss', DEFAULT_ISS_RATE))
+    iss_total = _quantize_currency(service_revenue * iss_rate)
+
+    faixa_simples = _determine_simples_bracket(revenue_12m)
+    das_total = ZERO
+    if _clinic_is_simples(clinic) and faixa_simples:
+        aliquota_efetiva = _effective_simples_rate(revenue_12m, faixa_simples)
+        if aliquota_efetiva > ZERO and monthly_revenue > ZERO:
+            das_total = _quantize_currency(monthly_revenue * aliquota_efetiva)
+
+    retencoes_pj = _calculate_pj_withholding(clinic, month_start)
+    fator_r = ZERO
+    if revenue_12m > ZERO and payroll_12m > ZERO:
+        fator_r = _quantize_factor(payroll_12m / revenue_12m)
+
+    projecao_anual = _quantize_currency(monthly_revenue * Decimal(12)) if monthly_revenue > ZERO else ZERO
+
+    taxes = (
+        ClinicTaxes.query.filter_by(clinic_id=clinic_id, month=month_start).one_or_none()
+    )
+    if taxes is None:
+        taxes = ClinicTaxes(clinic_id=clinic_id, month=month_start)
+        db.session.add(taxes)
+
+    taxes.iss_total = iss_total
+    taxes.das_total = das_total
+    taxes.retencoes_pj = retencoes_pj
+    taxes.fator_r = fator_r
+    taxes.faixa_simples = faixa_simples
+    taxes.projecao_anual = projecao_anual
+    db.session.commit()
+
+    _log("[Tributário] ISS calculado: %s", _format_currency(iss_total))
+    _log("[Tributário] DAS (Simples) calculado: %s", _format_currency(das_total))
+    _log("[Tributário] Retenções sobre PJ: %s", _format_currency(retencoes_pj))
+    _log("[Tributário] Fator R: %.4f", float(fator_r))
+
+    return taxes
+
+
 def generate_financial_snapshot(clinic_id: int, month: Optional[date | datetime | str] = None) -> ClinicFinancialSnapshot:
     """Create or refresh the snapshot for ``clinic_id`` in the given ``month``."""
 
@@ -589,6 +766,7 @@ def generate_financial_snapshot(clinic_id: int, month: Optional[date | datetime 
     db.session.commit()
 
     classify_transactions_for_month(clinic_id, month_start)
+    calculate_clinic_taxes(clinic_id, month_start)
     _log(f"[Contabilidade] Snapshot gerado para Clínica {clinic_id} — Mês {month_start:%Y-%m}")
     return snapshot
 

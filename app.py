@@ -45,6 +45,7 @@ import unicodedata
 from sqlalchemy import func, or_, exists, and_, case, true, false, inspect, text
 from sqlalchemy.exc import ProgrammingError
 from sqlalchemy.orm import joinedload, selectinload, aliased
+from config_utils import normalize_database_uri
 
 # ----------------------------------------------------------------
 # 1)  Alias único para “models”
@@ -102,7 +103,6 @@ def date_now(format_string='%Y-%m-%d'):
     return datetime.now(BR_TZ).strftime(format_string)
 # já existe no topo, logo depois das extensões:
 from extensions import db, migrate, mail, login, session as session_ext, babel
-from config_utils import normalize_database_uri
 from flask_login import login_user, logout_user, current_user, login_required
 from flask_mail import Message as MailMessage      #  ←  adicione esta linha
 from werkzeug.utils import secure_filename
