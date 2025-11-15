@@ -78,6 +78,9 @@ app = Flask(
     instance_relative_config=True,
 )
 app.config.from_object("config.Config")
+app.config["SQLALCHEMY_DATABASE_URI"] = normalize_database_uri(
+    app.config.get("SQLALCHEMY_DATABASE_URI")
+)
 app.config.setdefault("FRONTEND_URL", "http://127.0.0.1:5000")
 app.config.update(SESSION_PERMANENT=True, SESSION_TYPE="filesystem")
 CORS(app, resources={r"/surpresa*": {"origins": "*"}, r"/socket.io/*": {"origins": "*"}})
@@ -99,6 +102,7 @@ def date_now(format_string='%Y-%m-%d'):
     return datetime.now(BR_TZ).strftime(format_string)
 # já existe no topo, logo depois das extensões:
 from extensions import db, migrate, mail, login, session as session_ext, babel
+from config_utils import normalize_database_uri
 from flask_login import login_user, logout_user, current_user, login_required
 from flask_mail import Message as MailMessage      #  ←  adicione esta linha
 from werkzeug.utils import secure_filename
