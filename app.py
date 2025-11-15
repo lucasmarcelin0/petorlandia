@@ -3470,6 +3470,8 @@ def contabilidade_pagamentos():
         'custo_pago': Decimal('0.00'),
     }
     plantonista_medicos: list[tuple[str, str]] = []
+    plantonista_calendar: list[dict] = []
+    plantonista_calendar_weeks: list[list[Optional[dict]]] = []
     plantonista_error: Optional[str] = None
 
     def _coerce_decimal(value):
@@ -3698,6 +3700,80 @@ def contabilidade_pagamentos():
                 unique_medicos[str(escala.medico_id)] = escala.medico_nome
         plantonista_medicos = sorted(unique_medicos.items(), key=lambda item: item[1].lower())
 
+        day_cursor = start_date
+        while day_cursor < end_date:
+            day_start_dt = datetime.combine(day_cursor, time.min)
+            day_end_dt = datetime.combine(day_cursor + timedelta(days=1), time.min)
+
+            day_escalas = [
+                escala
+                for escala in plantonista_escalas
+                if escala.inicio < day_end_dt and escala.fim > day_start_dt
+            ]
+
+            status_counts: dict[str, int] = defaultdict(int)
+            horas_previstas = Decimal('0.00')
+            valor_previsto_total = Decimal('0.00')
+            medicos = set()
+            atrasos = 0
+
+            for escala in day_escalas:
+                status = (escala.status or 'agendado').strip().lower()
+                status_counts[status] += 1
+                horas_previstas += escala.horas_previstas or Decimal('0.00')
+                valor_previsto_total += escala.valor_previsto or Decimal('0.00')
+                if escala.medico_nome:
+                    medicos.add(escala.medico_nome)
+                if getattr(escala, 'atrasado', False):
+                    atrasos += 1
+
+            total_escalas = len(day_escalas)
+            badge_label = 'Livre'
+            badge_class = 'badge bg-light text-muted'
+            if total_escalas:
+                if atrasos:
+                    badge_label = 'Pendência'
+                    badge_class = 'badge bg-warning text-dark'
+                elif status_counts.get('realizado'):
+                    badge_label = 'Concluído'
+                    badge_class = 'badge bg-success'
+                elif status_counts.get('confirmado'):
+                    badge_label = 'Confirmado'
+                    badge_class = 'badge bg-primary'
+                else:
+                    badge_label = 'Agendado'
+                    badge_class = 'badge bg-info text-dark'
+
+            plantonista_calendar.append(
+                {
+                    'date': day_cursor,
+                    'total_escalas': total_escalas,
+                    'status_counts': dict(status_counts),
+                    'horas': horas_previstas,
+                    'valor_previsto': valor_previsto_total,
+                    'badge_label': badge_label,
+                    'badge_class': badge_class,
+                    'atrasos': atrasos,
+                    'medicos': sorted(medicos),
+                }
+            )
+
+            day_cursor += timedelta(days=1)
+
+        current_week: list[Optional[dict]] = []
+        for day_info in plantonista_calendar:
+            if not current_week and day_info['date'].weekday() != 0:
+                current_week.extend([None] * day_info['date'].weekday())
+            current_week.append(day_info)
+            if len(current_week) == 7:
+                plantonista_calendar_weeks.append(current_week)
+                current_week = []
+
+        if current_week:
+            while len(current_week) < 7:
+                current_week.append(None)
+            plantonista_calendar_weeks.append(current_week)
+
     total_pago = sum((payment.valor or Decimal('0.00')) for payment in payments if payment.status == 'pago')
     total_pendente = sum((payment.valor or Decimal('0.00')) for payment in payments if payment.status == 'pendente')
 
@@ -3721,6 +3797,8 @@ def contabilidade_pagamentos():
         plantonista_escalas=plantonista_escalas,
         plantonista_totals=plantonista_totals,
         plantonista_medicos=plantonista_medicos,
+        plantonista_calendar=plantonista_calendar,
+        plantonista_calendar_weeks=plantonista_calendar_weeks,
         plantonista_status_labels=dict(PLANTONISTA_ESCALA_STATUS_CHOICES),
         plantonista_status_styles=PLANTONISTA_STATUS_STYLES,
         plantonista_error=plantonista_error,
@@ -4129,7 +4207,14 @@ def contabilidade_plantonistas_novo():
     if request.method == 'GET':
         form.clinic_id.data = default_clinic_id
         form.status.data = 'agendado'
-        form.data_inicio.data = date.today()
+        default_day = date.today()
+        requested_day = request.args.get('dia')
+        if requested_day:
+            try:
+                default_day = date.fromisoformat(requested_day)
+            except ValueError:
+                pass
+        form.data_inicio.data = default_day
 
     if form.validate_on_submit():
         clinic_id = form.clinic_id.data
