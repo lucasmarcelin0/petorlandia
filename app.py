@@ -9680,8 +9680,6 @@ def novo_animal():
 
 
 
-
-
 @app.route('/animal/<int:animal_id>/marcar_falecido', methods=['POST'])
 @login_required
 def marcar_como_falecido(animal_id):
