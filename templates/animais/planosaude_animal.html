@@ -12,23 +12,107 @@
         </div>
     {% endif %}
 
+    {% if onboarding %}
+        <div class="alert alert-info shadow-sm rounded-4">
+            <div class="d-flex justify-content-between flex-wrap">
+                <div>
+                    <strong>Documentação enviada em {{ onboarding.created_at.strftime('%d/%m/%Y %H:%M') }}</strong><br>
+                    Status: {{ onboarding.status|capitalize }}
+                    {% if onboarding.contract_reference %}<br>Contrato: {{ onboarding.contract_reference }}{% endif %}
+                </div>
+                {% if onboarding.guardian_document %}
+                <div class="text-muted small">
+                    Documento do tutor: {{ onboarding.guardian_document }}
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    {% endif %}
+
     {% if subscription %}
-        <div class="alert alert-success">Plano atual: {{ subscription.plan.name }} – ativo</div>
+        <div class="alert alert-success shadow-sm rounded-4">
+            Plano atual: <strong>{{ subscription.plan.name }}</strong> – ativo desde {{ subscription.start_date.strftime('%d/%m/%Y') if subscription.start_date else 'N/D' }}
+        </div>
     {% endif %}
 
     <div class="card shadow-sm rounded-4 mb-5">
         <div class="card-body">
-            <form method="post" action="{{ url_for('contratar_plano', animal_id=animal.id) }}">
+            <form method="post" action="{{ url_for('contratar_plano', animal_id=animal.id) }}" class="row g-3">
                 {{ form.hidden_tag() }}
-                <div class="mb-3">
-                    {{ form.plan_id.label(class="form-label") }}
+                <div class="col-md-6">
+                    {{ form.plan_id.label(class="form-label fw-semibold") }}
                     {{ form.plan_id(class="form-select", id="plan_id") }}
                 </div>
-                <div id="plan-info" class="border rounded p-3 bg-light mb-3"></div>
-                {{ form.submit(class="btn btn-success rounded-pill") }}
+                <div class="col-md-6">
+                    {{ form.tutor_document.label(class="form-label fw-semibold") }}
+                    {{ form.tutor_document(class="form-control") }}
+                </div>
+                <div class="col-md-6">
+                    {{ form.animal_document.label(class="form-label fw-semibold") }}
+                    {{ form.animal_document(class="form-control") }}
+                </div>
+                <div class="col-md-6">
+                    {{ form.contract_reference.label(class="form-label fw-semibold") }}
+                    {{ form.contract_reference(class="form-control") }}
+                </div>
+                <div class="col-md-6">
+                    {{ form.document_links.label(class="form-label fw-semibold") }}
+                    {{ form.document_links(class="form-control", rows=2, placeholder="Cole URLs ou referências exigidas pela seguradora") }}
+                </div>
+                <div class="col-md-6">
+                    {{ form.extra_notes.label(class="form-label fw-semibold") }}
+                    {{ form.extra_notes(class="form-control", rows=2, placeholder="Observações adicionais") }}
+                </div>
+                <div class="col-12">
+                    <div class="form-check">
+                        {{ form.consent(class="form-check-input", id="consent-checkbox") }}
+                        <label class="form-check-label" for="consent-checkbox">
+                            Li o contrato e autorizo o compartilhamento dos documentos com a seguradora.
+                        </label>
+                    </div>
+                </div>
+                <div class="col-12">
+                    <div id="plan-info" class="border rounded p-3 bg-light mb-3 small"></div>
+                    <div id="plan-coverage" class="border rounded p-3 bg-white mb-3"></div>
+                </div>
+                <div class="col-12 text-end">
+                    {{ form.submit(class="btn btn-success rounded-pill px-4") }}
+                </div>
             </form>
         </div>
     </div>
+
+    {% if subscription and subscription.plan.coverages %}
+    <div class="card shadow-sm rounded-4 mb-5">
+        <div class="card-body">
+            <h5 class="fw-semibold">Coberturas do plano ativo</h5>
+            <div class="table-responsive">
+                <table class="table table-sm align-middle">
+                    <thead>
+                        <tr>
+                            <th>Procedimento</th>
+                            <th>Código</th>
+                            <th>Limite</th>
+                            <th>Carência</th>
+                            <th>Franquia</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for coverage in subscription.plan.coverages %}
+                        <tr>
+                            <td>{{ coverage.name }}</td>
+                            <td>{{ coverage.procedure_code }}</td>
+                            <td>{{ 'R$ %.2f'|format(coverage.monetary_limit or 0) if coverage.monetary_limit else 'Sem limite' }}</td>
+                            <td>{{ coverage.waiting_period_days or 0 }} dias</td>
+                            <td>{{ 'R$ %.2f'|format(coverage.deductible_amount or 0) }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    {% endif %}
 
     <div class="text-center">
         <a href="{{ url_for('appointments', animal_id=animal.id) }}" class="btn btn-outline-primary rounded-pill">🩺 Agendar Consulta</a>
@@ -37,16 +121,34 @@
 
 <script>
   const plans = {{ plans | tojson }};
+  function formatCoverageRows(coverages) {
+    if (!coverages || !coverages.length) {
+      return '<p class="text-muted mb-0">Plano sem coberturas cadastradas.</p>';
+    }
+    let rows = coverages.map(c => `
+      <tr>
+        <td>${c.name}</td>
+        <td>${c.code || '-'}</td>
+        <td>${c.limit ? 'R$ ' + c.limit.toFixed(2) : 'Sem limite'}</td>
+        <td>${c.waiting || 0} dias</td>
+        <td>${c.deductible ? 'R$ ' + c.deductible.toFixed(2) : 'R$ 0,00'}</td>
+      </tr>
+    `).join('');
+    return `<div class="table-responsive"><table class="table table-sm mb-0"><thead><tr><th>Procedimento</th><th>Código</th><th>Limite</th><th>Carência</th><th>Franquia</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+  }
   function updatePlanInfo() {
     const select = document.getElementById('plan_id');
     const infoDiv = document.getElementById('plan-info');
+    const coverageDiv = document.getElementById('plan-coverage');
     const plan = plans.find(p => p.id == select.value);
     if (plan) {
-      infoDiv.innerHTML = `<h5 class="fw-semibold">${plan.name}</h5>` +
+      infoDiv.innerHTML = `<h5 class="fw-semibold mb-1">${plan.name}</h5>` +
                           `<p class="mb-1">${plan.description || ''}</p>` +
                           `<p class="fw-bold">R$ ${plan.price.toFixed(2)}</p>`;
+      coverageDiv.innerHTML = formatCoverageRows(plan.coverages);
     } else {
       infoDiv.innerHTML = '';
+      coverageDiv.innerHTML = '';
     }
   }
   document.addEventListener('DOMContentLoaded', () => {
