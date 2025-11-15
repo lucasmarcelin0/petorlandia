@@ -57,13 +57,43 @@
           <option value="age_asc" {% if current_sort == 'age_asc' %}selected{% endif %}>Idade (menor)</option>
         </select>
       </div>
+      <div class="col-12">
+        <div class="d-flex flex-wrap gap-3 align-items-center">
+          <span class="form-label small text-muted mb-0">Mostrar</span>
+          <div class="d-flex flex-wrap gap-3" data-status-filter-group>
+            <label class="form-check form-switch d-inline-flex align-items-center gap-2 mb-0">
+              <input class="form-check-input" type="checkbox" role="switch" data-status-filter value="shared" checked>
+              <span class="form-check-label">Compartilhados</span>
+            </label>
+            <label class="form-check form-switch d-inline-flex align-items-center gap-2 mb-0">
+              <input class="form-check-input" type="checkbox" role="switch" data-status-filter value="internal" checked>
+              <span class="form-check-label">Internos</span>
+            </label>
+            <label class="form-check form-switch d-inline-flex align-items-center gap-2 mb-0">
+              <input class="form-check-input" type="checkbox" role="switch" data-status-filter value="professional" checked>
+              <span class="form-check-label">Profissionais</span>
+            </label>
+          </div>
+        </div>
+      </div>
     </div>
     <div id="tutor-cards" class="row g-3 flex-grow-1">
       {% if tutores_adicionados %}
         {% for tutor in tutores_adicionados %}
         {% set shared_access = shared_access_map.get(tutor.id) %}
-        {% set tutor_status = 'shared' if shared_access else ('professional' if tutor.worker|lower == 'veterinario' else 'internal') %}
-        <div class="col-md-6 d-flex" data-name="{{ tutor.name|lower }}" data-date="{{ tutor.created_at.isoformat() if tutor.created_at else '' }}" data-cpf="{{ tutor.cpf or '' }}" data-phone="{{ tutor.phone or '' }}" {% if tutor.date_of_birth %}data-dob="{{ tutor.date_of_birth.isoformat() }}"{% endif %}>
+        {% set is_professional = tutor.worker|lower == 'veterinario' %}
+        {% set tutor_status = 'shared' if shared_access else ('professional' if is_professional else 'internal') %}
+        {% set status_tokens = 'shared' if shared_access else 'internal' %}
+        {% if is_professional %}
+          {% set status_tokens = status_tokens + ' professional' %}
+        {% endif %}
+        <div class="col-md-6 d-flex"
+             data-name="{{ tutor.name|lower }}"
+             data-date="{{ tutor.created_at.isoformat() if tutor.created_at else '' }}"
+             data-cpf="{{ tutor.cpf or '' }}"
+             data-phone="{{ tutor.phone or '' }}"
+             {% if tutor.date_of_birth %}data-dob="{{ tutor.date_of_birth.isoformat() }}"{% endif %}
+             data-status="{{ status_tokens }}">
           <div class="card shadow-sm rounded-4 h-100 flex-fill position-relative overflow-hidden profile-card profile-card--{{ tutor_status }}">
             {% if tutor.worker|lower == 'veterinario' %}
             <span class="badge bg-success position-absolute top-0 end-0 m-2">Veterinário</span>
