@@ -25,6 +25,14 @@
             {% endfor %}
           </select>
         </div>
+        <div class="col-md-2">
+          <label class="form-label" for="orcamento-sort">Ordenar por</label>
+          <select id="orcamento-sort" class="form-select" name="orcamento_sort">
+            <option value="updated_desc" {% if orcamento_filters.sort == 'updated_desc' %}selected{% endif %}>Mais recentes</option>
+            <option value="value_desc" {% if orcamento_filters.sort == 'value_desc' %}selected{% endif %}>Maior valor</option>
+            <option value="value_asc" {% if orcamento_filters.sort == 'value_asc' %}selected{% endif %}>Menor valor</option>
+          </select>
+        </div>
         {% if start %}
         <input type="hidden" name="start" value="{{ start }}">
         {% endif %}
@@ -43,6 +51,7 @@
             <tr>
               <th>Descrição</th>
               <th>Tutor / Paciente</th>
+              <th class="text-end">Valor</th>
               <th class="text-center">Status</th>
               <th class="text-center">Atualizado</th>
               <th class="text-center">Envios</th>
@@ -67,6 +76,14 @@
                   <small class="text-muted">{{ tutor.name }}</small>
                 {% else %}
                   <span class="text-muted">—</span>
+                {% endif %}
+              </td>
+              <td class="text-end">
+                {% set totals = o.display_totals %}
+                <div class="fw-semibold">{{ totals.gross_formatted }}</div>
+                {% if totals.has_discount %}
+                <div class="text-muted small">Coberturas/Descontos: - {{ totals.plan_formatted }}</div>
+                <div class="fw-semibold text-success">Total líquido: {{ totals.net_formatted }}</div>
                 {% endif %}
               </td>
               <td class="text-center">
@@ -115,11 +132,30 @@
             </tr>
             {% else %}
             <tr>
-              <td colspan="6" class="text-center text-muted">Nenhum orçamento encontrado com os filtros atuais.</td>
+              <td colspan="7" class="text-center text-muted">Nenhum orçamento encontrado com os filtros atuais.</td>
             </tr>
             {% endfor %}
           </tbody>
         </table>
+      </div>
+
+      <div class="border rounded bg-light p-3 mt-3">
+        <div class="d-flex flex-column flex-md-row justify-content-between gap-2">
+          <div>
+            <div class="text-muted small">Somatório bruto</div>
+            <div class="fw-semibold">{{ orcamento_summary.gross_formatted }}</div>
+          </div>
+          {% if orcamento_summary.has_discount %}
+          <div>
+            <div class="text-muted small">Coberturas/Descontos</div>
+            <div class="fw-semibold text-danger">- {{ orcamento_summary.discount_formatted }}</div>
+          </div>
+          {% endif %}
+          <div>
+            <div class="text-muted small">Total líquido filtrado</div>
+            <div class="fw-semibold text-success">{{ orcamento_summary.net_formatted }}</div>
+          </div>
+        </div>
       </div>
 
       {% if orcamentos_pagination.pages > 1 %}
@@ -127,12 +163,12 @@
         <ul class="pagination pagination-sm mb-0">
           {% set prev_page = orcamentos_pagination.prev_num if orcamentos_pagination.has_prev else orcamentos_pagination.page %}
           <li class="page-item {% if not orcamentos_pagination.has_prev %}disabled{% endif %}">
-            <a class="page-link" href="{{ url_for('clinic_detail', clinica_id=clinica.id, orcamento_page=prev_page, orcamento_status=orcamento_filters.status, orcamento_search=orcamento_filters.search, orcamento_from=orcamento_filters.from, orcamento_to=orcamento_filters.to) }}#orcamento">Anterior</a>
+            <a class="page-link" href="{{ url_for('clinic_detail', clinica_id=clinica.id, orcamento_page=prev_page, orcamento_status=orcamento_filters.status, orcamento_search=orcamento_filters.search, orcamento_from=orcamento_filters.from, orcamento_to=orcamento_filters.to, orcamento_sort=orcamento_filters.sort) }}#orcamento">Anterior</a>
           </li>
           {% for page in orcamentos_pagination.iter_pages(left_edge=1, right_edge=1, left_current=2, right_current=2) %}
             {% if page %}
               <li class="page-item {% if page == orcamentos_pagination.page %}active{% endif %}">
-                <a class="page-link" href="{{ url_for('clinic_detail', clinica_id=clinica.id, orcamento_page=page, orcamento_status=orcamento_filters.status, orcamento_search=orcamento_filters.search, orcamento_from=orcamento_filters.from, orcamento_to=orcamento_filters.to) }}#orcamento">{{ page }}</a>
+                <a class="page-link" href="{{ url_for('clinic_detail', clinica_id=clinica.id, orcamento_page=page, orcamento_status=orcamento_filters.status, orcamento_search=orcamento_filters.search, orcamento_from=orcamento_filters.from, orcamento_to=orcamento_filters.to, orcamento_sort=orcamento_filters.sort) }}#orcamento">{{ page }}</a>
               </li>
             {% else %}
               <li class="page-item disabled"><span class="page-link">…</span></li>
@@ -140,7 +176,7 @@
           {% endfor %}
           {% set next_page = orcamentos_pagination.next_num if orcamentos_pagination.has_next else orcamentos_pagination.page %}
           <li class="page-item {% if not orcamentos_pagination.has_next %}disabled{% endif %}">
-            <a class="page-link" href="{{ url_for('clinic_detail', clinica_id=clinica.id, orcamento_page=next_page, orcamento_status=orcamento_filters.status, orcamento_search=orcamento_filters.search, orcamento_from=orcamento_filters.from, orcamento_to=orcamento_filters.to) }}#orcamento">Próxima</a>
+            <a class="page-link" href="{{ url_for('clinic_detail', clinica_id=clinica.id, orcamento_page=next_page, orcamento_status=orcamento_filters.status, orcamento_search=orcamento_filters.search, orcamento_from=orcamento_filters.from, orcamento_to=orcamento_filters.to, orcamento_sort=orcamento_filters.sort) }}#orcamento">Próxima</a>
           </li>
         </ul>
       </nav>
