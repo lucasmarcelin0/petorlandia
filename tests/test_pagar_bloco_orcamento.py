@@ -13,6 +13,7 @@ from models import (
     BlocoOrcamento,
     Clinica,
     Veterinario,
+    Orcamento,
 )
 
 
@@ -41,8 +42,15 @@ def _bootstrap_consulta(app):
             status='in_progress',
             clinica_id=clinica.id,
         )
-        item = OrcamentoItem(consulta=consulta, descricao='Consulta', valor=50, clinica=clinica)
-        db.session.add_all([consulta, item])
+        orcamento = Orcamento(clinica=clinica, consulta=consulta, descricao='Orçamento teste')
+        item = OrcamentoItem(
+            consulta=consulta,
+            orcamento=orcamento,
+            descricao='Consulta',
+            valor=50,
+            clinica=clinica,
+        )
+        db.session.add_all([consulta, orcamento, item])
         db.session.commit()
         return consulta.id
 
@@ -81,5 +89,43 @@ def test_pagar_bloco_orcamento(app, monkeypatch):
         assert payload['success']
         assert payload['redirect_url'] == 'http://mp'
         assert 'auto_return' not in captured['preference']
+
+    _teardown_db(app)
+
+
+def test_gerar_pagamento_orcamento(app, monkeypatch):
+    _bootstrap_consulta(app)
+    client = app.test_client()
+    captured = {}
+
+    with client:
+        client.post('/login', data={'email': 'vet@example.com', 'password': 'x'}, follow_redirects=True)
+        with app.app_context():
+            orcamento = Orcamento.query.first()
+            orcamento_id = orcamento.id
+
+        class FakePrefService:
+            def create(self, data):
+                captured['preference'] = data
+                return {'status': 201, 'response': {'init_point': 'http://mp', 'id': 'pref-1'}}
+
+        class FakeSDK:
+            def preference(self):
+                return FakePrefService()
+
+        monkeypatch.setattr(app_module, 'mp_sdk', lambda: FakeSDK())
+        resp = client.post(f'/orcamento/{orcamento_id}/pagar', headers={'Accept': 'application/json'})
+        assert resp.status_code == 200
+        payload = resp.get_json()
+        assert payload['success']
+        assert payload['payment_link'] == 'http://mp'
+        assert payload['payment_status'] == 'pending'
+        assert payload['status'] == 'sent'
+        assert captured['preference']['external_reference'] == f'orcamento-{orcamento_id}'
+
+        with app.app_context():
+            orc = Orcamento.query.get(orcamento_id)
+            assert orc.payment_link == 'http://mp'
+            assert orc.status == 'sent'
 
     _teardown_db(app)
