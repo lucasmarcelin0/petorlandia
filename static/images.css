@@ -227,6 +227,10 @@
     flex-wrap: nowrap;
 }
 
+.contact-item--actions-only {
+    justify-content: center;
+}
+
 .contact-icon {
     background: linear-gradient(135deg, rgba(78, 115, 223, 0.15), rgba(78, 115, 223, 0.35));
     color: #4e73df;
@@ -264,6 +268,12 @@
     flex-shrink: 0;
 }
 
+.contact-actions--standalone {
+    width: 100%;
+    justify-content: center;
+    gap: 0.75rem;
+}
+
 .contact-action-btn {
     width: 40px;
     height: 40px;
@@ -275,6 +285,12 @@
     border: none;
     box-shadow: 0 12px 25px -10px rgba(78, 115, 223, 0.45);
     transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.contact-action-btn--xl {
+    width: 52px;
+    height: 52px;
+    font-size: 1.15rem;
 }
 
 .contact-action-btn--email {
@@ -308,6 +324,16 @@
         align-items: stretch;
         text-align: left;
         gap: 0.65rem;
+    }
+
+    .contact-item--actions-only {
+        flex-direction: row;
+        align-items: center;
+        text-align: center;
+    }
+
+    .contact-item--actions-only .contact-actions--standalone {
+        justify-content: center;
     }
 
     .contact-icon {

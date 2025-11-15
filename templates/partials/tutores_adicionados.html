@@ -146,36 +146,22 @@
               </div>
 
               <div class="profile-card-contact-grid">
-                {% if tutor.email %}
-                <div class="contact-item u-pill u-pill--subtle u-hover-lift" data-bs-toggle="tooltip" data-bs-placement="top" data-bs-title="E-mail principal do tutor">
-                  <div class="contact-icon u-icon-circle">
-                    <i class="fa-solid fa-envelope"></i>
-                  </div>
-                  <div class="contact-content u-stack-sm">
-                    <span class="contact-label u-text-subtle">E-mail</span>
-                    <span class="contact-value u-text-strong" title="{{ tutor.email }}">{{ tutor.email }}</span>
-                  </div>
-                  <div class="contact-actions">
-                    <a href="mailto:{{ tutor.email }}" class="contact-action-btn contact-action-btn--email" title="Enviar e-mail" data-bs-toggle="tooltip" data-bs-placement="top" data-bs-title="Enviar e-mail">
-                      <i class="fa-solid fa-paper-plane"></i>
+                {% if tutor.email or tutor.phone %}
+                <div class="contact-item contact-item--actions-only u-pill u-pill--subtle u-hover-lift" data-bs-toggle="tooltip" data-bs-placement="top" data-bs-title="Ações de contato do tutor">
+                  <div class="contact-actions contact-actions--standalone">
+                    {% if tutor.email %}
+                    <a href="mailto:{{ tutor.email }}" class="contact-action-btn contact-action-btn--email contact-action-btn--xl" title="Enviar e-mail" data-bs-toggle="tooltip" data-bs-placement="top" data-bs-title="Enviar e-mail">
+                      <i class="fa-solid fa-envelope"></i>
+                      <span class="visually-hidden">Enviar e-mail para {{ tutor.name }}</span>
                     </a>
-                  </div>
-                </div>
-                {% endif %}
-                {% if tutor.phone %}
-                {% set phone_digits = tutor.phone|replace(' ', '')|replace('(', '')|replace(')', '')|replace('-', '')|replace('.', '')|replace('+', '') %}
-                <div class="contact-item u-pill u-pill--subtle u-hover-lift" data-bs-toggle="tooltip" data-bs-placement="top" data-bs-title="Telefone principal do tutor">
-                  <div class="contact-icon u-icon-circle">
-                    <i class="fa-solid fa-phone"></i>
-                  </div>
-                  <div class="contact-content u-stack-sm">
-                    <span class="contact-label u-text-subtle">Telefone</span>
-                    <span class="contact-value u-text-strong" title="{{ tutor.phone }}">{{ tutor.phone }}</span>
-                  </div>
-                  <div class="contact-actions">
-                    <a href="https://wa.me/{{ phone_digits }}" target="_blank" rel="noopener" class="contact-action-btn contact-action-btn--whatsapp" title="Conversar no WhatsApp" data-bs-toggle="tooltip" data-bs-placement="top" data-bs-title="Conversar no WhatsApp">
+                    {% endif %}
+                    {% if tutor.phone %}
+                    {% set phone_digits = tutor.phone|replace(' ', '')|replace('(', '')|replace(')', '')|replace('-', '')|replace('.', '')|replace('+', '') %}
+                    <a href="https://wa.me/{{ phone_digits }}" target="_blank" rel="noopener" class="contact-action-btn contact-action-btn--whatsapp contact-action-btn--xl" title="Conversar no WhatsApp" data-bs-toggle="tooltip" data-bs-placement="top" data-bs-title="Conversar no WhatsApp">
                       <i class="fa-brands fa-whatsapp"></i>
+                      <span class="visually-hidden">Conversar no WhatsApp com {{ tutor.name }}</span>
                     </a>
+                    {% endif %}
                   </div>
                 </div>
                 {% endif %}
