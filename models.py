@@ -586,7 +586,16 @@ class Orcamento(db.Model):
     clinica_id = db.Column(db.Integer, db.ForeignKey('clinica.id'), nullable=False)
     consulta_id = db.Column(db.Integer, db.ForeignKey('consulta.id'), nullable=True)
     descricao = db.Column(db.String(200), nullable=False)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = db.Column(
+        db.DateTime,
+        default=datetime.utcnow,
+        onupdate=datetime.utcnow,
+        nullable=False,
+    )
+    status = db.Column(db.String(20), nullable=False, default='draft')
+    email_sent_count = db.Column(db.Integer, nullable=False, default=0)
+    whatsapp_sent_count = db.Column(db.Integer, nullable=False, default=0)
 
     clinica = db.relationship('Clinica', backref=db.backref('orcamentos', cascade='all, delete-orphan'))
     consulta = db.relationship('Consulta', backref=db.backref('orcamento', uselist=False))

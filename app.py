@@ -3522,6 +3522,23 @@ def formatar_telefone(telefone: str) -> str:
         return f"+55{telefone}"
 
 
+ORCAMENTO_STATUS_LABELS = {
+    'draft': 'Rascunho',
+    'sent': 'Enviado',
+    'approved': 'Aprovado',
+    'rejected': 'Rejeitado',
+    'canceled': 'Cancelado',
+}
+
+ORCAMENTO_STATUS_STYLES = {
+    'draft': 'secondary',
+    'sent': 'info',
+    'approved': 'success',
+    'rejected': 'danger',
+    'canceled': 'dark',
+}
+
+
 def enviar_mensagem_whatsapp(texto: str, numero: str) -> None:
     """Envia uma mensagem de WhatsApp usando a API do Twilio."""
 
@@ -5400,7 +5417,68 @@ def clinic_detail(clinica_id):
         for v in vets_for_forms
     }
 
-    orcamentos = Orcamento.query.filter_by(clinica_id=clinica_id).all()
+    orcamento_search = (request.args.get('orcamento_search') or '').strip()
+    orcamento_status_filter = request.args.get('orcamento_status') or 'all'
+    orcamento_from_str = request.args.get('orcamento_from') or ''
+    orcamento_to_str = request.args.get('orcamento_to') or ''
+    orcamento_page = request.args.get('orcamento_page', type=int) or 1
+    orcamento_page = max(1, orcamento_page)
+
+    orcamentos_query = (
+        Orcamento.query.options(
+            joinedload(Orcamento.consulta)
+            .joinedload(Consulta.animal)
+            .joinedload(Animal.owner)
+        )
+        .filter(Orcamento.clinica_id == clinica_id)
+    )
+
+    if orcamento_status_filter and orcamento_status_filter != 'all':
+        orcamentos_query = orcamentos_query.filter(Orcamento.status == orcamento_status_filter)
+
+    if orcamento_search:
+        like_term = f"%{orcamento_search}%"
+        orcamentos_query = (
+            orcamentos_query.outerjoin(Consulta, Orcamento.consulta)
+            .outerjoin(Animal, Consulta.animal)
+            .outerjoin(User, Animal.owner)
+            .filter(
+                or_(
+                    Orcamento.descricao.ilike(like_term),
+                    Animal.name.ilike(like_term),
+                    User.name.ilike(like_term),
+                )
+            )
+        )
+
+    def _parse_date(date_str):
+        if not date_str:
+            return None
+        try:
+            return datetime.strptime(date_str, '%Y-%m-%d')
+        except ValueError:
+            return None
+
+    date_from = _parse_date(orcamento_from_str)
+    date_to = _parse_date(orcamento_to_str)
+    if date_to:
+        date_to = date_to + timedelta(days=1)
+
+    if date_from:
+        orcamentos_query = orcamentos_query.filter(Orcamento.updated_at >= date_from)
+    if date_to:
+        orcamentos_query = orcamentos_query.filter(Orcamento.updated_at < date_to)
+
+    if orcamento_search:
+        orcamentos_query = orcamentos_query.distinct()
+
+    per_page = current_app.config.get('ORCAMENTOS_PER_PAGE', 10)
+    orcamentos_pagination = (
+        orcamentos_query
+        .order_by(Orcamento.updated_at.desc())
+        .paginate(page=orcamento_page, per_page=per_page, error_out=False)
+    )
+
     today = date.today()
     today_str = today.strftime('%Y-%m-%d')
     next7_str = (today + timedelta(days=7)).strftime('%Y-%m-%d')
@@ -5432,7 +5510,16 @@ def clinic_detail(clinica_id):
         appointments=appointments,
         appointments_grouped=appointments_grouped,
         grouped_vet_schedules=grouped_vet_schedules,
-        orcamentos=orcamentos,
+        orcamentos=orcamentos_pagination.items,
+        orcamentos_pagination=orcamentos_pagination,
+        orcamento_filters={
+            'search': orcamento_search,
+            'status': orcamento_status_filter,
+            'from': orcamento_from_str,
+            'to': orcamento_to_str,
+        },
+        orcamento_status_labels=ORCAMENTO_STATUS_LABELS,
+        orcamento_status_styles=ORCAMENTO_STATUS_STYLES,
         pode_editar=pode_editar,
         animais_adicionados=animais_adicionados,
         tutores_adicionados=tutores_adicionados,
@@ -5791,6 +5878,67 @@ def editar_orcamento(orcamento_id):
         flash('Orçamento atualizado com sucesso.', 'success')
         return redirect(url_for('clinic_detail', clinica_id=orcamento.clinica_id) + '#orcamento')
     return render_template('orcamentos/orcamento_form.html', form=form, clinica=orcamento.clinica)
+
+
+@app.route('/orcamento/<int:orcamento_id>/enviar', methods=['POST'])
+@login_required
+def enviar_orcamento(orcamento_id):
+    orcamento = Orcamento.query.get_or_404(orcamento_id)
+    ensure_clinic_access(orcamento.clinica_id)
+
+    channel = (request.form.get('channel') or '').lower()
+    if channel not in {'email', 'whatsapp'}:
+        abort(400)
+
+    redirect_url = request.referrer or url_for('clinic_detail', clinica_id=orcamento.clinica_id) + '#orcamento'
+    consulta = orcamento.consulta
+    tutor = consulta.animal.owner if consulta else None
+    if not tutor:
+        flash('O orçamento precisa estar vinculado a uma consulta para envio automático.', 'warning')
+        return redirect(redirect_url)
+
+    link = url_for('imprimir_orcamento', consulta_id=consulta.id, _external=True)
+    animal = consulta.animal
+    tutor_nome = getattr(tutor, 'name', 'tutor')
+    animal_nome = getattr(animal, 'name', 'pet')
+    mensagem = f"Olá {tutor_nome}! Segue o orçamento para {animal_nome}: {link}"
+
+    if channel == 'email':
+        if not tutor.email:
+            flash('O tutor não possui e-mail cadastrado.', 'warning')
+            return redirect(redirect_url)
+        msg = MailMessage(
+            subject=f'Orçamento para {animal_nome}',
+            sender=app.config['MAIL_DEFAULT_SENDER'],
+            recipients=[tutor.email],
+            body=mensagem,
+        )
+        try:
+            mail.send(msg)
+        except Exception as exc:  # noqa: BLE001
+            current_app.logger.exception('Falha ao enviar orçamento por e-mail: %s', exc)
+            flash('Não foi possível enviar o e-mail. Tente novamente.', 'danger')
+            return redirect(redirect_url)
+        orcamento.email_sent_count = (orcamento.email_sent_count or 0) + 1
+    else:
+        if not tutor.phone:
+            flash('O tutor não possui telefone cadastrado.', 'warning')
+            return redirect(redirect_url)
+        numero = f"whatsapp:{formatar_telefone(tutor.phone)}"
+        try:
+            enviar_mensagem_whatsapp(mensagem, numero)
+        except Exception as exc:  # noqa: BLE001
+            current_app.logger.exception('Falha ao enviar orçamento por WhatsApp: %s', exc)
+            flash('Não foi possível enviar via WhatsApp. Verifique as credenciais do Twilio.', 'danger')
+            return redirect(redirect_url)
+        orcamento.whatsapp_sent_count = (orcamento.whatsapp_sent_count or 0) + 1
+
+    if orcamento.status == 'draft':
+        orcamento.status = 'sent'
+    db.session.add(orcamento)
+    db.session.commit()
+    flash('Orçamento enviado com sucesso!', 'success')
+    return redirect(redirect_url)
 
 
 @app.route('/clinica/<int:clinica_id>/orcamentos')
