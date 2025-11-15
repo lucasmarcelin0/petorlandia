@@ -2968,7 +2968,74 @@ def contabilidade_pagamentos_marcar_pago(payment_id):
 @login_required
 def contabilidade_obrigacoes():
     _ensure_accounting_access()
-    return render_template('contabilidade/obrigacoes.html')
+    clinics, accessible_ids = _accounting_accessible_clinics()
+
+    selected_clinic = None
+    if clinics:
+        requested_clinic_id = request.args.get('clinica_id', type=int)
+        if requested_clinic_id and requested_clinic_id in accessible_ids:
+            selected_clinic = next(
+                (clinic for clinic in clinics if clinic.id == requested_clinic_id),
+                clinics[0],
+            )
+        else:
+            selected_clinic = clinics[0]
+
+    month_param = request.args.get('month') or request.args.get('mes')
+    if month_param:
+        normalized_month = month_param[:7]
+    else:
+        normalized_month = None
+    selected_month = _parse_month_parameter(normalized_month)
+
+    current_month = date.today().replace(day=1)
+    month_names_pt = [
+        'janeiro',
+        'fevereiro',
+        'março',
+        'abril',
+        'maio',
+        'junho',
+        'julho',
+        'agosto',
+        'setembro',
+        'outubro',
+        'novembro',
+        'dezembro',
+    ]
+    months_list = []
+    for idx in range(12):
+        month_date = current_month - relativedelta(months=idx)
+        months_list.append(
+            {
+                'value': month_date.strftime('%Y-%m-01'),
+                'label': f"{month_names_pt[month_date.month - 1].capitalize()} de {month_date.year}",
+            }
+        )
+
+    selected_month_value = selected_month.strftime('%Y-%m-01')
+    selected_month_label = next(
+        (option['label'] for option in months_list if option['value'] == selected_month_value),
+        f"{month_names_pt[selected_month.month - 1].capitalize()} de {selected_month.year}",
+    )
+
+    clinic_taxes = None
+    if selected_clinic:
+        clinic_taxes = ClinicTaxes.query.filter_by(
+            clinic_id=selected_clinic.id,
+            month=selected_month,
+        ).first()
+
+    return render_template(
+        'contabilidade/obrigacoes.html',
+        clinics=clinics,
+        selected_clinic=selected_clinic,
+        clinic_taxes=clinic_taxes,
+        months_list=months_list,
+        selected_month=selected_month,
+        selected_month_value=selected_month_value,
+        selected_month_label=selected_month_label,
+    )
 
 
 @app.route('/service-worker.js')

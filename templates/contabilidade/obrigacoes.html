@@ -1,24 +1,167 @@
 {% extends "layout.html" %}
-{% set titulo = "Obrigações" %}
-{% set subtitulo = "Obrigações fiscais e contábeis mensais" %}
+{% set titulo = "Obrigações Mensais" %}
+{% set subtitulo = "Resumo contábil da sua clínica" %}
+
+{% block head %}
+  {{ super() }}
+  <style>
+    .obligation-header h2 {
+      font-size: clamp(1.6rem, 2.5vw, 2rem);
+    }
+
+    .obligation-card {
+      border: none;
+      border-radius: 22px;
+      padding: 1.75rem;
+      box-shadow: 0 12px 25px rgba(15, 23, 42, 0.08);
+      color: #1b1f3b;
+    }
+
+    .obligation-card .obligation-icon {
+      width: 52px;
+      height: 52px;
+      border-radius: 16px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.25rem;
+      margin-bottom: 1rem;
+      background-color: rgba(255, 255, 255, 0.35);
+    }
+
+    .obligation-card h3 {
+      font-size: clamp(1.5rem, 3vw, 2rem);
+      margin-bottom: 0.5rem;
+      font-weight: 600;
+    }
+
+    .obligation-card p {
+      margin-bottom: 0.4rem;
+    }
+
+    .obligation-card.is-blue { background: linear-gradient(135deg, #e3f2fd, #bbdefb); color: #0d47a1; }
+    .obligation-card.is-green { background: linear-gradient(135deg, #e0f8f0, #b2f1dc); color: #0f5132; }
+    .obligation-card.is-purple { background: linear-gradient(135deg, #f3e8ff, #d8b4fe); color: #582a87; }
+    .obligation-card.is-yellow { background: linear-gradient(135deg, #fff7e0, #ffe08a); color: #795000; }
+    .obligation-card.is-gray { background: linear-gradient(135deg, #f5f5f5, #e0e0e0); color: #424242; }
+    .obligation-card.is-orange { background: linear-gradient(135deg, #ffe7d6, #ffc8a2); color: #8a3b12; }
+
+    .obligation-empty-card {
+      border-radius: 18px;
+      border: 1px dashed rgba(15, 23, 42, 0.15);
+    }
+  </style>
+{% endblock %}
 
 {% block main %}
-<div class="container mt-4">
-    
-    <h2 class="mb-3">{{ titulo }}</h2>
-
-    <nav aria-label="breadcrumb">
-      <ol class="breadcrumb">
-        <li class="breadcrumb-item"><a href="/">Início</a></li>
-        <li class="breadcrumb-item"><a href="/contabilidade">Contabilidade</a></li>
-        <li class="breadcrumb-item active" aria-current="page">{{ titulo }}</li>
-      </ol>
-    </nav>
-
-    <div class="card shadow-sm p-4 mt-3">
-        <h5>{{ subtitulo }}</h5>
-        <p class="text-muted mb-0">Nenhum dado disponível ainda.</p>
+<div class="container mt-4 contabilidade-obrigacoes">
+  <div class="obligation-header d-flex flex-column flex-md-row align-items-md-center justify-content-between mb-3">
+    <div>
+      <h2 class="mb-1">{{ titulo }}</h2>
+      <p class="text-muted mb-0">{{ subtitulo }}</p>
     </div>
+  </div>
 
-    </div>
+  <nav aria-label="breadcrumb">
+    <ol class="breadcrumb">
+      <li class="breadcrumb-item"><a href="/">Início</a></li>
+      <li class="breadcrumb-item"><a href="/contabilidade">Contabilidade</a></li>
+      <li class="breadcrumb-item active" aria-current="page">{{ titulo }}</li>
+    </ol>
+  </nav>
+
+  <div class="card shadow-sm p-4 mt-3 mb-4">
+    <form method="get" class="row g-3 align-items-center">
+      <div class="col-auto">
+        <label for="month-select" class="form-label fw-semibold mb-0">Mês de referência</label>
+      </div>
+      <div class="col-auto">
+        <select id="month-select" class="form-select" name="month" onchange="this.form.submit()">
+          {% for option in months_list %}
+            <option value="{{ option.value }}" {% if option.value == selected_month_value %}selected{% endif %}>{{ option.label }}</option>
+          {% endfor %}
+        </select>
+      </div>
+    </form>
+  </div>
+
+  {% if not selected_clinic %}
+    <div class="alert alert-warning">Associe-se a uma clínica para visualizar as obrigações mensais.</div>
+  {% else %}
+    {% if clinic_taxes %}
+      <div class="row row-cols-1 row-cols-md-2 row-cols-lg-3 g-4">
+        <div class="col">
+          <div class="obligation-card is-blue h-100">
+            <div class="obligation-icon">
+              <i class="fa-solid fa-building-columns"></i>
+            </div>
+            <p class="text-uppercase small fw-semibold mb-1">ISS a pagar</p>
+            <h3 class="mb-0">{{ clinic_taxes.iss_total | currency_br }}</h3>
+            <small>{{ selected_month_label }}</small>
+          </div>
+        </div>
+
+        <div class="col">
+          <div class="obligation-card is-green h-100">
+            <div class="obligation-icon">
+              <i class="fa-solid fa-file-invoice-dollar"></i>
+            </div>
+            <p class="text-uppercase small fw-semibold mb-1">DAS (Simples Nacional)</p>
+            <h3 class="mb-0">{{ clinic_taxes.das_total | currency_br }}</h3>
+            <small>{{ selected_month_label }}</small>
+          </div>
+        </div>
+
+        <div class="col">
+          <div class="obligation-card is-purple h-100">
+            <div class="obligation-icon">
+              <i class="fa-solid fa-briefcase"></i>
+            </div>
+            <p class="text-uppercase small fw-semibold mb-1">Retenções PJ</p>
+            <h3 class="mb-0">{{ clinic_taxes.retencoes_pj | currency_br }}</h3>
+            <small>{{ selected_month_label }}</small>
+          </div>
+        </div>
+
+        <div class="col">
+          <div class="obligation-card is-yellow h-100">
+            <div class="obligation-icon">
+              <i class="fa-solid fa-percent"></i>
+            </div>
+            <p class="text-uppercase small fw-semibold mb-1">Fator R</p>
+            <h3 class="mb-0">{{ ((clinic_taxes.fator_r or 0) * 100) | round(2) }}%</h3>
+            <small>{{ selected_month_label }}</small>
+          </div>
+        </div>
+
+        <div class="col">
+          <div class="obligation-card is-gray h-100">
+            <div class="obligation-icon">
+              <i class="fa-solid fa-layer-group"></i>
+            </div>
+            <p class="text-uppercase small fw-semibold mb-1">Faixa do Simples</p>
+            <h3 class="mb-0">{{ clinic_taxes.faixa_simples or 'Não classificado' }}</h3>
+            <small>{{ selected_month_label }}</small>
+          </div>
+        </div>
+
+        <div class="col">
+          <div class="obligation-card is-orange h-100">
+            <div class="obligation-icon">
+              <i class="fa-solid fa-chart-line"></i>
+            </div>
+            <p class="text-uppercase small fw-semibold mb-1">Projeção anual de faturamento</p>
+            <h3 class="mb-0">{{ clinic_taxes.projecao_anual | currency_br }}</h3>
+            <small>{{ selected_month_label }}</small>
+          </div>
+        </div>
+      </div>
+    {% else %}
+      <div class="card obligation-empty-card shadow-none p-5 text-center text-muted">
+        <i class="fa-solid fa-circle-info fa-2x mb-3"></i>
+        <p class="mb-0">Nenhum dado disponível para este mês.</p>
+      </div>
+    {% endif %}
+  {% endif %}
+</div>
 {% endblock %}
