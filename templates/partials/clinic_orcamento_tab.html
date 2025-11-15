@@ -224,20 +224,26 @@
                   <span class="badge bg-light text-dark">E-mail: {{ o.email_sent_count or 0 }}</span>
                   <span class="badge bg-light text-dark">WhatsApp: {{ o.whatsapp_sent_count or 0 }}</span>
                 </div>
-                {% if consulta %}
-                <div class="d-flex flex-wrap gap-2 justify-content-center mt-2">
-                  <form method="post" action="{{ url_for('enviar_orcamento', orcamento_id=o.id) }}">
-                    {% if csrf_token is defined %}{{ csrf_token() }}{% endif %}
-                    <input type="hidden" name="channel" value="email">
-                    <button class="btn btn-sm btn-outline-primary" type="submit">Reenviar e-mail</button>
-                  </form>
-                  <form method="post" action="{{ url_for('enviar_orcamento', orcamento_id=o.id) }}">
-                    {% if csrf_token is defined %}{{ csrf_token() }}{% endif %}
-                    <input type="hidden" name="channel" value="whatsapp">
-                    <button class="btn btn-sm btn-outline-success" type="submit">Reenviar WhatsApp</button>
-                  </form>
+                {% set payment_status = o.payment_status or 'not_generated' %}
+                <div class="mt-2">
+                  {% set payment_badge = orcamento_payment_status_styles.get(payment_status, 'secondary') %}
+                  <span class="badge bg-{{ payment_badge }} d-inline-flex align-items-center gap-2 px-3" data-payment-status>
+                    <i class="fas fa-wallet"></i>
+                    <span class="payment-status-text">{{ orcamento_payment_status_labels.get(payment_status, 'Sem link') }}</span>
+                  </span>
                 </div>
-                {% endif %}
+                {% set can_share = consulta is not none %}
+                <div class="d-flex flex-wrap gap-2 justify-content-center mt-2">
+                  <button type="button" class="btn btn-sm btn-outline-dark" data-generate-payment data-orcamento-id="{{ o.id }}" data-endpoint="{{ url_for('gerar_link_pagamento_orcamento', orcamento_id=o.id) }}">
+                    Gerar link de pagamento
+                  </button>
+                  <button type="button" class="btn btn-sm btn-outline-secondary" data-copy-payment data-payment-link="{{ o.payment_link or '' }}" {% if not o.payment_link %}disabled{% endif %}>
+                    Copiar link
+                  </button>
+                  <button type="button" class="btn btn-sm btn-outline-primary" data-share-link data-bs-toggle="modal" data-bs-target="#orcamento-share-modal" data-payment-link="{{ o.payment_link or '' }}" data-orcamento-id="{{ o.id }}" data-share-endpoint="{{ url_for('enviar_orcamento', orcamento_id=o.id) }}" {% if not o.payment_link or not can_share %}disabled{% endif %}>
+                    Enviar ao tutor
+                  </button>
+                </div>
               </td>
               <td data-label="Ações">
                 <div class="d-flex flex-wrap gap-2">
@@ -273,12 +279,44 @@
       </div>
       {% endif %}
 
+      <div class="modal fade" id="orcamento-share-modal" tabindex="-1" aria-labelledby="orcamentoShareModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+          <div class="modal-content">
+            <div class="modal-header">
+              <h5 class="modal-title" id="orcamentoShareModalLabel">Enviar link ao tutor</h5>
+              <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+            </div>
+            <div class="modal-body">
+              <p class="text-muted small">Copie o link ou escolha um canal rápido para reenviar ao tutor.</p>
+              <div class="input-group mb-3">
+                <input type="text" class="form-control" data-share-link-input readonly value="">
+                <button type="button" class="btn btn-outline-secondary" data-share-copy>Copiar</button>
+              </div>
+              <div class="d-flex flex-column gap-2">
+                <form method="post" class="d-grid" data-share-form data-channel="email">
+                  {% if csrf_token is defined %}{{ csrf_token() }}{% endif %}
+                  <input type="hidden" name="channel" value="email">
+                  <button type="submit" class="btn btn-primary">Enviar por e-mail</button>
+                </form>
+                <form method="post" class="d-grid" data-share-form data-channel="whatsapp">
+                  {% if csrf_token is defined %}{{ csrf_token() }}{% endif %}
+                  <input type="hidden" name="channel" value="whatsapp">
+                  <button type="submit" class="btn btn-success">Enviar por WhatsApp</button>
+                </form>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <div id="orcamento-status-toast-container" class="position-fixed top-0 end-0 p-3" style="z-index: 1090;"></div>
       <script>
         (function() {
           const statusLabels = {{ orcamento_status_labels | tojson }};
           const statusStyles = {{ orcamento_status_styles | tojson }};
           const statusIcons = {{ status_icons | tojson }};
+          const paymentStatusLabels = {{ orcamento_payment_status_labels | tojson }};
+          const paymentStatusStyles = {{ orcamento_payment_status_styles | tojson }};
 
           const toastContainer = document.getElementById('orcamento-status-toast-container');
 
@@ -377,6 +415,161 @@
             button.dataset.bindStatusChange = '1';
             button.addEventListener('click', () => handleStatusUpdate(button));
           });
+
+          function updatePaymentUI(row, paymentStatus, paymentLink, paymentLabel, paymentStyle) {
+            const badge = row ? row.querySelector('[data-payment-status]') : null;
+            if (badge) {
+              const style = paymentStyle || paymentStatusStyles[paymentStatus] || 'secondary';
+              badge.className = `badge bg-${style} d-inline-flex align-items-center gap-2 px-3`;
+              const labelEl = badge.querySelector('.payment-status-text');
+              if (labelEl) {
+                labelEl.textContent = paymentLabel || paymentStatusLabels[paymentStatus] || paymentStatusLabels.not_generated;
+              }
+            }
+            const copyBtn = row ? row.querySelector('[data-copy-payment]') : null;
+            if (copyBtn) {
+              copyBtn.dataset.paymentLink = paymentLink || '';
+              copyBtn.disabled = !paymentLink;
+            }
+            const shareBtn = row ? row.querySelector('[data-share-link]') : null;
+            if (shareBtn) {
+              shareBtn.dataset.paymentLink = paymentLink || '';
+              shareBtn.disabled = !paymentLink;
+            }
+          }
+
+          async function handlePaymentGeneration(button) {
+            const endpoint = button.dataset.endpoint;
+            const row = button.closest('tr');
+            if (!endpoint || !row) {
+              showToast('Não foi possível iniciar o pagamento.', 'danger');
+              return;
+            }
+            const originalText = button.innerHTML;
+            button.disabled = true;
+            button.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>';
+            try {
+              const resp = await fetch(endpoint, { method: 'POST', headers: { 'Accept': 'application/json' } });
+              const data = await resp.json();
+              if (!resp.ok || !data.success) {
+                showToast((data && data.message) || 'Não foi possível gerar o link.', 'danger');
+                return;
+              }
+              updatePaymentUI(row, data.payment_status, data.payment_link, data.payment_status_label, data.payment_status_style);
+              if (data.status && row) {
+                const select = row.querySelector('.orcamento-status-select');
+                if (select) {
+                  select.value = data.status;
+                }
+                const badge = row.querySelector('[data-status-badge]');
+                if (badge) {
+                  const style = data.status_style || statusStyles[data.status] || 'secondary';
+                  badge.className = `badge rounded-pill d-inline-flex align-items-center justify-content-center gap-2 px-3 py-2 status-badge bg-${style} text-uppercase`;
+                  const icon = badge.querySelector('i');
+                  if (icon) {
+                    icon.className = `fas ${statusIcons[data.status] || 'fa-file-alt'}`;
+                  }
+                  const labelEl = badge.querySelector('.status-text');
+                  if (labelEl) {
+                    labelEl.textContent = data.status_label || statusLabels[data.status] || data.status;
+                  }
+                }
+              }
+              if (row) {
+                const updatedCell = row.querySelector('[data-orcamento-updated]');
+                if (updatedCell && data.updated_at) {
+                  updatedCell.textContent = formatDateTime(data.updated_at);
+                }
+              }
+              if (data.payment_link) {
+                window.open(data.payment_link, '_blank');
+              }
+              showToast(data.message || 'Link de pagamento gerado.', 'success');
+            } catch (error) {
+              showToast('Erro ao conectar com o servidor.', 'danger');
+            } finally {
+              button.disabled = false;
+              button.innerHTML = originalText;
+            }
+          }
+
+          document.querySelectorAll('[data-generate-payment]').forEach(button => {
+            if (button.dataset.bindPayment) return;
+            button.dataset.bindPayment = '1';
+            button.addEventListener('click', () => handlePaymentGeneration(button));
+          });
+
+          document.querySelectorAll('[data-copy-payment]').forEach(button => {
+            if (button.dataset.bindCopy) return;
+            button.dataset.bindCopy = '1';
+            button.addEventListener('click', () => {
+              const link = button.dataset.paymentLink;
+              if (!link) {
+                showToast('Nenhum link disponível.', 'warning');
+                return;
+              }
+              if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(link).then(() => {
+                  showToast('Link copiado!', 'success');
+                }).catch(() => showToast('Não foi possível copiar o link.', 'danger'));
+              } else {
+                const input = document.createElement('input');
+                input.value = link;
+                document.body.appendChild(input);
+                input.select();
+                document.execCommand('copy');
+                document.body.removeChild(input);
+                showToast('Link copiado!', 'success');
+              }
+            });
+          });
+
+          const shareModal = document.getElementById('orcamento-share-modal');
+          if (shareModal) {
+            shareModal.addEventListener('show.bs.modal', event => {
+              const trigger = event.relatedTarget;
+              const link = trigger ? (trigger.dataset.paymentLink || '') : '';
+              const endpoint = trigger ? trigger.dataset.shareEndpoint : '';
+              const input = shareModal.querySelector('[data-share-link-input]');
+              const copyButton = shareModal.querySelector('[data-share-copy]');
+              if (input) {
+                input.value = link || 'Nenhum link gerado ainda.';
+              }
+              if (copyButton) {
+                copyButton.disabled = !link;
+              }
+              shareModal.querySelectorAll('form[data-share-form]').forEach(form => {
+                const channel = form.dataset.channel;
+                const channelInput = form.querySelector('input[name="channel"]');
+                if (channelInput) {
+                  channelInput.value = channel;
+                }
+                form.action = endpoint || '#';
+                form.querySelector('button').disabled = !endpoint;
+              });
+              if (copyButton) {
+                copyButton.onclick = () => {
+                  if (!link) {
+                    showToast('Nenhum link disponível.', 'warning');
+                    return;
+                  }
+                  if (navigator.clipboard && navigator.clipboard.writeText) {
+                    navigator.clipboard.writeText(link).then(() => {
+                      showToast('Link copiado!', 'success');
+                    }).catch(() => showToast('Não foi possível copiar o link.', 'danger'));
+                  } else {
+                    const tempInput = document.createElement('input');
+                    tempInput.value = link;
+                    document.body.appendChild(tempInput);
+                    tempInput.select();
+                    document.execCommand('copy');
+                    document.body.removeChild(tempInput);
+                    showToast('Link copiado!', 'success');
+                  }
+                };
+              }
+            });
+          }
         })();
       </script>
 
