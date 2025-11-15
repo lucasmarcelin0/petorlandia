@@ -104,6 +104,7 @@ from flask_mail import Message as MailMessage      #  ←  adicione esta linha
 from werkzeug.utils import secure_filename
 from werkzeug.datastructures import FileStorage
 from werkzeug.routing import BuildError
+from werkzeug.exceptions import NotFound
 
 db.init_app(app)
 migrate.init_app(app, db, compare_type=True)
@@ -6580,6 +6581,54 @@ def enviar_orcamento(orcamento_id):
     db.session.commit()
     flash('Orçamento enviado com sucesso!', 'success')
     return redirect(redirect_url)
+
+
+@app.route('/orcamento/<int:orcamento_id>/status', methods=['PATCH'])
+@login_required
+def atualizar_status_orcamento(orcamento_id):
+    orcamento = Orcamento.query.get_or_404(orcamento_id)
+    try:
+        ensure_clinic_access(orcamento.clinica_id)
+    except NotFound:
+        abort(403)
+
+    payload = request.get_json(silent=True) or {}
+    new_status = payload.get('status')
+    if new_status is None:
+        new_status = request.form.get('status')
+    new_status = (new_status or '').strip()
+    wants_json = 'application/json' in request.headers.get('Accept', '')
+
+    if new_status not in ORCAMENTO_STATUS_LABELS:
+        message = 'Status inválido.'
+        if wants_json:
+            return jsonify(success=False, message=message), 400
+        flash(message, 'danger')
+        return redirect(request.referrer or url_for('clinic_detail', clinica_id=orcamento.clinica_id) + '#orcamento')
+
+    if orcamento.status != new_status:
+        orcamento.status = new_status
+        orcamento.updated_at = datetime.utcnow()
+        db.session.add(orcamento)
+        db.session.commit()
+    else:
+        db.session.commit()
+
+    message = 'Status atualizado com sucesso.'
+    response_payload = {
+        'success': True,
+        'message': message,
+        'status': orcamento.status,
+        'status_label': ORCAMENTO_STATUS_LABELS.get(orcamento.status, orcamento.status),
+        'status_style': ORCAMENTO_STATUS_STYLES.get(orcamento.status, 'secondary'),
+        'updated_at': (orcamento.updated_at or datetime.utcnow()).isoformat() + 'Z',
+    }
+
+    if wants_json:
+        return jsonify(response_payload)
+
+    flash(message, 'success')
+    return redirect(request.referrer or url_for('clinic_detail', clinica_id=orcamento.clinica_id) + '#orcamento')
 
 
 @app.route('/clinica/<int:clinica_id>/orcamentos')

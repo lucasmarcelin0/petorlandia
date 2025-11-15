@@ -179,7 +179,7 @@
             {% set consulta = o.consulta %}
             {% set animal = consulta.animal if consulta else None %}
             {% set tutor = animal.owner if animal else None %}
-            <tr>
+            <tr data-orcamento-row="{{ o.id }}">
               <td data-label="Descrição">
                 <div class="fw-semibold">{{ o.descricao }}</div>
                 {% if consulta %}
@@ -198,12 +198,24 @@
                 {% set badge = orcamento_status_styles.get(o.status, 'secondary') %}
                 {% set status_label = orcamento_status_labels.get(o.status, o.status|capitalize) %}
                 {% set status_icon = status_icons.get(o.status, 'fa-file-alt') %}
-                <span class="badge rounded-pill d-inline-flex align-items-center justify-content-center gap-2 px-3 py-2 status-badge bg-{{ badge }} text-uppercase">
-                  <i class="fas {{ status_icon }}" aria-hidden="true"></i>
-                  {{ status_label }}
-                </span>
+                <div class="d-flex flex-column gap-2 align-items-center">
+                  <span class="badge rounded-pill d-inline-flex align-items-center justify-content-center gap-2 px-3 py-2 status-badge bg-{{ badge }} text-uppercase" data-status-badge>
+                    <i class="fas {{ status_icon }}" aria-hidden="true"></i>
+                    <span class="status-text">{{ status_label }}</span>
+                  </span>
+                  <div class="d-flex flex-wrap gap-2 justify-content-center w-100">
+                    <select class="form-select form-select-sm orcamento-status-select" data-orcamento-id="{{ o.id }}">
+                      {% for status_key, label in orcamento_status_labels.items() %}
+                        <option value="{{ status_key }}" {% if o.status == status_key %}selected{% endif %}>{{ label }}</option>
+                      {% endfor %}
+                    </select>
+                    <button type="button" class="btn btn-sm btn-primary orcamento-status-update" data-orcamento-id="{{ o.id }}" data-endpoint="{{ url_for('atualizar_status_orcamento', orcamento_id=o.id) }}">
+                      Atualizar
+                    </button>
+                  </div>
+                </div>
               </td>
-              <td class="text-center" data-label="Atualizado">
+              <td class="text-center" data-label="Atualizado" data-orcamento-updated>
                 {% set updated = o.updated_at or o.created_at %}
                 {{ updated.strftime('%d/%m/%Y %H:%M') if updated else '—' }}
               </td>
@@ -260,6 +272,113 @@
         </div>
       </div>
       {% endif %}
+
+      <div id="orcamento-status-toast-container" class="position-fixed top-0 end-0 p-3" style="z-index: 1090;"></div>
+      <script>
+        (function() {
+          const statusLabels = {{ orcamento_status_labels | tojson }};
+          const statusStyles = {{ orcamento_status_styles | tojson }};
+          const statusIcons = {{ status_icons | tojson }};
+
+          const toastContainer = document.getElementById('orcamento-status-toast-container');
+
+          function showToast(message, type = 'success') {
+            if (!toastContainer) return;
+            const alert = document.createElement('div');
+            alert.className = `alert alert-${type} shadow-sm d-flex align-items-center gap-2 mb-2`;
+            alert.setAttribute('role', 'alert');
+            alert.innerHTML = `<i class="fas ${type === 'success' ? 'fa-circle-check text-success' : 'fa-circle-exclamation text-danger'}"></i><div>${message}</div>`;
+            toastContainer.appendChild(alert);
+            setTimeout(() => alert.remove(), 5000);
+          }
+
+          function formatDateTime(value) {
+            if (!value) return '';
+            try {
+              const date = new Date(value);
+              return date.toLocaleString('pt-BR', { hour12: false });
+            } catch (err) {
+              return value;
+            }
+          }
+
+          async function handleStatusUpdate(button) {
+            const orcamentoId = button.dataset.orcamentoId;
+            const endpoint = button.dataset.endpoint;
+            const select = button.closest('td').querySelector('.orcamento-status-select');
+            if (!endpoint || !select) {
+              showToast('Não foi possível encontrar o seletor de status.', 'danger');
+              return;
+            }
+            const status = select.value;
+            button.disabled = true;
+            button.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>';
+            let responseData = null;
+            try {
+              const resp = await fetch(endpoint, {
+                method: 'PATCH',
+                headers: {
+                  'Content-Type': 'application/json',
+                  'Accept': 'application/json'
+                },
+                body: JSON.stringify({ status })
+              });
+              try {
+                responseData = await resp.json();
+              } catch (error) {
+                responseData = null;
+              }
+              if (!resp.ok) {
+                const message = responseData && responseData.message ? responseData.message : 'Não foi possível atualizar o status.';
+                showToast(message, resp.status === 403 ? 'danger' : 'warning');
+                return;
+              }
+            } catch (err) {
+              showToast('Erro ao conectar com o servidor.', 'danger');
+              return;
+            } finally {
+              button.disabled = false;
+              button.textContent = 'Atualizar';
+            }
+
+            if (!responseData) {
+              showToast('Resposta inválida do servidor.', 'danger');
+              return;
+            }
+
+            const row = document.querySelector(`[data-orcamento-row="${orcamentoId}"]`);
+            const badge = row ? row.querySelector('[data-status-badge]') : null;
+            if (badge) {
+              const style = statusStyles[responseData.status] || 'secondary';
+              const iconName = statusIcons[responseData.status] || 'fa-file-alt';
+              badge.className = `badge rounded-pill d-inline-flex align-items-center justify-content-center gap-2 px-3 py-2 status-badge bg-${style} text-uppercase`;
+              const icon = badge.querySelector('i');
+              if (icon) {
+                icon.className = `fas ${iconName}`;
+              }
+              const labelEl = badge.querySelector('.status-text');
+              if (labelEl) {
+                labelEl.textContent = statusLabels[responseData.status] || responseData.status;
+              }
+            }
+
+            if (row) {
+              const updatedCell = row.querySelector('[data-orcamento-updated]');
+              if (updatedCell && responseData.updated_at) {
+                updatedCell.textContent = formatDateTime(responseData.updated_at);
+              }
+            }
+
+            showToast(responseData.message || 'Status atualizado com sucesso.', 'success');
+          }
+
+          document.querySelectorAll('.orcamento-status-update').forEach(button => {
+            if (button.dataset.bindStatusChange) return;
+            button.dataset.bindStatusChange = '1';
+            button.addEventListener('click', () => handleStatusUpdate(button));
+          });
+        })();
+      </script>
 
       {% if orcamentos_pagination.pages > 1 %}
       <nav aria-label="Paginação de orçamentos" class="mt-3">

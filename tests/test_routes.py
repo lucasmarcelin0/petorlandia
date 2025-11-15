@@ -23,6 +23,8 @@ from models import (
     AnimalDocumento,
     Veterinario,
     VeterinarianMembership,
+    Clinica,
+    Orcamento,
 )
 from flask import url_for
 from datetime import datetime, timedelta
@@ -37,6 +39,13 @@ def app():
         SQLALCHEMY_DATABASE_URI="sqlite:///:memory:"
     )
     yield flask_app
+
+
+def login(client, user_id):
+    with client.session_transaction() as sess:
+        sess.clear()
+        sess['_user_id'] = str(user_id)
+        sess['_fresh'] = True
 
 def test_login_page(app):
     client = app.test_client()
@@ -2014,3 +2023,76 @@ def test_delete_document_by_admin(app, monkeypatch):
     assert resp.status_code == 200
     with app.app_context():
         assert AnimalDocumento.query.get(doc_id) is None
+
+
+def _create_orcamento_fixture():
+    db.drop_all()
+    db.create_all()
+    owner = User(id=1, name='Owner', email='owner@test', worker='veterinario')
+    owner.set_password('secret')
+    clinic = Clinica(id=1, nome='Clinica Teste', owner_id=owner.id)
+    owner.clinica_id = clinic.id
+    budget = Orcamento(id=1, clinica_id=clinic.id, descricao='Orçamento Teste', status='draft')
+    db.session.add_all([owner, clinic, budget])
+    db.session.commit()
+    return SimpleNamespace(owner_id=owner.id, clinic_id=clinic.id, orcamento_id=budget.id)
+
+
+def test_atualizar_status_orcamento_sucesso(app):
+    with app.app_context():
+        data = _create_orcamento_fixture()
+        orcamento_id = data.orcamento_id
+        owner_id = data.owner_id
+
+    client = app.test_client()
+    login(client, owner_id)
+    resp = client.patch(
+        f'/orcamento/{orcamento_id}/status',
+        json={'status': 'approved'},
+        headers={'Accept': 'application/json'},
+    )
+    assert resp.status_code == 200
+    body = resp.get_json()
+    assert body['status'] == 'approved'
+
+    with app.app_context():
+        updated = Orcamento.query.get(orcamento_id)
+        assert updated.status == 'approved'
+
+
+def test_atualizar_status_orcamento_invalido(app):
+    with app.app_context():
+        data = _create_orcamento_fixture()
+        orcamento_id = data.orcamento_id
+        owner_id = data.owner_id
+
+    client = app.test_client()
+    login(client, owner_id)
+    resp = client.patch(
+        f'/orcamento/{orcamento_id}/status',
+        json={'status': 'unknown'},
+        headers={'Accept': 'application/json'},
+    )
+    assert resp.status_code == 400
+
+
+def test_atualizar_status_orcamento_sem_acesso_retorna_403(app):
+    with app.app_context():
+        data = _create_orcamento_fixture()
+        orcamento_id = data.orcamento_id
+        other_clinic_owner = User(id=2, name='Outro', email='other@test', worker='veterinario')
+        other_clinic_owner.set_password('secret')
+        other_clinic = Clinica(id=2, nome='Outra Clinica', owner_id=other_clinic_owner.id)
+        other_clinic_owner.clinica_id = other_clinic.id
+        db.session.add_all([other_clinic_owner, other_clinic])
+        db.session.commit()
+        other_id = other_clinic_owner.id
+
+    client = app.test_client()
+    login(client, other_id)
+    resp = client.patch(
+        f'/orcamento/{orcamento_id}/status',
+        json={'status': 'approved'},
+        headers={'Accept': 'application/json'},
+    )
+    assert resp.status_code == 403
