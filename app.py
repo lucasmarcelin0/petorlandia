@@ -3612,6 +3612,22 @@ def formatar_telefone(telefone: str) -> str:
         return f"+55{telefone}"
 
 
+APPOINTMENT_STATUS_LABELS = {
+    'scheduled': 'A fazer',
+    'accepted': 'Aceita',
+    'completed': 'Realizada',
+    'canceled': 'Cancelada',
+}
+
+APPOINTMENT_KIND_LABELS = {
+    'consulta': 'Consulta',
+    'retorno': 'Retorno',
+    'exame': 'Exame',
+    'banho_tosa': 'Banho e Tosa',
+    'vacina': 'Vacina',
+    'general': 'Geral',
+}
+
 ORCAMENTO_STATUS_LABELS = {
     'draft': 'Rascunho',
     'sent': 'Enviado',
@@ -5471,8 +5487,65 @@ def clinic_detail(clinica_id):
         or 0,
     }
 
+    valid_vet_ids = {getattr(v, 'id', None) for v in vets_for_forms if getattr(v, 'id', None)}
+    appointment_vet_options = [
+        {
+            'id': v.id,
+            'name': getattr(getattr(v, 'user', None), 'name', '') or f'Veterinário #{v.id}',
+        }
+        for v in sorted(vets_for_forms, key=lambda vet: (getattr(getattr(vet, 'user', None), 'name', '') or '').lower())
+        if getattr(v, 'id', None)
+    ]
+
+    status_labels = dict(APPOINTMENT_STATUS_LABELS)
+    kind_labels = dict(APPOINTMENT_KIND_LABELS)
+
+    try:
+        appointment_kind_choices = AppointmentForm().kind.choices
+    except Exception:  # noqa: BLE001
+        appointment_kind_choices = []
+
+    for value, label in appointment_kind_choices:
+        if value:
+            kind_labels.setdefault(value, label)
+
+    clinic_status_values = {
+        status
+        for (status,) in (
+            db.session.query(Appointment.status)
+            .filter(Appointment.clinica_id == clinica_id)
+            .distinct()
+        )
+        if status
+    }
+    clinic_kind_values = {
+        kind
+        for (kind,) in (
+            db.session.query(Appointment.kind)
+            .filter(Appointment.clinica_id == clinica_id)
+            .distinct()
+        )
+        if kind
+    }
+
+    for status in clinic_status_values:
+        status_labels.setdefault(status, status.replace('_', ' ').title())
+
+    for kind in clinic_kind_values:
+        kind_labels.setdefault(kind, kind.replace('_', ' ').title())
+
     start_str = request.args.get('start')
     end_str = request.args.get('end')
+    vet_filter_id = request.args.get('vet_id', type=int)
+    status_filter = (request.args.get('status') or '').strip()
+    type_filter = (request.args.get('type') or '').strip()
+
+    if vet_filter_id and vet_filter_id not in valid_vet_ids:
+        vet_filter_id = None
+    if status_filter and status_filter not in status_labels:
+        status_filter = ''
+    if type_filter and type_filter not in kind_labels:
+        type_filter = ''
     start_dt = None
     end_dt = None
     if start_str:
@@ -5493,6 +5566,12 @@ def clinic_detail(clinica_id):
         appointments_query = appointments_query.filter(Appointment.scheduled_at >= start_dt_utc)
     if end_dt_utc:
         appointments_query = appointments_query.filter(Appointment.scheduled_at < end_dt_utc)
+    if vet_filter_id:
+        appointments_query = appointments_query.filter(Appointment.veterinario_id == vet_filter_id)
+    if status_filter:
+        appointments_query = appointments_query.filter(Appointment.status == status_filter)
+    if type_filter:
+        appointments_query = appointments_query.filter(Appointment.kind == type_filter)
 
     appointments = appointments_query.order_by(Appointment.scheduled_at).all()
     appointments_grouped = group_appointments_by_day(appointments)
@@ -5580,6 +5659,100 @@ def clinic_detail(clinica_id):
     except BuildError:
         clinic_new_animal_url = url_for('novo_animal')
 
+    appointment_filters = {
+        'start': start_str or '',
+        'end': end_str or '',
+        'vet_id': str(vet_filter_id) if vet_filter_id else '',
+        'status': status_filter,
+        'type': type_filter,
+    }
+
+    def _normalize_filter_value(value):
+        if value in (None, ''):
+            return ''
+        return str(value)
+
+    def _is_active_for_query(query):
+        for key, value in query.items():
+            normalized = _normalize_filter_value(value)
+            current = appointment_filters.get(key) or ''
+            if normalized == '':
+                if current not in ('', None):
+                    return False
+            elif current != normalized:
+                return False
+        return True
+
+    def _build_filter_url(**overrides):
+        params = {k: v for k, v in appointment_filters.items() if v not in ('', None)}
+        for key, value in overrides.items():
+            normalized_value = _normalize_filter_value(value)
+            if normalized_value == '':
+                params.pop(key, None)
+            else:
+                params[key] = normalized_value
+        return url_for('clinic_detail', clinica_id=clinica.id, **params)
+
+    def _build_quick_entry(label, query, icon=None):
+        normalized_query = {k: _normalize_filter_value(v) for k, v in query.items()}
+        return {
+            'label': label,
+            'icon': icon,
+            'query': normalized_query,
+            'url': _build_filter_url(**query),
+            'active': _is_active_for_query(query),
+        }
+
+    appointment_status_options = [
+        {'value': '', 'label': 'Todos os status'},
+        *[
+            {'value': key, 'label': label}
+            for key, label in sorted(status_labels.items(), key=lambda item: item[1])
+        ],
+    ]
+
+    appointment_type_options = [
+        {'value': '', 'label': 'Todos os tipos'},
+        *[
+            {'value': key, 'label': label}
+            for key, label in sorted(kind_labels.items(), key=lambda item: item[1])
+        ],
+    ]
+
+    appointment_quick_ranges = [
+        _build_quick_entry(
+            'Hoje',
+            {'start': today_str, 'end': today_str},
+            icon='fa-solid fa-calendar-day',
+        ),
+        _build_quick_entry(
+            'Próximos 7 dias',
+            {'start': today_str, 'end': next7_str},
+            icon='fa-solid fa-calendar-week',
+        ),
+        _build_quick_entry(
+            'Todos os períodos',
+            {'start': '', 'end': ''},
+            icon='fa-solid fa-infinity',
+        ),
+    ]
+
+    appointment_status_quick_filters = [
+        _build_quick_entry('Todos os status', {'status': ''}),
+        *[
+            _build_quick_entry(label, {'status': key})
+            for key, label in sorted(status_labels.items(), key=lambda item: item[1])
+        ],
+    ]
+
+    appointment_type_quick_filters = [
+        _build_quick_entry('Todos os tipos', {'type': ''}),
+        *[
+            _build_quick_entry(label, {'type': key})
+            for key, label in sorted(kind_labels.items(), key=lambda item: item[1])
+        ],
+    ]
+
     return render_template(
         'clinica/clinic_detail.html',
         clinica=clinica,
@@ -5617,6 +5790,13 @@ def clinic_detail(clinica_id):
         pagination=None,
         start=start_str,
         end=end_str,
+        appointment_filters=appointment_filters,
+        appointment_vet_options=appointment_vet_options,
+        appointment_status_options=appointment_status_options,
+        appointment_type_options=appointment_type_options,
+        appointment_quick_ranges=appointment_quick_ranges,
+        appointment_status_quick_filters=appointment_status_quick_filters,
+        appointment_type_quick_filters=appointment_type_quick_filters,
         today_str=today_str,
         next7_str=next7_str,
         now=now_dt,
