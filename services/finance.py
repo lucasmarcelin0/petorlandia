@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections import defaultdict
 from datetime import date, datetime
 from decimal import Decimal, ROUND_HALF_UP
 from typing import Iterable, List, Optional, Sequence, Tuple
@@ -18,6 +19,7 @@ from models import (
     BlocoOrcamento,
     ClassifiedTransaction,
     ClinicFinancialSnapshot,
+    ClinicNotification,
     ClinicTaxes,
     Clinica,
     Consulta,
@@ -737,6 +739,196 @@ def calculate_clinic_taxes(
     return taxes
 
 
+def generate_clinic_notifications(
+    clinic_id: int,
+    month: Optional[date | datetime | str] = None,
+) -> List[ClinicNotification]:
+    """Build or refresh accounting alerts for the requested clinic/month."""
+
+    month_start = _normalize_month(month)
+    clinic = Clinica.query.get(clinic_id)
+    if clinic is None:
+        raise ValueError(f"Clinic {clinic_id} not found")
+
+    month_label = month_start.strftime("%m/%Y")
+    month_end = month_start + relativedelta(months=1)
+    taxes = ClinicTaxes.query.filter_by(clinic_id=clinic_id, month=month_start).one_or_none()
+    revenue_12m = _classified_sum_for_range(clinic_id, month_start, REVENUE_CATEGORIES)
+
+    alerts: list[dict[str, str]] = []
+
+    def _add_alert(title: str, message: str, type_: str) -> None:
+        alerts.append({"title": title, "message": message, "type": type_})
+
+    if taxes and taxes.faixa_simples:
+        faixa_index = max(1, min(int(taxes.faixa_simples), len(SIMPLIES_ANEXO_III_BRACKETS))) - 1
+        faixa_limit = SIMPLIES_ANEXO_III_BRACKETS[faixa_index][0]
+        if faixa_limit > ZERO:
+            threshold = faixa_limit * Decimal("0.85")
+            if revenue_12m >= threshold and revenue_12m < faixa_limit:
+                _add_alert(
+                    "Atenção: Receita próxima de mudar de faixa do Simples",
+                    "O faturamento acumulado em 12 meses está acima de 85% do limite atual.",
+                    "warning",
+                )
+
+    if taxes:
+        fator_r_value = _ensure_decimal(getattr(taxes, 'fator_r', ZERO))
+        if fator_r_value < Decimal("0.28"):
+            _add_alert(
+                "Fator R abaixo do limite",
+                "Seu Fator R está baixo; os prestadores podem ser tributados no Anexo V.",
+                "danger",
+            )
+
+        projecao = _ensure_decimal(getattr(taxes, 'projecao_anual', ZERO))
+        if projecao > Decimal("4800000"):
+            _add_alert(
+                "Projeção anual acima do limite do Simples Nacional",
+                "A projeção anual de receitas ultrapassa R$ 4,8 milhões e pode exigir migração de regime.",
+                "danger",
+            )
+
+        iss_total = _ensure_decimal(getattr(taxes, 'iss_total', ZERO))
+        if iss_total > ZERO:
+            _add_alert(
+                "ISS do mês pendente",
+                f"Valor estimado de ISS para {month_label} ainda não está registrado como pago.",
+                "info",
+            )
+
+        das_total = _ensure_decimal(getattr(taxes, 'das_total', ZERO))
+        if das_total > ZERO:
+            _add_alert(
+                "DAS do mês pendente",
+                f"O DAS calculado para {month_label} ainda não consta como quitado.",
+                "info",
+            )
+
+    payments_current = (
+        PJPayment.query
+        .filter(PJPayment.clinic_id == clinic_id)
+        .filter(PJPayment.data_servico >= month_start)
+        .filter(PJPayment.data_servico < month_end)
+        .all()
+    )
+
+    provider_counts: dict[str, int] = defaultdict(int)
+    provider_names: dict[str, str] = {}
+    for payment in payments_current:
+        provider_key = payment.prestador_cnpj or payment.prestador_nome or str(payment.id)
+        provider_counts[provider_key] += 1
+        provider_names[provider_key] = payment.prestador_nome or payment.prestador_cnpj or "Prestador"
+        nf_number = (payment.nota_fiscal_numero or "").strip()
+        if not nf_number:
+            _add_alert(
+                "Prestador sem nota fiscal",
+                (
+                    f"{provider_names[provider_key]} recebeu {_format_currency(_ensure_decimal(payment.valor))} "
+                    f"em {payment.data_servico.strftime('%d/%m/%Y')} sem nota fiscal registrada."
+                ),
+                "danger",
+            )
+
+    lookback_start = month_start - relativedelta(months=2)
+    recent_payments = (
+        PJPayment.query
+        .filter(PJPayment.clinic_id == clinic_id)
+        .filter(PJPayment.data_servico >= lookback_start)
+        .filter(PJPayment.data_servico < month_end)
+        .all()
+    )
+    monthly_totals: dict[str, dict[date, Decimal]] = defaultdict(lambda: defaultdict(Decimal))
+    for payment in recent_payments:
+        if not payment.data_servico:
+            continue
+        provider_key = payment.prestador_cnpj or payment.prestador_nome or str(payment.id)
+        provider_names[provider_key] = payment.prestador_nome or payment.prestador_cnpj or "Prestador"
+        month_bucket = payment.data_servico.replace(day=1)
+        monthly_totals[provider_key][month_bucket] += _ensure_decimal(payment.valor)
+
+    risk_flags: dict[str, list[str]] = defaultdict(list)
+    for provider_key, count in provider_counts.items():
+        if count > 20:
+            risk_flags[provider_key].append("mais de 20 repasses no mês")
+
+    for provider_key, totals in monthly_totals.items():
+        if len(totals) >= 3:
+            values = [total for _month, total in sorted(totals.items())][-3:]
+            if len(values) == 3 and len({value for value in values if value > ZERO}) == 1:
+                risk_flags[provider_key].append("pagamentos idênticos nos últimos meses")
+
+    for provider_key, reasons in risk_flags.items():
+        if not reasons:
+            continue
+        provider_name = provider_names.get(provider_key, "Prestador")
+        details = ", ".join(reasons)
+        _add_alert(
+            "Possível risco trabalhista com prestador PJ",
+            f"{provider_name} apresenta {details} em {month_label}.",
+            "warning",
+        )
+
+    negative_revenues = (
+        db.session.query(func.count(ClassifiedTransaction.id))
+        .filter(ClassifiedTransaction.clinic_id == clinic_id)
+        .filter(ClassifiedTransaction.month == month_start)
+        .filter(ClassifiedTransaction.category.in_(list(REVENUE_CATEGORIES)))
+        .filter(ClassifiedTransaction.value < 0)
+        .scalar()
+    )
+    if negative_revenues:
+        _add_alert(
+            "Receitas negativas ou inconsistentes",
+            "Foram detectados lançamentos de receita com valores negativos para o mês.",
+            "warning",
+        )
+
+    existing = ClinicNotification.query.filter_by(clinic_id=clinic_id, month=month_start).all()
+    existing_map = {
+        (notice.title, notice.type, notice.message or ""): notice
+        for notice in existing
+    }
+    seen_keys: set[tuple[str, str, str]] = set()
+    now = datetime.utcnow()
+
+    for alert in alerts:
+        message = alert.get("message", "")
+        key = (alert["title"], alert["type"], message)
+        seen_keys.add(key)
+        if key in existing_map:
+            notice = existing_map[key]
+            notice.message = message
+            if notice.resolved:
+                notice.resolved = False
+                notice.resolution_date = None
+        else:
+            db.session.add(
+                ClinicNotification(
+                    clinic_id=clinic_id,
+                    month=month_start,
+                    title=alert["title"],
+                    message=message,
+                    type=alert["type"],
+                    created_at=now,
+                )
+            )
+
+    for notice in existing:
+        key = (notice.title, notice.type, notice.message or "")
+        if key not in seen_keys and not notice.resolved:
+            notice.resolved = True
+            notice.resolution_date = now
+
+    db.session.commit()
+    return (
+        ClinicNotification.query
+        .filter_by(clinic_id=clinic_id, month=month_start, resolved=False)
+        .order_by(ClinicNotification.created_at.desc())
+        .all()
+    )
+
+
 def generate_financial_snapshot(clinic_id: int, month: Optional[date | datetime | str] = None) -> ClinicFinancialSnapshot:
     """Create or refresh the snapshot for ``clinic_id`` in the given ``month``."""
 
@@ -767,6 +959,7 @@ def generate_financial_snapshot(clinic_id: int, month: Optional[date | datetime 
 
     classify_transactions_for_month(clinic_id, month_start)
     calculate_clinic_taxes(clinic_id, month_start)
+    generate_clinic_notifications(clinic_id, month_start)
     _log(f"[Contabilidade] Snapshot gerado para Clínica {clinic_id} — Mês {month_start:%Y-%m}")
     return snapshot
 

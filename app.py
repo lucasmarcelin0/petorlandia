@@ -2707,7 +2707,40 @@ def _delete_pj_payment_classification(payment_id):
 @login_required
 def contabilidade_home():
     _ensure_accounting_access()
-    return render_template('contabilidade/index.html')
+    clinics, accessible_ids = _accounting_accessible_clinics()
+
+    selected_clinic = None
+    if clinics:
+        requested_id = request.args.get('clinica_id', type=int)
+        if requested_id and requested_id in accessible_ids:
+            selected_clinic = next(
+                (clinic for clinic in clinics if clinic.id == requested_id),
+                clinics[0],
+            )
+        else:
+            selected_clinic = clinics[0]
+
+    current_month = date.today().replace(day=1)
+    notifications = []
+    if selected_clinic:
+        notifications = (
+            ClinicNotification.query
+            .filter_by(
+                clinic_id=selected_clinic.id,
+                month=current_month,
+                resolved=False,
+            )
+            .order_by(ClinicNotification.created_at.desc())
+            .all()
+        )
+
+    return render_template(
+        'contabilidade/index.html',
+        clinics=clinics,
+        selected_clinic=selected_clinic,
+        notifications=notifications,
+        current_month=current_month,
+    )
 
 
 @app.route('/contabilidade/financeiro')
