@@ -146,55 +146,6 @@
 }
 
 document.addEventListener('DOMContentLoaded', function() {
-  const filterInput = document.getElementById('staff-filter');
-  const sortSelect = document.getElementById('staff-sort');
-  const roleSelect = document.getElementById('staff-role');
-  const list = document.getElementById('staff-list');
-  if (!filterInput || !sortSelect || !list) return;
-  const cards = Array.from(list.querySelectorAll('[data-name]'));
-
-  function applyFilter() {
-    const term = filterInput.value.toLowerCase();
-    const role = roleSelect ? roleSelect.value.toLowerCase() : '';
-    cards.forEach(card => {
-      const cardRole = (card.dataset.role || '').toLowerCase();
-      const matchesRole = !role || cardRole === role;
-      const matchesText = !term || card.textContent.toLowerCase().includes(term);
-      card.style.display = (matchesRole && matchesText) ? '' : 'none';
-    });
-  }
-
-  function applySort() {
-    const value = sortSelect.value;
-    const visible = cards.filter(card => card.style.display !== 'none');
-    visible.sort((a, b) => {
-      switch (value) {
-        case 'name_desc':
-          return (b.dataset.name || '').localeCompare(a.dataset.name || '');
-        case 'role_asc':
-          return (a.dataset.role || '').localeCompare(b.dataset.role || '');
-        case 'role_desc':
-          return (b.dataset.role || '').localeCompare(a.dataset.role || '');
-        case 'name_asc':
-        default:
-          return (a.dataset.name || '').localeCompare(b.dataset.name || '');
-      }
-    });
-    visible.forEach(card => list.appendChild(card));
-  }
-
-  const handleChange = () => {
-    applyFilter();
-    applySort();
-  };
-
-  filterInput.addEventListener('input', handleChange);
-  sortSelect.addEventListener('change', handleChange);
-  if (roleSelect) roleSelect.addEventListener('change', handleChange);
-  handleChange();
-});
-
-document.addEventListener('DOMContentLoaded', function() {
   const form = document.getElementById('appointment-filter-form');
   const container = document.getElementById('appointments-table-container');
   if (!form || !container) return;
@@ -269,5 +220,25 @@ document.addEventListener('DOMContentLoaded', function() {
       });
     });
   });
+</script>
+<script type="module">
+  import { initStaffFilters } from "{{ url_for('static', filename='js/staff_filters.js') }}";
+
+  initStaffFilters([
+    {
+      filterSelector: '#staff-filter',
+      sortSelector: '#staff-sort',
+      roleSelector: '#staff-role',
+      listSelector: '#staff-list',
+      itemSelector: '[data-name]'
+    },
+    {
+      filterSelector: '#staff-table-filter',
+      sortSelector: '#staff-table-sort',
+      roleSelector: '#staff-table-role',
+      listSelector: '#staffList',
+      itemSelector: 'tr[data-name]'
+    }
+  ]);
 </script>
 {% endblock %}

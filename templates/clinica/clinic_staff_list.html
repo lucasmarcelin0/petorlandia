@@ -9,11 +9,42 @@
       <button class="btn btn-primary" type="submit">Adicionar</button>
     </div>
   </form>
-  <table class="table">
+  <div class="card mb-3">
+    <div class="card-body">
+      <div class="row g-3 align-items-end">
+        <div class="col-md-6">
+          <label for="staff-table-filter" class="form-label text-muted small">Buscar funcionário</label>
+          <div class="input-group">
+            <span class="input-group-text bg-light"><i class="bi bi-search"></i></span>
+            <input type="text" id="staff-table-filter" class="form-control" placeholder="Nome ou email">
+          </div>
+        </div>
+        <div class="col-md-3">
+          <label for="staff-table-sort" class="form-label text-muted small">Ordenar por</label>
+          <select id="staff-table-sort" class="form-select">
+            <option value="name_asc">Nome (A-Z)</option>
+            <option value="name_desc">Nome (Z-A)</option>
+            <option value="role_asc">Função (A-Z)</option>
+            <option value="role_desc">Função (Z-A)</option>
+          </select>
+        </div>
+        <div class="col-md-3">
+          <label for="staff-table-role" class="form-label text-muted small">Filtrar função</label>
+          <select id="staff-table-role" class="form-select">
+            <option value="">Todas</option>
+            <option value="colaborador">Colaborador</option>
+            <option value="veterinario">Veterinário</option>
+          </select>
+        </div>
+      </div>
+    </div>
+  </div>
+  <table class="table table-hover align-middle">
     <thead>
       <tr>
         <th>Nome</th>
         <th>Email</th>
+        <th>Permissões</th>
         <th>Ações</th>
       </tr>
     </thead>
@@ -22,4 +53,21 @@
     </tbody>
   </table>
 </div>
+{% endblock %}
+
+{% block scripts %}
+{{ super() }}
+<script type="module">
+  import { initStaffFilters } from "{{ url_for('static', filename='js/staff_filters.js') }}";
+
+  initStaffFilters([
+    {
+      filterSelector: '#staff-table-filter',
+      sortSelector: '#staff-table-sort',
+      roleSelector: '#staff-table-role',
+      listSelector: '#staffList',
+      itemSelector: 'tr[data-name]'
+    }
+  ]);
+</script>
 {% endblock %}
