@@ -1,4 +1,13 @@
 {% if animals %}
+{% set status_styles = {
+  'adotado': {'label': 'Adotado', 'chip': 'success', 'bar': 'success'},
+  'vendido': {'label': 'Vendido', 'chip': 'secondary', 'bar': 'secondary'},
+  'venda':   {'label': 'À venda', 'chip': 'warning', 'bar': 'warning'},
+  'perdido': {'label': 'Perdido', 'chip': 'danger', 'bar': 'danger'},
+  'doação':  {'label': 'Para adoção', 'chip': 'info', 'bar': 'info'},
+  'doacao':  {'label': 'Para adoção', 'chip': 'info', 'bar': 'info'}
+}%}
+{% set default_status = {'label': 'Para adoção', 'chip': 'info', 'bar': 'info'} %}
 <div class="row row-cols-1 row-cols-md-2 row-cols-lg-3 g-4">
   {% for animal in animals %}
     {% if modo != 'adotado' and animal.modo == 'adotado' and current_user.worker not in ['veterinario', 'colaborador'] %}
@@ -6,37 +15,42 @@
     {% else %}
       {# renderiza normalmente #}
       <div class="col" id="animal-card-{{ animal.id }}">
-        <div class="card h-100 shadow-sm border-0 rounded-4 position-relative {% if animal.modo == 'perdido' %}border border-danger{% endif %} overflow-hidden">
-          <div class="profile-card-media profile-card-media--animal" style="--offset-x: {{ animal.photo_offset_x or 0 }}px; --offset-y: {{ animal.photo_offset_y or 0 }}px; --rotation: {{ animal.photo_rotation or 0 }}deg; --zoom: {{ animal.photo_zoom or 1 }};">
-            {% if animal.image %}
-            <img src="{{ animal.image }}" class="profile-card-photo" loading="lazy" alt="Imagem de {{ animal.name }}">
-            {% else %}
-            <div class="profile-card-placeholder profile-card-placeholder--icon" aria-hidden="true">🐾</div>
-            {% endif %}
-          </div>
+        {% set status_info = status_styles.get(animal.modo, default_status) %}
+        {% set species_label = animal.species|species_display %}
+        {% set size_label = animal.peso|animal_size_label %}
+        {% set size_token = animal.peso|animal_size_token %}
+        <div class="card animal-card h-100 border-0 rounded-4 position-relative {% if animal.modo == 'perdido' %}border border-danger{% endif %} overflow-hidden">
+          <div class="animal-card__status-bar animal-card__status-bar--{{ status_info['bar'] }}" aria-hidden="true"></div>
           <div class="card-body d-flex flex-column gap-3 p-4">
-            <div class="d-flex justify-content-between align-items-start">
-              <div>
-                <h5 class="card-title mb-1">
-                  <span data-bs-toggle="popover" data-bs-trigger="hover focus" data-bs-content="{{ animal.description }}" data-bs-placement="top">
-                    {{ animal.name }}
-                  </span>
-                </h5>
-                {% if animal.date_added %}
-                <p class="text-muted small mb-0">Adicionado em {{ animal.date_added.strftime('%d/%m/%Y') }}</p>
+            <div class="d-flex gap-3 align-items-center">
+              <div class="animal-card__thumbnail {% if not animal.image %}animal-card__thumbnail--placeholder{% endif %}">
+                {% if animal.image %}
+                <img src="{{ animal.image }}" class="animal-card__photo" loading="lazy" alt="Imagem de {{ animal.name }}">
+                {% else %}
+                <div class="animal-card__fallback" aria-hidden="true">
+                  <span>🐾</span>
+                </div>
                 {% endif %}
               </div>
-              {% if animal.modo == 'adotado' %}
-              <span class="badge bg-success">Adotado</span>
-              {% elif animal.modo == 'vendido' %}
-              <span class="badge bg-secondary">Vendido</span>
-              {% elif animal.modo == 'venda' %}
-              <span class="badge bg-warning text-dark">À venda</span>
-              {% elif animal.modo == 'perdido' %}
-              <span class="badge bg-danger">Perdido</span>
-              {% else %}
-              <span class="badge bg-info text-dark">Para adoção</span>
-              {% endif %}
+              <div class="flex-grow-1 min-w-0">
+                <div class="d-flex justify-content-between align-items-start gap-2">
+                  <div class="min-w-0">
+                    <h5 class="card-title mb-1 text-truncate">
+                      <span data-bs-toggle="popover" data-bs-trigger="hover focus" data-bs-content="{{ animal.description }}" data-bs-placement="top">
+                        {{ animal.name }}
+                      </span>
+                    </h5>
+                    {% if animal.date_added %}
+                    <p class="text-muted small mb-0">Adicionado em {{ animal.date_added.strftime('%d/%m/%Y') }}</p>
+                    {% endif %}
+                  </div>
+                  <span class="animal-card__status-chip animal-card__status-chip--{{ status_info['chip'] }}">{{ status_info['label'] }}</span>
+                </div>
+                <div class="animal-card__badges">
+                  <span class="animal-card__badge animal-card__badge--species" title="Espécie">{{ species_label }}</span>
+                  <span class="animal-card__badge animal-card__badge--size animal-card__badge--size-{{ size_token }}" title="Porte">{{ size_label }}</span>
+                </div>
+              </div>
             </div>
 
             {% if animal.modo == 'perdido' %}
@@ -49,7 +63,7 @@
             <ul class="list-unstyled profile-card-details mb-0">
               <li>
                 <i class="fa-solid fa-paw"></i>
-                <span>{{ animal.species }}</span>
+                <span>{{ species_label }}</span>
               </li>
               {% if animal.breed %}
               <li>
@@ -205,5 +219,12 @@
 </nav>
 {% endif %}
 {% else %}
-<p class="mt-3 text-center">Nenhum animal encontrado com esse filtro.</p>
+<div class="animal-empty-state mt-4 text-center">
+  <div class="animal-empty-state__icon" aria-hidden="true">🐕</div>
+  <h5 class="mb-2">Nenhum animal encontrado</h5>
+  <p class="mb-4 text-muted">Ajuste os filtros ou seja o primeiro a cadastrar um novo pet na plataforma.</p>
+  <a href="{{ url_for('novo_animal') }}" class="btn btn-primary rounded-pill">
+    Cadastrar primeiro animal
+  </a>
+</div>
 {% endif %}
