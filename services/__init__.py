@@ -2,6 +2,7 @@
 
 from .calendar_access import get_calendar_access_scope, CalendarAccessScope  # noqa: F401
 from .data_share import find_active_share, log_data_share_event  # noqa: F401
+from .finance import generate_financial_snapshot, update_financial_snapshots_daily  # noqa: F401
 from .health_plan import (  # noqa: F401
     build_usage_history,
     coverage_badge,

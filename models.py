@@ -859,6 +859,42 @@ class ClinicInventoryMovement(db.Model):
     clinica = db.relationship('Clinica', backref='inventory_movements')
     item = db.relationship('ClinicInventoryItem', back_populates='movements')
 
+
+class ClinicFinancialSnapshot(db.Model):
+    __tablename__ = 'clinic_financial_snapshot'
+    __table_args__ = (
+        db.UniqueConstraint('clinic_id', 'month', name='uq_snapshot_clinic_month'),
+    )
+
+    id = db.Column(db.Integer, primary_key=True)
+    clinic_id = db.Column(db.Integer, db.ForeignKey('clinica.id'), nullable=False, index=True)
+    month = db.Column(db.Date, nullable=False, index=True)
+    total_receitas_servicos = db.Column(db.Numeric(14, 2), nullable=False, default=Decimal('0.00'))
+    total_receitas_produtos = db.Column(db.Numeric(14, 2), nullable=False, default=Decimal('0.00'))
+    total_receitas_gerais = db.Column(db.Numeric(14, 2), nullable=False, default=Decimal('0.00'))
+    gerado_em = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+
+    clinic = db.relationship(
+        'Clinica',
+        backref=db.backref('financial_snapshots', cascade='all, delete-orphan', lazy=True),
+    )
+
+    def refresh_totals(self):
+        """Keep ``total_receitas_gerais`` in sync with service + product totals."""
+
+        service = Decimal(self.total_receitas_servicos or 0)
+        products = Decimal(self.total_receitas_produtos or 0)
+        self.total_receitas_gerais = service + products
+        return self.total_receitas_gerais
+
+
+def _sync_snapshot_totals(_mapper, _connection, target):
+    target.refresh_totals()
+
+
+event.listen(ClinicFinancialSnapshot, 'before_insert', _sync_snapshot_totals)
+event.listen(ClinicFinancialSnapshot, 'before_update', _sync_snapshot_totals)
+
 # Associação many-to-many entre veterinário e especialidade
 veterinario_especialidade = db.Table(
     'veterinario_especialidade',

@@ -1203,10 +1203,12 @@ from services import (
     coverage_label,
     evaluate_consulta_coverages,
     find_active_share,
+    generate_financial_snapshot,
     get_calendar_access_scope,
     insurer_token_valid,
     log_data_share_event,
     summarize_plan_metrics,
+    update_financial_snapshots_daily,
 )
 from services.animal_search import search_animals
 
@@ -3963,9 +3965,17 @@ def verificar_datas_proximas() -> None:
         db.session.commit()
 
 
+def _run_financial_snapshot_job() -> None:
+    """Daily hook executed by APScheduler to refresh monthly snapshots."""
+
+    with app.app_context():
+        update_financial_snapshots_daily()
+
+
 if not app.config.get("TESTING"):
     scheduler = BackgroundScheduler(timezone=str(BR_TZ))
     scheduler.add_job(verificar_datas_proximas, 'cron', hour=8)
+    scheduler.add_job(_run_financial_snapshot_job, 'cron', hour=2, minute=30)
     scheduler.start()
 
 
