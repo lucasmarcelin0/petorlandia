@@ -140,6 +140,43 @@ def test_index_hides_professional_area_when_membership_inactive(monkeypatch, app
         assert 'Área profissional' not in html
 
 
+def test_index_shows_professional_area_for_active_vet_without_worker_flag(monkeypatch, app):
+    client = app.test_client()
+
+    with app.app_context():
+        db.drop_all()
+        db.create_all()
+
+        user = User(id=1, name='Vet', email='vet@test', worker=None)
+        user.set_password('test')
+        vet_profile = Veterinario(id=1, user=user, crmv='CRMV123')
+        membership = VeterinarianMembership(
+            veterinario=vet_profile,
+            started_at=datetime.utcnow() - timedelta(days=5),
+            trial_ends_at=datetime.utcnow() + timedelta(days=25),
+            paid_until=None,
+        )
+
+        db.session.add_all([user, vet_profile, membership])
+        db.session.commit()
+
+        import flask_login.utils as login_utils
+
+        monkeypatch.setattr(login_utils, '_get_user', lambda: user)
+        monkeypatch.setattr(app_module, '_is_admin', lambda: False)
+
+        for idx, fn in enumerate(flask_app.template_context_processors[None]):
+            if fn.__name__ == 'inject_unread_count':
+                flask_app.template_context_processors[None][idx] = (
+                    lambda: {'unread_messages': 0}
+                )
+
+        response = client.get('/')
+        html = response.get_data(as_text=True)
+
+        assert 'Área profissional' in html
+
+
 def test_veterinarian_request_new_trial_requires_admin_for_activation(monkeypatch, app):
     client = app.test_client()
 
