@@ -3125,6 +3125,27 @@ def contabilidade_pagamentos():
     selected_month = _parse_month_parameter(request.args.get('mes'))
     start_date = selected_month
     end_date = selected_month + relativedelta(months=1)
+    context_month_value = selected_month.strftime('%Y-%m')
+
+    requested_month = (request.args.get('mes') or '')[:7]
+    requested_clinic_id = request.args.get('clinica_id', type=int)
+    needs_redirect = False
+
+    if selected_clinic_id:
+        if requested_clinic_id != selected_clinic_id:
+            needs_redirect = True
+    elif 'clinica_id' in request.args:
+        needs_redirect = True
+
+    if requested_month != context_month_value:
+        needs_redirect = True
+
+    canonical_params = {'mes': context_month_value}
+    if selected_clinic_id:
+        canonical_params['clinica_id'] = selected_clinic_id
+
+    if needs_redirect:
+        return redirect(url_for('contabilidade_pagamentos', **canonical_params))
 
     payments: list[PJPayment] = []
     payments_error = None
@@ -3280,6 +3301,17 @@ def contabilidade_pagamentos():
             payment_entry_url = None
             if orcamento.consulta_id:
                 payment_entry_url = url_for('pagar_consulta_orcamento', consulta_id=orcamento.consulta_id)
+            if orcamento.consulta and orcamento.consulta.animal_id:
+                source_url = (
+                    url_for(
+                        'consulta_direct',
+                        animal_id=orcamento.consulta.animal_id,
+                        c=orcamento.consulta.id,
+                    )
+                    + '#orcamento'
+                )
+            else:
+                source_url = url_for('editar_orcamento', orcamento_id=orcamento.id)
             budget_entries.append(
                 _build_budget_entry(
                     entry_type='orcamento',
@@ -3289,7 +3321,7 @@ def contabilidade_pagamentos():
                     reference_date=reference_date,
                     type_label='Orçamento',
                     context_label=animal_name,
-                    source_url=url_for('editar_orcamento', orcamento_id=orcamento.id),
+                    source_url=source_url,
                     payment_entry_url=payment_entry_url,
                 )
             )
@@ -3320,8 +3352,6 @@ def contabilidade_pagamentos():
 
     total_pago = sum((payment.valor or Decimal('0.00')) for payment in payments if payment.status == 'pago')
     total_pendente = sum((payment.valor or Decimal('0.00')) for payment in payments if payment.status == 'pendente')
-
-    context_month_value = selected_month.strftime('%Y-%m')
 
     return render_template(
         'contabilidade/pagamentos.html',
@@ -7722,7 +7752,8 @@ def orcamentos(clinica_id):
     if current_user.clinica_id != clinica_id and not _is_admin():
         abort(403)
     lista = Orcamento.query.filter_by(clinica_id=clinica_id).all()
-    month_value = request.args.get('mes') or _format_month_parameter(date.today())
+    selected_month = _parse_month_parameter(request.args.get('mes'))
+    month_value = selected_month.strftime('%Y-%m')
     contabilidade_url = None
     if _user_can_access_accounting():
         contabilidade_url = url_for(
@@ -7871,7 +7902,8 @@ def dashboard_orcamentos():
         Clinica.query.get(selected_clinic_id) if selected_clinic_id else None
     )
 
-    reference_month_value = request.args.get('mes') or _format_month_parameter(date.today())
+    reference_month = _parse_month_parameter(request.args.get('mes'))
+    reference_month_value = reference_month.strftime('%Y-%m')
     contabilidade_url = None
     if selected_clinic_id and _user_can_access_accounting():
         contabilidade_url = url_for(
