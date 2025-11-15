@@ -84,6 +84,12 @@
   </div>
   {% endif %}
 
+  {% if selected_view == 'plantonistas' and plantonista_error %}
+  <div class="alert alert-warning shadow-sm rounded-pill" role="alert">
+    <i class="fas fa-exclamation-triangle me-2"></i>{{ plantonista_error }}
+  </div>
+  {% endif %}
+
   {% if selected_view == 'geral' %}
   <div class="row g-3 mb-4">
     <div class="col-md-4">
