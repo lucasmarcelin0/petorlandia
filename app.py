@@ -1,7 +1,7 @@
 # ───────────────────────────  app.py  ───────────────────────────
 import os, sys, pathlib, importlib, logging, uuid, re
 import requests
-from collections import defaultdict
+from collections import defaultdict, Counter
 from io import BytesIO, StringIO
 from concurrent.futures import ThreadPoolExecutor
 from decimal import Decimal
@@ -5199,6 +5199,200 @@ def _send_clinic_invite_email(clinica, veterinarian_user, inviter):
     return True
 
 
+def _resolve_clinic_logo_path(clinica):
+    """Return an absolute filesystem path for the clinic logo if it exists."""
+    if not clinica or not clinica.logotipo:
+        return None
+
+    logo_path = clinica.logotipo
+    if logo_path.startswith('http'):
+        return None
+
+    if logo_path.startswith('/'):
+        candidate = os.path.join(current_app.root_path, logo_path.lstrip('/'))
+    else:
+        uploads_dir = os.path.join(
+            current_app.static_folder,
+            'uploads',
+            'clinicas',
+        )
+        candidate = os.path.join(uploads_dir, logo_path)
+
+    return candidate if os.path.isfile(candidate) else None
+
+
+def _rgb_to_hex(rgb):
+    return '#{:02x}{:02x}{:02x}'.format(*rgb)
+
+
+def _hex_to_rgb(value):
+    value = value.lstrip('#')
+    if len(value) == 3:
+        value = ''.join(ch * 2 for ch in value)
+    return tuple(int(value[i:i + 2], 16) for i in range(0, 6, 2))
+
+
+def _relative_brightness(rgb):
+    r, g, b = rgb
+    return (r * 299 + g * 587 + b * 114) / 1000
+
+
+def _is_light_color(rgb):
+    return _relative_brightness(rgb) >= 155
+
+
+def _color_distance(rgb_a, rgb_b):
+    return sum((a - b) ** 2 for a, b in zip(rgb_a, rgb_b)) ** 0.5
+
+
+def _simplify_color(rgb):
+    return tuple((channel // 16) * 16 for channel in rgb)
+
+
+def _extract_clinic_logo_palette(clinica):
+    logo_path = _resolve_clinic_logo_path(clinica)
+    if not logo_path:
+        return {}
+
+    try:
+        with Image.open(logo_path) as img:
+            img = img.convert('RGBA')
+            img.thumbnail((220, 220))
+            pixels = [
+                tuple(pixel[:3])
+                for pixel in img.getdata()
+                if (len(pixel) == 4 and pixel[3] > 50) or len(pixel) == 3
+            ]
+    except Exception as exc:
+        current_app.logger.debug(
+            'Não foi possível extrair cores do logo da clínica %s: %s',
+            clinica.id,
+            exc,
+        )
+        return {}
+
+    if not pixels:
+        return {}
+
+    counter = Counter(_simplify_color(pixel) for pixel in pixels)
+    if not counter:
+        return {}
+
+    primary = counter.most_common(1)[0][0]
+    secondary = primary
+    for color, _ in counter.most_common(5):
+        if _color_distance(primary, color) > 60:
+            secondary = color
+            break
+
+    if secondary == primary and len(counter) > 1:
+        secondary = counter.most_common(2)[1][0]
+
+    return {
+        'primary_color': _rgb_to_hex(primary),
+        'secondary_color': _rgb_to_hex(secondary),
+    }
+
+
+def _clinic_initials(clinica):
+    if not clinica or not clinica.nome:
+        return 'CL'
+    parts = [part for part in re.split(r'\s+', clinica.nome.strip()) if part]
+    if not parts:
+        return 'CL'
+    if len(parts) == 1:
+        return parts[0][:2].upper()
+    return (parts[0][0] + parts[1][0]).upper()
+
+
+def _extract_city_from_address(address):
+    if not address:
+        return ''
+    segments = [seg.strip() for seg in re.split(r'[-–,]', address) if seg.strip()]
+    if not segments:
+        return ''
+    candidate = segments[-1]
+    if len(candidate.split()) > 6:
+        return ''
+    return candidate
+
+
+def _build_clinic_subtitle(clinica):
+    if not clinica:
+        return 'Parceira PetOrlândia'
+
+    custom_slogans = current_app.config.get('CLINIC_SLOGANS', {}) or {}
+    for key in (clinica.id, str(clinica.id), clinica.nome):
+        if key in custom_slogans:
+            return custom_slogans[key]
+
+    city = _extract_city_from_address(clinica.endereco)
+    if city:
+        return f'Referência veterinária em {city}'
+    if clinica.telefone:
+        return f'Fale com a equipe pelo {clinica.telefone}'
+    if clinica.email:
+        return f'Contato direto: {clinica.email}'
+    return 'Parceira PetOrlândia'
+
+
+def _build_clinic_theme(clinica):
+    theme = {
+        'primary_color': '#6f6df4',
+        'secondary_color': '#46c4d3',
+    }
+
+    presets = current_app.config.get('CLINIC_COLOR_PRESETS', {}) or {}
+    keys = [
+        clinica.id if clinica else None,
+        str(clinica.id) if clinica else None,
+        clinica.nome if clinica else None,
+        'default',
+    ]
+    for key in keys:
+        if key in presets:
+            theme.update(presets[key])
+            break
+
+    theme.update(_extract_clinic_logo_palette(clinica))
+
+    primary_rgb = _hex_to_rgb(theme['primary_color'])
+    text_color = theme.get('text_color')
+    if not text_color:
+        text_color = '#0f172a' if _is_light_color(primary_rgb) else '#f8fafc'
+    theme['text_color'] = text_color
+
+    text_rgb = _hex_to_rgb(text_color)
+    text_is_light = _is_light_color(text_rgb)
+
+    if text_is_light:
+        theme.setdefault('subtitle_color', 'rgba(248, 250, 252, 0.82)')
+        theme.setdefault('eyebrow_color', 'rgba(248, 250, 252, 0.7)')
+        theme.setdefault('chip_bg_color', 'rgba(255, 255, 255, 0.2)')
+        theme.setdefault('chip_border_color', 'rgba(255, 255, 255, 0.35)')
+        theme.setdefault('chip_text_color', '#ffffff')
+        theme.setdefault('logo_frame_bg', '#ffffff')
+        theme.setdefault('logo_frame_shadow', 'rgba(0, 0, 0, 0.15)')
+        theme.setdefault('avatar_text_color', '#ffffff')
+    else:
+        theme.setdefault('subtitle_color', 'rgba(15, 23, 42, 0.82)')
+        theme.setdefault('eyebrow_color', 'rgba(15, 23, 42, 0.65)')
+        theme.setdefault('chip_bg_color', 'rgba(15, 23, 42, 0.08)')
+        theme.setdefault('chip_border_color', 'rgba(15, 23, 42, 0.18)')
+        theme.setdefault('chip_text_color', '#0f172a')
+        theme.setdefault('logo_frame_bg', '#f8fafc')
+        theme.setdefault('logo_frame_shadow', 'rgba(15, 23, 42, 0.12)')
+        theme.setdefault('avatar_text_color', '#0f172a')
+
+    theme.setdefault(
+        'avatar_bg',
+        f'linear-gradient(135deg, {theme["primary_color"]}, {theme["secondary_color"]})',
+    )
+    theme.setdefault('logo_frame_border', 'rgba(255, 255, 255, 0.4)')
+
+    return theme
+
+
 @app.route('/clinica/<int:clinica_id>', methods=['GET', 'POST'])
 @login_required
 def clinic_detail(clinica_id):
@@ -5786,9 +5980,16 @@ def clinic_detail(clinica_id):
         ],
     ]
 
+    clinic_theme = _build_clinic_theme(clinica)
+    clinic_subtitle = _build_clinic_subtitle(clinica)
+    clinic_initials = _clinic_initials(clinica)
+
     return render_template(
         'clinica/clinic_detail.html',
         clinica=clinica,
+        clinic_theme=clinic_theme,
+        clinic_subtitle=clinic_subtitle,
+        clinic_initials=clinic_initials,
         horarios=horarios,
         form=hours_form,
         clinic_form=clinic_form,
