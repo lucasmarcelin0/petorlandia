@@ -18,7 +18,18 @@
     <h5 class="card-title">💰 Histórico de Orçamentos</h5>
     {% for bloco in blocos|reverse %}
     <div class="border rounded p-3 mb-3">
-      <h6 class="text-muted">Orçamento feito em {{ bloco.data_criacao|format_datetime_brazil('%d/%m/%Y %H:%M') }}</h6>
+      <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center mb-2">
+        <h6 class="text-muted mb-0">Orçamento feito em {{ bloco.data_criacao|format_datetime_brazil('%d/%m/%Y %H:%M') }}</h6>
+        {% set status = bloco.payment_status or 'draft' %}
+        {% set status_map = {
+          'draft': ('Pendente', 'bg-secondary'),
+          'pending': ('Aguardando pagamento', 'bg-warning text-dark'),
+          'paid': ('Pago', 'bg-success'),
+          'failed': ('Pagamento falhou', 'bg-danger')
+        } %}
+        {% set label, badge = status_map.get(status, status_map['draft']) %}
+        <span class="badge {{ badge }} mt-2 mt-md-0">{{ label }}</span>
+      </div>
       {% set payer_groups = [
         ('plan', 'Plano', 'bg-info text-dark'),
         ('particular', 'Particular', 'bg-secondary')
@@ -40,16 +51,35 @@
         </ul>
         {% endif %}
       {% endfor %}
-      <div class="d-flex justify-content-between border-top pt-2 mt-2">
-        <strong>Total geral</strong>
-        <strong>R$ {{ '%.2f'|format(bloco.total) }}</strong>
+      <div class="border-top pt-2 mt-2">
+        <div class="d-flex justify-content-between">
+          <strong>Total bruto</strong>
+          <strong>R$ {{ '%.2f'|format(bloco.total) }}</strong>
+        </div>
+        {% if bloco.discount_value %}
+        <div class="d-flex justify-content-between text-muted small">
+          <span>Desconto {% if bloco.discount_percent %}({{ '%.2f'|format(bloco.discount_percent) }}%){% endif %}</span>
+          <span>- R$ {{ '%.2f'|format(bloco.discount_value) }}</span>
+        </div>
+        {% endif %}
+        <div class="d-flex justify-content-between fw-bold">
+          <span>Total líquido</span>
+          <span>R$ {{ '%.2f'|format(bloco.total_liquido) }}</span>
+        </div>
+        {% if bloco.tutor_notes %}
+        <p class="mb-0 mt-2"><strong>Observações ao tutor:</strong> {{ bloco.tutor_notes }}</p>
+        {% endif %}
       </div>
-      <div class="d-flex flex-wrap gap-2">
+      <div class="d-flex flex-wrap gap-2 mt-3">
         <form method="POST" action="{{ url_for('deletar_bloco_orcamento', bloco_id=bloco.id) }}" class="d-inline delete-history-form" data-sync data-target="historico-orcamentos" data-confirm="Deseja mesmo excluir este orçamento?">
           <button class="btn btn-danger btn-sm">🗑 Excluir</button>
         </form>
         <a href="{{ url_for('imprimir_bloco_orcamento', bloco_id=bloco.id) }}" class="btn btn-outline-secondary btn-sm" target="_blank">🖨 Imprimir</a>
         <a href="{{ url_for('editar_bloco_orcamento', bloco_id=bloco.id) }}" class="btn btn-outline-primary btn-sm">✏️ Editar</a>
+        <button type="button" class="btn btn-outline-success btn-sm" onclick="enviarBlocoParaPagamento({{ bloco.id }})">💳 Enviar para pagamento</button>
+        {% if bloco.payment_link %}
+        <a href="{{ bloco.payment_link }}" target="_blank" class="btn btn-outline-info btn-sm">🔗 Link atual</a>
+        {% endif %}
       </div>
     </div>
     {% endfor %}
@@ -58,3 +88,39 @@
 {% else %}
 <p class="text-muted">Nenhum orçamento registrado ainda.</p>
 {% endif %}
+
+<script>
+if (!window.enviarBlocoParaPagamento) {
+  window.enviarBlocoParaPagamento = async function enviarBlocoParaPagamento(blocoId) {
+    const historico = document.getElementById('historico-orcamentos');
+    try {
+      const resp = await fetch(`/pagar_orcamento/${blocoId}`, {
+        method: 'POST',
+        headers: {'Accept': 'application/json'}
+      });
+      const data = await resp.json();
+      if (!resp.ok || !data.success) {
+        if (typeof showToast === 'function') {
+          showToast((data && data.message) || 'Não foi possível iniciar o pagamento.', 'danger');
+        }
+        return;
+      }
+      if (data.html && historico) {
+        historico.innerHTML = data.html;
+        if (typeof bindSyncForms === 'function') { bindSyncForms(historico); }
+      }
+      if (data.redirect_url) {
+        window.open(data.redirect_url, '_blank');
+      }
+      if (typeof showToast === 'function') {
+        showToast(data.message || 'Pagamento iniciado.', 'success');
+      }
+    } catch (error) {
+      if (typeof showToast === 'function') {
+        showToast('Erro ao comunicar com o servidor.', 'danger');
+      }
+      console.error(error);
+    }
+  }
+}
+</script>

@@ -1,4 +1,5 @@
 import os
+import json
 os.environ["SQLALCHEMY_DATABASE_URI"] = "sqlite:///:memory:"
 import sys
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
@@ -36,7 +37,15 @@ def test_salvar_bloco_orcamento(app):
     client = app.test_client()
     with client:
         client.post('/login', data={'email': 'vet@example.com', 'password': 'x'}, follow_redirects=True)
-        resp = client.post(f'/consulta/{consulta_id}/bloco_orcamento', headers={'Accept': 'application/json'})
+        payload = {
+            'discount_percent': 10,
+            'tutor_notes': 'Observação importante'
+        }
+        resp = client.post(
+            f'/consulta/{consulta_id}/bloco_orcamento',
+            headers={'Accept': 'application/json', 'Content-Type': 'application/json'},
+            data=json.dumps(payload)
+        )
         assert resp.status_code == 200
         data = resp.get_json()
         assert data['success']
@@ -44,6 +53,8 @@ def test_salvar_bloco_orcamento(app):
         bloco = BlocoOrcamento.query.first()
         assert bloco is not None
         assert len(bloco.itens) == 2
+        assert float(bloco.discount_value) > 0
+        assert bloco.tutor_notes == 'Observação importante'
         consulta = Consulta.query.get(consulta_id)
         assert len(consulta.orcamento_items) == 0
         db.drop_all()

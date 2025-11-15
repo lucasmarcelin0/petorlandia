@@ -656,6 +656,13 @@ class BlocoOrcamento(db.Model):
     animal_id = db.Column(db.Integer, db.ForeignKey('animal.id'), nullable=False)
     clinica_id = db.Column(db.Integer, db.ForeignKey('clinica.id'), nullable=False)
     data_criacao = db.Column(db.DateTime, default=datetime.utcnow)
+    discount_percent = db.Column(db.Numeric(5, 2), nullable=True)
+    discount_value = db.Column(db.Numeric(10, 2), nullable=True)
+    tutor_notes = db.Column(db.Text, nullable=True)
+    net_total = db.Column(db.Numeric(10, 2), nullable=True)
+    payment_status = db.Column(db.String(20), nullable=False, default='draft')
+    payment_link = db.Column(db.Text, nullable=True)
+    payment_reference = db.Column(db.String(120), nullable=True)
 
     animal = db.relationship('Animal', backref=db.backref('blocos_orcamento', cascade='all, delete-orphan', lazy=True))
     clinica = db.relationship('Clinica', backref=db.backref('blocos_orcamento', cascade='all, delete-orphan'))
@@ -663,6 +670,16 @@ class BlocoOrcamento(db.Model):
     @property
     def total(self):
         return sum(item.valor for item in self.itens)
+
+    @property
+    def total_liquido(self):
+        bruto = self.total or Decimal('0.00')
+        desconto = self.discount_value or Decimal('0.00')
+        if bruto is None:
+            return Decimal('0.00')
+        if desconto is None:
+            return bruto
+        return max(bruto - desconto, Decimal('0.00'))
 
 
 # models.py

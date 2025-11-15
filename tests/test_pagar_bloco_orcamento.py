@@ -51,9 +51,11 @@ def test_pagar_bloco_orcamento(app, monkeypatch):
                 return FakePrefService()
 
         monkeypatch.setattr(app_module, 'mp_sdk', lambda: FakeSDK())
-        resp = client.get(f'/pagar_bloco_orcamento/{bloco_id}')
-        assert resp.status_code == 302
-        assert resp.headers['Location'] == 'http://mp'
+        resp = client.post(f'/pagar_orcamento/{bloco_id}', headers={'Accept': 'application/json'})
+        assert resp.status_code == 200
+        data = resp.get_json()
+        assert data['success']
+        assert data['redirect_url'] == 'http://mp'
 
     with app.app_context():
         db.drop_all()

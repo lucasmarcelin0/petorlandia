@@ -106,6 +106,23 @@
     </tr>
   </tfoot>
 </table>
+<div id="particular-extra-fields" class="border rounded p-3 mb-3 bg-white d-none">
+  <div class="row g-3">
+    <div class="col-md-4">
+      <label for="desconto-percentual" class="form-label">Desconto (%)</label>
+      <input type="number" step="0.01" min="0" max="100" class="form-control" id="desconto-percentual" placeholder="Ex: 10">
+    </div>
+    <div class="col-md-4">
+      <label for="desconto-valor" class="form-label">Desconto (R$)</label>
+      <input type="number" step="0.01" min="0" class="form-control" id="desconto-valor" placeholder="Ex: 50,00">
+    </div>
+    <div class="col-12">
+      <label for="observacoes-tutor" class="form-label">Observações para o tutor</label>
+      <textarea id="observacoes-tutor" class="form-control" rows="2" placeholder="Mensagem que aparecerá para o tutor"></textarea>
+      <small class="text-muted">Essas informações serão enviadas apenas para o orçamento particular.</small>
+    </div>
+  </div>
+</div>
 <div class="text-end mt-3">
   <button type="button" class="btn btn-success" onclick="finalizarBlocoOrcamento()">💾 Salvar orçamento</button>
 </div>
@@ -118,6 +135,7 @@
 const consultaId = {{ consulta.id }};
 const payerTypeLabels = { plan: 'Plano', particular: 'Particular' };
 let currentPayerType = '{{ default_payer_type }}';
+const discountContainer = document.getElementById('particular-extra-fields');
 
 function toggleNovoServico() {
   const container = document.getElementById('novo-servico-container');
@@ -169,6 +187,7 @@ function applyPayerFilter() {
     row.classList.toggle('d-none', !shouldShow);
   });
   updateOrcamentoTotal();
+  toggleDiscountFields();
 }
 
 function updateOrcamentoTotal() {
@@ -195,6 +214,36 @@ function bindPayerToggle() {
 function initPayerControls() {
   bindPayerToggle();
   applyPayerFilter();
+}
+
+function toggleDiscountFields() {
+  if (!discountContainer) return;
+  const show = currentPayerType === 'particular';
+  discountContainer.classList.toggle('d-none', !show);
+  discountContainer.querySelectorAll('input, textarea').forEach(el => {
+    el.disabled = !show;
+  });
+}
+
+function coletarDadosDesconto() {
+  if (!discountContainer || discountContainer.classList.contains('d-none')) {
+    return {};
+  }
+  const percent = parseFloat(document.getElementById('desconto-percentual').value);
+  const valor = parseFloat(document.getElementById('desconto-valor').value);
+  const observacoes = document.getElementById('observacoes-tutor').value.trim();
+  const payload = {};
+  if (!isNaN(percent)) payload.discount_percent = percent;
+  if (!isNaN(valor)) payload.discount_value = valor;
+  if (observacoes) payload.tutor_notes = observacoes;
+  return payload;
+}
+
+function limparCamposDesconto() {
+  if (!discountContainer) return;
+  document.getElementById('desconto-percentual').value = '';
+  document.getElementById('desconto-valor').value = '';
+  document.getElementById('observacoes-tutor').value = '';
 }
 
 if (document.readyState === 'loading') {
@@ -251,18 +300,31 @@ async function removerItemOrcamento(id) {
 async function finalizarBlocoOrcamento() {
   const tbody = document.querySelector('#orcamento-tabela tbody');
   if (!tbody.children.length) return;
-  const resp = await fetch(`/consulta/${consultaId}/bloco_orcamento`, {method: 'POST', headers: {'Accept': 'application/json'}});
+  const extra = coletarDadosDesconto();
+  const resp = await fetch(`/consulta/${consultaId}/bloco_orcamento`, {
+    method: 'POST',
+    headers: {'Accept': 'application/json', 'Content-Type': 'application/json'},
+    body: Object.keys(extra).length ? JSON.stringify(extra) : null
+  });
   if (resp.ok) {
     const data = await resp.json();
     if (data.success) {
       tbody.innerHTML = '';
       document.getElementById('orcamento-total').textContent = '0.00';
+      limparCamposDesconto();
       const historico = document.getElementById('historico-orcamentos');
       if (data.html) {
         historico.innerHTML = data.html;
         if (typeof bindSyncForms === 'function') { bindSyncForms(historico); }
       }
+      if (typeof showToast === 'function') {
+        showToast('Orçamento salvo com sucesso!', 'success');
+      }
+    } else if (typeof showToast === 'function') {
+      showToast(data.message || 'Não foi possível salvar o orçamento.', 'danger');
     }
+  } else if (typeof showToast === 'function') {
+    showToast('Não foi possível salvar o orçamento.', 'danger');
   }
 }
 </script>
