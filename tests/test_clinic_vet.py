@@ -10,7 +10,7 @@ from werkzeug.exceptions import Forbidden
 from flask_login import login_user, logout_user
 
 from app import app as flask_app, db, cancel_clinic_invite, resend_clinic_invite
-from models import User, Clinica, Veterinario, VetClinicInvite
+from models import User, Clinica, Veterinario, VetClinicInvite, Specialty
 
 
 @pytest.fixture
@@ -189,6 +189,49 @@ def test_cancel_invite_requires_permission(app):
         assert response.status_code == 302
         db.session.refresh(invite)
         assert invite.status == 'cancelled'
+
+        db.session.remove()
+        db.drop_all()
+
+
+def test_clinic_filters_include_specialties_and_crmv(app):
+    with app.app_context():
+        db.drop_all()
+        db.create_all()
+
+        owner = User(id=11, name='Owner', email='owner2@test', password_hash='x', worker='clinica')
+        clinic = Clinica(id=11, nome='Clinica Filtros', owner=owner)
+        owner.clinica_id = clinic.id
+
+        vet_user = User(id=12, name='Dra. Clara', email='clara@test', password_hash='x', worker='veterinario')
+        vet = Veterinario(id=12, user=vet_user, crmv='CRMV-INT', clinica=clinic)
+        cardio = Specialty(id=101, nome='Cardiologia')
+        vet.specialties.append(cardio)
+
+        specialist_user = User(id=13, name='Dr. Beto', email='beto@test', password_hash='x', worker='veterinario')
+        specialist = Veterinario(id=13, user=specialist_user, crmv='SP-999')
+        derma = Specialty(id=102, nome='Dermatologia')
+        specialist.specialties.append(derma)
+        clinic.veterinarios_associados.append(specialist)
+
+        db.session.add_all([owner, clinic, vet_user, vet, specialist_user, specialist, cardio, derma])
+        db.session.commit()
+
+        client = app.test_client()
+        login(client, owner.id)
+
+        response = client.get(f'/clinica/{clinic.id}')
+        assert response.status_code == 200
+        html = response.get_data(as_text=True)
+
+        assert 'id="staff-crmv"' in html
+        assert 'id="staff-specialties"' in html
+        assert 'Cardiologia' in html
+        assert 'Dermatologia' in html
+        assert 'data-crmv="crmv-int"' in html
+        assert 'data-crmv="sp-999"' in html
+        assert 'data-specialties="cardiologia"' in html
+        assert 'data-specialties="dermatologia"' in html
 
         db.session.remove()
         db.drop_all()

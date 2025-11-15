@@ -110,15 +110,27 @@
         <div class="accordion-body">
           <div class="card shadow-sm mb-4">
             <div class="card-body">
-              <div class="row row-cols-1 row-cols-md-3 g-3">
-                <div class="col">
+              <div class="row g-3 align-items-end">
+                <div class="col-12 col-lg-4">
                   <label for="staff-filter" class="form-label text-muted small">Buscar profissional</label>
                   <div class="input-group">
                     <span class="input-group-text bg-light"><i class="bi bi-search"></i></span>
-                    <input type="text" id="staff-filter" class="form-control" placeholder="Nome, CRMV...">
+                    <input type="text" id="staff-filter" class="form-control" placeholder="Nome ou email">
                   </div>
                 </div>
-                <div class="col">
+                <div class="col-12 col-sm-6 col-lg-2">
+                  <label for="staff-crmv" class="form-label text-muted small">Filtrar por CRMV</label>
+                  <input type="text" id="staff-crmv" class="form-control" placeholder="CRMV">
+                </div>
+                <div class="col-12 col-sm-6 col-lg-2">
+                  <label for="staff-role" class="form-label text-muted small">Filtrar função</label>
+                  <select id="staff-role" class="form-select">
+                    <option value="">Todas</option>
+                    <option value="veterinario">Veterinário</option>
+                    <option value="colaborador">Colaborador</option>
+                  </select>
+                </div>
+                <div class="col-12 col-sm-6 col-lg-2">
                   <label for="staff-sort" class="form-label text-muted small">Ordenar por</label>
                   <select id="staff-sort" class="form-select">
                     <option value="name_asc">Nome (A-Z)</option>
@@ -127,13 +139,16 @@
                     <option value="role_desc">Função (Z-A)</option>
                   </select>
                 </div>
-                <div class="col">
-                  <label for="staff-role" class="form-label text-muted small">Filtrar função</label>
-                  <select id="staff-role" class="form-select">
-                    <option value="">Todas</option>
-                    <option value="veterinario">Veterinário</option>
-                    <option value="colaborador">Colaborador</option>
+                <div class="col-12 col-lg-4">
+                  <label for="staff-specialties" class="form-label text-muted small">Filtrar especialidades</label>
+                  <select id="staff-specialties" class="form-select" multiple size="4" {% if not unique_specialties %}disabled{% endif %}>
+                    {% for specialty in unique_specialties %}
+                    <option value="{{ specialty }}">{{ specialty }}</option>
+                    {% endfor %}
                   </select>
+                  {% if not unique_specialties %}
+                  <div class="form-text text-muted">Nenhuma especialidade cadastrada.</div>
+                  {% endif %}
                 </div>
               </div>
             </div>
@@ -141,7 +156,7 @@
           <div id="staff-list" class="row row-cols-1 row-cols-md-2 g-3">
             {% for v in veterinarios %}
             {% set schedule_summary = grouped_vet_schedules.get(v.id, {}) %}
-            <div class="col" data-name="{{ v.user.name|lower }}" data-role="{{ v.user.worker or 'veterinario' }}">
+            <div class="col" data-name="{{ v.user.name|lower }}" data-role="{{ v.user.worker or 'veterinario' }}" data-crmv="{{ v.crmv|default('', true)|lower }}" data-specialties="{{ (v.specialties or []) | map(attribute='nome') | join('|') | lower }}">
               <div class="card team-card h-100">
                 <div class="card-body d-flex flex-column gap-3">
                   <div class="d-flex justify-content-between align-items-start gap-3">
@@ -237,7 +252,7 @@
           <div class="row row-cols-1 row-cols-md-2 g-3">
             {% for s in specialists %}
             {% set schedule_summary = grouped_vet_schedules.get(s.id, {}) %}
-            <div class="col" data-name="{{ s.user.name|lower }}" data-role="especialista">
+            <div class="col" data-name="{{ s.user.name|lower }}" data-role="especialista" data-crmv="{{ s.crmv|default('', true)|lower }}" data-specialties="{{ (s.specialties or []) | map(attribute='nome') | join('|') | lower }}">
               <div class="card team-card h-100">
                 <div class="card-body d-flex flex-column gap-3">
                   <div class="d-flex justify-content-between align-items-start gap-3">
