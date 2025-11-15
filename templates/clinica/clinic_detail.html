@@ -163,50 +163,55 @@
 }
 
 document.addEventListener('DOMContentLoaded', function() {
-  const filterInput = document.getElementById('staff-filter');
-  const sortSelect = document.getElementById('staff-sort');
-  const roleSelect = document.getElementById('staff-role');
-  const list = document.getElementById('staff-list');
-  if (!filterInput || !sortSelect || !list) return;
-  const tbody = list.querySelector('tbody');
-  const items = Array.from(tbody ? tbody.querySelectorAll('tr[data-name]') : []);
+  function setupListControls({ filterId, sortId, roleId, tableId }) {
+    const filterInput = document.getElementById(filterId);
+    const sortSelect = document.getElementById(sortId);
+    const list = document.getElementById(tableId);
+    if (!filterInput || !sortSelect || !list) return;
+    const roleSelect = roleId ? document.getElementById(roleId) : null;
+    const tbody = list.querySelector('tbody');
+    const items = Array.from(tbody ? tbody.querySelectorAll('tr[data-name]') : []);
 
-  function applyFilter() {
-    const term = filterInput.value.toLowerCase();
-    const role = roleSelect ? roleSelect.value : '';
-    items.forEach(item => {
-      const text = item.textContent.toLowerCase();
-      const matchesRole = !role || item.dataset.role === role;
-      item.style.display = (text.includes(term) && matchesRole) ? '' : 'none';
-    });
+    function applyFilter() {
+      const term = filterInput.value.toLowerCase();
+      const role = roleSelect ? roleSelect.value.toLowerCase() : '';
+      items.forEach(item => {
+        const text = item.textContent.toLowerCase();
+        const matchesRole = !role || (item.dataset.role || '').toLowerCase() === role;
+        item.style.display = (text.includes(term) && matchesRole) ? '' : 'none';
+      });
+    }
+
+    function applySort() {
+      const value = sortSelect.value;
+      const visible = items.filter(item => item.style.display !== 'none');
+      const hidden = items.filter(item => item.style.display === 'none');
+      visible.sort((a, b) => {
+        switch (value) {
+          case 'name_desc':
+            return b.dataset.name.localeCompare(a.dataset.name);
+          case 'role_asc':
+            return (a.dataset.role || '').localeCompare(b.dataset.role || '');
+          case 'role_desc':
+            return (b.dataset.role || '').localeCompare(a.dataset.role || '');
+          case 'name_asc':
+          default:
+            return a.dataset.name.localeCompare(b.dataset.name);
+        }
+      });
+      const target = tbody || list;
+      visible.forEach(item => target.appendChild(item));
+      hidden.forEach(item => target.appendChild(item));
+    }
+
+    filterInput.addEventListener('input', () => { applyFilter(); applySort(); });
+    sortSelect.addEventListener('change', applySort);
+    if (roleSelect) roleSelect.addEventListener('change', () => { applyFilter(); applySort(); });
+    applySort();
   }
 
-  function applySort() {
-    const value = sortSelect.value;
-    const visible = items.filter(item => item.style.display !== 'none');
-    const hidden = items.filter(item => item.style.display === 'none');
-    visible.sort((a, b) => {
-      switch (value) {
-        case 'name_desc':
-          return b.dataset.name.localeCompare(a.dataset.name);
-        case 'role_asc':
-          return (a.dataset.role || '').localeCompare(b.dataset.role || '');
-        case 'role_desc':
-          return (b.dataset.role || '').localeCompare(a.dataset.role || '');
-        case 'name_asc':
-        default:
-          return a.dataset.name.localeCompare(b.dataset.name);
-      }
-    });
-    const target = tbody || list;
-    visible.forEach(item => target.appendChild(item));
-    hidden.forEach(item => target.appendChild(item));
-  }
-
-  filterInput.addEventListener('input', () => { applyFilter(); applySort(); });
-  sortSelect.addEventListener('change', applySort);
-  if (roleSelect) roleSelect.addEventListener('change', () => { applyFilter(); applySort(); });
-  applySort();
+  setupListControls({ filterId: 'staff-filter', sortId: 'staff-sort', roleId: 'staff-role', tableId: 'staff-list' });
+  setupListControls({ filterId: 'employee-filter', sortId: 'employee-sort', roleId: 'employee-role', tableId: 'employee-list' });
 });
 
 document.addEventListener('DOMContentLoaded', function() {

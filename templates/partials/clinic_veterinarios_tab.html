@@ -16,12 +16,70 @@
           </div>
         </form>
         {% endif %}
+        {% set staff_role_ns = namespace(options=[]) %}
+        {% for s in staff_members %}
+          {% if s.user.worker and s.user.worker not in staff_role_ns.options %}
+            {% set staff_role_ns.options = staff_role_ns.options + [s.user.worker] %}
+          {% endif %}
+        {% endfor %}
+        <div class="row row-cols-1 row-cols-md-3 g-2 mb-3">
+          <div class="col">
+            <input type="text" id="employee-filter" class="form-control" placeholder="Buscar funcionário...">
+          </div>
+          <div class="col">
+            <select id="employee-sort" class="form-select">
+              <option value="name_asc">Nome (A-Z)</option>
+              <option value="name_desc">Nome (Z-A)</option>
+              <option value="role_asc">Função (A-Z)</option>
+              <option value="role_desc">Função (Z-A)</option>
+            </select>
+          </div>
+          <div class="col">
+            <select id="employee-role" class="form-select">
+              <option value="">Todas as funções</option>
+              {% for role in staff_role_ns.options %}
+                <option value="{{ role }}">{{ role|title }}</option>
+              {% endfor %}
+            </select>
+          </div>
+        </div>
         <div class="table-responsive mb-4">
-          <table id="employee-list" class="table table-striped">
-            <tbody>
-              {% for s in staff_members %}
+          <table id="employee-list" class="table table-striped align-middle">
+            <thead>
               <tr>
-                <td><strong>{{ s.user.name }}</strong> - {{ s.user.email }}</td>
+                <th>Funcionário</th>
+                <th>Permissões</th>
+                <th class="text-end">Ações</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% set perm_labels = [
+                ('can_manage_clients', 'Clientes'),
+                ('can_manage_animals', 'Animais'),
+                ('can_manage_staff', 'Equipe'),
+                ('can_manage_schedule', 'Agenda'),
+                ('can_manage_inventory', 'Estoque'),
+                ('can_view_full_calendar', 'Agenda completa'),
+              ] %}
+              {% for s in staff_members %}
+              <tr data-name="{{ s.user.name|lower }}" data-role="{{ (s.user.worker or '')|lower }}">
+                <td>
+                  <div class="fw-semibold">{{ s.user.name }}</div>
+                  <div class="text-muted small">{{ s.user.email }}</div>
+                </td>
+                <td>
+                  {% set perm_ns = namespace(active=[]) %}
+                  {% for field, label in perm_labels %}
+                    {% if attribute(s, field) %}
+                      {% set perm_ns.active = perm_ns.active + [label] %}
+                    {% endif %}
+                  {% endfor %}
+                  {% if perm_ns.active %}
+                    <span class="badge bg-light text-dark">{{ perm_ns.active|join(' • ') }}</span>
+                  {% else %}
+                    <span class="text-muted small">Padrão</span>
+                  {% endif %}
+                </td>
                 <td class="text-end">
                   {% if current_user.id == clinica.owner_id %}
                   <div class="btn-group">
@@ -36,7 +94,7 @@
               </tr>
               {% if current_user.id == clinica.owner_id %}
               <tr id="staff-perms-{{ s.user.id }}" style="display:none;">
-                <td colspan="2">
+                <td colspan="3">
                   <form method="post">
                     {{ staff_permission_forms[s.user.id].hidden_tag() }}
                     <div class="form-check">
@@ -71,7 +129,7 @@
               {% endif %}
               {% else %}
               <tr>
-                <td>Nenhum funcionário.</td>
+                <td colspan="3">Nenhum funcionário.</td>
               </tr>
               {% endfor %}
             </tbody>
