@@ -44,6 +44,18 @@
             {% for error in form.prestador_cnpj.errors %}<div class="invalid-feedback d-block">{{ error }}</div>{% endfor %}
           </div>
           <div class="col-md-4">
+            <label class="form-label fw-semibold">{{ form.prestador_tipo.label }}</label>
+            {{ form.prestador_tipo(class="form-select" + (' is-invalid' if form.prestador_tipo.errors else '')) }}
+            <small class="text-muted">Selecione "Plantonista" para vincular um plantão existente.</small>
+            {% for error in form.prestador_tipo.errors %}<div class="invalid-feedback d-block">{{ error }}</div>{% endfor %}
+          </div>
+          <div class="col-md-4">
+            <label class="form-label fw-semibold">{{ form.valor_hora.label }}</label>
+            {{ form.valor_hora(class="form-control" + (' is-invalid' if form.valor_hora.errors else ''), placeholder="0,00") }}
+            <small class="text-muted">Usado para calcular plantões automaticamente.</small>
+            {% for error in form.valor_hora.errors %}<div class="invalid-feedback d-block">{{ error }}</div>{% endfor %}
+          </div>
+          <div class="col-md-4">
             <label class="form-label fw-semibold">{{ form.nota_fiscal_numero.label }}</label>
             {{ form.nota_fiscal_numero(class="form-control" + (' is-invalid' if form.nota_fiscal_numero.errors else ''), placeholder="Ex: NF 12345") }}
             {% for error in form.nota_fiscal_numero.errors %}<div class="invalid-feedback d-block">{{ error }}</div>{% endfor %}
@@ -52,6 +64,12 @@
             <label class="form-label fw-semibold">{{ form.valor.label }}</label>
             {{ form.valor(class="form-control" + (' is-invalid' if form.valor.errors else ''), placeholder="0,00") }}
             {% for error in form.valor.errors %}<div class="invalid-feedback d-block">{{ error }}</div>{% endfor %}
+          </div>
+          <div class="col-md-4">
+            <label class="form-label fw-semibold">{{ form.plantonista_escala_id.label }}</label>
+            {{ form.plantonista_escala_id(class="form-control" + (' is-invalid' if form.plantonista_escala_id.errors else ''), placeholder="ID do plantão") }}
+            <small class="text-muted">Informe o ID da escala para sincronizar o pagamento.</small>
+            {% for error in form.plantonista_escala_id.errors %}<div class="invalid-feedback d-block">{{ error }}</div>{% endfor %}
           </div>
           <div class="col-md-4">
             <label class="form-label fw-semibold">{{ form.data_servico.label }}</label>

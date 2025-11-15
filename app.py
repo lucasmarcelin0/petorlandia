@@ -3483,6 +3483,142 @@ def _populate_plantonista_form_choices(form, clinics):
     form.medico_id.choices = medico_choices
 
 
+def _prefill_pj_form_from_query(form):
+    raw_tipo = (request.args.get('tipo') or request.args.get('prestador_tipo') or '').strip().lower()
+    if hasattr(form, 'prestador_tipo'):
+        if raw_tipo in {'geral', 'plantonista'}:
+            form.prestador_tipo.data = raw_tipo
+        elif not form.prestador_tipo.data:
+            form.prestador_tipo.data = 'geral'
+    escala_id = request.args.get('plantonista_escala_id', type=int) or request.args.get('escala_id', type=int)
+    if escala_id and hasattr(form, 'plantonista_escala_id'):
+        form.plantonista_escala_id.data = escala_id
+    raw_valor_hora = request.args.get('valor_hora')
+    if raw_valor_hora and hasattr(form, 'valor_hora'):
+        try:
+            form.valor_hora.data = Decimal(str(raw_valor_hora).replace(',', '.'))
+        except (InvalidOperation, ValueError):
+            form.valor_hora.data = None
+
+
+def _extract_payment_form_extras(form):
+    if hasattr(form, 'prestador_tipo') and form.prestador_tipo.data:
+        tipo = form.prestador_tipo.data.strip().lower()
+    else:
+        tipo = (request.form.get('prestador_tipo') or 'geral').strip().lower()
+    escala_id = None
+    if hasattr(form, 'plantonista_escala_id'):
+        escala_id = form.plantonista_escala_id.data or None
+    if not escala_id:
+        raw_escala = request.form.get('plantonista_escala_id')
+        if raw_escala not in (None, ''):
+            try:
+                escala_id = int(raw_escala)
+            except (ValueError, TypeError):
+                escala_id = None
+    valor_hora = None
+    if hasattr(form, 'valor_hora') and form.valor_hora.data not in (None, ''):
+        valor_hora = form.valor_hora.data
+    else:
+        raw_valor_hora = request.form.get('valor_hora')
+        if raw_valor_hora not in (None, ''):
+            try:
+                valor_hora = Decimal(str(raw_valor_hora).replace(',', '.'))
+            except (InvalidOperation, ValueError):
+                valor_hora = None
+    return {
+        'tipo': (tipo or 'geral').strip().lower(),
+        'escala_id': escala_id,
+        'valor_hora': valor_hora,
+    }
+
+
+def _load_plantonista_escala_for_payment(escala_id, clinic_id, current_payment_id=None):
+    if not escala_id:
+        return None
+    escala = PlantonistaEscala.query.get(escala_id)
+    if not escala:
+        raise ValueError('Plantão selecionado não foi encontrado.')
+    if clinic_id and escala.clinic_id != clinic_id:
+        raise ValueError('O plantão selecionado não pertence à clínica escolhida.')
+    if escala.pj_payment_id and escala.pj_payment_id != current_payment_id:
+        raise ValueError('O plantão selecionado já está vinculado a outro pagamento.')
+    return escala
+
+
+def _compute_payment_valor(base_valor, prestador_tipo, valor_hora, escala):
+    valor = base_valor or Decimal('0.00')
+    if prestador_tipo != 'plantonista' or valor_hora is None or valor_hora <= 0 or not escala:
+        return valor
+    horas_previstas = escala.horas_previstas or Decimal('0.00')
+    calculado = valor_hora * horas_previstas
+    try:
+        return calculado.quantize(Decimal('0.01'))
+    except (InvalidOperation, AttributeError):
+        return valor
+
+
+def _preserve_payment_query_args(exclude=None):
+    exclude = set(exclude or [])
+    preserved = {}
+    for key, value in request.args.items():
+        if key in exclude:
+            continue
+        if key in {'aba'} or key.startswith('plantao') or key.startswith('plantonista'):
+            preserved[key] = value
+    return preserved
+
+
+def _build_payment_redirect_params(clinic_id, reference_date, escala=None):
+    params = {
+        'clinica_id': clinic_id,
+        'mes': _format_month_parameter(reference_date),
+    }
+    preserved = _preserve_payment_query_args(exclude={'clinica_id', 'mes'})
+    params.update(preserved)
+    if escala:
+        params.setdefault('aba', 'plantonistas')
+        escala_value = str(escala.id)
+        params.setdefault('plantonista_escala_id', escala_value)
+        params.setdefault('escala_id', escala_value)
+    return params
+
+
+def _append_form_error(form, field_name, message):
+    field = getattr(form, field_name, None)
+    if field is not None:
+        field.errors.append(message)
+
+
+def _get_primary_payment_escala(payment):
+    if not payment or not hasattr(payment, 'plantao_escalas'):
+        return None
+    if not payment.plantao_escalas:
+        return None
+    return payment.plantao_escalas[0]
+
+
+def _populate_payment_form_from_payment(form, payment):
+    if not payment:
+        return
+    escala = _get_primary_payment_escala(payment)
+    if hasattr(form, 'prestador_tipo'):
+        form.prestador_tipo.data = 'plantonista' if escala else 'geral'
+    if hasattr(form, 'plantonista_escala_id'):
+        form.plantonista_escala_id.data = escala.id if escala else None
+    if hasattr(form, 'valor_hora'):
+        if escala and payment.valor and escala.horas_previstas:
+            horas = escala.horas_previstas
+            if horas and horas > 0:
+                try:
+                    form.valor_hora.data = (payment.valor / horas).quantize(Decimal('0.01'))
+                except (InvalidOperation, ZeroDivisionError):
+                    form.valor_hora.data = None
+            else:
+                form.valor_hora.data = None
+        else:
+            form.valor_hora.data = None
+
 @app.route('/contabilidade/pagamentos/novo', methods=['GET', 'POST'])
 @login_required
 def contabilidade_pagamentos_novo():
@@ -3495,21 +3631,56 @@ def contabilidade_pagamentos_novo():
     form = PJPaymentForm()
     form.clinic_id.choices = [(clinic.id, clinic.nome or f'Clínica #{clinic.id}') for clinic in clinics]
     default_clinic_id = request.args.get('clinica_id', type=int) or clinics[0].id
+    cancel_url = url_for(
+        'contabilidade_pagamentos',
+        clinica_id=default_clinic_id,
+        mes=request.args.get('mes') or _format_month_parameter(date.today()),
+        **_preserve_payment_query_args(exclude={'clinica_id', 'mes'}),
+    )
     if request.method == 'GET':
         form.clinic_id.data = default_clinic_id
         form.data_servico.data = date.today()
+        _prefill_pj_form_from_query(form)
 
     if form.validate_on_submit():
         clinic_id = form.clinic_id.data
         if clinic_id not in accessible_ids:
             abort(403)
 
+        extras = _extract_payment_form_extras(form)
+        prestador_tipo = extras['tipo'] or 'geral'
+        plantao_escala = None
+        if prestador_tipo == 'plantonista':
+            if not extras['escala_id']:
+                message = 'Selecione o plantão a ser vinculado.'
+                _append_form_error(form, 'plantonista_escala_id', message)
+                flash(message, 'warning')
+                return render_template(
+                    'contabilidade/pagamentos_form.html',
+                    form=form,
+                    form_title='Novo pagamento PJ',
+                    submit_label='Salvar pagamento',
+                    cancel_url=cancel_url,
+                )
+            try:
+                plantao_escala = _load_plantonista_escala_for_payment(extras['escala_id'], clinic_id)
+            except ValueError as exc:
+                _append_form_error(form, 'plantonista_escala_id', str(exc))
+                flash(str(exc), 'warning')
+                return render_template(
+                    'contabilidade/pagamentos_form.html',
+                    form=form,
+                    form_title='Novo pagamento PJ',
+                    submit_label='Salvar pagamento',
+                    cancel_url=cancel_url,
+                )
+
         payment = PJPayment(
             clinic_id=clinic_id,
             prestador_nome=form.prestador_nome.data.strip(),
             prestador_cnpj=''.join(ch for ch in (form.prestador_cnpj.data or '') if ch.isdigit()),
             nota_fiscal_numero=(form.nota_fiscal_numero.data or '').strip() or None,
-            valor=form.valor.data,
+            valor=_compute_payment_valor(form.valor.data, prestador_tipo, extras['valor_hora'], plantao_escala),
             data_servico=form.data_servico.data,
             data_pagamento=form.data_pagamento.data,
             observacoes=(form.observacoes.data or '').strip() or None,
@@ -3518,23 +3689,20 @@ def contabilidade_pagamentos_novo():
 
         db.session.add(payment)
         db.session.flush()
+        if plantao_escala:
+            plantao_escala.pj_payment = payment
+            db.session.flush()
         _sync_pj_payment_classification(payment)
         db.session.commit()
 
         flash('Pagamento PJ registrado com sucesso!', 'success')
+        redirect_escala = plantao_escala if prestador_tipo == 'plantonista' else None
         return redirect(
             url_for(
                 'contabilidade_pagamentos',
-                clinica_id=clinic_id,
-                mes=_format_month_parameter(payment.data_servico),
+                **_build_payment_redirect_params(clinic_id, payment.data_servico, redirect_escala),
             )
         )
-
-    cancel_url = url_for(
-        'contabilidade_pagamentos',
-        clinica_id=default_clinic_id,
-        mes=request.args.get('mes') or _format_month_parameter(date.today()),
-    )
 
     return render_template(
         'contabilidade/pagamentos_form.html',
@@ -3563,40 +3731,87 @@ def contabilidade_pagamentos_editar(payment_id):
     form.clinic_id.choices = clinic_choices
     if request.method == 'GET':
         form.clinic_id.data = payment.clinic_id
+        _populate_payment_form_from_payment(form, payment)
+
+    cancel_url = url_for(
+        'contabilidade_pagamentos',
+        clinica_id=payment.clinic_id,
+        mes=request.args.get('mes') or _format_month_parameter(payment.data_servico),
+        **_preserve_payment_query_args(exclude={'clinica_id', 'mes'}),
+    )
 
     if form.validate_on_submit():
         clinic_id = form.clinic_id.data
         if clinic_id not in accessible_ids and not _is_admin():
             abort(403)
 
+        extras = _extract_payment_form_extras(form)
+        prestador_tipo = extras['tipo'] or 'geral'
+        plantao_escala = None
+        if prestador_tipo == 'plantonista':
+            if not extras['escala_id']:
+                message = 'Selecione o plantão a ser vinculado.'
+                _append_form_error(form, 'plantonista_escala_id', message)
+                flash(message, 'warning')
+                return render_template(
+                    'contabilidade/pagamentos_form.html',
+                    form=form,
+                    form_title='Editar pagamento PJ',
+                    submit_label='Atualizar pagamento',
+                    cancel_url=cancel_url,
+                    editing=True,
+                )
+            try:
+                plantao_escala = _load_plantonista_escala_for_payment(extras['escala_id'], clinic_id, current_payment_id=payment.id)
+            except ValueError as exc:
+                _append_form_error(form, 'plantonista_escala_id', str(exc))
+                flash(str(exc), 'warning')
+                return render_template(
+                    'contabilidade/pagamentos_form.html',
+                    form=form,
+                    form_title='Editar pagamento PJ',
+                    submit_label='Atualizar pagamento',
+                    cancel_url=cancel_url,
+                    editing=True,
+                )
+
         payment.clinic_id = clinic_id
         payment.prestador_nome = form.prestador_nome.data.strip()
         payment.prestador_cnpj = ''.join(ch for ch in (form.prestador_cnpj.data or '') if ch.isdigit())
         payment.nota_fiscal_numero = (form.nota_fiscal_numero.data or '').strip() or None
-        payment.valor = form.valor.data
+        reference_escala = plantao_escala or _get_primary_payment_escala(payment)
+        payment.valor = _compute_payment_valor(form.valor.data, prestador_tipo, extras['valor_hora'], reference_escala)
         payment.data_servico = form.data_servico.data
         payment.data_pagamento = form.data_pagamento.data
         payment.observacoes = (form.observacoes.data or '').strip() or None
         payment.status = 'pago' if payment.data_pagamento else 'pendente'
+
+        if prestador_tipo == 'plantonista':
+            current_ids = {escala.id for escala in payment.plantao_escalas}
+            if plantao_escala and plantao_escala.id not in current_ids:
+                for escala in list(payment.plantao_escalas):
+                    if escala.id != plantao_escala.id:
+                        escala.pj_payment = None
+                plantao_escala.pj_payment = payment
+            elif not plantao_escala and reference_escala:
+                for escala in list(payment.plantao_escalas):
+                    escala.pj_payment = None
+        else:
+            for escala in list(payment.plantao_escalas):
+                escala.pj_payment = None
 
         db.session.flush()
         _sync_pj_payment_classification(payment)
         db.session.commit()
 
         flash('Pagamento PJ atualizado com sucesso!', 'success')
+        redirect_escala = plantao_escala if prestador_tipo == 'plantonista' else None
         return redirect(
             url_for(
                 'contabilidade_pagamentos',
-                clinica_id=clinic_id,
-                mes=_format_month_parameter(payment.data_servico),
+                **_build_payment_redirect_params(clinic_id, payment.data_servico, redirect_escala),
             )
         )
-
-    cancel_url = url_for(
-        'contabilidade_pagamentos',
-        clinica_id=payment.clinic_id,
-        mes=request.args.get('mes') or _format_month_parameter(payment.data_servico),
-    )
 
     return render_template(
         'contabilidade/pagamentos_form.html',

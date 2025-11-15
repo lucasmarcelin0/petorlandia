@@ -212,11 +212,25 @@ class PJPaymentForm(FlaskForm):
         validators=[DataRequired(message='Informe o CNPJ do prestador.'), Length(max=20)],
         render_kw={"placeholder": "00.000.000/0000-00"},
     )
+    prestador_tipo = SelectField(
+        'Tipo do prestador',
+        choices=[('geral', 'Prestador geral'), ('plantonista', 'Plantonista (escala)')],
+        default='geral',
+        validators=[DataRequired()],
+        render_kw={"class": "form-select"},
+    )
+    plantonista_escala_id = IntegerField('Plantão vinculado', validators=[Optional()])
+    valor_hora = DecimalField(
+        'Valor por hora',
+        places=2,
+        validators=[Optional(), NumberRange(min=0)],
+        render_kw={"min": "0", "step": "0.01"},
+    )
     nota_fiscal_numero = StringField('Número da nota fiscal', validators=[Optional(), Length(max=80)])
     valor = DecimalField(
         'Valor do pagamento',
         places=2,
-        validators=[DataRequired(message='Informe o valor do pagamento.')],
+        validators=[Optional()],
         render_kw={"min": "0", "step": "0.01"},
     )
     data_servico = DateField('Data do serviço', format='%Y-%m-%d', validators=[DataRequired(message='Informe a data do serviço.')])
@@ -230,8 +244,14 @@ class PJPaymentForm(FlaskForm):
             raise ValidationError('Informe um CNPJ válido com 14 dígitos.')
 
     def validate_valor(self, field):
+        prestador_tipo = (self.prestador_tipo.data or '').strip().lower() if hasattr(self, 'prestador_tipo') else ''
+        valor_hora = self.valor_hora.data if hasattr(self, 'valor_hora') else None
+        if prestador_tipo == 'plantonista':
+            if (field.data is None or field.data <= 0) and (valor_hora is None or valor_hora <= 0):
+                raise ValidationError('Informe o valor ou o valor por hora para o plantonista.')
+            return
         if field.data is None or field.data <= 0:
-            raise ValidationError('O valor deve ser maior que zero.')
+            raise ValidationError('Informe o valor do pagamento.')
 
     def validate_data_servico(self, field):
         if field.data and field.data > date.today():
