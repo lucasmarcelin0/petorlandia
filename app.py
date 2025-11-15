@@ -5226,6 +5226,9 @@ def clinic_detail(clinica_id):
     inventory_form = InventoryItemForm() if show_inventory else None
     inventory_items = []
     inventory_movements = []
+    critical_items_count = 0
+    overstock_items_count = 0
+    total_stock_quantity = 0
     if show_inventory:
         _ensure_inventory_threshold_columns()
         _ensure_inventory_movement_table()
@@ -5235,6 +5238,13 @@ def clinic_detail(clinica_id):
             .order_by(ClinicInventoryItem.name)
             .all()
         )
+        for item in inventory_items:
+            qty = item.quantity or 0
+            total_stock_quantity += qty
+            if item.min_quantity is not None and qty < item.min_quantity:
+                critical_items_count += 1
+            if item.max_quantity is not None and qty > item.max_quantity:
+                overstock_items_count += 1
         inventory_movements = (
             ClinicInventoryMovement.query
             .filter_by(clinica_id=clinica.id)
@@ -5836,6 +5846,9 @@ def clinic_detail(clinica_id):
         inventory_items=inventory_items,
         inventory_movements=inventory_movements,
         inventory_form=inventory_form,
+        critical_items_count=critical_items_count,
+        overstock_items_count=overstock_items_count,
+        total_stock_quantity=total_stock_quantity,
         show_inventory=show_inventory,
         clinic_metrics=clinic_metrics,
         show_clinic_metrics=can_view_metrics,
@@ -6074,6 +6087,17 @@ def clinic_stock(clinica_id):
         .order_by(ClinicInventoryItem.name)
         .all()
     )
+
+    critical_items_count = 0
+    overstock_items_count = 0
+    total_stock_quantity = 0
+    for item in inventory_items:
+        qty = item.quantity or 0
+        total_stock_quantity += qty
+        if item.min_quantity is not None and qty < item.min_quantity:
+            critical_items_count += 1
+        if item.max_quantity is not None and qty > item.max_quantity:
+            overstock_items_count += 1
     inventory_movements = (
         ClinicInventoryMovement.query
         .filter_by(clinica_id=clinica.id)
@@ -6087,6 +6111,9 @@ def clinic_stock(clinica_id):
         inventory_items=inventory_items,
         inventory_movements=inventory_movements,
         inventory_form=inventory_form,
+        critical_items_count=critical_items_count,
+        overstock_items_count=overstock_items_count,
+        total_stock_quantity=total_stock_quantity,
     )
 
 

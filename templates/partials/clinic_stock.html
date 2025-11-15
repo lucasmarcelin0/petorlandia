@@ -1,6 +1,66 @@
+<style>
+  .inventory-summary .card {
+    border-radius: 0.85rem;
+  }
+  .inventory-summary .card h4 {
+    font-size: 2rem;
+    font-weight: 700;
+  }
+  .inventory-table tbody tr > td {
+    padding-top: 1rem;
+    padding-bottom: 1rem;
+    vertical-align: middle;
+  }
+  .inventory-progress {
+    background-color: var(--bs-gray-200);
+    height: 0.55rem;
+    border-radius: 999px;
+    overflow: hidden;
+  }
+  .inventory-progress-bar {
+    height: 100%;
+    transition: width 0.3s ease;
+  }
+  .inventory-name-icon {
+    font-size: 1.35rem;
+    color: var(--bs-gray-600);
+  }
+</style>
+
 <h3>Estoque da Clínica {{ clinica.nome }}</h3>
-<div class="table-responsive mt-3">
-  <table class="table table-striped align-middle">
+
+<div class="row g-3 inventory-summary mt-2">
+  <div class="col-md-4">
+    <div class="card shadow-sm h-100">
+      <div class="card-body">
+        <p class="text-uppercase text-muted small mb-1">Itens críticos</p>
+        <h4 class="text-danger mb-0">{{ critical_items_count }}</h4>
+        <small class="text-muted">Abaixo do mínimo cadastrado</small>
+      </div>
+    </div>
+  </div>
+  <div class="col-md-4">
+    <div class="card shadow-sm h-100">
+      <div class="card-body">
+        <p class="text-uppercase text-muted small mb-1">Acima do limite</p>
+        <h4 class="text-warning mb-0">{{ overstock_items_count }}</h4>
+        <small class="text-muted">Itens que excedem o máximo</small>
+      </div>
+    </div>
+  </div>
+  <div class="col-md-4">
+    <div class="card shadow-sm h-100">
+      <div class="card-body">
+        <p class="text-uppercase text-muted small mb-1">Estoque total</p>
+        <h4 class="text-success mb-0">{{ total_stock_quantity }}</h4>
+        <small class="text-muted">Soma de todas as unidades</small>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="table-responsive mt-4">
+  <table class="table table-striped align-middle inventory-table">
     <thead>
       <tr>
         <th>Insumo</th>
@@ -14,7 +74,16 @@
       {% set above_max = item.max_quantity is not none and item.quantity > item.max_quantity %}
       <tr>
         <td>
+          {% set name_lower = item.name|lower %}
+          {% if 'seringa' in name_lower or 'agulha' in name_lower %}
+            {% set icon_class = 'bi-syringe text-primary' %}
+          {% elif 'vacina' in name_lower or 'medicamento' in name_lower or 'remedio' in name_lower or 'remédio' in name_lower or 'comprimido' in name_lower %}
+            {% set icon_class = 'bi-capsule text-success' %}
+          {% else %}
+            {% set icon_class = 'bi-box-seam text-secondary' %}
+          {% endif %}
           <div class="d-flex align-items-center gap-2">
+            <i class="bi {{ icon_class }} inventory-name-icon" aria-hidden="true"></i>
             <strong>{{ item.name }}</strong>
             {% if below_min %}
               <span class="badge bg-danger">Abaixo do mínimo</span>
@@ -28,6 +97,20 @@
           </div>
         </td>
         <td>
+          {% set qty = item.quantity or 0 %}
+          {% set min_qty = item.min_quantity if item.min_quantity is not none else None %}
+          {% set max_qty = item.max_quantity if item.max_quantity is not none else None %}
+          {% set progress_reference = max_qty if max_qty and max_qty > 0 else min_qty if min_qty and min_qty > 0 else qty if qty > 0 else 1 %}
+          {% set progress_percent = ((qty / progress_reference) * 100) if progress_reference else 0 %}
+          {% set progress_percent = 100 if progress_percent > 100 else progress_percent %}
+          {% set progress_variant = 'danger' if below_min else 'warning' if above_max else 'success' %}
+          <div class="inventory-progress" aria-label="{{ qty }} unidades em relação aos limites">
+            <div class="inventory-progress-bar bg-{{ progress_variant }}" style="width: {{ progress_percent|round(0, 'ceil') }}%;"></div>
+          </div>
+          <div class="d-flex justify-content-between small text-muted mt-1">
+            <span>Atual: {{ qty }}</span>
+            <span>Mín/Máx: {{ min_qty if min_qty is not none else '—' }} / {{ max_qty if max_qty is not none else '—' }}</span>
+          </div>
           <form method="post" action="{{ url_for('update_inventory_item', item_id=item.id) }}">
             {% if csrf_token %}{{ csrf_token() }}{% endif %}
             <div class="row g-2 align-items-end">
