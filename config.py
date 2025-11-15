@@ -1,13 +1,37 @@
 import os
 from datetime import timedelta
 
+from config_utils import normalize_database_uri
+
 
 class Config:
     SECRET_KEY = "dev-key"  # substitua por uma variável segura em produção
-    SQLALCHEMY_DATABASE_URI = os.environ.get(
-        "SQLALCHEMY_DATABASE_URI",
-        "postgresql://u82pgjdcmkbq7v:p0204cb9289674b66bfcbb9248eaf9d6a71e2dece2722fe22d6bd976c77b411e6@c2hbg00ac72j9d.cluster-czrs8kj4isg7.us-east-1.rds.amazonaws.com:5432/d2nnmcuqa8ljli",
+
+    _DATABASE_PROFILE = os.environ.get("DATABASE_PROFILE", "local").strip().lower()
+    _PRODUCTION_DATABASE_URI = (
+        "postgresql://u82pgjdcmkbq7v:p0204cb9289674b66bfcbb9248eaf9d6a71e2dece2722fe22d6bd976c77b411e6@"
+        "c2hbg00ac72j9d.cluster-czrs8kj4isg7.us-east-1.rds.amazonaws.com:5432/d2nnmcuqa8ljli"
     )
+    _QA_DATABASE_URI = os.environ.get("QA_DATABASE_URI")
+    _LOCAL_DATABASE_URI = os.environ.get(
+        "LOCAL_DATABASE_URI",
+        "postgresql://petorlandia:petorlandia@localhost:5432/petorlandia",
+    )
+
+    @classmethod
+    def _resolve_database_uri(cls):
+        explicit_uri = os.environ.get("SQLALCHEMY_DATABASE_URI")
+        if explicit_uri:
+            return explicit_uri
+
+        profile = cls._DATABASE_PROFILE
+        if profile in {"prod", "production"}:
+            return cls._PRODUCTION_DATABASE_URI
+        if profile in {"qa", "staging"}:
+            return cls._QA_DATABASE_URI or cls._PRODUCTION_DATABASE_URI
+        return cls._LOCAL_DATABASE_URI
+
+    SQLALCHEMY_DATABASE_URI = None
     SQLALCHEMY_TRACK_MODIFICATIONS = False
     # Evita erros "server closed the connection unexpectedly" ao testar conexões do pool
     SQLALCHEMY_ENGINE_OPTIONS = {
@@ -67,3 +91,6 @@ class Config:
 
     INSURER_PORTAL_TOKEN = os.environ.get("INSURER_PORTAL_TOKEN", "petorlandia-insurer")
 
+
+# Late binding ensures the helper can access the fully defined class.
+Config.SQLALCHEMY_DATABASE_URI = normalize_database_uri(Config._resolve_database_uri())
