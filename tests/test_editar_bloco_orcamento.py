@@ -30,12 +30,13 @@ def test_editar_bloco_orcamento(app):
         db.session.add_all([clinica, vet_user, vet, tutor, animal, bloco, item])
         db.session.commit()
         bloco_id = bloco.id
+        clinic_id = clinica.id
     client = app.test_client()
     with client:
         client.post('/login', data={'email': 'vet@example.com', 'password': 'x'}, follow_redirects=True)
         resp = client.post(
             f'/bloco_orcamento/{bloco_id}/atualizar',
-            json={'itens': [{'descricao': 'Procedimento', 'valor': 100}]},
+            json={'itens': [{'descricao': 'Procedimento', 'valor': 100}], 'clinica_id': clinic_id},
             headers={'Accept': 'application/json'}
         )
         assert resp.status_code == 200

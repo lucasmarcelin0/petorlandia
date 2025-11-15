@@ -146,6 +146,7 @@
 
 <script>
 const consultaId = {{ consulta.id }};
+const clinicId = {{ (consulta.clinica_id or current_user.clinica_id) | tojson }};
 const payerTypeLabels = { plan: 'Plano', particular: 'Particular' };
 let currentPayerType = '{{ default_payer_type }}';
 const discountContainer = document.getElementById('particular-extra-fields');
@@ -354,7 +355,11 @@ async function adicionarItemOrcamento() {
   const servicoId = parseInt(document.getElementById('servico-id').value);
   const valor = parseFloat(document.getElementById('valor-personalizado').value);
   if (!servicoId) return;
-  const payload = {servico_id: servicoId, payer_type: currentPayerType};
+  if (!clinicId) {
+    alert('Clínica não definida para o orçamento.');
+    return;
+  }
+  const payload = {servico_id: servicoId, payer_type: currentPayerType, clinica_id: clinicId};
   if (!isNaN(valor)) payload.valor = valor;
   const resp = await fetch(`/consulta/${consultaId}/orcamento_item`, {
     method: 'POST',
@@ -398,11 +403,16 @@ async function removerItemOrcamento(id) {
 async function finalizarBlocoOrcamento() {
   const tbody = document.querySelector('#orcamento-tabela tbody');
   if (!tbody.children.length) return;
+  if (!clinicId) {
+    alert('Clínica não definida para o orçamento.');
+    return;
+  }
   const extra = coletarDadosDesconto();
+  extra.clinica_id = clinicId;
   const resp = await fetch(`/consulta/${consultaId}/bloco_orcamento`, {
     method: 'POST',
     headers: {'Accept': 'application/json', 'Content-Type': 'application/json'},
-    body: Object.keys(extra).length ? JSON.stringify(extra) : null
+    body: JSON.stringify(extra)
   });
   if (resp.ok) {
     const data = await resp.json();

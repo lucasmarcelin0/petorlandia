@@ -38,7 +38,10 @@ def test_adiciona_item_padrao_no_orcamento(app):
         resp = client.post('/servico', json={'descricao':'Consulta', 'valor':50})
         assert resp.status_code == 201
         servico_id = resp.get_json()['id']
-        resp = client.post(f'/consulta/{consulta_id}/orcamento_item', json={'servico_id': servico_id})
+        resp = client.post(
+            f'/consulta/{consulta_id}/orcamento_item',
+            json={'servico_id': servico_id, 'clinica_id': clinica_id}
+        )
         assert resp.status_code == 201
         data = resp.get_json()
         assert data['descricao'] == 'Consulta'

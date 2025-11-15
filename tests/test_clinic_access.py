@@ -141,7 +141,7 @@ def test_orcamento_history_is_isolated(monkeypatch, app):
         c1 = Clinica(nome="Clinic One")
         c2 = Clinica(nome="Clinic Two")
         tutor = User(name="Tutor", email="t4@example.com", password_hash="x", clinica=c1)
-        animal = Animal(name="Rex", owner=tutor)
+        animal = Animal(name="Rex", owner=tutor, clinica=c1)
         vet1_user = User(name="Vet1", email="v1@example.com", password_hash="x", worker="veterinario")
         vet2_user = User(name="Vet2", email="v2@example.com", password_hash="y", worker="veterinario")
         vet1 = Veterinario(user=vet1_user, crmv="111", clinica=c1)
@@ -156,17 +156,19 @@ def test_orcamento_history_is_isolated(monkeypatch, app):
         animal_id = animal.id
         vet1_id = vet1_user.id
         vet2_id = vet2_user.id
+        clinic_id = c1.id
 
     import flask_login.utils as login_utils
     monkeypatch.setattr(login_utils, '_get_user', lambda: User.query.get(vet1_id))
     resp = client.post(
         f"/consulta/{consulta_id}/orcamento_item",
-        json={"descricao": "Consulta", "valor": 50},
+        json={"descricao": "Consulta", "valor": 50, "clinica_id": clinic_id},
     )
     assert resp.status_code == 201
     resp = client.post(
         f"/consulta/{consulta_id}/bloco_orcamento",
         headers={"Accept": "application/json"},
+        json={"clinica_id": clinic_id},
     )
     assert resp.status_code == 200
 
@@ -182,7 +184,7 @@ def test_shared_animal_history_and_prescriptions_are_scoped(monkeypatch, app):
         c1 = Clinica(nome="Clinic One")
         c2 = Clinica(nome="Clinic Two")
         tutor = User(name="Tutor", email="shared@example.com", password_hash="x", clinica=c1)
-        animal = Animal(name="Rex", owner=tutor)
+        animal = Animal(name="Rex", owner=tutor, clinica=c1)
         vet1_user = User(name="Vet1", email="vet1@example.com", password_hash="x", worker='veterinario')
         vet2_user = User(name="Vet2", email="vet2@example.com", password_hash="y", worker='veterinario')
         vet1 = Veterinario(user=vet1_user, crmv="111", clinica=c1)

@@ -52,7 +52,7 @@ def _bootstrap_consulta(app):
         )
         db.session.add_all([consulta, orcamento, item])
         db.session.commit()
-        return consulta.id
+        return consulta.id, clinica.id
 
 
 def _teardown_db(app):
@@ -61,13 +61,17 @@ def _teardown_db(app):
 
 
 def test_pagar_bloco_orcamento(app, monkeypatch):
-    consulta_id = _bootstrap_consulta(app)
+    consulta_id, clinic_id = _bootstrap_consulta(app)
     client = app.test_client()
     captured = {}
 
     with client:
         client.post('/login', data={'email': 'vet@example.com', 'password': 'x'}, follow_redirects=True)
-        resp = client.post(f'/consulta/{consulta_id}/bloco_orcamento', headers={'Accept': 'application/json'})
+        resp = client.post(
+            f'/consulta/{consulta_id}/bloco_orcamento',
+            headers={'Accept': 'application/json'},
+            json={'clinica_id': clinic_id},
+        )
         assert resp.status_code == 200
         with app.app_context():
             bloco = BlocoOrcamento.query.first()
@@ -88,7 +92,7 @@ def test_pagar_bloco_orcamento(app, monkeypatch):
         payload = resp.get_json()
         assert payload['success']
         assert payload['redirect_url'] == 'http://mp'
-        assert 'auto_return' not in captured['preference']
+        assert captured['preference'].get('auto_return') == 'approved'
 
     _teardown_db(app)
 

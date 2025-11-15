@@ -1667,6 +1667,13 @@ def ensure_clinic_access(clinica_id):
         abort(404)
 
 
+def _coerce_int(value):
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
 def get_animal_or_404(animal_id, *, viewer=None, clinic_scope=None):
     """Return animal if accessible to current user, otherwise 404."""
     if viewer is None and current_user.is_authenticated:
@@ -7607,15 +7614,22 @@ def update_inventory_item(item_id):
 @login_required
 def novo_orcamento(clinica_id):
     clinica = Clinica.query.get_or_404(clinica_id)
-    if current_user.clinica_id != clinica_id and not _is_admin():
-        abort(403)
+    ensure_clinic_access(clinica.id)
     form = OrcamentoForm()
+    if request.method == 'GET':
+        form.clinica_id.data = str(clinica_id)
     if form.validate_on_submit():
-        o = Orcamento(clinica_id=clinica_id, descricao=form.descricao.data)
+        form_clinic_id = _coerce_int(form.clinica_id.data)
+        if form_clinic_id is None:
+            abort(400)
+        ensure_clinic_access(form_clinic_id)
+        if form_clinic_id != clinica.id:
+            abort(400)
+        o = Orcamento(clinica_id=form_clinic_id, descricao=form.descricao.data)
         db.session.add(o)
         db.session.commit()
         flash('Orçamento criado com sucesso.', 'success')
-        return redirect(url_for('clinic_detail', clinica_id=clinica_id) + '#orcamento')
+        return redirect(url_for('clinic_detail', clinica_id=form_clinic_id) + '#orcamento')
     return render_template('orcamentos/orcamento_form.html', form=form, clinica=clinica)
 
 
@@ -7623,10 +7637,17 @@ def novo_orcamento(clinica_id):
 @login_required
 def editar_orcamento(orcamento_id):
     orcamento = Orcamento.query.get_or_404(orcamento_id)
-    if current_user.clinica_id != orcamento.clinica_id and not _is_admin():
-        abort(403)
+    ensure_clinic_access(orcamento.clinica_id)
     form = OrcamentoForm(obj=orcamento)
+    if request.method == 'GET':
+        form.clinica_id.data = str(orcamento.clinica_id)
     if form.validate_on_submit():
+        form_clinic_id = _coerce_int(form.clinica_id.data)
+        if form_clinic_id is None:
+            abort(400)
+        ensure_clinic_access(form_clinic_id)
+        if form_clinic_id != orcamento.clinica_id:
+            abort(400)
         orcamento.descricao = form.descricao.data
         db.session.commit()
         flash('Orçamento atualizado com sucesso.', 'success')
@@ -16609,12 +16630,15 @@ def adicionar_orcamento_item(consulta_id):
     consulta = get_consulta_or_404(consulta_id)
     if not is_veterinarian(current_user):
         return jsonify({'success': False, 'message': 'Apenas veterinários podem adicionar itens.'}), 403
-    clinic_id = consulta.clinica_id or current_user_clinic_id()
-    if not clinic_id:
-        return jsonify({'success': False, 'message': 'Consulta sem clínica associada.'}), 400
+    data = request.get_json(silent=True) or {}
+    clinic_id = _coerce_int(data.get('clinica_id'))
+    if clinic_id is None:
+        return jsonify({'success': False, 'message': 'Clínica obrigatória.'}), 400
+    ensure_clinic_access(clinic_id)
+    if consulta.clinica_id and consulta.clinica_id != clinic_id:
+        return jsonify({'success': False, 'message': 'Consulta pertence a outra clínica.'}), 400
     if not consulta.clinica_id:
         consulta.clinica_id = clinic_id
-    data = request.get_json(silent=True) or {}
     servico_id = data.get('servico_id')
     descricao = data.get('descricao')
     valor = data.get('valor')
@@ -16698,12 +16722,20 @@ def salvar_bloco_orcamento(consulta_id):
     if not consulta.orcamento_items:
         return jsonify({'success': False, 'message': 'Nenhum item no orçamento.'}), 400
     data = request.get_json(silent=True) or {}
+    clinic_id = _coerce_int(data.get('clinica_id'))
+    if clinic_id is None:
+        return jsonify({'success': False, 'message': 'Clínica obrigatória.'}), 400
+    ensure_clinic_access(clinic_id)
+    if consulta.clinica_id and consulta.clinica_id != clinic_id:
+        return jsonify({'success': False, 'message': 'Consulta pertence a outra clínica.'}), 400
+    if not consulta.clinica_id:
+        consulta.clinica_id = clinic_id
     discount_percent = data.get('discount_percent')
     discount_value = data.get('discount_value')
     tutor_notes = (data.get('tutor_notes') or '').strip() or None
     bloco = BlocoOrcamento(
         animal_id=consulta.animal_id,
-        clinica_id=consulta.clinica_id,
+        clinica_id=clinic_id,
         tutor_notes=tutor_notes,
         payment_status='draft'
     )
@@ -16788,6 +16820,12 @@ def atualizar_bloco_orcamento(bloco_id):
         return jsonify({'success': False, 'message': 'Apenas veterinários podem editar.'}), 403
 
     data = request.get_json(silent=True) or {}
+    clinic_id = _coerce_int(data.get('clinica_id'))
+    if clinic_id is None:
+        return jsonify({'success': False, 'message': 'Clínica obrigatória.'}), 400
+    ensure_clinic_access(clinic_id)
+    if clinic_id != bloco.clinica_id:
+        abort(404)
     itens = data.get('itens', [])
 
     for item in list(bloco.itens):
