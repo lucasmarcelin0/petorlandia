@@ -2713,6 +2713,17 @@ def contabilidade_financeiro():
     return render_template('contabilidade/financeiro.html')
 
 
+def _is_missing_pj_payments_error(exc: ProgrammingError) -> bool:
+    """Return True when the exception is about the pj_payments table not existing."""
+
+    message = str(getattr(exc, "orig", exc)).lower()
+    return "pj_payments" in message and (
+        "does not exist" in message or
+        "undefinedtable" in message or
+        "no such table" in message
+    )
+
+
 @app.route('/contabilidade/pagamentos')
 @login_required
 def contabilidade_pagamentos():
@@ -2734,15 +2745,30 @@ def contabilidade_pagamentos():
     start_date = selected_month
     end_date = selected_month + relativedelta(months=1)
 
-    payments = []
+    payments: list[PJPayment] = []
+    payments_error = None
     if selected_clinic_id:
-        payments = (
-            PJPayment.query.filter(PJPayment.clinic_id == selected_clinic_id)
-            .filter(PJPayment.data_servico >= start_date)
-            .filter(PJPayment.data_servico < end_date)
-            .order_by(PJPayment.data_servico.desc(), PJPayment.id.desc())
-            .all()
-        )
+        try:
+            payments = (
+                PJPayment.query.filter(PJPayment.clinic_id == selected_clinic_id)
+                .filter(PJPayment.data_servico >= start_date)
+                .filter(PJPayment.data_servico < end_date)
+                .order_by(PJPayment.data_servico.desc(), PJPayment.id.desc())
+                .all()
+            )
+        except ProgrammingError as exc:
+            db.session.rollback()
+            if _is_missing_pj_payments_error(exc):
+                current_app.logger.warning(
+                    "Tabela pj_payments ausente. Execute as migrações do banco para habilitar o módulo.",
+                    exc_info=exc,
+                )
+                payments_error = (
+                    "O módulo de pagamentos PJ ainda não está disponível porque a tabela pj_payments não existe. "
+                    "Execute as migrações do banco para criá-la."
+                )
+            else:
+                raise
 
     total_pago = sum((payment.valor or Decimal('0.00')) for payment in payments if payment.status == 'pago')
     total_pendente = sum((payment.valor or Decimal('0.00')) for payment in payments if payment.status == 'pendente')
@@ -2753,6 +2779,7 @@ def contabilidade_pagamentos():
         'contabilidade/pagamentos.html',
         clinics=clinics,
         payments=payments,
+        payments_error=payments_error,
         selected_clinic=selected_clinic,
         selected_clinic_id=selected_clinic_id,
         selected_month=selected_month,
