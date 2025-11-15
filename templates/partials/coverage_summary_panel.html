@@ -1,0 +1,69 @@
+<div class="card shadow-sm border-0 mb-4" id="coverage-summary-card" data-plan-active="{{ 1 if consulta and consulta.health_subscription_id else 0 }}">
+  <div class="card-body">
+    <div class="d-flex justify-content-between align-items-start flex-wrap gap-3">
+      <div>
+        <h5 class="fw-semibold mb-1">Resumo do plano de saúde</h5>
+        <small class="text-muted">Veja rapidamente o status de cada item do orçamento.</small>
+      </div>
+      <div class="text-end">
+        {% if authorization_summary and authorization_summary.status %}
+          <span class="badge bg-{{ authorization_summary.status|coverage_badge }}">
+            {{ authorization_summary.status|coverage_label }}
+          </span>
+        {% else %}
+          <span class="badge bg-secondary">Sem validação</span>
+        {% endif %}
+        {% if authorization_summary and authorization_summary.checked_at %}
+          <div class="small text-muted">Atualizado em {{ authorization_summary.checked_at.strftime('%d/%m %H:%M') }}</div>
+        {% endif %}
+        {% if worker == 'veterinario' %}
+          {% if consulta and consulta.health_subscription_id %}
+            <form method="post" action="{{ url_for('validar_plano_consulta', consulta_id=consulta.id) }}"
+                  class="mt-2" id="coverage-revalidate-form" data-sync data-target="#coverage-summary-panel">
+              {% if csrf_token is defined %}{{ csrf_token() }}{% endif %}
+              <input type="hidden" name="subscription_id" value="{{ consulta.health_subscription_id }}">
+              <input type="hidden" name="notes" value="">
+              <button type="submit" class="btn btn-outline-primary btn-sm">
+                <i class="fa-solid fa-rotate"></i> Revalidar cobertura
+              </button>
+            </form>
+          {% else %}
+            <div class="small text-muted mt-2">Associe um plano ativo para habilitar a validação automática.</div>
+          {% endif %}
+        {% endif %}
+      </div>
+    </div>
+
+    <div class="row text-center mt-4 g-3">
+      {% set status_cards = [
+        ('approved', 'success', 'fa-circle-check', 'Aprovado'),
+        ('pending', 'secondary', 'fa-hourglass-half', 'Pendente'),
+        ('denied', 'danger', 'fa-circle-xmark', 'Negado'),
+      ] %}
+      {% for code, color, icon, label in status_cards %}
+        {% set bucket = (coverage_summary['statuses'][code] if coverage_summary and coverage_summary['statuses'] else {'count': 0, 'total': 0}) %}
+        <div class="col-md-4">
+          <div class="border rounded-4 p-3 h-100">
+            <div class="text-muted text-uppercase small mb-1"><i class="fa-solid {{ icon }} text-{{ color }} me-2"></i>{{ label }}</div>
+            <h3 class="mb-0">{{ bucket['count'] }}</h3>
+            <small class="text-muted">Total R$ {{ '%.2f'|format(bucket['total'] or 0) }}</small>
+          </div>
+        </div>
+      {% endfor %}
+    </div>
+
+    {% if coverage_summary %}
+      <div class="mt-4 d-flex justify-content-between text-muted small flex-wrap gap-2">
+        <span>{{ coverage_summary['total_items'] }} itens em orçamento</span>
+        <span>Valor total analisado: R$ {{ '%.2f'|format(coverage_summary['total_amount'] or 0) }}</span>
+      </div>
+    {% endif %}
+
+    {% if authorization_summary and authorization_summary.notes %}
+      <div class="alert alert-secondary mt-3 mb-0 small">
+        <strong>Observações:</strong>
+        <pre class="mb-0 text-break">{{ authorization_summary.notes }}</pre>
+      </div>
+    {% endif %}
+  </div>
+</div>

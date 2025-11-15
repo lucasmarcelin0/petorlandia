@@ -8,5 +8,6 @@ from .health_plan import (  # noqa: F401
     coverage_label,
     evaluate_consulta_coverages,
     insurer_token_valid,
+    summarize_consulta_coverages,
     summarize_plan_metrics,
 )

@@ -1015,6 +1015,7 @@ from services import (
     get_calendar_access_scope,
     insurer_token_valid,
     log_data_share_event,
+    summarize_consulta_coverages,
     summarize_plan_metrics,
 )
 from services.animal_search import search_animals
@@ -3903,6 +3904,13 @@ def validar_plano_consulta(consulta_id):
     consulta = get_consulta_or_404(consulta_id)
     if current_user.worker != 'veterinario':
         abort(403)
+    redirect_url = url_for('consulta_direct', animal_id=consulta.animal_id, c=consulta.id)
+    accepts = request.accept_mimetypes
+    wants_json = (
+        accepts['application/json'] >= accepts['text/html']
+        or accepts.best == 'application/json'
+    )
+
     form = ConsultaPlanAuthorizationForm()
     from models import HealthSubscription
     active_subs = (
@@ -3915,22 +3923,32 @@ def validar_plano_consulta(consulta_id):
         for s in active_subs
     ]
     if not active_subs:
-        flash('O tutor não possui plano ativo para este animal.', 'warning')
-        return redirect(url_for('consulta_direct', animal_id=consulta.animal_id, c=consulta.id))
+        message = 'O tutor não possui plano ativo para este animal.'
+        if wants_json:
+            return jsonify({'success': False, 'message': message}), 400
+        flash(message, 'warning')
+        return redirect(redirect_url)
     if not form.validate_on_submit():
-        flash('Selecione um plano válido para validar a cobertura.', 'danger')
-        return redirect(url_for('consulta_direct', animal_id=consulta.animal_id, c=consulta.id))
+        message = 'Selecione um plano válido para validar a cobertura.'
+        if wants_json:
+            return jsonify({'success': False, 'message': message}), 400
+        flash(message, 'danger')
+        return redirect(redirect_url)
 
     subscription = HealthSubscription.query.get_or_404(form.subscription_id.data)
     if subscription.animal_id != consulta.animal_id:
-        flash('Plano selecionado não pertence a este animal.', 'danger')
-        return redirect(url_for('consulta_direct', animal_id=consulta.animal_id, c=consulta.id))
+        message = 'Plano selecionado não pertence a este animal.'
+        if wants_json:
+            return jsonify({'success': False, 'message': message}), 400
+        flash(message, 'danger')
+        return redirect(redirect_url)
 
     consulta.health_subscription_id = subscription.id
     consulta.health_plan_id = subscription.plan_id
     consulta.authorization_reference = f"PRG-{consulta.id}-{int(datetime.utcnow().timestamp())}"
     consulta.authorization_checked_at = datetime.utcnow()
-    consulta.authorization_notes = form.notes.data or ''
+    if form.notes.data:
+        consulta.authorization_notes = form.notes.data
 
     result = evaluate_consulta_coverages(consulta)
     consulta.authorization_status = result['status']
@@ -3939,8 +3957,29 @@ def validar_plano_consulta(consulta_id):
     db.session.commit()
 
     category = 'success' if result['status'] == 'approved' else 'warning'
+    coverage_summary = summarize_consulta_coverages(consulta)
+    authorization_summary = {
+        'status': consulta.authorization_status,
+        'notes': consulta.authorization_notes,
+        'checked_at': consulta.authorization_checked_at,
+    }
+    if wants_json:
+        panel_html = render_template(
+            'partials/coverage_summary_panel.html',
+            consulta=consulta,
+            worker=getattr(current_user, 'worker', None),
+            authorization_summary=authorization_summary,
+            coverage_summary=coverage_summary,
+        )
+        return jsonify({
+            'success': result['status'] == 'approved',
+            'status': result['status'],
+            'messages': result.get('messages', []),
+            'html': panel_html,
+        })
+
     flash(' '.join(result.get('messages', [])) or 'Cobertura analisada.', category)
-    return redirect(url_for('consulta_direct', animal_id=consulta.animal_id, c=consulta.id))
+    return redirect(redirect_url)
 
 
 
@@ -4272,6 +4311,7 @@ def generate_qr(animal_id):
 def consulta_qr():
     animal_id = request.args.get('animal_id', type=int)
     token = request.args.get('token')  # se estiver usando QR com token
+    worker_role = getattr(current_user, 'worker', None)
 
     # Aqui você já deve ter carregado o animal
     animal = get_animal_or_404(animal_id)
@@ -4320,6 +4360,12 @@ def consulta_qr():
     plan_form = None
     active_plan_subscriptions = []
     authorization_summary = None
+    if consulta:
+        authorization_summary = {
+            'status': consulta.authorization_status,
+            'notes': consulta.authorization_notes,
+            'checked_at': consulta.authorization_checked_at,
+        }
     if animal and worker_role == 'veterinario' and consulta:
         from models import HealthSubscription
         active_plan_subscriptions = (
@@ -4334,11 +4380,8 @@ def consulta_qr():
         ]
         if consulta.health_subscription_id:
             plan_form.subscription_id.data = consulta.health_subscription_id
-        authorization_summary = {
-            'status': consulta.authorization_status,
-            'notes': consulta.authorization_notes,
-            'checked_at': consulta.authorization_checked_at,
-        }
+
+    coverage_summary = summarize_consulta_coverages(consulta) if consulta else None
 
     clinic_scope_id = clinica_id
     shared_access = _resolve_shared_access_for_animal(animal, viewer=current_user, clinic_scope=clinic_scope_id)
@@ -4354,13 +4397,14 @@ def consulta_qr():
         animal_idade_unidade=idade_unidade,
         tutor_form=tutor_form,
         servicos=servicos,
-        worker=getattr(current_user, 'worker', None),
+        worker=worker_role,
         blocos_orcamento=blocos_orcamento,
         blocos_prescricao=blocos_prescricao,
         clinic_scope_id=clinic_scope_id,
         plan_form=plan_form,
         active_plan_subscriptions=active_plan_subscriptions,
         authorization_summary=authorization_summary,
+        coverage_summary=coverage_summary,
         shared_access=shared_access,
         viewer_clinic_id=clinica_id,
     )

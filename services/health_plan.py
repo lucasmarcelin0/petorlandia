@@ -38,6 +38,8 @@ COVERAGE_STATUS_BADGES: Dict[str, str] = {
     'no_rule': 'dark',
 }
 
+SUMMARY_KEY_STATUSES = ('approved', 'pending', 'denied')
+
 
 def coverage_label(value: Optional[str]) -> str:
     return COVERAGE_STATUS_LABELS.get(value or 'pending', 'Pendente')
@@ -49,6 +51,17 @@ def coverage_badge(value: Optional[str]) -> str:
 
 def _normalize_code(value: Optional[str]) -> str:
     return (value or '').strip().lower()
+
+
+def _to_decimal(value) -> Decimal:
+    if isinstance(value, Decimal):
+        return value
+    if value is None:
+        return Decimal('0')
+    try:
+        return Decimal(str(value))
+    except (ValueError, ArithmeticError):  # pragma: no cover - fallback for unexpected types
+        return Decimal('0')
 
 
 def _match_coverage(plan: HealthPlan, item: OrcamentoItem) -> Optional[HealthCoverage]:
@@ -156,6 +169,32 @@ def evaluate_consulta_coverages(consulta: Consulta) -> Dict[str, object]:
         messages.append('Nenhum item da consulta pôde ser autorizado.')
 
     return {'status': overall_status, 'messages': messages}
+
+
+def summarize_consulta_coverages(consulta: Consulta) -> Dict[str, object]:
+    """Aggregate coverage metrics (count/value) per status for a consulta."""
+
+    summary: Dict[str, Dict[str, Decimal]] = {
+        status: {'count': 0, 'total': Decimal('0')}
+        for status in SUMMARY_KEY_STATUSES
+    }
+    total_amount = Decimal('0')
+    total_items = 0
+
+    for item in consulta.orcamento_items:
+        status = (item.coverage_status or 'pending').strip().lower() or 'pending'
+        bucket = summary.setdefault(status, {'count': 0, 'total': Decimal('0')})
+        bucket['count'] += 1
+        amount = _to_decimal(getattr(item, 'valor', None))
+        bucket['total'] += amount
+        total_amount += amount
+        total_items += 1
+
+    return {
+        'statuses': summary,
+        'total_items': total_items,
+        'total_amount': total_amount,
+    }
 
 
 def summarize_plan_metrics() -> List[Dict[str, object]]:

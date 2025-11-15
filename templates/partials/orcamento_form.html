@@ -1,5 +1,11 @@
 <h5 class="mb-3">Orçamento da Consulta</h5>
 
+{% if consulta %}
+<div id="coverage-summary-panel">
+  {% include 'partials/coverage_summary_panel.html' with context %}
+</div>
+{% endif %}
+
 <div class="border rounded p-3 mb-4 bg-light">
   <form id="form-servico" class="row g-2 align-items-end" onsubmit="event.preventDefault(); criarServico();">
     <div class="col-md-5">
@@ -85,6 +91,46 @@
 
 <script>
 const consultaId = {{ consulta.id }};
+let coverageAutoRefreshTimer = null;
+
+function isPlanModeActive() {
+  const card = document.getElementById('coverage-summary-card');
+  return card && card.dataset.planActive === '1';
+}
+
+function handleCoveragePanelUpdate(html) {
+  if (!html) return;
+  const container = document.getElementById('coverage-summary-panel');
+  if (!container) return;
+  container.innerHTML = html;
+  if (typeof bindSyncForms === 'function') {
+    bindSyncForms(container);
+  }
+}
+
+async function triggerCoverageRevalidation() {
+  const form = document.getElementById('coverage-revalidate-form');
+  if (!form) return;
+  const formData = new FormData(form);
+  try {
+    const resp = await fetch(form.action, {
+      method: 'POST',
+      headers: {'Accept': 'application/json'},
+      body: formData,
+    });
+    if (!resp.ok) return;
+    const data = await resp.json();
+    if (data.html) {
+      handleCoveragePanelUpdate(data.html);
+    }
+  } catch (err) {}
+}
+
+function scheduleAutoCoverageRefresh() {
+  if (!isPlanModeActive()) return;
+  clearTimeout(coverageAutoRefreshTimer);
+  coverageAutoRefreshTimer = setTimeout(() => triggerCoverageRevalidation(), 400);
+}
 
 async function criarServico() {
   const descricao = document.getElementById('descricao-servico').value.trim();
@@ -138,6 +184,7 @@ async function adicionarItemOrcamento() {
     document.getElementById('servico-id').value = '';
     document.getElementById('valor-personalizado').value = '';
     document.getElementById('orcamento-total').textContent = data.total.toFixed(2);
+    scheduleAutoCoverageRefresh();
   }
 }
 
@@ -147,6 +194,7 @@ async function removerItemOrcamento(id) {
     document.querySelector(`#orcamento-tabela tr[data-id='${id}']`).remove();
     const data = await resp.json();
     document.getElementById('orcamento-total').textContent = data.total.toFixed(2);
+    scheduleAutoCoverageRefresh();
   }
 }
 
