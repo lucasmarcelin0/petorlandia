@@ -5925,12 +5925,14 @@ def clinic_detail(clinica_id):
     orcamento_to_str = request.args.get('orcamento_to') or ''
     orcamento_page = request.args.get('orcamento_page', type=int) or 1
     orcamento_page = max(1, orcamento_page)
+    orcamento_sort = request.args.get('orcamento_sort') or 'updated_desc'
 
     orcamentos_query = (
         Orcamento.query.options(
             joinedload(Orcamento.consulta)
             .joinedload(Consulta.animal)
-            .joinedload(Animal.owner)
+            .joinedload(Animal.owner),
+            selectinload(Orcamento.items),
         )
         .filter(Orcamento.clinica_id == clinica_id)
     )
@@ -5974,12 +5976,106 @@ def clinic_detail(clinica_id):
     if orcamento_search:
         orcamentos_query = orcamentos_query.distinct()
 
-    per_page = current_app.config.get('ORCAMENTOS_PER_PAGE', 10)
-    orcamentos_pagination = (
-        orcamentos_query
-        .order_by(Orcamento.updated_at.desc())
-        .paginate(page=orcamento_page, per_page=per_page, error_out=False)
+    filtered_orcamentos_query = orcamentos_query
+
+    orcamento_item_totals_subq = (
+        db.session.query(
+            OrcamentoItem.orcamento_id.label('orcamento_id'),
+            func.coalesce(func.sum(OrcamentoItem.valor), 0).label('gross_total'),
+            func.coalesce(
+                func.sum(
+                    case((OrcamentoItem.payer_type == 'plan', OrcamentoItem.valor), else_=0)
+                ),
+                0,
+            ).label('plan_total'),
+        )
+        .group_by(OrcamentoItem.orcamento_id)
+        .subquery()
     )
+
+    totals_join = Orcamento.id == orcamento_item_totals_subq.c.orcamento_id
+    gross_total_col = func.coalesce(orcamento_item_totals_subq.c.gross_total, 0)
+
+    orcamentos_query = orcamentos_query.outerjoin(orcamento_item_totals_subq, totals_join)
+
+    if orcamento_sort == 'value_asc':
+        orcamentos_query = orcamentos_query.order_by(gross_total_col.asc(), Orcamento.updated_at.desc())
+    elif orcamento_sort == 'value_desc':
+        orcamentos_query = orcamentos_query.order_by(gross_total_col.desc(), Orcamento.updated_at.desc())
+    else:
+        orcamento_sort = 'updated_desc'
+        orcamentos_query = orcamentos_query.order_by(Orcamento.updated_at.desc())
+
+    per_page = current_app.config.get('ORCAMENTOS_PER_PAGE', 10)
+    orcamentos_pagination = orcamentos_query.paginate(
+        page=orcamento_page,
+        per_page=per_page,
+        error_out=False,
+    )
+
+    def _to_decimal(value):
+        if isinstance(value, Decimal):
+            return value
+        if value is None:
+            return Decimal('0.00')
+        return Decimal(str(value))
+
+    def _format_brl(value):
+        quantized = _to_decimal(value).quantize(Decimal('0.01'))
+        formatted = f"R$ {quantized:,.2f}"
+        return formatted.replace(',', 'X').replace('.', ',').replace('X', '.')
+
+    def _compute_totals(items):
+        gross_total = Decimal('0.00')
+        plan_total = Decimal('0.00')
+        for item in items or []:
+            amount = _to_decimal(getattr(item, 'valor', None))
+            gross_total += amount
+            if (item.payer_type or 'particular') == 'plan':
+                plan_total += amount
+        net_total = gross_total - plan_total
+        if net_total < Decimal('0.00'):
+            net_total = Decimal('0.00')
+        return {
+            'gross_total': gross_total,
+            'net_total': net_total,
+            'plan_total': plan_total,
+            'gross_formatted': _format_brl(gross_total),
+            'net_formatted': _format_brl(net_total),
+            'plan_formatted': _format_brl(plan_total),
+            'has_discount': plan_total > Decimal('0.00'),
+        }
+
+    for orcamento in orcamentos_pagination.items:
+        totals = _compute_totals(getattr(orcamento, 'items', []))
+        setattr(orcamento, 'display_totals', totals)
+        setattr(orcamento, 'total_formatted', totals['gross_formatted'])
+
+    filtered_ids_subq = filtered_orcamentos_query.with_entities(Orcamento.id).subquery()
+    summary_row = (
+        db.session.query(
+            func.coalesce(func.sum(gross_total_col), 0).label('gross_total'),
+            func.coalesce(func.sum(func.coalesce(orcamento_item_totals_subq.c.plan_total, 0)), 0).label('plan_total'),
+        )
+        .select_from(filtered_ids_subq)
+        .outerjoin(orcamento_item_totals_subq, orcamento_item_totals_subq.c.orcamento_id == filtered_ids_subq.c.id)
+    ).first()
+
+    summary_gross = _to_decimal(summary_row.gross_total) if summary_row else Decimal('0.00')
+    summary_discount = _to_decimal(summary_row.plan_total) if summary_row else Decimal('0.00')
+    summary_net = summary_gross - summary_discount
+    if summary_net < Decimal('0.00'):
+        summary_net = Decimal('0.00')
+
+    orcamento_summary = {
+        'gross_total': summary_gross,
+        'net_total': summary_net,
+        'discount_total': summary_discount,
+        'gross_formatted': _format_brl(summary_gross),
+        'net_formatted': _format_brl(summary_net),
+        'discount_formatted': _format_brl(summary_discount),
+        'has_discount': summary_discount > Decimal('0.00'),
+    }
 
     today = date.today()
     today_str = today.strftime('%Y-%m-%d')
@@ -6121,7 +6217,9 @@ def clinic_detail(clinica_id):
             'status': orcamento_status_filter,
             'from': orcamento_from_str,
             'to': orcamento_to_str,
+            'sort': orcamento_sort,
         },
+        orcamento_summary=orcamento_summary,
         orcamento_status_labels=ORCAMENTO_STATUS_LABELS,
         orcamento_status_styles=ORCAMENTO_STATUS_STYLES,
         pode_editar=pode_editar,
