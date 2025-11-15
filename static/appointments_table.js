@@ -1,5 +1,7 @@
 import { submitAppointmentUpdate } from './appointments_shared.js';
 
+const APPOINTMENT_FILTER_FIELDS = ['start', 'end', 'vet_id', 'status', 'type'];
+
 const EMPTY_STATE_HTML = `
   <div class="empty-state">
     <span class="icon-circle bg-secondary text-white"><i class="fa-regular fa-calendar-xmark"></i></span>
@@ -197,7 +199,7 @@ function applyFilterParams(parsedUrl) {
     return;
   }
   const currentParams = new URLSearchParams(window.location.search);
-  ['start', 'end'].forEach((param) => {
+  APPOINTMENT_FILTER_FIELDS.forEach((param) => {
     if (currentParams.has(param)) {
       parsedUrl.searchParams.set(param, currentParams.get(param));
     } else {
