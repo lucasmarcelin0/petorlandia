@@ -1029,18 +1029,15 @@ class PlantonistaEscala(db.Model):
     __tablename__ = 'plantonista_escalas'
     __table_args__ = (
         db.CheckConstraint('valor_previsto >= 0', name='ck_plantonista_valor_positive'),
-        db.Index('ix_plantonista_escalas_clinic_id', 'clinic_id'),
-        db.Index('ix_plantonista_escalas_medico_id', 'medico_id'),
-        db.Index('ix_plantonista_escalas_inicio', 'inicio'),
     )
 
     id = db.Column(db.Integer, primary_key=True)
-    clinic_id = db.Column(db.Integer, db.ForeignKey('clinica.id'), nullable=False)
-    medico_id = db.Column(db.Integer, db.ForeignKey('veterinario.id'), nullable=True)
+    clinic_id = db.Column(db.Integer, db.ForeignKey('clinica.id'), nullable=False, index=True)
+    medico_id = db.Column(db.Integer, db.ForeignKey('veterinario.id'), nullable=True, index=True)
     medico_nome = db.Column(db.String(150), nullable=False)
     medico_cnpj = db.Column(db.String(20), nullable=True)
     turno = db.Column(db.String(80), nullable=False)
-    inicio = db.Column(db.DateTime, nullable=False)
+    inicio = db.Column(db.DateTime, nullable=False, index=True)
     fim = db.Column(db.DateTime, nullable=False)
     valor_previsto = db.Column(db.Numeric(14, 2), nullable=False)
     status = db.Column(db.String(20), nullable=False, default='agendado')
