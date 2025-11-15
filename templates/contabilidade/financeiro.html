@@ -46,8 +46,8 @@
   </div>
   {% endif %}
 
-  <div class="row g-3 mb-4">
-    <div class="col-md-3">
+  <div class="row row-cols-1 row-cols-md-2 row-cols-xl-3 g-3 mb-4">
+    <div class="col">
       <div class="card shadow-sm border-0 h-100">
         <div class="card-body">
           <div class="d-flex align-items-center">
@@ -63,7 +63,7 @@
         </div>
       </div>
     </div>
-    <div class="col-md-3">
+    <div class="col">
       <div class="card shadow-sm border-0 h-100">
         <div class="card-body">
           <div class="d-flex align-items-center">
@@ -79,7 +79,7 @@
         </div>
       </div>
     </div>
-    <div class="col-md-3">
+    <div class="col">
       <div class="card shadow-sm border-0 h-100">
         <div class="card-body">
           <div class="d-flex align-items-center">
@@ -95,7 +95,7 @@
         </div>
       </div>
     </div>
-    <div class="col-md-3">
+    <div class="col">
       <div class="card shadow-sm border-0 h-100">
         <div class="card-body">
           <div class="d-flex align-items-center">
@@ -106,6 +106,54 @@
               <p class="text-muted mb-1">Projeção anual</p>
               <h4 class="mb-0">{{ resumo_projecao | currency_br }}</h4>
               <small class="text-muted">{{ resumo_mes_label }}</small>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="col">
+      <div class="card shadow-sm border-0 h-100">
+        <div class="card-body">
+          <div class="d-flex align-items-center">
+            <div class="rounded-circle bg-info bg-opacity-25 text-info p-3 me-3">
+              <i class="fas fa-briefcase-medical"></i>
+            </div>
+            <div>
+              <p class="text-muted mb-1">Custo fixo plantonistas</p>
+              <h4 class="mb-0">{{ resumo_pj_plantonistas | currency_br }}</h4>
+              <small class="text-muted">Demais PJs: {{ resumo_pj_outros | currency_br }}</small>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="col">
+      <div class="card shadow-sm border-0 h-100">
+        <div class="card-body">
+          <div class="d-flex align-items-center">
+            <div class="rounded-circle bg-danger bg-opacity-10 text-danger p-3 me-3">
+              <i class="fas fa-file-excel"></i>
+            </div>
+            <div>
+              <p class="text-muted mb-1">Plantões sem NF</p>
+              <h4 class="mb-0">{{ plantonista_sem_nf }}</h4>
+              <small class="text-muted">{{ plantonista_escalas }} escala{{ 's' if plantonista_escalas != 1 else '' }} no mês</small>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="col">
+      <div class="card shadow-sm border-0 h-100">
+        <div class="card-body">
+          <div class="d-flex align-items-center">
+            <div class="rounded-circle bg-secondary bg-opacity-10 text-secondary p-3 me-3">
+              <i class="fas fa-trend-up"></i>
+            </div>
+            <div>
+              <p class="text-muted mb-1">Tendência por plantão</p>
+              <h4 class="mb-0">{{ plantonista_media | currency_br }}</h4>
+              <small class="text-muted">Custo/hora: {{ plantonista_custo_hora | currency_br }} · {{ plantonista_total_horas | round(2) }}h registradas</small>
             </div>
           </div>
         </div>
@@ -158,7 +206,8 @@
   <script>
     const monthLabels = {{ revenues_labels | tojson }};
     const revenueData = {{ revenues_values | tojson }};
-    const pjData = {{ pj_payments_values | tojson }};
+    const pjPlantonistaData = {{ pj_plantonista_values | tojson }};
+    const pjOutrosData = {{ pj_outros_values | tojson }};
     const fatorRData = {{ fator_r_values | tojson }};
     const projectionData = {{ projection_values | tojson }};
 
@@ -226,19 +275,34 @@
 
     const pjCtx = document.getElementById('graficoPJs');
     if (pjCtx) {
+      const pjOptions = JSON.parse(JSON.stringify(baseOptions));
+      pjOptions.plugins.legend.display = true;
+      pjOptions.scales.x.stacked = true;
+      pjOptions.scales.y.stacked = true;
       new Chart(pjCtx, {
         type: 'bar',
         data: {
           labels: monthLabels,
-          datasets: [{
-            label: 'Pagamentos PJ',
-            data: pjData,
-            backgroundColor: 'rgba(113, 88, 226, 0.8)',
-            borderRadius: 6,
-            maxBarThickness: 32,
-          }]
+          datasets: [
+            {
+              label: 'Plantonistas',
+              data: pjPlantonistaData,
+              backgroundColor: 'rgba(113, 88, 226, 0.85)',
+              borderRadius: 6,
+              maxBarThickness: 32,
+              stack: 'pj',
+            },
+            {
+              label: 'Demais PJs',
+              data: pjOutrosData,
+              backgroundColor: 'rgba(167, 139, 250, 0.65)',
+              borderRadius: 6,
+              maxBarThickness: 32,
+              stack: 'pj',
+            }
+          ]
         },
-        options: baseOptions,
+        options: pjOptions,
       });
     }
 

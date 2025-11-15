@@ -165,6 +165,16 @@
                 <tr>
                   <td>
                     <div class="fw-semibold">{{ pagamento.prestador_nome }}</div>
+                    <div class="d-flex flex-wrap align-items-center gap-2 mt-1">
+                      {% if pagamento.tipo_prestador %}
+                        <span class="badge bg-light text-muted border">{{ pagamento.tipo_prestador.replace('_', ' ')|title }}</span>
+                      {% endif %}
+                      {% if pagamento.plantao_horas %}
+                        <small class="text-muted">
+                          <i class="fas fa-clock me-1"></i>{{ '%.2f'|format(pagamento.plantao_horas or 0) }}h
+                        </small>
+                      {% endif %}
+                    </div>
                     {% if pagamento.observacoes %}
                     <small class="text-muted"><i class="fas fa-sticky-note me-1"></i>{{ pagamento.observacoes }}</small>
                     {% endif %}

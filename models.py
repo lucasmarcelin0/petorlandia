@@ -978,6 +978,13 @@ class PJPayment(db.Model):
     prestador_nome = db.Column(db.String(150), nullable=False)
     prestador_cnpj = db.Column(db.String(20), nullable=False)
     nota_fiscal_numero = db.Column(db.String(80), nullable=True)
+    tipo_prestador = db.Column(
+        db.String(50),
+        nullable=True,
+        default='especialista',
+        server_default='especialista',
+    )
+    plantao_horas = db.Column(db.Numeric(5, 2), nullable=True)
     valor = db.Column(db.Numeric(14, 2), nullable=False)
     data_servico = db.Column(db.Date, nullable=False)
     data_pagamento = db.Column(db.Date, nullable=True)

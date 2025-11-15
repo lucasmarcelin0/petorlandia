@@ -4,13 +4,13 @@ from __future__ import annotations
 
 from collections import defaultdict
 from dataclasses import dataclass
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from decimal import Decimal, ROUND_HALF_UP
 from typing import Callable, Iterable, List, Optional, Sequence, Tuple
 
 from dateutil.relativedelta import relativedelta
 from flask import current_app, has_app_context
-from sqlalchemy import cast, func
+from sqlalchemy import cast, func, or_
 from sqlalchemy.exc import OperationalError, ProgrammingError
 from sqlalchemy.sql.sqltypes import Numeric
 
@@ -68,6 +68,26 @@ EXPENSE_NAME_FIELDS = ("nome", "descricao", "description", "item_name")
 EXPENSE_KIND_FIELDS = ("tipo", "category", "natureza", "kind")
 EXPENSE_COGS_FLAGS = ("eh_custo", "is_cogs", "is_inventory", "is_resale")
 
+
+def _normalize_prestador_type(raw_value: Optional[str]) -> str:
+    text = (raw_value or "").strip().lower()
+    if not text:
+        return ""
+    if "planton" in text:
+        return "plantonista"
+    if "especial" in text or "cirurg" in text:
+        return "especialista"
+    if "demais" in text or "outro" in text:
+        return "demais_pj"
+    return text
+
+
+def determine_pj_payment_subcategory(raw_value: Optional[str]) -> str:
+    normalized = _normalize_prestador_type(raw_value)
+    if not normalized:
+        return "prestador_servico"
+    return normalized.replace(" ", "_")
+
 REVENUE_CATEGORIES = ("receita_servico", "receita_produto")
 PAYROLL_CATEGORIES = (
     "folha_pagamento",
@@ -78,6 +98,8 @@ PAYROLL_CATEGORIES = (
 )
 DEFAULT_ISS_RATE = Decimal("0.05")
 VET_WITHHOLDING_RATE = Decimal("0.05")
+PLANTONISTA_RETENTION_RATE = VET_WITHHOLDING_RATE
+PLANTAO_PENDING_ALERT_DAYS = 5
 PJ_WITHHOLDING_THRESHOLD = Decimal("10000.00")
 CURRENCY_PLACES = Decimal("0.01")
 FACTOR_PLACES = Decimal("0.0001")
@@ -551,6 +573,7 @@ def _classify_veterinarian_payments(
         raw_value = getattr(entry, raw_column.key, getattr(entry, 'id', None)) if raw_column else getattr(entry, 'id', None)
         if raw_value is None:
             raw_value = id(entry)
+        provider_type = determine_pj_payment_subcategory(getattr(entry, 'tipo_prestador', None))
         record, record_changed = _upsert_classified_transaction(
             clinic_id,
             month_start,
@@ -560,7 +583,7 @@ def _classify_veterinarian_payments(
             description=_prepare_description(description, "Pagamento PJ"),
             value=_ensure_decimal(amount_value),
             category="pagamento_pj",
-            subcategory=_prepare_subcategory("prestador_servico"),
+            subcategory=_prepare_subcategory(provider_type),
         )
         records.append(record)
         changed = changed or record_changed
@@ -725,6 +748,17 @@ def run_transactions_history_backfill(
     return HistoryBackfillResult(processed, clinic_ids_list, month_starts, failures)
 
 
+def _plantonista_retention_rate(clinic: Clinica | None) -> Decimal:
+    if clinic is None:
+        return _normalize_percentage(PLANTONISTA_RETENTION_RATE)
+    candidate = getattr(clinic, 'aliquota_retencao_plantonista', None)
+    if candidate in (None, ''):
+        candidate = getattr(clinic, 'retencao_plantonista_percentual', None)
+    if candidate in (None, ''):
+        candidate = PLANTONISTA_RETENTION_RATE
+    return _normalize_percentage(candidate)
+
+
 def _calculate_pj_withholding(clinic: Clinica, month_start: date) -> Decimal:
     if not clinic or not clinic.id:
         return ZERO
@@ -739,15 +773,103 @@ def _calculate_pj_withholding(clinic: Clinica, month_start: date) -> Decimal:
         value = _ensure_decimal(payment.valor)
         if value <= ZERO:
             continue
+        provider_type = determine_pj_payment_subcategory(getattr(payment, 'tipo_prestador', None))
+        rate = VET_WITHHOLDING_RATE
         requires_retention = (
             municipal_requirement
             or getattr(payment, 'retencao_obrigatoria', False)
             or value >= PJ_WITHHOLDING_THRESHOLD
         )
+        if provider_type == 'plantonista':
+            rate = _plantonista_retention_rate(clinic)
+            requires_retention = True
         if not requires_retention:
             continue
-        total += value * VET_WITHHOLDING_RATE
+        total += value * rate
     return _quantize_currency(total)
+
+
+def _ensure_pending_plantao_notifications(
+    clinic: Clinica,
+    month_start: date,
+    overdue_days: int = PLANTAO_PENDING_ALERT_DAYS,
+) -> None:
+    if not clinic or not clinic.id:
+        return
+    try:
+        overdue_days = int(overdue_days)
+    except (TypeError, ValueError):
+        overdue_days = PLANTAO_PENDING_ALERT_DAYS
+    overdue_days = max(overdue_days, 1)
+    title = "Plantão pendente"
+    today = date.today()
+    month_end = month_start + relativedelta(months=1)
+    threshold = today - timedelta(days=overdue_days)
+    query = (
+        PJPayment.query
+        .filter(PJPayment.clinic_id == clinic.id)
+        .filter(PJPayment.data_servico >= month_start)
+        .filter(PJPayment.data_servico < month_end)
+        .filter(PJPayment.data_servico <= threshold)
+        .filter(func.lower(func.coalesce(PJPayment.tipo_prestador, '')) == 'plantonista')
+        .filter(or_(PJPayment.status.is_(None), PJPayment.status != 'pago'))
+    )
+    active_ids: set[int] = set()
+    for payment in query.all():
+        if not payment.data_servico:
+            continue
+        active_ids.add(payment.id)
+        prefix = f"[PJPayment:{payment.id}]"
+        days_overdue = max((today - payment.data_servico).days, overdue_days)
+        message = (
+            f"{prefix} Plantão de {payment.prestador_nome} em "
+            f"{payment.data_servico.strftime('%d/%m/%Y')} segue pendente há {days_overdue} dia(s)."
+        )
+        existing = (
+            ClinicNotification.query.filter_by(
+                clinic_id=clinic.id,
+                month=month_start,
+                title=title,
+            )
+            .filter(ClinicNotification.message.like(f"{prefix}%"))
+            .one_or_none()
+        )
+        if existing:
+            existing.message = message
+            if existing.resolved:
+                existing.resolved = False
+                existing.resolution_date = None
+            continue
+        db.session.add(
+            ClinicNotification(
+                clinic_id=clinic.id,
+                month=month_start,
+                title=title,
+                message=message,
+                type='warning',
+            )
+        )
+
+    stale_notices = (
+        ClinicNotification.query.filter_by(
+            clinic_id=clinic.id,
+            month=month_start,
+            title=title,
+        )
+        .filter(ClinicNotification.message.like('[PJPayment:%'))
+        .all()
+    )
+    for notice in stale_notices:
+        marker = (notice.message or '').split(']')[0]
+        if not marker.startswith('[PJPayment:'):
+            continue
+        try:
+            payment_id = int(marker.split(':', 1)[1])
+        except (ValueError, IndexError):
+            continue
+        if payment_id not in active_ids and not notice.resolved:
+            notice.resolved = True
+            notice.resolution_date = datetime.utcnow()
 
 
 def calculate_clinic_taxes(
@@ -794,6 +916,12 @@ def calculate_clinic_taxes(
     taxes.fator_r = fator_r
     taxes.faixa_simples = faixa_simples
     taxes.projecao_anual = projecao_anual
+    overdue_days = getattr(clinic, 'plantao_alerta_dias', None)
+    if overdue_days in (None, ''):
+        overdue_days = getattr(clinic, 'dias_alerta_plantonista', None)
+    if overdue_days in (None, ''):
+        overdue_days = PLANTAO_PENDING_ALERT_DAYS
+    _ensure_pending_plantao_notifications(clinic, month_start, overdue_days)
     db.session.commit()
 
     _log("[Tributário] ISS calculado: %s", _format_currency(iss_total))

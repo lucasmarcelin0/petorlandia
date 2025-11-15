@@ -1290,6 +1290,7 @@ from services import (
 )
 from services.finance import (
     classify_transactions_for_month,
+    determine_pj_payment_subcategory,
     run_transactions_history_backfill,
 )
 from services.animal_search import search_animals
@@ -2768,7 +2769,9 @@ def _sync_pj_payment_classification(payment):
     description = f"Pagamento PJ - {payment.prestador_nome}"[:255]
     classification.clinic_id = payment.clinic_id
     classification.category = 'pagamento_pj'
-    classification.subcategory = 'prestador_servico'
+    classification.subcategory = determine_pj_payment_subcategory(
+        getattr(payment, 'tipo_prestador', None)
+    )
     classification.description = description
     classification.value = payment.valor
     classification.date = entry_datetime
@@ -3043,11 +3046,15 @@ def contabilidade_financeiro():
     revenues_labels = [_format_month_label(month) for month in months]
     revenues_values: list[float] = []
     pj_payments_values: list[float] = []
+    pj_plantonista_values: list[float] = []
+    pj_outros_values: list[float] = []
     fator_r_values: list[float] = []
     projection_values: list[float] = []
 
     monthly_revenues: dict[date, Decimal] = {}
     monthly_pj_totals: dict[date, Decimal] = {}
+    monthly_pj_plantonistas: dict[date, Decimal] = {}
+    monthly_pj_outros: dict[date, Decimal] = {}
     monthly_taxes: dict[date, ClinicTaxes] = {}
 
     if selected_clinic_id:
@@ -3065,18 +3072,28 @@ def contabilidade_financeiro():
         pj_totals = (
             db.session.query(
                 ClassifiedTransaction.month,
+                ClassifiedTransaction.subcategory,
                 func.coalesce(func.sum(ClassifiedTransaction.value), 0),
             )
             .filter(ClassifiedTransaction.clinic_id == selected_clinic_id)
             .filter(ClassifiedTransaction.month.in_(months))
             .filter(ClassifiedTransaction.category == 'pagamento_pj')
-            .group_by(ClassifiedTransaction.month)
+            .group_by(ClassifiedTransaction.month, ClassifiedTransaction.subcategory)
             .all()
         )
-        monthly_pj_totals = {
-            month: Decimal(total or 0)
-            for month, total in pj_totals
-        }
+        totals_map: dict[date, Decimal] = defaultdict(lambda: Decimal('0'))
+        plantonista_map: dict[date, Decimal] = defaultdict(lambda: Decimal('0'))
+        outros_map: dict[date, Decimal] = defaultdict(lambda: Decimal('0'))
+        for month_value, subcategory, total in pj_totals:
+            total_decimal = Decimal(total or 0)
+            totals_map[month_value] += total_decimal
+            if (subcategory or '').lower() == 'plantonista':
+                plantonista_map[month_value] += total_decimal
+            else:
+                outros_map[month_value] += total_decimal
+        monthly_pj_totals = dict(totals_map)
+        monthly_pj_plantonistas = dict(plantonista_map)
+        monthly_pj_outros = dict(outros_map)
 
         taxes_records = (
             ClinicTaxes.query
@@ -3092,6 +3109,8 @@ def contabilidade_financeiro():
 
         pj_total = monthly_pj_totals.get(month, Decimal('0'))
         pj_payments_values.append(float(pj_total))
+        pj_plantonista_values.append(float(monthly_pj_plantonistas.get(month, Decimal('0'))))
+        pj_outros_values.append(float(monthly_pj_outros.get(month, Decimal('0'))))
 
         taxes_record = monthly_taxes.get(month)
         fator_r = Decimal('0')
@@ -3106,8 +3125,16 @@ def contabilidade_financeiro():
     resumo_mes_label = _format_month_label(current_month)
     resumo_faturamento = monthly_revenues.get(current_month, Decimal('0'))
     resumo_pj_custos = monthly_pj_totals.get(current_month, Decimal('0'))
+    resumo_pj_plantonistas = monthly_pj_plantonistas.get(current_month, Decimal('0'))
+    resumo_pj_outros = monthly_pj_outros.get(current_month, Decimal('0'))
     resumo_projecao = Decimal('0')
     resumo_impostos = Decimal('0')
+
+    plantonista_sem_nf = 0
+    plantonista_total_horas = Decimal('0')
+    plantonista_escalas = 0
+    plantonista_media = Decimal('0')
+    plantonista_custo_hora = Decimal('0')
 
     taxes_for_current = monthly_taxes.get(current_month)
     if taxes_for_current:
@@ -3118,8 +3145,37 @@ def contabilidade_financeiro():
             + Decimal(taxes_for_current.retencoes_pj or 0)
         )
 
+    if selected_clinic_id:
+        month_end = current_month + relativedelta(months=1)
+        plantonista_records = (
+            PJPayment.query
+            .filter(PJPayment.clinic_id == selected_clinic_id)
+            .filter(PJPayment.data_servico >= current_month)
+            .filter(PJPayment.data_servico < month_end)
+            .filter(func.lower(func.coalesce(PJPayment.tipo_prestador, '')) == 'plantonista')
+            .all()
+        )
+        plantonista_escalas = len(plantonista_records)
+        for payment in plantonista_records:
+            if not (payment.nota_fiscal_numero or '').strip():
+                plantonista_sem_nf += 1
+            if payment.plantao_horas:
+                plantonista_total_horas += Decimal(str(payment.plantao_horas))
+        if plantonista_escalas:
+            plantonista_media = resumo_pj_plantonistas / plantonista_escalas
+        if plantonista_total_horas > 0:
+            plantonista_custo_hora = resumo_pj_plantonistas / plantonista_total_horas
+
     has_chart_data = any(
-        value != 0 for value in (revenues_values + pj_payments_values + fator_r_values + projection_values)
+        value != 0
+        for value in (
+            revenues_values
+            + pj_payments_values
+            + pj_plantonista_values
+            + pj_outros_values
+            + fator_r_values
+            + projection_values
+        )
     )
 
     return render_template(
@@ -3130,13 +3186,22 @@ def contabilidade_financeiro():
         revenues_labels=revenues_labels,
         revenues_values=revenues_values,
         pj_payments_values=pj_payments_values,
+        pj_plantonista_values=pj_plantonista_values,
+        pj_outros_values=pj_outros_values,
         fator_r_values=fator_r_values,
         projection_values=projection_values,
         resumo_mes_label=resumo_mes_label,
         resumo_faturamento=resumo_faturamento,
         resumo_pj_custos=resumo_pj_custos,
+        resumo_pj_plantonistas=resumo_pj_plantonistas,
+        resumo_pj_outros=resumo_pj_outros,
         resumo_impostos=resumo_impostos,
         resumo_projecao=resumo_projecao,
+        plantonista_sem_nf=plantonista_sem_nf,
+        plantonista_total_horas=plantonista_total_horas,
+        plantonista_escalas=plantonista_escalas,
+        plantonista_media=plantonista_media,
+        plantonista_custo_hora=plantonista_custo_hora,
         has_chart_data=has_chart_data,
     )
 
@@ -3509,6 +3574,8 @@ def contabilidade_pagamentos_novo():
             prestador_nome=form.prestador_nome.data.strip(),
             prestador_cnpj=''.join(ch for ch in (form.prestador_cnpj.data or '') if ch.isdigit()),
             nota_fiscal_numero=(form.nota_fiscal_numero.data or '').strip() or None,
+            tipo_prestador=form.tipo_prestador.data,
+            plantao_horas=form.plantao_horas.data,
             valor=form.valor.data,
             data_servico=form.data_servico.data,
             data_pagamento=form.data_pagamento.data,
@@ -3563,6 +3630,7 @@ def contabilidade_pagamentos_editar(payment_id):
     form.clinic_id.choices = clinic_choices
     if request.method == 'GET':
         form.clinic_id.data = payment.clinic_id
+        form.tipo_prestador.data = payment.tipo_prestador or 'especialista'
 
     if form.validate_on_submit():
         clinic_id = form.clinic_id.data
@@ -3573,6 +3641,8 @@ def contabilidade_pagamentos_editar(payment_id):
         payment.prestador_nome = form.prestador_nome.data.strip()
         payment.prestador_cnpj = ''.join(ch for ch in (form.prestador_cnpj.data or '') if ch.isdigit())
         payment.nota_fiscal_numero = (form.nota_fiscal_numero.data or '').strip() or None
+        payment.tipo_prestador = form.tipo_prestador.data
+        payment.plantao_horas = form.plantao_horas.data
         payment.valor = form.valor.data
         payment.data_servico = form.data_servico.data
         payment.data_pagamento = form.data_pagamento.data
