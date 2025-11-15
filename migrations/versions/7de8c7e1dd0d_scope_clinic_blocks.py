@@ -65,6 +65,15 @@ def upgrade():
     ))
     conn.execute(sa.text(
         """
+        UPDATE orcamento_item
+        SET clinica_id = (
+            SELECT clinica_id FROM servico_clinica WHERE servico_clinica.id = orcamento_item.servico_id
+        )
+        WHERE clinica_id IS NULL AND servico_id IS NOT NULL
+        """
+    ))
+    conn.execute(sa.text(
+        """
         UPDATE bloco_prescricao
         SET clinica_id = (
             SELECT clinica_id FROM animal WHERE animal.id = bloco_prescricao.animal_id
