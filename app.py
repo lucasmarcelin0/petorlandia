@@ -118,6 +118,7 @@ app.config.setdefault("BABEL_DEFAULT_LOCALE", "pt_BR")
 # ----------------------------------------------------------------
 
 _inventory_threshold_columns_checked = False
+_inventory_movement_table_checked = False
 
 
 def _ensure_inventory_threshold_columns() -> None:
@@ -159,6 +160,37 @@ def _ensure_inventory_threshold_columns() -> None:
                 continue
 
     _inventory_threshold_columns_checked = True
+
+
+def _ensure_inventory_movement_table() -> None:
+    """Create ``clinic_inventory_movement`` defensively when missing.
+
+    Some self-hosted deployments occasionally skip Alembic migrations.  When
+    that happens we opportunistically create the clinic inventory movement
+    table the first time the inventory UI is accessed so the application keeps
+    working.  Once the table exists the function becomes a cheap no-op.
+    """
+
+    global _inventory_movement_table_checked
+    if _inventory_movement_table_checked:
+        return
+
+    try:
+        inspector = inspect(db.engine)
+    except Exception:  # pragma: no cover - engine init failures
+        return
+
+    if inspector.has_table("clinic_inventory_movement"):
+        _inventory_movement_table_checked = True
+        return
+
+    try:
+        ClinicInventoryMovement.__table__.create(bind=db.engine, checkfirst=True)
+    except ProgrammingError:
+        # Another worker may have created the table already; nothing else to do.
+        pass
+    finally:
+        _inventory_movement_table_checked = True
 
 # ----------------------------------------------------------------
 # 4)  AWS S3 helper (lazy)
@@ -5180,6 +5212,7 @@ def clinic_detail(clinica_id):
     inventory_movements = []
     if show_inventory:
         _ensure_inventory_threshold_columns()
+        _ensure_inventory_movement_table()
         inventory_items = (
             ClinicInventoryItem.query
             .filter_by(clinica_id=clinica.id)
