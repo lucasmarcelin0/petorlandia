@@ -10620,6 +10620,14 @@ def mp_sdk():
     return mercadopago.SDK(current_app.config["MERCADOPAGO_ACCESS_TOKEN"])
 
 
+def _mp_auto_return_enabled(back_urls: dict) -> bool:
+    """Return True when Mercado Pago auto_return can safely be enabled."""
+    success_url = (back_urls or {}).get('success')
+    if not success_url:
+        return False
+    return urlparse(success_url).scheme == 'https'
+
+
 # Caches for frequently requested lists
 @cache
 def list_species():
@@ -11618,6 +11626,10 @@ def checkout():
         if m:
             payer_info["address"]["zip_code"] = m.group(1)
 
+    back_urls = {
+        s: url_for("payment_status", payment_id=payment.id, _external=True)
+        for s in ("success", "failure", "pending")
+    }
     preference_data = {
         "items": items,
         "external_reference": payment.external_reference,
@@ -11625,13 +11637,11 @@ def checkout():
         "payment_methods":    {"installments": 1},
         "statement_descriptor": current_app.config.get("MERCADOPAGO_STATEMENT_DESCRIPTOR"),
         "binary_mode": current_app.config.get("MERCADOPAGO_BINARY_MODE", False),
-        "back_urls": {
-            s: url_for("payment_status", payment_id=payment.id, _external=True)
-            for s in ("success", "failure", "pending")
-        },
-        "auto_return": "approved",
+        "back_urls": back_urls,
         "payer": payer_info,
     }
+    if _mp_auto_return_enabled(back_urls):
+        preference_data["auto_return"] = "approved"
     current_app.logger.debug("MP Preference Payload:\n%s",
                              json.dumps(preference_data, indent=2, ensure_ascii=False))
 
@@ -15218,17 +15228,19 @@ def pagar_orcamento(bloco_id):
         for it in bloco.itens
     ]
 
+    back_urls = {
+        s: url_for('consulta_direct', animal_id=bloco.animal_id, _external=True)
+        for s in ('success', 'failure', 'pending')
+    }
     preference_data = {
         'items': items,
         'external_reference': f'bloco_orcamento-{bloco.id}',
         'notification_url': url_for('notificacoes_mercado_pago', _external=True),
         'statement_descriptor': current_app.config.get('MERCADOPAGO_STATEMENT_DESCRIPTOR'),
-        'back_urls': {
-            s: url_for('consulta_direct', animal_id=bloco.animal_id, _external=True)
-            for s in ('success', 'failure', 'pending')
-        },
-        'auto_return': 'approved',
+        'back_urls': back_urls,
     }
+    if _mp_auto_return_enabled(back_urls):
+        preference_data['auto_return'] = 'approved'
 
     try:
         resp = mp_sdk().preference().create(preference_data)
@@ -15286,17 +15298,19 @@ def pagar_consulta_orcamento(consulta_id):
         for it in consulta.orcamento_items
     ]
 
+    back_urls = {
+        s: url_for('consulta_direct', animal_id=consulta.animal_id, _external=True)
+        for s in ('success', 'failure', 'pending')
+    }
     preference_data = {
         'items': items,
         'external_reference': f'consulta-{consulta.id}',
         'notification_url': url_for('notificacoes_mercado_pago', _external=True),
         'statement_descriptor': current_app.config.get('MERCADOPAGO_STATEMENT_DESCRIPTOR'),
-        'back_urls': {
-            s: url_for('consulta_direct', animal_id=consulta.animal_id, _external=True)
-            for s in ('success', 'failure', 'pending')
-        },
-        'auto_return': 'approved',
+        'back_urls': back_urls,
     }
+    if _mp_auto_return_enabled(back_urls):
+        preference_data['auto_return'] = 'approved'
 
     try:
         resp = mp_sdk().preference().create(preference_data)

@@ -5,7 +5,15 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')
 import pytest
 import app as app_module
 from app import app as flask_app, db
-from models import User, Animal, Consulta, OrcamentoItem, BlocoOrcamento, Clinica, Veterinario
+from models import (
+    User,
+    Animal,
+    Consulta,
+    OrcamentoItem,
+    BlocoOrcamento,
+    Clinica,
+    Veterinario,
+)
 
 
 @pytest.fixture
@@ -14,7 +22,7 @@ def app():
     yield flask_app
 
 
-def test_pagar_bloco_orcamento(app, monkeypatch):
+def _bootstrap_consulta(app):
     with app.app_context():
         db.drop_all()
         db.create_all()
@@ -27,13 +35,28 @@ def test_pagar_bloco_orcamento(app, monkeypatch):
         animal = Animal(name='Rex', owner=tutor, clinica=clinica)
         db.session.add_all([clinica, vet, vet_v, tutor, animal])
         db.session.commit()
-        consulta = Consulta(animal=animal, created_by=vet.id, status='in_progress', clinica_id=clinica.id)
+        consulta = Consulta(
+            animal=animal,
+            created_by=vet.id,
+            status='in_progress',
+            clinica_id=clinica.id,
+        )
         item = OrcamentoItem(consulta=consulta, descricao='Consulta', valor=50, clinica=clinica)
         db.session.add_all([consulta, item])
         db.session.commit()
-        consulta_id = consulta.id
+        return consulta.id
 
+
+def _teardown_db(app):
+    with app.app_context():
+        db.drop_all()
+
+
+def test_pagar_bloco_orcamento(app, monkeypatch):
+    consulta_id = _bootstrap_consulta(app)
     client = app.test_client()
+    captured = {}
+
     with client:
         client.post('/login', data={'email': 'vet@example.com', 'password': 'x'}, follow_redirects=True)
         resp = client.post(f'/consulta/{consulta_id}/bloco_orcamento', headers={'Accept': 'application/json'})
@@ -44,6 +67,7 @@ def test_pagar_bloco_orcamento(app, monkeypatch):
 
         class FakePrefService:
             def create(self, data):
+                captured['preference'] = data
                 return {'status': 201, 'response': {'init_point': 'http://mp'}}
 
         class FakeSDK:
@@ -53,9 +77,9 @@ def test_pagar_bloco_orcamento(app, monkeypatch):
         monkeypatch.setattr(app_module, 'mp_sdk', lambda: FakeSDK())
         resp = client.post(f'/pagar_orcamento/{bloco_id}', headers={'Accept': 'application/json'})
         assert resp.status_code == 200
-        data = resp.get_json()
-        assert data['success']
-        assert data['redirect_url'] == 'http://mp'
+        payload = resp.get_json()
+        assert payload['success']
+        assert payload['redirect_url'] == 'http://mp'
+        assert 'auto_return' not in captured['preference']
 
-    with app.app_context():
-        db.drop_all()
+    _teardown_db(app)
