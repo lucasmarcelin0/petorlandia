@@ -42,7 +42,8 @@ from jinja2 import TemplateNotFound
 import json
 import csv
 import unicodedata
-from sqlalchemy import func, or_, exists, and_, case, true, false
+from sqlalchemy import func, or_, exists, and_, case, true, false, inspect, text
+from sqlalchemy.exc import ProgrammingError
 from sqlalchemy.orm import joinedload, selectinload, aliased
 
 # ----------------------------------------------------------------
@@ -111,6 +112,53 @@ login.init_app(app)
 session_ext.init_app(app)
 babel.init_app(app)
 app.config.setdefault("BABEL_DEFAULT_LOCALE", "pt_BR")
+
+# ----------------------------------------------------------------
+# 3a)  Runtime safety checks for legacy databases
+# ----------------------------------------------------------------
+
+_inventory_threshold_columns_checked = False
+
+
+def _ensure_inventory_threshold_columns() -> None:
+    """Add inventory threshold columns when the migration wasn't applied.
+
+    Some self-hosted deployments might skip Alembic migrations, which means
+    new columns such as ``min_quantity``/``max_quantity`` are missing and the
+    ``ClinicInventoryItem`` queries fail immediately.  We opportunistically
+    add those columns the first time the clinic inventory is accessed so the
+    UI keeps working even on older databases.  This is intentionally defensive
+    and becomes a no-op once the Alembic migration runs.
+    """
+
+    global _inventory_threshold_columns_checked
+    if _inventory_threshold_columns_checked:
+        return
+
+    try:
+        inspector = inspect(db.engine)
+        existing_columns = {
+            column["name"] for column in inspector.get_columns("clinic_inventory_item")
+        }
+    except Exception:  # pragma: no cover - only triggered on engine init failures
+        return
+
+    statements = []
+    if "min_quantity" not in existing_columns:
+        statements.append("ALTER TABLE clinic_inventory_item ADD COLUMN min_quantity INTEGER")
+    if "max_quantity" not in existing_columns:
+        statements.append("ALTER TABLE clinic_inventory_item ADD COLUMN max_quantity INTEGER")
+
+    if statements:
+        for statement in statements:
+            try:
+                with db.engine.begin() as connection:
+                    connection.execute(text(statement))
+            except ProgrammingError:
+                # Another worker may have created the column first; ignore it.
+                continue
+
+    _inventory_threshold_columns_checked = True
 
 # ----------------------------------------------------------------
 # 4)  AWS S3 helper (lazy)
@@ -5131,6 +5179,7 @@ def clinic_detail(clinica_id):
     inventory_items = []
     inventory_movements = []
     if show_inventory:
+        _ensure_inventory_threshold_columns()
         inventory_items = (
             ClinicInventoryItem.query
             .filter_by(clinica_id=clinica.id)
