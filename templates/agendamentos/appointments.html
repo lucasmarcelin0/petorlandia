@@ -1,5 +1,10 @@
 {% extends "layout.html" %}
 
+{% block head %}
+  {{ super() }}
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/appointments.css') }}">
+{% endblock %}
+
 {% block main %}
 <section class="container py-4" aria-labelledby="appointments-calendar-title">
 
