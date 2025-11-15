@@ -390,6 +390,87 @@
             </div>
             <span class="badge bg-light text-muted">{{ plantonista_escalas|length }} plantões</span>
           </div>
+          <div class="card border-0 shadow-sm mb-4">
+            <div class="card-body">
+              <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-3">
+                <div>
+                  <h5 class="mb-0">Calendário visual do mês</h5>
+                  <small class="text-muted">Planeje toda a escala clicando no dia desejado.</small>
+                </div>
+                <div class="d-flex flex-wrap align-items-center gap-2">
+                  <span class="badge bg-info text-dark">Agendado</span>
+                  <span class="badge bg-primary">Confirmado</span>
+                  <span class="badge bg-success">Concluído</span>
+                  <span class="badge bg-warning text-dark">Pendência</span>
+                  <span class="badge bg-light text-muted border">Livre</span>
+                </div>
+              </div>
+              <div class="table-responsive">
+                <table class="table table-bordered align-middle mb-0">
+                  <thead class="table-light">
+                    <tr class="text-center">
+                      <th class="small text-uppercase">Seg</th>
+                      <th class="small text-uppercase">Ter</th>
+                      <th class="small text-uppercase">Qua</th>
+                      <th class="small text-uppercase">Qui</th>
+                      <th class="small text-uppercase">Sex</th>
+                      <th class="small text-uppercase">Sáb</th>
+                      <th class="small text-uppercase">Dom</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {% for week in plantonista_calendar_weeks %}
+                    <tr>
+                      {% for day in week %}
+                      <td style="min-width: 180px;">
+                        {% if day %}
+                        <div class="d-flex justify-content-between align-items-center mb-1">
+                          <div class="fw-semibold">{{ day.date.day }}</div>
+                          <span class="{{ day.badge_class }}">{{ day.badge_label }}</span>
+                        </div>
+                        <div class="small text-muted d-flex justify-content-between">
+                          <span>{{ day.total_escalas }} plantões</span>
+                          <span>{{ '%.2f' % day.horas }} h</span>
+                        </div>
+                        <div class="d-flex flex-column gap-1 mt-2">
+                          {% for status, count in day.status_counts.items() %}
+                          <div class="d-flex justify-content-between small text-muted">
+                            <span>{{ plantonista_status_labels.get(status, status|capitalize) }}</span>
+                            <span class="fw-semibold">{{ count }}</span>
+                          </div>
+                          {% endfor %}
+                        </div>
+                        <div class="d-flex justify-content-between align-items-center mt-2">
+                          <small class="text-muted">Previsto</small>
+                          <span class="fw-semibold text-primary">{{ day.valor_previsto | currency_br }}</span>
+                        </div>
+                        <div class="mt-2">
+                          <small class="text-muted">Médicos</small>
+                          <div class="d-flex flex-wrap gap-1">
+                            {% for medico in day.medicos[:3] %}
+                              <span class="badge bg-secondary-subtle text-dark border">{{ medico }}</span>
+                            {% endfor %}
+                            {% if day.medicos|length > 3 %}
+                              <span class="badge bg-secondary-subtle text-dark border">+{{ day.medicos|length - 3 }}</span>
+                            {% elif not day.medicos %}
+                              <span class="text-muted small">—</span>
+                            {% endif %}
+                          </div>
+                        </div>
+                        <a href="{{ url_for('contabilidade_plantonistas_novo', clinica_id=selected_clinic_id, mes=month_value, aba='plantonistas', dia=day.date.isoformat()) }}"
+                           class="btn btn-sm btn-outline-primary w-100 mt-2">
+                          <i class="fas fa-calendar-plus me-1"></i>Agendar neste dia
+                        </a>
+                        {% endif %}
+                      </td>
+                      {% endfor %}
+                    </tr>
+                    {% endfor %}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
           <div class="table-responsive">
             <table class="table align-middle" data-plantao-table>
               <thead class="table-light">
