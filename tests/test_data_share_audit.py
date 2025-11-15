@@ -15,6 +15,9 @@ from models import User, Clinica, Animal, DataShareAccess, DataSharePartyType, D
 @pytest.fixture
 def app():
     flask_app.config.update(TESTING=True, WTF_CSRF_ENABLED=False, SQLALCHEMY_DATABASE_URI="sqlite:///:memory:")
+    with flask_app.app_context():
+        db.session.remove()
+        db.engine.dispose()
     yield flask_app
 
 
@@ -25,6 +28,8 @@ def login(monkeypatch, user):
 
 
 def setup_entities():
+    db.session.remove()
+    db.engine.dispose()
     db.drop_all()
     db.create_all()
     clinic_a = Clinica(nome="Alpha")
