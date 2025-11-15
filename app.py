@@ -2933,6 +2933,7 @@ def list_animals():
     sex = request.args.get('sex')
     age = request.args.get('age')
     show_all = _is_admin() and request.args.get('show_all') == '1'
+    name_query = request.args.get('name')
 
     # Base query: ignora animais removidos
     query = Animal.query.filter(Animal.removido_em == None)
@@ -2958,6 +2959,8 @@ def list_animals():
         query = query.filter_by(sex=sex)
     if age:
         query = query.filter(Animal.age.ilike(f"{age}%"))
+    if name_query:
+        query = query.filter(Animal.name.ilike(f"%{name_query}%"))
 
     # Veterinários só podem ver animais perdidos, à venda ou para adoção,
     # ou então animais cadastrados pela própria clínica
@@ -3004,6 +3007,7 @@ def list_animals():
         breed_id=breed_id,
         sex=sex,
         age=age,
+        name=name_query,
         is_admin=_is_admin(),
         show_all=show_all
     )

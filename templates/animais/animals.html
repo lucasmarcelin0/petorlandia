@@ -27,6 +27,9 @@
   <!-- Filtro -->
   <form id="filterForm" method="GET" action="{{ url_for('list_animals') }}" class="mb-4">
     <div class="row g-2 justify-content-center">
+      <div class="col-md-3">
+        <input type="text" name="name" value="{{ name or '' }}" class="form-control rounded-pill" placeholder="Nome do pet">
+      </div>
       <div class="col-md-2">
         <select name="modo" class="form-select rounded-pill">
           <option value="todos">Todos os Modos</option>
