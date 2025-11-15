@@ -8,7 +8,8 @@ from datetime import datetime
 
 
 revision = '2f8a5b4d1234'
-down_revision = '9c54d2177bf8'
+down_revision = '784cfdc924d2'
+
 branch_labels = None
 depends_on = None
 
