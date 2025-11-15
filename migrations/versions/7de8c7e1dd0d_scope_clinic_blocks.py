@@ -116,19 +116,18 @@ def upgrade():
         WITH default_clinic AS (SELECT :default_clinic_id AS id)
         UPDATE orcamento_item AS oi
         SET clinica_id = COALESCE(
-            consulta.clinica_id,
-            bloco.clinica_id,
-            orcamento.clinica_id,
-            servico.clinica_id,
-            consulta_animal.clinica_id,
+            (SELECT consulta.clinica_id FROM consulta WHERE consulta.id = oi.consulta_id),
+            (SELECT bloco.clinica_id FROM bloco_orcamento AS bloco WHERE bloco.id = oi.bloco_id),
+            (SELECT orcamento.clinica_id FROM orcamento WHERE orcamento.id = oi.orcamento_id),
+            (SELECT servico.clinica_id FROM servico_clinica AS servico WHERE servico.id = oi.servico_id),
+            (SELECT animal.clinica_id FROM consulta
+                JOIN animal ON animal.id = consulta.animal_id
+                WHERE consulta.id = oi.consulta_id
+                LIMIT 1
+            ),
             default_clinic.id
         )
         FROM default_clinic
-        LEFT JOIN consulta ON consulta.id = oi.consulta_id
-        LEFT JOIN animal AS consulta_animal ON consulta_animal.id = consulta.animal_id
-        LEFT JOIN bloco_orcamento AS bloco ON bloco.id = oi.bloco_id
-        LEFT JOIN orcamento ON orcamento.id = oi.orcamento_id
-        LEFT JOIN servico_clinica AS servico ON servico.id = oi.servico_id
         WHERE oi.clinica_id IS NULL
         """
     ), {"default_clinic_id": default_clinic_id})
@@ -138,11 +137,10 @@ def upgrade():
         WITH default_clinic AS (SELECT :default_clinic_id AS id)
         UPDATE bloco_prescricao AS bp
         SET clinica_id = COALESCE(
-            animal.clinica_id,
+            (SELECT animal.clinica_id FROM animal WHERE animal.id = bp.animal_id),
             default_clinic.id
         )
         FROM default_clinic
-        LEFT JOIN animal ON animal.id = bp.animal_id
         WHERE bp.clinica_id IS NULL
         """
     ), {"default_clinic_id": default_clinic_id})
