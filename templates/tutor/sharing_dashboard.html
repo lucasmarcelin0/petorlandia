@@ -1,0 +1,136 @@
+{% extends 'layout.html' %}
+
+{% block main %}
+<div class="container py-4">
+  <div class="d-flex flex-column flex-lg-row justify-content-between align-items-lg-center mb-4 gap-3">
+    <div>
+      <h1 class="h3 mb-1">Compartilhamentos de Prontuário</h1>
+      <p class="text-muted mb-0">Aprove ou recuse solicitações e acompanhe quem já tem acesso aos dados dos seus animais.</p>
+    </div>
+    <a class="btn btn-outline-secondary" href="{{ url_for('profile') }}">
+      <i class="fa-solid fa-user me-2"></i> Atualizar meus dados
+    </a>
+  </div>
+
+  <div class="row g-4">
+    <div class="col-lg-6">
+      <div class="card shadow-sm h-100">
+        <div class="card-header bg-white border-0">
+          <h2 class="h5 mb-0">Solicitações pendentes</h2>
+          <small class="text-muted">As clínicas abaixo aguardam sua autorização.</small>
+        </div>
+        <div class="card-body">
+          {% if pending_shares %}
+            <div class="list-group list-group-flush">
+              {% for share in pending_shares %}
+              <div class="list-group-item px-0">
+                <div class="d-flex flex-column gap-2">
+                  <div class="d-flex justify-content-between align-items-start flex-wrap gap-2">
+                    <div>
+                      <strong>{{ share.clinic.nome if share.clinic else 'Clínica #' ~ share.clinica_id }}</strong>
+                      <div class="text-muted small">Animal: {{ share.animal.name if share.animal else 'ID ' ~ share.animal_id }}</div>
+                    </div>
+                    <span class="badge bg-warning text-dark">Pendente</span>
+                  </div>
+                  {% if share.reason %}
+                  <p class="mb-0 small text-muted">Motivo informado: {{ share.reason }}</p>
+                  {% endif %}
+                  <div class="d-flex flex-column small text-muted">
+                    <span>Solicitado em {{ share.created_at.strftime('%d/%m/%Y %H:%M') }}</span>
+                    {% if share.requested_by %}<span>Responsável: {{ share.requested_by.name }}</span>{% endif %}
+                  </div>
+                  {% if share.token %}
+                  <div class="d-flex flex-wrap gap-2">
+                    <button class="btn btn-sm btn-success" data-share-action="approve" data-token="{{ share.token.token }}">
+                      <i class="fa-solid fa-check me-1"></i> Aprovar
+                    </button>
+                    <button class="btn btn-sm btn-outline-danger" data-share-action="deny" data-token="{{ share.token.token }}">
+                      <i class="fa-solid fa-xmark me-1"></i> Recusar
+                    </button>
+                    <a href="{{ url_for('tutor_share_confirm', token=share.token.token) }}" class="btn btn-sm btn-outline-secondary">
+                      Abrir página segura
+                    </a>
+                  </div>
+                  {% endif %}
+                </div>
+              </div>
+              {% endfor %}
+            </div>
+          {% else %}
+            <div class="text-center text-muted py-4">
+              Nenhuma solicitação aguardando resposta.
+            </div>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+
+    <div class="col-lg-6">
+      <div class="card shadow-sm h-100">
+        <div class="card-header bg-white border-0">
+          <h2 class="h5 mb-0">Compartilhamentos ativos</h2>
+          <small class="text-muted">Clínicas com acesso aprovado por você.</small>
+        </div>
+        <div class="card-body">
+          {% if active_shares %}
+            <div class="list-group list-group-flush">
+              {% for share in active_shares %}
+              <div class="list-group-item px-0">
+                <div class="d-flex justify-content-between align-items-start flex-wrap gap-2">
+                  <div>
+                    <strong>{{ share.clinic.nome if share.clinic else 'Clínica #' ~ share.clinica_id }}</strong>
+                    <div class="small text-muted">Animal: {{ share.animal.name if share.animal else 'ID ' ~ share.animal_id }}</div>
+                    {% if share.expires_at %}
+                    <div class="small text-muted">Válido até {{ share.expires_at.strftime('%d/%m/%Y %H:%M') }}</div>
+                    {% endif %}
+                  </div>
+                  <span class="badge bg-info text-dark">Ativo</span>
+                </div>
+              </div>
+              {% endfor %}
+            </div>
+          {% else %}
+            <div class="text-center text-muted py-4">
+              Nenhum compartilhamento em vigor no momento.
+            </div>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+{{ super() }}
+<script>
+(function() {
+  document.querySelectorAll('[data-share-action]').forEach(function(button) {
+    button.addEventListener('click', async function() {
+      const token = button.getAttribute('data-token');
+      const decision = button.getAttribute('data-share-action');
+      if (!token) return;
+      button.setAttribute('disabled', 'disabled');
+      try {
+        const resp = await fetch(`/api/shares/${token}/confirm`, {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json', 'Accept': 'application/json'},
+          body: JSON.stringify({decision})
+        });
+        const data = await resp.json();
+        if (!resp.ok || data.success === false) {
+          throw new Error(data.message || 'Não foi possível atualizar esta solicitação.');
+        }
+        window.location.reload();
+      } catch (error) {
+        button.removeAttribute('disabled');
+        const alert = document.createElement('div');
+        alert.className = 'alert alert-danger mt-3';
+        alert.textContent = error.message;
+        button.closest('.list-group-item')?.appendChild(alert);
+      }
+    });
+  });
+})();
+</script>
+{% endblock %}

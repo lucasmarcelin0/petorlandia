@@ -511,6 +511,9 @@
                                 {% if has_veterinarian_profile_flag %}
                                 <li><a class="dropdown-item" href="{{ url_for('veterinarian_membership') }}"><i class="fas fa-credit-card me-2 text-success"></i> Assinatura de Veterinário</a></li>
                                 {% endif %}
+                                {% if (not current_user.worker or current_user.worker == 'tutor') %}
+                                <li><a class="dropdown-item" href="{{ url_for('tutor_shares') }}"><i class="fas fa-link me-2 text-info"></i> Compartilhamentos</a></li>
+                                {% endif %}
 
                                 <li><a class="dropdown-item" href="{{ url_for('logout') }}"><i class="fas fa-sign-out-alt me-2 text-danger"></i> Sair</a></li>
                             </ul>

@@ -440,6 +440,58 @@ class ConsultaToken(db.Model):
     )
     expires_at = db.Column(db.DateTime, nullable=False)
     used = db.Column(db.Boolean, default=False)
+    share = db.relationship('AnimalShare', back_populates='token', uselist=False)
+
+
+class AnimalShare(db.Model):
+    __tablename__ = 'animal_share'
+
+    id = db.Column(db.Integer, primary_key=True)
+    animal_id = db.Column(db.Integer, db.ForeignKey('animal.id'), nullable=False)
+    tutor_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    clinica_id = db.Column(db.Integer, db.ForeignKey('clinica.id'), nullable=False)
+    requested_by_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    granted_by_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True)
+    token_id = db.Column(db.Integer, db.ForeignKey('consulta_token.id'), nullable=True)
+    status = db.Column(db.String(20), nullable=False, default='pending')
+    reason = db.Column(db.Text, nullable=True)
+    requested_days = db.Column(db.Integer, nullable=True)
+    expires_at = db.Column(db.DateTime, nullable=True)
+    granted_at = db.Column(db.DateTime, nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = db.Column(
+        db.DateTime,
+        default=datetime.utcnow,
+        onupdate=datetime.utcnow,
+        nullable=False,
+    )
+
+    animal = db.relationship('Animal', backref='shares')
+    tutor = db.relationship('User', foreign_keys=[tutor_id])
+    clinic = db.relationship('Clinica', backref='animal_shares')
+    requested_by = db.relationship('User', foreign_keys=[requested_by_id], overlaps="clinic,animal")
+    granted_by = db.relationship('User', foreign_keys=[granted_by_id], overlaps="clinic,animal")
+    token = db.relationship('ConsultaToken', back_populates='share', uselist=False)
+    events = db.relationship(
+        'AnimalShareEvent',
+        back_populates='share',
+        cascade='all, delete-orphan',
+    )
+
+    def __repr__(self):
+        return f"<AnimalShare #{self.id} animal={self.animal_id} clinic={self.clinica_id} status={self.status}>"
+
+
+class AnimalShareEvent(db.Model):
+    __tablename__ = 'animal_share_event'
+
+    id = db.Column(db.Integer, primary_key=True)
+    share_id = db.Column(db.Integer, db.ForeignKey('animal_share.id'), nullable=False)
+    event = db.Column(db.String(50), nullable=False)
+    payload = db.Column(db.JSON, nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+
+    share = db.relationship('AnimalShare', back_populates='events')
 
 
 

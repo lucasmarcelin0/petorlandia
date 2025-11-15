@@ -1,5 +1,5 @@
 # ───────────────────────────  app.py  ───────────────────────────
-import os, sys, pathlib, importlib, logging, uuid, re
+import os, sys, pathlib, importlib, logging, uuid, re, secrets
 import requests
 from collections import defaultdict
 from io import BytesIO
@@ -105,6 +105,8 @@ login.init_app(app)
 session_ext.init_app(app)
 babel.init_app(app)
 app.config.setdefault("BABEL_DEFAULT_LOCALE", "pt_BR")
+app.config.setdefault("SHARE_DEFAULT_DURATION_DAYS", 30)
+app.config.setdefault("SHARE_TOKEN_EXPIRATION_HOURS", 72)
 
 # ----------------------------------------------------------------
 # 4)  AWS S3 helper (lazy)
@@ -1054,6 +1056,18 @@ def _user_visibility_clause(viewer=None, clinic_scope=None):
     clinic_ids = _collect_clinic_ids(viewer=viewer, clinic_scope=clinic_scope)
     if clinic_ids:
         clauses.append(User.clinica_id.in_(list(clinic_ids)))
+        now = datetime.utcnow()
+        share_exists = (
+            db.session.query(AnimalShare.id)
+            .join(Animal, AnimalShare.animal_id == Animal.id)
+            .filter(
+                AnimalShare.clinica_id.in_(list(clinic_ids)),
+                Animal.user_id == User.id,
+                AnimalShare.status == 'approved',
+                or_(AnimalShare.expires_at == None, AnimalShare.expires_at > now),
+            )
+        )
+        clauses.append(share_exists.exists())
 
     if not clauses:
         return false()
@@ -1083,7 +1097,9 @@ def _can_view_user(user, viewer=None, clinic_scope=None):
         return True
 
     clinic_ids = _collect_clinic_ids(viewer=viewer, clinic_scope=clinic_scope)
-    return bool(user.clinica_id and user.clinica_id in clinic_ids)
+    if user.clinica_id and user.clinica_id in clinic_ids:
+        return True
+    return _viewer_has_share_with_tutor(user.id, viewer=viewer, clinic_scope=clinic_scope)
 
 
 def get_user_or_404(user_id, *, viewer=None, clinic_scope=None):
@@ -1094,22 +1110,34 @@ def get_user_or_404(user_id, *, viewer=None, clinic_scope=None):
     return user
 
 
-def ensure_clinic_access(clinica_id):
-    """Abort with 404 if the current user cannot access the given clinic."""
+def ensure_clinic_access(clinica_id, *, animal=None, animal_id=None):
+    """Abort with 404 if the current user cannot access the given clinic or share."""
     if not clinica_id:
         return
     if not current_user.is_authenticated:
         abort(404)
-    if current_user.is_authenticated and current_user.role == 'admin':
+    if current_user.role == 'admin':
         return
-    if current_user_clinic_id() != clinica_id:
-        abort(404)
+
+    viewer_clinic = current_user_clinic_id()
+    if viewer_clinic == clinica_id:
+        return
+
+    if animal_id is None and animal is not None:
+        animal_id = getattr(animal, 'id', None)
+
+    if animal_id and viewer_clinic:
+        share = _active_share_for_clinic(animal_id, viewer_clinic)
+        if share:
+            return
+
+    abort(404)
 
 
 def get_animal_or_404(animal_id):
     """Return animal if accessible to current user, otherwise 404."""
     animal = Animal.query.get_or_404(animal_id)
-    ensure_clinic_access(animal.clinica_id)
+    ensure_clinic_access(animal.clinica_id, animal=animal)
 
     tutor_id = getattr(animal, "user_id", None)
     if tutor_id:
@@ -1120,7 +1148,7 @@ def get_animal_or_404(animal_id):
             .filter(visibility_clause)
             .first()
         )
-        if not tutor_visible:
+        if not tutor_visible and not _viewer_has_share_with_tutor(tutor_id):
             abort(404)
 
     return animal
@@ -1129,7 +1157,7 @@ def get_animal_or_404(animal_id):
 def get_consulta_or_404(consulta_id):
     """Return consulta if accessible to current user, otherwise 404."""
     consulta = Consulta.query.get_or_404(consulta_id)
-    ensure_clinic_access(consulta.clinica_id)
+    ensure_clinic_access(consulta.clinica_id, animal_id=consulta.animal_id)
     return consulta
 
 
@@ -3130,6 +3158,251 @@ def enviar_mensagem_whatsapp(texto: str, numero: str) -> None:
     client.messages.create(body=texto, from_=from_number, to=numero)
 
 
+def _share_default_duration_days():
+    cfg = current_app.config if has_request_context() else app.config
+    try:
+        days = int(cfg.get("SHARE_DEFAULT_DURATION_DAYS", 30))
+    except (TypeError, ValueError):
+        days = 30
+    return max(1, min(days, 180))
+
+
+def _share_token_expiration_hours():
+    cfg = current_app.config if has_request_context() else app.config
+    try:
+        hours = int(cfg.get("SHARE_TOKEN_EXPIRATION_HOURS", 72))
+    except (TypeError, ValueError):
+        hours = 72
+    return max(1, min(hours, 720))
+
+
+def _generate_unique_share_token():
+    while True:
+        candidate = secrets.token_urlsafe(32)
+        exists = ConsultaToken.query.filter_by(token=candidate).first()
+        if not exists:
+            return candidate
+
+
+def _ensure_share_token(share):
+    token = share.token
+    now = datetime.utcnow()
+    if token and not token.used and token.expires_at and token.expires_at > now:
+        return token
+
+    token_value = _generate_unique_share_token()
+    expires_at = now + timedelta(hours=_share_token_expiration_hours())
+    token = ConsultaToken(
+        token=token_value,
+        animal_id=share.animal_id,
+        tutor_id=share.tutor_id,
+        expires_at=expires_at,
+        used=False,
+    )
+    share.token = token
+    db.session.add(token)
+    db.session.flush()
+    return token
+
+
+def _log_share_event(share, event, **payload):
+    db.session.add(
+        AnimalShareEvent(
+            share_id=share.id,
+            event=event,
+            payload=payload or None,
+        )
+    )
+
+
+def _refresh_share_state(shares):
+    """Mark expired shares before returning them."""
+
+    if not shares:
+        return
+
+    now = datetime.utcnow()
+    changed = False
+    for share in shares:
+        if (
+            share.status == 'approved'
+            and share.expires_at
+            and share.expires_at <= now
+        ):
+            share.status = 'expired'
+            share.granted_by_id = share.granted_by_id
+            _log_share_event(share, 'expired', expired_at=now.isoformat())
+            changed = True
+    if changed:
+        db.session.commit()
+
+
+def _share_to_dict(share, audience='clinic'):
+    token_value = None
+    if audience == 'tutor' and share.status == 'pending':
+        token = _ensure_share_token(share)
+        token_value = token.token
+
+    def _dt(value):
+        return value.isoformat() if value else None
+
+    return {
+        'id': share.id,
+        'status': share.status,
+        'animal': {
+            'id': share.animal_id,
+            'name': getattr(share.animal, 'name', '—'),
+        },
+        'tutor': {
+            'id': share.tutor_id,
+            'name': getattr(share.tutor, 'name', '—'),
+        },
+        'clinic': {
+            'id': share.clinica_id,
+            'name': getattr(share.clinic, 'nome', '—'),
+        },
+        'requested_by': getattr(getattr(share, 'requested_by', None), 'name', None),
+        'granted_by': getattr(getattr(share, 'granted_by', None), 'name', None),
+        'reason': share.reason,
+        'requested_days': share.requested_days,
+        'expires_at': _dt(share.expires_at),
+        'granted_at': _dt(share.granted_at),
+        'token': token_value,
+    }
+
+
+def _send_share_sms(to_number, body):
+    if not to_number:
+        return False
+    account_sid = os.getenv("TWILIO_ACCOUNT_SID")
+    auth_token = os.getenv("TWILIO_AUTH_TOKEN")
+    from_number = os.getenv("TWILIO_SMS_FROM") or os.getenv("TWILIO_WHATSAPP_FROM")
+    if not all([account_sid, auth_token, from_number]):
+        return False
+    try:
+        client = Client(account_sid, auth_token)
+        client.messages.create(body=body, from_=from_number, to=formatar_telefone(to_number))
+        return True
+    except Exception as exc:  # noqa: BLE001
+        current_app.logger.warning("Falha ao enviar SMS de compartilhamento: %s", exc)
+        return False
+
+
+def _notify_tutor_share_request(share):
+    tutor = share.tutor
+    if not tutor:
+        return
+
+    token = _ensure_share_token(share)
+    approve_url = url_for('tutor_share_confirm', token=token.token, _external=True)
+    lines = [
+        f"Olá {tutor.name.split()[0] if tutor.name else 'tutor'},",
+        "",
+        f"A clínica {share.clinic.nome if share.clinic else share.clinica_id} solicitou acesso",
+        f"ao prontuário de {share.animal.name if share.animal else 'seu animal'}.",
+        "",
+        "Use o link seguro abaixo para aprovar ou recusar o compartilhamento:",
+        approve_url,
+        "",
+        "Este link expira em poucas horas para manter seus dados protegidos.",
+    ]
+    body = "\n".join(lines)
+
+    if tutor.email:
+        try:
+            msg = MailMessage(
+                subject="Confirme o compartilhamento do prontuário",
+                recipients=[tutor.email],
+                body=body,
+            )
+            mail.send(msg)
+        except Exception as exc:  # noqa: BLE001
+            current_app.logger.warning("Falha ao enviar e-mail de compartilhamento: %s", exc)
+
+    _send_share_sms(tutor.phone, body)
+
+
+def _notify_clinic_share_approved(share):
+    recipient = share.requested_by or getattr(share.clinic, 'owner', None)
+    if not recipient:
+        return
+
+    subject = "Tutor aprovou o compartilhamento"
+    lines = [
+        f"Olá {recipient.name.split()[0] if recipient.name else 'time'},",
+        "",
+        f"{share.tutor.name if share.tutor else 'O tutor'} autorizou o acesso ao animal",
+        f"{share.animal.name if share.animal else share.animal_id} até {share.expires_at.strftime('%d/%m/%Y') if share.expires_at else 'nova data' }.",
+        "",
+        "Você já pode abrir o prontuário normalmente no PetOrlândia.",
+    ]
+    body = "\n".join(lines)
+
+    if recipient.email:
+        try:
+            msg = MailMessage(subject=subject, recipients=[recipient.email], body=body)
+            mail.send(msg)
+        except Exception as exc:  # noqa: BLE001
+            current_app.logger.warning("Falha ao avisar clínica sobre compartilhamento: %s", exc)
+
+    _send_share_sms(getattr(recipient, 'phone', None), body)
+
+
+def _viewer_has_share_with_tutor(tutor_id, *, viewer=None, clinic_scope=None):
+    if viewer is None and current_user.is_authenticated:
+        viewer = current_user
+    if viewer is None:
+        return False
+
+    clinic_ids = _collect_clinic_ids(viewer=viewer, clinic_scope=clinic_scope)
+    if not clinic_ids:
+        return False
+
+    now = datetime.utcnow()
+    share_exists = (
+        db.session.query(AnimalShare.id)
+        .join(Animal, AnimalShare.animal_id == Animal.id)
+        .filter(
+            AnimalShare.clinica_id.in_(list(clinic_ids)),
+            Animal.user_id == tutor_id,
+            AnimalShare.status == 'approved',
+            or_(AnimalShare.expires_at == None, AnimalShare.expires_at > now),
+        )
+        .first()
+    )
+    return bool(share_exists)
+
+
+def _active_share_for_clinic(animal_id, clinic_id):
+    if not (animal_id and clinic_id):
+        return None
+    now = datetime.utcnow()
+    share = (
+        AnimalShare.query
+        .filter(
+            AnimalShare.animal_id == animal_id,
+            AnimalShare.clinica_id == clinic_id,
+            AnimalShare.status == 'approved',
+            or_(AnimalShare.expires_at == None, AnimalShare.expires_at > now),
+        )
+        .first()
+    )
+    if share:
+        _refresh_share_state([share])
+        if share.status == 'approved':
+            return share
+    return None
+
+
+def _get_share_by_token_or_404(token_value):
+    token = ConsultaToken.query.filter_by(token=token_value).first_or_404()
+    if token.expires_at and token.expires_at < datetime.utcnow():
+        token.used = True
+        db.session.commit()
+        abort(410)
+    share = token.share or AnimalShare.query.filter_by(token_id=token.id).first_or_404()
+    return share, token
+
 def verificar_datas_proximas() -> None:
     from models import Appointment, ExameSolicitado, Vacina, Notification
 
@@ -3939,6 +4212,20 @@ def consulta_direct(animal_id):
             .all()
         )
 
+    share_state = None
+    share_request_allowed = False
+    share_banner = None
+    if clinica_id and animal.clinica_id != clinica_id:
+        share_request_allowed = True
+        share_state = _active_share_for_clinic(animal.id, clinica_id)
+        if share_state:
+            share_banner = {
+                'clinic': share_state.clinic.nome if share_state.clinic else f"Clínica #{share_state.clinica_id}",
+                'expires_at': share_state.expires_at,
+                'granted_at': share_state.granted_at,
+                'granted_by': getattr(share_state.granted_by, 'name', None),
+            }
+
     return render_template(
         'consulta_qr.html',
         animal=animal,
@@ -3953,12 +4240,248 @@ def consulta_direct(animal_id):
         species_list=species_list,
         breed_list=breed_list,
         form=form,
+        share_context=share_banner,
+        share_request_allowed=share_request_allowed,
+        share_default_days=_share_default_duration_days(),
         tutor_form=tutor_form,
         animal_idade=idade,
         animal_idade_unidade=idade_unidade,
         servicos=servicos,
         appointment_form=appointment_form,
     )
+
+
+def _resolve_requesting_clinic_id(explicit=None):
+    clinic_ids = list(_collect_clinic_ids())
+    if explicit:
+        if current_user.role == 'admin' or explicit in clinic_ids:
+            return explicit
+        abort(403)
+    if clinic_ids:
+        return clinic_ids[0]
+    if current_user.role == 'admin' and explicit:
+        return explicit
+    return None
+
+
+@app.route('/api/shares', methods=['GET'])
+@login_required
+def api_list_shares():
+    worker = getattr(current_user, 'worker', None)
+    is_tutor = not worker or worker == 'tutor'
+    scope = request.args.get('scope', 'auto')
+
+    if is_tutor and current_user.role != 'admin':
+        query = AnimalShare.query.filter_by(tutor_id=current_user.id)
+        audience = 'tutor'
+    else:
+        clinic_param = request.args.get('clinic_id', type=int)
+        clinic_id = _resolve_requesting_clinic_id(clinic_param or current_user_clinic_id())
+        if not clinic_id and current_user.role == 'admin' and clinic_param:
+            clinic_id = clinic_param
+        if not clinic_id:
+            abort(403)
+        query = AnimalShare.query.filter_by(clinica_id=clinic_id)
+        audience = 'clinic'
+
+    if scope == 'pending':
+        query = query.filter(AnimalShare.status == 'pending')
+    elif scope == 'active':
+        query = query.filter(AnimalShare.status == 'approved')
+
+    shares = query.order_by(AnimalShare.created_at.desc()).all()
+    _refresh_share_state(shares)
+    response = {
+        'pending': [_share_to_dict(s, audience=audience) for s in shares if s.status == 'pending'],
+        'active': [_share_to_dict(s, audience=audience) for s in shares if s.status == 'approved'],
+        'total': len(shares),
+    }
+    return jsonify(response)
+
+
+@app.route('/api/shares', methods=['POST'])
+@login_required
+def api_create_share():
+    worker = getattr(current_user, 'worker', None)
+    if worker not in {'veterinario', 'colaborador'} and current_user.role != 'admin':
+        abort(403)
+
+    payload = request.get_json(silent=True) or request.form
+    try:
+        animal_id = int(payload.get('animal_id'))
+    except (TypeError, ValueError):
+        return jsonify(success=False, message='Animal inválido.'), 400
+
+    clinic_param = payload.get('clinic_id')
+    try:
+        clinic_param = int(clinic_param) if clinic_param else None
+    except (TypeError, ValueError):
+        clinic_param = None
+
+    clinic_id = _resolve_requesting_clinic_id(clinic_param or current_user_clinic_id())
+    if not clinic_id:
+        return jsonify(success=False, message='Defina uma clínica antes de solicitar acesso.'), 400
+
+    animal = Animal.query.get_or_404(animal_id)
+    if not animal.user_id:
+        return jsonify(success=False, message='Este animal não possui tutor vinculado.'), 400
+    if animal.clinica_id == clinic_id:
+        return jsonify(success=False, message='O animal já pertence à sua clínica.'), 400
+
+    reason = (payload.get('reason') or '').strip() or None
+    try:
+        requested_days = int(payload.get('duration_days') or _share_default_duration_days())
+    except (TypeError, ValueError):
+        requested_days = _share_default_duration_days()
+    requested_days = max(1, min(requested_days, 180))
+
+    existing = (
+        AnimalShare.query
+        .filter(
+            AnimalShare.animal_id == animal.id,
+            AnimalShare.clinica_id == clinic_id,
+            AnimalShare.status.in_(['pending', 'approved']),
+        )
+        .first()
+    )
+    if existing:
+        _refresh_share_state([existing])
+        if existing.status == 'approved':
+            return jsonify(success=False, message='Já existe um compartilhamento ativo para este animal.'), 400
+        return jsonify(success=False, message='Já existe uma solicitação pendente para este animal.'), 400
+
+    share = AnimalShare(
+        animal_id=animal.id,
+        tutor_id=animal.user_id,
+        clinica_id=clinic_id,
+        requested_by_id=current_user.id,
+        status='pending',
+        reason=reason,
+        requested_days=requested_days,
+    )
+    db.session.add(share)
+    db.session.flush()
+    _ensure_share_token(share)
+    _log_share_event(
+        share,
+        'requested',
+        clinic_id=clinic_id,
+        requested_by=current_user.id,
+        requested_days=requested_days,
+    )
+    db.session.commit()
+
+    _notify_tutor_share_request(share)
+
+    return jsonify(success=True, share=_share_to_dict(share, audience='clinic')), 201
+
+
+@app.route('/api/shares/<token>/confirm', methods=['POST'])
+@login_required
+def api_confirm_share(token):
+    share, token_obj = _get_share_by_token_or_404(token)
+    if share.tutor_id != current_user.id:
+        abort(403)
+    wants_json = request.is_json or (
+        request.accept_mimetypes['application/json']
+        >= request.accept_mimetypes['text/html']
+    )
+    if share.status != 'pending':
+        message = 'Solicitação já processada.'
+        if wants_json:
+            return jsonify(success=False, message=message), 400
+        flash(message, 'info')
+        next_url = request.form.get('next') or url_for('tutor_shares')
+        return redirect(next_url)
+
+    payload = request.get_json(silent=True) or request.form
+    decision = (payload.get('decision') or '').strip().lower()
+    if decision not in {'approve', 'approved', 'allow', 'deny', 'reject'}:
+        return jsonify(success=False, message='Informe approve ou deny.'), 400
+
+    now = datetime.utcnow()
+    token_obj.used = True
+    share.granted_by_id = current_user.id
+    share.granted_at = now
+
+    if decision in {'approve', 'approved', 'allow'}:
+        days = share.requested_days or _share_default_duration_days()
+        share.expires_at = now + timedelta(days=days)
+        share.status = 'approved'
+        _log_share_event(
+            share,
+            'approved',
+            granted_by=current_user.id,
+            expires_at=share.expires_at.isoformat(),
+        )
+        db.session.commit()
+        _notify_clinic_share_approved(share)
+        message = 'Compartilhamento aprovado com sucesso.'
+        category = 'success'
+    else:
+        share.status = 'denied'
+        _log_share_event(share, 'denied', granted_by=current_user.id)
+        db.session.commit()
+        message = 'Solicitação negada.'
+        category = 'warning'
+
+    wants_json = wants_json or False
+    if wants_json:
+        return jsonify(success=True, message=message, share=_share_to_dict(share, audience='tutor'))
+
+    flash(message, category)
+    next_url = payload.get('next') or url_for('tutor_shares')
+    return redirect(next_url)
+
+
+@app.route('/tutor/shares')
+@login_required
+def tutor_shares():
+    worker = getattr(current_user, 'worker', None)
+    if worker and worker not in {'tutor', None} and current_user.role != 'adotante':
+        abort(403)
+
+    shares = (
+        AnimalShare.query
+        .filter_by(tutor_id=current_user.id)
+        .order_by(AnimalShare.created_at.desc())
+        .options(
+            joinedload(AnimalShare.animal),
+            joinedload(AnimalShare.clinic),
+            joinedload(AnimalShare.requested_by),
+        )
+        .all()
+    )
+    _refresh_share_state(shares)
+    pending = [s for s in shares if s.status == 'pending']
+    active = [s for s in shares if s.status == 'approved']
+    issued_token = False
+    for share in pending:
+        before = getattr(share.token, 'token', None)
+        token_obj = _ensure_share_token(share)
+        if not before or before != token_obj.token:
+            issued_token = True
+    if issued_token:
+        db.session.commit()
+    return render_template(
+        'tutor/sharing_dashboard.html',
+        pending_shares=pending,
+        active_shares=active,
+    )
+
+
+@app.route('/tutor/shares/confirm/<token>')
+@login_required
+def tutor_share_confirm(token):
+    share, token_obj = _get_share_by_token_or_404(token)
+    if share.tutor_id != current_user.id:
+        abort(403)
+    if share.status != 'pending':
+        flash('Esta solicitação já foi processada.', 'info')
+    else:
+        _ensure_share_token(share)
+        db.session.commit()
+    return render_template('tutor/share_confirm.html', share=share, token=token_obj.token)
 
 
 
@@ -5811,6 +6334,7 @@ def tutores():
         scope=resolved_scope,
         tutor_search=tutor_search,
         tutor_sort=tutor_sort,
+        share_default_days=_share_default_duration_days(),
     )
 
 
@@ -8943,6 +9467,24 @@ def _get_recent_tutores(
     query = apply_search_filters(query)
     query = apply_sorting(query)
     pagination = query.paginate(page=page, per_page=per_page, error_out=False)
+
+    shared_ids = set()
+    if clinic_ids:
+        now = datetime.utcnow()
+        shared_rows = (
+            db.session.query(Animal.user_id)
+            .join(AnimalShare, AnimalShare.animal_id == Animal.id)
+            .filter(
+                AnimalShare.clinica_id.in_(clinic_ids),
+                AnimalShare.status == 'approved',
+                or_(AnimalShare.expires_at == None, AnimalShare.expires_at > now),
+            )
+            .all()
+        )
+        shared_ids = {row[0] for row in shared_rows if row[0]}
+
+    for tutor in pagination.items:
+        setattr(tutor, 'is_shared', tutor.id in shared_ids)
 
     return pagination.items, pagination, resolved_scope
 
