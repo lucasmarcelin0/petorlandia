@@ -1,0 +1,58 @@
+{% extends "layout.html" %}
+{% block main %}
+<h2>Termo de Interesse – {{ animal.modo|capitalize }}</h2>
+
+<p>Você está prestes a solicitar a <strong>{{ animal.modo }}</strong> de <strong>{{ animal.name }}</strong>.</p>
+
+{% if animal.modo == 'venda' %}
+    <p><strong>Valor acordado:</strong> R$ {{ "%.2f"|format(animal.price) }}</p>
+{% endif %}
+
+<h4>Dados do Interessado</h4>
+<ul>
+    <li><strong>Nome:</strong> {{ interessado.name }}</li>
+    <li><strong>Email:</strong> {{ interessado.email }}</li>
+    <li><strong>Telefone:</strong> {{ interessado.phone }}</li>
+    <li><strong>Endereço:</strong> {{ interessado.address }}</li>
+</ul>
+
+<h4>Dados do Animal</h4>
+<ul>
+    <li><strong>Nome:</strong> {{ animal.name }}</li>
+    <li><strong>Espécie:</strong> {{ animal.species }}</li>
+    <li><strong>Raça:</strong> {{ animal.breed }}</li>
+    <li><strong>Sexo:</strong> {{ animal.sex }}</li>
+    <li><strong>Idade:</strong> {{ animal.age_display }}</li>
+</ul>
+
+<h4>Compromissos de Adoção Responsável</h4>
+<ol>
+    <li>Compromisso Vitalício: Cuidar do animal até o fim da sua vida.</li>
+    <li>Ambiente Seguro e Confortável: Proteger contra frio, calor e chuva, garantindo água, comida e abrigo.</li>
+    <li>Passeios e Atividades: Proporcionar exercícios e lazer conforme necessário.</li>
+    <li>Proibição de Confinamento Inadequado: Não manter preso por correntes ou espaços inadequados.</li>
+    <li>Residência Alugada: Garantir que não há impedimentos legais para manter o animal.</li>
+    <li>Mudanças de Residência: Manter os cuidados mesmo em caso de mudança.</li>
+    <li>Convivência Harmônica: Garantir aceitação pelos demais moradores e animais da casa.</li>
+    <li>Cuidados com a Saúde: Alimentação de qualidade e cuidados veterinários em dia.</li>
+    <li>Acompanhamento Voluntário: Concordar com possíveis contatos da Prefeitura sobre o bem-estar do animal.</li>
+</ol>
+
+<p><strong>Data:</strong> {{ data_atual }}</p>
+
+<form method="POST">
+    <div class="form-check mb-3">
+        <input class="form-check-input" type="checkbox" id="concordo" required>
+        <label class="form-check-label" for="concordo">
+            Li e concordo com os termos acima.
+        </label>
+    </div>
+    <button class="btn btn-success" type="submit">Confirmar Interesse</button>
+</form>
+
+<form action="{{ url_for('upload_document', animal_id=animal.id) }}" method="post" enctype="multipart/form-data" class="mt-3">
+    <input type="hidden" name="descricao" value="termo_interesse">
+    <input type="file" id="termo_interesse_assinado" name="documento" class="d-none" onchange="this.form.submit()">
+    <button type="button" class="btn btn-secondary" onclick="document.getElementById('termo_interesse_assinado').click()">Enviar termo assinado</button>
+</form>
+{% endblock %}

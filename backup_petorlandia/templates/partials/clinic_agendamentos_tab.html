@@ -1,0 +1,39 @@
+      <h3 class="d-flex align-items-center gap-2">
+        <span class="icon-circle bg-success text-white"><i class="fa-solid fa-calendar"></i></span>
+        <span class="fw-semibold">Agendamentos</span>
+      </h3>
+      <div class="mb-3 text-end">
+        <button class="btn btn-primary" disabled>
+          <i class="fa-solid fa-list me-1"></i>Lista
+        </button>
+      </div>
+
+      <div id="list-container">
+        <form id="appointment-filter-form" method="get" action="{{ url_for('clinic_detail', clinica_id=clinica.id) }}" class="row g-2 mb-3">
+          <div class="col-auto">
+            <label for="start" class="form-label">Início</label>
+            <input type="date" id="start" name="start" class="form-control" value="{{ start }}">
+          </div>
+          <div class="col-auto">
+            <label for="end" class="form-label">Fim</label>
+            <input type="date" id="end" name="end" class="form-control" value="{{ end }}">
+          </div>
+          <div class="col-auto align-self-end">
+            <button type="submit" class="btn btn-primary">
+              <i class="fa-solid fa-filter me-1"></i>Filtrar
+            </button>
+          </div>
+          <div class="col-auto align-self-end d-flex gap-2">
+            <a href="{{ url_for('clinic_detail', clinica_id=clinica.id, start=today_str, end=today_str) }}" class="btn btn-outline-secondary">
+              <i class="fa-solid fa-calendar-day me-1"></i>Hoje
+            </a>
+            <a href="{{ url_for('clinic_detail', clinica_id=clinica.id, start=today_str, end=next7_str) }}" class="btn btn-outline-secondary">
+              <i class="fa-solid fa-calendar-week me-1"></i>Próximos 7 dias
+            </a>
+          </div>
+        </form>
+        <div id="appointments-table-container" data-appointments-container data-refresh-url="{{ request.url }}">
+          {% include 'partials/appointments_table.html' %}
+        </div>
+      </div>
+

@@ -1,0 +1,35 @@
+{% set clinic_id = current_user.veterinario.clinica_id if current_user.worker == 'veterinario' and current_user.veterinario else current_user.clinica_id %}
+{% set blocos = animal.blocos_orcamento | selectattr('clinica_id', 'equalto', clinic_id) | list %}
+{% if blocos %}
+<div class="card mb-3">
+  <div class="card-body">
+    <h5 class="card-title">💰 Histórico de Orçamentos</h5>
+    {% for bloco in blocos|reverse %}
+    <div class="border rounded p-3 mb-3">
+      <h6 class="text-muted">Orçamento feito em {{ bloco.data_criacao|format_datetime_brazil('%d/%m/%Y %H:%M') }}</h6>
+      <ul class="list-group list-group-flush mb-2">
+        {% for item in bloco.itens %}
+        <li class="list-group-item d-flex justify-content-between">
+          <span>{{ item.descricao }}</span>
+          <span>R$ {{ '%.2f'|format(item.valor) }}</span>
+        </li>
+        {% endfor %}
+        <li class="list-group-item d-flex justify-content-between">
+          <strong>Total</strong>
+          <strong>R$ {{ '%.2f'|format(bloco.total) }}</strong>
+        </li>
+      </ul>
+      <div class="d-flex flex-wrap gap-2">
+        <form method="POST" action="{{ url_for('deletar_bloco_orcamento', bloco_id=bloco.id) }}" class="d-inline delete-history-form" data-sync data-target="historico-orcamentos" data-confirm="Deseja mesmo excluir este orçamento?">
+          <button class="btn btn-danger btn-sm">🗑 Excluir</button>
+        </form>
+        <a href="{{ url_for('imprimir_bloco_orcamento', bloco_id=bloco.id) }}" class="btn btn-outline-secondary btn-sm" target="_blank">🖨 Imprimir</a>
+        <a href="{{ url_for('editar_bloco_orcamento', bloco_id=bloco.id) }}" class="btn btn-outline-primary btn-sm">✏️ Editar</a>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+</div>
+{% else %}
+<p class="text-muted">Nenhum orçamento registrado ainda.</p>
+{% endif %}

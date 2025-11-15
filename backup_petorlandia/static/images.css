@@ -1,0 +1,20 @@
+.logo-img {
+    max-width: 275px;
+    height: auto;
+    border-radius: 1rem;
+    object-fit: cover;
+}
+
+.avatar {
+    width: var(--avatar-size, 50px);
+    height: var(--avatar-size, 50px);
+    border-radius: 50%;
+    object-fit: cover;
+    display: block;
+    transform: translate(var(--offset-x, 0), var(--offset-y, 0)) rotate(var(--rotation, 0deg)) scale(var(--zoom, 1));
+}
+
+.card-img {
+    object-fit: cover;
+    display: block;
+}

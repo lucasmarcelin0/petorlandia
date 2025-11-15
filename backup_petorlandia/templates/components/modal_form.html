@@ -1,0 +1,43 @@
+<div class="custom-modal" id="{{ modal_id }}" style="display:none;">
+  <div class="custom-modal-backdrop" data-modal-close="{{ modal_id }}"></div>
+  <div class="custom-modal-content">
+    <div class="custom-modal-header">
+      <h5 class="modal-title">{{ title }}</h5>
+      <button type="button" class="btn-close" data-modal-close="{{ modal_id }}"></button>
+    </div>
+    <div class="custom-modal-body">
+      <div class="mb-3">
+        <label for="{{ modal_id }}-nome" class="form-label">Nome</label>
+        <input type="text" id="{{ modal_id }}-nome" class="form-control">
+      </div>
+      {% if extra_fields %}
+        {{ extra_fields|safe }}
+      {% endif %}
+    </div>
+    <div class="custom-modal-footer text-end">
+      <button type="button" class="btn btn-secondary" data-modal-close="{{ modal_id }}">Cancelar</button>
+      <button type="button" class="btn btn-primary" id="{{ save_button_id }}">Salvar</button>
+    </div>
+  </div>
+</div>
+<script>
+function openModal(id){
+  const m = document.getElementById(id);
+  if(m) m.style.display='flex';
+}
+function closeModal(id){
+  const m = document.getElementById(id);
+  if(m) m.style.display='none';
+}
+(function(){
+  document.querySelectorAll('[data-modal-close="{{ modal_id }}"]').forEach(btn=>{
+    btn.addEventListener('click',()=>closeModal('{{ modal_id }}'));
+  });
+})();
+</script>
+<style>
+.custom-modal{position:fixed;top:0;left:0;width:100%;height:100%;align-items:center;justify-content:center;display:none;z-index:1050;}
+.custom-modal-backdrop{position:absolute;width:100%;height:100%;top:0;left:0;background:rgba(0,0,0,0.5);}
+.custom-modal-content{position:relative;background:#fff;border-radius:.3rem;max-width:500px;width:90%;padding:1rem;z-index:1;}
+.custom-modal-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem;}
+</style>

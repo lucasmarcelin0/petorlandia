@@ -1,0 +1,24 @@
+@app.route('/animal/<int:animal_id>/editar_ficha', methods=['GET', 'POST'])
+@login_required
+def editar_ficha_animal(animal_id):
+    animal = Animal.query.get_or_404(animal_id)
+
+    # Apenas veterinários podem acessar
+    if current_user.role != 'veterinario':
+        flash("Acesso restrito a veterinários.", "danger")
+        return redirect(url_for('ficha_animal', animal_id=animal.id))
+
+    # Dados fictícios para fins de edição simples (substituir por formulário real depois)
+    if request.method == 'POST':
+        nova_vacina = request.form.get("vacina")
+        nova_consulta = request.form.get("consulta")
+        novo_medicamento = request.form.get("medicamento")
+
+        print(f"Vacina adicionada: {nova_vacina}")
+        print(f"Consulta adicionada: {nova_consulta}")
+        print(f"Medicação adicionada: {novo_medicamento}")
+
+        flash("Informacões adicionadas com sucesso (simulação).", "success")
+        return redirect(url_for('ficha_animal', animal_id=animal.id))
+
+    return render_template("editar_ficha.html", animal=animal)

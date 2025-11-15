@@ -1,0 +1,193 @@
+{% extends 'layout.html' %}
+{% block main %}
+<div class="container py-4">
+  <h2 class="mb-4">📝 Editar Bloco de Prescrição</h2>
+
+  <div id="form-edicao">
+    <!-- Lista Temporária de Medicamentos (com edição) -->
+    <div id="prescricao-lista" class="mb-3"></div>
+
+    <div class="form-group mb-3">
+      <label for="instrucoes-gerais">Instruções Gerais</label>
+      <textarea id="instrucoes-gerais" class="form-control" rows="3">{{ bloco.instrucoes_gerais or '' }}</textarea>
+    </div>
+
+    <button class="btn btn-outline-primary mb-3" onclick="adicionarMedicamento()">➕ Adicionar Medicamento</button>
+    <button class="btn btn-success mb-3" onclick="salvarEdicaoBloco({{ bloco.id }})">💾 Salvar alterações</button>
+    <button class="btn btn-secondary mb-3" onclick="history.back()">↩️ Cancelar</button>
+  </div>
+</div>
+
+<script>
+const ANIMAL_ID = {{ bloco.animal_id }};
+let medicamentos = [
+  {% for p in bloco.prescricoes %}
+    {
+      medicamento: "{{ p.medicamento|default('', true)|escape }}",
+      dosagem: "{{ p.dosagem|default('', true)|escape }}",
+      frequencia: "{{ p.frequencia|default('', true)|escape }}",
+      duracao: "{{ p.duracao|default('', true)|escape }}",
+      observacoes: `{{ p.observacoes|default('', true)|escape }}`,
+      modoLivre: false,
+      textoLivre: ''
+    },
+  {% endfor %}
+];
+
+// Converte prescrições antigas que usavam "observações" como texto livre
+medicamentos.forEach(m => {
+  if (!m.dosagem && !m.frequencia && !m.duracao && m.observacoes) {
+    m.modoLivre = true;
+    m.textoLivre = m.observacoes;
+    m.observacoes = '';
+  }
+});
+
+
+function renderListaEdicao() {
+  const container = document.getElementById('prescricao-lista');
+  container.innerHTML = '';
+  medicamentos.forEach((m, i) => {
+    const card = document.createElement('div');
+    card.className = 'card mb-3';
+    card.innerHTML = `
+      <div class="card-header d-flex justify-content-between align-items-center">
+        <span><strong>Medicamento ${i + 1}</strong></span>
+        <button class="btn btn-outline-danger btn-sm" onclick="removerMedicamento(${i})"><i class="fa fa-trash"></i></button>
+      </div>
+      <div class="card-body">
+        <div class="form-check form-switch mb-3">
+          <input class="form-check-input" type="checkbox" id="modoLivre-${i}" ${m.modoLivre ? 'checked' : ''} onchange="toggleModoLivre(${i}, this.checked)">
+          <label class="form-check-label" for="modoLivre-${i}">Texto livre</label>
+        </div>
+        <div class="form-group mb-3 position-relative">
+          <label>Medicamento</label>
+          <input class="form-control medicamento-input" placeholder="Nome do medicamento" data-index="${i}" value="${m.medicamento}" oninput="medicamentos[${i}].medicamento = this.value">
+          <small class="form-text text-muted">Digite para buscar sugestões.</small>
+          <ul class="list-group position-absolute w-100 mt-1 sugestoes" style="z-index:10;"></ul>
+        </div>
+        ${m.modoLivre ? `
+          <div class="form-group">
+            <label>Prescrição</label>
+            <textarea class="form-control" rows="3" placeholder="Digite a prescrição completa" oninput="medicamentos[${i}].textoLivre = this.value">${m.textoLivre}</textarea>
+          </div>
+        ` : `
+          <div class="row g-2 mb-3">
+            <div class="col-md-4">
+              <label>Dosagem</label>
+              <input class="form-control" placeholder="Ex: 5mg/kg" value="${m.dosagem}" oninput="medicamentos[${i}].dosagem = this.value">
+            </div>
+            <div class="col-md-4">
+              <label>Frequência</label>
+              <input class="form-control" placeholder="Ex: 2x ao dia" value="${m.frequencia}" oninput="medicamentos[${i}].frequencia = this.value">
+            </div>
+            <div class="col-md-4">
+              <label>Duração</label>
+              <input class="form-control" placeholder="Ex: 7 dias" value="${m.duracao}" oninput="medicamentos[${i}].duracao = this.value">
+            </div>
+          </div>
+        `}
+      </div>
+    `;
+    container.appendChild(card);
+  });
+  ativarAutocomplete();
+}
+
+function adicionarMedicamento() {
+  medicamentos.push({ medicamento: '', dosagem: '', frequencia: '', duracao: '', observacoes: '', modoLivre: false, textoLivre: '' });
+  renderListaEdicao();
+}
+
+function removerMedicamento(index) {
+  if (!confirm('Remover este medicamento?')) return;
+  medicamentos.splice(index, 1);
+  renderListaEdicao();
+}
+
+function toggleModoLivre(index, checked) {
+  medicamentos[index].modoLivre = checked;
+  renderListaEdicao();
+}
+
+function validarMedicamentos() {
+  for (let i = 0; i < medicamentos.length; i++) {
+    const m = medicamentos[i];
+    if (m.modoLivre) {
+      if (!m.medicamento || !m.medicamento.trim()) {
+        return `O nome do medicamento ${i + 1} está vazio.`;
+      }
+      if (!m.textoLivre || !m.textoLivre.trim()) {
+        return `O texto do medicamento ${i + 1} está vazio.`;
+      }
+    } else {
+      if (!m.medicamento || !m.medicamento.trim()) {
+        return `O nome do medicamento ${i + 1} está vazio.`;
+      }
+    }
+  }
+  return null;
+}
+
+function salvarEdicaoBloco(bloco_id) {
+  const erro = validarMedicamentos();
+  if (erro) {
+    alert(erro);
+    return;
+  }
+  const instrucoesGerais = document.getElementById('instrucoes-gerais').value;
+  const payload = medicamentos.map(m => m.modoLivre ? { medicamento: m.medicamento, dosagem: '', frequencia: '', duracao: '', observacoes: m.textoLivre } : m);
+
+  fetch(`/bloco_prescricao/${bloco_id}/atualizar`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ medicamentos: payload, instrucoes_gerais: instrucoesGerais })
+  })
+  .then(res => res.json())
+  .then(data => {
+    if (data.success) {
+      alert('Bloco atualizado com sucesso!');
+      localStorage.setItem('abaAtivaConsulta', 'medicamentos');
+      window.location.href = `/consulta/${ANIMAL_ID}`;
+    } else {
+      alert('Erro ao atualizar bloco.');
+    }
+  });
+}
+
+function ativarAutocomplete() {
+  document.querySelectorAll('.medicamento-input').forEach(input => {
+    const index = input.getAttribute('data-index');
+    const sugestoes = input.parentElement.querySelector('.sugestoes');
+
+    input.addEventListener('input', function () {
+      const query = this.value;
+      if (query.length < 2) return sugestoes.innerHTML = '';
+
+      fetch(`/buscar_medicamentos?q=${encodeURIComponent(query)}`)
+        .then(res => res.json())
+        .then(data => {
+          sugestoes.innerHTML = '';
+          data.forEach(item => {
+            const li = document.createElement('li');
+            li.className = 'list-group-item list-group-item-action';
+            li.textContent = item.nome;
+            li.onclick = () => {
+              input.value = item.nome;
+              medicamentos[index].medicamento = item.nome;
+              medicamentos[index].dosagem = item.dosagem_recomendada || '';
+              medicamentos[index].frequencia = '';
+              medicamentos[index].duracao = item.duracao_tratamento || '';
+              medicamentos[index].observacoes = item.observacoes || '';
+              renderListaEdicao();
+            };
+            sugestoes.appendChild(li);
+          });
+        });
+    });
+  });
+}
+
+renderListaEdicao();
+</script>
+{% endblock %}

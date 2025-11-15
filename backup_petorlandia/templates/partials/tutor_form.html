@@ -1,0 +1,309 @@
+{% set has_tutor = tutor is defined and tutor %}
+{% from 'components/photo_cropper.html' import photo_cropper %}
+
+<!-- 🔍 Busca de Tutor - Melhorado com acessibilidade e feedback visual -->
+<div class="mb-4 position-relative" id="tutor-search-box" {% if has_tutor %}style="display:none;"{% endif %}>
+  <label for="autocomplete-tutor" class="form-label">
+    <i class="bi bi-search me-1"></i> Buscar Tutor Existente
+  </label>
+  <div class="input-group">
+    <input type="text" id="autocomplete-tutor" class="form-control" 
+           placeholder="Digite nome, e-mail, CPF ou telefone"
+           aria-label="Buscar tutor existente"
+           aria-describedby="tutor-search-help">
+    <button class="btn btn-outline-secondary" type="button" id="clear-search">
+      <i class="bi bi-x"></i>
+    </button>
+  </div>
+  <div id="tutor-search-help" class="form-text">Busque tutores já cadastrados para vincular ao animal</div>
+  <ul class="list-group position-absolute w-100 mt-1 d-none shadow" 
+      id="autocomplete-results" style="z-index:1000; max-height:300px; overflow-y:auto;"></ul>
+</div>
+
+<!-- 👤 Formulário de Tutor - Aprimorado com validação e organização -->
+<form id="tutor-form" method="POST" enctype="multipart/form-data"
+      {% if has_tutor %}action="{{ url_for('update_tutor', user_id=tutor.id) }}"{% endif %}
+      class="needs-validation" novalidate data-sync>
+  
+  <h5 class="mb-4 d-flex align-items-center gap-2">
+    <i class="bi bi-person-fill"></i> Cadastro do Tutor
+  </h5>
+
+  <div class="row g-3">
+    <!-- Foto + Nome -->
+    <div class="col-md-6">
+      <label class="form-label">Foto e Nome</label>
+      <div class="d-flex align-items-center gap-3">
+        {{ photo_cropper(tutor_form.profile_photo, tutor_form.photo_rotation, tutor_form.photo_zoom,
+                         tutor_form.photo_offset_x, tutor_form.photo_offset_y,
+                         tutor.profile_photo if has_tutor else '', 120, 'profile_photo') }}
+        <input type="text" name="name" class="form-control" placeholder="Nome completo do tutor"
+               value="{{ tutor.name|default('', true) if has_tutor else '' }}" required minlength="3" maxlength="100">
+        <div class="invalid-feedback">Por favor, insira um nome válido (3-100 caracteres)</div>
+      </div>
+    </div>
+
+    <!-- Telefone - Aceita apenas números -->
+    <div class="col-md-6">
+      <label for="tutor-phone" class="form-label">Telefone</label>
+      <input type="tel" id="tutor-phone" name="phone" class="form-control" 
+             placeholder="Apenas números (ex: 99999999999)" 
+             pattern="[0-9]{10,11}"
+             value="{{ tutor.phone|default('', true) if has_tutor else '' }}">
+      <div class="invalid-feedback">Por favor, insira um telefone válido (10 ou 11 dígitos)</div>
+    </div>
+
+    <!-- CPF - Aceita apenas números -->
+    <div class="col-md-6">
+      <label for="tutor-cpf" class="form-label">CPF</label>
+      <input type="text" id="tutor-cpf" name="cpf" class="form-control" 
+             placeholder="Apenas números (ex: 12345678901)" 
+             pattern="[0-9]{11}"
+             value="{{ tutor.cpf|default('', true) if has_tutor else '' }}">
+      <div class="invalid-feedback">Por favor, insira um CPF válido (11 dígitos)</div>
+    </div>
+
+        <div class="col-md-6">
+      <label for="tutor-rg" class="form-label">RG</label>
+      <input type="text" id="tutor-rg" name="rg" class="form-control"
+             placeholder="Documento de identidade" pattern="[A-Za-z0-9]+"
+             value="{{ tutor.rg|default('', true) if has_tutor else '' }}">
+      <div class="invalid-feedback">Por favor, insira um RG válido (apenas letras ou números)</div>
+    </div>
+    
+    <!-- Data de nascimento + Idade - Com cálculo automático -->
+    <div class="col-md-6">
+      <label for="tutor-date-of-birth" class="form-label">Data de Nascimento</label>
+      <input type="date" id="tutor-date-of-birth" name="date_of_birth" 
+            class="form-control" max="{{ '%Y-%m-%d' | date_now }}"
+            value="{{ tutor.date_of_birth.strftime('%Y-%m-%d') if has_tutor and tutor.date_of_birth else '' }}"
+            onchange="calcularIdade()">
+      <div class="invalid-feedback">Por favor, insira uma data válida</div>
+    </div>
+
+    <div class="col-md-6">
+      <label for="tutor-age" class="form-label">Idade</label>
+      <input type="text" id="tutor-age" class="form-control bg-light" disabled>
+    </div>
+
+    <!-- Email - Com validação robusta -->
+    <div class="col-md-12">
+      <label for="tutor-email" class="form-label">E-mail</label>
+      <input type="email" id="tutor-email" name="email" class="form-control" 
+             placeholder="exemplo@email.com" required
+             value="{{ tutor.email|default('', true) if has_tutor else '' }}">
+      <div class="invalid-feedback">Por favor, insira um e-mail válido</div>
+    </div>
+
+    <!-- Endereço completo via CEP - Melhorado -->
+    <div class="col-md-12">
+      {% if has_tutor %}
+        {% set endereco = tutor.endereco %}
+      {% else %}
+        {% set endereco = None %}
+      {% endif %}
+      {% include "partials/endereco_form.html" with context %}
+    </div>
+
+    <!-- Adicionado por e data - Melhorado -->
+    {% if has_tutor and tutor.added_by %}
+      <div class="col-md-12">
+        <label for="created-info" class="form-label">
+          <i class="bi bi-person-plus"></i> Adicionado por
+        </label>
+        <input type="text" id="created-info" class="form-control bg-light"
+               data-nome="{{ tutor.added_by.name }}"
+               data-created-at="{{ tutor.created_at.isoformat() if tutor.created_at else '' }}"
+               disabled>
+      </div>
+    {% endif %}
+
+    <!-- Botão - Melhorado com feedback -->
+    <div class="col-12 mt-3">
+      <button type="submit" class="btn btn-primary w-100 py-2">
+        <i class="bi bi-save me-2"></i> Salvar Tutor
+      </button>
+    </div>
+  </div>
+</form>
+
+<!-- Scripts Aprimorados -->
+{% block scripts %}
+<script>
+  document.addEventListener('DOMContentLoaded', () => {
+    // Validação do formulário
+    const forms = document.querySelectorAll('.needs-validation');
+    
+    Array.from(forms).forEach(form => {
+      form.addEventListener('submit', event => {
+        if (!form.checkValidity()) {
+          event.preventDefault();
+          event.stopPropagation();
+        }
+        form.classList.add('was-validated');
+      }, false);
+    });
+
+    // Removidas as máscaras complexas
+    // Agora só permitimos números nesses campos
+    document.getElementById('tutor-phone')?.addEventListener('input', function(e) {
+      this.value = this.value.replace(/\D/g, '');
+    });
+    
+    document.getElementById('tutor-cpf')?.addEventListener('input', function(e) {
+      this.value = this.value.replace(/\D/g, '');
+    });
+    
+    document.getElementById('tutor-rg')?.addEventListener('input', function(e) {
+      this.value = this.value.replace(/[^0-9A-Za-z]/g, '');
+    });
+
+    // Cálculo de idade
+    function calcularIdadeTutor() {
+      const dataNasc = document.getElementById('tutor-date-of-birth').value;
+      const idadeInput = document.getElementById('tutor-age');
+      
+      if (dataNasc) {
+        const hoje = new Date();
+        const nascimento = new Date(dataNasc);
+        let idade = hoje.getFullYear() - nascimento.getFullYear();
+        const mes = hoje.getMonth() - nascimento.getMonth();
+        
+        if (mes < 0 || (mes === 0 && hoje.getDate() < nascimento.getDate())) {
+          idade--;
+        }
+        
+        idadeInput.value = `${idade} anos`;
+      } else {
+        idadeInput.value = '';
+      }
+    }
+
+    document.getElementById('tutor-date-of-birth')?.addEventListener('change', calcularIdadeTutor);
+
+    // Preview da imagem
+
+
+    // Formatação da informação "Adicionado por"
+    const createdInfo = document.getElementById('created-info');
+    if (createdInfo) {
+      const nome = createdInfo.dataset.nome;
+      const createdAt = createdInfo.dataset.createdAt;
+      
+      if (createdAt) {
+        const date = new Date(createdAt);
+        const options = { 
+          day: '2-digit', 
+          month: '2-digit', 
+          year: 'numeric', 
+          hour: '2-digit', 
+          minute: '2-digit' 
+        };
+        createdInfo.value = `${nome} em ${date.toLocaleDateString('pt-BR', options)}`;
+      } else {
+        createdInfo.value = `${nome} (data desconhecida)`;
+      }
+    }
+
+    // Limpar busca
+    document.getElementById('clear-search')?.addEventListener('click', () => {
+      document.getElementById('autocomplete-tutor').value = '';
+      document.getElementById('autocomplete-results').classList.add('d-none');
+    });
+
+    // Auto-complete
+    const autocompleteTutor = document.getElementById('autocomplete-tutor');
+    if (autocompleteTutor) {
+      autocompleteTutor.addEventListener('input', debounce(async (e) => {
+        const termo = e.target.value.trim();
+        const resultsContainer = document.getElementById('autocomplete-results');
+        
+        if (termo.length < 3) {
+          resultsContainer.classList.add('d-none');
+          return;
+        }
+        
+        try {
+          const response = await fetch(`/api/tutores/buscar?q=${encodeURIComponent(termo)}`);
+          const tutores = await response.json();
+          
+          if (tutores.length > 0) {
+            resultsContainer.innerHTML = tutores.map(tutor => `
+              <li class="list-group-item list-group-item-action" 
+                  data-tutor-id="${tutor.id}"
+                  onclick="selecionarTutor(${tutor.id}, '${tutor.name}', '${tutor.email}')">
+                <div class="d-flex justify-content-between">
+                  <span>${tutor.name}</span>
+                  <small class="text-muted">${tutor.email}</small>
+                </div>
+                <div class="d-flex gap-2 small">
+                  <span>${tutor.phone || 'Sem telefone'}</span>
+                  <span>${tutor.cpf ? 'CPF: ' + tutor.cpf : ''}</span>
+                </div>
+              </li>
+            `).join('');
+            resultsContainer.classList.remove('d-none');
+          } else {
+            resultsContainer.innerHTML = '<li class="list-group-item text-muted">Nenhum tutor encontrado</li>';
+            resultsContainer.classList.remove('d-none');
+          }
+        } catch (error) {
+          console.error('Erro na busca:', error);
+          resultsContainer.innerHTML = '<li class="list-group-item text-danger">Erro na busca</li>';
+          resultsContainer.classList.remove('d-none');
+        }
+      }, 300));
+    }
+  });
+
+  // Função debounce para melhorar performance
+  function debounce(func, wait) {
+    let timeout;
+    return function(...args) {
+      clearTimeout(timeout);
+      timeout = setTimeout(() => func.apply(this, args), wait);
+    };
+  }
+
+  // Selecionar tutor na busca
+  function selecionarTutor(id, nome, email) {
+    document.getElementById('tutor-search-box').style.display = 'none';
+    document.getElementById('tutor-form').style.display = 'block';
+    document.getElementById('autocomplete-results').classList.add('d-none');
+    
+    // Aqui você pode preencher os campos ou fazer o que for necessário
+    console.log(`Tutor selecionado: ${nome} (${email})`);
+  }
+
+  function calcularIdade() {
+    const dataNascimento = document.getElementById('tutor-date-of-birth').value;
+    const campoIdade = document.getElementById('tutor-age');
+    
+    if (dataNascimento) {
+      const hoje = new Date();
+      const nascimento = new Date(dataNascimento);
+      let idade = hoje.getFullYear() - nascimento.getFullYear();
+      
+      // Ajuste para caso ainda não tenha feito aniversário este ano
+      const mesAtual = hoje.getMonth();
+      const mesNascimento = nascimento.getMonth();
+      
+      if (mesNascimento > mesAtual || 
+          (mesNascimento === mesAtual && hoje.getDate() < nascimento.getDate())) {
+        idade--;
+      }
+      
+      campoIdade.value = idade + " anos";
+    } else {
+      campoIdade.value = "";
+    }
+  }
+
+  // Calcular idade ao carregar a página se já existir data
+  document.addEventListener('DOMContentLoaded', function() {
+    if (document.getElementById('tutor-date-of-birth').value) {
+      calcularIdade();
+    }
+  });
+</script>
+{% endblock %}

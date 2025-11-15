@@ -1,0 +1,22 @@
+{{ form.hidden_tag() }}
+<div class="form-check">
+  {{ form.can_manage_clients(class="form-check-input") }}
+  {{ form.can_manage_clients.label(class="form-check-label") }}
+</div>
+<div class="form-check">
+  {{ form.can_manage_animals(class="form-check-input") }}
+  {{ form.can_manage_animals.label(class="form-check-label") }}
+</div>
+<div class="form-check">
+  {{ form.can_manage_staff(class="form-check-input") }}
+  {{ form.can_manage_staff.label(class="form-check-label") }}
+</div>
+<div class="form-check">
+  {{ form.can_manage_schedule(class="form-check-input") }}
+  {{ form.can_manage_schedule.label(class="form-check-label") }}
+</div>
+<div class="form-check">
+  {{ form.can_manage_inventory(class="form-check-input") }}
+  {{ form.can_manage_inventory.label(class="form-check-label") }}
+</div>
+{{ form.submit(class="btn btn-primary mt-3") }}

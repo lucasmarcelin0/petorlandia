@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Orçamento | {{ clinica.nome if clinica else '' }}</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='print.css') }}">
+</head>
+<body>
+<div class="no-print">
+  <button onclick="window.print()">🖨️ Imprimir</button>
+  <a href="{{ url_for('clinic_detail', clinica_id=orcamento.clinica_id) }}#orcamento">← Voltar</a>
+</div>
+{% from 'components/logo.html' import clinic_logo %}
+<div class="document">
+  {% if clinica %}
+    <div class="header">
+      {{ clinic_logo(clinica) }}
+      <div class="clinica-nome">{{ clinica.nome }}</div>
+      {{ clinic_logo(clinica) }}
+    </div>
+  {% endif %}
+  <h2>Orçamento</h2>
+  <div class="top-info">
+    <div class="info-box">
+      <strong>Profissional Responsável</strong><br>
+      {{ veterinario.name if veterinario else '' }}<br>
+      CRMV: {{ veterinario.veterinario.crmv if veterinario and veterinario.veterinario else '—' }}
+    </div>
+  </div>
+  <table>
+    <thead>
+      <tr>
+        <th>Descrição</th>
+        <th>Valor (R$)</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for item in itens %}
+      <tr>
+        <td>{{ item.descricao }}</td>
+        <td>{{ '%.2f'|format(item.valor) }}</td>
+      </tr>
+      {% endfor %}
+      <tr>
+        <th>Total</th>
+        <th>{{ '%.2f'|format(total) }}</th>
+      </tr>
+    </tbody>
+  </table>
+  {% if clinica %}
+  <footer>
+    {{ clinica.nome }} – {{ clinica.endereco }}<br>
+    {% if clinica.telefone %}Telefone: {{ clinica.telefone }} • {% endif %}
+    {% if clinica.email %}Email: {{ clinica.email }} • {% endif %}
+    {% if clinica.cnpj %}CNPJ: {{ clinica.cnpj }}{% endif %}
+  </footer>
+  {% endif %}
+</div>
+</body>
+</html>

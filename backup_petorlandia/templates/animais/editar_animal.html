@@ -1,0 +1,86 @@
+{% extends "layout.html" %}
+{% from 'components/photo_cropper.html' import photo_cropper %}
+
+{% block main %}
+<h2>Editar Animal</h2>
+
+<form method="POST" enctype="multipart/form-data">
+    {{ form.hidden_tag() }}
+
+    {{ form.name.label }} {{ form.name(class="form-control") }}
+
+    <!-- Espécie manual -->
+    <label for="species_id" class="form-label mt-2">Espécie</label>
+    <select name="species_id" id="species_id" class="form-select">
+        <option value="">Selecionar</option>
+        {% for s in species_list %}
+            <option value="{{ s.id }}" {% if animal.species_id == s.id %}selected{% endif %}>{{ s.name }}</option>
+        {% endfor %}
+    </select>
+
+    <!-- Raça manual -->
+    <label for="breed_id" class="form-label mt-2">Raça</label>
+    <select name="breed_id" id="breed_id" class="form-select">
+        <option value="">Selecionar</option>
+        {% for b in breed_list %}
+            <option value="{{ b.id }}" {% if animal.breed_id == b.id %}selected{% endif %}>{{ b.name }}</option>
+        {% endfor %}
+    </select>
+
+    {% set prefixo = 'animal' %}
+    {% set nome_data = 'date_of_birth' %}
+    {% set nome_idade = 'age' %}
+    {% set valor_data = form.date_of_birth.data.strftime('%d/%m/%Y') if form.date_of_birth.data else (animal.date_of_birth.strftime('%d/%m/%Y') if animal.date_of_birth else '') %}
+    {% set valor_data_iso = form.date_of_birth.data.strftime('%Y-%m-%d') if form.date_of_birth.data else (animal.date_of_birth.strftime('%Y-%m-%d') if animal.date_of_birth else '') %}
+    {% set valor_idade = form.age.data if form.age.data else (animal.age if animal.age else '') %}
+    {% include 'components/campo_data_idade.html' %}
+    {% for error in form.age.errors %}
+      <div class="invalid-feedback d-block">{{ error }}</div>
+    {% endfor %}
+    {% for error in form.date_of_birth.errors %}
+      <div class="invalid-feedback d-block">{{ error }}</div>
+    {% endfor %}
+    {{ form.sex.label(class="mt-2") }} {{ form.sex(class="form-select") }}
+    {{ form.description.label(class="mt-2") }} {{ form.description(class="form-control") }}
+    {{ form.image.label(class="mt-2") }}
+    {{ photo_cropper(form.image, form.photo_rotation, form.photo_zoom, form.photo_offset_x, form.photo_offset_y, animal.image, 150, 'animal_image') }}
+
+    <div class="mb-3 mt-2">
+        {{ form.modo.label(class="form-label") }}
+        {{ form.modo(class="form-select", id="modo") }}
+    </div>
+
+    <div class="mb-3" id="price-field" style="display: none;">
+        {{ form.price.label(class="form-label") }}
+        {{ form.price(class="form-control") }}
+    </div>
+
+    <button class="btn btn-primary mt-2">Salvar</button>
+</form>
+
+<form action="{{ url_for('deletar_animal', animal_id=animal.id) }}" method="POST"
+      onsubmit="return confirm('Tem certeza que deseja deletar este animal? Esta ação não poderá ser desfeita.');">
+    <button type="submit" class="btn btn-danger mt-3">🗑️ Deletar Animal</button>
+</form>
+
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+<script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+<script src="https://cdn.jsdelivr.net/npm/flatpickr/dist/l10n/pt.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/inputmask@5.0.8/dist/inputmask.min.js"></script>
+
+<script>
+    const modoSelect = document.getElementById("modo");
+    const priceField = document.getElementById("price-field");
+
+    function togglePriceField() {
+        if (modoSelect.value === "venda") {
+            priceField.style.display = "block";
+        } else {
+            priceField.style.display = "none";
+        }
+    }
+
+    modoSelect.addEventListener("change", togglePriceField);
+    document.addEventListener("DOMContentLoaded", togglePriceField);
+</script>
+{% endblock %}

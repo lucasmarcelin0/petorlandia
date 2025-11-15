@@ -1,0 +1,35 @@
+{% extends "layout.html" %}
+{% from 'components/photo_cropper.html' import photo_cropper %}
+{% block main %}
+<div class="container mt-4">
+  <h2>Criar Clínica</h2>
+  <form method="post" enctype="multipart/form-data">
+    {{ form.hidden_tag() }}
+    <div class="mb-3">
+      {{ form.nome.label }}
+      {{ form.nome(class="form-control") }}
+    </div>
+    <div class="mb-3">
+      {{ form.cnpj.label }}
+      {{ form.cnpj(class="form-control") }}
+    </div>
+    <div class="mb-3">
+      {{ form.endereco.label }}
+      {{ form.endereco(class="form-control") }}
+    </div>
+    <div class="mb-3">
+      {{ form.telefone.label }}
+      {{ form.telefone(class="form-control") }}
+    </div>
+    <div class="mb-3">
+      {{ form.email.label }}
+      {{ form.email(class="form-control") }}
+    </div>
+    <div class="mb-3">
+      {{ form.logotipo.label }}
+      {{ photo_cropper(form.logotipo, form.photo_rotation, form.photo_zoom, form.photo_offset_x, form.photo_offset_y, None, 150, 'clinic_logo', 'user') }}
+    </div>
+    {{ form.submit(class="btn btn-primary") }}
+  </form>
+</div>
+{% endblock %}

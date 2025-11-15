@@ -1,0 +1,24 @@
+{% extends "layout.html" %}
+
+{% block main %}
+<div class="container mt-4">
+  <h2>Painel da Clínica {{ clinic.nome }}</h2>
+  <ul class="nav nav-tabs mt-3">
+    {% if staff.can_manage_clients %}
+    <li class="nav-item"><a class="nav-link" href="#">Clientes</a></li>
+    {% endif %}
+    {% if staff.can_manage_animals %}
+    <li class="nav-item"><a class="nav-link" href="#">Animais</a></li>
+    {% endif %}
+    {% if staff.can_manage_staff %}
+    <li class="nav-item"><a class="nav-link" href="#">Funcionários</a></li>
+    {% endif %}
+    {% if staff.can_manage_schedule %}
+    <li class="nav-item"><a class="nav-link" href="#">Agenda</a></li>
+    {% endif %}
+    {% if staff.can_manage_inventory %}
+    <li class="nav-item"><a class="nav-link" href="#">Estoque</a></li>
+    {% endif %}
+  </ul>
+</div>
+{% endblock %}

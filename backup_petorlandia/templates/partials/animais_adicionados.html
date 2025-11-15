@@ -1,0 +1,147 @@
+<!-- partials/animais_adicionados.html -->
+<div class="container d-flex justify-content-center my-5">
+  <div style="width: 100%; max-width: 700px;">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+      <h4 class="mb-0">🐾 Animais</h4>
+      {% if scope is defined %}
+      <div class="btn-group btn-group-sm">
+        <a href="{{ url_for('novo_animal', scope='all') }}" class="btn btn-outline-primary {% if scope != 'mine' %}active{% endif %}">Todos</a>
+        <a href="{{ url_for('novo_animal', scope='mine') }}" class="btn btn-outline-primary {% if scope == 'mine' %}active{% endif %}">Meus</a>
+      </div>
+      {% endif %}
+    </div>
+
+    <div class="row mb-3">
+      <div class="col-md-8">
+        <input type="text" id="animal-filter" class="form-control" placeholder="Buscar por nome, espécie...">
+      </div>
+      <div class="col-md-4">
+        <select id="animal-sort" class="form-select">
+          <option value="date_desc">Data (recentes)</option>
+          <option value="date_asc">Data (antigos)</option>
+          <option value="name_asc">Nome (A-Z)</option>
+          <option value="name_desc">Nome (Z-A)</option>
+          <option value="age_desc">Idade (maior)</option>
+          <option value="age_asc">Idade (menor)</option>
+        </select>
+      </div>
+    </div>
+
+    <div id="animal-cards" class="row g-3">
+      {% if animais_adicionados %}
+        {% for animal in animais_adicionados %}
+        <div class="col-md-6 d-flex" data-name="{{ animal.name|lower }}" data-date="{{ animal.date_added.isoformat() if animal.date_added else '' }}" data-age="{{ animal.age_years or 0 }}">
+          <div class="card shadow-sm rounded-4 h-100 flex-fill">
+            {% if animal.image %}
+              <img src="{{ animal.image }}" class="card-img card-img-top rounded-top-4" height="180" loading="lazy" alt="Foto de {{ animal.name }}">
+            {% else %}
+              <div class="d-flex align-items-center justify-content-center bg-light rounded-top-4" style="height: 180px;">
+                <span class="text-muted" style="font-size: 2rem;">🐾</span>
+              </div>
+            {% endif %}
+            <div class="card-body d-flex flex-column justify-content-between">
+              <div>
+                <h5 class="card-title">{{ animal.name }}</h5>
+                <p class="mb-1"><strong>Espécie:</strong> {{ animal.species }}</p>
+                <p class="mb-1"><strong>Adicionado em:</strong> {{ animal.date_added|format_datetime_brazil('%d/%m/%Y') }}</p>
+              </div>
+              <div class="d-flex flex-wrap gap-2 mt-3">
+                <a href="{{ url_for('consulta_direct', animal_id=animal.id) }}" class="btn btn-sm btn-outline-primary w-100">🩺 Consulta</a>
+                <a href="{{ url_for('ficha_animal', animal_id=animal.id) }}" class="btn btn-sm btn-outline-dark w-100">📋 Ficha</a>
+              </div>
+            </div>
+          </div>
+        </div>
+        {% endfor %}
+      {% else %}
+        <div class="text-center text-muted mt-4">
+          Nenhum animal cadastrado para esta clínica ainda.
+        </div>
+      {% endif %}
+    </div>
+
+    {% if pagination and pagination.pages > 1 %}
+    <div class="d-flex justify-content-center mt-4">
+      <nav aria-label="Navegação de páginas">
+        <ul class="pagination">
+          {% if pagination.has_prev %}
+            <li class="page-item">
+              <a class="page-link" href="{{ url_for('novo_animal', page=pagination.prev_num, scope=scope) }}">Anterior</a>
+            </li>
+          {% else %}
+            <li class="page-item disabled">
+              <span class="page-link">Anterior</span>
+            </li>
+          {% endif %}
+
+          {% for p in range(1, pagination.pages + 1) %}
+            <li class="page-item {% if p == pagination.page %}active{% endif %}">
+              <a class="page-link" href="{{ url_for('novo_animal', page=p, scope=scope) }}">{{ p }}</a>
+            </li>
+          {% endfor %}
+
+          {% if pagination.has_next %}
+            <li class="page-item">
+              <a class="page-link" href="{{ url_for('novo_animal', page=pagination.next_num, scope=scope) }}">Próxima</a>
+            </li>
+          {% else %}
+            <li class="page-item disabled">
+              <span class="page-link">Próxima</span>
+            </li>
+          {% endif %}
+        </ul>
+      </nav>
+    </div>
+    {% endif %}
+  </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+  const filterInput = document.getElementById('animal-filter');
+  const sortSelect = document.getElementById('animal-sort');
+  const container = document.getElementById('animal-cards');
+  const cards = Array.from(container.querySelectorAll('[data-name]'));
+
+  function getAge(card) {
+    return parseInt(card.dataset.age) || 0;
+  }
+
+  function applyFilter() {
+    const term = filterInput.value.toLowerCase();
+    cards.forEach(card => {
+      const text = card.textContent.toLowerCase();
+      card.style.display = text.includes(term) ? '' : 'none';
+    });
+  }
+
+  function applySort() {
+    const value = sortSelect.value;
+    const visible = cards.filter(card => card.style.display !== 'none');
+    const hidden = cards.filter(card => card.style.display === 'none');
+    visible.sort((a, b) => {
+      switch (value) {
+        case 'name_asc':
+          return a.dataset.name.localeCompare(b.dataset.name);
+        case 'name_desc':
+          return b.dataset.name.localeCompare(a.dataset.name);
+        case 'date_asc':
+          return new Date(a.dataset.date) - new Date(b.dataset.date);
+        case 'age_asc':
+          return getAge(a) - getAge(b);
+        case 'age_desc':
+          return getAge(b) - getAge(a);
+        case 'date_desc':
+        default:
+          return new Date(b.dataset.date) - new Date(a.dataset.date);
+      }
+    });
+    visible.forEach(card => container.appendChild(card));
+    hidden.forEach(card => container.appendChild(card));
+  }
+
+  filterInput.addEventListener('input', () => { applyFilter(); applySort(); });
+  sortSelect.addEventListener('change', applySort);
+  applySort();
+});
+</script>

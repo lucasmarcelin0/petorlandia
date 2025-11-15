@@ -1,0 +1,35 @@
+{% if appointments %}
+  <h5>Exames Agendados</h5>
+  <ul class="list-group">
+    {% for appt in appointments %}
+      <li class="list-group-item" id="exam-appt-{{ appt.id }}">
+        <div class="d-flex justify-content-between align-items-center exam-view">
+          <div>
+            <span>{{ appt.scheduled_at|datetime_brazil }} - {{ appt.specialist.user.name }}</span>
+            {% set status = appt.status_display %}
+            <span class="badge ms-2 {% if status == 'Aceito' %}bg-success{% elif status == 'Cancelado' %}bg-danger{% elif status == 'Prazo expirado' %}bg-secondary{% else %}bg-warning text-dark{% endif %}">{{ status }}</span>
+          </div>
+          <div class="btn-group">
+            <button type="button" class="btn btn-sm btn-outline-primary" onclick="editarAgendamentoExame({{ appt.id }})">✏️</button>
+            <button type="button" class="btn btn-sm btn-outline-danger" onclick="deletarAgendamentoExame({{ appt.id }})">🗑️</button>
+          </div>
+        </div>
+        <form class="row g-2 align-items-center mt-2 d-none exam-edit-form" data-id="{{ appt.id }}" onsubmit="salvarAgendamentoExame(event, {{ appt.id }})">
+          <div class="col-auto">
+            <input type="date" class="form-control" name="date" value="{{ appt.scheduled_at|format_datetime_brazil('%Y-%m-%d') }}">
+          </div>
+          <div class="col-auto">
+            <input type="time" class="form-control" name="time" value="{{ appt.scheduled_at|format_datetime_brazil('%H:%M') }}">
+          </div>
+          <input type="hidden" name="specialist_id" value="{{ appt.specialist_id }}">
+          <div class="col-auto d-flex gap-2">
+            <button type="submit" class="btn btn-primary btn-sm">Salvar</button>
+            <button type="button" class="btn btn-outline-secondary btn-sm" onclick="cancelarEdicaoExame({{ appt.id }})">Cancelar</button>
+          </div>
+        </form>
+      </li>
+    {% endfor %}
+  </ul>
+{% else %}
+  <p class="text-muted">Nenhum exame agendado.</p>
+{% endif %}

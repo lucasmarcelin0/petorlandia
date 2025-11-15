@@ -1,0 +1,281 @@
+{% if edit_mode %}
+  <div class="alert alert-warning d-flex align-items-center">
+    <i class="bi bi-pencil-square me-2"></i>
+    Editando consulta de {{ consulta.created_at|format_datetime_brazil('%d/%m/%Y %H:%M') }}.
+    <a href="{{ url_for('consulta_direct', animal_id=animal.id) }}" class="ms-2">Cancelar edição</a>
+  </div>
+{% endif %}
+
+<form id="consulta-form" method="POST"
+      action="{{ url_for('update_consulta', consulta_id=consulta.id) }}{% if edit_mode %}?edit=1{% endif %}"
+      class="needs-validation" novalidate data-sync data-target="#historico-consultas">
+
+  <!-- Seção de Queixa Principal -->
+  <div class="mb-3">
+    <label for="queixa-principal" class="form-label fw-bold">
+      <i class="bi bi-clipboard2-pulse"></i> Queixa Principal
+    </label>
+    <textarea id="queixa-principal" name="queixa_principal" 
+              class="form-control auto-expand" rows="2"
+              placeholder="Descreva a queixa principal do animal"
+              required>{{ consulta.queixa_principal or '' }}</textarea>
+    <div class="invalid-feedback">Por favor, informe a queixa principal</div>
+  </div>
+
+  <!-- Seção de Histórico Clínico -->
+  <div class="mb-3">
+    <label for="historico-clinico" class="form-label fw-bold">
+      <i class="bi bi-clock-history"></i> Histórico Clínico
+    </label>
+    <textarea id="historico-clinico" name="historico_clinico" 
+              class="form-control auto-expand" rows="3"
+              placeholder="Registre o histórico clínico do animal">{{ consulta.historico_clinico or '' }}</textarea>
+  </div>
+
+  <!-- Seção de Exame Físico -->
+  <div class="mb-3">
+    <label for="exame-fisico" class="form-label fw-bold">
+      <i class="bi bi-clipboard2-check"></i> Exame Físico
+    </label>
+    <textarea id="exame-fisico" name="exame_fisico" 
+              class="form-control auto-expand" rows="3"
+              placeholder="Descreva os achados do exame físico">{{ consulta.exame_fisico or '' }}</textarea>
+  </div>
+
+  <!-- Seção de Conduta -->
+  <div class="mb-3">
+    <label for="conduta" class="form-label fw-bold">
+      <i class="bi bi-prescription2"></i> Conduta
+    </label>
+    <textarea id="conduta" name="conduta"
+              class="form-control auto-expand" rows="3"
+              placeholder="Descreva a conduta adotada">{{ consulta.conduta or '' }}</textarea>
+  </div>
+
+  <div class="d-flex justify-content-between mt-4">
+    <button type="submit" class="btn btn-primary">
+      {% if edit_mode %}
+        <i class="bi bi-save2"></i> Salvar Alterações
+      {% else %}
+        <i class="bi bi-file-earmark-medical"></i> Salvar Consulta
+      {% endif %}
+    </button>
+    
+    {% if edit_mode %}
+      <a href="{{ url_for('consulta_direct', animal_id=animal.id) }}" class="btn btn-outline-secondary">
+        <i class="bi bi-x-circle"></i> Cancelar
+      </a>
+    {% endif %}
+  </div>
+</form>
+
+<div id="retorno-container">
+{% if consulta.appointment %}
+  <div id="retorno-card" class="card mt-4" data-appointment-id="{{ consulta.appointment.id }}">
+    <div class="card-body d-flex justify-content-between align-items-center">
+      <div>
+        <i class="bi bi-calendar-event"></i>
+        Retorno marcado para {{ consulta.appointment.scheduled_at|format_datetime_brazil('%d/%m/%Y %H:%M') }}.
+      </div>
+      <div class="d-flex gap-2">
+        <a href="#" class="card-link editar-retorno">Editar</a>
+        <form method="POST"
+              action="{{ url_for('delete_appointment', appointment_id=consulta.appointment.id) }}"
+              class="d-inline delete-appointment-form" data-sync>
+          <button type="submit" class="btn btn-link p-0 card-link">Excluir</button>
+        </form>
+        <a href="{{ url_for('consulta_direct', animal_id=animal.id) }}" class="card-link start-return-link">Iniciar retorno</a>
+      </div>
+    </div>
+  </div>
+  <form id="edit-return-form" class="row g-3 mt-3 d-none" data-appointment-id="{{ consulta.appointment.id }}">
+    <div class="col-md-6">
+      {{ appointment_form.veterinario_id.label(class='form-label') }}
+      {{ appointment_form.veterinario_id(class='form-select', value=consulta.appointment.veterinario_id) }}
+    </div>
+    <div class="col-md-3">
+      {{ appointment_form.date.label(class='form-label') }}
+      {{ appointment_form.date(class='form-control', type='date', value=consulta.appointment.scheduled_at|format_datetime_brazil('%Y-%m-%d')) }}
+    </div>
+    <div class="col-md-3">
+      {{ appointment_form.time.label(class='form-label') }}
+      {{ appointment_form.time(class='form-control', type='time', value=consulta.appointment.scheduled_at|format_datetime_brazil('%H:%M')) }}
+    </div>
+    <div class="col-12">
+      {{ appointment_form.kind.label(class='form-label') }}
+      {{ appointment_form.kind(class='form-select', value=consulta.appointment.kind) }}
+    </div>
+    <div class="col-12">
+      {{ appointment_form.reason.label(class='form-label') }}
+      {{ appointment_form.reason(class='form-control', rows=3, value=consulta.appointment.notes or '') }}
+    </div>
+    <div class="col-12 d-flex gap-2">
+      <button type="submit" class="btn btn-primary">Salvar</button>
+      <button type="button" class="btn btn-outline-secondary cancelar-retorno">Cancelar</button>
+    </div>
+  </form>
+{% elif appointment_form %}
+  <hr class="my-4">
+  <button type="button" class="btn btn-outline-primary mb-3" id="toggle-retorno-form">Agendar Retorno</button>
+  <form id="agendar-retorno-form" method="POST" action="{{ url_for('agendar_retorno', consulta_id=consulta.id) }}" class="row g-3 d-none">
+    <h5 class="mb-3">Agendar Retorno</h5>
+    {{ appointment_form.hidden_tag() }}
+    <input type="hidden" name="animal_id" value="{{ animal.id }}">
+    <div class="col-md-6">
+      {{ appointment_form.veterinario_id.label(class='form-label') }}
+      {{ appointment_form.veterinario_id(class='form-select') }}
+    </div>
+    <div class="col-md-6">
+      {{ appointment_form.date.label(class='form-label') }}
+      {{ appointment_form.date(class='form-control', type='date') }}
+    </div>
+    <div class="col-md-6">
+      {{ appointment_form.time.label(class='form-label') }}
+      {{ appointment_form.time(class='form-control', type='time') }}
+    </div>
+    <div class="col-12">
+      {{ appointment_form.kind.label(class='form-label') }}
+      {{ appointment_form.kind(class='form-select') }}
+    </div>
+    <div class="col-12">
+      {{ appointment_form.reason.label(class='form-label') }}
+      {{ appointment_form.reason(class='form-control', rows=3) }}
+    </div>
+    <div class="col-12">
+      {{ appointment_form.submit(class='btn btn-primary') }}
+    </div>
+  </form>
+{% endif %}
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+  // Função para auto-expand dos textareas
+  function setupAutoExpand() {
+    document.querySelectorAll('textarea.auto-expand').forEach(function(textarea) {
+      function autoResize() {
+        this.style.height = 'auto';
+        this.style.height = (this.scrollHeight) + 'px';
+      }
+      
+      // Aplica no carregamento
+      autoResize.call(textarea);
+      
+      // Adiciona o event listener
+      textarea.addEventListener('input', autoResize);
+    });
+  }
+
+  // Validação do formulário
+  const form = document.querySelector('form.needs-validation');
+  if (form) {
+    form.addEventListener('submit', function(event) {
+      if (!form.checkValidity()) {
+        event.preventDefault();
+        event.stopPropagation();
+      }
+      form.classList.add('was-validated');
+    }, false);
+  }
+
+  // Inicializa o auto-expand
+  setupAutoExpand();
+
+  // Reaplica auto-expand ao exibir a aba de consulta
+  const tabs = document.getElementById('consultaTabs');
+  if (tabs) {
+    tabs.addEventListener('shown.bs.tab', function(event) {
+      if (event.target.getAttribute('data-bs-target') === '#consulta-info') {
+        setupAutoExpand();
+      }
+    });
+  }
+
+  // --- Retorno edit/delete handlers ---
+  const retornoContainer = document.getElementById('retorno-container');
+  const toggleRetornoBtn = document.getElementById('toggle-retorno-form');
+  if (toggleRetornoBtn) {
+    toggleRetornoBtn.addEventListener('click', function() {
+      const form = document.getElementById('agendar-retorno-form');
+      if (form) {
+        form.classList.toggle('d-none');
+      }
+    });
+  }
+  if (retornoContainer) {
+    document.addEventListener('click', function(event) {
+      const card = event.target.closest('#retorno-card');
+      if (card && !event.target.closest('form') && !event.target.classList.contains('start-return-link')) {
+        event.preventDefault();
+        toggleEditForm(true);
+      }
+      if (event.target.closest('.editar-retorno')) {
+        event.preventDefault();
+        toggleEditForm(true);
+      }
+      if (event.target.closest('.cancelar-retorno')) {
+        event.preventDefault();
+        toggleEditForm(false);
+      }
+    });
+
+    document.addEventListener('submit', async function(event) {
+      if (event.target && event.target.id === 'edit-return-form') {
+        event.preventDefault();
+        const formEl = event.target;
+        const formData = new FormData(formEl);
+        const payload = {
+          veterinario_id: formData.get('veterinario_id'),
+          date: formData.get('date'),
+          time: formData.get('time'),
+          notes: formData.get('reason')
+        };
+        const resp = await fetch(`/appointments/${formEl.dataset.appointmentId}/edit`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': '{{ csrf_token() if csrf_token is defined else '' }}',
+            'Accept': 'application/json'
+          },
+          body: JSON.stringify(payload)
+        });
+        if (resp && resp.ok) {
+          await atualizarRetorno();
+        }
+      }
+    });
+
+    document.addEventListener('form-sync-success', async function(ev) {
+      const form = ev.detail && ev.detail.form;
+      if (form && form.classList.contains('delete-appointment-form')) {
+        ev.preventDefault();
+        await atualizarRetorno();
+      }
+    });
+
+    function toggleEditForm(show) {
+      const cardEl = retornoContainer.querySelector('#retorno-card');
+      const formEl = retornoContainer.querySelector('#edit-return-form');
+      if (cardEl && formEl) {
+        if (show) {
+          cardEl.classList.add('d-none');
+          formEl.classList.remove('d-none');
+        } else {
+          formEl.classList.add('d-none');
+          cardEl.classList.remove('d-none');
+        }
+      }
+    }
+
+    async function atualizarRetorno() {
+      const resp = await fetch(window.location.href);
+      const html = await resp.text();
+      const doc = new DOMParser().parseFromString(html, 'text/html');
+      const newContainer = doc.querySelector('#retorno-container');
+      if (newContainer && retornoContainer) {
+        retornoContainer.innerHTML = newContainer.innerHTML;
+      }
+    }
+  }
+});
+</script>

@@ -1,0 +1,69 @@
+{% extends "layout.html" %}
+{% block main %}
+<h2>Mensagens sobre Animais</h2>
+
+{% if mensagens_animais %}
+    <ul class="list-group mt-4">
+    {% for msg in mensagens_animais %}
+        {% set other_user = msg.sender if msg.sender_id != current_user.id else msg.receiver %}
+        <li class="list-group-item d-flex justify-content-between align-items-center">
+            <div class="d-flex align-items-center">
+                {% if other_user.profile_photo %}
+                    <img src="{{ other_user.profile_photo }}" alt="Foto" class="avatar me-3" width="50" height="50">
+                {% else %}
+                    <div class="rounded-circle bg-secondary me-3 d-flex justify-content-center align-items-center" style="width:50px;height:50px;color:white;">
+                        {{ other_user.name[0] }}
+                    </div>
+                {% endif %}
+                <div>
+                    <strong>{{ other_user.name }}</strong><br>
+                    <small class="text-muted">Sobre o animal: {{ msg.animal.name }}</small><br>
+                    <small class="text-muted">{{ msg.timestamp|format_datetime_brazil('%d/%m/%Y %H:%M') }}</small>
+                </div>
+            </div>
+            <a href="{{ url_for('conversa', animal_id=msg.animal.id, user_id=other_user.id) }}" class="btn btn-outline-primary btn-sm">
+                Ver Conversa
+                {% if unread_counts.get(other_user.id) %}
+                    <span class="badge bg-danger ms-2">{{ unread_counts[other_user.id] }}</span>
+                {% endif %}
+            </a>
+        </li>
+    {% endfor %}
+    </ul>
+{% else %}
+    <p>Nenhuma mensagem recebida.</p>
+{% endif %}
+
+<h2 class="mt-5">Mensagens Gerais</h2>
+
+{% if mensagens_gerais %}
+    <ul class="list-group mt-4">
+    {% for msg in mensagens_gerais %}
+        {% set other_user = msg.sender if msg.sender_id != current_user.id else msg.receiver %}
+        <li class="list-group-item d-flex justify-content-between align-items-center">
+            <div class="d-flex align-items-center">
+                {% if other_user.profile_photo %}
+                    <img src="{{ other_user.profile_photo }}" alt="Foto" class="avatar me-3" width="50" height="50">
+                {% else %}
+                    <div class="rounded-circle bg-secondary me-3 d-flex justify-content-center align-items-center" style="width:50px;height:50px;color:white;">
+                        {{ other_user.name[0] }}
+                    </div>
+                {% endif %}
+                <div>
+                    <strong>{{ other_user.name }}</strong><br>
+                    <small class="text-muted">{{ msg.timestamp|format_datetime_brazil('%d/%m/%Y %H:%M') }}</small>
+                </div>
+            </div>
+            <a href="{{ url_for('conversa_admin', user_id=other_user.id) }}" class="btn btn-outline-primary btn-sm">
+                Ver Conversa
+                {% if unread_counts.get(other_user.id) %}
+                    <span class="badge bg-danger ms-2">{{ unread_counts[other_user.id] }}</span>
+                {% endif %}
+            </a>
+        </li>
+    {% endfor %}
+    </ul>
+{% else %}
+    <p>Nenhuma mensagem recebida.</p>
+{% endif %}
+{% endblock %}

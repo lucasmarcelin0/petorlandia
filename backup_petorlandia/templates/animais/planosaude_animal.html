@@ -1,0 +1,60 @@
+{% extends "layout.html" %}
+{% block main %}
+<div class="container mt-4">
+
+    <h2 class="mb-4 text-center">Plano de Saúde para {{ animal.name }} 🐾</h2>
+
+    {% if animal.image %}
+        <div class="text-center mb-4">
+            <img src="{{ animal.image }}" alt="Foto de {{ animal.name }}"
+                 class="rounded-circle shadow-sm" loading="lazy"
+                 style="width: 150px; height: 150px; object-fit: cover;">
+        </div>
+    {% endif %}
+
+    {% if subscription %}
+        <div class="alert alert-success">Plano atual: {{ subscription.plan.name }} – ativo</div>
+    {% endif %}
+
+    <div class="card shadow-sm rounded-4 mb-5">
+        <div class="card-body">
+            <form method="post" action="{{ url_for('contratar_plano', animal_id=animal.id) }}">
+                {{ form.hidden_tag() }}
+                <div class="mb-3">
+                    {{ form.plan_id.label(class="form-label") }}
+                    {{ form.plan_id(class="form-select", id="plan_id") }}
+                </div>
+                <div id="plan-info" class="border rounded p-3 bg-light mb-3"></div>
+                {{ form.submit(class="btn btn-success rounded-pill") }}
+            </form>
+        </div>
+    </div>
+
+    <div class="text-center">
+        <a href="{{ url_for('appointments', animal_id=animal.id) }}" class="btn btn-outline-primary rounded-pill">🩺 Agendar Consulta</a>
+    </div>
+</div>
+
+<script>
+  const plans = {{ plans | tojson }};
+  function updatePlanInfo() {
+    const select = document.getElementById('plan_id');
+    const infoDiv = document.getElementById('plan-info');
+    const plan = plans.find(p => p.id == select.value);
+    if (plan) {
+      infoDiv.innerHTML = `<h5 class="fw-semibold">${plan.name}</h5>` +
+                          `<p class="mb-1">${plan.description || ''}</p>` +
+                          `<p class="fw-bold">R$ ${plan.price.toFixed(2)}</p>`;
+    } else {
+      infoDiv.innerHTML = '';
+    }
+  }
+  document.addEventListener('DOMContentLoaded', () => {
+    const select = document.getElementById('plan_id');
+    if (select) {
+      select.addEventListener('change', updatePlanInfo);
+      updatePlanInfo();
+    }
+  });
+</script>
+{% endblock %}

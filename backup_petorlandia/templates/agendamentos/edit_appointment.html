@@ -1,0 +1,58 @@
+{% extends "layout.html" %}
+
+{% block main %}
+<div class="container mt-4">
+  <h2>Editar Consulta</h2>
+  <form id="edit-form">
+    <div class="mb-3">
+      <label for="date" class="form-label">Data</label>
+      <input type="date" id="date" class="form-control" value="{{ appointment.scheduled_at|format_datetime_brazil('%Y-%m-%d') }}">
+    </div>
+    <div class="mb-3">
+      <label for="time" class="form-label">Horário</label>
+      <input type="time" id="time" class="form-control" value="{{ appointment.scheduled_at|format_datetime_brazil('%H:%M') }}">
+    </div>
+    <div class="mb-3">
+      <label for="veterinario" class="form-label">Veterinário</label>
+      <select id="veterinario" class="form-select">
+        {% for vet in veterinarios %}
+          <option value="{{ vet.id }}" {% if vet.id == appointment.veterinario_id %}selected{% endif %}>
+            {{ vet.user.name if vet.user else vet.id }}
+          </option>
+        {% endfor %}
+      </select>
+    </div>
+    <button type="submit" class="btn btn-primary">Salvar</button>
+    <a href="{{ url_for('appointments') }}" class="btn btn-secondary">Cancelar</a>
+  </form>
+</div>
+{% endblock %}
+
+{% block scripts %}
+{{ super() }}
+<script>
+document.getElementById('edit-form').addEventListener('submit', async function(e) {
+  e.preventDefault();
+  const data = {
+    date: document.getElementById('date').value,
+    time: document.getElementById('time').value,
+    veterinario_id: document.getElementById('veterinario').value
+  };
+  const resp = await fetch('', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-CSRFToken': '{{ csrf_token() if csrf_token is defined else "" }}'
+    },
+    body: JSON.stringify(data)
+  });
+  if (resp.ok) {
+    window.location.href = '{{ url_for("appointments") }}';
+  } else {
+    let err = 'Erro ao salvar';
+    try { const data = await resp.json(); if (data.message) err = data.message; } catch (e) {}
+    alert(err);
+  }
+});
+</script>
+{% endblock %}

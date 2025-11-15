@@ -1,0 +1,74 @@
+{% extends "layout.html" %}
+{% block main %}
+<div class="container py-4">
+  <div class="row">
+    <div class="col-md-6">
+      {% if product.image_url %}
+      <img src="{{ product.image_url }}" class="img-fluid mb-3" alt="{{ product.name }}" loading="lazy" width="600" height="600">
+      {% endif %}
+      {% for photo in product.extra_photos %}
+ 
+        <img src="{{ photo.image_url }}" class="img-thumbnail me-2 mb-2" height="100" alt="Foto extra">
+ 
+      {% endfor %}
+    </div>
+    <div class="col-md-6">
+      <h2>{{ product.name }}</h2>
+      <p>{{ product.description }}</p>
+      <p class="h4 text-success">R$ {{ '%.2f'|format(product.price)|replace('.', ',') }}</p>
+      <form action="{{ url_for('adicionar_carrinho', product_id=product.id) }}" method="post" class="d-flex align-items-center gap-2 js-cart-form">
+        {{ form.hidden_tag() }}
+        {{ form.quantity(class="form-control w-auto", min="1") }}
+        <button type="submit" class="btn btn-primary">Adicionar ao Carrinho</button>
+      </form>
+      <div class="mt-3">
+        <a href="{{ url_for('loja') }}" class="btn btn-outline-secondary me-2">Continuar comprando</a>
+        <a href="{{ url_for('ver_carrinho') }}" class="btn btn-outline-primary">Ir ao carrinho</a>
+      </div>
+    </div>
+  </div>
+
+  {% if is_admin %}
+  <hr>
+  <h4>Editar Produto</h4>
+  <form method="post" enctype="multipart/form-data">
+    {{ update_form.hidden_tag() }}
+    <div class="mb-3">
+      {{ update_form.name.label(class="form-label") }}
+      {{ update_form.name(class="form-control") }}
+    </div>
+    <div class="mb-3">
+      {{ update_form.description.label(class="form-label") }}
+      {{ update_form.description(class="form-control") }}
+    </div>
+    <div class="row">
+      <div class="col-md-4 mb-3">
+        {{ update_form.price.label(class="form-label") }}
+        {{ update_form.price(class="form-control") }}
+      </div>
+      <div class="col-md-4 mb-3">
+        {{ update_form.stock.label(class="form-label") }}
+        {{ update_form.stock(class="form-control") }}
+      </div>
+      <div class="col-md-4 mb-3">
+        {{ update_form.mp_category_id.label(class="form-label") }}
+        {{ update_form.mp_category_id(class="form-control") }}
+      </div>
+      <div class="col-md-4 mb-3">
+        {{ update_form.image_upload.label(class="form-label") }}
+        {{ update_form.image_upload(class="form-control") }}
+      </div>
+    </div>
+    <button type="submit" class="btn btn-success" name="upd-submit">{{ update_form.submit.label.text }}</button>
+  </form>
+
+  <hr>
+  <h4>Adicionar Foto</h4>
+  <form method="post" enctype="multipart/form-data">
+    {{ photo_form.hidden_tag() }}
+    {{ photo_form.image(class="form-control mb-2") }}
+    <button type="submit" class="btn btn-primary" name="photo-submit">{{ photo_form.submit.label.text }}</button>
+  </form>
+  {% endif %}
+</div>
+{% endblock %}

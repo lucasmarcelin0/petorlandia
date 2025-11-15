@@ -1,0 +1,125 @@
+{% extends "layout.html" %}
+{% block main %}
+<div class="container py-5">
+  <h2 class="text-center mb-5 display-5 fw-semibold">🛒 Meu Carrinho</h2>
+
+  {% if order and order.items %}
+  <ul class="list-group shadow-sm mb-4">
+    {% for item in order.items %}
+    <li class="list-group-item d-flex justify-content-between align-items-center">
+      <div>
+        <h6 class="mb-0 fw-bold">
+          <a href="{{ url_for('produto_detail', product_id=item.product_id) }}" class="cart-item-link">
+            {{ item.item_name }}
+          </a>
+        </h6>
+      </div>
+      <div class="d-flex align-items-center">
+        <form action="{{ url_for('diminuir_item_carrinho', item_id=item.id) }}" method="post" class="me-2 js-cart-form">
+          {{ form.csrf_token }}
+          <button type="submit" class="btn btn-outline-secondary btn-sm">-</button>
+        </form>
+        <span class="mx-1">{{ item.quantity }}</span>
+        <form action="{{ url_for('aumentar_item_carrinho', item_id=item.id) }}" method="post" class="ms-2 js-cart-form">
+          {{ form.csrf_token }}
+          <button type="submit" class="btn btn-outline-secondary btn-sm">+</button>
+        </form>
+      </div>
+    </li>
+    {% endfor %}
+  </ul>
+
+  <div class="d-flex justify-content-end mb-3">
+    <strong id="cartTotal">Total:&nbsp;R$ {{ '%.2f'|format(order.total_value()) }}</strong>
+  </div>
+
+  <div id="new-address-form" class="d-none mb-4">
+    <form action="{{ url_for('carrinho_salvar_endereco') }}" method="post">
+      {{ addr_form.hidden_tag() }}
+      {% include 'partials/endereco_form.html' %}
+      <div class="text-end">
+        <button type="submit" class="btn btn-primary">
+          <i class="bi bi-save"></i> Salvar Endereço
+        </button>
+      </div>
+    </form>
+  </div>
+
+  <form action="{{ url_for('checkout_confirm') }}" method="post" class="text-end">
+    {{ form.hidden_tag() }}
+
+    <div class="mb-3 text-start">
+      <label class="form-label">Endereço de entrega</label>
+
+      <select name="address_id" id="addressSelect" class="form-select mb-2">
+        {% if default_address %}
+        <option value="0" {% if form.address_id.data == 0 %}selected{% endif %}>{{ default_address }}</option>
+        {% endif %}
+        {% for addr in saved_addresses %}
+        <option value="{{ addr.id }}" {% if form.address_id.data == addr.id %}selected{% endif %}>{{ addr.address }}</option>
+        {% endfor %}
+        <option value="-1" {% if form.address_id.data == -1 %}selected{% endif %}>Novo endereço...</option>
+      </select>
+    </div>
+
+
+    <a href="{{ url_for('loja') }}" class="btn btn-outline-primary me-2">
+      <i class="bi bi-shop-window"></i> Continuar comprando
+    </a>
+    <button type="submit" class="btn btn-lg btn-success shadow-sm">
+      <i class="bi bi-cash-stack"></i> {{ form.submit.label.text }}
+    </button>
+  </form>
+
+  {% else %}
+  <div class="text-center text-muted mt-5">
+    <img src="https://cdn-icons-png.flaticon.com/512/2038/2038854.png" alt="Carrinho vazio" width="120" class="opacity-50">
+    <p class="mt-4 fs-5">Seu carrinho está vazio 😿</p>
+    <a href="{{ url_for('loja') }}" class="btn btn-outline-primary mt-3">
+      <i class="bi bi-arrow-left-circle"></i> Voltar à loja
+    </a>
+  </div>
+{% endif %}
+</div>
+
+<style>
+  .cart-item-link {
+    text-decoration: none;
+    color: var(--bs-dark);
+    transition: color 0.2s;
+  }
+
+  .cart-item-link:hover {
+    color: var(--bs-primary);
+    text-decoration: underline;
+  }
+</style>
+
+<script>
+  const addressSelect = document.getElementById('addressSelect');
+  const addressSearch = document.getElementById('addressSearch');
+  const newAddr = document.getElementById('new-address-form');
+  function toggleNewAddress() {
+    if (!addressSelect || !newAddr) return;
+    if (addressSelect.value === '-1') {
+      newAddr.classList.remove('d-none');
+    } else {
+      newAddr.classList.add('d-none');
+    }
+  }
+  function filterAddresses() {
+    if (!addressSearch || !addressSelect) return;
+    const term = addressSearch.value.toLowerCase();
+    Array.from(addressSelect.options).forEach(opt => {
+      if (opt.value === '-1') return;
+      const text = opt.text.toLowerCase();
+      opt.style.display = text.includes(term) ? '' : 'none';
+    });
+  }
+  if (addressSelect) {
+    addressSelect.addEventListener('change', toggleNewAddress);
+    toggleNewAddress();
+  }
+</script>
+{% endblock %}
+

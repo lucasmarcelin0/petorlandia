@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Exames de {{ animal.name }} | {{ clinica.nome }}</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='print.css') }}">
+</head>
+<body>
+
+<div class="no-print">
+  <button onclick="window.print()">🖨️ Imprimir</button>
+  <button onclick="abrirAssinatura()">🔏 Assinar</button>
+  <button onclick="enviarWhatsApp()" id="btn-whatsapp">📱 WhatsApp</button>
+  <a href="{{ url_for('consulta_direct', animal_id=animal.id) }}">← Voltar</a>
+</div>
+
+{% from 'components/logo.html' import clinic_logo %}
+<div class="document">
+  {% if clinica %}
+    <div class="header">
+      {{ clinic_logo(clinica) }}
+      <div class="clinica-nome">{{ clinica.nome }}</div>
+      {{ clinic_logo(clinica) }}
+    </div>
+  {% endif %}
+
+  <h2>Requisicao de Exames Complementares</h2>
+
+  <div class="top-info">
+    {% if veterinario and (veterinario.name or (veterinario.veterinario and veterinario.veterinario.crmv)) %}
+      <div class="info-box">
+        <strong>Médico Veterinário</strong><br>
+        {% if veterinario.name %}
+          {{ veterinario.name }}<br>
+        {% endif %}
+        {% if veterinario.veterinario and veterinario.veterinario.crmv %}
+          CRMV: {{ veterinario.veterinario.crmv }}
+        {% endif %}
+      </div>
+    {% endif %}
+
+    {% if animal.name or animal.species or animal.breed or animal.sex or animal.microchip_number %}
+      <div class="info-box">
+        <strong>Paciente</strong><br>
+        {% if animal.name %}
+          Nome: {{ animal.name }}<br>
+        {% endif %}
+        {% if animal.species %}
+          Espécie: {{ animal.species }}<br>
+        {% endif %}
+        {% if animal.breed %}
+          Raça: {{ animal.breed }}<br>
+        {% endif %}
+        {% if animal.sex %}
+          Sexo: {{ animal.sex }}<br>
+        {% endif %}
+        {% if animal.microchip_number %}
+          Microchip: {{ animal.microchip_number }}
+        {% endif %}
+      </div>
+    {% endif %}
+
+    {% if tutor.name or tutor.cpf or tutor.address %}
+      <div class="info-box">
+        <strong>Responsável</strong><br>
+        {% if tutor.name %}
+          Nome: {{ tutor.name }}<br>
+        {% endif %}
+        {% if tutor.cpf %}
+          CPF: {{ tutor.cpf }}<br>
+        {% endif %}
+        {% if tutor.address %}
+          Endereço: {{ tutor.address }}
+        {% endif %}
+      </div>
+    {% endif %}
+  </div>
+
+  <div class="section-title">Exames Solicitados</div>
+  <div class="exames">
+    {% for exame in bloco.exames %}
+      <div class="exame-item">
+        <strong>{{ exame.nome }}</strong><br>
+        <em style="color: #555;">{{ exame.justificativa }}</em>
+      </div>
+    {% endfor %}
+  </div>
+
+  {% if bloco.observacoes_gerais %}
+    <div class="section-title">Observações</div>
+    <div style="background-color: #f9f9f9; padding: 15px; border-radius: 4px; line-height: 1.6;">
+      {{ bloco.observacoes_gerais }}
+    </div>
+  {% endif %}
+
+  <div class="assinatura">
+    ___________________________________________<br>
+    <span>{{ veterinario.name if veterinario else '' }}</span>
+    <span>CRMV: {{ veterinario.veterinario.crmv if veterinario and veterinario.veterinario else '—' }}</span>
+  </div>
+
+  <footer>
+    {{ clinica.nome }} – {{ clinica.endereco }}<br>
+    {% if clinica.telefone %}Telefone: {{ clinica.telefone }} • {% endif %}
+    {% if clinica.email %}Email: {{ clinica.email }} • {% endif %}
+    {% if clinica.cnpj %}CNPJ: {{ clinica.cnpj }}{% endif %}
+  </footer>
+</div>
+
+<script>
+  const numeroWhatsApp = "{{ tutor.phone | digits_only if tutor and tutor.phone else '' }}";
+  const btnWhats = document.getElementById('btn-whatsapp');
+  if (!numeroWhatsApp && btnWhats) {
+    btnWhats.style.display = 'none';
+  }
+
+  function abrirAssinatura() {
+    if (confirm('Abrir página de assinatura digital?')) {
+      window.open('https://assinador.iti.br/assinatura/index.xhtml', '_blank');
+    }
+  }
+
+  function enviarWhatsApp() {
+    if (!numeroWhatsApp) {
+      alert('Número de telefone do responsável não informado.');
+      return;
+    }
+    const mensagem = encodeURIComponent(`Olá {{ tutor.name }}! Segue a requisição de exames para {{ animal.name }}:\n\n${window.location.href}\n\nQualquer dúvida, estamos à disposição.\nAtenciosamente,\nEquipe {{ clinica.nome }}`);
+    const url = `https://api.whatsapp.com/send?phone=${numeroWhatsApp}&text=${mensagem}`;
+    try {
+      const wpp = window.open(url, '_blank');
+      if (!wpp) {
+        alert('Não foi possível abrir o WhatsApp. Verifique o bloqueador de pop-ups.');
+      }
+    } catch (err) {
+      console.error('Erro ao abrir WhatsApp:', err);
+      alert('Ocorreu um erro ao abrir o WhatsApp. Tente novamente.');
+    }
+  }
+</script>
+</body>
+</html>

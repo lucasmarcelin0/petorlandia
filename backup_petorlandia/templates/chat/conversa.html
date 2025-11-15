@@ -1,0 +1,45 @@
+{% extends "layout.html" %}
+{% block main %}
+<h2>Chat sobre {{ animal.name }}</h2>
+<div id="messages" class="border p-3 mb-3 rounded" style="max-height:400px; overflow-y:auto;"></div>
+<form id="chat-form" class="input-group">
+    <input type="text" id="content" class="form-control" placeholder="Digite sua mensagem..." required>
+    <button class="btn btn-primary" type="submit">Enviar</button>
+</form>
+<script>
+const animalId = {{ animal.id }};
+const currentUserId = {{ current_user.id }};
+const receiverId = {{ animal.owner.id }};
+async function loadMessages() {
+    const resp = await fetch(`/chat/${animalId}`);
+    const msgs = await resp.json();
+    const container = document.getElementById('messages');
+    container.innerHTML = '';
+    msgs.forEach(m => {
+        const wrapper = document.createElement('div');
+        wrapper.className = 'mb-2 ' + (m.sender_id === currentUserId ? 'text-end' : '');
+        wrapper.innerHTML = `<div class="p-2 rounded ${m.sender_id === currentUserId ? 'bg-info-subtle' : 'bg-light'}">
+            <small>${m.sender_id === currentUserId ? 'Você' : 'Eles'}:</small><br>
+            ${m.content}
+            <div class="text-muted small">${new Date(m.timestamp).toLocaleString()}</div>
+        </div>`;
+        container.appendChild(wrapper);
+    });
+    container.scrollTop = container.scrollHeight;
+}
+document.getElementById('chat-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const content = document.getElementById('content').value.trim();
+    if (!content) return;
+    await fetch(`/chat/${animalId}`, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({sender_id: currentUserId, receiver_id: receiverId, content})
+    });
+    document.getElementById('content').value = '';
+    loadMessages();
+});
+loadMessages();
+setInterval(loadMessages, 3000);
+</script>
+{% endblock %}

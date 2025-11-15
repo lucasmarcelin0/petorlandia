@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Termo de Consentimento para Procedimentos | {{ clinica.nome }}</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='print.css') }}">
+</head>
+<body>
+
+<div class="no-print">
+  <button onclick="window.print()">🖨️ Imprimir</button>
+  <button onclick="abrirAssinatura()">🔏 Assinar</button>
+  <button onclick="enviarWhatsApp()" id="btn-whatsapp">📱 WhatsApp</button>
+  <a href="{{ url_for('ficha_animal', animal_id=animal.id) }}">← Voltar</a>
+</div>
+
+{% from 'components/logo.html' import clinic_logo %}
+<div class="document">
+  {% if clinica %}
+    <div class="header">
+      {{ clinic_logo(clinica) }}
+      <div class="clinica-nome">{{ clinica.nome }}</div>
+      {{ clinic_logo(clinica) }}
+    </div>
+  {% endif %}
+
+  <h2>Termo de Consentimento para Procedimentos</h2>
+
+  <p>Eu, {{ tutor.name }}, CPF {{ tutor.cpf or '—' }}, autorizo a realização de procedimentos veterinários no animal {{ animal.name }} na clínica {{ clinica.nome }}.</p>
+
+  <p>Fui informado sobre os riscos, benefícios e alternativas aos procedimentos propostos, incluindo cirurgias como castração, intervenções ortopédicas e remoção de tumores.</p>
+
+  <p>Estou ciente de que podem ocorrer complicações ou óbito mesmo com todos os cuidados adotados.</p>
+
+  <p>Autorizo o uso de anestesia, medicações e exames necessários à execução do procedimento.</p>
+
+  <div class="assinatura">
+    ___________________________________________<br>
+    <span>{{ tutor.name }}</span>
+  </div>
+
+  {% if clinica %}
+  <footer>
+    {{ clinica.nome }} – {{ clinica.endereco }}<br>
+    {% if clinica.telefone %}Telefone: {{ clinica.telefone }} • {% endif %}
+    {% if clinica.email %}Email: {{ clinica.email }} • {% endif %}
+    {% if clinica.cnpj %}CNPJ: {{ clinica.cnpj }}{% endif %}
+  </footer>
+  {% endif %}
+</div>
+
+<script>
+  const numeroWhatsApp = "{{ tutor.phone | digits_only if tutor and tutor.phone else '' }}";
+  const btnWhats = document.getElementById('btn-whatsapp');
+  if (!numeroWhatsApp && btnWhats) {
+    btnWhats.style.display = 'none';
+  }
+
+  function abrirAssinatura() {
+    if (confirm('Abrir página de assinatura digital?')) {
+      window.open('https://assinador.iti.br/assinatura/index.xhtml', '_blank');
+    }
+  }
+
+  function enviarWhatsApp() {
+    if (!numeroWhatsApp) {
+      alert('Número de telefone do responsável não informado.');
+      return;
+    }
+    const mensagem = encodeURIComponent(`Olá {{ tutor.name }}! Segue o termo de consentimento para procedimentos de {{ animal.name }}:\n\n${window.location.href}\n\nQualquer dúvida, estamos à disposição.\nAtenciosamente,\nEquipe {{ clinica.nome }}`);
+    const url = `https://api.whatsapp.com/send?phone=${numeroWhatsApp}&text=${mensagem}`;
+    try {
+      const wpp = window.open(url, '_blank');
+      if (!wpp) {
+        alert('Não foi possível abrir o WhatsApp. Verifique o bloqueador de pop-ups.');
+      }
+    } catch (err) {
+      console.error('Erro ao abrir WhatsApp:', err);
+      alert('Ocorreu um erro ao abrir o WhatsApp. Tente novamente.');
+    }
+  }
+</script>
+</body>
+</html>

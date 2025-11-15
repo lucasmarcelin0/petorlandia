@@ -1,0 +1,540 @@
+<form>
+  <div id="feedback-exames" class="alert d-none position-fixed" style="top: 20px; right: 20px; z-index: 1000;"></div>
+  <h5 class="mb-3">Solicitação de Exames</h5>
+
+  <!-- Botão para cadastrar novo exame -->
+  <button type="button" class="btn btn-outline-primary mb-3" onclick="toggleNovoExame()">➕ Novo exame</button>
+  <div id="novo-exame-container" class="border rounded p-3 mb-3 bg-light d-none">
+    <div class="mb-2 position-relative">
+      <label for="buscar-exame-novo" class="form-label">Pesquisar exame existente</label>
+      <input type="text" id="buscar-exame-novo" class="form-control" placeholder="Digite para buscar...">
+      <ul id="sugestoes-exame-novo" class="list-group position-absolute w-100" style="z-index: 10; max-height: 300px; overflow-y: auto; display: none;"></ul>
+    </div>
+    <div class="mb-2">
+      <label for="novo-exame-nome" class="form-label">Nome do exame</label>
+      <input type="text" id="novo-exame-nome" class="form-control">
+    </div>
+    <div class="mb-2">
+      <label for="novo-exame-justificativa" class="form-label">Justificativa</label>
+      <textarea id="novo-exame-justificativa" class="form-control" rows="2"></textarea>
+    </div>
+    <div class="mt-3">
+      <button type="button" id="btn-salvar-exame" class="btn btn-primary me-2" onclick="salvarExameModelo()">💾 Salvar Exame</button>
+      <button type="button" id="btn-editar-exame" class="btn btn-success me-2 d-none" onclick="salvarExameModelo()">✏️ Editar</button>
+      <button type="button" id="btn-excluir-exame" class="btn btn-outline-danger d-none" onclick="excluirExameModelo()">🗑️ Excluir</button>
+    </div>
+  </div>
+
+  <!-- Campo com autocomplete -->
+  <div class="mb-3 position-relative">
+    <label for="nome-exame" class="form-label">Tipo de Exame</label>
+    <input type="text" id="nome-exame" class="form-control" placeholder="Ex: Hemograma, Raio-X, Ultrassom...">
+    <ul id="sugestoes-exames" class="list-group position-absolute w-100" style="z-index: 10;"></ul>
+  </div>
+
+  <!-- Justificativa -->
+  <div class="mb-3">
+    <label for="justificativa-exame" class="form-label">Justificativa</label>
+    <textarea id="justificativa-exame" class="form-control" rows="2" placeholder="Por que o exame é necessário?"></textarea>
+  </div>
+
+  <!-- Botão para adicionar à lista -->
+  <button type="button" class="btn btn-success mb-4" onclick="adicionarExame()">➕ Adicionar Exame</button>
+
+  <!-- Lista de exames temporária -->
+  <div id="exames-lista" class="mb-4"></div>
+
+  <!-- Observações gerais -->
+  <div class="mb-3">
+    <label for="observacoes-exames" class="form-label">Observações Gerais</label>
+    <textarea id="observacoes-exames" class="form-control" rows="3" placeholder="Ex: Jejum de 12h, trazer histórico clínico anterior..."></textarea>
+  </div>
+
+  <!-- Botão para finalizar -->
+  <button type="button" class="btn btn-primary mt-2" id="btn-finalizar-exames" onclick="finalizarBlocoExames()">💾 Finalizar Solicitação</button>
+</form>
+
+<!-- Agendamento de exame -->
+<button type="button" class="btn btn-outline-primary mt-4" id="toggle-agendar-exame">Agendar Exame</button>
+<div id="agendar-exame" class="mt-5 d-none">
+  <h5 class="mb-3">Agendar Exame</h5>
+  <div class="mb-3">
+    <label for="exam-specialty" class="form-label">Especialidade</label>
+    <select id="exam-specialty" class="form-select"></select>
+  </div>
+  <div class="mb-3">
+    <label for="exam-specialist" class="form-label">Especialista</label>
+    <select id="exam-specialist" class="form-select"></select>
+  </div>
+  <div class="mb-3">
+    <label for="exam-date" class="form-label">Data</label>
+    <input type="date" id="exam-date" class="form-control">
+  </div>
+  <div class="mb-3">
+    <label for="exam-time" class="form-label">Horário</label>
+    <select id="exam-time" class="form-select"><option value="">Selecione...</option></select>
+  </div>
+  <button type="button" class="btn btn-outline-primary" onclick="agendarExame()">📅 Agendar Exame</button>
+</div>
+
+<!-- Exames agendados -->
+<div id="historico-agendamentos" class="mt-5">
+  {% set appointments = animal.exam_appointments %}
+  {% include 'partials/historico_exam_appointments.html' %}
+</div>
+
+<!-- Histórico de exames -->
+<div id="historico-exames" class="mt-5">
+  {% include 'partials/historico_exames.html' %}
+</div>
+
+
+
+
+
+
+<script src="{{ url_for('static', filename='admin/modelos.js') }}"></script>
+<script>
+  let exames = [];
+  let inputExame, sugestoes;
+  let exameSelecionado = null;
+
+  function mostrarFeedback(msg, tipo = 'success') {
+    const fb = document.getElementById('feedback-exames');
+    fb.textContent = msg;
+    fb.className = `alert alert-${tipo} d-block`;
+    setTimeout(() => fb.classList.add('d-none'), 3000);
+  }
+
+  function debounce(func, wait) {
+    let timeout;
+    return function (...args) {
+      clearTimeout(timeout);
+      timeout = setTimeout(() => func.apply(this, args), wait);
+    };
+  }
+
+  function toggleNovoExame() {
+    const container = document.getElementById('novo-exame-container');
+    if (container.classList.contains('d-none')) {
+      openExameCard(null);
+      container.classList.remove('d-none');
+    } else {
+      container.classList.add('d-none');
+    }
+  }
+
+  function openExameCard(ex) {
+    const buscar = document.getElementById('buscar-exame-novo');
+    const sugestoes = document.getElementById('sugestoes-exame-novo');
+    if (buscar) buscar.value = ex?.nome || '';
+    if (sugestoes) {
+      sugestoes.innerHTML = '';
+      sugestoes.style.display = 'none';
+    }
+    document.getElementById('novo-exame-nome').value = ex?.nome || '';
+    document.getElementById('novo-exame-justificativa').value = ex?.justificativa || '';
+    exameSelecionado = ex?.id ? ex : null;
+    document.getElementById('btn-salvar-exame').classList.toggle('d-none', !!exameSelecionado);
+    document.getElementById('btn-editar-exame').classList.toggle('d-none', !exameSelecionado);
+    document.getElementById('btn-excluir-exame').classList.toggle('d-none', !exameSelecionado);
+  }
+
+  async function salvarExameModelo() {
+    const nome = document.getElementById('novo-exame-nome').value.trim();
+    const justificativa = document.getElementById('novo-exame-justificativa').value.trim();
+    if (!nome) {
+      mostrarFeedback('Informe o nome do exame.', 'warning');
+      return;
+    }
+    const id = exameSelecionado?.id;
+    const url = id ? `/exame_modelo/${id}` : '/exame_modelo';
+    const method = id ? 'PUT' : 'POST';
+    try {
+      const resp = await fetch(url, {
+        method,
+        headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+        body: JSON.stringify({ nome, justificativa })
+      });
+      const data = await resp.json();
+      if (!resp.ok) throw new Error(data.message || 'Erro');
+      mostrarFeedback(id ? 'Exame atualizado!' : 'Exame cadastrado com sucesso!');
+      exameSelecionado = id ? { ...exameSelecionado, nome, justificativa } : data;
+      document.getElementById('nome-exame').value = exameSelecionado.nome;
+      document.getElementById('justificativa-exame').value = exameSelecionado.justificativa || '';
+      document.getElementById('novo-exame-container').classList.add('d-none');
+    } catch (e) {
+      mostrarFeedback(e.message || 'Erro ao salvar exame.', 'danger');
+    }
+  }
+
+  async function excluirExameModelo() {
+    if (!exameSelecionado?.id) return;
+    if (!confirm('Deseja realmente excluir este exame?')) return;
+    try {
+      const resp = await fetch(`/exame_modelo/${exameSelecionado.id}`, { method: 'DELETE' });
+      const data = await resp.json().catch(() => ({}));
+      if (!resp.ok) throw new Error(data.message || 'Erro');
+      mostrarFeedback('Exame excluído.');
+      openExameCard(null);
+      exameSelecionado = null;
+      document.getElementById('nome-exame').value = '';
+      document.getElementById('justificativa-exame').value = '';
+      document.getElementById('novo-exame-container').classList.add('d-none');
+    } catch (e) {
+      mostrarFeedback(e.message || 'Erro ao excluir exame.', 'danger');
+    }
+  }
+
+    document.addEventListener('DOMContentLoaded', function () {
+      inputExame = document.getElementById('nome-exame');
+      sugestoes = document.getElementById('sugestoes-exames');
+      const buscarNovo = document.getElementById('buscar-exame-novo');
+      const sugestoesNovo = document.getElementById('sugestoes-exame-novo');
+
+      const toggleAgendarBtn = document.getElementById('toggle-agendar-exame');
+      const agendarDiv = document.getElementById('agendar-exame');
+      if (toggleAgendarBtn && agendarDiv) {
+        toggleAgendarBtn.addEventListener('click', function () {
+          agendarDiv.classList.toggle('d-none');
+        });
+      }
+
+
+      inputExame.addEventListener('input', function () {
+        const query = this.value;
+        if (query.length < 2) {
+          sugestoes.innerHTML = '';
+          return;
+        }
+
+      fetch(`/buscar_exames?q=${encodeURIComponent(query)}`)
+        .then(res => res.json())
+        .then(data => {
+          sugestoes.innerHTML = '';
+          if (data.length) {
+            data.forEach(item => {
+              const li = document.createElement('li');
+              li.className = 'list-group-item list-group-item-action';
+              li.textContent = item.nome;
+              li.onclick = () => {
+                inputExame.value = item.nome;
+                document.getElementById('justificativa-exame').value = item.justificativa || '';
+                sugestoes.innerHTML = '';
+              };
+              sugestoes.appendChild(li);
+            });
+          } else {
+            const li = document.createElement('li');
+            li.className = 'list-group-item list-group-item-action text-primary';
+            li.textContent = 'Adicionar exame';
+            li.onclick = () => {
+              document.getElementById('novo-exame-container').classList.remove('d-none');
+              const input = document.getElementById('novo-exame-nome');
+              if (input) input.value = query;
+            };
+            sugestoes.appendChild(li);
+          }
+          });
+      });
+
+      if (buscarNovo) {
+        const debounceBusca = debounce(function () {
+          const q = buscarNovo.value.trim();
+          if (q.length < 2) {
+            sugestoesNovo.innerHTML = '';
+            sugestoesNovo.style.display = 'none';
+            return;
+          }
+          sugestoesNovo.innerHTML = '<li class="list-group-item text-muted">Buscando...</li>';
+          sugestoesNovo.style.display = 'block';
+          fetch(`/buscar_exames?q=${encodeURIComponent(q)}`)
+            .then(res => res.json())
+            .then(data => {
+              sugestoesNovo.innerHTML = '';
+              if (data.length === 0) {
+                const none = document.createElement('li');
+                none.className = 'list-group-item text-muted';
+                none.textContent = 'Nenhum exame encontrado';
+                sugestoesNovo.appendChild(none);
+              } else {
+                data.forEach(item => {
+                  const li = document.createElement('li');
+                  li.className = 'list-group-item list-group-item-action';
+                  li.textContent = item.nome;
+                  li.onclick = () => {
+                    openExameCard(item);
+                    sugestoesNovo.innerHTML = '';
+                    sugestoesNovo.style.display = 'none';
+                  };
+                  sugestoesNovo.appendChild(li);
+                });
+              }
+            })
+            .catch(() => {
+              sugestoesNovo.innerHTML = '<li class="list-group-item text-danger">Erro ao buscar exames</li>';
+            });
+        }, 300);
+
+        buscarNovo.addEventListener('input', debounceBusca);
+
+        document.addEventListener('click', function (e) {
+          if (e.target !== buscarNovo) {
+            sugestoesNovo.style.display = 'none';
+          }
+        });
+      }
+
+    const specialtySelect = document.getElementById('exam-specialty');
+    const specialistSelect = document.getElementById('exam-specialist');
+    if (specialtySelect && specialistSelect) {
+      fetch('/api/specialties')
+        .then(r => r.json())
+        .then(data => {
+          specialtySelect.innerHTML = '<option value="">Selecione...</option>';
+          data.forEach(sp => {
+            const opt = document.createElement('option');
+            opt.value = sp.id;
+            opt.textContent = sp.nome;
+            specialtySelect.appendChild(opt);
+          });
+        });
+
+      specialtySelect.addEventListener('change', () => {
+        const specId = specialtySelect.value;
+        specialistSelect.innerHTML = '<option value="">Selecione...</option>';
+        if (!specId) return;
+        fetch(`/api/specialists?specialty_id=${specId}`)
+          .then(r => r.json())
+          .then(data => {
+            data.forEach(sp => {
+              const opt = document.createElement('option');
+              const esp = sp.especialidades.join(', ');
+              opt.value = sp.id;
+              opt.textContent = esp ? `${sp.nome} - ${esp}` : sp.nome;
+              specialistSelect.appendChild(opt);
+            });
+          });
+      });
+      specialistSelect.addEventListener('change', atualizarHorarios);
+      document.getElementById('exam-date').addEventListener('change', atualizarHorarios);
+    }
+
+  renderExamesTemp(); // Inicializa a lista se já houver dados
+  });
+
+  function adicionarExame() {
+    const nome = document.getElementById('nome-exame').value.trim();
+    const justificativa = document.getElementById('justificativa-exame').value.trim();
+
+    if (!nome || !justificativa) {
+      alert('Preencha o nome do exame e a justificativa.');
+      return;
+    }
+
+    exames.push({ nome, justificativa });
+    renderExamesTemp();
+
+    document.getElementById('nome-exame').value = '';
+    document.getElementById('justificativa-exame').value = '';
+  }
+
+  function removerExame(index) {
+    exames.splice(index, 1);
+    renderExamesTemp();
+  }
+
+  function editarExame(index) {
+    const div = document.getElementById(`exame-${index}`);
+    const exame = exames[index];
+
+    div.innerHTML = `
+      <div class="mb-2">
+        <label class="form-label">Nome do Exame</label>
+        <input type="text" class="form-control" id="edit-nome-${index}" value="${exame.nome}">
+      </div>
+      <div class="mb-2">
+        <label class="form-label">Justificativa</label>
+        <textarea class="form-control" id="edit-just-${index}">${exame.justificativa}</textarea>
+      </div>
+      <button class="btn btn-sm btn-success me-2" onclick="salvarEdicaoExame(${index})">💾 Salvar</button>
+      <button class="btn btn-sm btn-secondary" onclick="renderExamesTemp()">Cancelar</button>
+    `;
+  }
+
+  function salvarEdicaoExame(index) {
+    const nome = document.getElementById(`edit-nome-${index}`).value.trim();
+    const justificativa = document.getElementById(`edit-just-${index}`).value.trim();
+
+    if (!nome || !justificativa) {
+      alert('Preencha os dois campos.');
+      return;
+    }
+
+    exames[index] = { nome, justificativa };
+    renderExamesTemp();
+  }
+
+  function renderExamesTemp() {
+    const lista = document.getElementById('exames-lista');
+    lista.innerHTML = '';
+
+    exames.forEach((exame, i) => {
+      const div = document.createElement('div');
+      div.className = 'border p-2 mb-2';
+      div.id = `exame-${i}`;
+      div.innerHTML = `
+        🧪 <strong>${exame.nome}</strong><br>
+        <em>${exame.justificativa}</em><br>
+        <button class="btn btn-sm btn-warning me-2" onclick="editarExame(${i})">✏️ Editar</button>
+        <button class="btn btn-sm btn-danger" onclick="removerExame(${i})">🗑️ Remover</button>
+      `;
+      lista.appendChild(div);
+    });
+  }
+
+  async function atualizarHorarios() {
+    const vetId = document.getElementById('exam-specialist').value;
+    const date = document.getElementById('exam-date').value;
+    if (!vetId || !date) return;
+    const resp = await fetch(`/api/specialist/${vetId}/available_times?date=${date}`);
+    const horarios = await resp.json();
+    const select = document.getElementById('exam-time');
+    select.innerHTML = '<option value="">Selecione...</option>';
+    horarios.forEach(h => {
+      const opt = document.createElement('option');
+      opt.value = h;
+      opt.textContent = h;
+      select.appendChild(opt);
+    });
+  }
+
+  async function agendarExame() {
+    const vetId = document.getElementById('exam-specialist').value;
+    const date = document.getElementById('exam-date').value;
+    const time = document.getElementById('exam-time').value;
+    if (!vetId || !date || !time) {
+      alert('Selecione especialista, data e horário.');
+      return;
+    }
+    const resp = await fetch(`/animal/{{ animal.id }}/schedule_exam`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+      body: JSON.stringify({ specialist_id: vetId, date, time })
+    });
+    if (resp.ok) {
+      const data = await resp.json();
+      mostrarFeedback('Exame agendado! Aguarde confirmação do especialista.');
+      document.getElementById('exam-time').innerHTML = '<option value="">Selecione...</option>';
+      if (data.html) {
+        const hist = document.getElementById('historico-agendamentos');
+        hist.innerHTML = data.html;
+      }
+      atualizarHorarios();
+    } else {
+      mostrarFeedback('Erro ao agendar exame.', 'danger');
+    }
+  }
+
+  async function deletarAgendamentoExame(id) {
+    if (!confirm('Excluir este agendamento?')) return;
+    const resp = await fetch(`/exam_appointment/${id}/delete`, {
+      method: 'POST',
+      headers: { 'Accept': 'application/json' }
+    });
+    if (resp.ok) {
+      const data = await resp.json();
+      if (data.html) {
+        document.getElementById('historico-agendamentos').innerHTML = data.html;
+      }
+      mostrarFeedback('Agendamento excluído.');
+    } else {
+      mostrarFeedback('Erro ao excluir agendamento.', 'danger');
+    }
+  }
+
+  function editarAgendamentoExame(id) {
+    const li = document.getElementById(`exam-appt-${id}`);
+    if (!li) return;
+    li.querySelector('.exam-view')?.classList.add('d-none');
+    li.querySelector('.exam-edit-form')?.classList.remove('d-none');
+  }
+
+  function cancelarEdicaoExame(id) {
+    const li = document.getElementById(`exam-appt-${id}`);
+    if (!li) return;
+    li.querySelector('.exam-edit-form')?.classList.add('d-none');
+    li.querySelector('.exam-view')?.classList.remove('d-none');
+  }
+
+  async function salvarAgendamentoExame(ev, id) {
+    ev.preventDefault();
+    const form = ev.target;
+    const date = form.querySelector('[name="date"]').value;
+    const time = form.querySelector('[name="time"]').value;
+    const specialistId = form.querySelector('[name="specialist_id"]').value;
+    const resp = await fetch(`/exam_appointment/${id}/update`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+      body: JSON.stringify({ date, time, specialist_id: specialistId })
+    });
+    if (resp.ok) {
+      const data = await resp.json();
+      if (data.html) {
+        document.getElementById('historico-agendamentos').innerHTML = data.html;
+      }
+      mostrarFeedback('Agendamento atualizado!');
+      atualizarHorarios();
+    } else {
+      mostrarFeedback('Erro ao atualizar agendamento.', 'danger');
+    }
+  }
+
+  async function finalizarBlocoExames() {
+    if (exames.length === 0) {
+      mostrarFeedback('Adicione pelo menos um exame antes de finalizar.', 'warning');
+      return;
+    }
+
+    const btn = document.getElementById('btn-finalizar-exames');
+    const originalHTML = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2" role="status"></span>Salvando...';
+
+    const obsGerais = document.getElementById('observacoes-exames')?.value || '';
+
+    const resp = await fetchOrQueue(`/animal/{{ animal.id }}/bloco_exames`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+      body: JSON.stringify({
+        exames: exames,
+        observacoes_gerais: obsGerais
+      })
+    });
+    if (resp) {
+      const data = await resp.json();
+      if (data.success) {
+        mostrarFeedback('Solicitação de exames salva com sucesso!');
+        if (data.html) {
+          const container = document.getElementById('historico-exames');
+          container.innerHTML = data.html;
+          if (typeof bindSyncForms === 'function') {
+            bindSyncForms(container);
+          }
+        }
+        exames = [];
+        renderExamesTemp();
+      } else {
+        mostrarFeedback('Erro ao salvar exames.', 'danger');
+      }
+    } else {
+      // Offline: mantém exames na fila sem mostrar notificação
+      exames = [];
+      renderExamesTemp();
+    }
+
+    btn.disabled = false;
+    btn.innerHTML = originalHTML;
+  }
+</script>
+

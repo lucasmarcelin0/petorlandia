@@ -1,0 +1,57 @@
+<h5 class="mb-3">Documentos</h5>
+{% if current_user.worker == 'veterinario' %}
+<div class="mb-3">
+  <button type="button" class="btn btn-sm btn-outline-primary mb-2" id="toggle-termos-{{ animal.id }}">Ver termos</button>
+  <div class="btn-group flex-wrap d-none" id="termos-container-{{ animal.id }}">
+    <a href="{{ url_for('termo_animal', animal_id=animal.id, tipo='internacao') }}" target="_blank" class="btn btn-sm btn-outline-primary">Termo de Internação</a>
+    <a href="{{ url_for('termo_animal', animal_id=animal.id, tipo='eutanasia') }}" target="_blank" class="btn btn-sm btn-outline-primary">Termo de Eutanásia</a>
+    <a href="{{ url_for('termo_animal', animal_id=animal.id, tipo='procedimentos') }}" target="_blank" class="btn btn-sm btn-outline-primary">Termo de Consentimento para Procedimentos</a>
+    <a href="{{ url_for('termo_animal', animal_id=animal.id, tipo='exames') }}" target="_blank" class="btn btn-sm btn-outline-primary">Termo de Responsabilidade para Exames</a>
+    <a href="{{ url_for('termo_animal', animal_id=animal.id, tipo='imagem') }}" target="_blank" class="btn btn-sm btn-outline-primary">Termo de Uso de Imagem</a>
+    <a href="{{ url_for('termo_animal', animal_id=animal.id, tipo='medicacao') }}" target="_blank" class="btn btn-sm btn-outline-primary">Termo de Responsabilidade de Medicação</a>
+    <a href="{{ url_for('termo_animal', animal_id=animal.id, tipo='planos') }}" target="_blank" class="btn btn-sm btn-outline-primary">Contrato de Planos de Saúde / Pacotes</a>
+    <a href="{{ url_for('termo_animal', animal_id=animal.id, tipo='adocao') }}" target="_blank" class="btn btn-sm btn-outline-primary">Termo de Adoção Responsável</a>
+  </div>
+</div>
+<script>
+document.getElementById('toggle-termos-{{ animal.id }}').addEventListener('click', function() {
+  const container = document.getElementById('termos-container-{{ animal.id }}');
+  container.classList.toggle('d-none');
+  this.textContent = container.classList.contains('d-none') ? 'Ver termos' : 'Ocultar termos';
+});
+</script>
+{% endif %}
+{% if animal.documentos %}
+  <ul class="list-group mb-3">
+    {% for d in animal.documentos %}
+        <li class="list-group-item d-flex justify-content-between align-items-center">
+          <span>{{ d.filename }}</span>
+          <div>
+            <a href="{{ d.file_url }}" target="_blank" class="btn btn-sm btn-outline-primary">Abrir</a>
+            {% if tutor.phone %}
+              <a href="https://api.whatsapp.com/send?phone={{ tutor.phone|digits_only }}&text={{ ('Olá ' ~ tutor.name ~ '! Segue o documento: ' ~ d.file_url)|urlencode }}" target="_blank" class="btn btn-sm btn-outline-success">WhatsApp</a>
+            {% endif %}
+            {% if current_user.role == 'admin' or (current_user.worker == 'veterinario' and current_user.id == d.veterinario_id) %}
+            <form action="{{ url_for('delete_document', animal_id=animal.id, doc_id=d.id) }}" method="post" class="d-inline">
+              <button class="btn btn-sm btn-outline-danger" onclick="return confirm('Excluir documento?')">Excluir</button>
+            </form>
+            {% endif %}
+          </div>
+        </li>
+    {% endfor %}
+  </ul>
+{% else %}
+  <p class="text-muted">Nenhum documento enviado.</p>
+{% endif %}
+
+{% if current_user.worker == 'veterinario' %}
+<form action="{{ url_for('upload_document', animal_id=animal.id) }}" method="post" enctype="multipart/form-data" class="mt-2">
+  <div class="mb-2">
+    <input type="file" name="documento" class="form-control form-control-sm" required>
+  </div>
+  <div class="mb-2">
+    <input type="text" name="descricao" class="form-control form-control-sm" placeholder="Descrição (opcional)">
+  </div>
+  <button class="btn btn-sm btn-outline-success">📤 Enviar</button>
+</form>
+{% endif %}
