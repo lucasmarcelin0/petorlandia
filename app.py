@@ -5786,6 +5786,14 @@ def clinic_detail(clinica_id):
         ],
     ]
 
+    specialty_names = set()
+    for vet in unique_items_by_id(veterinarios + specialists):
+        for specialty in getattr(vet, 'specialties', []) or []:
+            name = (getattr(specialty, 'nome', '') or '').strip()
+            if name:
+                specialty_names.add(name)
+    unique_specialties = sorted(specialty_names, key=lambda value: value.lower())
+
     return render_template(
         'clinica/clinic_detail.html',
         clinica=clinica,
@@ -5842,6 +5850,7 @@ def clinic_detail(clinica_id):
         invites_by_status=invites_by_status,
         invite_status_order=invite_status_order,
         clinic_new_animal_url=clinic_new_animal_url,
+        unique_specialties=unique_specialties,
     )
 
 
