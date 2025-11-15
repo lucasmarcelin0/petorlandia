@@ -75,11 +75,16 @@ def ensure_veterinarian_membership(veterinario, trial_days: int | None = None):
 
 
 def has_veterinarian_profile(user) -> bool:
-    return bool(
-        user
-        and getattr(user, 'worker', None) == 'veterinario'
-        and getattr(user, 'veterinario', None)
-    )
+    """Return ``True`` when the user has an associated veterinarian profile.
+
+    Older accounts may have the `Veterinario` relationship created without
+    updating ``User.worker`` to ``"veterinario"``. Relying solely on the worker
+    flag prevents those veterinarians — even with active memberships — from
+    being treated as such. Checking the actual relationship keeps the helper
+    compatible with legacy data while still ensuring the profile exists.
+    """
+
+    return bool(user and getattr(user, 'veterinario', None))
 
 
 def has_professional_access(user=None) -> bool:
