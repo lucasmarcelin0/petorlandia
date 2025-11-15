@@ -200,8 +200,21 @@ class OrderItemForm(FlaskForm):
     submit = SubmitField('Adicionar')
 
 
+PJ_PAYMENT_TYPE_CHOICES = [
+    ('prestador', 'Prestador PJ / fixo'),
+    ('plantonista', 'Plantonista / plantão'),
+    ('consultoria', 'Consultoria / serviço pontual'),
+]
+
+
 class PJPaymentForm(FlaskForm):
     clinic_id = SelectField('Clínica', coerce=int, validators=[DataRequired(message='Selecione a clínica.')])
+    tipo_prestador = SelectField(
+        'Tipo de prestador',
+        choices=PJ_PAYMENT_TYPE_CHOICES,
+        validators=[DataRequired(message='Informe o tipo de prestador.')],
+        default='prestador',
+    )
     prestador_nome = StringField(
         'Nome do prestador',
         validators=[DataRequired(message='Informe o nome do prestador.'), Length(max=150)],
@@ -215,12 +228,44 @@ class PJPaymentForm(FlaskForm):
     valor = DecimalField(
         'Valor do pagamento',
         places=2,
-        validators=[DataRequired(message='Informe o valor do pagamento.')],
+        validators=[Optional()],
         render_kw={"min": "0", "step": "0.01"},
+    )
+    valor_hora = DecimalField(
+        'Valor por hora',
+        places=2,
+        validators=[Optional()],
+        render_kw={"min": "0", "step": "0.01"},
+    )
+    horas_previstas = DecimalField(
+        'Horas previstas',
+        places=2,
+        validators=[Optional()],
+        render_kw={"min": "0", "step": "0.25"},
+    )
+    plantonista_id = SelectField(
+        'Escala/plantão',
+        coerce=int,
+        validators=[Optional()],
+        choices=[],
+        default=0,
+    )
+    plantonista_turno_inicio = DateTimeField(
+        'Início do plantão',
+        format='%Y-%m-%dT%H:%M',
+        validators=[Optional()],
+        render_kw={"type": "datetime-local"},
+    )
+    plantonista_turno_fim = DateTimeField(
+        'Fim do plantão',
+        format='%Y-%m-%dT%H:%M',
+        validators=[Optional()],
+        render_kw={"type": "datetime-local"},
     )
     data_servico = DateField('Data do serviço', format='%Y-%m-%d', validators=[DataRequired(message='Informe a data do serviço.')])
     data_pagamento = DateField('Data do pagamento', format='%Y-%m-%d', validators=[Optional()])
     observacoes = TextAreaField('Observações', validators=[Optional(), Length(max=2000)])
+    retencao_obrigatoria = BooleanField('Aplicar retenção obrigatória?')
     submit = SubmitField('Salvar')
 
     def validate_prestador_cnpj(self, field):
@@ -229,12 +274,52 @@ class PJPaymentForm(FlaskForm):
             raise ValidationError('Informe um CNPJ válido com 14 dígitos.')
 
     def validate_valor(self, field):
+        tipo = (self.tipo_prestador.data or '').strip()
+        if tipo == 'plantonista' and self.valor_hora.data and self.horas_previstas.data:
+            return
         if field.data is None or field.data <= 0:
             raise ValidationError('O valor deve ser maior que zero.')
 
     def validate_data_servico(self, field):
         if field.data and field.data > date.today():
             raise ValidationError('A data do serviço não pode estar no futuro.')
+
+    def validate(self, extra_validators=None):
+        is_valid = super().validate(extra_validators)
+        tipo = (self.tipo_prestador.data or '').strip()
+
+        if self.valor_hora.data is not None and self.valor_hora.data <= 0:
+            self.valor_hora.errors.append('Informe um valor por hora maior que zero.')
+            is_valid = False
+
+        if self.horas_previstas.data is not None and self.horas_previstas.data <= 0:
+            self.horas_previstas.errors.append('Informe horas previstas maiores que zero.')
+            is_valid = False
+
+        if self.plantonista_turno_inicio.data and self.plantonista_turno_fim.data:
+            if self.plantonista_turno_fim.data <= self.plantonista_turno_inicio.data:
+                self.plantonista_turno_fim.errors.append('O fim do plantão deve ser posterior ao início.')
+                is_valid = False
+        elif self.plantonista_turno_inicio.data or self.plantonista_turno_fim.data:
+            self.plantonista_turno_fim.errors.append('Informe o início e o fim do plantão.')
+            is_valid = False
+
+        if tipo == 'plantonista':
+            if not self.horas_previstas.data and not (
+                self.plantonista_turno_inicio.data and self.plantonista_turno_fim.data
+            ):
+                self.horas_previstas.errors.append('Informe as horas previstas ou os horários do plantão.')
+                is_valid = False
+            if not (self.valor_hora.data and self.horas_previstas.data) and not self.valor.data:
+                self.valor.errors.append('Informe o valor total ou o valor por hora para plantonistas.')
+                is_valid = False
+            if not self.plantonista_id.data and not (
+                self.plantonista_turno_inicio.data and self.plantonista_turno_fim.data
+            ):
+                self.plantonista_id.errors.append('Selecione uma escala existente ou preencha o plantão.')
+                is_valid = False
+
+        return is_valid
 
 
 class AddToCartForm(FlaskForm):
