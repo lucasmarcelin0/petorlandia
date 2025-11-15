@@ -7,7 +7,19 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')
 import pytest
 import app as app_module
 from app import app as flask_app, db
-from models import Clinica, Orcamento, OrcamentoItem, User, Animal, Consulta, Veterinario
+from decimal import Decimal
+from datetime import datetime, date
+
+from models import (
+    Clinica,
+    Orcamento,
+    OrcamentoItem,
+    User,
+    Animal,
+    Consulta,
+    Veterinario,
+    ClassifiedTransaction,
+)
 
 
 @pytest.fixture
@@ -104,3 +116,68 @@ def test_webhook_marks_orcamento_rejected(app, monkeypatch):
         assert orcamento.payment_status == 'failed'
         assert orcamento.status == 'rejected'
         assert orcamento.paid_at is None
+
+
+def test_orcamento_classification_flow(app, monkeypatch):
+    orcamento_id = _create_orcamento(app)
+    with app.app_context():
+        orcamento = Orcamento.query.get(orcamento_id)
+        orcamento.created_at = datetime(2024, 1, 10, 9, 0, 0)
+        db.session.add(orcamento)
+        db.session.commit()
+
+    client = app.test_client()
+
+    def fake_preference(items, external_reference, back_url):
+        return {'payment_url': 'http://mp', 'payment_reference': 'pref-1'}
+
+    monkeypatch.setattr(app_module, '_criar_preferencia_pagamento', fake_preference)
+
+    with client:
+        client.post('/login', data={'email': 'vet@example.com', 'password': 'x'}, follow_redirects=True)
+        resp = client.post(
+            f'/orcamento/{orcamento_id}/pagar',
+            headers={'Accept': 'application/json'},
+        )
+        assert resp.status_code == 200
+
+    with app.app_context():
+        entry = ClassifiedTransaction.query.filter_by(
+            origin='orcamento_payment', raw_id=f'orcamento:{orcamento_id}'
+        ).one()
+        assert entry.category == 'recebivel_orcamento'
+        assert entry.value == Decimal('50')
+        assert entry.month == date(2024, 1, 1)
+
+    monkeypatch.setattr(app_module, 'verify_mp_signature', lambda req, secret: True)
+    payload_paid = {
+        'status': 'approved',
+        'external_reference': f'orcamento-{orcamento_id}',
+        'date_approved': '2024-04-15T10:30:00Z',
+    }
+    _mock_payment(monkeypatch, payload_paid)
+    webhook_client = app.test_client()
+    resp = _post_notification(webhook_client)
+    assert resp.status_code == 200
+
+    with app.app_context():
+        entry = ClassifiedTransaction.query.filter_by(
+            origin='orcamento_payment', raw_id=f'orcamento:{orcamento_id}'
+        ).one()
+        assert entry.category == 'receita_servico'
+        assert entry.month == date(2024, 4, 1)
+        assert entry.date == datetime(2024, 4, 15, 10, 30)
+
+    payload_failed = {
+        'status': 'rejected',
+        'external_reference': f'orcamento-{orcamento_id}',
+    }
+    _mock_payment(monkeypatch, payload_failed)
+    resp = _post_notification(webhook_client)
+    assert resp.status_code == 200
+
+    with app.app_context():
+        remaining = ClassifiedTransaction.query.filter_by(
+            origin='orcamento_payment', raw_id=f'orcamento:{orcamento_id}'
+        ).count()
+        assert remaining == 0

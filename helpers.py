@@ -82,6 +82,23 @@ def has_veterinarian_profile(user) -> bool:
     )
 
 
+def has_professional_access(user) -> bool:
+    """Return ``True`` when ``user`` can access professional-only features."""
+
+    if not user:
+        return False
+
+    role = (getattr(user, 'role', None) or '').lower()
+    if role in {'admin', 'gestor'}:
+        return True
+
+    if has_veterinarian_profile(user):
+        return True
+
+    worker = (getattr(user, 'worker', None) or '').lower()
+    return worker in {'veterinario', 'colaborador'}
+
+
 def is_veterinarian(user=None, *, require_membership: bool = True) -> bool:
     """Return ``True`` when ``user`` has veterinarian role and active membership."""
 

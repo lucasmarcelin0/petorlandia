@@ -2711,6 +2711,65 @@ def _delete_pj_payment_classification(payment_id):
     ClassifiedTransaction.query.filter_by(origin='pj_payment', raw_id=str(payment_id)).delete()
 
 
+def _sync_orcamento_payment_classification(source):
+    """Synchronize ClassifiedTransaction entries for Orcamento/Bloco payments."""
+
+    if not source or not getattr(source, 'id', None):
+        return
+
+    clinic_id = getattr(source, 'clinica_id', None)
+    if not clinic_id:
+        return
+
+    status = (getattr(source, 'payment_status', None) or '').lower()
+    is_orcamento = isinstance(source, Orcamento)
+    origin = 'orcamento_payment' if is_orcamento else 'bloco_orcamento_payment'
+    raw_prefix = 'orcamento' if is_orcamento else 'bloco_orcamento'
+    raw_id = f"{raw_prefix}:{source.id}"
+
+    classification = ClassifiedTransaction.query.filter_by(origin=origin, raw_id=raw_id).first()
+
+    if status in {'failed', 'canceled', 'rejected', 'expired', 'draft', ''}:
+        if classification:
+            db.session.delete(classification)
+        return
+
+    if status not in {'pending', 'paid'}:
+        if classification:
+            db.session.delete(classification)
+        return
+
+    if is_orcamento:
+        value = Decimal(source.total or Decimal('0.00'))
+        reference_dt = source.paid_at if status == 'paid' and getattr(source, 'paid_at', None) else None
+        fallback_dt = source.created_at or source.updated_at
+        description = f"Pagamento do orçamento #{source.id}"
+    else:
+        value = Decimal(source.total_liquido or Decimal('0.00'))
+        reference_dt = None  # Blocos não armazenam paid_at
+        fallback_dt = getattr(source, 'data_criacao', None)
+        description = f"Pagamento do bloco de orçamento #{source.id}"
+
+    reference_dt = reference_dt or fallback_dt or datetime.utcnow()
+    if isinstance(reference_dt, date) and not isinstance(reference_dt, datetime):
+        reference_dt = datetime.combine(reference_dt, time.min)
+
+    month_reference = reference_dt.date().replace(day=1)
+
+    if classification is None:
+        classification = ClassifiedTransaction(origin=origin, raw_id=raw_id)
+
+    category = 'receita_servico' if status == 'paid' else 'recebivel_orcamento'
+    classification.clinic_id = clinic_id
+    classification.category = category
+    classification.subcategory = 'orcamento_online'
+    classification.description = description[:255]
+    classification.value = value
+    classification.date = reference_dt
+    classification.month = month_reference
+    db.session.add(classification)
+
+
 @app.route('/contabilidade')
 @login_required
 def contabilidade_home():
@@ -11310,10 +11369,19 @@ def mp_sdk():
 
 def _mp_auto_return_enabled(back_urls: dict) -> bool:
     """Return True when Mercado Pago auto_return can safely be enabled."""
+
     success_url = (back_urls or {}).get('success')
     if not success_url:
         return False
-    return urlparse(success_url).scheme == 'https'
+
+    parsed = urlparse(success_url)
+    if parsed.scheme != 'https':
+        return False
+
+    if parsed.hostname in {'localhost', '127.0.0.1'}:
+        return False
+
+    return True
 
 
 class PaymentPreferenceError(RuntimeError):
@@ -12639,6 +12707,7 @@ def notificacoes_mercado_pago():
 
             if bloco:
                 bloco.payment_status = bloco_status_map.get(status, 'pending')
+                _sync_orcamento_payment_classification(bloco)
 
             if orcamento:
                 new_payment_status = orcamento_payment_map.get(status)
@@ -12657,6 +12726,7 @@ def notificacoes_mercado_pago():
                     orcamento.status = 'rejected'
                 elif status in {'cancelled', 'refunded', 'expired'}:
                     orcamento.status = 'canceled'
+                _sync_orcamento_payment_classification(orcamento)
 
     except SQLAlchemyError as e:
         current_app.logger.exception("DB error: %s", e)
@@ -16059,6 +16129,7 @@ def pagar_orcamento(bloco_id):
     bloco.payment_link = preference_info['payment_url']
     bloco.payment_reference = preference_info['payment_reference']
     bloco.payment_status = 'pending'
+    _sync_orcamento_payment_classification(bloco)
     db.session.commit()
     if request.accept_mimetypes.accept_json:
         historico_html = _render_orcamento_history(bloco.animal, bloco.clinica_id)
@@ -16107,6 +16178,7 @@ def gerar_link_pagamento_orcamento(orcamento_id):
         orcamento.status = 'sent'
     orcamento.updated_at = datetime.utcnow()
     db.session.add(orcamento)
+    _sync_orcamento_payment_classification(orcamento)
     db.session.commit()
 
     payment_status_label = ORCAMENTO_PAYMENT_STATUS_LABELS.get(orcamento.payment_status, orcamento.payment_status)
