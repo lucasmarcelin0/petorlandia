@@ -102,7 +102,7 @@ def upgrade():
             JOIN animal a ON a.id = va.animal_id
             """
         )
-        bind.execute(insert_stmt, granted_type='veterinarian')
+        bind.execute(insert_stmt, {"granted_type": 'veterinarian'})
         op.drop_table('veterinarian_access')
 
 
