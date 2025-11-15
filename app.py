@@ -3106,9 +3106,11 @@ def contabilidade_pagamentos():
 
     def _normalize_budget_status(raw_status: Optional[str]) -> str:
         normalized = (raw_status or '').strip().lower()
+        if normalized in {'', 'draft', 'not_generated', 'no_link', 'sem_link'}:
+            return 'sem_link'
         if normalized in {'paid', 'success', 'approved', 'completed'}:
             return 'pago'
-        if normalized in {'failed', 'canceled', 'cancelled', 'rejected'}:
+        if normalized in {'failed', 'canceled', 'cancelled', 'rejected', 'expired'}:
             return 'cancelado'
         return 'pendente'
 
@@ -3121,6 +3123,7 @@ def contabilidade_pagamentos():
         )
 
     badge_by_status = {
+        'sem_link': 'bg-info text-dark',
         'pendente': 'bg-warning text-dark',
         'pago': 'bg-success',
         'cancelado': 'bg-secondary',
@@ -3131,6 +3134,8 @@ def contabilidade_pagamentos():
             return 'Sincronizado', 'fas fa-check-circle', 'success'
         if status_code == 'cancelado':
             return 'Cancelado', 'fas fa-ban', 'secondary'
+        if status_code == 'sem_link':
+            return 'Sem link gerado', 'fas fa-unlink', 'info'
         return 'Aguardando pagamento', 'fas fa-clock', 'warning'
 
     def _build_budget_entry(*, entry_type: str, title: str, total, raw_status: Optional[str],
@@ -4778,6 +4783,7 @@ ORCAMENTO_PAYMENT_STATUS_STYLES = {
 }
 
 ACCOUNTING_BUDGET_STATUS_SUMMARY = {
+    'sem_link': {'label': 'Sem link'},
     'pendente': {'label': 'Pendentes'},
     'pago': {'label': 'Pagos'},
     'cancelado': {'label': 'Cancelados'},
