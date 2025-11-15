@@ -6,6 +6,11 @@
       <div class="card shadow-sm border-0 rounded-4">
         <div class="card-body p-4">
           {% include 'partials/tutor_management_panel.html' %}
+          <div class="d-flex justify-content-end mt-3">
+            <button class="btn btn-outline-primary" data-share-request-trigger data-share-modal="tutor-share-request">
+              <i class="fa-solid fa-link me-2"></i> Solicitar acesso compartilhado
+            </button>
+          </div>
         </div>
       </div>
     </div>
@@ -20,4 +25,5 @@
     </div>
   </div>
 </div>
+{% include 'partials/share_request_modal.html' with component_id='tutor-share-request' default_duration=share_default_days %}
 {% endblock %}

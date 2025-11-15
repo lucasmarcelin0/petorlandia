@@ -43,6 +43,31 @@
     {% endif %}
   </div>
 
+  {% if share_context %}
+  <div class="alert alert-info d-flex flex-column flex-lg-row align-items-lg-center gap-3" role="status">
+    <div>
+      <strong>Dados compartilhados por {{ share_context.clinic }}</strong>
+      {% if share_context.expires_at %}
+        – acesso válido até {{ share_context.expires_at.strftime('%d/%m/%Y %H:%M') }}
+      {% endif %}
+      {% if share_context.granted_by %}
+        <br><small class="text-muted">Autorizado por {{ share_context.granted_by }}{% if share_context.granted_at %} em {{ share_context.granted_at.strftime('%d/%m/%Y') }}{% endif %}</small>
+      {% endif %}
+    </div>
+    {% if animal %}
+    <div class="ms-lg-auto">
+      <button class="btn btn-outline-primary btn-sm" data-share-request-trigger data-share-modal="consulta-share-request" data-share-animal="{{ animal.id }}">
+        <i class="fa-solid fa-link me-1"></i> Solicitar renovação
+      </button>
+    </div>
+    {% endif %}
+  </div>
+  {% elif share_request_allowed %}
+  <div class="alert alert-warning" role="alert">
+    Este prontuário pertence a outra clínica. Solicite o compartilhamento com o tutor para liberar o acesso completo.
+  </div>
+  {% endif %}
+
 <ul class="nav nav-tabs mb-4 rounded shadow-sm bg-white pet-nav" id="consultaTabs" role="tablist">
   <li class="nav-item" role="presentation">
     <button class="nav-link active d-flex align-items-center gap-2" id="tutor-tab" data-bs-toggle="tab" data-bs-target="#tutor-info" type="button" role="tab">
@@ -267,6 +292,10 @@
 
 
 
+
+{% if animal %}
+  {% include 'partials/share_request_modal.html' with component_id='consulta-share-request' default_animal_id=animal.id default_duration=share_default_days %}
+{% endif %}
 
 <script>
 function bindSyncForms(root) {

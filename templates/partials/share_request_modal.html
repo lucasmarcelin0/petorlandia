@@ -1,0 +1,123 @@
+{% set component_id = component_id|default('share-request-modal') %}
+{% set default_duration = default_duration|default(share_default_days if share_default_days is defined else 30) %}
+{% set default_animal_id = default_animal_id|default('') %}
+<div class="modal fade" id="{{ component_id }}" tabindex="-1" aria-labelledby="{{ component_id }}-label" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <form data-share-request-form data-share-modal="{{ component_id }}" action="{{ url_for('api_create_share') }}">
+        <div class="modal-header">
+          <h5 class="modal-title" id="{{ component_id }}-label">Solicitar acesso ao tutor</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+        </div>
+        <div class="modal-body">
+          <div class="alert alert-info small">
+            Informe o ID do animal e um motivo breve. O tutor receberá um link seguro para aprovar a solicitação.
+          </div>
+          <div class="mb-3">
+            <label class="form-label">ID do animal</label>
+            <input type="number" class="form-control" name="animal_id" data-share-animal-input value="{{ default_animal_id }}" {% if default_animal_id %}readonly{% endif %} required>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Motivo</label>
+            <textarea class="form-control" name="reason" rows="3" placeholder="Ex.: Precisamos avaliar exames anteriores" maxlength="280"></textarea>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Prazo desejado (dias)</label>
+            <input type="number" class="form-control" name="duration_days" min="1" max="180" value="{{ default_duration }}">
+            <div class="form-text">O tutor poderá ajustar o prazo ao aprovar.</div>
+          </div>
+          <div class="text-muted small" data-share-status></div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
+          <button type="submit" class="btn btn-primary" data-share-submit>Enviar pedido</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+<script>
+(function() {
+  const modalId = '{{ component_id }}';
+  const modalEl = document.getElementById(modalId);
+  if (!modalEl) return;
+  const form = modalEl.querySelector('[data-share-request-form]');
+  const statusEl = modalEl.querySelector('[data-share-status]');
+  const submitBtn = modalEl.querySelector('[data-share-submit]');
+  const animalInput = modalEl.querySelector('[data-share-animal-input]');
+  const bootstrapModal = typeof bootstrap !== 'undefined' ? new bootstrap.Modal(modalEl) : null;
+  const hasDefaultAnimal = {{ 'true' if default_animal_id else 'false' }};
+
+  function setStatus(message, type) {
+    if (!statusEl) return;
+    statusEl.textContent = message || '';
+    statusEl.className = 'small';
+    if (type) {
+      statusEl.classList.add('text-' + type);
+    }
+  }
+
+  async function submitShareRequest(event) {
+    event.preventDefault();
+    if (!form || !animalInput || !animalInput.value) {
+      setStatus('Informe o ID do animal.', 'danger');
+      return;
+    }
+    submitBtn?.setAttribute('disabled', 'disabled');
+    setStatus('Enviando solicitação...', 'muted');
+    const payload = {
+      animal_id: Number(animalInput.value),
+      reason: form.elements.reason?.value || '',
+      duration_days: Number(form.elements.duration_days?.value || {{ default_duration }})
+    };
+    try {
+      const resp = await fetch(form.action, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json', 'Accept': 'application/json'},
+        body: JSON.stringify(payload)
+      });
+      const data = await resp.json();
+      if (!resp.ok || data.success === false) {
+        throw new Error(data.message || 'Não foi possível solicitar o compartilhamento.');
+      }
+      setStatus('Solicitação enviada! Aguarde a aprovação do tutor.', 'success');
+      setTimeout(() => {
+        if (bootstrapModal) {
+          bootstrapModal.hide();
+        }
+        form.reset();
+        {% if default_animal_id %}
+        animalInput.value = '{{ default_animal_id }}';
+        {% endif %}
+        setStatus('', null);
+      }, 1200);
+    } catch (error) {
+      setStatus(error.message, 'danger');
+    } finally {
+      submitBtn?.removeAttribute('disabled');
+    }
+  }
+
+  form?.addEventListener('submit', submitShareRequest);
+
+  document.querySelectorAll('[data-share-request-trigger][data-share-modal="' + modalId + '"]').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      const animalId = btn.getAttribute('data-share-animal');
+      if (animalId && animalInput) {
+        animalInput.value = animalId;
+        animalInput.setAttribute('readonly', 'readonly');
+      } else if (animalInput && !hasDefaultAnimal) {
+        animalInput.removeAttribute('readonly');
+        animalInput.value = '';
+      }
+      setStatus('', null);
+      if (bootstrapModal) {
+        bootstrapModal.show();
+      } else {
+        modalEl.classList.add('show');
+        modalEl.style.display = 'block';
+      }
+    });
+  });
+})();
+</script>

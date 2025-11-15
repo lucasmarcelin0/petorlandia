@@ -61,6 +61,9 @@
         {% for tutor in tutores_adicionados %}
         <div class="col-md-6 d-flex" data-name="{{ tutor.name|lower }}" data-date="{{ tutor.created_at.isoformat() if tutor.created_at else '' }}" data-cpf="{{ tutor.cpf or '' }}" data-phone="{{ tutor.phone or '' }}" {% if tutor.date_of_birth %}data-dob="{{ tutor.date_of_birth.isoformat() }}"{% endif %}>
           <div class="card shadow-sm rounded-4 h-100 flex-fill position-relative border-0 overflow-hidden">
+            {% if tutor.is_shared %}
+            <span class="badge bg-info text-dark position-absolute top-0 start-0 m-2">Compartilhado</span>
+            {% endif %}
             {% if tutor.worker|lower == 'veterinario' %}
             <span class="badge bg-success position-absolute top-0 end-0 m-2">Veterinário</span>
             {% endif %}
@@ -84,7 +87,13 @@
                   <span class="badge text-bg-light border text-muted">Desde {{ tutor.created_at.strftime('%d/%m/%Y') }}</span>
                   {% endif %}
                 </div>
-                <p class="text-muted small mb-0">Tutor cadastrado na clínica</p>
+                <p class="text-muted small mb-0">
+                  {% if tutor.is_shared %}
+                    Tutor compartilhado via autorização do responsável.
+                  {% else %}
+                    Tutor cadastrado na clínica.
+                  {% endif %}
+                </p>
               </div>
 
               <ul class="list-unstyled profile-card-details mb-0">

@@ -1,0 +1,68 @@
+{% extends 'layout.html' %}
+
+{% block main %}
+<div class="container py-5">
+  <div class="row justify-content-center">
+    <div class="col-lg-7">
+      <div class="card shadow-sm border-0">
+        <div class="card-body p-4">
+          <h1 class="h4 mb-3">Confirmar compartilhamento</h1>
+          <p class="text-muted">Revise os dados antes de liberar o acesso.</p>
+
+          <dl class="row small">
+            <dt class="col-sm-4">Clínica</dt>
+            <dd class="col-sm-8">{{ share.clinic.nome if share.clinic else 'Clínica #' ~ share.clinica_id }}</dd>
+            <dt class="col-sm-4">Animal</dt>
+            <dd class="col-sm-8">{{ share.animal.name if share.animal else 'ID ' ~ share.animal_id }}</dd>
+            {% if share.reason %}
+            <dt class="col-sm-4">Motivo</dt>
+            <dd class="col-sm-8">{{ share.reason }}</dd>
+            {% endif %}
+            <dt class="col-sm-4">Solicitado em</dt>
+            <dd class="col-sm-8">{{ share.created_at.strftime('%d/%m/%Y %H:%M') }}</dd>
+          </dl>
+
+          {% if share.status != 'pending' %}
+          <div class="alert alert-info">
+            Esta solicitação já foi {{ share.status }}.
+          </div>
+          <a href="{{ url_for('tutor_shares') }}" class="btn btn-outline-primary">Voltar</a>
+          {% else %}
+          <div class="d-flex flex-wrap gap-2">
+            <form method="post" action="{{ url_for('api_confirm_share', token=token) }}" class="d-inline" data-share-decision>
+              <input type="hidden" name="decision" value="approve">
+              <input type="hidden" name="next" value="{{ url_for('tutor_shares') }}">
+              <button type="submit" class="btn btn-success">
+                <i class="fa-solid fa-check me-1"></i> Aprovar
+              </button>
+            </form>
+            <form method="post" action="{{ url_for('api_confirm_share', token=token) }}" class="d-inline" data-share-decision>
+              <input type="hidden" name="decision" value="deny">
+              <input type="hidden" name="next" value="{{ url_for('tutor_shares') }}">
+              <button type="submit" class="btn btn-outline-danger">
+                <i class="fa-solid fa-xmark me-1"></i> Recusar
+              </button>
+            </form>
+            <a href="{{ url_for('tutor_shares') }}" class="btn btn-outline-secondary">Cancelar</a>
+          </div>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+{{ super() }}
+<script>
+(function() {
+  document.querySelectorAll('[data-share-decision]').forEach(function(form) {
+    form.addEventListener('submit', function() {
+      const button = form.querySelector('button[type="submit"]');
+      button?.setAttribute('disabled', 'disabled');
+    });
+  });
+})();
+</script>
+{% endblock %}
