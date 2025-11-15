@@ -1129,6 +1129,7 @@ from helpers import (
     calcular_idade,
     clinicas_do_usuario,
     consulta_to_event,
+    build_clinic_contact_links,
     ensure_veterinarian_membership,
     exam_to_event,
     get_appointment_duration,
@@ -5786,6 +5787,8 @@ def clinic_detail(clinica_id):
         ],
     ]
 
+    contact_links = build_clinic_contact_links(clinica)
+
     return render_template(
         'clinica/clinic_detail.html',
         clinica=clinica,
@@ -5842,6 +5845,10 @@ def clinic_detail(clinica_id):
         invites_by_status=invites_by_status,
         invite_status_order=invite_status_order,
         clinic_new_animal_url=clinic_new_animal_url,
+        clinic_phone_link=contact_links['phone'],
+        clinic_whatsapp_link=contact_links['whatsapp'],
+        clinic_maps_link=contact_links['maps'],
+        clinic_email_link=contact_links['email'],
     )
 
 

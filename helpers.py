@@ -1,3 +1,4 @@
+import re
 import requests
 
 from flask import abort, current_app, redirect, render_template, session
@@ -10,6 +11,7 @@ from itertools import groupby
 from dateutil.relativedelta import relativedelta
 from sqlalchemy import case
 from zoneinfo import ZoneInfo
+from urllib.parse import quote_plus
 
 from extensions import db
 
@@ -35,6 +37,50 @@ if APPOINTMENT_KIND_DURATIONS:
 else:
     MAX_APPOINTMENT_DURATION_MINUTES = DEFAULT_APPOINTMENT_DURATION_MINUTES
 MAX_APPOINTMENT_DURATION = timedelta(minutes=MAX_APPOINTMENT_DURATION_MINUTES)
+
+
+def _sanitize_phone_digits(value: str | None) -> str | None:
+    if not value:
+        return None
+    digits = re.sub(r"\D+", "", value)
+    return digits or None
+
+
+def _ensure_international_phone(digits: str | None) -> str | None:
+    if not digits:
+        return None
+    stripped = digits.lstrip('0') or digits
+    if len(stripped) in (10, 11) and not stripped.startswith('55'):
+        stripped = f"55{stripped}"
+    return stripped
+
+
+def build_clinic_contact_links(clinica):
+    """Return sanitized contact links for the provided clinic model."""
+
+    phone_digits = _sanitize_phone_digits(getattr(clinica, 'telefone', None))
+    phone_international = _ensure_international_phone(phone_digits)
+    phone_href = f"tel:+{phone_international}" if phone_international else None
+    whatsapp_href = (
+        f"https://wa.me/{phone_international}" if phone_international else None
+    )
+
+    email = (getattr(clinica, 'email', None) or '').strip()
+    email_href = f"mailto:{email}" if email else None
+
+    address = (getattr(clinica, 'endereco', None) or '').strip()
+    maps_href = (
+        f"https://www.google.com/maps/search/?api=1&query={quote_plus(address)}"
+        if address
+        else None
+    )
+
+    return {
+        'phone': phone_href,
+        'whatsapp': whatsapp_href,
+        'email': email_href,
+        'maps': maps_href,
+    }
 
 
 def _trial_days():
