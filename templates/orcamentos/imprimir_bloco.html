@@ -44,6 +44,9 @@
   </div>
 
   {% set signature_user = printing_user %}
+  {% set signature_vet_profile = signature_user.veterinario if signature_user else None %}
+  {% set signature_vet_membership = signature_vet_profile.membership if signature_vet_profile else None %}
+  {% set signature_has_active_membership = signature_vet_membership and signature_vet_membership.is_active() %}
 
   <div class="document-meta">
     {% if bloco.data_criacao %}
@@ -59,10 +62,8 @@
     <div class="print-attribution__line">
       <span class="print-attribution__label">Impresso por:</span>
       <span class="print-attribution__value">{{ signature_user.name if signature_user else '—' }}</span>
-      {% if signature_user and signature_user.veterinario %}
+      {% if signature_has_active_membership %}
         <span class="print-attribution__value">CRMV {{ signature_user.veterinario.crmv }}</span>
-      {% elif signature_user and signature_user.worker == 'veterinario' %}
-        <span class="print-attribution__value">CRMV —</span>
       {% endif %}
     </div>
     <div class="print-attribution__line">
@@ -76,7 +77,7 @@
       <h3>Profissional Responsável</h3>
       <ul class="info-list">
         <li><span>Nome</span><span>{{ printing_user.name if printing_user else '—' }}</span></li>
-        <li><span>CRMV</span><span>{{ printing_user.veterinario.crmv if printing_user and printing_user.veterinario else '—' }}</span></li>
+        <li><span>CRMV</span><span>{{ printing_user.veterinario.crmv if signature_has_active_membership else '—' }}</span></li>
       </ul>
     </section>
     <section class="info-card">
@@ -134,7 +135,7 @@
     <div class="signature">
       <div class="signature-line"></div>
       <span>{{ signature_user.name if signature_user else '—' }}</span>
-      <span>CRMV {{ signature_user.veterinario.crmv if signature_user and signature_user.veterinario else '—' }}</span>
+      <span>CRMV {{ signature_user.veterinario.crmv if signature_has_active_membership else '—' }}</span>
     </div>
   </div>
 

@@ -34,6 +34,9 @@
   {% endif %}
 
   {% set signature_user = printing_user or veterinario %}
+  {% set signature_vet_profile = signature_user.veterinario if signature_user else None %}
+  {% set signature_vet_membership = signature_vet_profile.membership if signature_vet_profile else None %}
+  {% set signature_has_active_membership = signature_vet_membership and signature_vet_membership.is_active() %}
 
   <div class="document-title-group">
     <h1 class="document-title">Orçamento</h1>
@@ -44,10 +47,8 @@
     <div class="print-attribution__line">
       <span class="print-attribution__label">Impresso por:</span>
       <span class="print-attribution__value">{{ signature_user.name if signature_user else '—' }}</span>
-      {% if signature_user and signature_user.veterinario %}
+      {% if signature_has_active_membership %}
         <span class="print-attribution__value">CRMV {{ signature_user.veterinario.crmv }}</span>
-      {% elif signature_user and signature_user.worker == 'veterinario' %}
-        <span class="print-attribution__value">CRMV —</span>
       {% endif %}
     </div>
     <div class="print-attribution__line">
@@ -102,7 +103,7 @@
     <div class="signature">
       <div class="signature-line"></div>
       <span>{{ signature_user.name if signature_user else '—' }}</span>
-      <span>CRMV {{ signature_user.veterinario.crmv if signature_user and signature_user.veterinario else '—' }}</span>
+      <span>CRMV {{ signature_user.veterinario.crmv if signature_has_active_membership else '—' }}</span>
     </div>
   </div>
   {% if veterinario and signature_user and veterinario.id != signature_user.id %}
