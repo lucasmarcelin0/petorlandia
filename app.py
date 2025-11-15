@@ -5067,6 +5067,16 @@ def clinic_detail(clinica_id):
     if request.method == 'GET':
         hours_form.clinica_id.data = clinica.id
     pode_editar = _user_can_manage_clinic(clinica)
+    can_view_metrics = _is_admin() or pode_editar
+    if not can_view_metrics and staff:
+        can_view_metrics = any(
+            [
+                staff.can_manage_clients,
+                staff.can_manage_animals,
+                staff.can_manage_schedule,
+                staff.can_manage_inventory,
+            ]
+        )
     if staff_form.submit.data and staff_form.validate_on_submit():
         if not (_is_admin() or current_user.id == clinica.owner_id):
             abort(403)
@@ -5299,6 +5309,32 @@ def clinic_detail(clinica_id):
         .all()
     )
 
+    clinic_metrics = {
+        'animals': db.session.query(func.count(Animal.id))
+        .filter(Animal.clinica_id == clinica_id, Animal.removido_em.is_(None))
+        .scalar()
+        or 0,
+        'tutors': db.session.query(func.count(User.id))
+        .filter(
+            User.clinica_id == clinica_id,
+            or_(User.worker != 'veterinario', User.worker == None),
+        )
+        .scalar()
+        or 0,
+        'future_appointments': db.session.query(func.count(Appointment.id))
+        .filter(
+            Appointment.clinica_id == clinica_id,
+            Appointment.scheduled_at >= datetime.utcnow(),
+            Appointment.status == 'scheduled',
+        )
+        .scalar()
+        or 0,
+        'open_prescriptions': db.session.query(func.count(BlocoPrescricao.id))
+        .filter(BlocoPrescricao.clinica_id == clinica_id)
+        .scalar()
+        or 0,
+    }
+
     start_str = request.args.get('start')
     end_str = request.args.get('end')
     start_dt = None
@@ -5376,6 +5412,8 @@ def clinic_detail(clinica_id):
         inventory_items=inventory_items,
         inventory_form=inventory_form,
         show_inventory=show_inventory,
+        clinic_metrics=clinic_metrics,
+        show_clinic_metrics=can_view_metrics,
         invites_by_status=invites_by_status,
         invite_status_order=invite_status_order,
     )
