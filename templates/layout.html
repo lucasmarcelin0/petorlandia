@@ -462,13 +462,6 @@
                         </a>
                     </li>
                     {% if current_user.is_authenticated %}
-                    <li class="nav-item">
-                        <a class="nav-link" href="{{ url_for('plano_saude_overview') }}">
-                            <i class="fas fa-shield-dog me-1 text-success"></i> Planos
-                        </a>
-                    </li>
-                    {% endif %}
-                    {% if current_user.is_authenticated %}
                             {% if current_user.worker == 'delivery' %}
                                 <li class="nav-item">
                                     <a class="nav-link" href="{{ url_for('list_delivery_requests') }}">
