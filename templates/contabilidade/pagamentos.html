@@ -1,24 +1,189 @@
 {% extends "layout.html" %}
 {% set titulo = "Pagamentos / PJs" %}
-{% set subtitulo = "Gerenciamento de prestadores e pagamentos" %}
+{% set subtitulo = "Gerencie repasses, notas fiscais e status de prestadores PJ." %}
 
 {% block content %}
-<div class="container mt-4">
-    
-    <h2 class="mb-3">{{ titulo }}</h2>
-
-    <nav aria-label="breadcrumb">
-      <ol class="breadcrumb">
-        <li class="breadcrumb-item"><a href="/">Início</a></li>
-        <li class="breadcrumb-item"><a href="/contabilidade">Contabilidade</a></li>
-        <li class="breadcrumb-item active" aria-current="page">{{ titulo }}</li>
-      </ol>
-    </nav>
-
-    <div class="card shadow-sm p-4 mt-3">
-        <h5>{{ subtitulo }}</h5>
-        <p class="text-muted mb-0">Nenhum dado disponível ainda.</p>
+<div class="container py-4">
+  <div class="d-flex flex-wrap justify-content-between align-items-start gap-3 mb-3">
+    <div>
+      <h2 class="fw-semibold mb-1">{{ titulo }}</h2>
+      <p class="text-muted mb-0">{{ subtitulo }}</p>
     </div>
+    <a href="{{ url_for('contabilidade_pagamentos_novo', clinica_id=selected_clinic_id, mes=month_value) if selected_clinic_id else '#!' }}"
+       class="btn btn-primary btn-lg rounded-pill shadow-sm {% if not selected_clinic_id %}disabled pe-none{% endif %}">
+      <i class="fas fa-plus me-2"></i>Adicionar Pagamento
+    </a>
+  </div>
 
+  <nav aria-label="breadcrumb" class="mb-4">
+    <ol class="breadcrumb bg-white px-3 py-2 rounded shadow-sm">
+      <li class="breadcrumb-item"><a href="/">Início</a></li>
+      <li class="breadcrumb-item"><a href="/contabilidade">Contabilidade</a></li>
+      <li class="breadcrumb-item active" aria-current="page">Pagamentos / PJs</li>
+    </ol>
+  </nav>
+
+  {% if clinics %}
+  <div class="card border-0 shadow-sm mb-4">
+    <div class="card-body">
+      <form class="row g-3 align-items-end" method="get">
+        <div class="col-md-6">
+          <label class="form-label fw-semibold">Clínica</label>
+          <select class="form-select" name="clinica_id" onchange="this.form.submit()">
+            {% for clinic in clinics %}
+              <option value="{{ clinic.id }}" {% if clinic.id == selected_clinic_id %}selected{% endif %}>{{ clinic.nome }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-md-3">
+          <label class="form-label fw-semibold">Mês de referência</label>
+          <input type="month" class="form-control" name="mes" value="{{ month_value }}" onchange="this.form.submit()">
+        </div>
+        <div class="col-md-3 text-md-end">
+          <button type="submit" class="btn btn-outline-secondary rounded-pill px-4">
+            <i class="fas fa-filter me-1"></i>Filtrar
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+  {% else %}
+  <div class="alert alert-info shadow-sm rounded-pill" role="alert">
+    <i class="fas fa-info-circle me-2"></i>Conecte-se a uma clínica para começar a registrar pagamentos PJ.
+  </div>
+  {% endif %}
+
+  <div class="row g-3 mb-4">
+    <div class="col-md-4">
+      <div class="card shadow-sm border-0 h-100">
+        <div class="card-body">
+          <div class="d-flex align-items-center">
+            <div class="rounded-circle bg-warning bg-opacity-25 text-warning p-3 me-3">
+              <i class="fas fa-clock"></i>
+            </div>
+            <div>
+              <p class="text-muted mb-1">Total pendente</p>
+              <h4 class="mb-0">{{ total_pendente | currency_br }}</h4>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-4">
+      <div class="card shadow-sm border-0 h-100">
+        <div class="card-body">
+          <div class="d-flex align-items-center">
+            <div class="rounded-circle bg-success bg-opacity-25 text-success p-3 me-3">
+              <i class="fas fa-check-circle"></i>
+            </div>
+            <div>
+              <p class="text-muted mb-1">Total pago</p>
+              <h4 class="mb-0">{{ total_pago | currency_br }}</h4>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-4">
+      <div class="card shadow-sm border-0 h-100">
+        <div class="card-body">
+          <div class="d-flex align-items-center">
+            <div class="rounded-circle bg-primary bg-opacity-25 text-primary p-3 me-3">
+              <i class="fas fa-calendar-alt"></i>
+            </div>
+            <div>
+              <p class="text-muted mb-1">Pagamentos no mês</p>
+              <h4 class="mb-0">{{ payments|length }}</h4>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card border-0 shadow-sm">
+    <div class="card-body">
+      <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+        <div>
+          <h5 class="mb-0">{{ selected_clinic.nome if selected_clinic else 'Selecione uma clínica' }}</h5>
+          <small class="text-muted">Referência: {{ selected_month.strftime('%m/%Y') if selected_month else month_value }}</small>
+        </div>
+        <div class="btn-group" role="group">
+          <a class="btn btn-outline-light text-secondary" href="{{ url_for('contabilidade_pagamentos', clinica_id=selected_clinic_id, mes=prev_month_value) }}" title="Mês anterior"><i class="fas fa-chevron-left"></i></a>
+          <a class="btn btn-outline-light text-secondary" href="{{ url_for('contabilidade_pagamentos', clinica_id=selected_clinic_id, mes=next_month_value) }}" title="Próximo mês"><i class="fas fa-chevron-right"></i></a>
+        </div>
+      </div>
+      <div class="table-responsive">
+        <table class="table table-striped align-middle">
+          <thead class="table-light">
+            <tr>
+              <th>Nome do prestador</th>
+              <th>CNPJ</th>
+              <th>Nº da nota</th>
+              <th>Valor</th>
+              <th>Data do serviço</th>
+              <th>Status</th>
+              <th class="text-end">Ações</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for pagamento in payments %}
+            <tr>
+              <td>
+                <div class="fw-semibold">{{ pagamento.prestador_nome }}</div>
+                {% if pagamento.observacoes %}
+                <small class="text-muted"><i class="fas fa-sticky-note me-1"></i>{{ pagamento.observacoes }}</small>
+                {% endif %}
+              </td>
+              <td>{{ pagamento.prestador_cnpj | format_cnpj }}</td>
+              <td>{{ pagamento.nota_fiscal_numero or '—' }}</td>
+              <td>{{ pagamento.valor | currency_br }}</td>
+              <td>{{ pagamento.data_servico.strftime('%d/%m/%Y') }}</td>
+              <td>
+                {% if pagamento.status == 'pago' %}
+                  <span class="badge bg-success rounded-pill"><i class="fas fa-check me-1"></i>Pago</span>
+                  {% if pagamento.data_pagamento %}
+                    <small class="d-block text-muted">{{ pagamento.data_pagamento.strftime('%d/%m/%Y') }}</small>
+                  {% endif %}
+                {% else %}
+                  <span class="badge bg-warning text-dark rounded-pill"><i class="fas fa-clock me-1"></i>Pendente</span>
+                {% endif %}
+              </td>
+              <td class="text-end">
+                <div class="d-flex flex-wrap justify-content-end gap-2">
+                  <a href="{{ url_for('contabilidade_pagamentos_editar', payment_id=pagamento.id, clinica_id=selected_clinic_id, mes=month_value) }}"
+                     class="btn btn-sm btn-outline-primary rounded-pill">
+                    <i class="fas fa-edit me-1"></i>Editar
+                  </a>
+                  {% if pagamento.status != 'pago' %}
+                  <form method="post" action="{{ url_for('contabilidade_pagamentos_marcar_pago', payment_id=pagamento.id, clinica_id=selected_clinic_id, mes=month_value) }}">
+                    {% if csrf_token is defined %}{{ csrf_token() }}{% endif %}
+                    <button type="submit" class="btn btn-sm btn-success rounded-pill">
+                      <i class="fas fa-check me-1"></i>Marcar pago
+                    </button>
+                  </form>
+                  {% endif %}
+                  <form method="post" action="{{ url_for('contabilidade_pagamentos_delete', payment_id=pagamento.id, clinica_id=selected_clinic_id, mes=month_value) }}" onsubmit="return confirm('Deseja remover este pagamento?');">
+                    {% if csrf_token is defined %}{{ csrf_token() }}{% endif %}
+                    <button type="submit" class="btn btn-sm btn-outline-danger rounded-pill">
+                      <i class="fas fa-trash-alt me-1"></i>Excluir
+                    </button>
+                  </form>
+                </div>
+              </td>
+            </tr>
+            {% else %}
+            <tr>
+              <td colspan="7" class="text-center py-4 text-muted">
+                <i class="fas fa-file-invoice-dollar fa-2x mb-2 text-secondary"></i>
+                <p class="mb-0">Nenhum pagamento PJ registrado para este período.</p>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
 </div>
 {% endblock %}

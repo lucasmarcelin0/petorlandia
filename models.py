@@ -922,6 +922,48 @@ class ClassifiedTransaction(db.Model):
     def __repr__(self):
         return f"<{self.origin} {self.category} R$ {self.value}>"
 
+
+class PJPayment(db.Model):
+    __tablename__ = 'pj_payments'
+    __table_args__ = (
+        db.CheckConstraint('valor >= 0', name='ck_pj_payments_valor_positive'),
+        db.CheckConstraint("status IN ('pendente','pago')", name='ck_pj_payments_status'),
+    )
+
+    id = db.Column(db.Integer, primary_key=True)
+    clinic_id = db.Column(db.Integer, db.ForeignKey('clinica.id'), nullable=False, index=True)
+    prestador_nome = db.Column(db.String(150), nullable=False)
+    prestador_cnpj = db.Column(db.String(20), nullable=False)
+    nota_fiscal_numero = db.Column(db.String(80), nullable=True)
+    valor = db.Column(db.Numeric(14, 2), nullable=False)
+    data_servico = db.Column(db.Date, nullable=False)
+    data_pagamento = db.Column(db.Date, nullable=True)
+    status = db.Column(
+        db.String(20),
+        nullable=False,
+        default='pendente',
+        server_default='pendente',
+    )
+    observacoes = db.Column(db.Text, nullable=True)
+    created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+    updated_at = db.Column(
+        db.DateTime,
+        nullable=False,
+        default=datetime.utcnow,
+        onupdate=datetime.utcnow,
+    )
+
+    clinic = db.relationship(
+        'Clinica',
+        backref=db.backref('pj_payments', cascade='all, delete-orphan', lazy=True),
+    )
+
+    def is_paid(self):
+        return self.status == 'pago'
+
+    def __repr__(self):
+        return f"<PJPayment {self.prestador_nome} R$ {self.valor}>"
+
 # Associação many-to-many entre veterinário e especialidade
 veterinario_especialidade = db.Table(
     'veterinario_especialidade',

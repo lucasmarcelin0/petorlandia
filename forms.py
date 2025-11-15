@@ -1,5 +1,6 @@
 from flask_wtf import FlaskForm
 from sqlalchemy import or_, false
+from datetime import date
 from wtforms import (
     StringField,
     TextAreaField,
@@ -196,6 +197,44 @@ class OrderItemForm(FlaskForm):
     item_name = StringField('Item', validators=[DataRequired()])
     quantity = IntegerField('Quantidade', validators=[DataRequired()])
     submit = SubmitField('Adicionar')
+
+
+class PJPaymentForm(FlaskForm):
+    clinic_id = SelectField('Clínica', coerce=int, validators=[DataRequired(message='Selecione a clínica.')])
+    prestador_nome = StringField(
+        'Nome do prestador',
+        validators=[DataRequired(message='Informe o nome do prestador.'), Length(max=150)],
+    )
+    prestador_cnpj = StringField(
+        'CNPJ',
+        validators=[DataRequired(message='Informe o CNPJ do prestador.'), Length(max=20)],
+        render_kw={"placeholder": "00.000.000/0000-00"},
+    )
+    nota_fiscal_numero = StringField('Número da nota fiscal', validators=[Optional(), Length(max=80)])
+    valor = DecimalField(
+        'Valor do pagamento',
+        places=2,
+        validators=[DataRequired(message='Informe o valor do pagamento.')],
+        render_kw={"min": "0", "step": "0.01"},
+    )
+    data_servico = DateField('Data do serviço', format='%Y-%m-%d', validators=[DataRequired(message='Informe a data do serviço.')])
+    data_pagamento = DateField('Data do pagamento', format='%Y-%m-%d', validators=[Optional()])
+    observacoes = TextAreaField('Observações', validators=[Optional(), Length(max=2000)])
+    submit = SubmitField('Salvar')
+
+    def validate_prestador_cnpj(self, field):
+        digits = ''.join(ch for ch in (field.data or '') if ch.isdigit())
+        if len(digits) != 14:
+            raise ValidationError('Informe um CNPJ válido com 14 dígitos.')
+
+    def validate_valor(self, field):
+        if field.data is None or field.data <= 0:
+            raise ValidationError('O valor deve ser maior que zero.')
+
+    def validate_data_servico(self, field):
+        if field.data and field.data > date.today():
+            raise ValidationError('A data do serviço não pode estar no futuro.')
+
 
 class AddToCartForm(FlaskForm):
     quantity = IntegerField('Quantidade', default=1, validators=[DataRequired()])
