@@ -1,15 +1,46 @@
+      {% set current_view = appointment_view or 'list' %}
+      {% set is_calendar_view = current_view == 'calendar' %}
       <h3 class="d-flex align-items-center gap-2">
         <span class="icon-circle bg-success text-white"><i class="fa-solid fa-calendar"></i></span>
         <span class="fw-semibold">Agendamentos</span>
       </h3>
-      <div class="mb-3 text-end">
-        <button class="btn btn-primary" disabled>
-          <i class="fa-solid fa-list me-1"></i>Lista
-        </button>
+      <div class="mb-3 d-flex justify-content-end">
+        <div
+          class="btn-group"
+          role="group"
+          aria-label="Alternar visualização da agenda"
+          data-appointments-view-toggle
+          data-storage-key="clinicAgendaView_{{ clinica.id }}"
+          data-parameter="view"
+          data-current-view="{{ current_view }}"
+        >
+          <button
+            type="button"
+            class="btn btn-outline-primary{% if not is_calendar_view %} active{% endif %}"
+            data-view-value="list"
+            aria-pressed="{{ 'true' if not is_calendar_view else 'false' }}"
+          >
+            <i class="fa-solid fa-list me-1" aria-hidden="true"></i>
+            <span>Lista</span>
+          </button>
+          <button
+            type="button"
+            class="btn btn-outline-primary{% if is_calendar_view %} active{% endif %}"
+            data-view-value="calendar"
+            aria-pressed="{{ 'true' if is_calendar_view else 'false' }}"
+          >
+            <i class="fa-solid fa-calendar-days me-1" aria-hidden="true"></i>
+            <span>Calendário</span>
+          </button>
+        </div>
       </div>
 
+      {% if is_calendar_view %}
+        {% include 'partials/clinic_agenda_calendar.html' %}
+      {% else %}
       <div id="list-container">
         <form id="appointment-filter-form" method="get" action="{{ url_for('clinic_detail', clinica_id=clinica.id) }}" class="row g-3 align-items-end mb-3">
+          <input type="hidden" name="view" value="{{ current_view }}">
           <div class="col-12 col-md-3">
             <label for="start" class="form-label">Início</label>
             <input type="date" id="start" name="start" class="form-control" value="{{ appointment_filters.start }}">
@@ -80,4 +111,5 @@
           {% include 'partials/appointments_table.html' %}
         </div>
       </div>
+      {% endif %}
 

@@ -145,7 +145,7 @@ document.addEventListener('DOMContentLoaded', function() {
   const container = document.getElementById('appointments-table-container');
   if (!form || !container) return;
 
-  const FILTER_FIELDS = ['start', 'end', 'vet_id', 'status', 'type'];
+  const FILTER_FIELDS = ['start', 'end', 'vet_id', 'status', 'type', 'view'];
   const quickLinks = form.querySelectorAll('[data-filter-params]');
 
   function sanitizeParams(params) {
@@ -253,6 +253,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
 {% block scripts %}
 {{ super() }}
+<script type="module" src="{{ url_for('static', filename='js/clinic_agenda_view_toggle.js') }}"></script>
 <script type="module" src="{{ url_for('static', filename='appointments_table.js') }}"></script>
 <script>
   document.addEventListener('DOMContentLoaded', function () {

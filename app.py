@@ -5811,6 +5811,10 @@ def clinic_detail(clinica_id):
     for kind in clinic_kind_values:
         kind_labels.setdefault(kind, kind.replace('_', ' ').title())
 
+    appointment_view = (request.args.get('view') or '').strip().lower()
+    if appointment_view not in ('list', 'calendar'):
+        appointment_view = 'list'
+
     start_str = request.args.get('start')
     end_str = request.args.get('end')
     vet_filter_id = request.args.get('vet_id', type=int)
@@ -5852,6 +5856,9 @@ def clinic_detail(clinica_id):
 
     appointments = appointments_query.order_by(Appointment.scheduled_at).all()
     appointments_grouped = group_appointments_by_day(appointments)
+    appointments_events = []
+    if appointment_view == 'calendar':
+        appointments_events = appointments_to_events(appointments)
 
     if request.headers.get("X-Requested-With") == "XMLHttpRequest":
         return render_template(
@@ -5942,6 +5949,7 @@ def clinic_detail(clinica_id):
         'vet_id': str(vet_filter_id) if vet_filter_id else '',
         'status': status_filter,
         'type': type_filter,
+        'view': appointment_view,
     }
 
     def _normalize_filter_value(value):
@@ -6081,6 +6089,8 @@ def clinic_detail(clinica_id):
         appointment_quick_ranges=appointment_quick_ranges,
         appointment_status_quick_filters=appointment_status_quick_filters,
         appointment_type_quick_filters=appointment_type_quick_filters,
+        appointment_view=appointment_view,
+        appointments_events=appointments_events,
         today_str=today_str,
         next7_str=next7_str,
         now=now_dt,
