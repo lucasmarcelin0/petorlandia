@@ -960,6 +960,48 @@ def coverage_label_filter(value):
 def coverage_badge_filter(value):
     return coverage_badge(value)
 
+
+def _resolve_species_name(species) -> str | None:
+    if not species:
+        return None
+    name = getattr(species, "name", None)
+    if isinstance(name, str) and name.strip():
+        return name
+    if isinstance(species, str):
+        return species
+    return str(species)
+
+
+@app.template_filter('species_display')
+def species_display(species) -> str:
+    """Return a readable label for a Species relationship or string."""
+    return _resolve_species_name(species) or "Espécie não informada"
+
+
+def _resolve_size_data(weight):
+    try:
+        value = float(weight)
+    except (TypeError, ValueError):
+        value = None
+
+    if value is None or value <= 0:
+        return "Porte indefinido", "unknown"
+    if value < 10:
+        return "Porte pequeno", "small"
+    if value < 25:
+        return "Porte médio", "medium"
+    return "Porte grande", "large"
+
+
+@app.template_filter('animal_size_label')
+def animal_size_label(weight) -> str:
+    return _resolve_size_data(weight)[0]
+
+
+@app.template_filter('animal_size_token')
+def animal_size_token(weight) -> str:
+    return _resolve_size_data(weight)[1]
+
 # ----------------------------------------------------------------
 # 6)  Forms e helpers
 # ----------------------------------------------------------------
