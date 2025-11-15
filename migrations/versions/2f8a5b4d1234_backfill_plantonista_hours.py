@@ -42,6 +42,9 @@ OPTIONAL_LEGACY_COLUMNS = {
 
 
 def _ensure_plantao_horas_column(inspector):
+    if not inspector.has_table('plantonista_escalas'):
+        return
+
     columns = {col['name'] for col in inspector.get_columns('plantonista_escalas')}
     if 'plantao_horas' not in columns:
         op.add_column('plantonista_escalas', sa.Column('plantao_horas', sa.Numeric(5, 2), nullable=True))
@@ -74,6 +77,9 @@ def _find_legacy_table(inspector):
 
 
 def _migrate_legacy_plantoes(bind, inspector):
+    if not inspector.has_table('plantonista_escalas'):
+        return
+
     legacy_table = _find_legacy_table(inspector)
     if not legacy_table:
         return
@@ -166,6 +172,10 @@ def _migrate_legacy_plantoes(bind, inspector):
 
 
 def _backfill_hours_and_payments(bind):
+    inspector = inspect(bind)
+    if not inspector.has_table('plantonista_escalas'):
+        return
+
     rows = bind.execute(sa.text(
         """
         SELECT id, inicio, fim, pj_payment_id
@@ -235,6 +245,9 @@ def upgrade():
 def downgrade():
     bind = op.get_bind()
     inspector = inspect(bind)
+    if not inspector.has_table('plantonista_escalas'):
+        return
+
     columns = {col['name'] for col in inspector.get_columns('plantonista_escalas')}
     if 'plantao_horas' in columns:
         op.drop_column('plantonista_escalas', 'plantao_horas')
