@@ -180,17 +180,34 @@ def _ensure_inventory_movement_table() -> None:
     except Exception:  # pragma: no cover - engine init failures
         return
 
+    statements = []
     if inspector.has_table("clinic_inventory_movement"):
+        try:
+            existing_columns = {
+                column["name"] for column in inspector.get_columns("clinic_inventory_movement")
+            }
+        except Exception:  # pragma: no cover - inspector failures
+            existing_columns = set()
+    else:
+        try:
+            ClinicInventoryMovement.__table__.create(bind=db.engine, checkfirst=True)
+        except ProgrammingError:
+            # Another worker may have created the table already; nothing else to do.
+            pass
         _inventory_movement_table_checked = True
         return
 
-    try:
-        ClinicInventoryMovement.__table__.create(bind=db.engine, checkfirst=True)
-    except ProgrammingError:
-        # Another worker may have created the table already; nothing else to do.
-        pass
-    finally:
-        _inventory_movement_table_checked = True
+    if "reason" not in existing_columns:
+        statements.append("ALTER TABLE clinic_inventory_movement ADD COLUMN reason VARCHAR(255)")
+
+    for statement in statements:
+        try:
+            with db.engine.begin() as connection:
+                connection.execute(text(statement))
+        except ProgrammingError:
+            continue
+
+    _inventory_movement_table_checked = True
 
 # ----------------------------------------------------------------
 # 4)  AWS S3 helper (lazy)
@@ -6062,6 +6079,7 @@ def clinic_stock(clinica_id):
                     quantity_change=item.quantity,
                     quantity_before=0,
                     quantity_after=item.quantity,
+                    reason='Saldo inicial',
                 )
             )
         db.session.commit()
@@ -6114,11 +6132,19 @@ def update_inventory_item(item_id):
 
     wants_json = 'application/json' in request.headers.get('Accept', '')
 
-    old_quantity = item.quantity
-    qty = _optional_nonnegative_int(request.form.get('quantity'))
-    if qty is None:
-        qty = old_quantity
-    item.quantity = qty
+    if 'quantity' in request.form:
+        posted_quantity = request.form.get('quantity')
+        if posted_quantity not in (None, ''):
+            try:
+                requested_qty = int(posted_quantity)
+            except (TypeError, ValueError):
+                requested_qty = item.quantity
+            if requested_qty != item.quantity:
+                message = 'Atualize o saldo usando os botões de movimentação e informe um motivo.'
+                flash(message, 'warning')
+                if wants_json:
+                    return jsonify(success=False, message=message, category='warning'), 400
+                return redirect(url_for('clinic_detail', clinica_id=clinica.id) + '#estoque')
 
     new_min = _optional_nonnegative_int(request.form.get('min_quantity'))
     new_max = _optional_nonnegative_int(request.form.get('max_quantity'))
@@ -6134,19 +6160,76 @@ def update_inventory_item(item_id):
     item.min_quantity = new_min
     item.max_quantity = new_max
 
-    if item.quantity != old_quantity:
-        db.session.add(
-            ClinicInventoryMovement(
-                clinica_id=clinica.id,
-                item=item,
-                quantity_change=item.quantity - old_quantity,
-                quantity_before=old_quantity,
-                quantity_after=item.quantity,
-            )
-        )
-
     db.session.commit()
     message = 'Item atualizado.'
+    flash(message, 'success')
+    if wants_json:
+        return jsonify(success=True, message=message, category='success', quantity=item.quantity)
+    return redirect(url_for('clinic_detail', clinica_id=clinica.id) + '#estoque')
+
+
+@app.route('/inventory/<int:item_id>/movements', methods=['POST'])
+@login_required
+def create_inventory_movement(item_id):
+    item = ClinicInventoryItem.query.get_or_404(item_id)
+    clinica = item.clinica
+    is_owner = current_user.id == clinica.owner_id if current_user.is_authenticated else False
+    staff = None
+    if current_user.is_authenticated:
+        staff = ClinicStaff.query.filter_by(clinic_id=clinica.id, user_id=current_user.id).first()
+    has_perm = staff.can_manage_inventory if staff else False
+    if not (_is_admin() or is_owner or has_perm):
+        abort(403)
+
+    wants_json = 'application/json' in request.headers.get('Accept', '')
+
+    raw_qty = request.form.get('quantity_change')
+    try:
+        qty = abs(int(raw_qty)) if raw_qty not in (None, '') else 0
+    except (TypeError, ValueError):
+        qty = 0
+
+    direction = (request.form.get('direction') or 'in').lower()
+    if direction not in {'in', 'out'}:
+        direction = 'in'
+
+    reason = (request.form.get('reason') or '').strip()
+    if not reason:
+        message = 'Informe um motivo para a movimentação.'
+        flash(message, 'warning')
+        if wants_json:
+            return jsonify(success=False, message=message, category='warning'), 400
+        return redirect(url_for('clinic_detail', clinica_id=clinica.id) + '#estoque')
+
+    if qty <= 0:
+        message = 'Informe uma quantidade maior que zero.'
+        flash(message, 'warning')
+        if wants_json:
+            return jsonify(success=False, message=message, category='warning'), 400
+        return redirect(url_for('clinic_detail', clinica_id=clinica.id) + '#estoque')
+
+    delta = qty if direction == 'in' else -qty
+    new_quantity = item.quantity + delta
+    if new_quantity < 0:
+        message = 'Esta movimentação deixaria o saldo negativo.'
+        flash(message, 'danger')
+        if wants_json:
+            return jsonify(success=False, message=message, category='danger'), 400
+        return redirect(url_for('clinic_detail', clinica_id=clinica.id) + '#estoque')
+
+    movement = ClinicInventoryMovement(
+        clinica_id=clinica.id,
+        item=item,
+        quantity_change=delta,
+        quantity_before=item.quantity,
+        quantity_after=new_quantity,
+        reason=reason,
+    )
+    item.quantity = new_quantity
+    db.session.add_all([movement, item])
+    db.session.commit()
+
+    message = 'Movimentação registrada com sucesso.'
     flash(message, 'success')
     if wants_json:
         return jsonify(success=True, message=message, category='success', quantity=item.quantity)

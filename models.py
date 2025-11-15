@@ -850,6 +850,7 @@ class ClinicInventoryMovement(db.Model):
     quantity_change = db.Column(db.Integer, nullable=False)
     quantity_before = db.Column(db.Integer, nullable=False)
     quantity_after = db.Column(db.Integer, nullable=False)
+    reason = db.Column(db.String(255))
     created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
 
     clinica = db.relationship('Clinica', backref='inventory_movements')
