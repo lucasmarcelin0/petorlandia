@@ -14,6 +14,12 @@
 </div>
 
 <div class="border rounded p-3 mb-4 bg-light">
+<div class="d-flex justify-content-end mb-2">
+  <button id="toggle-novo-servico-btn" type="button" class="btn btn-outline-primary btn-sm" onclick="toggleNovoServico()">
+    ➕ Novo item de tabela
+  </button>
+</div>
+<div id="novo-servico-container" class="border rounded p-3 mb-4 bg-light d-none">
   <form id="form-servico" class="row g-2 align-items-end" onsubmit="event.preventDefault(); criarServico();">
     <div class="col-md-5">
       <label for="descricao-servico" class="form-label">Descrição do item</label>
@@ -112,6 +118,17 @@
 const consultaId = {{ consulta.id }};
 const payerTypeLabels = { plan: 'Plano', particular: 'Particular' };
 let currentPayerType = '{{ default_payer_type }}';
+
+function toggleNovoServico() {
+  const container = document.getElementById('novo-servico-container');
+  const button = document.getElementById('toggle-novo-servico-btn');
+  container.classList.toggle('d-none');
+  if (button) {
+    button.textContent = container.classList.contains('d-none')
+      ? '➕ Novo item de tabela'
+      : '➖ Fechar cadastro';
+  }
+}
 
 async function criarServico() {
   const descricao = document.getElementById('descricao-servico').value.trim();
