@@ -67,7 +67,14 @@ globals().update({
     if name[:1].isupper()          # naive check: classes start with capital
 })
 
-from models import DataShareAccess, DataSharePartyType, DataShareRequest
+from models import (
+    DataShareAccess,
+    DataSharePartyType,
+    DataShareRequest,
+    PlantonistaEscala,
+    User,
+    Veterinario,
+)
 _config_utils_module_name = (
     f"{__package__}.config_utils" if __package__ else "config_utils"
 )
@@ -1227,6 +1234,7 @@ from forms import (
     OrcamentoForm,
     OrderItemForm,
     PJPaymentForm,
+    PlantonistaEscalaForm,
     ProductPhotoForm,
     ProductUpdateForm,
     RegistrationForm,
@@ -3168,6 +3176,9 @@ def contabilidade_pagamentos():
 
     requested_month = (request.args.get('mes') or '')[:7]
     requested_clinic_id = request.args.get('clinica_id', type=int)
+    raw_view_param = (request.args.get('aba') or request.args.get('view') or '').strip().lower()
+    allowed_views = {'geral', 'plantonistas'}
+    selected_view = raw_view_param if raw_view_param in allowed_views else 'geral'
     needs_redirect = False
 
     if selected_clinic_id:
@@ -3182,6 +3193,13 @@ def contabilidade_pagamentos():
     canonical_params = {'mes': context_month_value}
     if selected_clinic_id:
         canonical_params['clinica_id'] = selected_clinic_id
+    if selected_view != 'geral':
+        canonical_params['aba'] = selected_view
+
+    if raw_view_param and raw_view_param not in allowed_views:
+        needs_redirect = True
+    if 'view' in request.args:
+        needs_redirect = True
 
     if needs_redirect:
         return redirect(url_for('contabilidade_pagamentos', **canonical_params))
@@ -3195,6 +3213,14 @@ def contabilidade_pagamentos():
 
     start_datetime = datetime.combine(start_date, time.min)
     end_datetime = datetime.combine(end_date, time.min)
+
+    plantonista_escalas: list[PlantonistaEscala] = []
+    plantonista_totals = {
+        'horas_previstas': Decimal('0.00'),
+        'custo_previsto': Decimal('0.00'),
+        'custo_pago': Decimal('0.00'),
+    }
+    plantonista_medicos: list[tuple[str, str]] = []
 
     def _coerce_decimal(value):
         if value is None:
@@ -3389,6 +3415,30 @@ def contabilidade_pagamentos():
 
         budget_entries.sort(key=lambda entry: entry['reference_date'], reverse=True)
 
+    if selected_view == 'plantonistas' and selected_clinic_id:
+        plantonista_escalas = (
+            PlantonistaEscala.query.filter(
+                PlantonistaEscala.clinic_id == selected_clinic_id,
+                PlantonistaEscala.inicio >= start_datetime,
+                PlantonistaEscala.inicio < end_datetime,
+            )
+            .options(
+                selectinload(PlantonistaEscala.pj_payment),
+                selectinload(PlantonistaEscala.medico).joinedload(Veterinario.user),
+            )
+            .order_by(PlantonistaEscala.inicio.asc())
+            .all()
+        )
+
+        unique_medicos = {}
+        for escala in plantonista_escalas:
+            plantonista_totals['horas_previstas'] += escala.horas_previstas or Decimal('0.00')
+            plantonista_totals['custo_previsto'] += escala.valor_previsto or Decimal('0.00')
+            plantonista_totals['custo_pago'] += escala.valor_pago or Decimal('0.00')
+            if escala.medico_id and escala.medico_nome:
+                unique_medicos[str(escala.medico_id)] = escala.medico_nome
+        plantonista_medicos = sorted(unique_medicos.items(), key=lambda item: item[1].lower())
+
     total_pago = sum((payment.valor or Decimal('0.00')) for payment in payments if payment.status == 'pago')
     total_pendente = sum((payment.valor or Decimal('0.00')) for payment in payments if payment.status == 'pendente')
 
@@ -3408,7 +3458,29 @@ def contabilidade_pagamentos():
         budget_entries=budget_entries,
         budget_totals=budget_totals,
         budget_status_summary=ACCOUNTING_BUDGET_STATUS_SUMMARY,
+        selected_view=selected_view,
+        plantonista_escalas=plantonista_escalas,
+        plantonista_totals=plantonista_totals,
+        plantonista_medicos=plantonista_medicos,
+        plantonista_status_labels=dict(PLANTONISTA_ESCALA_STATUS_CHOICES),
+        plantonista_status_styles=PLANTONISTA_STATUS_STYLES,
     )
+
+
+def _populate_plantonista_form_choices(form, clinics):
+    form.clinic_id.choices = [
+        (clinic.id, clinic.nome or f'Clínica #{clinic.id}') for clinic in clinics
+    ]
+    medico_choices = [(0, 'Sem vínculo direto')]
+    medicos = (
+        Veterinario.query.join(User)
+        .order_by(User.name.asc())
+        .all()
+    )
+    for medico in medicos:
+        label = medico.user.name if medico.user else f'Veterinário #{medico.id}'
+        medico_choices.append((medico.id, label))
+    form.medico_id.choices = medico_choices
 
 
 @app.route('/contabilidade/pagamentos/novo', methods=['GET', 'POST'])
@@ -3578,6 +3650,245 @@ def contabilidade_pagamentos_marcar_pago(payment_id):
 
     month_value = request.args.get('mes') or _format_month_parameter(payment.data_servico)
     return redirect(url_for('contabilidade_pagamentos', clinica_id=payment.clinic_id, mes=month_value))
+
+
+@app.route('/contabilidade/pagamentos/plantonistas/novo', methods=['GET', 'POST'])
+@login_required
+def contabilidade_plantonistas_novo():
+    _ensure_accounting_access()
+    clinics, accessible_ids = _accounting_accessible_clinics()
+    if not clinics:
+        flash('Associe-se a uma clínica antes de cadastrar plantões.', 'warning')
+        return redirect(url_for('contabilidade_pagamentos', aba='plantonistas'))
+
+    form = PlantonistaEscalaForm()
+    _populate_plantonista_form_choices(form, clinics)
+    default_clinic_id = request.args.get('clinica_id', type=int) or clinics[0].id
+    if request.method == 'GET':
+        form.clinic_id.data = default_clinic_id
+        form.status.data = 'agendado'
+        form.data_inicio.data = date.today()
+
+    if form.validate_on_submit():
+        clinic_id = form.clinic_id.data
+        if clinic_id not in accessible_ids and not _is_admin():
+            abort(403)
+
+        medico_id = form.medico_id.data or None
+        if medico_id == 0:
+            medico_id = None
+        medico_nome = (form.medico_nome.data or '').strip()
+        medico_cnpj = ''.join(ch for ch in (form.medico_cnpj.data or '') if ch.isdigit()) or None
+
+        inicio = datetime.combine(form.data_inicio.data, form.hora_inicio.data)
+        fim = datetime.combine(form.data_inicio.data, form.hora_fim.data)
+        if fim <= inicio:
+            fim += timedelta(days=1)
+
+        escala = PlantonistaEscala(
+            clinic_id=clinic_id,
+            medico_id=medico_id,
+            medico_nome=medico_nome,
+            medico_cnpj=medico_cnpj,
+            turno=form.turno.data.strip(),
+            inicio=inicio,
+            fim=fim,
+            valor_previsto=form.valor_previsto.data,
+            status=form.status.data,
+            nota_fiscal_recebida=form.nota_fiscal_recebida.data,
+            retencao_validada=form.retencao_validada.data,
+            observacoes=(form.observacoes.data or '').strip() or None,
+        )
+        if escala.status == 'realizado' and escala.realizado_em is None:
+            escala.realizado_em = datetime.utcnow()
+
+        db.session.add(escala)
+        db.session.commit()
+
+        flash('Plantão cadastrado com sucesso.', 'success')
+        return redirect(
+            url_for(
+                'contabilidade_pagamentos',
+                clinica_id=clinic_id,
+                mes=_format_month_parameter(inicio),
+                aba='plantonistas',
+            )
+        )
+
+    cancel_url = url_for(
+        'contabilidade_pagamentos',
+        clinica_id=default_clinic_id,
+        mes=request.args.get('mes') or _format_month_parameter(date.today()),
+        aba='plantonistas',
+    )
+
+    return render_template(
+        'contabilidade/plantonistas_form.html',
+        form=form,
+        form_title='Cadastrar plantão',
+        submit_label='Salvar plantão',
+        cancel_url=cancel_url,
+    )
+
+
+@app.route('/contabilidade/pagamentos/plantonistas/<int:escala_id>/editar', methods=['GET', 'POST'])
+@login_required
+def contabilidade_plantonistas_editar(escala_id):
+    _ensure_accounting_access()
+    escala = PlantonistaEscala.query.get_or_404(escala_id)
+    clinics, accessible_ids = _accounting_accessible_clinics()
+    if escala.clinic_id not in accessible_ids and not _is_admin():
+        abort(403)
+
+    form = PlantonistaEscalaForm(obj=escala)
+    _populate_plantonista_form_choices(form, clinics or [escala.clinic])
+
+    if request.method == 'GET':
+        form.clinic_id.data = escala.clinic_id
+        form.medico_id.data = escala.medico_id or 0
+        form.medico_nome.data = escala.medico_nome
+        form.medico_cnpj.data = escala.medico_cnpj
+        form.turno.data = escala.turno
+        form.data_inicio.data = escala.inicio.date()
+        form.hora_inicio.data = escala.inicio.time().replace(microsecond=0)
+        form.hora_fim.data = escala.fim.time().replace(microsecond=0)
+        form.valor_previsto.data = escala.valor_previsto
+        form.status.data = escala.status
+        form.nota_fiscal_recebida.data = escala.nota_fiscal_recebida
+        form.retencao_validada.data = escala.retencao_validada
+        form.observacoes.data = escala.observacoes
+
+    if form.validate_on_submit():
+        clinic_id = form.clinic_id.data
+        if clinic_id not in accessible_ids and not _is_admin():
+            abort(403)
+
+        medico_id = form.medico_id.data or None
+        if medico_id == 0:
+            medico_id = None
+        escala.clinic_id = clinic_id
+        escala.medico_id = medico_id
+        escala.medico_nome = (form.medico_nome.data or '').strip()
+        escala.medico_cnpj = ''.join(ch for ch in (form.medico_cnpj.data or '') if ch.isdigit()) or None
+        escala.turno = form.turno.data.strip()
+        inicio = datetime.combine(form.data_inicio.data, form.hora_inicio.data)
+        fim = datetime.combine(form.data_inicio.data, form.hora_fim.data)
+        if fim <= inicio:
+            fim += timedelta(days=1)
+        escala.inicio = inicio
+        escala.fim = fim
+        escala.valor_previsto = form.valor_previsto.data
+        escala.status = form.status.data
+        if escala.status == 'realizado' and not escala.realizado_em:
+            escala.realizado_em = datetime.utcnow()
+        elif escala.status != 'realizado':
+            escala.realizado_em = None
+        escala.nota_fiscal_recebida = form.nota_fiscal_recebida.data
+        escala.retencao_validada = form.retencao_validada.data
+        escala.observacoes = (form.observacoes.data or '').strip() or None
+
+        db.session.commit()
+        flash('Plantão atualizado com sucesso.', 'success')
+        return redirect(
+            url_for(
+                'contabilidade_pagamentos',
+                clinica_id=clinic_id,
+                mes=_format_month_parameter(escala.inicio),
+                aba='plantonistas',
+            )
+        )
+
+    cancel_url = url_for(
+        'contabilidade_pagamentos',
+        clinica_id=escala.clinic_id,
+        mes=request.args.get('mes') or _format_month_parameter(escala.inicio),
+        aba='plantonistas',
+    )
+
+    return render_template(
+        'contabilidade/plantonistas_form.html',
+        form=form,
+        form_title='Editar plantão',
+        submit_label='Atualizar plantão',
+        cancel_url=cancel_url,
+        editing=True,
+    )
+
+
+@app.route('/contabilidade/pagamentos/plantao/<int:escala_id>/confirmar', methods=['POST'])
+@login_required
+def contabilidade_plantao_confirmar(escala_id):
+    _ensure_accounting_access()
+    escala = PlantonistaEscala.query.get_or_404(escala_id)
+    _, accessible_ids = _accounting_accessible_clinics()
+    if escala.clinic_id not in accessible_ids and not _is_admin():
+        abort(403)
+
+    if escala.status != 'realizado':
+        escala.status = 'realizado'
+        escala.realizado_em = datetime.utcnow()
+        db.session.commit()
+        flash('Plantão confirmado como realizado.', 'success')
+    else:
+        flash('Plantão já estava marcado como realizado.', 'info')
+
+    month_value = _format_month_parameter(escala.inicio)
+    return redirect(
+        url_for(
+            'contabilidade_pagamentos',
+            clinica_id=escala.clinic_id,
+            mes=month_value,
+            aba='plantonistas',
+        )
+    )
+
+
+@app.route('/contabilidade/pagamentos/plantao/<int:escala_id>/gerar_pagamento', methods=['POST'])
+@login_required
+def contabilidade_plantao_gerar_pagamento(escala_id):
+    _ensure_accounting_access()
+    escala = PlantonistaEscala.query.get_or_404(escala_id)
+    _, accessible_ids = _accounting_accessible_clinics()
+    if escala.clinic_id not in accessible_ids and not _is_admin():
+        abort(403)
+
+    if escala.pj_payment_id:
+        flash('Este plantão já possui um pagamento vinculado.', 'info')
+    else:
+        if not escala.nota_fiscal_recebida or not escala.retencao_validada:
+            flash('Valide a nota fiscal e retenções antes de gerar o pagamento.', 'warning')
+        else:
+            cnpj = ''.join(ch for ch in (escala.medico_cnpj or '') if ch.isdigit())
+            if len(cnpj) != 14:
+                flash('Informe um CNPJ válido para o médico antes de gerar o pagamento.', 'warning')
+            else:
+                payment = PJPayment(
+                    clinic_id=escala.clinic_id,
+                    prestador_nome=escala.medico_nome,
+                    prestador_cnpj=cnpj,
+                    nota_fiscal_numero=None,
+                    valor=escala.valor_previsto,
+                    data_servico=escala.inicio.date(),
+                    data_pagamento=date.today() if escala.status == 'realizado' else None,
+                    observacoes=escala.observacoes,
+                )
+                payment.status = 'pago' if payment.data_pagamento else 'pendente'
+                db.session.add(payment)
+                db.session.flush()
+                escala.pj_payment = payment
+                db.session.flush()
+                _sync_pj_payment_classification(payment)
+                db.session.commit()
+                flash('Pagamento PJ gerado a partir do plantão.', 'success')
+
+    return redirect(
+        url_for(
+            'contabilidade_pagamentos',
+            clinica_id=escala.clinic_id,
+            mes=_format_month_parameter(escala.inicio),
+            aba='plantonistas',
+        )
+    )
 
 
 @app.route('/contabilidade/obrigacoes')
@@ -4899,6 +5210,13 @@ ACCOUNTING_BUDGET_STATUS_SUMMARY = {
     'pendente': {'label': 'Pendentes'},
     'pago': {'label': 'Pagos'},
     'cancelado': {'label': 'Cancelados'},
+}
+
+PLANTONISTA_STATUS_STYLES = {
+    'agendado': 'badge bg-info text-dark',
+    'confirmado': 'badge bg-primary',
+    'realizado': 'badge bg-success',
+    'cancelado': 'badge bg-secondary',
 }
 
 

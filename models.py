@@ -1009,6 +1009,72 @@ class PJPayment(db.Model):
     def __repr__(self):
         return f"<PJPayment {self.prestador_nome} R$ {self.valor}>"
 
+
+PLANTONISTA_ESCALA_STATUS_CHOICES = [
+    ('agendado', 'Agendado'),
+    ('confirmado', 'Confirmado'),
+    ('realizado', 'Realizado'),
+    ('cancelado', 'Cancelado'),
+]
+
+
+class PlantonistaEscala(db.Model):
+    __tablename__ = 'plantonista_escalas'
+    __table_args__ = (
+        db.CheckConstraint('valor_previsto >= 0', name='ck_plantonista_valor_positive'),
+    )
+
+    id = db.Column(db.Integer, primary_key=True)
+    clinic_id = db.Column(db.Integer, db.ForeignKey('clinica.id'), nullable=False, index=True)
+    medico_id = db.Column(db.Integer, db.ForeignKey('veterinario.id'), nullable=True, index=True)
+    medico_nome = db.Column(db.String(150), nullable=False)
+    medico_cnpj = db.Column(db.String(20), nullable=True)
+    turno = db.Column(db.String(80), nullable=False)
+    inicio = db.Column(db.DateTime, nullable=False, index=True)
+    fim = db.Column(db.DateTime, nullable=False)
+    valor_previsto = db.Column(db.Numeric(14, 2), nullable=False)
+    status = db.Column(db.String(20), nullable=False, default='agendado')
+    nota_fiscal_recebida = db.Column(db.Boolean, nullable=False, default=False)
+    retencao_validada = db.Column(db.Boolean, nullable=False, default=False)
+    observacoes = db.Column(db.Text, nullable=True)
+    realizado_em = db.Column(db.DateTime, nullable=True)
+    pj_payment_id = db.Column(db.Integer, db.ForeignKey('pj_payments.id'), nullable=True)
+    created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    clinic = db.relationship(
+        'Clinica',
+        backref=db.backref('plantonista_escalas', cascade='all, delete-orphan', lazy=True),
+    )
+    medico = db.relationship('Veterinario', backref=db.backref('escalas', lazy=True))
+    pj_payment = db.relationship('PJPayment', backref=db.backref('plantao_escalas', lazy=True))
+
+    @hybrid_property
+    def horas_previstas(self):
+        if not self.inicio or not self.fim:
+            return Decimal('0.00')
+        total_seconds = Decimal((self.fim - self.inicio).total_seconds())
+        horas = total_seconds / Decimal('3600')
+        return horas.quantize(Decimal('0.01'))
+
+    @property
+    def valor_pago(self):
+        if self.pj_payment and self.pj_payment.status == 'pago':
+            return self.pj_payment.valor or Decimal('0.00')
+        return Decimal('0.00')
+
+    @property
+    def atrasado(self):
+        if self.status in {'realizado', 'cancelado'}:
+            return False
+        referencia = self.fim or self.inicio
+        if not referencia:
+            return False
+        return referencia < datetime.utcnow()
+
+    def __repr__(self):
+        return f"<PlantonistaEscala {self.medico_nome} {self.turno}>"
+
 # Associação many-to-many entre veterinário e especialidade
 veterinario_especialidade = db.Table(
     'veterinario_especialidade',
