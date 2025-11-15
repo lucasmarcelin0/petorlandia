@@ -1042,6 +1042,7 @@ class PlantonistaEscala(db.Model):
     turno = db.Column(db.String(80), nullable=False)
     inicio = db.Column(db.DateTime, nullable=False)
     fim = db.Column(db.DateTime, nullable=False)
+    plantao_horas = db.Column(db.Numeric(5, 2), nullable=True)
     valor_previsto = db.Column(db.Numeric(14, 2), nullable=False)
     status = db.Column(db.String(20), nullable=False, default='agendado')
     nota_fiscal_recebida = db.Column(db.Boolean, nullable=False, default=False)
@@ -1061,6 +1062,8 @@ class PlantonistaEscala(db.Model):
 
     @hybrid_property
     def horas_previstas(self):
+        if self.plantao_horas is not None:
+            return Decimal(str(self.plantao_horas))
         if not self.inicio or not self.fim:
             return Decimal('0.00')
         total_seconds = Decimal((self.fim - self.inicio).total_seconds())
