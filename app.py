@@ -2726,6 +2726,46 @@ def _sync_pj_payment_classification(payment):
     db.session.add(classification)
 
 
+_PAYMENT_STATUS_ALIASES = {
+    'pendente': 'pending',
+    'pending': 'pending',
+    'in_process': 'pending',
+    'in_mediation': 'pending',
+    'aguardando': 'pending',
+    'pago': 'paid',
+    'paid': 'paid',
+    'success': 'paid',
+    'approved': 'paid',
+    'authorized': 'paid',
+    'completed': 'paid',
+    'falha': 'failed',
+    'falhou': 'failed',
+    'erro': 'failed',
+    'failed': 'failed',
+    'cancelado': 'failed',
+    'cancelled': 'failed',
+    'canceled': 'failed',
+    'rejected': 'failed',
+    'refunded': 'failed',
+    'expired': 'failed',
+    'charged_back': 'failed',
+    'rascunho': 'draft',
+    'draft': 'draft',
+}
+
+
+def _normalize_payment_status(raw_status: Optional[str]) -> str:
+    normalized = (raw_status or '').strip().lower()
+    return _PAYMENT_STATUS_ALIASES.get(normalized, normalized)
+
+
+def _normalize_external_payment_status(raw_status: Optional[str]) -> str:
+    normalized = _normalize_payment_status(raw_status)
+    if normalized in {'pending', 'paid', 'failed'}:
+        return normalized
+    return 'pending'
+
+
 def _sync_orcamento_payment_classification(record):
     """Create/update classified transactions for Orcamento or Bloco payments."""
 
@@ -2736,14 +2776,7 @@ def _sync_orcamento_payment_classification(record):
     if not clinic_id:
         return
 
-    status = (getattr(record, 'payment_status', None) or '').strip().lower()
-    status = {
-        'pendente': 'pending',
-        'pago': 'paid',
-        'cancelado': 'failed',
-        'cancelled': 'failed',
-        'canceled': 'failed',
-    }.get(status, status)
+    status = _normalize_payment_status(getattr(record, 'payment_status', None))
     raw_prefix = 'bloco_orcamento' if isinstance(record, BlocoOrcamento) else 'orcamento'
     raw_id = f"{raw_prefix}:{record.id}"
     origin = 'orcamento_payment'
@@ -3113,11 +3146,12 @@ def contabilidade_pagamentos():
         return 'pendente'
 
     def _humanize_payment_status(raw_status: Optional[str]) -> str:
-        if not raw_status or raw_status == 'draft':
+        normalized = _normalize_payment_status(raw_status)
+        if not normalized or normalized == 'draft':
             return 'Sem link'
         return ORCAMENTO_PAYMENT_STATUS_LABELS.get(
-            raw_status,
-            raw_status.replace('_', ' ').title(),
+            normalized,
+            normalized.replace('_', ' ').title(),
         )
 
     badge_by_status = {
@@ -12955,30 +12989,6 @@ def notificacoes_mercado_pago():
         except (ValueError, TypeError):
             orcamento_id = None
 
-    bloco_status_map = {
-        'approved': 'paid',
-        'authorized': 'paid',
-        'pending': 'pending',
-        'in_process': 'pending',
-        'in_mediation': 'pending',
-        'rejected': 'failed',
-        'cancelled': 'failed',
-        'refunded': 'failed',
-        'expired': 'failed',
-    }
-
-    orcamento_payment_map = {
-        'approved': 'paid',
-        'authorized': 'paid',
-        'pending': 'pending',
-        'in_process': 'pending',
-        'in_mediation': 'pending',
-        'rejected': 'failed',
-        'cancelled': 'failed',
-        'refunded': 'failed',
-        'expired': 'failed',
-    }
-
     try:
         with db.session.begin():
             pay = Payment.query.filter_by(external_reference=extref).first()
@@ -13003,19 +13013,20 @@ def notificacoes_mercado_pago():
                             status="pendente",
                         ))
 
+            normalized_status = _normalize_external_payment_status(status)
+
             if bloco:
-                bloco.payment_status = bloco_status_map.get(status, 'pending')
+                bloco.payment_status = normalized_status
                 _sync_orcamento_payment_classification(bloco)
 
             if orcamento:
-                new_payment_status = orcamento_payment_map.get(status)
-                if new_payment_status:
-                    orcamento.payment_status = new_payment_status
-                    if new_payment_status == 'paid':
-                        paid_at = _parse_mp_datetime(info.get('date_approved')) or datetime.utcnow()
-                        orcamento.paid_at = paid_at
-                    elif new_payment_status == 'failed':
-                        orcamento.paid_at = None
+                new_payment_status = normalized_status
+                orcamento.payment_status = new_payment_status
+                if new_payment_status == 'paid':
+                    paid_at = _parse_mp_datetime(info.get('date_approved')) or datetime.utcnow()
+                    orcamento.paid_at = paid_at
+                else:
+                    orcamento.paid_at = None
                 if status in {'pending', 'in_process', 'in_mediation'} and orcamento.status == 'draft':
                     orcamento.status = 'sent'
                 elif status in {'approved', 'authorized'}:
@@ -16752,6 +16763,8 @@ def atualizar_bloco_orcamento(bloco_id):
             )
         )
 
+    db.session.flush()
+    _sync_orcamento_payment_classification(bloco)
     db.session.commit()
 
     historico_html = _render_orcamento_history(bloco.animal, bloco.clinica_id)
