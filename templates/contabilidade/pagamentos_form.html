@@ -33,6 +33,11 @@
             {% for error in form.clinic_id.errors %}<div class="invalid-feedback d-block">{{ error }}</div>{% endfor %}
           </div>
           <div class="col-md-6">
+            <label class="form-label fw-semibold">{{ form.prestador_tipo.label }}</label>
+            {{ form.prestador_tipo(class="form-select" + (' is-invalid' if form.prestador_tipo.errors else '')) }}
+            {% for error in form.prestador_tipo.errors %}<div class="invalid-feedback d-block">{{ error }}</div>{% endfor %}
+          </div>
+          <div class="col-md-6">
             <label class="form-label fw-semibold">{{ form.prestador_nome.label }}</label>
             {{ form.prestador_nome(class="form-control" + (' is-invalid' if form.prestador_nome.errors else ''), placeholder="Nome completo ou razão social") }}
             {% for error in form.prestador_nome.errors %}<div class="invalid-feedback d-block">{{ error }}</div>{% endfor %}
@@ -64,6 +69,32 @@
             <label class="form-label fw-semibold">{{ form.valor.label }}</label>
             {{ form.valor(class="form-control" + (' is-invalid' if form.valor.errors else ''), placeholder="0,00") }}
             {% for error in form.valor.errors %}<div class="invalid-feedback d-block">{{ error }}</div>{% endfor %}
+          </div>
+          <div class="col-md-8">
+            <label class="form-label fw-semibold">{{ form.plantao_vinculado.label }}</label>
+            {{ form.plantao_vinculado(class="form-select" + (' is-invalid' if form.plantao_vinculado.errors else '')) }}
+            <small class="text-muted">Vincule um plantão existente para sincronizar o repasse.</small>
+            {% for error in form.plantao_vinculado.errors %}<div class="invalid-feedback d-block">{{ error }}</div>{% endfor %}
+          </div>
+          <div class="col-md-3">
+            <label class="form-label fw-semibold">{{ form.valor_por_hora.label }}</label>
+            {{ form.valor_por_hora(class="form-control" + (' is-invalid' if form.valor_por_hora.errors else ''), placeholder="0,00") }}
+            {% for error in form.valor_por_hora.errors %}<div class="invalid-feedback d-block">{{ error }}</div>{% endfor %}
+          </div>
+          <div class="col-md-3">
+            <label class="form-label fw-semibold">{{ form.horas_previstas.label }}</label>
+            {{ form.horas_previstas(class="form-control" + (' is-invalid' if form.horas_previstas.errors else ''), placeholder="0") }}
+            {% for error in form.horas_previstas.errors %}<div class="invalid-feedback d-block">{{ error }}</div>{% endfor %}
+          </div>
+          <div class="col-md-3">
+            <label class="form-label fw-semibold">{{ form.plantao_inicio.label }}</label>
+            {{ form.plantao_inicio(class="form-control" + (' is-invalid' if form.plantao_inicio.errors else ''), type="datetime-local") }}
+            {% for error in form.plantao_inicio.errors %}<div class="invalid-feedback d-block">{{ error }}</div>{% endfor %}
+          </div>
+          <div class="col-md-3">
+            <label class="form-label fw-semibold">{{ form.plantao_fim.label }}</label>
+            {{ form.plantao_fim(class="form-control" + (' is-invalid' if form.plantao_fim.errors else ''), type="datetime-local") }}
+            {% for error in form.plantao_fim.errors %}<div class="invalid-feedback d-block">{{ error }}</div>{% endfor %}
           </div>
           <div class="col-md-4">
             <label class="form-label fw-semibold">{{ form.data_servico.label }}</label>
