@@ -62,8 +62,9 @@
       {% if tutores_adicionados %}
         {% for tutor in tutores_adicionados %}
         {% set shared_access = shared_access_map.get(tutor.id) %}
+        {% set tutor_status = 'shared' if shared_access else ('professional' if tutor.worker|lower == 'veterinario' else 'internal') %}
         <div class="col-md-6 d-flex" data-name="{{ tutor.name|lower }}" data-date="{{ tutor.created_at.isoformat() if tutor.created_at else '' }}" data-cpf="{{ tutor.cpf or '' }}" data-phone="{{ tutor.phone or '' }}" {% if tutor.date_of_birth %}data-dob="{{ tutor.date_of_birth.isoformat() }}"{% endif %}>
-          <div class="card shadow-sm rounded-4 h-100 flex-fill position-relative border-0 overflow-hidden">
+          <div class="card shadow-sm rounded-4 h-100 flex-fill position-relative overflow-hidden profile-card profile-card--{{ tutor_status }}">
             {% if tutor.worker|lower == 'veterinario' %}
             <span class="badge bg-success position-absolute top-0 end-0 m-2">Veterinário</span>
             {% endif %}
@@ -87,42 +88,90 @@
                   <span class="badge text-bg-light border text-muted">Desde {{ tutor.created_at.strftime('%d/%m/%Y') }}</span>
                   {% endif %}
                 </div>
-                <p class="text-muted small mb-0">
+                <div class="status-chip-group d-flex flex-wrap gap-2">
                   {% if shared_access %}
-                    Dados compartilhados por {{ shared_access.source_clinic.nome if shared_access.source_clinic else 'outra clínica' }}
-                    {% if shared_access.expires_at %}
-                      (expira em {{ shared_access.expires_at.strftime('%d/%m/%Y') }})
-                    {% endif %}
+                    {% set source_name = shared_access.source_clinic.nome if shared_access.source_clinic else 'outra clínica' %}
+                    <span class="status-chip status-chip--shared">
+                      <i class="fa-solid fa-share-nodes"></i>
+                      <span>
+                        Compartilhado de {{ source_name }}
+                        {% if shared_access.expires_at %}
+                          – expira em {{ shared_access.expires_at.strftime('%d/%m/%Y') }}
+                        {% endif %}
+                      </span>
+                    </span>
                   {% else %}
-                    Tutor cadastrado na clínica
+                    <span class="status-chip status-chip--internal">
+                      <i class="fa-solid fa-building"></i>
+                      <span>Interno da clínica</span>
+                    </span>
                   {% endif %}
-                </p>
+                  {% if tutor.worker|lower == 'veterinario' %}
+                  <span class="status-chip status-chip--professional">
+                    <i class="fa-solid fa-user-tie"></i>
+                    <span>Profissional</span>
+                  </span>
+                  {% endif %}
+                </div>
               </div>
 
-              <ul class="list-unstyled profile-card-details mb-0">
-                <li>
-                  <i class="fa-solid fa-envelope"></i>
-                  <span>{{ tutor.email }}</span>
-                </li>
+              <div class="profile-card-contact-grid">
+                {% if tutor.email %}
+                <div class="contact-item">
+                  <div class="contact-icon">
+                    <i class="fa-solid fa-envelope"></i>
+                  </div>
+                  <div class="contact-content">
+                    <span class="contact-label">E-mail</span>
+                    <span class="contact-value">{{ tutor.email }}</span>
+                  </div>
+                  <div class="contact-actions">
+                    <a href="mailto:{{ tutor.email }}" class="contact-action-btn contact-action-btn--email" title="Enviar e-mail">
+                      <i class="fa-solid fa-paper-plane"></i>
+                    </a>
+                  </div>
+                </div>
+                {% endif %}
                 {% if tutor.phone %}
-                <li>
-                  <i class="fa-solid fa-phone"></i>
-                  <span>{{ tutor.phone }}</span>
-                </li>
+                {% set phone_digits = tutor.phone|replace(' ', '')|replace('(', '')|replace(')', '')|replace('-', '')|replace('.', '')|replace('+', '') %}
+                <div class="contact-item">
+                  <div class="contact-icon">
+                    <i class="fa-solid fa-phone"></i>
+                  </div>
+                  <div class="contact-content">
+                    <span class="contact-label">Telefone</span>
+                    <span class="contact-value">{{ tutor.phone }}</span>
+                  </div>
+                  <div class="contact-actions">
+                    <a href="https://wa.me/{{ phone_digits }}" target="_blank" rel="noopener" class="contact-action-btn contact-action-btn--whatsapp" title="Conversar no WhatsApp">
+                      <i class="fa-brands fa-whatsapp"></i>
+                    </a>
+                  </div>
+                </div>
                 {% endif %}
                 {% if tutor.cpf %}
-                <li>
-                  <i class="fa-solid fa-id-card"></i>
-                  <span>{{ tutor.cpf }}</span>
-                </li>
+                <div class="contact-item">
+                  <div class="contact-icon">
+                    <i class="fa-solid fa-id-card"></i>
+                  </div>
+                  <div class="contact-content">
+                    <span class="contact-label">CPF</span>
+                    <span class="contact-value">{{ tutor.cpf }}</span>
+                  </div>
+                </div>
                 {% endif %}
                 {% if tutor.worker|lower == 'veterinario' and tutor.veterinario and tutor.veterinario.specialties %}
-                <li>
-                  <i class="fa-solid fa-stethoscope"></i>
-                  <span>{{ tutor.veterinario.specialty_list }}</span>
-                </li>
+                <div class="contact-item">
+                  <div class="contact-icon">
+                    <i class="fa-solid fa-stethoscope"></i>
+                  </div>
+                  <div class="contact-content">
+                    <span class="contact-label">Especialidades</span>
+                    <span class="contact-value">{{ tutor.veterinario.specialty_list }}</span>
+                  </div>
+                </div>
                 {% endif %}
-              </ul>
+              </div>
             </div>
 
             <div class="card-footer bg-white border-0 pt-0 pb-4 px-4 mt-auto">
