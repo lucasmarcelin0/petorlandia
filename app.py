@@ -6878,6 +6878,20 @@ def _share_request_or_404(request_id):
     return share_request
 
 
+def _share_access_for_current_clinic(access_id):
+    clinic_id = current_user_clinic_id()
+    if not clinic_id:
+        abort(403)
+    access = DataShareAccess.query.get_or_404(access_id)
+    if (
+        access.granted_to_type != DataSharePartyType.clinic
+        or access.granted_to_id != clinic_id
+        or access.revoked_at is not None
+    ):
+        abort(404)
+    return access
+
+
 def _ensure_pending(share_request):
     if not share_request.is_pending():
         abort(400, description='Pedido já foi processado ou expirou.')
@@ -7008,6 +7022,72 @@ def share_request_detail(token):
         abort(404)
     return jsonify(_serialize_share_request(share_request))
 
+
+
+@app.route('/api/share-access/<int:access_id>/renew', methods=['POST'])
+@login_required
+def renew_share_access(access_id):
+    if not _can_request_share(current_user):
+        abort(403)
+    access = _share_access_for_current_clinic(access_id)
+    payload = request.get_json(silent=True) or {}
+    expires_days = _default_share_duration(payload.get('expires_in_days'))
+    access.expires_at = datetime.utcnow() + timedelta(days=expires_days)
+    new_reason = (payload.get('grant_reason') or '').strip()
+    if new_reason:
+        access.grant_reason = new_reason
+    access.granted_by = current_user.id
+    db.session.add(access)
+    _log_data_share(
+        access,
+        event_type='share_renewed',
+        resource_type='user',
+        resource_id=access.user_id,
+        actor=current_user,
+    )
+    if access.animal_id:
+        _log_data_share(
+            access,
+            event_type='share_renewed',
+            resource_type='animal',
+            resource_id=access.animal_id,
+            actor=current_user,
+        )
+    db.session.commit()
+    return jsonify(success=True, access=_serialize_share_access(access))
+
+
+@app.route('/api/share-access/<int:access_id>/revoke', methods=['POST'])
+@login_required
+def revoke_share_access(access_id):
+    if not _can_request_share(current_user):
+        abort(403)
+    access = _share_access_for_current_clinic(access_id)
+    payload = request.get_json(silent=True) or {}
+    reason = (payload.get('reason') or '').strip() or None
+    access.revoked_at = datetime.utcnow()
+    access.revoked_by = current_user.id
+    access.revoke_reason = reason
+    db.session.add(access)
+    _log_data_share(
+        access,
+        event_type='share_revoked',
+        resource_type='user',
+        resource_id=access.user_id,
+        actor=current_user,
+        notes=reason,
+    )
+    if access.animal_id:
+        _log_data_share(
+            access,
+            event_type='share_revoked',
+            resource_type='animal',
+            resource_id=access.animal_id,
+            actor=current_user,
+            notes=reason,
+        )
+    db.session.commit()
+    return jsonify(success=True, access=_serialize_share_access(access))
 
 
 @app.route('/deletar_tutor/<int:tutor_id>', methods=['POST'])
@@ -10180,6 +10260,73 @@ def _get_recent_animais(
     return pagination.items, pagination, resolved_scope
 
 
+def _hydrate_tutor_dashboard_metadata(tutors):
+    """Attach aggregated metadata for tutor listing cards."""
+
+    tutor_ids = [getattr(tutor, 'id', None) for tutor in tutors]
+    tutor_ids = [tid for tid in tutor_ids if tid]
+    if not tutor_ids:
+        return
+
+    animals_rows = (
+        db.session.query(Animal.user_id, func.count(Animal.id).label('animals_count'))
+        .filter(Animal.user_id.in_(tutor_ids))
+        .group_by(Animal.user_id)
+        .all()
+    )
+    animals_map = {row.user_id: row.animals_count for row in animals_rows}
+
+    last_visit_subquery = (
+        db.session.query(
+            Animal.user_id.label('tutor_id'),
+            Consulta.id.label('consulta_id'),
+            Consulta.animal_id.label('animal_id'),
+            Consulta.created_at.label('created_at'),
+            Animal.name.label('animal_name'),
+            func.row_number()
+            .over(
+                partition_by=Animal.user_id,
+                order_by=(Consulta.created_at.desc(), Consulta.id.desc()),
+            )
+            .label('row_number'),
+        )
+        .join(Consulta, Consulta.animal_id == Animal.id)
+        .filter(Animal.user_id.in_(tutor_ids))
+        .subquery()
+    )
+    last_visit_rows = (
+        db.session.query(last_visit_subquery)
+        .filter(last_visit_subquery.c.row_number == 1)
+        .all()
+    )
+    last_visit_map = {row.tutor_id: row for row in last_visit_rows}
+
+    pending_tutor_ids = {
+        row.user_id
+        for row in db.session.query(Payment.user_id)
+        .filter(
+            Payment.user_id.in_(tutor_ids),
+            Payment.status == PaymentStatus.PENDING,
+        )
+        .distinct()
+    }
+
+    for tutor in tutors:
+        tutor.animals_count = animals_map.get(tutor.id, 0)
+        last_visit = last_visit_map.get(tutor.id)
+        if last_visit:
+            tutor.last_visit = last_visit.created_at
+            tutor.last_visit_animal_id = last_visit.animal_id
+            tutor.last_visit_consulta_id = last_visit.consulta_id
+            tutor.last_visit_animal_name = last_visit.animal_name
+        else:
+            tutor.last_visit = None
+            tutor.last_visit_animal_id = None
+            tutor.last_visit_consulta_id = None
+            tutor.last_visit_animal_name = None
+        tutor.has_pending_items = tutor.id in pending_tutor_ids
+
+
 def _get_recent_tutores(
     scope,
     page,
@@ -10302,6 +10449,7 @@ def _get_recent_tutores(
     query = apply_search_filters(query)
     query = apply_sorting(query)
     pagination = query.paginate(page=page, per_page=per_page, error_out=False)
+    _hydrate_tutor_dashboard_metadata(pagination.items)
 
     return pagination.items, pagination, resolved_scope
 

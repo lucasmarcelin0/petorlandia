@@ -64,6 +64,43 @@
     }
   }
 
+  async function handleAccessAction(button, action) {
+    const accessId = button.dataset.shareAccessId;
+    if (!accessId) {
+      alert('Não foi possível identificar o compartilhamento.');
+      return;
+    }
+    const payload = {};
+    if (action === 'renew') {
+      const renewDays = prompt('Por quantos dias deseja renovar o acesso?', button.dataset.shareDuration || '30');
+      if (renewDays === null) {
+        return;
+      }
+      const normalized = Number(renewDays);
+      if (!Number.isNaN(normalized) && normalized > 0) {
+        payload.expires_in_days = normalized;
+      }
+      const reason = prompt('Deseja atualizar o motivo do acesso? (opcional)');
+      if (reason && reason.trim()) {
+        payload.grant_reason = reason.trim();
+      }
+    } else if (action === 'revoke') {
+      if (!confirm('Tem certeza que deseja revogar este acesso imediatamente?')) {
+        return;
+      }
+      const revokeReason = prompt('Deseja informar o motivo da revogação? (opcional)');
+      if (revokeReason && revokeReason.trim()) {
+        payload.reason = revokeReason.trim();
+      }
+    }
+    try {
+      await postJSON(`/api/share-access/${accessId}/${action}`, payload);
+      window.location.reload();
+    } catch (error) {
+      alert(error.message || 'Não foi possível completar a operação.');
+    }
+  }
+
   document.addEventListener('click', function (event) {
     const requestButton = event.target.closest('[data-share-request-button]');
     if (requestButton) {
@@ -81,6 +118,17 @@
     if (denyButton) {
       event.preventDefault();
       handleDecision(denyButton, 'deny');
+    }
+    const renewButton = event.target.closest('[data-share-renew]');
+    if (renewButton) {
+      event.preventDefault();
+      handleAccessAction(renewButton, 'renew');
+      return;
+    }
+    const revokeButton = event.target.closest('[data-share-revoke]');
+    if (revokeButton) {
+      event.preventDefault();
+      handleAccessAction(revokeButton, 'revoke');
     }
   });
 

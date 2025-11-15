@@ -99,6 +99,39 @@
                 </p>
               </div>
 
+              {% if shared_access %}
+              <div class="alert alert-warning border rounded-3 py-2 px-3 d-flex flex-column gap-2">
+                <div class="d-flex flex-column">
+                  <strong class="small">Dados compartilhados</strong>
+                  <span class="text-muted small">
+                    Concedido por {{ shared_access.source_clinic.nome if shared_access.source_clinic else 'clínica parceira' }}
+                    {% if shared_access.expires_at %}
+                      · expira em {{ shared_access.expires_at.strftime('%d/%m/%Y') }}
+                    {% else %}
+                      · sem data de expiração definida
+                    {% endif %}
+                  </span>
+                  {% if shared_access.grant_reason %}
+                  <span class="text-muted small">Motivo: {{ shared_access.grant_reason }}</span>
+                  {% endif %}
+                </div>
+                <div class="d-flex flex-wrap gap-2">
+                  <button type="button"
+                          class="btn btn-sm btn-outline-success"
+                          data-share-renew
+                          data-share-access-id="{{ shared_access.id }}">
+                    🔄 Renovar acesso
+                  </button>
+                  <button type="button"
+                          class="btn btn-sm btn-outline-danger"
+                          data-share-revoke
+                          data-share-access-id="{{ shared_access.id }}">
+                    ✋ Revogar acesso
+                  </button>
+                </div>
+              </div>
+              {% endif %}
+
               <ul class="list-unstyled profile-card-details mb-0">
                 <li>
                   <i class="fa-solid fa-envelope"></i>
@@ -123,6 +156,24 @@
                 </li>
                 {% endif %}
               </ul>
+
+              <div class="d-flex flex-wrap gap-2 small">
+                {% set animals_url = url_for('ficha_tutor', tutor_id=tutor.id) + '#animais' %}
+                <a href="{{ animals_url }}" class="badge text-bg-primary text-decoration-none">
+                  🐾 {{ tutor.animals_count or 0 }} pet{{ '' if (tutor.animals_count or 0) == 1 else 's' }}
+                </a>
+                {% if tutor.last_visit and tutor.last_visit_animal_id %}
+                  {% set consulta_url = url_for('consulta_direct', animal_id=tutor.last_visit_animal_id, c=tutor.last_visit_consulta_id) %}
+                  <a href="{{ consulta_url }}" class="badge text-bg-info text-decoration-none">
+                    🩺 Último atendimento {{ tutor.last_visit.strftime('%d/%m/%Y') }}
+                  </a>
+                {% else %}
+                  <span class="badge text-bg-light text-muted">🩺 Sem atendimentos recentes</span>
+                {% endif %}
+                {% if tutor.has_pending_items %}
+                <span class="badge text-bg-danger">⚠️ Pendências</span>
+                {% endif %}
+              </div>
             </div>
 
             <div class="card-footer bg-white border-0 pt-0 pb-4 px-4 mt-auto">
@@ -131,7 +182,7 @@
                 {% if tutor.worker|lower == 'veterinario' and tutor.veterinario %}
                 <a href="{{ url_for('edit_vet_specialties', veterinario_id=tutor.veterinario.id) }}" class="btn btn-sm btn-outline-primary flex-fill">🩺 Especialidades</a>
                 {% endif %}
-                {% if (viewer_clinic_id and tutor.clinica_id and tutor.clinica_id != viewer_clinic_id) or shared_access %}
+                {% if (viewer_clinic_id and tutor.clinica_id and tutor.clinica_id != viewer_clinic_id) and not shared_access %}
                 <button type="button"
                         class="btn btn-sm btn-outline-secondary flex-fill"
                         data-share-request-button

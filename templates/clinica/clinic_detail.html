@@ -242,6 +242,7 @@ document.addEventListener('DOMContentLoaded', function() {
 {% block scripts %}
 {{ super() }}
 <script type="module" src="{{ url_for('static', filename='appointments_table.js') }}"></script>
+<script src="{{ url_for('static', filename='share_requests.js') }}"></script>
 <script>
   document.addEventListener('DOMContentLoaded', function () {
     const storageKey = 'clinicActiveTab_{{ clinica.id }}';
