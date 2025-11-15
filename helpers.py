@@ -100,6 +100,12 @@ def has_professional_access(user=None) -> bool:
     if role in {'admin', 'gestor'}:
         return True
 
+    worker = (getattr(user, 'worker', None) or '').lower()
+    if worker in {'colaborador', 'staff', 'assistente'}:
+        # Colaboradores podem acessar mesmo antes de serem associados a uma
+        # clínica (ex.: testes que criam objetos sem flush prévio).
+        return True
+
     if has_veterinarian_profile(user):
         return True
 

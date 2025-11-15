@@ -49,6 +49,18 @@
             {% for error in form.nota_fiscal_numero.errors %}<div class="invalid-feedback d-block">{{ error }}</div>{% endfor %}
           </div>
           <div class="col-md-4">
+            <label class="form-label fw-semibold">{{ form.tipo_prestador.label }}</label>
+            {{ form.tipo_prestador(class="form-select" + (' is-invalid' if form.tipo_prestador.errors else '')) }}
+            <small class="text-muted">Classifique o profissional para relatórios segmentados.</small>
+            {% for error in form.tipo_prestador.errors %}<div class="invalid-feedback d-block">{{ error }}</div>{% endfor %}
+          </div>
+          <div class="col-md-4">
+            <label class="form-label fw-semibold">{{ form.plantao_horas.label }}</label>
+            {{ form.plantao_horas(class="form-control" + (' is-invalid' if form.plantao_horas.errors else ''), placeholder="Ex: 12" ) }}
+            <small class="text-muted">Opcional — use para controlar custo por hora.</small>
+            {% for error in form.plantao_horas.errors %}<div class="invalid-feedback d-block">{{ error }}</div>{% endfor %}
+          </div>
+          <div class="col-md-4">
             <label class="form-label fw-semibold">{{ form.valor.label }}</label>
             {{ form.valor(class="form-control" + (' is-invalid' if form.valor.errors else ''), placeholder="0,00") }}
             {% for error in form.valor.errors %}<div class="invalid-feedback d-block">{{ error }}</div>{% endfor %}

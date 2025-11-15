@@ -212,6 +212,22 @@ class PJPaymentForm(FlaskForm):
         render_kw={"placeholder": "00.000.000/0000-00"},
     )
     nota_fiscal_numero = StringField('Número da nota fiscal', validators=[Optional(), Length(max=80)])
+    tipo_prestador = SelectField(
+        'Tipo de prestador',
+        choices=[
+            ('plantonista', 'Plantonista'),
+            ('especialista', 'Especialista'),
+            ('demais_pj', 'Demais PJs'),
+        ],
+        default='especialista',
+        validators=[DataRequired(message='Selecione o tipo de prestador.')],
+    )
+    plantao_horas = DecimalField(
+        'Horas do plantão',
+        places=2,
+        validators=[Optional()],
+        render_kw={"min": "0", "step": "0.25"},
+    )
     valor = DecimalField(
         'Valor do pagamento',
         places=2,
@@ -235,6 +251,10 @@ class PJPaymentForm(FlaskForm):
     def validate_data_servico(self, field):
         if field.data and field.data > date.today():
             raise ValidationError('A data do serviço não pode estar no futuro.')
+
+    def validate_plantao_horas(self, field):
+        if field.data is not None and field.data <= 0:
+            raise ValidationError('Informe um número de horas maior que zero ou deixe em branco.')
 
 
 class AddToCartForm(FlaskForm):

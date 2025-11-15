@@ -1,6 +1,6 @@
 import os
 import sys
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from decimal import Decimal
 
 import pytest
@@ -105,6 +105,8 @@ def _create_clinic_with_data():
         prestador_nome="Vet Serviços",
         prestador_cnpj="12.345.678/0001-00",
         nota_fiscal_numero="NF-001",
+        tipo_prestador='especialista',
+        plantao_horas=Decimal('6.00'),
         valor=Decimal('12000.00'),
         data_servico=date(2024, 5, 12),
         data_pagamento=date(2024, 5, 15),
@@ -216,6 +218,7 @@ def test_classify_transactions_creates_service_and_product_entries(app):
         assert pj_payment.origin == "vet_payment"
         assert pj_payment.month == date(2024, 5, 1)
         assert pj_payment.value == Decimal('12000.00')
+        assert pj_payment.subcategory == 'especialista'
 
 
 def test_classify_transactions_upserts_existing_rows(app):
@@ -244,6 +247,26 @@ def test_classify_transactions_upserts_existing_rows(app):
         assert pj_entry.value == Decimal('12000.00')
 
 
+def test_classify_transactions_uses_tipo_prestador(app):
+    with app.app_context():
+        clinic = _create_clinic_with_data()
+        extra = PJPayment(
+            clinic_id=clinic.id,
+            prestador_nome="Equipe Plantão",
+            prestador_cnpj="98.765.432/0001-00",
+            tipo_prestador='plantonista',
+            valor=Decimal('3000.00'),
+            data_servico=date(2024, 5, 20),
+            status='pendente',
+        )
+        db.session.add(extra)
+        db.session.commit()
+
+        classify_transactions_for_month(clinic.id, date(2024, 5, 1))
+        entries = ClassifiedTransaction.query.filter_by(category='pagamento_pj').all()
+        assert any(entry.subcategory == 'plantonista' for entry in entries)
+
+
 def test_calculate_clinic_taxes_creates_record(app):
     with app.app_context():
         clinic = _create_clinic_with_data()
@@ -257,6 +280,33 @@ def test_calculate_clinic_taxes_creates_record(app):
         assert taxes.faixa_simples == 1
         assert taxes.fator_r == Decimal('54.4218')
         assert taxes.projecao_anual == Decimal('2646.00')
+
+
+def test_calculate_clinic_taxes_flags_plantonista_alert(app):
+    with app.app_context():
+        clinic = _create_clinic_with_data()
+        payment = PJPayment.query.first()
+        payment.valor = Decimal('5000.00')
+        payment.tipo_prestador = 'plantonista'
+        payment.data_pagamento = None
+        payment.status = 'pendente'
+        overdue_date = date.today() - timedelta(days=10)
+        payment.data_servico = overdue_date
+        payment.nota_fiscal_numero = None
+        db.session.commit()
+
+        month_start = overdue_date.replace(day=1)
+        classify_transactions_for_month(clinic.id, month_start)
+        taxes = calculate_clinic_taxes(clinic.id, month_start)
+        assert taxes.retencoes_pj == Decimal('250.00')
+
+        notices = ClinicNotification.query.filter_by(
+            clinic_id=clinic.id,
+            month=month_start,
+            title='Plantão pendente',
+        ).all()
+        assert notices
+        assert any('[PJPayment:' in (notice.message or '') for notice in notices)
 
 
 def test_calculate_clinic_taxes_updates_existing_record(app):
