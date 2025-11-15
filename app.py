@@ -3207,15 +3207,44 @@ def contabilidade_financeiro():
     )
 
 
-def _is_missing_pj_payments_error(exc: ProgrammingError) -> bool:
-    """Return True when the exception is about the pj_payments table not existing."""
+def _describe_pj_payments_schema_error(exc: ProgrammingError) -> Optional[tuple[str, str]]:
+    """Return log and user friendly messages for pj_payments schema issues."""
 
-    message = str(getattr(exc, "orig", exc)).lower()
-    return "pj_payments" in message and (
-        "does not exist" in message or
-        "undefinedtable" in message or
-        "no such table" in message
-    )
+    original_message = str(getattr(exc, "orig", exc))
+    normalized = original_message.lower()
+    if "pj_payments" not in normalized:
+        return None
+
+    if "column" in normalized and (
+        "does not exist" in normalized or "undefinedcolumn" in normalized
+    ):
+        column_name = None
+        column_match = re.search(
+            r"column\s+([\w\.\"]+)\s+(?:of\s+relation\s+[\w\"]+\s+)?does\s+not\s+exist",
+            original_message,
+            re.IGNORECASE,
+        )
+        if column_match:
+            identifier = column_match.group(1).strip('"')
+            column_name = identifier.split('.')[-1]
+        if not column_name:
+            column_name = 'tipo_prestador'
+        return (
+            "Coluna %s ausente na tabela pj_payments. Execute as migrações do banco para habilitar o módulo." % column_name,
+            "O módulo de pagamentos PJ ainda não está disponível porque a coluna %s da tabela pj_payments não existe. Execute as migrações do banco para adicioná-la." % column_name,
+        )
+
+    if (
+        "does not exist" in normalized
+        or "undefinedtable" in normalized
+        or "no such table" in normalized
+    ):
+        return (
+            "Tabela pj_payments ausente. Execute as migrações do banco para habilitar o módulo.",
+            "O módulo de pagamentos PJ ainda não está disponível porque a tabela pj_payments não existe. Execute as migrações do banco para criá-la.",
+        )
+
+    return None
 
 
 @app.route('/contabilidade/pagamentos')
@@ -3381,15 +3410,11 @@ def contabilidade_pagamentos():
             )
         except ProgrammingError as exc:
             db.session.rollback()
-            if _is_missing_pj_payments_error(exc):
-                current_app.logger.warning(
-                    "Tabela pj_payments ausente. Execute as migrações do banco para habilitar o módulo.",
-                    exc_info=exc,
-                )
-                payments_error = (
-                    "O módulo de pagamentos PJ ainda não está disponível porque a tabela pj_payments não existe. "
-                    "Execute as migrações do banco para criá-la."
-                )
+            schema_issue = _describe_pj_payments_schema_error(exc)
+            if schema_issue:
+                log_message, user_message = schema_issue
+                current_app.logger.warning(log_message, exc_info=exc)
+                payments_error = user_message
             else:
                 raise
 
