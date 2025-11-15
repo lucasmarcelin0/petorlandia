@@ -37,6 +37,10 @@ class Config:
     MERCADOPAGO_BINARY_MODE = bool(int(os.environ.get("MERCADOPAGO_BINARY_MODE", "0")))
     MERCADOPAGO_NOTIFICATION_URL = os.environ.get("MERCADOPAGO_NOTIFICATION_URL")
 
+    # URLs gerados com ``url_for(..., _external=True)`` agora usam HTTPS por padrão,
+    # garantindo que endpoints como o webhook do Mercado Pago sejam aceitos.
+    PREFERRED_URL_SCHEME = os.environ.get("PREFERRED_URL_SCHEME", "https")
+
     # Habilita validação de plano de saúde para agendamentos
     REQUIRE_HEALTH_SUBSCRIPTION_FOR_APPOINTMENT = bool(
         int(os.environ.get("REQUIRE_HEALTH_SUBSCRIPTION_FOR_APPOINTMENT", "0"))
