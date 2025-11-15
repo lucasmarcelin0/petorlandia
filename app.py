@@ -2738,6 +2738,12 @@ def _format_month_parameter(reference_date):
     return reference_date.replace(day=1).strftime('%Y-%m')
 
 
+_PJ_PAYMENT_CLASSIFICATION_SUBCATEGORY = {
+    'plantonista': 'plantonista',
+    'consultoria': 'consultoria',
+}
+
+
 def _sync_pj_payment_classification(payment):
     """Create or update the classified transaction entry for a PJ payment."""
 
@@ -2758,14 +2764,159 @@ def _sync_pj_payment_classification(payment):
         )
 
     description = f"Pagamento PJ - {payment.prestador_nome}"[:255]
+    tipo = (payment.tipo_prestador or 'prestador').strip().lower()
     classification.clinic_id = payment.clinic_id
     classification.category = 'pagamento_pj'
-    classification.subcategory = 'prestador_servico'
+    classification.subcategory = _PJ_PAYMENT_CLASSIFICATION_SUBCATEGORY.get(
+        tipo,
+        'prestador_servico',
+    )
     classification.description = description
     classification.value = payment.valor
     classification.date = entry_datetime
     classification.month = month_reference
     db.session.add(classification)
+
+
+def _describe_plantonista_escala(escala: 'PlantonistaEscala') -> str:
+    if not escala:
+        return ''
+    nome = escala.prestador_nome
+    if not nome and getattr(escala, 'veterinario', None):
+        nome = getattr(getattr(escala.veterinario, 'user', None), 'name', None) or f"Vet #{escala.veterinario.id}"
+    nome = nome or f"Escala #{escala.id}"
+    periodo = None
+    if escala.turno_inicio and escala.turno_fim:
+        periodo = f"{escala.turno_inicio.strftime('%d/%m %Hh')} - {escala.turno_fim.strftime('%d/%m %Hh')}"
+    valor = None
+    if escala.valor_previsto:
+        valor = f"Previsto R$ {Decimal(escala.valor_previsto).quantize(Decimal('0.01'))}"
+    parts = [part for part in (nome, periodo, valor) if part]
+    return ' • '.join(parts)
+
+
+def _plantonista_escalas_choices(clinic_id: Optional[int], ensure_id: Optional[int] = None):
+    base_choices = [(0, 'Sem escala vinculada')]
+    if not clinic_id:
+        return base_choices
+
+    query = PlantonistaEscala.query.filter_by(clinic_id=clinic_id).order_by(PlantonistaEscala.turno_inicio.desc())
+    escalas = query.limit(50).all()
+    seen_ids = {0}
+    for escala in escalas:
+        seen_ids.add(escala.id)
+        base_choices.append((escala.id, _describe_plantonista_escala(escala)))
+
+    if ensure_id and ensure_id not in seen_ids:
+        extra = PlantonistaEscala.query.get(ensure_id)
+        if extra and extra.clinic_id == clinic_id:
+            base_choices.append((extra.id, _describe_plantonista_escala(extra) + ' (atual)'))
+
+    return base_choices
+
+
+def _calculate_hours_between(start_dt: Optional[datetime], end_dt: Optional[datetime]) -> Optional[Decimal]:
+    if not start_dt or not end_dt:
+        return None
+    delta = end_dt - start_dt
+    if delta.total_seconds() <= 0:
+        return None
+    seconds = Decimal(delta.days * 86400 + delta.seconds)
+    seconds += Decimal(delta.microseconds) / Decimal('1000000')
+    hours = seconds / Decimal('3600')
+    return hours.quantize(Decimal('0.01'))
+
+
+def _determine_payment_total(form, horas_previstas: Optional[Decimal]) -> Optional[Decimal]:
+    tipo = (form.tipo_prestador.data or '').strip()
+    if tipo == 'plantonista' and form.valor_hora.data and horas_previstas:
+        return (form.valor_hora.data * horas_previstas).quantize(Decimal('0.01'))
+    return form.valor.data
+
+
+def _resolve_plantonista_selection(
+    form,
+    clinic_id: int,
+    *,
+    prestador_nome: str,
+    payment_status: str,
+    valor_previsto: Optional[Decimal],
+    observacoes: Optional[str],
+):
+    selected_id = form.plantonista_id.data or 0
+    if selected_id:
+        escala = PlantonistaEscala.query.get(selected_id)
+        if not escala or escala.clinic_id != clinic_id:
+            return None, 'A escala selecionada não pertence à clínica escolhida.'
+        return escala, None
+
+    if form.plantonista_turno_inicio.data and form.plantonista_turno_fim.data:
+        escala = PlantonistaEscala(
+            clinic_id=clinic_id,
+            prestador_nome=prestador_nome,
+            turno_inicio=form.plantonista_turno_inicio.data,
+            turno_fim=form.plantonista_turno_fim.data,
+            status='executado' if payment_status == 'pago' else 'previsto',
+            valor_previsto=valor_previsto or Decimal('0.00'),
+            observacoes=observacoes,
+        )
+        db.session.add(escala)
+        db.session.flush()
+        return escala, None
+
+    return None, None
+
+
+def _collect_pj_payment_attributes(form):
+    clinic_id = form.clinic_id.data
+    prestador_nome = (form.prestador_nome.data or '').strip()
+    prestador_cnpj = ''.join(ch for ch in (form.prestador_cnpj.data or '') if ch.isdigit())
+    nota_fiscal = (form.nota_fiscal_numero.data or '').strip() or None
+    data_servico = form.data_servico.data
+    data_pagamento = form.data_pagamento.data
+    status = 'pago' if data_pagamento else 'pendente'
+    observacoes = (form.observacoes.data or '').strip() or None
+    tipo = (form.tipo_prestador.data or 'prestador').strip()
+    valor_hora = form.valor_hora.data or None
+    horas_previstas = form.horas_previstas.data
+    if horas_previstas is None:
+        horas_previstas = _calculate_hours_between(
+            form.plantonista_turno_inicio.data,
+            form.plantonista_turno_fim.data,
+        ) or horas_previstas
+    retencao_obrigatoria = bool(form.retencao_obrigatoria.data)
+    valor_total = _determine_payment_total(form, horas_previstas) or Decimal('0.00')
+    valor_total = Decimal(valor_total).quantize(Decimal('0.01'))
+
+    escala = None
+    error = None
+    if tipo == 'plantonista':
+        escala, error = _resolve_plantonista_selection(
+            form,
+            clinic_id,
+            prestador_nome=prestador_nome,
+            payment_status=status,
+            valor_previsto=valor_total,
+            observacoes=observacoes,
+        )
+
+    payload = {
+        'clinic_id': clinic_id,
+        'prestador_nome': prestador_nome,
+        'prestador_cnpj': prestador_cnpj,
+        'nota_fiscal_numero': nota_fiscal,
+        'valor': valor_total,
+        'data_servico': data_servico,
+        'data_pagamento': data_pagamento,
+        'status': status,
+        'observacoes': observacoes,
+        'tipo_prestador': tipo,
+        'valor_hora': valor_hora,
+        'horas_previstas': horas_previstas,
+        'retencao_obrigatoria': retencao_obrigatoria,
+        'plantonista_escala': escala,
+    }
+    return payload, error
 
 
 _PAYMENT_STATUS_ALIASES = {
@@ -3426,37 +3577,33 @@ def contabilidade_pagamentos_novo():
     if request.method == 'GET':
         form.clinic_id.data = default_clinic_id
         form.data_servico.data = date.today()
+    selected_clinic_id = form.clinic_id.data or default_clinic_id
+    form.plantonista_id.choices = _plantonista_escalas_choices(
+        selected_clinic_id, ensure_id=form.plantonista_id.data
+    )
 
     if form.validate_on_submit():
         clinic_id = form.clinic_id.data
         if clinic_id not in accessible_ids:
             abort(403)
+        payload, error = _collect_pj_payment_attributes(form)
+        if error:
+            form.plantonista_id.errors.append(error)
+        else:
+            payment = PJPayment(**payload)
+            db.session.add(payment)
+            db.session.flush()
+            _sync_pj_payment_classification(payment)
+            db.session.commit()
 
-        payment = PJPayment(
-            clinic_id=clinic_id,
-            prestador_nome=form.prestador_nome.data.strip(),
-            prestador_cnpj=''.join(ch for ch in (form.prestador_cnpj.data or '') if ch.isdigit()),
-            nota_fiscal_numero=(form.nota_fiscal_numero.data or '').strip() or None,
-            valor=form.valor.data,
-            data_servico=form.data_servico.data,
-            data_pagamento=form.data_pagamento.data,
-            observacoes=(form.observacoes.data or '').strip() or None,
-        )
-        payment.status = 'pago' if payment.data_pagamento else 'pendente'
-
-        db.session.add(payment)
-        db.session.flush()
-        _sync_pj_payment_classification(payment)
-        db.session.commit()
-
-        flash('Pagamento PJ registrado com sucesso!', 'success')
-        return redirect(
-            url_for(
-                'contabilidade_pagamentos',
-                clinica_id=clinic_id,
-                mes=_format_month_parameter(payment.data_servico),
+            flash('Pagamento PJ registrado com sucesso!', 'success')
+            return redirect(
+                url_for(
+                    'contabilidade_pagamentos',
+                    clinica_id=clinic_id,
+                    mes=_format_month_parameter(payment.data_servico),
+                )
             )
-        )
 
     cancel_url = url_for(
         'contabilidade_pagamentos',
@@ -3491,34 +3638,35 @@ def contabilidade_pagamentos_editar(payment_id):
     form.clinic_id.choices = clinic_choices
     if request.method == 'GET':
         form.clinic_id.data = payment.clinic_id
+        form.plantonista_id.data = payment.plantonista_id or 0
+
+    selected_clinic_id = form.clinic_id.data or payment.clinic_id
+    ensure_choice_id = form.plantonista_id.data or payment.plantonista_id
+    form.plantonista_id.choices = _plantonista_escalas_choices(selected_clinic_id, ensure_id=ensure_choice_id)
 
     if form.validate_on_submit():
         clinic_id = form.clinic_id.data
         if clinic_id not in accessible_ids and not _is_admin():
             abort(403)
+        payload, error = _collect_pj_payment_attributes(form)
+        if error:
+            form.plantonista_id.errors.append(error)
+        else:
+            for key, value in payload.items():
+                setattr(payment, key, value)
 
-        payment.clinic_id = clinic_id
-        payment.prestador_nome = form.prestador_nome.data.strip()
-        payment.prestador_cnpj = ''.join(ch for ch in (form.prestador_cnpj.data or '') if ch.isdigit())
-        payment.nota_fiscal_numero = (form.nota_fiscal_numero.data or '').strip() or None
-        payment.valor = form.valor.data
-        payment.data_servico = form.data_servico.data
-        payment.data_pagamento = form.data_pagamento.data
-        payment.observacoes = (form.observacoes.data or '').strip() or None
-        payment.status = 'pago' if payment.data_pagamento else 'pendente'
+            db.session.flush()
+            _sync_pj_payment_classification(payment)
+            db.session.commit()
 
-        db.session.flush()
-        _sync_pj_payment_classification(payment)
-        db.session.commit()
-
-        flash('Pagamento PJ atualizado com sucesso!', 'success')
-        return redirect(
-            url_for(
-                'contabilidade_pagamentos',
-                clinica_id=clinic_id,
-                mes=_format_month_parameter(payment.data_servico),
+            flash('Pagamento PJ atualizado com sucesso!', 'success')
+            return redirect(
+                url_for(
+                    'contabilidade_pagamentos',
+                    clinica_id=clinic_id,
+                    mes=_format_month_parameter(payment.data_servico),
+                )
             )
-        )
 
     cancel_url = url_for(
         'contabilidade_pagamentos',

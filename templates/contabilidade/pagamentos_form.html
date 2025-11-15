@@ -33,36 +33,81 @@
             {% for error in form.clinic_id.errors %}<div class="invalid-feedback d-block">{{ error }}</div>{% endfor %}
           </div>
           <div class="col-md-6">
+            <label class="form-label fw-semibold">{{ form.tipo_prestador.label }}</label>
+            {{ form.tipo_prestador(class="form-select" + (' is-invalid' if form.tipo_prestador.errors else '')) }}
+            {% for error in form.tipo_prestador.errors %}<div class="invalid-feedback d-block">{{ error }}</div>{% endfor %}
+          </div>
+          <div class="col-md-6">
             <label class="form-label fw-semibold">{{ form.prestador_nome.label }}</label>
             {{ form.prestador_nome(class="form-control" + (' is-invalid' if form.prestador_nome.errors else ''), placeholder="Nome completo ou razão social") }}
             {% for error in form.prestador_nome.errors %}<div class="invalid-feedback d-block">{{ error }}</div>{% endfor %}
           </div>
-          <div class="col-md-4">
+          <div class="col-md-3">
             <label class="form-label fw-semibold">{{ form.prestador_cnpj.label }}</label>
             {{ form.prestador_cnpj(class="form-control" + (' is-invalid' if form.prestador_cnpj.errors else '')) }}
             <small class="text-muted">Informe os 14 dígitos (com ou sem máscara).</small>
             {% for error in form.prestador_cnpj.errors %}<div class="invalid-feedback d-block">{{ error }}</div>{% endfor %}
           </div>
-          <div class="col-md-4">
+          <div class="col-md-3">
             <label class="form-label fw-semibold">{{ form.nota_fiscal_numero.label }}</label>
             {{ form.nota_fiscal_numero(class="form-control" + (' is-invalid' if form.nota_fiscal_numero.errors else ''), placeholder="Ex: NF 12345") }}
             {% for error in form.nota_fiscal_numero.errors %}<div class="invalid-feedback d-block">{{ error }}</div>{% endfor %}
           </div>
-          <div class="col-md-4">
+          <div class="col-md-6">
+            <label class="form-label fw-semibold">{{ form.plantonista_id.label }}</label>
+            {{ form.plantonista_id(class="form-select" + (' is-invalid' if form.plantonista_id.errors else '')) }}
+            <small class="text-muted">Selecione uma escala existente ou preencha abaixo para registrar um novo plantão.</small>
+            {% for error in form.plantonista_id.errors %}<div class="invalid-feedback d-block">{{ error }}</div>{% endfor %}
+          </div>
+          <div class="col-md-3">
+            <label class="form-label fw-semibold">{{ form.plantonista_turno_inicio.label }}</label>
+            {{ form.plantonista_turno_inicio(class="form-control" + (' is-invalid' if form.plantonista_turno_inicio.errors else '')) }}
+            {% for error in form.plantonista_turno_inicio.errors %}<div class="invalid-feedback d-block">{{ error }}</div>{% endfor %}
+          </div>
+          <div class="col-md-3">
+            <label class="form-label fw-semibold">{{ form.plantonista_turno_fim.label }}</label>
+            {{ form.plantonista_turno_fim(class="form-control" + (' is-invalid' if form.plantonista_turno_fim.errors else '')) }}
+            {% for error in form.plantonista_turno_fim.errors %}<div class="invalid-feedback d-block">{{ error }}</div>{% endfor %}
+          </div>
+          <div class="col-md-3">
+            <label class="form-label fw-semibold">{{ form.horas_previstas.label }}</label>
+            {{ form.horas_previstas(class="form-control" + (' is-invalid' if form.horas_previstas.errors else ''), placeholder="Ex: 12") }}
+            {% for error in form.horas_previstas.errors %}<div class="invalid-feedback d-block">{{ error }}</div>{% endfor %}
+          </div>
+          <div class="col-md-3">
+            <label class="form-label fw-semibold">{{ form.valor_hora.label }}</label>
+            {{ form.valor_hora(class="form-control" + (' is-invalid' if form.valor_hora.errors else ''), placeholder="0,00") }}
+            {% for error in form.valor_hora.errors %}<div class="invalid-feedback d-block">{{ error }}</div>{% endfor %}
+          </div>
+          <div class="col-md-3">
             <label class="form-label fw-semibold">{{ form.valor.label }}</label>
             {{ form.valor(class="form-control" + (' is-invalid' if form.valor.errors else ''), placeholder="0,00") }}
+            <small class="text-muted">Quando houver valor/hora e horas, o total é calculado automaticamente.</small>
             {% for error in form.valor.errors %}<div class="invalid-feedback d-block">{{ error }}</div>{% endfor %}
           </div>
-          <div class="col-md-4">
+          <div class="col-md-3">
             <label class="form-label fw-semibold">{{ form.data_servico.label }}</label>
             {{ form.data_servico(class="form-control" + (' is-invalid' if form.data_servico.errors else ''), type="date") }}
             {% for error in form.data_servico.errors %}<div class="invalid-feedback d-block">{{ error }}</div>{% endfor %}
           </div>
-          <div class="col-md-4">
+          <div class="col-md-3">
             <label class="form-label fw-semibold">{{ form.data_pagamento.label }}</label>
             {{ form.data_pagamento(class="form-control" + (' is-invalid' if form.data_pagamento.errors else ''), type="date") }}
             <small class="text-muted">Ao informar a data, o status será marcado como pago.</small>
             {% for error in form.data_pagamento.errors %}<div class="invalid-feedback d-block">{{ error }}</div>{% endfor %}
+          </div>
+          <div class="col-md-3">
+            <label class="form-label fw-semibold d-flex align-items-center gap-2">
+              {{ form.retencao_obrigatoria.label }}
+              <span class="text-muted" data-bs-toggle="tooltip" title="Use quando a clínica precisar reter impostos obrigatórios (ISS/INSS) na fonte.">
+                <i class="fas fa-info-circle"></i>
+              </span>
+            </label>
+            <div class="form-check form-switch">
+              {{ form.retencao_obrigatoria(class="form-check-input" + (' is-invalid' if form.retencao_obrigatoria.errors else '')) }}
+              <label class="form-check-label">Marque quando houver retenção contratual.</label>
+            </div>
+            {% for error in form.retencao_obrigatoria.errors %}<div class="invalid-feedback d-block">{{ error }}</div>{% endfor %}
           </div>
           <div class="col-12">
             <label class="form-label fw-semibold">{{ form.observacoes.label }}</label>

@@ -987,6 +987,27 @@ class PJPayment(db.Model):
         default='pendente',
         server_default='pendente',
     )
+    tipo_prestador = db.Column(
+        db.String(40),
+        nullable=False,
+        default='prestador',
+        server_default='prestador',
+        index=True,
+    )
+    plantonista_id = db.Column(
+        db.Integer,
+        db.ForeignKey('plantonista_escala.id'),
+        nullable=True,
+        index=True,
+    )
+    horas_previstas = db.Column(db.Numeric(6, 2), nullable=True)
+    valor_hora = db.Column(db.Numeric(10, 2), nullable=True)
+    retencao_obrigatoria = db.Column(
+        db.Boolean,
+        nullable=False,
+        default=False,
+        server_default='false',
+    )
     observacoes = db.Column(db.Text, nullable=True)
     created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
     updated_at = db.Column(
@@ -1002,12 +1023,53 @@ class PJPayment(db.Model):
         'Clinica',
         backref=db.backref('pj_payments', cascade='all, delete-orphan', lazy=True),
     )
+    plantonista_escala = db.relationship(
+        'PlantonistaEscala',
+        back_populates='pj_payment',
+        foreign_keys=[plantonista_id],
+    )
 
     def is_paid(self):
         return self.status == 'pago'
 
     def __repr__(self):
         return f"<PJPayment {self.prestador_nome} R$ {self.valor}>"
+
+
+class PlantonistaEscala(db.Model):
+    __tablename__ = 'plantonista_escala'
+
+    id = db.Column(db.Integer, primary_key=True)
+    clinic_id = db.Column(db.Integer, db.ForeignKey('clinica.id'), nullable=False, index=True)
+    veterinario_id = db.Column(db.Integer, db.ForeignKey('veterinario.id'), nullable=True, index=True)
+    prestador_nome = db.Column(db.String(150), nullable=True)
+    turno_inicio = db.Column(db.DateTime, nullable=False, index=True)
+    turno_fim = db.Column(db.DateTime, nullable=False, index=True)
+    status = db.Column(
+        db.String(40),
+        nullable=False,
+        default='executado',
+        server_default='executado',
+        index=True,
+    )
+    valor_previsto = db.Column(
+        db.Numeric(14, 2),
+        nullable=False,
+        default=Decimal('0.00'),
+        server_default='0.00',
+    )
+    observacoes = db.Column(db.Text, nullable=True)
+
+    clinic = db.relationship(
+        'Clinica',
+        backref=db.backref('plantonista_escalas', cascade='all, delete-orphan', lazy=True),
+    )
+    veterinario = db.relationship('Veterinario', backref=db.backref('plantonista_escalas', lazy=True))
+    pj_payment = db.relationship('PJPayment', back_populates='plantonista_escala', uselist=False)
+
+    def __repr__(self):
+        nome = self.prestador_nome or getattr(self.veterinario, 'id', 'Sem nome')
+        return f"<PlantonistaEscala {nome} {self.turno_inicio:%Y-%m-%d %H:%M}>"
 
 # Associação many-to-many entre veterinário e especialidade
 veterinario_especialidade = db.Table(
