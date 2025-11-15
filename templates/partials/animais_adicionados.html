@@ -9,6 +9,8 @@
 {% set current_sort = animal_sort if animal_sort is defined else request.args.get(sort_param, 'date_desc') %}
 {% set current_page = pagination.page if pagination else request.args.get(page_param, 1, type=int) %}
 {% set fetch_url = fetch_url|default(url_for('novo_animal')) %}
+{% set can_create_animals = can_create_animals|default(pode_editar|default(False)) %}
+{% set new_animal_url = new_animal_url|default(url_for('novo_animal')) %}
 {% set card_block %}
 <div class="card shadow-sm border-0 rounded-4 h-100 d-flex flex-column"
      data-listing-panel="animals"
@@ -27,14 +29,23 @@
         <h4 class="mb-1">🐾 Animais</h4>
         <p class="text-muted small mb-0">Visualize, filtre e organize rapidamente os pets cadastrados.</p>
       </div>
-      {% if scope is defined %}
-      <div class="btn-group btn-group-sm">
-        <a href="{{ url_for('novo_animal', scope='all') }}"
-           class="btn btn-outline-primary {% if current_scope != 'mine' %}active{% endif %}"
-           data-scope-value="all">Todos</a>
-        <a href="{{ url_for('novo_animal', scope='mine') }}"
-           class="btn btn-outline-primary {% if current_scope == 'mine' %}active{% endif %}"
-           data-scope-value="mine">Meus</a>
+      {% if can_create_animals or scope is defined %}
+      <div class="d-flex flex-column align-items-end gap-2">
+        {% if can_create_animals %}
+        <a href="{{ new_animal_url }}" class="btn btn-primary btn-sm shadow-sm d-inline-flex align-items-center gap-1">
+          <span class="fw-semibold">+ Novo animal</span>
+        </a>
+        {% endif %}
+        {% if scope is defined %}
+        <div class="btn-group btn-group-sm">
+          <a href="{{ url_for('novo_animal', scope='all') }}"
+             class="btn btn-outline-primary {% if current_scope != 'mine' %}active{% endif %}"
+             data-scope-value="all">Todos</a>
+          <a href="{{ url_for('novo_animal', scope='mine') }}"
+             class="btn btn-outline-primary {% if current_scope == 'mine' %}active{% endif %}"
+             data-scope-value="mine">Meus</a>
+        </div>
+        {% endif %}
       </div>
       {% endif %}
     </div>

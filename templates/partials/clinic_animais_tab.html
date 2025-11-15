@@ -1,3 +1,6 @@
-{% with fetch_url=url_for('novo_animal') %}
+{% set clinic_animals_create_url = clinic_new_animal_url|default(url_for('novo_animal')) %}
+{% with fetch_url=url_for('novo_animal'),
+        can_create_animals=pode_editar,
+        new_animal_url=clinic_animals_create_url %}
   {% include 'partials/animais_adicionados.html' %}
 {% endwith %}
