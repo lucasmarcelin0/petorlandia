@@ -82,6 +82,51 @@ def upgrade():
         """
     ))
 
+    conn.execute(sa.text(
+        """
+        UPDATE orcamento_item
+        SET clinica_id = animal.clinica_id
+        FROM consulta
+        JOIN animal ON animal.id = consulta.animal_id
+        WHERE orcamento_item.clinica_id IS NULL
+          AND orcamento_item.consulta_id = consulta.id
+          AND animal.clinica_id IS NOT NULL
+        """
+    ))
+
+    conn.execute(sa.text(
+        """
+        UPDATE bloco_prescricao
+        SET clinica_id = animal.clinica_id
+        FROM animal
+        WHERE bloco_prescricao.clinica_id IS NULL
+          AND bloco_prescricao.animal_id = animal.id
+          AND animal.clinica_id IS NOT NULL
+        """
+    ))
+
+    default_clinic_id = conn.execute(
+        sa.text("SELECT id FROM clinica ORDER BY id LIMIT 1")
+    ).scalar()
+    if default_clinic_id is None:
+        raise RuntimeError("Nenhuma clínica cadastrada para definir clinica_id padrão")
+
+    conn.execute(sa.text(
+        """
+        UPDATE orcamento_item
+        SET clinica_id = :default_clinic_id
+        WHERE clinica_id IS NULL
+        """
+    ), {"default_clinic_id": default_clinic_id})
+
+    conn.execute(sa.text(
+        """
+        UPDATE bloco_prescricao
+        SET clinica_id = :default_clinic_id
+        WHERE clinica_id IS NULL
+        """
+    ), {"default_clinic_id": default_clinic_id})
+
     with op.batch_alter_table('orcamento_item', schema=None) as batch_op:
         batch_op.alter_column('clinica_id', existing_type=sa.Integer(), nullable=False)
 
