@@ -72,6 +72,8 @@ def search_animals(
     sort: Optional[str] = None,
     tutor_id: Optional[int] = None,
     limit: Optional[int] = None,
+    species_id: Optional[int] = None,
+    status: Optional[str] = None,
 ) -> List[dict]:
     """Return serialized animals for the search endpoint."""
 
@@ -113,6 +115,14 @@ def search_animals(
 
     if tutor_id:
         query = query.filter(Animal.user_id == tutor_id)
+
+    if species_id:
+        query = query.filter(Animal.species_id == species_id)
+
+    if status:
+        normalized_status = status.strip().lower()
+        if normalized_status:
+            query = query.filter(func.lower(func.coalesce(Animal.status, '')) == normalized_status)
 
     sort_value = _coerce_sort(sort)
 

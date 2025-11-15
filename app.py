@@ -5487,6 +5487,8 @@ def clinic_detail(clinica_id):
         .filter(Animal.removido_em == None)
         .all()
     )
+    available_species = list_species()
+    available_statuses = _extract_available_animal_statuses(animais_adicionados)
     tutores_adicionados = (
         User.query
         .filter_by(clinica_id=clinica_id)
@@ -5842,6 +5844,8 @@ def clinic_detail(clinica_id):
         invites_by_status=invites_by_status,
         invite_status_order=invite_status_order,
         clinic_new_animal_url=clinic_new_animal_url,
+        available_species=available_species,
+        available_statuses=available_statuses,
     )
 
 
@@ -7350,6 +7354,8 @@ def buscar_animais():
     visibility_clause = _user_visibility_clause(clinic_scope=clinic_id)
     sort = request.args.get('sort')
     tutor_id = request.args.get('tutor_id', type=int)
+    species_id = request.args.get('species_id', type=int)
+    status_filter = (request.args.get('status', '', type=str) or '').strip()
 
     results = search_animals(
         term=term,
@@ -7358,6 +7364,8 @@ def buscar_animais():
         visibility_clause=visibility_clause,
         sort=sort,
         tutor_id=tutor_id,
+        species_id=species_id,
+        status=status_filter,
     )
 
     return jsonify(results)
@@ -9153,6 +9161,8 @@ def novo_animal():
     require_appointments = _is_specialist_veterinarian(vet_profile)
     veterinarian_scope_id = vet_profile.id if require_appointments and vet_profile else None
     current_user_id = getattr(current_user, 'id', None)
+    animal_species = request.args.get('animal_species', type=int)
+    animal_status = (request.args.get('animal_status', '', type=str) or '').strip()
 
     if request.method == 'POST':
         tutor_id = request.form.get('tutor_id', type=int)
@@ -9267,7 +9277,11 @@ def novo_animal():
                 veterinario_id=veterinarian_scope_id,
                 search=animal_search,
                 sort_option=animal_sort,
+                species_filter=animal_species,
+                status_filter=animal_status,
             )
+            available_species = list_species()
+            available_statuses = _extract_available_animal_statuses(animais_adicionados)
             html = render_template(
                 'partials/animais_adicionados.html',
                 animais_adicionados=animais_adicionados,
@@ -9281,6 +9295,10 @@ def novo_animal():
                 compact=True,
                 can_create_animals=True,
                 new_animal_url=url_for('novo_animal'),
+                available_species=available_species,
+                available_statuses=available_statuses,
+                current_species=animal_species,
+                current_status=animal_status,
             )
             return jsonify(
                 message='Animal cadastrado com sucesso!',
@@ -9305,11 +9323,15 @@ def novo_animal():
         veterinario_id=veterinarian_scope_id,
         search=animal_search,
         sort_option=animal_sort,
+        species_filter=animal_species,
+        status_filter=animal_status,
     )
 
     # Lista de espécies e raças para os <select> do formulário
     species_list = list_species()
     breed_list = list_breeds()
+    available_species = species_list
+    available_statuses = _extract_available_animal_statuses(animais_adicionados)
 
     if request.headers.get('X-Requested-With') == 'XMLHttpRequest' or (
         request.accept_mimetypes['application/json'] > request.accept_mimetypes['text/html']
@@ -9327,6 +9349,10 @@ def novo_animal():
             compact=True,
             can_create_animals=True,
             new_animal_url=url_for('novo_animal'),
+            available_species=available_species,
+            available_statuses=available_statuses,
+            current_species=animal_species,
+            current_status=animal_status,
         )
         return jsonify(html=html, scope=scope)
 
@@ -9339,6 +9365,12 @@ def novo_animal():
         scope=scope,
         animal_search=animal_search,
         animal_sort=animal_sort,
+        available_species=available_species,
+        available_statuses=available_statuses,
+        current_species=animal_species,
+        current_status=animal_status,
+        animal_species=animal_species,
+        animal_status=animal_status,
     )
 
 
@@ -10310,6 +10342,21 @@ def _viewer_accessible_clinic_ids(viewer):
     return clinic_ids
 
 
+def _extract_available_animal_statuses(animais):
+    """Return a sorted list of statuses available in ``animais``."""
+
+    if not animais:
+        return []
+
+    statuses = set()
+    for animal in animais:
+        status = (getattr(animal, 'status', None) or '').strip()
+        if status:
+            statuses.add(status)
+
+    return sorted(statuses, key=lambda value: value.lower())
+
+
 def _get_recent_animais(
     scope,
     page,
@@ -10319,6 +10366,8 @@ def _get_recent_animais(
     veterinario_id=None,
     search=None,
     sort_option=None,
+    species_filter=None,
+    status_filter=None,
 ):
     """Return recent animals and pagination metadata for dashboards."""
 
@@ -10332,6 +10381,16 @@ def _get_recent_animais(
         resolved_scope = 'all'
 
     base_query = Animal.query.filter(Animal.removido_em == None)
+
+    if species_filter:
+        base_query = base_query.filter(Animal.species_id == species_filter)
+
+    if status_filter:
+        normalized_status = (status_filter or '').strip().lower()
+        if normalized_status:
+            base_query = base_query.filter(
+                func.lower(func.coalesce(Animal.status, '')) == normalized_status
+            )
 
     search_value = (search or '').strip().lower()
     sort_value = (sort_option or 'date_desc').strip().lower() or 'date_desc'
@@ -12559,6 +12618,8 @@ def appointments():
         pet_page = request.args.get('page', 1, type=int)
         pet_search = (request.args.get('animal_search', '', type=str) or '').strip()
         pet_sort = (request.args.get('animal_sort', 'date_desc', type=str) or 'date_desc').strip()
+        pet_species = request.args.get('animal_species', type=int)
+        pet_status = (request.args.get('animal_status', '', type=str) or '').strip()
         vet_animais_adicionados, vet_animais_pagination, vet_animais_scope = _get_recent_animais(
             pet_scope_param,
             pet_page,
@@ -12568,7 +12629,10 @@ def appointments():
             veterinario_id=veterinario.id if require_vet_appointments else None,
             search=pet_search,
             sort_option=pet_sort,
+            species_filter=pet_species,
+            status_filter=pet_status,
         )
+        vet_available_statuses = _extract_available_animal_statuses(vet_animais_adicionados)
 
         tutor_scope_param = request.args.get('tutor_scope', 'all')
         tutor_page = request.args.get('tutor_page', 1, type=int)
@@ -12625,11 +12689,15 @@ def appointments():
             vet_animais_scope=vet_animais_scope,
             vet_animal_search=pet_search,
             vet_animal_sort=pet_sort,
+            vet_animal_species=pet_species,
+            vet_animal_status=pet_status,
             vet_tutores_adicionados=vet_tutores_adicionados,
             vet_tutores_pagination=vet_tutores_pagination,
             vet_tutores_scope=vet_tutores_scope,
             vet_tutor_search=tutor_search,
             vet_tutor_sort=tutor_sort,
+            available_species=species_list,
+            available_statuses=vet_available_statuses,
         )
     else:
         if worker in ['colaborador', 'admin']:

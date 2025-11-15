@@ -153,6 +153,70 @@ def test_buscar_animais_without_clinic_returns_empty(app, monkeypatch):
     assert response.get_json() == []
 
 
+def test_buscar_animais_filters_by_species_and_status(app, monkeypatch):
+    with app.app_context():
+        clinic = Clinica(nome="Clínica 1")
+        db.session.add(clinic)
+        db.session.flush()
+
+        staff = User(
+            name="Staff",
+            email="staff@example.com",
+            password_hash="hash",
+            worker="colaborador",
+            clinica_id=clinic.id,
+        )
+        tutor = User(
+            name="Tutor",
+            email="tutor@example.com",
+            password_hash="hash",
+            clinica_id=clinic.id,
+        )
+        species_dog = Species(name="Canina")
+        species_cat = Species(name="Felina")
+        db.session.add_all([staff, tutor, species_dog, species_cat])
+        db.session.flush()
+
+        matching = Animal(
+            name="Paciente Alfa",
+            user_id=tutor.id,
+            clinica_id=clinic.id,
+            species_id=species_dog.id,
+            status='Internado',
+        )
+        other = Animal(
+            name="Paciente Beta",
+            user_id=tutor.id,
+            clinica_id=clinic.id,
+            species_id=species_cat.id,
+            status='disponível',
+        )
+        db.session.add_all([matching, other])
+        db.session.commit()
+
+        staff_id = staff.id
+        species_dog_id = species_dog.id
+        species_cat_id = species_cat.id
+
+    login(monkeypatch, staff_id)
+
+    client = app.test_client()
+    response = client.get(
+        f'/buscar_animais?q=Paciente&species_id={species_dog_id}&status=INTERNADO'
+    )
+
+    assert response.status_code == 200
+    data = response.get_json()
+    assert len(data) == 1
+    assert data[0]['name'] == 'Paciente Alfa'
+
+    response = client.get(
+        f'/buscar_animais?q=Paciente&species_id={species_cat_id}&status=INTERNADO'
+    )
+    assert response.status_code == 200
+    assert response.get_json() == []
+
+
 def test_buscar_animais_supports_sorting_by_recent_attended(app, monkeypatch):
     with app.app_context():
         clinic = Clinica(nome="Clínica 1")

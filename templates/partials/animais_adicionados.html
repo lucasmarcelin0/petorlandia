@@ -11,6 +11,24 @@
 {% set fetch_url = fetch_url|default(url_for('novo_animal')) %}
 {% set can_create_animals = can_create_animals|default(pode_editar|default(False)) %}
 {% set new_animal_url = new_animal_url|default(url_for('novo_animal')) %}
+{% set available_species = available_species|default([]) %}
+{% set available_statuses = available_statuses|default([]) %}
+{% set species_param = species_param|default('animal_species') %}
+{% set status_param = status_param|default('animal_status') %}
+{% set current_species_value = '' %}
+{% if current_species is defined and current_species not in (None, '') %}
+  {% set current_species_value = current_species|string %}
+{% else %}
+  {% set current_species_value = request.args.get(species_param, '') or '' %}
+{% endif %}
+{% set current_status_value = '' %}
+{% if current_status is defined and current_status not in (None, '') %}
+  {% set current_status_value = current_status|string %}
+{% else %}
+  {% set current_status_value = request.args.get(status_param, '') or '' %}
+{% endif %}
+{% set show_species_filter = available_species|length > 0 %}
+{% set show_status_filter = available_statuses|length > 0 %}
 {% set card_block %}
 <div class="card shadow-sm border-0 rounded-4 h-100 d-flex flex-column"
      data-listing-panel="animals"
@@ -22,7 +40,11 @@
      data-sort-param="{{ sort_param }}"
      data-page-param="{{ page_param }}"
      data-storage-key="animal"
-     data-default-sort="date_desc">
+     data-default-sort="date_desc"
+     data-species-param="{{ species_param }}"
+     data-status-param="{{ status_param }}"
+     data-species="{{ current_species_value }}"
+     data-status="{{ current_status_value }}">
   <div class="card-header bg-white border-0 pb-0">
     <div class="d-flex justify-content-between align-items-start flex-wrap gap-2">
       <div>
@@ -52,11 +74,11 @@
   </div>
   <div class="card-body p-4 flex-grow-1 d-flex flex-column">
     <div class="row g-3 align-items-end mb-4">
-      <div class="col-12 col-lg-7">
+      <div class="col-12 col-lg-4">
         <label for="animal-filter" class="form-label small text-muted mb-1">Buscar</label>
         <input type="text" id="animal-filter" class="form-control" placeholder="Buscar por nome, espécie..." value="{{ current_search }}">
       </div>
-      <div class="col-12 col-lg-5">
+      <div class="col-6 col-lg-3">
         <label for="animal-sort" class="form-label small text-muted mb-1">Ordenar por</label>
         <select id="animal-sort" class="form-select">
           <option value="date_desc" {% if current_sort == 'date_desc' %}selected{% endif %}>Data (recentes)</option>
@@ -67,12 +89,41 @@
           <option value="age_asc" {% if current_sort == 'age_asc' %}selected{% endif %}>Idade (menor)</option>
         </select>
       </div>
+      {% if show_species_filter %}
+      <div class="col-6 col-lg-3 col-xl-2">
+        <label for="animal-species-filter" class="form-label small text-muted mb-1">Espécie</label>
+        <select id="animal-species-filter" class="form-select">
+          <option value="">Todas as espécies</option>
+          {% for sp in available_species %}
+          {% set option_value = sp.id|string %}
+          <option value="{{ option_value }}" {% if current_species_value == option_value %}selected{% endif %}>{{ sp.name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      {% endif %}
+      {% if show_status_filter %}
+      <div class="col-6 col-lg-2">
+        <label for="animal-status-filter" class="form-label small text-muted mb-1">Status</label>
+        <select id="animal-status-filter" class="form-select">
+          <option value="">Todos os status</option>
+          {% for status in available_statuses %}
+          {% set option_value = status|string %}
+          <option value="{{ option_value }}" {% if current_status_value == option_value %}selected{% endif %}>{{ status|replace('_', ' ')|title }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      {% endif %}
     </div>
 
     <div id="animal-cards" class="row g-3 flex-grow-1">
       {% if animais_adicionados %}
         {% for animal in animais_adicionados %}
-        <div class="col-md-6 d-flex" data-name="{{ animal.name|lower }}" data-date="{{ animal.date_added.isoformat() if animal.date_added else '' }}" data-age="{{ animal.age_years or 0 }}">
+        <div class="col-md-6 d-flex"
+             data-name="{{ animal.name|lower }}"
+             data-date="{{ animal.date_added.isoformat() if animal.date_added else '' }}"
+             data-age="{{ animal.age_years or 0 }}"
+             data-species="{{ animal.species_id or '' }}"
+             data-status="{{ (animal.status or '')|lower }}">
           <div class="card shadow-sm rounded-4 h-100 flex-fill border-0">
             {% if animal.image %}
             <img src="{{ animal.image }}" class="card-img card-img-top rounded-top-4" height="180" loading="lazy" alt="Foto de {{ animal.name }}">

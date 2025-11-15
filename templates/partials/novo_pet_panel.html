@@ -16,7 +16,11 @@
         {% with compact=True,
                 fetch_url=url_for('novo_animal'),
                 can_create_animals=True,
-                new_animal_url=url_for('novo_animal') %}
+                new_animal_url=url_for('novo_animal'),
+                available_species=available_species|default([]),
+                available_statuses=available_statuses|default([]),
+                current_species=current_species|default(vet_animal_species|default(animal_species|default(''))),
+                current_status=current_status|default(vet_animal_status|default(animal_status|default(''))) %}
           {% include 'partials/animais_adicionados.html' %}
         {% endwith %}
       </div>

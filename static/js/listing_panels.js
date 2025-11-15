@@ -5,6 +5,8 @@
     animals: {
       filterSelector: '#animal-filter',
       sortSelector: '#animal-sort',
+      speciesFilterSelector: '#animal-species-filter',
+      statusFilterSelector: '#animal-status-filter',
       cardsSelector: '#animal-cards',
       paginationContainerSelector: '[data-animal-pagination-container]',
       paginationScopeSelector: '[data-animal-pagination]',
@@ -54,6 +56,10 @@
       pageParam: panel.dataset.pageParam || 'page',
       defaultSort: panel.dataset.defaultSort || typeConfig.defaultSort,
       storagePrefix: panel.dataset.storageKey || typeConfig.storagePrefix,
+      speciesParam: panel.dataset.speciesParam || 'animal_species',
+      statusParam: panel.dataset.statusParam || 'animal_status',
+      speciesFilterSelector: typeConfig.speciesFilterSelector,
+      statusFilterSelector: typeConfig.statusFilterSelector,
       filterSelector: typeConfig.filterSelector,
       sortSelector: typeConfig.sortSelector,
       cardsSelector: typeConfig.cardsSelector,
@@ -64,18 +70,26 @@
     const filterInput = panel.querySelector(config.filterSelector);
     const sortSelect = panel.querySelector(config.sortSelector);
     const cardsContainer = panel.querySelector(config.cardsSelector);
+    const speciesSelect = config.speciesFilterSelector
+      ? panel.querySelector(config.speciesFilterSelector)
+      : null;
+    const statusSelect = config.statusFilterSelector
+      ? panel.querySelector(config.statusFilterSelector)
+      : null;
 
     const state = {
       scope: panel.dataset.scope || 'all',
       page: parseInt(panel.dataset.page || '1', 10) || 1,
       search: filterInput ? filterInput.value.trim() : '',
       sort: sortSelect ? sortSelect.value : config.defaultSort,
+      species: panel.dataset.species || (speciesSelect ? speciesSelect.value : ''),
+      status: panel.dataset.status || (statusSelect ? statusSelect.value : ''),
     };
 
     const persisted = restorePreferences(config, state, filterInput, sortSelect);
 
     panel.dataset.listingInitialized = 'true';
-    panelStates.set(panel, { config, state, filterInput, sortSelect, cardsContainer });
+    panelStates.set(panel, { config, state, filterInput, sortSelect, cardsContainer, speciesSelect, statusSelect });
 
     if (filterInput) {
       filterInput.addEventListener('input', () => {
@@ -93,6 +107,24 @@
         if (!panelState) return;
         panelState.sort = sortSelect.value;
         persistPreference(panelConfig.storagePrefix, 'Sort', sortSelect.value);
+        fetchPage(panel, 1);
+      });
+    }
+
+    if (speciesSelect) {
+      speciesSelect.addEventListener('change', () => {
+        const panelData = panelStates.get(panel);
+        if (!panelData) return;
+        panelData.state.species = speciesSelect.value;
+        fetchPage(panel, 1);
+      });
+    }
+
+    if (statusSelect) {
+      statusSelect.addEventListener('change', () => {
+        const panelData = panelStates.get(panel);
+        if (!panelData) return;
+        panelData.state.status = statusSelect.value;
         fetchPage(panel, 1);
       });
     }
@@ -272,6 +304,20 @@
     } else {
       params.delete(config.sortParam);
     }
+    if (config.speciesParam) {
+      if (state.species) {
+        params.set(config.speciesParam, state.species);
+      } else {
+        params.delete(config.speciesParam);
+      }
+    }
+    if (config.statusParam) {
+      if (state.status) {
+        params.set(config.statusParam, state.status);
+      } else {
+        params.delete(config.statusParam);
+      }
+    }
     if (state.page && state.page > 1) {
       params.set(config.pageParam, state.page);
     } else {
@@ -290,7 +336,7 @@
       return;
     }
 
-    const { config, state, filterInput, sortSelect, cardsContainer } = panelData;
+    const { config, state, filterInput, sortSelect, cardsContainer, speciesSelect, statusSelect } = panelData;
 
     const newCards = newPanel.querySelector(config.cardsSelector);
     if (newCards && cardsContainer) {
@@ -326,8 +372,36 @@
       state.sort = sortSelect.value;
     }
 
+    if (config.speciesFilterSelector && speciesSelect) {
+      const newSpecies = newPanel.querySelector(config.speciesFilterSelector);
+      if (newSpecies) {
+        speciesSelect.innerHTML = newSpecies.innerHTML;
+        speciesSelect.value = newSpecies.value;
+        state.species = speciesSelect.value;
+      }
+    }
+
+    if (config.statusFilterSelector && statusSelect) {
+      const newStatus = newPanel.querySelector(config.statusFilterSelector);
+      if (newStatus) {
+        statusSelect.innerHTML = newStatus.innerHTML;
+        statusSelect.value = newStatus.value;
+        state.status = statusSelect.value;
+      }
+    }
+
     state.scope = newPanel.dataset.scope || state.scope;
     panel.dataset.scope = state.scope;
+
+    if (typeof newPanel.dataset.species === 'string') {
+      state.species = newPanel.dataset.species;
+      panel.dataset.species = state.species;
+    }
+
+    if (typeof newPanel.dataset.status === 'string') {
+      state.status = newPanel.dataset.status;
+      panel.dataset.status = state.status;
+    }
 
     const newPage = parseInt(newPanel.dataset.page || `${state.page}`, 10);
     if (!Number.isNaN(newPage)) {
@@ -359,6 +433,20 @@
       url.searchParams.set(config.sortParam, state.sort);
     } else {
       url.searchParams.delete(config.sortParam);
+    }
+    if (config.speciesParam) {
+      if (state.species) {
+        url.searchParams.set(config.speciesParam, state.species);
+      } else {
+        url.searchParams.delete(config.speciesParam);
+      }
+    }
+    if (config.statusParam) {
+      if (state.status) {
+        url.searchParams.set(config.statusParam, state.status);
+      } else {
+        url.searchParams.delete(config.statusParam);
+      }
     }
 
     if (state.page && state.page > 1) {
