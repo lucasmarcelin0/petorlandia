@@ -117,16 +117,16 @@
 
               <div class="profile-card-contact-grid">
                 {% if tutor.email %}
-                <div class="contact-item">
-                  <div class="contact-icon">
+                <div class="contact-item u-pill u-pill--subtle u-hover-lift" data-bs-toggle="tooltip" data-bs-placement="top" data-bs-title="E-mail principal do tutor">
+                  <div class="contact-icon u-icon-circle">
                     <i class="fa-solid fa-envelope"></i>
                   </div>
-                  <div class="contact-content">
-                    <span class="contact-label">E-mail</span>
-                    <span class="contact-value">{{ tutor.email }}</span>
+                  <div class="contact-content u-stack-sm">
+                    <span class="contact-label u-text-subtle">E-mail</span>
+                    <span class="contact-value u-text-strong">{{ tutor.email }}</span>
                   </div>
                   <div class="contact-actions">
-                    <a href="mailto:{{ tutor.email }}" class="contact-action-btn contact-action-btn--email" title="Enviar e-mail">
+                    <a href="mailto:{{ tutor.email }}" class="contact-action-btn contact-action-btn--email" title="Enviar e-mail" data-bs-toggle="tooltip" data-bs-placement="top" data-bs-title="Enviar e-mail">
                       <i class="fa-solid fa-paper-plane"></i>
                     </a>
                   </div>
@@ -134,40 +134,40 @@
                 {% endif %}
                 {% if tutor.phone %}
                 {% set phone_digits = tutor.phone|replace(' ', '')|replace('(', '')|replace(')', '')|replace('-', '')|replace('.', '')|replace('+', '') %}
-                <div class="contact-item">
-                  <div class="contact-icon">
+                <div class="contact-item u-pill u-pill--subtle u-hover-lift" data-bs-toggle="tooltip" data-bs-placement="top" data-bs-title="Telefone principal do tutor">
+                  <div class="contact-icon u-icon-circle">
                     <i class="fa-solid fa-phone"></i>
                   </div>
-                  <div class="contact-content">
-                    <span class="contact-label">Telefone</span>
-                    <span class="contact-value">{{ tutor.phone }}</span>
+                  <div class="contact-content u-stack-sm">
+                    <span class="contact-label u-text-subtle">Telefone</span>
+                    <span class="contact-value u-text-strong">{{ tutor.phone }}</span>
                   </div>
                   <div class="contact-actions">
-                    <a href="https://wa.me/{{ phone_digits }}" target="_blank" rel="noopener" class="contact-action-btn contact-action-btn--whatsapp" title="Conversar no WhatsApp">
+                    <a href="https://wa.me/{{ phone_digits }}" target="_blank" rel="noopener" class="contact-action-btn contact-action-btn--whatsapp" title="Conversar no WhatsApp" data-bs-toggle="tooltip" data-bs-placement="top" data-bs-title="Conversar no WhatsApp">
                       <i class="fa-brands fa-whatsapp"></i>
                     </a>
                   </div>
                 </div>
                 {% endif %}
                 {% if tutor.cpf %}
-                <div class="contact-item">
-                  <div class="contact-icon">
+                <div class="contact-item u-pill u-pill--subtle u-hover-lift" data-bs-toggle="tooltip" data-bs-placement="top" data-bs-title="Documento do tutor">
+                  <div class="contact-icon u-icon-circle">
                     <i class="fa-solid fa-id-card"></i>
                   </div>
-                  <div class="contact-content">
-                    <span class="contact-label">CPF</span>
-                    <span class="contact-value">{{ tutor.cpf }}</span>
+                  <div class="contact-content u-stack-sm">
+                    <span class="contact-label u-text-subtle">CPF</span>
+                    <span class="contact-value u-text-strong">{{ tutor.cpf }}</span>
                   </div>
                 </div>
                 {% endif %}
                 {% if tutor.worker|lower == 'veterinario' and tutor.veterinario and tutor.veterinario.specialties %}
-                <div class="contact-item">
-                  <div class="contact-icon">
+                <div class="contact-item u-pill u-pill--subtle u-hover-lift" data-bs-toggle="tooltip" data-bs-placement="top" data-bs-title="Especialidades cadastradas">
+                  <div class="contact-icon u-icon-circle">
                     <i class="fa-solid fa-stethoscope"></i>
                   </div>
-                  <div class="contact-content">
-                    <span class="contact-label">Especialidades</span>
-                    <span class="contact-value">{{ tutor.veterinario.specialty_list }}</span>
+                  <div class="contact-content u-stack-sm">
+                    <span class="contact-label u-text-subtle">Especialidades</span>
+                    <span class="contact-value u-text-strong">{{ tutor.veterinario.specialty_list }}</span>
                   </div>
                 </div>
                 {% endif %}
