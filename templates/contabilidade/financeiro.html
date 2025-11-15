@@ -1,0 +1,24 @@
+{% extends "layout.html" %}
+{% set titulo = "Financeiro" %}
+{% set subtitulo = "Resumo financeiro da clínica" %}
+
+{% block content %}
+<div class="container mt-4">
+    
+    <h2 class="mb-3">{{ titulo }}</h2>
+
+    <nav aria-label="breadcrumb">
+      <ol class="breadcrumb">
+        <li class="breadcrumb-item"><a href="/">Início</a></li>
+        <li class="breadcrumb-item"><a href="/contabilidade">Contabilidade</a></li>
+        <li class="breadcrumb-item active" aria-current="page">{{ titulo }}</li>
+      </ol>
+    </nav>
+
+    <div class="card shadow-sm p-4 mt-3">
+        <h5>{{ subtitulo }}</h5>
+        <p class="text-muted mb-0">Nenhum dado disponível ainda.</p>
+    </div>
+
+</div>
+{% endblock %}
