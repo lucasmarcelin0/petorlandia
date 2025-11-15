@@ -11,6 +11,7 @@ from dateutil.relativedelta import relativedelta
 from decimal import Decimal
 import unicodedata
 import enum
+import uuid
 from sqlalchemy import Enum, event, func, case
 from enum import Enum
 from sqlalchemy import Enum as PgEnum
@@ -241,6 +242,39 @@ class DataShareAccess(db.Model):
     @property
     def is_active(self):
         if self.revoked_at is not None:
+            return False
+        if self.expires_at and self.expires_at <= datetime.utcnow():
+            return False
+        return True
+
+
+class DataShareRequest(db.Model):
+    __tablename__ = 'data_share_request'
+
+    id = db.Column(db.Integer, primary_key=True)
+    tutor_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    animal_id = db.Column(db.Integer, db.ForeignKey('animal.id'), nullable=True)
+    clinic_id = db.Column(db.Integer, db.ForeignKey('clinica.id'), nullable=False)
+    requested_by_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    token = db.Column(db.String(64), unique=True, nullable=False, default=lambda: uuid.uuid4().hex)
+    message = db.Column(db.Text, nullable=True)
+    status = db.Column(db.String(20), nullable=False, default='pending')
+    expires_at = db.Column(db.DateTime, nullable=True)
+    approved_at = db.Column(db.DateTime, nullable=True)
+    approved_by_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True)
+    denied_at = db.Column(db.DateTime, nullable=True)
+    denial_reason = db.Column(db.String(255), nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
+    tutor = db.relationship('User', foreign_keys=[tutor_id])
+    animal = db.relationship('Animal')
+    clinic = db.relationship('Clinica')
+    requester = db.relationship('User', foreign_keys=[requested_by_id])
+    approved_by = db.relationship('User', foreign_keys=[approved_by_id])
+
+    def is_pending(self):
+        if self.status != 'pending':
             return False
         if self.expires_at and self.expires_at <= datetime.utcnow():
             return False
