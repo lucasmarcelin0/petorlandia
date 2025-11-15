@@ -9,10 +9,17 @@
       <h2 class="fw-semibold mb-1">{{ titulo }}</h2>
       <p class="text-muted mb-0">{{ subtitulo }}</p>
     </div>
-    <a href="{{ url_for('contabilidade_pagamentos_novo', clinica_id=selected_clinic_id, mes=month_value) if selected_clinic_id else '#!' }}"
-       class="btn btn-primary btn-lg rounded-pill shadow-sm {% if not selected_clinic_id %}disabled pe-none{% endif %}">
-      <i class="fas fa-plus me-2"></i>Adicionar Pagamento
-    </a>
+    {% if selected_view == 'plantonistas' %}
+      <a href="{{ url_for('contabilidade_plantonistas_novo', clinica_id=selected_clinic_id, mes=month_value) if selected_clinic_id else '#!' }}"
+         class="btn btn-primary btn-lg rounded-pill shadow-sm {% if not selected_clinic_id %}disabled pe-none{% endif %}">
+        <i class="fas fa-user-md me-2"></i>Adicionar plantão
+      </a>
+    {% else %}
+      <a href="{{ url_for('contabilidade_pagamentos_novo', clinica_id=selected_clinic_id, mes=month_value) if selected_clinic_id else '#!' }}"
+         class="btn btn-primary btn-lg rounded-pill shadow-sm {% if not selected_clinic_id %}disabled pe-none{% endif %}">
+        <i class="fas fa-plus me-2"></i>Adicionar Pagamento
+      </a>
+    {% endif %}
   </div>
 
   <nav aria-label="breadcrumb" class="mb-4">
@@ -22,6 +29,21 @@
       <li class="breadcrumb-item active" aria-current="page">Pagamentos / PJs</li>
     </ol>
   </nav>
+
+  <ul class="nav nav-pills mb-4 bg-white rounded-pill shadow-sm px-2 py-1">
+    <li class="nav-item">
+      <a class="nav-link rounded-pill {% if selected_view == 'geral' %}active{% endif %}"
+         href="{{ url_for('contabilidade_pagamentos', clinica_id=selected_clinic_id, mes=month_value) }}">
+        <i class="fas fa-file-invoice-dollar me-1"></i>Pagamentos gerais
+      </a>
+    </li>
+    <li class="nav-item">
+      <a class="nav-link rounded-pill {% if selected_view == 'plantonistas' %}active{% endif %}"
+         href="{{ url_for('contabilidade_pagamentos', clinica_id=selected_clinic_id, mes=month_value, aba='plantonistas') }}">
+        <i class="fas fa-user-nurse me-1"></i>Plantonistas
+      </a>
+    </li>
+  </ul>
 
   {% if clinics %}
   <div class="card border-0 shadow-sm mb-4">
@@ -44,6 +66,9 @@
             <i class="fas fa-filter me-1"></i>Filtrar
           </button>
         </div>
+        {% if selected_view != 'geral' %}
+          <input type="hidden" name="aba" value="{{ selected_view }}">
+        {% endif %}
       </form>
     </div>
   </div>
@@ -59,6 +84,7 @@
   </div>
   {% endif %}
 
+  {% if selected_view == 'geral' %}
   <div class="row g-3 mb-4">
     <div class="col-md-4">
       <div class="card shadow-sm border-0 h-100">
@@ -268,5 +294,199 @@
       </div>
     </div>
   </div>
+  {% else %}
+  <div class="row g-3 mb-4">
+    <div class="col-md-4">
+      <div class="card shadow-sm border-0 h-100">
+        <div class="card-body">
+          <div class="d-flex align-items-center">
+            <div class="rounded-circle bg-info bg-opacity-25 text-info p-3 me-3">
+              <i class="fas fa-hourglass-half"></i>
+            </div>
+            <div>
+              <p class="text-muted mb-1">Horas previstas</p>
+              <h4 class="mb-0">{{ '%.2f' % plantonista_totals.horas_previstas }} h</h4>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-4">
+      <div class="card shadow-sm border-0 h-100">
+        <div class="card-body">
+          <div class="d-flex align-items-center">
+            <div class="rounded-circle bg-primary bg-opacity-25 text-primary p-3 me-3">
+              <i class="fas fa-money-bill-wave"></i>
+            </div>
+            <div>
+              <p class="text-muted mb-1">Custo previsto</p>
+              <h4 class="mb-0">{{ plantonista_totals.custo_previsto | currency_br }}</h4>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-4">
+      <div class="card shadow-sm border-0 h-100">
+        <div class="card-body">
+          <div class="d-flex align-items-center">
+            <div class="rounded-circle bg-success bg-opacity-25 text-success p-3 me-3">
+              <i class="fas fa-receipt"></i>
+            </div>
+            <div>
+              <p class="text-muted mb-1">Custo pago</p>
+              <h4 class="mb-0">{{ plantonista_totals.custo_pago | currency_br }}</h4>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="row g-3">
+    <div class="col-12 col-xl-8">
+      <div class="card border-0 shadow-sm h-100">
+        <div class="card-body">
+          <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-3">
+            <div>
+              <h5 class="mb-0">Escalas do mês</h5>
+              <small class="text-muted">Referência: {{ selected_month.strftime('%m/%Y') if selected_month else month_value }}</small>
+            </div>
+            <div class="btn-group" role="group">
+              <a class="btn btn-outline-light text-secondary" href="{{ url_for('contabilidade_pagamentos', clinica_id=selected_clinic_id, mes=prev_month_value, aba='plantonistas') }}" title="Mês anterior"><i class="fas fa-chevron-left"></i></a>
+              <a class="btn btn-outline-light text-secondary" href="{{ url_for('contabilidade_pagamentos', clinica_id=selected_clinic_id, mes=next_month_value, aba='plantonistas') }}" title="Próximo mês"><i class="fas fa-chevron-right"></i></a>
+            </div>
+          </div>
+          <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-3">
+            <div class="d-flex flex-wrap gap-2">
+              <select class="form-select form-select-sm" data-plantao-filter>
+                <option value="">Todos os médicos</option>
+                {% for medico_id, nome in plantonista_medicos %}
+                  <option value="{{ medico_id }}">{{ nome }}</option>
+                {% endfor %}
+              </select>
+              <select class="form-select form-select-sm" data-plantao-sort>
+                <option value="inicio:asc">Ordenar por data</option>
+                <option value="turno:asc">Turno A-Z</option>
+                <option value="turno:desc">Turno Z-A</option>
+              </select>
+              <input type="search" class="form-control form-control-sm" placeholder="Buscar plantão" data-plantao-search>
+            </div>
+            <span class="badge bg-light text-muted">{{ plantonista_escalas|length }} plantões</span>
+          </div>
+          <div class="table-responsive">
+            <table class="table align-middle" data-plantao-table>
+              <thead class="table-light">
+                <tr>
+                  <th>Médico</th>
+                  <th>Turno</th>
+                  <th>Duração</th>
+                  <th>Valor previsto</th>
+                  <th>Valor pago</th>
+                  <th>Status</th>
+                  <th>NF / retenção</th>
+                  <th class="text-end">Ações</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for escala in plantonista_escalas %}
+                <tr data-medico="{{ escala.medico_id or '' }}"
+                    data-turno="{{ escala.turno|lower }}"
+                    data-inicio="{{ escala.inicio.isoformat() }}"
+                    data-atrasado="{{ 1 if escala.atrasado else 0 }}">
+                  <td>
+                    <div class="fw-semibold">{{ escala.medico_nome }}</div>
+                    <small class="text-muted">{{ escala.inicio.strftime('%d/%m %Hh') }} - {{ escala.fim.strftime('%d/%m %Hh') }}</small>
+                  </td>
+                  <td>{{ escala.turno }}</td>
+                  <td>{{ '%.2f' % escala.horas_previstas }} h</td>
+                  <td>{{ escala.valor_previsto | currency_br }}</td>
+                  <td>
+                    {% if escala.pj_payment %}
+                      <span class="badge {{ 'bg-success' if escala.pj_payment.status == 'pago' else 'bg-warning text-dark' }}">{{ escala.pj_payment.valor | currency_br }}</span>
+                      <small class="d-block text-muted">{{ 'Pago' if escala.pj_payment.status == 'pago' else 'Pendente' }}</small>
+                    {% else %}
+                      <span class="text-muted">—</span>
+                    {% endif %}
+                  </td>
+                  <td>
+                    {% set status_class = plantonista_status_styles.get(escala.status, 'badge bg-secondary') %}
+                    <span class="{{ status_class }}">{{ plantonista_status_labels.get(escala.status, escala.status|capitalize) }}</span>
+                  </td>
+                  <td>
+                    <span class="badge {{ 'bg-success' if escala.nota_fiscal_recebida else 'bg-light text-dark' }}">NF</span>
+                    <span class="badge {{ 'bg-success' if escala.retencao_validada else 'bg-light text-dark' }}">Ret.</span>
+                  </td>
+                  <td class="text-end">
+                    <div class="d-flex flex-wrap justify-content-end gap-2">
+                      <form method="post" action="{{ url_for('contabilidade_plantao_confirmar', escala_id=escala.id, clinica_id=selected_clinic_id, mes=month_value, aba='plantonistas') }}" class="mb-0">
+                        {% if csrf_token is defined %}{{ csrf_token() }}{% endif %}
+                        <button type="submit" class="btn btn-sm btn-outline-success rounded-pill {% if escala.status == 'realizado' %}disabled pe-none{% endif %}">
+                          <i class="fas fa-check-double me-1"></i>Confirmar
+                        </button>
+                      </form>
+                      <a href="{{ url_for('contabilidade_plantonistas_editar', escala_id=escala.id, clinica_id=selected_clinic_id, mes=month_value, aba='plantonistas') }}"
+                         class="btn btn-sm btn-outline-primary rounded-pill">
+                        <i class="fas fa-edit me-1"></i>Editar
+                      </a>
+                      <form method="post" action="{{ url_for('contabilidade_plantao_gerar_pagamento', escala_id=escala.id, clinica_id=selected_clinic_id, mes=month_value, aba='plantonistas') }}" class="mb-0">
+                        {% if csrf_token is defined %}{{ csrf_token() }}{% endif %}
+                        <button type="submit" class="btn btn-sm btn-primary rounded-pill {% if escala.pj_payment %}disabled pe-none{% endif %}">
+                          <i class="fas fa-file-invoice me-1"></i>Gerar pagamento
+                        </button>
+                      </form>
+                      {% if escala.pj_payment %}
+                        <a href="{{ url_for('contabilidade_pagamentos_editar', payment_id=escala.pj_payment.id, clinica_id=selected_clinic_id, mes=month_value) }}"
+                           class="btn btn-sm btn-outline-secondary rounded-pill">
+                          <i class="fas fa-link me-1"></i>Pagamento
+                        </a>
+                      {% endif %}
+                    </div>
+                  </td>
+                </tr>
+                {% else %}
+                <tr>
+                  <td colspan="8" class="text-center py-4 text-muted">
+                    <i class="fas fa-user-clock fa-2x mb-2 text-secondary"></i>
+                    <p class="mb-0">Nenhum plantão registrado para este período.</p>
+                  </td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="col-12 col-xl-4">
+      <div class="card border-0 shadow-sm h-100">
+        <div class="card-body">
+          <h5 class="mb-3">Dicas rápidas</h5>
+          <div class="list-group list-group-flush border rounded-3">
+            <div class="list-group-item">
+              <div class="fw-semibold">Confirmação operacional</div>
+              <p class="text-muted small mb-0">Utilize o botão "Confirmar" para marcar plantões realizados e liberar o fluxo de pagamento.</p>
+            </div>
+            <div class="list-group-item">
+              <div class="fw-semibold">Notas fiscais</div>
+              <p class="text-muted small mb-0">Somente plantões com NF e retenções validadas permitem gerar pagamentos automáticos.</p>
+            </div>
+            <div class="list-group-item">
+              <div class="fw-semibold">Filtros inteligentes</div>
+              <p class="text-muted small mb-0">Filtre por médico, ordene por turno e destaque atrasos para evitar gargalos.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  {% endif %}
 </div>
+{% endblock %}
+
+{% block scripts %}
+  {{ super() }}
+  {% if selected_view == 'plantonistas' %}
+    <script src="{{ url_for('static', filename='js/contabilidade_plantoes.js') }}"></script>
+  {% endif %}
 {% endblock %}

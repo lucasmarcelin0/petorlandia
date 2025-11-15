@@ -1,0 +1,93 @@
+{% extends "layout.html" %}
+{% set titulo = form_title %}
+
+{% block main %}
+<div class="container py-4">
+  <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+    <div>
+      <h2 class="fw-semibold mb-1">{{ form_title }}</h2>
+      <p class="text-muted mb-0">Cadastre plantões de médicos plantonistas e conecte-os aos pagamentos PJ.</p>
+    </div>
+    <a href="{{ cancel_url }}" class="btn btn-outline-secondary rounded-pill">
+      <i class="fas fa-arrow-left me-1"></i>Voltar
+    </a>
+  </div>
+
+  <div class="card shadow-sm border-0">
+    <div class="card-body">
+      <form method="post" novalidate>
+        {{ form.hidden_tag() }}
+        <div class="row g-3">
+          <div class="col-md-6">
+            {{ form.clinic_id.label(class_='form-label fw-semibold') }}
+            {{ form.clinic_id(class_='form-select') }}
+            {% for error in form.clinic_id.errors %}<div class="text-danger small">{{ error }}</div>{% endfor %}
+          </div>
+          <div class="col-md-6">
+            {{ form.medico_id.label(class_='form-label fw-semibold') }}
+            {{ form.medico_id(class_='form-select') }}
+            {% for error in form.medico_id.errors %}<div class="text-danger small">{{ error }}</div>{% endfor %}
+          </div>
+          <div class="col-md-6">
+            {{ form.medico_nome.label(class_='form-label fw-semibold') }}
+            {{ form.medico_nome(class_='form-control', placeholder='Nome exibido no relatório') }}
+            {% for error in form.medico_nome.errors %}<div class="text-danger small">{{ error }}</div>{% endfor %}
+          </div>
+          <div class="col-md-6">
+            {{ form.medico_cnpj.label(class_='form-label fw-semibold') }}
+            {{ form.medico_cnpj(class_='form-control', placeholder='00.000.000/0000-00') }}
+            {% for error in form.medico_cnpj.errors %}<div class="text-danger small">{{ error }}</div>{% endfor %}
+          </div>
+          <div class="col-md-6">
+            {{ form.turno.label(class_='form-label fw-semibold') }}
+            {{ form.turno(class_='form-control', placeholder='Ex.: Plantão noturno') }}
+            {% for error in form.turno.errors %}<div class="text-danger small">{{ error }}</div>{% endfor %}
+          </div>
+          <div class="col-md-3">
+            {{ form.data_inicio.label(class_='form-label fw-semibold') }}
+            {{ form.data_inicio(class_='form-control') }}
+            {% for error in form.data_inicio.errors %}<div class="text-danger small">{{ error }}</div>{% endfor %}
+          </div>
+          <div class="col-md-3">
+            {{ form.hora_inicio.label(class_='form-label fw-semibold') }}
+            {{ form.hora_inicio(class_='form-control') }}
+            {% for error in form.hora_inicio.errors %}<div class="text-danger small">{{ error }}</div>{% endfor %}
+          </div>
+          <div class="col-md-3">
+            {{ form.hora_fim.label(class_='form-label fw-semibold') }}
+            {{ form.hora_fim(class_='form-control') }}
+            {% for error in form.hora_fim.errors %}<div class="text-danger small">{{ error }}</div>{% endfor %}
+          </div>
+          <div class="col-md-3">
+            {{ form.status.label(class_='form-label fw-semibold') }}
+            {{ form.status(class_='form-select') }}
+            {% for error in form.status.errors %}<div class="text-danger small">{{ error }}</div>{% endfor %}
+          </div>
+          <div class="col-md-6">
+            {{ form.valor_previsto.label(class_='form-label fw-semibold') }}
+            {{ form.valor_previsto(class_='form-control') }}
+            {% for error in form.valor_previsto.errors %}<div class="text-danger small">{{ error }}</div>{% endfor %}
+          </div>
+          <div class="col-md-3 form-check mt-4 pt-2">
+            {{ form.nota_fiscal_recebida(class_='form-check-input', id='nfRecebida') }}
+            <label class="form-check-label fw-semibold" for="nfRecebida">{{ form.nota_fiscal_recebida.label.text }}</label>
+          </div>
+          <div class="col-md-3 form-check mt-4 pt-2">
+            {{ form.retencao_validada(class_='form-check-input', id='retencaoValidada') }}
+            <label class="form-check-label fw-semibold" for="retencaoValidada">{{ form.retencao_validada.label.text }}</label>
+          </div>
+          <div class="col-12">
+            {{ form.observacoes.label(class_='form-label fw-semibold') }}
+            {{ form.observacoes(class_='form-control', rows=4, placeholder='Observações internas, NF, preferências...') }}
+            {% for error in form.observacoes.errors %}<div class="text-danger small">{{ error }}</div>{% endfor %}
+          </div>
+        </div>
+        <div class="d-flex justify-content-end gap-2 mt-4">
+          <a href="{{ cancel_url }}" class="btn btn-outline-secondary rounded-pill">Cancelar</a>
+          <button type="submit" class="btn btn-primary rounded-pill px-4">{{ submit_label }}</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}
