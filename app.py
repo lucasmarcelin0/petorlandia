@@ -3254,6 +3254,104 @@ def _describe_pj_payments_schema_error(exc: ProgrammingError) -> Optional[tuple[
     return None
 
 
+REQUIRED_PLANTONISTA_COLUMNS = {
+    'id',
+    'clinic_id',
+    'medico_nome',
+    'turno',
+    'inicio',
+    'fim',
+    'valor_previsto',
+    'status',
+    'nota_fiscal_recebida',
+    'retencao_validada',
+    'pj_payment_id',
+}
+
+
+def _describe_plantonista_schema_error(exc: ProgrammingError) -> Optional[tuple[str, str]]:
+    """Return log and user friendly messages for plantonista schema issues."""
+
+    original_message = str(getattr(exc, "orig", exc))
+    normalized = original_message.lower()
+    if "plantonista_escalas" not in normalized:
+        return None
+
+    if "column" in normalized and (
+        "does not exist" in normalized or "undefinedcolumn" in normalized
+    ):
+        column_name = None
+        column_match = re.search(
+            r"column\s+([\w\.\"]+)\s+(?:of\s+relation\s+[\w\"]+\s+)?does\s+not\s+exist",
+            original_message,
+            re.IGNORECASE,
+        )
+        if column_match:
+            identifier = column_match.group(1).strip('"')
+            column_name = identifier.split('.')[-1]
+        if not column_name:
+            column_name = sorted(REQUIRED_PLANTONISTA_COLUMNS)[0]
+        return (
+            "Coluna %s ausente na tabela plantonista_escalas. Execute as migrações do banco para habilitar o módulo." % column_name,
+            "O módulo de plantonistas ainda não está disponível porque a coluna %s da tabela plantonista_escalas não existe. Execute as migrações do banco para adicioná-la." % column_name,
+        )
+
+    if (
+        "does not exist" in normalized
+        or "undefinedtable" in normalized
+        or "no such table" in normalized
+    ):
+        return (
+            "Tabela plantonista_escalas ausente. Execute as migrações do banco para habilitar o módulo.",
+            "O módulo de plantonistas ainda não está disponível porque a tabela plantonista_escalas não existe. Execute as migrações do banco para criá-la.",
+        )
+
+    return None
+
+
+def _plantonista_schema_issue() -> Optional[tuple[str, str]]:
+    """Return cached schema issues for the ``plantonista_escalas`` table, if any."""
+
+    if not has_request_context():
+        return None
+    cached = getattr(g, '_plantonista_schema_issue', None)
+    if cached is not None:
+        return cached
+
+    issue: Optional[tuple[str, str]] = None
+    try:
+        inspector = inspect(db.engine)
+        columns = {column["name"] for column in inspector.get_columns('plantonista_escalas')}
+    except NoSuchTableError:
+        issue = (
+            "Tabela plantonista_escalas ausente. Execute as migrações do banco para habilitar o módulo.",
+            "O módulo de plantonistas ainda não está disponível porque a tabela plantonista_escalas não existe. Execute as migrações do banco para criá-la.",
+        )
+    except (ProgrammingError, OperationalError) as exc:
+        described = _describe_plantonista_schema_error(exc)
+        if described:
+            issue = described
+        else:
+            current_app.logger.warning(
+                "Falha ao inspecionar a tabela plantonista_escalas: %s", exc, exc_info=exc
+            )
+            issue = (
+                "Não foi possível verificar o esquema da tabela plantonista_escalas.",
+                "Não foi possível verificar se o módulo de plantonistas está habilitado. Verifique as migrações do banco.",
+            )
+    else:
+        missing_columns = REQUIRED_PLANTONISTA_COLUMNS - columns
+        if missing_columns:
+            missing_label = ', '.join(sorted(missing_columns))
+            issue = (
+                "Colunas ausentes na tabela plantonista_escalas (%s). Execute as migrações do banco para habilitar o módulo." % missing_label,
+                "O módulo de plantonistas ainda não está disponível porque as colunas %s da tabela plantonista_escalas não existem. Execute as migrações do banco para adicioná-las." % missing_label,
+            )
+
+    g._plantonista_schema_issue = issue
+    return issue
+
+
 def _pj_payments_schema_issue() -> Optional[tuple[str, str]]:
     """Return cached schema issues for the ``pj_payments`` table, if any."""
 
@@ -3372,6 +3470,7 @@ def contabilidade_pagamentos():
         'custo_pago': Decimal('0.00'),
     }
     plantonista_medicos: list[tuple[str, str]] = []
+    plantonista_error: Optional[str] = None
 
     def _coerce_decimal(value):
         if value is None:
@@ -3563,19 +3662,32 @@ def contabilidade_pagamentos():
         budget_entries.sort(key=lambda entry: entry['reference_date'], reverse=True)
 
     if selected_view == 'plantonistas' and selected_clinic_id:
-        plantonista_escalas = (
-            PlantonistaEscala.query.filter(
-                PlantonistaEscala.clinic_id == selected_clinic_id,
-                PlantonistaEscala.inicio >= start_datetime,
-                PlantonistaEscala.inicio < end_datetime,
-            )
-            .options(
-                selectinload(PlantonistaEscala.pj_payment),
-                selectinload(PlantonistaEscala.medico).joinedload(Veterinario.user),
-            )
-            .order_by(PlantonistaEscala.inicio.asc())
-            .all()
-        )
+        schema_issue = _plantonista_schema_issue()
+        if schema_issue:
+            plantonista_error = schema_issue[1]
+        else:
+            try:
+                plantonista_escalas = (
+                    PlantonistaEscala.query.filter(
+                        PlantonistaEscala.clinic_id == selected_clinic_id,
+                        PlantonistaEscala.inicio >= start_datetime,
+                        PlantonistaEscala.inicio < end_datetime,
+                    )
+                    .options(
+                        selectinload(PlantonistaEscala.pj_payment),
+                        selectinload(PlantonistaEscala.medico).joinedload(Veterinario.user),
+                    )
+                    .order_by(PlantonistaEscala.inicio.asc())
+                    .all()
+                )
+            except ProgrammingError as exc:
+                db.session.rollback()
+                described = _describe_plantonista_schema_error(exc)
+                if described:
+                    current_app.logger.warning(described[0], exc_info=exc)
+                    plantonista_error = described[1]
+                else:
+                    raise
 
         unique_medicos = {}
         for escala in plantonista_escalas:
@@ -3611,6 +3723,7 @@ def contabilidade_pagamentos():
         plantonista_medicos=plantonista_medicos,
         plantonista_status_labels=dict(PLANTONISTA_ESCALA_STATUS_CHOICES),
         plantonista_status_styles=PLANTONISTA_STATUS_STYLES,
+        plantonista_error=plantonista_error,
     )
 
 
