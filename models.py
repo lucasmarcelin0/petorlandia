@@ -203,67 +203,23 @@ class User(UserMixin, db.Model):
 
 
 
-class DataSharePartyType(enum.Enum):
-    clinic = 'clinic'
-    veterinarian = 'veterinarian'
-    insurer = 'insurer'
-
-
-class DataShareAccess(db.Model):
-    __tablename__ = 'data_share_access'
-    __table_args__ = {'extend_existing': True}
+class VeterinarianAccess(db.Model):
+    __table_args__ = {'extend_existing': True}  # ← ESSA LINHA
 
     id = db.Column(db.Integer, primary_key=True)
-    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True)
-    animal_id = db.Column(db.Integer, db.ForeignKey('animal.id'), nullable=True)
-    source_clinic_id = db.Column(db.Integer, db.ForeignKey('clinica.id'), nullable=True)
+    animal_id = db.Column(db.Integer, db.ForeignKey('animal.id'), nullable=False)
+    vet_id = db.Column(
+        db.Integer,
+        db.ForeignKey('user.id', ondelete='CASCADE'),
+        nullable=False,
+    )
+    date_granted = db.Column(db.DateTime, default=datetime.utcnow)
 
-    granted_to_type = db.Column(PgEnum(DataSharePartyType, name='data_share_party_type'), nullable=False)
-    granted_to_id = db.Column(db.Integer, nullable=False)
-    granted_by = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True)
-    granted_via = db.Column(db.String(50), nullable=True)
-    grant_reason = db.Column(db.String(255), nullable=True)
-
-    expires_at = db.Column(db.DateTime, nullable=True)
-    revoked_at = db.Column(db.DateTime, nullable=True)
-    revoked_by = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True)
-    revoke_reason = db.Column(db.String(255), nullable=True)
-
-    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
-    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
-
-    user = db.relationship('User', foreign_keys=[user_id], backref=db.backref('data_share_accesses', cascade='all, delete-orphan'))
-    animal = db.relationship('Animal', foreign_keys=[animal_id], backref=db.backref('data_share_accesses', cascade='all, delete-orphan'))
-    source_clinic = db.relationship('Clinica', foreign_keys=[source_clinic_id])
-    granted_by_user = db.relationship('User', foreign_keys=[granted_by])
-    revoked_by_user = db.relationship('User', foreign_keys=[revoked_by])
-
-    @property
-    def is_active(self):
-        if self.revoked_at is not None:
-            return False
-        if self.expires_at and self.expires_at <= datetime.utcnow():
-            return False
-        return True
-
-
-class DataShareLog(db.Model):
-    __tablename__ = 'data_share_log'
-    __table_args__ = {'extend_existing': True}
-
-    id = db.Column(db.Integer, primary_key=True)
-    access_id = db.Column(db.Integer, db.ForeignKey('data_share_access.id'), nullable=False)
-    actor_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True)
-    event_type = db.Column(db.String(50), nullable=False)
-    resource_type = db.Column(db.String(50), nullable=False)
-    resource_id = db.Column(db.Integer, nullable=True)
-    request_path = db.Column(db.String(255), nullable=True)
-    request_ip = db.Column(db.String(50), nullable=True)
-    notes = db.Column(db.Text, nullable=True)
-    occurred_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
-
-    access = db.relationship('DataShareAccess', backref=db.backref('logs', cascade='all, delete-orphan'))
-    actor = db.relationship('User', foreign_keys=[actor_id])
+    animal = db.relationship('Animal', backref='vet_accesses')
+    veterinarian = db.relationship(
+        'User',
+        backref=db.backref('authorized_animals', cascade='all, delete-orphan')
+    )
 
 
 
