@@ -7,14 +7,41 @@
       <h1 class="clinic-hero__title text-white mb-3">{{ clinica.nome }}</h1>
       <p class="clinic-hero__subtitle text-white-75 mb-4">Cuidando de cada pet com carinho e tecnologia.</p>
       <div class="clinic-hero__chips mb-4">
-        {% if clinica.endereco %}
-          <span class="clinic-hero__chip"><i class="fa-solid fa-location-dot"></i>{{ clinica.endereco }}</span>
+        {% if clinic_maps_link %}
+          <a class="clinic-hero__chip"
+             href="{{ clinic_maps_link }}"
+             target="_blank"
+             rel="noopener"
+             title="Abrir endereço no Google Maps"
+             aria-label="Abrir endereço da clínica no Google Maps">
+            <i class="fa-solid fa-location-dot"></i>{{ clinica.endereco }}
+          </a>
         {% endif %}
-        {% if clinica.telefone %}
-          <span class="clinic-hero__chip"><i class="fa-solid fa-phone"></i>{{ clinica.telefone }}</span>
+        {% if clinic_phone_link %}
+          <a class="clinic-hero__chip"
+             href="{{ clinic_phone_link }}"
+             title="Ligar para {{ clinica.telefone }}"
+             aria-label="Ligar para {{ clinica.telefone }}">
+            <i class="fa-solid fa-phone"></i>{{ clinica.telefone }}
+          </a>
         {% endif %}
-        {% if clinica.email %}
-          <span class="clinic-hero__chip"><i class="fa-solid fa-envelope"></i>{{ clinica.email }}</span>
+        {% if clinic_whatsapp_link %}
+          <a class="clinic-hero__chip"
+             href="{{ clinic_whatsapp_link }}"
+             target="_blank"
+             rel="noopener"
+             title="Conversar com a clínica pelo WhatsApp"
+             aria-label="Conversar com a clínica pelo WhatsApp">
+            <i class="fa-brands fa-whatsapp"></i>WhatsApp
+          </a>
+        {% endif %}
+        {% if clinic_email_link %}
+          <a class="clinic-hero__chip"
+             href="{{ clinic_email_link }}"
+             title="Enviar e-mail para {{ clinica.email }}"
+             aria-label="Enviar e-mail para {{ clinica.email }}">
+            <i class="fa-solid fa-envelope"></i>{{ clinica.email }}
+          </a>
         {% endif %}
       </div>
       <div class="clinic-hero__actions d-flex flex-wrap gap-2">
