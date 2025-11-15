@@ -35,6 +35,7 @@ class Config:
     # Opções adicionais de integração com o Mercado Pago
     MERCADOPAGO_STATEMENT_DESCRIPTOR = os.environ.get("MERCADOPAGO_STATEMENT_DESCRIPTOR", "PETORLANDIA")
     MERCADOPAGO_BINARY_MODE = bool(int(os.environ.get("MERCADOPAGO_BINARY_MODE", "0")))
+    MERCADOPAGO_NOTIFICATION_URL = os.environ.get("MERCADOPAGO_NOTIFICATION_URL")
 
     # Habilita validação de plano de saúde para agendamentos
     REQUIRE_HEALTH_SUBSCRIPTION_FOR_APPOINTMENT = bool(
