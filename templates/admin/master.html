@@ -126,11 +126,47 @@
     }
 
     .menu-group-title {
-      padding: 15px 20px 5px;
-      font-size: 0.75rem;
+      width: 100%;
+      background: transparent;
+      border: none;
+      color: rgba(255, 255, 255, 0.8);
+      padding: 12px 20px;
+      font-size: 0.85rem;
       text-transform: uppercase;
-      color: rgba(255, 255, 255, 0.6);
       font-weight: 600;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      cursor: pointer;
+      transition: background-color 0.2s ease;
+    }
+
+    .menu-group-title:hover,
+    .menu-group.open .menu-group-title {
+      background-color: rgba(255, 255, 255, 0.1);
+      color: #fff;
+    }
+
+    .menu-group-title i {
+      transition: transform 0.2s ease;
+    }
+
+    .menu-group.open .menu-group-title i {
+      transform: rotate(180deg);
+    }
+
+    .menu-children {
+      max-height: 0;
+      overflow: hidden;
+      transition: max-height 0.25s ease;
+    }
+
+    .menu-group.open .menu-children {
+      max-height: 1000px;
+    }
+
+    .menu-children a {
+      padding-left: 40px;
     }
 
     /* Logo Styles */
@@ -443,14 +479,26 @@
 
     {% for menu_item in admin_view.admin.menu() %}
       {% if menu_item.is_category() %}
-        <div class="menu-group">
-          <div class="menu-group-title">{{ menu_item.name }}</div>
-          {% for child in menu_item.get_children() %}
-            <a href="{{ child.get_url() }}" {% if request.path == child.get_url() %}class="active"{% endif %}>
-              <i class="fas fa-{{ child.get_icon_value() if child.get_icon_value() else 'circle' }}"></i>
-              <span class="menu-text">{{ child.name }}</span>
-            </a>
-          {% endfor %}
+        {% set children = menu_item.get_children() %}
+        {% set ns = namespace(active=false) %}
+        {% for child in children %}
+          {% if request.path == child.get_url() %}
+            {% set ns.active = true %}
+          {% endif %}
+        {% endfor %}
+        <div class="menu-group {% if ns.active %}open{% endif %}">
+          <button class="menu-group-title" type="button">
+            <span>{{ menu_item.name }}</span>
+            <i class="fas fa-chevron-down"></i>
+          </button>
+          <div class="menu-children">
+            {% for child in children %}
+              <a href="{{ child.get_url() }}" {% if request.path == child.get_url() %}class="active"{% endif %}>
+                <i class="fas fa-{{ child.get_icon_value() if child.get_icon_value() else 'circle' }}"></i>
+                <span class="menu-text">{{ child.name }}</span>
+              </a>
+            {% endfor %}
+          </div>
         </div>
       {% else %}
         <a href="{{ menu_item.get_url() }}" {% if request.path == menu_item.get_url() %}class="active"{% endif %}>
@@ -527,7 +575,7 @@
           sidebar.classList.toggle('active');
         });
       }
-      
+
       // Close sidebar when clicking outside on mobile
       document.addEventListener('click', (e) => {
         if (window.innerWidth <= 992 && 
@@ -567,7 +615,17 @@
           }
         }
       });
-      
+
+      // Toggle category menu groups
+      document.querySelectorAll('.menu-group-title').forEach(button => {
+        button.addEventListener('click', () => {
+          const group = button.closest('.menu-group');
+          if (group) {
+            group.classList.toggle('open');
+          }
+        });
+      });
+
       // Add active class to current menu item
       const currentPath = window.location.pathname;
       const menuItems = document.querySelectorAll('.sidebar a');
