@@ -1218,6 +1218,7 @@ from helpers import (
     get_appointment_duration,
     get_available_times,
     get_weekly_schedule,
+    has_professional_access,
     grant_veterinarian_role,
     group_appointments_by_day,
     group_vet_schedules_by_day,
@@ -1303,7 +1304,7 @@ def _viewer_parties(viewer=None, clinic_scope=None):
     if viewer:
         worker = getattr(viewer, 'worker', None)
         viewer_id = getattr(viewer, 'id', None)
-        if worker == 'veterinario' and viewer_id:
+        if viewer_id and is_veterinarian(viewer):
             parties.append((DataSharePartyType.veterinarian, viewer_id))
         elif worker == 'seguradora' and viewer_id:
             parties.append((DataSharePartyType.insurer, viewer_id))
@@ -1354,6 +1355,9 @@ def _user_visibility_clause(viewer=None, clinic_scope=None):
     if viewer and getattr(viewer, 'role', None) == 'admin':
         return true()
 
+    if viewer and has_professional_access(viewer):
+        return true()
+
     clauses = []
 
     if viewer:
@@ -1388,6 +1392,9 @@ def _can_view_user(user, viewer=None, clinic_scope=None):
         return False
 
     if getattr(viewer, 'role', None) == 'admin':
+        return True
+
+    if has_professional_access(viewer):
         return True
 
     viewer_id = getattr(viewer, 'id', None)
@@ -2472,6 +2479,7 @@ def inject_veterinarian_membership_context():
     return dict(
         is_active_veterinarian=has_profile and is_veterinarian(current_user),
         has_veterinarian_profile_flag=has_profile,
+        has_professional_access=has_professional_access(current_user),
         current_veterinarian_membership=membership,
     )
 
@@ -3834,7 +3842,7 @@ def api_message_threads():
 @login_required
 def chat_messages(animal_id):
     """API simples para listar e criar mensagens relacionadas a um animal."""
-    get_animal_or_404(animal_id)
+    Animal.query.get_or_404(animal_id)
     if request.method == 'GET':
         mensagens = (
             Message.query
@@ -4208,6 +4216,8 @@ def mensagens_admin():
                     else message.receiver_id
                 )
                 key = (other_id, message.animal_id or 0)
+                if message.sender_id in admin_ids:
+                    continue
                 if key in seen:
                     continue
                 seen.add(key)
@@ -4838,7 +4848,7 @@ def contratar_plano(animal_id):
 @login_required
 def validar_plano_consulta(consulta_id):
     consulta = get_consulta_or_404(consulta_id)
-    if current_user.worker != 'veterinario':
+    if not is_veterinarian(current_user):
         abort(403)
     form = ConsultaPlanAuthorizationForm()
     from models import HealthSubscription
@@ -4976,7 +4986,7 @@ def ficha_animal(animal_id):
         )
         if (
             current_user.role != 'admin'
-            and current_user.worker in ['veterinario', 'colaborador']
+            and has_professional_access(current_user)
         ):
             consultas_query = consultas_query.filter_by(
                 clinica_id=current_user_clinic_id()
@@ -5079,7 +5089,7 @@ def ficha_animal(animal_id):
 @login_required
 def upload_document(animal_id):
     animal = get_animal_or_404(animal_id)
-    if current_user.worker != 'veterinario':
+    if not is_veterinarian(current_user):
         flash('Apenas veterinários podem enviar documentos.', 'danger')
         return redirect(request.referrer or url_for('ficha_animal', animal_id=animal.id))
 
@@ -5213,6 +5223,8 @@ def consulta_qr():
     # Aqui você já deve ter carregado o animal
     animal = get_animal_or_404(animal_id)
     clinica_id = current_user_clinic_id()
+    is_active_vet = is_veterinarian(current_user)
+    worker_role = 'veterinario' if is_active_vet else getattr(current_user, 'worker', None)
 
     # Idade e unidade (anos/meses)
     idade = ''
@@ -5257,7 +5269,7 @@ def consulta_qr():
     plan_form = None
     active_plan_subscriptions = []
     authorization_summary = None
-    if animal and worker_role == 'veterinario' and consulta:
+    if animal and is_active_vet and consulta:
         from models import HealthSubscription
         active_plan_subscriptions = (
             HealthSubscription.query
@@ -5291,7 +5303,7 @@ def consulta_qr():
         animal_idade_unidade=idade_unidade,
         tutor_form=tutor_form,
         servicos=servicos,
-        worker=getattr(current_user, 'worker', None),
+        worker=worker_role,
         blocos_orcamento=blocos_orcamento,
         blocos_prescricao=blocos_prescricao,
         clinic_scope_id=clinic_scope_id,
@@ -5472,6 +5484,8 @@ def consulta_direct(animal_id):
             .all()
         )
 
+    worker_role = 'veterinario' if is_veterinarian(current_user) else current_user.worker
+
     return render_template(
         'consulta_qr.html',
         animal=animal,
@@ -5479,7 +5493,7 @@ def consulta_direct(animal_id):
         consulta=consulta,
         historico_consultas=historico,
         edit_mode=edit_mode,
-        worker=current_user.worker,
+        worker=worker_role,
         tipos_racao=tipos_racao,
         marcas_existentes=marcas_existentes,
         linhas_existentes=linhas_existentes,
@@ -5502,7 +5516,7 @@ def consulta_direct(animal_id):
 @login_required
 def finalizar_consulta(consulta_id):
     consulta = get_consulta_or_404(consulta_id)
-    if current_user.worker != 'veterinario':
+    if not is_veterinarian(current_user):
         flash('Apenas veterinários podem finalizar consultas.', 'danger')
         return redirect(url_for('index'))
 
@@ -5585,7 +5599,7 @@ def finalizar_consulta(consulta_id):
 @login_required
 def agendar_retorno(consulta_id):
     consulta = get_consulta_or_404(consulta_id)
-    if current_user.worker != 'veterinario':
+    if not is_veterinarian(current_user):
         abort(403)
     from models import Veterinario
 
@@ -5644,7 +5658,7 @@ def agendar_retorno(consulta_id):
 @login_required
 def iniciar_retorno(appointment_id):
     appt = Appointment.query.get_or_404(appointment_id)
-    if current_user.worker != 'veterinario':
+    if not is_veterinarian(current_user):
         abort(403)
     consulta = Consulta(
         animal_id=appt.animal_id,
@@ -5664,7 +5678,7 @@ def iniciar_retorno(appointment_id):
 def deletar_consulta(consulta_id):
     consulta = get_consulta_or_404(consulta_id)
     animal_id = consulta.animal_id
-    if current_user.worker != 'veterinario':
+    if not is_veterinarian(current_user):
         if request.accept_mimetypes.accept_json:
             return jsonify(success=False,
                            message='Apenas veterinários podem excluir consultas.'), 403
@@ -7933,7 +7947,7 @@ def tutor_detail(tutor_id):
 @login_required
 def tutores():
     # Restrição de acesso
-    if current_user.worker not in ['veterinario', 'colaborador']:
+    if not has_professional_access(current_user):
         flash('Apenas veterinários ou colaboradores podem acessar esta página.', 'danger')
         return redirect(url_for('index'))
 
@@ -8366,7 +8380,7 @@ def share_request_detail(token):
 def deletar_tutor(tutor_id):
     tutor = get_user_or_404(tutor_id)
 
-    if current_user.worker != 'veterinario':
+    if not is_veterinarian(current_user):
         flash('Apenas veterinários podem excluir tutores.', 'danger')
         return redirect(url_for('index'))
 
@@ -8438,7 +8452,7 @@ def update_tutor(user_id):
     wants_json = 'application/json' in request.headers.get('Accept', '')
 
     # 🔐 Permissão: veterinários ou colaboradores
-    if current_user.worker not in ['veterinario', 'colaborador']:
+    if not has_professional_access(current_user):
         message = 'Apenas veterinários ou colaboradores podem editar dados do tutor.'
         if wants_json:
             return jsonify(success=False, message=message, category='danger'), 403
@@ -8568,7 +8582,7 @@ from sqlalchemy.orm import joinedload
 @login_required
 def ficha_tutor(tutor_id):
     # Restrição de acesso
-    if current_user.worker not in ['veterinario', 'colaborador']:
+    if not has_professional_access(current_user):
         flash('Apenas veterinários ou colaboradores podem acessar esta página.', 'danger')
         return redirect(url_for('index'))
 
@@ -8639,7 +8653,7 @@ def update_animal(animal_id):
         else:
             flash(text, category)
 
-    if current_user.worker != 'veterinario':
+    if not is_veterinarian(current_user):
         message = 'Apenas veterinários podem editar dados do animal.'
         if wants_json:
             return jsonify(success=False, message=message, category='danger'), 403
@@ -8768,7 +8782,7 @@ def update_consulta(consulta_id):
 
     wants_json = 'application/json' in request.headers.get('Accept', '')
 
-    if current_user.worker != 'veterinario':
+    if not is_veterinarian(current_user):
         message = 'Apenas veterinários podem editar a consulta.'
         flash(message, 'danger')
         if wants_json:
@@ -8854,7 +8868,7 @@ def salvar_racao(animal_id):
     animal = get_animal_or_404(animal_id)
 
     # Verifica se o usuário pode editar esse animal
-    if current_user.worker != 'veterinario':
+    if not is_veterinarian(current_user):
         return jsonify({'success': False, 'error': 'Permissão negada.'}), 403
 
     data = request.get_json(silent=True) or {}
@@ -8934,7 +8948,7 @@ def salvar_racao(animal_id):
 @app.route('/tipo_racao', methods=['POST'])
 @login_required
 def criar_tipo_racao():
-    if current_user.worker != 'veterinario':
+    if not is_veterinarian(current_user):
         return jsonify({'success': False, 'error': 'Permissão negada.'}), 403
 
     data = request.get_json(silent=True) or {}
@@ -9055,7 +9069,7 @@ def buscar_racoes():
 def alterar_racao(racao_id):
     racao = Racao.query.get_or_404(racao_id)
 
-    if current_user.worker != 'veterinario':
+    if not is_veterinarian(current_user):
         return jsonify({'success': False, 'error': 'Permissão negada.'}), 403
 
     if racao.created_by and racao.created_by != current_user.id and getattr(current_user, 'role', '') != 'admin':
@@ -9323,7 +9337,7 @@ def imprimir_vacinas(animal_id):
 def alterar_vacina(vacina_id):
     vacina = Vacina.query.get_or_404(vacina_id)
 
-    if current_user.worker != 'veterinario':
+    if not is_veterinarian(current_user):
         return jsonify({'success': False, 'error': 'Permissão negada.'}), 403
 
     if vacina.created_by and vacina.created_by != current_user.id and getattr(current_user, 'role', '') != 'admin':
@@ -9422,7 +9436,7 @@ def alterar_vacina(vacina_id):
 def criar_prescricao(consulta_id):
     consulta = get_consulta_or_404(consulta_id)
 
-    if current_user.worker != 'veterinario':
+    if not is_veterinarian(current_user):
         flash('Apenas veterinários podem adicionar prescrições.', 'danger')
         return redirect(request.referrer or url_for('index'))
 
@@ -9477,7 +9491,7 @@ def deletar_prescricao(prescricao_id):
     ensure_clinic_access(clinic_id)
     animal_id = prescricao.animal_id
 
-    if current_user.worker != 'veterinario':
+    if not is_veterinarian(current_user):
         flash('Apenas veterinários podem excluir prescrições.', 'danger')
         return redirect(request.referrer or url_for('index'))
 
@@ -9714,7 +9728,7 @@ def salvar_prescricoes_lote(consulta_id):
 def salvar_bloco_prescricao(consulta_id):
     consulta = get_consulta_or_404(consulta_id)
 
-    if current_user.worker != 'veterinario':
+    if not is_veterinarian(current_user):
         return jsonify({'success': False, 'message': 'Apenas veterinários podem prescrever.'}), 403
 
     dados = request.get_json(silent=True) or {}
@@ -9781,7 +9795,7 @@ def salvar_bloco_prescricao(consulta_id):
 def deletar_bloco_prescricao(bloco_id):
     bloco = BlocoPrescricao.query.get_or_404(bloco_id)
     ensure_clinic_access(bloco.clinica_id)
-    if current_user.worker != 'veterinario':
+    if not is_veterinarian(current_user):
         if request.accept_mimetypes.accept_json:
             return jsonify(success=False,
                            message='Apenas veterinários podem excluir prescrições.'), 403
@@ -9808,7 +9822,7 @@ def editar_bloco_prescricao(bloco_id):
     bloco = BlocoPrescricao.query.get_or_404(bloco_id)
     ensure_clinic_access(bloco.clinica_id)
 
-    if current_user.worker != 'veterinario':
+    if not is_veterinarian(current_user):
         flash('Apenas veterinários podem editar prescrições.', 'danger')
         return redirect(url_for('index'))
 
@@ -9821,7 +9835,7 @@ def atualizar_bloco_prescricao(bloco_id):
     bloco = BlocoPrescricao.query.get_or_404(bloco_id)
     ensure_clinic_access(bloco.clinica_id)
 
-    if current_user.worker != 'veterinario':
+    if not is_veterinarian(current_user):
         return jsonify({'success': False, 'message': 'Apenas veterinários podem editar.'}), 403
 
     data = request.get_json(silent=True) or {}
@@ -9870,7 +9884,7 @@ def imprimir_bloco_prescricao(bloco_id):
     bloco = BlocoPrescricao.query.get_or_404(bloco_id)
     ensure_clinic_access(bloco.clinica_id)
 
-    if current_user.worker != 'veterinario':
+    if not is_veterinarian(current_user):
         flash('Apenas veterinários podem imprimir prescrições.', 'danger')
         return redirect(url_for('index'))
 
@@ -10006,7 +10020,7 @@ def imprimir_bloco_exames(bloco_id):
 @login_required
 def deletar_bloco_exames(bloco_id):
     bloco = BlocoExames.query.get_or_404(bloco_id)
-    if current_user.worker != 'veterinario':
+    if not is_veterinarian(current_user):
         if request.accept_mimetypes.accept_json:
             return jsonify(success=False,
                            message='Apenas veterinários podem excluir blocos de exames.'), 403
@@ -10032,7 +10046,7 @@ def deletar_bloco_exames(bloco_id):
 @login_required
 def editar_bloco_exames(bloco_id):
     bloco = BlocoExames.query.get_or_404(bloco_id)
-    if current_user.worker != 'veterinario':
+    if not is_veterinarian(current_user):
         return jsonify({'success': False, 'message': 'Apenas veterinários podem editar exames.'}), 403
     return render_template('orcamentos/editar_bloco_exames.html', bloco=bloco)
 
@@ -10045,7 +10059,7 @@ def editar_bloco_exames(bloco_id):
 def alterar_exame(exame_id):
     exame = ExameSolicitado.query.get_or_404(exame_id)
 
-    if current_user.worker != 'veterinario':
+    if not is_veterinarian(current_user):
         return jsonify({'success': False, 'error': 'Permissão negada.'}), 403
 
     if request.method == 'DELETE':
@@ -10146,7 +10160,7 @@ def atualizar_bloco_exames(bloco_id):
 @app.route('/novo_atendimento')
 @login_required
 def novo_atendimento():
-    if current_user.worker != 'veterinario':
+    if not is_veterinarian(current_user):
         flash('Apenas veterinários podem acessar esta página.', 'danger')
         return redirect(url_for('index'))
 
@@ -10200,7 +10214,7 @@ def criar_tutor_ajax():
 @app.route('/novo_animal', methods=['GET', 'POST'])
 @login_required
 def novo_animal():
-    if current_user.worker not in ['veterinario', 'colaborador']:
+    if not has_professional_access(current_user):
         flash('Apenas veterinários ou colaboradores podem cadastrar animais.', 'danger')
         return redirect(url_for('index'))
 
@@ -10412,7 +10426,7 @@ def novo_animal():
 def marcar_como_falecido(animal_id):
     animal = get_animal_or_404(animal_id)
 
-    if current_user.worker != 'veterinario':
+    if not is_veterinarian(current_user):
         flash('Apenas veterinários podem realizar essa ação.', 'danger')
         return redirect(url_for('ficha_animal', animal_id=animal.id))
 
@@ -10442,7 +10456,7 @@ def marcar_como_falecido(animal_id):
 @app.route('/animal/<int:animal_id>/reverter_falecimento', methods=['POST'])
 @login_required
 def reverter_falecimento(animal_id):
-    if current_user.worker != 'veterinario':
+    if not is_veterinarian(current_user):
         abort(403)
 
     animal = get_animal_or_404(animal_id)
@@ -10467,7 +10481,7 @@ def reverter_falecimento(animal_id):
 def arquivar_animal(animal_id):
     animal = get_animal_or_404(animal_id)
 
-    if current_user.worker != 'veterinario':
+    if not is_veterinarian(current_user):
         flash('Apenas veterinários podem excluir animais definitivamente.', 'danger')
         return redirect(request.referrer or url_for('index'))
 
@@ -14764,7 +14778,7 @@ def api_my_pets():
 def api_clinic_pets():
     """Return pets associated with the current clinic (or admin selection)."""
 
-    if current_user.worker not in {"veterinario", "colaborador"} and current_user.role != 'admin':
+    if not has_professional_access(current_user) and current_user.role != 'admin':
         return api_my_pets()
 
     clinic_id = None
@@ -15917,7 +15931,7 @@ def animal_exam_appointments(animal_id):
 @app.route('/servico', methods=['POST'])
 @login_required
 def criar_servico_clinica():
-    if current_user.worker != 'veterinario':
+    if not is_veterinarian(current_user):
         return jsonify({'success': False, 'message': 'Apenas veterinários podem adicionar itens.'}), 403
     data = request.get_json(silent=True) or {}
     descricao = data.get('descricao')
@@ -16163,7 +16177,7 @@ def pagar_consulta_orcamento(consulta_id):
 @login_required
 def adicionar_orcamento_item(consulta_id):
     consulta = get_consulta_or_404(consulta_id)
-    if current_user.worker != 'veterinario':
+    if not is_veterinarian(current_user):
         return jsonify({'success': False, 'message': 'Apenas veterinários podem adicionar itens.'}), 403
     clinic_id = consulta.clinica_id or current_user_clinic_id()
     if not clinic_id:
@@ -16236,7 +16250,7 @@ def adicionar_orcamento_item(consulta_id):
 @login_required
 def deletar_orcamento_item(item_id):
     item = OrcamentoItem.query.get_or_404(item_id)
-    if current_user.worker != 'veterinario':
+    if not is_veterinarian(current_user):
         return jsonify({'success': False, 'message': 'Apenas veterinários podem remover itens.'}), 403
     consulta = item.consulta
     ensure_clinic_access(consulta.clinica_id)
@@ -16249,7 +16263,7 @@ def deletar_orcamento_item(item_id):
 @login_required
 def salvar_bloco_orcamento(consulta_id):
     consulta = get_consulta_or_404(consulta_id)
-    if current_user.worker != 'veterinario':
+    if not is_veterinarian(current_user):
         return jsonify({'success': False, 'message': 'Apenas veterinários podem salvar orçamento.'}), 403
     if not consulta.orcamento_items:
         return jsonify({'success': False, 'message': 'Nenhum item no orçamento.'}), 400
@@ -16309,7 +16323,7 @@ def salvar_bloco_orcamento(consulta_id):
 def deletar_bloco_orcamento(bloco_id):
     bloco = BlocoOrcamento.query.get_or_404(bloco_id)
     ensure_clinic_access(bloco.clinica_id)
-    if current_user.worker != 'veterinario':
+    if not is_veterinarian(current_user):
         return jsonify({'success': False, 'message': 'Apenas veterinários podem excluir.'}), 403
     animal_id = bloco.animal_id
     clinic_id = bloco.clinica_id
@@ -16330,7 +16344,7 @@ def deletar_bloco_orcamento(bloco_id):
 def editar_bloco_orcamento(bloco_id):
     bloco = BlocoOrcamento.query.get_or_404(bloco_id)
     ensure_clinic_access(bloco.clinica_id)
-    if current_user.worker != 'veterinario':
+    if not is_veterinarian(current_user):
         return jsonify({'success': False, 'message': 'Apenas veterinários podem editar.'}), 403
     return render_template('orcamentos/editar_bloco_orcamento.html', bloco=bloco)
 
@@ -16340,7 +16354,7 @@ def editar_bloco_orcamento(bloco_id):
 def atualizar_bloco_orcamento(bloco_id):
     bloco = BlocoOrcamento.query.get_or_404(bloco_id)
     ensure_clinic_access(bloco.clinica_id)
-    if current_user.worker != 'veterinario':
+    if not is_veterinarian(current_user):
         return jsonify({'success': False, 'message': 'Apenas veterinários podem editar.'}), 403
 
     data = request.get_json(silent=True) or {}
