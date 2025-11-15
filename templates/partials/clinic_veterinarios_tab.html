@@ -1,460 +1,657 @@
-        <div class="d-flex justify-content-between align-items-center mt-4">
-          <h3 class="mb-0">Funcionários</h3>
-        </div>
-        <div class="btn-group mt-3" role="group" aria-label="Navegação entre seções">
-          <button type="button" class="btn btn-outline-secondary btn-sm" data-section-target="staff-section">Equipe interna</button>
-          <button type="button" class="btn btn-outline-secondary btn-sm" data-section-target="vets-section">Veterinários</button>
-          <button type="button" class="btn btn-outline-secondary btn-sm" data-section-target="especialistas">Especialistas</button>
-        </div>
-        <section id="staff-section" class="mt-3">
-        {% if current_user.id == clinica.owner_id %}
-        <form method="post" class="mt-3 mb-4" id="add-staff-form">
-          {{ staff_form.hidden_tag() }}
-          <div class="input-group">
-            {{ staff_form.email(class="form-control", placeholder="Email do usuário") }}
-            {{ staff_form.submit(class="btn btn-primary") }}
-          </div>
-        </form>
-        {% endif %}
-        <div class="table-responsive mb-4">
-          <table id="employee-list" class="table table-striped">
-            <tbody>
-              {% for s in staff_members %}
-              <tr>
-                <td><strong>{{ s.user.name }}</strong> - {{ s.user.email }}</td>
-                <td class="text-end">
-                  {% if current_user.id == clinica.owner_id %}
-                  <div class="btn-group">
-                    <button class="btn btn-sm btn-outline-primary" onclick="toggleStaffPerm({{ s.user.id }})">Permissões</button>
-                    <form method="post" action="{{ url_for('remove_funcionario', clinica_id=clinica.id, user_id=s.user.id) }}" class="d-inline">
-                      {{ staff_permission_forms[s.user.id].csrf_token }}
-                      <button type="submit" class="btn btn-sm btn-outline-danger">Remover</button>
-                    </form>
-                  </div>
-                  {% endif %}
-                </td>
-              </tr>
-              {% if current_user.id == clinica.owner_id %}
-              <tr id="staff-perms-{{ s.user.id }}" style="display:none;">
-                <td colspan="2">
-                  <form method="post">
-                    {{ staff_permission_forms[s.user.id].hidden_tag() }}
-                    <div class="form-check">
-                      {{ staff_permission_forms[s.user.id].can_manage_clients(class="form-check-input") }}
-                      {{ staff_permission_forms[s.user.id].can_manage_clients.label(class="form-check-label") }}
-                    </div>
-                    <div class="form-check">
-                      {{ staff_permission_forms[s.user.id].can_manage_animals(class="form-check-input") }}
-                      {{ staff_permission_forms[s.user.id].can_manage_animals.label(class="form-check-label") }}
-                    </div>
-                    <div class="form-check">
-                      {{ staff_permission_forms[s.user.id].can_manage_staff(class="form-check-input") }}
-                      {{ staff_permission_forms[s.user.id].can_manage_staff.label(class="form-check-label") }}
-                    </div>
-                    <div class="form-check">
-                      {{ staff_permission_forms[s.user.id].can_manage_schedule(class="form-check-input") }}
-                      {{ staff_permission_forms[s.user.id].can_manage_schedule.label(class="form-check-label") }}
-                    </div>
-                    <div class="form-check">
-                      {{ staff_permission_forms[s.user.id].can_manage_inventory(class="form-check-input") }}
-                      {{ staff_permission_forms[s.user.id].can_manage_inventory.label(class="form-check-label") }}
-                    </div>
-                    <div class="form-check">
-                      {{ staff_permission_forms[s.user.id].can_view_full_calendar(class="form-check-input") }}
-                      {{ staff_permission_forms[s.user.id].can_view_full_calendar.label(class="form-check-label") }}
-                      <div class="form-text">Permite visualizar a agenda completa da clínica.</div>
-                    </div>
-                    {{ staff_permission_forms[s.user.id].submit(class="btn btn-primary btn-sm mt-2") }}
-                  </form>
-                </td>
-              </tr>
-              {% endif %}
-              {% else %}
-              <tr>
-                <td>Nenhum funcionário.</td>
-              </tr>
-              {% endfor %}
-            </tbody>
-          </table>
-        </div>
-        </section>
-        <section id="vets-section" class="mt-5">
-        <h4 class="mt-4">Veterinários</h4>
-        <div class="row row-cols-1 row-cols-md-3 g-2 mt-3 mb-3">
-          <div class="col">
-            <input type="text" id="staff-filter" class="form-control" placeholder="Buscar por nome, CRMV...">
-          </div>
-          <div class="col">
-            <select id="staff-sort" class="form-select">
-              <option value="name_asc">Nome (A-Z)</option>
-              <option value="name_desc">Nome (Z-A)</option>
-              <option value="role_asc">Função (A-Z)</option>
-              <option value="role_desc">Função (Z-A)</option>
-            </select>
-          </div>
-          <div class="col">
-            <select id="staff-role" class="form-select">
-              <option value="">Todas as funções</option>
-              <option value="veterinario">Veterinário</option>
-              <option value="colaborador">Colaborador</option>
-            </select>
-          </div>
-        </div>
-        <div class="table-responsive">
-          <table id="staff-list" class="table table-striped">
-            <thead>
-              <tr>
-                <th>Veterinário</th>
-              </tr>
-            </thead>
-            <tbody>
-              {% for v in veterinarios %}
-              <tr data-name="{{ v.user.name|lower }}" data-role="{{ v.user.worker or '' }}">
-                <td>
-                  <div class="d-flex justify-content-between align-items-center">
-                    <div><strong>{{ v.user.name }}</strong> (CRMV: {{ v.crmv }})</div>
-                    {% if pode_editar %}
-                    <div class="btn-group">
-                      <button class="btn btn-sm btn-outline-primary" onclick="toggleVetOptions({{ v.id }})">Editar</button>
-                      <button class="btn btn-sm btn-outline-secondary" onclick="toggleVetPerm({{ v.user.id }})">Permissões</button>
-                    </div>
-                    {% endif %}
-                  </div>
-                  <table class="table table-sm ms-3 mt-2">
-                    <tbody>
-                      {% for dia, horarios in grouped_vet_schedules.get(v.id, {}).items() %}
-                      <tr>
-                        <td>{{ dia }}: {{ ', '.join(horarios) }}</td>
-                      </tr>
-                      {% else %}
-                      <tr>
-                        <td>Sem horários cadastrados.</td>
-                      </tr>
-                      {% endfor %}
-                    </tbody>
-                  </table>
-                  {% if pode_editar %}
-                  <div id="vet-perms-{{ v.user.id }}" style="display:none;" class="mt-2">
-                    <form method="post">
-                      {{ vet_permission_forms[v.user.id].hidden_tag() }}
-                      <div class="form-check">
-                        {{ vet_permission_forms[v.user.id].can_manage_clients(class="form-check-input") }}
-                        {{ vet_permission_forms[v.user.id].can_manage_clients.label(class="form-check-label") }}
-                      </div>
-                      <div class="form-check">
-                        {{ vet_permission_forms[v.user.id].can_manage_animals(class="form-check-input") }}
-                        {{ vet_permission_forms[v.user.id].can_manage_animals.label(class="form-check-label") }}
-                      </div>
-                      <div class="form-check">
-                        {{ vet_permission_forms[v.user.id].can_manage_staff(class="form-check-input") }}
-                        {{ vet_permission_forms[v.user.id].can_manage_staff.label(class="form-check-label") }}
-                      </div>
-                      <div class="form-check">
-                        {{ vet_permission_forms[v.user.id].can_manage_schedule(class="form-check-input") }}
-                        {{ vet_permission_forms[v.user.id].can_manage_schedule.label(class="form-check-label") }}
-                      </div>
-                      <div class="form-check">
-                        {{ vet_permission_forms[v.user.id].can_manage_inventory(class="form-check-input") }}
-                        {{ vet_permission_forms[v.user.id].can_manage_inventory.label(class="form-check-label") }}
-                      </div>
-                      <div class="form-check">
-                        {{ vet_permission_forms[v.user.id].can_view_full_calendar(class="form-check-input") }}
-                        {{ vet_permission_forms[v.user.id].can_view_full_calendar.label(class="form-check-label") }}
-                        <div class="form-text">Permite visualizar a agenda completa da clínica.</div>
-                      </div>
-                      {{ vet_permission_forms[v.user.id].submit(class="btn btn-primary btn-sm mt-2") }}
-                    </form>
-                  </div>
-                  <div id="vet-options-{{ v.id }}" style="display:none;" class="mt-2">
-                    <form method="post" action="{{ url_for('remove_veterinario', clinica_id=clinica.id, veterinario_id=v.id) }}" class="mb-3">
-                      {{ vet_schedule_forms[v.id].csrf_token }}
-                      <button type="submit" class="btn btn-sm btn-outline-danger">Remover</button>
-                    </form>
-                    <table class="table table-sm ms-3 mb-3">
-                      <tbody>
-                        {% for h in v.horarios %}
-                        <tr>
-                          <td>
-                            {{ h.dia_semana }}: {{ h.hora_inicio.strftime('%H:%M') }} - {{ h.hora_fim.strftime('%H:%M') }}
-                            <form method="post" action="{{ url_for('delete_vet_schedule_clinic', clinica_id=clinica.id, veterinario_id=v.id, horario_id=h.id) }}" class="d-inline">
-                              {{ vet_schedule_forms[v.id].csrf_token }}
-                              <button type="submit" class="btn btn-sm btn-outline-danger ms-2">Excluir</button>
-                            </form>
-                          </td>
-                        </tr>
-                        {% else %}
-                        <tr>
-                          <td>Sem horários cadastrados.</td>
-                        </tr>
-                        {% endfor %}
-                      </tbody>
-                    </table>
-                    <form method="post" class="ms-3 mb-3">
-                      {{ vet_schedule_forms[v.id].hidden_tag() }}
-                      <div style="display:none;">{{ vet_schedule_forms[v.id].veterinario_id() }}</div>
-                      <div class="mb-2">
-                        {{ vet_schedule_forms[v.id].dias_semana.label }}
-                        {{ vet_schedule_forms[v.id].dias_semana(class="form-select", multiple=True, size=7) }}
-                      </div>
-                      <div class="mb-2">
-                        {{ vet_schedule_forms[v.id].hora_inicio.label }}
-                        {{ vet_schedule_forms[v.id].hora_inicio(class="form-control") }}
-                      </div>
-                      <div class="mb-2">
-                        {{ vet_schedule_forms[v.id].hora_fim.label }}
-                        {{ vet_schedule_forms[v.id].hora_fim(class="form-control") }}
-                      </div>
-                      <div class="mb-2">
-                        {{ vet_schedule_forms[v.id].intervalo_inicio.label }}
-                        {{ vet_schedule_forms[v.id].intervalo_inicio(class="form-control") }}
-                      </div>
-                      <div class="mb-2">
-                        {{ vet_schedule_forms[v.id].intervalo_fim.label }}
-                        {{ vet_schedule_forms[v.id].intervalo_fim(class="form-control") }}
-                      </div>
-                      {{ vet_schedule_forms[v.id].submit(class="btn btn-primary btn-sm") }}
-                    </form>
-                  </div>
-                  {% endif %}
-                </td>
-              </tr>
-              {% else %}
-              <tr>
-                <td>Nenhum veterinário associado.</td>
-              </tr>
-              {% endfor %}
-            </tbody>
-          </table>
-        </div>
+<div class="clinic-team-container">
+  <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mt-4">
+    <div>
+      <h3 class="mb-1 d-flex align-items-center gap-2">
+        <i class="bi bi-people-fill text-primary"></i>
+        Gestão de profissionais
+      </h3>
+      <p class="text-muted small mb-0">Organize a equipe interna, especialistas e convites enviados.</p>
+    </div>
+    {% if pode_editar %}
+    <button class="btn btn-outline-primary" data-bs-toggle="offcanvas" data-bs-target="#addVetOffcanvas">
+      <i class="bi bi-person-plus"></i>
+      <span class="ms-1">Adicionar profissional</span>
+    </button>
+    {% endif %}
+  </div>
 
-        <h4 class="mt-4" id="especialistas">Especialistas</h4>
-        {% if current_user.id == clinica.owner_id %}
-        <form method="post" class="mt-3 mb-4">
-          {{ specialist_form.hidden_tag() }}
-          <div class="input-group">
-            {{ specialist_form.email(class="form-control", placeholder="Email do especialista") }}
-            {{ specialist_form.submit(class="btn btn-primary") }}
+  <div class="accordion mt-4" id="clinicTeamAccordion">
+    <div class="accordion-item shadow-sm">
+      <h2 class="accordion-header" id="accordion-staff">
+        <button class="accordion-button" type="button" data-bs-toggle="collapse" data-bs-target="#collapse-staff" aria-expanded="true" aria-controls="collapse-staff">
+          <i class="bi bi-person-badge me-2 text-primary"></i>
+          Equipe interna
+          <span class="badge badge-soft-primary ms-2">{{ staff_members|length }}</span>
+        </button>
+      </h2>
+      <div id="collapse-staff" class="accordion-collapse collapse show" aria-labelledby="accordion-staff" data-bs-parent="#clinicTeamAccordion">
+        <div class="accordion-body">
+          {% if current_user.id == clinica.owner_id %}
+          <div class="card shadow-sm mb-4">
+            <div class="card-body">
+              <h5 class="card-title d-flex align-items-center gap-2 mb-3">
+                <i class="bi bi-envelope-plus text-primary"></i>
+                Convidar funcionário interno
+              </h5>
+              <form method="post" id="add-staff-form">
+                {{ staff_form.hidden_tag() }}
+                <div class="input-group">
+                  {{ staff_form.email(class="form-control", placeholder="Email do usuário") }}
+                  {{ staff_form.submit(class="btn btn-primary") }}
+                </div>
+              </form>
+            </div>
           </div>
-        </form>
-        {% endif %}
-        <div class="table-responsive mb-4">
-          <table class="table table-striped">
-            <tbody>
-              {% for s in specialists %}
-              <tr>
-                <td>
-                  <div class="d-flex justify-content-between align-items-center">
+          {% endif %}
+          <div class="row row-cols-1 row-cols-lg-2 g-3">
+            {% for s in staff_members %}
+            <div class="col" data-name="{{ s.user.name|lower }}" data-role="colaborador">
+              <div class="card team-card h-100">
+                <div class="card-body d-flex justify-content-between align-items-start gap-3">
+                  <div>
+                    <div class="d-flex flex-wrap align-items-center gap-2">
+                      <div class="team-card-icon bg-primary-subtle text-primary">
+                        <i class="bi bi-person-workspace"></i>
+                      </div>
+                      <div>
+                        <h6 class="mb-1">{{ s.user.name }}</h6>
+                        <div class="text-muted small">{{ s.user.email }}</div>
+                      </div>
+                      <span class="badge badge-soft-primary">Equipe interna</span>
+                    </div>
+                  </div>
+                  {% if current_user.id == clinica.owner_id %}
+                  <div class="dropdown ms-auto action-dropdown">
+                    <button class="btn btn-icon" type="button" data-bs-toggle="dropdown" aria-expanded="false">
+                      <i class="bi bi-three-dots-vertical"></i>
+                    </button>
+                    <ul class="dropdown-menu dropdown-menu-end">
+                      <li>
+                        <button class="dropdown-item d-flex align-items-center gap-2" type="button" data-bs-toggle="offcanvas" data-bs-target="#staffPermOffcanvas-{{ s.user.id }}">
+                          <i class="bi bi-shield-lock"></i>
+                          Gerenciar permissões
+                        </button>
+                      </li>
+                      <li>
+                        <button class="dropdown-item text-danger d-flex align-items-center gap-2" type="button" data-bs-toggle="modal" data-bs-target="#removeStaffModal-{{ s.user.id }}">
+                          <i class="bi bi-person-dash"></i>
+                          Remover funcionário
+                        </button>
+                      </li>
+                    </ul>
+                  </div>
+                  {% endif %}
+                </div>
+              </div>
+            </div>
+            {% else %}
+            <div class="col">
+              <div class="card team-card h-100">
+                <div class="card-body text-center text-muted">
+                  Nenhum funcionário cadastrado.
+                </div>
+              </div>
+            </div>
+            {% endfor %}
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="accordion-item shadow-sm mt-3">
+      <h2 class="accordion-header" id="accordion-vets">
+        <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapse-vets" aria-controls="collapse-vets">
+          <i class="bi bi-heart-pulse me-2 text-success"></i>
+          Veterinários
+          <span class="badge badge-soft-success ms-2">{{ veterinarios|length }}</span>
+        </button>
+      </h2>
+      <div id="collapse-vets" class="accordion-collapse collapse" aria-labelledby="accordion-vets" data-bs-parent="#clinicTeamAccordion">
+        <div class="accordion-body">
+          <div class="card shadow-sm mb-4">
+            <div class="card-body">
+              <div class="row row-cols-1 row-cols-md-3 g-3">
+                <div class="col">
+                  <label for="staff-filter" class="form-label text-muted small">Buscar profissional</label>
+                  <div class="input-group">
+                    <span class="input-group-text bg-light"><i class="bi bi-search"></i></span>
+                    <input type="text" id="staff-filter" class="form-control" placeholder="Nome, CRMV...">
+                  </div>
+                </div>
+                <div class="col">
+                  <label for="staff-sort" class="form-label text-muted small">Ordenar por</label>
+                  <select id="staff-sort" class="form-select">
+                    <option value="name_asc">Nome (A-Z)</option>
+                    <option value="name_desc">Nome (Z-A)</option>
+                    <option value="role_asc">Função (A-Z)</option>
+                    <option value="role_desc">Função (Z-A)</option>
+                  </select>
+                </div>
+                <div class="col">
+                  <label for="staff-role" class="form-label text-muted small">Filtrar função</label>
+                  <select id="staff-role" class="form-select">
+                    <option value="">Todas</option>
+                    <option value="veterinario">Veterinário</option>
+                    <option value="colaborador">Colaborador</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div id="staff-list" class="row row-cols-1 row-cols-md-2 g-3">
+            {% for v in veterinarios %}
+            {% set schedule_summary = grouped_vet_schedules.get(v.id, {}) %}
+            <div class="col" data-name="{{ v.user.name|lower }}" data-role="{{ v.user.worker or 'veterinario' }}">
+              <div class="card team-card h-100">
+                <div class="card-body d-flex flex-column gap-3">
+                  <div class="d-flex justify-content-between align-items-start gap-3">
                     <div>
-                      <strong>{{ s.user.name }}</strong>
-                      {% if s.specialties %}
-                      <div class="small text-muted">{{ s.specialties | map(attribute='nome') | join(', ') }}</div>
-                      {% endif %}
+                      <div class="d-flex flex-wrap align-items-center gap-2">
+                        <div class="team-card-icon bg-success-subtle text-success">
+                          <i class="bi bi-heart-pulse"></i>
+                        </div>
+                        <div>
+                          <h6 class="mb-1">{{ v.user.name }}</h6>
+                          <div class="text-muted small">CRMV: {{ v.crmv }}</div>
+                        </div>
+                        <span class="badge badge-soft-success">Veterinário</span>
+                      </div>
                     </div>
                     {% if pode_editar %}
-                    <div class="btn-group">
-                      <button class="btn btn-sm btn-outline-primary" onclick="toggleVetOptions({{ s.id }})">Horários</button>
-                      <button class="btn btn-sm btn-outline-secondary" onclick="toggleVetPerm({{ s.user.id }})">Permissões</button>
-                      <form method="post" action="{{ url_for('remove_specialist', clinica_id=clinica.id, veterinario_id=s.id) }}" class="d-inline">
-                        {{ vet_permission_forms[s.user.id].csrf_token }}
-                        <button type="submit" class="btn btn-sm btn-outline-danger">Remover</button>
-                      </form>
+                    <div class="dropdown action-dropdown">
+                      <button class="btn btn-icon" type="button" data-bs-toggle="dropdown" aria-expanded="false">
+                        <i class="bi bi-three-dots"></i>
+                      </button>
+                      <ul class="dropdown-menu dropdown-menu-end">
+                        <li>
+                          <button class="dropdown-item d-flex align-items-center gap-2" type="button" data-bs-toggle="offcanvas" data-bs-target="#vetScheduleOffcanvas-{{ v.id }}">
+                            <i class="bi bi-calendar-week"></i>
+                            Gerenciar horários
+                          </button>
+                        </li>
+                        <li>
+                          <button class="dropdown-item d-flex align-items-center gap-2" type="button" data-bs-toggle="offcanvas" data-bs-target="#vetPermOffcanvas-{{ v.user.id }}">
+                            <i class="bi bi-shield-lock"></i>
+                            Permissões
+                          </button>
+                        </li>
+                        <li>
+                          <button class="dropdown-item text-danger d-flex align-items-center gap-2" type="button" data-bs-toggle="modal" data-bs-target="#removeVetModal-{{ v.id }}">
+                            <i class="bi bi-person-dash"></i>
+                            Remover
+                          </button>
+                        </li>
+                      </ul>
                     </div>
                     {% endif %}
                   </div>
-                  <table class="table table-sm ms-3 mt-2">
-                    <tbody>
-                      {% for dia, horarios in grouped_vet_schedules.get(s.id, {}).items() %}
-                      <tr>
-                        <td>{{ dia }}: {{ ', '.join(horarios) }}</td>
-                      </tr>
+                  <div class="schedule-summary">
+                    <h6 class="text-muted small text-uppercase mb-2">Disponibilidade</h6>
+                    <ul class="list-unstyled mb-0 small">
+                      {% for dia, horarios in schedule_summary.items() %}
+                      <li class="d-flex align-items-center gap-2">
+                        <i class="bi bi-calendar-event text-success"></i>
+                        <span>{{ dia }}: {{ ', '.join(horarios) }}</span>
+                      </li>
                       {% else %}
-                      <tr>
-                        <td>Sem horários cadastrados.</td>
-                      </tr>
+                      <li class="text-muted d-flex align-items-center gap-2">
+                        <i class="bi bi-clock-history"></i>
+                        <span>Sem horários cadastrados.</span>
+                      </li>
                       {% endfor %}
-                    </tbody>
-                  </table>
-                  {% if pode_editar %}
-                  <div id="vet-perms-{{ s.user.id }}" style="display:none;" class="mt-2">
-                    <form method="post">
-                      {{ vet_permission_forms[s.user.id].hidden_tag() }}
-                      <div class="form-check">
-                        {{ vet_permission_forms[s.user.id].can_manage_clients(class="form-check-input") }}
-                        {{ vet_permission_forms[s.user.id].can_manage_clients.label(class="form-check-label") }}
-                      </div>
-                      <div class="form-check">
-                        {{ vet_permission_forms[s.user.id].can_manage_animals(class="form-check-input") }}
-                        {{ vet_permission_forms[s.user.id].can_manage_animals.label(class="form-check-label") }}
-                      </div>
-                      <div class="form-check">
-                        {{ vet_permission_forms[s.user.id].can_manage_staff(class="form-check-input") }}
-                        {{ vet_permission_forms[s.user.id].can_manage_staff.label(class="form-check-label") }}
-                      </div>
-                      <div class="form-check">
-                        {{ vet_permission_forms[s.user.id].can_manage_schedule(class="form-check-input") }}
-                        {{ vet_permission_forms[s.user.id].can_manage_schedule.label(class="form-check-label") }}
-                      </div>
-                      <div class="form-check">
-                        {{ vet_permission_forms[s.user.id].can_manage_inventory(class="form-check-input") }}
-                        {{ vet_permission_forms[s.user.id].can_manage_inventory.label(class="form-check-label") }}
-                      </div>
-                      {{ vet_permission_forms[s.user.id].submit(class="btn btn-primary btn-sm mt-2") }}
-                    </form>
+                    </ul>
                   </div>
-                  <div id="vet-options-{{ s.id }}" style="display:none;" class="mt-2">
-                    <table class="table table-sm ms-3 mb-3">
-                      <tbody>
-                        {% for h in s.horarios %}
-                        <tr>
-                          <td>
-                            {{ h.dia_semana }}: {{ h.hora_inicio.strftime('%H:%M') }} - {{ h.hora_fim.strftime('%H:%M') }}
-                            <form method="post" action="{{ url_for('delete_vet_schedule_clinic', clinica_id=clinica.id, veterinario_id=s.id, horario_id=h.id) }}" class="d-inline">
-                              {{ vet_schedule_forms[s.id].csrf_token }}
-                              <button type="submit" class="btn btn-sm btn-outline-danger ms-2">Excluir</button>
-                            </form>
-                          </td>
-                        </tr>
-                        {% else %}
-                        <tr>
-                          <td>Sem horários cadastrados.</td>
-                        </tr>
-                        {% endfor %}
-                      </tbody>
-                    </table>
-                    <form method="post" class="ms-3 mb-3">
-                      {{ vet_schedule_forms[s.id].hidden_tag() }}
-                      <div style="display:none;">{{ vet_schedule_forms[s.id].veterinario_id() }}</div>
-                      <div class="mb-2">
-                        {{ vet_schedule_forms[s.id].dias_semana.label }}
-                        {{ vet_schedule_forms[s.id].dias_semana(class="form-select", multiple=True, size=7) }}
-                      </div>
-                      <div class="mb-2">
-                        {{ vet_schedule_forms[s.id].hora_inicio.label }}
-                        {{ vet_schedule_forms[s.id].hora_inicio(class="form-control") }}
-                      </div>
-                      <div class="mb-2">
-                        {{ vet_schedule_forms[s.id].hora_fim.label }}
-                        {{ vet_schedule_forms[s.id].hora_fim(class="form-control") }}
-                      </div>
-                      <div class="mb-2">
-                        {{ vet_schedule_forms[s.id].intervalo_inicio.label }}
-                        {{ vet_schedule_forms[s.id].intervalo_inicio(class="form-control") }}
-                      </div>
-                      <div class="mb-2">
-                        {{ vet_schedule_forms[s.id].intervalo_fim.label }}
-                        {{ vet_schedule_forms[s.id].intervalo_fim(class="form-control") }}
-                      </div>
-                      {{ vet_schedule_forms[s.id].submit(class="btn btn-primary btn-sm") }}
-                    </form>
-                  </div>
-                  {% endif %}
-                </td>
-              </tr>
-              {% else %}
-              <tr>
-                <td>Nenhum especialista associado.</td>
-              </tr>
-              {% endfor %}
-            </tbody>
-          </table>
+                </div>
+              </div>
+            </div>
+            {% else %}
+            <div class="col">
+              <div class="card team-card h-100">
+                <div class="card-body text-center text-muted">
+                  Nenhum veterinário associado.
+                </div>
+              </div>
+            </div>
+            {% endfor %}
+          </div>
         </div>
-        {% if pode_editar %}
-        <div class="mt-4">
-          <h5>Convites enviados</h5>
+      </div>
+    </div>
+
+    <div class="accordion-item shadow-sm mt-3">
+      <h2 class="accordion-header" id="accordion-specialists">
+        <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapse-specialists" aria-controls="collapse-specialists">
+          <i class="bi bi-stars me-2 text-info"></i>
+          Especialistas
+          <span class="badge badge-soft-info ms-2">{{ specialists|length }}</span>
+        </button>
+      </h2>
+      <div id="collapse-specialists" class="accordion-collapse collapse" aria-labelledby="accordion-specialists" data-bs-parent="#clinicTeamAccordion">
+        <div class="accordion-body">
+          {% if current_user.id == clinica.owner_id %}
+          <div class="alert alert-info d-flex align-items-center gap-2" role="alert">
+            <i class="bi bi-info-circle"></i>
+            Convide especialistas externos para disponibilizar agendas compartilhadas.
+          </div>
+          {% endif %}
+          <div class="row row-cols-1 row-cols-md-2 g-3">
+            {% for s in specialists %}
+            {% set schedule_summary = grouped_vet_schedules.get(s.id, {}) %}
+            <div class="col" data-name="{{ s.user.name|lower }}" data-role="especialista">
+              <div class="card team-card h-100">
+                <div class="card-body d-flex flex-column gap-3">
+                  <div class="d-flex justify-content-between align-items-start gap-3">
+                    <div>
+                      <div class="d-flex flex-wrap align-items-center gap-2">
+                        <div class="team-card-icon bg-info-subtle text-info">
+                          <i class="bi bi-stars"></i>
+                        </div>
+                        <div>
+                          <h6 class="mb-1">{{ s.user.name }}</h6>
+                          {% if s.specialties %}
+                          <div class="text-muted small">{{ s.specialties | map(attribute='nome') | join(', ') }}</div>
+                          {% endif %}
+                          <div class="text-muted small">{{ s.user.email }}</div>
+                        </div>
+                        <span class="badge badge-soft-info">Especialista</span>
+                      </div>
+                    </div>
+                    {% if pode_editar %}
+                    <div class="dropdown action-dropdown">
+                      <button class="btn btn-icon" type="button" data-bs-toggle="dropdown" aria-expanded="false">
+                        <i class="bi bi-three-dots"></i>
+                      </button>
+                      <ul class="dropdown-menu dropdown-menu-end">
+                        <li>
+                          <button class="dropdown-item d-flex align-items-center gap-2" type="button" data-bs-toggle="offcanvas" data-bs-target="#vetScheduleOffcanvas-{{ s.id }}">
+                            <i class="bi bi-calendar-week"></i>
+                            Horários
+                          </button>
+                        </li>
+                        <li>
+                          <button class="dropdown-item d-flex align-items-center gap-2" type="button" data-bs-toggle="offcanvas" data-bs-target="#vetPermOffcanvas-{{ s.user.id }}">
+                            <i class="bi bi-shield-lock"></i>
+                            Permissões
+                          </button>
+                        </li>
+                        <li>
+                          <button class="dropdown-item text-danger d-flex align-items-center gap-2" type="button" data-bs-toggle="modal" data-bs-target="#removeVetModal-{{ s.id }}">
+                            <i class="bi bi-person-dash"></i>
+                            Remover
+                          </button>
+                        </li>
+                      </ul>
+                    </div>
+                    {% endif %}
+                  </div>
+                  <div class="schedule-summary">
+                    <h6 class="text-muted small text-uppercase mb-2">Disponibilidade</h6>
+                    <ul class="list-unstyled mb-0 small">
+                      {% for dia, horarios in schedule_summary.items() %}
+                      <li class="d-flex align-items-center gap-2">
+                        <i class="bi bi-calendar-event text-info"></i>
+                        <span>{{ dia }}: {{ ', '.join(horarios) }}</span>
+                      </li>
+                      {% else %}
+                      <li class="text-muted d-flex align-items-center gap-2">
+                        <i class="bi bi-clock-history"></i>
+                        <span>Sem horários cadastrados.</span>
+                      </li>
+                      {% endfor %}
+                    </ul>
+                  </div>
+                </div>
+              </div>
+            </div>
+            {% else %}
+            <div class="col">
+              <div class="card team-card h-100">
+                <div class="card-body text-center text-muted">
+                  Nenhum especialista associado.
+                </div>
+              </div>
+            </div>
+            {% endfor %}
+          </div>
+        </div>
+      </div>
+    </div>
+
+    {% if pode_editar %}
+    {% set invite_counter = namespace(total=0) %}
+    {% if invites_by_status %}
+      {% for invite_group in invites_by_status.values() %}
+        {% set invite_counter.total = invite_counter.total + invite_group|length %}
+      {% endfor %}
+    {% endif %}
+    <div class="accordion-item shadow-sm mt-3">
+      <h2 class="accordion-header" id="accordion-invites">
+        <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapse-invites" aria-controls="collapse-invites">
+          <i class="bi bi-envelope-paper me-2 text-secondary"></i>
+          Convites enviados
+          <span class="badge badge-soft-secondary ms-2">{{ invite_counter.total }}</span>
+        </button>
+      </h2>
+      <div id="collapse-invites" class="accordion-collapse collapse" aria-labelledby="accordion-invites" data-bs-parent="#clinicTeamAccordion">
+        <div class="accordion-body">
           {% set status_badges = {
-            'pending': ('Pendente', 'bg-warning text-dark'),
-            'declined': ('Recusado', 'bg-danger'),
-            'accepted': ('Aceito', 'bg-success'),
-            'cancelled': ('Cancelado', 'bg-secondary')
+            'pending': ('Convite pendente', 'badge-soft-warning', 'bi-hourglass-split'),
+            'declined': ('Convite recusado', 'badge-soft-danger', 'bi-x-circle'),
+            'accepted': ('Convite aceito', 'badge-soft-success', 'bi-check-circle'),
+            'cancelled': ('Convite cancelado', 'badge-soft-secondary', 'bi-slash-circle')
           } %}
           {% if invites_by_status %}
-          <div class="list-group">
+          <div class="row g-3">
             {% for status in invite_status_order %}
             {% set invites = invites_by_status.get(status, []) %}
             {% if invites %}
-            {% set status_info = status_badges.get(status, (status|capitalize, 'bg-secondary')) %}
-            <div class="list-group-item">
-              <div class="d-flex align-items-center mb-2">
-                <span class="badge {{ status_info[1] }}">{{ status_info[0] }}</span>
-              </div>
-              <ul class="list-unstyled mb-0">
-                {% for invite in invites %}
-                {% set vet_user = invite.veterinario.user if invite.veterinario and invite.veterinario.user else None %}
-                <li class="mb-3">
-                  <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
-                    <div>
-                      <strong>{{ vet_user.name if vet_user else 'Veterinário convidado' }}</strong>
-                      {% if vet_user %}
-                      <div class="small text-muted">{{ vet_user.email }}</div>
-                      {% endif %}
-                      <div class="small text-muted">Enviado em {{ invite.created_at|datetime_brazil }}</div>
+            {% set status_info = status_badges.get(status, (status|capitalize, 'badge-soft-secondary', 'bi-envelope')) %}
+            <div class="col-12">
+              <div class="card invite-card shadow-sm">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                  <div class="d-flex align-items-center gap-2">
+                    <div class="team-card-icon {{ status_info[1] }}">
+                      <i class="bi {{ status_info[2] }}"></i>
                     </div>
-                    <div class="d-flex gap-2">
-                      {% if status == 'pending' %}
-                      <form method="post" class="d-inline" action="{{ url_for('cancel_clinic_invite', clinica_id=clinica.id, invite_id=invite.id) }}">
-                        {{ invite_cancel_form.hidden_tag() }}
-                        {{ invite_cancel_form.submit(class_="btn btn-sm btn-outline-danger") }}
-                      </form>
-                      {% elif status == 'declined' %}
-                      <form method="post" class="d-inline" action="{{ url_for('resend_clinic_invite', clinica_id=clinica.id, invite_id=invite.id) }}">
-                        {{ invite_resend_form.hidden_tag() }}
-                        {{ invite_resend_form.submit(class_="btn btn-sm btn-outline-primary") }}
-                      </form>
-                      {% endif %}
+                    <div>
+                      <h6 class="mb-0">{{ status_info[0] }}</h6>
+                      <small class="text-muted">{{ invites|length }} convite{{ 's' if invites|length != 1 else '' }}</small>
                     </div>
                   </div>
-                </li>
-                {% endfor %}
-              </ul>
+                </div>
+                <ul class="list-group list-group-flush">
+                  {% for invite in invites %}
+                  {% set vet_user = invite.veterinario.user if invite.veterinario and invite.veterinario.user else None %}
+                  <li class="list-group-item d-flex justify-content-between align-items-start gap-3 flex-wrap">
+                    <div>
+                      <div class="d-flex align-items-center gap-2">
+                        <i class="bi bi-person-plus text-secondary"></i>
+                        <div>
+                          <strong>{{ vet_user.name if vet_user else 'Profissional convidado' }}</strong>
+                          {% if vet_user %}
+                          <div class="text-muted small">{{ vet_user.email }}</div>
+                          {% endif %}
+                        </div>
+                        <span class="badge {{ status_info[1] }}">{{ status_info[0] }}</span>
+                      </div>
+                      <div class="text-muted small mt-1">
+                        Enviado em {{ invite.created_at|datetime_brazil }}
+                      </div>
+                    </div>
+                    <div class="dropdown action-dropdown">
+                      <button class="btn btn-sm btn-outline-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false">
+                        Ações
+                      </button>
+                      <ul class="dropdown-menu dropdown-menu-end">
+                        {% if status == 'pending' %}
+                        <li>
+                          <form method="post" action="{{ url_for('cancel_clinic_invite', clinica_id=clinica.id, invite_id=invite.id) }}">
+                            {{ invite_cancel_form.hidden_tag() }}
+                            <button type="submit" class="dropdown-item text-danger d-flex align-items-center gap-2">
+                              <i class="bi bi-x-circle"></i>
+                              Cancelar convite
+                            </button>
+                          </form>
+                        </li>
+                        {% elif status == 'declined' %}
+                        <li>
+                          <form method="post" action="{{ url_for('resend_clinic_invite', clinica_id=clinica.id, invite_id=invite.id) }}">
+                            {{ invite_resend_form.hidden_tag() }}
+                            <button type="submit" class="dropdown-item d-flex align-items-center gap-2">
+                              <i class="bi bi-arrow-repeat"></i>
+                              Reenviar convite
+                            </button>
+                          </form>
+                        </li>
+                        {% endif %}
+                      </ul>
+                    </div>
+                  </li>
+                  {% endfor %}
+                </ul>
+              </div>
             </div>
             {% endif %}
             {% endfor %}
           </div>
           {% else %}
-          <p class="text-muted">Nenhum convite enviado.</p>
+          <p class="text-muted mb-0">Nenhum convite enviado.</p>
           {% endif %}
         </div>
-        <button class="btn btn-secondary mt-3" onclick="toggleAddVet()">Adicionar Veterinário</button>
-        <div id="add-vet" class="mt-3" style="display:none;">
-          <form method="post" class="mb-4">
-            {{ invite_form.hidden_tag() }}
-            <div class="mb-3">
-              {{ invite_form.email.label }}
-              {{ invite_form.email(class="form-control", list="all-vets-list") }}
-              <datalist id="all-vets-list">
-                {% for v in all_veterinarios %}
-                <option value="{{ v.user.email }}">{{ v.user.name }} (CRMV: {{ v.crmv }})</option>
-                {% endfor %}
-              </datalist>
-            </div>
-            {{ invite_form.submit(class="btn btn-primary") }}
-          </form>
-          <hr>
-          <form method="post" action="{{ url_for('create_clinic_veterinario', clinica_id=clinica.id) }}" class="mb-4">
-            <div class="mb-3">
-              <label for="vet-name" class="form-label">Nome</label>
-              <input type="text" id="vet-name" name="name" class="form-control" required>
-            </div>
-            <div class="mb-3">
-              <label for="vet-email" class="form-label">E-mail</label>
-              <input type="email" id="vet-email" name="email" class="form-control" required>
-            </div>
-            <div class="mb-3">
-              <label for="vet-crmv" class="form-label">CRMV</label>
-              <input type="text" id="vet-crmv" name="crmv" class="form-control" required>
-            </div>
-            <button type="submit" class="btn btn-primary">Cadastrar</button>
+      </div>
+    </div>
+    {% endif %}
+  </div>
+</div>
+
+{% if pode_editar %}
+<div class="offcanvas offcanvas-end" tabindex="-1" id="addVetOffcanvas" aria-labelledby="addVetOffcanvasLabel">
+  <div class="offcanvas-header">
+    <h5 id="addVetOffcanvasLabel">Adicionar veterinário ou especialista</h5>
+    <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Fechar"></button>
+  </div>
+  <div class="offcanvas-body">
+    <form method="post" class="mb-4">
+      {{ invite_form.hidden_tag() }}
+      <div class="mb-3">
+        {{ invite_form.email.label(class_="form-label") }}
+        {{ invite_form.email(class="form-control", list="all-vets-list") }}
+        <datalist id="all-vets-list">
+          {% for v in all_veterinarios %}
+          <option value="{{ v.user.email }}">{{ v.user.name }} (CRMV: {{ v.crmv }})</option>
+          {% endfor %}
+        </datalist>
+      </div>
+      {{ invite_form.submit(class="btn btn-primary w-100") }}
+    </form>
+    <div class="border-top pt-4">
+      <h6 class="mb-3">Cadastrar profissional manualmente</h6>
+      <form method="post" action="{{ url_for('create_clinic_veterinario', clinica_id=clinica.id) }}">
+        <div class="mb-3">
+          <label for="vet-name" class="form-label">Nome</label>
+          <input type="text" id="vet-name" name="name" class="form-control" required>
+        </div>
+        <div class="mb-3">
+          <label for="vet-email" class="form-label">E-mail</label>
+          <input type="email" id="vet-email" name="email" class="form-control" required>
+        </div>
+        <div class="mb-3">
+          <label for="vet-crmv" class="form-label">CRMV</label>
+          <input type="text" id="vet-crmv" name="crmv" class="form-control" required>
+        </div>
+        <button type="submit" class="btn btn-outline-primary w-100">Cadastrar</button>
+      </form>
+    </div>
+  </div>
+</div>
+{% endif %}
+
+{% for s in staff_members %}
+{% if current_user.id == clinica.owner_id %}
+<div class="offcanvas offcanvas-end" tabindex="-1" id="staffPermOffcanvas-{{ s.user.id }}" aria-labelledby="staffPermLabel-{{ s.user.id }}">
+  <div class="offcanvas-header">
+    <h5 id="staffPermLabel-{{ s.user.id }}">Permissões - {{ s.user.name }}</h5>
+    <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Fechar"></button>
+  </div>
+  <div class="offcanvas-body">
+    <form method="post">
+      {{ staff_permission_forms[s.user.id].hidden_tag() }}
+      <div class="form-check">
+        {{ staff_permission_forms[s.user.id].can_manage_clients(class="form-check-input") }}
+        {{ staff_permission_forms[s.user.id].can_manage_clients.label(class="form-check-label") }}
+      </div>
+      <div class="form-check">
+        {{ staff_permission_forms[s.user.id].can_manage_animals(class="form-check-input") }}
+        {{ staff_permission_forms[s.user.id].can_manage_animals.label(class="form-check-label") }}
+      </div>
+      <div class="form-check">
+        {{ staff_permission_forms[s.user.id].can_manage_staff(class="form-check-input") }}
+        {{ staff_permission_forms[s.user.id].can_manage_staff.label(class="form-check-label") }}
+      </div>
+      <div class="form-check">
+        {{ staff_permission_forms[s.user.id].can_manage_schedule(class="form-check-input") }}
+        {{ staff_permission_forms[s.user.id].can_manage_schedule.label(class="form-check-label") }}
+      </div>
+      <div class="form-check">
+        {{ staff_permission_forms[s.user.id].can_manage_inventory(class="form-check-input") }}
+        {{ staff_permission_forms[s.user.id].can_manage_inventory.label(class="form-check-label") }}
+      </div>
+      <div class="form-check">
+        {{ staff_permission_forms[s.user.id].can_view_full_calendar(class="form-check-input") }}
+        {{ staff_permission_forms[s.user.id].can_view_full_calendar.label(class="form-check-label") }}
+        <div class="form-text">Permite visualizar a agenda completa da clínica.</div>
+      </div>
+      {{ staff_permission_forms[s.user.id].submit(class="btn btn-primary btn-sm mt-3") }}
+    </form>
+  </div>
+</div>
+<div class="modal fade" id="removeStaffModal-{{ s.user.id }}" tabindex="-1" aria-labelledby="removeStaffLabel-{{ s.user.id }}" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="removeStaffLabel-{{ s.user.id }}">Remover funcionário</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+      </div>
+      <div class="modal-body">
+        Tem certeza de que deseja remover {{ s.user.name }} da equipe interna?
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+        <form method="post" action="{{ url_for('remove_funcionario', clinica_id=clinica.id, user_id=s.user.id) }}">
+          {{ staff_permission_forms[s.user.id].csrf_token }}
+          <button type="submit" class="btn btn-danger">Remover</button>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+{% endif %}
+{% endfor %}
+
+{% for vet in veterinarios + specialists %}
+{% if pode_editar %}
+<div class="offcanvas offcanvas-end" tabindex="-1" id="vetPermOffcanvas-{{ vet.user.id }}" aria-labelledby="vetPermLabel-{{ vet.user.id }}">
+  <div class="offcanvas-header">
+    <h5 id="vetPermLabel-{{ vet.user.id }}">Permissões - {{ vet.user.name }}</h5>
+    <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Fechar"></button>
+  </div>
+  <div class="offcanvas-body">
+    <form method="post">
+      {{ vet_permission_forms[vet.user.id].hidden_tag() }}
+      <div class="form-check">
+        {{ vet_permission_forms[vet.user.id].can_manage_clients(class="form-check-input") }}
+        {{ vet_permission_forms[vet.user.id].can_manage_clients.label(class="form-check-label") }}
+      </div>
+      <div class="form-check">
+        {{ vet_permission_forms[vet.user.id].can_manage_animals(class="form-check-input") }}
+        {{ vet_permission_forms[vet.user.id].can_manage_animals.label(class="form-check-label") }}
+      </div>
+      <div class="form-check">
+        {{ vet_permission_forms[vet.user.id].can_manage_staff(class="form-check-input") }}
+        {{ vet_permission_forms[vet.user.id].can_manage_staff.label(class="form-check-label") }}
+      </div>
+      <div class="form-check">
+        {{ vet_permission_forms[vet.user.id].can_manage_schedule(class="form-check-input") }}
+        {{ vet_permission_forms[vet.user.id].can_manage_schedule.label(class="form-check-label") }}
+      </div>
+      <div class="form-check">
+        {{ vet_permission_forms[vet.user.id].can_manage_inventory(class="form-check-input") }}
+        {{ vet_permission_forms[vet.user.id].can_manage_inventory.label(class="form-check-label") }}
+      </div>
+      <div class="form-check">
+        {{ vet_permission_forms[vet.user.id].can_view_full_calendar(class="form-check-input") }}
+        {{ vet_permission_forms[vet.user.id].can_view_full_calendar.label(class="form-check-label") }}
+        <div class="form-text">Permite visualizar a agenda completa da clínica.</div>
+      </div>
+      {{ vet_permission_forms[vet.user.id].submit(class="btn btn-primary btn-sm mt-3") }}
+    </form>
+  </div>
+</div>
+<div class="offcanvas offcanvas-end" tabindex="-1" id="vetScheduleOffcanvas-{{ vet.id }}" aria-labelledby="vetScheduleLabel-{{ vet.id }}">
+  <div class="offcanvas-header">
+    <h5 id="vetScheduleLabel-{{ vet.id }}">Gerenciar horários - {{ vet.user.name }}</h5>
+    <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Fechar"></button>
+  </div>
+  <div class="offcanvas-body">
+    <div class="mb-3">
+      <h6>Horários cadastrados</h6>
+      <div class="list-group list-group-flush">
+        {% for h in vet.horarios %}
+        <div class="list-group-item d-flex justify-content-between align-items-center">
+          <span>{{ h.dia_semana }}: {{ h.hora_inicio.strftime('%H:%M') }} - {{ h.hora_fim.strftime('%H:%M') }}</span>
+          <form method="post" action="{{ url_for('delete_vet_schedule_clinic', clinica_id=clinica.id, veterinario_id=vet.id, horario_id=h.id) }}" class="ms-2">
+            {{ vet_schedule_forms[vet.id].csrf_token }}
+            <button type="submit" class="btn btn-sm btn-outline-danger">
+              <i class="bi bi-trash"></i>
+            </button>
           </form>
         </div>
+        {% else %}
+        <div class="list-group-item text-muted">Sem horários cadastrados.</div>
+        {% endfor %}
+      </div>
+    </div>
+    <form method="post" class="mt-4">
+      {{ vet_schedule_forms[vet.id].hidden_tag() }}
+      <div style="display:none;">{{ vet_schedule_forms[vet.id].veterinario_id() }}</div>
+      <div class="mb-3">
+        {{ vet_schedule_forms[vet.id].dias_semana.label(class_="form-label") }}
+        {{ vet_schedule_forms[vet.id].dias_semana(class="form-select", multiple=True, size=7) }}
+      </div>
+      <div class="row g-3">
+        <div class="col-6">
+          {{ vet_schedule_forms[vet.id].hora_inicio.label(class_="form-label") }}
+          {{ vet_schedule_forms[vet.id].hora_inicio(class="form-control") }}
+        </div>
+        <div class="col-6">
+          {{ vet_schedule_forms[vet.id].hora_fim.label(class_="form-label") }}
+          {{ vet_schedule_forms[vet.id].hora_fim(class="form-control") }}
+        </div>
+        <div class="col-6">
+          {{ vet_schedule_forms[vet.id].intervalo_inicio.label(class_="form-label") }}
+          {{ vet_schedule_forms[vet.id].intervalo_inicio(class="form-control") }}
+        </div>
+        <div class="col-6">
+          {{ vet_schedule_forms[vet.id].intervalo_fim.label(class_="form-label") }}
+          {{ vet_schedule_forms[vet.id].intervalo_fim(class="form-control") }}
+        </div>
+      </div>
+      {{ vet_schedule_forms[vet.id].submit(class="btn btn-primary w-100 mt-3") }}
+    </form>
+    <div class="border-top pt-3 mt-4">
+      <button class="btn btn-outline-danger w-100" data-bs-toggle="modal" data-bs-target="#removeVetModal-{{ vet.id }}">
+        <i class="bi bi-person-dash me-1"></i>
+        Remover profissional da clínica
+      </button>
+    </div>
+  </div>
+</div>
+<div class="modal fade" id="removeVetModal-{{ vet.id }}" tabindex="-1" aria-labelledby="removeVetLabel-{{ vet.id }}" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="removeVetLabel-{{ vet.id }}">Remover profissional</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+      </div>
+      <div class="modal-body">
+        Confirma a remoção de {{ vet.user.name }} desta clínica?
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+        {% if vet in veterinarios %}
+        <form method="post" action="{{ url_for('remove_veterinario', clinica_id=clinica.id, veterinario_id=vet.id) }}">
+          {{ vet_schedule_forms[vet.id].csrf_token }}
+          <button type="submit" class="btn btn-danger">Remover</button>
+        </form>
+        {% else %}
+        <form method="post" action="{{ url_for('remove_specialist', clinica_id=clinica.id, veterinario_id=vet.id) }}">
+          {{ vet_permission_forms[vet.user.id].csrf_token }}
+          <button type="submit" class="btn btn-danger">Remover</button>
+        </form>
         {% endif %}
-        <script>
-          document.querySelectorAll('[data-section-target]').forEach(btn => {
-            btn.addEventListener('click', () => {
-              const targetId = btn.getAttribute('data-section-target');
-              const section = document.getElementById(targetId);
-              if (section) {
-                section.scrollIntoView({ behavior: 'smooth', block: 'start' });
-              }
-            });
-          });
-        </script>
+      </div>
+    </div>
+  </div>
+</div>
+{% endif %}
+{% endfor %}
