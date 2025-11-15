@@ -9,27 +9,88 @@
       </div>
 
       <div id="list-container">
-        <form id="appointment-filter-form" method="get" action="{{ url_for('clinic_detail', clinica_id=clinica.id) }}" class="row g-2 mb-3">
-          <div class="col-auto">
+        <form id="appointment-filter-form" method="get" action="{{ url_for('clinic_detail', clinica_id=clinica.id) }}" class="row g-3 mb-3 align-items-end">
+          <div class="col-12 col-md-3">
             <label for="start" class="form-label">Início</label>
             <input type="date" id="start" name="start" class="form-control" value="{{ start }}">
           </div>
-          <div class="col-auto">
+          <div class="col-12 col-md-3">
             <label for="end" class="form-label">Fim</label>
             <input type="date" id="end" name="end" class="form-control" value="{{ end }}">
           </div>
-          <div class="col-auto align-self-end">
-            <button type="submit" class="btn btn-primary">
+          <div class="col-12 col-md-3">
+            <label for="vet_id" class="form-label">Profissional</label>
+            {% set selected_vet = selected_vet_id|string if selected_vet_id is not none else '' %}
+            <select id="vet_id" name="vet_id" class="form-select">
+              <option value="">Todos os profissionais</option>
+              {% for value, label in appointment_vet_options %}
+                {% set value_str = value|string %}
+                <option value="{{ value }}" {% if value_str == selected_vet %}selected{% endif %}>{{ label }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="col-12 col-md-3">
+            <label for="status" class="form-label">Status</label>
+            <select id="status" name="status" class="form-select">
+              {% set current_status = selected_status or '' %}
+              {% for value, label in appointment_status_options %}
+                <option value="{{ value }}" {% if (value or '') == current_status %}selected{% endif %}>{{ label }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="col-12 col-md-3">
+            <label for="appointment-type" class="form-label">Tipo</label>
+            <select id="appointment-type" name="type" class="form-select">
+              {% set current_type = selected_type or '' %}
+              {% for value, label in appointment_kind_options %}
+                <option value="{{ value }}" {% if (value or '') == current_type %}selected{% endif %}>{{ label }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="col-12 col-lg-3 d-flex gap-2 flex-wrap">
+            <button type="submit" class="btn btn-primary flex-grow-1">
               <i class="fa-solid fa-filter me-1"></i>Filtrar
             </button>
-          </div>
-          <div class="col-auto align-self-end d-flex gap-2">
-            <a href="{{ url_for('clinic_detail', clinica_id=clinica.id, start=today_str, end=today_str) }}" class="btn btn-outline-secondary">
+            {% set today_url = url_for('clinic_detail', clinica_id=clinica.id, start=today_str, end=today_str, **appointment_filter_kwargs) %}
+            {% set next7_url = url_for('clinic_detail', clinica_id=clinica.id, start=today_str, end=next7_str, **appointment_filter_kwargs) %}
+            <a href="{{ today_url }}" data-quick-link data-base-url="{{ today_url }}" class="btn btn-outline-secondary flex-grow-1">
               <i class="fa-solid fa-calendar-day me-1"></i>Hoje
             </a>
-            <a href="{{ url_for('clinic_detail', clinica_id=clinica.id, start=today_str, end=next7_str) }}" class="btn btn-outline-secondary">
+            <a href="{{ next7_url }}" data-quick-link data-base-url="{{ next7_url }}" class="btn btn-outline-secondary flex-grow-1">
               <i class="fa-solid fa-calendar-week me-1"></i>Próximos 7 dias
             </a>
+          </div>
+          <div class="col-12">
+            <div class="small text-muted fw-semibold mb-2">Status rápidos</div>
+            <div class="d-flex flex-wrap gap-2 mb-3">
+              {% for badge in appointment_quick_status_filters %}
+                <button type="button"
+                        class="btn btn-sm btn-outline-secondary quick-filter-btn"
+                        data-quick-filter
+                        data-quick-field="{{ badge.field }}"
+                        data-quick-value="{{ badge.value }}"
+                        data-active-class="btn-primary"
+                        data-inactive-class="btn-outline-secondary"
+                        aria-pressed="false">
+                  {{ badge.label }}
+                </button>
+              {% endfor %}
+            </div>
+            <div class="small text-muted fw-semibold mb-2">Tipos rápidos</div>
+            <div class="d-flex flex-wrap gap-2">
+              {% for badge in appointment_quick_type_filters %}
+                <button type="button"
+                        class="btn btn-sm btn-outline-secondary quick-filter-btn"
+                        data-quick-filter
+                        data-quick-field="{{ badge.field }}"
+                        data-quick-value="{{ badge.value }}"
+                        data-active-class="btn-primary"
+                        data-inactive-class="btn-outline-secondary"
+                        aria-pressed="false">
+                  {{ badge.label }}
+                </button>
+              {% endfor %}
+            </div>
           </div>
         </form>
         <div id="appointments-table-container" data-appointments-container data-refresh-url="{{ request.url }}">

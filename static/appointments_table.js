@@ -10,6 +10,7 @@ const EMPTY_STATE_HTML = `
 
 const UPDATE_ERROR_MESSAGE = 'Erro ao salvar. Verifique os dados e tente novamente.';
 const UPDATE_SUCCESS_MESSAGE = 'Agendamento atualizado com sucesso.';
+const FILTER_PARAM_KEYS = ['start', 'end', 'vet_id', 'status', 'type'];
 
 function parseHTML(html) {
   if (!html) {
@@ -197,7 +198,7 @@ function applyFilterParams(parsedUrl) {
     return;
   }
   const currentParams = new URLSearchParams(window.location.search);
-  ['start', 'end'].forEach((param) => {
+  FILTER_PARAM_KEYS.forEach((param) => {
     if (currentParams.has(param)) {
       parsedUrl.searchParams.set(param, currentParams.get(param));
     } else {

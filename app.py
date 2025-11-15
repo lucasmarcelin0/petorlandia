@@ -1,4 +1,5 @@
 # ───────────────────────────  app.py  ───────────────────────────
+import itertools
 import os, sys, pathlib, importlib, logging, uuid, re
 import requests
 from collections import defaultdict
@@ -7,8 +8,6 @@ from concurrent.futures import ThreadPoolExecutor
 from decimal import Decimal
 from urllib.parse import urlparse, parse_qs
 from typing import Iterable, Optional, Set, Dict
-
-
 
 from datetime import datetime, timezone, date, timedelta, time
 from dateutil.relativedelta import relativedelta
@@ -88,6 +87,37 @@ if async_mode == "eventlet":
         async_mode = None
 
 socketio = SocketIO(app, cors_allowed_origins="*", async_mode=async_mode)
+
+APPOINTMENT_STATUS_LABELS = {
+    'scheduled': 'A fazer',
+    'accepted': 'Aceita',
+    'confirmed': 'Confirmada',
+    'completed': 'Realizada',
+    'pending': 'Pendente',
+    'awaiting_confirmation': 'Aguardando Confirmação',
+    'canceled': 'Cancelada',
+}
+
+APPOINTMENT_KIND_LABELS = {
+    'consulta': 'Consulta',
+    'retorno': 'Retorno',
+    'banho_tosa': 'Banho e Tosa',
+    'vacina': 'Vacina',
+    'exame': 'Exame',
+    'general': 'Geral',
+}
+
+
+def _humanize_appointment_status(value: Optional[str]) -> str:
+    if not value:
+        return '—'
+    return APPOINTMENT_STATUS_LABELS.get(value, value.replace('_', ' ').title())
+
+
+def _humanize_appointment_kind(value: Optional[str]) -> str:
+    if not value:
+        return '—'
+    return APPOINTMENT_KIND_LABELS.get(value, value.replace('_', ' ').title())
 
 # ----------------------------------------------------------------
 # 3)  Extensões
@@ -5301,6 +5331,18 @@ def clinic_detail(clinica_id):
 
     start_str = request.args.get('start')
     end_str = request.args.get('end')
+    selected_vet_id = request.args.get('vet_id', type=int)
+    selected_status = (request.args.get('status') or '').strip()
+    selected_type = (request.args.get('type') or '').strip()
+    appointment_filter_kwargs = {
+        key: value
+        for key, value in {
+            'vet_id': selected_vet_id if selected_vet_id is not None else None,
+            'status': selected_status or None,
+            'type': selected_type or None,
+        }.items()
+        if value not in (None, '', [])
+    }
     start_dt = None
     end_dt = None
     if start_str:
@@ -5321,6 +5363,12 @@ def clinic_detail(clinica_id):
         appointments_query = appointments_query.filter(Appointment.scheduled_at >= start_dt_utc)
     if end_dt_utc:
         appointments_query = appointments_query.filter(Appointment.scheduled_at < end_dt_utc)
+    if selected_vet_id:
+        appointments_query = appointments_query.filter(Appointment.veterinario_id == selected_vet_id)
+    if selected_status:
+        appointments_query = appointments_query.filter(Appointment.status == selected_status)
+    if selected_type:
+        appointments_query = appointments_query.filter(Appointment.kind == selected_type)
 
     appointments = appointments_query.order_by(Appointment.scheduled_at).all()
     appointments_grouped = group_appointments_by_day(appointments)
@@ -5341,6 +5389,43 @@ def clinic_detail(clinica_id):
     today_str = today.strftime('%Y-%m-%d')
     next7_str = (today + timedelta(days=7)).strftime('%Y-%m-%d')
     now_dt = datetime.utcnow()
+
+    combined_vets = list(itertools.chain(veterinarios, specialists))
+    combined_vets.sort(key=lambda vet: ((getattr(getattr(vet, 'user', None), 'name', None) or '').lower(), getattr(vet, 'id', 0)))
+    seen_vet_ids = set()
+    appointment_vet_options = []
+    for vet in combined_vets:
+        vet_id = getattr(vet, 'id', None)
+        if not vet_id or vet_id in seen_vet_ids:
+            continue
+        label = getattr(getattr(vet, 'user', None), 'name', None) or f'Veterinário #{vet_id}'
+        appointment_vet_options.append((vet_id, label))
+        seen_vet_ids.add(vet_id)
+
+    status_sequence = ['scheduled', 'accepted', 'confirmed', 'completed', 'pending', 'awaiting_confirmation', 'canceled']
+    appointment_status_options = [('', 'Todos os status')]
+    for status_value in status_sequence:
+        appointment_status_options.append((status_value, _humanize_appointment_status(status_value)))
+
+    kind_sequence = ['consulta', 'retorno', 'banho_tosa', 'vacina', 'exame']
+    appointment_kind_options = [('', 'Todos os tipos')]
+    for kind_value in kind_sequence:
+        appointment_kind_options.append((kind_value, _humanize_appointment_kind(kind_value)))
+
+    appointment_quick_status_filters = [
+        {'label': 'Todos', 'value': '', 'field': 'status'},
+        {'label': _humanize_appointment_status('scheduled'), 'value': 'scheduled', 'field': 'status'},
+        {'label': _humanize_appointment_status('completed'), 'value': 'completed', 'field': 'status'},
+        {'label': _humanize_appointment_status('canceled'), 'value': 'canceled', 'field': 'status'},
+    ]
+    appointment_quick_type_filters = [
+        {'label': 'Todos', 'value': '', 'field': 'type'},
+        {'label': _humanize_appointment_kind('consulta'), 'value': 'consulta', 'field': 'type'},
+        {'label': _humanize_appointment_kind('retorno'), 'value': 'retorno', 'field': 'type'},
+        {'label': _humanize_appointment_kind('banho_tosa'), 'value': 'banho_tosa', 'field': 'type'},
+        {'label': _humanize_appointment_kind('vacina'), 'value': 'vacina', 'field': 'type'},
+        {'label': _humanize_appointment_kind('exame'), 'value': 'exame', 'field': 'type'},
+    ]
 
     return render_template(
         'clinica/clinic_detail.html',
@@ -5378,6 +5463,15 @@ def clinic_detail(clinica_id):
         show_inventory=show_inventory,
         invites_by_status=invites_by_status,
         invite_status_order=invite_status_order,
+        appointment_vet_options=appointment_vet_options,
+        appointment_status_options=appointment_status_options,
+        appointment_kind_options=appointment_kind_options,
+        selected_vet_id=selected_vet_id,
+        selected_status=selected_status,
+        selected_type=selected_type,
+        appointment_quick_status_filters=appointment_quick_status_filters,
+        appointment_quick_type_filters=appointment_quick_type_filters,
+        appointment_filter_kwargs=appointment_filter_kwargs,
     )
 
 

@@ -214,11 +214,75 @@ document.addEventListener('DOMContentLoaded', function() {
   const container = document.getElementById('appointments-table-container');
   if (!form || !container) return;
 
+  const quickLinks = form.querySelectorAll('[data-quick-link]');
+  const quickBadges = form.querySelectorAll('[data-quick-filter]');
+  const preservedLinkParams = ['vet_id', 'status', 'type'];
+
+  function serializeFormParams() {
+    return new URLSearchParams(new FormData(form));
+  }
+
+  function buildUrlFromForm() {
+    const params = serializeFormParams();
+    return `${form.action}?${params.toString()}`;
+  }
+
+  function setBadgeState(badge, isActive) {
+    const activeClass = badge.dataset.activeClass || 'btn-primary';
+    const inactiveClass = badge.dataset.inactiveClass || 'btn-outline-secondary';
+    if (isActive) {
+      badge.classList.add('active');
+      if (inactiveClass) badge.classList.remove(inactiveClass);
+      if (activeClass) badge.classList.add(activeClass);
+    } else {
+      badge.classList.remove('active');
+      if (activeClass) badge.classList.remove(activeClass);
+      if (inactiveClass && !badge.classList.contains(inactiveClass)) {
+        badge.classList.add(inactiveClass);
+      }
+    }
+    badge.setAttribute('aria-pressed', isActive ? 'true' : 'false');
+  }
+
+  function updateQuickBadgesState() {
+    const params = serializeFormParams();
+    quickBadges.forEach(badge => {
+      const field = badge.dataset.quickField;
+      if (!field) return;
+      const desired = badge.dataset.quickValue || '';
+      const current = params.get(field) || '';
+      setBadgeState(badge, current === desired);
+    });
+  }
+
+  function syncQuickLinks() {
+    const params = serializeFormParams();
+    quickLinks.forEach(link => {
+      const baseUrl = link.dataset.baseUrl || link.getAttribute('href');
+      if (!baseUrl) return;
+      try {
+        const url = new URL(baseUrl, window.location.origin);
+        preservedLinkParams.forEach(param => {
+          const value = params.get(param) || '';
+          if (value) {
+            url.searchParams.set(param, value);
+          } else {
+            url.searchParams.delete(param);
+          }
+        });
+        link.href = url.toString();
+      } catch (error) {
+        console.warn('Não foi possível sincronizar link rápido.', error);
+      }
+    });
+  }
+
   function updateTable(url, pushState = true) {
     fetch(url, { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
       .then(response => response.text())
       .then(html => {
         container.innerHTML = html;
+        container.dataset.refreshUrl = url;
         if (typeof bindAppointmentRowClicks === 'function') {
           bindAppointmentRowClicks();
         }
@@ -231,24 +295,52 @@ document.addEventListener('DOMContentLoaded', function() {
 
   form.addEventListener('submit', function(e) {
     e.preventDefault();
-    const params = new URLSearchParams(new FormData(form));
-    const url = `${form.action}?${params.toString()}`;
+    const url = buildUrlFromForm();
     updateTable(url);
+    syncQuickLinks();
+    updateQuickBadgesState();
   });
 
-  const quickLinks = form.querySelectorAll('a[href]');
+  const filterInputs = form.querySelectorAll('input, select');
+  filterInputs.forEach(input => {
+    input.addEventListener('change', () => {
+      syncQuickLinks();
+      updateQuickBadgesState();
+    });
+  });
+
   quickLinks.forEach(link => {
     link.addEventListener('click', function(e) {
       e.preventDefault();
-      const url = this.href;
-      const u = new URL(url);
-      updateTable(url);
+      const url = new URL(this.href, window.location.origin);
       const startInput = document.getElementById('start');
       const endInput = document.getElementById('end');
-      if (u.searchParams.get('start')) startInput.value = u.searchParams.get('start');
-      if (u.searchParams.get('end')) endInput.value = u.searchParams.get('end');
+      if (startInput) {
+        startInput.value = url.searchParams.get('start') || '';
+      }
+      if (endInput) {
+        endInput.value = url.searchParams.get('end') || '';
+      }
+      updateTable(url.toString());
+      syncQuickLinks();
+      updateQuickBadgesState();
     });
   });
+
+  quickBadges.forEach(badge => {
+    badge.addEventListener('click', () => {
+      const field = badge.dataset.quickField;
+      if (!field) return;
+      const value = badge.dataset.quickValue || '';
+      const target = form.querySelector(`[name="${field}"]`);
+      if (!target) return;
+      target.value = value;
+      form.dispatchEvent(new Event('submit', { cancelable: true, bubbles: true }));
+    });
+  });
+
+  syncQuickLinks();
+  updateQuickBadgesState();
 });
 
 </script>
