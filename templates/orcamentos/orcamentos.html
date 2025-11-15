@@ -1,9 +1,12 @@
 {% extends "layout.html" %}
 {% block main %}
 <div class="container mt-4">
-  <div class="d-flex justify-content-between align-items-center mb-3">
-    <h2>Orçamentos</h2>
-    <a href="{{ url_for('novo_orcamento', clinica_id=clinica.id) }}" class="btn btn-primary">Novo Orçamento</a>
+  <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+    <h2 class="mb-0">Orçamentos</h2>
+    <div class="btn-group">
+      <a href="{{ url_for('novo_orcamento', clinica_id=clinica.id) }}" class="btn btn-primary">Novo Orçamento</a>
+      <a href="{{ contabilidade_pagamentos_url }}" class="btn btn-outline-secondary">Ver na contabilidade</a>
+    </div>
   </div>
   <table class="table">
     <thead>

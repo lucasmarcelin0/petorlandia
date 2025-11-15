@@ -107,87 +107,153 @@
     </div>
   </div>
 
-  <div class="card border-0 shadow-sm">
-    <div class="card-body">
-      <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
-        <div>
-          <h5 class="mb-0">{{ selected_clinic.nome if selected_clinic else 'Selecione uma clínica' }}</h5>
-          <small class="text-muted">Referência: {{ selected_month.strftime('%m/%Y') if selected_month else month_value }}</small>
-        </div>
-        <div class="btn-group" role="group">
-          <a class="btn btn-outline-light text-secondary" href="{{ url_for('contabilidade_pagamentos', clinica_id=selected_clinic_id, mes=prev_month_value) }}" title="Mês anterior"><i class="fas fa-chevron-left"></i></a>
-          <a class="btn btn-outline-light text-secondary" href="{{ url_for('contabilidade_pagamentos', clinica_id=selected_clinic_id, mes=next_month_value) }}" title="Próximo mês"><i class="fas fa-chevron-right"></i></a>
+  <div class="row g-3">
+    <div class="col-12 col-xl-8">
+      <div class="card border-0 shadow-sm h-100">
+        <div class="card-body">
+          <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+            <div>
+              <h5 class="mb-0">{{ selected_clinic.nome if selected_clinic else 'Selecione uma clínica' }}</h5>
+              <small class="text-muted">Referência: {{ selected_month.strftime('%m/%Y') if selected_month else month_value }}</small>
+            </div>
+            <div class="btn-group" role="group">
+              <a class="btn btn-outline-light text-secondary" href="{{ url_for('contabilidade_pagamentos', clinica_id=selected_clinic_id, mes=prev_month_value) }}" title="Mês anterior"><i class="fas fa-chevron-left"></i></a>
+              <a class="btn btn-outline-light text-secondary" href="{{ url_for('contabilidade_pagamentos', clinica_id=selected_clinic_id, mes=next_month_value) }}" title="Próximo mês"><i class="fas fa-chevron-right"></i></a>
+            </div>
+          </div>
+          <div class="table-responsive">
+            <table class="table table-striped align-middle">
+              <thead class="table-light">
+                <tr>
+                  <th>Nome do prestador</th>
+                  <th>CNPJ</th>
+                  <th>Nº da nota</th>
+                  <th>Valor</th>
+                  <th>Data do serviço</th>
+                  <th>Status</th>
+                  <th class="text-end">Ações</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for pagamento in payments %}
+                <tr>
+                  <td>
+                    <div class="fw-semibold">{{ pagamento.prestador_nome }}</div>
+                    {% if pagamento.observacoes %}
+                    <small class="text-muted"><i class="fas fa-sticky-note me-1"></i>{{ pagamento.observacoes }}</small>
+                    {% endif %}
+                  </td>
+                  <td>{{ pagamento.prestador_cnpj | format_cnpj }}</td>
+                  <td>{{ pagamento.nota_fiscal_numero or '—' }}</td>
+                  <td>{{ pagamento.valor | currency_br }}</td>
+                  <td>{{ pagamento.data_servico.strftime('%d/%m/%Y') }}</td>
+                  <td>
+                    {% if pagamento.status == 'pago' %}
+                      <span class="badge bg-success rounded-pill"><i class="fas fa-check me-1"></i>Pago</span>
+                      {% if pagamento.data_pagamento %}
+                        <small class="d-block text-muted">{{ pagamento.data_pagamento.strftime('%d/%m/%Y') }}</small>
+                      {% endif %}
+                    {% else %}
+                      <span class="badge bg-warning text-dark rounded-pill"><i class="fas fa-clock me-1"></i>Pendente</span>
+                    {% endif %}
+                  </td>
+                  <td class="text-end">
+                    <div class="d-flex flex-wrap justify-content-end gap-2">
+                      <a href="{{ url_for('contabilidade_pagamentos_editar', payment_id=pagamento.id, clinica_id=selected_clinic_id, mes=month_value) }}"
+                         class="btn btn-sm btn-outline-primary rounded-pill">
+                        <i class="fas fa-edit me-1"></i>Editar
+                      </a>
+                      {% if pagamento.status != 'pago' %}
+                      <form method="post" action="{{ url_for('contabilidade_pagamentos_marcar_pago', payment_id=pagamento.id, clinica_id=selected_clinic_id, mes=month_value) }}">
+                        {% if csrf_token is defined %}{{ csrf_token() }}{% endif %}
+                        <button type="submit" class="btn btn-sm btn-success rounded-pill">
+                          <i class="fas fa-check me-1"></i>Marcar pago
+                        </button>
+                      </form>
+                      {% endif %}
+                      <form method="post" action="{{ url_for('contabilidade_pagamentos_delete', payment_id=pagamento.id, clinica_id=selected_clinic_id, mes=month_value) }}" onsubmit="return confirm('Deseja remover este pagamento?');">
+                        {% if csrf_token is defined %}{{ csrf_token() }}{% endif %}
+                        <button type="submit" class="btn btn-sm btn-outline-danger rounded-pill">
+                          <i class="fas fa-trash-alt me-1"></i>Excluir
+                        </button>
+                      </form>
+                    </div>
+                  </td>
+                </tr>
+                {% else %}
+                <tr>
+                  <td colspan="7" class="text-center py-4 text-muted">
+                    <i class="fas fa-file-invoice-dollar fa-2x mb-2 text-secondary"></i>
+                    <p class="mb-0">Nenhum pagamento PJ registrado para este período.</p>
+                  </td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
         </div>
       </div>
-      <div class="table-responsive">
-        <table class="table table-striped align-middle">
-          <thead class="table-light">
-            <tr>
-              <th>Nome do prestador</th>
-              <th>CNPJ</th>
-              <th>Nº da nota</th>
-              <th>Valor</th>
-              <th>Data do serviço</th>
-              <th>Status</th>
-              <th class="text-end">Ações</th>
-            </tr>
-          </thead>
-          <tbody>
-            {% for pagamento in payments %}
-            <tr>
-              <td>
-                <div class="fw-semibold">{{ pagamento.prestador_nome }}</div>
-                {% if pagamento.observacoes %}
-                <small class="text-muted"><i class="fas fa-sticky-note me-1"></i>{{ pagamento.observacoes }}</small>
-                {% endif %}
-              </td>
-              <td>{{ pagamento.prestador_cnpj | format_cnpj }}</td>
-              <td>{{ pagamento.nota_fiscal_numero or '—' }}</td>
-              <td>{{ pagamento.valor | currency_br }}</td>
-              <td>{{ pagamento.data_servico.strftime('%d/%m/%Y') }}</td>
-              <td>
-                {% if pagamento.status == 'pago' %}
-                  <span class="badge bg-success rounded-pill"><i class="fas fa-check me-1"></i>Pago</span>
-                  {% if pagamento.data_pagamento %}
-                    <small class="d-block text-muted">{{ pagamento.data_pagamento.strftime('%d/%m/%Y') }}</small>
-                  {% endif %}
-                {% else %}
-                  <span class="badge bg-warning text-dark rounded-pill"><i class="fas fa-clock me-1"></i>Pendente</span>
-                {% endif %}
-              </td>
-              <td class="text-end">
-                <div class="d-flex flex-wrap justify-content-end gap-2">
-                  <a href="{{ url_for('contabilidade_pagamentos_editar', payment_id=pagamento.id, clinica_id=selected_clinic_id, mes=month_value) }}"
-                     class="btn btn-sm btn-outline-primary rounded-pill">
-                    <i class="fas fa-edit me-1"></i>Editar
-                  </a>
-                  {% if pagamento.status != 'pago' %}
-                  <form method="post" action="{{ url_for('contabilidade_pagamentos_marcar_pago', payment_id=pagamento.id, clinica_id=selected_clinic_id, mes=month_value) }}">
-                    {% if csrf_token is defined %}{{ csrf_token() }}{% endif %}
-                    <button type="submit" class="btn btn-sm btn-success rounded-pill">
-                      <i class="fas fa-check me-1"></i>Marcar pago
-                    </button>
-                  </form>
-                  {% endif %}
-                  <form method="post" action="{{ url_for('contabilidade_pagamentos_delete', payment_id=pagamento.id, clinica_id=selected_clinic_id, mes=month_value) }}" onsubmit="return confirm('Deseja remover este pagamento?');">
-                    {% if csrf_token is defined %}{{ csrf_token() }}{% endif %}
-                    <button type="submit" class="btn btn-sm btn-outline-danger rounded-pill">
-                      <i class="fas fa-trash-alt me-1"></i>Excluir
-                    </button>
-                  </form>
-                </div>
-              </td>
-            </tr>
-            {% else %}
-            <tr>
-              <td colspan="7" class="text-center py-4 text-muted">
-                <i class="fas fa-file-invoice-dollar fa-2x mb-2 text-secondary"></i>
-                <p class="mb-0">Nenhum pagamento PJ registrado para este período.</p>
-              </td>
-            </tr>
+    </div>
+    <div class="col-12 col-xl-4">
+      <div class="card border-0 shadow-sm h-100">
+        <div class="card-body d-flex flex-column">
+          <div class="d-flex justify-content-between align-items-start gap-3 mb-3">
+            <div>
+              <h5 class="mb-0">Orçamentos vinculados</h5>
+              <small class="text-muted">Filtros da mesma clínica/mês</small>
+            </div>
+            <span class="badge bg-primary bg-opacity-10 text-primary fw-semibold">{{ budget_entries|length }} itens</span>
+          </div>
+          <div class="d-flex flex-wrap gap-3 mb-3">
+            {% for status_key, info in budget_status_summary.items() %}
+            <div class="flex-grow-1 min-w-0">
+              <small class="text-muted text-uppercase">{{ info.label }}</small>
+              <div class="fw-bold">{{ budget_totals[status_key] | currency_br }}</div>
+            </div>
             {% endfor %}
-          </tbody>
-        </table>
+          </div>
+          <div class="list-group list-group-flush border rounded-3 flex-grow-1" style="max-height: 520px; overflow-y: auto;">
+            {% if budget_entries %}
+              {% for entry in budget_entries %}
+              <div class="list-group-item border-0 border-bottom">
+                <div class="d-flex justify-content-between align-items-start gap-3">
+                  <div>
+                    <div class="fw-semibold">{{ entry.title }}</div>
+                    <small class="text-muted">{{ entry.subtitle }}</small>
+                  </div>
+                  <div class="text-end">
+                    <div class="fw-bold">{{ entry.total | currency_br }}</div>
+                    <span class="badge {{ entry.badge_class }}">{{ entry.status_label }}</span>
+                  </div>
+                </div>
+                <div class="d-flex justify-content-between align-items-center text-muted small mt-2 flex-wrap gap-2">
+                  <span class="d-flex align-items-center gap-1 text-{{ entry.sync_color }}">
+                    <i class="{{ entry.sync_icon }}"></i>
+                    {{ entry.sync_label }}
+                  </span>
+                  <div class="d-flex flex-wrap gap-3">
+                    {% if entry.source_url %}
+                    <a href="{{ entry.source_url }}" class="text-decoration-none">
+                      <i class="fas fa-external-link-alt me-1"></i>Detalhes
+                    </a>
+                    {% endif %}
+                    {% if entry.payment_entry_url %}
+                    <a href="{{ entry.payment_entry_url }}" class="text-decoration-none">
+                      <i class="fas fa-link me-1"></i>Link original
+                    </a>
+                    {% endif %}
+                  </div>
+                </div>
+              </div>
+              {% endfor %}
+            {% else %}
+              <div class="list-group-item text-center text-muted py-5 border-0">
+                <i class="fas fa-file-signature fa-2x mb-2"></i>
+                <p class="mb-0">Nenhum orçamento com link de pagamento neste período.</p>
+              </div>
+            {% endif %}
+          </div>
+        </div>
       </div>
     </div>
   </div>

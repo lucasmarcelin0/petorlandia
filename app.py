@@ -4,7 +4,7 @@ import requests
 from collections import defaultdict, Counter
 from io import BytesIO, StringIO
 from concurrent.futures import ThreadPoolExecutor
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 from urllib.parse import urlparse, parse_qs
 from typing import Iterable, Optional, Set, Dict
 
@@ -2977,6 +2977,81 @@ def contabilidade_pagamentos():
 
     payments: list[PJPayment] = []
     payments_error = None
+    budget_entries: list[dict] = []
+    budget_totals = {
+        status: Decimal('0.00') for status in ACCOUNTING_BUDGET_STATUS_SUMMARY
+    }
+
+    start_datetime = datetime.combine(start_date, time.min)
+    end_datetime = datetime.combine(end_date, time.min)
+
+    def _coerce_decimal(value):
+        if value is None:
+            return Decimal('0.00')
+        if isinstance(value, Decimal):
+            return value
+        try:
+            return Decimal(str(value))
+        except (InvalidOperation, ValueError, TypeError):
+            return Decimal('0.00')
+
+    def _normalize_budget_status(raw_status: Optional[str]) -> str:
+        normalized = (raw_status or '').strip().lower()
+        if normalized in {'paid', 'success', 'approved', 'completed'}:
+            return 'pago'
+        if normalized in {'failed', 'canceled', 'cancelled', 'rejected'}:
+            return 'cancelado'
+        return 'pendente'
+
+    def _humanize_payment_status(raw_status: Optional[str]) -> str:
+        if not raw_status or raw_status == 'draft':
+            return 'Sem link'
+        return ORCAMENTO_PAYMENT_STATUS_LABELS.get(
+            raw_status,
+            raw_status.replace('_', ' ').title(),
+        )
+
+    badge_by_status = {
+        'pendente': 'bg-warning text-dark',
+        'pago': 'bg-success',
+        'cancelado': 'bg-secondary',
+    }
+
+    def _sync_metadata(status_code: str):
+        if status_code == 'pago':
+            return 'Sincronizado', 'fas fa-check-circle', 'success'
+        if status_code == 'cancelado':
+            return 'Cancelado', 'fas fa-ban', 'secondary'
+        return 'Aguardando pagamento', 'fas fa-clock', 'warning'
+
+    def _build_budget_entry(*, entry_type: str, title: str, total, raw_status: Optional[str],
+                            reference_date: datetime, type_label: str,
+                            context_label: Optional[str], source_url: Optional[str],
+                            payment_entry_url: Optional[str]):
+        status_key = _normalize_budget_status(raw_status)
+        if status_key not in budget_totals:
+            status_key = 'pendente'
+        total_decimal = _coerce_decimal(total)
+        budget_totals[status_key] += total_decimal
+        sync_label, sync_icon, sync_color = _sync_metadata(status_key)
+        subtitle_parts = [type_label]
+        if context_label:
+            subtitle_parts.append(context_label)
+        subtitle_parts.append(f"Referência: {reference_date.strftime('%d/%m/%Y')}")
+        return {
+            'type': entry_type,
+            'title': title,
+            'total': total_decimal,
+            'status_label': _humanize_payment_status(raw_status),
+            'badge_class': badge_by_status.get(status_key, 'bg-secondary'),
+            'reference_date': reference_date,
+            'subtitle': ' • '.join(subtitle_parts),
+            'sync_label': sync_label,
+            'sync_icon': sync_icon,
+            'sync_color': sync_color,
+            'source_url': source_url,
+            'payment_entry_url': payment_entry_url,
+        }
     if selected_clinic_id:
         try:
             classify_transactions_for_month(selected_clinic_id, start_date)
@@ -3009,6 +3084,83 @@ def contabilidade_pagamentos():
             else:
                 raise
 
+        orcamentos_query = (
+            Orcamento.query.options(
+                joinedload(Orcamento.consulta).joinedload(Consulta.animal)
+            )
+            .filter(Orcamento.clinica_id == selected_clinic_id)
+            .filter(
+                or_(
+                    and_(
+                        Orcamento.paid_at.isnot(None),
+                        Orcamento.paid_at >= start_datetime,
+                        Orcamento.paid_at < end_datetime,
+                    ),
+                    and_(
+                        Orcamento.paid_at.is_(None),
+                        Orcamento.created_at >= start_datetime,
+                        Orcamento.created_at < end_datetime,
+                    ),
+                )
+            )
+        )
+
+        bloco_query = (
+            BlocoOrcamento.query.options(
+                joinedload(BlocoOrcamento.animal),
+                joinedload(BlocoOrcamento.clinica),
+            )
+            .filter(BlocoOrcamento.clinica_id == selected_clinic_id)
+            .filter(BlocoOrcamento.data_criacao >= start_datetime)
+            .filter(BlocoOrcamento.data_criacao < end_datetime)
+        )
+
+        for orcamento in orcamentos_query.all():
+            reference_date = orcamento.paid_at or orcamento.created_at or start_datetime
+            animal_name = None
+            if orcamento.consulta and orcamento.consulta.animal:
+                animal_name = orcamento.consulta.animal.name
+            payment_entry_url = None
+            if orcamento.consulta_id:
+                payment_entry_url = url_for('pagar_consulta_orcamento', consulta_id=orcamento.consulta_id)
+            budget_entries.append(
+                _build_budget_entry(
+                    entry_type='orcamento',
+                    title=orcamento.descricao or f'Orçamento #{orcamento.id}',
+                    total=orcamento.total,
+                    raw_status=orcamento.payment_status,
+                    reference_date=reference_date,
+                    type_label='Orçamento',
+                    context_label=animal_name,
+                    source_url=url_for('editar_orcamento', orcamento_id=orcamento.id),
+                    payment_entry_url=payment_entry_url,
+                )
+            )
+
+        for bloco in bloco_query.all():
+            reference_date = bloco.data_criacao or start_datetime
+            animal_name = bloco.animal.name if bloco.animal else None
+            clinic_name = bloco.clinica.nome if getattr(bloco, 'clinica', None) else None
+            budget_entries.append(
+                _build_budget_entry(
+                    entry_type='bloco',
+                    title=(
+                        f"{animal_name} (Bloco #{bloco.id})"
+                        if animal_name
+                        else f"Bloco #{bloco.id}"
+                    ),
+                    total=bloco.total_liquido,
+                    raw_status=bloco.payment_status,
+                    reference_date=reference_date,
+                    type_label='Bloco',
+                    context_label=clinic_name,
+                    source_url=url_for('editar_bloco_orcamento', bloco_id=bloco.id),
+                    payment_entry_url=url_for('pagar_orcamento', bloco_id=bloco.id),
+                )
+            )
+
+        budget_entries.sort(key=lambda entry: entry['reference_date'], reverse=True)
+
     total_pago = sum((payment.valor or Decimal('0.00')) for payment in payments if payment.status == 'pago')
     total_pendente = sum((payment.valor or Decimal('0.00')) for payment in payments if payment.status == 'pendente')
 
@@ -3027,6 +3179,9 @@ def contabilidade_pagamentos():
         next_month_value=(selected_month + relativedelta(months=1)).strftime('%Y-%m'),
         total_pago=total_pago,
         total_pendente=total_pendente,
+        budget_entries=budget_entries,
+        budget_totals=budget_totals,
+        budget_status_summary=ACCOUNTING_BUDGET_STATUS_SUMMARY,
     )
 
 
@@ -4511,6 +4666,12 @@ ORCAMENTO_PAYMENT_STATUS_STYLES = {
     'pending': 'warning',
     'paid': 'success',
     'failed': 'danger',
+}
+
+ACCOUNTING_BUDGET_STATUS_SUMMARY = {
+    'pendente': {'label': 'Pendentes'},
+    'pago': {'label': 'Pagos'},
+    'cancelado': {'label': 'Cancelados'},
 }
 
 
@@ -7403,7 +7564,18 @@ def orcamentos(clinica_id):
     if current_user.clinica_id != clinica_id and not _is_admin():
         abort(403)
     lista = Orcamento.query.filter_by(clinica_id=clinica_id).all()
-    return render_template('orcamentos/orcamentos.html', clinica=clinica, orcamentos=lista)
+    month_value = request.args.get('mes') or _format_month_parameter(date.today())
+    contabilidade_url = url_for(
+        'contabilidade_pagamentos',
+        clinica_id=clinica_id,
+        mes=month_value,
+    )
+    return render_template(
+        'orcamentos/orcamentos.html',
+        clinica=clinica,
+        orcamentos=lista,
+        contabilidade_pagamentos_url=contabilidade_url,
+    )
 
 
 @app.route('/dashboard/orcamentos')
@@ -7539,6 +7711,15 @@ def dashboard_orcamentos():
         Clinica.query.get(selected_clinic_id) if selected_clinic_id else None
     )
 
+    reference_month_value = request.args.get('mes') or _format_month_parameter(date.today())
+    contabilidade_url = None
+    if selected_clinic_id:
+        contabilidade_url = url_for(
+            'contabilidade_pagamentos',
+            clinica_id=selected_clinic_id,
+            mes=reference_month_value,
+        )
+
     return render_template(
         'orcamentos/dashboard_orcamentos.html',
         consultas=dados_consultas,
@@ -7554,6 +7735,7 @@ def dashboard_orcamentos():
         total_emitido=total_emitido,
         total_aprovado=total_aprovado,
         total_pendente=total_pendente,
+        contabilidade_pagamentos_url=contabilidade_url,
     )
 
 
