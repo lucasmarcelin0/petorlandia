@@ -45,7 +45,6 @@ import unicodedata
 from sqlalchemy import func, or_, exists, and_, case, true, false, inspect, text
 from sqlalchemy.exc import ProgrammingError
 from sqlalchemy.orm import joinedload, selectinload, aliased
-from config_utils import normalize_database_uri
 
 # ----------------------------------------------------------------
 # 1)  Alias único para “models”
@@ -67,7 +66,12 @@ globals().update({
 })
 
 from models import DataShareAccess, DataSharePartyType, DataShareRequest
-from config_utils import normalize_database_uri
+_config_utils_module_name = (
+    f"{__package__}.config_utils" if __package__ else "config_utils"
+)
+normalize_database_uri = importlib.import_module(
+    _config_utils_module_name
+).normalize_database_uri
 
 # ----------------------------------------------------------------
 # 2)  Flask app + config
