@@ -77,6 +77,61 @@
         .status-badge i {
           font-size: 0.95rem;
         }
+        .status-selector {
+          width: 100%;
+        }
+        .status-badge-button {
+          width: 100%;
+          border: none;
+          background: transparent;
+          padding: 0;
+          position: relative;
+        }
+        .status-badge-button:focus-visible {
+          outline: 2px solid var(--bs-primary);
+          outline-offset: 2px;
+        }
+        .status-badge-button[disabled] {
+          cursor: progress;
+        }
+        .status-badge-button .status-badge {
+          width: 100%;
+        }
+        .status-badge-button--loading::after {
+          content: '';
+          position: absolute;
+          top: 50%;
+          left: 50%;
+          width: 1.2rem;
+          height: 1.2rem;
+          margin-top: -0.6rem;
+          margin-left: -0.6rem;
+          border-radius: 50%;
+          border: 0.18rem solid rgba(255, 255, 255, 0.45);
+          border-top-color: rgba(13, 110, 253, 0.9);
+          animation: status-spinner 0.7s linear infinite;
+          pointer-events: none;
+        }
+        .status-badge-button--loading .status-badge {
+          opacity: 0.45;
+        }
+        .status-dropdown-menu {
+          min-width: 12rem;
+        }
+        .status-dropdown-menu .dropdown-item.active,
+        .status-dropdown-menu .dropdown-item.active:focus,
+        .status-dropdown-menu .dropdown-item.active:hover {
+          background-color: var(--bs-primary);
+          color: #fff;
+        }
+        @keyframes status-spinner {
+          from {
+            transform: rotate(0deg);
+          }
+          to {
+            transform: rotate(360deg);
+          }
+        }
         .orcamento-empty-state img {
           max-width: 130px;
           opacity: 0.8;
@@ -199,19 +254,23 @@
                 {% set status_label = orcamento_status_labels.get(o.status, o.status|capitalize) %}
                 {% set status_icon = status_icons.get(o.status, 'fa-file-alt') %}
                 <div class="d-flex flex-column gap-2 align-items-center">
-                  <span class="badge rounded-pill d-inline-flex align-items-center justify-content-center gap-2 px-3 py-2 status-badge bg-{{ badge }} text-uppercase" data-status-badge>
-                    <i class="fas {{ status_icon }}" aria-hidden="true"></i>
-                    <span class="status-text">{{ status_label }}</span>
-                  </span>
-                  <div class="d-flex flex-wrap gap-2 justify-content-center w-100">
-                    <select class="form-select form-select-sm orcamento-status-select" data-orcamento-id="{{ o.id }}">
-                      {% for status_key, label in orcamento_status_labels.items() %}
-                        <option value="{{ status_key }}" {% if o.status == status_key %}selected{% endif %}>{{ label }}</option>
-                      {% endfor %}
-                    </select>
-                    <button type="button" class="btn btn-sm btn-primary orcamento-status-update" data-orcamento-id="{{ o.id }}" data-endpoint="{{ url_for('atualizar_status_orcamento', orcamento_id=o.id) }}">
-                      Atualizar
+                  <div class="dropdown status-selector" data-status-dropdown data-endpoint="{{ url_for('atualizar_status_orcamento', orcamento_id=o.id) }}" data-orcamento-id="{{ o.id }}" data-current-status="{{ o.status }}">
+                    <button type="button" class="status-badge-button" data-status-toggle data-bs-toggle="dropdown" aria-expanded="false">
+                      <span class="badge rounded-pill d-inline-flex align-items-center justify-content-center gap-2 px-3 py-2 status-badge bg-{{ badge }} text-uppercase" data-status-badge>
+                        <i class="fas {{ status_icon }}" aria-hidden="true"></i>
+                        <span class="status-text">{{ status_label }}</span>
+                      </span>
                     </button>
+                    <ul class="dropdown-menu dropdown-menu-end shadow-sm status-dropdown-menu" role="menu">
+                      {% for status_key, label in orcamento_status_labels.items() %}
+                      <li>
+                        <button type="button" class="dropdown-item d-flex align-items-center gap-2 {% if o.status == status_key %}active{% endif %}" data-status-option data-status="{{ status_key }}">
+                          <i class="fas {{ status_icons.get(status_key, 'fa-file-alt') }}" aria-hidden="true"></i>
+                          <span>{{ label }}</span>
+                        </button>
+                      </li>
+                      {% endfor %}
+                    </ul>
                   </div>
                 </div>
               </td>
@@ -302,17 +361,65 @@
             }
           }
 
-          async function handleStatusUpdate(button) {
-            const orcamentoId = button.dataset.orcamentoId;
-            const endpoint = button.dataset.endpoint;
-            const select = button.closest('td').querySelector('.orcamento-status-select');
-            if (!endpoint || !select) {
-              showToast('Não foi possível encontrar o seletor de status.', 'danger');
+          function setActiveOption(dropdown, status) {
+            if (!dropdown) return;
+            dropdown.querySelectorAll('[data-status-option]').forEach(option => {
+              const isActive = option.dataset.status === status;
+              option.classList.toggle('active', isActive);
+              option.setAttribute('aria-pressed', isActive ? 'true' : 'false');
+            });
+          }
+
+          function setDropdownLoading(dropdown, isLoading) {
+            if (!dropdown) return;
+            dropdown.dataset.loading = isLoading ? '1' : '0';
+            const toggle = dropdown.querySelector('[data-status-toggle]');
+            if (toggle) {
+              toggle.disabled = isLoading;
+              toggle.classList.toggle('status-badge-button--loading', isLoading);
+              toggle.setAttribute('aria-busy', isLoading ? 'true' : 'false');
+            }
+            dropdown.querySelectorAll('[data-status-option]').forEach(option => {
+              option.disabled = !!isLoading;
+            });
+          }
+
+          function closeDropdown(dropdown) {
+            if (!dropdown) return;
+            const toggle = dropdown.querySelector('[data-status-toggle]');
+            if (!toggle) return;
+            if (window.bootstrap && window.bootstrap.Dropdown) {
+              let instance = window.bootstrap.Dropdown.getInstance(toggle);
+              if (!instance) {
+                instance = new window.bootstrap.Dropdown(toggle);
+              }
+              instance.hide();
+            } else {
+              dropdown.classList.remove('show');
+              const menu = dropdown.querySelector('.dropdown-menu');
+              if (menu) {
+                menu.classList.remove('show');
+              }
+            }
+          }
+
+          async function handleStatusUpdate(dropdown, status) {
+            if (!dropdown || !status) {
+              showToast('Selecione um status válido.', 'warning');
               return;
             }
-            const status = select.value;
-            button.disabled = true;
-            button.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>';
+            const endpoint = dropdown.dataset.endpoint;
+            const orcamentoId = dropdown.dataset.orcamentoId;
+            const currentStatus = dropdown.dataset.currentStatus;
+            if (!endpoint) {
+              showToast('Não foi possível localizar o endpoint de atualização.', 'danger');
+              return;
+            }
+            if (currentStatus === status) {
+              closeDropdown(dropdown);
+              return;
+            }
+            setDropdownLoading(dropdown, true);
             let responseData = null;
             try {
               const resp = await fetch(endpoint, {
@@ -337,8 +444,7 @@
               showToast('Erro ao conectar com o servidor.', 'danger');
               return;
             } finally {
-              button.disabled = false;
-              button.textContent = 'Atualizar';
+              setDropdownLoading(dropdown, false);
             }
 
             if (!responseData) {
@@ -346,11 +452,16 @@
               return;
             }
 
+            const newStatus = responseData.status || status;
+            dropdown.dataset.currentStatus = newStatus;
+            setActiveOption(dropdown, newStatus);
+            closeDropdown(dropdown);
+
             const row = document.querySelector(`[data-orcamento-row="${orcamentoId}"]`);
             const badge = row ? row.querySelector('[data-status-badge]') : null;
             if (badge) {
-              const style = statusStyles[responseData.status] || 'secondary';
-              const iconName = statusIcons[responseData.status] || 'fa-file-alt';
+              const style = statusStyles[newStatus] || 'secondary';
+              const iconName = statusIcons[newStatus] || 'fa-file-alt';
               badge.className = `badge rounded-pill d-inline-flex align-items-center justify-content-center gap-2 px-3 py-2 status-badge bg-${style} text-uppercase`;
               const icon = badge.querySelector('i');
               if (icon) {
@@ -358,7 +469,7 @@
               }
               const labelEl = badge.querySelector('.status-text');
               if (labelEl) {
-                labelEl.textContent = statusLabels[responseData.status] || responseData.status;
+                labelEl.textContent = statusLabels[newStatus] || newStatus;
               }
             }
 
@@ -372,10 +483,12 @@
             showToast(responseData.message || 'Status atualizado com sucesso.', 'success');
           }
 
-          document.querySelectorAll('.orcamento-status-update').forEach(button => {
-            if (button.dataset.bindStatusChange) return;
-            button.dataset.bindStatusChange = '1';
-            button.addEventListener('click', () => handleStatusUpdate(button));
+          document.querySelectorAll('[data-status-dropdown]').forEach(dropdown => {
+            if (dropdown.dataset.bindStatusDropdown) return;
+            dropdown.dataset.bindStatusDropdown = '1';
+            dropdown.querySelectorAll('[data-status-option]').forEach(option => {
+              option.addEventListener('click', () => handleStatusUpdate(dropdown, option.dataset.status));
+            });
           });
         })();
       </script>
