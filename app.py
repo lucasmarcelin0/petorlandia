@@ -3644,6 +3644,19 @@ def _format_plantao_option(escala):
     return ' • '.join(parts)
 
 
+def _compute_plantao_horas(inicio, fim):
+    if not inicio or not fim:
+        return None
+    total_seconds = (fim - inicio).total_seconds()
+    if total_seconds <= 0:
+        return None
+    try:
+        horas = Decimal(str(total_seconds)) / Decimal('3600')
+        return horas.quantize(Decimal('0.01'))
+    except (InvalidOperation, TypeError):
+        return None
+
+
 def _configure_pj_payment_form(form, clinics, accessible_ids):
     form.clinic_id.choices = [
         (clinic.id, clinic.nome or f'Clínica #{clinic.id}') for clinic in clinics
@@ -3682,6 +3695,7 @@ def _apply_plantao_details_from_form(escala, form):
         escala.inicio = form.plantao_inicio.data
     if form.plantao_fim.data:
         escala.fim = form.plantao_fim.data
+    escala.plantao_horas = _compute_plantao_horas(escala.inicio, escala.fim)
     horas = form.horas_previstas.data
     valor_hora = form.valor_por_hora.data
     if horas is not None and valor_hora is not None:
@@ -3699,10 +3713,16 @@ def _sync_payment_plantao_link(payment, target_scale, form):
     if target_scale:
         target_scale.pj_payment = payment
         _apply_plantao_details_from_form(target_scale, form)
+        if payment:
+            payment.tipo_prestador = 'plantonista'
+            if target_scale.plantao_horas is not None:
+                payment.plantao_horas = target_scale.plantao_horas
         return target_scale
 
     if current_scale and current_scale is target_scale:
         _apply_plantao_details_from_form(current_scale, form)
+        if payment and current_scale.plantao_horas is not None:
+            payment.plantao_horas = current_scale.plantao_horas
         return current_scale
 
     return None
@@ -4010,6 +4030,7 @@ def contabilidade_plantonistas_novo():
         fim = datetime.combine(form.data_inicio.data, form.hora_fim.data)
         if fim <= inicio:
             fim += timedelta(days=1)
+        horas_previstas = _compute_plantao_horas(inicio, fim)
 
         escala = PlantonistaEscala(
             clinic_id=clinic_id,
@@ -4019,6 +4040,7 @@ def contabilidade_plantonistas_novo():
             turno=form.turno.data.strip(),
             inicio=inicio,
             fim=fim,
+            plantao_horas=horas_previstas,
             valor_previsto=form.valor_previsto.data,
             status=form.status.data,
             nota_fiscal_recebida=form.nota_fiscal_recebida.data,
@@ -4103,6 +4125,7 @@ def contabilidade_plantonistas_editar(escala_id):
             fim += timedelta(days=1)
         escala.inicio = inicio
         escala.fim = fim
+        escala.plantao_horas = _compute_plantao_horas(inicio, fim)
         escala.valor_previsto = form.valor_previsto.data
         escala.status = form.status.data
         if escala.status == 'realizado' and not escala.realizado_em:
@@ -4199,6 +4222,10 @@ def contabilidade_plantao_gerar_pagamento(escala_id):
                     observacoes=escala.observacoes,
                 )
                 payment.status = 'pago' if payment.data_pagamento else 'pendente'
+                horas_previstas = escala.plantao_horas or escala.horas_previstas
+                if horas_previstas and horas_previstas > 0:
+                    payment.plantao_horas = horas_previstas
+                payment.tipo_prestador = 'plantonista'
                 db.session.add(payment)
                 db.session.flush()
                 escala.pj_payment = payment
