@@ -1,5 +1,17 @@
-{% set clinic_id = current_user.veterinario.clinica_id if current_user.worker == 'veterinario' and current_user.veterinario else current_user.clinica_id %}
-{% set blocos = animal.blocos_orcamento | selectattr('clinica_id', 'equalto', clinic_id) | list %}
+{% set clinic_id = clinic_scope_id if clinic_scope_id is defined else None %}
+{% if clinic_id is none %}
+  {% if current_user.worker == 'veterinario' and current_user.veterinario %}
+    {% set clinic_id = current_user.veterinario.clinica_id %}
+  {% else %}
+    {% set clinic_id = current_user.clinica_id %}
+  {% endif %}
+{% endif %}
+{% set blocos = blocos_orcamento if blocos_orcamento is defined else animal.blocos_orcamento %}
+{% if clinic_id %}
+  {% set blocos = blocos | selectattr('clinica_id', 'equalto', clinic_id) | list %}
+{% else %}
+  {% set blocos = blocos | list %}
+{% endif %}
 {% if blocos %}
 <div class="card mb-3">
   <div class="card-body">

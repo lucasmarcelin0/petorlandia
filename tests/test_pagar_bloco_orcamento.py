@@ -28,7 +28,7 @@ def test_pagar_bloco_orcamento(app, monkeypatch):
         db.session.add_all([clinica, vet, vet_v, tutor, animal])
         db.session.commit()
         consulta = Consulta(animal=animal, created_by=vet.id, status='in_progress', clinica_id=clinica.id)
-        item = OrcamentoItem(consulta=consulta, descricao='Consulta', valor=50)
+        item = OrcamentoItem(consulta=consulta, descricao='Consulta', valor=50, clinica=clinica)
         db.session.add_all([consulta, item])
         db.session.commit()
         consulta_id = consulta.id

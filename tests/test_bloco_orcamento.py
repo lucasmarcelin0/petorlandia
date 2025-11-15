@@ -28,8 +28,8 @@ def test_salvar_bloco_orcamento(app):
         db.session.add_all([clinica, vet, vet_v, tutor, animal])
         db.session.commit()
         consulta = Consulta(animal=animal, created_by=vet.id, status='in_progress', clinica_id=clinica.id)
-        item1 = OrcamentoItem(consulta=consulta, descricao='Consulta', valor=50)
-        item2 = OrcamentoItem(consulta=consulta, descricao='Exame', valor=30)
+        item1 = OrcamentoItem(consulta=consulta, descricao='Consulta', valor=50, clinica=clinica)
+        item2 = OrcamentoItem(consulta=consulta, descricao='Exame', valor=30, clinica=clinica)
         db.session.add_all([consulta, item1, item2])
         db.session.commit()
         consulta_id = consulta.id

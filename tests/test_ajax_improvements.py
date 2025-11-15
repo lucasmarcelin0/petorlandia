@@ -182,7 +182,7 @@ def test_ficha_animal_ajax_sections(client, monkeypatch):
         )
         db.session.add_all([futura_vacina, vacina_atrasada, vacina_aplicada])
 
-        bloco_prescricao = BlocoPrescricao(id=1, animal_id=animal.id)
+        bloco_prescricao = BlocoPrescricao(id=1, animal_id=animal.id, clinica=clinic)
         prescricao = Prescricao(
             id=1,
             bloco_id=1,

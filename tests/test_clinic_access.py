@@ -5,7 +5,17 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')
 
 import pytest
 from app import app as flask_app, db
-from models import User, Clinica, Veterinario, Animal, Consulta
+from models import (
+    User,
+    Clinica,
+    Veterinario,
+    Animal,
+    Consulta,
+    BlocoOrcamento,
+    OrcamentoItem,
+    BlocoPrescricao,
+    Prescricao,
+)
 
 
 @pytest.fixture
@@ -69,8 +79,8 @@ def test_vet_can_access_other_clinic_consulta(monkeypatch, app):
         db.create_all()
         c1 = Clinica(nome="Clinic One")
         c2 = Clinica(nome="Clinic Two")
-        tutor = User(name="Tutor", email="tutor@example.com", password_hash="x")
-        animal = Animal(name="Rex", owner=tutor, clinica=c2)
+        tutor = User(name="Tutor", email="tutor@example.com", password_hash="x", clinica=c1)
+        animal = Animal(name="Rex", owner=tutor)
         user = User(name="User", email="user2@example.com", password_hash="x", worker="veterinario")
         vet = Veterinario(user=user, crmv="123", clinica=c1)
         other_user = User(name="OtherVet", email="other@example.com", password_hash="z", worker="veterinario")
@@ -96,8 +106,8 @@ def test_colaborador_can_access_other_clinic_consulta(monkeypatch, app):
         db.create_all()
         c1 = Clinica(nome="Clinic One")
         c2 = Clinica(nome="Clinic Two")
-        tutor = User(name="Tutor", email="tutor3@example.com", password_hash="x")
-        animal = Animal(name="Rex", owner=tutor, clinica=c2)
+        tutor = User(name="Tutor", email="tutor3@example.com", password_hash="x", clinica=c1)
+        animal = Animal(name="Rex", owner=tutor)
         colaborador = User(name="Colab", email="colab@example.com", password_hash="x",
                            worker="colaborador", clinica=c1)
         db.session.add_all([c1, c2, tutor, animal, colaborador])
@@ -130,12 +140,13 @@ def test_orcamento_history_is_isolated(monkeypatch, app):
         db.create_all()
         c1 = Clinica(nome="Clinic One")
         c2 = Clinica(nome="Clinic Two")
-        tutor = User(name="Tutor", email="t4@example.com", password_hash="x")
-        animal = Animal(name="Rex", owner=tutor, clinica=c1)
+        tutor = User(name="Tutor", email="t4@example.com", password_hash="x", clinica=c1)
+        animal = Animal(name="Rex", owner=tutor)
         vet1_user = User(name="Vet1", email="v1@example.com", password_hash="x", worker="veterinario")
         vet2_user = User(name="Vet2", email="v2@example.com", password_hash="y", worker="veterinario")
         vet1 = Veterinario(user=vet1_user, crmv="111", clinica=c1)
         vet2 = Veterinario(user=vet2_user, crmv="222", clinica=c2)
+        tutor.added_by_id = vet2_user.id
         db.session.add_all([c1, c2, tutor, animal, vet1_user, vet2_user, vet1, vet2])
         db.session.commit()
         consulta = Consulta(animal_id=animal.id, created_by=vet1_user.id, clinica_id=c1.id, status='in_progress')
@@ -161,6 +172,51 @@ def test_orcamento_history_is_isolated(monkeypatch, app):
 
     monkeypatch.setattr(login_utils, '_get_user', lambda: User.query.get(vet2_id))
     resp = client.get(f"/consulta/{animal_id}")
+    assert resp.status_code == 404
+
+
+def test_shared_animal_history_and_prescriptions_are_scoped(monkeypatch, app):
+    client = app.test_client()
+    with app.app_context():
+        db.create_all()
+        c1 = Clinica(nome="Clinic One")
+        c2 = Clinica(nome="Clinic Two")
+        tutor = User(name="Tutor", email="shared@example.com", password_hash="x", clinica=c1)
+        animal = Animal(name="Rex", owner=tutor)
+        vet1_user = User(name="Vet1", email="vet1@example.com", password_hash="x", worker='veterinario')
+        vet2_user = User(name="Vet2", email="vet2@example.com", password_hash="y", worker='veterinario')
+        vet1 = Veterinario(user=vet1_user, crmv="111", clinica=c1)
+        vet2 = Veterinario(user=vet2_user, crmv="222", clinica=c2)
+        tutor.added_by_id = vet2_user.id
+        db.session.add_all([c1, c2, tutor, animal, vet1_user, vet2_user, vet1, vet2])
+        db.session.flush()
+
+        consulta_c1 = Consulta(
+            animal_id=animal.id,
+            created_by=vet1_user.id,
+            clinica_id=c1.id,
+            status='finalizada',
+            queixa_principal='tosse clinic one',
+        )
+        bloco_orc = BlocoOrcamento(animal=animal, clinica=c1)
+        bloco_presc = BlocoPrescricao(animal=animal, clinica=c1, saved_by=vet1_user)
+        prescricao = Prescricao(animal=animal, bloco=bloco_presc, medicamento='Antibiotico C1')
+        item = OrcamentoItem(bloco=bloco_orc, descricao='Exame sangue', valor=50, clinica=c1)
+        db.session.add_all([consulta_c1, bloco_orc, bloco_presc, prescricao, item])
+        db.session.commit()
+        animal_id = animal.id
+        vet1_id = vet1_user.id
+        vet2_id = vet2_user.id
+
+    import flask_login.utils as login_utils
+
+    monkeypatch.setattr(login_utils, '_get_user', lambda: User.query.get(vet1_id))
+    resp = client.get(f"/consulta/{animal_id}")
     assert resp.status_code == 200
-    assert b"Nenhum or\xc3\xa7amento registrado ainda." in resp.data
-    assert b"R$ 50.00" not in resp.data
+    assert b"tosse clinic one" in resp.data
+    assert b"R$ 50.00" in resp.data
+    assert b"Antibiotico C1" in resp.data
+
+    monkeypatch.setattr(login_utils, '_get_user', lambda: User.query.get(vet2_id))
+    resp = client.get(f"/consulta/{animal_id}")
+    assert resp.status_code == 404

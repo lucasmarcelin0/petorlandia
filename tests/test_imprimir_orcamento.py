@@ -49,17 +49,21 @@ def test_imprimir_orcamento_includes_printing_user_details(app):
         db.drop_all()
         db.create_all()
 
+        clinica = Clinica(nome='Clinica 1')
+        db.session.add(clinica)
+        db.session.flush()
+
         vet = _create_veterinarian('Vet', 'vet@example.com', 'x', 'SP-789')
         tutor = _create_tutor('Tutor', 'tutor@example.com', 'y')
-        animal = Animal(name='Rex', owner=tutor)
+        animal = Animal(name='Rex', owner=tutor, clinica=clinica)
         db.session.add(animal)
         db.session.flush()
 
-        consulta = Consulta(animal_id=animal.id, created_by=vet.id, status='in_progress')
+        consulta = Consulta(animal_id=animal.id, created_by=vet.id, status='in_progress', clinica_id=clinica.id)
         db.session.add(consulta)
         db.session.flush()
 
-        item = OrcamentoItem(consulta=consulta, descricao='Consulta', valor=50)
+        item = OrcamentoItem(consulta=consulta, descricao='Consulta', valor=50, clinica=clinica)
         db.session.add(item)
         db.session.commit()
         consulta_id = consulta.id
@@ -91,18 +95,22 @@ def test_imprimir_orcamento_displays_original_vet_when_different(app):
         db.drop_all()
         db.create_all()
 
+        clinica = Clinica(nome='Clinica 2')
+        db.session.add(clinica)
+        db.session.flush()
+
         vet1 = _create_veterinarian('Vet1', 'vet1@example.com', 'x', 'SP-101')
         vet2 = _create_veterinarian('Vet2', 'vet2@example.com', 'y', 'SP-202')
         tutor = _create_tutor('Tutor', 'tutor@example.com', 'z')
-        animal = Animal(name='Rex', owner=tutor)
+        animal = Animal(name='Rex', owner=tutor, clinica=clinica)
         db.session.add(animal)
         db.session.flush()
 
-        consulta = Consulta(animal_id=animal.id, created_by=vet1.id, status='in_progress')
+        consulta = Consulta(animal_id=animal.id, created_by=vet1.id, status='in_progress', clinica_id=clinica.id)
         db.session.add(consulta)
         db.session.flush()
 
-        item = OrcamentoItem(consulta=consulta, descricao='Consulta', valor=80)
+        item = OrcamentoItem(consulta=consulta, descricao='Consulta', valor=80, clinica=clinica)
         db.session.add(item)
         db.session.commit()
         consulta_id = consulta.id
@@ -143,7 +151,7 @@ def test_imprimir_orcamento_padrao_includes_printing_user_details(app):
         db.session.add(orcamento)
         db.session.flush()
 
-        item = OrcamentoItem(orcamento=orcamento, descricao='Servico', valor=100)
+        item = OrcamentoItem(orcamento=orcamento, descricao='Servico', valor=100, clinica=clinica)
         db.session.add(item)
         db.session.commit()
         orcamento_id = orcamento.id

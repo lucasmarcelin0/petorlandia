@@ -1,4 +1,11 @@
-{% if animal.blocos_prescricao %}
+{% set clinic_id = clinic_scope_id if clinic_scope_id is defined else None %}
+{% set blocos = blocos_prescricao if blocos_prescricao is defined else animal.blocos_prescricao %}
+{% if clinic_id %}
+  {% set blocos = blocos | selectattr('clinica_id', 'equalto', clinic_id) | list %}
+{% else %}
+  {% set blocos = blocos | list %}
+{% endif %}
+{% if blocos %}
 <div class="prescricao-history card mb-3">
   <div class="card-body">
     <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3">
@@ -7,7 +14,7 @@
     </div>
 
     <div class="prescricao-history__grid">
-      {% for bloco in animal.blocos_prescricao|reverse %}
+      {% for bloco in blocos|reverse %}
         <article class="prescricao-card">
           <header class="prescricao-card__header">
             <div>

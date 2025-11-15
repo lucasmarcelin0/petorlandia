@@ -7,7 +7,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')
 import pytest
 
 from app import app as flask_app, db
-from models import Animal, BlocoPrescricao, Consulta, User, Veterinario
+from models import Animal, BlocoPrescricao, Clinica, Consulta, User, Veterinario
 
 
 @pytest.fixture
@@ -20,12 +20,12 @@ def app():
     yield flask_app
 
 
-def _create_veterinarian(name: str, email: str, password: str, crmv: str) -> User:
+def _create_veterinarian(name: str, email: str, password: str, crmv: str, clinic=None) -> User:
     vet = User(name=name, email=email, worker='veterinario', role='admin')
     vet.set_password(password)
     db.session.add(vet)
     db.session.flush()
-    db.session.add(Veterinario(user=vet, crmv=crmv))
+    db.session.add(Veterinario(user=vet, crmv=crmv, clinica=clinic))
     return vet
 
 
@@ -34,18 +34,22 @@ def test_imprimir_bloco_prescricao_displays_printing_user(app):
         db.drop_all()
         db.create_all()
 
-        vet1 = _create_veterinarian('Vet1', 'vet1@example.com', 'pw1', 'SP-123')
-        vet2 = _create_veterinarian('Vet2', 'vet2@example.com', 'pw2', 'SP-456')
+        clinica = Clinica(nome='Clinica Prescricao')
+        db.session.add(clinica)
+        db.session.flush()
+
+        vet1 = _create_veterinarian('Vet1', 'vet1@example.com', 'pw1', 'SP-123', clinic=clinica)
+        vet2 = _create_veterinarian('Vet2', 'vet2@example.com', 'pw2', 'SP-456', clinic=clinica)
 
         tutor = User(name='Tutor', email='tutor@example.com')
         tutor.set_password('pw3')
-        animal = Animal(name='Jurema', owner=tutor)
+        animal = Animal(name='Jurema', owner=tutor, clinica=clinica)
 
         db.session.add_all([tutor, animal])
         db.session.flush()
 
-        consulta = Consulta(animal_id=animal.id, created_by=vet1.id, status='in_progress')
-        bloco = BlocoPrescricao(animal=animal, saved_by=vet1)
+        consulta = Consulta(animal_id=animal.id, created_by=vet1.id, status='in_progress', clinica_id=clinica.id)
+        bloco = BlocoPrescricao(animal=animal, saved_by=vet1, clinica=clinica)
         db.session.add_all([consulta, bloco])
         db.session.commit()
         bloco_id = bloco.id

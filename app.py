@@ -1133,6 +1133,46 @@ def get_consulta_or_404(consulta_id):
     return consulta
 
 
+def _filter_records_by_clinic(records, clinic_id):
+    """Return a list limited to the given clinic id (if provided)."""
+
+    if not records:
+        return []
+
+    items = list(records)
+    if clinic_id:
+        return [item for item in items if getattr(item, 'clinica_id', None) == clinic_id]
+    return items
+
+
+def _clinic_orcamento_blocks(animal, clinic_id):
+    return _filter_records_by_clinic(getattr(animal, 'blocos_orcamento', []) or [], clinic_id)
+
+
+def _clinic_prescricao_blocks(animal, clinic_id):
+    return _filter_records_by_clinic(getattr(animal, 'blocos_prescricao', []) or [], clinic_id)
+
+
+def _render_orcamento_history(animal, clinic_id):
+    blocos = _clinic_orcamento_blocks(animal, clinic_id)
+    return render_template(
+        'partials/historico_orcamentos.html',
+        animal=animal,
+        blocos_orcamento=blocos,
+        clinic_scope_id=clinic_id,
+    )
+
+
+def _render_prescricao_history(animal, clinic_id):
+    blocos = _clinic_prescricao_blocks(animal, clinic_id)
+    return render_template(
+        'partials/historico_prescricoes.html',
+        animal=animal,
+        blocos_prescricao=blocos,
+        clinic_scope_id=clinic_id,
+    )
+
+
 MISSING_VET_PROFILE_MESSAGE = (
     "Para visualizar os convites de clínica, finalize seu cadastro de "
     "veterinário informando o CRMV e demais dados profissionais."
@@ -3501,9 +3541,17 @@ def ficha_animal(animal_id):
 
     def _load_history_data():
         consultas = _load_consultas()
-        blocos_prescricao = BlocoPrescricao.query.filter_by(
+        blocos_prescricao_query = BlocoPrescricao.query.filter_by(
             animal_id=animal.id
-        ).all()
+        )
+        clinic_scope = None
+        if current_user.role != 'admin':
+            clinic_scope = current_user_clinic_id()
+        if clinic_scope:
+            blocos_prescricao_query = blocos_prescricao_query.filter_by(
+                clinica_id=clinic_scope
+            )
+        blocos_prescricao = blocos_prescricao_query.all()
         blocos_exames = BlocoExames.query.filter_by(animal_id=animal.id).all()
         vacinas_aplicadas = (
             Vacina.query.filter_by(animal_id=animal.id, aplicada=True)
@@ -3762,6 +3810,10 @@ def consulta_qr():
             .all()
         )
 
+    clinic_scope_id = clinica_id
+    blocos_orcamento = _clinic_orcamento_blocks(animal, clinic_scope_id)
+    blocos_prescricao = _clinic_prescricao_blocks(animal, clinic_scope_id)
+
     return render_template(
         'consulta_qr.html',
         tutor=tutor,
@@ -3771,6 +3823,10 @@ def consulta_qr():
         animal_idade_unidade=idade_unidade,
         tutor_form=tutor_form,
         servicos=servicos,
+        worker=getattr(current_user, 'worker', None),
+        blocos_orcamento=blocos_orcamento,
+        blocos_prescricao=blocos_prescricao,
+        clinic_scope_id=clinic_scope_id,
     )
 
 
@@ -3873,6 +3929,10 @@ def consulta_direct(animal_id):
             .all()
         )
 
+    clinic_scope_id = clinica_id
+    blocos_orcamento = _clinic_orcamento_blocks(animal, clinic_scope_id)
+    blocos_prescricao = _clinic_prescricao_blocks(animal, clinic_scope_id)
+
     tipos_racao = list_rations()
     marcas_existentes = sorted(set([t.marca for t in tipos_racao if t.marca]))
     linhas_existentes = sorted(set([t.linha for t in tipos_racao if t.linha]))
@@ -3958,6 +4018,9 @@ def consulta_direct(animal_id):
         animal_idade_unidade=idade_unidade,
         servicos=servicos,
         appointment_form=appointment_form,
+        blocos_orcamento=blocos_orcamento,
+        blocos_prescricao=blocos_prescricao,
+        clinic_scope_id=clinic_scope_id,
     )
 
 
@@ -6923,7 +6986,13 @@ from flask import request, jsonify
 @login_required
 def deletar_prescricao(prescricao_id):
     prescricao = Prescricao.query.get_or_404(prescricao_id)
-    consulta_id = prescricao.consulta_id
+    clinic_id = None
+    if getattr(prescricao, 'bloco', None):
+        clinic_id = prescricao.bloco.clinica_id
+    if not clinic_id and prescricao.animal:
+        clinic_id = prescricao.animal.clinica_id
+    ensure_clinic_access(clinic_id)
+    animal_id = prescricao.animal_id
 
     if current_user.worker != 'veterinario':
         flash('Apenas veterinários podem excluir prescrições.', 'danger')
@@ -6932,7 +7001,7 @@ def deletar_prescricao(prescricao_id):
     db.session.delete(prescricao)
     db.session.commit()
     flash('Prescrição removida com sucesso!', 'info')
-    return redirect(url_for('consulta_qr', animal_id=consulta.animal_id))
+    return redirect(url_for('consulta_qr', animal_id=animal_id))
 
 
 @app.route('/importar_medicamentos')
@@ -7153,7 +7222,7 @@ def salvar_prescricoes_lote(consulta_id):
 
     db.session.commit()
 
-    historico_html = render_template('partials/historico_prescricoes.html', consulta=consulta)
+    historico_html = _render_prescricao_history(consulta.animal, consulta.clinica_id)
     return jsonify({'status': 'ok', 'historico_html': historico_html})
 
 
@@ -7172,10 +7241,15 @@ def salvar_bloco_prescricao(consulta_id):
     if not lista_prescricoes:
         return jsonify({'success': False, 'message': 'Nenhuma prescrição recebida.'}), 400
 
+    clinic_id = consulta.clinica_id or current_user_clinic_id()
+    if not clinic_id:
+        return jsonify({'success': False, 'message': 'Consulta sem clínica definida.'}), 400
+
     # ⬇️ Aqui é onde a instrução geral precisa ser usada
     bloco = BlocoPrescricao(
         animal_id=consulta.animal_id,
         instrucoes_gerais=instrucoes,
+        clinica_id=clinic_id,
     )
     bloco.saved_by = current_user
     bloco.saved_by_id = current_user.id
@@ -7211,10 +7285,7 @@ def salvar_bloco_prescricao(consulta_id):
     # Recarrega o animal para garantir que as prescrições recém-criadas
     # apareçam no histórico renderizado logo após o commit.
     animal_atualizado = Animal.query.get(consulta.animal_id)
-    historico_html = render_template(
-        'partials/historico_prescricoes.html',
-        animal=animal_atualizado
-    )
+    historico_html = _render_prescricao_history(animal_atualizado, clinic_id)
     return jsonify({
         'success': True,
         'message': 'Prescrições salvas com sucesso!',
@@ -7226,6 +7297,7 @@ def salvar_bloco_prescricao(consulta_id):
 @login_required
 def deletar_bloco_prescricao(bloco_id):
     bloco = BlocoPrescricao.query.get_or_404(bloco_id)
+    ensure_clinic_access(bloco.clinica_id)
     if current_user.worker != 'veterinario':
         if request.accept_mimetypes.accept_json:
             return jsonify(success=False,
@@ -7234,13 +7306,13 @@ def deletar_bloco_prescricao(bloco_id):
         return redirect(request.referrer or url_for('index'))
 
     animal_id = bloco.animal_id
+    clinic_id = bloco.clinica_id
     db.session.delete(bloco)
     db.session.commit()
 
     if request.accept_mimetypes.accept_json:
         animal = get_animal_or_404(animal_id)
-        historico_html = render_template('partials/historico_prescricoes.html',
-                                         animal=animal)
+        historico_html = _render_prescricao_history(animal, clinic_id)
         return jsonify(success=True, html=historico_html)
 
     flash('Bloco de prescrição excluído com sucesso!', 'info')
@@ -7251,6 +7323,7 @@ def deletar_bloco_prescricao(bloco_id):
 @login_required
 def editar_bloco_prescricao(bloco_id):
     bloco = BlocoPrescricao.query.get_or_404(bloco_id)
+    ensure_clinic_access(bloco.clinica_id)
 
     if current_user.worker != 'veterinario':
         flash('Apenas veterinários podem editar prescrições.', 'danger')
@@ -7263,6 +7336,7 @@ def editar_bloco_prescricao(bloco_id):
 @login_required
 def atualizar_bloco_prescricao(bloco_id):
     bloco = BlocoPrescricao.query.get_or_404(bloco_id)
+    ensure_clinic_access(bloco.clinica_id)
 
     if current_user.worker != 'veterinario':
         return jsonify({'success': False, 'message': 'Apenas veterinários podem editar.'}), 403
@@ -7311,6 +7385,7 @@ def atualizar_bloco_prescricao(bloco_id):
 @login_required
 def imprimir_bloco_prescricao(bloco_id):
     bloco = BlocoPrescricao.query.get_or_404(bloco_id)
+    ensure_clinic_access(bloco.clinica_id)
 
     if current_user.worker != 'veterinario':
         flash('Apenas veterinários podem imprimir prescrições.', 'danger')
@@ -13226,6 +13301,11 @@ def adicionar_orcamento_item(consulta_id):
     consulta = get_consulta_or_404(consulta_id)
     if current_user.worker != 'veterinario':
         return jsonify({'success': False, 'message': 'Apenas veterinários podem adicionar itens.'}), 403
+    clinic_id = consulta.clinica_id or current_user_clinic_id()
+    if not clinic_id:
+        return jsonify({'success': False, 'message': 'Consulta sem clínica associada.'}), 400
+    if not consulta.clinica_id:
+        consulta.clinica_id = clinic_id
     data = request.get_json(silent=True) or {}
     servico_id = data.get('servico_id')
     descricao = data.get('descricao')
@@ -13236,6 +13316,8 @@ def adicionar_orcamento_item(consulta_id):
         servico = ServicoClinica.query.get(servico_id)
         if not servico:
             return jsonify({'success': False, 'message': 'Item não encontrado.'}), 404
+        if servico.clinica_id and servico.clinica_id != clinic_id:
+            return jsonify({'success': False, 'message': 'Item indisponível para esta clínica.'}), 403
         descricao = servico.descricao
         if valor is None:
             valor = servico.valor
@@ -13243,17 +13325,16 @@ def adicionar_orcamento_item(consulta_id):
     if not descricao or valor is None:
         return jsonify({'success': False, 'message': 'Dados incompletos.'}), 400
     orcamento = None
-    if consulta.clinica_id:
-        orcamento = consulta.orcamento
-        if not orcamento:
-            desc = f"Orçamento da consulta {consulta.id} - {consulta.animal.name}"
-            orcamento = Orcamento(
-                clinica_id=consulta.clinica_id,
-                consulta_id=consulta.id,
-                descricao=desc,
-            )
-            db.session.add(orcamento)
-            db.session.flush()
+    orcamento = consulta.orcamento
+    if not orcamento:
+        desc = f"Orçamento da consulta {consulta.id} - {consulta.animal.name}"
+        orcamento = Orcamento(
+            clinica_id=clinic_id,
+            consulta_id=consulta.id,
+            descricao=desc,
+        )
+        db.session.add(orcamento)
+        db.session.flush()
 
     item = OrcamentoItem(
         consulta_id=consulta.id,
@@ -13261,6 +13342,7 @@ def adicionar_orcamento_item(consulta_id):
         descricao=descricao,
         valor=valor,
         servico_id=servico.id if servico else None,
+        clinica_id=clinic_id,
     )
     db.session.add(item)
     db.session.commit()
@@ -13296,7 +13378,7 @@ def salvar_bloco_orcamento(consulta_id):
         item.consulta_id = None
         db.session.add(item)
     db.session.commit()
-    historico_html = render_template('partials/historico_orcamentos.html', animal=consulta.animal)
+    historico_html = _render_orcamento_history(consulta.animal, consulta.clinica_id)
     return jsonify({'success': True, 'html': historico_html})
 
 
@@ -13308,10 +13390,15 @@ def deletar_bloco_orcamento(bloco_id):
     if current_user.worker != 'veterinario':
         return jsonify({'success': False, 'message': 'Apenas veterinários podem excluir.'}), 403
     animal_id = bloco.animal_id
+    clinic_id = bloco.clinica_id
     db.session.delete(bloco)
     db.session.commit()
     if request.accept_mimetypes.accept_json:
-        historico_html = render_template('partials/historico_orcamentos.html', animal=Animal.query.get(animal_id))
+        animal = Animal.query.get(animal_id)
+        historico_html = _render_orcamento_history(
+            animal,
+            clinic_id or getattr(animal, 'clinica_id', None)
+        )
         return jsonify({'success': True, 'html': historico_html})
     return redirect(url_for('consulta_direct', animal_id=animal_id))
 
@@ -13349,11 +13436,17 @@ def atualizar_bloco_orcamento(bloco_id):
             valor_decimal = Decimal(str(valor))
         except Exception:
             continue
-        bloco.itens.append(OrcamentoItem(descricao=descricao, valor=valor_decimal))
+        bloco.itens.append(
+            OrcamentoItem(
+                descricao=descricao,
+                valor=valor_decimal,
+                clinica_id=bloco.clinica_id,
+            )
+        )
 
     db.session.commit()
 
-    historico_html = render_template('partials/historico_orcamentos.html', animal=bloco.animal)
+    historico_html = _render_orcamento_history(bloco.animal, bloco.clinica_id)
     return jsonify(success=True, html=historico_html)
 
 
