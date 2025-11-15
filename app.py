@@ -1293,6 +1293,7 @@ from services import (
 from services.finance import (
     classify_transactions_for_month,
     determine_pj_payment_subcategory,
+    REQUIRED_PJ_PAYMENT_COLUMNS,
     run_transactions_history_backfill,
 )
 from services.animal_search import search_animals
@@ -3234,7 +3235,7 @@ def _describe_pj_payments_schema_error(exc: ProgrammingError) -> Optional[tuple[
             identifier = column_match.group(1).strip('"')
             column_name = identifier.split('.')[-1]
         if not column_name:
-            column_name = 'tipo_prestador'
+            column_name = sorted(REQUIRED_PJ_PAYMENT_COLUMNS)[0]
         return (
             "Coluna %s ausente na tabela pj_payments. Execute as migrações do banco para habilitar o módulo." % column_name,
             "O módulo de pagamentos PJ ainda não está disponível porque a coluna %s da tabela pj_payments não existe. Execute as migrações do banco para adicioná-la." % column_name,
@@ -3284,10 +3285,12 @@ def _pj_payments_schema_issue() -> Optional[tuple[str, str]]:
                 "Não foi possível verificar se o módulo de pagamentos PJ está habilitado. Verifique as migrações do banco.",
             )
     else:
-        if 'tipo_prestador' not in columns:
+        missing_columns = REQUIRED_PJ_PAYMENT_COLUMNS - columns
+        if missing_columns:
+            missing_column = sorted(missing_columns)[0]
             issue = (
-                "Coluna tipo_prestador ausente na tabela pj_payments. Execute as migrações do banco para habilitar o módulo.",
-                "O módulo de pagamentos PJ ainda não está disponível porque a coluna tipo_prestador da tabela pj_payments não existe. Execute as migrações do banco para adicioná-la.",
+                "Coluna %s ausente na tabela pj_payments. Execute as migrações do banco para habilitar o módulo." % missing_column,
+                "O módulo de pagamentos PJ ainda não está disponível porque a coluna %s da tabela pj_payments não existe. Execute as migrações do banco para adicioná-la." % missing_column,
             )
 
     g._pj_payments_schema_issue = issue
