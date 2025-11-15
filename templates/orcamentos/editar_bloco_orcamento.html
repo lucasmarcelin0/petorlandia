@@ -1,58 +1,345 @@
 {% extends 'layout.html' %}
 {% block main %}
 <div class="container py-4">
-  <h2 class="mb-4">✏️ Editar Orçamento</h2>
-  <div id="itens-container">
-    {% for item in bloco.itens %}
-    <div class="row g-2 mb-2 item-row">
-      <div class="col-md-8">
-        <input type="text" class="form-control descricao" value="{{ item.descricao }}">
+  <style>
+    .budget-editor {
+      max-width: 960px;
+      margin: 0 auto;
+    }
+
+    .item-list {
+      display: flex;
+      flex-direction: column;
+      gap: 1.25rem;
+    }
+
+    .item-card {
+      background: #fff;
+      border-radius: 22px;
+      box-shadow: 0 15px 35px rgba(15, 23, 42, 0.12);
+      border: 1px solid rgba(15, 23, 42, 0.08);
+      padding: 1.5rem;
+      display: flex;
+      gap: 1rem;
+      align-items: stretch;
+    }
+
+    .value-indicator {
+      width: 8px;
+      border-radius: 999px;
+      background: var(--danger-color);
+      flex-shrink: 0;
+    }
+
+    .value-indicator.indicator-low {
+      background: var(--danger-color);
+    }
+
+    .value-indicator.indicator-medium {
+      background: var(--warning-color);
+    }
+
+    .value-indicator.indicator-high {
+      background: var(--secondary-color);
+    }
+
+    .item-icon {
+      width: 56px;
+      height: 56px;
+      border-radius: 16px;
+      background: #f4f6fb;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.75rem;
+    }
+
+    .item-category-label {
+      letter-spacing: 0.1em;
+      font-size: 0.8rem;
+      text-transform: uppercase;
+      margin-bottom: 0.15rem;
+    }
+
+    .item-card .helper-text {
+      font-size: 0.78rem;
+      color: #6c757d;
+      margin-top: 0.35rem;
+      display: block;
+    }
+
+    .empty-state {
+      border: 2px dashed rgba(15, 23, 42, 0.2);
+      border-radius: 22px;
+      padding: 2rem;
+      text-align: center;
+      margin-top: 1.5rem;
+      background: #fff;
+      box-shadow: 0 10px 20px rgba(15, 23, 42, 0.08);
+    }
+
+    .empty-state .emoji {
+      font-size: 2.5rem;
+      margin-bottom: 0.5rem;
+    }
+
+    .add-item-wrapper {
+      display: flex;
+      justify-content: center;
+      margin-top: 2rem;
+    }
+
+    .add-item-card {
+      width: 100%;
+      max-width: 760px;
+      border-radius: 26px;
+      border: 1px solid rgba(15, 23, 42, 0.08);
+    }
+
+    .add-item-card .helper-text {
+      font-size: 0.78rem;
+      color: #6c757d;
+    }
+
+    @media (max-width: 576px) {
+      .item-card {
+        flex-direction: column;
+      }
+
+      .value-indicator {
+        width: 100%;
+        height: 6px;
+      }
+    }
+  </style>
+
+  <div class="budget-editor">
+    <div class="text-center mb-4">
+      <h2 class="mb-1">✏️ Editar Orçamento</h2>
+      <p class="text-muted mb-0">Visualize cada item como um card com destaque de categoria e quantidade relativa.</p>
+    </div>
+
+    <div id="itens-container" class="item-list">
+      {% for item in bloco.itens %}
+      <div class="item-card">
+        <span class="value-indicator indicator-medium" aria-hidden="true"></span>
+        <div class="flex-grow-1">
+          <div class="d-flex justify-content-between align-items-center flex-wrap gap-3 mb-3 item-header">
+            <div class="d-flex align-items-center gap-3">
+              <span class="item-icon">💊</span>
+              <div>
+                <p class="item-category-label text-muted mb-1">Medicamento</p>
+                <small class="text-muted">A categoria é ajustada automaticamente conforme a descrição.</small>
+              </div>
+            </div>
+            <button type="button" class="btn btn-link text-danger remover-item p-0">
+              <i class="fa-solid fa-trash-can me-1"></i> Remover
+            </button>
+          </div>
+          <div class="row g-3 align-items-end">
+            <div class="col-md-8">
+              <label class="form-label text-muted text-uppercase small">Descrição</label>
+              <input type="text" class="form-control descricao" value="{{ item.descricao }}" placeholder="Ex.: Aplicação de vacina anual">
+              <small class="helper-text">Explique rapidamente o procedimento ou medicamento.</small>
+            </div>
+            <div class="col-md-4">
+              <label class="form-label text-muted text-uppercase small">Valor estimado</label>
+              <div class="input-group">
+                <span class="input-group-text">R$</span>
+                <input type="number" step="0.01" class="form-control valor" value="{{ '%.2f'|format(item.valor) }}" placeholder="0,00">
+              </div>
+              <small class="helper-text">Informe o valor relativo deste item.</small>
+            </div>
+          </div>
+        </div>
       </div>
-      <div class="col-md-3">
-        <input type="number" step="0.01" class="form-control valor" value="{{ '%.2f'|format(item.valor) }}">
-      </div>
-      <div class="col-md-1">
-        <button type="button" class="btn btn-danger w-100 remover-item">🗑️</button>
+      {% endfor %}
+    </div>
+
+    <div id="empty-state" class="empty-state {% if bloco.itens %}d-none{% endif %}">
+      <div class="emoji">🧾</div>
+      <h5 class="mb-1">Nenhum item adicionado</h5>
+      <p class="text-muted mb-0">Utilize o formulário abaixo para começar a montar o orçamento.</p>
+    </div>
+
+    <div class="add-item-wrapper">
+      <div class="card shadow-sm add-item-card">
+        <div class="card-body">
+          <div class="text-center mb-4">
+            <h5 class="mb-1">Adicionar item</h5>
+            <p class="text-muted small mb-0">Centralizamos o formulário para que você inclua novos cards rapidamente.</p>
+          </div>
+          <div class="row g-3 align-items-end">
+            <div class="col-md-6">
+              <label for="novo-descricao" class="form-label text-muted text-uppercase small">Descrição</label>
+              <input type="text" id="novo-descricao" class="form-control" placeholder="Ex.: Vacina múltipla anual">
+              <small class="helper-text">Resuma o serviço ou medicamento.</small>
+            </div>
+            <div class="col-md-3">
+              <label for="novo-valor" class="form-label text-muted text-uppercase small">Valor estimado</label>
+              <div class="input-group">
+                <span class="input-group-text">R$</span>
+                <input type="number" step="0.01" id="novo-valor" class="form-control" placeholder="0,00">
+              </div>
+              <small class="helper-text">Use o melhor valor disponível.</small>
+            </div>
+            <div class="col-md-3">
+              <button type="button" class="btn btn-primary w-100" onclick="adicionarItemFromForm()">➕ Adicionar item</button>
+              <small class="helper-text text-center d-block">Os campos serão limpos após o envio.</small>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
-    {% endfor %}
-  </div>
-  <button type="button" class="btn btn-outline-primary mb-3" onclick="adicionarItem()">➕ Adicionar item</button>
-  <div class="d-flex gap-2">
-    <button class="btn btn-success" onclick="salvar({{ bloco.id }}, {{ bloco.animal_id }})">💾 Salvar alterações</button>
-    <a class="btn btn-secondary" href="javascript:history.back()">↩️ Cancelar</a>
+
+    <div class="d-flex gap-2 flex-wrap justify-content-center justify-content-md-start mt-4">
+      <button class="btn btn-success" onclick="salvar({{ bloco.id }}, {{ bloco.animal_id }})">💾 Salvar alterações</button>
+      <a class="btn btn-secondary" href="javascript:history.back()">↩️ Cancelar</a>
+    </div>
   </div>
 </div>
 
 <script>
-function adicionarItem() {
-  const container = document.getElementById('itens-container');
-  const row = document.createElement('div');
-  row.className = 'row g-2 mb-2 item-row';
-  row.innerHTML = `
-    <div class="col-md-8">
-      <input type="text" class="form-control descricao" placeholder="Descrição">
-    </div>
-    <div class="col-md-3">
-      <input type="number" step="0.01" class="form-control valor" placeholder="0.00">
-    </div>
-    <div class="col-md-1">
-      <button type="button" class="btn btn-danger w-100 remover-item">🗑️</button>
-    </div>`;
-  container.appendChild(row);
+const itensContainer = document.getElementById('itens-container');
+const emptyState = document.getElementById('empty-state');
+const descricaoInputForm = document.getElementById('novo-descricao');
+const valorInputForm = document.getElementById('novo-valor');
+
+function getCategoryData(description) {
+  const texto = (description || '').toLowerCase();
+  const vacinaRegex = /(vacina|dose|aplica|inje[cç][aã]o|soro|refor[cç]o)/i;
+  if (vacinaRegex.test(texto)) {
+    return { icon: '💉', label: 'Aplicação / Vacina' };
+  }
+  return { icon: '💊', label: 'Medicamento / Tratamento' };
 }
 
-document.addEventListener('click', function(e) {
-  if (e.target.classList.contains('remover-item')) {
-    e.target.closest('.item-row').remove();
-  }
+function syncItemCard(card) {
+  const descricao = card.querySelector('.descricao').value;
+  const { icon, label } = getCategoryData(descricao);
+  const iconEl = card.querySelector('.item-icon');
+  const labelEl = card.querySelector('.item-category-label');
+  iconEl.textContent = icon;
+  labelEl.textContent = label;
+}
+
+function updateRelativeIndicators() {
+  const cards = itensContainer.querySelectorAll('.item-card');
+  const valores = Array.from(cards).map(card => {
+    const raw = card.querySelector('.valor').value.replace(',', '.');
+    return parseFloat(raw) || 0;
+  });
+  const max = Math.max(...valores, 0);
+  cards.forEach((card, index) => {
+    const indicador = card.querySelector('.value-indicator');
+    indicador.classList.remove('indicator-low', 'indicator-medium', 'indicator-high');
+    let classe = 'indicator-low';
+    if (max > 0) {
+      const ratio = valores[index] / max;
+      if (ratio >= 0.66) {
+        classe = 'indicator-high';
+      } else if (ratio >= 0.33) {
+        classe = 'indicator-medium';
+      }
+      indicador.setAttribute('aria-label', `Valor relativo: ${(ratio * 100).toFixed(0)}%`);
+    } else {
+      indicador.removeAttribute('aria-label');
+    }
+    indicador.classList.add(classe);
+  });
+}
+
+function toggleEmptyState() {
+  if (!emptyState) return;
+  const hasItems = itensContainer.querySelector('.item-card');
+  emptyState.classList.toggle('d-none', Boolean(hasItems));
+}
+
+function bindCardEvents(card) {
+  const descricaoField = card.querySelector('.descricao');
+  const valorField = card.querySelector('.valor');
+  const removerBtn = card.querySelector('.remover-item');
+
+  descricaoField.addEventListener('input', () => syncItemCard(card));
+  valorField.addEventListener('input', updateRelativeIndicators);
+  removerBtn.addEventListener('click', () => {
+    card.remove();
+    toggleEmptyState();
+    updateRelativeIndicators();
+  });
+}
+
+function criarItemCard(descricao = '', valor = '') {
+  const wrapper = document.createElement('div');
+  wrapper.className = 'item-card';
+  wrapper.innerHTML = `
+    <span class="value-indicator indicator-medium" aria-hidden="true"></span>
+    <div class="flex-grow-1">
+      <div class="d-flex justify-content-between align-items-center flex-wrap gap-3 mb-3 item-header">
+        <div class="d-flex align-items-center gap-3">
+          <span class="item-icon">💊</span>
+          <div>
+            <p class="item-category-label text-muted mb-1">Medicamento</p>
+            <small class="text-muted">A categoria é ajustada automaticamente conforme a descrição.</small>
+          </div>
+        </div>
+        <button type="button" class="btn btn-link text-danger remover-item p-0">
+          <i class="fa-solid fa-trash-can me-1"></i> Remover
+        </button>
+      </div>
+      <div class="row g-3 align-items-end">
+        <div class="col-md-8">
+          <label class="form-label text-muted text-uppercase small">Descrição</label>
+          <input type="text" class="form-control descricao" placeholder="Ex.: Aplicação de vacina anual">
+          <small class="helper-text">Explique rapidamente o procedimento ou medicamento.</small>
+        </div>
+        <div class="col-md-4">
+          <label class="form-label text-muted text-uppercase small">Valor estimado</label>
+          <div class="input-group">
+            <span class="input-group-text">R$</span>
+            <input type="number" step="0.01" class="form-control valor" placeholder="0,00">
+          </div>
+          <small class="helper-text">Informe o valor relativo deste item.</small>
+        </div>
+      </div>
+    </div>`;
+  const descricaoField = wrapper.querySelector('.descricao');
+  const valorField = wrapper.querySelector('.valor');
+  descricaoField.value = descricao;
+  valorField.value = valor;
+  return wrapper;
+}
+
+function adicionarItem(descricao = '', valor = '') {
+  const card = criarItemCard(descricao, valor);
+  itensContainer.appendChild(card);
+  bindCardEvents(card);
+  syncItemCard(card);
+  updateRelativeIndicators();
+  toggleEmptyState();
+  return card;
+}
+
+function adicionarItemFromForm() {
+  adicionarItem(descricaoInputForm.value.trim(), valorInputForm.value);
+  descricaoInputForm.value = '';
+  valorInputForm.value = '';
+  descricaoInputForm.focus();
+}
+
+document.querySelectorAll('#itens-container .item-card').forEach(card => {
+  bindCardEvents(card);
+  syncItemCard(card);
 });
+
+updateRelativeIndicators();
+toggleEmptyState();
 
 function salvar(blocoId, animalId) {
   const itens = [];
-  document.querySelectorAll('#itens-container .item-row').forEach(row => {
-    const descricao = row.querySelector('.descricao').value.trim();
-    const valor = parseFloat(row.querySelector('.valor').value);
+  document.querySelectorAll('#itens-container .item-card').forEach(card => {
+    const descricao = card.querySelector('.descricao').value.trim();
+    const valor = parseFloat(card.querySelector('.valor').value.replace(',', '.'));
     if (descricao && !isNaN(valor)) {
       itens.push({descricao, valor});
     }
