@@ -22,6 +22,7 @@ import click
 from dotenv import load_dotenv
 from flask import (
     Flask,
+    g,
     session,
     send_from_directory,
     send_file,
@@ -46,7 +47,7 @@ import json
 import csv
 import unicodedata
 from sqlalchemy import func, or_, exists, and_, case, true, false, inspect, text
-from sqlalchemy.exc import ProgrammingError
+from sqlalchemy.exc import NoSuchTableError, OperationalError, ProgrammingError
 from sqlalchemy.orm import joinedload, selectinload, aliased
 
 # ----------------------------------------------------------------
@@ -3034,6 +3035,11 @@ def contabilidade_financeiro():
     if selected_clinic_id:
         selected_clinic = next((c for c in clinics if c.id == selected_clinic_id), None)
 
+    pj_schema_issue = _pj_payments_schema_issue()
+    pj_payments_available = pj_schema_issue is None
+    if pj_schema_issue and selected_clinic_id:
+        flash(pj_schema_issue[1], 'warning')
+
     month_reference = date.today().replace(day=1)
     months = [month_reference - relativedelta(months=offset) for offset in range(11, -1, -1)]
     month_names = [
@@ -3146,7 +3152,7 @@ def contabilidade_financeiro():
             + Decimal(taxes_for_current.retencoes_pj or 0)
         )
 
-    if selected_clinic_id:
+    if selected_clinic_id and pj_payments_available:
         month_end = current_month + relativedelta(months=1)
         plantonista_records = (
             PJPayment.query
@@ -3247,6 +3253,49 @@ def _describe_pj_payments_schema_error(exc: ProgrammingError) -> Optional[tuple[
     return None
 
 
+def _pj_payments_schema_issue() -> Optional[tuple[str, str]]:
+    """Return cached schema issues for the ``pj_payments`` table, if any."""
+
+    if not has_request_context():
+        return None
+    cached = getattr(g, '_pj_payments_schema_issue', None)
+    if cached is not None:
+        return cached
+
+    issue: Optional[tuple[str, str]] = None
+    try:
+        inspector = inspect(db.engine)
+        columns = {column["name"] for column in inspector.get_columns('pj_payments')}
+    except NoSuchTableError:
+        issue = (
+            "Tabela pj_payments ausente. Execute as migrações do banco para habilitar o módulo.",
+            "O módulo de pagamentos PJ ainda não está disponível porque a tabela pj_payments não existe. Execute as migrações do banco para criá-la.",
+        )
+    except (ProgrammingError, OperationalError) as exc:
+        described = _describe_pj_payments_schema_error(exc)
+        if described:
+            issue = described
+        else:
+            current_app.logger.warning(
+                "Falha ao inspecionar a tabela pj_payments: %s", exc, exc_info=exc
+            )
+            issue = (
+                "Não foi possível verificar o esquema da tabela pj_payments.",
+                "Não foi possível verificar se o módulo de pagamentos PJ está habilitado. Verifique as migrações do banco.",
+            )
+    else:
+        if 'tipo_prestador' not in columns:
+            issue = (
+                "Coluna tipo_prestador ausente na tabela pj_payments. Execute as migrações do banco para habilitar o módulo.",
+                "O módulo de pagamentos PJ ainda não está disponível porque a coluna tipo_prestador da tabela pj_payments não existe. Execute as migrações do banco para adicioná-la.",
+            )
+
+    g._pj_payments_schema_issue = issue
+    if issue:
+        current_app.logger.warning(issue[0])
+    return issue
+
+
 @app.route('/contabilidade/pagamentos')
 @login_required
 def contabilidade_pagamentos():
@@ -3301,6 +3350,10 @@ def contabilidade_pagamentos():
 
     payments: list[PJPayment] = []
     payments_error = None
+    pj_schema_issue = _pj_payments_schema_issue()
+    pj_payments_available = pj_schema_issue is None
+    if pj_schema_issue:
+        payments_error = pj_schema_issue[1]
     budget_entries: list[dict] = []
     budget_totals = {
         status: Decimal('0.00') for status in ACCOUNTING_BUDGET_STATUS_SUMMARY
@@ -3390,7 +3443,7 @@ def contabilidade_pagamentos():
             'source_url': source_url,
             'payment_entry_url': payment_entry_url,
         }
-    if selected_clinic_id:
+    if selected_clinic_id and pj_payments_available:
         try:
             classify_transactions_for_month(selected_clinic_id, start_date)
         except Exception:
@@ -3683,6 +3736,17 @@ def contabilidade_pagamentos_novo():
         flash('Associe-se a uma clínica antes de registrar pagamentos PJ.', 'warning')
         return redirect(url_for('contabilidade_pagamentos'))
 
+    schema_issue = _pj_payments_schema_issue()
+    if schema_issue:
+        flash(schema_issue[1], 'warning')
+        return redirect(
+            url_for(
+                'contabilidade_pagamentos',
+                clinica_id=request.args.get('clinica_id'),
+                mes=request.args.get('mes'),
+            )
+        )
+
     form = PJPaymentForm()
     form.payment_id = None
     _configure_pj_payment_form(form, clinics, accessible_ids)
@@ -3759,6 +3823,16 @@ def contabilidade_pagamentos_novo():
 @login_required
 def contabilidade_pagamentos_editar(payment_id):
     _ensure_accounting_access()
+    schema_issue = _pj_payments_schema_issue()
+    if schema_issue:
+        flash(schema_issue[1], 'warning')
+        return redirect(
+            url_for(
+                'contabilidade_pagamentos',
+                clinica_id=request.args.get('clinica_id'),
+                mes=request.args.get('mes'),
+            )
+        )
     payment = PJPayment.query.get_or_404(payment_id)
     clinics, accessible_ids = _accounting_accessible_clinics()
     if clinics:
@@ -3844,6 +3918,16 @@ def contabilidade_pagamentos_editar(payment_id):
 @login_required
 def contabilidade_pagamentos_delete(payment_id):
     _ensure_accounting_access()
+    schema_issue = _pj_payments_schema_issue()
+    if schema_issue:
+        flash(schema_issue[1], 'warning')
+        return redirect(
+            url_for(
+                'contabilidade_pagamentos',
+                clinica_id=request.args.get('clinica_id'),
+                mes=request.args.get('mes'),
+            )
+        )
     payment = PJPayment.query.get_or_404(payment_id)
     _, accessible_ids = _accounting_accessible_clinics()
     if payment.clinic_id not in accessible_ids and not _is_admin():
@@ -3864,6 +3948,16 @@ def contabilidade_pagamentos_delete(payment_id):
 @login_required
 def contabilidade_pagamentos_marcar_pago(payment_id):
     _ensure_accounting_access()
+    schema_issue = _pj_payments_schema_issue()
+    if schema_issue:
+        flash(schema_issue[1], 'warning')
+        return redirect(
+            url_for(
+                'contabilidade_pagamentos',
+                clinica_id=request.args.get('clinica_id'),
+                mes=request.args.get('mes'),
+            )
+        )
     payment = PJPayment.query.get_or_404(payment_id)
     _, accessible_ids = _accounting_accessible_clinics()
     if payment.clinic_id not in accessible_ids and not _is_admin():

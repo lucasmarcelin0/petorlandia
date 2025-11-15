@@ -7,6 +7,7 @@ from .finance import (  # noqa: F401
     classify_transactions_for_month,
     generate_clinic_notifications,
     generate_financial_snapshot,
+    pj_payments_schema_is_ready,
     update_financial_snapshots_daily,
 )
 from .health_plan import (  # noqa: F401

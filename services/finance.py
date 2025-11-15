@@ -11,7 +11,7 @@ from typing import Callable, Iterable, List, Optional, Sequence, Tuple
 from dateutil.relativedelta import relativedelta
 from flask import current_app, has_app_context
 from sqlalchemy import and_, cast, func, or_, inspect as sa_inspect
-from sqlalchemy.exc import OperationalError, ProgrammingError
+from sqlalchemy.exc import NoSuchTableError, OperationalError, ProgrammingError
 from sqlalchemy.orm import load_only
 from sqlalchemy.sql.sqltypes import Numeric
 
@@ -303,7 +303,7 @@ def _get_table_columns(table_name: str) -> set[str]:
     try:
         inspector = sa_inspect(db.engine)
         names = {column["name"] for column in inspector.get_columns(table_name)}
-    except (ProgrammingError, OperationalError):  # pragma: no cover - legacy DBs
+    except (ProgrammingError, OperationalError, NoSuchTableError):  # pragma: no cover - legacy DBs
         names = set()
     _TABLE_COLUMN_CACHE[table_name] = names
     return names
@@ -313,6 +313,12 @@ def _table_has_column(table_name: str, column_name: str) -> bool:
     if not column_name:
         return False
     return column_name in _get_table_columns(table_name)
+
+
+def pj_payments_schema_is_ready() -> bool:
+    """Return ``True`` when ``pj_payments`` already exposes the new columns."""
+
+    return _table_has_column('pj_payments', 'tipo_prestador')
 
 
 def _manual_entries_total(clinic_id: int, start_dt: datetime, end_dt: datetime) -> Decimal:
@@ -845,6 +851,11 @@ def _plantonista_retention_rate(clinic: Clinica | None) -> Decimal:
 def _calculate_pj_withholding(clinic: Clinica, month_start: date) -> Decimal:
     if not clinic or not clinic.id:
         return ZERO
+    if not pj_payments_schema_is_ready():
+        _log(
+            "[Tributário] Retenção PJ ignorada porque a coluna tipo_prestador não existe"
+        )
+        return ZERO
     month_end = month_start + relativedelta(months=1)
     total = ZERO
     municipal_requirement = bool(getattr(clinic, 'retencao_pj_obrigatoria', False))
@@ -878,6 +889,11 @@ def _ensure_pending_plantao_notifications(
     overdue_days: int = PLANTAO_PENDING_ALERT_DAYS,
 ) -> None:
     if not clinic or not clinic.id:
+        return
+    if not pj_payments_schema_is_ready():
+        _log(
+            "[Notificações] Plantões pendentes ignorados porque a coluna tipo_prestador não existe"
+        )
         return
     try:
         overdue_days = int(overdue_days)
@@ -1081,13 +1097,29 @@ def generate_clinic_notifications(
                 "info",
             )
 
-    payments_current = (
-        PJPayment.query
-        .filter(PJPayment.clinic_id == clinic_id)
-        .filter(PJPayment.data_servico >= month_start)
-        .filter(PJPayment.data_servico < month_end)
-        .all()
-    )
+    pj_payments_ready = pj_payments_schema_is_ready()
+    payments_current: list[PJPayment] = []
+    recent_payments: list[PJPayment] = []
+    if pj_payments_ready:
+        payments_current = (
+            PJPayment.query
+            .filter(PJPayment.clinic_id == clinic_id)
+            .filter(PJPayment.data_servico >= month_start)
+            .filter(PJPayment.data_servico < month_end)
+            .all()
+        )
+        lookback_start = month_start - relativedelta(months=2)
+        recent_payments = (
+            PJPayment.query
+            .filter(PJPayment.clinic_id == clinic_id)
+            .filter(PJPayment.data_servico >= lookback_start)
+            .filter(PJPayment.data_servico < month_end)
+            .all()
+        )
+    else:
+        _log(
+            "[Notificações] Alertas de PJ ignorados porque a coluna tipo_prestador não existe"
+        )
 
     provider_counts: dict[str, int] = defaultdict(int)
     provider_names: dict[str, str] = {}
@@ -1106,14 +1138,6 @@ def generate_clinic_notifications(
                 "danger",
             )
 
-    lookback_start = month_start - relativedelta(months=2)
-    recent_payments = (
-        PJPayment.query
-        .filter(PJPayment.clinic_id == clinic_id)
-        .filter(PJPayment.data_servico >= lookback_start)
-        .filter(PJPayment.data_servico < month_end)
-        .all()
-    )
     monthly_totals: dict[str, dict[date, Decimal]] = defaultdict(lambda: defaultdict(Decimal))
     for payment in recent_payments:
         if not payment.data_servico:
