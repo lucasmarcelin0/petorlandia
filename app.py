@@ -102,6 +102,7 @@ from flask_login import login_user, logout_user, current_user, login_required
 from flask_mail import Message as MailMessage      #  ←  adicione esta linha
 from werkzeug.utils import secure_filename
 from werkzeug.datastructures import FileStorage
+from werkzeug.routing import BuildError
 
 db.init_app(app)
 migrate.init_app(app, db, compare_type=True)
@@ -5361,6 +5362,11 @@ def clinic_detail(clinica_id):
     next7_str = (today + timedelta(days=7)).strftime('%Y-%m-%d')
     now_dt = datetime.utcnow()
 
+    try:
+        clinic_new_animal_url = url_for('criar_animal', clinica_id=clinica.id)
+    except BuildError:
+        clinic_new_animal_url = url_for('novo_animal')
+
     return render_template(
         'clinica/clinic_detail.html',
         clinica=clinica,
@@ -5397,6 +5403,7 @@ def clinic_detail(clinica_id):
         show_inventory=show_inventory,
         invites_by_status=invites_by_status,
         invite_status_order=invite_status_order,
+        clinic_new_animal_url=clinic_new_animal_url,
     )
 
 
@@ -8688,6 +8695,8 @@ def novo_animal():
                 page_param=request.args.get('page_param', 'page'),
                 fetch_url=url_for('novo_animal'),
                 compact=True,
+                can_create_animals=True,
+                new_animal_url=url_for('novo_animal'),
             )
             return jsonify(
                 message='Animal cadastrado com sucesso!',
@@ -8732,6 +8741,8 @@ def novo_animal():
             page_param=request.args.get('page_param', 'page'),
             fetch_url=url_for('novo_animal'),
             compact=True,
+            can_create_animals=True,
+            new_animal_url=url_for('novo_animal'),
         )
         return jsonify(html=html, scope=scope)
 

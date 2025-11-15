@@ -13,7 +13,10 @@
   <div class="col-12">
     <div class="d-flex flex-column gap-4">
       <div id="animais-adicionados">
-        {% with compact=True, fetch_url=url_for('novo_animal') %}
+        {% with compact=True,
+                fetch_url=url_for('novo_animal'),
+                can_create_animals=True,
+                new_animal_url=url_for('novo_animal') %}
           {% include 'partials/animais_adicionados.html' %}
         {% endwith %}
       </div>
