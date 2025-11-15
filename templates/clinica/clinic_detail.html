@@ -143,6 +143,35 @@
 document.addEventListener('DOMContentLoaded', function() {
   const form = document.getElementById('appointment-filter-form');
   const container = document.getElementById('appointments-table-container');
+  const quickFiltersCollapse = document.getElementById('appointmentQuickFiltersCollapse');
+  const quickFiltersToggle = document.querySelector('[data-bs-target="#appointmentQuickFiltersCollapse"]');
+
+  if (quickFiltersCollapse && typeof bootstrap !== 'undefined' && bootstrap.Collapse) {
+    const quickFiltersMedia = window.matchMedia('(min-width: 992px)');
+    const syncQuickFiltersCollapse = () => {
+      const instance = bootstrap.Collapse.getOrCreateInstance(quickFiltersCollapse, { toggle: false });
+      if (quickFiltersMedia.matches) {
+        instance.show();
+        if (quickFiltersToggle) {
+          quickFiltersToggle.classList.remove('collapsed');
+          quickFiltersToggle.setAttribute('aria-expanded', 'true');
+        }
+      } else {
+        instance.hide();
+        if (quickFiltersToggle) {
+          quickFiltersToggle.classList.add('collapsed');
+          quickFiltersToggle.setAttribute('aria-expanded', 'false');
+        }
+      }
+    };
+    syncQuickFiltersCollapse();
+    if (typeof quickFiltersMedia.addEventListener === 'function') {
+      quickFiltersMedia.addEventListener('change', syncQuickFiltersCollapse);
+    } else if (typeof quickFiltersMedia.addListener === 'function') {
+      quickFiltersMedia.addListener(syncQuickFiltersCollapse);
+    }
+  }
+
   if (!form || !container) return;
 
   const FILTER_FIELDS = ['start', 'end', 'vet_id', 'status', 'type'];
@@ -180,19 +209,6 @@ document.addEventListener('DOMContentLoaded', function() {
         }
       });
       link.classList.toggle('active', matches);
-      const variant = link.dataset.badgeVariant;
-      if (variant === 'status' || variant === 'type') {
-        const activeClasses = variant === 'status'
-          ? ['text-bg-primary', 'text-white']
-          : ['text-bg-info', 'text-white'];
-        if (matches) {
-          link.classList.add(...activeClasses);
-          link.classList.remove('text-bg-light', 'text-body');
-        } else {
-          link.classList.remove(...activeClasses);
-          link.classList.add('text-bg-light', 'text-body');
-        }
-      }
     });
   }
 

@@ -1,0 +1,25 @@
+{% macro quick_pill_group(label, filters, icon=None, variant='secondary', size='sm', data_variant=None) %}
+<div class="quick-filter-group">
+  <span class="quick-filter-group__label text-muted small fw-semibold text-uppercase">
+    {% if icon %}
+    <i class="{{ icon }} quick-filter-group__icon" aria-hidden="true"></i>
+    {% endif %}
+    {{ label }}
+  </span>
+  <div class="quick-filter-group__content d-flex flex-wrap gap-2">
+    {% for quick in filters %}
+    <a
+      href="{{ quick.url }}"
+      class="btn quick-filter-pill btn-outline-{{ variant }} btn-{{ size }}{% if quick.active %} active{% endif %}"
+      data-filter-params="{{ quick.query|urlencode }}"
+      {% if data_variant %}data-badge-variant="{{ data_variant }}"{% endif %}
+    >
+      {% if quick.icon %}
+      <i class="{{ quick.icon }} quick-filter-pill__icon" aria-hidden="true"></i>
+      {% endif %}
+      <span>{{ quick.label }}</span>
+    </a>
+    {% endfor %}
+  </div>
+</div>
+{% endmacro %}

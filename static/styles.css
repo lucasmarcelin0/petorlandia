@@ -1434,3 +1434,90 @@
 .prescricao-card__footer .btn {
   min-width: 110px;
 }
+
+/* Clinic appointments filter panel */
+.appointment-filter-card {
+  border-radius: 1rem;
+}
+
+.appointment-filter-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 1.5rem;
+}
+
+.appointment-filter-grid .form-label {
+  font-weight: 600;
+  color: #4b5563;
+}
+
+.appointment-filter-grid .input-group-text {
+  background: #f8fafc;
+  color: #475569;
+  border-color: #e2e8f0;
+}
+
+.filter-period-inputs {
+  display: grid;
+  gap: 0.75rem;
+}
+
+@media (min-width: 768px) {
+  .filter-period-inputs {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.appointment-filter-accordion .accordion-button {
+  font-weight: 600;
+}
+
+.quick-filter-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.quick-filter-group__label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  letter-spacing: 0.08em;
+}
+
+.quick-filter-pill {
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-weight: 600;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.quick-filter-pill__icon,
+.quick-filter-group__icon {
+  font-size: 0.85rem;
+}
+
+.quick-filter-pill:focus-visible {
+  box-shadow: 0 0 0 0.2rem rgba(99, 102, 241, 0.35);
+  outline: none;
+}
+
+.quick-filter-pill.active {
+  transform: translateY(-1px);
+  box-shadow: 0 12px 20px -14px rgba(15, 23, 42, 0.25);
+  color: #fff;
+}
+
+.quick-filter-pill.active .quick-filter-pill__icon {
+  color: currentColor;
+}
+
+@media (max-width: 575.98px) {
+  .appointment-filter-card .input-group-text i,
+  .quick-filter-pill__icon,
+  .quick-filter-group__icon {
+    font-size: 0.8rem;
+  }
+}
