@@ -19,12 +19,24 @@
       paginationScopeSelector: '[data-tutor-pagination]',
       storagePrefix: 'tutor',
       defaultSort: 'name_asc',
+      statusFilterSelector: '[data-status-filter]',
     },
   };
 
   const panelStates = new WeakMap();
   const debounceTimers = new WeakMap();
   const activeControllers = new WeakMap();
+
+  function collectStatusFilters(inputs) {
+    if (!inputs || inputs.length === 0) {
+      return new Set();
+    }
+    return new Set(
+      Array.from(inputs)
+        .filter((input) => input instanceof HTMLInputElement && input.checked)
+        .map((input) => input.value)
+    );
+  }
 
   function initAllPanels(root) {
     const scope = root && root.querySelectorAll ? root : document;
@@ -64,18 +76,22 @@
     const filterInput = panel.querySelector(config.filterSelector);
     const sortSelect = panel.querySelector(config.sortSelector);
     const cardsContainer = panel.querySelector(config.cardsSelector);
+    const statusFilterInputs = config.statusFilterSelector
+      ? panel.querySelectorAll(config.statusFilterSelector)
+      : null;
 
     const state = {
       scope: panel.dataset.scope || 'all',
       page: parseInt(panel.dataset.page || '1', 10) || 1,
       search: filterInput ? filterInput.value.trim() : '',
       sort: sortSelect ? sortSelect.value : config.defaultSort,
+      statusFilters: collectStatusFilters(statusFilterInputs),
     };
 
-    const persisted = restorePreferences(config, state, filterInput, sortSelect);
+    const persisted = restorePreferences(config, state, filterInput, sortSelect, statusFilterInputs);
 
     panel.dataset.listingInitialized = 'true';
-    panelStates.set(panel, { config, state, filterInput, sortSelect, cardsContainer });
+    panelStates.set(panel, { config, state, filterInput, sortSelect, cardsContainer, statusFilterInputs });
 
     if (filterInput) {
       filterInput.addEventListener('input', () => {
@@ -94,6 +110,23 @@
         panelState.sort = sortSelect.value;
         persistPreference(panelConfig.storagePrefix, 'Sort', sortSelect.value);
         fetchPage(panel, 1);
+      });
+    }
+
+    if (statusFilterInputs && statusFilterInputs.length) {
+      statusFilterInputs.forEach((input) => {
+        input.addEventListener('change', () => {
+          const panelData = panelStates.get(panel);
+          if (!panelData) return;
+          const { state: panelState, config: panelConfig, statusFilterInputs: storedInputs } = panelData;
+          panelState.statusFilters = collectStatusFilters(storedInputs);
+          persistPreference(
+            panelConfig.storagePrefix,
+            'StatusFilters',
+            JSON.stringify(Array.from(panelState.statusFilters))
+          );
+          applyStatusFilters(panel);
+        });
       });
     }
 
@@ -135,6 +168,8 @@
     });
 
     updateScopeButtons(panel, state.scope);
+    applyStatusFilters(panel);
+
     if (persisted.shouldFetch) {
       fetchPage(panel, 1);
     } else {
@@ -142,7 +177,7 @@
     }
   }
 
-  function restorePreferences(config, state, filterInput, sortSelect) {
+  function restorePreferences(config, state, filterInput, sortSelect, statusFilterInputs) {
     let shouldFetch = false;
     if (!config.storagePrefix) {
       return { shouldFetch };
@@ -165,6 +200,26 @@
             state.sort = storedSort;
             shouldFetch = true;
           }
+        }
+      }
+      if (statusFilterInputs && statusFilterInputs.length) {
+        const storedStatuses = window.localStorage.getItem(`${config.storagePrefix}StatusFilters`);
+        if (storedStatuses !== null) {
+          let parsed;
+          try {
+            parsed = JSON.parse(storedStatuses);
+          } catch (error) {
+            parsed = storedStatuses.split(',').map((value) => value.trim()).filter(Boolean);
+          }
+          const availableValues = new Set(Array.from(statusFilterInputs).map((input) => input.value));
+          const normalized = Array.isArray(parsed) ? parsed.filter((value) => availableValues.has(value)) : [];
+          const statusSet = new Set(normalized);
+          statusFilterInputs.forEach((input) => {
+            input.checked = statusSet.has(input.value);
+          });
+          state.statusFilters = statusSet;
+        } else {
+          state.statusFilters = collectStatusFilters(statusFilterInputs);
         }
       }
     } catch (error) {
@@ -334,6 +389,7 @@
       state.page = newPage;
       panel.dataset.page = String(state.page);
     }
+    applyStatusFilters(panel);
   }
 
   function syncUrl(panel) {
@@ -383,6 +439,33 @@
       } else {
         link.removeAttribute('aria-current');
       }
+    });
+  }
+
+  function applyStatusFilters(panel) {
+    const panelData = panelStates.get(panel);
+    if (!panelData) return;
+    const { config, state, cardsContainer, statusFilterInputs } = panelData;
+    if (!config.statusFilterSelector || !statusFilterInputs || !statusFilterInputs.length || !cardsContainer) {
+      return;
+    }
+
+    const cards = cardsContainer.querySelectorAll('[data-status]');
+    if (!cards.length) {
+      return;
+    }
+
+    const activeFilters = Array.from(state.statusFilters || []);
+    const hasActiveFilters = activeFilters.length > 0;
+    cards.forEach((card) => {
+      const cardStatuses = (card.dataset.status || '')
+        .split(/\s+/)
+        .map((status) => status.trim())
+        .filter(Boolean);
+      const matches = hasActiveFilters
+        ? activeFilters.some((status) => cardStatuses.includes(status))
+        : false;
+      card.classList.toggle('d-none', !matches);
     });
   }
 
