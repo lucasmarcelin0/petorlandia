@@ -1904,6 +1904,45 @@ def _serialize_message_threads(mensagens):
         threads.values(), key=lambda thread: thread["last_message_dt"], reverse=True
     )
 
+
+def _user_initials_from_name(full_name: Optional[str]) -> str:
+    """Return a compact set of initials for display-only contexts.
+
+    The function gracefully handles single-word names, multi-word names and
+    missing values while ensuring the returned value is always uppercase.
+    """
+
+    if not full_name:
+        return "?"
+
+    parts = [part for part in full_name.strip().split() if part]
+    if not parts:
+        return "?"
+
+    if len(parts) == 1:
+        return parts[0][:2].upper()
+
+    return (parts[0][0] + parts[-1][0]).upper()
+
+
+def _build_user_avatar_map(users: Iterable["User"]) -> Dict[int, Dict[str, str]]:
+    """Prepare avatar payloads (photo + initials) keyed by user id."""
+
+    avatar_map: Dict[int, Dict[str, str]] = {}
+    for user in users:
+        if not user or getattr(user, "id", None) is None:
+            continue
+
+        if user.id in avatar_map:
+            continue
+
+        avatar_map[user.id] = {
+            "photo": getattr(user, "profile_photo", None),
+            "initials": _user_initials_from_name(getattr(user, "name", None)),
+        }
+
+    return avatar_map
+
     for thread in sorted_threads:
         thread.pop("last_message_dt", None)
 
@@ -5592,6 +5631,17 @@ def clinic_detail(clinica_id):
         ClinicStaff.user.has(User.veterinario == None),
     ).all()
 
+    team_users = []
+    for staff_member in staff_members:
+        user = getattr(staff_member, "user", None)
+        if user:
+            team_users.append(user)
+    for vet_profile in veterinarios + specialists:
+        user = getattr(vet_profile, "user", None)
+        if user:
+            team_users.append(user)
+    team_user_avatars = _build_user_avatar_map(team_users)
+
     clinic_invites = (
         VetClinicInvite.query
         .filter_by(clinica_id=clinica.id)
@@ -6043,6 +6093,7 @@ def clinic_detail(clinica_id):
         invites_by_status=invites_by_status,
         invite_status_order=invite_status_order,
         clinic_new_animal_url=clinic_new_animal_url,
+        team_user_avatars=team_user_avatars,
     )
 
 
