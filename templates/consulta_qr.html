@@ -43,6 +43,29 @@
     {% endif %}
   </div>
 
+  {% if shared_access %}
+    <div class="alert alert-info d-flex align-items-center gap-2">
+      <i class="fa-solid fa-link"></i>
+      <span>
+        Dados compartilhados por {{ shared_access.source_clinic.nome if shared_access.source_clinic else 'outra clínica' }}
+        {% if shared_access.expires_at %}
+          (válido até {{ shared_access.expires_at.strftime('%d/%m/%Y') }})
+        {% endif %}
+      </span>
+    </div>
+  {% elif animal and viewer_clinic_id and animal.clinica_id != viewer_clinic_id %}
+    <div class="alert alert-warning d-flex flex-wrap align-items-center gap-2">
+      <span><i class="fa-solid fa-unlock-keyhole me-2"></i>Solicite permissão ao tutor para acessar todos os dados.</span>
+      <button type="button"
+              class="btn btn-sm btn-outline-dark"
+              data-share-request-button
+              data-tutor-id="{{ tutor.id }}"
+              data-animal-id="{{ animal.id }}">
+        🤝 Solicitar acesso
+      </button>
+    </div>
+  {% endif %}
+
 <ul class="nav nav-tabs mb-4 rounded shadow-sm bg-white pet-nav" id="consultaTabs" role="tablist">
   <li class="nav-item" role="presentation">
     <button class="nav-link active d-flex align-items-center gap-2" id="tutor-tab" data-bs-toggle="tab" data-bs-target="#tutor-info" type="button" role="tab">
@@ -538,4 +561,9 @@ document.addEventListener('DOMContentLoaded', function () {
 
 
 
+{% endblock %}
+
+{% block scripts %}
+  {{ super() }}
+  <script src="{{ url_for('static', filename='share_requests.js') }}"></script>
 {% endblock %}

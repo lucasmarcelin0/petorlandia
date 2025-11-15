@@ -1,0 +1,86 @@
+{% extends 'layout.html' %}
+{% block main %}
+<div class="container py-4"
+     data-share-dashboard
+     data-share-endpoint="{{ share_api }}"
+     {% if pending_token %}data-share-token="{{ pending_token }}"{% endif %}
+     {% if token_request %}data-token-request='{{ token_request|tojson }}'{% endif %}>
+  <div class="row g-4">
+    <div class="col-12 col-lg-6">
+      <div class="card shadow-sm border-0 h-100">
+        <div class="card-header bg-white border-0">
+          <h3 class="h5 mb-0">Solicitações pendentes</h3>
+          <p class="text-muted small mb-0">Autorize clínicas parceiras a acessar seus dados.</p>
+        </div>
+        <div class="card-body">
+          {% if share_payload.pending_requests %}
+            <ul class="list-group list-group-flush">
+              {% for request in share_payload.pending_requests %}
+              <li class="list-group-item border-0 px-0">
+                <div class="d-flex flex-column gap-1">
+                  <strong>{{ request.clinic or 'Clínica parceira' }}</strong>
+                  {% if request.animal %}
+                  <span class="text-muted small">Animal: {{ request.animal }}</span>
+                  {% endif %}
+                  {% if request.message %}
+                  <span class="text-muted small">Mensagem: {{ request.message }}</span>
+                  {% endif %}
+                  <div class="d-flex flex-wrap gap-2 mt-2">
+                    <button class="btn btn-sm btn-success"
+                            data-share-approve
+                            data-request-id="{{ request.id }}">
+                      Aprovar
+                    </button>
+                    <button class="btn btn-sm btn-outline-danger"
+                            data-share-deny
+                            data-request-id="{{ request.id }}">
+                      Negar
+                    </button>
+                  </div>
+                </div>
+              </li>
+              {% endfor %}
+            </ul>
+          {% else %}
+            <div class="alert alert-success mb-0">Nenhum pedido pendente.</div>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+    <div class="col-12 col-lg-6">
+      <div class="card shadow-sm border-0 h-100">
+        <div class="card-header bg-white border-0">
+          <h3 class="h5 mb-0">Compartilhamentos ativos</h3>
+          <p class="text-muted small mb-0">Revise quem está com acesso aos seus dados.</p>
+        </div>
+        <div class="card-body">
+          {% if share_payload.active_shares %}
+          <ul class="list-group list-group-flush">
+            {% for share in share_payload.active_shares %}
+            <li class="list-group-item border-0 px-0">
+              <div class="d-flex flex-column gap-1">
+                <strong>{{ share.clinic or 'Clínica parceira' }}</strong>
+                {% if share.expires_label %}
+                <span class="text-muted small">Expira em {{ share.expires_label }}</span>
+                {% endif %}
+                {% if share.grant_reason %}
+                <span class="text-muted small">Motivo: {{ share.grant_reason }}</span>
+                {% endif %}
+              </div>
+            </li>
+            {% endfor %}
+          </ul>
+          {% else %}
+          <div class="alert alert-light border mb-0">Nenhum compartilhamento ativo.</div>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+  {{ super() }}
+  <script src="{{ url_for('static', filename='share_requests.js') }}"></script>
+{% endblock %}

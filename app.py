@@ -64,7 +64,7 @@ globals().update({
     if name[:1].isupper()          # naive check: classes start with capital
 })
 
-from models import DataSharePartyType
+from models import DataShareAccess, DataSharePartyType, DataShareRequest
 
 # ----------------------------------------------------------------
 # 2)  Flask app + config
@@ -1189,6 +1189,187 @@ def _log_data_share(access, *, event_type, resource_type, resource_id=None, acto
         resource_id=resource_id,
         actor=actor,
     )
+
+
+def _default_share_duration(days=None):
+    value = days or current_app.config.get('DATA_SHARE_DEFAULT_DAYS', 30)
+    try:
+        value = int(value)
+    except (TypeError, ValueError):
+        value = 30
+    return max(value, 1)
+
+
+def _serialize_share_request(req):
+    clinic_name = getattr(req.clinic, 'nome', None)
+    requester_name = getattr(req.requester, 'name', None)
+    status = req.status
+    if status == 'pending' and req.expires_at and req.expires_at <= datetime.utcnow():
+        status = 'expired'
+    return {
+        'id': req.id,
+        'token': req.token,
+        'message': req.message,
+        'status': status,
+        'expires_at': req.expires_at.isoformat() if req.expires_at else None,
+        'created_at': req.created_at.isoformat() if req.created_at else None,
+        'clinic': clinic_name,
+        'requester': requester_name,
+        'animal': getattr(req.animal, 'name', None),
+    }
+
+
+def _serialize_share_access(access):
+    clinic_name = getattr(access.source_clinic, 'nome', None)
+    return {
+        'id': access.id,
+        'clinic': clinic_name,
+        'expires_at': access.expires_at.isoformat() if access.expires_at else None,
+        'expires_label': access.expires_at.strftime('%d/%m/%Y') if access.expires_at else None,
+        'grant_reason': access.grant_reason,
+    }
+
+
+def _send_share_email(subject, recipients, body):
+    if not recipients:
+        return False
+    try:
+        msg = MailMessage(subject=subject, recipients=recipients, body=body)
+        mail.send(msg)
+        return True
+    except Exception as exc:  # pragma: no cover - defensive logging
+        current_app.logger.warning('Falha ao enviar email de compartilhamento: %s', exc)
+        return False
+
+
+def _send_share_sms(phone, body):
+    if not phone or not body:
+        return False
+    account_sid = os.getenv('TWILIO_ACCOUNT_SID')
+    auth_token = os.getenv('TWILIO_AUTH_TOKEN')
+    from_number = os.getenv('TWILIO_SMS_FROM')
+    if not all([account_sid, auth_token, from_number]):
+        return False
+    number = formatar_telefone(phone)
+    try:
+        client = Client(account_sid, auth_token)
+        client.messages.create(body=body, from_=from_number, to=number)
+        return True
+    except Exception as exc:  # pragma: no cover - avoid test flakes
+        current_app.logger.warning('Falha ao enviar SMS: %s', exc)
+        return False
+
+
+def _share_request_link(token):
+    try:
+        return url_for('tutor_sharing_dashboard', token=token, _external=True)
+    except Exception:  # pragma: no cover - fallback when outside request
+        return None
+
+
+def _notify_tutor_share_request(share_request):
+    tutor = share_request.tutor
+    clinic_name = getattr(share_request.clinic, 'nome', 'uma clínica parceira')
+    link = _share_request_link(share_request.token)
+    lines = [
+        f'Olá {tutor.name or "tutor"},',
+        '',
+        f'A clínica {clinic_name} está solicitando acesso aos dados do seu tutorado.',
+    ]
+    if share_request.animal:
+        lines.append(f'Animal: {share_request.animal.name}.')
+    if share_request.message:
+        lines.extend(['', f'Mensagem da clínica:', share_request.message])
+    if link:
+        lines.extend(['', 'Para revisar o pedido, acesse o link seguro:', link])
+    subject = 'Novo pedido de compartilhamento de dados - PetOrlândia'
+    _send_share_email(subject, [tutor.email] if tutor.email else [], '\n'.join(lines))
+    if tutor.phone:
+        sms_body = f'PetOrlândia: {clinic_name} pediu acesso aos seus dados. Confirme em {link}' if link else (
+            f'PetOrlândia: {clinic_name} pediu acesso aos seus dados.'
+        )
+        _send_share_sms(tutor.phone, sms_body)
+
+
+def _notify_clinic_share_decision(share_request, approved):
+    requester = share_request.requester
+    if not requester:
+        return
+    clinic_name = getattr(share_request.clinic, 'nome', 'sua clínica')
+    if approved:
+        subject = 'Compartilhamento aprovado - PetOrlândia'
+        status_line = 'foi aprovado'
+    else:
+        subject = 'Compartilhamento negado - PetOrlândia'
+        status_line = 'foi negado'
+    lines = [
+        f'Olá {requester.name or "time"},',
+        '',
+        f'O pedido de compartilhamento com {share_request.tutor.name} {status_line}.',
+        f'Clínica: {clinic_name}',
+    ]
+    if share_request.animal:
+        lines.append(f'Animal: {share_request.animal.name}')
+    if share_request.denial_reason and not approved:
+        lines.extend(['', f'Motivo informado: {share_request.denial_reason}'])
+    _send_share_email(subject, [requester.email] if requester.email else [], '\n'.join(lines))
+    if requester.phone:
+        sms_body = f'PetOrlândia: pedido com {share_request.tutor.name} {status_line}.'
+        _send_share_sms(requester.phone, sms_body)
+
+
+def _serialize_tutor_share_payload(user):
+    now = datetime.utcnow()
+    pending = (
+        DataShareRequest.query.filter_by(tutor_id=user.id)
+        .order_by(DataShareRequest.created_at.desc())
+        .all()
+    )
+    active_access = (
+        DataShareAccess.query.filter_by(user_id=user.id)
+        .filter(DataShareAccess.revoked_at.is_(None))
+        .filter(or_(DataShareAccess.expires_at.is_(None), DataShareAccess.expires_at > now))
+        .order_by(DataShareAccess.created_at.desc())
+        .all()
+    )
+    return {
+        'pending_requests': [_serialize_share_request(req) for req in pending if req.is_pending()],
+        'active_shares': [_serialize_share_access(access) for access in active_access if access.is_active],
+    }
+
+
+def _serialize_clinic_share_payload(user):
+    requests = (
+        DataShareRequest.query.filter_by(requested_by_id=user.id)
+        .order_by(DataShareRequest.created_at.desc())
+        .limit(25)
+        .all()
+    )
+    clinic_ids = list(_collect_clinic_ids(viewer=user))
+    active = []
+    if clinic_ids:
+        active = (
+            DataShareAccess.query
+            .filter(DataShareAccess.granted_to_type == DataSharePartyType.clinic)
+            .filter(DataShareAccess.granted_to_id.in_(clinic_ids))
+            .filter(DataShareAccess.revoked_at.is_(None))
+            .filter(or_(DataShareAccess.expires_at.is_(None), DataShareAccess.expires_at > datetime.utcnow()))
+            .order_by(DataShareAccess.created_at.desc())
+            .limit(25)
+            .all()
+        )
+    return {
+        'pending_requests': [_serialize_share_request(req) for req in requests if req.is_pending()],
+        'active_shares': [_serialize_share_access(access) for access in active],
+    }
+
+
+def _is_tutor_portal_user(user=None):
+    user = user or (current_user if current_user.is_authenticated else None)
+    if not user:
+        return False
+    worker = (getattr(user, 'worker', None) or '').lower()
+    return worker not in {'veterinario', 'colaborador', 'admin'}
 
 
 def get_user_or_404(user_id, *, viewer=None, clinic_scope=None):
@@ -3955,6 +4136,7 @@ def consulta_qr():
         )
 
     clinic_scope_id = clinica_id
+    shared_access = _resolve_shared_access_for_animal(animal, viewer=current_user, clinic_scope=clinic_scope_id)
     blocos_orcamento = _clinic_orcamento_blocks(animal, clinic_scope_id)
     blocos_prescricao = _clinic_prescricao_blocks(animal, clinic_scope_id)
 
@@ -3971,6 +4153,8 @@ def consulta_qr():
         blocos_orcamento=blocos_orcamento,
         blocos_prescricao=blocos_prescricao,
         clinic_scope_id=clinic_scope_id,
+        shared_access=shared_access,
+        viewer_clinic_id=clinica_id,
     )
 
 
@@ -6008,6 +6192,8 @@ def tutores():
             page_param=request.args.get('page_param', 'page'),
             fetch_url=url_for('tutores'),
             compact=True,
+            shared_access_map={t.id: _resolve_shared_access_for_user(t, viewer=current_user, clinic_scope=clinic_scope) for t in tutores_adicionados},
+            viewer_clinic_id=clinic_id,
         )
         return jsonify(html=html, scope=resolved_scope)
 
@@ -6018,7 +6204,247 @@ def tutores():
         scope=resolved_scope,
         tutor_search=tutor_search,
         tutor_sort=tutor_sort,
+        viewer_clinic_id=clinic_id,
+        shared_access_map={t.id: _resolve_shared_access_for_user(t, viewer=current_user, clinic_scope=clinic_scope) for t in tutores_adicionados},
     )
+
+
+@app.route('/tutor/compartilhamentos')
+@login_required
+def tutor_sharing_dashboard():
+    if not _is_tutor_portal_user(current_user):
+        abort(403)
+    payload = _serialize_tutor_share_payload(current_user)
+    token = request.args.get('token')
+    token_request = None
+    if token:
+        share_request = DataShareRequest.query.filter_by(token=token).first()
+        if share_request and share_request.tutor_id == current_user.id:
+            token_request = _serialize_share_request(share_request)
+        else:
+            flash('Pedido não encontrado ou expirado.', 'warning')
+    return render_template(
+        'tutor/sharing_dashboard.html',
+        share_payload=payload,
+        share_api=url_for('shares_api'),
+        pending_token=token,
+        token_request=token_request,
+    )
+
+
+def _can_request_share(user):
+    worker = (getattr(user, 'worker', None) or '').lower()
+    if worker in {'veterinario', 'colaborador'}:
+        return True
+    return getattr(user, 'role', None) == 'admin'
+
+
+def _share_request_target_animals(tutor_id, animal_id):
+    animal = None
+    if animal_id:
+        animal = Animal.query.get_or_404(animal_id)
+        if animal.user_id != tutor_id:
+            raise ValueError('Animal não pertence ao tutor informado.')
+    return animal
+
+
+@app.route('/api/shares', methods=['GET', 'POST'])
+@login_required
+def shares_api():
+    if request.method == 'POST':
+        if not _can_request_share(current_user):
+            return (
+                jsonify(success=False, message='Apenas colaboradores podem solicitar compartilhamentos.', category='danger'),
+                403,
+            )
+        clinic_id = current_user_clinic_id()
+        if not clinic_id:
+            return jsonify(success=False, message='Associe-se a uma clínica antes de solicitar acesso.', category='warning'), 400
+        payload = request.get_json(silent=True) or {}
+        tutor_id = payload.get('tutor_id')
+        if not tutor_id:
+            return jsonify(success=False, message='tutor_id é obrigatório.', category='danger'), 400
+        tutor = User.query.get_or_404(tutor_id)
+        try:
+            animal = _share_request_target_animals(tutor.id, payload.get('animal_id'))
+        except ValueError as exc:
+            return jsonify(success=False, message=str(exc), category='danger'), 400
+        parties = [(DataSharePartyType.clinic, clinic_id)]
+        existing_access = find_active_share(parties, user_id=tutor.id, animal_id=getattr(animal, 'id', None))
+        if existing_access:
+            return jsonify(success=False, message='Este tutor já concedeu acesso à sua clínica.', category='info'), 409
+        pending = (
+            DataShareRequest.query.filter_by(
+                tutor_id=tutor.id,
+                clinic_id=clinic_id,
+                animal_id=getattr(animal, 'id', None),
+                status='pending',
+            )
+            .order_by(DataShareRequest.created_at.desc())
+            .first()
+        )
+        if pending and pending.is_pending():
+            return jsonify(success=False, message='Já existe um pedido pendente para este tutor.', category='warning'), 409
+        expires_days = _default_share_duration(payload.get('expires_in_days'))
+        expires_at = datetime.utcnow() + timedelta(days=expires_days)
+        message = (payload.get('message') or payload.get('grant_reason') or '').strip() or None
+        share_request = DataShareRequest(
+            tutor_id=tutor.id,
+            animal_id=getattr(animal, 'id', None),
+            clinic_id=clinic_id,
+            requested_by_id=current_user.id,
+            message=message,
+            expires_at=expires_at,
+        )
+        db.session.add(share_request)
+        db.session.commit()
+        _notify_tutor_share_request(share_request)
+        return jsonify(success=True, request=_serialize_share_request(share_request)), 201
+
+    scope = request.args.get('scope') or ('tutor' if _is_tutor_portal_user(current_user) else 'clinic')
+    if scope == 'tutor' and _is_tutor_portal_user(current_user):
+        payload = _serialize_tutor_share_payload(current_user)
+    else:
+        payload = _serialize_clinic_share_payload(current_user)
+    return jsonify(payload)
+
+
+def _share_request_or_404(request_id):
+    share_request = DataShareRequest.query.get_or_404(request_id)
+    if share_request.tutor_id != current_user.id:
+        abort(404)
+    return share_request
+
+
+def _ensure_pending(share_request):
+    if not share_request.is_pending():
+        abort(400, description='Pedido já foi processado ou expirou.')
+
+
+def _activate_share_request(share_request, expires_in_days=None):
+    now = datetime.utcnow()
+    expires_at = share_request.expires_at
+    if expires_in_days:
+        expires_at = now + timedelta(days=_default_share_duration(expires_in_days))
+    elif not expires_at or expires_at <= now:
+        expires_at = now + timedelta(days=_default_share_duration(None))
+    tutor = share_request.tutor
+    party = (DataSharePartyType.clinic, share_request.clinic_id)
+    access = find_active_share([party], user_id=share_request.tutor_id, animal_id=share_request.animal_id)
+    if access:
+        access.expires_at = expires_at
+        access.grant_reason = share_request.message or access.grant_reason
+        access.granted_by = current_user.id
+        access.granted_via = 'share_request'
+    else:
+        access = DataShareAccess(
+            user_id=share_request.tutor_id,
+            animal_id=share_request.animal_id,
+            source_clinic_id=getattr(tutor, 'clinica_id', None),
+            granted_to_type=DataSharePartyType.clinic,
+            granted_to_id=share_request.clinic_id,
+            granted_by=current_user.id,
+            grant_reason=share_request.message,
+            granted_via='share_request',
+            expires_at=expires_at,
+        )
+        db.session.add(access)
+    share_request.status = 'approved'
+    share_request.approved_at = now
+    share_request.approved_by_id = current_user.id
+    share_request.denied_at = None
+    share_request.denial_reason = None
+    db.session.add(share_request)
+    db.session.flush()
+    log_data_share_event(
+        access,
+        event_type='share_granted',
+        resource_type='user',
+        resource_id=share_request.tutor_id,
+        actor=current_user,
+        notes=f'Pedido #{share_request.id}',
+    )
+    if share_request.animal_id:
+        log_data_share_event(
+            access,
+            event_type='share_granted',
+            resource_type='animal',
+            resource_id=share_request.animal_id,
+            actor=current_user,
+            notes=f'Pedido #{share_request.id}',
+        )
+    return access
+
+
+@app.route('/api/shares/<int:request_id>/approve', methods=['POST'])
+@login_required
+def approve_share_request(request_id):
+    if not _is_tutor_portal_user(current_user):
+        abort(403)
+    share_request = _share_request_or_404(request_id)
+    _ensure_pending(share_request)
+    payload = request.get_json(silent=True) or {}
+    access = _activate_share_request(share_request, expires_in_days=payload.get('expires_in_days'))
+    db.session.commit()
+    _notify_clinic_share_decision(share_request, True)
+    return jsonify(success=True, request=_serialize_share_request(share_request), access=_serialize_share_access(access))
+
+
+@app.route('/api/shares/<int:request_id>/deny', methods=['POST'])
+@login_required
+def deny_share_request(request_id):
+    if not _is_tutor_portal_user(current_user):
+        abort(403)
+    share_request = _share_request_or_404(request_id)
+    _ensure_pending(share_request)
+    payload = request.get_json(silent=True) or {}
+    reason = (payload.get('reason') or '').strip() or None
+    share_request.status = 'denied'
+    share_request.denied_at = datetime.utcnow()
+    share_request.denial_reason = reason
+    db.session.add(share_request)
+    db.session.commit()
+    _notify_clinic_share_decision(share_request, False)
+    return jsonify(success=True, request=_serialize_share_request(share_request))
+
+
+@app.route('/api/shares/confirm', methods=['POST'])
+@login_required
+def confirm_share_request():
+    if not _is_tutor_portal_user(current_user):
+        abort(403)
+    payload = request.get_json(silent=True) or {}
+    token = payload.get('token')
+    if not token:
+        return jsonify(success=False, message='Token é obrigatório.', category='danger'), 400
+    share_request = DataShareRequest.query.filter_by(token=token).first()
+    if not share_request or share_request.tutor_id != current_user.id:
+        return jsonify(success=False, message='Pedido não encontrado.', category='warning'), 404
+    if payload.get('decision', 'approve').lower() == 'deny':
+        _ensure_pending(share_request)
+        share_request.status = 'denied'
+        share_request.denied_at = datetime.utcnow()
+        share_request.denial_reason = (payload.get('reason') or '').strip() or None
+        db.session.add(share_request)
+        db.session.commit()
+        _notify_clinic_share_decision(share_request, False)
+        return jsonify(success=True, request=_serialize_share_request(share_request))
+    _ensure_pending(share_request)
+    access = _activate_share_request(share_request)
+    db.session.commit()
+    _notify_clinic_share_decision(share_request, True)
+    return jsonify(success=True, request=_serialize_share_request(share_request), access=_serialize_share_access(access))
+
+
+@app.route('/api/share-requests/<string:token>', methods=['GET'])
+@login_required
+def share_request_detail(token):
+    if not _is_tutor_portal_user(current_user):
+        abort(403)
+    share_request = DataShareRequest.query.filter_by(token=token).first_or_404()
+    if share_request.tutor_id != current_user.id:
+        abort(404)
+    return jsonify(_serialize_share_request(share_request))
 
 
 

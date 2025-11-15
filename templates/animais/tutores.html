@@ -21,3 +21,8 @@
   </div>
 </div>
 {% endblock %}
+
+{% block scripts %}
+  {{ super() }}
+  <script src="{{ url_for('static', filename='share_requests.js') }}"></script>
+{% endblock %}
