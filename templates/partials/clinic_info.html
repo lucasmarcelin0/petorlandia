@@ -1,125 +1,156 @@
 <!-- partials/clinic_info.html -->
 {% from 'components/logo.html' import clinic_logo %}
-<div class="card shadow-lg border-0 rounded-3 mb-4">
-  <div class="card-body">
-    <div class="row align-items-center">
-      {% if clinica.logotipo %}
-        <div class="col-md-4 text-center mb-3 mb-md-0">
-          {{ clinic_logo(clinica) }}
-        </div>
-      {% endif %}
-      <div class="{% if clinica.logotipo %}col-md-8{% else %}col-12{% endif %}">
-        <h2 class="fw-bold mb-3 text-center text-md-start">{{ clinica.nome }}</h2>
-        <div class="text-start">
-          {% if clinica.endereco %}
-            <p><i class="fas fa-map-marker-alt text-danger me-2"></i><strong>Endereço:</strong> {{ clinica.endereco }}</p>
-          {% endif %}
-          {% if clinica.telefone %}
-            <p><i class="fas fa-phone-alt text-success me-2"></i><strong>Telefone:</strong> {{ clinica.telefone }}</p>
-          {% endif %}
-          {% if clinica.email %}
-            <p><i class="fas fa-envelope text-primary me-2"></i><strong>Email:</strong> {{ clinica.email }}</p>
-          {% endif %}
-        </div>
 
-        {% if pode_editar %}
-          <button class="btn btn-sm btn-outline-primary mt-3" onclick="toggleEditInfo()">Editar</button>
-          <div id="edit-info" class="mt-3" style="display:none;">
-            <form method="post" enctype="multipart/form-data" class="row g-3">
-              {{ clinic_form.hidden_tag() }}
-              <div class="col-md-6">{{ clinic_form.nome.label }} {{ clinic_form.nome(class="form-control") }}</div>
-              <div class="col-md-6">{{ clinic_form.cnpj.label }} {{ clinic_form.cnpj(class="form-control") }}</div>
-              <div class="col-md-12">{{ clinic_form.endereco.label }} {{ clinic_form.endereco(class="form-control") }}</div>
-              <div class="col-md-6">{{ clinic_form.telefone.label }} {{ clinic_form.telefone(class="form-control") }}</div>
-              <div class="col-md-6">{{ clinic_form.email.label }} {{ clinic_form.email(class="form-control") }}</div>
-              <div class="col-md-12">
-                {{ clinic_form.logotipo.label }}
-                {{ photo_cropper(clinic_form.logotipo, clinic_form.photo_rotation, clinic_form.photo_zoom, clinic_form.photo_offset_x, clinic_form.photo_offset_y, clinica.logotipo, 150, 'clinic_logo', 'user') }}
-              </div>
-              <div class="col-12">
-                {{ clinic_form.submit(class="btn btn-primary") }}
-              </div>
-            </form>
-          </div>
+<div class="clinic-hero shadow-lg mb-4">
+  <div class="clinic-hero-glow"></div>
+  <div class="row align-items-center g-4">
+    <div class="col-lg-8">
+      <p class="clinic-hero-eyebrow text-uppercase mb-2">Bem-vindo à clínica</p>
+      <h1 class="clinic-hero-title">{{ clinica.nome }}</h1>
+      <ul class="clinic-hero-meta list-unstyled d-flex flex-wrap gap-4 mb-4">
+        {% if clinica.endereco %}
+          <li><i class="fa-solid fa-location-dot me-2"></i>{{ clinica.endereco }}</li>
         {% endif %}
+        {% if clinica.telefone %}
+          <li><i class="fa-solid fa-phone me-2"></i>{{ clinica.telefone }}</li>
+        {% endif %}
+        {% if clinica.email %}
+          <li><i class="fa-solid fa-envelope me-2"></i>{{ clinica.email }}</li>
+        {% endif %}
+      </ul>
+      <div class="clinic-hero-actions d-flex flex-wrap gap-3">
+        {% if pode_editar %}
+          <button class="btn btn-light btn-lg shadow-sm" onclick="toggleEditInfo()">
+            <i class="fa-solid fa-pen-to-square me-2"></i>Editar dados
+          </button>
+        {% endif %}
+        <a class="btn btn-primary btn-lg shadow-sm" href="{{ url_for('novo_atendimento') }}">
+          <i class="fa-solid fa-stethoscope me-2"></i>Nova consulta
+        </a>
+      </div>
+    </div>
+    <div class="col-lg-4">
+      <div class="clinic-hero-photo mx-auto">
+        {{ clinic_logo(clinica) }}
+        <span class="clinic-hero-photo-label">
+          Mascote oficial
+        </span>
       </div>
     </div>
   </div>
 </div>
 
-<!-- Horários -->
-<div class="card shadow-sm border-0 rounded-3 mb-4">
-  <div class="card-header bg-light">
-    <h5 class="mb-0"><i class="far fa-clock me-2"></i>Horários de Atendimento</h5>
+{% if pode_editar %}
+  <div id="edit-info" class="clinic-edit-panel card shadow-sm border-0 mb-4" style="display:none;">
+    <div class="card-body">
+      <form method="post" enctype="multipart/form-data" class="row g-3">
+        {{ clinic_form.hidden_tag() }}
+        <div class="col-md-6">{{ clinic_form.nome.label }} {{ clinic_form.nome(class="form-control") }}</div>
+        <div class="col-md-6">{{ clinic_form.cnpj.label }} {{ clinic_form.cnpj(class="form-control") }}</div>
+        <div class="col-md-12">{{ clinic_form.endereco.label }} {{ clinic_form.endereco(class="form-control") }}</div>
+        <div class="col-md-6">{{ clinic_form.telefone.label }} {{ clinic_form.telefone(class="form-control") }}</div>
+        <div class="col-md-6">{{ clinic_form.email.label }} {{ clinic_form.email(class="form-control") }}</div>
+        <div class="col-md-12">
+          {{ clinic_form.logotipo.label }}
+          {{ photo_cropper(clinic_form.logotipo, clinic_form.photo_rotation, clinic_form.photo_zoom, clinic_form.photo_offset_x, clinic_form.photo_offset_y, clinica.logotipo, 150, 'clinic_logo', 'user') }}
+        </div>
+        <div class="col-12">
+          {{ clinic_form.submit(class="btn btn-primary") }}
+        </div>
+      </form>
+    </div>
+  </div>
+{% endif %}
+
+<div class="card clinic-hours-card shadow-sm border-0 rounded-3 mb-4">
+  <div class="card-header bg-white py-3">
+    <div class="d-flex flex-wrap justify-content-between align-items-center gap-3">
+      <div>
+        <h5 class="mb-0"><i class="far fa-clock me-2"></i>Horários de Atendimento</h5>
+        <small class="text-muted">Visualize rapidamente quando a clínica está disponível.</small>
+      </div>
+      {% if pode_editar %}
+        <button class="btn btn-outline-primary btn-sm" onclick="toggleEditHours()">
+          <i class="fa-solid fa-calendar-plus me-1"></i>Gerenciar horários
+        </button>
+      {% endif %}
+    </div>
   </div>
   <div class="card-body">
-    <div class="table-responsive">
-      <table class="table align-middle table-hover">
-        <thead class="table-light">
-          <tr>
-            <th>Dia</th>
-            <th>Abre</th>
-            <th>Fecha</th>
-            {% if pode_editar %}<th>Ações</th>{% endif %}
-          </tr>
-        </thead>
-        <tbody>
-          {% for h in horarios %}
-            <tr>
-              <td>{{ h.dia_semana }}</td>
-              <td><span class="badge bg-success-subtle text-dark">{{ h.hora_abertura.strftime('%H:%M') }}</span></td>
-              <td><span class="badge bg-danger-subtle text-dark">{{ h.hora_fechamento.strftime('%H:%M') }}</span></td>
+    {% if horarios %}
+      <div class="clinic-hours-timeline">
+        {% for h in horarios %}
+          {% set is_day = h.hora_abertura and (6 <= h.hora_abertura.hour < 18) %}
+          <article class="clinic-hour-entry">
+            <div class="clinic-hour-icon {% if is_day %}day{% else %}night{% endif %}">
+              <i class="fa-solid {% if is_day %}fa-sun{% else %}fa-moon{% endif %}"></i>
+            </div>
+            <div class="clinic-hour-details flex-grow-1">
+              <div class="d-flex flex-wrap justify-content-between align-items-center gap-2">
+                <div>
+                  <h6 class="clinic-hour-day mb-1">{{ h.dia_semana }}</h6>
+                  <div class="clinic-hour-range text-muted">
+                    {{ h.hora_abertura.strftime('%H:%M') }} <span class="mx-1">às</span> {{ h.hora_fechamento.strftime('%H:%M') }}
+                  </div>
+                </div>
+                <span class="badge bg-success-subtle text-success fw-semibold">Aberto</span>
+              </div>
               {% if pode_editar %}
-                <td>
+                <div class="clinic-hour-actions mt-3">
                   <form method="post" action="{{ url_for('delete_clinic_hour', clinica_id=clinica.id, horario_id=h.id) }}" class="d-inline">
                     {{ form.csrf_token }}
-                    <button type="submit" class="btn btn-sm btn-outline-danger"
-                            onclick="return confirm('Excluir este horário?');">
+                    <button type="submit" class="btn btn-sm btn-outline-danger" onclick="return confirm('Excluir este horário?');">
                       <i class="fas fa-trash-alt"></i>
                     </button>
                   </form>
-                </td>
+                </div>
               {% endif %}
-            </tr>
-          {% else %}
-            <tr>
-              <td colspan="{% if pode_editar %}4{% else %}3{% endif %}" class="text-center text-muted">
-                Nenhum horário cadastrado.
-              </td>
-            </tr>
-          {% endfor %}
-        </tbody>
-      </table>
-    </div>
-
-    {% if pode_editar %}
-      <button class="btn btn-sm btn-outline-primary mt-3" onclick="toggleEditHours()">Editar</button>
-      <div id="edit-hours" class="mt-3" style="display:none;">
-        <form method="post" class="row g-3">
-          {{ form.hidden_tag() }}
-          <div class="col-md-12">
-            {{ form.clinica_id.label }} {{ form.clinica_id(class="form-select") }}
-          </div>
-          <div class="col-md-12">
-            {{ form.dias_semana.label }} {{ form.dias_semana(class="form-select", multiple=True, size=7) }}
-            <div class="mt-2">
-              <button type="button" class="btn btn-sm btn-outline-secondary" onclick="selectDays('all')">Todos</button>
-              <button type="button" class="btn btn-sm btn-outline-secondary" onclick="selectDays('weekday')">Dias Úteis</button>
-              <button type="button" class="btn btn-sm btn-outline-secondary" onclick="selectDays('weekend')">Fins de Semana</button>
-              <button type="button" class="btn btn-sm btn-outline-secondary" onclick="selectDays('clear')">Limpar</button>
             </div>
-          </div>
-          <div class="col-md-6">
-            {{ form.hora_abertura.label }} {{ form.hora_abertura(class="form-control") }}
-          </div>
-          <div class="col-md-6">
-            {{ form.hora_fechamento.label }} {{ form.hora_fechamento(class="form-control") }}
-          </div>
-          <div class="col-12">
-            {{ form.submit(class="btn btn-primary") }}
-          </div>
-        </form>
+          </article>
+        {% endfor %}
+      </div>
+    {% else %}
+      <div class="clinic-hours-empty text-center">
+        <div class="clinic-hours-illustration mb-3">
+          <i class="fa-solid fa-calendar-xmark"></i>
+        </div>
+        <h6 class="fw-semibold">Ainda não há horários cadastrados</h6>
+        <p class="text-muted mb-3">Defina os períodos de atendimento para organizar o agendamento da equipe.</p>
+        {% if pode_editar %}
+          <button class="btn btn-primary" onclick="toggleEditHours()">Cadastrar horários</button>
+        {% endif %}
       </div>
     {% endif %}
   </div>
 </div>
+
+{% if pode_editar %}
+  <div id="edit-hours" class="clinic-edit-panel card shadow-sm border-0" style="display:none;">
+    <div class="card-body">
+      <form method="post" class="row g-3">
+        {{ form.hidden_tag() }}
+        <div class="col-md-12">
+          {{ form.clinica_id.label }} {{ form.clinica_id(class="form-select") }}
+        </div>
+        <div class="col-md-12">
+          {{ form.dias_semana.label }} {{ form.dias_semana(class="form-select", multiple=True, size=7) }}
+          <div class="mt-2 d-flex flex-wrap gap-2">
+            <button type="button" class="btn btn-sm btn-outline-secondary" onclick="selectDays('all')">Todos</button>
+            <button type="button" class="btn btn-sm btn-outline-secondary" onclick="selectDays('weekday')">Dias Úteis</button>
+            <button type="button" class="btn btn-sm btn-outline-secondary" onclick="selectDays('weekend')">Fins de Semana</button>
+            <button type="button" class="btn btn-sm btn-outline-secondary" onclick="selectDays('clear')">Limpar</button>
+          </div>
+        </div>
+        <div class="col-md-6">
+          {{ form.hora_abertura.label }} {{ form.hora_abertura(class="form-control") }}
+        </div>
+        <div class="col-md-6">
+          {{ form.hora_fechamento.label }} {{ form.hora_fechamento(class="form-control") }}
+        </div>
+        <div class="col-12">
+          {{ form.submit(class="btn btn-primary") }}
+        </div>
+      </form>
+    </div>
+  </div>
+{% endif %}
