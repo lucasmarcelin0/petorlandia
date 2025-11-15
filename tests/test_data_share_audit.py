@@ -15,6 +15,9 @@ from models import User, Clinica, Animal, DataShareAccess, DataSharePartyType, D
 @pytest.fixture
 def app():
     flask_app.config.update(TESTING=True, WTF_CSRF_ENABLED=False, SQLALCHEMY_DATABASE_URI="sqlite:///:memory:")
+    with flask_app.app_context():
+        db.session.remove()
+        db.engines.pop(flask_app, None)
     yield flask_app
 
 

@@ -247,6 +247,29 @@ class DataShareAccess(db.Model):
         return True
 
 
+class DataShareRequest(db.Model):
+    __tablename__ = 'data_share_request'
+    __table_args__ = {'extend_existing': True}
+
+    id = db.Column(db.Integer, primary_key=True)
+    tutor_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    clinic_id = db.Column(db.Integer, db.ForeignKey('clinica.id'), nullable=False)
+    animal_id = db.Column(db.Integer, db.ForeignKey('animal.id'), nullable=True)
+    requested_by_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True)
+    reason = db.Column(db.String(255), nullable=True)
+    requested_expires_at = db.Column(db.DateTime, nullable=True)
+    status = db.Column(db.String(20), nullable=False, default='pending')
+    responded_at = db.Column(db.DateTime, nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    granted_access_id = db.Column(db.Integer, db.ForeignKey('data_share_access.id'), nullable=True)
+
+    tutor = db.relationship('User', foreign_keys=[tutor_id], backref=db.backref('share_requests', cascade='all, delete-orphan'))
+    clinic = db.relationship('Clinica', foreign_keys=[clinic_id])
+    animal = db.relationship('Animal', foreign_keys=[animal_id])
+    requested_by = db.relationship('User', foreign_keys=[requested_by_id])
+    granted_access = db.relationship('DataShareAccess', foreign_keys=[granted_access_id], backref=db.backref('share_request', uselist=False))
+
+
 class DataShareLog(db.Model):
     __tablename__ = 'data_share_log'
     __table_args__ = {'extend_existing': True}
@@ -476,14 +499,17 @@ class Interest(db.Model):
 class ConsultaToken(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     token = db.Column(db.String(64), unique=True, nullable=False)
-    animal_id = db.Column(db.Integer, db.ForeignKey('animal.id'), nullable=False)
+    animal_id = db.Column(db.Integer, db.ForeignKey('animal.id'), nullable=True)
     tutor_id = db.Column(
         db.Integer,
         db.ForeignKey('user.id', ondelete='CASCADE'),
         nullable=False,
     )
+    share_request_id = db.Column(db.Integer, db.ForeignKey('data_share_request.id'), nullable=True)
     expires_at = db.Column(db.DateTime, nullable=False)
     used = db.Column(db.Boolean, default=False)
+
+    share_request = db.relationship('DataShareRequest', backref=db.backref('tokens', cascade='all, delete-orphan'))
 
 
 

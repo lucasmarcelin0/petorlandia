@@ -5,6 +5,9 @@
 {% set page_param = page_param|default('page') %}
 {% set fetch_url = fetch_url|default(url_for('tutores')) %}
 {% set current_scope = scope|default('all') %}
+{% set allow_share_requests = allow_share_requests|default(False) %}
+{% set share_request_url = share_request_url|default(url_for('api_create_share')) %}
+{% set share_request_clinic_id = share_request_clinic_id|default(None) %}
 {% set current_search = tutor_search if tutor_search is defined else request.args.get(search_param, '') %}
 {% set current_sort = tutor_sort if tutor_sort is defined else request.args.get(sort_param, 'name_asc') %}
 {% set current_page = pagination.page if pagination else request.args.get(page_param, 1, type=int) %}
@@ -64,6 +67,9 @@
             {% if tutor.worker|lower == 'veterinario' %}
             <span class="badge bg-success position-absolute top-0 end-0 m-2">Veterinário</span>
             {% endif %}
+            {% if tutor.shared_access %}
+            <span class="badge bg-info text-dark position-absolute top-0 start-0 m-2">Compartilhado</span>
+            {% endif %}
 
             <div class="profile-card-media profile-card-media--tutor" style="--offset-x: {{ tutor.photo_offset_x or 0 }}px; --offset-y: {{ tutor.photo_offset_y or 0 }}px; --rotation: {{ tutor.photo_rotation or 0 }}deg; --zoom: {{ tutor.photo_zoom or 1 }};">
               {% if tutor.profile_photo %}
@@ -86,6 +92,17 @@
                 </div>
                 <p class="text-muted small mb-0">Tutor cadastrado na clínica</p>
               </div>
+
+              {% if tutor.shared_access %}
+              <div class="alert alert-info py-2 px-3 small mb-0">
+                <strong>Compartilhado:</strong>
+                {% set source = tutor.shared_access.source_clinic %}
+                Dados disponibilizados por {{ source.nome if source else 'outra clínica' }}.
+                {% if tutor.shared_access.expires_at %}
+                  Expira em {{ tutor.shared_access.expires_at.strftime('%d/%m/%Y') }}.
+                {% endif %}
+              </div>
+              {% endif %}
 
               <ul class="list-unstyled profile-card-details mb-0">
                 <li>
@@ -118,6 +135,17 @@
                 <a href="{{ url_for('ficha_tutor', tutor_id=tutor.id) }}" class="btn btn-sm btn-outline-dark flex-fill">📋 Ver Ficha</a>
                 {% if tutor.worker|lower == 'veterinario' and tutor.veterinario %}
                 <a href="{{ url_for('edit_vet_specialties', veterinario_id=tutor.veterinario.id) }}" class="btn btn-sm btn-outline-primary flex-fill">🩺 Especialidades</a>
+                {% endif %}
+                {% if allow_share_requests and share_request_clinic_id %}
+                <button type="button"
+                        class="btn btn-sm btn-outline-primary flex-fill"
+                        data-share-request
+                        data-share-url="{{ share_request_url }}"
+                        data-tutor-id="{{ tutor.id }}"
+                        data-clinic-id="{{ share_request_clinic_id }}"
+                        data-has-share="{{ '1' if tutor.shared_access else '0' }}">
+                  {{ '🔄 Renovar acesso' if tutor.shared_access else '🔗 Solicitar acesso' }}
+                </button>
                 {% endif %}
               </div>
             </div>

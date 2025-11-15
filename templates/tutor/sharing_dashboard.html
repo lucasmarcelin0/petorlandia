@@ -1,0 +1,128 @@
+{% extends 'layout.html' %}
+{% block main %}
+<div class="container py-5">
+  <div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+      <h1 class="h3 mb-1">Compartilhamento de prontuários</h1>
+      <p class="text-muted mb-0">Gerencie os pedidos de clínicas e acompanhe quem possui acesso aos dados dos seus pets.</p>
+    </div>
+    <div>
+      <a href="{{ url_for('ficha_tutor', tutor_id=current_user.id) }}" class="btn btn-outline-secondary btn-sm">Voltar à minha ficha</a>
+    </div>
+  </div>
+  <div class="row g-4">
+    <div class="col-lg-6">
+      <div class="card shadow-sm border-0 h-100">
+        <div class="card-body">
+          <h2 class="h5 mb-3">Solicitações pendentes</h2>
+          {% if pending_requests %}
+          <div class="list-group list-group-flush">
+            {% for request in pending_requests %}
+            <div class="list-group-item px-0 d-flex flex-column gap-2">
+              <div>
+                <div class="d-flex justify-content-between flex-wrap gap-2">
+                  <strong>{{ request.clinic.nome if request.clinic else 'Clínica #' ~ request.clinic_id }}</strong>
+                  <span class="text-muted small">{{ request.created_at.strftime('%d/%m/%Y %H:%M') }}</span>
+                </div>
+                <div class="text-muted small">
+                  {% if request.reason %}Motivo: {{ request.reason }}{% else %}Sem justificativa informada.{% endif %}
+                </div>
+                {% if request.requested_expires_at %}
+                <div class="text-muted small">Validade solicitada até {{ request.requested_expires_at.strftime('%d/%m/%Y') }}.</div>
+                {% endif %}
+              </div>
+              <div class="d-flex gap-2">
+                <button class="btn btn-sm btn-success flex-fill"
+                        data-share-action="approve"
+                        data-request-id="{{ request.id }}"
+                        data-decision-url="{{ url_for('api_share_decision', request_id=request.id) }}">
+                  Aprovar
+                </button>
+                <button class="btn btn-sm btn-outline-danger flex-fill"
+                        data-share-action="deny"
+                        data-request-id="{{ request.id }}"
+                        data-decision-url="{{ url_for('api_share_decision', request_id=request.id) }}">
+                  Recusar
+                </button>
+              </div>
+            </div>
+            {% endfor %}
+          </div>
+          {% else %}
+          <p class="text-muted mb-0">Nenhum pedido aguardando aprovação.</p>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+    <div class="col-lg-6">
+      <div class="card shadow-sm border-0 h-100">
+        <div class="card-body">
+          <h2 class="h5 mb-3">Compartilhamentos ativos</h2>
+          {% if active_shares %}
+          <ul class="list-group list-group-flush">
+            {% for share in active_shares %}
+            <li class="list-group-item px-0">
+              <div class="d-flex justify-content-between flex-wrap gap-2">
+                <div>
+                  <strong>{{ share.target_clinic.nome if share.target_clinic else 'Clínica #' ~ share.granted_to_id }}</strong>
+                  {% if share.grant_reason %}
+                  <div class="text-muted small">Motivo: {{ share.grant_reason }}</div>
+                  {% endif %}
+                </div>
+                <div class="text-muted small">
+                  {% if share.expires_at %}
+                    Expira em {{ share.expires_at.strftime('%d/%m/%Y') }}
+                  {% else %}
+                    Sem validade definida
+                  {% endif %}
+                </div>
+              </div>
+            </li>
+            {% endfor %}
+          </ul>
+          {% else %}
+          <p class="text-muted mb-0">Nenhuma clínica possui acesso compartilhado neste momento.</p>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+  {{ super() }}
+  <script>
+    document.addEventListener('click', async (event) => {
+      const button = event.target.closest('[data-share-action]');
+      if (!button) {
+        return;
+      }
+      event.preventDefault();
+      const url = button.getAttribute('data-decision-url');
+      const action = button.getAttribute('data-share-action');
+      if (!url || !action) {
+        return;
+      }
+      try {
+        const response = await fetch(url, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json',
+          },
+          body: JSON.stringify({ action }),
+        });
+        const body = await response.json().catch(() => ({}));
+        const message = body.message || 'Pedido atualizado com sucesso.';
+        alert(message);
+        if (response.ok) {
+          window.location.reload();
+        }
+      } catch (error) {
+        console.error('Erro ao atualizar pedido de compartilhamento', error);
+        alert('Não foi possível atualizar o pedido agora.');
+      }
+    });
+  </script>
+{% endblock %}

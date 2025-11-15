@@ -1,4 +1,7 @@
 {% extends 'layout.html' %}
+{% set allow_share_requests = allow_share_requests|default(False) %}
+{% set share_request_url = share_request_url|default(url_for('api_create_share')) %}
+{% set share_request_clinic_id = share_request_clinic_id|default(None) %}
 
 {% block head %}
   {{ super() }}
@@ -112,6 +115,41 @@
       </div>
     </div>
   </div>
+
+  {% if shared_access %}
+  <div class="alert alert-warning d-flex justify-content-between align-items-center flex-wrap gap-2">
+    <div>
+      <strong>Dados compartilhados.</strong>
+      {% set origem = shared_access.source_clinic %}
+      Origem: {{ origem.nome if origem else 'outra clínica' }}.
+      {% if shared_access.expires_at %}
+        Expira em {{ shared_access.expires_at.strftime('%d/%m/%Y') }}.
+      {% endif %}
+    </div>
+    {% if allow_share_requests and tutor %}
+    <button class="btn btn-sm btn-outline-primary"
+            data-share-request
+            data-share-url="{{ share_request_url }}"
+            data-tutor-id="{{ tutor.id }}"
+            data-animal-id="{{ animal.id if animal else '' }}"
+            data-clinic-id="{{ share_request_clinic_id }}">
+      🔄 Renovar acesso
+    </button>
+    {% endif %}
+  </div>
+  {% elif allow_share_requests and tutor and animal %}
+  <div class="alert alert-light border d-flex justify-content-between align-items-center flex-wrap gap-2">
+    <span>Precisa acessar este prontuário futuramente? Solicite a aprovação do tutor.</span>
+    <button class="btn btn-sm btn-outline-primary"
+            data-share-request
+            data-share-url="{{ share_request_url }}"
+            data-tutor-id="{{ tutor.id }}"
+            data-animal-id="{{ animal.id }}"
+            data-clinic-id="{{ share_request_clinic_id }}">
+      🔗 Solicitar acesso
+    </button>
+  </div>
+  {% endif %}
 
   <div class="tab-pane fade" id="animal-info" role="tabpanel">
     <div class="card shadow-sm">
@@ -267,6 +305,51 @@
 
 
 
+
+<script>
+document.addEventListener('click', async (event) => {
+  const button = event.target.closest('[data-share-request]');
+  if (!button) {
+    return;
+  }
+  event.preventDefault();
+  const tutorId = button.getAttribute('data-tutor-id');
+  const clinicId = button.getAttribute('data-clinic-id') || {{ share_request_clinic_id|tojson }};
+  if (!tutorId || !clinicId) {
+    alert('Selecione uma clínica válida para solicitar o compartilhamento.');
+    return;
+  }
+  const payload = {
+    tutor_id: Number(tutorId),
+    clinic_id: Number(clinicId),
+  };
+  const animalId = button.getAttribute('data-animal-id');
+  if (animalId) {
+    payload.animal_id = Number(animalId);
+  }
+  const reasonSuggestion = animalId ? `Prontuário do animal #${animalId}` : '';
+  const reason = prompt('Descreva o motivo do acesso (opcional):', reasonSuggestion);
+  if (reason) {
+    payload.reason = reason;
+  }
+  try {
+    const response = await fetch(button.getAttribute('data-share-url') || {{ share_request_url|tojson }}, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+      },
+      body: JSON.stringify(payload),
+    });
+    const body = await response.json().catch(() => ({}));
+    const message = body.message || (response.status === 201 ? 'Pedido enviado ao tutor.' : 'Solicitação registrada.');
+    alert(message);
+  } catch (error) {
+    console.error('Erro ao solicitar compartilhamento', error);
+    alert('Não foi possível enviar o pedido agora.');
+  }
+});
+</script>
 
 <script>
 function bindSyncForms(root) {

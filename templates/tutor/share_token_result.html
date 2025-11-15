@@ -1,0 +1,33 @@
+{% extends 'layout.html' %}
+{% block main %}
+<div class="container py-5">
+  <div class="card shadow-sm border-0 mx-auto" style="max-width: 520px;">
+    <div class="card-body text-center py-5">
+      {% if status == 'approved' %}
+      <div class="display-4 text-success mb-3">✅</div>
+      <h1 class="h4 mb-2">Compartilhamento confirmado!</h1>
+      <p class="text-muted">A clínica receberá uma confirmação e poderá acessar os dados solicitados.</p>
+      {% elif status == 'expired' %}
+      <div class="display-4 text-warning mb-3">⌛</div>
+      <h1 class="h4 mb-2">Token expirado</h1>
+      <p class="text-muted">O link não é mais válido. Peça para a clínica reenviar o pedido.</p>
+      {% elif status == 'used' %}
+      <div class="display-4 text-info mb-3">ℹ️</div>
+      <h1 class="h4 mb-2">Token já utilizado</h1>
+      <p class="text-muted">Este pedido já foi processado anteriormente.</p>
+      {% elif status == 'already' %}
+      <div class="display-4 text-primary mb-3">🔁</div>
+      <h1 class="h4 mb-2">Acesso já concedido</h1>
+      <p class="text-muted">Esta clínica já possui um compartilhamento ativo.</p>
+      {% else %}
+      <div class="display-4 text-danger mb-3">⚠️</div>
+      <h1 class="h4 mb-2">Não foi possível concluir</h1>
+      <p class="text-muted">O pedido não está mais disponível ou foi cancelado.</p>
+      {% endif %}
+      <div class="mt-4">
+        <a href="{{ url_for('tutor_sharing_dashboard') }}" class="btn btn-primary">Ver meus compartilhamentos</a>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

@@ -21,3 +21,48 @@
   </div>
 </div>
 {% endblock %}
+
+{% block scripts %}
+  {{ super() }}
+  <script>
+    const shareRequestEndpoint = {{ share_request_url|tojson }};
+    const defaultClinicId = {{ share_request_clinic_id|tojson }};
+    document.addEventListener('click', async (event) => {
+      const button = event.target.closest('[data-share-request]');
+      if (!button) {
+        return;
+      }
+      event.preventDefault();
+      const tutorId = button.getAttribute('data-tutor-id');
+      const clinicId = button.getAttribute('data-clinic-id') || defaultClinicId;
+      if (!tutorId || !clinicId) {
+        alert('Selecione uma clínica para solicitar o compartilhamento.');
+        return;
+      }
+      const reason = prompt('Descreva o motivo do acesso (opcional):');
+      const payload = {
+        tutor_id: Number(tutorId),
+        clinic_id: Number(clinicId),
+      };
+      if (reason) {
+        payload.reason = reason;
+      }
+      try {
+        const response = await fetch(button.getAttribute('data-share-url') || shareRequestEndpoint, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json',
+          },
+          body: JSON.stringify(payload),
+        });
+        const body = await response.json().catch(() => ({}));
+        const message = body.message || (response.status === 201 ? 'Pedido enviado com sucesso.' : 'Solicitação registrada.');
+        alert(message);
+      } catch (error) {
+        console.error('Erro ao solicitar compartilhamento', error);
+        alert('Não foi possível enviar o pedido agora. Tente novamente.');
+      }
+    });
+  </script>
+{% endblock %}
