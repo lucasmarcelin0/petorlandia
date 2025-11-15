@@ -184,14 +184,80 @@
   box-shadow: 0 12px 24px rgba(15, 47, 91, 0.08);
 }
 
-.team-card-icon {
-  width: 42px;
-  height: 42px;
+.team-avatar {
+  width: 48px;
+  height: 48px;
   border-radius: 50%;
+  border: 2px solid transparent;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  font-size: 1.1rem;
+  font-weight: 600;
+  font-size: 0.95rem;
+  text-transform: uppercase;
+  background-color: #f1f3f5;
+  color: #495057;
+  overflow: hidden;
+  flex-shrink: 0;
+  position: relative;
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.05);
+}
+
+.team-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.team-avatar-initials {
+  letter-spacing: 0.5px;
+}
+
+.team-avatar .bi {
+  font-size: 1.15rem;
+}
+
+@media (min-width: 992px) {
+  .team-avatar {
+    width: 56px;
+    height: 56px;
+  }
+}
+
+.team-avatar-soft-primary {
+  background-color: rgba(78, 115, 223, 0.15);
+  color: #4e73df;
+  border-color: rgba(78, 115, 223, 0.35);
+}
+
+.team-avatar-soft-success {
+  background-color: rgba(28, 200, 138, 0.15);
+  color: #1cc88a;
+  border-color: rgba(28, 200, 138, 0.35);
+}
+
+.team-avatar-soft-info {
+  background-color: rgba(54, 185, 204, 0.15);
+  color: #36b9cc;
+  border-color: rgba(54, 185, 204, 0.35);
+}
+
+.team-avatar-soft-warning {
+  background-color: rgba(246, 194, 62, 0.2);
+  color: #c28700;
+  border-color: rgba(246, 194, 62, 0.45);
+}
+
+.team-avatar-soft-danger {
+  background-color: rgba(231, 74, 59, 0.2);
+  color: #be2617;
+  border-color: rgba(231, 74, 59, 0.45);
+}
+
+.team-avatar-soft-secondary {
+  background-color: rgba(133, 135, 150, 0.15);
+  color: #5a5c69;
+  border-color: rgba(133, 135, 150, 0.35);
 }
 
 .action-dropdown .btn-icon {

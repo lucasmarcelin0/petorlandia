@@ -1,3 +1,19 @@
+{% macro render_team_avatar(user=None, tone_class='', fallback_icon=None, fallback_text='?') %}
+  {% set avatars = team_user_avatars|default({}) %}
+  {% set avatar = avatars.get(user.id) if user else None %}
+  <div class="team-avatar {{ tone_class }}">
+    {% if avatar and avatar.photo %}
+    <img src="{{ avatar.photo }}" alt="Foto de {{ user.name if user else 'profissional' }}" loading="lazy">
+    {% elif avatar and avatar.initials %}
+    <span class="team-avatar-initials">{{ avatar.initials }}</span>
+    {% elif fallback_icon %}
+    <i class="bi {{ fallback_icon }}"></i>
+    {% else %}
+    <span class="team-avatar-initials">{{ fallback_text }}</span>
+    {% endif %}
+  </div>
+{% endmacro %}
+
 <div class="clinic-team-container">
   <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mt-4">
     <div>
@@ -50,9 +66,7 @@
                 <div class="card-body d-flex justify-content-between align-items-start gap-3">
                   <div>
                     <div class="d-flex flex-wrap align-items-center gap-2">
-                      <div class="team-card-icon bg-primary-subtle text-primary">
-                        <i class="bi bi-person-workspace"></i>
-                      </div>
+                      {{ render_team_avatar(s.user, 'team-avatar-soft-primary', 'bi-person-workspace') }}
                       <div>
                         <h6 class="mb-1">{{ s.user.name }}</h6>
                         <div class="text-muted small">{{ s.user.email }}</div>
@@ -147,9 +161,7 @@
                   <div class="d-flex justify-content-between align-items-start gap-3">
                     <div>
                       <div class="d-flex flex-wrap align-items-center gap-2">
-                        <div class="team-card-icon bg-success-subtle text-success">
-                          <i class="bi bi-heart-pulse"></i>
-                        </div>
+                        {{ render_team_avatar(v.user, 'team-avatar-soft-success', 'bi-heart-pulse') }}
                         <div>
                           <h6 class="mb-1">{{ v.user.name }}</h6>
                           <div class="text-muted small">CRMV: {{ v.crmv }}</div>
@@ -243,9 +255,7 @@
                   <div class="d-flex justify-content-between align-items-start gap-3">
                     <div>
                       <div class="d-flex flex-wrap align-items-center gap-2">
-                        <div class="team-card-icon bg-info-subtle text-info">
-                          <i class="bi bi-stars"></i>
-                        </div>
+                        {{ render_team_avatar(s.user, 'team-avatar-soft-info', 'bi-stars') }}
                         <div>
                           <h6 class="mb-1">{{ s.user.name }}</h6>
                           {% if s.specialties %}
@@ -335,24 +345,22 @@
       <div id="collapse-invites" class="accordion-collapse collapse" aria-labelledby="accordion-invites" data-bs-parent="#clinicTeamAccordion">
         <div class="accordion-body">
           {% set status_badges = {
-            'pending': ('Convite pendente', 'badge-soft-warning', 'bi-hourglass-split'),
-            'declined': ('Convite recusado', 'badge-soft-danger', 'bi-x-circle'),
-            'accepted': ('Convite aceito', 'badge-soft-success', 'bi-check-circle'),
-            'cancelled': ('Convite cancelado', 'badge-soft-secondary', 'bi-slash-circle')
+            'pending': ('Convite pendente', 'badge-soft-warning', 'bi-hourglass-split', 'team-avatar-soft-warning'),
+            'declined': ('Convite recusado', 'badge-soft-danger', 'bi-x-circle', 'team-avatar-soft-danger'),
+            'accepted': ('Convite aceito', 'badge-soft-success', 'bi-check-circle', 'team-avatar-soft-success'),
+            'cancelled': ('Convite cancelado', 'badge-soft-secondary', 'bi-slash-circle', 'team-avatar-soft-secondary')
           } %}
           {% if invites_by_status %}
           <div class="row g-3">
             {% for status in invite_status_order %}
             {% set invites = invites_by_status.get(status, []) %}
             {% if invites %}
-            {% set status_info = status_badges.get(status, (status|capitalize, 'badge-soft-secondary', 'bi-envelope')) %}
+            {% set status_info = status_badges.get(status, (status|capitalize, 'badge-soft-secondary', 'bi-envelope', 'team-avatar-soft-secondary')) %}
             <div class="col-12">
               <div class="card invite-card shadow-sm">
                 <div class="card-header d-flex justify-content-between align-items-center">
                   <div class="d-flex align-items-center gap-2">
-                    <div class="team-card-icon {{ status_info[1] }}">
-                      <i class="bi {{ status_info[2] }}"></i>
-                    </div>
+                    {{ render_team_avatar(None, status_info[3], status_info[2]) }}
                     <div>
                       <h6 class="mb-0">{{ status_info[0] }}</h6>
                       <small class="text-muted">{{ invites|length }} convite{{ 's' if invites|length != 1 else '' }}</small>
