@@ -1,11 +1,35 @@
 {% for s in staff_members %}
-<tr>
+{% set form = staff_permission_forms.get(s.user.id) if staff_permission_forms is defined else None %}
+{% set permissions = namespace(values=[]) %}
+{% if form %}
+  {% if form.can_manage_clients.data %}{% set permissions.values = permissions.values + ['Clientes'] %}{% endif %}
+  {% if form.can_manage_animals.data %}{% set permissions.values = permissions.values + ['Animais'] %}{% endif %}
+  {% if form.can_manage_staff.data %}{% set permissions.values = permissions.values + ['Equipe'] %}{% endif %}
+  {% if form.can_manage_schedule.data %}{% set permissions.values = permissions.values + ['Agenda'] %}{% endif %}
+  {% if form.can_manage_inventory.data %}{% set permissions.values = permissions.values + ['Estoque'] %}{% endif %}
+  {% if form.can_view_full_calendar.data %}{% set permissions.values = permissions.values + ['Agenda completa'] %}{% endif %}
+{% else %}
+  {% if s.can_manage_clients %}{% set permissions.values = permissions.values + ['Clientes'] %}{% endif %}
+  {% if s.can_manage_animals %}{% set permissions.values = permissions.values + ['Animais'] %}{% endif %}
+  {% if s.can_manage_staff %}{% set permissions.values = permissions.values + ['Equipe'] %}{% endif %}
+  {% if s.can_manage_schedule %}{% set permissions.values = permissions.values + ['Agenda'] %}{% endif %}
+  {% if s.can_manage_inventory %}{% set permissions.values = permissions.values + ['Estoque'] %}{% endif %}
+  {% if s.can_view_full_calendar %}{% set permissions.values = permissions.values + ['Agenda completa'] %}{% endif %}
+{% endif %}
+<tr data-name="{{ s.user.name|lower }}" data-role="{{ s.user.worker or 'colaborador' }}">
   <td>{{ s.user.name }}</td>
   <td>{{ s.user.email }}</td>
+  <td>
+    {% if permissions.values %}
+    <span class="text-body-secondary small">{{ permissions.values | join(' • ') }}</span>
+    {% else %}
+    <span class="text-muted small">Sem permissões definidas</span>
+    {% endif %}
+  </td>
   <td>
     <a href="{{ url_for('clinic_staff_permissions', clinica_id=clinic.id, user_id=s.user.id) }}" class="btn btn-sm btn-outline-primary">Permissões</a>
   </td>
 </tr>
 {% else %}
-<tr><td colspan="3">Nenhum funcionário.</td></tr>
+<tr><td colspan="4">Nenhum funcionário.</td></tr>
 {% endfor %}
