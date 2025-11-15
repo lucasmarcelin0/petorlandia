@@ -5781,6 +5781,14 @@ def dashboard_orcamentos():
         for o in orcamento_query.all()
     ]
 
+    total_emitido = sum(orcamento['total'] for orcamento in dados_orcamentos)
+    total_aprovado = sum(
+        consulta['total'] for consulta in dados_consultas if consulta['status'] == 'Pago'
+    )
+    total_pendente = sum(
+        consulta['total'] for consulta in dados_consultas if consulta['status'] != 'Pago'
+    )
+
     clinic_options = []
     if is_admin:
         clinic_options = Clinica.query.order_by(Clinica.nome).all()
@@ -5807,6 +5815,9 @@ def dashboard_orcamentos():
         selected_clinic_id=selected_clinic_id,
         selected_scope='all' if is_global_scope else 'clinic',
         is_global_scope=is_global_scope,
+        total_emitido=total_emitido,
+        total_aprovado=total_aprovado,
+        total_pendente=total_pendente,
     )
 
 
