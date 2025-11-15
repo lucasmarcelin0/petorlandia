@@ -10,7 +10,7 @@ from typing import Callable, Iterable, List, Optional, Sequence, Tuple
 
 from dateutil.relativedelta import relativedelta
 from flask import current_app, has_app_context
-from sqlalchemy import cast, func, or_, inspect as sa_inspect
+from sqlalchemy import and_, cast, func, or_, inspect as sa_inspect
 from sqlalchemy.exc import OperationalError, ProgrammingError
 from sqlalchemy.orm import load_only
 from sqlalchemy.sql.sqltypes import Numeric
@@ -581,11 +581,34 @@ def _classify_veterinarian_payments(
         return [], False
 
     query = model.query.filter(model.clinica_id == clinic_id)
-    query = query.filter(date_column >= start_dt, date_column < end_dt)
+    service_date_column = getattr(model, 'data_servico', None)
+    table_name = getattr(model, '__tablename__', None)
+    service_date_available = False
+    if service_date_column is not None and table_name:
+        service_date_available = _table_has_column(table_name, service_date_column.key)
+        if not service_date_available:
+            service_date_column = None
+
+    if (
+        service_date_column is not None
+        and service_date_available
+        and service_date_column.key != date_column.key
+    ):
+        query = query.filter(
+            or_(
+                and_(date_column >= start_dt, date_column < end_dt),
+                and_(
+                    date_column.is_(None),
+                    service_date_column >= start_dt,
+                    service_date_column < end_dt,
+                ),
+            )
+        )
+    else:
+        query = query.filter(date_column >= start_dt, date_column < end_dt)
 
     provider_type_column = getattr(model, 'tipo_prestador', None)
     provider_type_available = False
-    table_name = getattr(model, '__tablename__', None)
     if provider_type_column is not None and table_name:
         provider_type_available = _table_has_column(table_name, provider_type_column.key)
         if not provider_type_available:
@@ -609,6 +632,8 @@ def _classify_veterinarian_payments(
         load_only_columns.append(id_column)
     if provider_type_available and provider_type_column not in load_only_columns:
         load_only_columns.append(provider_type_column)
+    if service_date_column is not None and service_date_column not in load_only_columns:
+        load_only_columns.append(service_date_column)
     if load_only_columns:
         query = query.options(load_only(*load_only_columns))
 
@@ -617,6 +642,8 @@ def _classify_veterinarian_payments(
     for entry in query.all():
         amount_value = getattr(entry, amount_column.key)
         date_value = getattr(entry, date_column.key)
+        if not date_value and service_date_column is not None:
+            date_value = getattr(entry, service_date_column.key)
         description = getattr(entry, description_column.key, "Pagamento PJ") if description_column else "Pagamento PJ"
         nf_value = getattr(entry, invoice_column.key, None) if invoice_column else None
         if nf_value:
