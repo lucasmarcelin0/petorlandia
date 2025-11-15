@@ -647,12 +647,28 @@ class BlocoOrcamento(db.Model):
     animal_id = db.Column(db.Integer, db.ForeignKey('animal.id'), nullable=False)
     clinica_id = db.Column(db.Integer, db.ForeignKey('clinica.id'), nullable=False)
     data_criacao = db.Column(db.DateTime, default=datetime.utcnow)
+    cobranca_tipo = db.Column(db.String(20), default='plano')
+    desconto_tipo = db.Column(db.String(20), nullable=True)
+    desconto_percentual = db.Column(db.Numeric(5, 2), nullable=True)
+    desconto_valor = db.Column(db.Numeric(10, 2), nullable=True)
+    total_liquido = db.Column(db.Numeric(10, 2), nullable=True)
+    observacoes_tutor = db.Column(db.Text, nullable=True)
+    pagamento_status = db.Column(db.String(20), default='rascunho', nullable=False)
+    pagamento_link = db.Column(db.String(255), nullable=True)
+    pagamento_preference_id = db.Column(db.String(64), nullable=True)
+    pagamento_atualizado_em = db.Column(db.DateTime, nullable=True)
 
     animal = db.relationship('Animal', backref=db.backref('blocos_orcamento', cascade='all, delete-orphan', lazy=True))
     clinica = db.relationship('Clinica', backref=db.backref('blocos_orcamento', cascade='all, delete-orphan'))
 
     @property
     def total(self):
+        if self.total_liquido is not None:
+            return self.total_liquido
+        return sum(item.valor for item in self.itens)
+
+    @property
+    def total_bruto(self):
         return sum(item.valor for item in self.itens)
 
 

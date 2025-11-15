@@ -36,14 +36,24 @@ def test_salvar_bloco_orcamento(app):
     client = app.test_client()
     with client:
         client.post('/login', data={'email': 'vet@example.com', 'password': 'x'}, follow_redirects=True)
-        resp = client.post(f'/consulta/{consulta_id}/bloco_orcamento', headers={'Accept': 'application/json'})
+        resp = client.post(
+            f'/consulta/{consulta_id}/bloco_orcamento',
+            headers={'Accept': 'application/json'},
+            json={'cobranca_tipo': 'particular', 'desconto_percentual': 10, 'observacoes_tutor': 'Teste'}
+        )
         assert resp.status_code == 200
         data = resp.get_json()
         assert data['success']
+        assert 'bloco_id' in data
     with app.app_context():
         bloco = BlocoOrcamento.query.first()
         assert bloco is not None
         assert len(bloco.itens) == 2
+        assert bloco.cobranca_tipo == 'particular'
+        assert bloco.desconto_tipo == 'percentual'
+        assert float(bloco.desconto_valor or 0) == pytest.approx(8.0)
+        assert float(bloco.total_liquido) == pytest.approx(72.0)
+        assert bloco.observacoes_tutor == 'Teste'
         consulta = Consulta.query.get(consulta_id)
         assert len(consulta.orcamento_items) == 0
         db.drop_all()

@@ -75,7 +75,39 @@
     </tr>
   </tfoot>
 </table>
-<div class="text-end mt-3">
+<div class="border rounded p-3 mb-3 bg-white">
+  <div class="d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center gap-3">
+    <div>
+      <label class="form-label mb-2">Forma de cobrança</label>
+      <div class="btn-group" role="group" aria-label="Modo de cobrança">
+        <input type="radio" class="btn-check" name="modo-cobranca" id="modo-cobranca-plano" value="plano" checked>
+        <label class="btn btn-outline-secondary" for="modo-cobranca-plano">Plano</label>
+        <input type="radio" class="btn-check" name="modo-cobranca" id="modo-cobranca-particular" value="particular">
+        <label class="btn btn-outline-secondary" for="modo-cobranca-particular">Particular</label>
+      </div>
+    </div>
+    <div class="text-muted small">
+      Configure descontos e observações apenas para cobranças particulares.
+    </div>
+  </div>
+  <div id="campos-particular" class="row g-3 mt-2 d-none">
+    <div class="col-md-4">
+      <label for="desconto-percentual" class="form-label">Desconto (%)</label>
+      <input type="number" step="0.01" min="0" max="100" id="desconto-percentual" class="form-control" placeholder="0,00">
+    </div>
+    <div class="col-md-4">
+      <label for="desconto-valor" class="form-label">Desconto (R$)</label>
+      <input type="number" step="0.01" min="0" id="desconto-valor" class="form-control" placeholder="0,00">
+    </div>
+    <div class="col-12">
+      <label for="observacoes-tutor" class="form-label">Observações para o tutor</label>
+      <textarea id="observacoes-tutor" class="form-control" rows="2" maxlength="500" placeholder="Mensagem opcional"></textarea>
+      <small class="text-muted">Essas observações aparecerão no histórico e no envio para pagamento.</small>
+    </div>
+  </div>
+</div>
+<div class="d-flex flex-column flex-md-row justify-content-end gap-2 mt-3">
+  <button type="button" class="btn btn-outline-primary" onclick="enviarBlocoParaPagamento()">💸 Enviar para pagamento</button>
   <button type="button" class="btn btn-success" onclick="finalizarBlocoOrcamento()">💾 Salvar orçamento</button>
 </div>
 
@@ -85,6 +117,7 @@
 
 <script>
 const consultaId = {{ consulta.id }};
+let ultimoBlocoId = null;
 
 async function criarServico() {
   const descricao = document.getElementById('descricao-servico').value.trim();
@@ -153,18 +186,144 @@ async function removerItemOrcamento(id) {
 async function finalizarBlocoOrcamento() {
   const tbody = document.querySelector('#orcamento-tabela tbody');
   if (!tbody.children.length) return;
-  const resp = await fetch(`/consulta/${consultaId}/bloco_orcamento`, {method: 'POST', headers: {'Accept': 'application/json'}});
+  const payload = coletarDadosBloco();
+  const resp = await fetch(`/consulta/${consultaId}/bloco_orcamento`, {
+    method: 'POST',
+    headers: {'Accept': 'application/json', 'Content-Type': 'application/json'},
+    body: JSON.stringify(payload)
+  });
   if (resp.ok) {
     const data = await resp.json();
     if (data.success) {
       tbody.innerHTML = '';
       document.getElementById('orcamento-total').textContent = '0.00';
+      limparCamposParticular();
       const historico = document.getElementById('historico-orcamentos');
       if (data.html) {
         historico.innerHTML = data.html;
         if (typeof bindSyncForms === 'function') { bindSyncForms(historico); }
+        bindOrcamentoHistoryActions();
+        refreshUltimoBlocoId();
       }
+      if (data.bloco_id) {
+        ultimoBlocoId = data.bloco_id;
+      }
+      notifyBudget('Orçamento salvo com sucesso.', 'success');
+    } else if (data.message) {
+      notifyBudget(data.message, 'danger');
     }
+  } else {
+    notifyBudget('Não foi possível salvar o orçamento.', 'danger');
   }
 }
+
+function coletarDadosBloco() {
+  const modo = getModoCobranca();
+  const observacoes = document.getElementById('observacoes-tutor').value.trim();
+  const data = {cobranca_tipo: modo};
+  if (modo === 'particular') {
+    const percentual = parseFloat(document.getElementById('desconto-percentual').value);
+    const valor = parseFloat(document.getElementById('desconto-valor').value);
+    if (!isNaN(percentual)) data.desconto_percentual = percentual;
+    if (!isNaN(valor)) data.desconto_valor = valor;
+    if (observacoes) data.observacoes_tutor = observacoes;
+  } else if (observacoes) {
+    data.observacoes_tutor = observacoes;
+  }
+  return data;
+}
+
+function limparCamposParticular() {
+  document.getElementById('desconto-percentual').value = '';
+  document.getElementById('desconto-valor').value = '';
+  document.getElementById('observacoes-tutor').value = '';
+  const planoRadio = document.getElementById('modo-cobranca-plano');
+  if (planoRadio) planoRadio.checked = true;
+  atualizarCamposParticular();
+}
+
+function getModoCobranca() {
+  const selecionado = document.querySelector('input[name="modo-cobranca"]:checked');
+  return selecionado ? selecionado.value : 'plano';
+}
+
+function atualizarCamposParticular() {
+  const container = document.getElementById('campos-particular');
+  const modo = getModoCobranca();
+  container?.classList.toggle('d-none', modo !== 'particular');
+}
+
+function bindModoCobrancaToggle() {
+  document.querySelectorAll('input[name="modo-cobranca"]').forEach(radio => {
+    radio.addEventListener('change', atualizarCamposParticular);
+  });
+  atualizarCamposParticular();
+}
+
+function notifyBudget(message, category='info') {
+  if (typeof showToast === 'function') {
+    showToast(message, category);
+  } else {
+    console.log(`[${category}]`, message);
+  }
+}
+
+function bindOrcamentoHistoryActions() {
+  document.querySelectorAll('#historico-orcamentos .btn-enviar-pagamento').forEach(btn => {
+    if (btn.dataset.bound) return;
+    btn.dataset.bound = 'true';
+    btn.addEventListener('click', () => {
+      const blocoId = parseInt(btn.dataset.blocoId, 10);
+      enviarBlocoParaPagamento(blocoId);
+    });
+  });
+}
+
+function refreshUltimoBlocoId() {
+  const cards = document.querySelectorAll('#historico-orcamentos [data-bloco-id]');
+  let maior = null;
+  cards.forEach(card => {
+    const id = parseInt(card.dataset.blocoId, 10);
+    if (!isNaN(id)) {
+      maior = maior === null ? id : Math.max(maior, id);
+    }
+  });
+  ultimoBlocoId = maior;
+}
+
+async function enviarBlocoParaPagamento(blocoId = null) {
+  const targetId = blocoId || ultimoBlocoId;
+  if (!targetId) {
+    notifyBudget('Salve um orçamento antes de enviar para pagamento.', 'warning');
+    return;
+  }
+  const resp = await fetch(`/consulta/${consultaId}/pagar_orcamento?bloco_id=${targetId}`, {
+    method: 'POST',
+    headers: {'Accept': 'application/json'}
+  });
+  const historico = document.getElementById('historico-orcamentos');
+  if (resp.ok) {
+    const data = await resp.json();
+    if (data.success) {
+      notifyBudget('Link de pagamento gerado. Abrindo em nova aba...', 'success');
+      if (data.pagamento_url) {
+        window.open(data.pagamento_url, '_blank');
+      }
+      if (data.html) {
+        historico.innerHTML = data.html;
+        if (typeof bindSyncForms === 'function') { bindSyncForms(historico); }
+        bindOrcamentoHistoryActions();
+        refreshUltimoBlocoId();
+      }
+      return;
+    }
+    notifyBudget(data.message || 'Não foi possível enviar para pagamento.', 'danger');
+  } else {
+    notifyBudget('Falha ao iniciar o pagamento.', 'danger');
+  }
+}
+
+bindModoCobrancaToggle();
+bindOrcamentoHistoryActions();
+refreshUltimoBlocoId();
 </script>

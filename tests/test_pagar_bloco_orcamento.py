@@ -14,24 +14,28 @@ def app():
     yield flask_app
 
 
+def _criar_dados_basicos():
+    clinica = Clinica(nome='Clinica 1')
+    vet = User(name='Vet', email='vet@example.com', worker='veterinario', role='admin')
+    vet.set_password('x')
+    vet_v = Veterinario(user=vet, crmv='123', clinica=clinica)
+    tutor = User(name='Tutor', email='tutor@example.com')
+    tutor.set_password('y')
+    animal = Animal(name='Rex', owner=tutor, clinica=clinica)
+    db.session.add_all([clinica, vet, vet_v, tutor, animal])
+    db.session.commit()
+    consulta = Consulta(animal=animal, created_by=vet.id, status='in_progress', clinica_id=clinica.id)
+    item = OrcamentoItem(consulta=consulta, descricao='Consulta', valor=50, clinica=clinica)
+    db.session.add_all([consulta, item])
+    db.session.commit()
+    return consulta.id
+
+
 def test_pagar_bloco_orcamento(app, monkeypatch):
     with app.app_context():
         db.drop_all()
         db.create_all()
-        clinica = Clinica(nome='Clinica 1')
-        vet = User(name='Vet', email='vet@example.com', worker='veterinario', role='admin')
-        vet.set_password('x')
-        vet_v = Veterinario(user=vet, crmv='123', clinica=clinica)
-        tutor = User(name='Tutor', email='tutor@example.com')
-        tutor.set_password('y')
-        animal = Animal(name='Rex', owner=tutor, clinica=clinica)
-        db.session.add_all([clinica, vet, vet_v, tutor, animal])
-        db.session.commit()
-        consulta = Consulta(animal=animal, created_by=vet.id, status='in_progress', clinica_id=clinica.id)
-        item = OrcamentoItem(consulta=consulta, descricao='Consulta', valor=50, clinica=clinica)
-        db.session.add_all([consulta, item])
-        db.session.commit()
-        consulta_id = consulta.id
+        consulta_id = _criar_dados_basicos()
 
     client = app.test_client()
     with client:
@@ -56,4 +60,50 @@ def test_pagar_bloco_orcamento(app, monkeypatch):
         assert resp.headers['Location'] == 'http://mp'
 
     with app.app_context():
+        db.drop_all()
+
+
+def test_pagar_orcamento_bloco_json(app, monkeypatch):
+    with app.app_context():
+        db.drop_all()
+        db.create_all()
+        consulta_id = _criar_dados_basicos()
+
+    client = app.test_client()
+    with client:
+        client.post('/login', data={'email': 'vet@example.com', 'password': 'x'}, follow_redirects=True)
+        resp = client.post(
+            f'/consulta/{consulta_id}/bloco_orcamento',
+            headers={'Accept': 'application/json'},
+            json={'cobranca_tipo': 'particular'}
+        )
+        assert resp.status_code == 200
+        with app.app_context():
+            bloco = BlocoOrcamento.query.first()
+            bloco_id = bloco.id
+
+        class FakePrefService:
+            def create(self, data):
+                return {'status': 201, 'response': {'init_point': 'http://mp', 'id': 'pref-123'}}
+
+        class FakeSDK:
+            def preference(self):
+                return FakePrefService()
+
+        monkeypatch.setattr(app_module, 'mp_sdk', lambda: FakeSDK())
+        resp = client.post(
+            f'/consulta/{consulta_id}/pagar_orcamento?bloco_id={bloco_id}',
+            headers={'Accept': 'application/json'}
+        )
+        assert resp.status_code == 200
+        data = resp.get_json()
+        assert data['success']
+        assert data['pagamento_url'] == 'http://mp'
+        assert 'html' in data
+
+    with app.app_context():
+        bloco = BlocoOrcamento.query.get(bloco_id)
+        assert bloco.pagamento_status == 'pendente'
+        assert bloco.pagamento_link == 'http://mp'
+        assert bloco.pagamento_preference_id == 'pref-123'
         db.drop_all()

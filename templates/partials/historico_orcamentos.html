@@ -17,8 +17,27 @@
   <div class="card-body">
     <h5 class="card-title">💰 Histórico de Orçamentos</h5>
     {% for bloco in blocos|reverse %}
-    <div class="border rounded p-3 mb-3">
-      <h6 class="text-muted">Orçamento feito em {{ bloco.data_criacao|format_datetime_brazil('%d/%m/%Y %H:%M') }}</h6>
+    <div class="border rounded p-3 mb-3 orcamento-card" data-bloco-id="{{ bloco.id }}">
+      {% set status = (bloco.pagamento_status or 'rascunho') %}
+      {% set status_map = {'pago': ('success', 'Pago'), 'pendente': ('warning', 'Pendente'), 'falhou': ('danger', 'Falhou'), 'rascunho': ('secondary', 'Rascunho')} %}
+      {% set status_badge = status_map.get(status, ('secondary', status|capitalize)) %}
+      <div class="d-flex flex-column flex-md-row justify-content-between align-items-start gap-3">
+        <div>
+          <h6 class="text-muted mb-1">Orçamento feito em {{ bloco.data_criacao|format_datetime_brazil('%d/%m/%Y %H:%M') }}</h6>
+          <div class="d-flex flex-wrap gap-2">
+            <span class="badge bg-{{ status_badge[0] }}">{{ status_badge[1] }}</span>
+            <span class="badge bg-light text-dark border">{{ bloco.cobranca_tipo|default('plano')|capitalize }}</span>
+          </div>
+        </div>
+        {% if current_user.worker == 'veterinario' %}
+        <div class="d-flex flex-wrap gap-2">
+          <button type="button" class="btn btn-outline-success btn-sm btn-enviar-pagamento" data-bloco-id="{{ bloco.id }}" {% if status == 'pago' %}disabled{% endif %}>💸 Enviar para pagamento</button>
+          {% if bloco.pagamento_link %}
+            <a href="{{ bloco.pagamento_link }}" target="_blank" class="btn btn-outline-secondary btn-sm {% if status == 'pago' %}disabled{% endif %}" {% if status == 'pago' %}aria-disabled="true" tabindex="-1"{% endif %}>🔗 Abrir link</a>
+          {% endif %}
+        </div>
+        {% endif %}
+      </div>
       <ul class="list-group list-group-flush mb-2">
         {% for item in bloco.itens %}
         <li class="list-group-item d-flex justify-content-between">
@@ -27,10 +46,31 @@
         </li>
         {% endfor %}
         <li class="list-group-item d-flex justify-content-between">
+          <span>Subtotal</span>
+          <span>R$ {{ '%.2f'|format(bloco.total_bruto) }}</span>
+        </li>
+        {% if bloco.desconto_tipo %}
+        <li class="list-group-item d-flex justify-content-between text-danger">
+          <span>Desconto {% if bloco.desconto_tipo == 'percentual' and bloco.desconto_percentual %}({{ '%.2f'|format(bloco.desconto_percentual) }}%){% endif %}</span>
+          <span>- R$ {{ '%.2f'|format(bloco.desconto_valor or 0) }}</span>
+        </li>
+        <li class="list-group-item d-flex justify-content-between">
+          <strong>Total líquido</strong>
+          <strong>R$ {{ '%.2f'|format(bloco.total) }}</strong>
+        </li>
+        {% else %}
+        <li class="list-group-item d-flex justify-content-between">
           <strong>Total</strong>
           <strong>R$ {{ '%.2f'|format(bloco.total) }}</strong>
         </li>
+        {% endif %}
       </ul>
+      {% if bloco.observacoes_tutor %}
+      <div class="alert alert-info small mb-2">
+        <strong>Observações para o tutor:</strong>
+        <div>{{ bloco.observacoes_tutor }}</div>
+      </div>
+      {% endif %}
       <div class="d-flex flex-wrap gap-2">
         <form method="POST" action="{{ url_for('deletar_bloco_orcamento', bloco_id=bloco.id) }}" class="d-inline delete-history-form" data-sync data-target="historico-orcamentos" data-confirm="Deseja mesmo excluir este orçamento?">
           <button class="btn btn-danger btn-sm">🗑 Excluir</button>
@@ -38,6 +78,9 @@
         <a href="{{ url_for('imprimir_bloco_orcamento', bloco_id=bloco.id) }}" class="btn btn-outline-secondary btn-sm" target="_blank">🖨 Imprimir</a>
         <a href="{{ url_for('editar_bloco_orcamento', bloco_id=bloco.id) }}" class="btn btn-outline-primary btn-sm">✏️ Editar</a>
       </div>
+      {% if bloco.pagamento_atualizado_em %}
+      <small class="text-muted d-block mt-2">Atualizado em {{ bloco.pagamento_atualizado_em|format_datetime_brazil('%d/%m/%Y %H:%M') }}</small>
+      {% endif %}
     </div>
     {% endfor %}
   </div>

@@ -4,7 +4,7 @@ import requests
 from collections import defaultdict
 from io import BytesIO, StringIO
 from concurrent.futures import ThreadPoolExecutor
-from decimal import Decimal
+from decimal import Decimal, ROUND_HALF_UP, InvalidOperation
 from urllib.parse import urlparse, parse_qs
 from typing import Iterable, Optional, Set, Dict
 
@@ -202,6 +202,22 @@ def upload_profile_photo_async(user_id, data, content_type, filename):
 # ----------------------------------------------------------------
 
 BR_TZ = ZoneInfo("America/Sao_Paulo")
+MONEY_PLACES = Decimal('0.01')
+
+
+def _parse_decimal_value(value):
+    if value is None or value == '':
+        return None
+    try:
+        return Decimal(str(value))
+    except (InvalidOperation, ValueError, TypeError):
+        return None
+
+
+def _quantize_money(value):
+    if value is None:
+        return None
+    return value.quantize(MONEY_PLACES, rounding=ROUND_HALF_UP)
 
 
 # ----------------------------------------------------------------
@@ -10773,6 +10789,34 @@ def notificacoes_mercado_pago():
         "refunded": PaymentStatus.FAILED,
         "expired": PaymentStatus.FAILED,
     }
+    bloco_status_map = {
+        "approved": 'pago',
+        "authorized": 'pago',
+        "pending": 'pendente',
+        "in_process": 'pendente',
+        "in_mediation": 'pendente',
+        "rejected": 'falhou',
+        "cancelled": 'falhou',
+        "refunded": 'falhou',
+        "expired": 'falhou',
+    }
+
+    if extref.startswith('bloco_orcamento-'):
+        try:
+            bloco_id = int(extref.split('-', 1)[1])
+        except (ValueError, IndexError):
+            return jsonify(status="ignored"), 200
+        bloco = BlocoOrcamento.query.get(bloco_id)
+        if not bloco:
+            return jsonify(status="ignored"), 200
+        bloco.pagamento_status = bloco_status_map.get(status, 'pendente')
+        bloco.pagamento_atualizado_em = datetime.utcnow()
+        if info.get('init_point'):
+            bloco.pagamento_link = info.get('init_point')
+        if info.get('preference_id'):
+            bloco.pagamento_preference_id = info.get('preference_id')
+        db.session.commit()
+        return jsonify(status="updated"), 200
 
     try:
         with db.session.begin():
@@ -14204,29 +14248,65 @@ def pagar_bloco_orcamento(bloco_id):
         return redirect(url_for('consulta_direct', animal_id=bloco.animal_id))
 
     pref = resp['response']
+    bloco.pagamento_status = 'pendente'
+    bloco.pagamento_link = pref.get('init_point')
+    bloco.pagamento_preference_id = pref.get('id') or pref.get('preference_id')
+    bloco.pagamento_atualizado_em = datetime.utcnow()
+    db.session.commit()
     return redirect(pref['init_point'])
 
-@app.route('/consulta/<int:consulta_id>/pagar_orcamento')
+def _orcamento_payment_error(message, wants_json, animal_id, category='danger', status=400):
+    if wants_json:
+        return jsonify({'success': False, 'message': message}), status
+    flash(message, category)
+    return redirect(url_for('consulta_direct', animal_id=animal_id))
+
+
+@app.route('/consulta/<int:consulta_id>/pagar_orcamento', methods=['GET', 'POST'])
 @login_required
 def pagar_orcamento(consulta_id):
     consulta = get_consulta_or_404(consulta_id)
-    if not consulta.orcamento_items:
-        flash('Nenhum item no orçamento.', 'warning')
-        return redirect(url_for('consulta_direct', animal_id=consulta.animal_id))
+    wants_json = 'application/json' in request.headers.get('Accept', '') or request.is_json
+    bloco_id = request.args.get('bloco_id', type=int)
+    if bloco_id is None:
+        data = request.get_json(silent=True) or {}
+        bloco_id = data.get('bloco_id')
+    bloco = None
 
-    items = [
-        {
-            'id': str(it.id),
-            'title': it.descricao,
-            'quantity': 1,
-            'unit_price': float(it.valor),
-        }
-        for it in consulta.orcamento_items
-    ]
+    if bloco_id:
+        bloco = BlocoOrcamento.query.get_or_404(bloco_id)
+        ensure_clinic_access(bloco.clinica_id)
+        if bloco.animal_id != consulta.animal_id:
+            return _orcamento_payment_error('Bloco não pertence a este animal.', wants_json, consulta.animal_id)
+        if not bloco.itens:
+            return _orcamento_payment_error('Nenhum item no orçamento.', wants_json, consulta.animal_id, category='warning')
+        items = [
+            {
+                'id': f'bloco-{bloco.id}',
+                'title': f"Orçamento #{bloco.id} - {bloco.animal.name}",
+                'quantity': 1,
+                'unit_price': float(bloco.total),
+            }
+        ]
+        external_reference = f'bloco_orcamento-{bloco.id}'
+    else:
+        if not consulta.orcamento_items:
+            return _orcamento_payment_error('Nenhum item no orçamento.', wants_json, consulta.animal_id, category='warning')
+        ensure_clinic_access(consulta.clinica_id)
+        items = [
+            {
+                'id': str(it.id),
+                'title': it.descricao,
+                'quantity': 1,
+                'unit_price': float(it.valor),
+            }
+            for it in consulta.orcamento_items
+        ]
+        external_reference = f'consulta-{consulta.id}'
 
     preference_data = {
         'items': items,
-        'external_reference': f'consulta-{consulta.id}',
+        'external_reference': external_reference,
         'notification_url': url_for('notificacoes_mercado_pago', _external=True),
         'statement_descriptor': current_app.config.get('MERCADOPAGO_STATEMENT_DESCRIPTOR'),
         'back_urls': {
@@ -14240,15 +14320,32 @@ def pagar_orcamento(consulta_id):
         resp = mp_sdk().preference().create(preference_data)
     except Exception:
         current_app.logger.exception('Erro de conexão com Mercado Pago')
-        flash('Falha ao conectar com Mercado Pago.', 'danger')
-        return redirect(url_for('consulta_direct', animal_id=consulta.animal_id))
+        return _orcamento_payment_error('Falha ao conectar com Mercado Pago.', wants_json, consulta.animal_id)
 
     if resp.get('status') != 201:
         current_app.logger.error('MP error (HTTP %s): %s', resp.get('status'), resp)
-        flash('Erro ao iniciar pagamento.', 'danger')
-        return redirect(url_for('consulta_direct', animal_id=consulta.animal_id))
+        return _orcamento_payment_error('Erro ao iniciar pagamento.', wants_json, consulta.animal_id)
 
     pref = resp['response']
+
+    historico_html = None
+    if bloco:
+        bloco.pagamento_status = 'pendente'
+        bloco.pagamento_link = pref.get('init_point')
+        bloco.pagamento_preference_id = pref.get('id') or pref.get('preference_id')
+        bloco.pagamento_atualizado_em = datetime.utcnow()
+        db.session.commit()
+        historico_html = _render_orcamento_history(bloco.animal, bloco.clinica_id)
+
+    if wants_json:
+        payload = {'success': True, 'pagamento_url': pref.get('init_point'), 'external_reference': external_reference}
+        if bloco:
+            payload['bloco_id'] = bloco.id
+            payload['pagamento_status'] = bloco.pagamento_status
+        if historico_html:
+            payload['html'] = historico_html
+        return jsonify(payload)
+
     return redirect(pref['init_point'])
 
 
@@ -14340,16 +14437,52 @@ def salvar_bloco_orcamento(consulta_id):
         return jsonify({'success': False, 'message': 'Apenas veterinários podem salvar orçamento.'}), 403
     if not consulta.orcamento_items:
         return jsonify({'success': False, 'message': 'Nenhum item no orçamento.'}), 400
+    data = request.get_json(silent=True) or {}
+    cobranca_tipo = (data.get('cobranca_tipo') or 'plano').lower()
+    if cobranca_tipo not in {'plano', 'particular'}:
+        cobranca_tipo = 'plano'
+    percentual = _parse_decimal_value(data.get('desconto_percentual'))
+    valor_desconto = _parse_decimal_value(data.get('desconto_valor'))
+    observacoes = (data.get('observacoes_tutor') or '').strip() or None
+    if percentual is not None and percentual <= 0:
+        percentual = None
+    if valor_desconto is not None and valor_desconto <= 0:
+        valor_desconto = None
+
     bloco = BlocoOrcamento(animal_id=consulta.animal_id, clinica_id=consulta.clinica_id)
+    bloco.cobranca_tipo = cobranca_tipo
+    bloco.observacoes_tutor = observacoes
+    bloco.pagamento_status = 'rascunho'
+    bloco.pagamento_link = None
+    bloco.pagamento_preference_id = None
+    bloco.pagamento_atualizado_em = None
     db.session.add(bloco)
     db.session.flush()
     for item in list(consulta.orcamento_items):
         item.bloco_id = bloco.id
         item.consulta_id = None
         db.session.add(item)
+
+    total_bruto = sum((item.valor for item in bloco.itens), Decimal('0'))
+    desconto_tipo = None
+    desconto_valor_total = Decimal('0')
+    if cobranca_tipo == 'particular':
+        if percentual is not None:
+            percentual = min(percentual, Decimal('100'))
+            desconto_tipo = 'percentual'
+            desconto_valor_total = _quantize_money(total_bruto * (percentual / Decimal('100')))
+        elif valor_desconto is not None:
+            desconto_tipo = 'valor'
+            desconto_valor_total = _quantize_money(min(valor_desconto, total_bruto))
+
+    total_liquido = _quantize_money(max(total_bruto - desconto_valor_total, Decimal('0')))
+    bloco.desconto_tipo = desconto_tipo
+    bloco.desconto_percentual = percentual if desconto_tipo == 'percentual' else None
+    bloco.desconto_valor = desconto_valor_total if desconto_tipo else None
+    bloco.total_liquido = total_liquido
     db.session.commit()
     historico_html = _render_orcamento_history(consulta.animal, consulta.clinica_id)
-    return jsonify({'success': True, 'html': historico_html})
+    return jsonify({'success': True, 'html': historico_html, 'bloco_id': bloco.id})
 
 
 @app.route('/bloco_orcamento/<int:bloco_id>/deletar', methods=['POST'])
