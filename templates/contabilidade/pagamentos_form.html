@@ -1,0 +1,83 @@
+{% extends "layout.html" %}
+{% set titulo = form_title or "Pagamento PJ" %}
+
+{% block content %}
+<div class="container py-4">
+  <div class="d-flex flex-wrap align-items-center justify-content-between gap-3 mb-3">
+    <div>
+      <h2 class="fw-semibold mb-1">{{ titulo }}</h2>
+      <p class="text-muted mb-0">Preencha os dados do prestador PJ e registre o repasse.</p>
+    </div>
+    <a href="{{ cancel_url }}" class="btn btn-outline-secondary rounded-pill">
+      <i class="fas fa-arrow-left me-1"></i>Voltar para a lista
+    </a>
+  </div>
+
+  <nav aria-label="breadcrumb" class="mb-4">
+    <ol class="breadcrumb bg-white px-3 py-2 rounded shadow-sm">
+      <li class="breadcrumb-item"><a href="/">Início</a></li>
+      <li class="breadcrumb-item"><a href="/contabilidade">Contabilidade</a></li>
+      <li class="breadcrumb-item"><a href="/contabilidade/pagamentos">Pagamentos / PJs</a></li>
+      <li class="breadcrumb-item active" aria-current="page">{{ titulo }}</li>
+    </ol>
+  </nav>
+
+  <div class="card border-0 shadow-sm">
+    <div class="card-body">
+      <form method="post" novalidate>
+        {{ form.hidden_tag() }}
+        <div class="row g-3">
+          <div class="col-md-6">
+            <label class="form-label fw-semibold">{{ form.clinic_id.label }}</label>
+            {{ form.clinic_id(class="form-select" + (' is-invalid' if form.clinic_id.errors else '')) }}
+            {% for error in form.clinic_id.errors %}<div class="invalid-feedback d-block">{{ error }}</div>{% endfor %}
+          </div>
+          <div class="col-md-6">
+            <label class="form-label fw-semibold">{{ form.prestador_nome.label }}</label>
+            {{ form.prestador_nome(class="form-control" + (' is-invalid' if form.prestador_nome.errors else ''), placeholder="Nome completo ou razão social") }}
+            {% for error in form.prestador_nome.errors %}<div class="invalid-feedback d-block">{{ error }}</div>{% endfor %}
+          </div>
+          <div class="col-md-4">
+            <label class="form-label fw-semibold">{{ form.prestador_cnpj.label }}</label>
+            {{ form.prestador_cnpj(class="form-control" + (' is-invalid' if form.prestador_cnpj.errors else '')) }}
+            <small class="text-muted">Informe os 14 dígitos (com ou sem máscara).</small>
+            {% for error in form.prestador_cnpj.errors %}<div class="invalid-feedback d-block">{{ error }}</div>{% endfor %}
+          </div>
+          <div class="col-md-4">
+            <label class="form-label fw-semibold">{{ form.nota_fiscal_numero.label }}</label>
+            {{ form.nota_fiscal_numero(class="form-control" + (' is-invalid' if form.nota_fiscal_numero.errors else ''), placeholder="Ex: NF 12345") }}
+            {% for error in form.nota_fiscal_numero.errors %}<div class="invalid-feedback d-block">{{ error }}</div>{% endfor %}
+          </div>
+          <div class="col-md-4">
+            <label class="form-label fw-semibold">{{ form.valor.label }}</label>
+            {{ form.valor(class="form-control" + (' is-invalid' if form.valor.errors else ''), placeholder="0,00") }}
+            {% for error in form.valor.errors %}<div class="invalid-feedback d-block">{{ error }}</div>{% endfor %}
+          </div>
+          <div class="col-md-4">
+            <label class="form-label fw-semibold">{{ form.data_servico.label }}</label>
+            {{ form.data_servico(class="form-control" + (' is-invalid' if form.data_servico.errors else ''), type="date") }}
+            {% for error in form.data_servico.errors %}<div class="invalid-feedback d-block">{{ error }}</div>{% endfor %}
+          </div>
+          <div class="col-md-4">
+            <label class="form-label fw-semibold">{{ form.data_pagamento.label }}</label>
+            {{ form.data_pagamento(class="form-control" + (' is-invalid' if form.data_pagamento.errors else ''), type="date") }}
+            <small class="text-muted">Ao informar a data, o status será marcado como pago.</small>
+            {% for error in form.data_pagamento.errors %}<div class="invalid-feedback d-block">{{ error }}</div>{% endfor %}
+          </div>
+          <div class="col-12">
+            <label class="form-label fw-semibold">{{ form.observacoes.label }}</label>
+            {{ form.observacoes(class="form-control" + (' is-invalid' if form.observacoes.errors else ''), rows="3", placeholder="Notas internas, percentual de repasse, etc.") }}
+            {% for error in form.observacoes.errors %}<div class="invalid-feedback d-block">{{ error }}</div>{% endfor %}
+          </div>
+        </div>
+        <div class="d-flex justify-content-end gap-2 mt-4">
+          <a href="{{ cancel_url }}" class="btn btn-link text-muted">Cancelar</a>
+          <button type="submit" class="btn btn-primary rounded-pill px-4">
+            <i class="fas fa-save me-2"></i>{{ submit_label or 'Salvar' }}
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}

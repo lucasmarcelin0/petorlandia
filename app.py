@@ -999,6 +999,32 @@ def digits_only(value):
     return "".join(filter(str.isdigit, value)) if value else ""
 
 
+@app.template_filter("format_cnpj")
+def format_cnpj(value):
+    """Return a formatted CNPJ (00.000.000/0000-00)."""
+    if not value:
+        return ""
+    digits = "".join(ch for ch in str(value) if ch.isdigit())
+    if len(digits) == 14:
+        return f"{digits[:2]}.{digits[2:5]}.{digits[5:8]}/{digits[8:12]}-{digits[12:]}"
+    return value
+
+
+@app.template_filter("currency_br")
+def currency_br(value):
+    """Format numeric values using the Brazilian currency style."""
+    if value is None:
+        value = Decimal("0")
+    if not isinstance(value, Decimal):
+        try:
+            value = Decimal(str(value))
+        except (ArithmeticError, ValueError):
+            return str(value)
+    quantized = value.quantize(Decimal("0.01"))
+    formatted = f"{quantized:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+    return f"R$ {formatted}"
+
+
 @app.template_filter("payment_status_label")
 def payment_status_label(value):
     """Translate payment status codes to Portuguese labels."""
@@ -1158,6 +1184,7 @@ from forms import (
     MessageForm,
     OrcamentoForm,
     OrderItemForm,
+    PJPaymentForm,
     ProductPhotoForm,
     ProductUpdateForm,
     RegistrationForm,
@@ -2585,6 +2612,89 @@ def _ensure_accounting_access():
     abort(403)
 
 
+def _accounting_accessible_clinics():
+    """Return (clinics, clinic_ids) accessible for the accounting module."""
+
+    clinics = []
+    if _is_admin():
+        clinics = Clinica.query.order_by(Clinica.nome.asc()).all()
+        return clinics, {clinic.id for clinic in clinics if clinic.id}
+
+    accessible_ids = set()
+    if current_user.is_authenticated:
+        accessible_ids.update(_collect_clinic_ids(viewer=current_user))
+        for clinic in getattr(current_user, 'clinicas', []) or []:
+            if clinic and clinic.id:
+                accessible_ids.add(clinic.id)
+                clinics.append(clinic)
+
+    existing_ids = {clinic.id for clinic in clinics if clinic.id}
+    missing_ids = [cid for cid in accessible_ids if cid and cid not in existing_ids]
+    if missing_ids:
+        clinics.extend(
+            Clinica.query.filter(Clinica.id.in_(missing_ids)).order_by(Clinica.nome.asc()).all()
+        )
+
+    clinics.sort(key=lambda clinic: (clinic.nome or '').lower())
+    return clinics, {clinic.id for clinic in clinics if clinic.id}
+
+
+def _parse_month_parameter(month_value):
+    base_date = date.today().replace(day=1)
+    if not month_value:
+        return base_date
+    try:
+        year_str, month_str = month_value.split('-', 1)
+        parsed_date = date(int(year_str), int(month_str), 1)
+    except (ValueError, TypeError):
+        return base_date
+    return parsed_date
+
+
+def _format_month_parameter(reference_date):
+    if reference_date is None:
+        reference_date = date.today()
+    if isinstance(reference_date, datetime):
+        reference_date = reference_date.date()
+    return reference_date.replace(day=1).strftime('%Y-%m')
+
+
+def _sync_pj_payment_classification(payment):
+    """Create or update the classified transaction entry for a PJ payment."""
+
+    if not payment or not payment.id:
+        return
+
+    reference_date = payment.data_pagamento or payment.data_servico or date.today()
+    entry_datetime = datetime.combine(reference_date, time.min)
+    month_reference = reference_date.replace(day=1)
+
+    classification = ClassifiedTransaction.query.filter_by(
+        origin='pj_payment', raw_id=str(payment.id)
+    ).first()
+    if classification is None:
+        classification = ClassifiedTransaction(
+            origin='pj_payment',
+            raw_id=str(payment.id),
+        )
+
+    description = f"Pagamento PJ - {payment.prestador_nome}"[:255]
+    classification.clinic_id = payment.clinic_id
+    classification.category = 'pagamento_pj'
+    classification.subcategory = 'prestador_servico'
+    classification.description = description
+    classification.value = payment.valor
+    classification.date = entry_datetime
+    classification.month = month_reference
+    db.session.add(classification)
+
+
+def _delete_pj_payment_classification(payment_id):
+    if not payment_id:
+        return
+    ClassifiedTransaction.query.filter_by(origin='pj_payment', raw_id=str(payment_id)).delete()
+
+
 @app.route('/contabilidade')
 @login_required
 def contabilidade_home():
@@ -2603,7 +2713,220 @@ def contabilidade_financeiro():
 @login_required
 def contabilidade_pagamentos():
     _ensure_accounting_access()
-    return render_template('contabilidade/pagamentos.html')
+    clinics, accessible_ids = _accounting_accessible_clinics()
+
+    requested_clinic_id = request.args.get('clinica_id', type=int)
+    selected_clinic_id = None
+    if requested_clinic_id and requested_clinic_id in accessible_ids:
+        selected_clinic_id = requested_clinic_id
+    elif clinics:
+        selected_clinic_id = clinics[0].id
+
+    selected_clinic = None
+    if selected_clinic_id:
+        selected_clinic = next((c for c in clinics if c.id == selected_clinic_id), None)
+
+    selected_month = _parse_month_parameter(request.args.get('mes'))
+    start_date = selected_month
+    end_date = selected_month + relativedelta(months=1)
+
+    payments = []
+    if selected_clinic_id:
+        payments = (
+            PJPayment.query.filter(PJPayment.clinic_id == selected_clinic_id)
+            .filter(PJPayment.data_servico >= start_date)
+            .filter(PJPayment.data_servico < end_date)
+            .order_by(PJPayment.data_servico.desc(), PJPayment.id.desc())
+            .all()
+        )
+
+    total_pago = sum((payment.valor or Decimal('0.00')) for payment in payments if payment.status == 'pago')
+    total_pendente = sum((payment.valor or Decimal('0.00')) for payment in payments if payment.status == 'pendente')
+
+    context_month_value = selected_month.strftime('%Y-%m')
+
+    return render_template(
+        'contabilidade/pagamentos.html',
+        clinics=clinics,
+        payments=payments,
+        selected_clinic=selected_clinic,
+        selected_clinic_id=selected_clinic_id,
+        selected_month=selected_month,
+        month_value=context_month_value,
+        prev_month_value=(selected_month - relativedelta(months=1)).strftime('%Y-%m'),
+        next_month_value=(selected_month + relativedelta(months=1)).strftime('%Y-%m'),
+        total_pago=total_pago,
+        total_pendente=total_pendente,
+    )
+
+
+@app.route('/contabilidade/pagamentos/novo', methods=['GET', 'POST'])
+@login_required
+def contabilidade_pagamentos_novo():
+    _ensure_accounting_access()
+    clinics, accessible_ids = _accounting_accessible_clinics()
+    if not clinics:
+        flash('Associe-se a uma clínica antes de registrar pagamentos PJ.', 'warning')
+        return redirect(url_for('contabilidade_pagamentos'))
+
+    form = PJPaymentForm()
+    form.clinic_id.choices = [(clinic.id, clinic.nome or f'Clínica #{clinic.id}') for clinic in clinics]
+    default_clinic_id = request.args.get('clinica_id', type=int) or clinics[0].id
+    if request.method == 'GET':
+        form.clinic_id.data = default_clinic_id
+        form.data_servico.data = date.today()
+
+    if form.validate_on_submit():
+        clinic_id = form.clinic_id.data
+        if clinic_id not in accessible_ids:
+            abort(403)
+
+        payment = PJPayment(
+            clinic_id=clinic_id,
+            prestador_nome=form.prestador_nome.data.strip(),
+            prestador_cnpj=''.join(ch for ch in (form.prestador_cnpj.data or '') if ch.isdigit()),
+            nota_fiscal_numero=(form.nota_fiscal_numero.data or '').strip() or None,
+            valor=form.valor.data,
+            data_servico=form.data_servico.data,
+            data_pagamento=form.data_pagamento.data,
+            observacoes=(form.observacoes.data or '').strip() or None,
+        )
+        payment.status = 'pago' if payment.data_pagamento else 'pendente'
+
+        db.session.add(payment)
+        db.session.flush()
+        _sync_pj_payment_classification(payment)
+        db.session.commit()
+
+        flash('Pagamento PJ registrado com sucesso!', 'success')
+        return redirect(
+            url_for(
+                'contabilidade_pagamentos',
+                clinica_id=clinic_id,
+                mes=_format_month_parameter(payment.data_servico),
+            )
+        )
+
+    cancel_url = url_for(
+        'contabilidade_pagamentos',
+        clinica_id=default_clinic_id,
+        mes=request.args.get('mes') or _format_month_parameter(date.today()),
+    )
+
+    return render_template(
+        'contabilidade/pagamentos_form.html',
+        form=form,
+        form_title='Novo pagamento PJ',
+        submit_label='Salvar pagamento',
+        cancel_url=cancel_url,
+    )
+
+
+@app.route('/contabilidade/pagamentos/<int:payment_id>/editar', methods=['GET', 'POST'])
+@login_required
+def contabilidade_pagamentos_editar(payment_id):
+    _ensure_accounting_access()
+    payment = PJPayment.query.get_or_404(payment_id)
+    clinics, accessible_ids = _accounting_accessible_clinics()
+    if clinics:
+        clinic_choices = [(clinic.id, clinic.nome or f'Clínica #{clinic.id}') for clinic in clinics]
+    else:
+        clinic_choices = [(payment.clinic_id, getattr(payment.clinic, 'nome', f'Clínica #{payment.clinic_id}'))]
+
+    if payment.clinic_id not in accessible_ids and not _is_admin():
+        abort(403)
+
+    form = PJPaymentForm(obj=payment)
+    form.clinic_id.choices = clinic_choices
+    if request.method == 'GET':
+        form.clinic_id.data = payment.clinic_id
+
+    if form.validate_on_submit():
+        clinic_id = form.clinic_id.data
+        if clinic_id not in accessible_ids and not _is_admin():
+            abort(403)
+
+        payment.clinic_id = clinic_id
+        payment.prestador_nome = form.prestador_nome.data.strip()
+        payment.prestador_cnpj = ''.join(ch for ch in (form.prestador_cnpj.data or '') if ch.isdigit())
+        payment.nota_fiscal_numero = (form.nota_fiscal_numero.data or '').strip() or None
+        payment.valor = form.valor.data
+        payment.data_servico = form.data_servico.data
+        payment.data_pagamento = form.data_pagamento.data
+        payment.observacoes = (form.observacoes.data or '').strip() or None
+        payment.status = 'pago' if payment.data_pagamento else 'pendente'
+
+        db.session.flush()
+        _sync_pj_payment_classification(payment)
+        db.session.commit()
+
+        flash('Pagamento PJ atualizado com sucesso!', 'success')
+        return redirect(
+            url_for(
+                'contabilidade_pagamentos',
+                clinica_id=clinic_id,
+                mes=_format_month_parameter(payment.data_servico),
+            )
+        )
+
+    cancel_url = url_for(
+        'contabilidade_pagamentos',
+        clinica_id=payment.clinic_id,
+        mes=request.args.get('mes') or _format_month_parameter(payment.data_servico),
+    )
+
+    return render_template(
+        'contabilidade/pagamentos_form.html',
+        form=form,
+        form_title='Editar pagamento PJ',
+        submit_label='Atualizar pagamento',
+        cancel_url=cancel_url,
+        editing=True,
+    )
+
+
+@app.route('/contabilidade/pagamentos/<int:payment_id>/delete', methods=['POST'])
+@login_required
+def contabilidade_pagamentos_delete(payment_id):
+    _ensure_accounting_access()
+    payment = PJPayment.query.get_or_404(payment_id)
+    _, accessible_ids = _accounting_accessible_clinics()
+    if payment.clinic_id not in accessible_ids and not _is_admin():
+        abort(403)
+
+    clinic_id = payment.clinic_id
+    month_value = request.args.get('mes') or _format_month_parameter(payment.data_servico)
+
+    _delete_pj_payment_classification(payment.id)
+    db.session.delete(payment)
+    db.session.commit()
+
+    flash('Pagamento PJ excluído com sucesso.', 'success')
+    return redirect(url_for('contabilidade_pagamentos', clinica_id=clinic_id, mes=month_value))
+
+
+@app.route('/contabilidade/pagamentos/<int:payment_id>/marcar_pago', methods=['POST'])
+@login_required
+def contabilidade_pagamentos_marcar_pago(payment_id):
+    _ensure_accounting_access()
+    payment = PJPayment.query.get_or_404(payment_id)
+    _, accessible_ids = _accounting_accessible_clinics()
+    if payment.clinic_id not in accessible_ids and not _is_admin():
+        abort(403)
+
+    if payment.status != 'pago':
+        payment.status = 'pago'
+        if not payment.data_pagamento:
+            payment.data_pagamento = date.today()
+        db.session.flush()
+        _sync_pj_payment_classification(payment)
+        db.session.commit()
+        flash('Pagamento marcado como pago.', 'success')
+    else:
+        flash('Pagamento já estava marcado como pago.', 'info')
+
+    month_value = request.args.get('mes') or _format_month_parameter(payment.data_servico)
+    return redirect(url_for('contabilidade_pagamentos', clinica_id=payment.clinic_id, mes=month_value))
 
 
 @app.route('/contabilidade/obrigacoes')
