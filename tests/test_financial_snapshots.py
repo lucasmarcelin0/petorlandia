@@ -318,3 +318,86 @@ def test_generate_clinic_notifications_marks_alert_resolved(app):
             title="Prestador sem nota fiscal",
         ).one()
         assert resolved_alert.resolved is True
+
+
+def test_contabilidade_pagamentos_auto_classifies_transactions(app):
+    with app.app_context():
+        clinic = _create_clinic_with_data()
+        clinic_id = clinic.id
+        admin = User(name="Admin", email="admin@example.com", role="admin")
+        admin.set_password("secret")
+        db.session.add(admin)
+        db.session.commit()
+
+        assert ClassifiedTransaction.query.count() == 0
+
+    client = app.test_client()
+    with client:
+        login_response = client.post(
+            '/login',
+            data={'email': 'admin@example.com', 'password': 'secret'},
+            follow_redirects=True,
+        )
+        assert login_response.status_code == 200
+
+        month_value = '2024-05'
+        response = client.get(
+            f'/contabilidade/pagamentos?clinica_id={clinic_id}&mes={month_value}',
+            follow_redirects=True,
+        )
+        assert response.status_code == 200
+
+        with app.app_context():
+            entries = ClassifiedTransaction.query.order_by(ClassifiedTransaction.id).all()
+            assert len(entries) == 3
+            values = sorted(entry.value for entry in entries)
+            assert values == [Decimal('100.00'), Decimal('120.50'), Decimal('12000.00')]
+
+            orcamento = Orcamento.query.filter_by(clinica_id=clinic_id).first()
+            servico = ServicoClinica.query.filter_by(clinica_id=clinic_id).first()
+            db.session.add(
+                OrcamentoItem(
+                    orcamento_id=orcamento.id,
+                    clinica_id=clinic_id,
+                    descricao='Retorno detalhado',
+                    valor=Decimal('80.00'),
+                    servico_id=servico.id,
+                )
+            )
+            db.session.commit()
+
+        second_response = client.get(
+            f'/contabilidade/pagamentos?clinica_id={clinic_id}&mes={month_value}',
+            follow_redirects=True,
+        )
+        assert second_response.status_code == 200
+
+        with app.app_context():
+            entries = ClassifiedTransaction.query.order_by(ClassifiedTransaction.id).all()
+            assert len(entries) == 4
+            new_entry = ClassifiedTransaction.query.filter_by(value=Decimal('80.00')).one()
+            assert new_entry.description == 'Retorno detalhado'
+
+
+def test_cli_classify_transactions_history_backfills_data(app):
+    with app.app_context():
+        clinic = _create_clinic_with_data()
+        clinic_id = clinic.id
+        assert ClassifiedTransaction.query.count() == 0
+
+    runner = app.test_cli_runner()
+    result = runner.invoke(
+        args=[
+            'classify-transactions-history',
+            '--months',
+            '1',
+            '--clinic-id',
+            str(clinic_id),
+            '--reference-month',
+            '2024-05',
+        ],
+    )
+    assert result.exit_code == 0
+
+    with app.app_context():
+        assert ClassifiedTransaction.query.count() == 3

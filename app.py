@@ -17,6 +17,7 @@ from PIL import Image
 
 
 from apscheduler.schedulers.background import BackgroundScheduler
+import click
 from dotenv import load_dotenv
 from flask import (
     Flask,
@@ -34,6 +35,7 @@ from flask import (
     has_request_context,
     make_response,
 )
+from flask.cli import with_appcontext
 from flask_cors import CORS
 from flask_socketio import SocketIO, disconnect, emit, join_room, leave_room
 from twilio.rest import Client
@@ -1246,6 +1248,7 @@ from services import (
     summarize_plan_metrics,
     update_financial_snapshots_daily,
 )
+from services.finance import classify_transactions_for_month
 from services.animal_search import search_animals
 
 
@@ -2711,6 +2714,67 @@ def _delete_pj_payment_classification(payment_id):
     ClassifiedTransaction.query.filter_by(origin='pj_payment', raw_id=str(payment_id)).delete()
 
 
+@app.cli.command('classify-transactions-history')
+@click.option('--months', type=click.IntRange(1, 36), default=6, show_default=True, help='Quantidade de meses a reprocessar, contando a partir do mês de referência.')
+@click.option(
+    '--clinic-id',
+    'clinic_ids',
+    type=int,
+    multiple=True,
+    help='Limite o processamento a clínicas específicas (pode ser informado múltiplas vezes).',
+)
+@click.option(
+    '--reference-month',
+    type=str,
+    default=None,
+    help='Mês base (YYYY-MM) para iniciar a varredura; padrão: mês atual.',
+)
+@with_appcontext
+def classify_transactions_history(months, clinic_ids, reference_month):
+    """Reprocessa classificações de receitas e despesas para meses anteriores."""
+
+    base_month = date.today().replace(day=1)
+    if reference_month:
+        try:
+            reference_date = datetime.strptime(reference_month, '%Y-%m')
+            base_month = reference_date.date().replace(day=1)
+        except ValueError as exc:
+            raise click.BadParameter('Use o formato YYYY-MM em --reference-month.') from exc
+    month_starts = sorted(
+        base_month - relativedelta(months=offset)
+        for offset in range(months)
+    )
+
+    query = Clinica.query
+    if clinic_ids:
+        query = query.filter(Clinica.id.in_(clinic_ids))
+    clinics = query.order_by(Clinica.id.asc()).all()
+    if not clinics:
+        click.echo('Nenhuma clínica encontrada para processar.')
+        return
+
+    processed = 0
+    for clinic in clinics:
+        for month_start in month_starts:
+            try:
+                classify_transactions_for_month(clinic.id, month_start)
+                processed += 1
+            except Exception as exc:
+                db.session.rollback()
+                current_app.logger.exception(
+                    'Falha ao classificar transações para a clínica %s no mês %s',
+                    clinic.id,
+                    month_start,
+                )
+                click.echo(
+                    f"Erro ao classificar a clínica {clinic.id} no mês {month_start:%Y-%m}: {exc}",
+                    err=True,
+                )
+    click.echo(
+        f'Classificação executada para {processed} combinações de clínica/mês.'
+    )
+
+
 @app.route('/contabilidade')
 @login_required
 def contabilidade_home():
@@ -2914,6 +2978,15 @@ def contabilidade_pagamentos():
     payments: list[PJPayment] = []
     payments_error = None
     if selected_clinic_id:
+        try:
+            classify_transactions_for_month(selected_clinic_id, start_date)
+        except Exception:
+            db.session.rollback()
+            current_app.logger.exception(
+                "Falha ao classificar transações para a clínica %s no mês %s",
+                selected_clinic_id,
+                start_date,
+            )
         try:
             payments = (
                 PJPayment.query.filter(PJPayment.clinic_id == selected_clinic_id)
