@@ -192,6 +192,74 @@ def upload_profile_photo_async(user_id, data, content_type, filename):
 
     executor.submit(_task)
 
+
+def _save_plan_upload(file_storage, prefix: str) -> str | None:
+    """Helper to store onboarding documents in S3/local storage."""
+    if not file_storage:
+        return None
+    filename = file_storage.filename or f"{prefix}.pdf"
+    safe_name = secure_filename(filename)
+    final_name = f"{prefix}_{int(datetime.utcnow().timestamp())}_{safe_name}"
+    return upload_to_s3(file_storage, final_name, folder="planos")
+
+
+def _active_subscriptions_for_animal(animal_id: int):
+    from models import HealthSubscription
+
+    now = datetime.utcnow()
+    return (
+        HealthSubscription.query
+        .filter(
+            HealthSubscription.animal_id == animal_id,
+            HealthSubscription.active.is_(True),
+            or_(HealthSubscription.end_date.is_(None), HealthSubscription.end_date > now),
+        )
+        .all()
+    )
+
+
+def _status_badge(status: str | None) -> str:
+    mapping = {
+        'approved': 'success',
+        'approved_with_copay': 'warning',
+        'partial': 'warning',
+        'limit_exceeded': 'danger',
+        'denied': 'danger',
+        'waiting_period': 'warning',
+    }
+    return mapping.get((status or 'pending').lower(), 'secondary')
+
+
+def _consulta_requires_authorization(consulta) -> bool:
+    if not consulta:
+        return False
+    if consulta.health_authorization_status in {'approved', 'approved_with_copay', 'not_required'}:
+        return False
+    if not getattr(consulta, 'orcamento_items', None):
+        return False
+    if not current_app.config.get('HEALTH_PLAN_REQUIRE_AUTHORIZATION', True):
+        return False
+    return bool(_active_subscriptions_for_animal(consulta.animal_id))
+
+
+def _require_insurer_token():
+    expected = current_app.config.get('INSURER_API_TOKEN')
+    if not expected:
+        return True
+    provided = request.headers.get('X-INSURER-TOKEN')
+    if provided != expected:
+        abort(401)
+    return True
+
+
+@app.errorhandler(404)
+def handle_not_found(error):
+    app.logger.warning('404 %s: %s', request.path, getattr(error, 'description', ''))
+    description = getattr(error, 'description', None)
+    if description:
+        return description, 404
+    return 'Recurso não encontrado', 404
+
 # ----------------------------------------------------------------
 # 5)  Filtros Jinja para data BR
 # ----------------------------------------------------------------
@@ -958,6 +1026,7 @@ from forms import (
     ResetPasswordForm,
     ResetPasswordRequestForm,
     SubscribePlanForm,
+    HealthAuthorizationForm,
     VetScheduleForm,
     VetSpecialtyForm,
     VeterinarianMembershipCheckoutForm,
@@ -1000,7 +1069,7 @@ def current_user_clinic_id():
         return None
     if has_veterinarian_profile(current_user):
         return getattr(current_user.veterinario, 'clinica_id', None)
-    return current_user.clinica_id
+    return getattr(current_user, 'clinica_id', None)
 
 
 def _collect_clinic_ids(viewer=None, clinic_scope=None):
@@ -1109,19 +1178,39 @@ def ensure_clinic_access(clinica_id):
 def get_animal_or_404(animal_id):
     """Return animal if accessible to current user, otherwise 404."""
     animal = Animal.query.get_or_404(animal_id)
-    ensure_clinic_access(animal.clinica_id)
+    viewer = current_user if current_user.is_authenticated else None
+    viewer_clinic_id = current_user_clinic_id() if viewer else None
+    enforce_clinic_scope = True
+    if viewer:
+        if getattr(viewer, 'role', None) == 'admin':
+            enforce_clinic_scope = False
+        elif has_veterinarian_profile(viewer):
+            enforce_clinic_scope = False
+        elif getattr(viewer, 'worker', None) == 'colaborador':
+            enforce_clinic_scope = False
+    if enforce_clinic_scope:
+        ensure_clinic_access(animal.clinica_id)
 
     tutor_id = getattr(animal, "user_id", None)
     if tutor_id:
-        visibility_clause = _user_visibility_clause()
-        tutor_visible = (
-            db.session.query(User.id)
-            .filter(User.id == tutor_id)
-            .filter(visibility_clause)
-            .first()
-        )
-        if not tutor_visible:
-            abort(404)
+        bypass_privacy = False
+        if viewer:
+            if getattr(viewer, 'role', None) == 'admin':
+                bypass_privacy = True
+            elif has_veterinarian_profile(viewer):
+                bypass_privacy = True
+            elif getattr(viewer, 'worker', None) == 'colaborador':
+                bypass_privacy = True
+        if not bypass_privacy:
+            visibility_clause = _user_visibility_clause()
+            tutor_visible = (
+                db.session.query(User.id)
+                .filter(User.id == tutor_id)
+                .filter(visibility_clause)
+                .first()
+            )
+            if not tutor_visible:
+                abort(404)
 
     return animal
 
@@ -3361,14 +3450,17 @@ def plano_saude_overview():
     )
     subscriptions = {s.animal_id: s for s in subs}
 
+    show_dashboard_link = current_user.role == 'admin' or (
+        getattr(current_user, 'worker', None) in {'veterinario', 'colaborador'}
+    )
+
     return render_template(
         "planos/plano_saude_overview.html",
         animais=animais_do_usuario,
-        subscriptions=subscriptions,   # ← agora o template encontra
+        subscriptions=subscriptions,
         user=current_user,
+        show_dashboard_link=show_dashboard_link,
     )
-
-from forms import SubscribePlanForm   # coloque o import lá no topo
 
 @app.route("/animal/<int:animal_id>/planosaude", methods=["GET", "POST"])
 @login_required
@@ -3380,7 +3472,7 @@ def planosaude_animal(animal_id):
         return redirect(url_for("profile"))
 
     form = SubscribePlanForm()
-    from models import HealthPlan, HealthSubscription
+    from models import HealthPlan, HealthSubscription, HealthPlanOnboarding
     plans = HealthPlan.query.all()
     form.plan_id.choices = [
         (p.id, f"{p.name} - R$ {p.price:.2f}") for p in plans
@@ -3405,12 +3497,21 @@ def planosaude_animal(animal_id):
         flash("Plano de saúde contratado!", "success")
         return redirect(url_for("planosaude_animal", animal_id=animal_id))
 
+    onboarding_records = (
+        HealthPlanOnboarding.query
+        .filter_by(animal_id=animal.id)
+        .order_by(HealthPlanOnboarding.created_at.desc())
+        .limit(5)
+        .all()
+    )
+
     return render_template(
         "animais/planosaude_animal.html",
         animal=animal,
-        form=form,        # {{ form.hidden_tag() }} agora existe
+        form=form,
         subscription=subscription,
         plans=plans_data,
+        onboarding_records=onboarding_records,
     )
 
 
@@ -3426,7 +3527,7 @@ def contratar_plano(animal_id):
         return redirect(url_for("planosaude_animal", animal_id=animal.id))
 
     form = SubscribePlanForm()
-    from models import HealthPlan
+    from models import HealthPlan, HealthPlanOnboarding
     plans = HealthPlan.query.all()
     form.plan_id.choices = [
         (p.id, f"{p.name} - R$ {p.price:.2f}") for p in plans
@@ -3436,6 +3537,25 @@ def contratar_plano(animal_id):
         return redirect(url_for("planosaude_animal", animal_id=animal.id))
 
     plan = HealthPlan.query.get_or_404(form.plan_id.data)
+
+    contract_url = _save_plan_upload(form.contract_document.data, f"contrato_{animal.id}")
+    if not contract_url:
+        flash('Não foi possível salvar o contrato enviado. Tente novamente.', 'danger')
+        return redirect(url_for('planosaude_animal', animal_id=animal.id))
+    docs_url = _save_plan_upload(form.pet_documents.data, f"docs_{animal.id}") if form.pet_documents.data else None
+
+    onboarding = HealthPlanOnboarding(
+        animal_id=animal.id,
+        plan_id=plan.id,
+        user_id=current_user.id,
+        contract_document_url=contract_url,
+        medical_records_url=docs_url,
+        consent_text=form.additional_consent.data,
+        consent_accepted_at=datetime.utcnow() if form.accept_terms.data else None,
+        insurer_notes=form.insurer_notes.data,
+    )
+    db.session.add(onboarding)
+    db.session.commit()
 
     preapproval_data = {
         "reason": f"{plan.name} - {animal.name}",
@@ -3468,6 +3588,196 @@ def contratar_plano(animal_id):
         return redirect(url_for("planosaude_animal", animal_id=animal.id))
 
     return redirect(init_point)
+
+
+@app.route('/consulta/<int:consulta_id>/pre_autorizacao', methods=['GET', 'POST'])
+@login_required
+def consulta_pre_autorizacao(consulta_id):
+    consulta = get_consulta_or_404(consulta_id)
+    from admin import _is_admin
+
+    if not (_is_admin() or getattr(current_user, 'worker', None) in {'veterinario', 'colaborador'}):
+        abort(403)
+
+    subscriptions = _active_subscriptions_for_animal(consulta.animal_id)
+    if not subscriptions:
+        flash('O tutor não possui planos ativos para esse animal.', 'warning')
+        return redirect(url_for('consulta_direct', animal_id=consulta.animal_id))
+
+    form = HealthAuthorizationForm()
+    form.subscription_id.choices = [
+        (s.id, f"{s.plan.name} ({s.plan.insurer_name or 'Plano'})")
+        for s in subscriptions
+    ]
+    if consulta.health_subscription_id and not form.subscription_id.data:
+        form.subscription_id.data = consulta.health_subscription_id
+
+    evaluation = None
+    status_badge = _status_badge(consulta.health_authorization_status)
+
+    if form.validate_on_submit():
+        subscription = next((s for s in subscriptions if s.id == form.subscription_id.data), None)
+        if not subscription:
+            abort(404)
+        evaluation = subscription.evaluate_items(list(consulta.orcamento_items))
+        status = subscription.apply_authorization_results(consulta, evaluation, form.notes.data)
+        db.session.commit()
+        status_badge = _status_badge(status)
+        if status in {'approved', 'approved_with_copay'}:
+            flash('Cobertura validada. Você já pode finalizar a consulta.', 'success')
+        else:
+            flash('Cobertura analisada com pendências. Revise o orçamento.', 'warning')
+    elif consulta.health_subscription:
+        evaluation = consulta.health_subscription.evaluate_items(list(consulta.orcamento_items))
+
+    return render_template(
+        'consultas/pre_autorizacao.html',
+        form=form,
+        consulta=consulta,
+        evaluation=evaluation,
+        status_badge=status_badge,
+    )
+
+
+@app.route('/orcamento/<int:orcamento_id>/pre_autorizacao')
+@login_required
+def orcamento_pre_autorizacao(orcamento_id):
+    orcamento = Orcamento.query.get_or_404(orcamento_id)
+    if not orcamento.consulta:
+        flash('Somente orçamentos vinculados a uma consulta podem ser pré-autorizados.', 'warning')
+        return redirect(request.referrer or url_for('clinic_detail', clinica_id=orcamento.clinica_id))
+    return redirect(url_for('consulta_pre_autorizacao', consulta_id=orcamento.consulta_id))
+
+
+@app.route('/api/insurers/claims', methods=['POST'])
+def api_insurer_claims():
+    _require_insurer_token()
+    payload = request.get_json(silent=True) or {}
+    claim = InsuranceClaim(
+        external_id=payload.get('external_id') or payload.get('id'),
+        subscription_id=payload.get('subscription_id'),
+        consulta_id=payload.get('consulta_id'),
+        insurer_name=payload.get('insurer_name'),
+        payload=payload,
+        status=payload.get('status') or 'received',
+    )
+    db.session.add(claim)
+    db.session.commit()
+    return jsonify({'id': claim.id, 'status': claim.status}), 201
+
+
+@app.route('/api/insurers/authorizations/<int:consulta_id>')
+def api_insurer_authorization_status(consulta_id):
+    _require_insurer_token()
+    consulta = Consulta.query.get_or_404(consulta_id)
+    subscription = consulta.health_subscription
+    return jsonify({
+        'consulta_id': consulta.id,
+        'status': consulta.health_authorization_status,
+        'plan': subscription.plan.name if subscription else None,
+        'subscription_id': subscription.id if subscription else None,
+        'items': [usage.to_dict() for usage in consulta.coverage_usages],
+    })
+
+
+@app.route('/api/insurers/usage/<int:plan_id>')
+def api_insurer_usage(plan_id):
+    _require_insurer_token()
+    plan = HealthPlan.query.get_or_404(plan_id)
+    total = (
+        db.session.query(func.count(HealthCoverageUsage.id))
+        .join(HealthSubscription, HealthCoverageUsage.subscription_id == HealthSubscription.id)
+        .filter(HealthSubscription.plan_id == plan.id)
+        .scalar()
+    ) or 0
+    denied = (
+        db.session.query(func.count(HealthCoverageUsage.id))
+        .join(HealthSubscription, HealthCoverageUsage.subscription_id == HealthSubscription.id)
+        .filter(
+            HealthSubscription.plan_id == plan.id,
+            HealthCoverageUsage.status == 'denied',
+        )
+        .scalar()
+    ) or 0
+    avg_cost = (
+        db.session.query(func.avg(HealthCoverageUsage.amount_approved))
+        .join(HealthSubscription, HealthCoverageUsage.subscription_id == HealthSubscription.id)
+        .filter(HealthSubscription.plan_id == plan.id)
+        .scalar()
+    ) or 0
+    return jsonify({
+        'plan': plan.name,
+        'plan_id': plan.id,
+        'total_authorizations': total,
+        'denied_authorizations': denied,
+        'rejection_rate': float(denied) / float(total) if total else 0,
+        'average_cost': float(avg_cost or 0),
+    })
+
+
+@app.route('/planos/indicadores')
+@login_required
+def planos_indicadores():
+    from admin import _is_admin
+
+    if not (_is_admin() or getattr(current_user, 'worker', None) in {'veterinario', 'colaborador'}):
+        abort(403)
+
+    plans = HealthPlan.query.order_by(HealthPlan.name).all()
+    plan_metrics = []
+    for plan in plans:
+        total_consultas = (
+            db.session.query(func.count(Consulta.id))
+            .join(HealthSubscription, HealthSubscription.id == Consulta.health_subscription_id)
+            .filter(HealthSubscription.plan_id == plan.id)
+            .scalar()
+        ) or 0
+        avg_cost = (
+            db.session.query(func.avg(HealthCoverageUsage.amount_approved))
+            .join(HealthSubscription, HealthCoverageUsage.subscription_id == HealthSubscription.id)
+            .filter(HealthSubscription.plan_id == plan.id)
+            .scalar()
+        ) or 0
+        denied = (
+            db.session.query(func.count(HealthCoverageUsage.id))
+            .join(HealthSubscription, HealthCoverageUsage.subscription_id == HealthSubscription.id)
+            .filter(
+                HealthSubscription.plan_id == plan.id,
+                HealthCoverageUsage.status == 'denied',
+            )
+            .scalar()
+        ) or 0
+        partial = (
+            db.session.query(func.count(HealthCoverageUsage.id))
+            .join(HealthSubscription, HealthCoverageUsage.subscription_id == HealthSubscription.id)
+            .filter(
+                HealthSubscription.plan_id == plan.id,
+                HealthCoverageUsage.status == 'partial',
+            )
+            .scalar()
+        ) or 0
+        top_diagnosticos = (
+            db.session.query(Consulta.queixa_principal, func.count(Consulta.id))
+            .join(HealthSubscription, HealthSubscription.id == Consulta.health_subscription_id)
+            .filter(
+                HealthSubscription.plan_id == plan.id,
+                Consulta.queixa_principal.isnot(None),
+            )
+            .group_by(Consulta.queixa_principal)
+            .order_by(func.count(Consulta.id).desc())
+            .limit(3)
+            .all()
+        )
+        plan_metrics.append({
+            'plan': plan,
+            'avg_cost': float(avg_cost or 0),
+            'rejection_rate': (denied / total_consultas * 100) if total_consultas else 0,
+            'partial_count': partial,
+            'total_consultas': total_consultas,
+            'top_diagnosticos': top_diagnosticos,
+        })
+
+    return render_template('planos/indicadores.html', plan_metrics=plan_metrics)
 
 
 
@@ -3969,6 +4279,12 @@ def finalizar_consulta(consulta_id):
     if current_user.worker != 'veterinario':
         flash('Apenas veterinários podem finalizar consultas.', 'danger')
         return redirect(url_for('index'))
+
+    if _consulta_requires_authorization(consulta):
+        flash('Valide a cobertura do plano antes de finalizar a consulta.', 'warning')
+        return redirect(url_for('consulta_pre_autorizacao', consulta_id=consulta.id))
+    if not _active_subscriptions_for_animal(consulta.animal_id):
+        consulta.health_authorization_status = 'not_required'
 
     consulta.status = 'finalizada'
     consulta.finalizada_em = datetime.utcnow()
@@ -10199,12 +10515,13 @@ def appointments():
             elif agenda_veterinarios:
                 veterinario = agenda_veterinarios[0]
             else:
-                abort(404)
+                abort(404, description='appointments_admin_no_vets')
             admin_selected_veterinario_id = veterinario.id
         else:
             veterinario = current_user.veterinario
         if not veterinario:
-            abort(404)
+            app.logger.warning('appointments_missing_vet_profile user=%s worker=%s', getattr(current_user, 'id', None), worker)
+            abort(404, description='appointments_missing_vet_profile')
         vet_user_id = getattr(veterinario, "user_id", None)
         clinic_ids = []
         if getattr(veterinario, "clinica_id", None):
