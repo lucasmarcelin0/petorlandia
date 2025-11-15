@@ -1,24 +1,290 @@
 {% extends "layout.html" %}
 {% set titulo = "Financeiro" %}
-{% set subtitulo = "Resumo financeiro da clínica" %}
-
 {% block main %}
-<div class="container mt-4">
-    
-    <h2 class="mb-3">{{ titulo }}</h2>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<div class="container py-4">
+  <div class="d-flex flex-wrap justify-content-between align-items-start gap-3 mb-3">
+    <div>
+      <h2 class="fw-semibold mb-1">Financeiro</h2>
+      <p class="text-muted mb-0">Visão financeira completa da sua clínica</p>
+    </div>
+    {% if selected_clinic %}
+    <div class="text-end">
+      <span class="badge bg-primary bg-opacity-10 text-primary rounded-pill px-3 py-2">
+        <i class="fas fa-building me-1"></i>{{ selected_clinic.nome }}
+      </span>
+    </div>
+    {% endif %}
+  </div>
 
-    <nav aria-label="breadcrumb">
-      <ol class="breadcrumb">
-        <li class="breadcrumb-item"><a href="/">Início</a></li>
-        <li class="breadcrumb-item"><a href="/contabilidade">Contabilidade</a></li>
-        <li class="breadcrumb-item active" aria-current="page">{{ titulo }}</li>
-      </ol>
-    </nav>
+  <nav aria-label="breadcrumb" class="mb-4">
+    <ol class="breadcrumb bg-white px-3 py-2 rounded shadow-sm">
+      <li class="breadcrumb-item"><a href="/">Início</a></li>
+      <li class="breadcrumb-item"><a href="/contabilidade">Contabilidade</a></li>
+      <li class="breadcrumb-item active" aria-current="page">Financeiro</li>
+    </ol>
+  </nav>
 
-    <div class="card shadow-sm p-4 mt-3">
-        <h5>{{ subtitulo }}</h5>
-        <p class="text-muted mb-0">Nenhum dado disponível ainda.</p>
+  {% if clinics %}
+  <div class="card border-0 shadow-sm mb-4">
+    <div class="card-body">
+      <form class="row g-3 align-items-end" method="get">
+        <div class="col-md-6">
+          <label class="form-label fw-semibold">Clínica</label>
+          <select class="form-select" name="clinica_id" onchange="this.form.submit()">
+            {% for clinic in clinics %}
+              <option value="{{ clinic.id }}" {% if clinic.id == selected_clinic_id %}selected{% endif %}>{{ clinic.nome }}</option>
+            {% endfor %}
+          </select>
+        </div>
+      </form>
+    </div>
+  </div>
+  {% else %}
+  <div class="alert alert-info shadow-sm rounded-pill" role="alert">
+    <i class="fas fa-info-circle me-2"></i>Conecte-se a uma clínica para visualizar o painel financeiro.
+  </div>
+  {% endif %}
+
+  <div class="row g-3 mb-4">
+    <div class="col-md-3">
+      <div class="card shadow-sm border-0 h-100">
+        <div class="card-body">
+          <div class="d-flex align-items-center">
+            <div class="rounded-circle bg-primary bg-opacity-10 text-primary p-3 me-3">
+              <i class="fas fa-chart-line"></i>
+            </div>
+            <div>
+              <p class="text-muted mb-1">Faturamento do mês</p>
+              <h4 class="mb-0">{{ resumo_faturamento | currency_br }}</h4>
+              <small class="text-muted">{{ resumo_mes_label }}</small>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-3">
+      <div class="card shadow-sm border-0 h-100">
+        <div class="card-body">
+          <div class="d-flex align-items-center">
+            <div class="rounded-circle p-3 me-3" style="background-color: rgba(111, 66, 193, 0.12); color: #6f42c1;">
+              <i class="fas fa-user-md"></i>
+            </div>
+            <div>
+              <p class="text-muted mb-1">Custos com PJs</p>
+              <h4 class="mb-0">{{ resumo_pj_custos | currency_br }}</h4>
+              <small class="text-muted">{{ resumo_mes_label }}</small>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-3">
+      <div class="card shadow-sm border-0 h-100">
+        <div class="card-body">
+          <div class="d-flex align-items-center">
+            <div class="rounded-circle bg-warning bg-opacity-25 text-warning p-3 me-3">
+              <i class="fas fa-file-invoice-dollar"></i>
+            </div>
+            <div>
+              <p class="text-muted mb-1">Impostos estimados</p>
+              <h4 class="mb-0">{{ resumo_impostos | currency_br }}</h4>
+              <small class="text-muted">{{ resumo_mes_label }}</small>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-3">
+      <div class="card shadow-sm border-0 h-100">
+        <div class="card-body">
+          <div class="d-flex align-items-center">
+            <div class="rounded-circle bg-success bg-opacity-25 text-success p-3 me-3">
+              <i class="fas fa-bullseye"></i>
+            </div>
+            <div>
+              <p class="text-muted mb-1">Projeção anual</p>
+              <h4 class="mb-0">{{ resumo_projecao | currency_br }}</h4>
+              <small class="text-muted">{{ resumo_mes_label }}</small>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  {% if selected_clinic_id %}
+    {% if has_chart_data %}
+    <div class="card shadow-sm p-4 mb-4">
+      <h5>Receita Mensal</h5>
+      <div style="height: 320px;">
+        <canvas id="graficoReceita"></canvas>
+      </div>
     </div>
 
+    <div class="card shadow-sm p-4 mb-4">
+      <h5>Despesas/Pagamentos PJ</h5>
+      <div style="height: 320px;">
+        <canvas id="graficoPJs"></canvas>
+      </div>
+    </div>
+
+    <div class="card shadow-sm p-4 mb-4">
+      <h5>Fator R</h5>
+      <div style="height: 320px;">
+        <canvas id="graficoFatorR"></canvas>
+      </div>
+    </div>
+
+    <div class="card shadow-sm p-4 mb-4">
+      <h5>Projeção Anual</h5>
+      <div style="height: 320px;">
+        <canvas id="graficoProjecao"></canvas>
+      </div>
+    </div>
+    {% else %}
+    <div class="card shadow-sm p-4 text-center">
+      <h5 class="mb-2">Painel Financeiro</h5>
+      <p class="text-muted mb-0">Nenhum dado disponível para gerar gráficos.</p>
+    </div>
+    {% endif %}
+  {% endif %}
 </div>
+{% endblock %}
+
+{% block scripts %}
+  {{ super() }}
+  {% if selected_clinic_id and has_chart_data %}
+  <script>
+    const monthLabels = {{ revenues_labels | tojson }};
+    const revenueData = {{ revenues_values | tojson }};
+    const pjData = {{ pj_payments_values | tojson }};
+    const fatorRData = {{ fator_r_values | tojson }};
+    const projectionData = {{ projection_values | tojson }};
+
+    const baseOptions = {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: {
+          display: false,
+        },
+        tooltip: {
+          backgroundColor: '#ffffff',
+          borderColor: '#e5e7eb',
+          borderWidth: 1,
+          titleColor: '#0f172a',
+          bodyColor: '#0f172a',
+          padding: 12,
+          displayColors: false,
+        }
+      },
+      scales: {
+        x: {
+          grid: {
+            display: false,
+          },
+          ticks: {
+            color: '#6b7280',
+          }
+        },
+        y: {
+          beginAtZero: true,
+          grid: {
+            color: 'rgba(107, 114, 128, 0.15)'
+          },
+          ticks: {
+            color: '#6b7280',
+          }
+        }
+      }
+    };
+
+    const receitaCtx = document.getElementById('graficoReceita');
+    if (receitaCtx) {
+      new Chart(receitaCtx, {
+        type: 'line',
+        data: {
+          labels: monthLabels,
+          datasets: [{
+            label: 'Receitas',
+            data: revenueData,
+            borderColor: '#4e73df',
+            backgroundColor: 'rgba(78, 115, 223, 0.1)',
+            borderWidth: 3,
+            tension: 0.35,
+            fill: true,
+            pointBackgroundColor: '#4e73df',
+            pointBorderColor: '#fff',
+            pointRadius: 4,
+            pointHoverRadius: 5,
+          }]
+        },
+        options: baseOptions,
+      });
+    }
+
+    const pjCtx = document.getElementById('graficoPJs');
+    if (pjCtx) {
+      new Chart(pjCtx, {
+        type: 'bar',
+        data: {
+          labels: monthLabels,
+          datasets: [{
+            label: 'Pagamentos PJ',
+            data: pjData,
+            backgroundColor: 'rgba(113, 88, 226, 0.8)',
+            borderRadius: 6,
+            maxBarThickness: 32,
+          }]
+        },
+        options: baseOptions,
+      });
+    }
+
+    const fatorCtx = document.getElementById('graficoFatorR');
+    if (fatorCtx) {
+      const fatorOptions = JSON.parse(JSON.stringify(baseOptions));
+      fatorOptions.scales.y.ticks.callback = (value) => `${value}%`;
+      new Chart(fatorCtx, {
+        type: 'line',
+        data: {
+          labels: monthLabels,
+          datasets: [{
+            label: 'Fator R',
+            data: fatorRData,
+            borderColor: '#f6c23e',
+            backgroundColor: 'rgba(246, 194, 62, 0.2)',
+            borderWidth: 3,
+            tension: 0.35,
+            fill: true,
+            pointBackgroundColor: '#f6c23e',
+            pointBorderColor: '#fff',
+            pointRadius: 4,
+            pointHoverRadius: 5,
+          }]
+        },
+        options: fatorOptions,
+      });
+    }
+
+    const projecaoCtx = document.getElementById('graficoProjecao');
+    if (projecaoCtx) {
+      new Chart(projecaoCtx, {
+        type: 'bar',
+        data: {
+          labels: monthLabels,
+          datasets: [{
+            label: 'Projeção Anual',
+            data: projectionData,
+            backgroundColor: 'rgba(28, 200, 138, 0.85)',
+            borderRadius: 6,
+            maxBarThickness: 32,
+          }]
+        },
+        options: baseOptions,
+      });
+    }
+  </script>
+  {% endif %}
 {% endblock %}

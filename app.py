@@ -2714,7 +2714,128 @@ def contabilidade_home():
 @login_required
 def contabilidade_financeiro():
     _ensure_accounting_access()
-    return render_template('contabilidade/financeiro.html')
+    clinics, accessible_ids = _accounting_accessible_clinics()
+
+    requested_clinic_id = request.args.get('clinica_id', type=int)
+    selected_clinic_id = None
+    if requested_clinic_id and requested_clinic_id in accessible_ids:
+        selected_clinic_id = requested_clinic_id
+    elif clinics:
+        selected_clinic_id = clinics[0].id
+
+    selected_clinic = None
+    if selected_clinic_id:
+        selected_clinic = next((c for c in clinics if c.id == selected_clinic_id), None)
+
+    month_reference = date.today().replace(day=1)
+    months = [month_reference - relativedelta(months=offset) for offset in range(11, -1, -1)]
+    month_names = [
+        'Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun',
+        'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'
+    ]
+
+    def _format_month_label(month_value):
+        return f"{month_names[month_value.month - 1]}/{month_value.year}"
+
+    revenues_labels = [_format_month_label(month) for month in months]
+    revenues_values: list[float] = []
+    pj_payments_values: list[float] = []
+    fator_r_values: list[float] = []
+    projection_values: list[float] = []
+
+    monthly_revenues: dict[date, Decimal] = {}
+    monthly_pj_totals: dict[date, Decimal] = {}
+    monthly_taxes: dict[date, ClinicTaxes] = {}
+
+    if selected_clinic_id:
+        snapshots = (
+            ClinicFinancialSnapshot.query
+            .filter(ClinicFinancialSnapshot.clinic_id == selected_clinic_id)
+            .filter(ClinicFinancialSnapshot.month.in_(months))
+            .all()
+        )
+        monthly_revenues = {
+            snapshot.month: Decimal(snapshot.total_receitas_gerais or 0)
+            for snapshot in snapshots
+        }
+
+        pj_totals = (
+            db.session.query(
+                ClassifiedTransaction.month,
+                func.coalesce(func.sum(ClassifiedTransaction.value), 0),
+            )
+            .filter(ClassifiedTransaction.clinic_id == selected_clinic_id)
+            .filter(ClassifiedTransaction.month.in_(months))
+            .filter(ClassifiedTransaction.category == 'pagamento_pj')
+            .group_by(ClassifiedTransaction.month)
+            .all()
+        )
+        monthly_pj_totals = {
+            month: Decimal(total or 0)
+            for month, total in pj_totals
+        }
+
+        taxes_records = (
+            ClinicTaxes.query
+            .filter(ClinicTaxes.clinic_id == selected_clinic_id)
+            .filter(ClinicTaxes.month.in_(months))
+            .all()
+        )
+        monthly_taxes = {record.month: record for record in taxes_records}
+
+    for month in months:
+        revenue_total = monthly_revenues.get(month, Decimal('0'))
+        revenues_values.append(float(revenue_total))
+
+        pj_total = monthly_pj_totals.get(month, Decimal('0'))
+        pj_payments_values.append(float(pj_total))
+
+        taxes_record = monthly_taxes.get(month)
+        fator_r = Decimal('0')
+        projection = Decimal('0')
+        if taxes_record:
+            fator_r = Decimal(taxes_record.fator_r or 0)
+            projection = Decimal(taxes_record.projecao_anual or 0)
+        fator_r_values.append(float(fator_r))
+        projection_values.append(float(projection))
+
+    current_month = months[-1]
+    resumo_mes_label = _format_month_label(current_month)
+    resumo_faturamento = monthly_revenues.get(current_month, Decimal('0'))
+    resumo_pj_custos = monthly_pj_totals.get(current_month, Decimal('0'))
+    resumo_projecao = Decimal('0')
+    resumo_impostos = Decimal('0')
+
+    taxes_for_current = monthly_taxes.get(current_month)
+    if taxes_for_current:
+        resumo_projecao = Decimal(taxes_for_current.projecao_anual or 0)
+        resumo_impostos = (
+            Decimal(taxes_for_current.iss_total or 0)
+            + Decimal(taxes_for_current.das_total or 0)
+            + Decimal(taxes_for_current.retencoes_pj or 0)
+        )
+
+    has_chart_data = any(
+        value != 0 for value in (revenues_values + pj_payments_values + fator_r_values + projection_values)
+    )
+
+    return render_template(
+        'contabilidade/financeiro.html',
+        clinics=clinics,
+        selected_clinic_id=selected_clinic_id,
+        selected_clinic=selected_clinic,
+        revenues_labels=revenues_labels,
+        revenues_values=revenues_values,
+        pj_payments_values=pj_payments_values,
+        fator_r_values=fator_r_values,
+        projection_values=projection_values,
+        resumo_mes_label=resumo_mes_label,
+        resumo_faturamento=resumo_faturamento,
+        resumo_pj_custos=resumo_pj_custos,
+        resumo_impostos=resumo_impostos,
+        resumo_projecao=resumo_projecao,
+        has_chart_data=has_chart_data,
+    )
 
 
 def _is_missing_pj_payments_error(exc: ProgrammingError) -> bool:
