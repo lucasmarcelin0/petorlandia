@@ -2,7 +2,7 @@
 import os, sys, pathlib, importlib, logging, uuid, re
 import requests
 from collections import defaultdict
-from io import BytesIO
+from io import BytesIO, StringIO
 from concurrent.futures import ThreadPoolExecutor
 from decimal import Decimal
 from urllib.parse import urlparse, parse_qs
@@ -22,6 +22,7 @@ from flask import (
     Flask,
     session,
     send_from_directory,
+    send_file,
     abort,
     request,
     jsonify,
@@ -31,6 +32,7 @@ from flask import (
     url_for,
     current_app,
     has_request_context,
+    make_response,
 )
 from flask_cors import CORS
 from flask_socketio import SocketIO, disconnect, emit, join_room, leave_room
@@ -38,6 +40,7 @@ from twilio.rest import Client
 from itsdangerous import URLSafeTimedSerializer
 from jinja2 import TemplateNotFound
 import json
+import csv
 import unicodedata
 from sqlalchemy import func, or_, exists, and_, case, true, false
 from sqlalchemy.orm import joinedload, selectinload, aliased
@@ -60,6 +63,8 @@ globals().update({
     for name, obj in models_pkg.__dict__.items()
     if name[:1].isupper()          # naive check: classes start with capital
 })
+
+from models import DataSharePartyType
 
 # ----------------------------------------------------------------
 # 2)  Flask app + config
@@ -990,7 +995,7 @@ from helpers import (
     vaccine_to_event,
     veterinarian_required,
 )
-from services import get_calendar_access_scope
+from services import get_calendar_access_scope, find_active_share, log_data_share_event
 from services.animal_search import search_animals
 
 
@@ -1035,6 +1040,63 @@ def _collect_clinic_ids(viewer=None, clinic_scope=None):
     return clinic_ids
 
 
+def _viewer_parties(viewer=None, clinic_scope=None):
+    parties = []
+
+    clinic_ids = _collect_clinic_ids(viewer=viewer, clinic_scope=clinic_scope)
+    for clinic_id in clinic_ids:
+        if clinic_id:
+            parties.append((DataSharePartyType.clinic, clinic_id))
+
+    if viewer is None and current_user.is_authenticated:
+        viewer = current_user
+
+    if viewer:
+        worker = getattr(viewer, 'worker', None)
+        viewer_id = getattr(viewer, 'id', None)
+        if worker == 'veterinario' and viewer_id:
+            parties.append((DataSharePartyType.veterinarian, viewer_id))
+        elif worker == 'seguradora' and viewer_id:
+            parties.append((DataSharePartyType.insurer, viewer_id))
+
+    unique = []
+    seen = set()
+    for party in parties:
+        if not party or party[1] is None:
+            continue
+        key = (party[0].value if isinstance(party[0], DataSharePartyType) else party[0], party[1])
+        if key in seen:
+            continue
+        seen.add(key)
+        unique.append(party)
+    return unique
+
+
+def _shared_user_clause(viewer=None, clinic_scope=None):
+    parties = _viewer_parties(viewer=viewer, clinic_scope=clinic_scope)
+    if not parties:
+        return None
+
+    now = datetime.utcnow()
+    query = (
+        db.session.query(DataShareAccess.user_id)
+        .filter(DataShareAccess.user_id.isnot(None))
+        .filter(DataShareAccess.revoked_at.is_(None))
+        .filter(or_(DataShareAccess.expires_at.is_(None), DataShareAccess.expires_at > now))
+    )
+    party_clauses = [
+        and_(
+            DataShareAccess.granted_to_type == party_type,
+            DataShareAccess.granted_to_id == party_id,
+        )
+        for party_type, party_id in parties
+    ]
+    if not party_clauses:
+        return None
+    query = query.filter(or_(*party_clauses))
+    return User.id.in_(query.subquery())
+
+
 def _user_visibility_clause(viewer=None, clinic_scope=None):
     """Return a SQLAlchemy clause enforcing user privacy for listings."""
     if viewer is None and current_user.is_authenticated:
@@ -1054,6 +1116,10 @@ def _user_visibility_clause(viewer=None, clinic_scope=None):
     clinic_ids = _collect_clinic_ids(viewer=viewer, clinic_scope=clinic_scope)
     if clinic_ids:
         clauses.append(User.clinica_id.in_(list(clinic_ids)))
+
+    shared_clause = _shared_user_clause(viewer=viewer, clinic_scope=clinic_scope)
+    if shared_clause is not None:
+        clauses.append(shared_clause)
 
     if not clauses:
         return false()
@@ -1082,15 +1148,67 @@ def _can_view_user(user, viewer=None, clinic_scope=None):
     if viewer_id and user.added_by_id == viewer_id:
         return True
 
+    if _resolve_shared_access_for_user(user, viewer=viewer, clinic_scope=clinic_scope):
+        return True
+
     clinic_ids = _collect_clinic_ids(viewer=viewer, clinic_scope=clinic_scope)
     return bool(user.clinica_id and user.clinica_id in clinic_ids)
 
 
+def _resolve_shared_access_for_user(user, viewer=None, clinic_scope=None):
+    if not user:
+        return None
+    parties = _viewer_parties(viewer=viewer, clinic_scope=clinic_scope)
+    return find_active_share(parties, user_id=getattr(user, 'id', None))
+
+
+def _resolve_shared_access_for_animal(animal, viewer=None, clinic_scope=None):
+    if not animal:
+        return None
+    parties = _viewer_parties(viewer=viewer, clinic_scope=clinic_scope)
+    user_id = getattr(animal, 'user_id', None)
+    animal_id = getattr(animal, 'id', None)
+    return find_active_share(parties, user_id=user_id, animal_id=animal_id)
+
+
+def _resolve_shared_access_for_consulta(consulta, viewer=None, clinic_scope=None):
+    if not consulta:
+        return None
+    if getattr(consulta, 'animal', None):
+        return _resolve_shared_access_for_animal(consulta.animal, viewer=viewer, clinic_scope=clinic_scope)
+    return None
+
+
+def _log_data_share(access, *, event_type, resource_type, resource_id=None, actor=None):
+    if not access:
+        return None
+    return log_data_share_event(
+        access,
+        event_type=event_type,
+        resource_type=resource_type,
+        resource_id=resource_id,
+        actor=actor,
+    )
+
+
 def get_user_or_404(user_id, *, viewer=None, clinic_scope=None):
     """Load a user enforcing privacy-aware visibility."""
+    if viewer is None and current_user.is_authenticated:
+        viewer = current_user
+
     user = User.query.get_or_404(user_id)
-    if not _can_view_user(user, viewer=viewer, clinic_scope=clinic_scope):
+    shared_access = _resolve_shared_access_for_user(user, viewer=viewer, clinic_scope=clinic_scope)
+    if not shared_access and not _can_view_user(user, viewer=viewer, clinic_scope=clinic_scope):
         abort(404)
+
+    if shared_access:
+        _log_data_share(
+            shared_access,
+            event_type='read',
+            resource_type='user',
+            resource_id=user.id,
+            actor=viewer,
+        )
     return user
 
 
@@ -1106,30 +1224,56 @@ def ensure_clinic_access(clinica_id):
         abort(404)
 
 
-def get_animal_or_404(animal_id):
+def get_animal_or_404(animal_id, *, viewer=None, clinic_scope=None):
     """Return animal if accessible to current user, otherwise 404."""
+    if viewer is None and current_user.is_authenticated:
+        viewer = current_user
+
     animal = Animal.query.get_or_404(animal_id)
-    ensure_clinic_access(animal.clinica_id)
+    shared_access = _resolve_shared_access_for_animal(animal, viewer=viewer, clinic_scope=clinic_scope)
+    if not shared_access:
+        ensure_clinic_access(animal.clinica_id)
+    else:
+        _log_data_share(
+            shared_access,
+            event_type='read',
+            resource_type='animal',
+            resource_id=animal.id,
+            actor=viewer,
+        )
 
     tutor_id = getattr(animal, "user_id", None)
     if tutor_id:
-        visibility_clause = _user_visibility_clause()
+        visibility_clause = _user_visibility_clause(viewer=viewer, clinic_scope=clinic_scope)
         tutor_visible = (
             db.session.query(User.id)
             .filter(User.id == tutor_id)
             .filter(visibility_clause)
             .first()
         )
-        if not tutor_visible:
+        if not tutor_visible and not shared_access:
             abort(404)
 
     return animal
 
 
-def get_consulta_or_404(consulta_id):
+def get_consulta_or_404(consulta_id, *, viewer=None, clinic_scope=None):
     """Return consulta if accessible to current user, otherwise 404."""
+    if viewer is None and current_user.is_authenticated:
+        viewer = current_user
+
     consulta = Consulta.query.get_or_404(consulta_id)
-    ensure_clinic_access(consulta.clinica_id)
+    shared_access = _resolve_shared_access_for_consulta(consulta, viewer=viewer, clinic_scope=clinic_scope)
+    if not shared_access:
+        ensure_clinic_access(consulta.clinica_id)
+    else:
+        _log_data_share(
+            shared_access,
+            event_type='read',
+            resource_type='consulta',
+            resource_id=consulta.id,
+            actor=viewer,
+        )
     return consulta
 
 
@@ -8541,6 +8685,154 @@ def delivery_archive():
     )
 
     return render_template('admin/delivery_archive_admin.html', requests=reqs)
+
+
+@app.route('/admin/data-share-logs')
+@login_required
+def admin_data_share_logs():
+    if not _is_admin():
+        abort(403)
+
+    query = (
+        DataShareLog.query.options(
+            joinedload(DataShareLog.access).joinedload(DataShareAccess.user),
+            joinedload(DataShareLog.access).joinedload(DataShareAccess.source_clinic),
+            joinedload(DataShareLog.actor),
+        )
+        .join(DataShareAccess)
+    )
+
+    clinic_id = request.args.get('clinic_id', type=int)
+    tutor_id = request.args.get('tutor_id', type=int)
+    actor_id = request.args.get('actor_id', type=int)
+    start_date = request.args.get('start_date')
+    end_date = request.args.get('end_date')
+
+    if clinic_id:
+        query = query.filter(DataShareAccess.source_clinic_id == clinic_id)
+    if tutor_id:
+        query = query.filter(DataShareAccess.user_id == tutor_id)
+    if actor_id:
+        query = query.filter(DataShareLog.actor_id == actor_id)
+
+    if start_date:
+        try:
+            start_dt = datetime.strptime(start_date, '%Y-%m-%d')
+            query = query.filter(DataShareLog.occurred_at >= start_dt)
+        except ValueError:
+            start_dt = None
+    if end_date:
+        try:
+            end_dt = datetime.strptime(end_date, '%Y-%m-%d') + timedelta(days=1)
+            query = query.filter(DataShareLog.occurred_at < end_dt)
+        except ValueError:
+            end_dt = None
+
+    filters = {
+        'clinic_id': clinic_id or '',
+        'tutor_id': tutor_id or '',
+        'actor_id': actor_id or '',
+        'start_date': start_date or '',
+        'end_date': end_date or '',
+    }
+    query_args = {k: v for k, v in filters.items() if v not in ('', None)}
+    csv_args = dict(query_args, format='csv')
+    pdf_args = dict(query_args, format='pdf')
+
+    export_format = request.args.get('format')
+    total = query.count()
+    ordered = query.order_by(DataShareLog.occurred_at.desc())
+
+    if export_format in {'csv', 'pdf'}:
+        logs = ordered.all()
+        if export_format == 'csv':
+            return _export_data_share_logs_csv(logs)
+        return _export_data_share_logs_pdf(logs)
+
+    logs = ordered.limit(500).all()
+    return render_template(
+        'admin/data_share_logs.html',
+        logs=logs,
+        total=total,
+        filters=filters,
+        query_args=query_args,
+        csv_args=csv_args,
+        pdf_args=pdf_args,
+    )
+
+
+def _export_data_share_logs_csv(logs):
+    output = StringIO()
+    writer = csv.writer(output)
+    writer.writerow([
+        'ID',
+        'Data',
+        'Evento',
+        'Recurso',
+        'Recurso ID',
+        'Tutor ID',
+        'Animal ID',
+        'Clínica Origem',
+        'Destinatário',
+        'Destinatário ID',
+        'Ator',
+        'IP',
+        'Endpoint',
+    ])
+    for log in logs:
+        access = getattr(log, 'access', None)
+        writer.writerow([
+            log.id,
+            log.occurred_at.isoformat() if log.occurred_at else '',
+            log.event_type,
+            log.resource_type,
+            log.resource_id or '',
+            access.user_id if access else '',
+            access.animal_id if access else '',
+            access.source_clinic_id if access else '',
+            access.granted_to_type.value if access and access.granted_to_type else '',
+            access.granted_to_id if access else '',
+            log.actor_id or '',
+            log.request_ip or '',
+            log.request_path or '',
+        ])
+    response = make_response(output.getvalue())
+    response.headers['Content-Type'] = 'text/csv; charset=utf-8'
+    response.headers['Content-Disposition'] = 'attachment; filename=data-share-logs.csv'
+    return response
+
+
+def _export_data_share_logs_pdf(logs):
+    from reportlab.lib.pagesizes import A4
+    from reportlab.pdfgen import canvas
+
+    buffer = BytesIO()
+    pdf = canvas.Canvas(buffer, pagesize=A4)
+    width, height = A4
+    y = height - 40
+    for log in logs:
+        access = getattr(log, 'access', None)
+        lines = [
+            f"{log.occurred_at:%Y-%m-%d %H:%M:%S} – {log.event_type} {log.resource_type} #{log.resource_id or '-'}",
+            f"Tutor #{access.user_id if access else '-'} | Animal #{access.animal_id if access else '-'} | Clínica #{access.source_clinic_id if access else '-'}",
+            f"Destinatário {access.granted_to_type.value if access and access.granted_to_type else '-'} #{access.granted_to_id if access else '-'} | Ator #{log.actor_id or '-'}",
+            f"IP {log.request_ip or '-'} | {log.request_path or ''}",
+        ]
+        for text in lines:
+            if y < 40:
+                pdf.showPage()
+                y = height - 40
+            pdf.drawString(36, y, text[:130])
+            y -= 16
+        y -= 8
+    pdf.save()
+    buffer.seek(0)
+    return send_file(
+        buffer,
+        mimetype='application/pdf',
+        as_attachment=True,
+        download_name='data-share-logs.pdf',
+    )
 
 
 @app.route('/delivery_archive')
