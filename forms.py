@@ -218,7 +218,41 @@ class DeliveryRequestForm(FlaskForm):
 
 class SubscribePlanForm(FlaskForm):
     plan_id = SelectField('Plano', coerce=int, validators=[DataRequired()])
+    tutor_document = StringField(
+        'Documento do tutor (CPF/CNPJ)',
+        validators=[DataRequired(), Length(min=5, max=40)],
+    )
+    animal_document = StringField(
+        'Registro do animal (microchip, RG, etc.)',
+        validators=[Optional(), Length(max=60)],
+    )
+    contract_reference = StringField(
+        'Número da apólice/contrato',
+        validators=[Optional(), Length(max=80)],
+    )
+    document_links = TextAreaField(
+        'Links para documentos exigidos pela seguradora',
+        validators=[Optional(), Length(max=500)],
+    )
+    extra_notes = TextAreaField(
+        'Observações adicionais',
+        validators=[Optional(), Length(max=500)],
+    )
+    consent = BooleanField(
+        'Confirmo que revisei e aceitei o contrato do plano.',
+        validators=[DataRequired(message='É necessário aceitar os termos.')],
+    )
     submit = SubmitField('Contratar Plano')
+
+
+class ConsultaPlanAuthorizationForm(FlaskForm):
+    subscription_id = SelectField(
+        'Plano do animal',
+        coerce=int,
+        validators=[DataRequired(message='Escolha um plano para validar.')],
+    )
+    notes = TextAreaField('Anotações para a seguradora', validators=[Optional(), Length(max=500)])
+    submit = SubmitField('Validar cobertura')
 class CheckoutForm(FlaskForm):
     """
     Formulário usado apenas para proteger a rota /checkout com CSRF

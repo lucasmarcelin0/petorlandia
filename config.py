@@ -60,3 +60,5 @@ class Config:
         os.environ.get("VETERINARIAN_MEMBERSHIP_BILLING_DAYS", "30")
     )
 
+    INSURER_PORTAL_TOKEN = os.environ.get("INSURER_PORTAL_TOKEN", "petorlandia-insurer")
+

@@ -1,0 +1,79 @@
+{% extends "layout.html" %}
+{% block main %}
+<div class="container py-4">
+  <div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-3">
+    <div>
+      <h2 class="fw-semibold mb-0">Indicadores dos planos de saúde</h2>
+      <p class="text-muted mb-0">Acompanhe custos médios, diagnósticos e taxa de reprovação por plano.</p>
+    </div>
+  </div>
+
+  <div class="row g-4">
+    {% for item in metrics %}
+    <div class="col-md-6">
+      <div class="card shadow-sm border-0 rounded-4 h-100">
+        <div class="card-body">
+          <div class="d-flex justify-content-between align-items-center mb-2">
+            <h5 class="fw-bold mb-0">{{ item.plan.name }}</h5>
+            <span class="badge bg-primary">R$ {{ '%.2f'|format(item.avg_cost) }} média/consulta</span>
+          </div>
+          <p class="text-muted small">{{ item.plan.description }}</p>
+          <p class="mb-2">Taxa de reprovação: <strong>{{ item.rejection_rate }}%</strong></p>
+          <div>
+            <strong class="small text-uppercase text-muted">Top diagnósticos</strong>
+            <ul class="list-unstyled small mb-0">
+              {% for diag in item.top_diagnosticos %}
+              <li>• {{ diag.descricao }} ({{ diag.total }})</li>
+              {% else %}
+              <li class="text-muted">Sem registros.</li>
+              {% endfor %}
+            </ul>
+          </div>
+        </div>
+      </div>
+    </div>
+    {% else %}
+    <div class="col-12">
+      <div class="alert alert-info">Nenhum plano cadastrado.</div>
+    </div>
+    {% endfor %}
+  </div>
+
+  <hr class="my-5">
+  <h4 class="mb-3">Histórico de uso recente</h4>
+  <div class="table-responsive shadow-sm rounded-4">
+    <table class="table table-hover align-middle mb-0">
+      <thead class="table-light">
+        <tr>
+          <th>ID</th>
+          <th>Plano</th>
+          <th>Animal</th>
+          <th>Procedimento</th>
+          <th>Valor cobrado</th>
+          <th>Valor autorizado</th>
+          <th>Status</th>
+          <th>Data</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for usage in history %}
+        <tr>
+          <td>#{{ usage.id }}</td>
+          <td>{{ usage.plan or 'N/D' }}</td>
+          <td>{{ usage.animal or 'N/D' }}</td>
+          <td>{{ usage.coverage }}{% if usage.procedure_code %} ({{ usage.procedure_code }}){% endif %}</td>
+          <td>R$ {{ '%.2f'|format(usage.amount_billed) }}</td>
+          <td>R$ {{ '%.2f'|format(usage.amount_covered) }}</td>
+          <td><span class="badge bg-{{ usage.status|coverage_badge }}">{{ usage.status_label }}</span></td>
+          <td>{{ usage.created_at or 'N/D' }}</td>
+        </tr>
+        {% else %}
+        <tr>
+          <td colspan="8" class="text-center text-muted">Nenhum uso registrado.</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

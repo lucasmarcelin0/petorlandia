@@ -930,6 +930,16 @@ def payment_status_label(value):
     }
     return mapping.get(value.lower(), value) if value else ""
 
+
+@app.template_filter('coverage_label')
+def coverage_label_filter(value):
+    return coverage_label(value)
+
+
+@app.template_filter('coverage_badge')
+def coverage_badge_filter(value):
+    return coverage_badge(value)
+
 # ----------------------------------------------------------------
 # 6)  Forms e helpers
 # ----------------------------------------------------------------
@@ -963,6 +973,7 @@ from forms import (
     ResetPasswordForm,
     ResetPasswordRequestForm,
     SubscribePlanForm,
+    ConsultaPlanAuthorizationForm,
     VetScheduleForm,
     VetSpecialtyForm,
     VeterinarianMembershipCheckoutForm,
@@ -995,7 +1006,17 @@ from helpers import (
     vaccine_to_event,
     veterinarian_required,
 )
-from services import get_calendar_access_scope, find_active_share, log_data_share_event
+from services import (
+    build_usage_history,
+    coverage_badge,
+    coverage_label,
+    evaluate_consulta_coverages,
+    find_active_share,
+    get_calendar_access_scope,
+    insurer_token_valid,
+    log_data_share_event,
+    summarize_plan_metrics,
+)
 from services.animal_search import search_animals
 
 
@@ -3733,7 +3754,16 @@ def plano_saude_overview():
         user=current_user,
     )
 
-from forms import SubscribePlanForm   # coloque o import lá no topo
+
+@app.route('/admin/planos/dashboard')
+@login_required
+def planos_dashboard():
+    from admin import _is_admin
+    if not _is_admin():
+        abort(403)
+    metrics = summarize_plan_metrics()
+    history = build_usage_history(limit=25)
+    return render_template('planos/dashboard.html', metrics=metrics, history=history)
 
 @app.route("/animal/<int:animal_id>/planosaude", methods=["GET", "POST"])
 @login_required
@@ -3745,8 +3775,8 @@ def planosaude_animal(animal_id):
         return redirect(url_for("profile"))
 
     form = SubscribePlanForm()
-    from models import HealthPlan, HealthSubscription
-    plans = HealthPlan.query.all()
+    from models import HealthPlan, HealthPlanOnboarding, HealthSubscription
+    plans = HealthPlan.query.options(selectinload(HealthPlan.coverages)).all()
     form.plan_id.choices = [
         (p.id, f"{p.name} - R$ {p.price:.2f}") for p in plans
     ]
@@ -3756,12 +3786,28 @@ def planosaude_animal(animal_id):
             "name": p.name,
             "description": p.description,
             "price": p.price,
+            "coverages": [
+                {
+                    "name": c.name,
+                    "code": c.procedure_code,
+                    "limit": float(c.monetary_limit or 0),
+                    "waiting": c.waiting_period_days,
+                    "deductible": float(c.deductible_amount or 0),
+                }
+                for c in p.coverages
+            ],
         }
         for p in plans
     ]
     subscription = (
         HealthSubscription.query
         .filter_by(animal_id=animal.id, user_id=current_user.id, active=True)
+        .first()
+    )
+    onboarding = (
+        HealthPlanOnboarding.query
+        .filter_by(animal_id=animal.id)
+        .order_by(HealthPlanOnboarding.created_at.desc())
         .first()
     )
 
@@ -3776,6 +3822,7 @@ def planosaude_animal(animal_id):
         form=form,        # {{ form.hidden_tag() }} agora existe
         subscription=subscription,
         plans=plans_data,
+        onboarding=onboarding,
     )
 
 
@@ -3791,7 +3838,7 @@ def contratar_plano(animal_id):
         return redirect(url_for("planosaude_animal", animal_id=animal.id))
 
     form = SubscribePlanForm()
-    from models import HealthPlan
+    from models import HealthPlan, HealthPlanOnboarding
     plans = HealthPlan.query.all()
     form.plan_id.choices = [
         (p.id, f"{p.name} - R$ {p.price:.2f}") for p in plans
@@ -3801,6 +3848,21 @@ def contratar_plano(animal_id):
         return redirect(url_for("planosaude_animal", animal_id=animal.id))
 
     plan = HealthPlan.query.get_or_404(form.plan_id.data)
+
+    onboarding = HealthPlanOnboarding(
+        plan_id=plan.id,
+        animal_id=animal.id,
+        user_id=current_user.id,
+        guardian_document=form.tutor_document.data,
+        animal_document=form.animal_document.data or None,
+        contract_reference=form.contract_reference.data or None,
+        extra_notes=form.extra_notes.data or None,
+        consent_ip=request.remote_addr,
+        attachments={'document_links': form.document_links.data} if form.document_links.data else None,
+    )
+    db.session.add(onboarding)
+    db.session.commit()
+    flash('Documentos enviados para análise da seguradora.', 'info')
 
     preapproval_data = {
         "reason": f"{plan.name} - {animal.name}",
@@ -3835,10 +3897,130 @@ def contratar_plano(animal_id):
     return redirect(init_point)
 
 
+@app.route('/consulta/<int:consulta_id>/validar-plano', methods=['POST'])
+@login_required
+def validar_plano_consulta(consulta_id):
+    consulta = get_consulta_or_404(consulta_id)
+    if current_user.worker != 'veterinario':
+        abort(403)
+    form = ConsultaPlanAuthorizationForm()
+    from models import HealthSubscription
+    active_subs = (
+        HealthSubscription.query
+        .filter_by(animal_id=consulta.animal_id, active=True)
+        .all()
+    )
+    form.subscription_id.choices = [
+        (s.id, f"{s.plan.name} – vigente desde {s.start_date.date():%d/%m/%Y}")
+        for s in active_subs
+    ]
+    if not active_subs:
+        flash('O tutor não possui plano ativo para este animal.', 'warning')
+        return redirect(url_for('consulta_direct', animal_id=consulta.animal_id, c=consulta.id))
+    if not form.validate_on_submit():
+        flash('Selecione um plano válido para validar a cobertura.', 'danger')
+        return redirect(url_for('consulta_direct', animal_id=consulta.animal_id, c=consulta.id))
+
+    subscription = HealthSubscription.query.get_or_404(form.subscription_id.data)
+    if subscription.animal_id != consulta.animal_id:
+        flash('Plano selecionado não pertence a este animal.', 'danger')
+        return redirect(url_for('consulta_direct', animal_id=consulta.animal_id, c=consulta.id))
+
+    consulta.health_subscription_id = subscription.id
+    consulta.health_plan_id = subscription.plan_id
+    consulta.authorization_reference = f"PRG-{consulta.id}-{int(datetime.utcnow().timestamp())}"
+    consulta.authorization_checked_at = datetime.utcnow()
+    consulta.authorization_notes = form.notes.data or ''
+
+    result = evaluate_consulta_coverages(consulta)
+    consulta.authorization_status = result['status']
+    if result.get('messages'):
+        consulta.authorization_notes = '\n'.join(result['messages'])
+    db.session.commit()
+
+    category = 'success' if result['status'] == 'approved' else 'warning'
+    flash(' '.join(result.get('messages', [])) or 'Cobertura analisada.', category)
+    return redirect(url_for('consulta_direct', animal_id=consulta.animal_id, c=consulta.id))
 
 
 
 
+
+
+
+
+@app.route('/api/seguradoras/sinistros', methods=['POST'])
+def api_criar_sinistro():
+    token = request.headers.get('X-Insurer-Token')
+    if not insurer_token_valid(token):
+        abort(401)
+    payload = request.get_json(silent=True) or {}
+    subscription_id = payload.get('subscription_id') or payload.get('subscriptionId')
+    if not subscription_id:
+        return jsonify({'error': 'subscription_id é obrigatório'}), 400
+    from models import HealthSubscription, HealthClaim
+    subscription = HealthSubscription.query.get_or_404(subscription_id)
+    consulta_id = payload.get('consulta_id') or payload.get('consultaId')
+    coverage_code = payload.get('procedure_code') or payload.get('procedureCode')
+    coverage = None
+    if coverage_code and subscription.plan:
+        coverage = next((c for c in subscription.plan.coverages if c.matches(coverage_code)), None)
+    claim = HealthClaim(
+        subscription_id=subscription.id,
+        consulta_id=consulta_id,
+        coverage_id=coverage.id if coverage else None,
+        insurer_reference=payload.get('reference') or payload.get('id'),
+        request_format='fhir' if payload.get('resourceType') else 'json',
+        payload=payload,
+        status=payload.get('status') or 'received',
+    )
+    db.session.add(claim)
+    db.session.commit()
+    return jsonify({'id': claim.id, 'status': claim.status}), 201
+
+
+@app.route('/api/seguradoras/sinistros/<int:claim_id>')
+def api_status_sinistro(claim_id):
+    token = request.headers.get('X-Insurer-Token')
+    if not insurer_token_valid(token):
+        abort(401)
+    from models import HealthClaim
+    claim = HealthClaim.query.get_or_404(claim_id)
+    return jsonify({
+        'id': claim.id,
+        'status': claim.status,
+        'consulta_id': claim.consulta_id,
+        'subscription_id': claim.subscription_id,
+        'coverage_id': claim.coverage_id,
+        'payload': claim.payload,
+        'response_payload': claim.response_payload,
+    })
+
+
+@app.route('/api/seguradoras/planos/<int:plan_id>/historico')
+def api_historico_uso(plan_id):
+    token = request.headers.get('X-Insurer-Token')
+    if not insurer_token_valid(token):
+        abort(401)
+    limit = request.args.get('limit', 50, type=int)
+    history = build_usage_history(plan_id=plan_id, limit=limit)
+    return jsonify({'plan_id': plan_id, 'historico': history})
+
+
+@app.route('/api/seguradoras/consultas/<int:consulta_id>/autorizacao')
+def api_status_autorizacao(consulta_id):
+    token = request.headers.get('X-Insurer-Token')
+    if not insurer_token_valid(token):
+        abort(401)
+    consulta = Consulta.query.get_or_404(consulta_id)
+    return jsonify({
+        'consulta_id': consulta.id,
+        'animal_id': consulta.animal_id,
+        'status': consulta.authorization_status,
+        'status_label': coverage_label(consulta.authorization_status),
+        'checked_at': consulta.authorization_checked_at.isoformat() if consulta.authorization_checked_at else None,
+        'notes': consulta.authorization_notes,
+    })
 
 
 @app.route('/animal/<int:animal_id>/ficha')
@@ -4135,6 +4317,29 @@ def consulta_qr():
             .all()
         )
 
+    plan_form = None
+    active_plan_subscriptions = []
+    authorization_summary = None
+    if animal and worker_role == 'veterinario' and consulta:
+        from models import HealthSubscription
+        active_plan_subscriptions = (
+            HealthSubscription.query
+            .filter_by(animal_id=animal.id, active=True)
+            .all()
+        )
+        plan_form = ConsultaPlanAuthorizationForm()
+        plan_form.subscription_id.choices = [
+            (s.id, f"{s.plan.name} – desde {s.start_date.date():%d/%m/%Y}")
+            for s in active_plan_subscriptions
+        ]
+        if consulta.health_subscription_id:
+            plan_form.subscription_id.data = consulta.health_subscription_id
+        authorization_summary = {
+            'status': consulta.authorization_status,
+            'notes': consulta.authorization_notes,
+            'checked_at': consulta.authorization_checked_at,
+        }
+
     clinic_scope_id = clinica_id
     shared_access = _resolve_shared_access_for_animal(animal, viewer=current_user, clinic_scope=clinic_scope_id)
     blocos_orcamento = _clinic_orcamento_blocks(animal, clinic_scope_id)
@@ -4153,6 +4358,9 @@ def consulta_qr():
         blocos_orcamento=blocos_orcamento,
         blocos_prescricao=blocos_prescricao,
         clinic_scope_id=clinic_scope_id,
+        plan_form=plan_form,
+        active_plan_subscriptions=active_plan_subscriptions,
+        authorization_summary=authorization_summary,
         shared_access=shared_access,
         viewer_clinic_id=clinica_id,
     )
@@ -4360,6 +4568,26 @@ def finalizar_consulta(consulta_id):
     if current_user.worker != 'veterinario':
         flash('Apenas veterinários podem finalizar consultas.', 'danger')
         return redirect(url_for('index'))
+
+    if consulta.orcamento_items:
+        from models import HealthSubscription
+        if not consulta.health_subscription_id:
+            active_sub = (
+                HealthSubscription.query
+                .filter_by(animal_id=consulta.animal_id, active=True)
+                .first()
+            )
+            if active_sub:
+                flash('Associe e valide o plano de saúde antes de finalizar a consulta.', 'warning')
+                return redirect(url_for('consulta_direct', animal_id=consulta.animal_id, c=consulta.id))
+        result = evaluate_consulta_coverages(consulta)
+        consulta.authorization_status = result['status']
+        consulta.authorization_checked_at = datetime.utcnow()
+        consulta.authorization_notes = '\n'.join(result.get('messages', [])) if result.get('messages') else None
+        if result['status'] != 'approved':
+            db.session.commit()
+            flash('Cobertura não aprovada. Revise o orçamento ou contate a seguradora.', 'danger')
+            return redirect(url_for('consulta_direct', animal_id=consulta.animal_id, c=consulta.id))
 
     consulta.status = 'finalizada'
     consulta.finalizada_em = datetime.utcnow()
@@ -13845,6 +14073,7 @@ def criar_servico_clinica():
     data = request.get_json(silent=True) or {}
     descricao = data.get('descricao')
     valor = data.get('valor')
+    procedure_code = (data.get('procedure_code') or '').strip() or None
     if not descricao or valor is None:
         return jsonify({'success': False, 'message': 'Dados incompletos.'}), 400
     clinica_id = None
@@ -13852,10 +14081,20 @@ def criar_servico_clinica():
         clinica_id = current_user.veterinario.clinica_id
     elif current_user.clinica_id:
         clinica_id = current_user.clinica_id
-    servico = ServicoClinica(descricao=descricao, valor=valor, clinica_id=clinica_id)
+    servico = ServicoClinica(
+        descricao=descricao,
+        valor=valor,
+        clinica_id=clinica_id,
+        procedure_code=procedure_code,
+    )
     db.session.add(servico)
     db.session.commit()
-    return jsonify({'id': servico.id, 'descricao': servico.descricao, 'valor': float(servico.valor)}), 201
+    return jsonify({
+        'id': servico.id,
+        'descricao': servico.descricao,
+        'valor': float(servico.valor),
+        'procedure_code': servico.procedure_code,
+    }), 201
 
 
 @app.route('/imprimir_orcamento/<int:consulta_id>')
@@ -14028,6 +14267,7 @@ def adicionar_orcamento_item(consulta_id):
     servico_id = data.get('servico_id')
     descricao = data.get('descricao')
     valor = data.get('valor')
+    procedure_code = (data.get('procedure_code') or '').strip() or None
 
     servico = None
     if servico_id:
@@ -14039,6 +14279,8 @@ def adicionar_orcamento_item(consulta_id):
         descricao = servico.descricao
         if valor is None:
             valor = servico.valor
+        if not procedure_code:
+            procedure_code = servico.procedure_code
 
     if not descricao or valor is None:
         return jsonify({'success': False, 'message': 'Dados incompletos.'}), 400
@@ -14061,10 +14303,20 @@ def adicionar_orcamento_item(consulta_id):
         valor=valor,
         servico_id=servico.id if servico else None,
         clinica_id=clinic_id,
+        procedure_code=procedure_code,
     )
     db.session.add(item)
     db.session.commit()
-    return jsonify({'id': item.id, 'descricao': item.descricao, 'valor': float(item.valor), 'total': float(consulta.total_orcamento)}), 201
+    return jsonify({
+        'id': item.id,
+        'descricao': item.descricao,
+        'valor': float(item.valor),
+        'total': float(consulta.total_orcamento),
+        'coverage_status': item.coverage_status,
+        'coverage_label': coverage_label(item.coverage_status),
+        'coverage_badge': coverage_badge(item.coverage_status),
+        'coverage_message': item.coverage_message,
+    }), 201
 
 
 @app.route('/consulta/orcamento_item/<int:item_id>', methods=['DELETE'])
