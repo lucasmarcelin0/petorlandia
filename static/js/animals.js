@@ -55,6 +55,7 @@ function syncFormWithParams(params) {
   assign('breed_id');
   assign('sex');
   assign('age');
+  assign('name');
 }
 
 async function loadAnimals(params, { pushState = true } = {}) {
