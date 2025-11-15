@@ -2500,6 +2500,11 @@ def inject_clinic_invite_count():
     return dict(pending_clinic_invites=pending)
 
 
+@app.context_processor
+def inject_accounting_access_flag():
+    return dict(can_access_accounting=_user_can_access_accounting())
+
+
 s = URLSafeTimedSerializer(app.config['SECRET_KEY'])
 
 @app.route('/reset_password_request', methods=['GET', 'POST'])
@@ -2592,13 +2597,16 @@ def index():
     return render_template('index.html')
 
 
-def _user_is_clinic_owner():
-    """Return ``True`` if the current user owns at least one clinic."""
+def _user_is_clinic_owner(user=None):
+    """Return ``True`` if ``user`` owns at least one clinic."""
 
-    if not current_user.is_authenticated:
+    if user is None:
+        user = current_user if current_user.is_authenticated else None
+
+    if not user or not getattr(user, "is_authenticated", False):
         return False
 
-    owner_attr = getattr(current_user, "is_clinic_owner", None)
+    owner_attr = getattr(user, "is_clinic_owner", None)
     if callable(owner_attr):
         try:
             if owner_attr():
@@ -2608,27 +2616,37 @@ def _user_is_clinic_owner():
     elif owner_attr:
         return True
 
-    owned_clinics = getattr(current_user, "clinicas", None)
+    owned_clinics = getattr(user, "clinicas", None)
     if owned_clinics:
-        return any(getattr(clinic, "owner_id", None) == current_user.id for clinic in owned_clinics)
+        return any(getattr(clinic, "owner_id", None) == user.id for clinic in owned_clinics)
 
-    return Clinica.query.filter_by(owner_id=current_user.id).first() is not None
+    return Clinica.query.filter_by(owner_id=user.id).first() is not None
+
+
+def _user_can_access_accounting(user=None):
+    """Return ``True`` when ``user`` has permission to access accounting tools."""
+
+    if user is None:
+        user = current_user if current_user.is_authenticated else None
+
+    if not user or not getattr(user, "is_authenticated", False):
+        return False
+
+    role = (getattr(user, "role", "") or "").lower()
+    if role in {"admin", "gestor", "master"}:
+        return True
+
+    if _user_is_clinic_owner(user) and is_veterinarian(user):
+        return True
+
+    return False
 
 
 def _ensure_accounting_access():
     """Abort with 403 when the current user lacks accounting permissions."""
 
-    if not current_user.is_authenticated:
+    if not _user_can_access_accounting():
         abort(403)
-
-    role = (current_user.role or "").lower()
-    if role in {"admin", "gestor"}:
-        return
-
-    if _user_is_clinic_owner():
-        return
-
-    abort(403)
 
 
 def _accounting_accessible_clinics():
@@ -7656,11 +7674,13 @@ def orcamentos(clinica_id):
         abort(403)
     lista = Orcamento.query.filter_by(clinica_id=clinica_id).all()
     month_value = request.args.get('mes') or _format_month_parameter(date.today())
-    contabilidade_url = url_for(
-        'contabilidade_pagamentos',
-        clinica_id=clinica_id,
-        mes=month_value,
-    )
+    contabilidade_url = None
+    if _user_can_access_accounting():
+        contabilidade_url = url_for(
+            'contabilidade_pagamentos',
+            clinica_id=clinica_id,
+            mes=month_value,
+        )
     return render_template(
         'orcamentos/orcamentos.html',
         clinica=clinica,
@@ -7804,7 +7824,7 @@ def dashboard_orcamentos():
 
     reference_month_value = request.args.get('mes') or _format_month_parameter(date.today())
     contabilidade_url = None
-    if selected_clinic_id:
+    if selected_clinic_id and _user_can_access_accounting():
         contabilidade_url = url_for(
             'contabilidade_pagamentos',
             clinica_id=selected_clinic_id,
