@@ -1,4 +1,56 @@
 {% if animals %}
+{% macro species_avatar_icon(token) %}
+  {% if token == 'dog' %}
+  <svg viewBox="0 0 64 64" aria-hidden="true" focusable="false">
+    <circle cx="18" cy="20" r="8" />
+    <circle cx="46" cy="20" r="8" />
+    <circle cx="18" cy="36" r="7" />
+    <circle cx="46" cy="36" r="7" />
+    <path d="M20 44c0-6.6 5.4-12 12-12s12 5.4 12 12v5c0 5-4 9-9 9h-6c-5 0-9-4-9-9z" />
+  </svg>
+  {% elif token == 'cat' %}
+  <svg viewBox="0 0 64 64" aria-hidden="true" focusable="false">
+    <path d="M8 28v-14l12-8 6 16h12l6-16 12 8v14c0 12-9 22-22 22S8 40 8 28z" />
+    <circle cx="26" cy="30" r="4" />
+    <circle cx="38" cy="30" r="4" />
+    <path d="M24 42c4 3 12 3 16 0" stroke-width="4" stroke-linecap="round" stroke="currentColor" fill="none" />
+  </svg>
+  {% elif token == 'bird' %}
+  <svg viewBox="0 0 64 64" aria-hidden="true" focusable="false">
+    <path d="M8 44c8-10 12-24 32-24 4 0 10 2 16-4v20c0 12-10 20-22 20H18z" />
+    <circle cx="46" cy="20" r="4" />
+  </svg>
+  {% elif token == 'rabbit' %}
+  <svg viewBox="0 0 64 64" aria-hidden="true" focusable="false">
+    <path d="M20 8c6 0 10 10 10 18 0 8-4 18-10 18S10 34 10 26 14 8 20 8zm24 0c-6 0-10 10-10 18 0 8 4 18 10 18s10-10 10-18S50 8 44 8z" />
+    <circle cx="24" cy="38" r="10" />
+    <circle cx="40" cy="38" r="10" />
+    <path d="M18 46c4 4 24 4 28 0" stroke-width="4" stroke-linecap="round" stroke="currentColor" fill="none" />
+  </svg>
+  {% elif token == 'reptile' %}
+  <svg viewBox="0 0 64 64" aria-hidden="true" focusable="false">
+    <path d="M6 34c8-12 16-18 30-18 10 0 22 8 22 18s-12 18-22 18c-14 0-22-6-30-18z" />
+    <circle cx="20" cy="30" r="4" />
+    <circle cx="38" cy="30" r="4" />
+    <path d="M12 42c6 6 34 6 40 0" stroke-width="4" stroke-linecap="round" stroke="currentColor" fill="none" />
+  </svg>
+  {% elif token == 'rodent' %}
+  <svg viewBox="0 0 64 64" aria-hidden="true" focusable="false">
+    <path d="M12 40c0-12 10-22 20-22s20 10 20 22v4c0 6-6 12-12 12H24c-6 0-12-6-12-12z" />
+    <circle cx="18" cy="24" r="6" />
+    <circle cx="46" cy="24" r="6" />
+    <path d="M8 32c4 8 0 14 12 20" stroke-width="4" stroke-linecap="round" stroke="currentColor" fill="none" />
+  </svg>
+  {% else %}
+  <svg viewBox="0 0 64 64" aria-hidden="true" focusable="false">
+    <circle cx="18" cy="20" r="8" />
+    <circle cx="46" cy="20" r="8" />
+    <circle cx="18" cy="36" r="7" />
+    <circle cx="46" cy="36" r="7" />
+    <circle cx="32" cy="48" r="12" />
+  </svg>
+  {% endif %}
+{% endmacro %}
 {% set status_styles = {
   'adotado': {'label': 'Adotado', 'chip': 'success', 'bar': 'success'},
   'vendido': {'label': 'Vendido', 'chip': 'secondary', 'bar': 'secondary'},
@@ -17,18 +69,23 @@
       <div class="col" id="animal-card-{{ animal.id }}">
         {% set status_info = status_styles.get(animal.modo, default_status) %}
         {% set species_label = animal.species|species_display %}
+        {% set species_visual_token = animal.species|species_visual_token %}
         {% set size_label = animal.peso|animal_size_label %}
         {% set size_token = animal.peso|animal_size_token %}
         <div class="card animal-card h-100 border-0 rounded-4 position-relative {% if animal.modo == 'perdido' %}border border-danger{% endif %} overflow-hidden">
           <div class="animal-card__status-bar animal-card__status-bar--{{ status_info['bar'] }}" aria-hidden="true"></div>
+          <div class="animal-card__identity-badges" role="group" aria-label="Identificadores do animal">
+            <span class="animal-card__identity-badge animal-card__identity-badge--species" title="Espécie">{{ species_label }}</span>
+            <span class="animal-card__identity-badge animal-card__identity-badge--size animal-card__identity-badge--size-{{ size_token }}" title="Porte">{{ size_label }}</span>
+          </div>
           <div class="card-body d-flex flex-column gap-3 p-4">
             <div class="d-flex gap-3 align-items-center">
               <div class="animal-card__thumbnail {% if not animal.image %}animal-card__thumbnail--placeholder{% endif %}">
                 {% if animal.image %}
                 <img src="{{ animal.image }}" class="animal-card__photo" loading="lazy" alt="Imagem de {{ animal.name }}">
                 {% else %}
-                <div class="animal-card__fallback" aria-hidden="true">
-                  <span>🐾</span>
+                <div class="animal-card__species-avatar animal-card__species-avatar--{{ species_visual_token }}" role="img" aria-label="{{ species_label }}">
+                  {{ species_avatar_icon(species_visual_token)|safe }}
                 </div>
                 {% endif %}
               </div>
@@ -45,10 +102,6 @@
                     {% endif %}
                   </div>
                   <span class="animal-card__status-chip animal-card__status-chip--{{ status_info['chip'] }}">{{ status_info['label'] }}</span>
-                </div>
-                <div class="animal-card__badges">
-                  <span class="animal-card__badge animal-card__badge--species" title="Espécie">{{ species_label }}</span>
-                  <span class="animal-card__badge animal-card__badge--size animal-card__badge--size-{{ size_token }}" title="Porte">{{ size_label }}</span>
                 </div>
               </div>
             </div>
