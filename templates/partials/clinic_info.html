@@ -1,11 +1,25 @@
 <!-- partials/clinic_info.html -->
 {% from 'components/logo.html' import clinic_logo %}
-<section class="clinic-hero mb-4">
+{% set theme = clinic_theme or {} %}
+<section class="clinic-hero mb-4"
+         style="--clinic-primary: {{ theme.primary_color|default('#6f6df4') }};
+                --clinic-secondary: {{ theme.secondary_color|default('#46c4d3') }};
+                --clinic-text-color: {{ theme.text_color|default('#ffffff') }};
+                --clinic-subtitle-color: {{ theme.subtitle_color|default('rgba(255,255,255,0.85)') }};
+                --clinic-eyebrow-color: {{ theme.eyebrow_color|default('rgba(255,255,255,0.8)') }};
+                --clinic-chip-bg: {{ theme.chip_bg_color|default('rgba(255,255,255,0.15)') }};
+                --clinic-chip-border: {{ theme.chip_border_color|default('rgba(255,255,255,0.25)') }};
+                --clinic-chip-text: {{ theme.chip_text_color|default('#ffffff') }};
+                --clinic-logo-frame-bg: {{ theme.logo_frame_bg|default('#ffffff') }};
+                --clinic-logo-frame-shadow: {{ theme.logo_frame_shadow|default('rgba(0,0,0,0.12)') }};
+                --clinic-logo-frame-border: {{ theme.logo_frame_border|default('rgba(255,255,255,0.35)') }};
+                --clinic-avatar-bg: {{ theme.avatar_bg|default('rgba(255,255,255,0.1)') }};
+                --clinic-avatar-text: {{ theme.avatar_text_color|default('#ffffff') }};">
   <div class="clinic-hero__inner row g-4 align-items-center">
     <div class="col-lg-7">
-      <p class="clinic-hero__eyebrow text-white-50 mb-1">Clínica parceira</p>
-      <h1 class="clinic-hero__title text-white mb-3">{{ clinica.nome }}</h1>
-      <p class="clinic-hero__subtitle text-white-75 mb-4">Cuidando de cada pet com carinho e tecnologia.</p>
+      <p class="clinic-hero__eyebrow mb-1">Clínica parceira</p>
+      <h1 class="clinic-hero__title mb-3">{{ clinica.nome }}</h1>
+      <p class="clinic-hero__subtitle mb-4">{{ clinic_subtitle }}</p>
       <div class="clinic-hero__chips mb-4">
         {% if clinica.endereco %}
           <span class="clinic-hero__chip"><i class="fa-solid fa-location-dot"></i>{{ clinica.endereco }}</span>
@@ -32,12 +46,15 @@
       </div>
     </div>
     <div class="col-lg-5">
-      <div class="clinic-hero__photo shadow-lg">
-        {% if clinica.logotipo %}
-          {{ clinic_logo(clinica, alt_text='Mascote da clínica') }}
-        {% else %}
-          <img src="{{ url_for('static', filename='pastorgado.jpg') }}" alt="Mascote PetOrlândia" class="clinic-hero__fallback">
-        {% endif %}
+      <div class="clinic-hero__brand text-center text-lg-end">
+        <div class="clinic-hero__logo-frame {{ 'clinic-hero__logo-frame--has-logo' if clinica.logotipo }}">
+          {% if clinica.logotipo %}
+            {{ clinic_logo(clinica, alt_text='Logotipo da clínica') }}
+          {% else %}
+            <span class="clinic-hero__avatar" aria-hidden="true">{{ clinic_initials }}</span>
+            <span class="visually-hidden">Avatar gerado automaticamente com as iniciais da clínica</span>
+          {% endif %}
+        </div>
       </div>
     </div>
   </div>
