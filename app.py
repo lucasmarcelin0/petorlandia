@@ -2708,6 +2708,97 @@ def _sync_pj_payment_classification(payment):
     db.session.add(classification)
 
 
+def _sync_orcamento_payment_classification(record):
+    """Create/update classified transactions for Orcamento or Bloco payments."""
+
+    if record is None or not getattr(record, 'id', None):
+        return
+
+    clinic_id = getattr(record, 'clinica_id', None)
+    if not clinic_id:
+        return
+
+    status = (getattr(record, 'payment_status', None) or '').strip().lower()
+    status = {
+        'pendente': 'pending',
+        'pago': 'paid',
+        'cancelado': 'failed',
+        'cancelled': 'failed',
+        'canceled': 'failed',
+    }.get(status, status)
+    raw_prefix = 'bloco_orcamento' if isinstance(record, BlocoOrcamento) else 'orcamento'
+    raw_id = f"{raw_prefix}:{record.id}"
+    origin = 'orcamento_payment'
+
+    def _delete_entry():
+        (
+            ClassifiedTransaction.query.filter_by(origin=origin, raw_id=raw_id)
+            .delete(synchronize_session=False)
+        )
+
+    if status in {'', 'draft', 'failed'}:
+        _delete_entry()
+        return
+
+    if status not in {'pending', 'paid'}:
+        return
+
+    if isinstance(record, BlocoOrcamento):
+        gross_value = record.total_liquido
+        created_at = getattr(record, 'data_criacao', None)
+        base_description = (record.tutor_notes or '').strip()
+        subcategory = 'bloco_orcamento'
+    else:
+        gross_value = record.total
+        created_at = getattr(record, 'created_at', None)
+        base_description = (record.descricao or '').strip()
+        subcategory = 'orcamento'
+
+    try:
+        value = Decimal(gross_value)
+    except (InvalidOperation, TypeError):
+        value = Decimal('0.00')
+
+    reference_dt = None
+    if status == 'paid':
+        reference_dt = getattr(record, 'paid_at', None)
+    if reference_dt is None:
+        reference_dt = created_at
+    if reference_dt is None:
+        reference_dt = datetime.utcnow()
+    elif isinstance(reference_dt, date) and not isinstance(reference_dt, datetime):
+        reference_dt = datetime.combine(reference_dt, time.min)
+    elif isinstance(reference_dt, datetime) and reference_dt.tzinfo:
+        reference_dt = reference_dt.astimezone(timezone.utc).replace(tzinfo=None)
+
+    if isinstance(value, (int, float)):
+        value = Decimal(str(value))
+    if not isinstance(value, Decimal):
+        value = Decimal('0.00')
+
+    category = 'receita_servico' if status == 'paid' else 'recebivel_orcamento'
+    base_label = 'Bloco de orçamento' if isinstance(record, BlocoOrcamento) else 'Orçamento'
+    description = f"{base_label} #{record.id}"
+    if base_description:
+        description = f"{description} - {base_description}"
+    description = description[:255]
+
+    classification = ClassifiedTransaction.query.filter_by(
+        origin=origin, raw_id=raw_id
+    ).first()
+    if classification is None:
+        classification = ClassifiedTransaction(origin=origin, raw_id=raw_id)
+
+    classification.clinic_id = clinic_id
+    classification.date = reference_dt
+    classification.month = reference_dt.date().replace(day=1)
+    classification.description = description
+    classification.value = value
+    classification.category = category
+    classification.subcategory = subcategory
+    db.session.add(classification)
+
+
 def _delete_pj_payment_classification(payment_id):
     if not payment_id:
         return
@@ -12894,6 +12985,7 @@ def notificacoes_mercado_pago():
 
             if bloco:
                 bloco.payment_status = bloco_status_map.get(status, 'pending')
+                _sync_orcamento_payment_classification(bloco)
 
             if orcamento:
                 new_payment_status = orcamento_payment_map.get(status)
@@ -12912,6 +13004,7 @@ def notificacoes_mercado_pago():
                     orcamento.status = 'rejected'
                 elif status in {'cancelled', 'refunded', 'expired'}:
                     orcamento.status = 'canceled'
+                _sync_orcamento_payment_classification(orcamento)
 
     except SQLAlchemyError as e:
         current_app.logger.exception("DB error: %s", e)
@@ -16314,6 +16407,8 @@ def pagar_orcamento(bloco_id):
     bloco.payment_link = preference_info['payment_url']
     bloco.payment_reference = preference_info['payment_reference']
     bloco.payment_status = 'pending'
+    db.session.flush()
+    _sync_orcamento_payment_classification(bloco)
     db.session.commit()
     if request.accept_mimetypes.accept_json:
         historico_html = _render_orcamento_history(bloco.animal, bloco.clinica_id)
@@ -16362,6 +16457,8 @@ def gerar_link_pagamento_orcamento(orcamento_id):
         orcamento.status = 'sent'
     orcamento.updated_at = datetime.utcnow()
     db.session.add(orcamento)
+    db.session.flush()
+    _sync_orcamento_payment_classification(orcamento)
     db.session.commit()
 
     payment_status_label = ORCAMENTO_PAYMENT_STATUS_LABELS.get(orcamento.payment_status, orcamento.payment_status)
