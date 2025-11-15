@@ -16,6 +16,13 @@ This project is a Flask application for managing pets. The repository now includ
 
 The tests run without needing external services or a database connection.
 
+## Contabilidade — Backfill histórico
+
+Para recompor classificações antigas ou acionar o novo agendador mensal consulte
+`docs/accounting_backfill.md`, que documenta o comando
+`flask classify-transactions-history`, suas opções avançadas e as variáveis do
+job automático.
+
 ## Offline Usage
 
 PetOrlândia can operate with limited connectivity thanks to a small service worker

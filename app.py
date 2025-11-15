@@ -1248,7 +1248,10 @@ from services import (
     summarize_plan_metrics,
     update_financial_snapshots_daily,
 )
-from services.finance import classify_transactions_for_month
+from services.finance import (
+    classify_transactions_for_month,
+    run_transactions_history_backfill,
+)
 from services.animal_search import search_animals
 
 
@@ -2824,7 +2827,13 @@ def _delete_pj_payment_classification(payment_id):
 
 
 @app.cli.command('classify-transactions-history')
-@click.option('--months', type=click.IntRange(1, 36), default=6, show_default=True, help='Quantidade de meses a reprocessar, contando a partir do mês de referência.')
+@click.option(
+    '--months',
+    type=click.IntRange(min=1),
+    default=6,
+    show_default=True,
+    help='Quantidade de meses a reprocessar a partir do mês de referência.',
+)
 @click.option(
     '--clinic-id',
     'clinic_ids',
@@ -2838,49 +2847,49 @@ def _delete_pj_payment_classification(payment_id):
     default=None,
     help='Mês base (YYYY-MM) para iniciar a varredura; padrão: mês atual.',
 )
+@click.option(
+    '--verbose/--quiet',
+    default=False,
+    help='Mostra logs detalhados para cada combinação clínica/mês.',
+)
 @with_appcontext
-def classify_transactions_history(months, clinic_ids, reference_month):
+def classify_transactions_history(months, clinic_ids, reference_month, verbose):
     """Reprocessa classificações de receitas e despesas para meses anteriores."""
 
-    base_month = date.today().replace(day=1)
-    if reference_month:
-        try:
-            reference_date = datetime.strptime(reference_month, '%Y-%m')
-            base_month = reference_date.date().replace(day=1)
-        except ValueError as exc:
-            raise click.BadParameter('Use o formato YYYY-MM em --reference-month.') from exc
-    month_starts = sorted(
-        base_month - relativedelta(months=offset)
-        for offset in range(months)
-    )
+    def _verbose_callback(clinic_id, month_start):
+        click.echo(
+            f"Classificando clínica {clinic_id} — mês {month_start:%Y-%m}",
+            err=False,
+        )
 
-    query = Clinica.query
-    if clinic_ids:
-        query = query.filter(Clinica.id.in_(clinic_ids))
-    clinics = query.order_by(Clinica.id.asc()).all()
-    if not clinics:
+    def _error_callback(clinic_id, month_start, exc):
+        click.echo(
+            f"Erro ao classificar a clínica {clinic_id} no mês {month_start:%Y-%m}: {exc}",
+            err=True,
+        )
+
+    try:
+        result = run_transactions_history_backfill(
+            months=months,
+            reference_month=reference_month,
+            clinic_ids=clinic_ids,
+            progress_callback=_verbose_callback if verbose else None,
+            error_callback=_error_callback,
+        )
+    except ValueError as exc:
+        raise click.BadParameter(str(exc)) from exc
+
+    if not result.clinics:
         click.echo('Nenhuma clínica encontrada para processar.')
         return
 
-    processed = 0
-    for clinic in clinics:
-        for month_start in month_starts:
-            try:
-                classify_transactions_for_month(clinic.id, month_start)
-                processed += 1
-            except Exception as exc:
-                db.session.rollback()
-                current_app.logger.exception(
-                    'Falha ao classificar transações para a clínica %s no mês %s',
-                    clinic.id,
-                    month_start,
-                )
-                click.echo(
-                    f"Erro ao classificar a clínica {clinic.id} no mês {month_start:%Y-%m}: {exc}",
-                    err=True,
-                )
+    if result.failures:
+        click.echo(
+            f'{len(result.failures)} combinação(ões) falharam; verifique os logs acima.',
+            err=True,
+        )
     click.echo(
-        f'Classificação executada para {processed} combinações de clínica/mês.'
+        f'Classificação executada para {result.processed} combinações de clínica/mês.'
     )
 
 

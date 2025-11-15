@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 from collections import defaultdict
+from dataclasses import dataclass
 from datetime import date, datetime
 from decimal import Decimal, ROUND_HALF_UP
-from typing import Iterable, List, Optional, Sequence, Tuple
+from typing import Callable, Iterable, List, Optional, Sequence, Tuple
 
 from dateutil.relativedelta import relativedelta
 from flask import current_app, has_app_context
@@ -658,6 +659,70 @@ def classify_transactions_for_month(
     if changed:
         db.session.commit()
     return records
+
+
+@dataclass
+class HistoryBackfillFailure:
+    clinic_id: int
+    month: date
+    error: str
+
+
+@dataclass
+class HistoryBackfillResult:
+    processed: int
+    clinics: list[int]
+    months: list[date]
+    failures: list[HistoryBackfillFailure]
+
+
+def run_transactions_history_backfill(
+    months: int,
+    reference_month: Optional[date | datetime | str] = None,
+    clinic_ids: Optional[Iterable[int]] = None,
+    progress_callback: Optional[Callable[[int, date], None]] = None,
+    error_callback: Optional[Callable[[int, date, Exception], None]] = None,
+) -> HistoryBackfillResult:
+    """Execute classification for multiple clinics/months returning a summary."""
+
+    if months <= 0:
+        raise ValueError("O número de meses deve ser maior que zero.")
+
+    base_month = _normalize_month(reference_month)
+    month_starts = sorted(
+        base_month - relativedelta(months=offset)
+        for offset in range(months)
+    )
+
+    query = Clinica.query
+    if clinic_ids:
+        query = query.filter(Clinica.id.in_(list(clinic_ids)))
+    clinics = query.order_by(Clinica.id.asc()).all()
+    clinic_ids_list = [clinic.id for clinic in clinics]
+    if not clinic_ids_list:
+        return HistoryBackfillResult(0, [], month_starts, [])
+
+    failures: list[HistoryBackfillFailure] = []
+    processed = 0
+    for clinic in clinics:
+        for month_start in month_starts:
+            try:
+                classify_transactions_for_month(clinic.id, month_start)
+                processed += 1
+                if progress_callback:
+                    progress_callback(clinic.id, month_start)
+            except Exception as exc:  # pragma: no cover - defensive logging
+                db.session.rollback()
+                _log(
+                    "[Backfill] Falha ao classificar clínica %s no mês %s: %s",
+                    clinic.id,
+                    f"{month_start:%Y-%m}",
+                    exc,
+                )
+                failures.append(HistoryBackfillFailure(clinic.id, month_start, str(exc)))
+                if error_callback:
+                    error_callback(clinic.id, month_start, exc)
+    return HistoryBackfillResult(processed, clinic_ids_list, month_starts, failures)
 
 
 def _calculate_pj_withholding(clinic: Clinica, month_start: date) -> Decimal:

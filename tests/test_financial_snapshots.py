@@ -377,6 +377,7 @@ def test_contabilidade_pagamentos_auto_classifies_transactions(app):
             assert len(entries) == 4
             new_entry = ClassifiedTransaction.query.filter_by(value=Decimal('80.00')).one()
             assert new_entry.description == 'Retorno detalhado'
+            assert new_entry.month == date(2024, 5, 1)
 
 
 def test_cli_classify_transactions_history_backfills_data(app):
@@ -401,3 +402,67 @@ def test_cli_classify_transactions_history_backfills_data(app):
 
     with app.app_context():
         assert ClassifiedTransaction.query.count() == 3
+
+
+def test_cli_classify_transactions_history_reprocesses_previous_months(app):
+    with app.app_context():
+        clinic = _create_clinic_with_data()
+        clinic_id = clinic.id
+
+    runner = app.test_cli_runner()
+    first_run = runner.invoke(
+        args=[
+            'classify-transactions-history',
+            '--months',
+            '1',
+            '--clinic-id',
+            str(clinic_id),
+            '--reference-month',
+            '2024-06',
+        ],
+    )
+    assert first_run.exit_code == 0
+    assert 'Classificação executada' in first_run.output
+
+    with app.app_context():
+        assert ClassifiedTransaction.query.count() == 0
+        orcamento = Orcamento(
+            clinica_id=clinic_id,
+            descricao='Limpeza dental abril',
+            created_at=datetime(2024, 4, 20, 9, 0, 0),
+        )
+        db.session.add(orcamento)
+        db.session.flush()
+        servico = ServicoClinica.query.filter_by(clinica_id=clinic_id).first()
+        db.session.add(
+            OrcamentoItem(
+                orcamento_id=orcamento.id,
+                clinica_id=clinic_id,
+                descricao='Limpeza dental premium',
+                valor=Decimal('300.00'),
+                servico_id=servico.id,
+            )
+        )
+        db.session.commit()
+
+    second_run = runner.invoke(
+        args=[
+            'classify-transactions-history',
+            '--months',
+            '3',
+            '--clinic-id',
+            str(clinic_id),
+            '--reference-month',
+            '2024-06',
+            '--verbose',
+        ],
+    )
+    assert second_run.exit_code == 0
+    assert 'Classificando clínica' in second_run.output
+
+    with app.app_context():
+        entries = ClassifiedTransaction.query.order_by(ClassifiedTransaction.month).all()
+        assert len(entries) == 4
+        april_entry = next(entry for entry in entries if entry.month == date(2024, 4, 1))
+        assert april_entry.description.startswith('Limpeza dental')
+        assert april_entry.value == Decimal('300.00')
