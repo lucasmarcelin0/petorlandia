@@ -10,8 +10,9 @@ from typing import Callable, Iterable, List, Optional, Sequence, Tuple
 
 from dateutil.relativedelta import relativedelta
 from flask import current_app, has_app_context
-from sqlalchemy import cast, func, or_
+from sqlalchemy import cast, func, or_, inspect as sa_inspect
 from sqlalchemy.exc import OperationalError, ProgrammingError
+from sqlalchemy.orm import load_only
 from sqlalchemy.sql.sqltypes import Numeric
 
 import models
@@ -35,6 +36,7 @@ from models import (
 )
 
 ZERO = Decimal("0.00")
+_TABLE_COLUMN_CACHE: dict[str, set[str]] = {}
 MANUAL_ENTRY_MODEL_CANDIDATES = (
     "ClinicManualFinancialEntry",
     "ClinicManualEntry",
@@ -291,6 +293,26 @@ def _resolve_column(model, candidates: Iterable[str]):
         if column is not None:
             return column
     return None
+
+
+def _get_table_columns(table_name: str) -> set[str]:
+    if not table_name:
+        return set()
+    if table_name in _TABLE_COLUMN_CACHE:
+        return _TABLE_COLUMN_CACHE[table_name]
+    try:
+        inspector = sa_inspect(db.engine)
+        names = {column["name"] for column in inspector.get_columns(table_name)}
+    except (ProgrammingError, OperationalError):  # pragma: no cover - legacy DBs
+        names = set()
+    _TABLE_COLUMN_CACHE[table_name] = names
+    return names
+
+
+def _table_has_column(table_name: str, column_name: str) -> bool:
+    if not column_name:
+        return False
+    return column_name in _get_table_columns(table_name)
 
 
 def _manual_entries_total(clinic_id: int, start_dt: datetime, end_dt: datetime) -> Decimal:
@@ -561,6 +583,35 @@ def _classify_veterinarian_payments(
     query = model.query.filter(model.clinica_id == clinic_id)
     query = query.filter(date_column >= start_dt, date_column < end_dt)
 
+    provider_type_column = getattr(model, 'tipo_prestador', None)
+    provider_type_available = False
+    table_name = getattr(model, '__tablename__', None)
+    if provider_type_column is not None and table_name:
+        provider_type_available = _table_has_column(table_name, provider_type_column.key)
+        if not provider_type_available:
+            _log(
+                "[Contabilidade] Campo tipo_prestador ausente na tabela %s; usando subcategoria padrão",
+                table_name,
+            )
+
+    load_only_columns = []
+    for column in (
+        amount_column,
+        date_column,
+        description_column,
+        invoice_column,
+        raw_column,
+    ):
+        if column is not None and column not in load_only_columns:
+            load_only_columns.append(column)
+    id_column = getattr(model, 'id', None)
+    if id_column is not None and id_column not in load_only_columns:
+        load_only_columns.append(id_column)
+    if provider_type_available and provider_type_column not in load_only_columns:
+        load_only_columns.append(provider_type_column)
+    if load_only_columns:
+        query = query.options(load_only(*load_only_columns))
+
     records: List[ClassifiedTransaction] = []
     changed = False
     for entry in query.all():
@@ -573,7 +624,12 @@ def _classify_veterinarian_payments(
         raw_value = getattr(entry, raw_column.key, getattr(entry, 'id', None)) if raw_column else getattr(entry, 'id', None)
         if raw_value is None:
             raw_value = id(entry)
-        provider_type = determine_pj_payment_subcategory(getattr(entry, 'tipo_prestador', None))
+        provider_value = (
+            getattr(entry, provider_type_column.key, None)
+            if provider_type_available and provider_type_column is not None
+            else None
+        )
+        provider_type = determine_pj_payment_subcategory(provider_value)
         record, record_changed = _upsert_classified_transaction(
             clinic_id,
             month_start,
