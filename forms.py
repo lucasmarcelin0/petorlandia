@@ -14,6 +14,7 @@ from wtforms import (
     DateField,
     DateTimeField,
     TimeField,
+    HiddenField,
 )
 from wtforms.validators import (
     DataRequired,
@@ -545,6 +546,7 @@ class ProductPhotoForm(FlaskForm):
 
 
 class OrcamentoForm(FlaskForm):
+    clinica_id = HiddenField(validators=[DataRequired()])
     descricao = StringField('Descrição', validators=[DataRequired(), Length(max=200)])
     submit = SubmitField('Salvar')
 

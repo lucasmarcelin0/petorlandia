@@ -204,6 +204,7 @@ const itensContainer = document.getElementById('itens-container');
 const emptyState = document.getElementById('empty-state');
 const descricaoInputForm = document.getElementById('novo-descricao');
 const valorInputForm = document.getElementById('novo-valor');
+const clinicId = {{ bloco.clinica_id | tojson }};
 
 function getCategoryData(description) {
   const texto = (description || '').toLowerCase();
@@ -336,6 +337,10 @@ updateRelativeIndicators();
 toggleEmptyState();
 
 function salvar(blocoId, animalId) {
+  if (!clinicId) {
+    alert('Clínica não definida para este orçamento.');
+    return;
+  }
   const itens = [];
   document.querySelectorAll('#itens-container .item-card').forEach(card => {
     const descricao = card.querySelector('.descricao').value.trim();
@@ -347,7 +352,7 @@ function salvar(blocoId, animalId) {
   fetch(`/bloco_orcamento/${blocoId}/atualizar`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
-    body: JSON.stringify({ itens })
+    body: JSON.stringify({ itens, clinica_id: clinicId })
   }).then(r => r.json()).then(data => {
     if (data.success) {
       window.location.href = `/consulta/${animalId}`;

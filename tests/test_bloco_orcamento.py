@@ -34,12 +34,14 @@ def test_salvar_bloco_orcamento(app):
         db.session.add_all([consulta, item1, item2])
         db.session.commit()
         consulta_id = consulta.id
+        clinic_id = clinica.id
     client = app.test_client()
     with client:
         client.post('/login', data={'email': 'vet@example.com', 'password': 'x'}, follow_redirects=True)
         payload = {
             'discount_percent': 10,
-            'tutor_notes': 'Observação importante'
+            'tutor_notes': 'Observação importante',
+            'clinica_id': clinic_id,
         }
         resp = client.post(
             f'/consulta/{consulta_id}/bloco_orcamento',
