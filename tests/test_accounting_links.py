@@ -5,6 +5,7 @@ from decimal import Decimal
 from urllib.parse import parse_qs, urlsplit
 
 import pytest
+from sqlalchemy import inspect
 
 os.environ["SQLALCHEMY_DATABASE_URI"] = "sqlite:///:memory:"
 
@@ -15,6 +16,7 @@ import app as app_module  # noqa: E402
 from models import (  # noqa: E402
     Animal,
     BlocoOrcamento,
+    ClinicNotification,
     Clinica,
     Consulta,
     Orcamento,
@@ -190,3 +192,19 @@ def test_budget_widget_links_point_to_medical_pages(app, clinic_setup):
         assert bloco_link in html
         bloco_pagamento = f"/pagar_orcamento/{clinic_setup['bloco_id']}"
         assert bloco_pagamento in html
+
+
+def test_accounting_home_recovers_when_notifications_table_missing(app, clinic_setup):
+    client = app.test_client()
+    with app.app_context():
+        ClinicNotification.__table__.drop(bind=db.engine, checkfirst=True)
+        inspector = inspect(db.engine)
+        assert not inspector.has_table("clinic_notifications")
+
+    with client:
+        _login(client)
+        response = client.get("/contabilidade")
+        assert response.status_code == 200
+
+    with app.app_context():
+        assert inspect(db.engine).has_table("clinic_notifications")

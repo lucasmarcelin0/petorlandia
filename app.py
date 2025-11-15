@@ -130,6 +130,7 @@ app.config.setdefault("BABEL_DEFAULT_LOCALE", "pt_BR")
 
 _inventory_threshold_columns_checked = False
 _inventory_movement_table_checked = False
+_clinic_notifications_table_checked = False
 
 
 def _ensure_inventory_threshold_columns() -> None:
@@ -202,6 +203,37 @@ def _ensure_inventory_movement_table() -> None:
         pass
     finally:
         _inventory_movement_table_checked = True
+
+
+def _ensure_clinic_notifications_table() -> bool:
+    """Create ``clinic_notifications`` defensively when missing."""
+
+    global _clinic_notifications_table_checked
+    if _clinic_notifications_table_checked:
+        return True
+
+    try:
+        inspector = inspect(db.engine)
+    except Exception:  # pragma: no cover - engine initialization failures
+        return False
+
+    if inspector.has_table("clinic_notifications"):
+        _clinic_notifications_table_checked = True
+        return True
+
+    try:
+        ClinicNotification.__table__.create(bind=db.engine, checkfirst=True)
+    except ProgrammingError:
+        # Another worker may have created the table already; ignore and re-check.
+        pass
+
+    try:
+        exists = inspect(db.engine).has_table("clinic_notifications")
+    except Exception:  # pragma: no cover - engine initialization failures
+        exists = False
+
+    _clinic_notifications_table_checked = exists
+    return exists
 
 # ----------------------------------------------------------------
 # 4)  AWS S3 helper (lazy)
@@ -2952,7 +2984,7 @@ def contabilidade_home():
 
     current_month = date.today().replace(day=1)
     notifications = []
-    if selected_clinic:
+    if selected_clinic and _ensure_clinic_notifications_table():
         notifications = (
             ClinicNotification.query
             .filter_by(
