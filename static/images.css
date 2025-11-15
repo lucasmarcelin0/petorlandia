@@ -1,3 +1,58 @@
+.u-pill {
+    --pill-bg: #f4f6fb;
+    --pill-border: rgba(15, 23, 42, 0.08);
+    display: inline-flex;
+    align-items: center;
+    gap: 0.55rem;
+    padding: 0.55rem 0.85rem;
+    border-radius: 999px;
+    background: var(--pill-bg);
+    border: 1px solid var(--pill-border);
+}
+
+.u-pill--subtle {
+    --pill-bg: rgba(78, 115, 223, 0.08);
+    --pill-border: rgba(78, 115, 223, 0.18);
+}
+
+.u-icon-circle {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.u-hover-lift {
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.u-hover-lift:hover,
+.u-hover-lift:focus-within {
+    transform: translateY(-1px);
+    box-shadow: 0 0.35rem 0.85rem rgba(15, 23, 42, 0.08);
+}
+
+.u-stack-sm {
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+}
+
+.u-text-subtle {
+    font-size: 0.75rem;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: #6c757d;
+}
+
+.u-text-strong {
+    font-weight: 600;
+    color: #1f2d3d;
+}
+
 .logo-img {
     max-width: 275px;
     height: auto;
@@ -139,39 +194,36 @@
 
 .profile-card-contact-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-    gap: 0.75rem;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0.5rem;
+}
+
+@media (min-width: 768px) {
+    .profile-card-contact-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
 }
 
 .contact-item {
     display: flex;
     align-items: center;
-    gap: 0.75rem;
-    padding: 0.75rem;
-    border-radius: 1rem;
-    border: 1px solid rgba(0, 0, 0, 0.05);
-    background: #f8f9fc;
+    gap: 0.65rem;
+    width: 100%;
 }
 
 .contact-icon {
-    width: 42px;
-    height: 42px;
-    border-radius: 50%;
     background: rgba(78, 115, 223, 0.12);
     color: #4e73df;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 1rem;
+    font-size: 0.95rem;
 }
 
 .contact-content {
     flex: 1;
+    min-width: 0;
 }
 
 .contact-label {
     font-size: 0.75rem;
-    text-transform: uppercase;
     letter-spacing: 0.04em;
     color: #6c757d;
 }
@@ -180,6 +232,8 @@
     display: block;
     font-weight: 600;
     color: #1f2d3d;
+    line-height: 1.2;
+    word-break: break-word;
 }
 
 .contact-actions {
