@@ -49,16 +49,13 @@
             {% for error in form.nota_fiscal_numero.errors %}<div class="invalid-feedback d-block">{{ error }}</div>{% endfor %}
           </div>
           <div class="col-md-4">
-            <label class="form-label fw-semibold">{{ form.tipo_prestador.label }}</label>
+            <label class="form-label fw-semibold d-flex align-items-center gap-1">
+              {{ form.tipo_prestador.label }}
+              <i class="fas fa-info-circle text-muted" data-bs-toggle="tooltip" data-bs-placement="top" title="Usamos o tipo para aplicar automaticamente retenções (ISS/INSS) e segmentar os relatórios de prestadores."></i>
+            </label>
             {{ form.tipo_prestador(class="form-select" + (' is-invalid' if form.tipo_prestador.errors else '')) }}
-            <small class="text-muted">Classifique o profissional para relatórios segmentados.</small>
+            <small class="text-muted">Classifique o profissional para relatórios segmentados e retenções.</small>
             {% for error in form.tipo_prestador.errors %}<div class="invalid-feedback d-block">{{ error }}</div>{% endfor %}
-          </div>
-          <div class="col-md-4">
-            <label class="form-label fw-semibold">{{ form.plantao_horas.label }}</label>
-            {{ form.plantao_horas(class="form-control" + (' is-invalid' if form.plantao_horas.errors else ''), placeholder="Ex: 12" ) }}
-            <small class="text-muted">Opcional — use para controlar custo por hora.</small>
-            {% for error in form.plantao_horas.errors %}<div class="invalid-feedback d-block">{{ error }}</div>{% endfor %}
           </div>
           <div class="col-md-4">
             <label class="form-label fw-semibold">{{ form.valor.label }}</label>
@@ -76,7 +73,7 @@
             <small class="text-muted">Ao informar a data, o status será marcado como pago.</small>
             {% for error in form.data_pagamento.errors %}<div class="invalid-feedback d-block">{{ error }}</div>{% endfor %}
           </div>
-          {% set tipo_field = form._fields.get('tipo') %}
+          {% set tipo_field = form._fields.get('tipo') or form._fields.get('tipo_prestador') %}
           {% set plantao_field = form._fields.get('plantao') or form._fields.get('plantao_id') or form._fields.get('plantao_escala_id') %}
           {% set horas_previstas_field = form._fields.get('horas_previstas') %}
           {% set valor_hora_field = form._fields.get('valor_hora') %}

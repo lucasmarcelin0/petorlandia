@@ -50,7 +50,7 @@ VET_PAYMENT_MODEL_CANDIDATES = (
     "VetPayment",
     "PJPayment",
 )
-VET_PAYMENT_DATE_FIELDS = ("data_pagamento", "paid_at", "data", "created_at")
+VET_PAYMENT_DATE_FIELDS = ("data_servico", "data_pagamento", "paid_at", "data", "created_at")
 VET_PAYMENT_AMOUNT_FIELDS = ("valor", "amount", "valor_total")
 VET_PAYMENT_DESCRIPTION_FIELDS = ("descricao", "description", "detalhes")
 VET_PAYMENT_INVOICE_FIELDS = ("nota_fiscal", "nf_number", "invoice_number")

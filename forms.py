@@ -223,12 +223,28 @@ class PJPaymentForm(FlaskForm):
         default='especialista',
         validators=[DataRequired(message='Selecione o tipo de prestador.')],
     )
-    plantao_horas = DecimalField(
-        'Horas do plantão',
-        places=2,
+    plantao_escala_id = SelectField(
+        'Escala/plantão',
+        coerce=int,
         validators=[Optional()],
+        choices=[(0, 'Não vincular a um plantão')],
+    )
+    horas_previstas = DecimalField(
+        'Horas previstas',
+        places=2,
+        validators=[Optional(), NumberRange(min=0, message='Informe um número de horas válido.')],
         render_kw={"min": "0", "step": "0.25"},
     )
+    valor_hora = DecimalField(
+        'Valor por hora',
+        places=2,
+        validators=[Optional(), NumberRange(min=0, message='Informe um valor/hora válido.')],
+        render_kw={"min": "0", "step": "0.01"},
+    )
+    data_extra_inicio = DateField('Data real de início', format='%Y-%m-%d', validators=[Optional()])
+    hora_extra_inicio = TimeField('Hora real de início', validators=[Optional()])
+    data_extra_fim = DateField('Data real de término', format='%Y-%m-%d', validators=[Optional()])
+    hora_extra_fim = TimeField('Hora real de término', validators=[Optional()])
     valor = DecimalField(
         'Valor do pagamento',
         places=2,
@@ -253,9 +269,31 @@ class PJPaymentForm(FlaskForm):
         if field.data and field.data > date.today():
             raise ValidationError('A data do serviço não pode estar no futuro.')
 
-    def validate_plantao_horas(self, field):
-        if field.data is not None and field.data <= 0:
-            raise ValidationError('Informe um número de horas maior que zero ou deixe em branco.')
+    def validate(self, extra_validators=None):
+        initial_validation = super().validate(extra_validators=extra_validators)
+        errors_found = False
+
+        has_start = self.data_extra_inicio.data and self.hora_extra_inicio.data
+        has_end = self.data_extra_fim.data and self.hora_extra_fim.data
+
+        if any([self.data_extra_inicio.data, self.hora_extra_inicio.data]) and not has_start:
+            self.data_extra_inicio.errors.append('Preencha data e hora de início completas.')
+            errors_found = True
+        if any([self.data_extra_fim.data, self.hora_extra_fim.data]) and not has_end:
+            self.data_extra_fim.errors.append('Preencha data e hora de término completas.')
+            errors_found = True
+
+        if self.tipo_prestador.data == 'plantonista':
+            require_hours = not self.plantao_escala_id.data
+            if require_hours and not (self.horas_previstas.data or (has_start and has_end)):
+                self.horas_previstas.errors.append('Informe as horas previstas ou o período real do plantão.')
+                errors_found = True
+            require_valor_hora = not self.plantao_escala_id.data
+            if require_valor_hora and (not self.valor_hora.data or self.valor_hora.data <= 0):
+                self.valor_hora.errors.append('Informe o valor por hora do plantão.')
+                errors_found = True
+
+        return initial_validation and not errors_found
 
 
 class PlantonistaEscalaForm(FlaskForm):
