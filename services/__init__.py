@@ -5,6 +5,7 @@ from .data_share import find_active_share, log_data_share_event  # noqa: F401
 from .finance import (  # noqa: F401
     calculate_clinic_taxes,
     classify_transactions_for_month,
+    generate_clinic_notifications,
     generate_financial_snapshot,
     update_financial_snapshots_daily,
 )

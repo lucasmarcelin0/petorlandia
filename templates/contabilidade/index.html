@@ -4,7 +4,7 @@
 
 {% block main %}
 <div class="container mt-4">
-    
+
     <h2 class="mb-3">{{ titulo }}</h2>
 
     <nav aria-label="breadcrumb">
@@ -15,9 +15,73 @@
     </nav>
 
     <div class="card shadow-sm p-4 mt-3">
-        <h5>{{ subtitulo }}</h5>
-        <p class="text-muted mb-0">Nenhum dado disponível ainda.</p>
+        <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3">
+            <div>
+                <h5 class="mb-1">{{ subtitulo }}</h5>
+                <p class="text-muted mb-0">Monitoramento automático das pendências contábeis do mês.</p>
+            </div>
+            {% if clinics %}
+            <form method="get" class="ms-md-auto">
+                <label class="form-label small text-muted mb-1" for="clinica-select">Clínica</label>
+                <select id="clinica-select" name="clinica_id" class="form-select" onchange="this.form.submit()">
+                    {% for clinic in clinics %}
+                        <option value="{{ clinic.id }}" {% if selected_clinic and clinic.id == selected_clinic.id %}selected{% endif %}>
+                            {{ clinic.nome or 'Clínica' }}
+                        </option>
+                    {% endfor %}
+                </select>
+            </form>
+            {% endif %}
+        </div>
     </div>
 
+    <div class="card shadow-sm mt-4">
+        <div class="card-body">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <div>
+                    <h5 class="mb-1">Alertas da clínica</h5>
+                    <p class="text-muted mb-0">Referente a {{ current_month.strftime('%m/%Y') if current_month else '' }}</p>
+                </div>
+                <i class="fas fa-bell text-primary fs-4"></i>
+            </div>
+
+            {% set type_classes = {
+                'danger': 'border-danger-subtle bg-danger-subtle text-danger-emphasis',
+                'warning': 'border-warning-subtle bg-warning-subtle text-warning-emphasis',
+                'info': 'border-info-subtle bg-info-subtle text-info-emphasis',
+                'success': 'border-success-subtle bg-success-subtle text-success-emphasis'
+            } %}
+            {% set type_icons = {
+                'danger': 'fa-triangle-exclamation',
+                'warning': 'fa-circle-exclamation',
+                'info': 'fa-circle-info',
+                'success': 'fa-circle-check'
+            } %}
+
+            {% if selected_clinic %}
+                {% if notifications %}
+                    <div class="d-flex flex-column gap-3">
+                        {% for alert in notifications %}
+                            {% set tone_class = type_classes.get(alert.type, 'bg-light border-light text-dark') %}
+                            <div class="border rounded-3 px-3 py-3 {{ tone_class }}">
+                                <div class="d-flex align-items-start gap-3">
+                                    <span class="fs-4"><i class="fas {{ type_icons.get(alert.type, 'fa-circle-info') }}"></i></span>
+                                    <div>
+                                        <h6 class="mb-1">{{ alert.title }}</h6>
+                                        <p class="mb-0 small">{{ alert.message }}</p>
+                                    </div>
+                                </div>
+                            </div>
+                        {% endfor %}
+                    </div>
+                {% else %}
+                    <p class="text-muted mb-0">Nenhum alerta para este mês.</p>
+                {% endif %}
+            {% else %}
+                <p class="text-muted mb-0">Nenhuma clínica disponível para exibir alertas.</p>
+            {% endif %}
+        </div>
     </div>
+
+</div>
 {% endblock %}

@@ -920,6 +920,25 @@ class ClinicTaxes(db.Model):
     )
 
 
+class ClinicNotification(db.Model):
+    __tablename__ = 'clinic_notifications'
+
+    id = db.Column(db.Integer, primary_key=True)
+    clinic_id = db.Column(db.Integer, db.ForeignKey('clinica.id'), nullable=False, index=True)
+    title = db.Column(db.String(150), nullable=False)
+    message = db.Column(db.Text, nullable=True)
+    type = db.Column(db.String(20), nullable=False, default='info')
+    month = db.Column(db.Date, nullable=False, index=True)
+    created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+    resolved = db.Column(db.Boolean, nullable=False, default=False)
+    resolution_date = db.Column(db.DateTime, nullable=True)
+
+    clinic = db.relationship(
+        'Clinica',
+        backref=db.backref('clinic_notifications', cascade='all, delete-orphan', lazy=True),
+    )
+
+
 class ClassifiedTransaction(db.Model):
     __tablename__ = 'classified_transactions'
     __table_args__ = (

@@ -12,6 +12,7 @@ from app import app as flask_app, db  # noqa: E402
 from models import (  # noqa: E402
     ClassifiedTransaction,
     ClinicFinancialSnapshot,
+    ClinicNotification,
     ClinicTaxes,
     Clinica,
     Orcamento,
@@ -26,6 +27,7 @@ from models import (  # noqa: E402
 from services.finance import (  # noqa: E402
     calculate_clinic_taxes,
     classify_transactions_for_month,
+    generate_clinic_notifications,
     generate_financial_snapshot,
     update_financial_snapshots_daily,
 )
@@ -229,3 +231,90 @@ def test_calculate_clinic_taxes_updates_existing_record(app):
         assert taxes.das_total == Decimal('27.00')
         assert taxes.retencoes_pj == Decimal('600.00')
         assert taxes.projecao_anual == Decimal('5400.00')
+
+
+def test_generate_clinic_notifications_detects_key_alerts(app):
+    with app.app_context():
+        clinic = _create_clinic_with_data()
+        month = date(2024, 5, 1)
+
+        payment = PJPayment.query.first()
+        payment.nota_fiscal_numero = None
+
+        taxes = ClinicTaxes(
+            clinic_id=clinic.id,
+            month=month,
+            iss_total=Decimal('500.00'),
+            das_total=Decimal('800.00'),
+            retencoes_pj=Decimal('0'),
+            fator_r=Decimal('0.10'),
+            faixa_simples=5,
+            projecao_anual=Decimal('5000000.00'),
+        )
+        db.session.add(taxes)
+
+        db.session.add(
+            ClassifiedTransaction(
+                clinic_id=clinic.id,
+                date=datetime(2024, 5, 5, 12, 0),
+                month=month,
+                origin='manual',
+                description='Ajuste negativo',
+                value=Decimal('-100.00'),
+                category='receita_servico',
+                subcategory='ajuste',
+                raw_id='adjust-1',
+            )
+        )
+        db.session.commit()
+
+        notifications = generate_clinic_notifications(clinic.id, month)
+        titles = {notice.title for notice in notifications}
+
+        assert "Prestador sem nota fiscal" in titles
+        assert "Fator R abaixo do limite" in titles
+        assert "ISS do mês pendente" in titles
+        assert "DAS do mês pendente" in titles
+        assert "Receitas negativas ou inconsistentes" in titles
+        assert "Projeção anual acima do limite do Simples Nacional" in titles
+
+
+def test_generate_clinic_notifications_marks_alert_resolved(app):
+    with app.app_context():
+        clinic = _create_clinic_with_data()
+        month = date(2024, 5, 1)
+
+        payment = PJPayment.query.first()
+        payment.nota_fiscal_numero = None
+        taxes = ClinicTaxes(
+            clinic_id=clinic.id,
+            month=month,
+            iss_total=Decimal('0.00'),
+            das_total=Decimal('0.00'),
+            retencoes_pj=Decimal('0.00'),
+            fator_r=Decimal('0.50'),
+            faixa_simples=1,
+            projecao_anual=Decimal('100000.00'),
+        )
+        db.session.add(taxes)
+        db.session.commit()
+
+        generate_clinic_notifications(clinic.id, month)
+        unpaid_alert = ClinicNotification.query.filter_by(
+            clinic_id=clinic.id,
+            month=month,
+            title="Prestador sem nota fiscal",
+        ).one()
+        assert unpaid_alert.resolved is False
+
+        payment.nota_fiscal_numero = "NF-OK"
+        db.session.commit()
+
+        notifications = generate_clinic_notifications(clinic.id, month)
+        assert all(alert.title != "Prestador sem nota fiscal" for alert in notifications)
+        resolved_alert = ClinicNotification.query.filter_by(
+            clinic_id=clinic.id,
+            month=month,
+            title="Prestador sem nota fiscal",
+        ).one()
+        assert resolved_alert.resolved is True
