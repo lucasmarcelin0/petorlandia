@@ -153,7 +153,7 @@
                   </div>
                   <div class="contact-content u-stack-sm">
                     <span class="contact-label u-text-subtle">E-mail</span>
-                    <span class="contact-value u-text-strong">{{ tutor.email }}</span>
+                    <span class="contact-value u-text-strong" title="{{ tutor.email }}">{{ tutor.email }}</span>
                   </div>
                   <div class="contact-actions">
                     <a href="mailto:{{ tutor.email }}" class="contact-action-btn contact-action-btn--email" title="Enviar e-mail" data-bs-toggle="tooltip" data-bs-placement="top" data-bs-title="Enviar e-mail">
@@ -170,7 +170,7 @@
                   </div>
                   <div class="contact-content u-stack-sm">
                     <span class="contact-label u-text-subtle">Telefone</span>
-                    <span class="contact-value u-text-strong">{{ tutor.phone }}</span>
+                    <span class="contact-value u-text-strong" title="{{ tutor.phone }}">{{ tutor.phone }}</span>
                   </div>
                   <div class="contact-actions">
                     <a href="https://wa.me/{{ phone_digits }}" target="_blank" rel="noopener" class="contact-action-btn contact-action-btn--whatsapp" title="Conversar no WhatsApp" data-bs-toggle="tooltip" data-bs-placement="top" data-bs-title="Conversar no WhatsApp">
@@ -186,7 +186,7 @@
                   </div>
                   <div class="contact-content u-stack-sm">
                     <span class="contact-label u-text-subtle">CPF</span>
-                    <span class="contact-value u-text-strong">{{ tutor.cpf }}</span>
+                    <span class="contact-value u-text-strong" title="{{ tutor.cpf }}">{{ tutor.cpf }}</span>
                   </div>
                 </div>
                 {% endif %}
@@ -197,7 +197,7 @@
                   </div>
                   <div class="contact-content u-stack-sm">
                     <span class="contact-label u-text-subtle">Especialidades</span>
-                    <span class="contact-value u-text-strong">{{ tutor.veterinario.specialty_list }}</span>
+                    <span class="contact-value u-text-strong" title="{{ tutor.veterinario.specialty_list }}">{{ tutor.veterinario.specialty_list }}</span>
                   </div>
                 </div>
                 {% endif %}

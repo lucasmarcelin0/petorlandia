@@ -224,6 +224,7 @@
     background: rgba(255, 255, 255, 0.85);
     border: 1px solid rgba(15, 23, 42, 0.05);
     box-shadow: 0 20px 45px -38px rgba(15, 23, 42, 0.65);
+    flex-wrap: nowrap;
 }
 
 .contact-icon {
@@ -250,13 +251,17 @@
     font-weight: 600;
     color: #1b1f3b;
     line-height: 1.25;
-    word-break: break-word;
+    max-width: 100%;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 .contact-actions {
     display: flex;
     align-items: center;
     gap: 0.35rem;
+    flex-shrink: 0;
 }
 
 .contact-action-btn {
