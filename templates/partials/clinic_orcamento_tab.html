@@ -81,6 +81,15 @@
           max-width: 130px;
           opacity: 0.8;
         }
+        .payment-card {
+          background: var(--bs-body-bg);
+        }
+        .payment-card .payment-link-content .text-truncate {
+          max-width: 240px;
+        }
+        .payment-card button[data-generate-payment-link] {
+          white-space: nowrap;
+        }
       </style>
 
       <div class="card shadow-sm mb-4 orcamento-filter-card">
@@ -213,6 +222,40 @@
                       Atualizar
                     </button>
                   </div>
+                  {% set payment_key = o.payment_status or 'none' %}
+                  {% set payment_badge = orcamento_payment_status_styles.get(payment_key, 'secondary') %}
+                  {% set payment_label = orcamento_payment_status_labels.get(payment_key, 'Sem link') %}
+                  <div class="payment-card w-100 mt-3 p-3 border rounded" data-payment-section>
+                    <div class="d-flex flex-wrap justify-content-between align-items-start gap-2">
+                      <div>
+                        <div class="text-muted text-uppercase small fw-semibold">Pagamento</div>
+                        <span class="badge rounded-pill px-3 py-2 bg-{{ payment_badge }}" data-payment-status-badge data-status="{{ payment_key }}">{{ payment_label }}</span>
+                        <div class="small text-muted mt-1" data-payment-paid-at {% if not o.paid_at %}hidden{% endif %}>
+                          {% if o.paid_at %}Pago em {{ o.paid_at.strftime('%d/%m/%Y %H:%M') }}{% endif %}
+                        </div>
+                      </div>
+                      <button type="button" class="btn btn-sm btn-outline-primary d-flex align-items-center gap-2" data-generate-payment-link data-endpoint="{{ url_for('gerar_pagamento_orcamento', orcamento_id=o.id) }}" data-orcamento-id="{{ o.id }}">
+                        <i class="fas fa-link"></i>
+                        Gerar link de pagamento
+                      </button>
+                    </div>
+                    <div class="mt-3" data-payment-link-wrapper>
+                      <small class="text-muted" data-payment-empty {% if o.payment_link %}hidden{% endif %}>Link ainda não gerado.</small>
+                      <div class="payment-link-content" data-payment-link-content {% if not o.payment_link %}hidden{% endif %}>
+                        <div class="small text-truncate" data-payment-link-display title="{{ o.payment_link or '' }}">{{ o.payment_link }}</div>
+                        <div class="d-flex flex-wrap gap-2 mt-2">
+                          <button type="button" class="btn btn-sm btn-outline-secondary" data-copy-payment-link data-link="{{ o.payment_link or '' }}" {% if not o.payment_link %}disabled{% endif %}>
+                            <i class="fas fa-copy"></i>
+                            Copiar link
+                          </button>
+                          <a href="{{ o.payment_link or '#' }}" class="btn btn-sm btn-outline-info" target="_blank" rel="noopener" data-open-payment-link {% if not o.payment_link %}hidden{% endif %}>
+                            <i class="fas fa-arrow-up-right-from-square"></i>
+                            Abrir link
+                          </a>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
                 </div>
               </td>
               <td class="text-center" data-label="Atualizado" data-orcamento-updated>
@@ -279,6 +322,8 @@
           const statusLabels = {{ orcamento_status_labels | tojson }};
           const statusStyles = {{ orcamento_status_styles | tojson }};
           const statusIcons = {{ status_icons | tojson }};
+          const paymentStatusLabels = {{ orcamento_payment_status_labels | tojson }};
+          const paymentStatusStyles = {{ orcamento_payment_status_styles | tojson }};
 
           const toastContainer = document.getElementById('orcamento-status-toast-container');
 
@@ -372,10 +417,117 @@
             showToast(responseData.message || 'Status atualizado com sucesso.', 'success');
           }
 
+          function updatePaymentSection(row, payload) {
+            if (!row) return;
+            const section = row.querySelector('[data-payment-section]');
+            if (!section) return;
+            const key = payload && payload.payment_status ? payload.payment_status : 'none';
+            const badge = section.querySelector('[data-payment-status-badge]');
+            if (badge) {
+              const style = paymentStatusStyles[key] || 'secondary';
+              badge.className = `badge rounded-pill d-inline-flex align-items-center gap-2 px-3 py-2 bg-${style}`;
+              badge.textContent = paymentStatusLabels[key] || key;
+              badge.dataset.status = key;
+            }
+            const paidAt = section.querySelector('[data-payment-paid-at]');
+            if (paidAt) {
+              if (payload && payload.paid_at) {
+                paidAt.textContent = `Pago em ${formatDateTime(payload.paid_at)}`;
+                paidAt.hidden = false;
+              } else {
+                paidAt.textContent = '';
+                paidAt.hidden = true;
+              }
+            }
+            const wrapper = section.querySelector('[data-payment-link-wrapper]');
+            if (wrapper) {
+              const empty = wrapper.querySelector('[data-payment-empty]');
+              const content = wrapper.querySelector('[data-payment-link-content]');
+              const linkDisplay = wrapper.querySelector('[data-payment-link-display]');
+              const copyBtn = wrapper.querySelector('[data-copy-payment-link]');
+              const openBtn = wrapper.querySelector('[data-open-payment-link]');
+              const hasLink = payload && payload.payment_link;
+              if (empty) empty.hidden = !!hasLink;
+              if (content) content.hidden = !hasLink;
+              if (hasLink && linkDisplay) {
+                linkDisplay.textContent = payload.payment_link;
+                linkDisplay.title = payload.payment_link;
+              }
+              if (copyBtn) {
+                copyBtn.dataset.link = hasLink ? payload.payment_link : '';
+                copyBtn.disabled = !hasLink;
+              }
+              if (openBtn) {
+                openBtn.hidden = !hasLink;
+                openBtn.href = hasLink ? payload.payment_link : '#';
+              }
+            }
+          }
+
+          async function handlePaymentLink(button) {
+            const endpoint = button.dataset.endpoint;
+            if (!endpoint) {
+              showToast('Não foi possível encontrar o endpoint de pagamento.', 'danger');
+              return;
+            }
+            const original = button.innerHTML;
+            button.disabled = true;
+            button.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>';
+            let payload = null;
+            try {
+              const resp = await fetch(endpoint, {
+                method: 'POST',
+                headers: { 'Accept': 'application/json' }
+              });
+              payload = await resp.json().catch(() => null);
+              if (!resp.ok || !payload || !payload.success) {
+                showToast((payload && payload.message) || 'Não foi possível gerar o link.', resp.ok ? 'warning' : 'danger');
+                return;
+              }
+            } catch (error) {
+              showToast('Erro ao conectar com o servidor.', 'danger');
+              return;
+            } finally {
+              button.disabled = false;
+              button.innerHTML = original;
+            }
+            const row = button.closest('tr');
+            updatePaymentSection(row, payload);
+            showToast(payload.message || 'Link gerado com sucesso.', 'success');
+          }
+
+          async function copyPaymentLink(button) {
+            const link = button.dataset.link;
+            if (!link) {
+              showToast('Nenhum link disponível para copiar.', 'warning');
+              return;
+            }
+            try {
+              await navigator.clipboard.writeText(link);
+              showToast('Link copiado para a área de transferência.', 'success');
+            } catch (error) {
+              showToast('Não foi possível copiar o link automaticamente.', 'warning');
+            }
+          }
+
           document.querySelectorAll('.orcamento-status-update').forEach(button => {
             if (button.dataset.bindStatusChange) return;
             button.dataset.bindStatusChange = '1';
             button.addEventListener('click', () => handleStatusUpdate(button));
+          });
+
+          document.addEventListener('click', event => {
+            const generator = event.target.closest('[data-generate-payment-link]');
+            if (generator) {
+              event.preventDefault();
+              handlePaymentLink(generator);
+              return;
+            }
+            const copyBtn = event.target.closest('[data-copy-payment-link]');
+            if (copyBtn) {
+              event.preventDefault();
+              copyPaymentLink(copyBtn);
+            }
           });
         })();
       </script>

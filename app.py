@@ -3768,6 +3768,20 @@ ORCAMENTO_STATUS_STYLES = {
     'canceled': 'dark',
 }
 
+ORCAMENTO_PAYMENT_STATUS_LABELS = {
+    'none': 'Sem link',
+    'pending': 'Pendente',
+    'paid': 'Pago',
+    'failed': 'Falhou',
+}
+
+ORCAMENTO_PAYMENT_STATUS_STYLES = {
+    'none': 'secondary',
+    'pending': 'warning text-dark',
+    'paid': 'success',
+    'failed': 'danger',
+}
+
 
 def enviar_mensagem_whatsapp(texto: str, numero: str) -> None:
     """Envia uma mensagem de WhatsApp usando a API do Twilio."""
@@ -6139,6 +6153,8 @@ def clinic_detail(clinica_id):
         },
         orcamento_status_labels=ORCAMENTO_STATUS_LABELS,
         orcamento_status_styles=ORCAMENTO_STATUS_STYLES,
+        orcamento_payment_status_labels=ORCAMENTO_PAYMENT_STATUS_LABELS,
+        orcamento_payment_status_styles=ORCAMENTO_PAYMENT_STATUS_STYLES,
         pode_editar=pode_editar,
         animais_adicionados=animais_adicionados,
         tutores_adicionados=tutores_adicionados,
@@ -6548,6 +6564,8 @@ def enviar_orcamento(orcamento_id):
     tutor_nome = getattr(tutor, 'name', 'tutor')
     animal_nome = getattr(animal, 'name', 'pet')
     mensagem = f"Olá {tutor_nome}! Segue o orçamento para {animal_nome}: {link}"
+    if orcamento.payment_link:
+        mensagem += f"\nLink para pagamento: {orcamento.payment_link}"
 
     if channel == 'email':
         if not tutor.email:
@@ -6585,6 +6603,50 @@ def enviar_orcamento(orcamento_id):
     db.session.commit()
     flash('Orçamento enviado com sucesso!', 'success')
     return redirect(redirect_url)
+
+
+@app.route('/orcamento/<int:orcamento_id>/pagar', methods=['POST'])
+@login_required
+def gerar_pagamento_orcamento(orcamento_id):
+    orcamento = Orcamento.query.get_or_404(orcamento_id)
+    ensure_clinic_access(orcamento.clinica_id)
+    if not orcamento.items:
+        return jsonify({'success': False, 'message': 'Nenhum item no orçamento.'}), 400
+
+    items = [
+        {
+            'id': str(it.id),
+            'title': it.descricao,
+            'quantity': 1,
+            'unit_price': float(it.valor),
+        }
+        for it in orcamento.items
+    ]
+
+    back_url = url_for('clinic_detail', clinica_id=orcamento.clinica_id, _external=True)
+    try:
+        pref, payment_url = _criar_preferencia_pagamento(
+            items,
+            external_reference=f'orcamento-{orcamento.id}',
+            back_url=back_url,
+        )
+    except MercadoPagoPreferenceError as exc:
+        status = exc.status_code
+        return jsonify({'success': False, 'message': str(exc)}), status
+
+    orcamento.payment_link = payment_url
+    orcamento.payment_reference = str(pref.get('id') or pref.get('external_reference') or f'orcamento-{orcamento.id}')
+    orcamento.payment_status = 'pending'
+    orcamento.paid_at = None
+    db.session.commit()
+    return jsonify({
+        'success': True,
+        'payment_link': payment_url,
+        'payment_status': orcamento.payment_status,
+        'payment_reference': orcamento.payment_reference,
+        'paid_at': orcamento.paid_at.isoformat() if orcamento.paid_at else None,
+        'message': 'Link de pagamento gerado com sucesso.'
+    })
 
 
 @app.route('/orcamento/<int:orcamento_id>/status', methods=['PATCH'])
@@ -10620,6 +10682,43 @@ def mp_sdk():
     return mercadopago.SDK(current_app.config["MERCADOPAGO_ACCESS_TOKEN"])
 
 
+class MercadoPagoPreferenceError(RuntimeError):
+    def __init__(self, message: str, status_code: int = 400):
+        super().__init__(message)
+        self.status_code = status_code
+
+
+def _criar_preferencia_pagamento(items, external_reference: str, back_url: str):
+    if not items:
+        raise MercadoPagoPreferenceError('Nenhum item no orçamento.', status_code=400)
+
+    preference_data = {
+        'items': items,
+        'external_reference': external_reference,
+        'notification_url': url_for('notificacoes_mercado_pago', _external=True),
+        'statement_descriptor': current_app.config.get('MERCADOPAGO_STATEMENT_DESCRIPTOR'),
+        'back_urls': {state: back_url for state in ('success', 'failure', 'pending')},
+        'auto_return': 'approved',
+    }
+
+    try:
+        resp = mp_sdk().preference().create(preference_data)
+    except Exception as exc:  # noqa: BLE001
+        current_app.logger.exception('Erro de conexão com Mercado Pago')
+        raise MercadoPagoPreferenceError('Falha ao conectar com Mercado Pago.', status_code=502) from exc
+
+    if resp.get('status') != 201:
+        current_app.logger.error('MP error (HTTP %s): %s', resp.get('status'), resp)
+        raise MercadoPagoPreferenceError('Erro ao iniciar pagamento.', status_code=502)
+
+    pref = resp.get('response') or {}
+    payment_url = pref.get('init_point')
+    if not payment_url:
+        raise MercadoPagoPreferenceError('Retorno de pagamento inválido.', status_code=502)
+
+    return pref, payment_url
+
+
 # Caches for frequently requested lists
 @cache
 def list_species():
@@ -11670,6 +11769,18 @@ from sqlalchemy.exc import SQLAlchemyError
 # Regular expression for parsing X-Signature header
 _SIG_RE = re.compile(r"(?i)(?:ts=(\d+),\s*)?v1=([a-f0-9]{64})")
 
+
+def _parse_mp_datetime(value):
+    if not value:
+        return None
+    try:
+        dt = datetime.fromisoformat(value.replace('Z', '+00:00'))
+    except ValueError:
+        return None
+    if dt.tzinfo:
+        return dt.astimezone(timezone.utc).replace(tzinfo=None)
+    return dt
+
 def verify_mp_signature(req, secret: str) -> bool:
     """
     Verify the signature of a Mercado Pago webhook notification.
@@ -11788,11 +11899,17 @@ def notificacoes_mercado_pago():
     }
 
     bloco_id = None
+    orcamento_id = None
     if extref and extref.startswith('bloco_orcamento-'):
         try:
             bloco_id = int(extref.split('-', 1)[1])
         except (ValueError, TypeError):
             bloco_id = None
+    if extref and extref.startswith('orcamento-'):
+        try:
+            orcamento_id = int(extref.split('-', 1)[1])
+        except (ValueError, TypeError):
+            orcamento_id = None
 
     bloco_status_map = {
         'approved': 'paid',
@@ -11810,7 +11927,8 @@ def notificacoes_mercado_pago():
         with db.session.begin():
             pay = Payment.query.filter_by(external_reference=extref).first()
             bloco = BlocoOrcamento.query.get(bloco_id) if bloco_id else None
-            if not pay and not bloco:
+            orcamento = Orcamento.query.get(orcamento_id) if orcamento_id else None
+            if not pay and not bloco and not orcamento:
                 current_app.logger.warning("Payment %s not found for external_reference %s", mp_id, extref)
                 return jsonify(error="payment not found"), 404
 
@@ -11831,6 +11949,31 @@ def notificacoes_mercado_pago():
 
             if bloco:
                 bloco.payment_status = bloco_status_map.get(status, 'pending')
+            if orcamento:
+                payment_state = bloco_status_map.get(status, 'pending')
+                orcamento.payment_status = payment_state
+                if payment_state == 'paid':
+                    orcamento.paid_at = _parse_mp_datetime(info.get('date_approved')) or datetime.utcnow()
+                elif payment_state == 'failed':
+                    orcamento.paid_at = None
+
+                orcamento_status_map = {
+                    'approved': 'approved',
+                    'authorized': 'approved',
+                    'pending': 'sent',
+                    'in_process': 'sent',
+                    'in_mediation': 'sent',
+                    'rejected': 'rejected',
+                    'cancelled': 'canceled',
+                    'refunded': 'canceled',
+                    'expired': 'canceled',
+                }
+                new_status = orcamento_status_map.get(status)
+                if new_status == 'sent':
+                    if orcamento.status in {'draft', 'sent'}:
+                        orcamento.status = 'sent'
+                elif new_status in {'approved', 'rejected', 'canceled'}:
+                    orcamento.status = new_status
 
     except SQLAlchemyError as e:
         current_app.logger.exception("DB error: %s", e)
@@ -15202,8 +15345,10 @@ def imprimir_orcamento_padrao(orcamento_id):
 def pagar_orcamento(bloco_id):
     bloco = BlocoOrcamento.query.get_or_404(bloco_id)
     ensure_clinic_access(bloco.clinica_id)
+    wants_json = request.accept_mimetypes.accept_json
+    back_url = url_for('consulta_direct', animal_id=bloco.animal_id, _external=True)
     if not bloco.itens:
-        if request.accept_mimetypes.accept_json:
+        if wants_json:
             return jsonify({'success': False, 'message': 'Nenhum item no orçamento.'}), 400
         flash('Nenhum item no orçamento.', 'warning')
         return redirect(url_for('consulta_direct', animal_id=bloco.animal_id))
@@ -15218,50 +15363,28 @@ def pagar_orcamento(bloco_id):
         for it in bloco.itens
     ]
 
-    preference_data = {
-        'items': items,
-        'external_reference': f'bloco_orcamento-{bloco.id}',
-        'notification_url': url_for('notificacoes_mercado_pago', _external=True),
-        'statement_descriptor': current_app.config.get('MERCADOPAGO_STATEMENT_DESCRIPTOR'),
-        'back_urls': {
-            s: url_for('consulta_direct', animal_id=bloco.animal_id, _external=True)
-            for s in ('success', 'failure', 'pending')
-        },
-        'auto_return': 'approved',
-    }
-
     try:
-        resp = mp_sdk().preference().create(preference_data)
-    except Exception:
-        current_app.logger.exception('Erro de conexão com Mercado Pago')
-        if request.accept_mimetypes.accept_json:
-            return jsonify({'success': False, 'message': 'Falha ao conectar com Mercado Pago.'}), 502
-        flash('Falha ao conectar com Mercado Pago.', 'danger')
+        pref, payment_url = _criar_preferencia_pagamento(
+            items,
+            external_reference=f'bloco_orcamento-{bloco.id}',
+            back_url=back_url,
+        )
+    except MercadoPagoPreferenceError as exc:
+        if wants_json:
+            return jsonify({'success': False, 'message': str(exc)}), exc.status_code
+        flash(str(exc), 'danger' if exc.status_code >= 500 else 'warning')
         return redirect(url_for('consulta_direct', animal_id=bloco.animal_id))
 
-    if resp.get('status') != 201:
-        current_app.logger.error('MP error (HTTP %s): %s', resp.get('status'), resp)
-        if request.accept_mimetypes.accept_json:
-            return jsonify({'success': False, 'message': 'Erro ao iniciar pagamento.'}), 502
-        flash('Erro ao iniciar pagamento.', 'danger')
-        return redirect(url_for('consulta_direct', animal_id=bloco.animal_id))
-
-    pref = resp['response']
-    payment_url = pref.get('init_point')
-    if not payment_url:
-        if request.accept_mimetypes.accept_json:
-            return jsonify({'success': False, 'message': 'Retorno de pagamento inválido.'}), 502
-        flash('Retorno de pagamento inválido.', 'danger')
-        return redirect(url_for('consulta_direct', animal_id=bloco.animal_id))
     bloco.payment_link = payment_url
     bloco.payment_reference = str(pref.get('id') or pref.get('external_reference') or f'bloco_orcamento-{bloco.id}')
     bloco.payment_status = 'pending'
     db.session.commit()
-    if request.accept_mimetypes.accept_json:
+    if wants_json:
         historico_html = _render_orcamento_history(bloco.animal, bloco.clinica_id)
         return jsonify({
             'success': True,
             'redirect_url': bloco.payment_link,
+            'payment_link': bloco.payment_link,
             'payment_status': bloco.payment_status,
             'html': historico_html,
             'message': 'Link de pagamento gerado com sucesso.'
