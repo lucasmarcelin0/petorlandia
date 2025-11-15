@@ -9,7 +9,7 @@ from sqlalchemy import func, or_, true
 from sqlalchemy.orm import joinedload
 
 from extensions import db
-from models import Animal, Appointment
+from models import Animal, Appointment, AnimalClinicShare, TutorClinicShare
 
 DEFAULT_LIMIT = 50
 VALID_SORTS = {"name_asc", "recent_added", "recent_attended"}
@@ -37,6 +37,32 @@ def _coerce_sort(value: Optional[str]) -> str:
     if value in VALID_SORTS:
         return value
     return "recent_added"
+
+
+def _clinic_scope_clause(clinic_scope: Optional[int]):
+    if not clinic_scope:
+        return None
+    share_exists = (
+        db.session.query(AnimalClinicShare.id)
+        .filter(
+            AnimalClinicShare.animal_id == Animal.id,
+            AnimalClinicShare.clinica_id == clinic_scope,
+            AnimalClinicShare.scope_clinic.is_(True),
+            AnimalClinicShare.revoked_at.is_(None),
+        )
+        .exists()
+    )
+    tutor_share_exists = (
+        db.session.query(TutorClinicShare.id)
+        .filter(
+            TutorClinicShare.tutor_id == Animal.user_id,
+            TutorClinicShare.clinica_id == clinic_scope,
+            TutorClinicShare.scope_clinic.is_(True),
+            TutorClinicShare.revoked_at.is_(None),
+        )
+        .exists()
+    )
+    return or_(Animal.clinica_id == clinic_scope, share_exists, tutor_share_exists)
 
 
 def _serialize_species(animal: Animal) -> Optional[str]:
@@ -109,7 +135,9 @@ def search_animals(
         query = query.filter(Animal.owner.has(visibility_clause))
 
     if not is_admin and clinic_scope:
-        query = query.filter(Animal.clinica_id == clinic_scope)
+        clinic_clause = _clinic_scope_clause(clinic_scope)
+        if clinic_clause is not None:
+            query = query.filter(clinic_clause)
 
     if tutor_id:
         query = query.filter(Animal.user_id == tutor_id)

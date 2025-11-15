@@ -116,6 +116,14 @@ class User(UserMixin, db.Model):
         foreign_keys='Animal.user_id'  # 🛠 THIS LINE
     )
 
+    clinic_shares = db.relationship(
+        'TutorClinicShare',
+        back_populates='tutor',
+        cascade='all, delete-orphan',
+        lazy='dynamic',
+        foreign_keys='TutorClinicShare.tutor_id',
+    )
+
 
 
 
@@ -203,6 +211,53 @@ class User(UserMixin, db.Model):
 
 
 
+
+
+class TutorClinicShare(db.Model):
+    __tablename__ = 'tutor_clinic_share'
+    __table_args__ = (
+        db.UniqueConstraint('tutor_id', 'clinica_id', name='uq_tutor_clinic_share_tutor_clinic'),
+    )
+
+    id = db.Column(db.Integer, primary_key=True)
+    tutor_id = db.Column(
+        db.Integer,
+        db.ForeignKey('user.id', ondelete='CASCADE'),
+        nullable=False,
+    )
+    clinica_id = db.Column(
+        db.Integer,
+        db.ForeignKey('clinica.id', ondelete='CASCADE'),
+        nullable=False,
+    )
+    granted_by_id = db.Column(db.Integer, db.ForeignKey('user.id', ondelete='SET NULL'), nullable=True)
+    granted_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    revoked_at = db.Column(db.DateTime, nullable=True)
+    revoked_by_id = db.Column(db.Integer, db.ForeignKey('user.id', ondelete='SET NULL'), nullable=True)
+    scope_clinic = db.Column(db.Boolean, nullable=False, default=True)
+    scope_insurer = db.Column(db.Boolean, nullable=False, default=False)
+    scope_all = db.Column(db.Boolean, nullable=False, default=False)
+
+    tutor = db.relationship(
+        'User',
+        foreign_keys=[tutor_id],
+        back_populates='clinic_shares',
+    )
+    clinic = db.relationship(
+        'Clinica',
+        backref=db.backref('tutor_shares', cascade='all, delete-orphan'),
+    )
+    granted_by = db.relationship(
+        'User',
+        foreign_keys=[granted_by_id],
+        backref=db.backref('granted_tutor_clinic_shares', lazy='dynamic'),
+    )
+    revoked_by = db.relationship(
+        'User',
+        foreign_keys=[revoked_by_id],
+        backref=db.backref('revoked_tutor_clinic_shares', lazy='dynamic'),
+    )
+
 class VeterinarianAccess(db.Model):
     __table_args__ = {'extend_existing': True}  # ← ESSA LINHA
 
@@ -262,6 +317,12 @@ class Animal(db.Model):
     photos = db.relationship('AnimalPhoto', backref='animal', cascade='all, delete-orphan', lazy=True)
     transactions = db.relationship('Transaction', backref='animal', cascade='all, delete-orphan', lazy=True)
     favorites = db.relationship('Favorite', backref='animal', cascade='all, delete-orphan', lazy=True)
+    clinic_shares = db.relationship(
+        'AnimalClinicShare',
+        back_populates='animal',
+        cascade='all, delete-orphan',
+        lazy='dynamic',
+    )
 
     microchip_number = db.Column(db.String(50), nullable=True)
     neutered = db.Column(db.Boolean, default=False)
@@ -324,6 +385,54 @@ class Animal(db.Model):
         return f"{self.name} ({self.species.name if self.species else self.species})"
 
     
+
+
+
+
+class AnimalClinicShare(db.Model):
+    __tablename__ = 'animal_clinic_share'
+    __table_args__ = (
+        db.UniqueConstraint('animal_id', 'clinica_id', name='uq_animal_clinic_share_animal_clinic'),
+    )
+
+    id = db.Column(db.Integer, primary_key=True)
+    animal_id = db.Column(
+        db.Integer,
+        db.ForeignKey('animal.id', ondelete='CASCADE'),
+        nullable=False,
+    )
+    clinica_id = db.Column(
+        db.Integer,
+        db.ForeignKey('clinica.id', ondelete='CASCADE'),
+        nullable=False,
+    )
+    granted_by_id = db.Column(db.Integer, db.ForeignKey('user.id', ondelete='SET NULL'), nullable=True)
+    granted_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    revoked_at = db.Column(db.DateTime, nullable=True)
+    revoked_by_id = db.Column(db.Integer, db.ForeignKey('user.id', ondelete='SET NULL'), nullable=True)
+    scope_clinic = db.Column(db.Boolean, nullable=False, default=True)
+    scope_insurer = db.Column(db.Boolean, nullable=False, default=False)
+    scope_all = db.Column(db.Boolean, nullable=False, default=False)
+
+    animal = db.relationship(
+        'Animal',
+        foreign_keys=[animal_id],
+        back_populates='clinic_shares',
+    )
+    clinic = db.relationship(
+        'Clinica',
+        backref=db.backref('animal_shares', cascade='all, delete-orphan'),
+    )
+    granted_by = db.relationship(
+        'User',
+        foreign_keys=[granted_by_id],
+        backref=db.backref('granted_animal_clinic_shares', lazy='dynamic'),
+    )
+    revoked_by = db.relationship(
+        'User',
+        foreign_keys=[revoked_by_id],
+        backref=db.backref('revoked_animal_clinic_shares', lazy='dynamic'),
+    )
 
 class Species(db.Model):
     id = db.Column(db.Integer, primary_key=True)

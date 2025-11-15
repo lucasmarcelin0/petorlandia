@@ -4,8 +4,9 @@ import sys
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 import pytest
+from datetime import datetime
 from app import app as flask_app, db
-from models import User, Clinica, Veterinario, Animal, Consulta
+from models import User, Clinica, Veterinario, Animal, Consulta, TutorClinicShare
 
 
 @pytest.fixture
@@ -77,6 +78,9 @@ def test_vet_can_access_other_clinic_consulta(monkeypatch, app):
         vet2 = Veterinario(user=other_user, crmv="999", clinica=c2)
         db.session.add_all([c1, c2, tutor, animal, user, vet, other_user, vet2])
         db.session.commit()
+        share = TutorClinicShare(tutor_id=tutor.id, clinica_id=c1.id, granted_by_id=user.id)
+        db.session.add(share)
+        db.session.commit()
         consulta_c2 = Consulta(animal_id=animal.id, created_by=other_user.id, clinica_id=c2.id,
                                queixa_principal="dados c2", status='in_progress')
         db.session.add(consulta_c2)
@@ -101,6 +105,9 @@ def test_colaborador_can_access_other_clinic_consulta(monkeypatch, app):
         colaborador = User(name="Colab", email="colab@example.com", password_hash="x",
                            worker="colaborador", clinica=c1)
         db.session.add_all([c1, c2, tutor, animal, colaborador])
+        db.session.commit()
+        share = TutorClinicShare(tutor_id=tutor.id, clinica_id=c1.id, granted_by_id=colaborador.id)
+        db.session.add(share)
         db.session.commit()
         login(monkeypatch, colaborador)
         resp = client.get(f"/consulta/{animal.id}")
@@ -138,6 +145,9 @@ def test_orcamento_history_is_isolated(monkeypatch, app):
         vet2 = Veterinario(user=vet2_user, crmv="222", clinica=c2)
         db.session.add_all([c1, c2, tutor, animal, vet1_user, vet2_user, vet1, vet2])
         db.session.commit()
+        share = TutorClinicShare(tutor_id=tutor.id, clinica_id=c2.id, granted_by_id=vet1_user.id)
+        db.session.add(share)
+        db.session.commit()
         consulta = Consulta(animal_id=animal.id, created_by=vet1_user.id, clinica_id=c1.id, status='in_progress')
         db.session.add(consulta)
         db.session.commit()
@@ -164,3 +174,51 @@ def test_orcamento_history_is_isolated(monkeypatch, app):
     assert resp.status_code == 200
     assert b"Nenhum or\xc3\xa7amento registrado ainda." in resp.data
     assert b"R$ 50.00" not in resp.data
+
+
+def test_tutor_access_denied_without_share(monkeypatch, app):
+    client = app.test_client()
+    with app.app_context():
+        db.create_all()
+        clinic_a = Clinica(nome="Clinic A")
+        clinic_b = Clinica(nome="Clinic B")
+        tutor = User(name="Tutor", email="tutor_share@example.com", password_hash="x", clinica=clinic_a)
+        vet_user = User(name="OtherVet", email="vetb@example.com", password_hash="x", worker="veterinario")
+        vet = Veterinario(user=vet_user, crmv="12345", clinica=clinic_b)
+        db.session.add_all([clinic_a, clinic_b, tutor, vet_user, vet])
+        db.session.commit()
+        login(monkeypatch, vet_user)
+        resp = client.get(f"/tutor/{tutor.id}")
+        assert resp.status_code == 404
+
+
+def test_tutor_share_grants_and_revokes_access(monkeypatch, app):
+    client = app.test_client()
+    with app.app_context():
+        db.create_all()
+        clinic_a = Clinica(nome="Clinic A")
+        clinic_b = Clinica(nome="Clinic B")
+        tutor = User(name="Tutor", email="tutor_share2@example.com", password_hash="x", clinica=clinic_a)
+        animal = Animal(name="Rex", owner=tutor, clinica=clinic_a)
+        vet_user = User(name="SharedVet", email="vetshare@example.com", password_hash="x", worker="veterinario")
+        vet = Veterinario(user=vet_user, crmv="999", clinica=clinic_b)
+        db.session.add_all([clinic_a, clinic_b, tutor, animal, vet_user, vet])
+        db.session.commit()
+
+        share = TutorClinicShare(tutor_id=tutor.id, clinica_id=clinic_b.id, granted_by_id=vet_user.id)
+        db.session.add(share)
+        db.session.commit()
+
+        login(monkeypatch, vet_user)
+        resp = client.get(f"/consulta/{animal.id}")
+        assert resp.status_code == 200
+        resp_tutor = client.get(f"/tutor/{tutor.id}")
+        assert resp_tutor.status_code == 200
+
+        share.revoked_at = datetime.utcnow()
+        db.session.commit()
+
+        resp_after = client.get(f"/consulta/{animal.id}")
+        assert resp_after.status_code == 404
+        resp_tutor_after = client.get(f"/tutor/{tutor.id}")
+        assert resp_tutor_after.status_code == 404

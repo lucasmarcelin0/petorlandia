@@ -1035,6 +1035,136 @@ def _collect_clinic_ids(viewer=None, clinic_scope=None):
     return clinic_ids
 
 
+def _active_tutor_share_exists_for_clinics(clinic_ids):
+    if not clinic_ids:
+        return None
+    return (
+        db.session.query(TutorClinicShare.id)
+        .filter(
+            TutorClinicShare.tutor_id == User.id,
+            TutorClinicShare.clinica_id.in_(clinic_ids),
+            TutorClinicShare.scope_clinic.is_(True),
+            TutorClinicShare.revoked_at.is_(None),
+        )
+        .exists()
+    )
+
+
+def _active_animal_share_exists_for_clinics(clinic_ids):
+    if not clinic_ids:
+        return None
+    return (
+        db.session.query(AnimalClinicShare.id)
+        .filter(
+            AnimalClinicShare.animal_id == Animal.id,
+            AnimalClinicShare.clinica_id.in_(clinic_ids),
+            AnimalClinicShare.scope_clinic.is_(True),
+            AnimalClinicShare.revoked_at.is_(None),
+        )
+        .exists()
+    )
+
+
+def _clinic_has_tutor_share(clinic_id, tutor_id):
+    if not clinic_id or not tutor_id:
+        return False
+    return (
+        db.session.query(TutorClinicShare.id)
+        .filter(
+            TutorClinicShare.tutor_id == tutor_id,
+            TutorClinicShare.clinica_id == clinic_id,
+            TutorClinicShare.scope_clinic.is_(True),
+            TutorClinicShare.revoked_at.is_(None),
+        )
+        .first()
+        is not None
+    )
+
+
+def _clinic_has_animal_share(clinic_id, animal_id):
+    if not clinic_id or not animal_id:
+        return False
+    return (
+        db.session.query(AnimalClinicShare.id)
+        .filter(
+            AnimalClinicShare.animal_id == animal_id,
+            AnimalClinicShare.clinica_id == clinic_id,
+            AnimalClinicShare.scope_clinic.is_(True),
+            AnimalClinicShare.revoked_at.is_(None),
+        )
+        .first()
+        is not None
+    )
+
+
+def _tutor_clinic_access_clause(clinic_ids):
+    if not clinic_ids:
+        return None
+    share_exists = _active_tutor_share_exists_for_clinics(clinic_ids)
+    direct_clause = User.clinica_id.in_(clinic_ids)
+    if share_exists is None:
+        return direct_clause
+    return or_(direct_clause, share_exists)
+
+
+def _animal_clinic_access_clause(clinic_ids):
+    if not clinic_ids:
+        return None
+    share_exists = _active_animal_share_exists_for_clinics(clinic_ids)
+    tutor_share_exists = (
+        db.session.query(TutorClinicShare.id)
+        .filter(
+            TutorClinicShare.tutor_id == Animal.user_id,
+            TutorClinicShare.clinica_id.in_(clinic_ids),
+            TutorClinicShare.scope_clinic.is_(True),
+            TutorClinicShare.revoked_at.is_(None),
+        )
+        .exists()
+    )
+    direct_clause = Animal.clinica_id.in_(clinic_ids)
+    return or_(direct_clause, share_exists, tutor_share_exists)
+
+
+def _ensure_tutor_clinic_share(tutor_id, clinic_id, granted_by_id=None):
+    if not tutor_id or not clinic_id:
+        return
+    share = TutorClinicShare.query.filter_by(tutor_id=tutor_id, clinica_id=clinic_id).first()
+    if share:
+        share.revoked_at = None
+        share.revoked_by_id = None
+        share.scope_clinic = True
+        share.granted_at = datetime.utcnow()
+        if granted_by_id:
+            share.granted_by_id = granted_by_id
+        return
+    share = TutorClinicShare(
+        tutor_id=tutor_id,
+        clinica_id=clinic_id,
+        granted_by_id=granted_by_id,
+    )
+    db.session.add(share)
+
+
+def _ensure_animal_clinic_share(animal_id, clinic_id, granted_by_id=None):
+    if not animal_id or not clinic_id:
+        return
+    share = AnimalClinicShare.query.filter_by(animal_id=animal_id, clinica_id=clinic_id).first()
+    if share:
+        share.revoked_at = None
+        share.revoked_by_id = None
+        share.scope_clinic = True
+        share.granted_at = datetime.utcnow()
+        if granted_by_id:
+            share.granted_by_id = granted_by_id
+        return
+    share = AnimalClinicShare(
+        animal_id=animal_id,
+        clinica_id=clinic_id,
+        granted_by_id=granted_by_id,
+    )
+    db.session.add(share)
+
+
 def _user_visibility_clause(viewer=None, clinic_scope=None):
     """Return a SQLAlchemy clause enforcing user privacy for listings."""
     if viewer is None and current_user.is_authenticated:
@@ -1052,8 +1182,9 @@ def _user_visibility_clause(viewer=None, clinic_scope=None):
             clauses.append(User.added_by_id == viewer_id)
 
     clinic_ids = _collect_clinic_ids(viewer=viewer, clinic_scope=clinic_scope)
-    if clinic_ids:
-        clauses.append(User.clinica_id.in_(list(clinic_ids)))
+    clinic_clause = _tutor_clinic_access_clause(list(clinic_ids)) if clinic_ids else None
+    if clinic_clause is not None:
+        clauses.append(clinic_clause)
 
     if not clauses:
         return false()
@@ -1083,7 +1214,14 @@ def _can_view_user(user, viewer=None, clinic_scope=None):
         return True
 
     clinic_ids = _collect_clinic_ids(viewer=viewer, clinic_scope=clinic_scope)
-    return bool(user.clinica_id and user.clinica_id in clinic_ids)
+    if not clinic_ids:
+        return False
+    if user.clinica_id and user.clinica_id in clinic_ids:
+        return True
+    for clinic_id in clinic_ids:
+        if _clinic_has_tutor_share(clinic_id, user.id):
+            return True
+    return False
 
 
 def get_user_or_404(user_id, *, viewer=None, clinic_scope=None):
@@ -1094,22 +1232,35 @@ def get_user_or_404(user_id, *, viewer=None, clinic_scope=None):
     return user
 
 
-def ensure_clinic_access(clinica_id):
+def ensure_clinic_access(clinica_id, *, tutor_id=None, animal_id=None):
     """Abort with 404 if the current user cannot access the given clinic."""
     if not clinica_id:
         return
     if not current_user.is_authenticated:
         abort(404)
-    if current_user.is_authenticated and current_user.role == 'admin':
+    if current_user.role == 'admin':
         return
-    if current_user_clinic_id() != clinica_id:
-        abort(404)
+
+    accessible_clinic_ids = _viewer_accessible_clinic_ids(current_user)
+    if clinica_id in accessible_clinic_ids:
+        return
+
+    for viewer_clinic_id in accessible_clinic_ids:
+        if tutor_id and _clinic_has_tutor_share(viewer_clinic_id, tutor_id):
+            return
+        if animal_id and _clinic_has_animal_share(viewer_clinic_id, animal_id):
+            return
+    abort(404)
 
 
 def get_animal_or_404(animal_id):
     """Return animal if accessible to current user, otherwise 404."""
     animal = Animal.query.get_or_404(animal_id)
-    ensure_clinic_access(animal.clinica_id)
+    ensure_clinic_access(
+        animal.clinica_id,
+        tutor_id=getattr(animal, 'user_id', None),
+        animal_id=animal.id,
+    )
 
     tutor_id = getattr(animal, "user_id", None)
     if tutor_id:
@@ -1129,7 +1280,10 @@ def get_animal_or_404(animal_id):
 def get_consulta_or_404(consulta_id):
     """Return consulta if accessible to current user, otherwise 404."""
     consulta = Consulta.query.get_or_404(consulta_id)
-    ensure_clinic_access(consulta.clinica_id)
+    ensure_clinic_access(
+        consulta.clinica_id,
+        animal_id=getattr(consulta, 'animal_id', None),
+    )
     return consulta
 
 
@@ -3803,7 +3957,13 @@ def consulta_direct(animal_id):
         if not appointment_clinic_id and getattr(appointment, 'animal', None):
             appointment_clinic_id = appointment.animal.clinica_id
         if appointment_clinic_id:
-            ensure_clinic_access(appointment_clinic_id)
+            ensure_clinic_access(
+                appointment_clinic_id,
+                animal_id=appointment.animal_id,
+                tutor_id=getattr(appointment.animal, 'user_id', None)
+                if getattr(appointment, 'animal', None)
+                else None,
+            )
             if clinica_id and appointment_clinic_id != clinica_id:
                 abort(404)
             if not clinica_id:
@@ -5729,6 +5889,12 @@ def tutores():
             novo.profile_photo = f"/static/uploads/{filename}"
 
         db.session.add(novo)
+        db.session.flush()
+        _ensure_tutor_clinic_share(
+            novo.id,
+            current_user_clinic_id(),
+            getattr(current_user, 'id', None),
+        )
         db.session.commit()
 
         if request.accept_mimetypes.accept_json:
@@ -7739,6 +7905,12 @@ def novo_animal():
             modo='adotado',
         )
         db.session.add(animal)
+        db.session.flush()
+        _ensure_animal_clinic_share(
+            animal.id,
+            animal.clinica_id,
+            getattr(current_user, 'id', None),
+        )
         db.session.commit()
 
         # Criação da consulta
@@ -8748,7 +8920,9 @@ def _get_recent_animais(
     if resolved_scope == 'mine' and effective_user_id:
         query = base_query
         if clinic_ids and not require_appointments:
-            query = query.filter(Animal.clinica_id.in_(clinic_ids))
+            clinic_clause = _animal_clinic_access_clause(clinic_ids)
+            if clinic_clause is not None:
+                query = query.filter(clinic_clause)
 
         if require_appointments and clinic_ids:
             appointment_exists = (
@@ -8804,10 +8978,10 @@ def _get_recent_animais(
                 .group_by(Appointment.animal_id)
                 .subquery()
             )
-            query = (
-                base_query.outerjoin(last_appt, Animal.id == last_appt.c.animal_id)
-                .filter(Animal.clinica_id.in_(clinic_ids))
-            )
+            clinic_clause = _animal_clinic_access_clause(clinic_ids)
+            query = base_query.outerjoin(last_appt, Animal.id == last_appt.c.animal_id)
+            if clinic_clause is not None:
+                query = query.filter(clinic_clause)
             last_reference = func.coalesce(last_appt.c.last_at, Animal.date_added)
     else:
         query = base_query
@@ -8884,7 +9058,9 @@ def _get_recent_tutores(
             .filter(_user_visibility_clause(clinic_scope=clinic_ids))
         )
         if clinic_ids and not require_appointments:
-            base_query = base_query.filter(User.clinica_id.in_(clinic_ids))
+            clinic_clause = _tutor_clinic_access_clause(clinic_ids)
+            if clinic_clause is not None:
+                base_query = base_query.filter(clinic_clause)
 
         if require_appointments and clinic_ids:
             appointment_exists = (
@@ -8934,7 +9110,9 @@ def _get_recent_tutores(
                 )
             query = query.filter(appointment_exists.exists())
         else:
-            query = query.filter(User.clinica_id.in_(clinic_ids))
+            clinic_clause = _tutor_clinic_access_clause(clinic_ids)
+            if clinic_clause is not None:
+                query = query.filter(clinic_clause)
     else:
         query = User.query.filter(User.created_at != None)
         if effective_user_id:
@@ -13092,7 +13270,7 @@ def imprimir_orcamento(consulta_id):
 @login_required
 def imprimir_bloco_orcamento(bloco_id):
     bloco = BlocoOrcamento.query.get_or_404(bloco_id)
-    ensure_clinic_access(bloco.clinica_id)
+    ensure_clinic_access(bloco.clinica_id, animal_id=bloco.animal_id)
     animal = bloco.animal
     tutor = animal.owner
     consulta = animal.consultas[-1] if animal.consultas else None
@@ -13132,7 +13310,7 @@ def imprimir_orcamento_padrao(orcamento_id):
 @login_required
 def pagar_bloco_orcamento(bloco_id):
     bloco = BlocoOrcamento.query.get_or_404(bloco_id)
-    ensure_clinic_access(bloco.clinica_id)
+    ensure_clinic_access(bloco.clinica_id, animal_id=bloco.animal_id)
     if not bloco.itens:
         flash('Nenhum item no orçamento.', 'warning')
         return redirect(url_for('consulta_direct', animal_id=bloco.animal_id))
@@ -13274,7 +13452,7 @@ def deletar_orcamento_item(item_id):
     if current_user.worker != 'veterinario':
         return jsonify({'success': False, 'message': 'Apenas veterinários podem remover itens.'}), 403
     consulta = item.consulta
-    ensure_clinic_access(consulta.clinica_id)
+    ensure_clinic_access(consulta.clinica_id, animal_id=consulta.animal_id)
     db.session.delete(item)
     db.session.commit()
     return jsonify({'total': float(consulta.total_orcamento)}), 200
@@ -13304,7 +13482,7 @@ def salvar_bloco_orcamento(consulta_id):
 @login_required
 def deletar_bloco_orcamento(bloco_id):
     bloco = BlocoOrcamento.query.get_or_404(bloco_id)
-    ensure_clinic_access(bloco.clinica_id)
+    ensure_clinic_access(bloco.clinica_id, animal_id=bloco.animal_id)
     if current_user.worker != 'veterinario':
         return jsonify({'success': False, 'message': 'Apenas veterinários podem excluir.'}), 403
     animal_id = bloco.animal_id
@@ -13320,7 +13498,7 @@ def deletar_bloco_orcamento(bloco_id):
 @login_required
 def editar_bloco_orcamento(bloco_id):
     bloco = BlocoOrcamento.query.get_or_404(bloco_id)
-    ensure_clinic_access(bloco.clinica_id)
+    ensure_clinic_access(bloco.clinica_id, animal_id=bloco.animal_id)
     if current_user.worker != 'veterinario':
         return jsonify({'success': False, 'message': 'Apenas veterinários podem editar.'}), 403
     return render_template('orcamentos/editar_bloco_orcamento.html', bloco=bloco)
@@ -13330,7 +13508,7 @@ def editar_bloco_orcamento(bloco_id):
 @login_required
 def atualizar_bloco_orcamento(bloco_id):
     bloco = BlocoOrcamento.query.get_or_404(bloco_id)
-    ensure_clinic_access(bloco.clinica_id)
+    ensure_clinic_access(bloco.clinica_id, animal_id=bloco.animal_id)
     if current_user.worker != 'veterinario':
         return jsonify({'success': False, 'message': 'Apenas veterinários podem editar.'}), 403
 
