@@ -2,6 +2,7 @@
 import os, sys, pathlib, importlib, logging, uuid, re
 import requests
 from collections import defaultdict, Counter
+from types import SimpleNamespace
 from io import BytesIO, StringIO
 from concurrent.futures import ThreadPoolExecutor
 from decimal import Decimal, InvalidOperation
@@ -3483,6 +3484,106 @@ def _populate_plantonista_form_choices(form, clinics):
     form.medico_id.choices = medico_choices
 
 
+def _format_plantao_option(escala):
+    if not escala:
+        return 'Plantão'
+    medico = (escala.medico_nome or 'Plantonista').strip()
+    turno = (escala.turno or '').strip()
+    inicio = escala.inicio.strftime('%d/%m %H:%M') if escala.inicio else 'Sem início'
+    fim = escala.fim.strftime('%d/%m %H:%M') if escala.fim else 'Sem fim'
+    clinic_label = getattr(getattr(escala, 'clinic', None), 'nome', None)
+    parts = [medico]
+    if turno:
+        parts.append(turno)
+    parts.append(f'{inicio} → {fim}')
+    if clinic_label:
+        parts.append(clinic_label)
+    return ' • '.join(parts)
+
+
+def _configure_pj_payment_form(form, clinics, accessible_ids):
+    form.clinic_id.choices = [
+        (clinic.id, clinic.nome or f'Clínica #{clinic.id}') for clinic in clinics
+    ]
+
+    allowed_ids = sorted({cid for cid in accessible_ids if cid})
+
+    if not allowed_ids:
+        form.plantao_vinculado.query_factory = lambda: PlantonistaEscala.query.filter(false())
+    else:
+        def _plantao_query():
+            return (
+                PlantonistaEscala.query.options(selectinload(PlantonistaEscala.clinic))
+                .filter(PlantonistaEscala.clinic_id.in_(allowed_ids))
+                .order_by(PlantonistaEscala.inicio.desc())
+            )
+
+        form.plantao_vinculado.query_factory = _plantao_query
+
+    form.plantao_vinculado.get_label = _format_plantao_option
+
+
+def _get_primary_payment_plantao(payment):
+    if not payment:
+        return None
+    for escala in getattr(payment, 'plantao_escalas', []) or []:
+        if escala:
+            return escala
+    return None
+
+
+def _apply_plantao_details_from_form(escala, form):
+    if not escala or not form:
+        return
+    if form.plantao_inicio.data:
+        escala.inicio = form.plantao_inicio.data
+    if form.plantao_fim.data:
+        escala.fim = form.plantao_fim.data
+    horas = form.horas_previstas.data
+    valor_hora = form.valor_por_hora.data
+    if horas is not None and valor_hora is not None:
+        try:
+            escala.valor_previsto = (Decimal(valor_hora) * Decimal(horas)).quantize(Decimal('0.01'))
+        except (InvalidOperation, TypeError):
+            pass
+
+
+def _sync_payment_plantao_link(payment, target_scale, form):
+    current_scale = _get_primary_payment_plantao(payment)
+    if current_scale and current_scale is not target_scale:
+        current_scale.pj_payment = None
+
+    if target_scale:
+        target_scale.pj_payment = payment
+        _apply_plantao_details_from_form(target_scale, form)
+        return target_scale
+
+    if current_scale and current_scale is target_scale:
+        _apply_plantao_details_from_form(current_scale, form)
+        return current_scale
+
+    return None
+
+
+def _prefill_plantao_fields_on_form(form, escala):
+    if not form or not escala:
+        return
+    form.plantao_vinculado.data = escala
+    if escala.inicio:
+        form.plantao_inicio.data = escala.inicio
+    if escala.fim:
+        form.plantao_fim.data = escala.fim
+    horas = escala.horas_previstas
+    if horas and horas > 0:
+        form.horas_previstas.data = horas
+        if escala.valor_previsto:
+            try:
+                form.valor_por_hora.data = (Decimal(escala.valor_previsto) / horas).quantize(Decimal('0.01'))
+            except (InvalidOperation, TypeError):
+                pass
+
+
+
 @app.route('/contabilidade/pagamentos/novo', methods=['GET', 'POST'])
 @login_required
 def contabilidade_pagamentos_novo():
@@ -3493,16 +3594,31 @@ def contabilidade_pagamentos_novo():
         return redirect(url_for('contabilidade_pagamentos'))
 
     form = PJPaymentForm()
-    form.clinic_id.choices = [(clinic.id, clinic.nome or f'Clínica #{clinic.id}') for clinic in clinics]
+    form.payment_id = None
+    _configure_pj_payment_form(form, clinics, accessible_ids)
     default_clinic_id = request.args.get('clinica_id', type=int) or clinics[0].id
     if request.method == 'GET':
         form.clinic_id.data = default_clinic_id
         form.data_servico.data = date.today()
+        form.prestador_tipo.data = form.prestador_tipo.data or 'servico'
+
+        selected_plantao_id = request.args.get('plantao_id', type=int)
+        if selected_plantao_id:
+            escala = PlantonistaEscala.query.get(selected_plantao_id)
+            if escala and escala.clinic_id in accessible_ids:
+                form.prestador_tipo.data = 'plantonista'
+                _prefill_plantao_fields_on_form(form, escala)
 
     if form.validate_on_submit():
         clinic_id = form.clinic_id.data
         if clinic_id not in accessible_ids:
             abort(403)
+
+        selected_plantao = (
+            form.plantao_vinculado.data
+            if (form.prestador_tipo.data or '').strip() == 'plantonista'
+            else None
+        )
 
         payment = PJPayment(
             clinic_id=clinic_id,
@@ -3517,6 +3633,8 @@ def contabilidade_pagamentos_novo():
         payment.status = 'pago' if payment.data_pagamento else 'pendente'
 
         db.session.add(payment)
+        db.session.flush()
+        _sync_payment_plantao_link(payment, selected_plantao, form)
         db.session.flush()
         _sync_pj_payment_classification(payment)
         db.session.commit()
@@ -3559,15 +3677,32 @@ def contabilidade_pagamentos_editar(payment_id):
     if payment.clinic_id not in accessible_ids and not _is_admin():
         abort(403)
 
+    form_clinics = clinics or ([payment.clinic] if payment.clinic else [])
+    if not form_clinics:
+        form_clinics = [SimpleNamespace(id=payment.clinic_id, nome=f'Clínica #{payment.clinic_id}')]
+
     form = PJPaymentForm(obj=payment)
-    form.clinic_id.choices = clinic_choices
+    form.payment_id = payment.id
+    _configure_pj_payment_form(form, form_clinics, set(accessible_ids) | {payment.clinic_id})
     if request.method == 'GET':
         form.clinic_id.data = payment.clinic_id
+
+    current_plantao = _get_primary_payment_plantao(payment)
+    if request.method == 'GET':
+        form.prestador_tipo.data = 'plantonista' if current_plantao else 'servico'
+        if current_plantao:
+            _prefill_plantao_fields_on_form(form, current_plantao)
 
     if form.validate_on_submit():
         clinic_id = form.clinic_id.data
         if clinic_id not in accessible_ids and not _is_admin():
             abort(403)
+
+        selected_plantao = (
+            form.plantao_vinculado.data
+            if (form.prestador_tipo.data or '').strip() == 'plantonista'
+            else None
+        )
 
         payment.clinic_id = clinic_id
         payment.prestador_nome = form.prestador_nome.data.strip()
@@ -3579,6 +3714,8 @@ def contabilidade_pagamentos_editar(payment_id):
         payment.observacoes = (form.observacoes.data or '').strip() or None
         payment.status = 'pago' if payment.data_pagamento else 'pendente'
 
+        db.session.flush()
+        _sync_payment_plantao_link(payment, selected_plantao, form)
         db.session.flush()
         _sync_pj_payment_classification(payment)
         db.session.commit()

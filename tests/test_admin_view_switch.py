@@ -19,6 +19,7 @@ def client():
     )
     with flask_app.test_client() as client:
         with flask_app.app_context():
+            db.drop_all()
             db.create_all()
         yield client
         with flask_app.app_context():
