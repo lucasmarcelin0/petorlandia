@@ -8,7 +8,7 @@ import pytest
 os.environ["SQLALCHEMY_DATABASE_URI"] = "sqlite:///:memory:"
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
-from app import app as flask_app, db  # noqa: E402
+from app import app as flask_app, db, _sync_pj_payment_classification  # noqa: E402
 from models import (  # noqa: E402
     Animal,
     ClassifiedTransaction,
@@ -22,6 +22,7 @@ from models import (  # noqa: E402
     Order,
     OrderItem,
     PJPayment,
+    PlantonistaEscala,
     Product,
     ServicoClinica,
     User,
@@ -552,3 +553,76 @@ def test_cli_classify_transactions_history_reprocesses_previous_months(app):
         april_entry = next(entry for entry in entries if entry.month == date(2024, 4, 1))
         assert april_entry.description.startswith('Limpeza dental')
         assert april_entry.value == Decimal('300.00')
+
+
+def test_sync_pj_payment_classification_uses_prestador_tipo(app):
+    with app.app_context():
+        clinic = Clinica(nome='Clínica Tipos')
+        db.session.add(clinic)
+        db.session.commit()
+
+        payment = PJPayment(
+            clinic_id=clinic.id,
+            prestador_nome='Consultoria Vet',
+            prestador_cnpj='12345678000100',
+            valor=Decimal('500.00'),
+            data_servico=date(2024, 7, 1),
+            data_pagamento=date(2024, 7, 2),
+            status='pago',
+        )
+        payment.prestador_tipo = 'Consultoria'
+        db.session.add(payment)
+        db.session.flush()
+
+        _sync_pj_payment_classification(payment)
+        db.session.commit()
+
+        record = ClassifiedTransaction.query.filter_by(
+            origin='pj_payment', raw_id=str(payment.id)
+        ).one()
+        assert record.subcategory == 'consultoria'
+        assert record.description.startswith('Pagamento PJ - Consultoria Vet')
+
+
+def test_sync_pj_payment_classification_includes_plantao_details(app):
+    with app.app_context():
+        clinic = Clinica(nome='Clínica Plantões')
+        db.session.add(clinic)
+        db.session.commit()
+
+        payment = PJPayment(
+            clinic_id=clinic.id,
+            prestador_nome='Dr. Plantão',
+            prestador_cnpj='12345678000100',
+            valor=Decimal('900.00'),
+            data_servico=date(2024, 7, 10),
+            data_pagamento=date(2024, 7, 11),
+            status='pago',
+        )
+        payment.prestador_tipo = 'Plantonista'
+        db.session.add(payment)
+        db.session.flush()
+
+        escala = PlantonistaEscala(
+            clinic_id=clinic.id,
+            medico_nome='Dr. Plantão',
+            medico_cnpj='12345678000100',
+            turno='Noturno',
+            inicio=datetime(2024, 7, 10, 20, 0),
+            fim=datetime(2024, 7, 11, 8, 0),
+            valor_previsto=Decimal('900.00'),
+            status='realizado',
+            pj_payment=payment,
+        )
+        db.session.add(escala)
+        db.session.flush()
+
+        _sync_pj_payment_classification(payment)
+        db.session.commit()
+
+        record = ClassifiedTransaction.query.filter_by(
+            origin='pj_payment', raw_id=str(payment.id)
+        ).one()
+        assert record.subcategory == 'plantonista'
+        assert 'Plantão 10/07/2024 20:00 - 11/07/2024 08:00' in record.description
+        assert 'Noturno' in record.description

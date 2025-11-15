@@ -2746,6 +2746,84 @@ def _format_month_parameter(reference_date):
     return reference_date.replace(day=1).strftime('%Y-%m')
 
 
+_PJ_PAYMENT_SUBCATEGORY_ALIASES = {
+    'plantao': 'plantonista',
+    'plantonista': 'plantonista',
+    'consultor': 'consultoria',
+    'consultoria': 'consultoria',
+}
+
+
+def _normalize_prestador_tipo(value: Optional[str]) -> str:
+    if not value:
+        return ''
+    normalized = (
+        unicodedata.normalize('NFKD', value)
+        .encode('ascii', 'ignore')
+        .decode('ascii')
+        .lower()
+    )
+    for separator in ('-', '/', '\\'):
+        normalized = normalized.replace(separator, ' ')
+    normalized = '_'.join(part for part in normalized.split() if part)
+    return normalized
+
+
+def _resolve_pj_payment_subcategory(payment) -> str:
+    normalized = _normalize_prestador_tipo(getattr(payment, 'prestador_tipo', None))
+    if not normalized:
+        return 'prestador_servico'
+    return _PJ_PAYMENT_SUBCATEGORY_ALIASES.get(normalized, normalized) or 'prestador_servico'
+
+
+def _describe_payment_plantao(payment) -> Optional[str]:
+    escalas = getattr(payment, 'plantao_escalas', None)
+    if not escalas:
+        return None
+    try:
+        escalas = [esc for esc in escalas if esc is not None]
+    except TypeError:
+        return None
+    if not escalas:
+        return None
+    escalas_with_start = [esc for esc in escalas if getattr(esc, 'inicio', None)]
+    if escalas_with_start:
+        escala = min(escalas_with_start, key=lambda esc: esc.inicio)
+    else:
+        escala = escalas[0]
+
+    if escala is None:
+        return None
+
+    start = getattr(escala, 'inicio', None)
+    end = getattr(escala, 'fim', None)
+    turno = (getattr(escala, 'turno', None) or '').strip()
+    segments = []
+    if start:
+        start_fmt = start.strftime('%d/%m/%Y %H:%M')
+        if end:
+            if start.date() == end.date():
+                end_fmt = end.strftime('%H:%M')
+            else:
+                end_fmt = end.strftime('%d/%m/%Y %H:%M')
+            start_fmt = f"{start_fmt} - {end_fmt}"
+        segments.append(start_fmt)
+    if turno:
+        segments.append(turno)
+
+    if not segments:
+        return None
+    return f"Plantão {' | '.join(segments)}"
+
+
+def _build_pj_payment_description(payment) -> str:
+    description = f"Pagamento PJ - {payment.prestador_nome}"
+    plantao_details = _describe_payment_plantao(payment)
+    if plantao_details:
+        description = f"{description} ({plantao_details})"
+    return description[:255]
+
+
 def _sync_pj_payment_classification(payment):
     """Create or update the classified transaction entry for a PJ payment."""
 
@@ -2765,11 +2843,10 @@ def _sync_pj_payment_classification(payment):
             raw_id=str(payment.id),
         )
 
-    description = f"Pagamento PJ - {payment.prestador_nome}"[:255]
     classification.clinic_id = payment.clinic_id
     classification.category = 'pagamento_pj'
-    classification.subcategory = 'prestador_servico'
-    classification.description = description
+    classification.subcategory = _resolve_pj_payment_subcategory(payment)
+    classification.description = _build_pj_payment_description(payment)
     classification.value = payment.valor
     classification.date = entry_datetime
     classification.month = month_reference
