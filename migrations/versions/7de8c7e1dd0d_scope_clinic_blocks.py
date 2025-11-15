@@ -113,19 +113,57 @@ def upgrade():
 
     conn.execute(sa.text(
         """
-        UPDATE orcamento_item
-        SET clinica_id = :default_clinic_id
-        WHERE clinica_id IS NULL
+        WITH default_clinic AS (SELECT :default_clinic_id AS id)
+        UPDATE orcamento_item AS oi
+        SET clinica_id = COALESCE(
+            consulta.clinica_id,
+            bloco.clinica_id,
+            orcamento.clinica_id,
+            servico.clinica_id,
+            consulta_animal.clinica_id,
+            default_clinic.id
+        )
+        FROM default_clinic
+        LEFT JOIN consulta ON consulta.id = oi.consulta_id
+        LEFT JOIN animal AS consulta_animal ON consulta_animal.id = consulta.animal_id
+        LEFT JOIN bloco_orcamento AS bloco ON bloco.id = oi.bloco_id
+        LEFT JOIN orcamento ON orcamento.id = oi.orcamento_id
+        LEFT JOIN servico_clinica AS servico ON servico.id = oi.servico_id
+        WHERE oi.clinica_id IS NULL
         """
     ), {"default_clinic_id": default_clinic_id})
 
     conn.execute(sa.text(
         """
-        UPDATE bloco_prescricao
-        SET clinica_id = :default_clinic_id
-        WHERE clinica_id IS NULL
+        WITH default_clinic AS (SELECT :default_clinic_id AS id)
+        UPDATE bloco_prescricao AS bp
+        SET clinica_id = COALESCE(
+            animal.clinica_id,
+            default_clinic.id
+        )
+        FROM default_clinic
+        LEFT JOIN animal ON animal.id = bp.animal_id
+        WHERE bp.clinica_id IS NULL
         """
     ), {"default_clinic_id": default_clinic_id})
+
+    remaining_orcamento_items = conn.execute(
+        sa.text("SELECT id FROM orcamento_item WHERE clinica_id IS NULL LIMIT 5")
+    ).fetchall()
+    if remaining_orcamento_items:
+        raise RuntimeError(
+            "Não foi possível definir clinica_id para os orçamentos: "
+            + ", ".join(str(row.id) for row in remaining_orcamento_items)
+        )
+
+    remaining_blocos = conn.execute(
+        sa.text("SELECT id FROM bloco_prescricao WHERE clinica_id IS NULL LIMIT 5")
+    ).fetchall()
+    if remaining_blocos:
+        raise RuntimeError(
+            "Não foi possível definir clinica_id para os blocos de prescrição: "
+            + ", ".join(str(row.id) for row in remaining_blocos)
+        )
 
     with op.batch_alter_table('orcamento_item', schema=None) as batch_op:
         batch_op.alter_column('clinica_id', existing_type=sa.Integer(), nullable=False)
