@@ -17,7 +17,14 @@ data_share_party_enum = sa.Enum('clinic', 'veterinarian', 'insurer', name='data_
 def upgrade():
     bind = op.get_bind()
     if bind.dialect.name != 'sqlite':
-        data_share_party_enum.create(bind, checkfirst=True)
+        enum_exists = bind.execute(
+            sa.text(
+                "SELECT EXISTS (SELECT 1 FROM pg_type WHERE typname = :name)"
+            ),
+            {"name": data_share_party_enum.name},
+        ).scalar()
+        if not enum_exists:
+            data_share_party_enum.create(bind, checkfirst=True)
 
     op.create_table(
         'data_share_access',
