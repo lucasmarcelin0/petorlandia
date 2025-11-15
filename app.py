@@ -931,6 +931,25 @@ def payment_status_label(value):
     return mapping.get(value.lower(), value) if value else ""
 
 
+PAYER_TYPE_LABELS = {
+    "plan": "Plano",
+    "particular": "Particular",
+}
+
+
+def payer_type_label(value):
+    return PAYER_TYPE_LABELS.get(value or "particular", "Particular")
+
+
+def default_payer_type_for_consulta(consulta):
+    return "plan" if getattr(consulta, "health_subscription_id", None) else "particular"
+
+
+@app.template_filter("payer_label")
+def payer_label_filter(value):
+    return payer_type_label(value)
+
+
 @app.template_filter('coverage_label')
 def coverage_label_filter(value):
     return coverage_label(value)
@@ -14268,6 +14287,9 @@ def adicionar_orcamento_item(consulta_id):
     descricao = data.get('descricao')
     valor = data.get('valor')
     procedure_code = (data.get('procedure_code') or '').strip() or None
+    payer_type = data.get('payer_type') or default_payer_type_for_consulta(consulta)
+    if payer_type not in PAYER_TYPE_LABELS:
+        return jsonify({'success': False, 'message': 'Tipo de pagador inválido.'}), 400
 
     servico = None
     if servico_id:
@@ -14304,6 +14326,7 @@ def adicionar_orcamento_item(consulta_id):
         servico_id=servico.id if servico else None,
         clinica_id=clinic_id,
         procedure_code=procedure_code,
+        payer_type=payer_type,
     )
     db.session.add(item)
     db.session.commit()
@@ -14312,6 +14335,8 @@ def adicionar_orcamento_item(consulta_id):
         'descricao': item.descricao,
         'valor': float(item.valor),
         'total': float(consulta.total_orcamento),
+        'payer_type': item.payer_type,
+        'payer_label': payer_type_label(item.payer_type),
         'coverage_status': item.coverage_status,
         'coverage_label': coverage_label(item.coverage_status),
         'coverage_badge': coverage_badge(item.coverage_status),

@@ -1,4 +1,17 @@
+{% set default_payer_type = 'plan' if consulta.health_subscription_id else 'particular' %}
+
 <h5 class="mb-3">Orçamento da Consulta</h5>
+
+<div class="d-flex flex-column flex-md-row align-items-md-center justify-content-between mb-3 gap-2">
+  <div class="btn-group" role="group" aria-label="Tipo de pagador">
+    <input type="radio" class="btn-check" name="payer-toggle" id="payer-plan" autocomplete="off" value="plan" {% if default_payer_type == 'plan' %}checked{% endif %}>
+    <label class="btn btn-outline-primary" for="payer-plan">Plano</label>
+
+    <input type="radio" class="btn-check" name="payer-toggle" id="payer-particular" autocomplete="off" value="particular" {% if default_payer_type == 'particular' %}checked{% endif %}>
+    <label class="btn btn-outline-primary" for="payer-particular">Particular</label>
+  </div>
+  <small class="text-muted">Selecione se o item pertence ao plano de saúde ou a um pagamento particular.</small>
+</div>
 
 <div class="border rounded p-3 mb-4 bg-light">
   <form id="form-servico" class="row g-2 align-items-end" onsubmit="event.preventDefault(); criarServico();">
@@ -41,6 +54,14 @@
   </form>
 </div>
 
+{% set visible_total = namespace(value=0) %}
+{% for item in consulta.orcamento_items %}
+  {% set payer_type = item.payer_type or default_payer_type %}
+  {% if payer_type == default_payer_type %}
+    {% set visible_total.value = visible_total.value + item.valor %}
+  {% endif %}
+{% endfor %}
+
 <table class="table" id="orcamento-tabela">
   <thead>
     <tr>
@@ -52,8 +73,12 @@
   </thead>
   <tbody>
     {% for item in consulta.orcamento_items %}
-    <tr data-id="{{ item.id }}">
-      <td>{{ item.descricao }}</td>
+    {% set payer_type = item.payer_type or default_payer_type %}
+    <tr data-id="{{ item.id }}" data-payer="{{ payer_type }}" data-value="{{ '%.2f'|format(item.valor) }}" class="{% if payer_type != default_payer_type %}d-none{% endif %}">
+      <td>
+        <span class="badge {% if payer_type == 'plan' %}bg-info text-dark{% else %}bg-secondary{% endif %} me-2">{{ payer_type|payer_label }}</span>
+        <span>{{ item.descricao }}</span>
+      </td>
       <td class="text-end">{{ '%.2f'|format(item.valor) }}</td>
       <td class="text-center">
         <span class="badge bg-{{ item.coverage_status|coverage_badge }}">
@@ -70,7 +95,7 @@
   <tfoot>
     <tr>
       <th>Total</th>
-      <th class="text-end" id="orcamento-total">{{ '%.2f'|format(consulta.total_orcamento) }}</th>
+      <th class="text-end" id="orcamento-total">{{ '%.2f'|format(visible_total.value) }}</th>
       <th colspan="2"></th>
     </tr>
   </tfoot>
@@ -85,6 +110,8 @@
 
 <script>
 const consultaId = {{ consulta.id }};
+const payerTypeLabels = { plan: 'Plano', particular: 'Particular' };
+let currentPayerType = '{{ default_payer_type }}';
 
 async function criarServico() {
   const descricao = document.getElementById('descricao-servico').value.trim();
@@ -111,11 +138,59 @@ async function criarServico() {
   }
 }
 
+function payerBadge(type) {
+  const label = payerTypeLabels[type] || payerTypeLabels.particular;
+  const badgeClass = type === 'plan' ? 'bg-info text-dark' : 'bg-secondary';
+  return `<span class="badge ${badgeClass} me-2">${label}</span>`;
+}
+
+function applyPayerFilter() {
+  const rows = document.querySelectorAll('#orcamento-tabela tbody tr');
+  rows.forEach(row => {
+    const rowType = row.dataset.payer || 'particular';
+    const shouldShow = rowType === currentPayerType;
+    row.classList.toggle('d-none', !shouldShow);
+  });
+  updateOrcamentoTotal();
+}
+
+function updateOrcamentoTotal() {
+  const rows = document.querySelectorAll('#orcamento-tabela tbody tr');
+  let total = 0;
+  rows.forEach(row => {
+    if (row.classList.contains('d-none')) return;
+    total += parseFloat(row.dataset.value || '0');
+  });
+  document.getElementById('orcamento-total').textContent = total.toFixed(2);
+}
+
+function bindPayerToggle() {
+  document.querySelectorAll('input[name="payer-toggle"]').forEach(input => {
+    input.addEventListener('change', (event) => {
+      if (event.target.checked) {
+        currentPayerType = event.target.value;
+        applyPayerFilter();
+      }
+    });
+  });
+}
+
+function initPayerControls() {
+  bindPayerToggle();
+  applyPayerFilter();
+}
+
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', initPayerControls);
+} else {
+  initPayerControls();
+}
+
 async function adicionarItemOrcamento() {
   const servicoId = parseInt(document.getElementById('servico-id').value);
   const valor = parseFloat(document.getElementById('valor-personalizado').value);
   if (!servicoId) return;
-  const payload = {servico_id: servicoId};
+  const payload = {servico_id: servicoId, payer_type: currentPayerType};
   if (!isNaN(valor)) payload.valor = valor;
   const resp = await fetch(`/consulta/${consultaId}/orcamento_item`, {
     method: 'POST',
@@ -127,17 +202,23 @@ async function adicionarItemOrcamento() {
     const tbody = document.querySelector('#orcamento-tabela tbody');
     const tr = document.createElement('tr');
     tr.dataset.id = data.id;
+    const payerType = data.payer_type || currentPayerType;
+    tr.dataset.payer = payerType;
+    tr.dataset.value = data.valor;
+    if (payerType !== currentPayerType) {
+      tr.classList.add('d-none');
+    }
     const badgeClass = data.coverage_badge || 'secondary';
     const badgeLabel = data.coverage_label || 'Pendente';
     const coverageMessage = data.coverage_message ? `<small class="d-block text-muted">${data.coverage_message}</small>` : '';
-    tr.innerHTML = `<td>${data.descricao}</td>` +
+    tr.innerHTML = `<td>${payerBadge(payerType)}<span>${data.descricao}</span></td>` +
                    `<td class="text-end">${data.valor.toFixed(2)}</td>` +
                    `<td class="text-center"><span class="badge bg-${badgeClass}">${badgeLabel}</span>${coverageMessage}</td>` +
                    `<td class="text-end"><button class="btn btn-sm btn-outline-danger" onclick="removerItemOrcamento(${data.id})">🗑️</button></td>`;
     tbody.appendChild(tr);
     document.getElementById('servico-id').value = '';
     document.getElementById('valor-personalizado').value = '';
-    document.getElementById('orcamento-total').textContent = data.total.toFixed(2);
+    applyPayerFilter();
   }
 }
 
@@ -145,8 +226,8 @@ async function removerItemOrcamento(id) {
   const resp = await fetch(`/consulta/orcamento_item/${id}`, {method:'DELETE'});
   if (resp.ok) {
     document.querySelector(`#orcamento-tabela tr[data-id='${id}']`).remove();
-    const data = await resp.json();
-    document.getElementById('orcamento-total').textContent = data.total.toFixed(2);
+    await resp.json();
+    updateOrcamentoTotal();
   }
 }
 

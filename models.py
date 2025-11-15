@@ -620,6 +620,7 @@ class OrcamentoItem(db.Model):
     coverage_id = db.Column(db.Integer, db.ForeignKey('health_coverage.id'), nullable=True)
     coverage_status = db.Column(db.String(20), default='pending')
     coverage_message = db.Column(db.Text, nullable=True)
+    payer_type = db.Column(db.String(20), nullable=False, default='particular')
 
     consulta = db.relationship(
         'Consulta',
@@ -636,6 +637,14 @@ class OrcamentoItem(db.Model):
     servico = db.relationship('ServicoClinica')
     clinica = db.relationship('Clinica', backref=db.backref('orcamento_items', cascade='all, delete-orphan'))
     coverage = db.relationship('HealthCoverage', backref=db.backref('orcamento_items', cascade='all, delete-orphan'))
+
+    @property
+    def effective_payer_type(self):
+        return self.payer_type or 'particular'
+
+    @property
+    def payer_label(self):
+        return 'Plano' if self.effective_payer_type == 'plan' else 'Particular'
 
 
 
