@@ -971,15 +971,26 @@ class PJPayment(db.Model):
     __table_args__ = (
         db.CheckConstraint('valor >= 0', name='ck_pj_payments_valor_positive'),
         db.CheckConstraint("status IN ('pendente','pago')", name='ck_pj_payments_status'),
+        db.UniqueConstraint('plantonista_escala_id', name='uq_pj_payment_plantonista'),
     )
 
     id = db.Column(db.Integer, primary_key=True)
     clinic_id = db.Column(db.Integer, db.ForeignKey('clinica.id'), nullable=False, index=True)
     prestador_nome = db.Column(db.String(150), nullable=False)
     prestador_cnpj = db.Column(db.String(20), nullable=False)
-    nota_fiscal_numero = db.Column(db.String(80), nullable=True)
+    prestador_tipo = db.Column(
+        db.String(20),
+        nullable=False,
+        default='pj',
+        server_default='pj',
+    )
     valor = db.Column(db.Numeric(14, 2), nullable=False)
+    valor_hora = db.Column(db.Numeric(10, 2), nullable=True)
+    horas_previstas = db.Column(db.Numeric(6, 2), nullable=True)
+    nota_fiscal_numero = db.Column(db.String(80), nullable=True)
     data_servico = db.Column(db.Date, nullable=False)
+    turno_inicio = db.Column(db.DateTime, nullable=True)
+    turno_fim = db.Column(db.DateTime, nullable=True)
     data_pagamento = db.Column(db.Date, nullable=True)
     status = db.Column(
         db.String(20),
@@ -988,6 +999,12 @@ class PJPayment(db.Model):
         server_default='pendente',
     )
     observacoes = db.Column(db.Text, nullable=True)
+    plantonista_escala_id = db.Column(
+        db.Integer,
+        db.ForeignKey('plantonista_escalas.id', ondelete='SET NULL'),
+        nullable=True,
+        index=True,
+    )
     created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
     updated_at = db.Column(
         db.DateTime,
@@ -1001,6 +1018,10 @@ class PJPayment(db.Model):
     clinic = db.relationship(
         'Clinica',
         backref=db.backref('pj_payments', cascade='all, delete-orphan', lazy=True),
+    )
+    plantonista_escala = db.relationship(
+        'PlantonistaEscala',
+        back_populates='pj_payment',
     )
 
     def is_paid(self):
@@ -1026,19 +1047,26 @@ class PlantonistaEscala(db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
     clinic_id = db.Column(db.Integer, db.ForeignKey('clinica.id'), nullable=False, index=True)
-    medico_id = db.Column(db.Integer, db.ForeignKey('veterinario.id'), nullable=True, index=True)
-    medico_nome = db.Column(db.String(150), nullable=False)
-    medico_cnpj = db.Column(db.String(20), nullable=True)
+    veterinario_id = db.Column(db.Integer, db.ForeignKey('veterinario.id'), nullable=True, index=True)
+    prestador_tipo = db.Column(
+        db.String(20),
+        nullable=False,
+        default='pj',
+        server_default='pj',
+    )
+    prestador_nome = db.Column(db.String(150), nullable=False)
+    prestador_cnpj = db.Column(db.String(20), nullable=True)
     turno = db.Column(db.String(80), nullable=False)
-    inicio = db.Column(db.DateTime, nullable=False, index=True)
-    fim = db.Column(db.DateTime, nullable=False)
+    turno_inicio = db.Column(db.DateTime, nullable=False, index=True)
+    turno_fim = db.Column(db.DateTime, nullable=False)
     valor_previsto = db.Column(db.Numeric(14, 2), nullable=False)
+    valor_hora = db.Column(db.Numeric(10, 2), nullable=True)
+    _horas_previstas = db.Column('horas_previstas', db.Numeric(6, 2), nullable=True)
     status = db.Column(db.String(20), nullable=False, default='agendado')
     nota_fiscal_recebida = db.Column(db.Boolean, nullable=False, default=False)
     retencao_validada = db.Column(db.Boolean, nullable=False, default=False)
     observacoes = db.Column(db.Text, nullable=True)
     realizado_em = db.Column(db.DateTime, nullable=True)
-    pj_payment_id = db.Column(db.Integer, db.ForeignKey('pj_payments.id'), nullable=True)
     created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
 
@@ -1046,16 +1074,30 @@ class PlantonistaEscala(db.Model):
         'Clinica',
         backref=db.backref('plantonista_escalas', cascade='all, delete-orphan', lazy=True),
     )
-    medico = db.relationship('Veterinario', backref=db.backref('escalas', lazy=True))
-    pj_payment = db.relationship('PJPayment', backref=db.backref('plantao_escalas', lazy=True))
+    veterinario = db.relationship('Veterinario', backref=db.backref('escalas', lazy=True))
+    pj_payment = db.relationship(
+        'PJPayment',
+        back_populates='plantonista_escala',
+        uselist=False,
+    )
 
     @hybrid_property
     def horas_previstas(self):
-        if not self.inicio or not self.fim:
+        if self._horas_previstas is not None:
+            return self._horas_previstas
+        if not self.turno_inicio or not self.turno_fim:
             return Decimal('0.00')
-        total_seconds = Decimal((self.fim - self.inicio).total_seconds())
+        total_seconds = Decimal((self.turno_fim - self.turno_inicio).total_seconds())
         horas = total_seconds / Decimal('3600')
         return horas.quantize(Decimal('0.01'))
+
+    @horas_previstas.setter
+    def horas_previstas(self, value):
+        self._horas_previstas = value
+
+    @horas_previstas.expression
+    def horas_previstas(cls):
+        return cls._horas_previstas
 
     @property
     def valor_pago(self):
@@ -1067,13 +1109,13 @@ class PlantonistaEscala(db.Model):
     def atrasado(self):
         if self.status in {'realizado', 'cancelado'}:
             return False
-        referencia = self.fim or self.inicio
+        referencia = self.turno_fim or self.turno_inicio
         if not referencia:
             return False
         return referencia < datetime.utcnow()
 
     def __repr__(self):
-        return f"<PlantonistaEscala {self.medico_nome} {self.turno}>"
+        return f"<PlantonistaEscala {self.prestador_nome} {self.turno}>"
 
 # Associação many-to-many entre veterinário e especialidade
 veterinario_especialidade = db.Table(

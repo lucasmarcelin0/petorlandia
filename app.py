@@ -3220,7 +3220,7 @@ def contabilidade_pagamentos():
         'custo_previsto': Decimal('0.00'),
         'custo_pago': Decimal('0.00'),
     }
-    plantonista_medicos: list[tuple[str, str]] = []
+    plantonista_prestadores: list[tuple[str, str]] = []
 
     def _coerce_decimal(value):
         if value is None:
@@ -3419,25 +3419,26 @@ def contabilidade_pagamentos():
         plantonista_escalas = (
             PlantonistaEscala.query.filter(
                 PlantonistaEscala.clinic_id == selected_clinic_id,
-                PlantonistaEscala.inicio >= start_datetime,
-                PlantonistaEscala.inicio < end_datetime,
+                PlantonistaEscala.turno_inicio >= start_datetime,
+                PlantonistaEscala.turno_inicio < end_datetime,
             )
             .options(
                 selectinload(PlantonistaEscala.pj_payment),
-                selectinload(PlantonistaEscala.medico).joinedload(Veterinario.user),
+                selectinload(PlantonistaEscala.veterinario).joinedload(Veterinario.user),
             )
-            .order_by(PlantonistaEscala.inicio.asc())
+            .order_by(PlantonistaEscala.turno_inicio.asc())
             .all()
         )
 
-        unique_medicos = {}
+        unique_veterinarios = {}
         for escala in plantonista_escalas:
-            plantonista_totals['horas_previstas'] += escala.horas_previstas or Decimal('0.00')
+            horas = escala.horas_previstas or Decimal('0.00')
+            plantonista_totals['horas_previstas'] += horas
             plantonista_totals['custo_previsto'] += escala.valor_previsto or Decimal('0.00')
             plantonista_totals['custo_pago'] += escala.valor_pago or Decimal('0.00')
-            if escala.medico_id and escala.medico_nome:
-                unique_medicos[str(escala.medico_id)] = escala.medico_nome
-        plantonista_medicos = sorted(unique_medicos.items(), key=lambda item: item[1].lower())
+            if escala.veterinario_id and escala.prestador_nome:
+                unique_veterinarios[str(escala.veterinario_id)] = escala.prestador_nome
+        plantonista_prestadores = sorted(unique_veterinarios.items(), key=lambda item: item[1].lower())
 
     total_pago = sum((payment.valor or Decimal('0.00')) for payment in payments if payment.status == 'pago')
     total_pendente = sum((payment.valor or Decimal('0.00')) for payment in payments if payment.status == 'pendente')
@@ -3461,17 +3462,34 @@ def contabilidade_pagamentos():
         selected_view=selected_view,
         plantonista_escalas=plantonista_escalas,
         plantonista_totals=plantonista_totals,
-        plantonista_medicos=plantonista_medicos,
+        plantonista_prestadores=plantonista_prestadores,
         plantonista_status_labels=dict(PLANTONISTA_ESCALA_STATUS_CHOICES),
         plantonista_status_styles=PLANTONISTA_STATUS_STYLES,
     )
+
+
+def _calculate_plantao_horas(turno_inicio: datetime, turno_fim: datetime) -> Decimal:
+    if not turno_inicio or not turno_fim:
+        return Decimal('0.00')
+    total_seconds = Decimal(max((turno_fim - turno_inicio).total_seconds(), 0))
+    if total_seconds <= 0:
+        return Decimal('0.00')
+    return (total_seconds / Decimal('3600')).quantize(Decimal('0.01'))
+
+
+def _calculate_valor_hora_previsto(valor_previsto: Optional[Decimal], horas: Optional[Decimal]) -> Optional[Decimal]:
+    if not valor_previsto or not horas:
+        return None
+    if horas <= 0:
+        return None
+    return (valor_previsto / horas).quantize(Decimal('0.01'))
 
 
 def _populate_plantonista_form_choices(form, clinics):
     form.clinic_id.choices = [
         (clinic.id, clinic.nome or f'Clínica #{clinic.id}') for clinic in clinics
     ]
-    medico_choices = [(0, 'Sem vínculo direto')]
+    veterinario_choices = [(0, 'Sem vínculo direto')]
     medicos = (
         Veterinario.query.join(User)
         .order_by(User.name.asc())
@@ -3479,8 +3497,8 @@ def _populate_plantonista_form_choices(form, clinics):
     )
     for medico in medicos:
         label = medico.user.name if medico.user else f'Veterinário #{medico.id}'
-        medico_choices.append((medico.id, label))
-    form.medico_id.choices = medico_choices
+        veterinario_choices.append((medico.id, label))
+    form.veterinario_id.choices = veterinario_choices
 
 
 @app.route('/contabilidade/pagamentos/novo', methods=['GET', 'POST'])
@@ -3668,32 +3686,44 @@ def contabilidade_plantonistas_novo():
         form.clinic_id.data = default_clinic_id
         form.status.data = 'agendado'
         form.data_inicio.data = date.today()
+        form.prestador_tipo.data = form.prestador_tipo.data or 'pj'
 
     if form.validate_on_submit():
         clinic_id = form.clinic_id.data
         if clinic_id not in accessible_ids and not _is_admin():
             abort(403)
 
-        medico_id = form.medico_id.data or None
-        if medico_id == 0:
-            medico_id = None
-        medico_nome = (form.medico_nome.data or '').strip()
-        medico_cnpj = ''.join(ch for ch in (form.medico_cnpj.data or '') if ch.isdigit()) or None
+        veterinario_id = form.veterinario_id.data or None
+        if veterinario_id == 0:
+            veterinario_id = None
+        prestador_nome = (form.prestador_nome.data or '').strip()
+        prestador_cnpj = ''.join(ch for ch in (form.prestador_cnpj.data or '') if ch.isdigit()) or None
+        prestador_tipo = form.prestador_tipo.data or 'pj'
 
-        inicio = datetime.combine(form.data_inicio.data, form.hora_inicio.data)
-        fim = datetime.combine(form.data_inicio.data, form.hora_fim.data)
-        if fim <= inicio:
-            fim += timedelta(days=1)
+        turno_inicio = datetime.combine(form.data_inicio.data, form.hora_inicio.data)
+        turno_fim = datetime.combine(form.data_inicio.data, form.hora_fim.data)
+        if turno_fim <= turno_inicio:
+            turno_fim += timedelta(days=1)
+
+        horas_previstas = form.horas_previstas.data
+        if horas_previstas is None:
+            horas_previstas = _calculate_plantao_horas(turno_inicio, turno_fim)
+        valor_hora = form.valor_hora.data
+        if valor_hora is None:
+            valor_hora = _calculate_valor_hora_previsto(form.valor_previsto.data, horas_previstas)
 
         escala = PlantonistaEscala(
             clinic_id=clinic_id,
-            medico_id=medico_id,
-            medico_nome=medico_nome,
-            medico_cnpj=medico_cnpj,
+            veterinario_id=veterinario_id,
+            prestador_tipo=prestador_tipo,
+            prestador_nome=prestador_nome,
+            prestador_cnpj=prestador_cnpj,
             turno=form.turno.data.strip(),
-            inicio=inicio,
-            fim=fim,
+            turno_inicio=turno_inicio,
+            turno_fim=turno_fim,
             valor_previsto=form.valor_previsto.data,
+            valor_hora=valor_hora,
+            horas_previstas=horas_previstas,
             status=form.status.data,
             nota_fiscal_recebida=form.nota_fiscal_recebida.data,
             retencao_validada=form.retencao_validada.data,
@@ -3710,7 +3740,7 @@ def contabilidade_plantonistas_novo():
             url_for(
                 'contabilidade_pagamentos',
                 clinica_id=clinic_id,
-                mes=_format_month_parameter(inicio),
+                mes=_format_month_parameter(turno_inicio),
                 aba='plantonistas',
             )
         )
@@ -3745,14 +3775,17 @@ def contabilidade_plantonistas_editar(escala_id):
 
     if request.method == 'GET':
         form.clinic_id.data = escala.clinic_id
-        form.medico_id.data = escala.medico_id or 0
-        form.medico_nome.data = escala.medico_nome
-        form.medico_cnpj.data = escala.medico_cnpj
+        form.veterinario_id.data = escala.veterinario_id or 0
+        form.prestador_tipo.data = escala.prestador_tipo or 'pj'
+        form.prestador_nome.data = escala.prestador_nome
+        form.prestador_cnpj.data = escala.prestador_cnpj
         form.turno.data = escala.turno
-        form.data_inicio.data = escala.inicio.date()
-        form.hora_inicio.data = escala.inicio.time().replace(microsecond=0)
-        form.hora_fim.data = escala.fim.time().replace(microsecond=0)
+        form.data_inicio.data = escala.turno_inicio.date()
+        form.hora_inicio.data = escala.turno_inicio.time().replace(microsecond=0)
+        form.hora_fim.data = escala.turno_fim.time().replace(microsecond=0)
         form.valor_previsto.data = escala.valor_previsto
+        form.horas_previstas.data = escala.horas_previstas
+        form.valor_hora.data = escala.valor_hora
         form.status.data = escala.status
         form.nota_fiscal_recebida.data = escala.nota_fiscal_recebida
         form.retencao_validada.data = escala.retencao_validada
@@ -3763,21 +3796,30 @@ def contabilidade_plantonistas_editar(escala_id):
         if clinic_id not in accessible_ids and not _is_admin():
             abort(403)
 
-        medico_id = form.medico_id.data or None
-        if medico_id == 0:
-            medico_id = None
+        veterinario_id = form.veterinario_id.data or None
+        if veterinario_id == 0:
+            veterinario_id = None
         escala.clinic_id = clinic_id
-        escala.medico_id = medico_id
-        escala.medico_nome = (form.medico_nome.data or '').strip()
-        escala.medico_cnpj = ''.join(ch for ch in (form.medico_cnpj.data or '') if ch.isdigit()) or None
+        escala.veterinario_id = veterinario_id
+        escala.prestador_tipo = form.prestador_tipo.data or 'pj'
+        escala.prestador_nome = (form.prestador_nome.data or '').strip()
+        escala.prestador_cnpj = ''.join(ch for ch in (form.prestador_cnpj.data or '') if ch.isdigit()) or None
         escala.turno = form.turno.data.strip()
-        inicio = datetime.combine(form.data_inicio.data, form.hora_inicio.data)
-        fim = datetime.combine(form.data_inicio.data, form.hora_fim.data)
-        if fim <= inicio:
-            fim += timedelta(days=1)
-        escala.inicio = inicio
-        escala.fim = fim
+        turno_inicio = datetime.combine(form.data_inicio.data, form.hora_inicio.data)
+        turno_fim = datetime.combine(form.data_inicio.data, form.hora_fim.data)
+        if turno_fim <= turno_inicio:
+            turno_fim += timedelta(days=1)
+        escala.turno_inicio = turno_inicio
+        escala.turno_fim = turno_fim
         escala.valor_previsto = form.valor_previsto.data
+        horas_previstas = form.horas_previstas.data
+        if horas_previstas is None:
+            horas_previstas = _calculate_plantao_horas(turno_inicio, turno_fim)
+        escala.horas_previstas = horas_previstas
+        valor_hora = form.valor_hora.data
+        if valor_hora is None:
+            valor_hora = _calculate_valor_hora_previsto(escala.valor_previsto, horas_previstas)
+        escala.valor_hora = valor_hora
         escala.status = form.status.data
         if escala.status == 'realizado' and not escala.realizado_em:
             escala.realizado_em = datetime.utcnow()
@@ -3793,7 +3835,7 @@ def contabilidade_plantonistas_editar(escala_id):
             url_for(
                 'contabilidade_pagamentos',
                 clinica_id=clinic_id,
-                mes=_format_month_parameter(escala.inicio),
+                mes=_format_month_parameter(escala.turno_inicio),
                 aba='plantonistas',
             )
         )
@@ -3801,7 +3843,7 @@ def contabilidade_plantonistas_editar(escala_id):
     cancel_url = url_for(
         'contabilidade_pagamentos',
         clinica_id=escala.clinic_id,
-        mes=request.args.get('mes') or _format_month_parameter(escala.inicio),
+        mes=request.args.get('mes') or _format_month_parameter(escala.turno_inicio),
         aba='plantonistas',
     )
 
@@ -3832,7 +3874,7 @@ def contabilidade_plantao_confirmar(escala_id):
     else:
         flash('Plantão já estava marcado como realizado.', 'info')
 
-    month_value = _format_month_parameter(escala.inicio)
+    month_value = _format_month_parameter(escala.turno_inicio)
     return redirect(
         url_for(
             'contabilidade_pagamentos',
@@ -3852,31 +3894,34 @@ def contabilidade_plantao_gerar_pagamento(escala_id):
     if escala.clinic_id not in accessible_ids and not _is_admin():
         abort(403)
 
-    if escala.pj_payment_id:
+    if escala.pj_payment:
         flash('Este plantão já possui um pagamento vinculado.', 'info')
     else:
         if not escala.nota_fiscal_recebida or not escala.retencao_validada:
             flash('Valide a nota fiscal e retenções antes de gerar o pagamento.', 'warning')
         else:
-            cnpj = ''.join(ch for ch in (escala.medico_cnpj or '') if ch.isdigit())
+            cnpj = ''.join(ch for ch in (escala.prestador_cnpj or '') if ch.isdigit())
             if len(cnpj) != 14:
-                flash('Informe um CNPJ válido para o médico antes de gerar o pagamento.', 'warning')
+                flash('Informe um CNPJ válido para o prestador antes de gerar o pagamento.', 'warning')
             else:
                 payment = PJPayment(
                     clinic_id=escala.clinic_id,
-                    prestador_nome=escala.medico_nome,
+                    prestador_nome=escala.prestador_nome,
                     prestador_cnpj=cnpj,
+                    prestador_tipo=escala.prestador_tipo,
                     nota_fiscal_numero=None,
                     valor=escala.valor_previsto,
-                    data_servico=escala.inicio.date(),
+                    valor_hora=escala.valor_hora,
+                    horas_previstas=escala.horas_previstas,
+                    turno_inicio=escala.turno_inicio,
+                    turno_fim=escala.turno_fim,
+                    data_servico=escala.turno_inicio.date(),
                     data_pagamento=date.today() if escala.status == 'realizado' else None,
                     observacoes=escala.observacoes,
+                    plantonista_escala=escala,
                 )
                 payment.status = 'pago' if payment.data_pagamento else 'pendente'
                 db.session.add(payment)
-                db.session.flush()
-                escala.pj_payment = payment
-                db.session.flush()
                 _sync_pj_payment_classification(payment)
                 db.session.commit()
                 flash('Pagamento PJ gerado a partir do plantão.', 'success')
@@ -3885,7 +3930,7 @@ def contabilidade_plantao_gerar_pagamento(escala_id):
         url_for(
             'contabilidade_pagamentos',
             clinica_id=escala.clinic_id,
-            mes=_format_month_parameter(escala.inicio),
+            mes=_format_month_parameter(escala.turno_inicio),
             aba='plantonistas',
         )
     )

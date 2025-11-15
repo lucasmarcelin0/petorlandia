@@ -360,9 +360,9 @@
           <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-3">
             <div class="d-flex flex-wrap gap-2">
               <select class="form-select form-select-sm" data-plantao-filter>
-                <option value="">Todos os médicos</option>
-                {% for medico_id, nome in plantonista_medicos %}
-                  <option value="{{ medico_id }}">{{ nome }}</option>
+                <option value="">Todos os prestadores</option>
+                {% for veterinario_id, nome in plantonista_prestadores %}
+                  <option value="{{ veterinario_id }}">{{ nome }}</option>
                 {% endfor %}
               </select>
               <select class="form-select form-select-sm" data-plantao-sort>
@@ -378,7 +378,7 @@
             <table class="table align-middle" data-plantao-table>
               <thead class="table-light">
                 <tr>
-                  <th>Médico</th>
+                  <th>Prestador</th>
                   <th>Turno</th>
                   <th>Duração</th>
                   <th>Valor previsto</th>
@@ -390,13 +390,16 @@
               </thead>
               <tbody>
                 {% for escala in plantonista_escalas %}
-                <tr data-medico="{{ escala.medico_id or '' }}"
+                <tr data-veterinario="{{ escala.veterinario_id or '' }}"
                     data-turno="{{ escala.turno|lower }}"
-                    data-inicio="{{ escala.inicio.isoformat() }}"
+                    data-inicio="{{ escala.turno_inicio.isoformat() }}"
                     data-atrasado="{{ 1 if escala.atrasado else 0 }}">
                   <td>
-                    <div class="fw-semibold">{{ escala.medico_nome }}</div>
-                    <small class="text-muted">{{ escala.inicio.strftime('%d/%m %Hh') }} - {{ escala.fim.strftime('%d/%m %Hh') }}</small>
+                    <div class="fw-semibold">{{ escala.prestador_nome }}</div>
+                    {% if escala.prestador_cnpj %}
+                      <small class="text-muted d-block">{{ escala.prestador_cnpj | format_cnpj }}</small>
+                    {% endif %}
+                    <small class="text-muted">{{ escala.turno_inicio.strftime('%d/%m %Hh') }} - {{ escala.turno_fim.strftime('%d/%m %Hh') }}</small>
                   </td>
                   <td>{{ escala.turno }}</td>
                   <td>{{ '%.2f' % escala.horas_previstas }} h</td>
@@ -473,7 +476,7 @@
             </div>
             <div class="list-group-item">
               <div class="fw-semibold">Filtros inteligentes</div>
-              <p class="text-muted small mb-0">Filtre por médico, ordene por turno e destaque atrasos para evitar gargalos.</p>
+                    <p class="text-muted small mb-0">Filtre por prestador, ordene por turno e destaque atrasos para evitar gargalos.</p>
             </div>
           </div>
         </div>

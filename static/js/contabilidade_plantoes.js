@@ -20,12 +20,12 @@
   }
 
   function applyFilter() {
-    const medicoId = filterSelect ? filterSelect.value : '';
+    const veterinarioId = filterSelect ? filterSelect.value : '';
     const term = searchInput ? searchInput.value.toLowerCase().trim() : '';
     rows.forEach((row) => {
-      const matchesMedico = !medicoId || row.dataset.medico === medicoId;
+      const matchesVeterinario = !veterinarioId || row.dataset.veterinario === veterinarioId;
       const matchesTerm = !term || row.textContent.toLowerCase().includes(term);
-      row.style.display = matchesMedico && matchesTerm ? '' : 'none';
+      row.style.display = matchesVeterinario && matchesTerm ? '' : 'none';
     });
   }
 

@@ -240,9 +240,15 @@ class PJPaymentForm(FlaskForm):
 
 class PlantonistaEscalaForm(FlaskForm):
     clinic_id = SelectField('Clínica', coerce=int, validators=[DataRequired()])
-    medico_id = SelectField('Médico (opcional)', coerce=int, validators=[Optional()], choices=[])
-    medico_nome = StringField('Nome exibido do médico', validators=[DataRequired(), Length(max=150)])
-    medico_cnpj = StringField('CNPJ do médico', validators=[Optional(), Length(max=20)])
+    veterinario_id = SelectField('Vínculo com veterinário (opcional)', coerce=int, validators=[Optional()], choices=[])
+    prestador_tipo = SelectField(
+        'Tipo do prestador',
+        choices=[('pj', 'Pessoa jurídica'), ('pf', 'Pessoa física')],
+        validators=[DataRequired()],
+        default='pj',
+    )
+    prestador_nome = StringField('Nome exibido do prestador', validators=[DataRequired(), Length(max=150)])
+    prestador_cnpj = StringField('CNPJ do prestador', validators=[Optional(), Length(max=20)])
     turno = StringField('Turno', validators=[DataRequired(), Length(max=80)])
     data_inicio = DateField('Data do plantão', format='%Y-%m-%d', validators=[DataRequired()])
     hora_inicio = TimeField('Hora de início', validators=[DataRequired()])
@@ -251,6 +257,18 @@ class PlantonistaEscalaForm(FlaskForm):
         'Valor previsto',
         places=2,
         validators=[DataRequired(), NumberRange(min=0)],
+        render_kw={"min": "0", "step": "0.01"},
+    )
+    horas_previstas = DecimalField(
+        'Horas previstas (opcional)',
+        places=2,
+        validators=[Optional(), NumberRange(min=0)],
+        render_kw={"min": "0", "step": "0.25"},
+    )
+    valor_hora = DecimalField(
+        'Valor por hora (opcional)',
+        places=2,
+        validators=[Optional(), NumberRange(min=0)],
         render_kw={"min": "0", "step": "0.01"},
     )
     status = SelectField('Status operacional', choices=PLANTONISTA_ESCALA_STATUS_CHOICES, validators=[DataRequired()])
