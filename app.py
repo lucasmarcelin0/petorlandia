@@ -2544,6 +2544,73 @@ def index():
     return render_template('index.html')
 
 
+def _user_is_clinic_owner():
+    """Return ``True`` if the current user owns at least one clinic."""
+
+    if not current_user.is_authenticated:
+        return False
+
+    owner_attr = getattr(current_user, "is_clinic_owner", None)
+    if callable(owner_attr):
+        try:
+            if owner_attr():
+                return True
+        except TypeError:
+            pass
+    elif owner_attr:
+        return True
+
+    owned_clinics = getattr(current_user, "clinicas", None)
+    if owned_clinics:
+        return any(getattr(clinic, "owner_id", None) == current_user.id for clinic in owned_clinics)
+
+    return Clinica.query.filter_by(owner_id=current_user.id).first() is not None
+
+
+def _ensure_accounting_access():
+    """Abort with 403 when the current user lacks accounting permissions."""
+
+    if not current_user.is_authenticated:
+        abort(403)
+
+    role = (current_user.role or "").lower()
+    if role in {"admin", "gestor"}:
+        return
+
+    if _user_is_clinic_owner():
+        return
+
+    abort(403)
+
+
+@app.route('/contabilidade')
+@login_required
+def contabilidade_home():
+    _ensure_accounting_access()
+    return render_template('contabilidade/index.html')
+
+
+@app.route('/contabilidade/financeiro')
+@login_required
+def contabilidade_financeiro():
+    _ensure_accounting_access()
+    return render_template('contabilidade/financeiro.html')
+
+
+@app.route('/contabilidade/pagamentos')
+@login_required
+def contabilidade_pagamentos():
+    _ensure_accounting_access()
+    return render_template('contabilidade/pagamentos.html')
+
+
+@app.route('/contabilidade/obrigacoes')
+@login_required
+def contabilidade_obrigacoes():
+    _ensure_accounting_access()
+    return render_template('contabilidade/obrigacoes.html')
+
+
 @app.route('/service-worker.js')
 def service_worker():
     return send_from_directory(app.static_folder, 'service-worker.js')
