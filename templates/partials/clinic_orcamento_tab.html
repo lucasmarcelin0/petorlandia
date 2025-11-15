@@ -1,36 +1,147 @@
-      <div class="d-flex justify-content-between align-items-center mb-3 mt-3">
+      <div class="d-flex justify-content-between align-items-center mb-3 mt-3 flex-wrap gap-2">
         <h3 class="mb-0">Orçamentos</h3>
         <a href="{{ url_for('novo_orcamento', clinica_id=clinica.id) }}" class="btn btn-sm btn-primary">Novo Orçamento</a>
       </div>
-      <table class="table">
-        <thead>
-          <tr><th>Descrição</th><th>Valor (R$)</th><th>Ações</th></tr>
-        </thead>
-        <tbody>
-          {% for o in orcamentos %}
-          <tr>
-            <td>{{ o.descricao }}</td>
-            <td>{{ '%.2f'|format(o.total) }}</td>
-            <td>
-              {% if o.consulta %}
-                {% if current_user.worker in ['veterinario', 'colaborador'] %}
-                <a href="{{ url_for('consulta_direct', animal_id=o.consulta.animal_id, c=o.consulta.id) }}#orcamento" class="btn btn-sm btn-outline-secondary">Ver/Editar</a>
-                {% else %}
-                <a href="{{ url_for('editar_orcamento', orcamento_id=o.id) }}" class="btn btn-sm btn-outline-secondary">Ver/Editar</a>
+
+      <form class="row g-2 align-items-end mb-4" method="get" action="{{ url_for('clinic_detail', clinica_id=clinica.id) }}#orcamento">
+        <div class="col-md-4">
+          <label class="form-label" for="orcamento-search">Buscar</label>
+          <input type="text" id="orcamento-search" name="orcamento_search" class="form-control" placeholder="Tutor, paciente ou descrição" value="{{ orcamento_filters.search }}">
+        </div>
+        <div class="col-md-3">
+          <label class="form-label" for="orcamento-from">De</label>
+          <input type="date" id="orcamento-from" name="orcamento_from" class="form-control" value="{{ orcamento_filters.from }}">
+        </div>
+        <div class="col-md-3">
+          <label class="form-label" for="orcamento-to">Até</label>
+          <input type="date" id="orcamento-to" name="orcamento_to" class="form-control" value="{{ orcamento_filters.to }}">
+        </div>
+        <div class="col-md-2">
+          <label class="form-label" for="orcamento-status">Status</label>
+          <select id="orcamento-status" class="form-select" name="orcamento_status">
+            <option value="all" {% if orcamento_filters.status == 'all' %}selected{% endif %}>Todos</option>
+            {% for status, label in orcamento_status_labels.items() %}
+              <option value="{{ status }}" {% if orcamento_filters.status == status %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        {% if start %}
+        <input type="hidden" name="start" value="{{ start }}">
+        {% endif %}
+        {% if end %}
+        <input type="hidden" name="end" value="{{ end }}">
+        {% endif %}
+        <div class="col-12 d-flex gap-2 mt-2">
+          <button type="submit" class="btn btn-primary btn-sm">Aplicar filtros</button>
+          <a class="btn btn-outline-secondary btn-sm" href="{{ url_for('clinic_detail', clinica_id=clinica.id) }}#orcamento">Limpar</a>
+        </div>
+      </form>
+
+      <div class="table-responsive">
+        <table class="table align-middle">
+          <thead>
+            <tr>
+              <th>Descrição</th>
+              <th>Tutor / Paciente</th>
+              <th class="text-center">Status</th>
+              <th class="text-center">Atualizado</th>
+              <th class="text-center">Envios</th>
+              <th>Ações</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for o in orcamentos %}
+            {% set consulta = o.consulta %}
+            {% set animal = consulta.animal if consulta else None %}
+            {% set tutor = animal.owner if animal else None %}
+            <tr>
+              <td>
+                <div class="fw-semibold">{{ o.descricao }}</div>
+                {% if consulta %}
+                  <small class="text-muted">Consulta #{{ consulta.id }}</small>
                 {% endif %}
-                <a href="{{ url_for('imprimir_orcamento', consulta_id=o.consulta.id) }}" class="btn btn-sm btn-outline-secondary" target="_blank">Imprimir</a>
-                <a href="mailto:{{ o.consulta.animal.owner.email }}?subject=Orçamento&body={{ url_for('imprimir_orcamento', consulta_id=o.consulta.id, _external=True)|urlencode }}" class="btn btn-sm btn-outline-primary">E-mail</a>
-                <a href="https://api.whatsapp.com/send?phone={{ o.consulta.animal.owner.phone }}&text={{ ('Olá ' ~ o.consulta.animal.owner.name ~ '! Segue o orçamento para ' ~ o.consulta.animal.name ~ ': ' ~ url_for('imprimir_orcamento', consulta_id=o.consulta.id, _external=True))|urlencode }}" target="_blank" class="btn btn-sm btn-outline-success">WhatsApp</a>
-              {% else %}
-                <a href="{{ url_for('editar_orcamento', orcamento_id=o.id) }}" class="btn btn-sm btn-outline-secondary">Ver/Editar</a>
-                <a href="{{ url_for('imprimir_orcamento_padrao', orcamento_id=o.id) }}" class="btn btn-sm btn-outline-secondary" target="_blank">Imprimir</a>
-                <a href="mailto:?subject=Orçamento&body={{ url_for('editar_orcamento', orcamento_id=o.id, _external=True) }}" class="btn btn-sm btn-outline-primary">E-mail</a>
-                <a href="https://api.whatsapp.com/send?text={{ url_for('editar_orcamento', orcamento_id=o.id, _external=True)|urlencode }}" target="_blank" class="btn btn-sm btn-outline-success">WhatsApp</a>
-              {% endif %}
-            </td>
-          </tr>
-          {% else %}
-          <tr><td colspan="3">Nenhum orçamento cadastrado.</td></tr>
+              </td>
+              <td>
+                {% if animal %}
+                  <div class="fw-semibold">{{ animal.name }}</div>
+                  <small class="text-muted">{{ tutor.name }}</small>
+                {% else %}
+                  <span class="text-muted">—</span>
+                {% endif %}
+              </td>
+              <td class="text-center">
+                {% set badge = orcamento_status_styles.get(o.status, 'secondary') %}
+                <span class="badge bg-{{ badge }}">{{ orcamento_status_labels.get(o.status, o.status|capitalize) }}</span>
+              </td>
+              <td class="text-center">
+                {% set updated = o.updated_at or o.created_at %}
+                {{ updated.strftime('%d/%m/%Y %H:%M') if updated else '—' }}
+              </td>
+              <td class="text-center">
+                <div class="d-flex flex-column gap-1">
+                  <span class="badge bg-light text-dark">E-mail: {{ o.email_sent_count or 0 }}</span>
+                  <span class="badge bg-light text-dark">WhatsApp: {{ o.whatsapp_sent_count or 0 }}</span>
+                </div>
+                {% if consulta %}
+                <div class="d-flex flex-wrap gap-2 justify-content-center mt-2">
+                  <form method="post" action="{{ url_for('enviar_orcamento', orcamento_id=o.id) }}">
+                    {% if csrf_token is defined %}{{ csrf_token() }}{% endif %}
+                    <input type="hidden" name="channel" value="email">
+                    <button class="btn btn-sm btn-outline-primary" type="submit">Reenviar e-mail</button>
+                  </form>
+                  <form method="post" action="{{ url_for('enviar_orcamento', orcamento_id=o.id) }}">
+                    {% if csrf_token is defined %}{{ csrf_token() }}{% endif %}
+                    <input type="hidden" name="channel" value="whatsapp">
+                    <button class="btn btn-sm btn-outline-success" type="submit">Reenviar WhatsApp</button>
+                  </form>
+                </div>
+                {% endif %}
+              </td>
+              <td>
+                <div class="d-flex flex-wrap gap-2">
+                  {% if consulta %}
+                    {% if current_user.worker in ['veterinario', 'colaborador'] %}
+                      <a href="{{ url_for('consulta_direct', animal_id=consulta.animal_id, c=consulta.id) }}#orcamento" class="btn btn-sm btn-outline-secondary">Ver/Editar</a>
+                    {% else %}
+                      <a href="{{ url_for('editar_orcamento', orcamento_id=o.id) }}" class="btn btn-sm btn-outline-secondary">Ver/Editar</a>
+                    {% endif %}
+                    <a href="{{ url_for('imprimir_orcamento', consulta_id=consulta.id) }}" class="btn btn-sm btn-outline-secondary" target="_blank">Imprimir</a>
+                  {% else %}
+                    <a href="{{ url_for('editar_orcamento', orcamento_id=o.id) }}" class="btn btn-sm btn-outline-secondary">Ver/Editar</a>
+                    <a href="{{ url_for('imprimir_orcamento_padrao', orcamento_id=o.id) }}" class="btn btn-sm btn-outline-secondary" target="_blank">Imprimir</a>
+                  {% endif %}
+                </div>
+              </td>
+            </tr>
+            {% else %}
+            <tr>
+              <td colspan="6" class="text-center text-muted">Nenhum orçamento encontrado com os filtros atuais.</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+
+      {% if orcamentos_pagination.pages > 1 %}
+      <nav aria-label="Paginação de orçamentos" class="mt-3">
+        <ul class="pagination pagination-sm mb-0">
+          {% set prev_page = orcamentos_pagination.prev_num if orcamentos_pagination.has_prev else orcamentos_pagination.page %}
+          <li class="page-item {% if not orcamentos_pagination.has_prev %}disabled{% endif %}">
+            <a class="page-link" href="{{ url_for('clinic_detail', clinica_id=clinica.id, orcamento_page=prev_page, orcamento_status=orcamento_filters.status, orcamento_search=orcamento_filters.search, orcamento_from=orcamento_filters.from, orcamento_to=orcamento_filters.to) }}#orcamento">Anterior</a>
+          </li>
+          {% for page in orcamentos_pagination.iter_pages(left_edge=1, right_edge=1, left_current=2, right_current=2) %}
+            {% if page %}
+              <li class="page-item {% if page == orcamentos_pagination.page %}active{% endif %}">
+                <a class="page-link" href="{{ url_for('clinic_detail', clinica_id=clinica.id, orcamento_page=page, orcamento_status=orcamento_filters.status, orcamento_search=orcamento_filters.search, orcamento_from=orcamento_filters.from, orcamento_to=orcamento_filters.to) }}#orcamento">{{ page }}</a>
+              </li>
+            {% else %}
+              <li class="page-item disabled"><span class="page-link">…</span></li>
+            {% endif %}
           {% endfor %}
-        </tbody>
-      </table>
+          {% set next_page = orcamentos_pagination.next_num if orcamentos_pagination.has_next else orcamentos_pagination.page %}
+          <li class="page-item {% if not orcamentos_pagination.has_next %}disabled{% endif %}">
+            <a class="page-link" href="{{ url_for('clinic_detail', clinica_id=clinica.id, orcamento_page=next_page, orcamento_status=orcamento_filters.status, orcamento_search=orcamento_filters.search, orcamento_from=orcamento_filters.from, orcamento_to=orcamento_filters.to) }}#orcamento">Próxima</a>
+          </li>
+        </ul>
+      </nav>
+      {% endif %}
