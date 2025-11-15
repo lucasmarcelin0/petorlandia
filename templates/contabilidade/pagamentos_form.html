@@ -64,6 +64,106 @@
             <small class="text-muted">Ao informar a data, o status será marcado como pago.</small>
             {% for error in form.data_pagamento.errors %}<div class="invalid-feedback d-block">{{ error }}</div>{% endfor %}
           </div>
+          {% set tipo_field = form._fields.get('tipo') %}
+          {% set plantao_field = form._fields.get('plantao') or form._fields.get('plantao_id') or form._fields.get('plantao_escala_id') %}
+          {% set horas_previstas_field = form._fields.get('horas_previstas') %}
+          {% set valor_hora_field = form._fields.get('valor_hora') %}
+          {% set data_extra_inicio_field = form._fields.get('data_extra_inicio') or form._fields.get('data_inicio_adicional') or form._fields.get('data_inicio_extra') %}
+          {% set data_extra_fim_field = form._fields.get('data_extra_fim') or form._fields.get('data_fim_adicional') or form._fields.get('data_fim_extra') %}
+          {% set hora_extra_inicio_field = form._fields.get('hora_extra_inicio') or form._fields.get('hora_inicio_adicional') or form._fields.get('hora_inicio_extra') %}
+          {% set hora_extra_fim_field = form._fields.get('hora_extra_fim') or form._fields.get('hora_fim_adicional') or form._fields.get('hora_fim_extra') %}
+          {% if tipo_field or plantao_field or horas_previstas_field or valor_hora_field or data_extra_inicio_field or data_extra_fim_field or hora_extra_inicio_field or hora_extra_fim_field %}
+          <div class="col-12">
+            <div class="border-top pt-3 mt-2">
+              <div class="d-flex align-items-center justify-content-between mb-2">
+                <h6 class="fw-semibold mb-0">Configurações avançadas</h6>
+                <small class="text-muted">Os campos abaixo ajudam a validar retenções e cálculos automáticos.</small>
+              </div>
+              <div class="row g-3">
+                {% if tipo_field %}
+                <div class="col-md-4" data-pagamento-wrapper="tipo">
+                  <label class="form-label fw-semibold">{{ tipo_field.label.text }}</label>
+                  {{ tipo_field(class=("form-select" if tipo_field.type in ['SelectField', 'SelectMultipleField', 'QuerySelectField'] else 'form-control') + (' is-invalid' if tipo_field.errors else ''), data_pagamento_field="tipo") }}
+                  <small class="text-muted">Selecione o tipo para aplicar automaticamente as regras de retenção (ISS/INSS) e revelar os campos correspondentes.</small>
+                  {% for error in tipo_field.errors %}<div class="invalid-feedback d-block">{{ error }}</div>{% endfor %}
+                </div>
+                {% endif %}
+                {% if plantao_field %}
+                <div class="col-md-8" data-pagamento-wrapper="plantao" data-pagamento-visible-when="tipo:plantao">
+                  <label class="form-label fw-semibold">{{ plantao_field.label.text }}</label>
+                  {{ plantao_field(class=("form-select" if plantao_field.type in ['SelectField', 'SelectMultipleField', 'QuerySelectField'] else 'form-control') + (' is-invalid' if plantao_field.errors else ''), data_pagamento_field="plantao") }}
+                  <small class="text-muted">Ao vincular um plantão, as horas previstas e o valor-hora são preenchidos automaticamente e usados nos cálculos de retenção.</small>
+                  {% for error in plantao_field.errors %}<div class="invalid-feedback d-block">{{ error }}</div>{% endfor %}
+                </div>
+                {% endif %}
+                {% if horas_previstas_field %}
+                <div class="col-md-4" data-pagamento-wrapper="horas_previstas" data-pagamento-visible-when="tipo:plantao">
+                  <label class="form-label fw-semibold">{{ horas_previstas_field.label.text }}</label>
+                  {{ horas_previstas_field(class="form-control" + (' is-invalid' if horas_previstas_field.errors else ''), data_pagamento_field="horas_previstas", placeholder="0,00", step="0.01", min="0") }}
+                  <small class="text-muted">Horas contratadas para o plantão. Utilizadas para estimar o total a pagar e validar o limite mínimo exigido.</small>
+                  {% for error in horas_previstas_field.errors %}<div class="invalid-feedback d-block">{{ error }}</div>{% endfor %}
+                </div>
+                {% endif %}
+                {% if valor_hora_field %}
+                <div class="col-md-4" data-pagamento-wrapper="valor_hora" data-pagamento-visible-when="tipo:plantao">
+                  <label class="form-label fw-semibold">{{ valor_hora_field.label.text }}</label>
+                  {{ valor_hora_field(class="form-control" + (' is-invalid' if valor_hora_field.errors else ''), data_pagamento_field="valor_hora", placeholder="0,00", step="0.01", min="0") }}
+                  <small class="text-muted">Base para cálculo automático (horas x valor-hora). Retenções são aplicadas sobre o valor bruto informado aqui.</small>
+                  {% for error in valor_hora_field.errors %}<div class="invalid-feedback d-block">{{ error }}</div>{% endfor %}
+                </div>
+                {% endif %}
+                {% if data_extra_inicio_field or hora_extra_inicio_field %}
+                <div class="col-md-4" data-pagamento-wrapper="adicional_inicio" data-pagamento-visible-when="tipo:plantao">
+                  <label class="form-label fw-semibold">
+                    {% if data_extra_inicio_field %}
+                      {{ data_extra_inicio_field.label.text }}
+                    {% elif hora_extra_inicio_field %}
+                      {{ hora_extra_inicio_field.label.text }}
+                    {% else %}
+                      Início adicional
+                    {% endif %}
+                  </label>
+                  <div class="d-flex gap-2">
+                    {% if data_extra_inicio_field %}
+                    {{ data_extra_inicio_field(class="form-control" + (' is-invalid' if data_extra_inicio_field.errors else ''), type="date", data_pagamento_field="data_extra_inicio") }}
+                    {% endif %}
+                    {% if hora_extra_inicio_field %}
+                    {{ hora_extra_inicio_field(class="form-control" + (' is-invalid' if hora_extra_inicio_field.errors else ''), type="time", data_pagamento_field="hora_extra_inicio") }}
+                    {% endif %}
+                  </div>
+                  <small class="text-muted">Defina o período real trabalhado para atualizar o cálculo proporcional e registrar retenções sobre horas extras.</small>
+                  {% for error in (data_extra_inicio_field.errors if data_extra_inicio_field else []) %}<div class="invalid-feedback d-block">{{ error }}</div>{% endfor %}
+                  {% for error in (hora_extra_inicio_field.errors if hora_extra_inicio_field else []) %}<div class="invalid-feedback d-block">{{ error }}</div>{% endfor %}
+                </div>
+                {% endif %}
+                {% if data_extra_fim_field or hora_extra_fim_field %}
+                <div class="col-md-4" data-pagamento-wrapper="adicional_fim" data-pagamento-visible-when="tipo:plantao">
+                  <label class="form-label fw-semibold">
+                    {% if data_extra_fim_field %}
+                      {{ data_extra_fim_field.label.text }}
+                    {% elif hora_extra_fim_field %}
+                      {{ hora_extra_fim_field.label.text }}
+                    {% else %}
+                      Término adicional
+                    {% endif %}
+                  </label>
+                  <div class="d-flex gap-2">
+                    {% if data_extra_fim_field %}
+                    {{ data_extra_fim_field(class="form-control" + (' is-invalid' if data_extra_fim_field.errors else ''), type="date", data_pagamento_field="data_extra_fim") }}
+                    {% endif %}
+                    {% if hora_extra_fim_field %}
+                    {{ hora_extra_fim_field(class="form-control" + (' is-invalid' if hora_extra_fim_field.errors else ''), type="time", data_pagamento_field="hora_extra_fim") }}
+                    {% endif %}
+                  </div>
+                  <small class="text-muted">Utilizado para ajustar o encerramento do período trabalhado e refletir diferenças no valor líquido/retido.</small>
+                  {% for error in (data_extra_fim_field.errors if data_extra_fim_field else []) %}<div class="invalid-feedback d-block">{{ error }}</div>{% endfor %}
+                  {% for error in (hora_extra_fim_field.errors if hora_extra_fim_field else []) %}<div class="invalid-feedback d-block">{{ error }}</div>{% endfor %}
+                </div>
+                {% endif %}
+              </div>
+            </div>
+          </div>
+          {% endif %}
           <div class="col-12">
             <label class="form-label fw-semibold">{{ form.observacoes.label }}</label>
             {{ form.observacoes(class="form-control" + (' is-invalid' if form.observacoes.errors else ''), rows="3", placeholder="Notas internas, percentual de repasse, etc.") }}
