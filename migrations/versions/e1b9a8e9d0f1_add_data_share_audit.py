@@ -2,6 +2,7 @@
 
 from alembic import op
 import sqlalchemy as sa
+from sqlalchemy.dialects import postgresql
 
 
 # revision identifiers, used by Alembic.
@@ -11,7 +12,9 @@ branch_labels = None
 depends_on = None
 
 
-data_share_party_enum = sa.Enum('clinic', 'veterinarian', 'insurer', name='data_share_party_type')
+data_share_party_enum = postgresql.ENUM(
+    'clinic', 'veterinarian', 'insurer', name='data_share_party_type', create_type=False
+)
 
 
 def upgrade():
@@ -24,7 +27,15 @@ def upgrade():
             {"name": data_share_party_enum.name},
         ).scalar()
         if not enum_exists:
-            data_share_party_enum.create(bind, checkfirst=True)
+            bind.execute(
+                sa.text(
+                    """
+                    CREATE TYPE data_share_party_type AS ENUM (
+                        'clinic', 'veterinarian', 'insurer'
+                    )
+                    """
+                )
+            )
 
     op.create_table(
         'data_share_access',
