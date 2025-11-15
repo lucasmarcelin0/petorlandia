@@ -10731,6 +10731,28 @@ class PaymentPreferenceError(RuntimeError):
         self.status_code = status_code
 
 
+def _mercadopago_notification_url() -> str:
+    """Return the webhook URL used by Mercado Pago notifications."""
+
+    configured = (current_app.config.get('MERCADOPAGO_NOTIFICATION_URL') or '').strip()
+    if configured:
+        return configured
+
+    if not has_request_context():
+        raise RuntimeError(
+            'MERCADOPAGO_NOTIFICATION_URL não configurado e url_for fora do request context.',
+        )
+
+    preferred_scheme = current_app.config.get('PREFERRED_URL_SCHEME')
+    url_kwargs = {'_external': True}
+    if preferred_scheme:
+        url_kwargs['_scheme'] = preferred_scheme
+    elif request.is_secure:
+        url_kwargs['_scheme'] = 'https'
+
+    return url_for('notificacoes_mercado_pago', **url_kwargs)
+
+
 def _criar_preferencia_pagamento(items, external_reference: str, back_url: str):
     """Create a Mercado Pago payment preference for the given items."""
 
@@ -10750,7 +10772,7 @@ def _criar_preferencia_pagamento(items, external_reference: str, back_url: str):
     preference_data = {
         'items': normalized_items,
         'external_reference': external_reference,
-        'notification_url': url_for('notificacoes_mercado_pago', _external=True),
+        'notification_url': _mercadopago_notification_url(),
         'statement_descriptor': current_app.config.get('MERCADOPAGO_STATEMENT_DESCRIPTOR'),
         'back_urls': back_urls,
     }
@@ -11784,7 +11806,7 @@ def checkout():
     preference_data = {
         "items": items,
         "external_reference": payment.external_reference,
-        "notification_url":   url_for("notificacoes_mercado_pago", _external=True),
+        "notification_url":   _mercadopago_notification_url(),
         "payment_methods":    {"installments": 1},
         "statement_descriptor": current_app.config.get("MERCADOPAGO_STATEMENT_DESCRIPTOR"),
         "binary_mode": current_app.config.get("MERCADOPAGO_BINARY_MODE", False),
@@ -15535,7 +15557,7 @@ def pagar_consulta_orcamento(consulta_id):
     preference_data = {
         'items': items,
         'external_reference': f'consulta-{consulta.id}',
-        'notification_url': url_for('notificacoes_mercado_pago', _external=True),
+        'notification_url': _mercadopago_notification_url(),
         'statement_descriptor': current_app.config.get('MERCADOPAGO_STATEMENT_DESCRIPTOR'),
         'back_urls': back_urls,
     }
