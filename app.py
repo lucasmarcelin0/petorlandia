@@ -141,6 +141,7 @@ app.config.setdefault("BABEL_DEFAULT_LOCALE", "pt_BR")
 _inventory_threshold_columns_checked = False
 _inventory_movement_table_checked = False
 _clinic_notifications_table_checked = False
+_plantao_modelos_table_checked = False
 
 
 def _ensure_inventory_threshold_columns() -> None:
@@ -243,6 +244,37 @@ def _ensure_clinic_notifications_table() -> bool:
         exists = False
 
     _clinic_notifications_table_checked = exists
+    return exists
+
+
+def _ensure_plantao_modelos_table() -> bool:
+    """Create ``plantao_modelos`` defensively when the migration is missing."""
+
+    global _plantao_modelos_table_checked
+    if _plantao_modelos_table_checked:
+        return True
+
+    try:
+        inspector = inspect(db.engine)
+    except Exception:  # pragma: no cover - engine initialization failures
+        return False
+
+    if inspector.has_table("plantao_modelos"):
+        _plantao_modelos_table_checked = True
+        return True
+
+    try:
+        PlantaoModelo.__table__.create(bind=db.engine, checkfirst=True)
+    except ProgrammingError:
+        # Another worker may have created the table already; ignore and re-check.
+        pass
+
+    try:
+        exists = inspect(db.engine).has_table("plantao_modelos")
+    except Exception:  # pragma: no cover - engine initialization failures
+        exists = False
+
+    _plantao_modelos_table_checked = exists
     return exists
 
 # ----------------------------------------------------------------
@@ -3889,6 +3921,8 @@ def _build_modelo_from_form(form):
 
 def _load_plantao_modelos(clinic_ids: Iterable[int]):
     if not clinic_ids:
+        return []
+    if not _ensure_plantao_modelos_table():
         return []
     return (
         PlantaoModelo.query.options(
