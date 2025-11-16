@@ -357,6 +357,7 @@ class PlantonistaEscalaForm(FlaskForm):
     medico_id = SelectField('Médico (opcional)', coerce=int, validators=[Optional()], choices=[])
     medico_nome = StringField('Nome exibido do médico', validators=[DataRequired(), Length(max=150)])
     medico_cnpj = StringField('CNPJ do médico', validators=[Optional(), Length(max=20)])
+    plantao_modelo_id = SelectField('Modelo de plantão', coerce=int, validators=[Optional()], choices=[])
     turno = StringField('Turno', validators=[DataRequired(), Length(max=80)])
     data_inicio = DateField('Data do plantão', format='%Y-%m-%d', validators=[DataRequired()])
     hora_inicio = TimeField('Hora de início', validators=[DataRequired()])
@@ -371,6 +372,8 @@ class PlantonistaEscalaForm(FlaskForm):
     nota_fiscal_recebida = BooleanField('Nota fiscal recebida')
     retencao_validada = BooleanField('Retenção/NF verificada')
     observacoes = TextAreaField('Observações', validators=[Optional(), Length(max=2000)])
+    salvar_modelo = BooleanField('Salvar como modelo da clínica')
+    modelo_nome = StringField('Nome do modelo', validators=[Optional(), Length(max=80)])
     submit = SubmitField('Salvar plantão')
 
 
