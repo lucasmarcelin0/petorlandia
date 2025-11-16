@@ -1085,6 +1085,27 @@ class PlantonistaEscala(db.Model):
     def __repr__(self):
         return f"<PlantonistaEscala {self.medico_nome} {self.turno}>"
 
+
+class PlantaoModelo(db.Model):
+    __tablename__ = 'plantao_modelos'
+
+    id = db.Column(db.Integer, primary_key=True)
+    clinic_id = db.Column(db.Integer, db.ForeignKey('clinica.id'), nullable=False, index=True)
+    nome = db.Column(db.String(80), nullable=False)
+    hora_inicio = db.Column(db.Time, nullable=True)
+    duracao_horas = db.Column(db.Numeric(5, 2), nullable=False)
+    medico_id = db.Column(db.Integer, db.ForeignKey('veterinario.id'), nullable=True, index=True)
+    medico_nome = db.Column(db.String(150), nullable=True)
+    medico_cnpj = db.Column(db.String(20), nullable=True)
+    created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    clinic = db.relationship('Clinica', backref=db.backref('plantao_modelos', cascade='all, delete-orphan', lazy=True))
+    medico = db.relationship('Veterinario', backref=db.backref('plantao_modelos', lazy=True))
+
+    def __repr__(self):
+        return f"<PlantaoModelo {self.nome} ({self.duracao_horas}h)>"
+
 # Associação many-to-many entre veterinário e especialidade
 veterinario_especialidade = db.Table(
     'veterinario_especialidade',

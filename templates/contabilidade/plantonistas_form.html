@@ -20,27 +20,38 @@
         <div class="row g-3">
           <div class="col-md-6">
             {{ form.clinic_id.label(class_='form-label fw-semibold') }}
-            {{ form.clinic_id(class_='form-select') }}
+            {{ form.clinic_id(class_='form-select', **{'data-plantao-clinic': 'true'}) }}
             {% for error in form.clinic_id.errors %}<div class="text-danger small">{{ error }}</div>{% endfor %}
           </div>
           <div class="col-md-6">
             {{ form.medico_id.label(class_='form-label fw-semibold') }}
-            {{ form.medico_id(class_='form-select') }}
+            {{ form.medico_id(class_='form-select', **{'data-plantao-medico': 'true'}) }}
             {% for error in form.medico_id.errors %}<div class="text-danger small">{{ error }}</div>{% endfor %}
           </div>
           <div class="col-md-6">
             {{ form.medico_nome.label(class_='form-label fw-semibold') }}
-            {{ form.medico_nome(class_='form-control', placeholder='Nome exibido no relatório') }}
+            {{ form.medico_nome(class_='form-control', placeholder='Nome exibido no relatório', **{'data-plantao-medico-nome': 'true'}) }}
             {% for error in form.medico_nome.errors %}<div class="text-danger small">{{ error }}</div>{% endfor %}
           </div>
           <div class="col-md-6">
             {{ form.medico_cnpj.label(class_='form-label fw-semibold') }}
-            {{ form.medico_cnpj(class_='form-control', placeholder='00.000.000/0000-00') }}
+            {{ form.medico_cnpj(class_='form-control', placeholder='00.000.000/0000-00', **{'data-plantao-medico-cnpj': 'true'}) }}
             {% for error in form.medico_cnpj.errors %}<div class="text-danger small">{{ error }}</div>{% endfor %}
+          </div>
+          <div class="col-12">
+            {{ form.plantao_modelo_id.label(class_='form-label fw-semibold') }}
+            <div class="d-flex flex-column flex-md-row gap-2 align-items-md-center">
+              {{ form.plantao_modelo_id(class_='form-select w-auto flex-grow-1', **{'data-plantao-modelo-select': 'true'}) }}
+              <button type="button" class="btn btn-outline-primary rounded-pill" data-plantao-modelo-aplicar>
+                <i class="fas fa-magic me-1"></i>Aplicar modelo
+              </button>
+            </div>
+            <div class="form-text">Modelos são filtrados pela clínica selecionada e preenchem automaticamente horas e profissional.</div>
+            {% for error in form.plantao_modelo_id.errors %}<div class="text-danger small">{{ error }}</div>{% endfor %}
           </div>
           <div class="col-md-6">
             {{ form.turno.label(class_='form-label fw-semibold') }}
-            {{ form.turno(class_='form-control', placeholder='Ex.: Plantão noturno') }}
+            {{ form.turno(class_='form-control', placeholder='Ex.: Plantão noturno', **{'data-plantao-turno': 'true'}) }}
             {% for error in form.turno.errors %}<div class="text-danger small">{{ error }}</div>{% endfor %}
           </div>
           <div class="col-md-3">
@@ -50,12 +61,12 @@
           </div>
           <div class="col-md-3">
             {{ form.hora_inicio.label(class_='form-label fw-semibold') }}
-            {{ form.hora_inicio(class_='form-control') }}
+            {{ form.hora_inicio(class_='form-control', **{'data-plantao-hora-inicio': 'true'}) }}
             {% for error in form.hora_inicio.errors %}<div class="text-danger small">{{ error }}</div>{% endfor %}
           </div>
           <div class="col-md-3">
             {{ form.hora_fim.label(class_='form-label fw-semibold') }}
-            {{ form.hora_fim(class_='form-control') }}
+            {{ form.hora_fim(class_='form-control', **{'data-plantao-hora-fim': 'true'}) }}
             {% for error in form.hora_fim.errors %}<div class="text-danger small">{{ error }}</div>{% endfor %}
           </div>
           <div class="col-md-3">
@@ -76,10 +87,22 @@
             {{ form.retencao_validada(class_='form-check-input', id='retencaoValidada') }}
             <label class="form-check-label fw-semibold" for="retencaoValidada">{{ form.retencao_validada.label.text }}</label>
           </div>
-          <div class="col-12">
+          <div class="col-12 col-xl-6">
             {{ form.observacoes.label(class_='form-label fw-semibold') }}
             {{ form.observacoes(class_='form-control', rows=4, placeholder='Observações internas, NF, preferências...') }}
             {% for error in form.observacoes.errors %}<div class="text-danger small">{{ error }}</div>{% endfor %}
+          </div>
+          <div class="col-12 col-xl-6">
+            <div class="border rounded-3 h-100 p-3 bg-light-subtle">
+              <div class="form-check mb-2">
+                {{ form.salvar_modelo(class_='form-check-input', id='salvarModelo') }}
+                <label class="form-check-label fw-semibold" for="salvarModelo">{{ form.salvar_modelo.label.text }}</label>
+              </div>
+              {{ form.modelo_nome.label(class_='form-label fw-semibold') }}
+              {{ form.modelo_nome(class_='form-control', placeholder='Ex.: Plantão 12h noturno') }}
+              <div class="form-text">Usamos o turno como nome padrão se este campo ficar em branco.</div>
+              {% for error in form.modelo_nome.errors %}<div class="text-danger small">{{ error }}</div>{% endfor %}
+            </div>
           </div>
         </div>
         <div class="d-flex justify-content-end gap-2 mt-4">
@@ -90,4 +113,11 @@
     </div>
   </div>
 </div>
+{% endblock %}
+
+{% block scripts %}
+  {{ super() }}
+  <script>
+    window.PLANTAO_MODELOS = {{ (plantao_modelos or []) | tojson | safe }};
+  </script>
 {% endblock %}

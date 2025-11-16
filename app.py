@@ -74,6 +74,7 @@ from models import (
     DataSharePartyType,
     DataShareRequest,
     PlantonistaEscala,
+    PlantaoModelo,
     User,
     Veterinario,
 )
@@ -3821,6 +3822,109 @@ def _populate_plantonista_form_choices(form, clinics):
     form.medico_id.choices = medico_choices
 
 
+def _serialize_plantao_modelo(modelo: PlantaoModelo) -> dict:
+    hora_inicio = None
+    if modelo.hora_inicio:
+        hora_inicio = modelo.hora_inicio.strftime('%H:%M')
+    return {
+        'id': modelo.id,
+        'clinic_id': modelo.clinic_id,
+        'nome': modelo.nome,
+        'duracao_horas': float(modelo.duracao_horas or 0),
+        'hora_inicio': hora_inicio,
+        'medico_id': modelo.medico_id,
+        'medico_nome': modelo.medico_nome,
+        'medico_cnpj': modelo.medico_cnpj,
+    }
+
+
+def _configure_modelo_choices(form, modelos: list[PlantaoModelo], clinic_id: int | None):
+    form.plantao_modelo_id.choices = [(0, 'Sem modelo salvo')]
+    for modelo in modelos:
+        clinic_label = getattr(getattr(modelo, 'clinic', None), 'nome', '') or ''
+        label_suffix = f" ({clinic_label})" if clinic_label else ''
+        label = f"{modelo.nome} — {modelo.duracao_horas}h{label_suffix}"
+        form.plantao_modelo_id.choices.append((modelo.id, label))
+
+
+def _build_modelo_from_form(form):
+    if not form.salvar_modelo.data:
+        return None
+
+    if not form.hora_inicio.data or not form.hora_fim.data:
+        flash('Defina hora de início e término para salvar como modelo.', 'warning')
+        return None
+
+    start = datetime.combine(date.today(), form.hora_inicio.data)
+    end = datetime.combine(date.today(), form.hora_fim.data)
+    if end <= start:
+        end += timedelta(days=1)
+    duracao = _compute_plantao_horas(start, end)
+    if not duracao:
+        flash('Não foi possível calcular a duração do modelo de plantão.', 'warning')
+        return None
+
+    nome_modelo = (form.modelo_nome.data or form.turno.data or '').strip()
+    if not nome_modelo:
+        flash('Informe um nome para o modelo de plantão.', 'warning')
+        return None
+
+    medico_id = form.medico_id.data or None
+    if medico_id == 0:
+        medico_id = None
+
+    medico_nome = (form.medico_nome.data or '').strip() or None
+    medico_cnpj = (form.medico_cnpj.data or '').strip() or None
+
+    return PlantaoModelo(
+        clinic_id=form.clinic_id.data,
+        nome=nome_modelo,
+        hora_inicio=form.hora_inicio.data,
+        duracao_horas=duracao,
+        medico_id=medico_id,
+        medico_nome=medico_nome,
+        medico_cnpj=medico_cnpj,
+    )
+
+
+def _load_plantao_modelos(clinic_ids: Iterable[int]):
+    if not clinic_ids:
+        return []
+    return (
+        PlantaoModelo.query.options(
+            selectinload(PlantaoModelo.medico).joinedload(Veterinario.user),
+            selectinload(PlantaoModelo.clinic),
+        )
+        .filter(PlantaoModelo.clinic_id.in_(clinic_ids))
+        .order_by(PlantaoModelo.nome.asc())
+        .all()
+    )
+
+
+def _apply_modelo_to_form(form, modelo: PlantaoModelo):
+    if not form or not modelo:
+        return
+
+    form.plantao_modelo_id.data = modelo.id
+    form.turno.data = modelo.nome
+
+    if modelo.hora_inicio:
+        form.hora_inicio.data = modelo.hora_inicio
+        try:
+            start_dt = datetime.combine(date.today(), modelo.hora_inicio)
+            end_dt = start_dt + timedelta(hours=float(modelo.duracao_horas or 0))
+            form.hora_fim.data = end_dt.time()
+        except Exception:
+            pass
+
+    if modelo.medico_id:
+        form.medico_id.data = modelo.medico_id
+    if modelo.medico_nome:
+        form.medico_nome.data = modelo.medico_nome
+    if modelo.medico_cnpj:
+        form.medico_cnpj.data = modelo.medico_cnpj
+
+
 def _format_plantao_option(escala):
     if not escala:
         return 'Plantão'
@@ -4203,7 +4307,9 @@ def contabilidade_plantonistas_novo():
 
     form = PlantonistaEscalaForm()
     _populate_plantonista_form_choices(form, clinics)
+    plantao_modelos = _load_plantao_modelos(accessible_ids)
     default_clinic_id = request.args.get('clinica_id', type=int) or clinics[0].id
+    _configure_modelo_choices(form, plantao_modelos, default_clinic_id)
     if request.method == 'GET':
         form.clinic_id.data = default_clinic_id
         form.status.data = 'agendado'
@@ -4216,10 +4322,19 @@ def contabilidade_plantonistas_novo():
                 pass
         form.data_inicio.data = default_day
 
+        selected_modelo_id = request.args.get('modelo_id', type=int)
+        if selected_modelo_id:
+            modelo = next((m for m in plantao_modelos if m.id == selected_modelo_id), None)
+            if modelo and modelo.clinic_id == form.clinic_id.data:
+                _apply_modelo_to_form(form, modelo)
+
     if form.validate_on_submit():
         clinic_id = form.clinic_id.data
         if clinic_id not in accessible_ids and not _is_admin():
             abort(403)
+
+        if form.plantao_modelo_id.data == 0:
+            form.plantao_modelo_id.data = None
 
         medico_id = form.medico_id.data or None
         if medico_id == 0:
@@ -4232,6 +4347,8 @@ def contabilidade_plantonistas_novo():
         if fim <= inicio:
             fim += timedelta(days=1)
         horas_previstas = _compute_plantao_horas(inicio, fim)
+
+        novo_modelo = _build_modelo_from_form(form)
 
         escala = PlantonistaEscala(
             clinic_id=clinic_id,
@@ -4251,8 +4368,13 @@ def contabilidade_plantonistas_novo():
         if escala.status == 'realizado' and escala.realizado_em is None:
             escala.realizado_em = datetime.utcnow()
 
+        if novo_modelo:
+            db.session.add(novo_modelo)
         db.session.add(escala)
         db.session.commit()
+
+        if novo_modelo:
+            flash('Modelo de plantão salvo para a clínica.', 'success')
 
         flash('Plantão cadastrado com sucesso.', 'success')
         return redirect(
@@ -4271,12 +4393,15 @@ def contabilidade_plantonistas_novo():
         aba='plantonistas',
     )
 
+    plantao_modelos_data = [_serialize_plantao_modelo(modelo) for modelo in plantao_modelos]
+
     return render_template(
         'contabilidade/plantonistas_form.html',
         form=form,
         form_title='Cadastrar plantão',
         submit_label='Salvar plantão',
         cancel_url=cancel_url,
+        plantao_modelos=plantao_modelos_data,
     )
 
 
@@ -4291,6 +4416,8 @@ def contabilidade_plantonistas_editar(escala_id):
 
     form = PlantonistaEscalaForm(obj=escala)
     _populate_plantonista_form_choices(form, clinics or [escala.clinic])
+    plantao_modelos = _load_plantao_modelos(accessible_ids or [escala.clinic_id])
+    _configure_modelo_choices(form, plantao_modelos, escala.clinic_id)
 
     if request.method == 'GET':
         form.clinic_id.data = escala.clinic_id
@@ -4307,10 +4434,19 @@ def contabilidade_plantonistas_editar(escala_id):
         form.retencao_validada.data = escala.retencao_validada
         form.observacoes.data = escala.observacoes
 
+        selected_modelo_id = request.args.get('modelo_id', type=int)
+        if selected_modelo_id:
+            modelo = next((m for m in plantao_modelos if m.id == selected_modelo_id), None)
+            if modelo and modelo.clinic_id == form.clinic_id.data:
+                _apply_modelo_to_form(form, modelo)
+
     if form.validate_on_submit():
         clinic_id = form.clinic_id.data
         if clinic_id not in accessible_ids and not _is_admin():
             abort(403)
+
+        if form.plantao_modelo_id.data == 0:
+            form.plantao_modelo_id.data = None
 
         medico_id = form.medico_id.data or None
         if medico_id == 0:
@@ -4337,7 +4473,13 @@ def contabilidade_plantonistas_editar(escala_id):
         escala.retencao_validada = form.retencao_validada.data
         escala.observacoes = (form.observacoes.data or '').strip() or None
 
+        novo_modelo = _build_modelo_from_form(form)
+        if novo_modelo:
+            db.session.add(novo_modelo)
+
         db.session.commit()
+        if novo_modelo:
+            flash('Modelo de plantão salvo para a clínica.', 'success')
         flash('Plantão atualizado com sucesso.', 'success')
         return redirect(
             url_for(
@@ -4355,6 +4497,8 @@ def contabilidade_plantonistas_editar(escala_id):
         aba='plantonistas',
     )
 
+    plantao_modelos_data = [_serialize_plantao_modelo(modelo) for modelo in plantao_modelos]
+
     return render_template(
         'contabilidade/plantonistas_form.html',
         form=form,
@@ -4362,6 +4506,7 @@ def contabilidade_plantonistas_editar(escala_id):
         submit_label='Atualizar plantão',
         cancel_url=cancel_url,
         editing=True,
+        plantao_modelos=plantao_modelos_data,
     )
 
 
