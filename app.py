@@ -1474,12 +1474,6 @@ def _can_view_user(user, viewer=None, clinic_scope=None):
     if viewer is None:
         return False
 
-    if getattr(viewer, 'role', None) == 'admin':
-        return True
-
-    if has_professional_access(viewer):
-        return True
-
     viewer_id = getattr(viewer, 'id', None)
     if viewer_id and user.id == viewer_id:
         return True
@@ -1487,10 +1481,17 @@ def _can_view_user(user, viewer=None, clinic_scope=None):
     if viewer_id and user.added_by_id == viewer_id:
         return True
 
-    if _resolve_shared_access_for_user(user, viewer=viewer, clinic_scope=clinic_scope):
+    shared_access = _resolve_shared_access_for_user(user, viewer=viewer, clinic_scope=clinic_scope)
+    if getattr(viewer, 'role', None) == 'admin':
+        return True
+
+    if shared_access:
         return True
 
     clinic_ids = _collect_clinic_ids(viewer=viewer, clinic_scope=clinic_scope)
+    if has_professional_access(viewer):
+        return bool(user.clinica_id and user.clinica_id in clinic_ids)
+
     return bool(user.clinica_id and user.clinica_id in clinic_ids)
 
 
