@@ -72,3 +72,49 @@ def test_bloco_prescricao_uses_animal_clinic_when_consulta_missing(app):
         assert bloco.clinica_id == clinic_id
         assert consulta.clinica_id == clinic_id
         db.drop_all()
+
+
+def test_bloco_prescricao_rejects_cross_clinic_when_consulta_missing(app):
+    with app.app_context():
+        db.drop_all()
+        db.create_all()
+
+        clinic_a = Clinica(nome='Clinic A')
+        clinic_b = Clinica(nome='Clinic B')
+        db.session.add_all([clinic_a, clinic_b])
+        db.session.flush()
+
+        vet_user = User(name='Vet', email='vet@example.com', worker='veterinario', role='veterinario')
+        vet_user.set_password('secret')
+        vet = Veterinario(user=vet_user, crmv='12345', clinica=clinic_a)
+
+        tutor = User(name='Tutor', email='tutor@example.com')
+        tutor.set_password('secret')
+        animal = Animal(name='Bidu', owner=tutor, clinica=clinic_b)
+
+        db.session.add_all([vet_user, vet, tutor, animal])
+        db.session.flush()
+
+        consulta = Consulta(animal=animal, created_by=vet_user.id, status='in_progress')
+        db.session.add(consulta)
+        db.session.commit()
+        consulta_id = consulta.id
+
+    client = app.test_client()
+    with client:
+        login_resp = client.post(
+            '/login', data={'email': 'vet@example.com', 'password': 'secret'}, follow_redirects=True
+        )
+        assert login_resp.status_code == 200
+
+        resp = client.post(
+            f'/consulta/{consulta_id}/bloco_prescricao',
+            json={'prescricoes': [{'medicamento': 'Antibiótico'}]},
+        )
+        assert resp.status_code == 404
+
+    with app.app_context():
+        assert BlocoPrescricao.query.count() == 0
+        consulta = Consulta.query.get(consulta_id)
+        assert consulta.clinica_id is None
+        db.drop_all()
