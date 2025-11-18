@@ -11289,10 +11289,11 @@ def salvar_bloco_prescricao(consulta_id):
     if not lista_prescricoes:
         return jsonify({'success': False, 'message': 'Nenhuma prescrição recebida.'}), 400
 
+    animal_clinic_id = getattr(consulta.animal, 'clinica_id', None)
     clinic_id = (
         consulta.clinica_id
+        or animal_clinic_id
         or current_user_clinic_id()
-        or getattr(consulta.animal, 'clinica_id', None)
     )
     if not clinic_id:
         return jsonify({'success': False, 'message': 'Consulta sem clínica definida.'}), 400
