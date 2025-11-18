@@ -1,234 +1,323 @@
 {% extends 'layout.html' %}
 {% from 'components/photo_cropper.html' import photo_cropper %}
+
+{% block head %}
+  {{ super() }}
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/tutor_detail.css') }}">
+{% endblock %}
+
 {% block main %}
+{% set active_animals = animais | selectattr('removido_em', 'equalto', none) | list %}
+{% set removed_animals = animais | selectattr('removido_em') | list %}
+
 <div class="container py-4">
-
-  <!-- Navegação -->
-  <a href="{{ url_for('tutores') }}" class="btn btn-secondary mb-3">← Voltar à Busca de Tutores</a>
-
-  <ul class="nav nav-tabs" id="tutorTabs" role="tablist">
-    <li class="nav-item" role="presentation">
-      <button class="nav-link active" id="dados-tab" data-bs-toggle="tab" data-bs-target="#dados" type="button" role="tab" aria-controls="dados" aria-selected="true">Dados do Tutor</button>
-    </li>
-    <li class="nav-item" role="presentation">
-      <button class="nav-link" id="animais-tab" data-bs-toggle="tab" data-bs-target="#animais" type="button" role="tab" aria-controls="animais" aria-selected="false">Lista de Animais</button>
-    </li>
-  </ul>
-
-  <div class="tab-content mt-3">
-
-    <div class="tab-pane fade show active" id="dados" role="tabpanel" aria-labelledby="dados-tab">
-      <!-- =========================  FICHA DO TUTOR  ========================= -->
-      <div class="card mb-4">
-        <div class="card-body position-relative">
-      <!-- Botão de excluir tutor no topo direito -->
-      <form method="POST" action="{{ url_for('deletar_tutor', tutor_id=tutor.id) }}"
-            onsubmit="return confirm('Tem certeza que deseja excluir este tutor e todos os seus dados permanentemente?');"
-            class="position-absolute top-0 end-0 m-2">
-        <button type="submit" class="btn btn-sm btn-danger" title="Excluir Tutor">
-          ❌
-        </button>
-      </form>
-
-      <h3 class="card-title mb-3">👤 Dados do Tutor</h3>
-
-      <div class="mb-3 text-center">
-        <img
-          id="preview-tutor"
-          src="{{ tutor.profile_photo or '' }}"
-          alt="Foto do Tutor"
-          class="avatar img-thumbnail {% if not tutor.profile_photo %}d-none{% endif %}"
-          style="--avatar-size:150px;"
-          loading="lazy"
-          data-offset-x="{{ tutor.photo_offset_x or 0 }}"
-          data-offset-y="{{ tutor.photo_offset_y or 0 }}"
-          data-rotation="{{ tutor.photo_rotation or 0 }}"
-          data-zoom="{{ tutor.photo_zoom or 1 }}"
-        >
+  <div class="card tutor-hero shadow-sm border-0 mb-4 overflow-hidden">
+    <div class="tutor-hero__bg"></div>
+    <div class="card-body position-relative">
+      <div class="d-flex flex-column flex-lg-row align-items-lg-center gap-3">
+        <div class="d-flex align-items-center gap-3 flex-grow-1">
+          <a href="{{ url_for('tutores') }}" class="btn btn-link text-decoration-none px-0 text-primary fw-semibold d-flex align-items-center gap-2">
+            <i class="fas fa-arrow-left"></i> Voltar aos tutores
+          </a>
+        </div>
+        <form method="POST" action="{{ url_for('deletar_tutor', tutor_id=tutor.id) }}"
+              onsubmit="return confirm('Tem certeza que deseja excluir este tutor e todos os seus dados permanentemente?');"
+              class="ms-lg-auto">
+          <button type="submit" class="btn btn-outline-danger btn-sm rounded-pill px-3 d-flex align-items-center gap-2">
+            <i class="fas fa-trash"></i> Excluir tutor
+          </button>
+        </form>
       </div>
 
-
-      <form id="tutor-form" action="{{ url_for('update_tutor', user_id=tutor.id) }}" method="POST" enctype="multipart/form-data" class="row g-3" data-sync>
-        {{ tutor_form.hidden_tag() }}
-        <div class="col-md-6">
-          <label class="form-label">Nome</label>
-          <input name="name" class="form-control" value="{{ tutor.name or '' }}" required>
+      <div class="d-flex flex-column flex-lg-row align-items-lg-center gap-4 mt-3">
+        <div class="tutor-avatar">
+          <img
+            id="preview-tutor"
+            src="{{ tutor.profile_photo or '' }}"
+            alt="Foto do Tutor"
+            class="avatar {% if not tutor.profile_photo %}d-none{% endif %}"
+            style="--avatar-size:140px;"
+            loading="lazy"
+            data-offset-x="{{ tutor.photo_offset_x or 0 }}"
+            data-offset-y="{{ tutor.photo_offset_y or 0 }}"
+            data-rotation="{{ tutor.photo_rotation or 0 }}"
+            data-zoom="{{ tutor.photo_zoom or 1 }}">
+          <div class="avatar-ring"></div>
         </div>
-        <div class="col-md-6">
-          <label class="form-label">E‑mail</label>
-          <input name="email" type="email" class="form-control" value="{{ tutor.email or '' }}" required>
-        </div>
-        <div class="col-md-6">
-          <label class="form-label">Telefone</label>
-          <input name="phone" class="form-control" value="{{ tutor.phone or '' }}"
-                 data-mask="(99) 99999-9999" pattern="\(\d{2}\) \d{5}-\d{4}">
-        </div>
-
-        <div class="col-md-4">
-          <label class="form-label">CPF</label>
-          <input name="cpf" class="form-control" value="{{ tutor.cpf or '' }}"
-                 data-mask="999.999.999-99" pattern="\d{3}\.\d{3}\.\d{3}-\d{2}">
-        </div>
-        <div class="col-md-4">
-          <label class="form-label">RG</label>
-          <input name="rg" class="form-control" value="{{ tutor.rg or '' }}"
-                 data-mask="99.999.999-9" pattern="\d{2}\.\d{3}\.\d{3}-\d">
-        </div>
-        <div class="col-md-4">
-          <label class="form-label">Data de Nascimento</label>
-          <input id="tutor_dob" name="date_of_birth" class="form-control" value="{{ tutor.date_of_birth.strftime('%Y-%m-%d') if tutor.date_of_birth else '' }}">
-        </div>
-        <div class="col-md-4">
-          <label class="form-label">Idade</label>
-          <input id="tutor_age" type="number" class="form-control" min="0">
-        </div>
-        <div class="col-md-8">
-          <label class="form-label">Foto do Tutor</label>
-          {{ photo_cropper(tutor_form.profile_photo, tutor_form.photo_rotation, tutor_form.photo_zoom, tutor_form.photo_offset_x, tutor_form.photo_offset_y, tutor.profile_photo, 150, 'profile_photo', 'user') }}
-        </div>
-        {% if tutor.worker|lower == 'veterinario' and tutor.veterinario %}
-        <div class="col-12">
-          <label class="form-label">Especialidades</label>
-          <div class="d-flex flex-wrap gap-2">
-            {% for esp in tutor.veterinario.specialties %}
-              <span class="badge bg-secondary">{{ esp.nome }}</span>
-            {% else %}
-              <span class="text-muted">Nenhuma</span>
-            {% endfor %}
-          </div>
-          <a href="{{ url_for('edit_vet_specialties', veterinario_id=tutor.veterinario.id) }}" class="btn btn-sm btn-outline-primary mt-2">Editar Especialidades</a>
-        </div>
-        {% endif %}
-
-
-        <!-- ======================== Endereço ======================== -->
-        {% include "partials/endereco_form.html" with context %}
-
-
-
-        <div class="col-12">
-          <div class="d-grid">
-            <button class="btn btn-primary" data-loading-text="Salvando..." data-success-text="Alterações salvas!">💾 Salvar Alterações</button>
-          </div>
-          <div class="alert alert-success mt-3 d-none form-status-message" role="alert" aria-live="polite"></div>
-        </div>
-      </form>
-    </div>
-  </div>
-    </div>
-
-    <div class="tab-pane fade" id="animais" role="tabpanel" aria-labelledby="animais-tab">
-      <!-- ========================= LISTA DE ANIMAIS ========================= -->
-      <div class="card">
-        <div class="card-body">
-          <div class="d-flex justify-content-between align-items-center mb-3">
-            <h3 class="card-title mb-0" id="animais-heading">🐾 Animais de {{ tutor.name.split(' ')[0] }}</h3>
-            <button class="btn btn-outline-primary" data-bs-toggle="modal" data-bs-target="#modalNovoAnimal">
-              ➕ Novo Animal
-            </button>
-          </div>
-          <input id="animal-search" type="search" class="form-control mb-3" placeholder="Buscar animal">
-
-    <table id="animals-table" class="table table-hover align-middle">
-      <thead>
-        <tr>
-          <th>Nome</th>
-          <th>Espécie / Raça</th>
-          <th>Sexo</th>
-          <th>Ações</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for a in animais if not a.removido_em %}
-        <tr id="animal-row-{{ a.id }}">
-          <td>
-            {% if a.image %}
- 
-              <img src="{{ a.image }}"
-                   alt="Foto de {{ a.name }}"
-                   class="avatar me-2"
-                   data-offset-x="{{ a.photo_offset_x or 0 }}"
-                   data-offset-y="{{ a.photo_offset_y or 0 }}"
-                   data-rotation="{{ a.photo_rotation or 0 }}"
-                   data-zoom="{{ a.photo_zoom or 1 }}"
-                   style="--avatar-size:32px;">
- 
+        <div class="flex-grow-1">
+          <div class="d-flex flex-wrap align-items-center gap-2 mb-2">
+            <h2 class="mb-0">{{ tutor.name }}</h2>
+            {% if tutor.worker %}
+              <span class="badge bg-light text-primary border">{{ tutor.worker|title }}</span>
             {% endif %}
-            <span class="animal-name">{{ a.name }}</span>
-          </td>
-          <td class="animal-species">{{ a.species }} / {{ a.breed }}</td>
-          <td class="animal-sex">{{ a.sex or '—' }}</td>
-          <td class="d-flex gap-2 flex-wrap">
-            <a href="{{ url_for('consulta_direct', animal_id=a.id) }}" class="btn btn-outline-success btn-sm">
-              🩺 Consulta
-            </a>
-            <a href="{{ url_for('ficha_animal', animal_id=a.id) }}" class="btn btn-outline-info btn-sm">
-              📄 Ficha
-            </a>
-            <button type="button" class="btn btn-outline-warning btn-sm" data-bs-toggle="modal" data-bs-target="#modalEditarAnimal{{ a.id }}">
-              ✏️ Editar
-            </button>
-            <form action="{{ url_for('deletar_animal', animal_id=a.id) }}"
-                  method="POST"
-                  class="js-animal-delete-form d-inline"
-                  data-sync
-                  data-confirm="Tem certeza que deseja remover este animal?"
-                  data-animal-id="{{ a.id }}"
-                  data-animal-name="{{ a.name }}"
-                  data-animal-species="{{ a.species }}"
-                  data-animal-breed="{{ a.breed }}">
-              <button type="submit" class="btn btn-outline-danger btn-sm">
-                🗑️ Remover
-              </button>
-            </form>
-          </td>
-        </tr>
-        {% endfor %}
-        {% if not animais|selectattr("removido_em", "equalto", none)|list %}
-        <tr>
-          <td colspan="4" class="text-muted text-center">Nenhum animal cadastrado.</td>
-        </tr>
-        {% endif %}
-      </tbody>
-    </table>
-
-    {% set removidos = animais | selectattr("removido_em") | list %}
-    {% if removidos %}
-    <div class="text-end">
-      <button class="btn btn-link text-muted small" onclick="document.getElementById('removidos-wrapper').classList.toggle('d-none')">
-        Mostrar/Esconder Animais Removidos
-      </button>
-    </div>
-    <div id="removidos-wrapper" class="d-none mt-3">
-      <div class="border rounded p-3">
-        <h5 class="text-danger">🗓️ Animais Removidos</h5>
-        <ul class="list-group list-group-flush">
-          {% for r in removidos %}
-          <li class="list-group-item d-flex justify-content-between align-items-center">
-            <span><strong>{{ r.name }}</strong> — {{ r.species }} / {{ r.breed }}</span>
-            <form action="{{ url_for('deletar_animal', animal_id=r.id) }}"
-                  method="POST"
-                  class="js-animal-delete-form d-inline"
-                  data-sync
-                  data-confirm="Excluir permanentemente {{ r.name }}?"
-                  data-animal-id="{{ r.id }}"
-                  data-animal-name="{{ r.name }}"
-                  data-animal-species="{{ r.species }}"
-                  data-animal-breed="{{ r.breed }}"
-                  data-removed-item="true">
-              <button type="submit" class="btn btn-sm btn-danger">❌ Excluir Definitivamente</button>
-            </form>
-          </li>
-          {% endfor %}
-        </ul>
+            {% if tutor.worker|lower == 'veterinario' %}
+              <span class="badge bg-secondary text-white">CRM: {{ tutor.veterinario.crm if tutor.veterinario else '—' }}</span>
+            {% endif %}
+          </div>
+          <p class="text-muted mb-3">Dados completos, contatos e histórico de animais deste tutor.</p>
+          <div class="d-flex flex-wrap gap-2 mb-3 tutor-chips">
+            {% if tutor.email %}
+              <span class="chip"><i class="fas fa-envelope"></i> {{ tutor.email }}</span>
+            {% endif %}
+            {% if tutor.phone %}
+              <span class="chip"><i class="fas fa-phone"></i> {{ tutor.phone }}</span>
+            {% endif %}
+            {% if tutor.cpf %}
+              <span class="chip"><i class="fas fa-id-card"></i> CPF {{ tutor.cpf }}</span>
+            {% endif %}
+          </div>
+          <div class="d-flex flex-wrap gap-3">
+            <div class="stat-card">
+              <span class="label">Animais ativos</span>
+              <strong>{{ active_animals|length }}</strong>
+            </div>
+            <div class="stat-card">
+              <span class="label">Animais removidos</span>
+              <strong>{{ removed_animals|length }}</strong>
+            </div>
+            <div class="stat-card">
+              <span class="label">Cadastro</span>
+              <strong>{{ tutor.created_at.strftime('%d/%m/%Y') if tutor.created_at else '—' }}</strong>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
-      {% endif %}
-    </div>
-  </div>
-    </div>
   </div>
 
+  <div class="card shadow-sm border-0">
+    <div class="card-body pb-0">
+      <ul class="nav nav-tabs custom-tabs" id="tutorTabs" role="tablist">
+        <li class="nav-item" role="presentation">
+          <button class="nav-link active" id="dados-tab" data-bs-toggle="tab" data-bs-target="#dados" type="button" role="tab" aria-controls="dados" aria-selected="true">
+            <i class="fas fa-user"></i> Dados do Tutor
+          </button>
+        </li>
+        <li class="nav-item" role="presentation">
+          <button class="nav-link" id="animais-tab" data-bs-toggle="tab" data-bs-target="#animais" type="button" role="tab" aria-controls="animais" aria-selected="false">
+            <i class="fas fa-paw"></i> Lista de Animais
+          </button>
+        </li>
+      </ul>
+    </div>
+    <div class="tab-content p-3">
+
+      <div class="tab-pane fade show active" id="dados" role="tabpanel" aria-labelledby="dados-tab">
+        <form id="tutor-form" action="{{ url_for('update_tutor', user_id=tutor.id) }}" method="POST" enctype="multipart/form-data" data-sync class="section-card">
+          {{ tutor_form.hidden_tag() }}
+          <div class="section-card__header">
+            <div>
+              <p class="section-eyebrow">Perfil</p>
+              <h5 class="mb-1">Informações do tutor</h5>
+              <p class="text-muted mb-0">Atualize contatos, documentos e a foto do tutor.</p>
+            </div>
+          </div>
+
+          <div class="row g-3">
+            <div class="col-md-6">
+              <label class="form-label">Nome</label>
+              <input name="name" class="form-control" value="{{ tutor.name or '' }}" required>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label">E‑mail</label>
+              <input name="email" type="email" class="form-control" value="{{ tutor.email or '' }}" required>
+            </div>
+            <div class="col-md-4">
+              <label class="form-label">Telefone</label>
+              <input name="phone" class="form-control" value="{{ tutor.phone or '' }}"
+                     data-mask="(99) 99999-9999" pattern="\(\d{2}\) \d{5}-\d{4}">
+            </div>
+            <div class="col-md-4">
+              <label class="form-label">CPF</label>
+              <input name="cpf" class="form-control" value="{{ tutor.cpf or '' }}"
+                     data-mask="999.999.999-99" pattern="\d{3}\.\d{3}\.\d{3}-\d{2}">
+            </div>
+            <div class="col-md-4">
+              <label class="form-label">RG</label>
+              <input name="rg" class="form-control" value="{{ tutor.rg or '' }}"
+                     data-mask="99.999.999-9" pattern="\d{2}\.\d{3}\.\d{3}-\d">
+            </div>
+            <div class="col-md-4">
+              <label class="form-label">Data de Nascimento</label>
+              <input id="tutor_dob" name="date_of_birth" class="form-control" value="{{ tutor.date_of_birth.strftime('%Y-%m-%d') if tutor.date_of_birth else '' }}">
+            </div>
+            <div class="col-md-4">
+              <label class="form-label">Idade</label>
+              <input id="tutor_age" type="number" class="form-control" min="0">
+            </div>
+            <div class="col-md-4">
+              <label class="form-label">Foto do Tutor</label>
+              <div class="photo-uploader">
+                {{ photo_cropper(tutor_form.profile_photo, tutor_form.photo_rotation, tutor_form.photo_zoom, tutor_form.photo_offset_x, tutor_form.photo_offset_y, tutor.profile_photo, 150, 'profile_photo', 'user') }}
+              </div>
+            </div>
+            {% if tutor.worker|lower == 'veterinario' and tutor.veterinario %}
+            <div class="col-12">
+              <label class="form-label">Especialidades</label>
+              <div class="d-flex flex-wrap gap-2">
+                {% for esp in tutor.veterinario.specialties %}
+                  <span class="badge bg-secondary">{{ esp.nome }}</span>
+                {% else %}
+                  <span class="text-muted">Nenhuma</span>
+                {% endfor %}
+              </div>
+              <a href="{{ url_for('edit_vet_specialties', veterinario_id=tutor.veterinario.id) }}" class="btn btn-sm btn-outline-primary mt-2">Editar Especialidades</a>
+            </div>
+            {% endif %}
+
+            <div class="col-12">
+              <div class="section-divider"></div>
+              <p class="section-eyebrow">Endereço</p>
+            </div>
+
+            {% include "partials/endereco_form.html" with context %}
+
+            <div class="col-12">
+              <div class="d-grid gap-2 d-sm-flex justify-content-sm-end">
+                <button class="btn btn-primary px-4" data-loading-text="Salvando..." data-success-text="Alterações salvas!">
+                  <i class="fas fa-save me-2"></i>Salvar alterações
+                </button>
+              </div>
+              <div class="alert alert-success mt-3 d-none form-status-message" role="alert" aria-live="polite"></div>
+            </div>
+          </div>
+        </form>
+      </div>
+
+      <div class="tab-pane fade" id="animais" role="tabpanel" aria-labelledby="animais-tab">
+        <div class="section-card">
+          <div class="section-card__header align-items-center flex-wrap gap-3">
+            <div>
+              <p class="section-eyebrow">Animais</p>
+              <h5 class="mb-1" id="animais-heading">🐾 Animais de {{ tutor.name.split(' ')[0] }}</h5>
+              <p class="text-muted mb-0">Visualize rapidamente os pacientes deste tutor e acesse suas fichas.</p>
+            </div>
+            <div class="ms-auto d-flex gap-2 flex-wrap">
+              <button class="btn btn-outline-primary" data-bs-toggle="modal" data-bs-target="#modalNovoAnimal">
+                <i class="fas fa-plus-circle me-2"></i>Novo Animal
+              </button>
+            </div>
+          </div>
+
+          <div class="search-box mb-3">
+            <i class="fas fa-search"></i>
+            <input id="animal-search" type="search" class="form-control" placeholder="Busque por nome do animal">
+          </div>
+
+          <div class="table-responsive">
+            <table id="animals-table" class="table table-hover align-middle animals-table">
+              <thead>
+                <tr>
+                  <th>Nome</th>
+                  <th>Espécie / Raça</th>
+                  <th>Sexo</th>
+                  <th class="text-end">Ações</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for a in active_animals %}
+                <tr id="animal-row-{{ a.id }}">
+                  <td>
+                    <div class="d-flex align-items-center gap-2">
+                      {% if a.image %}
+                        <img src="{{ a.image }}"
+                             alt="Foto de {{ a.name }}"
+                             class="avatar"
+                             data-offset-x="{{ a.photo_offset_x or 0 }}"
+                             data-offset-y="{{ a.photo_offset_y or 0 }}"
+                             data-rotation="{{ a.photo_rotation or 0 }}"
+                             data-zoom="{{ a.photo_zoom or 1 }}"
+                             style="--avatar-size:36px;">
+                      {% else %}
+                        <div class="avatar placeholder" style="--avatar-size:36px;">
+                          <i class="fas fa-paw"></i>
+                        </div>
+                      {% endif %}
+                      <span class="animal-name fw-semibold">{{ a.name }}</span>
+                    </div>
+                  </td>
+                  <td class="animal-species">
+                    <span class="badge bg-light text-dark border me-2">{{ a.species }}</span>
+                    <span class="text-muted">{{ a.breed }}</span>
+                  </td>
+                  <td class="animal-sex">
+                    <span class="badge {% if a.sex == 'Fêmea' %}bg-pink{% elif a.sex == 'Macho' %}bg-info-subtle text-info{% else %}bg-light text-dark border{% endif %}">
+                      {{ a.sex or '—' }}
+                    </span>
+                  </td>
+                  <td class="text-end">
+                    <div class="d-flex gap-2 justify-content-end flex-wrap">
+                      <a href="{{ url_for('consulta_direct', animal_id=a.id) }}" class="btn btn-outline-success btn-sm">
+                        <i class="fas fa-stethoscope me-1"></i> Consulta
+                      </a>
+                      <a href="{{ url_for('ficha_animal', animal_id=a.id) }}" class="btn btn-outline-info btn-sm">
+                        <i class="fas fa-file-lines me-1"></i> Ficha
+                      </a>
+                      <button type="button" class="btn btn-outline-warning btn-sm" data-bs-toggle="modal" data-bs-target="#modalEditarAnimal{{ a.id }}">
+                        <i class="fas fa-pen"></i> Editar
+                      </button>
+                      <form action="{{ url_for('deletar_animal', animal_id=a.id) }}"
+                            method="POST"
+                            class="js-animal-delete-form d-inline"
+                            data-sync
+                            data-confirm="Tem certeza que deseja remover este animal?"
+                            data-animal-id="{{ a.id }}"
+                            data-animal-name="{{ a.name }}"
+                            data-animal-species="{{ a.species }}"
+                            data-animal-breed="{{ a.breed }}">
+                        <button type="submit" class="btn btn-outline-danger btn-sm">
+                          <i class="fas fa-trash"></i>
+                        </button>
+                      </form>
+                    </div>
+                  </td>
+                </tr>
+                {% endfor %}
+                {% if active_animals|length == 0 %}
+                <tr data-empty-state>
+                  <td colspan="4" class="text-muted text-center py-4">Nenhum animal cadastrado.</td>
+                </tr>
+                {% endif %}
+              </tbody>
+            </table>
+          </div>
+
+          {% if removed_animals %}
+          <div class="removed-animals mt-3">
+            <button class="btn btn-link text-muted p-0" onclick="document.getElementById('removidos-wrapper').classList.toggle('d-none')">
+              Mostrar/Esconder animais removidos
+            </button>
+            <div id="removidos-wrapper" class="d-none mt-2">
+              <div class="border rounded p-3 bg-light-subtle">
+                <h6 class="text-danger d-flex align-items-center gap-2 mb-3"><i class="fas fa-box-archive"></i> Animais Removidos</h6>
+                <ul class="list-group list-group-flush">
+                  {% for r in removed_animals %}
+                  <li class="list-group-item d-flex justify-content-between align-items-center">
+                    <span><strong>{{ r.name }}</strong> — {{ r.species }} / {{ r.breed }}</span>
+                    <form action="{{ url_for('deletar_animal', animal_id=r.id) }}"
+                          method="POST"
+                          class="js-animal-delete-form d-inline"
+                          data-sync
+                          data-confirm="Excluir permanentemente {{ r.name }}?"
+                          data-animal-id="{{ r.id }}"
+                          data-animal-name="{{ r.name }}"
+                          data-animal-species="{{ r.species }}"
+                          data-animal-breed="{{ r.breed }}"
+                          data-removed-item="true">
+                      <button type="submit" class="btn btn-sm btn-danger">❌ Excluir Definitivamente</button>
+                    </form>
+                  </li>
+                  {% endfor %}
+                </ul>
+              </div>
+            </div>
+          </div>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
 
   <!-- =========================  MODAIS DE EDIÇÃO  ========================= -->
 {% for a in animais %}
