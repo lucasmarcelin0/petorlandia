@@ -206,7 +206,16 @@
           {% for r in removidos %}
           <li class="list-group-item d-flex justify-content-between align-items-center">
             <span><strong>{{ r.name }}</strong> — {{ r.species }} / {{ r.breed }}</span>
-            <form action="{{ url_for('deletar_animal', animal_id=r.id) }}" method="POST" onsubmit="return confirm('Excluir permanentemente {{ r.name }}?')">
+            <form action="{{ url_for('deletar_animal', animal_id=r.id) }}"
+                  method="POST"
+                  class="js-animal-delete-form d-inline"
+                  data-sync
+                  data-confirm="Excluir permanentemente {{ r.name }}?"
+                  data-animal-id="{{ r.id }}"
+                  data-animal-name="{{ r.name }}"
+                  data-animal-species="{{ r.species }}"
+                  data-animal-breed="{{ r.breed }}"
+                  data-removed-item="true">
               <button type="submit" class="btn btn-sm btn-danger">❌ Excluir Definitivamente</button>
             </form>
           </li>
