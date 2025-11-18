@@ -451,6 +451,7 @@
     const data = detail.data || {};
     const response = detail.response;
     if(!form || !form.classList.contains('js-animal-delete-form')) return;
+    if(ev.defaultPrevented) return;
 
     if(!response || !response.ok || (data && data.success === false)){
       setButtonIdle(getSubmitButton(form));
