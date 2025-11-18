@@ -11289,9 +11289,19 @@ def salvar_bloco_prescricao(consulta_id):
     if not lista_prescricoes:
         return jsonify({'success': False, 'message': 'Nenhuma prescrição recebida.'}), 400
 
-    clinic_id = consulta.clinica_id or current_user_clinic_id()
+    clinic_id = (
+        consulta.clinica_id
+        or current_user_clinic_id()
+        or getattr(consulta.animal, 'clinica_id', None)
+    )
     if not clinic_id:
         return jsonify({'success': False, 'message': 'Consulta sem clínica definida.'}), 400
+
+    ensure_clinic_access(clinic_id)
+    if consulta.clinica_id and consulta.clinica_id != clinic_id:
+        return jsonify({'success': False, 'message': 'Consulta pertence a outra clínica.'}), 400
+    if not consulta.clinica_id:
+        consulta.clinica_id = clinic_id
 
     # ⬇️ Aqui é onde a instrução geral precisa ser usada
     bloco = BlocoPrescricao(
