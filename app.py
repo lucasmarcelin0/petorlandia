@@ -10657,7 +10657,7 @@ def alterar_racao(racao_id):
 
 
 from sqlalchemy.orm import aliased
-from sqlalchemy import desc
+from sqlalchemy import desc, and_, or_
 
 from collections import defaultdict
 
@@ -11797,6 +11797,7 @@ def novo_animal():
     if request.method == 'POST':
         tutor_id = request.form.get('tutor_id', type=int)
         tutor = get_user_or_404(tutor_id)
+        nome_animal = (request.form.get('name') or '').strip()
 
         dob_str = request.form.get('date_of_birth')
         dob = None
@@ -11852,15 +11853,58 @@ def novo_animal():
         species_obj = Species.query.get(species_id) if species_id else None
         breed_obj = Breed.query.get(breed_id) if breed_id else None
 
+        microchip_number = (request.form.get('microchip_number') or '').strip() or None
+
+        duplicate_filters = [
+            Animal.user_id == tutor.id,
+            func.lower(Animal.name) == func.lower(nome_animal),
+        ]
+
+        duplicate_conditions = []
+        if microchip_number:
+            duplicate_conditions.append(Animal.microchip_number == microchip_number)
+        if dob:
+            duplicate_conditions.append(Animal.date_of_birth == dob)
+        if idade_registrada:
+            duplicate_conditions.append(and_(Animal.age.isnot(None), Animal.age == idade_registrada))
+
+        # Evita duplicação por cliques repetidos considerando cadastros recentes
+        recent_window = datetime.utcnow() - timedelta(minutes=10)
+        duplicate_conditions.append(and_(Animal.date_added >= recent_window))
+
+        existing_animal = None
+        if duplicate_conditions:
+            existing_animal = (
+                Animal.query.filter(*duplicate_filters)
+                .filter(or_(*duplicate_conditions))
+                .first()
+            )
+
+        if existing_animal:
+            message = 'Já existe um animal com os mesmos dados para este tutor recentemente cadastrado.'
+            flash(message, 'warning')
+            if request.headers.get('X-Requested-With') == 'XMLHttpRequest' or (
+                request.accept_mimetypes['application/json'] > request.accept_mimetypes['text/html']
+            ):
+                return (
+                    jsonify(
+                        message=message,
+                        category='warning',
+                        redirect=url_for('ficha_animal', animal_id=existing_animal.id),
+                    ),
+                    409,
+                )
+            return redirect(url_for('ficha_animal', animal_id=existing_animal.id))
+
         # Criação do animal
         animal = Animal(
-            name=request.form.get('name'),
+            name=nome_animal,
             species_id=species_id,
             breed_id=breed_id,
             sex=request.form.get('sex'),
             date_of_birth=dob,
             age=idade_registrada,
-            microchip_number=request.form.get('microchip_number'),
+            microchip_number=microchip_number,
             peso=peso,
             health_plan=request.form.get('health_plan'),
             neutered=neutered,
