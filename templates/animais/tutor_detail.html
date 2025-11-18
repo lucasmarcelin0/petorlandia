@@ -582,6 +582,41 @@ document.addEventListener('form-sync-success', function(ev) {
 
   if (form.id === 'tutor-form') {
     ev.preventDefault();
+    if (window.FormFeedback && typeof window.FormFeedback.showStatus === 'function') {
+      const successMessage = (data && data.message) || 'Dados do tutor atualizados com sucesso!';
+      window.FormFeedback.showStatus(form, successMessage, 'success');
+    }
+
+    const tutorPayload = data && data.tutor;
+    if (tutorPayload) {
+      const preview = document.getElementById('preview-tutor');
+      if (preview) {
+        if (tutorPayload.profile_photo) {
+          preview.src = typeof cacheBust === 'function'
+            ? cacheBust(tutorPayload.profile_photo)
+            : tutorPayload.profile_photo;
+          preview.classList.remove('d-none');
+        }
+        if (typeof tutorPayload.photo_offset_x !== 'undefined') preview.dataset.offsetX = tutorPayload.photo_offset_x;
+        if (typeof tutorPayload.photo_offset_y !== 'undefined') preview.dataset.offsetY = tutorPayload.photo_offset_y;
+        if (typeof tutorPayload.photo_rotation !== 'undefined') preview.dataset.rotation = tutorPayload.photo_rotation;
+        if (typeof tutorPayload.photo_zoom !== 'undefined') preview.dataset.zoom = tutorPayload.photo_zoom;
+        if (typeof updateAvatarTransform === 'function') {
+          const offsetX = parseFloat(preview.dataset.offsetX) || 0;
+          const offsetY = parseFloat(preview.dataset.offsetY) || 0;
+          const rotation = parseFloat(preview.dataset.rotation) || 0;
+          const zoom = parseFloat(preview.dataset.zoom) || 1;
+          updateAvatarTransform(preview, offsetX, offsetY, rotation, zoom);
+        }
+      }
+
+      const cropperPreview = document.querySelector('#profile_photo-preview img');
+      if (cropperPreview && tutorPayload.profile_photo) {
+        cropperPreview.src = typeof cacheBust === 'function'
+          ? cacheBust(tutorPayload.profile_photo)
+          : tutorPayload.profile_photo;
+      }
+    }
     if (data && data.tutor_name) {
       const heading = document.getElementById('animais-heading');
       if (heading) {
