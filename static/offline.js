@@ -2,7 +2,7 @@
   const KEY = 'offline-queue';
   const BUTTON_RESET_DELAY = 2000;
   const DEFAULT_LOADING_TIMEOUT = 5000;
-  const DEFAULT_TIMEOUT_MESSAGE = 'O envio está demorando. Reativamos o botão para tentar novamente.';
+  const DEFAULT_TIMEOUT_MESSAGE = 'O tempo limite foi atingido. Reativamos o botão para que você possa tentar novamente.';
 
   function getSubmitButton(form){
     if(!form) return null;
