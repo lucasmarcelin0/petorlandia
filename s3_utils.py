@@ -20,9 +20,7 @@ def upload_to_s3(file, filename, folder="uploads"):
         BUCKET_NAME,
         filepath,
         ExtraArgs={
-    "ContentType": file.content_type
-}
-
-
+            "ContentType": file.content_type
+        }
     )
     return f"https://{BUCKET_NAME}.s3.amazonaws.com/{filepath}"
