@@ -69,6 +69,8 @@
   const medicoSelect = document.querySelector('[data-plantao-medico]');
   const medicoNomeInput = document.querySelector('[data-plantao-medico-nome]');
   const medicoCnpjInput = document.querySelector('[data-plantao-medico-cnpj]');
+  const modalEl = document.getElementById('plantaoAgendarModal');
+  const modalDayButtons = document.querySelectorAll('[data-plantao-agendar-dia]');
 
   function renderModeloOptions() {
     if (!modeloSelect) {
@@ -147,5 +149,120 @@
       renderModeloOptions();
       modeloSelect.value = '0';
     });
+  }
+
+  function formatDayLabel(value) {
+    if (!value) {
+      return '';
+    }
+    const date = new Date(value);
+    return date.toLocaleDateString('pt-BR', {
+      weekday: 'long',
+      day: '2-digit',
+      month: 'long'
+    });
+  }
+
+  function renderQuickModeloOptions(selectEl, clinicId) {
+    if (!selectEl) {
+      return;
+    }
+    const modelos = Array.isArray(window.PLANTAO_MODELOS) ? window.PLANTAO_MODELOS : [];
+    const filtered = modelos.filter((modelo) => !clinicId || Number(modelo.clinic_id) === Number(clinicId));
+    selectEl.innerHTML = '';
+    const placeholder = new Option('Selecione um modelo ou crie manualmente', '');
+    selectEl.appendChild(placeholder);
+    filtered.forEach((modelo) => {
+      const option = new Option(`${modelo.nome} — ${modelo.duracao_horas}h`, modelo.id);
+      selectEl.appendChild(option);
+    });
+  }
+
+  function renderQuickMedicos(selectEl) {
+    if (!selectEl) {
+      return;
+    }
+    const medicos = Array.isArray(window.PLANTAO_MEDICOS) ? window.PLANTAO_MEDICOS : [];
+    selectEl.innerHTML = '';
+    selectEl.appendChild(new Option('Escolha quem irá cobrir o plantão', ''));
+    medicos.forEach(([id, nome]) => {
+      selectEl.appendChild(new Option(nome, id));
+    });
+  }
+
+  function renderQuickChips(container, clinicId, targetSelect) {
+    if (!container || !targetSelect) {
+      return;
+    }
+    const modelos = Array.isArray(window.PLANTAO_MODELOS) ? window.PLANTAO_MODELOS : [];
+    const filtered = modelos.filter((modelo) => !clinicId || Number(modelo.clinic_id) === Number(clinicId));
+    container.innerHTML = '';
+    filtered.slice(0, 4).forEach((modelo) => {
+      const chip = document.createElement('button');
+      chip.type = 'button';
+      chip.className = 'btn btn-outline-secondary btn-sm plantao-quick-chip';
+      chip.textContent = modelo.nome;
+      chip.addEventListener('click', () => {
+        targetSelect.value = String(modelo.id);
+      });
+      container.appendChild(chip);
+    });
+  }
+
+  if (modalEl && modalDayButtons.length) {
+    const modal = new bootstrap.Modal(modalEl);
+    const dayLabel = modalEl.querySelector('[data-plantao-dia-label]');
+    const dayInput = modalEl.querySelector('[data-plantao-dia-input]');
+    const quickForm = modalEl.querySelector('[data-plantao-quick-form]');
+    const modeloQuickSelect = modalEl.querySelector('[data-plantao-modal-modelo]');
+    const medicoQuickSelect = modalEl.querySelector('[data-plantao-modal-medico]');
+    const chipsContainer = modalEl.querySelector('[data-plantao-modal-chips]');
+    const quickOptions = modalEl.querySelectorAll('[data-plantao-quick-option]');
+    const clinicId = window.PLANTAO_DEFAULTS ? window.PLANTAO_DEFAULTS.clinicaId : null;
+
+    renderQuickModeloOptions(modeloQuickSelect, clinicId);
+    renderQuickMedicos(medicoQuickSelect);
+    renderQuickChips(chipsContainer, clinicId, modeloQuickSelect);
+
+    modalDayButtons.forEach((button) => {
+      button.addEventListener('click', () => {
+        const dia = button.dataset.dia;
+        if (dayInput) {
+          dayInput.value = dia;
+        }
+        if (dayLabel) {
+          dayLabel.textContent = formatDayLabel(dia);
+        }
+        modal.show();
+      });
+    });
+
+    quickOptions.forEach((option) => {
+      option.addEventListener('click', () => {
+        const action = option.dataset.plantaoQuickOption;
+        if (action === 'limpar') {
+          if (modeloQuickSelect) {
+            modeloQuickSelect.value = '';
+          }
+          if (medicoQuickSelect) {
+            medicoQuickSelect.value = '';
+          }
+        }
+        if (action === 'modelo' && modeloQuickSelect && modeloQuickSelect.options.length > 1) {
+          modeloQuickSelect.selectedIndex = 1;
+        }
+      });
+    });
+
+    if (quickForm) {
+      quickForm.addEventListener('submit', () => {
+        if (modeloQuickSelect && !modeloQuickSelect.value) {
+          modeloQuickSelect.name = '';
+        }
+        if (medicoQuickSelect && !medicoQuickSelect.value) {
+          medicoQuickSelect.name = '';
+        }
+      });
+    }
   }
 })();

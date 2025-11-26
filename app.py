@@ -3504,6 +3504,7 @@ def contabilidade_pagamentos():
         'custo_pago': Decimal('0.00'),
     }
     plantonista_medicos: list[tuple[str, str]] = []
+    plantao_modelos_serialized: list[dict] = []
     plantonista_calendar: list[dict] = []
     plantonista_calendar_weeks: list[list[Optional[dict]]] = []
     plantonista_error: Optional[str] = None
@@ -3808,6 +3809,11 @@ def contabilidade_pagamentos():
                 current_week.append(None)
             plantonista_calendar_weeks.append(current_week)
 
+        plantao_modelos_serialized = [
+            _serialize_plantao_modelo(modelo)
+            for modelo in _load_plantao_modelos(accessible_ids)
+        ]
+
     total_pago = sum((payment.valor or Decimal('0.00')) for payment in payments if payment.status == 'pago')
     total_pendente = sum((payment.valor or Decimal('0.00')) for payment in payments if payment.status == 'pendente')
 
@@ -3831,6 +3837,7 @@ def contabilidade_pagamentos():
         plantonista_escalas=plantonista_escalas,
         plantonista_totals=plantonista_totals,
         plantonista_medicos=plantonista_medicos,
+        plantao_modelos_serialized=plantao_modelos_serialized,
         plantonista_calendar=plantonista_calendar,
         plantonista_calendar_weeks=plantonista_calendar_weeks,
         plantonista_status_labels=dict(PLANTONISTA_ESCALA_STATUS_CHOICES),
@@ -4362,6 +4369,10 @@ def contabilidade_plantonistas_novo():
             modelo = next((m for m in plantao_modelos if m.id == selected_modelo_id), None)
             if modelo and modelo.clinic_id == form.clinic_id.data:
                 _apply_modelo_to_form(form, modelo)
+
+        requested_medico_id = request.args.get('medico_id', type=int)
+        if requested_medico_id is not None:
+            form.medico_id.data = requested_medico_id
 
     if form.validate_on_submit():
         clinic_id = form.clinic_id.data
