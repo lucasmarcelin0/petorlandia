@@ -265,4 +265,33 @@
       });
     }
   }
+
+  const sidebar = document.querySelector('[data-plantao-sidebar]');
+  const sidebarToggle = document.querySelector('[data-plantao-sidebar-toggle]');
+  const sidebarClose = document.querySelector('[data-plantao-sidebar-close]');
+
+  if (sidebar && sidebarToggle) {
+    function setSidebar(open) {
+      sidebar.classList.toggle('d-none', !open);
+      sidebarToggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+      sidebarToggle.innerHTML = `<i class="fas fa-lightbulb me-1"></i>${open ? 'Esconder dicas' : 'Mostrar dicas'}`;
+      sidebarToggle.classList.toggle('btn-outline-secondary', !open);
+      sidebarToggle.classList.toggle('btn-secondary', open);
+    }
+
+    let sidebarOpen = false;
+    setSidebar(false);
+
+    sidebarToggle.addEventListener('click', () => {
+      sidebarOpen = !sidebarOpen;
+      setSidebar(sidebarOpen);
+    });
+
+    if (sidebarClose) {
+      sidebarClose.addEventListener('click', () => {
+        sidebarOpen = false;
+        setSidebar(sidebarOpen);
+      });
+    }
+  }
 })();

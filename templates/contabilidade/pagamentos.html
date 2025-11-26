@@ -453,6 +453,12 @@
             </div>
             <span class="badge bg-light text-muted">{{ plantonista_escalas|length }} plantões</span>
           </div>
+          <div class="d-flex justify-content-end mb-3">
+            <button type="button" class="btn btn-outline-secondary btn-sm" data-plantao-sidebar-toggle aria-expanded="false">
+              <i class="fas fa-lightbulb me-1"></i>
+              Mostrar dicas
+            </button>
+          </div>
           <div class="card border-0 shadow-sm mb-4">
             <div class="card-body">
               <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-3">
@@ -622,10 +628,15 @@
         </div>
       </div>
     </div>
-    <div class="col-12 col-xxl-3">
+    <div class="col-12 col-xxl-3 d-none" data-plantao-sidebar>
       <div class="card border-0 shadow-sm h-100">
         <div class="card-body">
-          <h5 class="mb-3">Dicas rápidas</h5>
+          <div class="d-flex justify-content-between align-items-start mb-3">
+            <h5 class="mb-0">Dicas rápidas</h5>
+            <button type="button" class="btn btn-sm btn-outline-secondary" data-plantao-sidebar-close>
+              <i class="fas fa-times"></i>
+            </button>
+          </div>
           <div class="list-group list-group-flush border rounded-3">
             <div class="list-group-item">
               <div class="fw-semibold">Confirmação operacional</div>
