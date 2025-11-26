@@ -1,4 +1,5 @@
 import os
+import shutil
 import sys
 from io import BytesIO
 from werkzeug.datastructures import FileStorage
@@ -55,3 +56,37 @@ def test_upload_to_s3_secure_filename(monkeypatch):
 
     assert captured['key'].startswith('clinicas/evil_image.jpg')
     assert url == f"https://test-bucket.s3.amazonaws.com/{captured['key']}"
+
+
+def test_upload_to_s3_falls_back_when_client_fails(tmp_path, monkeypatch):
+    class DummyS3:
+        def upload_fileobj(self, *args, **kwargs):
+            raise RuntimeError("client failure")
+
+    uploads_root = tmp_path / "static" / "uploads"
+    expected_path = uploads_root / "clinicas" / "logo.jpg"
+
+    monkeypatch.setattr(app, "BUCKET", "test-bucket")
+    monkeypatch.setattr(app, "BUCKET_NAME", "test-bucket", raising=False)
+    monkeypatch.setattr(app, "PROJECT_ROOT", tmp_path)
+    monkeypatch.setattr(app, "_s3", lambda: DummyS3())
+
+    img_bytes = BytesIO()
+    Image.new("RGB", (1, 1)).save(img_bytes, format="PNG")
+    img_bytes.seek(0)
+
+    fs = FileStorage(stream=img_bytes, filename="logo.png", content_type="image/png")
+
+    try:
+        url = app.upload_to_s3(fs, "logo.png", folder="clinicas")
+
+        assert expected_path.exists()
+        with Image.open(expected_path) as saved:
+            assert saved.format == "JPEG"
+            assert saved.size == (1, 1)
+
+        assert url in {None, "/static/uploads/clinicas/logo.jpg"}
+        if url is not None:
+            assert url == "/static/uploads/clinicas/logo.jpg"
+    finally:
+        shutil.rmtree(uploads_root.parent, ignore_errors=True)
