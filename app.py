@@ -3809,9 +3809,11 @@ def contabilidade_pagamentos():
                 current_week.append(None)
             plantonista_calendar_weeks.append(current_week)
 
+    if selected_view == 'plantonistas':
+        modelo_clinic_ids = [selected_clinic_id] if selected_clinic_id else []
         plantao_modelos_serialized = [
             _serialize_plantao_modelo(modelo)
-            for modelo in _load_plantao_modelos(accessible_ids)
+            for modelo in _load_plantao_modelos(modelo_clinic_ids)
         ]
 
     total_pago = sum((payment.valor or Decimal('0.00')) for payment in payments if payment.status == 'pago')
@@ -4349,8 +4351,8 @@ def contabilidade_plantonistas_novo():
 
     form = PlantonistaEscalaForm()
     _populate_plantonista_form_choices(form, clinics)
-    plantao_modelos = _load_plantao_modelos(accessible_ids)
     default_clinic_id = request.args.get('clinica_id', type=int) or clinics[0].id
+    plantao_modelos = _load_plantao_modelos([default_clinic_id])
     _configure_modelo_choices(form, plantao_modelos, default_clinic_id)
     if request.method == 'GET':
         form.clinic_id.data = default_clinic_id
@@ -4555,7 +4557,7 @@ def contabilidade_plantonistas_editar(escala_id):
 
     form = PlantonistaEscalaForm(obj=escala)
     _populate_plantonista_form_choices(form, clinics or [escala.clinic])
-    plantao_modelos = _load_plantao_modelos(accessible_ids or [escala.clinic_id])
+    plantao_modelos = _load_plantao_modelos([escala.clinic_id])
     _configure_modelo_choices(form, plantao_modelos, escala.clinic_id)
 
     if request.method == 'GET':
