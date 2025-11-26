@@ -23,6 +23,7 @@
 
     .plantao-calendar-table td {
       border: none;
+      min-width: 170px;
     }
 
     .calendar-day-card {
@@ -53,6 +54,12 @@
       border-radius: 999px;
     }
 
+    @media (max-width: 1400px) {
+      .plantao-calendar-table td {
+        min-width: 140px;
+      }
+    }
+
     @media (max-width: 991px) {
       .plantao-calendar-table {
         border-spacing: 0.35rem;
@@ -60,6 +67,10 @@
 
       .calendar-day-card {
         min-height: 220px;
+      }
+
+      .plantao-calendar-table td {
+        min-width: 120px;
       }
     }
   </style>
@@ -491,7 +502,7 @@
                     {% for week in plantonista_calendar_weeks %}
                     <tr>
                       {% for day in week %}
-                      <td class="align-top p-2" style="min-width: 200px;">
+                      <td class="align-top p-2">
                         {% if day %}
                         <div class="calendar-day-card h-100" data-plantao-day-card>
                           <div class="d-flex justify-content-between align-items-center mb-1">
