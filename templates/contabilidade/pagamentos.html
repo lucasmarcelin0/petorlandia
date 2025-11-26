@@ -2,6 +2,69 @@
 {% set titulo = "Pagamentos / PJs" %}
 {% set subtitulo = "Gerencie repasses, notas fiscais e status de prestadores PJ." %}
 
+{% block styles %}
+  {{ super() }}
+  <style>
+    .plantao-calendar-wrapper {
+      margin: -0.5rem;
+    }
+
+    .plantao-calendar-table {
+      min-width: 100%;
+      border-collapse: separate;
+      border-spacing: 0.5rem;
+    }
+
+    .plantao-calendar-table thead th {
+      border: none;
+      font-weight: 700;
+      letter-spacing: 0.02em;
+    }
+
+    .plantao-calendar-table td {
+      border: none;
+    }
+
+    .calendar-day-card {
+      background: linear-gradient(145deg, #f8f9fb, #ffffff);
+      border: 1px solid #e6e9ef;
+      border-radius: 14px;
+      padding: 0.9rem;
+      min-height: 250px;
+      box-shadow: 0 4px 14px rgba(0, 0, 0, 0.04);
+      transition: transform 0.12s ease, box-shadow 0.12s ease;
+    }
+
+    .calendar-day-card:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 8px 20px rgba(0, 0, 0, 0.06);
+    }
+
+    .calendar-day-card .badge {
+      text-transform: none;
+      font-weight: 600;
+    }
+
+    .calendar-day-card small {
+      font-size: 0.8rem;
+    }
+
+    .plantao-quick-chip {
+      border-radius: 999px;
+    }
+
+    @media (max-width: 991px) {
+      .plantao-calendar-table {
+        border-spacing: 0.35rem;
+      }
+
+      .calendar-day-card {
+        min-height: 220px;
+      }
+    }
+  </style>
+{% endblock %}
+
 {% block main %}
 <div class="container py-4">
   <div class="d-flex flex-wrap justify-content-between align-items-start gap-3 mb-3">
@@ -140,7 +203,7 @@
   </div>
 
   <div class="row g-3">
-    <div class="col-12 col-xl-8">
+    <div class="col-12 col-xxl-9">
       <div class="card border-0 shadow-sm h-100">
         <div class="card-body">
           <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
@@ -394,7 +457,7 @@
             <div class="card-body">
               <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-3">
                 <div>
-                  <h5 class="mb-0">Calendário visual do mês</h5>
+                  <h5 class="mb-1">Calendário visual do mês</h5>
                   <small class="text-muted">Planeje toda a escala clicando no dia desejado.</small>
                 </div>
                 <div class="d-flex flex-wrap align-items-center gap-2">
@@ -405,8 +468,8 @@
                   <span class="badge bg-light text-muted border">Livre</span>
                 </div>
               </div>
-              <div class="table-responsive">
-                <table class="table table-bordered align-middle mb-0">
+              <div class="table-responsive plantao-calendar-wrapper">
+                <table class="table align-middle mb-0 plantao-calendar-table">
                   <thead class="table-light">
                     <tr class="text-center">
                       <th class="small text-uppercase">Seg</th>
@@ -422,45 +485,49 @@
                     {% for week in plantonista_calendar_weeks %}
                     <tr>
                       {% for day in week %}
-                      <td style="min-width: 180px;">
+                      <td class="align-top p-2" style="min-width: 200px;">
                         {% if day %}
-                        <div class="d-flex justify-content-between align-items-center mb-1">
-                          <div class="fw-semibold">{{ day.date.day }}</div>
-                          <span class="{{ day.badge_class }}">{{ day.badge_label }}</span>
-                        </div>
-                        <div class="small text-muted d-flex justify-content-between">
-                          <span>{{ day.total_escalas }} plantões</span>
-                          <span>{{ '%.2f' % day.horas }} h</span>
-                        </div>
-                        <div class="d-flex flex-column gap-1 mt-2">
-                          {% for status, count in day.status_counts.items() %}
-                          <div class="d-flex justify-content-between small text-muted">
-                            <span>{{ plantonista_status_labels.get(status, status|capitalize) }}</span>
-                            <span class="fw-semibold">{{ count }}</span>
+                        <div class="calendar-day-card h-100" data-plantao-day-card>
+                          <div class="d-flex justify-content-between align-items-center mb-1">
+                            <div class="fw-semibold fs-5">{{ day.date.day }}</div>
+                            <span class="{{ day.badge_class }}">{{ day.badge_label }}</span>
                           </div>
-                          {% endfor %}
-                        </div>
-                        <div class="d-flex justify-content-between align-items-center mt-2">
-                          <small class="text-muted">Previsto</small>
-                          <span class="fw-semibold text-primary">{{ day.valor_previsto | currency_br }}</span>
-                        </div>
-                        <div class="mt-2">
-                          <small class="text-muted">Médicos</small>
-                          <div class="d-flex flex-wrap gap-1">
-                            {% for medico in day.medicos[:3] %}
-                              <span class="badge bg-secondary-subtle text-dark border">{{ medico }}</span>
+                          <div class="small text-muted d-flex justify-content-between">
+                            <span>{{ day.total_escalas }} plantões</span>
+                            <span>{{ '%.2f' % day.horas }} h</span>
+                          </div>
+                          <div class="d-flex flex-column gap-1 mt-2">
+                            {% for status, count in day.status_counts.items() %}
+                            <div class="d-flex justify-content-between small text-muted">
+                              <span>{{ plantonista_status_labels.get(status, status|capitalize) }}</span>
+                              <span class="fw-semibold">{{ count }}</span>
+                            </div>
                             {% endfor %}
-                            {% if day.medicos|length > 3 %}
-                              <span class="badge bg-secondary-subtle text-dark border">+{{ day.medicos|length - 3 }}</span>
-                            {% elif not day.medicos %}
-                              <span class="text-muted small">—</span>
-                            {% endif %}
                           </div>
+                          <div class="d-flex justify-content-between align-items-center mt-2">
+                            <small class="text-muted">Previsto</small>
+                            <span class="fw-semibold text-primary">{{ day.valor_previsto | currency_br }}</span>
+                          </div>
+                          <div class="mt-2">
+                            <small class="text-muted">Médicos</small>
+                            <div class="d-flex flex-wrap gap-1">
+                              {% for medico in day.medicos[:3] %}
+                                <span class="badge bg-secondary-subtle text-dark border">{{ medico }}</span>
+                              {% endfor %}
+                              {% if day.medicos|length > 3 %}
+                                <span class="badge bg-secondary-subtle text-dark border">+{{ day.medicos|length - 3 }}</span>
+                              {% elif not day.medicos %}
+                                <span class="text-muted small">—</span>
+                              {% endif %}
+                            </div>
+                          </div>
+                          <button type="button"
+                                  class="btn btn-sm btn-outline-primary w-100 mt-3"
+                                  data-plantao-agendar-dia
+                                  data-dia="{{ day.date.isoformat() }}">
+                            <i class="fas fa-calendar-plus me-1"></i>Agendar neste dia
+                          </button>
                         </div>
-                        <a href="{{ url_for('contabilidade_plantonistas_novo', clinica_id=selected_clinic_id, mes=month_value, aba='plantonistas', dia=day.date.isoformat()) }}"
-                           class="btn btn-sm btn-outline-primary w-100 mt-2">
-                          <i class="fas fa-calendar-plus me-1"></i>Agendar neste dia
-                        </a>
                         {% endif %}
                       </td>
                       {% endfor %}
@@ -555,7 +622,7 @@
         </div>
       </div>
     </div>
-    <div class="col-12 col-xl-4">
+    <div class="col-12 col-xxl-3">
       <div class="card border-0 shadow-sm h-100">
         <div class="card-body">
           <h5 class="mb-3">Dicas rápidas</h5>
@@ -579,11 +646,84 @@
   </div>
   {% endif %}
 </div>
+
+{% if selected_view == 'plantonistas' %}
+<div class="modal fade" id="plantaoAgendarModal" tabindex="-1" aria-labelledby="plantaoAgendarModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered modal-lg">
+    <div class="modal-content">
+      <div class="modal-header">
+        <div>
+          <p class="text-muted mb-1">Agendamento rápido</p>
+          <h5 class="modal-title" id="plantaoAgendarModalLabel">Escolha como agendar este dia</h5>
+          <small class="text-muted" data-plantao-dia-label></small>
+        </div>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+      </div>
+      <div class="modal-body">
+        <form class="row g-3" method="get" action="{{ url_for('contabilidade_plantonistas_novo') }}" data-plantao-quick-form>
+          <input type="hidden" name="clinica_id" value="{{ selected_clinic_id or '' }}">
+          <input type="hidden" name="mes" value="{{ month_value }}">
+          <input type="hidden" name="dia" data-plantao-dia-input>
+          <div class="col-12">
+            <label class="form-label fw-semibold">Modelos salvos</label>
+            <div class="d-flex flex-wrap gap-2 mb-2" data-plantao-modal-chips></div>
+            <select class="form-select" name="modelo_id" data-plantao-modal-modelo>
+              <option value="">Selecione um modelo ou crie manualmente</option>
+            </select>
+            <div class="form-text">Aplicamos automaticamente turno, horários e médico quando o modelo é escolhido.</div>
+          </div>
+          <div class="col-md-7">
+            <label class="form-label fw-semibold">Funcionários da clínica</label>
+            <select class="form-select" name="medico_id" data-plantao-modal-medico>
+              <option value="">Escolha quem irá cobrir o plantão</option>
+            </select>
+          </div>
+          <div class="col-md-5">
+            <label class="form-label fw-semibold">Opções rápidas</label>
+            <div class="d-flex flex-wrap gap-2">
+              <button type="button" class="btn btn-outline-light border plantao-quick-chip" data-plantao-quick-option="hoje">
+                <i class="fas fa-calendar-day me-1"></i>Usar data selecionada
+              </button>
+              <button type="button" class="btn btn-outline-light border plantao-quick-chip" data-plantao-quick-option="modelo">
+                <i class="fas fa-magic me-1"></i>Aplicar modelo sugerido
+              </button>
+              <button type="button" class="btn btn-outline-light border plantao-quick-chip" data-plantao-quick-option="limpar">
+                <i class="fas fa-eraser me-1"></i>Limpar seleção
+              </button>
+            </div>
+          </div>
+          <div class="col-12">
+            <div class="alert alert-info d-flex align-items-center mb-0">
+              <i class="fas fa-bolt me-2"></i>
+              <div>
+                <div class="fw-semibold">Agende sem sair do calendário</div>
+                <small>Escolha um modelo salvo ou um funcionário e iremos abrir o formulário já preenchido.</small>
+              </div>
+            </div>
+          </div>
+          <div class="col-12 d-flex justify-content-end gap-2 mt-2">
+            <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
+            <button type="submit" class="btn btn-primary">Abrir formulário preenchido</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+{% endif %}
 {% endblock %}
 
 {% block scripts %}
   {{ super() }}
   {% if selected_view == 'plantonistas' %}
+    <script>
+      window.PLANTAO_MODELOS = {{ (plantao_modelos_serialized or []) | tojson | safe }};
+      window.PLANTAO_MEDICOS = {{ (plantonista_medicos or []) | tojson | safe }};
+      window.PLANTAO_DEFAULTS = {
+        clinicaId: {{ selected_clinic_id or 'null' }},
+        monthValue: '{{ month_value }}'
+      };
+    </script>
     <script src="{{ url_for('static', filename='js/contabilidade_plantoes.js') }}"></script>
   {% endif %}
 {% endblock %}
