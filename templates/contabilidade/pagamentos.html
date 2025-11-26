@@ -682,7 +682,12 @@
         <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
       </div>
       <div class="modal-body">
-        <form class="row g-3" method="get" action="{{ url_for('contabilidade_plantonistas_novo') }}" data-plantao-quick-form>
+        <form class="row g-3"
+              method="get"
+              action="{{ url_for('contabilidade_plantonistas_novo') }}"
+              data-plantao-quick-form
+              data-plantao-quick-endpoint="{{ url_for('contabilidade_plantonistas_quick_create') }}"
+              data-plantao-csrf="{{ csrf_token() if csrf_token is defined else '' }}">
           <input type="hidden" name="clinica_id" value="{{ selected_clinic_id or '' }}">
           <input type="hidden" name="mes" value="{{ month_value }}">
           <input type="hidden" name="dia" data-plantao-dia-input>
@@ -725,7 +730,11 @@
           </div>
           <div class="col-12 d-flex justify-content-end gap-2 mt-2">
             <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
-            <button type="submit" class="btn btn-primary">Abrir formulário preenchido</button>
+            <a class="btn btn-outline-secondary"
+               href="{{ url_for('contabilidade_plantonistas_novo', clinica_id=selected_clinic_id, mes=month_value) }}">
+              Formulário completo
+            </a>
+            <button type="submit" class="btn btn-primary">Agendar direto</button>
           </div>
         </form>
       </div>

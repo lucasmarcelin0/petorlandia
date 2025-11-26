@@ -4451,6 +4451,99 @@ def contabilidade_plantonistas_novo():
     )
 
 
+@app.route('/contabilidade/pagamentos/plantonistas/quick-create', methods=['POST'])
+@login_required
+def contabilidade_plantonistas_quick_create():
+    _ensure_accounting_access()
+    clinics, accessible_ids = _accounting_accessible_clinics()
+    if not clinics:
+        return jsonify({'error': 'Associe-se a uma clínica antes de cadastrar plantões.'}), 400
+
+    data = request.get_json(silent=True) or request.form
+
+    def _parse_int(value):
+        try:
+            return int(value)
+        except (TypeError, ValueError):
+            return None
+
+    clinic_id = _parse_int(data.get('clinica_id') if hasattr(data, 'get') else None)
+    modelo_id = _parse_int(data.get('modelo_id') if hasattr(data, 'get') else None)
+    dia_value = data.get('dia') if hasattr(data, 'get') else None
+    medico_id = _parse_int(data.get('medico_id') if hasattr(data, 'get') else None)
+
+    if not clinic_id:
+        return jsonify({'error': 'Clínica não informada.'}), 400
+    if clinic_id not in accessible_ids and not _is_admin():
+        return jsonify({'error': 'Você não tem acesso a esta clínica.'}), 403
+    if not modelo_id:
+        return jsonify({'error': 'Selecione um modelo válido para agendar.'}), 400
+
+    modelo = PlantaoModelo.query.get_or_404(modelo_id)
+    if modelo.clinic_id != clinic_id:
+        return jsonify({'error': 'O modelo selecionado pertence a outra clínica.'}), 400
+
+    try:
+        dia = date.fromisoformat(dia_value)
+    except Exception:
+        return jsonify({'error': 'Data do plantão inválida.'}), 400
+
+    if not modelo.hora_inicio:
+        return jsonify({'error': 'O modelo selecionado não possui horário de início.'}), 400
+
+    inicio = datetime.combine(dia, modelo.hora_inicio)
+    fim = inicio + timedelta(hours=float(modelo.duracao_horas or 0))
+    horas_previstas = _compute_plantao_horas(inicio, fim)
+    if not horas_previstas:
+        return jsonify({'error': 'Não foi possível calcular a duração do plantão.'}), 400
+
+    medico_nome = (modelo.medico_nome or '').strip()
+    medico_cnpj = (modelo.medico_cnpj or '').strip() or None
+    medico_db_id = None
+
+    if medico_id:
+        medico = Veterinario.query.get(medico_id)
+        if not medico:
+            return jsonify({'error': 'Médico selecionado não encontrado.'}), 404
+        medico_db_id = medico.id
+        medico_nome = medico.user.name if medico.user else (medico_nome or f'Veterinário #{medico_id}')
+    elif modelo.medico_id:
+        medico_db_id = modelo.medico_id
+
+    if not medico_nome:
+        return jsonify({'error': 'Defina o profissional responsável pelo plantão.'}), 400
+
+    escala = PlantonistaEscala(
+        clinic_id=clinic_id,
+        medico_id=medico_db_id,
+        medico_nome=medico_nome,
+        medico_cnpj=medico_cnpj,
+        turno=modelo.nome,
+        inicio=inicio,
+        fim=fim,
+        plantao_horas=horas_previstas,
+        valor_previsto=Decimal('0.00'),
+        status='agendado',
+        nota_fiscal_recebida=False,
+        retencao_validada=False,
+    )
+
+    db.session.add(escala)
+    db.session.commit()
+
+    redirect_url = url_for(
+        'contabilidade_pagamentos',
+        clinica_id=clinic_id,
+        mes=_format_month_parameter(inicio),
+        aba='plantonistas',
+    )
+
+    return jsonify({
+        'message': 'Plantão agendado com o modelo selecionado.',
+        'redirect': redirect_url,
+    })
+
+
 @app.route('/contabilidade/pagamentos/plantonistas/<int:escala_id>/editar', methods=['GET', 'POST'])
 @login_required
 def contabilidade_plantonistas_editar(escala_id):

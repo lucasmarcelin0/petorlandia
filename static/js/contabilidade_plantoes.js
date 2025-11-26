@@ -255,12 +255,64 @@
     });
 
     if (quickForm) {
-      quickForm.addEventListener('submit', () => {
-        if (modeloQuickSelect && !modeloQuickSelect.value) {
-          modeloQuickSelect.name = '';
+      quickForm.addEventListener('submit', async (event) => {
+        const modeloId = modeloQuickSelect ? modeloQuickSelect.value : '';
+        const medicoId = medicoQuickSelect ? medicoQuickSelect.value : '';
+        const shouldQuickCreate = Boolean(modeloId && medicoId);
+
+        if (!shouldQuickCreate) {
+          if (modeloQuickSelect && !modeloQuickSelect.value) {
+            modeloQuickSelect.name = '';
+          }
+          if (medicoQuickSelect && !medicoQuickSelect.value) {
+            medicoQuickSelect.name = '';
+          }
+          return;
         }
-        if (medicoQuickSelect && !medicoQuickSelect.value) {
-          medicoQuickSelect.name = '';
+
+        event.preventDefault();
+        const submitBtn = quickForm.querySelector('button[type="submit"]');
+        const originalText = submitBtn ? submitBtn.innerHTML : '';
+        if (submitBtn) {
+          submitBtn.disabled = true;
+          submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Agendando...';
+        }
+
+        try {
+          const endpoint = quickForm.dataset.plantaoQuickEndpoint || '/contabilidade/pagamentos/plantonistas/quick-create';
+          const payload = {
+            clinica_id: clinicId,
+            modelo_id: Number(modeloId),
+            medico_id: Number(medicoId),
+            dia: dayInput ? dayInput.value : null,
+          };
+
+          const response = await fetch(endpoint, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              ...(quickForm.dataset.plantaoCsrf ? { 'X-CSRFToken': quickForm.dataset.plantaoCsrf } : {}),
+            },
+            body: JSON.stringify(payload),
+          });
+
+          const result = await response.json();
+          if (!response.ok) {
+            throw new Error(result.error || 'Não foi possível criar o plantão.');
+          }
+
+          if (result.redirect) {
+            window.location.href = result.redirect;
+          } else {
+            window.location.reload();
+          }
+        } catch (error) {
+          alert(error.message || 'Erro ao agendar o plantão.');
+        } finally {
+          if (submitBtn) {
+            submitBtn.disabled = false;
+            submitBtn.innerHTML = originalText || 'Agendar direto';
+          }
         }
       });
     }
