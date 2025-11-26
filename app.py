@@ -3775,8 +3775,8 @@ def contabilidade_pagamentos():
                     'is_pj': entry.get('is_pj', False),
                     'clinicas_total': len(entry.get('clinicas', set()) or []),
                     'ocupado_nas_datas': sorted(
-                        date.isoformat() if isinstance(date, date) else str(date)
-                        for date in entry.get('ocupado_nas_datas', set())
+                        day.isoformat() if isinstance(day, date) else str(day)
+                        for day in entry.get('ocupado_nas_datas', set())
                     ),
                     'nf_pendente': entry.get('nf_pendente', False),
                 }
