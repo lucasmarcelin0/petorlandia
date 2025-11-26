@@ -173,20 +173,35 @@
     const placeholder = new Option('Selecione um modelo ou crie manualmente', '');
     selectEl.appendChild(placeholder);
     filtered.forEach((modelo) => {
-      const option = new Option(`${modelo.nome} — ${modelo.duracao_horas}h`, modelo.id);
+      const ownerLabel = modelo.owner_tipo === 'medico' ? 'Modelo do médico' : 'Modelo da clínica';
+      const option = new Option(`${modelo.nome} — ${modelo.duracao_horas}h (${ownerLabel})`, modelo.id);
+      option.dataset.ownerTipo = modelo.owner_tipo || 'clinica';
       selectEl.appendChild(option);
     });
   }
 
-  function renderQuickMedicos(selectEl) {
+  function renderQuickMedicos(selectEl, selectedDay) {
     if (!selectEl) {
       return;
     }
     const medicos = Array.isArray(window.PLANTAO_MEDICOS) ? window.PLANTAO_MEDICOS : [];
     selectEl.innerHTML = '';
     selectEl.appendChild(new Option('Escolha quem irá cobrir o plantão', ''));
-    medicos.forEach(([id, nome]) => {
-      selectEl.appendChild(new Option(nome, id));
+    medicos.forEach((medico) => {
+      const hasConflict = selectedDay && Array.isArray(medico.ocupado_nas_datas)
+        ? medico.ocupado_nas_datas.includes(selectedDay)
+        : false;
+      const badges = [];
+      if (medico.is_pj) badges.push('PJ');
+      if (medico.clinicas_total > 1) badges.push(`${medico.clinicas_total} clínicas`);
+      if (hasConflict) badges.push('Conflito');
+      const label = `${medico.nome}${badges.length ? ' — ' + badges.join(' • ') : ''}`;
+      const option = new Option(label, medico.id);
+      option.dataset.isPj = medico.is_pj ? '1' : '0';
+      option.dataset.clinicasTotal = medico.clinicas_total || 0;
+      option.dataset.hasConflict = hasConflict ? '1' : '0';
+      option.dataset.nfPendente = medico.nf_pendente ? '1' : '0';
+      selectEl.appendChild(option);
     });
   }
 
@@ -200,12 +215,35 @@
     filtered.slice(0, 4).forEach((modelo) => {
       const chip = document.createElement('button');
       chip.type = 'button';
-      chip.className = 'btn btn-outline-secondary btn-sm plantao-quick-chip';
-      chip.textContent = modelo.nome;
+      chip.className = 'btn btn-outline-secondary btn-sm plantao-quick-chip d-flex align-items-center gap-2';
+      const badge = document.createElement('span');
+      badge.className = 'badge bg-light text-secondary border';
+      badge.textContent = modelo.owner_tipo === 'medico' ? 'Médico' : 'Clínica';
+      chip.appendChild(badge);
+      chip.appendChild(document.createTextNode(modelo.nome));
       chip.addEventListener('click', () => {
         targetSelect.value = String(modelo.id);
       });
       container.appendChild(chip);
+    });
+  }
+
+  function renderMedicoChips(container, medico, hasConflict) {
+    if (!container) return;
+    container.innerHTML = '';
+    if (!medico) return;
+
+    const badges = [];
+    if (medico.is_pj) badges.push(['PJ', 'bg-primary']);
+    if ((medico.clinicas_total || 0) > 1) badges.push([`${medico.clinicas_total} clínicas`, 'bg-secondary']);
+    if (hasConflict) badges.push(['Conflito no dia', 'bg-danger']);
+    if (medico.nf_pendente) badges.push(['NF/Retenção pendente', 'bg-warning text-dark']);
+
+    badges.forEach(([label, cls]) => {
+      const span = document.createElement('span');
+      span.className = `badge ${cls}`;
+      span.textContent = label;
+      container.appendChild(span);
     });
   }
 
@@ -218,10 +256,46 @@
     const medicoQuickSelect = modalEl.querySelector('[data-plantao-modal-medico]');
     const chipsContainer = modalEl.querySelector('[data-plantao-modal-chips]');
     const quickOptions = modalEl.querySelectorAll('[data-plantao-quick-option]');
+    const medicoChips = modalEl.querySelector('[data-plantao-medico-chips]');
+    const medicoContext = modalEl.querySelector('[data-plantao-medico-context]');
+    const recorrenciaSelect = modalEl.querySelector('[data-plantao-recorrencia]');
+    const recorrenciaTotal = modalEl.querySelector('[data-plantao-recorrencia-total]');
+    const alertaFinanceiro = modalEl.querySelector('[data-plantao-alertas]');
     const clinicId = window.PLANTAO_DEFAULTS ? window.PLANTAO_DEFAULTS.clinicaId : null;
 
+    const updateMedicoContext = () => {
+      const selectedDay = dayInput ? dayInput.value : null;
+      const selectedMedicoId = medicoQuickSelect ? medicoQuickSelect.value : '';
+      const medicos = Array.isArray(window.PLANTAO_MEDICOS) ? window.PLANTAO_MEDICOS : [];
+      const selectedMedico = medicos.find((medico) => String(medico.id) === String(selectedMedicoId));
+      const hasConflict = selectedDay && selectedMedico && Array.isArray(selectedMedico.ocupado_nas_datas)
+        ? selectedMedico.ocupado_nas_datas.includes(selectedDay)
+        : false;
+      if (medicoContext) {
+        medicoContext.textContent = selectedMedico
+          ? `${selectedMedico.is_pj ? 'PJ' : 'CLT'}${hasConflict ? ' • Conflito' : ''}`
+          : '';
+      }
+      renderMedicoChips(medicoChips, selectedMedico, hasConflict);
+      if (alertaFinanceiro) {
+        const alertaMsg = selectedMedico && selectedMedico.nf_pendente
+          ? 'NF/Retenção pendente para este médico no período escolhido.'
+          : 'Avisamos quando o profissional tem NF ou retenção pendente.';
+        const small = alertaFinanceiro.querySelector('small');
+        if (small) {
+          small.textContent = alertaMsg;
+        }
+      }
+    };
+
+    const refreshMedicos = () => {
+      const selectedDay = dayInput ? dayInput.value : null;
+      renderQuickMedicos(medicoQuickSelect, selectedDay);
+      updateMedicoContext();
+    };
+
     renderQuickModeloOptions(modeloQuickSelect, clinicId);
-    renderQuickMedicos(medicoQuickSelect);
+    refreshMedicos();
     renderQuickChips(chipsContainer, clinicId, modeloQuickSelect);
 
     modalDayButtons.forEach((button) => {
@@ -233,6 +307,7 @@
         if (dayLabel) {
           dayLabel.textContent = formatDayLabel(dia);
         }
+        refreshMedicos();
         modal.show();
       });
     });
@@ -247,11 +322,32 @@
           if (medicoQuickSelect) {
             medicoQuickSelect.value = '';
           }
+          if (recorrenciaSelect) {
+            recorrenciaSelect.value = '';
+          }
+          if (recorrenciaTotal) {
+            recorrenciaTotal.value = '1';
+          }
+          updateMedicoContext();
         }
         if (action === 'modelo' && modeloQuickSelect && modeloQuickSelect.options.length > 1) {
-          modeloQuickSelect.selectedIndex = 1;
+          const medicos = Array.isArray(window.PLANTAO_MEDICOS) ? window.PLANTAO_MEDICOS : [];
+          const selectedMedicoId = medicoQuickSelect ? medicoQuickSelect.value : '';
+          const modelos = Array.isArray(window.PLANTAO_MODELOS) ? window.PLANTAO_MODELOS : [];
+          const suggested = medicos.length
+            ? modelos.find((m) => selectedMedicoId && Number(m.medico_id) === Number(selectedMedicoId))
+            : null;
+          if (suggested) {
+            modeloQuickSelect.value = String(suggested.id);
+          } else {
+            modeloQuickSelect.selectedIndex = 1;
+          }
         }
       });
+    });
+
+    medicoQuickSelect && medicoQuickSelect.addEventListener('change', () => {
+      updateMedicoContext();
     });
 
     if (quickForm) {
@@ -285,6 +381,8 @@
             modelo_id: Number(modeloId),
             medico_id: Number(medicoId),
             dia: dayInput ? dayInput.value : null,
+            recorrencia: recorrenciaSelect ? recorrenciaSelect.value : '',
+            recorrencia_total: recorrenciaTotal ? Number(recorrenciaTotal.value || 1) : 1,
           };
 
           const response = await fetch(endpoint, {

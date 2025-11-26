@@ -3503,7 +3503,7 @@ def contabilidade_pagamentos():
         'custo_previsto': Decimal('0.00'),
         'custo_pago': Decimal('0.00'),
     }
-    plantonista_medicos: list[tuple[str, str]] = []
+    plantonista_medicos: list[dict] = []
     plantao_modelos_serialized: list[dict] = []
     plantonista_calendar: list[dict] = []
     plantonista_calendar_weeks: list[list[Optional[dict]]] = []
@@ -3726,14 +3726,64 @@ def contabilidade_pagamentos():
                 else:
                     raise
 
-        unique_medicos = {}
+        unique_medicos: dict[str, dict] = {}
         for escala in plantonista_escalas:
             plantonista_totals['horas_previstas'] += escala.horas_previstas or Decimal('0.00')
             plantonista_totals['custo_previsto'] += escala.valor_previsto or Decimal('0.00')
             plantonista_totals['custo_pago'] += escala.valor_pago or Decimal('0.00')
             if escala.medico_id and escala.medico_nome:
-                unique_medicos[str(escala.medico_id)] = escala.medico_nome
-        plantonista_medicos = sorted(unique_medicos.items(), key=lambda item: item[1].lower())
+                medico_entry = unique_medicos.setdefault(
+                    str(escala.medico_id),
+                    {
+                        'id': escala.medico_id,
+                        'nome': escala.medico_nome,
+                        'is_pj': False,
+                        'clinicas': set(),
+                        'ocupado_nas_datas': set(),
+                        'nf_pendente': False,
+                    },
+                )
+                medico_entry['nome'] = escala.medico_nome
+                medico_entry['is_pj'] = medico_entry['is_pj'] or bool(escala.medico_cnpj)
+                medico_entry['clinicas'].add(escala.clinic_id)
+                if escala.inicio:
+                    medico_entry['ocupado_nas_datas'].add(escala.inicio.date())
+                if not getattr(escala, 'nota_fiscal_recebida', False) or not getattr(escala, 'retencao_validada', False):
+                    medico_entry['nf_pendente'] = True
+
+        if unique_medicos:
+            try:
+                medicos_db = (
+                    Veterinario.query.options(selectinload(Veterinario.clinicas))
+                    .filter(Veterinario.id.in_([int(mid) for mid in unique_medicos.keys()]))
+                    .all()
+                )
+                for medico in medicos_db:
+                    if medico and str(medico.id) in unique_medicos:
+                        entry = unique_medicos[str(medico.id)]
+                        entry['clinicas'] = set(entry.get('clinicas', set()) or [])
+                        for clinica in getattr(medico, 'clinicas', []) or []:
+                            entry['clinicas'].add(clinica.id)
+            except Exception:
+                current_app.logger.exception('Falha ao enriquecer dados dos médicos de plantão')
+
+        plantonista_medicos = sorted(
+            [
+                {
+                    'id': int(entry['id']),
+                    'nome': entry['nome'],
+                    'is_pj': entry.get('is_pj', False),
+                    'clinicas_total': len(entry.get('clinicas', set()) or []),
+                    'ocupado_nas_datas': sorted(
+                        date.isoformat() if isinstance(date, date) else str(date)
+                        for date in entry.get('ocupado_nas_datas', set())
+                    ),
+                    'nf_pendente': entry.get('nf_pendente', False),
+                }
+                for entry in unique_medicos.values()
+            ],
+            key=lambda item: item['nome'].lower(),
+        )
 
         day_cursor = start_date
         while day_cursor < end_date:
@@ -3877,6 +3927,7 @@ def _serialize_plantao_modelo(modelo: PlantaoModelo) -> dict:
         'medico_id': modelo.medico_id,
         'medico_nome': modelo.medico_nome,
         'medico_cnpj': modelo.medico_cnpj,
+        'owner_tipo': 'medico' if modelo.medico_id else 'clinica',
     }
 
 
@@ -4473,6 +4524,10 @@ def contabilidade_plantonistas_quick_create():
     modelo_id = _parse_int(data.get('modelo_id') if hasattr(data, 'get') else None)
     dia_value = data.get('dia') if hasattr(data, 'get') else None
     medico_id = _parse_int(data.get('medico_id') if hasattr(data, 'get') else None)
+    recorrencia = (data.get('recorrencia') if hasattr(data, 'get') else '') or ''
+    recorrencia_total = _parse_int(data.get('recorrencia_total') if hasattr(data, 'get') else None) or 1
+
+    recorrencia_total = max(1, min(recorrencia_total, 12))
 
     if not clinic_id:
         return jsonify({'error': 'Clínica não informada.'}), 400
@@ -4493,11 +4548,25 @@ def contabilidade_plantonistas_quick_create():
     if not modelo.hora_inicio:
         return jsonify({'error': 'O modelo selecionado não possui horário de início.'}), 400
 
-    inicio = datetime.combine(dia, modelo.hora_inicio)
-    fim = inicio + timedelta(hours=float(modelo.duracao_horas or 0))
-    horas_previstas = _compute_plantao_horas(inicio, fim)
-    if not horas_previstas:
-        return jsonify({'error': 'Não foi possível calcular a duração do plantão.'}), 400
+    datas_agendar: list[date] = [dia]
+    if recorrencia.lower() in {'semanal', 'mensal', 'quinzenal'}:
+        next_date = dia
+        for _ in range(recorrencia_total - 1):
+            if recorrencia.lower() == 'semanal':
+                next_date = next_date + timedelta(weeks=1)
+            elif recorrencia.lower() == 'quinzenal':
+                next_date = next_date + timedelta(days=14)
+            else:
+                next_date = next_date + relativedelta(months=1)
+            datas_agendar.append(next_date)
+
+    escalas_criadas = []
+    for data_agenda in datas_agendar:
+        inicio = datetime.combine(data_agenda, modelo.hora_inicio)
+        fim = inicio + timedelta(hours=float(modelo.duracao_horas or 0))
+        horas_previstas = _compute_plantao_horas(inicio, fim)
+        if not horas_previstas:
+            continue
 
     medico_nome = (modelo.medico_nome or '').strip()
     medico_cnpj = (modelo.medico_cnpj or '').strip() or None
@@ -4515,22 +4584,27 @@ def contabilidade_plantonistas_quick_create():
     if not medico_nome:
         return jsonify({'error': 'Defina o profissional responsável pelo plantão.'}), 400
 
-    escala = PlantonistaEscala(
-        clinic_id=clinic_id,
-        medico_id=medico_db_id,
-        medico_nome=medico_nome,
-        medico_cnpj=medico_cnpj,
-        turno=modelo.nome,
-        inicio=inicio,
-        fim=fim,
-        plantao_horas=horas_previstas,
-        valor_previsto=Decimal('0.00'),
-        status='agendado',
-        nota_fiscal_recebida=False,
-        retencao_validada=False,
-    )
+        escala = PlantonistaEscala(
+            clinic_id=clinic_id,
+            medico_id=medico_db_id,
+            medico_nome=medico_nome,
+            medico_cnpj=medico_cnpj,
+            turno=modelo.nome,
+            inicio=inicio,
+            fim=fim,
+            plantao_horas=horas_previstas,
+            valor_previsto=Decimal('0.00'),
+            status='agendado',
+            nota_fiscal_recebida=False,
+            retencao_validada=False,
+        )
 
-    db.session.add(escala)
+        db.session.add(escala)
+        escalas_criadas.append(escala)
+
+    if not escalas_criadas:
+        return jsonify({'error': 'Nenhum plantão pôde ser criado a partir do modelo.'}), 400
+
     db.session.commit()
 
     redirect_url = url_for(
@@ -4542,6 +4616,7 @@ def contabilidade_plantonistas_quick_create():
 
     return jsonify({
         'message': 'Plantão agendado com o modelo selecionado.',
+        'total_criado': len(escalas_criadas),
         'redirect': redirect_url,
     })
 

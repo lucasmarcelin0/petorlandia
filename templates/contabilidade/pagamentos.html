@@ -451,8 +451,8 @@
             <div class="d-flex flex-wrap gap-2">
               <select class="form-select form-select-sm" data-plantao-filter>
                 <option value="">Todos os médicos</option>
-                {% for medico_id, nome in plantonista_medicos %}
-                  <option value="{{ medico_id }}">{{ nome }}</option>
+                {% for medico in plantonista_medicos %}
+                  <option value="{{ medico.id }}">{{ medico.nome }}</option>
                 {% endfor %}
               </select>
               <select class="form-select form-select-sm" data-plantao-sort>
@@ -698,12 +698,21 @@
               <option value="">Selecione um modelo ou crie manualmente</option>
             </select>
             <div class="form-text">Aplicamos automaticamente turno, horários e médico quando o modelo é escolhido.</div>
+            <div class="mt-2 small text-muted d-flex align-items-center gap-2">
+              <span class="badge bg-light text-secondary border">Modelo da clínica</span>
+              <span class="badge bg-light text-secondary border">Modelo do médico (PJ)</span>
+              <span>Use rótulos para saber quem é dono do modelo.</span>
+            </div>
           </div>
           <div class="col-md-7">
-            <label class="form-label fw-semibold">Funcionários da clínica</label>
+            <label class="form-label fw-semibold d-flex justify-content-between align-items-center">
+              <span>Funcionários da clínica</span>
+              <span class="small text-muted" data-plantao-medico-context></span>
+            </label>
             <select class="form-select" name="medico_id" data-plantao-modal-medico>
               <option value="">Escolha quem irá cobrir o plantão</option>
             </select>
+            <div class="d-flex flex-wrap gap-2 mt-2" data-plantao-medico-chips></div>
           </div>
           <div class="col-md-5">
             <label class="form-label fw-semibold">Opções rápidas</label>
@@ -718,13 +727,43 @@
                 <i class="fas fa-eraser me-1"></i>Limpar seleção
               </button>
             </div>
+            <div class="form-text mt-2">Atalhos para limpar, aplicar sugestão ou reaproveitar a data selecionada.</div>
+          </div>
+          <div class="col-md-7">
+            <label class="form-label fw-semibold d-flex align-items-center gap-2">Recorrência do modelo <span class="badge bg-info text-dark">Novo</span></label>
+            <div class="row g-2">
+              <div class="col-7">
+                <select class="form-select" name="recorrencia" data-plantao-recorrencia>
+                  <option value="">Único plantão</option>
+                  <option value="semanal">Semanal</option>
+                  <option value="quinzenal">Quinzenal</option>
+                  <option value="mensal">Mensal</option>
+                </select>
+              </div>
+              <div class="col-5">
+                <input type="number" min="1" max="12" step="1" class="form-control" name="recorrencia_total" data-plantao-recorrencia-total value="1" placeholder="Ocorrências">
+              </div>
+            </div>
+            <div class="form-text">Crie séries de plantões recorrentes para PJ que cobrem datas fixas.</div>
+          </div>
+          <div class="col-md-5">
+            <label class="form-label fw-semibold">Alertas financeiros</label>
+            <div class="alert alert-warning py-2 px-3 mb-2" data-plantao-alertas>
+              <div class="d-flex align-items-center gap-2">
+                <i class="fas fa-receipt"></i>
+                <div>
+                  <div class="fw-semibold">Notas e retenções</div>
+                  <small class="text-muted">Avisamos quando o médico possui NF pendente no dia escolhido.</small>
+                </div>
+              </div>
+            </div>
           </div>
           <div class="col-12">
             <div class="alert alert-info d-flex align-items-center mb-0">
               <i class="fas fa-bolt me-2"></i>
               <div>
                 <div class="fw-semibold">Agende sem sair do calendário</div>
-                <small>Escolha um modelo salvo ou um funcionário e iremos abrir o formulário já preenchido.</small>
+                <small>Escolha um modelo salvo ou um funcionário e iremos abrir o formulário já preenchido. Modelos recorrentes geram várias datas de uma só vez.</small>
               </div>
             </div>
           </div>
