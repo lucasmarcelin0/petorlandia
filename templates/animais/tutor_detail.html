@@ -680,9 +680,16 @@ document.addEventListener('form-sync-success', function(ev) {
 
   if (form.id === 'tutor-form') {
     ev.preventDefault();
+    const successMessage = (data && data.message) || 'Dados do tutor atualizados com sucesso!';
     if (window.FormFeedback && typeof window.FormFeedback.showStatus === 'function') {
-      const successMessage = (data && data.message) || 'Dados do tutor atualizados com sucesso!';
       window.FormFeedback.showStatus(form, successMessage, 'success');
+    } else {
+      const statusEl = form.querySelector('.form-status-message');
+      if (statusEl) {
+        statusEl.textContent = successMessage;
+        statusEl.classList.remove('d-none');
+        statusEl.classList.add('alert', 'alert-success');
+      }
     }
 
     const tutorPayload = data && data.tutor;
