@@ -244,6 +244,47 @@
     bootstrap.Toast.getOrCreateInstance(toastEl).show();
   }
 
+  function clearFieldErrors(form){
+    if(!form) return;
+    form.querySelectorAll('.is-invalid').forEach(input => {
+      input.classList.remove('is-invalid');
+      input.removeAttribute('aria-invalid');
+      if(typeof input.setCustomValidity === 'function'){
+        input.setCustomValidity('');
+      }
+    });
+  }
+
+  function applyFieldErrors(form, errors){
+    if(!form || !errors || typeof errors !== 'object') return;
+    Object.entries(errors).forEach(([field, messages]) => {
+      const input = form.querySelector(`[name="${field}"]`);
+      if(!input) return;
+      const message = Array.isArray(messages) ? messages.join(' ') : String(messages || 'Campo inválido.');
+      input.classList.add('is-invalid');
+      input.setAttribute('aria-invalid', 'true');
+      if(typeof input.setCustomValidity === 'function'){
+        input.setCustomValidity(message);
+      }
+      let feedback = input.closest('.form-group, .mb-3, .form-floating')?.querySelector('.invalid-feedback');
+      if(!feedback){
+        feedback = document.createElement('div');
+        feedback.className = 'invalid-feedback';
+        input.insertAdjacentElement('afterend', feedback);
+      }
+      feedback.textContent = message;
+    });
+  }
+
+  function showFormStatusMessage(form, message, category){
+    if(window.FormFeedback && typeof window.FormFeedback.showStatus === 'function'){
+      window.FormFeedback.showStatus(form, message, category);
+    }
+    if(message){
+      showToast(message, category);
+    }
+  }
+
   document.addEventListener('submit', async ev => {
     if (ev.defaultPrevented) return;
     const form = ev.target;
@@ -280,15 +321,19 @@
 
     if (!resp) {
       setButtonIdle(submitButton);
-      showToast('Formulário salvo para sincronização quando voltar a ficar online.', 'info');
+      showFormStatusMessage(form, 'Formulário salvo para sincronização quando voltar a ficar online.', 'info');
       return;
     }
 
     let json = null;
     try { json = await resp.json(); } catch(e) {}
+    clearFieldErrors(form);
+    const isSuccess = resp.ok && !(json && json.success === false);
+    const hasValidationErrors = Boolean(json && json.errors);
+
     if (json && json.message) {
       const category = json.category || (json.success === false || !resp.ok ? 'danger' : 'success');
-      showToast(json.message, category);
+      showFormStatusMessage(form, json.message, category);
     }
     if (json && Array.isArray(json.messages)) {
       json.messages.forEach(entry => {
@@ -300,15 +345,73 @@
         }
       });
     }
-    const isSuccess = resp.ok && !(json && json.success === false);
+
+    if (hasValidationErrors) {
+      setButtonIdle(submitButton);
+      applyFieldErrors(form, json.errors);
+      if (!json || !json.message) {
+        showFormStatusMessage(form, 'Verifique os dados e tente novamente.', 'danger');
+      }
+      return;
+    }
+
     if (isSuccess) {
       setButtonSuccess(submitButton);
     } else {
       setButtonIdle(submitButton);
     }
-    const evt = new CustomEvent('form-sync-success', {detail: {form, data: json, response: resp}, cancelable: true});
+
+    const evt = new CustomEvent('form-sync-success', {detail: {form, data: json, response: resp, success: isSuccess}, cancelable: true});
     document.dispatchEvent(evt);
-    if (!evt.defaultPrevented) {
+
+    let handledReload = false;
+
+    if (isSuccess && form.classList.contains('js-animal-form')) {
+      handledReload = true;
+      if (json && json.html) {
+        const cont = document.getElementById('animais-adicionados');
+        if (cont) {
+          cont.innerHTML = json.html;
+        }
+      }
+      const tableBody = document.querySelector('#animals-table tbody');
+      if (tableBody) {
+        updateAnimalsEmptyState(tableBody);
+      }
+      form.reset();
+      setButtonIdle(submitButton);
+    }
+
+    if (isSuccess && form.classList.contains('animal-update-form')) {
+      handledReload = true;
+      const animalId = form.dataset.animalId || (json && json.animal && json.animal.id);
+      const rowId = animalId ? `animal-row-${animalId}` : null;
+      if (rowId) {
+        const row = document.getElementById(rowId);
+        if (row) {
+          const nameCell = row.querySelector('.animal-name');
+          const speciesCell = row.querySelector('.animal-species');
+          const sexCell = row.querySelector('.animal-sex');
+          if (nameCell && json && json.animal && json.animal.name) {
+            nameCell.textContent = json.animal.name;
+          }
+          if (speciesCell && json && json.animal) {
+            const speciesText = json.animal.species || '';
+            const breedText = json.animal.breed || '';
+            speciesCell.textContent = `${speciesText}${breedText ? ' / ' + breedText : ''}`;
+          }
+          if (sexCell && json && json.animal) {
+            sexCell.textContent = json.animal.sex || '—';
+          }
+        }
+      }
+      const tableBody = document.querySelector('#animals-table tbody');
+      if (tableBody) {
+        updateAnimalsEmptyState(tableBody);
+      }
+    }
+
+    if (isSuccess && !evt.defaultPrevented && !handledReload) {
       location.reload();
     }
   });

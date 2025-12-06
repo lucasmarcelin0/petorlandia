@@ -10443,14 +10443,10 @@ def ficha_tutor(tutor_id):
 def update_animal(animal_id):
     animal = get_animal_or_404(animal_id)
 
-    wants_json = 'application/json' in request.headers.get('Accept', '')
-    queued_messages = [] if wants_json else None
-
-    def queue_message(text, category='info'):
-        if wants_json:
-            queued_messages.append({'message': text, 'category': category})
-        else:
-            flash(text, category)
+    wants_json = (
+        request.headers.get('X-Requested-With') == 'XMLHttpRequest'
+        or 'application/json' in request.headers.get('Accept', '')
+    )
 
     if not is_veterinarian(current_user):
         message = 'Apenas veterinários podem editar dados do animal.'
@@ -10459,73 +10455,103 @@ def update_animal(animal_id):
         flash(message, 'danger')
         return redirect(request.referrer or url_for('index'))
 
+    errors = {}
+
     # Campos básicos
-    animal.name = request.form.get('name')
-    animal.sex = request.form.get('sex')
-    animal.description = request.form.get('description') or ''
-    animal.microchip_number = request.form.get('microchip_number')
-    animal.health_plan = request.form.get('health_plan')
-    animal.neutered = request.form.get('neutered') == '1'
+    name = (request.form.get('name') or '').strip()
+    if not name:
+        errors['name'] = ['O nome é obrigatório.']
+    sex = request.form.get('sex')
+    description = request.form.get('description') or ''
+    microchip_number = request.form.get('microchip_number')
+    health_plan = request.form.get('health_plan')
+    neutered = request.form.get('neutered') == '1'
 
     # Espécie (relacional)
-    species_id = request.form.get('species_id')
-    if species_id:
+    species_obj = None
+    species_id_raw = request.form.get('species_id')
+    if species_id_raw:
         try:
-            animal.species_id = int(species_id)
+            species_obj = Species.query.get(int(species_id_raw))
+            if not species_obj:
+                errors['species_id'] = ['Espécie não encontrada.']
         except ValueError:
-            queue_message('ID de espécie inválido.', 'warning')
+            errors['species_id'] = ['ID de espécie inválido.']
 
     # Raça (relacional)
-    breed_id = request.form.get('breed_id')
-    if breed_id:
+    breed_obj = None
+    breed_id_raw = request.form.get('breed_id')
+    if breed_id_raw:
         try:
-            animal.breed_id = int(breed_id)
+            breed_obj = Breed.query.get(int(breed_id_raw))
+            if not breed_obj:
+                errors['breed_id'] = ['Raça não encontrada.']
         except ValueError:
-            queue_message('ID de raça inválido.', 'warning')
+            errors['breed_id'] = ['ID de raça inválido.']
 
     # Peso
     peso_valor = request.form.get('peso')
+    peso = None
     if peso_valor:
         try:
-            animal.peso = float(peso_valor)
+            peso = float(peso_valor)
         except ValueError:
-            queue_message('Peso inválido. Deve ser um número.', 'warning')
-    else:
-        animal.peso = None
+            errors['peso'] = ['Peso inválido. Deve ser um número.']
 
     # Data de nascimento ou idade
     dob_str = request.form.get('date_of_birth')
     age_input = request.form.get('age')
     age_unit_input = request.form.get('age_unit')
     idade_numero = None
+    date_of_birth = animal.date_of_birth
     if dob_str:
         try:
-            animal.date_of_birth = datetime.strptime(dob_str, '%Y-%m-%d').date()
+            date_of_birth = datetime.strptime(dob_str, '%Y-%m-%d').date()
         except ValueError:
-            queue_message('Data de nascimento inválida.', 'warning')
+            errors['date_of_birth'] = ['Data de nascimento inválida.']
     elif age_input:
         try:
             idade_numero = int(age_input)
             unidade_norm = _normalizar_unidade_idade(age_unit_input)
             if unidade_norm == 'meses':
-                animal.date_of_birth = date.today() - relativedelta(months=idade_numero)
+                date_of_birth = date.today() - relativedelta(months=idade_numero)
             else:
-                animal.date_of_birth = date.today() - relativedelta(years=idade_numero)
+                date_of_birth = date.today() - relativedelta(years=idade_numero)
         except ValueError:
-            queue_message('Idade inválida. Deve ser um número inteiro.', 'warning')
+            errors['age'] = ['Idade inválida. Deve ser um número inteiro.']
 
-    if animal.date_of_birth:
-        delta = relativedelta(date.today(), animal.date_of_birth)
+    age_value = animal.age
+    if date_of_birth:
+        delta = relativedelta(date.today(), date_of_birth)
         if delta.years > 0:
-            animal.age = _formatar_idade(delta.years, 'anos')
+            age_value = _formatar_idade(delta.years, 'anos')
         else:
-            animal.age = _formatar_idade(delta.months, 'meses')
+            age_value = _formatar_idade(delta.months, 'meses')
     elif idade_numero is not None:
-        animal.age = _formatar_idade(idade_numero, age_unit_input)
+        age_value = _formatar_idade(idade_numero, age_unit_input)
     elif age_input:
-        animal.age = age_input
-    else:
-        animal.age = None
+        age_value = age_input
+
+    if errors:
+        message = 'Corrija os dados e tente novamente.'
+        if wants_json:
+            return jsonify(success=False, message=message, category='danger', errors=errors), 400
+        flash(message, 'danger')
+        return redirect(request.referrer or url_for('index'))
+
+    animal.name = name
+    animal.sex = sex
+    animal.description = description
+    animal.microchip_number = microchip_number
+    animal.health_plan = health_plan
+    animal.neutered = neutered
+    animal.peso = peso
+    animal.date_of_birth = date_of_birth
+    animal.age = age_value
+    if species_obj:
+        animal.species_id = species_obj.id
+    if breed_obj:
+        animal.breed_id = breed_obj.id
 
     # Upload de imagem
     if 'image' in request.files and request.files['image'].filename != '':
@@ -10564,10 +10590,18 @@ def update_animal(animal_id):
 
     message = 'Dados do animal atualizados com sucesso!'
     if wants_json:
-        payload = dict(success=True, message=message, animal_name=animal.name, category='success')
-        if queued_messages:
-            payload['messages'] = queued_messages
-        return jsonify(payload)
+        return jsonify(
+            success=True,
+            message=message,
+            category='success',
+            animal={
+                'id': animal.id,
+                'name': animal.name,
+                'species': animal.species.name if animal.species else '',
+                'breed': animal.breed.name if animal.breed else '',
+                'sex': animal.sex or '',
+            },
+        )
     flash(message, 'success')
     return redirect(request.referrer or url_for('index'))
 
@@ -12042,9 +12076,16 @@ def novo_animal():
     current_user_id = getattr(current_user, 'id', None)
 
     if request.method == 'POST':
+        prefers_json = request.headers.get('X-Requested-With') == 'XMLHttpRequest' or (
+            request.accept_mimetypes['application/json'] > request.accept_mimetypes['text/html']
+        )
         tutor_id = request.form.get('tutor_id', type=int)
         tutor = get_user_or_404(tutor_id)
+        errors = {}
+
         nome_animal = (request.form.get('name') or '').strip()
+        if not nome_animal:
+            errors['name'] = ['O nome do animal é obrigatório.']
 
         dob_str = request.form.get('date_of_birth')
         dob = None
@@ -12054,8 +12095,7 @@ def novo_animal():
             try:
                 dob = datetime.strptime(dob_str, '%Y-%m-%d').date()
             except ValueError:
-                flash('Data de nascimento inválida. Use AAAA‑MM‑DD.', 'warning')
-                return redirect(url_for('ficha_tutor', tutor_id=tutor.id))
+                errors['date_of_birth'] = ['Data de nascimento inválida. Use AAAA‑MM‑DD.']
         else:
             age_input = request.form.get('age')
             if age_input:
@@ -12067,8 +12107,7 @@ def novo_animal():
                     else:
                         dob = date.today() - relativedelta(years=idade_numero)
                 except ValueError:
-                    flash('Idade inválida. Deve ser um número inteiro.', 'warning')
-                    return redirect(url_for('ficha_tutor', tutor_id=tutor.id))
+                    errors['age'] = ['Idade inválida. Deve ser um número inteiro.']
 
         idade_registrada = None
         if dob:
@@ -12081,7 +12120,12 @@ def novo_animal():
             idade_registrada = _formatar_idade(idade_numero, age_unit_input)
 
         peso_str = request.form.get('peso')
-        peso = float(peso_str) if peso_str else None
+        peso = None
+        if peso_str:
+            try:
+                peso = float(peso_str)
+            except ValueError:
+                errors['peso'] = ['Peso inválido. Informe apenas números.']
 
         neutered_val = request.form.get('neutered')
         neutered = True if neutered_val == '1' else False if neutered_val == '0' else None
@@ -12129,19 +12173,26 @@ def novo_animal():
 
         if existing_animal:
             message = 'Já existe um animal com os mesmos dados para este tutor recentemente cadastrado.'
-            flash(message, 'warning')
-            if request.headers.get('X-Requested-With') == 'XMLHttpRequest' or (
-                request.accept_mimetypes['application/json'] > request.accept_mimetypes['text/html']
-            ):
+            if prefers_json:
                 return (
                     jsonify(
+                        success=False,
                         message=message,
                         category='warning',
+                        errors={'name': [message]},
                         redirect=url_for('ficha_animal', animal_id=existing_animal.id),
                     ),
                     409,
                 )
+            flash(message, 'warning')
             return redirect(url_for('ficha_animal', animal_id=existing_animal.id))
+
+        if errors:
+            message = 'Corrija os dados do animal antes de continuar.'
+            if prefers_json:
+                return jsonify(success=False, message=message, category='danger', errors=errors), 400
+            flash(message, 'danger')
+            return redirect(url_for('ficha_tutor', tutor_id=tutor.id))
 
         # Criação do animal
         animal = Animal(
@@ -12176,15 +12227,7 @@ def novo_animal():
         db.session.add(consulta)
         db.session.commit()
 
-        # Retorna conteúdo em JSON apenas quando o cliente realmente
-        # priorizar "application/json" ou quando for uma requisição AJAX.
-        prefers_json = (
-            request.accept_mimetypes['application/json'] >
-            request.accept_mimetypes['text/html']
-        )
-        is_ajax = request.headers.get('X-Requested-With') == 'XMLHttpRequest'
-
-        if prefers_json or is_ajax:
+        if prefers_json:
             scope_param = request.args.get('scope', 'all')
             page = request.args.get('page', 1, type=int)
             animal_search = (request.args.get('animal_search', '', type=str) or '').strip()
@@ -12214,9 +12257,17 @@ def novo_animal():
                 new_animal_url=url_for('novo_animal'),
             )
             return jsonify(
+                success=True,
                 message='Animal cadastrado com sucesso!',
                 category='success',
-                html=html
+                html=html,
+                animal={
+                    'id': animal.id,
+                    'name': animal.name,
+                    'species': species_obj.name if species_obj else '',
+                    'breed': breed_obj.name if breed_obj else '',
+                    'sex': animal.sex or '',
+                },
             )
 
         flash('Animal cadastrado com sucesso!', 'success')
