@@ -8,27 +8,29 @@
         <div class="card shadow-sm p-4 rounded-4 mt-5 mb-4 card-surface-muted">
             <h5 class="mb-4">Bem-vindo(a)! O que você deseja fazer hoje?</h5>
 
-            <div class="row justify-content-center g-4">
+            <div class="row row-cols-1 row-cols-sm-2 row-cols-lg-4 justify-content-center g-4">
                 <!-- Lottie: Add Animal -->
-                <div class="col-md-3">
+                <div class="col">
                     <div class="lottie-wrapper">
                         <lottie-player src="https://assets5.lottiefiles.com/packages/lf20_ghs9bthn.json"
                                        background="transparent" speed="1" class="lottie-cta" loop autoplay></lottie-player>
                         <img src="{{ url_for('static', filename='icons/add-animal.svg') }}" alt="Ilustração de adicionar animal" class="lottie-fallback d-none">
                     </div>
-                    <a href="{{ url_for('add_animal') }}" class="btn btn-outline-success rounded-pill shadow-sm px-4 py-2"
+                    <p class="mt-2 mb-3 text-muted small">Cadastre rapidamente um novo pet no sistema.</p>
+                    <a href="{{ url_for('add_animal') }}" class="btn btn-success rounded-pill shadow-sm px-4 py-2"
                        data-bs-toggle="tooltip" title="Cadastre um novo animal na plataforma.">
                         ➕ Cadastrar novo animal
                     </a>
                 </div>
 
                 <!-- Lottie: List Animals -->
-                <div class="col-md-3">
+                <div class="col">
                     <div class="lottie-wrapper">
                         <lottie-player src="https://assets4.lottiefiles.com/packages/lf20_qp1q7mct.json"
                                        background="transparent" speed="1" class="lottie-cta" loop autoplay></lottie-player>
                         <img src="{{ url_for('static', filename='icons/list-animals.svg') }}" alt="Ilustração de listagem de animais" class="lottie-fallback d-none">
                     </div>
+                    <p class="mt-2 mb-3 text-muted small">Visualize todos os animais já cadastrados.</p>
                     <a href="{{ url_for('list_animals') }}" class="btn btn-outline-primary rounded-pill shadow-sm px-4 py-2"
                        data-bs-toggle="tooltip" title="Veja todos os animais disponíveis.">
                         📋 Ver todos os animais
@@ -36,12 +38,13 @@
                 </div>
 
                 <!-- Lottie: Health -->
-                <div class="col-md-3">
+                <div class="col">
                     <div class="lottie-wrapper">
                         <lottie-player src="https://assets10.lottiefiles.com/packages/lf20_ksixj2kx.json"
                                        background="transparent" speed="1" class="lottie-cta" loop autoplay></lottie-player>
                         <img src="{{ url_for('static', filename='icons/health-plan.svg') }}" alt="Ilustração do plano de saúde" class="lottie-fallback d-none">
                     </div>
+                    <p class="mt-2 mb-3 text-muted small">Conheça e gerencie o plano de saúde pet.</p>
                     <a href="{{ url_for('plano_saude_overview') }}" class="btn btn-outline-info rounded-pill shadow-sm px-4 py-2"
                        data-bs-toggle="tooltip" title="Conheça nosso plano de saúde para pets.">
                         ❤️ Plano de Saúde Pet
@@ -49,14 +52,15 @@
                 </div>
 
                 <!-- Lottie: Store -->
-                <div class="col-md-3">
+                <div class="col">
                     <div class="lottie-wrapper">
                         <lottie-player src="https://assets10.lottiefiles.com/packages/lf20_sGqAqL.json"
                                        background="transparent" speed="1" class="lottie-cta" loop autoplay></lottie-player>
                         <img src="{{ url_for('static', filename='icons/store.svg') }}" alt="Ilustração da loja pet" class="lottie-fallback d-none">
                     </div>
+                    <p class="mt-2 mb-3 text-muted small">Compre produtos e serviços essenciais para o pet.</p>
                     <a href="{{ url_for('loja') }}"
-                       class="btn rounded-pill shadow-sm loja-pet-filled px-4 py-2"
+                       class="btn btn-outline-warning rounded-pill shadow-sm px-4 py-2"
                        data-bs-toggle="tooltip"
                        title="Acesse nossa loja para encontrar tudo que seu pet precisa.">
                        🛍️ Loja Pet
