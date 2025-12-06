@@ -11,8 +11,11 @@
             <div class="row justify-content-center g-4">
                 <!-- Lottie: Add Animal -->
                 <div class="col-md-3">
-                    <lottie-player src="https://assets5.lottiefiles.com/packages/lf20_ghs9bthn.json"
-                                   background="transparent" speed="1" class="lottie-cta" loop autoplay></lottie-player>
+                    <div class="lottie-wrapper">
+                        <lottie-player src="https://assets5.lottiefiles.com/packages/lf20_ghs9bthn.json"
+                                       background="transparent" speed="1" class="lottie-cta" loop autoplay></lottie-player>
+                        <img src="{{ url_for('static', filename='icons/add-animal.svg') }}" alt="Ilustração de adicionar animal" class="lottie-fallback d-none">
+                    </div>
                     <a href="{{ url_for('add_animal') }}" class="btn btn-outline-success rounded-pill shadow-sm px-4 py-2"
                        data-bs-toggle="tooltip" title="Cadastre um novo animal na plataforma.">
                         ➕ Cadastrar novo animal
@@ -21,8 +24,11 @@
 
                 <!-- Lottie: List Animals -->
                 <div class="col-md-3">
-                    <lottie-player src="https://assets4.lottiefiles.com/packages/lf20_qp1q7mct.json"
-                                   background="transparent" speed="1" class="lottie-cta" loop autoplay></lottie-player>
+                    <div class="lottie-wrapper">
+                        <lottie-player src="https://assets4.lottiefiles.com/packages/lf20_qp1q7mct.json"
+                                       background="transparent" speed="1" class="lottie-cta" loop autoplay></lottie-player>
+                        <img src="{{ url_for('static', filename='icons/list-animals.svg') }}" alt="Ilustração de listagem de animais" class="lottie-fallback d-none">
+                    </div>
                     <a href="{{ url_for('list_animals') }}" class="btn btn-outline-primary rounded-pill shadow-sm px-4 py-2"
                        data-bs-toggle="tooltip" title="Veja todos os animais disponíveis.">
                         📋 Ver todos os animais
@@ -31,8 +37,11 @@
 
                 <!-- Lottie: Health -->
                 <div class="col-md-3">
-                    <lottie-player src="https://assets10.lottiefiles.com/packages/lf20_ksixj2kx.json"
-                                   background="transparent" speed="1" class="lottie-cta" loop autoplay></lottie-player>
+                    <div class="lottie-wrapper">
+                        <lottie-player src="https://assets10.lottiefiles.com/packages/lf20_ksixj2kx.json"
+                                       background="transparent" speed="1" class="lottie-cta" loop autoplay></lottie-player>
+                        <img src="{{ url_for('static', filename='icons/health-plan.svg') }}" alt="Ilustração do plano de saúde" class="lottie-fallback d-none">
+                    </div>
                     <a href="{{ url_for('plano_saude_overview') }}" class="btn btn-outline-info rounded-pill shadow-sm px-4 py-2"
                        data-bs-toggle="tooltip" title="Conheça nosso plano de saúde para pets.">
                         ❤️ Plano de Saúde Pet
@@ -41,14 +50,17 @@
 
                 <!-- Lottie: Store -->
                 <div class="col-md-3">
-                    <lottie-player src="https://assets10.lottiefiles.com/packages/lf20_sGqAqL.json"
-                                   background="transparent" speed="1" class="lottie-cta" loop autoplay></lottie-player>
-                                   <a href="{{ url_for('loja') }}"
-                                   class="btn rounded-pill shadow-sm loja-pet-filled px-4 py-2"
-                                   data-bs-toggle="tooltip"
-                                   title="Acesse nossa loja para encontrar tudo que seu pet precisa.">
-                                   🛍️ Loja Pet
-                                </a>
+                    <div class="lottie-wrapper">
+                        <lottie-player src="https://assets10.lottiefiles.com/packages/lf20_sGqAqL.json"
+                                       background="transparent" speed="1" class="lottie-cta" loop autoplay></lottie-player>
+                        <img src="{{ url_for('static', filename='icons/store.svg') }}" alt="Ilustração da loja pet" class="lottie-fallback d-none">
+                    </div>
+                    <a href="{{ url_for('loja') }}"
+                       class="btn rounded-pill shadow-sm loja-pet-filled px-4 py-2"
+                       data-bs-toggle="tooltip"
+                       title="Acesse nossa loja para encontrar tudo que seu pet precisa.">
+                       🛍️ Loja Pet
+                    </a>
 
 
                 </div>
@@ -141,4 +153,50 @@
         </div>
     {% endif %}
 </div>
+{% endblock %}
+
+{% block scripts %}
+{{ super() }}
+<script>
+    document.addEventListener('DOMContentLoaded', () => {
+        document.querySelectorAll('.lottie-wrapper').forEach((wrapper) => {
+            const player = wrapper.querySelector('lottie-player');
+            const fallback = wrapper.querySelector('.lottie-fallback');
+
+            if (!player || !fallback) {
+                return;
+            }
+
+            const showFallback = () => {
+                fallback.classList.remove('d-none');
+                player.classList.add('d-none');
+            };
+
+            const showPlayer = () => {
+                fallback.classList.add('d-none');
+                player.classList.remove('d-none');
+            };
+
+            let isReady = false;
+
+            const markReady = () => {
+                isReady = true;
+                showPlayer();
+            };
+
+            player.addEventListener('load', markReady);
+            player.addEventListener('ready', markReady);
+            player.addEventListener('error', () => {
+                isReady = false;
+                showFallback();
+            });
+
+            setTimeout(() => {
+                if (!isReady) {
+                    showFallback();
+                }
+            }, 4000);
+        });
+    });
+</script>
 {% endblock %}

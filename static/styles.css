@@ -201,6 +201,31 @@
   color: currentColor;
 }
 
+/* CTA Lottie wrappers with static fallbacks */
+.lottie-wrapper {
+  min-height: 200px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 0.75rem;
+}
+
+.lottie-cta {
+  width: 100%;
+  max-width: 180px;
+  height: 180px;
+  margin: 0 auto;
+}
+
+.lottie-fallback {
+  width: 100%;
+  max-width: 180px;
+  height: 180px;
+  display: block;
+  object-fit: contain;
+  margin: 0 auto;
+}
+
 .schedule-action-btn.btn-sm,
 .schedule-action-btn.schedule-action-btn--sm,
 .btn-group-sm > .schedule-action-btn {
