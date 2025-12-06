@@ -265,33 +265,8 @@ function buscarCep(trigger) {
 
 // Validação melhorada
 document.addEventListener("DOMContentLoaded", function() {
-  document.addEventListener("DOMContentLoaded", function() {
-  const addressContainer = document.currentScript.closest(".card"); 
-  const form = addressContainer.closest("form"); // find the form wrapping this address partial
-  if (!form) return;
-
-  form.addEventListener("submit", function(e) {
-    const requiredFields = ['rua', 'cidade', 'estado'];
-    let isValid = true;
-    
-    requiredFields.forEach(id => {
-      const field = form.querySelector(`#${id}`);
-      if (field && !field.value.trim()) {
-        field.classList.add("is-invalid");
-        isValid = false;
-      } else if (field) {
-        field.classList.remove("is-invalid");
-      }
-    });
-
-    if (!isValid) {
-      e.preventDefault();
-      const toast = new bootstrap.Toast(document.getElementById('errorToast'));
-      toast.show();
-    }
-  });
-});
-
+  const addressCard = document.querySelector('[data-address-card]');
+  const form = addressCard ? addressCard.closest("form") : null; // find the form wrapping this address partial
   if (!form) return;
 
   // Define campos obrigatórios
@@ -306,13 +281,13 @@ document.addEventListener("DOMContentLoaded", function() {
     }
 
     let isValid = true;
-    
+
     requiredFields.forEach(id => {
-      const field = document.getElementById(id);
-      if (!field.value.trim()) {
+      const field = form.querySelector(`#${id}`);
+      if (field && !field.value.trim()) {
         field.classList.add("is-invalid");
         isValid = false;
-      } else {
+      } else if (field) {
         field.classList.remove("is-invalid");
       }
     });
@@ -321,10 +296,12 @@ document.addEventListener("DOMContentLoaded", function() {
       e.preventDefault();
       const firstInvalid = document.querySelector(".is-invalid");
       if (firstInvalid) firstInvalid.focus();
-      
+
       // Toast de erro (substitui o alert)
-      const toast = new bootstrap.Toast(document.getElementById('errorToast'));
-      toast.show();
+      const toastEl = document.getElementById('errorToast');
+      if (toastEl && typeof bootstrap?.Toast === 'function') {
+        new bootstrap.Toast(toastEl).show();
+      }
     }
   });
 
