@@ -37,13 +37,34 @@ function updateAnimalsEmptyState(tableBody) {
   }
 }
 
-function addRemovedAnimalToList(form) {
+function buildRemovedStatusBadge(options = {}) {
+  const badge = document.createElement('span');
+  badge.dataset.removedStatus = 'true';
+  badge.classList.add('badge', 'ms-2', 'align-middle');
+  const queued = Boolean(options.queued);
+  if (queued) {
+    badge.classList.add('bg-warning', 'text-dark');
+    badge.innerHTML = '<i class="fas fa-cloud-slash me-1"></i>Aguardando sincronização';
+    badge.title = 'Remoção pendente de sincronização.';
+  } else {
+    badge.classList.add('bg-danger-subtle', 'text-danger');
+    badge.innerHTML = '<i class="fas fa-trash-alt me-1"></i>Excluído';
+    badge.title = 'Remoção concluída.';
+  }
+  return badge;
+}
+
+function addRemovedAnimalToList(form, detail = {}) {
   const removedWrapper = document.getElementById('removidos-wrapper');
   const removedList = removedWrapper ? removedWrapper.querySelector('.list-group') : null;
   if (!removedList || !removedWrapper) return;
 
-  const li = document.createElement('li');
+  const animalId = form.dataset.animalId || '';
+  const existing = animalId ? removedList.querySelector(`li[data-animal-id="${animalId}"]`) : null;
+  const li = existing || document.createElement('li');
   li.className = 'list-group-item d-flex justify-content-between align-items-center';
+  if (animalId) li.dataset.animalId = animalId;
+  if (existing) li.innerHTML = '';
 
   const infoSpan = document.createElement('span');
   const nameStrong = document.createElement('strong');
@@ -53,6 +74,7 @@ function addRemovedAnimalToList(form) {
   nameStrong.textContent = animalName;
   infoSpan.appendChild(nameStrong);
   infoSpan.appendChild(document.createTextNode(` — ${animalSpecies} / ${animalBreed}`));
+  infoSpan.appendChild(buildRemovedStatusBadge({ queued: detail.offlineQueued }));
 
   const deleteForm = document.createElement('form');
   deleteForm.action = form.getAttribute('action');
@@ -74,7 +96,9 @@ function addRemovedAnimalToList(form) {
 
   li.appendChild(infoSpan);
   li.appendChild(deleteForm);
-  removedList.appendChild(li);
+  if (!existing) {
+    removedList.appendChild(li);
+  }
   removedWrapper.classList.remove('d-none');
 }
 
@@ -86,13 +110,14 @@ document.addEventListener('form-sync-success', (ev) => {
 
   if (!form || !form.classList.contains('js-animal-delete-form')) return;
   if (ev.defaultPrevented) return;
-  if (!response || !response.ok || (data && data.success === false)) return;
+  if ((!response || !response.ok || (data && data.success === false)) && !detail.offlineQueued) return;
 
   ev.preventDefault();
 
   const animalId = form.dataset.animalId;
   const rowId = animalId ? `animal-row-${animalId}` : null;
-  if (form.dataset.removedItem === 'true') {
+  const isRemovedItem = form.dataset.removedItem === 'true';
+  if (isRemovedItem) {
     const listItem = form.closest('li');
     if (listItem) listItem.remove();
   } else {
@@ -103,6 +128,10 @@ document.addEventListener('form-sync-success', (ev) => {
 
     const tableBody = document.querySelector('#animals-table tbody');
     updateAnimalsEmptyState(tableBody);
-    addRemovedAnimalToList(form);
+    addRemovedAnimalToList(form, detail);
+    const toastMessage = (data && data.message) || (detail.offlineQueued ? 'Remoção enfileirada para sincronização.' : 'Animal removido.');
+    if (typeof showToast === 'function') {
+      showToast(toastMessage, detail.offlineQueued ? 'warning' : 'success');
+    }
   }
 });
