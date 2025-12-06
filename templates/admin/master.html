@@ -255,6 +255,15 @@
       margin-right: 20px;
       cursor: pointer;
       transition: transform 0.2s ease;
+      padding: 8px;
+      border-radius: 6px;
+    }
+
+    .toggle-sidebar .navbar-toggler-icon,
+    .mobile-menu-toggle .navbar-toggler-icon {
+      background-image: var(--bs-navbar-toggler-icon-bg);
+      width: 1.5em;
+      height: 1.5em;
     }
 
     .toggle-sidebar:hover {
@@ -512,17 +521,17 @@
   <!-- Topbar -->
   <div class="topbar">
     <div class="topbar-left">
-      <button class="toggle-sidebar">
-        <i class="fas fa-bars"></i>
+      <button class="toggle-sidebar navbar-toggler" type="button" aria-label="Alternar menu lateral">
+        <span class="navbar-toggler-icon"></span>
       </button>
       <h5 class="page-title">Painel Administrativo</h5>
     </div>
   </div>
 
   <!-- Mobile Menu Toggle -->
-  <div class="mobile-menu-toggle">
-    <i class="fas fa-bars"></i>
-  </div>
+  <button class="mobile-menu-toggle navbar-toggler" type="button" aria-label="Abrir menu lateral">
+    <span class="navbar-toggler-icon"></span>
+  </button>
 
   <!-- Conteúdo principal -->
   <div class="content">
@@ -564,13 +573,21 @@
       const mobileMenuToggle = document.querySelector('.mobile-menu-toggle');
       const body = document.body;
 
-      if (toggleSidebar) {
-        toggleSidebar.addEventListener('click', () => {
+      const isMobileView = () => window.innerWidth <= 992;
+
+      const toggleSidebarVisibility = () => {
+        if (isMobileView()) {
+          sidebar.classList.toggle('active');
+        } else {
           sidebar.classList.toggle('sidebar-collapsed');
           body.classList.toggle('sidebar-collapsed');
-        });
+        }
+      };
+
+      if (toggleSidebar) {
+        toggleSidebar.addEventListener('click', toggleSidebarVisibility);
       }
-      
+
       // Mobile menu toggle
       if (mobileMenuToggle) {
         mobileMenuToggle.addEventListener('click', () => {
@@ -580,10 +597,16 @@
 
       // Close sidebar when clicking outside on mobile
       document.addEventListener('click', (e) => {
-        if (window.innerWidth <= 992 && 
-            !sidebar.contains(e.target) && 
-            !mobileMenuToggle.contains(e.target) && 
+        if (window.innerWidth <= 992 &&
+            !sidebar.contains(e.target) &&
+            !mobileMenuToggle.contains(e.target) &&
             !e.target.classList.contains('toggle-sidebar')) {
+          sidebar.classList.remove('active');
+        }
+      });
+
+      window.addEventListener('resize', () => {
+        if (!isMobileView()) {
           sidebar.classList.remove('active');
         }
       });
