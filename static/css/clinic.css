@@ -1,3 +1,61 @@
+:root {
+  --accounting-finance-bg: #4a90e2;
+  --accounting-finance-text: #052038;
+  --accounting-pagamentos-bg: #6f42c1;
+  --accounting-pagamentos-text: #ffffff;
+  --accounting-obrigacoes-bg: #f4b400;
+  --accounting-obrigacoes-text: #2b1f00;
+  --accounting-btn-shadow: rgba(0, 0, 0, 0.08);
+  --accounting-btn-shadow-hover: rgba(0, 0, 0, 0.12);
+  --accounting-focus-ring: rgba(31, 88, 199, 0.35);
+}
+
+.accounting-card .accounting-btn {
+  border-radius: 999px;
+  border: none;
+  padding: 0.75rem 1.75rem;
+  min-width: 190px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  font-weight: 600;
+  box-shadow: 0 6px 16px var(--accounting-btn-shadow);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  text-decoration: none;
+}
+
+.accounting-card .accounting-btn i {
+  font-size: 1rem;
+}
+
+.accounting-card .accounting-btn:hover,
+.accounting-card .accounting-btn:focus-visible {
+  transform: translateY(-1px);
+  box-shadow: 0 10px 20px var(--accounting-btn-shadow-hover);
+  color: inherit;
+}
+
+.accounting-card .accounting-btn:focus-visible {
+  outline: 3px solid var(--accounting-focus-ring);
+  outline-offset: 3px;
+}
+
+.accounting-btn--financeiro {
+  background-color: var(--accounting-finance-bg);
+  color: var(--accounting-finance-text);
+}
+
+.accounting-btn--pagamentos {
+  background-color: var(--accounting-pagamentos-bg);
+  color: var(--accounting-pagamentos-text);
+}
+
+.accounting-btn--obrigacoes {
+  background-color: var(--accounting-obrigacoes-bg);
+  color: var(--accounting-obrigacoes-text);
+}
+
 /* Hero da clínica */
 .clinic-hero {
   background: linear-gradient(

@@ -1,32 +1,6 @@
 {% extends "layout.html" %}
 
 {% block main %}
-<style>
-    .accounting-card .accounting-btn {
-        border-radius: 999px;
-        color: #fff;
-        border: none;
-        padding: 0.75rem 1.75rem;
-        min-width: 190px;
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        gap: 0.4rem;
-        font-weight: 600;
-        box-shadow: 0 6px 16px rgba(0, 0, 0, 0.08);
-        transition: transform 0.2s ease, box-shadow 0.2s ease;
-    }
-
-    .accounting-card .accounting-btn i {
-        font-size: 1rem;
-    }
-
-    .accounting-card .accounting-btn:hover {
-        transform: translateY(-1px);
-        box-shadow: 0 10px 20px rgba(0, 0, 0, 0.12);
-        color: #fff;
-    }
-</style>
 <div class="container text-center">
 
     {% if current_user.is_authenticated %}
@@ -138,15 +112,15 @@
         <div class="card shadow-lg p-4 rounded-4 mb-5 accounting-card" style="background: #ffffff;">
             <h5 class="mb-4 text-center">Contabilidade</h5>
             <div class="d-flex flex-wrap justify-content-center gap-3">
-                <a href="/contabilidade/financeiro" class="btn accounting-btn" style="background-color: #4A90E2;">
+                <a href="/contabilidade/financeiro" class="btn accounting-btn accounting-btn--financeiro">
                     <i class="fa-solid fa-chart-line"></i>
                     <span>Financeiro</span>
                 </a>
-                <a href="/contabilidade/pagamentos" class="btn accounting-btn" style="background-color: #6f42c1;">
+                <a href="/contabilidade/pagamentos" class="btn accounting-btn accounting-btn--pagamentos">
                     <i class="fa-solid fa-briefcase"></i>
                     <span>Pagamentos / PJs</span>
                 </a>
-                <a href="/contabilidade/obrigacoes" class="btn accounting-btn" style="background-color: #f4b400; color: #4a3c00;">
+                <a href="/contabilidade/obrigacoes" class="btn accounting-btn accounting-btn--obrigacoes">
                     <i class="fa-solid fa-file-invoice-dollar"></i>
                     <span>Obrigações</span>
                 </a>
