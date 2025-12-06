@@ -244,6 +244,15 @@
     bootstrap.Toast.getOrCreateInstance(toastEl).show();
   }
 
+  function showFormMessage(form, message, category = 'info'){
+    if(!message) return;
+    if (window.FormFeedback && typeof window.FormFeedback.showStatus === 'function') {
+      window.FormFeedback.showStatus(form, message, category);
+    } else {
+      showToast(message, category);
+    }
+  }
+
   document.addEventListener('submit', async ev => {
     if (ev.defaultPrevented) return;
     const form = ev.target;
@@ -269,6 +278,7 @@
     setButtonLoading(submitButton, form);
     const data = new FormData(form);
     let resp = null;
+    let offlineQueued = false;
     try {
       resp = await window.fetchOrQueue(form.action, {method: form.method || 'POST', headers: {'Accept': 'application/json'}, body: data});
     } catch (error) {
@@ -279,36 +289,42 @@
     }
 
     if (!resp) {
+      offlineQueued = true;
       setButtonIdle(submitButton);
-      showToast('Formulário salvo para sincronização quando voltar a ficar online.', 'info');
+      showFormMessage(form, 'Formulário enfileirado para sincronização quando voltar a ficar online.', 'info');
       return;
     }
 
     let json = null;
     try { json = await resp.json(); } catch(e) {}
-    if (json && json.message) {
-      const category = json.category || (json.success === false || !resp.ok ? 'danger' : 'success');
-      showToast(json.message, category);
+    const mainMessage = json && json.message ? json.message : undefined;
+    const category = json && json.category ? json.category : (json && json.success === false || !resp.ok ? 'danger' : 'success');
+    if (mainMessage) {
+      showFormMessage(form, mainMessage, category);
     }
     if (json && Array.isArray(json.messages)) {
       json.messages.forEach(entry => {
         if (!entry) return;
         if (typeof entry === 'string') {
-          showToast(entry, 'info');
+          showFormMessage(form, entry, 'info');
         } else if (entry.message) {
-          showToast(entry.message, entry.category || 'info');
+          showFormMessage(form, entry.message, entry.category || 'info');
         }
       });
     }
     const isSuccess = resp.ok && !(json && json.success === false);
+    if (!isSuccess && !mainMessage && resp && !resp.ok) {
+      const fallback = resp.statusText || 'Falha ao processar o formulário.';
+      showFormMessage(form, fallback, 'danger');
+    }
     if (isSuccess) {
       setButtonSuccess(submitButton);
     } else {
       setButtonIdle(submitButton);
     }
-    const evt = new CustomEvent('form-sync-success', {detail: {form, data: json, response: resp}, cancelable: true});
+    const evt = new CustomEvent('form-sync-success', {detail: {form, data: json, response: resp, offlineQueued, success: isSuccess}, cancelable: true});
     document.dispatchEvent(evt);
-    if (!evt.defaultPrevented) {
+    if (!evt.defaultPrevented && !(form.classList && (form.classList.contains('js-tutor-form') || form.id === 'tutor-form'))) {
       location.reload();
     }
   });
@@ -317,10 +333,16 @@
     const detail = ev.detail || {};
     const form = detail.form;
     const data = detail.data || {};
+    const isQueued = detail.offlineQueued;
     if(!form) return;
 
     if(form.classList.contains('js-tutor-form')){
       ev.preventDefault();
+      const btn=form.querySelector('button[type="submit"]');
+      const message = isQueued
+        ? 'Cadastro de tutor enfileirado para sincronizar quando estiver online.'
+        : (data && data.message) || 'Tutor salvo com sucesso.';
+      showFormMessage(form, message, isQueued ? 'info' : 'success');
       if(data.html){
         const cont=document.getElementById('tutores-adicionados');
         if(cont) cont.innerHTML=data.html;
@@ -349,18 +371,20 @@
         });
       }
       form.reset();
-      const btn=form.querySelector('button[type="submit"]');
-      if(btn && btn.dataset.original){
-        btn.disabled=false;
-        btn.innerHTML=btn.dataset.original;
-      }
+      setButtonIdle(btn);
     } else if(form.id === 'tutor-form'){
       const resp = detail.response;
       if(!(resp && resp.ok) || (data && data.success === false)){
+        const message = (data && data.message) || 'Não foi possível salvar o tutor.';
+        showFormMessage(form, message, 'danger');
         setButtonIdle(getSubmitButton(form));
         return;
       }
       ev.preventDefault();
+      const successMessage = isQueued
+        ? 'Alterações do tutor enfileiradas para sincronização offline.'
+        : (data && data.message) || 'Tutor salvo com sucesso.';
+      showFormMessage(form, successMessage, isQueued ? 'info' : 'success');
       setButtonSuccess(getSubmitButton(form));
       const tutor = data ? data.tutor : null;
       if(tutor){
@@ -401,11 +425,7 @@
         if(cont) cont.innerHTML=data.html;
       }
       form.reset();
-      const btn=form.querySelector('button[type="submit"]');
-      if(btn && btn.dataset.original){
-        btn.disabled=false;
-        btn.innerHTML=btn.dataset.original;
-      }
+      setButtonIdle(form.querySelector('button[type="submit"]'));
     }
   });
 
