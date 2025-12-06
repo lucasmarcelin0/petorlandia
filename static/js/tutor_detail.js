@@ -37,7 +37,32 @@ function updateAnimalsEmptyState(tableBody) {
   }
 }
 
-function addRemovedAnimalToList(form) {
+function buildStatusBadge(label, variant, iconClass, tooltip){
+  const badge = document.createElement('span');
+  badge.className = `badge text-bg-${variant} ms-2 d-inline-flex align-items-center gap-1`;
+  if(tooltip){
+    badge.title = tooltip;
+  }
+  if(iconClass){
+    const icon = document.createElement('i');
+    icon.className = iconClass;
+    badge.appendChild(icon);
+  }
+  badge.appendChild(document.createTextNode(label));
+  return badge;
+}
+
+function showLocalToast(message, category = 'info'){
+  const toastEl = document.getElementById('actionToast');
+  if(!toastEl || !message) return;
+  toastEl.querySelector('.toast-body').textContent = message;
+  const classes = ['bg-danger','bg-info','bg-success','bg-warning','bg-primary','bg-secondary','bg-dark'];
+  toastEl.classList.remove(...classes);
+  toastEl.classList.add(`bg-${category}`);
+  bootstrap.Toast.getOrCreateInstance(toastEl).show();
+}
+
+function addRemovedAnimalToList(form, options = {}) {
   const removedWrapper = document.getElementById('removidos-wrapper');
   const removedList = removedWrapper ? removedWrapper.querySelector('.list-group') : null;
   if (!removedList || !removedWrapper) return;
@@ -73,6 +98,9 @@ function addRemovedAnimalToList(form) {
   deleteForm.appendChild(deleteButton);
 
   li.appendChild(infoSpan);
+  if(options.badge){
+    li.appendChild(options.badge);
+  }
   li.appendChild(deleteForm);
   removedList.appendChild(li);
   removedWrapper.classList.remove('d-none');
@@ -83,15 +111,27 @@ document.addEventListener('form-sync-success', (ev) => {
   const form = detail.form;
   const data = detail.data || {};
   const response = detail.response;
+  const offlineQueued = Boolean(detail.offlineQueued);
 
   if (!form || !form.classList.contains('js-animal-delete-form')) return;
-  if (ev.defaultPrevented) return;
-  if (!response || !response.ok || (data && data.success === false)) return;
+  if (ev.defaultPrevented || detail.handledRemoval) return;
+
+  const removalSucceeded = offlineQueued || (response && response.ok && !(data && data.success === false));
+  if (!removalSucceeded) return;
 
   ev.preventDefault();
+  detail.handledRemoval = true;
 
   const animalId = form.dataset.animalId;
   const rowId = animalId ? `animal-row-${animalId}` : null;
+  const message = data.message || (offlineQueued ? 'Remoção aguardando sincronização.' : 'Animal removido com sucesso.');
+  const badge = buildStatusBadge(
+    offlineQueued ? 'Aguardando sincronização' : 'Excluído',
+    offlineQueued ? 'warning' : 'success',
+    offlineQueued ? 'fa-solid fa-cloud-arrow-up' : 'fa-solid fa-circle-check',
+    offlineQueued ? 'O dispositivo está offline. Este item será excluído ao sincronizar.' : 'A exclusão foi processada com sucesso.'
+  );
+
   if (form.dataset.removedItem === 'true') {
     const listItem = form.closest('li');
     if (listItem) listItem.remove();
@@ -103,6 +143,9 @@ document.addEventListener('form-sync-success', (ev) => {
 
     const tableBody = document.querySelector('#animals-table tbody');
     updateAnimalsEmptyState(tableBody);
-    addRemovedAnimalToList(form);
+    addRemovedAnimalToList(form, { badge });
   }
+
+  const toastCategory = offlineQueued ? 'warning' : (data.category || 'success');
+  showLocalToast(message, toastCategory);
 });

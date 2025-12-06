@@ -291,7 +291,11 @@
     if (!resp) {
       offlineQueued = true;
       setButtonIdle(submitButton);
-      showFormMessage(form, 'Formulário enfileirado para sincronização quando voltar a ficar online.', 'info');
+      const queuedMessage = 'Formulário enfileirado para sincronização quando voltar a ficar online.';
+      const queuedData = { message: queuedMessage, category: 'info' };
+      showFormMessage(form, queuedMessage, 'info');
+      const queuedEvent = new CustomEvent('form-sync-success', {detail: {form, data: queuedData, response: null, offlineQueued: true, success: false}, cancelable: true});
+      document.dispatchEvent(queuedEvent);
       return;
     }
 
@@ -324,7 +328,7 @@
     }
     const evt = new CustomEvent('form-sync-success', {detail: {form, data: json, response: resp, offlineQueued, success: isSuccess}, cancelable: true});
     document.dispatchEvent(evt);
-    if (!evt.defaultPrevented && !(form.classList && (form.classList.contains('js-tutor-form') || form.id === 'tutor-form'))) {
+    if (!offlineQueued && !evt.defaultPrevented && !(form.classList && (form.classList.contains('js-tutor-form') || form.id === 'tutor-form'))) {
       location.reload();
     }
   });
@@ -670,18 +674,38 @@
     const form = detail.form;
     const data = detail.data || {};
     const response = detail.response;
+    const offlineQueued = Boolean(detail.offlineQueued);
     if(!form || !form.classList.contains('js-animal-delete-form')) return;
-    if(ev.defaultPrevented) return;
+    if(ev.defaultPrevented || detail.handledRemoval) return;
 
-    if(!response || !response.ok || (data && data.success === false)){
-      setButtonIdle(getSubmitButton(form));
+    const removalSucceeded = offlineQueued || (response && response.ok && !(data && data.success === false));
+    const submitButton = getSubmitButton(form);
+    if(!removalSucceeded){
+      setButtonIdle(submitButton);
       return;
     }
 
     ev.preventDefault();
+    detail.handledRemoval = true;
+
+    const message = data.message || (offlineQueued ? 'Remoção aguardando sincronização.' : 'Animal removido com sucesso.');
+    const toastCategory = offlineQueued ? 'warning' : (data.category || 'success');
+    const statusLabel = offlineQueued ? 'Aguardando sincronização' : 'Excluído';
+    const statusVariant = offlineQueued ? 'warning' : 'success';
+    const statusIcon = offlineQueued ? 'fa-cloud-arrow-up' : 'fa-circle-check';
+
+    if(submitButton) setButtonIdle(submitButton);
 
     const animalId = form.dataset.animalId;
     const rowId = animalId ? `animal-row-${animalId}` : null;
+
+    if(form.dataset.removedItem === 'true'){
+      const listItem = form.closest('li');
+      if(listItem) listItem.remove();
+      showToast(message, toastCategory);
+      return;
+    }
+
     if(rowId){
       const row = document.getElementById(rowId);
       if(row) row.remove();
@@ -708,7 +732,13 @@
       const deleteForm = document.createElement('form');
       deleteForm.action = form.getAttribute('action');
       deleteForm.method = 'POST';
-      deleteForm.className = 'd-inline';
+      deleteForm.className = 'd-inline js-animal-delete-form';
+      deleteForm.dataset.sync = '';
+      deleteForm.dataset.animalId = form.dataset.animalId || '';
+      deleteForm.dataset.animalName = animalName;
+      deleteForm.dataset.animalSpecies = animalSpecies;
+      deleteForm.dataset.animalBreed = animalBreed;
+      deleteForm.dataset.removedItem = 'true';
       deleteForm.addEventListener('submit', evt => {
         if(!window.confirm(`Excluir permanentemente ${animalName}?`)){
           evt.preventDefault();
@@ -721,10 +751,20 @@
       deleteButton.textContent = '❌ Excluir Definitivamente';
       deleteForm.appendChild(deleteButton);
 
+      const badge = document.createElement('span');
+      badge.className = `badge text-bg-${statusVariant} ms-2 d-inline-flex align-items-center gap-1`;
+      badge.title = offlineQueued ? 'O dispositivo está offline. Este item será excluído ao sincronizar.' : 'A exclusão foi processada com sucesso.';
+      const icon = document.createElement('i');
+      icon.className = `fa-solid ${statusIcon}`;
+      badge.appendChild(icon);
+      badge.appendChild(document.createTextNode(statusLabel));
+
       li.appendChild(infoSpan);
+      li.appendChild(badge);
       li.appendChild(deleteForm);
       removedList.appendChild(li);
       removedWrapper.classList.remove('d-none');
+      showToast(message, toastCategory);
     }
   });
 })();

@@ -42,6 +42,9 @@ def test_deletar_animal_json(monkeypatch, app):
     resp = client.post('/animal/1/deletar', headers={'Accept': 'application/json'})
     assert resp.status_code == 200
     assert resp.json['deleted'] is True
+    assert resp.json['message'] == 'Animal marcado como removido. Histórico preservado.'
+    assert resp.json['undo_available'] is False
+    assert resp.json['restore_available'] is False
 
     with app.app_context():
         assert Animal.query.get(1).removido_em is not None
