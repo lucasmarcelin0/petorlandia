@@ -343,14 +343,214 @@
         ? 'Cadastro de tutor enfileirado para sincronizar quando estiver online.'
         : (data && data.message) || 'Tutor salvo com sucesso.';
       showFormMessage(form, message, isQueued ? 'info' : 'success');
-      if(data.html){
-        const cont=document.getElementById('tutores-adicionados');
-        if(cont) cont.innerHTML=data.html;
+
+      function showTutorPanelMessage(text, category){
+        const container = document.getElementById('tutores-adicionados');
+        if(!container || !text) return;
+        const alert = document.createElement('div');
+        alert.className = `alert alert-${category || 'success'} alert-dismissible fade show mb-3`;
+        alert.setAttribute('role', 'alert');
+        alert.innerHTML = `
+          <div class="d-flex align-items-center gap-2">
+            <i class="fa-solid fa-circle-check text-success"></i>
+            <span>${text}</span>
+          </div>
+          <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        `;
+        container.prepend(alert);
       }
-      if (data.redirect_url) {
-        window.location.assign(data.redirect_url);
-        return;
+
+      async function refreshTutorPanel(){
+        const panel = document.querySelector('[data-listing-panel="tutors"]');
+        if(!panel) return false;
+
+        const fetchUrl = panel.dataset.fetchUrl || window.location.pathname;
+        const scopeParam = panel.dataset.scopeParam || 'scope';
+        const searchParam = panel.dataset.searchParam || 'tutor_search';
+        const sortParam = panel.dataset.sortParam || 'tutor_sort';
+        const pageParam = panel.dataset.pageParam || 'page';
+        const params = new URLSearchParams();
+
+        const scope = panel.dataset.scope || 'all';
+        if(scope) params.set(scopeParam, scope);
+
+        const page = parseInt(panel.dataset.page || '1', 10);
+        if(page && page > 1) params.set(pageParam, page);
+
+        const filterInput = panel.querySelector('#tutor-filter');
+        const searchValue = filterInput ? filterInput.value.trim() : '';
+        if(searchValue) params.set(searchParam, searchValue);
+
+        const sortSelect = panel.querySelector('#tutor-sort');
+        const sortValue = sortSelect ? sortSelect.value : (panel.dataset.defaultSort || 'name_asc');
+        if(sortValue) params.set(sortParam, sortValue);
+
+        const requestUrl = new URL(fetchUrl, window.location.origin);
+        params.forEach((value, key) => requestUrl.searchParams.set(key, value));
+
+        try {
+          const response = await fetch(requestUrl, {
+            headers: { Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+            credentials: 'same-origin',
+          });
+          if(!response.ok) return false;
+          const payload = await response.json();
+          if(payload && payload.html){
+            const container = document.getElementById('tutores-adicionados');
+            if(container){
+              container.innerHTML = payload.html;
+              if(window.PetorlandiaPanels && typeof window.PetorlandiaPanels.refreshListings === 'function'){
+                window.PetorlandiaPanels.refreshListings();
+              }
+              return true;
+            }
+          }
+        } catch (error) {
+          console.error('Erro ao recarregar painel de tutores:', error);
+        }
+        return false;
       }
+
+      function normalizeStatus(tutor){
+        const statuses = ['internal'];
+        if(tutor && typeof tutor.worker === 'string' && tutor.worker.toLowerCase() === 'veterinario'){
+          statuses.push('professional');
+        }
+        return statuses.join(' ');
+      }
+
+      function createTutorCard(tutor){
+        if(!tutor) return null;
+        const col = document.createElement('div');
+        const cardStatus = normalizeStatus(tutor);
+        col.className = 'col-md-6 d-flex';
+        col.dataset.name = (tutor.name || '').toLowerCase();
+        col.dataset.date = tutor.created_at || '';
+        col.dataset.cpf = tutor.cpf || '';
+        col.dataset.phone = tutor.phone || '';
+        if(tutor.date_of_birth) col.dataset.dob = tutor.date_of_birth;
+        col.dataset.status = cardStatus;
+
+        const detailUrl = tutor.detail_url || (tutor.id ? `/tutor/${tutor.id}` : '#');
+        const createdAt = tutor.created_at ? new Date(tutor.created_at).toLocaleDateString('pt-BR') : '';
+        const professionalBadge = cardStatus.includes('professional') ? '<span class="badge bg-success position-absolute top-0 end-0 m-2">Veterinário</span>' : '';
+        const placeholderInitial = (tutor.name || '?').trim().charAt(0).toUpperCase();
+
+        col.innerHTML = `
+          <div class="card shadow-sm rounded-4 h-100 flex-fill position-relative overflow-hidden profile-card profile-card--internal">
+            ${professionalBadge}
+            <div class="profile-card-media profile-card-media--tutor" style="--offset-x: ${tutor.photo_offset_x || 0}px; --offset-y: ${tutor.photo_offset_y || 0}px; --rotation: ${tutor.photo_rotation || 0}deg; --zoom: ${tutor.photo_zoom || 1};">
+              ${tutor.profile_photo ? `<img src="${tutor.profile_photo}" alt="Foto de ${tutor.name || ''}" class="profile-card-photo" loading="lazy">` : `
+              <div class="profile-card-placeholder">
+                <span>${placeholderInitial}</span>
+              </div>`}
+            </div>
+            <div class="card-body d-flex flex-column gap-3">
+              <div>
+                <div class="d-flex justify-content-between align-items-start mb-2">
+                  <h5 class="card-title mb-0">${tutor.name || `Tutor #${tutor.id}`}</h5>
+                  ${createdAt ? `<span class="badge text-bg-light border text-muted">Desde ${createdAt}</span>` : ''}
+                </div>
+              </div>
+              <div class="profile-card-contact-grid">
+                ${(tutor.email || tutor.phone) ? `
+                <div class="contact-item contact-item--actions-only u-pill u-pill--subtle u-hover-lift">
+                  <div class="contact-actions contact-actions--standalone">
+                    ${tutor.email ? `<a href="mailto:${tutor.email}" class="contact-action-btn contact-action-btn--email contact-action-btn--xl" title="Enviar e-mail"><i class="fa-solid fa-envelope"></i></a>` : ''}
+                    ${tutor.phone ? `<a href="https://wa.me/${(tutor.phone || '').replace(/[^\d]/g, '')}" target="_blank" rel="noopener" class="contact-action-btn contact-action-btn--whatsapp contact-action-btn--xl" title="Conversar no WhatsApp"><i class="fa-brands fa-whatsapp"></i></a>` : ''}
+                  </div>
+                </div>` : ''}
+                ${tutor.cpf ? `
+                <div class="contact-item u-pill u-pill--subtle u-hover-lift">
+                  <div class="contact-icon u-icon-circle">
+                    <i class="fa-solid fa-id-card"></i>
+                  </div>
+                  <div class="contact-content u-stack-sm">
+                    <span class="contact-label u-text-subtle">CPF</span>
+                    <span class="contact-value u-text-strong" title="${tutor.cpf}">${tutor.cpf}</span>
+                  </div>
+                </div>` : ''}
+              </div>
+            </div>
+            <div class="card-footer bg-white border-0 pt-0 pb-4 px-4 mt-auto">
+              <div class="d-flex flex-wrap gap-2">
+                <a href="${detailUrl}" class="btn btn-sm btn-outline-dark flex-fill">📋 Ver Ficha</a>
+              </div>
+            </div>
+          </div>
+        `;
+        return col;
+      }
+
+      function tutorSortComparator(sortOption, a, b){
+        const nameA = (a.dataset.name || '').toLowerCase();
+        const nameB = (b.dataset.name || '').toLowerCase();
+        const dateA = Date.parse(a.dataset.date || '') || 0;
+        const dateB = Date.parse(b.dataset.date || '') || 0;
+        const dobA = Date.parse(a.dataset.dob || '') || Infinity;
+        const dobB = Date.parse(b.dataset.dob || '') || Infinity;
+
+        switch(sortOption){
+          case 'name_desc':
+            return nameB.localeCompare(nameA);
+          case 'date_desc':
+            return dateB - dateA;
+          case 'date_asc':
+            return dateA - dateB;
+          case 'age_desc':
+            return dobA - dobB;
+          case 'age_asc':
+            return dobB - dobA;
+          default:
+            return nameA.localeCompare(nameB);
+        }
+      }
+
+      function insertTutorCard(tutor){
+        const cardsContainer = document.getElementById('tutor-cards');
+        if(!cardsContainer) return false;
+        const card = createTutorCard(tutor);
+        if(!card) return false;
+        cardsContainer.appendChild(card);
+        const sortSelect = document.querySelector('#tutor-sort');
+        const sortOption = sortSelect ? sortSelect.value : 'name_asc';
+        const cards = Array.from(cardsContainer.children);
+        cards.sort((a,b) => tutorSortComparator(sortOption, a, b));
+        cards.forEach(c => cardsContainer.appendChild(c));
+        if(window.PetorlandiaPanels && typeof window.PetorlandiaPanels.refreshListings === 'function'){
+          const panel = document.querySelector('[data-listing-panel="tutors"]');
+          if(panel){
+            delete panel.dataset.listingInitialized;
+          }
+          window.PetorlandiaPanels.refreshListings();
+        }
+        return true;
+      }
+
+      (async () => {
+        let updated = false;
+        if(data.html){
+          const cont=document.getElementById('tutores-adicionados');
+          if(cont) {
+            cont.innerHTML=data.html;
+            if(window.PetorlandiaPanels && typeof window.PetorlandiaPanels.refreshListings === 'function'){
+              window.PetorlandiaPanels.refreshListings();
+            }
+            updated = true;
+          }
+        }
+
+        if(!updated){
+          updated = await refreshTutorPanel();
+        }
+
+        if(!updated && data && data.tutor){
+          updated = insertTutorCard(data.tutor);
+        }
+
+        showTutorPanelMessage(message, isQueued ? 'info' : 'success');
+      })();
+
       if (data && data.tutor && typeof document !== 'undefined') {
         const tutorId = String(data.tutor.id);
         const tutorLabel = data.tutor.display_name || data.tutor.name || `Tutor #${tutorId}`;
