@@ -9865,16 +9865,38 @@ def tutores():
                 fetch_url=url_for('tutores'),
                 compact=True,
             )
+            tutor_payload = {
+                'id': novo.id,
+                'name': novo.name or f'Tutor #{novo.id}',
+                'display_name': novo.name or f'Tutor #{novo.id}',
+                'email': novo.email,
+                'phone': novo.phone,
+                'cpf': novo.cpf,
+                'profile_photo': novo.profile_photo,
+                'photo_offset_x': novo.photo_offset_x,
+                'photo_offset_y': novo.photo_offset_y,
+                'photo_rotation': novo.photo_rotation,
+                'photo_zoom': novo.photo_zoom,
+                'date_of_birth': novo.date_of_birth.isoformat() if novo.date_of_birth else None,
+                'created_at': novo.created_at.isoformat() if novo.created_at else None,
+                'worker': getattr(novo, 'worker', None),
+                'clinica_id': novo.clinica_id,
+                'urls': {
+                    'detail': url_for('ficha_tutor', tutor_id=novo.id),
+                },
+            }
             return jsonify(
                 message='Tutor criado com sucesso!',
                 category='success',
                 html=html,
-                tutor={
-                    'id': novo.id,
-                    'name': novo.name or f'Tutor #{novo.id}',
-                    'display_name': novo.name or f'Tutor #{novo.id}',
-                },
+                tutor=tutor_payload,
                 redirect_url=url_for('ficha_tutor', tutor_id=novo.id),
+                panel_params={
+                    'scope': resolved_scope,
+                    'page': pagination.page if pagination else page,
+                    'search': tutor_search,
+                    'sort': tutor_sort,
+                },
             )
 
         flash('Tutor criado com sucesso!', 'success')

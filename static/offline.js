@@ -313,7 +313,154 @@
     }
   });
 
-  document.addEventListener('form-sync-success', ev => {
+  function renderTutorPanelMessage(root, message, category = 'success') {
+    const container = root instanceof Element ? root : document.getElementById('tutores-adicionados');
+    if (!container || !message) return;
+
+    let alert = container.querySelector('[data-tutor-panel-message]');
+    if (!alert) {
+      alert = document.createElement('div');
+      alert.dataset.tutorPanelMessage = 'true';
+      container.prepend(alert);
+    }
+
+    alert.className = `alert alert-${category} d-flex align-items-center gap-2 mt-0 mb-3`;
+    alert.textContent = message;
+
+    window.clearTimeout(Number(alert.dataset.timerId || 0));
+    const timerId = window.setTimeout(() => {
+      alert.remove();
+    }, 5000);
+    alert.dataset.timerId = timerId;
+  }
+
+  async function refreshTutorListingPanel(panelContainer, panelElement, panelParams = {}) {
+    const container = panelContainer || document.getElementById('tutores-adicionados');
+    const panel = panelElement || (container ? container.querySelector('[data-listing-panel="tutors"]') : null) || document.querySelector('[data-listing-panel="tutors"]');
+    if (!container || !panel) return false;
+
+    const scopeParam = panel.dataset.scopeParam || 'scope';
+    const searchParam = panel.dataset.searchParam || 'tutor_search';
+    const sortParam = panel.dataset.sortParam || 'tutor_sort';
+    const pageParam = panel.dataset.pageParam || 'page';
+    const filterInput = panel.querySelector('#tutor-filter');
+    const sortSelect = panel.querySelector('#tutor-sort');
+
+    const fetchUrl = new URL(panel.dataset.fetchUrl || window.location.pathname, window.location.origin);
+    const scopeValue = panelParams.scope || panel.dataset.scope || 'all';
+    const pageValue = panelParams.page || panel.dataset.page || '1';
+    const searchValue = panelParams.search ?? (filterInput ? filterInput.value.trim() : '');
+    const sortValue = panelParams.sort || (sortSelect ? sortSelect.value : panel.dataset.defaultSort || 'name_asc');
+
+    if (scopeValue) fetchUrl.searchParams.set(scopeParam, scopeValue);
+    if (pageValue) fetchUrl.searchParams.set(pageParam, pageValue);
+    if (searchValue) fetchUrl.searchParams.set(searchParam, searchValue);
+    if (sortValue) fetchUrl.searchParams.set(sortParam, sortValue);
+
+    try {
+      const resp = await fetch(fetchUrl.toString(), {
+        headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+      });
+      if (!resp.ok) return false;
+      const payload = await resp.json();
+      if (payload && payload.html) {
+        container.innerHTML = payload.html;
+        return true;
+      }
+    } catch (error) {
+      console.error('Não foi possível atualizar o painel de tutores.', error);
+    }
+
+    return false;
+  }
+
+  function insertTutorCardFromData(panelContainer, tutor) {
+    const container = panelContainer || document.getElementById('tutores-adicionados') || document;
+    const cardsContainer = container.querySelector('#tutor-cards');
+    if (!cardsContainer || !tutor) return false;
+
+    const col = document.createElement('div');
+    col.className = 'col-md-6 d-flex';
+    col.dataset.name = (tutor.name || '').toLowerCase();
+    col.dataset.status = 'internal';
+    col.dataset.cpf = tutor.cpf || '';
+    col.dataset.phone = tutor.phone || '';
+    if (tutor.date_of_birth) col.dataset.dob = tutor.date_of_birth;
+
+    const card = document.createElement('div');
+    card.className = 'card shadow-sm rounded-4 h-100 flex-fill position-relative overflow-hidden profile-card profile-card--internal';
+
+    const media = document.createElement('div');
+    media.className = 'profile-card-media profile-card-media--tutor';
+    media.style.setProperty('--offset-x', `${tutor.photo_offset_x || 0}px`);
+    media.style.setProperty('--offset-y', `${tutor.photo_offset_y || 0}px`);
+    media.style.setProperty('--rotation', `${tutor.photo_rotation || 0}deg`);
+    media.style.setProperty('--zoom', `${tutor.photo_zoom || 1}`);
+
+    if (tutor.profile_photo) {
+      const img = document.createElement('img');
+      img.src = tutor.profile_photo;
+      img.alt = `Foto de ${tutor.name || tutor.display_name || 'tutor'}`;
+      img.className = 'profile-card-photo';
+      img.loading = 'lazy';
+      media.appendChild(img);
+    } else {
+      const placeholder = document.createElement('div');
+      placeholder.className = 'profile-card-placeholder';
+      const initial = document.createElement('span');
+      initial.textContent = (tutor.name || '?').trim().charAt(0).toUpperCase();
+      placeholder.appendChild(initial);
+      media.appendChild(placeholder);
+    }
+
+    const cardBody = document.createElement('div');
+    cardBody.className = 'card-body d-flex flex-column gap-3';
+    const titleWrapper = document.createElement('div');
+    const titleRow = document.createElement('div');
+    titleRow.className = 'd-flex justify-content-between align-items-start mb-2';
+    const title = document.createElement('h5');
+    title.className = 'card-title mb-0';
+    title.textContent = tutor.name || tutor.display_name || `Tutor #${tutor.id}`;
+    titleRow.appendChild(title);
+
+    if (tutor.created_at) {
+      const badge = document.createElement('span');
+      badge.className = 'badge text-bg-light border text-muted';
+      const created = new Date(tutor.created_at);
+      badge.textContent = `Desde ${created.toLocaleDateString('pt-BR')}`;
+      titleRow.appendChild(badge);
+    }
+
+    titleWrapper.appendChild(titleRow);
+    const chipRow = document.createElement('div');
+    chipRow.className = 'status-chip-group d-flex flex-wrap gap-2';
+    const chip = document.createElement('span');
+    chip.className = 'status-chip status-chip--internal';
+    chip.innerHTML = '<i class="fa-solid fa-building"></i><span>Interno da clínica</span>';
+    chipRow.appendChild(chip);
+    titleWrapper.appendChild(chipRow);
+    cardBody.appendChild(titleWrapper);
+
+    const footer = document.createElement('div');
+    footer.className = 'card-footer bg-white border-0 pt-0 pb-4 px-4 mt-auto';
+    const actions = document.createElement('div');
+    actions.className = 'd-flex flex-wrap gap-2';
+    const detailLink = document.createElement('a');
+    detailLink.href = (tutor.urls && tutor.urls.detail) || '#';
+    detailLink.className = 'btn btn-sm btn-outline-dark flex-fill';
+    detailLink.textContent = '📋 Ver Ficha';
+    actions.appendChild(detailLink);
+    footer.appendChild(actions);
+
+    card.appendChild(media);
+    card.appendChild(cardBody);
+    card.appendChild(footer);
+    col.appendChild(card);
+    cardsContainer.prepend(col);
+    return true;
+  }
+
+  document.addEventListener('form-sync-success', async ev => {
     const detail = ev.detail || {};
     const form = detail.form;
     const data = detail.data || {};
@@ -321,14 +468,17 @@
 
     if(form.classList.contains('js-tutor-form')){
       ev.preventDefault();
+      const cont=document.getElementById('tutores-adicionados');
+      const successMessage = data.message || 'Tutor criado com sucesso!';
       if(data.html){
-        const cont=document.getElementById('tutores-adicionados');
         if(cont) cont.innerHTML=data.html;
+      } else {
+        const refreshed = await refreshTutorListingPanel(cont, cont ? cont.querySelector('[data-listing-panel="tutors"]') : null, data.panel_params);
+        if(!refreshed && data.tutor){
+          insertTutorCardFromData(cont, data.tutor);
+        }
       }
-      if (data.redirect_url) {
-        window.location.assign(data.redirect_url);
-        return;
-      }
+      renderTutorPanelMessage(cont, successMessage, data.category || 'success');
       if (data && data.tutor && typeof document !== 'undefined') {
         const tutorId = String(data.tutor.id);
         const tutorLabel = data.tutor.display_name || data.tutor.name || `Tutor #${tutorId}`;
