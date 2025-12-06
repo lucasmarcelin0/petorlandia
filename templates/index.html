@@ -6,7 +6,8 @@
     {% if current_user.is_authenticated %}
         <!-- Área pessoal -->
         <div class="card shadow-sm p-4 rounded-4 mt-5 mb-4 card-surface-muted">
-            <h5 class="mb-4">Bem-vindo(a)! O que você deseja fazer hoje?</h5>
+            <h5 class="mb-2">Bem-vindo(a)! O que você deseja fazer hoje?</h5>
+            <p class="text-muted small">Escolha um atalho abaixo para ir direto à ação desejada.</p>
 
             <div class="row justify-content-center g-4">
                 <!-- Lottie: Add Animal -->
@@ -17,7 +18,7 @@
                         <img src="{{ url_for('static', filename='icons/add-animal.svg') }}" alt="Ilustração de adicionar animal" class="lottie-fallback d-none">
                     </div>
                     <a href="{{ url_for('add_animal') }}" class="btn btn-outline-success rounded-pill shadow-sm px-4 py-2"
-                       data-bs-toggle="tooltip" title="Cadastre um novo animal na plataforma.">
+                       data-bs-toggle="tooltip" title="Abre o formulário para registrar um novo pet.">
                         ➕ Cadastrar novo animal
                     </a>
                 </div>
@@ -30,7 +31,7 @@
                         <img src="{{ url_for('static', filename='icons/list-animals.svg') }}" alt="Ilustração de listagem de animais" class="lottie-fallback d-none">
                     </div>
                     <a href="{{ url_for('list_animals') }}" class="btn btn-outline-primary rounded-pill shadow-sm px-4 py-2"
-                       data-bs-toggle="tooltip" title="Veja todos os animais disponíveis.">
+                       data-bs-toggle="tooltip" title="Mostra a lista completa para visualizar e filtrar pets.">
                         📋 Ver todos os animais
                     </a>
                 </div>
@@ -43,7 +44,7 @@
                         <img src="{{ url_for('static', filename='icons/health-plan.svg') }}" alt="Ilustração do plano de saúde" class="lottie-fallback d-none">
                     </div>
                     <a href="{{ url_for('plano_saude_overview') }}" class="btn btn-outline-info rounded-pill shadow-sm px-4 py-2"
-                       data-bs-toggle="tooltip" title="Conheça nosso plano de saúde para pets.">
+                       data-bs-toggle="tooltip" title="Mostra detalhes e contratação do plano de saúde.">
                         ❤️ Plano de Saúde Pet
                     </a>
                 </div>
@@ -58,7 +59,7 @@
                     <a href="{{ url_for('loja') }}"
                        class="btn rounded-pill shadow-sm loja-pet-filled px-4 py-2"
                        data-bs-toggle="tooltip"
-                       title="Acesse nossa loja para encontrar tudo que seu pet precisa.">
+                       title="Abre a loja para comprar produtos e agendar entregas.">
                        🛍️ Loja Pet
                     </a>
 
@@ -91,22 +92,23 @@
     {% if current_user.is_authenticated and (current_user.worker == 'colaborador' or is_active_veterinarian) %}
     <!-- Área profissional -->
         <div class="card shadow-lg p-4 rounded-4 mb-5 card-surface-white">
-            <h5 class="mb-4">Área profissional</h5>
+            <h5 class="mb-2">Área profissional</h5>
+            <p class="text-muted small">Atalhos para gerenciar atendimentos, animais e tutores.</p>
             <div class="d-flex flex-wrap justify-content-center gap-3">
                 <a href="{{ url_for('novo_animal') }}" class="btn btn-outline-primary rounded-pill shadow-sm px-4 py-2"
-                   data-bs-toggle="tooltip" title="Gerencie os animais vinculados a tutores.">
+                   data-bs-toggle="tooltip" title="Abre a lista de animais para editar vínculos e dados.">
                     🐶 Animais
                 </a>
 
                 <a href="{{ url_for('tutores') }}" class="btn btn-outline-secondary rounded-pill shadow-sm px-4 py-2"
-                   data-bs-toggle="tooltip" title="Veja os tutores cadastrados.">
+                   data-bs-toggle="tooltip" title="Visualiza tutores e permite atualizar contatos.">
                     👥 Tutores
                 </a>
 
                 {% if current_user.worker == 'colaborador' or (is_active_veterinarian and current_user.veterinario) %}
                 <a href="{{ url_for('appointments') }}"
                    class="btn btn-outline-warning rounded-pill shadow-sm px-4 py-2"
-                   data-bs-toggle="tooltip" title="Administre sua agenda de atendimentos.">
+                   data-bs-toggle="tooltip" title="Abre a agenda para marcar e revisar atendimentos.">
                     🗓️ Agenda
                 </a>
                 {% endif %}
@@ -122,7 +124,8 @@
         {% set owner_with_access = owned_clinics|length > 0 and can_access_accounting %}
         {% if has_admin_role or has_admin_worker or owner_with_access %}
         <div class="card shadow-lg p-4 rounded-4 mb-5 accounting-card card-surface-white">
-            <h5 class="mb-4 text-center">Contabilidade</h5>
+            <h5 class="mb-2 text-center">Contabilidade</h5>
+            <p class="text-muted small text-center">Escolha um painel para acompanhar receitas, pagamentos e obrigações.</p>
             <div class="d-flex flex-wrap justify-content-center gap-3">
                 <a href="/contabilidade/financeiro" class="btn accounting-btn accounting-btn--finance">
                     <i class="fa-solid fa-chart-line"></i>
@@ -144,7 +147,8 @@
     {% if current_user.is_authenticated and current_user.worker == 'delivery' %}
     <!-- Área de Entregas -->
         <div class="card shadow-lg p-4 rounded-4 mb-5 card-surface-white">
-            <h5 class="mb-4">Área de Entregas</h5>
+            <h5 class="mb-2">Área de Entregas</h5>
+            <p class="text-muted small">Acesse pedidos e confirme entregas rapidamente.</p>
             <div class="d-flex flex-wrap justify-content-center gap-3">
                 <a href="{{ url_for('list_delivery_requests') }}" class="btn btn-outline-secondary rounded-pill shadow-sm px-4 py-2">
                     🚚 Solicitações
