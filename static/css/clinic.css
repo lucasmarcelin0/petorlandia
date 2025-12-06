@@ -576,6 +576,20 @@ p {
   color: var(--primary-color);
 }
 
+button:focus-visible,
+.btn:focus-visible,
+a:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+[role="button"]:focus-visible,
+[tabindex]:focus-visible {
+  outline: 3px solid color-mix(in srgb, var(--primary-color) 80%, #000);
+  outline-offset: 3px;
+  box-shadow: 0 0 0 4px rgba(78, 115, 223, 0.2);
+  border-radius: 10px;
+}
+
 .badge {
   font-weight: 500;
   padding: 5px 10px;
@@ -647,8 +661,8 @@ main.container {
 
 .btn:focus-visible,
 a:focus-visible {
-  outline: 2px solid var(--primary-color);
-  outline-offset: 2px;
+  outline: 3px solid color-mix(in srgb, var(--primary-color) 80%, #000);
+  outline-offset: 3px;
 }
 
 .btn-primary {
