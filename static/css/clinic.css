@@ -399,8 +399,12 @@
 
 .accounting-btn {
   border-radius: 999px;
-  color: #fff;
-  border: none;
+  --accounting-btn-bg: color-mix(in srgb, var(--primary-color) 80%, #000);
+  --accounting-btn-text: #fff;
+  --accounting-btn-focus: color-mix(in srgb, var(--primary-color) 25%, #fff);
+  background: var(--accounting-btn-bg);
+  color: var(--accounting-btn-text);
+  border: 1px solid transparent;
   padding: 0.75rem 1.75rem;
   min-width: 190px;
   display: inline-flex;
@@ -409,28 +413,36 @@
   gap: 0.4rem;
   font-weight: 600;
   box-shadow: 0 6px 16px rgba(0, 0, 0, 0.08);
-  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  transition: transform 0.2s ease, box-shadow 0.2s ease, outline-color 0.2s ease;
 }
 
 .accounting-btn i {
   font-size: 1rem;
 }
 
-.accounting-btn:hover {
+.accounting-btn:focus-visible {
+  outline: 2px solid var(--accounting-btn-focus);
+  outline-offset: 3px;
+}
+
+.accounting-btn:hover,
+.accounting-btn:focus-visible {
   transform: translateY(-1px);
-  box-shadow: 0 10px 20px rgba(0, 0, 0, 0.12);
-  color: #fff;
+  box-shadow: 0 12px 22px rgba(0, 0, 0, 0.12);
+  color: var(--accounting-btn-text);
 }
 
 .accounting-btn--finance {
-  background-color: #4a90e2;
+  --accounting-btn-bg: color-mix(in srgb, var(--primary-color) 80%, #000);
+  --accounting-btn-focus: color-mix(in srgb, var(--primary-color) 25%, #fff);
 }
 
 .accounting-btn--payments {
-  background-color: #6f42c1;
+  --accounting-btn-bg: color-mix(in srgb, var(--secondary-color) 40%, #000);
+  --accounting-btn-focus: color-mix(in srgb, var(--secondary-color) 30%, #fff);
 }
 
 .accounting-btn--obligations {
-  background-color: #f4b400;
-  color: #4a3c00;
+  --accounting-btn-bg: color-mix(in srgb, var(--warning-color) 60%, #000);
+  --accounting-btn-focus: color-mix(in srgb, var(--warning-color) 35%, #fff);
 }
