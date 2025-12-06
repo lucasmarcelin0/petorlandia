@@ -31,7 +31,6 @@
       --dark-color: #5a5c69;
       --light-color: #f8f9fc;
       --sidebar-width: 250px;
-      --sidebar-collapsed-width: 80px;
       --topbar-height: 70px;
       --transition-speed: 0.3s;
     }
@@ -79,16 +78,7 @@
     }
 
     body.sidebar-collapsed .sidebar {
-      width: var(--sidebar-collapsed-width);
-    }
-
-    body.sidebar-collapsed .logo-text,
-    body.sidebar-collapsed .menu-text {
-      display: none;
-    }
-
-    body.sidebar-collapsed .logo-icon {
-      font-size: 1.8rem;
+      transform: translateX(-100%);
     }
 
     .sidebar a {
@@ -240,7 +230,7 @@
     }
 
     body.sidebar-collapsed .topbar {
-      left: var(--sidebar-collapsed-width);
+      left: 0;
     }
 
     .topbar-left {
@@ -295,7 +285,7 @@
     }
 
     body.sidebar-collapsed .content {
-      margin-left: var(--sidebar-collapsed-width);
+      margin-left: 0;
     }
 
     /* Card Styles */
