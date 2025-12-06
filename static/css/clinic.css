@@ -393,6 +393,60 @@
   background: #ffffff;
 }
 
+.home-card {
+  padding: var(--space-5);
+  margin-top: var(--space-6);
+  margin-bottom: var(--space-5);
+  border: 1px solid rgba(0, 0, 0, 0.03);
+}
+
+.home-card:first-of-type {
+  margin-top: var(--space-8);
+}
+
+.home-card--spacious {
+  padding: var(--space-6);
+}
+
+.home-card:not(:last-child) {
+  margin-bottom: var(--space-6);
+}
+
+.home-cta-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: var(--space-4);
+  justify-items: center;
+}
+
+.home-cta-grid--accounting {
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+}
+
+.home-cta-grid--accounting .accounting-btn {
+  width: 100%;
+}
+
+.home-cta-item {
+  width: 100%;
+}
+
+@media (max-width: 767.98px) {
+  .home-card {
+    padding: var(--space-4);
+  }
+}
+
+@media (min-width: 768px) and (max-width: 1199.98px) {
+  .home-cta-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .home-cta-grid--accounting {
+    grid-template-columns: repeat(2, minmax(220px, 1fr));
+  }
+}
+
 .lottie-cta {
   height: 100px;
 }
@@ -457,6 +511,14 @@
   --light-color: #f2f5f9;
   --topbar-height: 70px;
   --transition-speed: 0.3s;
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-5: 1.5rem;
+  --space-6: 2rem;
+  --space-7: 2.5rem;
+  --space-8: 3rem;
 }
 
 html {
