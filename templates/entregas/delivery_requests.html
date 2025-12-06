@@ -6,6 +6,8 @@
 
   <h2 class="fw-bold mb-4">🚚 Minhas Entregas</h2>
 
+  <div id="delivery-feedback" class="mb-3" aria-live="polite"></div>
+
   <div id="delivery-sections">
     {% include "entregas/_delivery_sections.html" %}
   </div>
@@ -18,6 +20,10 @@
 </div>
 <script>
   document.addEventListener('DOMContentLoaded', () => {
+    const toastEl = document.getElementById('actionToast');
+    const sections = document.getElementById('delivery-sections');
+    const feedback = document.getElementById('delivery-feedback');
+
     async function refreshCounts() {
       try {
         const resp = await fetch('/api/delivery_counts');
@@ -41,6 +47,76 @@
     }
     refreshCounts();
     setInterval(refreshCounts, 10000);
+
+    function getStatusButton(form) {
+      if (window.FormFeedback && typeof window.FormFeedback.getButton === 'function') {
+        return window.FormFeedback.getButton(form);
+      }
+      return form?.querySelector('button[type="submit"], button:not([type])') || null;
+    }
+
+    function resetButton(button) {
+      if (!button) return;
+      if (window.FormFeedback && typeof window.FormFeedback.setIdle === 'function') {
+        window.FormFeedback.setIdle(button);
+        return;
+      }
+      button.disabled = false;
+    }
+
+    function showToastMessage(message, category = 'info') {
+      if (!toastEl) return;
+      toastEl.querySelector('.toast-body').textContent = message;
+      if (typeof applyToastTone === 'function') {
+        applyToastTone(toastEl, category);
+      }
+      new bootstrap.Toast(toastEl).show();
+    }
+
+    function renderInlineStatus(message, level = 'info') {
+      if (!feedback) return;
+      feedback.innerHTML = '';
+      if (!message) return;
+      const alert = document.createElement('div');
+      alert.className = `alert alert-${level} mb-0`;
+      alert.textContent = message;
+      feedback.appendChild(alert);
+    }
+
+    function handleSyncResult(ev) {
+      const detail = ev.detail || {};
+      const form = detail.form;
+      if (!form || !sections || !sections.contains(form)) return;
+
+      ev.preventDefault();
+      const button = getStatusButton(form);
+      const success = detail.success !== false && (!detail.response || detail.response.ok !== false);
+      const offlineQueued = Boolean(detail.offlineQueued);
+
+      resetButton(button);
+
+      const message = offlineQueued
+        ? 'Ação será sincronizada assim que houver conexão.'
+        : (detail.data && (detail.data.message || detail.data.error)) || (success ? 'Ação concluída.' : 'Falha ao processar a ação.');
+      const category = offlineQueued ? 'info' : (detail.data && detail.data.category) || (success ? 'success' : 'danger');
+
+      renderInlineStatus(message, category === 'danger' ? 'danger' : category);
+      showToastMessage(message, category);
+    }
+
+    function handleFeedbackTimeout(ev) {
+      const detail = ev.detail || {};
+      const form = detail.form || ev.target?.form || null;
+      if (!form || !sections || !sections.contains(form)) return;
+
+      const button = detail.button || getStatusButton(form);
+      resetButton(button);
+      renderInlineStatus('Ação será sincronizada assim que houver conexão.', 'warning');
+      showToastMessage(detail.message || 'Ação será sincronizada assim que houver conexão.', 'warning');
+    }
+
+    document.addEventListener('form-sync-success', handleSyncResult);
+    document.addEventListener('form-feedback-timeout', handleFeedbackTimeout);
   });
 </script>
 {% endblock %}
