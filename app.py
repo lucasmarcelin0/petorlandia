@@ -4560,14 +4560,6 @@ def contabilidade_plantonistas_quick_create():
                 next_date = next_date + relativedelta(months=1)
             datas_agendar.append(next_date)
 
-    escalas_criadas = []
-    for data_agenda in datas_agendar:
-        inicio = datetime.combine(data_agenda, modelo.hora_inicio)
-        fim = inicio + timedelta(hours=float(modelo.duracao_horas or 0))
-        horas_previstas = _compute_plantao_horas(inicio, fim)
-        if not horas_previstas:
-            continue
-
     medico_nome = (modelo.medico_nome or '').strip()
     medico_cnpj = (modelo.medico_cnpj or '').strip() or None
     medico_db_id = None
@@ -4583,6 +4575,14 @@ def contabilidade_plantonistas_quick_create():
 
     if not medico_nome:
         return jsonify({'error': 'Defina o profissional responsável pelo plantão.'}), 400
+
+    escalas_criadas = []
+    for data_agenda in datas_agendar:
+        inicio = datetime.combine(data_agenda, modelo.hora_inicio)
+        fim = inicio + timedelta(hours=float(modelo.duracao_horas or 0))
+        horas_previstas = _compute_plantao_horas(inicio, fim)
+        if not horas_previstas:
+            continue
 
         escala = PlantonistaEscala(
             clinic_id=clinic_id,
