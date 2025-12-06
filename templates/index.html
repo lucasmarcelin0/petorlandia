@@ -26,6 +26,33 @@
         box-shadow: 0 10px 20px rgba(0, 0, 0, 0.12);
         color: #fff;
     }
+
+    .lottie-wrapper {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 0.75rem;
+    }
+
+    .lottie-box {
+        position: relative;
+        height: 120px;
+        width: 100%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .lottie-box lottie-player,
+    .lottie-box .lottie-fallback {
+        height: 100px;
+        width: auto;
+        max-width: 180px;
+    }
+
+    .lottie-fallback {
+        object-fit: contain;
+    }
 </style>
 <div class="container text-center">
 
@@ -37,44 +64,72 @@
             <div class="row justify-content-center g-4">
                 <!-- Lottie: Add Animal -->
                 <div class="col-md-3">
-                    <lottie-player src="https://assets5.lottiefiles.com/packages/lf20_ghs9bthn.json"
-                                   background="transparent" speed="1" style="height: 100px;" loop autoplay></lottie-player>
-                    <a href="{{ url_for('add_animal') }}" class="btn btn-outline-success rounded-pill shadow-sm px-4 py-2"
-                       data-bs-toggle="tooltip" title="Cadastre um novo animal na plataforma.">
-                        ➕ Cadastrar novo animal
-                    </a>
+                    <div class="lottie-wrapper">
+                        <div class="lottie-box">
+                            <lottie-player src="https://assets5.lottiefiles.com/packages/lf20_ghs9bthn.json"
+                                           background="transparent" speed="1" loop autoplay aria-label="Cadastrar novo animal">
+                            </lottie-player>
+                            <img src="{{ url_for('static', filename='icons/add-animal.svg') }}" alt="Ilustração de cadastro de animal"
+                                 class="lottie-fallback d-none" loading="lazy" aria-hidden="true">
+                        </div>
+                        <a href="{{ url_for('add_animal') }}" class="btn btn-outline-success rounded-pill shadow-sm px-4 py-2"
+                           data-bs-toggle="tooltip" title="Cadastre um novo animal na plataforma.">
+                            ➕ Cadastrar novo animal
+                        </a>
+                    </div>
                 </div>
 
                 <!-- Lottie: List Animals -->
                 <div class="col-md-3">
-                    <lottie-player src="https://assets4.lottiefiles.com/packages/lf20_qp1q7mct.json"
-                                   background="transparent" speed="1" style="height: 100px;" loop autoplay></lottie-player>
-                    <a href="{{ url_for('list_animals') }}" class="btn btn-outline-primary rounded-pill shadow-sm px-4 py-2"
-                       data-bs-toggle="tooltip" title="Veja todos os animais disponíveis.">
-                        📋 Ver todos os animais
-                    </a>
+                    <div class="lottie-wrapper">
+                        <div class="lottie-box">
+                            <lottie-player src="https://assets4.lottiefiles.com/packages/lf20_qp1q7mct.json"
+                                           background="transparent" speed="1" loop autoplay aria-label="Listar animais">
+                            </lottie-player>
+                            <img src="{{ url_for('static', filename='icons/list-animals.svg') }}" alt="Ilustração de listagem de animais"
+                                 class="lottie-fallback d-none" loading="lazy" aria-hidden="true">
+                        </div>
+                        <a href="{{ url_for('list_animals') }}" class="btn btn-outline-primary rounded-pill shadow-sm px-4 py-2"
+                           data-bs-toggle="tooltip" title="Veja todos os animais disponíveis.">
+                            📋 Ver todos os animais
+                        </a>
+                    </div>
                 </div>
 
                 <!-- Lottie: Health -->
                 <div class="col-md-3">
-                    <lottie-player src="https://assets10.lottiefiles.com/packages/lf20_ksixj2kx.json"
-                                   background="transparent" speed="1" style="height: 100px;" loop autoplay></lottie-player>
-                    <a href="{{ url_for('plano_saude_overview') }}" class="btn btn-outline-info rounded-pill shadow-sm px-4 py-2"
-                       data-bs-toggle="tooltip" title="Conheça nosso plano de saúde para pets.">
-                        ❤️ Plano de Saúde Pet
-                    </a>
+                    <div class="lottie-wrapper">
+                        <div class="lottie-box">
+                            <lottie-player src="https://assets10.lottiefiles.com/packages/lf20_ksixj2kx.json"
+                                           background="transparent" speed="1" loop autoplay aria-label="Plano de saúde pet">
+                            </lottie-player>
+                            <img src="{{ url_for('static', filename='icons/health-plan.svg') }}" alt="Ilustração de plano de saúde pet"
+                                 class="lottie-fallback d-none" loading="lazy" aria-hidden="true">
+                        </div>
+                        <a href="{{ url_for('plano_saude_overview') }}" class="btn btn-outline-info rounded-pill shadow-sm px-4 py-2"
+                           data-bs-toggle="tooltip" title="Conheça nosso plano de saúde para pets.">
+                            ❤️ Plano de Saúde Pet
+                        </a>
+                    </div>
                 </div>
 
                 <!-- Lottie: Store -->
                 <div class="col-md-3">
-                    <lottie-player src="https://assets10.lottiefiles.com/packages/lf20_sGqAqL.json"
-                                   background="transparent" speed="1" style="height: 100px;" loop autoplay></lottie-player>
-                                   <a href="{{ url_for('loja') }}"
-                                   class="btn rounded-pill shadow-sm loja-pet-filled px-4 py-2"
-                                   data-bs-toggle="tooltip"
-                                   title="Acesse nossa loja para encontrar tudo que seu pet precisa.">
-                                   🛍️ Loja Pet
-                                </a>
+                    <div class="lottie-wrapper">
+                        <div class="lottie-box">
+                            <lottie-player src="https://assets10.lottiefiles.com/packages/lf20_sGqAqL.json"
+                                           background="transparent" speed="1" loop autoplay aria-label="Loja pet">
+                            </lottie-player>
+                            <img src="{{ url_for('static', filename='icons/pet-store.svg') }}" alt="Ilustração de loja pet"
+                                 class="lottie-fallback d-none" loading="lazy" aria-hidden="true">
+                        </div>
+                        <a href="{{ url_for('loja') }}"
+                           class="btn rounded-pill shadow-sm loja-pet-filled px-4 py-2"
+                           data-bs-toggle="tooltip"
+                           title="Acesse nossa loja para encontrar tudo que seu pet precisa.">
+                           🛍️ Loja Pet
+                        </a>
+                    </div>
 
 
                 </div>
@@ -167,4 +222,51 @@
         </div>
     {% endif %}
 </div>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function () {
+        document.querySelectorAll('.lottie-wrapper').forEach(function (wrapper) {
+            var player = wrapper.querySelector('lottie-player');
+            var fallback = wrapper.querySelector('.lottie-fallback');
+            var animationLoaded = false;
+
+            if (!fallback) {
+                return;
+            }
+
+            function showFallback() {
+                if (animationLoaded) {
+                    return;
+                }
+                fallback.classList.remove('d-none');
+                fallback.setAttribute('aria-hidden', 'false');
+                if (player) {
+                    player.classList.add('d-none');
+                    player.setAttribute('aria-hidden', 'true');
+                }
+            }
+
+            function markLoaded() {
+                animationLoaded = true;
+                fallback.classList.add('d-none');
+                fallback.setAttribute('aria-hidden', 'true');
+                if (player) {
+                    player.classList.remove('d-none');
+                    player.setAttribute('aria-hidden', 'false');
+                }
+            }
+
+            if (player) {
+                player.addEventListener('load', markLoaded);
+                player.addEventListener('error', showFallback);
+            }
+
+            setTimeout(function () {
+                if (!animationLoaded) {
+                    showFallback();
+                }
+            }, 4000);
+        });
+    });
+</script>
 {% endblock %}
