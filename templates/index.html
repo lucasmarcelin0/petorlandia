@@ -26,12 +26,20 @@
         box-shadow: 0 10px 20px rgba(0, 0, 0, 0.12);
         color: #fff;
     }
+
+    /* Tooltips curtos para leitura em telas menores */
+    .tooltip-inner {
+        max-width: 220px;
+        font-size: 0.9rem;
+        text-align: center;
+    }
 </style>
 <div class="container text-center">
 
     {% if current_user.is_authenticated %}
         <!-- Área pessoal -->
         <div class="card shadow-sm p-4 rounded-4 mt-5 mb-4" style="background: #f8f9fa;">
+            <p class="text-muted small mb-1">Início • Área pessoal</p>
             <h5 class="mb-4">Bem-vindo(a)! O que você deseja fazer hoje?</h5>
 
             <div class="row justify-content-center g-4">
@@ -40,7 +48,7 @@
                     <lottie-player src="https://assets5.lottiefiles.com/packages/lf20_ghs9bthn.json"
                                    background="transparent" speed="1" style="height: 100px;" loop autoplay></lottie-player>
                     <a href="{{ url_for('add_animal') }}" class="btn btn-outline-success rounded-pill shadow-sm px-4 py-2"
-                       data-bs-toggle="tooltip" title="Cadastre um novo animal na plataforma.">
+                       data-bs-toggle="tooltip" title="Crie um cadastro e acompanhe os dados do novo pet.">
                         ➕ Cadastrar novo animal
                     </a>
                 </div>
@@ -50,7 +58,7 @@
                     <lottie-player src="https://assets4.lottiefiles.com/packages/lf20_qp1q7mct.json"
                                    background="transparent" speed="1" style="height: 100px;" loop autoplay></lottie-player>
                     <a href="{{ url_for('list_animals') }}" class="btn btn-outline-primary rounded-pill shadow-sm px-4 py-2"
-                       data-bs-toggle="tooltip" title="Veja todos os animais disponíveis.">
+                       data-bs-toggle="tooltip" title="Visualize e filtre todos os pets cadastrados.">
                         📋 Ver todos os animais
                     </a>
                 </div>
@@ -60,7 +68,7 @@
                     <lottie-player src="https://assets10.lottiefiles.com/packages/lf20_ksixj2kx.json"
                                    background="transparent" speed="1" style="height: 100px;" loop autoplay></lottie-player>
                     <a href="{{ url_for('plano_saude_overview') }}" class="btn btn-outline-info rounded-pill shadow-sm px-4 py-2"
-                       data-bs-toggle="tooltip" title="Conheça nosso plano de saúde para pets.">
+                       data-bs-toggle="tooltip" title="Consulte coberturas e adesão do plano de saúde.">
                         ❤️ Plano de Saúde Pet
                     </a>
                 </div>
@@ -72,7 +80,7 @@
                                    <a href="{{ url_for('loja') }}"
                                    class="btn rounded-pill shadow-sm loja-pet-filled px-4 py-2"
                                    data-bs-toggle="tooltip"
-                                   title="Acesse nossa loja para encontrar tudo que seu pet precisa.">
+                                   title="Compre itens e serviços recomendados para o pet.">
                                    🛍️ Loja Pet
                                 </a>
 
@@ -83,6 +91,7 @@
     {% else %}
         <!-- Visitante não autenticado -->
         <div class="card shadow-lg p-5 rounded-4 mt-5" style="background: white;">
+            <p class="text-muted small mb-1">Início • Visite a plataforma</p>
             <div class="text-center">
                 <img src="{{ url_for('static', filename='logo_pet.png') }}"
                      alt="Logo PetOrlândia"
@@ -105,22 +114,23 @@
     {% if current_user.is_authenticated and (current_user.worker == 'colaborador' or is_active_veterinarian) %}
     <!-- Área profissional -->
         <div class="card shadow-lg p-4 rounded-4 mb-5" style="background: #ffffff;">
+            <p class="text-muted small mb-1">Início • Área profissional</p>
             <h5 class="mb-4">Área profissional</h5>
             <div class="d-flex flex-wrap justify-content-center gap-3">
                 <a href="{{ url_for('novo_animal') }}" class="btn btn-outline-primary rounded-pill shadow-sm px-4 py-2"
-                   data-bs-toggle="tooltip" title="Gerencie os animais vinculados a tutores.">
+                   data-bs-toggle="tooltip" title="Cadastre e edite dados dos pets de clientes.">
                     🐶 Animais
                 </a>
 
                 <a href="{{ url_for('tutores') }}" class="btn btn-outline-secondary rounded-pill shadow-sm px-4 py-2"
-                   data-bs-toggle="tooltip" title="Veja os tutores cadastrados.">
+                   data-bs-toggle="tooltip" title="Revise tutores e atualize contatos rapidamente.">
                     👥 Tutores
                 </a>
 
                 {% if current_user.worker == 'colaborador' or (is_active_veterinarian and current_user.veterinario) %}
                 <a href="{{ url_for('appointments') }}"
                    class="btn btn-outline-warning rounded-pill shadow-sm px-4 py-2"
-                   data-bs-toggle="tooltip" title="Administre sua agenda de atendimentos.">
+                   data-bs-toggle="tooltip" title="Abra a agenda para marcar ou confirmar consultas.">
                     🗓️ Agenda
                 </a>
                 {% endif %}
@@ -136,6 +146,7 @@
         {% set owner_with_access = owned_clinics|length > 0 and can_access_accounting %}
         {% if has_admin_role or has_admin_worker or owner_with_access %}
         <div class="card shadow-lg p-4 rounded-4 mb-5 accounting-card" style="background: #ffffff;">
+            <p class="text-muted small mb-1 text-center">Início • Gestão financeira</p>
             <h5 class="mb-4 text-center">Contabilidade</h5>
             <div class="d-flex flex-wrap justify-content-center gap-3">
                 <a href="/contabilidade/financeiro" class="btn accounting-btn" style="background-color: #4A90E2;">
@@ -158,6 +169,7 @@
     {% if current_user.is_authenticated and current_user.worker == 'delivery' %}
     <!-- Área de Entregas -->
         <div class="card shadow-lg p-4 rounded-4 mb-5" style="background: #ffffff;">
+            <p class="text-muted small mb-1">Início • Área de entregas</p>
             <h5 class="mb-4">Área de Entregas</h5>
             <div class="d-flex flex-wrap justify-content-center gap-3">
                 <a href="{{ url_for('list_delivery_requests') }}" class="btn btn-outline-secondary rounded-pill shadow-sm px-4 py-2">
