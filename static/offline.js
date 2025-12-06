@@ -291,14 +291,16 @@
     if (!resp) {
       offlineQueued = true;
       setButtonIdle(submitButton);
-      showFormMessage(form, 'Formulário enfileirado para sincronização quando voltar a ficar online.', 'info');
-      return;
     }
 
     let json = null;
-    try { json = await resp.json(); } catch(e) {}
-    const mainMessage = json && json.message ? json.message : undefined;
-    const category = json && json.category ? json.category : (json && json.success === false || !resp.ok ? 'danger' : 'success');
+    if (resp) {
+      try { json = await resp.json(); } catch(e) {}
+    }
+    const mainMessage = json && json.message ? json.message : (offlineQueued ? 'Formulário enfileirado para sincronização quando voltar a ficar online.' : undefined);
+    const category = json && json.category
+      ? json.category
+      : (offlineQueued ? 'warning' : (json && json.success === false || (resp && !resp.ok) ? 'danger' : 'success'));
     if (mainMessage) {
       showFormMessage(form, mainMessage, category);
     }
@@ -312,17 +314,20 @@
         }
       });
     }
-    const isSuccess = resp.ok && !(json && json.success === false);
+    const isSuccess = offlineQueued || (resp && resp.ok && !(json && json.success === false));
     if (!isSuccess && !mainMessage && resp && !resp.ok) {
       const fallback = resp.statusText || 'Falha ao processar o formulário.';
       showFormMessage(form, fallback, 'danger');
     }
-    if (isSuccess) {
+    if (isSuccess && !offlineQueued) {
       setButtonSuccess(submitButton);
-    } else {
+    } else if (!isSuccess || offlineQueued) {
       setButtonIdle(submitButton);
     }
     const evt = new CustomEvent('form-sync-success', {detail: {form, data: json, response: resp, offlineQueued, success: isSuccess}, cancelable: true});
+    if (offlineQueued) {
+      evt.preventDefault();
+    }
     document.dispatchEvent(evt);
     if (!evt.defaultPrevented && !(form.classList && (form.classList.contains('js-tutor-form') || form.id === 'tutor-form'))) {
       location.reload();
@@ -665,6 +670,73 @@
     }
   }
 
+  function buildRemovedStatusBadge(options = {}) {
+    const badge = document.createElement('span');
+    badge.dataset.removedStatus = 'true';
+    badge.classList.add('badge', 'ms-2', 'align-middle');
+    const queued = Boolean(options.queued);
+    if (queued) {
+      badge.classList.add('bg-warning', 'text-dark');
+      badge.innerHTML = '<i class="fas fa-cloud-slash me-1"></i>Aguardando sincronização';
+      badge.title = 'Remoção pendente de sincronização.';
+    } else {
+      badge.classList.add('bg-danger-subtle', 'text-danger');
+      badge.innerHTML = '<i class="fas fa-trash-alt me-1"></i>Excluído';
+      badge.title = 'Remoção concluída.';
+    }
+    return badge;
+  }
+
+  function addRemovedAnimalToList(form, detail = {}){
+    const removedWrapper = document.getElementById('removidos-wrapper');
+    const removedList = removedWrapper ? removedWrapper.querySelector('.list-group') : null;
+    if(!removedList){
+      return;
+    }
+
+    const animalId = form.dataset.animalId || '';
+    const existing = animalId ? removedList.querySelector(`li[data-animal-id="${animalId}"]`) : null;
+    const li = existing || document.createElement('li');
+    li.className = 'list-group-item d-flex justify-content-between align-items-center';
+    if (animalId) li.dataset.animalId = animalId;
+    if (existing) li.innerHTML = '';
+
+    const infoSpan = document.createElement('span');
+    const nameStrong = document.createElement('strong');
+    const animalName = form.dataset.animalName || '';
+    const animalSpecies = form.dataset.animalSpecies || '';
+    const animalBreed = form.dataset.animalBreed || '';
+    nameStrong.textContent = animalName;
+    infoSpan.appendChild(nameStrong);
+    infoSpan.appendChild(document.createTextNode(` — ${animalSpecies} / ${animalBreed}`));
+    infoSpan.appendChild(buildRemovedStatusBadge({queued: detail.offlineQueued}));
+
+    const deleteForm = document.createElement('form');
+    deleteForm.action = form.getAttribute('action');
+    deleteForm.method = 'POST';
+    deleteForm.className = 'js-animal-delete-form d-inline';
+    deleteForm.dataset.sync = '';
+    deleteForm.dataset.confirm = `Excluir permanentemente ${animalName}?`;
+    deleteForm.dataset.animalId = form.dataset.animalId || '';
+    deleteForm.dataset.animalName = animalName;
+    deleteForm.dataset.animalSpecies = animalSpecies;
+    deleteForm.dataset.animalBreed = animalBreed;
+    deleteForm.dataset.removedItem = 'true';
+
+    const deleteButton = document.createElement('button');
+    deleteButton.type = 'submit';
+    deleteButton.className = 'btn btn-sm btn-danger';
+    deleteButton.textContent = '❌ Excluir Definitivamente';
+    deleteForm.appendChild(deleteButton);
+
+    li.appendChild(infoSpan);
+    li.appendChild(deleteForm);
+    if (!existing) {
+      removedList.appendChild(li);
+    }
+    removedWrapper.classList.remove('d-none');
+  }
+
   document.addEventListener('form-sync-success', ev => {
     const detail = ev.detail || {};
     const form = detail.form;
@@ -673,15 +745,24 @@
     if(!form || !form.classList.contains('js-animal-delete-form')) return;
     if(ev.defaultPrevented) return;
 
-    if(!response || !response.ok || (data && data.success === false)){
+    if((!response || !response.ok || (data && data.success === false)) && !detail.offlineQueued){
       setButtonIdle(getSubmitButton(form));
       return;
     }
 
     ev.preventDefault();
 
+    const toastMessage = (data && data.message) || (detail.offlineQueued ? 'Remoção enfileirada para sincronização.' : 'Animal removido.');
+    showToast(toastMessage, detail.offlineQueued ? 'warning' : 'success');
+
     const animalId = form.dataset.animalId;
+    const isRemovedItem = form.dataset.removedItem === 'true';
     const rowId = animalId ? `animal-row-${animalId}` : null;
+    if (isRemovedItem) {
+      const listItem = form.closest('li');
+      if (listItem) listItem.remove();
+      return;
+    }
     if(rowId){
       const row = document.getElementById(rowId);
       if(row) row.remove();
@@ -690,41 +771,6 @@
     const tableBody = document.querySelector('#animals-table tbody');
     updateAnimalsEmptyState(tableBody);
 
-    const removedWrapper = document.getElementById('removidos-wrapper');
-    const removedList = removedWrapper ? removedWrapper.querySelector('.list-group') : null;
-    if(removedList){
-      const li = document.createElement('li');
-      li.className = 'list-group-item d-flex justify-content-between align-items-center';
-
-      const infoSpan = document.createElement('span');
-      const nameStrong = document.createElement('strong');
-      const animalName = form.dataset.animalName || '';
-      const animalSpecies = form.dataset.animalSpecies || '';
-      const animalBreed = form.dataset.animalBreed || '';
-      nameStrong.textContent = animalName;
-      infoSpan.appendChild(nameStrong);
-      infoSpan.appendChild(document.createTextNode(` — ${animalSpecies} / ${animalBreed}`));
-
-      const deleteForm = document.createElement('form');
-      deleteForm.action = form.getAttribute('action');
-      deleteForm.method = 'POST';
-      deleteForm.className = 'd-inline';
-      deleteForm.addEventListener('submit', evt => {
-        if(!window.confirm(`Excluir permanentemente ${animalName}?`)){
-          evt.preventDefault();
-        }
-      });
-
-      const deleteButton = document.createElement('button');
-      deleteButton.type = 'submit';
-      deleteButton.className = 'btn btn-sm btn-danger';
-      deleteButton.textContent = '❌ Excluir Definitivamente';
-      deleteForm.appendChild(deleteButton);
-
-      li.appendChild(infoSpan);
-      li.appendChild(deleteForm);
-      removedList.appendChild(li);
-      removedWrapper.classList.remove('d-none');
-    }
+    addRemovedAnimalToList(form, detail);
   });
 })();
