@@ -249,6 +249,9 @@
     const form = ev.target;
     if (!form.matches('form[data-sync]')) return;
 
+    const isDeleteHistory = form.classList.contains('delete-history-form');
+    const isDeleteAppointment = form.classList.contains('delete-appointment-form');
+
     const submitButton = getSubmitButton(form);
 
     const confirmationMessage = form.dataset.confirm || (form.classList.contains('delete-history-form') ? 'Excluir este registro?' : null);
@@ -280,15 +283,19 @@
 
     if (!resp) {
       setButtonIdle(submitButton);
-      showToast('Formulário salvo para sincronização quando voltar a ficar online.', 'info');
+      const savedMessage = (isDeleteHistory || isDeleteAppointment)
+        ? 'Remoção salva para sincronização quando voltar a ficar online.'
+        : 'Formulário salvo para sincronização quando voltar a ficar online.';
+      showToast(savedMessage, 'info');
       return;
     }
 
     let json = null;
     try { json = await resp.json(); } catch(e) {}
-    if (json && json.message) {
+    const message = json && (json.message || json.error || json.detail);
+    if (message) {
       const category = json.category || (json.success === false || !resp.ok ? 'danger' : 'success');
-      showToast(json.message, category);
+      showToast(message, category);
     }
     if (json && Array.isArray(json.messages)) {
       json.messages.forEach(entry => {
@@ -306,7 +313,19 @@
     } else {
       setButtonIdle(submitButton);
     }
+
+    const hasHtmlTarget = Boolean(json && json.html && form.dataset.target);
+    if (hasHtmlTarget) {
+      const container = document.getElementById(form.dataset.target);
+      if (container) {
+        container.innerHTML = json.html;
+      }
+    }
+
     const evt = new CustomEvent('form-sync-success', {detail: {form, data: json, response: resp}, cancelable: true});
+    if (hasHtmlTarget || isDeleteHistory || isDeleteAppointment) {
+      evt.preventDefault();
+    }
     document.dispatchEvent(evt);
     if (!evt.defaultPrevented) {
       location.reload();
@@ -405,22 +424,6 @@
       if(btn && btn.dataset.original){
         btn.disabled=false;
         btn.innerHTML=btn.dataset.original;
-      }
-    }
-  });
-
-  // Atualiza automaticamente o contêiner do histórico após exclusões
-  document.addEventListener('form-sync-success', ev => {
-    const detail = ev.detail || {};
-    const form = detail.form;
-    const data = detail.data;
-    if (!form || !form.classList.contains('delete-history-form')) return;
-
-    ev.preventDefault();
-    if (data && data.html && form.dataset.target) {
-      const container = document.getElementById(form.dataset.target);
-      if (container) {
-        container.innerHTML = data.html;
       }
     }
   });

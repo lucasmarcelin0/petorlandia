@@ -7420,6 +7420,7 @@ def deletar_consulta(consulta_id):
     db.session.delete(consulta)
     db.session.commit()
 
+    message = 'Consulta excluída!'
     if request.accept_mimetypes.accept_json:
         animal = get_animal_or_404(animal_id)
         historico_html = render_template(
@@ -7427,9 +7428,9 @@ def deletar_consulta(consulta_id):
             animal=animal,
             historico_consultas=animal.consultas
         )
-        return jsonify(success=True, html=historico_html)
+        return jsonify(success=True, message=message, html=historico_html)
 
-    flash('Consulta excluída!', 'info')
+    flash(message, 'info')
     return redirect(url_for('consulta_direct', animal_id=animal_id))
 
 
@@ -11290,13 +11291,25 @@ def deletar_prescricao(prescricao_id):
     ensure_clinic_access(clinic_id)
     animal_id = prescricao.animal_id
 
+    wants_json = request.accept_mimetypes.accept_json
+
     if not is_veterinarian(current_user):
-        flash('Apenas veterinários podem excluir prescrições.', 'danger')
+        message = 'Apenas veterinários podem excluir prescrições.'
+        if wants_json:
+            return jsonify({'success': False, 'message': message}), 403
+        flash(message, 'danger')
         return redirect(request.referrer or url_for('index'))
 
     db.session.delete(prescricao)
     db.session.commit()
-    flash('Prescrição removida com sucesso!', 'info')
+    message = 'Prescrição removida com sucesso!'
+
+    if wants_json:
+        animal = get_animal_or_404(animal_id)
+        historico_html = _render_prescricao_history(animal, clinic_id)
+        return jsonify({'success': True, 'message': message, 'html': historico_html})
+
+    flash(message, 'info')
     return redirect(url_for('consulta_qr', animal_id=animal_id))
 
 
@@ -11619,7 +11632,7 @@ def deletar_bloco_prescricao(bloco_id):
     if request.accept_mimetypes.accept_json:
         animal = get_animal_or_404(animal_id)
         historico_html = _render_prescricao_history(animal, clinic_id)
-        return jsonify(success=True, html=historico_html)
+        return jsonify(success=True, message='Bloco de prescrição excluído com sucesso!', html=historico_html)
 
     flash('Bloco de prescrição excluído com sucesso!', 'info')
     return redirect(url_for('consulta_direct', animal_id=animal_id))
@@ -11844,7 +11857,7 @@ def deletar_bloco_exames(bloco_id):
         animal = get_animal_or_404(animal_id)
         historico_html = render_template('partials/historico_exames.html',
                                          animal=animal)
-        return jsonify(success=True, html=historico_html)
+        return jsonify(success=True, message='Bloco de exames excluído com sucesso!', html=historico_html)
 
     flash('Bloco de exames excluído com sucesso!', 'info')
     return redirect(url_for('consulta_direct', animal_id=animal_id))
@@ -14845,6 +14858,8 @@ def pedido_detail(order_id):
 @login_required
 def appointment_confirmation(appointment_id):
     appointment = Appointment.query.get_or_404(appointment_id)
+    consulta = appointment.consulta
+    animal = appointment.animal
     if appointment.tutor_id != current_user.id:
         abort(403)
     return render_template('agendamentos/appointment_confirmation.html', appointment=appointment)
@@ -16534,7 +16549,7 @@ def update_appointment_status(appointment_id):
 def delete_appointment(appointment_id):
     appointment = Appointment.query.get_or_404(appointment_id)
 
-    wants_json = 'application/json' in request.headers.get('Accept', '')
+    wants_json = 'application/json' in request.headers.get('Accept', '') or request.accept_mimetypes.accept_json
     is_vet = is_veterinarian(current_user)
     is_collaborator = getattr(current_user, 'worker', None) == 'colaborador'
 
@@ -16552,9 +16567,16 @@ def delete_appointment(appointment_id):
             appointment_clinic = appointment.veterinario.clinica_id
 
         if appointment_clinic != user_clinic:
+            if wants_json:
+                return jsonify({'success': False, 'message': 'Permissão negada.'}), 403
             abort(403)
     else:
+        if wants_json:
+            return jsonify({'success': False, 'message': 'Permissão negada.'}), 403
         abort(403)
+    if consulta:
+        consulta.appointment = None
+
     try:
         db.session.delete(appointment)
         db.session.commit()
@@ -16567,8 +16589,40 @@ def delete_appointment(appointment_id):
         return redirect(request.referrer or url_for('manage_appointments'))
 
     message = 'Agendamento removido.'
+    appointment_form = None
+    if consulta:
+        from models import Veterinario
+
+        appointment_form = AppointmentForm()
+        appointment_form.populate_animals(
+            [animal],
+            restrict_tutors=True,
+            selected_tutor_id=getattr(animal, 'user_id', None),
+            allow_all_option=False,
+        )
+        appointment_form.animal_id.data = getattr(animal, 'id', None)
+        vet_obj = None
+        if consulta.veterinario and getattr(consulta.veterinario, "veterinario", None):
+            vet_obj = consulta.veterinario.veterinario
+        if vet_obj:
+            vets = (
+                Veterinario.query.filter_by(
+                    clinica_id=current_user_clinic_id()
+                ).all()
+            )
+            appointment_form.veterinario_id.choices = [
+                (v.id, v.user.name) for v in vets
+            ]
+            appointment_form.veterinario_id.data = vet_obj.id
+
     if wants_json:
-        return jsonify({'success': True, 'message': message, 'appointment_id': appointment_id})
+        retorno_html = render_template(
+            'partials/retorno_container.html',
+            consulta=consulta,
+            appointment_form=appointment_form,
+            animal=animal,
+        )
+        return jsonify({'success': True, 'message': message, 'appointment_id': appointment_id, 'html': retorno_html})
 
     flash(message, 'success')
     return redirect(request.referrer or url_for('manage_appointments'))
@@ -18198,7 +18252,7 @@ def deletar_bloco_orcamento(bloco_id):
             animal,
             clinic_id or getattr(animal, 'clinica_id', None)
         )
-        return jsonify({'success': True, 'html': historico_html})
+        return jsonify({'success': True, 'message': 'Orçamento removido com sucesso.', 'html': historico_html})
     return redirect(url_for('consulta_direct', animal_id=animal_id))
 
 
