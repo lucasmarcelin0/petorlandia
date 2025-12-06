@@ -253,6 +253,12 @@
     }
   }
 
+  function showFieldValidation(form, errors){
+    if (window.FormFeedback && typeof window.FormFeedback.showFieldErrors === 'function') {
+      window.FormFeedback.showFieldErrors(form, errors || null);
+    }
+  }
+
   document.addEventListener('submit', async ev => {
     if (ev.defaultPrevented) return;
     const form = ev.target;
@@ -290,13 +296,24 @@
 
     if (!resp) {
       offlineQueued = true;
-      setButtonIdle(submitButton);
-      showFormMessage(form, 'Formulário enfileirado para sincronização quando voltar a ficar online.', 'info');
+      const fallbackData = {};
+      const tutorName = data.get ? data.get('name') : null;
+      if (tutorName) {
+        fallbackData.tutor_name = tutorName;
+        fallbackData.tutor = { name: tutorName };
+      }
+      showFieldValidation(form, null);
+      setButtonSuccess(submitButton);
+      showFormMessage(form, 'Alterações enfileiradas para sincronização quando voltar a ficar online.', 'info');
+      showToast('Alterações serão sincronizadas assim que a conexão voltar.', 'info');
+      const evt = new CustomEvent('form-sync-success', {detail: {form, data: fallbackData, response: null, offlineQueued: true, success: true}, cancelable: true});
+      document.dispatchEvent(evt);
       return;
     }
 
     let json = null;
     try { json = await resp.json(); } catch(e) {}
+    showFieldValidation(form, json && json.errors);
     const mainMessage = json && json.message ? json.message : undefined;
     const category = json && json.category ? json.category : (json && json.success === false || !resp.ok ? 'danger' : 'success');
     if (mainMessage) {
@@ -574,7 +591,10 @@
       setButtonIdle(btn);
     } else if(form.id === 'tutor-form'){
       const resp = detail.response;
-      if(!(resp && resp.ok) || (data && data.success === false)){
+      const isSuccessResponse = typeof detail.success === 'boolean'
+        ? detail.success
+        : ((resp && resp.ok) && !(data && data.success === false));
+      if(!isSuccessResponse){
         const message = (data && data.message) || 'Não foi possível salvar o tutor.';
         showFormMessage(form, message, 'danger');
         setButtonIdle(getSubmitButton(form));
@@ -585,6 +605,7 @@
         ? 'Alterações do tutor enfileiradas para sincronização offline.'
         : (data && data.message) || 'Tutor salvo com sucesso.';
       showFormMessage(form, successMessage, isQueued ? 'info' : 'success');
+      showToast(isQueued ? 'Alterações serão sincronizadas.' : 'Alterações aplicadas.', isQueued ? 'info' : 'success');
       setButtonSuccess(getSubmitButton(form));
       const tutor = data ? data.tutor : null;
       if(tutor){

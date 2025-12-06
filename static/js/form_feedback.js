@@ -8,6 +8,62 @@
   const DEFAULT_TIMEOUT_MESSAGE = 'O tempo limite foi atingido. Reativamos o botão para que você possa tentar novamente.';
   const STATUS_VARIANTS = ['success', 'danger', 'warning', 'info'];
 
+  function clearFieldErrors(form) {
+    if (!form) return;
+    form.querySelectorAll('.is-invalid').forEach((el) => {
+      el.classList.remove('is-invalid');
+    });
+    form.querySelectorAll('.invalid-feedback[data-dynamic="true"]').forEach((el) => el.remove());
+  }
+
+  function findFeedbackElement(input) {
+    const container = input.closest('.form-floating, .input-group, .mb-3, .form-group, .col-12, .col-md-6, .col-6, .col-3');
+    const existing = container ? container.querySelector('.invalid-feedback') : null;
+    if (existing) {
+      return existing;
+    }
+
+    if (input.nextElementSibling && input.nextElementSibling.classList.contains('invalid-feedback')) {
+      return input.nextElementSibling;
+    }
+
+    const feedback = document.createElement('div');
+    feedback.className = 'invalid-feedback d-block';
+    feedback.dataset.dynamic = 'true';
+    input.insertAdjacentElement('afterend', feedback);
+    return feedback;
+  }
+
+  function showFieldErrors(form, errors) {
+    if (!form) return;
+    clearFieldErrors(form);
+
+    if (!errors || typeof errors !== 'object') return;
+
+    let firstInvalid = null;
+    Object.entries(errors).forEach(([fieldName, messages]) => {
+      const fields = form.querySelectorAll(`[name="${fieldName}"]`);
+      if (!fields.length) return;
+
+      const message = Array.isArray(messages) ? messages.join(' ') : String(messages || 'Corrija este campo.');
+      fields.forEach((field) => {
+        field.classList.add('is-invalid');
+        const feedback = findFeedbackElement(field);
+        if (feedback) {
+          feedback.textContent = message;
+          feedback.classList.remove('d-none');
+        }
+        if (!firstInvalid) {
+          firstInvalid = field;
+        }
+      });
+    });
+
+    if (firstInvalid && typeof firstInvalid.focus === 'function') {
+      firstInvalid.focus({ preventScroll: false });
+    }
+  }
+
   function getButton(target) {
     if (!target) return null;
     if (target instanceof HTMLButtonElement) return target;
@@ -244,6 +300,7 @@
 
     const form = options.form || (target instanceof HTMLFormElement ? target : null);
     if (form) {
+      clearFieldErrors(form);
       clearStatus(form);
     }
 
@@ -378,6 +435,8 @@
     setSuccess,
     showStatus,
     clearStatus,
+    clearFieldErrors,
+    showFieldErrors,
     withSavingState,
   };
 })();
