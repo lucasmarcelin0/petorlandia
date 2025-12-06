@@ -379,3 +379,58 @@
 .clinic-team-container .offcanvas form button.btn-outline-danger {
   min-width: 40px;
 }
+
+/* Home utilities */
+.toast-stack {
+  z-index: 11;
+}
+
+.card-surface-muted {
+  background: #f8f9fa;
+}
+
+.card-surface-white {
+  background: #ffffff;
+}
+
+.lottie-cta {
+  height: 100px;
+}
+
+.accounting-btn {
+  border-radius: 999px;
+  color: #fff;
+  border: none;
+  padding: 0.75rem 1.75rem;
+  min-width: 190px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  font-weight: 600;
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.08);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.accounting-btn i {
+  font-size: 1rem;
+}
+
+.accounting-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 10px 20px rgba(0, 0, 0, 0.12);
+  color: #fff;
+}
+
+.accounting-btn--finance {
+  background-color: #4a90e2;
+}
+
+.accounting-btn--payments {
+  background-color: #6f42c1;
+}
+
+.accounting-btn--obligations {
+  background-color: #f4b400;
+  color: #4a3c00;
+}
