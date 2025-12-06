@@ -604,10 +604,14 @@
 
       // Close sidebar when clicking outside on mobile
       document.addEventListener('click', (e) => {
+        const clickedSidebar = sidebar.contains(e.target);
+        const clickedMobileToggle = mobileMenuToggle?.contains(e.target);
+        const clickedTopbarToggle = toggleSidebar?.contains(e.target);
+
         if (window.innerWidth <= 992 &&
-            !sidebar.contains(e.target) &&
-            !mobileMenuToggle.contains(e.target) &&
-            !e.target.classList.contains('toggle-sidebar')) {
+            !clickedSidebar &&
+            !clickedMobileToggle &&
+            !clickedTopbarToggle) {
           sidebar.classList.remove('active');
         }
       });
