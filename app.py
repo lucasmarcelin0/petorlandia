@@ -6057,7 +6057,13 @@ def deletar_animal(animal_id):
     db.session.commit()
     message = 'Animal marcado como removido. Histórico preservado.'
     if 'application/json' in request.headers.get('Accept', ''):
-        return jsonify(message=message, category='success', deleted=True)
+        return jsonify(
+            message=message,
+            category='success',
+            deleted=True,
+            undo_available=False,
+            undo_status='not_available'
+        )
     flash(message, 'success')
     return redirect(request.referrer or url_for('list_animals'))
 

@@ -37,7 +37,25 @@ function updateAnimalsEmptyState(tableBody) {
   }
 }
 
-function addRemovedAnimalToList(form) {
+function buildRemovalBadge(syncStatus) {
+  const badge = document.createElement('span');
+  badge.className = 'badge ms-2';
+  if (syncStatus === 'queued') {
+    badge.classList.add('bg-warning', 'text-dark');
+    badge.innerHTML = '<i class="fas fa-cloud-slash me-1"></i>Aguardando sincronização';
+    badge.title = 'Este item será removido quando a conexão voltar.';
+  } else {
+    badge.classList.add('bg-success');
+    badge.innerHTML = '<i class="fas fa-check me-1"></i>Excluído';
+    badge.title = 'Remoção concluída';
+  }
+  if (window.bootstrap && bootstrap.Tooltip) {
+    bootstrap.Tooltip.getOrCreateInstance(badge);
+  }
+  return badge;
+}
+
+function addRemovedAnimalToList(form, syncStatus = 'completed') {
   const removedWrapper = document.getElementById('removidos-wrapper');
   const removedList = removedWrapper ? removedWrapper.querySelector('.list-group') : null;
   if (!removedList || !removedWrapper) return;
@@ -53,6 +71,7 @@ function addRemovedAnimalToList(form) {
   nameStrong.textContent = animalName;
   infoSpan.appendChild(nameStrong);
   infoSpan.appendChild(document.createTextNode(` — ${animalSpecies} / ${animalBreed}`));
+  infoSpan.appendChild(buildRemovalBadge(syncStatus));
 
   const deleteForm = document.createElement('form');
   deleteForm.action = form.getAttribute('action');
@@ -85,10 +104,15 @@ document.addEventListener('form-sync-success', (ev) => {
   const response = detail.response;
 
   if (!form || !form.classList.contains('js-animal-delete-form')) return;
-  if (ev.defaultPrevented) return;
-  if (!response || !response.ok || (data && data.success === false)) return;
+  if (ev.defaultPrevented || form.dataset.removalHandled === 'true') return;
+
+  const syncStatus = detail.syncStatus || (!response ? 'queued' : (response.ok && data.success !== false ? 'completed' : 'error'));
+  const isQueued = syncStatus === 'queued';
+  const isSuccess = syncStatus === 'completed' || isQueued;
+  if (!isSuccess) return;
 
   ev.preventDefault();
+  form.dataset.removalHandled = 'true';
 
   const animalId = form.dataset.animalId;
   const rowId = animalId ? `animal-row-${animalId}` : null;
@@ -103,6 +127,11 @@ document.addEventListener('form-sync-success', (ev) => {
 
     const tableBody = document.querySelector('#animals-table tbody');
     updateAnimalsEmptyState(tableBody);
-    addRemovedAnimalToList(form);
+    addRemovedAnimalToList(form, syncStatus === 'queued' ? 'queued' : 'completed');
+  }
+
+  const message = data && data.message ? data.message : (isQueued ? 'Remoção aguardando sincronização.' : 'Animal removido com sucesso.');
+  if (typeof showToast === 'function') {
+    showToast(message, isQueued ? 'warning' : 'success');
   }
 });
