@@ -450,16 +450,46 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 
 
+function resetSubmitButton(button) {
+  if (!button) return;
+  clearTimeout(button.spinnerTimer);
+  button.spinnerTimer = null;
+  button.querySelector('.spinner-border')?.remove();
+  if (button.dataset && button.dataset.originalHtml) {
+    button.innerHTML = button.dataset.originalHtml;
+  }
+  button.disabled = false;
+  button.removeAttribute('aria-busy');
+}
+
+function showActionToast(message, variant = 'info') {
+  const toastEl = document.getElementById('actionToast');
+  if (!toastEl) return;
+  toastEl.querySelector('.toast-body').textContent = message;
+  toastEl.classList.remove('bg-danger', 'bg-info', 'bg-success', 'bg-warning');
+  toastEl.classList.add(`bg-${variant}`);
+  bootstrap.Toast.getOrCreateInstance(toastEl).show();
+}
+
+document.addEventListener('form-feedback-timeout', function(ev) {
+  const { button, form } = ev.detail || {};
+  const submitButton = button || (form ? form.querySelector('button[type="submit"]') : null);
+  resetSubmitButton(submitButton);
+  showActionToast('Ação será sincronizada assim que houver conexão', 'warning');
+});
+
 document.addEventListener('form-sync-success', function(ev) {
   const {form, data, response} = ev.detail || {};
   if (!form) return;
 
+  ev.preventDefault();
+
   const btn = form.querySelector('button[type="submit"]');
-  if (btn) {
-    clearTimeout(btn.spinnerTimer);
-    btn.spinnerTimer = null;
-    btn.querySelector('.spinner-border')?.remove();
-    btn.disabled = false;
+  resetSubmitButton(btn);
+
+  const isOffline = data && data.status === 'warning';
+  if (isOffline) {
+    showActionToast('Ação será sincronizada assim que houver conexão', 'warning');
   }
 
   const success = !(data && data.success === false) && (!response || response.ok);
@@ -474,7 +504,6 @@ document.addEventListener('form-sync-success', function(ev) {
   }
 
   if (form.classList.contains('delete-history-form')) {
-    ev.preventDefault();
     if (data && data.html && form.dataset.target) {
       const container = document.getElementById(form.dataset.target);
       if (container) {
@@ -482,19 +511,12 @@ document.addEventListener('form-sync-success', function(ev) {
         bindSyncForms(container);
       }
     }
-    const toastEl = document.getElementById('actionToast');
-    if (toastEl) {
-      const msg = (data && (data.message || data.error)) || (success ? 'Item removido!' : 'Erro ao remover item');
-      toastEl.querySelector('.toast-body').textContent = msg;
-      toastEl.classList.remove('bg-danger', 'bg-info', 'bg-success');
-      toastEl.classList.add(success ? 'bg-info' : 'bg-danger');
-      bootstrap.Toast.getOrCreateInstance(toastEl).show();
-    }
+    const msg = (data && (data.message || data.error)) || (success ? 'Item removido!' : 'Erro ao remover item');
+    showActionToast(msg, success ? 'info' : 'danger');
     return;
   }
 
   if (form.id === 'consulta-form') {
-    ev.preventDefault();
     if (data && data.html) {
       const container = document.getElementById('historico-consultas');
       if (container) {
@@ -502,14 +524,8 @@ document.addEventListener('form-sync-success', function(ev) {
         bindSyncForms(container);
       }
     }
-    const toastEl = document.getElementById('actionToast');
-    if (toastEl) {
-      const msg = (data && (data.message || data.error)) || 'Consulta salva com sucesso!';
-      toastEl.querySelector('.toast-body').textContent = msg;
-      toastEl.classList.remove('bg-danger', 'bg-info', 'bg-success');
-      toastEl.classList.add(success ? 'bg-success' : 'bg-danger');
-      bootstrap.Toast.getOrCreateInstance(toastEl).show();
-    }
+    const msg = (data && (data.message || data.error)) || 'Consulta salva com sucesso!';
+    showActionToast(msg, success ? 'success' : 'danger');
   }
 });
 

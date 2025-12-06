@@ -284,8 +284,27 @@
       return;
     }
 
+    const respClone = resp.clone();
     let json = null;
+    let rawHtml = null;
     try { json = await resp.json(); } catch(e) {}
+    if (!json) {
+      try { rawHtml = await respClone.text(); } catch (error) { rawHtml = null; }
+    }
+    if (!json && rawHtml) {
+      const isOffline = typeof navigator !== 'undefined' && navigator.onLine === false;
+      const success = resp.ok && !isOffline;
+      const statusClass = success ? 'success' : (isOffline ? 'warning' : 'danger');
+      const fallbackMessage = success
+        ? 'Operação concluída, mas a resposta veio em HTML.'
+        : (isOffline ? 'Ação será sincronizada assim que houver conexão.' : 'Não foi possível processar a solicitação.');
+      json = {
+        success,
+        message: fallbackMessage,
+        status: statusClass,
+        html: `<div class="alert alert-${statusClass} mb-3" role="alert">${fallbackMessage}</div>${rawHtml}`
+      };
+    }
     if (json && json.message) {
       const category = json.category || (json.success === false || !resp.ok ? 'danger' : 'success');
       showToast(json.message, category);
