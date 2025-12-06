@@ -57,7 +57,7 @@
   <!-- Gerenciar horários e agendamento -->
   {% set schedule_collapse_group_id = 'vet-schedule-collapse-group-' ~ veterinario.id %}
   <div class="row g-4 align-items-start">
-    <div class="col-12 d-flex flex-column gap-4">
+    <div class="col-12 d-flex flex-column gap-0">
       <div class="card border-0 shadow-lg rounded-4" id="{{ schedule_collapse_group_id }}">
         <div class="card-header border-0 p-0">
           <nav class="schedule-toolbar rounded-top-4" aria-label="Ações rápidas da agenda">
@@ -1122,7 +1122,7 @@
     </div>
     <div class="collapse" id="vetNewTutorForm" data-bs-parent="#{{ schedule_collapse_group_id }}">
       <div class="card-body bg-light px-0 pb-4 pt-0 h-100">
-        <div class="row align-items-stretch h-100">
+        <div class="row align-items-stretch h-100 g-0">
           <div class="col-12 h-100">
             <div class="card shadow-lg border-0 rounded-4 overflow-hidden h-100">
               <div class="card-body p-4 p-lg-5 d-flex flex-column h-100">
@@ -1152,7 +1152,7 @@
     </div>
     <div class="collapse" id="vetNewPetForm" data-bs-parent="#{{ schedule_collapse_group_id }}">
       <div class="card-body bg-light px-0 pb-4 pt-0 h-100">
-        <div class="row align-items-stretch h-100">
+        <div class="row align-items-stretch h-100 g-0">
           <div class="col-12 h-100">
             <div class="card shadow-lg border-0 rounded-4 overflow-hidden h-100">
               <div class="card-body p-4 p-lg-5 d-flex flex-column h-100">
