@@ -40,6 +40,19 @@
         const permissionBanner = document.getElementById('notification-permission-banner');
         const permissionMessage = document.getElementById('notification-permission-message');
         const permissionButton = document.getElementById('notification-permission-button');
+        const permissionHelp = document.getElementById('notification-permission-help');
+
+        const updateHelp = (text) => {
+            if (!permissionHelp) {
+                return;
+            }
+            if (text) {
+                permissionHelp.textContent = text;
+                permissionHelp.classList.remove('d-none');
+                return;
+            }
+            permissionHelp.classList.add('d-none');
+        };
 
         const showFlashNotifications = () => {
             if (Notification.permission !== "granted") {
@@ -61,18 +74,31 @@
 
             if (status === "default") {
                 permissionMessage.textContent = "Ative as notificações para receber avisos da agenda e mensagens.";
-                permissionBanner.classList.remove('d-none');
                 permissionButton?.classList.remove('d-none');
+                permissionButton?.classList.remove('btn-outline-primary');
+                permissionButton?.classList.add('btn-primary');
+                if (permissionButton) {
+                    permissionButton.textContent = "Ativar notificações";
+                }
+                updateHelp('Você pode escolher agora e mudar depois nas configurações do navegador.');
+                permissionBanner.classList.remove('d-none');
                 return;
             }
 
             if (status === "denied") {
-                permissionMessage.textContent = "As notificações estão bloqueadas. Reative-as nas configurações do site para voltar a receber alertas.";
+                permissionMessage.textContent = "As notificações estão bloqueadas. Clique em \"Reativar\" para tentar novamente ou libere no cadeado/URL do navegador.";
+                permissionButton?.classList.remove('d-none');
+                permissionButton?.classList.remove('btn-primary');
+                permissionButton?.classList.add('btn-outline-primary');
+                if (permissionButton) {
+                    permissionButton.textContent = "Reativar notificações";
+                }
+                updateHelp('No Chrome, use o cadeado ao lado do endereço e permita notificações. No iOS/macOS, libere em Preferências > Notificações.');
                 permissionBanner.classList.remove('d-none');
-                permissionButton?.classList.add('d-none');
                 return;
             }
 
+            updateHelp('');
             permissionBanner.classList.add('d-none');
         };
 
@@ -241,7 +267,10 @@
         <div class="alert alert-info shadow-sm d-flex flex-column flex-lg-row align-items-lg-center justify-content-lg-between gap-2" role="alert">
             <div class="d-flex align-items-center gap-2">
                 <i class="fas fa-bell text-primary"></i>
-                <span id="notification-permission-message"></span>
+                <div class="d-flex flex-column">
+                    <span id="notification-permission-message"></span>
+                    <small id="notification-permission-help" class="text-muted d-none"></small>
+                </div>
             </div>
             <button id="notification-permission-button" class="btn btn-sm btn-primary">Ativar notificações</button>
         </div>
