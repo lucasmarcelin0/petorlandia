@@ -2,6 +2,56 @@
 
 {% block main %}
 <style>
+    .home-card {
+        padding: var(--space-5);
+        margin-top: var(--space-6);
+        margin-bottom: var(--space-5);
+        border-radius: 1rem;
+    }
+
+    .home-card--muted {
+        background: #f8f9fa;
+    }
+
+    .home-card--white {
+        background: #ffffff;
+    }
+
+    .home-cta-grid {
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: var(--space-4);
+        justify-items: center;
+    }
+
+    .home-cta {
+        display: flex;
+        flex-direction: column;
+        gap: var(--space-3);
+        align-items: center;
+        text-align: center;
+    }
+
+    .accounting-actions {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+        gap: var(--space-3);
+        justify-items: center;
+    }
+
+    @media (min-width: 768px) and (max-width: 1199.98px) {
+        .home-cta-grid,
+        .accounting-actions {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+    }
+
+    @media (min-width: 1200px) {
+        .home-cta-grid {
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+        }
+    }
+
     .accounting-card .accounting-btn {
         border-radius: 999px;
         color: #fff;
@@ -31,12 +81,12 @@
 
     {% if current_user.is_authenticated %}
         <!-- Área pessoal -->
-        <div class="card shadow-sm p-4 rounded-4 mt-5 mb-4" style="background: #f8f9fa;">
+        <div class="card shadow-sm rounded-4 home-card home-card--muted">
             <h5 class="mb-4">Bem-vindo(a)! O que você deseja fazer hoje?</h5>
 
-            <div class="row justify-content-center g-4">
+            <div class="home-cta-grid">
                 <!-- Lottie: Add Animal -->
-                <div class="col-md-3">
+                <div class="home-cta">
                     <lottie-player src="https://assets5.lottiefiles.com/packages/lf20_ghs9bthn.json"
                                    background="transparent" speed="1" style="height: 100px;" loop autoplay></lottie-player>
                     <a href="{{ url_for('add_animal') }}" class="btn btn-outline-success rounded-pill shadow-sm px-4 py-2"
@@ -46,7 +96,7 @@
                 </div>
 
                 <!-- Lottie: List Animals -->
-                <div class="col-md-3">
+                <div class="home-cta">
                     <lottie-player src="https://assets4.lottiefiles.com/packages/lf20_qp1q7mct.json"
                                    background="transparent" speed="1" style="height: 100px;" loop autoplay></lottie-player>
                     <a href="{{ url_for('list_animals') }}" class="btn btn-outline-primary rounded-pill shadow-sm px-4 py-2"
@@ -56,7 +106,7 @@
                 </div>
 
                 <!-- Lottie: Health -->
-                <div class="col-md-3">
+                <div class="home-cta">
                     <lottie-player src="https://assets10.lottiefiles.com/packages/lf20_ksixj2kx.json"
                                    background="transparent" speed="1" style="height: 100px;" loop autoplay></lottie-player>
                     <a href="{{ url_for('plano_saude_overview') }}" class="btn btn-outline-info rounded-pill shadow-sm px-4 py-2"
@@ -66,23 +116,21 @@
                 </div>
 
                 <!-- Lottie: Store -->
-                <div class="col-md-3">
+                <div class="home-cta">
                     <lottie-player src="https://assets10.lottiefiles.com/packages/lf20_sGqAqL.json"
                                    background="transparent" speed="1" style="height: 100px;" loop autoplay></lottie-player>
-                                   <a href="{{ url_for('loja') }}"
-                                   class="btn rounded-pill shadow-sm loja-pet-filled px-4 py-2"
-                                   data-bs-toggle="tooltip"
-                                   title="Acesse nossa loja para encontrar tudo que seu pet precisa.">
-                                   🛍️ Loja Pet
-                                </a>
-
-
+                    <a href="{{ url_for('loja') }}"
+                       class="btn rounded-pill shadow-sm loja-pet-filled px-4 py-2"
+                       data-bs-toggle="tooltip"
+                       title="Acesse nossa loja para encontrar tudo que seu pet precisa.">
+                        🛍️ Loja Pet
+                    </a>
                 </div>
             </div>
         </div>
     {% else %}
         <!-- Visitante não autenticado -->
-        <div class="card shadow-lg p-5 rounded-4 mt-5" style="background: white;">
+        <div class="card shadow-lg rounded-4 home-card home-card--white">
             <div class="text-center">
                 <img src="{{ url_for('static', filename='logo_pet.png') }}"
                      alt="Logo PetOrlândia"
@@ -104,7 +152,7 @@
 
     {% if current_user.is_authenticated and (current_user.worker == 'colaborador' or is_active_veterinarian) %}
     <!-- Área profissional -->
-        <div class="card shadow-lg p-4 rounded-4 mb-5" style="background: #ffffff;">
+        <div class="card shadow-lg rounded-4 home-card home-card--white">
             <h5 class="mb-4">Área profissional</h5>
             <div class="d-flex flex-wrap justify-content-center gap-3">
                 <a href="{{ url_for('novo_animal') }}" class="btn btn-outline-primary rounded-pill shadow-sm px-4 py-2"
@@ -135,9 +183,9 @@
         {% set has_admin_worker = current_user.worker in admin_worker_roles %}
         {% set owner_with_access = owned_clinics|length > 0 and can_access_accounting %}
         {% if has_admin_role or has_admin_worker or owner_with_access %}
-        <div class="card shadow-lg p-4 rounded-4 mb-5 accounting-card" style="background: #ffffff;">
+        <div class="card shadow-lg rounded-4 home-card home-card--white accounting-card">
             <h5 class="mb-4 text-center">Contabilidade</h5>
-            <div class="d-flex flex-wrap justify-content-center gap-3">
+            <div class="accounting-actions">
                 <a href="/contabilidade/financeiro" class="btn accounting-btn" style="background-color: #4A90E2;">
                     <i class="fa-solid fa-chart-line"></i>
                     <span>Financeiro</span>
@@ -157,7 +205,7 @@
 
     {% if current_user.is_authenticated and current_user.worker == 'delivery' %}
     <!-- Área de Entregas -->
-        <div class="card shadow-lg p-4 rounded-4 mb-5" style="background: #ffffff;">
+        <div class="card shadow-lg rounded-4 home-card home-card--white">
             <h5 class="mb-4">Área de Entregas</h5>
             <div class="d-flex flex-wrap justify-content-center gap-3">
                 <a href="{{ url_for('list_delivery_requests') }}" class="btn btn-outline-secondary rounded-pill shadow-sm px-4 py-2">
