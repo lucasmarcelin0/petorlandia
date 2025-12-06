@@ -4898,6 +4898,25 @@ def register():
             flash('Email já está em uso.', 'danger')
             return render_template('auth/register.html', form=form, endereco=None)
 
+        required_address_labels = {
+            'cep': 'CEP',
+            'rua': 'Rua',
+            'cidade': 'Cidade',
+            'estado': 'Estado',
+        }
+
+        required_missing = [
+            label for key, label in required_address_labels.items()
+            if not (request.form.get(key) or '').strip()
+        ]
+
+        if required_missing:
+            message = 'Preencha os campos obrigatórios do endereço: ' + ', '.join(required_missing) + '.'
+            if request.accept_mimetypes['application/json'] > request.accept_mimetypes['text/html']:
+                return jsonify({'success': False, 'errors': {'endereco': [message]}}), 400
+            flash(message, 'warning')
+            return render_template('auth/register.html', form=form, endereco=None)
+
         # Cria o endereço
         endereco = Endereco(
             cep=request.form.get('cep'),
@@ -5176,6 +5195,25 @@ def profile():
         endereco.bairro = request.form.get("bairro")
         endereco.cidade = request.form.get("cidade")
         endereco.estado = request.form.get("estado")
+
+        required_address_labels = {
+            'cep': 'CEP',
+            'rua': 'Rua',
+            'cidade': 'Cidade',
+            'estado': 'Estado',
+        }
+
+        missing_required = [
+            label for key, label in required_address_labels.items()
+            if not (request.form.get(key) or '').strip()
+        ]
+
+        if missing_required:
+            message = 'Preencha os campos obrigatórios do endereço: ' + ', '.join(missing_required) + '.'
+            if request.accept_mimetypes['application/json'] > request.accept_mimetypes['text/html']:
+                return jsonify({'success': False, 'errors': {'endereco': [message]}}), 400
+            flash(message, 'warning')
+            return redirect(url_for('profile'))
 
         db.session.add(endereco)
 
@@ -9757,19 +9795,37 @@ def tutores():
         cidade = request.form.get('cidade')
         estado = request.form.get('estado')
 
-        if cep and rua and cidade and estado:
-            endereco = Endereco(
-                cep=cep,
-                rua=rua,
-                numero=numero,
-                complemento=complemento,
-                bairro=bairro,
-                cidade=cidade,
-                estado=estado
-            )
-            db.session.add(endereco)
-            db.session.flush()
-            novo.endereco_id = endereco.id
+        required_address_labels = {
+            'cep': 'CEP',
+            'rua': 'Rua',
+            'cidade': 'Cidade',
+            'estado': 'Estado',
+        }
+
+        required_missing = [
+            label for key, label in required_address_labels.items()
+            if not (request.form.get(key) or '').strip()
+        ]
+
+        if required_missing:
+            message = 'Preencha os campos obrigatórios do endereço: ' + ', '.join(required_missing) + '.'
+            if wants_json:
+                return jsonify(success=False, message=message, category='warning'), 400
+            flash(message, 'warning')
+            return redirect(url_for('tutores'))
+
+        endereco = Endereco(
+            cep=cep,
+            rua=rua,
+            numero=numero,
+            complemento=complemento,
+            bairro=bairro,
+            cidade=cidade,
+            estado=estado
+        )
+        db.session.add(endereco)
+        db.session.flush()
+        novo.endereco_id = endereco.id
 
         # Foto
         if 'image' in request.files and request.files['image'].filename:
@@ -10256,22 +10312,32 @@ def update_tutor(user_id):
         k: request.form.get(k) or None
         for k in ['cep', 'rua', 'numero', 'complemento', 'bairro', 'cidade', 'estado']
     }
-    required_fields = ['cep', 'rua', 'cidade', 'estado']
+    required_address_labels = {
+        'cep': 'CEP',
+        'rua': 'Rua',
+        'cidade': 'Cidade',
+        'estado': 'Estado',
+    }
 
-    if all(addr_fields.get(f) for f in required_fields):
-        endereco = user.endereco or Endereco()
-        for k, v in addr_fields.items():
-            setattr(endereco, k, v)
-        if not user.endereco_id:
-            db.session.add(endereco)
-            db.session.flush()
-            user.endereco_id = endereco.id
-    elif any(addr_fields.values()):
-        message = 'Por favor, informe CEP, rua, cidade e estado.'
+    missing_required = [
+        label for key, label in required_address_labels.items()
+        if not (addr_fields.get(key) or '').strip()
+    ]
+
+    if missing_required:
+        message = 'Preencha os campos obrigatórios do endereço: ' + ', '.join(missing_required) + '.'
         if wants_json:
             return jsonify(success=False, message=message, category='warning'), 400
         flash(message, 'warning')
         return redirect(request.referrer or url_for('index'))
+
+    endereco = user.endereco or Endereco()
+    for k, v in addr_fields.items():
+        setattr(endereco, k, v)
+    if not user.endereco_id:
+        db.session.add(endereco)
+        db.session.flush()
+        user.endereco_id = endereco.id
 
     # 💾 Commit final
     try:
@@ -14080,21 +14146,37 @@ def checkout():
         bairro = request.form.get('bairro')
         cidade = request.form.get('cidade')
         estado = request.form.get('estado')
-        if any([cep, rua, cidade, estado]):
-            tmp_addr = Endereco(
-                cep=cep,
-                rua=rua,
-                numero=numero,
-                complemento=complemento,
-                bairro=bairro,
-                cidade=cidade,
-                estado=estado
-            )
-            address_text = tmp_addr.full
-            sa = SavedAddress(user_id=current_user.id, address=address_text)
-            db.session.add(sa)
-            db.session.flush()
-            session["last_address_id"] = sa.id
+        required_address_labels = {
+            'cep': 'CEP',
+            'rua': 'Rua',
+            'cidade': 'Cidade',
+            'estado': 'Estado',
+        }
+
+        missing_required = [
+            label for key, label in required_address_labels.items()
+            if not ((request.form.get(key) or '').strip())
+        ]
+
+        if missing_required:
+            message = 'Preencha os campos obrigatórios do endereço: ' + ', '.join(missing_required) + '.'
+            flash(message, 'warning')
+            return redirect(url_for("ver_carrinho"))
+
+        tmp_addr = Endereco(
+            cep=cep,
+            rua=rua,
+            numero=numero,
+            complemento=complemento,
+            bairro=bairro,
+            cidade=cidade,
+            estado=estado
+        )
+        address_text = tmp_addr.full
+        sa = SavedAddress(user_id=current_user.id, address=address_text)
+        db.session.add(sa)
+        db.session.flush()
+        session["last_address_id"] = sa.id
     if not address_text and form.shipping_address.data:
         address_text = form.shipping_address.data
         sa = SavedAddress(user_id=current_user.id, address=address_text)
