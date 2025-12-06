@@ -235,6 +235,39 @@
     return allowed.includes(normalized) ? normalized : 'info';
   }
 
+  function clearFieldErrors(form){
+    if(!form) return;
+    form.querySelectorAll('.is-invalid').forEach(el => el.classList.remove('is-invalid'));
+    form.querySelectorAll('[data-field-error]').forEach(el => el.remove());
+  }
+
+  function applyFieldErrors(form, errors){
+    if(!form){
+      return;
+    }
+    clearFieldErrors(form);
+    if(!errors || typeof errors !== 'object'){
+      return;
+    }
+
+    Object.entries(errors).forEach(([field, messages]) => {
+      const inputs = form.querySelectorAll(`[name="${field}"]`);
+      if(!inputs.length) return;
+      const message = Array.isArray(messages) ? messages.join(' ') : String(messages || '');
+      inputs.forEach(input => {
+        input.classList.add('is-invalid');
+        let feedback = input.nextElementSibling;
+        if(!feedback || !feedback.classList.contains('invalid-feedback')){
+          feedback = document.createElement('div');
+          feedback.className = 'invalid-feedback';
+          feedback.dataset.fieldError = 'true';
+          input.insertAdjacentElement('afterend', feedback);
+        }
+        feedback.textContent = message;
+      });
+    });
+  }
+
   function showToast(message, category='success'){
     const toastEl = document.getElementById('actionToast');
     if(!toastEl) return;
@@ -276,6 +309,7 @@
 
     ev.preventDefault();
     setButtonLoading(submitButton, form);
+    clearFieldErrors(form);
     const data = new FormData(form);
     let resp = null;
     let offlineQueued = false;
@@ -297,8 +331,14 @@
 
     let json = null;
     try { json = await resp.json(); } catch(e) {}
+    applyFieldErrors(form, json && json.errors);
+    const hasValidationErrors = Boolean(json && json.errors);
     const mainMessage = json && json.message ? json.message : undefined;
-    const category = json && json.category ? json.category : (json && json.success === false || !resp.ok ? 'danger' : 'success');
+    const category = hasValidationErrors
+      ? 'danger'
+      : json && json.category
+        ? json.category
+        : (json && json.success === false || !resp.ok ? 'danger' : 'success');
     if (mainMessage) {
       showFormMessage(form, mainMessage, category);
     }
@@ -312,17 +352,24 @@
         }
       });
     }
-    const isSuccess = resp.ok && !(json && json.success === false);
+    const isSuccess = resp.ok && !(json && json.success === false) && !hasValidationErrors;
     if (!isSuccess && !mainMessage && resp && !resp.ok) {
       const fallback = resp.statusText || 'Falha ao processar o formulário.';
       showFormMessage(form, fallback, 'danger');
     }
+    if (offlineQueued) {
+      showFormMessage(form, 'Formulário enfileirado para sincronização quando voltar a ficar online.', 'info');
+    }
+
     if (isSuccess) {
       setButtonSuccess(submitButton);
     } else {
       setButtonIdle(submitButton);
+      if (hasValidationErrors && !mainMessage) {
+        showFormMessage(form, 'Corrija os campos destacados e tente novamente.', 'danger');
+      }
     }
-    const evt = new CustomEvent('form-sync-success', {detail: {form, data: json, response: resp, offlineQueued, success: isSuccess}, cancelable: true});
+    const evt = new CustomEvent('form-sync-success', {detail: {form, data: json, response: resp, offlineQueued, success: isSuccess, hasValidationErrors}, cancelable: true});
     document.dispatchEvent(evt);
     if (!evt.defaultPrevented && !(form.classList && (form.classList.contains('js-tutor-form') || form.id === 'tutor-form'))) {
       location.reload();
@@ -620,12 +667,16 @@
       }
     } else if(form.classList.contains('js-animal-form')){
       ev.preventDefault();
-      if(data.html){
+      if(data && data.html){
         const cont=document.getElementById('animais-adicionados');
-        if(cont) cont.innerHTML=data.html;
+        if(cont){
+          cont.innerHTML=data.html;
+        }
       }
       form.reset();
       setButtonIdle(form.querySelector('button[type="submit"]'));
+      const tableBody = document.querySelector('#animals-table tbody');
+      updateAnimalsEmptyState(tableBody);
     }
   });
 
@@ -726,5 +777,64 @@
       removedList.appendChild(li);
       removedWrapper.classList.remove('d-none');
     }
+  });
+
+  document.addEventListener('form-sync-success', ev => {
+    const detail = ev.detail || {};
+    const form = detail.form;
+    const data = detail.data || {};
+    const response = detail.response;
+    if(!form || !form.classList.contains('animal-update-form')) return;
+    if(ev.defaultPrevented) return;
+
+    ev.preventDefault();
+
+    const submitButton = getSubmitButton(form);
+    if(!response || !response.ok || (data && data.success === false)){
+      setButtonIdle(submitButton);
+      return;
+    }
+
+    const animalId = form.dataset.animalId || data.animal_id;
+    const rowId = animalId ? `animal-row-${animalId}` : null;
+    const row = rowId ? document.getElementById(rowId) : null;
+    if(row){
+      const nameCell = row.querySelector('.animal-name');
+      const speciesCell = row.querySelector('.animal-species');
+      const sexCell = row.querySelector('.animal-sex');
+      if(nameCell && (data.animal_name || data.name)){
+        nameCell.textContent = data.animal_name || data.name;
+      }
+      if(speciesCell){
+        const speciesText = data.species_name || (() => {
+          const select = form.querySelector('select[name="species_id"]');
+          return select && select.selectedOptions.length ? select.selectedOptions[0].textContent : '';
+        })();
+        const breedText = data.breed_name || (() => {
+          const select = form.querySelector('select[name="breed_id"]');
+          return select && select.selectedOptions.length ? select.selectedOptions[0].textContent : '';
+        })();
+        speciesCell.textContent = `${speciesText} / ${breedText}`.trim();
+      }
+      if(sexCell){
+        const sexValue = data.sex || (() => {
+          const select = form.querySelector('select[name="sex"]');
+          return select ? (select.value || '—') : '—';
+        })();
+        sexCell.textContent = sexValue || '—';
+      }
+    }
+
+    const tableBody = document.querySelector('#animals-table tbody');
+    updateAnimalsEmptyState(tableBody);
+
+    const modalEl = form.closest('.modal');
+    if(modalEl){
+      const modal = bootstrap.Modal.getInstance(modalEl);
+      if(modal){
+        modal.hide();
+      }
+    }
+    setButtonSuccess(submitButton);
   });
 })();
