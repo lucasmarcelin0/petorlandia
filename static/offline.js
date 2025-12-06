@@ -104,6 +104,26 @@
     }
   }
 
+  function buildTutorPayloadFromForm(form){
+    if(!form || form.id !== 'tutor-form') return null;
+    const nameInput = form.querySelector('input[name="name"]');
+    const emailInput = form.querySelector('input[name="email"]');
+    const photoPreview = document.querySelector('#profile_photo-preview img') || document.getElementById('preview-tutor');
+    const payload = {
+      id: form.dataset.tutorId ? Number(form.dataset.tutorId) : undefined,
+      name: nameInput ? nameInput.value.trim() : undefined,
+      email: emailInput ? emailInput.value.trim() : undefined,
+    };
+    if(photoPreview){
+      payload.profile_photo = photoPreview.getAttribute('src') || undefined;
+      payload.photo_offset_x = photoPreview.dataset.offsetX ? Number(photoPreview.dataset.offsetX) : undefined;
+      payload.photo_offset_y = photoPreview.dataset.offsetY ? Number(photoPreview.dataset.offsetY) : undefined;
+      payload.photo_rotation = photoPreview.dataset.rotation ? Number(photoPreview.dataset.rotation) : undefined;
+      payload.photo_zoom = photoPreview.dataset.zoom ? Number(photoPreview.dataset.zoom) : undefined;
+    }
+    return payload;
+  }
+
   function setButtonIdle(button){
     if(!button) return;
     if (window.FormFeedback && typeof window.FormFeedback.setIdle === 'function') {
@@ -249,6 +269,10 @@
     const form = ev.target;
     if (!form.matches('form[data-sync]')) return;
 
+    if (window.FormFeedback && typeof window.FormFeedback.clearFieldErrors === 'function') {
+      window.FormFeedback.clearFieldErrors(form);
+    }
+
     const submitButton = getSubmitButton(form);
 
     const confirmationMessage = form.dataset.confirm || (form.classList.contains('delete-history-form') ? 'Excluir este registro?' : null);
@@ -278,17 +302,24 @@
       return;
     }
 
+    let json = null;
+    let queued = false;
     if (!resp) {
-      setButtonIdle(submitButton);
-      showToast('Formulário salvo para sincronização quando voltar a ficar online.', 'info');
-      return;
+      queued = true;
     }
 
-    let json = null;
-    try { json = await resp.json(); } catch(e) {}
+    try { json = resp ? await resp.json() : null; } catch(e) {}
+    if (!json) { json = {}; }
+
+    if (json.errors && window.FormFeedback && typeof window.FormFeedback.applyFieldErrors === 'function') {
+      window.FormFeedback.applyFieldErrors(form, json.errors);
+    }
+    const responseOk = resp ? resp.ok : true;
+    let toastShown = false;
     if (json && json.message) {
-      const category = json.category || (json.success === false || !resp.ok ? 'danger' : 'success');
+      const category = json.category || (json.success === false || !responseOk ? 'danger' : 'success');
       showToast(json.message, category);
+      toastShown = true;
     }
     if (json && Array.isArray(json.messages)) {
       json.messages.forEach(entry => {
@@ -300,23 +331,21 @@
         }
       });
     }
-    const isSuccess = resp.ok && !(json && json.success === false);
+    const isSuccess = responseOk && !(json && json.success === false);
     if (isSuccess) {
       setButtonSuccess(submitButton);
     } else {
       setButtonIdle(submitButton);
     }
-    const evt = new CustomEvent('form-sync-success', {detail: {form, data: json, response: resp}, cancelable: true});
+    const evt = new CustomEvent('form-sync-success', {detail: {form, data: json, response: resp, queued, toastShown}, cancelable: true});
     document.dispatchEvent(evt);
-    if (!evt.defaultPrevented) {
-      location.reload();
-    }
   });
 
   document.addEventListener('form-sync-success', ev => {
     const detail = ev.detail || {};
     const form = detail.form;
     const data = detail.data || {};
+    const toastAlreadyShown = Boolean(detail.toastShown);
     if(!form) return;
 
     if(form.classList.contains('js-tutor-form')){
@@ -356,18 +385,23 @@
       }
     } else if(form.id === 'tutor-form'){
       const resp = detail.response;
-      if(!(resp && resp.ok) || (data && data.success === false)){
+      const isQueued = detail.queued;
+      const success = (isQueued || (resp && resp.ok)) && !(data && data.success === false);
+      if(!success){
         setButtonIdle(getSubmitButton(form));
         return;
       }
       ev.preventDefault();
       setButtonSuccess(getSubmitButton(form));
-      const tutor = data ? data.tutor : null;
+      const tutor = data && data.tutor ? data.tutor : buildTutorPayloadFromForm(form);
       if(tutor){
         const preview = document.getElementById('preview-tutor');
         if(preview){
           if(tutor.profile_photo){
-            preview.src = cacheBust(tutor.profile_photo);
+            const previewSrc = tutor.profile_photo && typeof cacheBust === 'function' && !String(tutor.profile_photo).startsWith('data:')
+              ? cacheBust(tutor.profile_photo)
+              : tutor.profile_photo;
+            preview.src = previewSrc;
             preview.classList.remove('d-none');
           } else {
             preview.classList.add('d-none');
@@ -386,13 +420,50 @@
         }
         const cropperPreview = document.querySelector('#profile_photo-preview img');
         if(cropperPreview && tutor.profile_photo){
-          cropperPreview.src = cacheBust(tutor.profile_photo);
+          const cropperSrc = tutor.profile_photo && typeof cacheBust === 'function' && !String(tutor.profile_photo).startsWith('data:')
+            ? cacheBust(tutor.profile_photo)
+            : tutor.profile_photo;
+          cropperPreview.src = cropperSrc;
         }
         const animalsHeading = document.getElementById('animais-heading');
         if(animalsHeading && tutor.name){
           const firstName = tutor.name.trim().split(/\s+/)[0] || tutor.name.trim();
           animalsHeading.textContent = `🐾 Animais de ${firstName}`;
         }
+      }
+      const headingMessage = data && data.message
+        ? data.message
+        : (isQueued ? 'Alterações serão sincronizadas' : 'Alterações aplicadas');
+      if(!toastAlreadyShown || isQueued){
+        showToast(headingMessage, isQueued ? 'info' : 'success');
+      }
+      if(!isQueued && window.FormFeedback && typeof window.FormFeedback.clearFieldErrors === 'function'){
+        window.FormFeedback.clearFieldErrors(form);
+      }
+    } else if(form.id === 'consulta-form'){
+      ev.preventDefault();
+      const container = document.getElementById('historico-consultas');
+      const isQueued = detail.queued;
+      if(container && data && data.html){
+        container.innerHTML = data.html;
+      }
+      if(container){
+        let badge = container.querySelector('[data-sync-alert="consulta"]');
+        if(isQueued){
+          if(!badge){
+            badge = document.createElement('div');
+            badge.className = 'alert alert-warning mt-3';
+            badge.dataset.syncAlert = 'consulta';
+            container.appendChild(badge);
+          }
+          badge.textContent = 'Consulta salva offline. Será sincronizada quando a conexão voltar.';
+        } else if(badge){
+          badge.remove();
+        }
+      }
+      const message = (data && (data.message || data.error)) || (detail.queued ? 'Consulta salva offline.' : 'Consulta salva com sucesso!');
+      if(!toastAlreadyShown || detail.queued){
+        showToast(message, detail.queued ? 'info' : 'success');
       }
     } else if(form.classList.contains('js-animal-form')){
       ev.preventDefault();

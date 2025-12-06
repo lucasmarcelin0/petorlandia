@@ -7,6 +7,7 @@
   const DEFAULT_LOADING_TIMEOUT = 5000;
   const DEFAULT_TIMEOUT_MESSAGE = 'O tempo limite foi atingido. Reativamos o botão para que você possa tentar novamente.';
   const STATUS_VARIANTS = ['success', 'danger', 'warning', 'info'];
+  const FIELD_ERROR_CLASS = 'field-error-feedback';
 
   function getButton(target) {
     if (!target) return null;
@@ -162,6 +163,43 @@
       delete button.dataset.resetTimeout;
     }, timeout);
     button.dataset.resetTimeout = String(timerId);
+  }
+
+  function clearFieldErrors(form) {
+    if (!form) return;
+    form.querySelectorAll('.is-invalid').forEach((el) => el.classList.remove('is-invalid'));
+    form.querySelectorAll(`.invalid-feedback.${FIELD_ERROR_CLASS}`).forEach((el) => el.remove());
+    form.querySelectorAll('.invalid-feedback').forEach((el) => {
+      if (el.dataset.originalText) {
+        el.textContent = el.dataset.originalText;
+      }
+    });
+  }
+
+  function attachFieldError(field, message) {
+    if (!(field instanceof HTMLElement)) return;
+    field.classList.add('is-invalid');
+    let feedback = field.parentElement?.querySelector('.invalid-feedback');
+    if (!feedback) {
+      feedback = document.createElement('div');
+      feedback.className = `invalid-feedback d-block ${FIELD_ERROR_CLASS}`;
+      field.insertAdjacentElement('afterend', feedback);
+    }
+    if (!feedback.dataset.originalText) {
+      feedback.dataset.originalText = feedback.textContent || '';
+    }
+    feedback.textContent = message || feedback.dataset.originalText || 'Campo inválido.';
+  }
+
+  function applyFieldErrors(form, errors) {
+    if (!form || !errors) return;
+    clearFieldErrors(form);
+    Object.entries(errors).forEach(([name, messages]) => {
+      const fields = Array.from(form.querySelectorAll(`[name="${name}"]`));
+      if (!fields.length) return;
+      const message = Array.isArray(messages) ? (messages[0] || '') : messages;
+      fields.forEach((field) => attachFieldError(field, message));
+    });
   }
 
   function clearStatus(form) {
@@ -379,5 +417,7 @@
     showStatus,
     clearStatus,
     withSavingState,
+    applyFieldErrors,
+    clearFieldErrors,
   };
 })();
