@@ -33,18 +33,57 @@
 {% set flash_messages = get_flashed_messages(with_categories=true) %}
 <script>
     document.addEventListener("DOMContentLoaded", () => {
-        if (Notification.permission !== "granted") {
-            Notification.requestPermission();
+        if (!('Notification' in window)) {
+            return;
         }
 
-        {% for category, message in flash_messages %}
-            if (Notification.permission === "granted") {
+        const permissionBanner = document.getElementById('notification-permission-banner');
+        const permissionMessage = document.getElementById('notification-permission-message');
+        const permissionButton = document.getElementById('notification-permission-button');
+
+        const showFlashNotifications = () => {
+            if (Notification.permission !== "granted") {
+                return;
+            }
+
+            {% for category, message in flash_messages %}
                 new Notification("🐾 PetOrlândia", {
                     body: "{{ message }}",
                     icon: "{{ url_for('static', filename='pastorgato.png') }}"
                 });
+            {% endfor %}
+        };
+
+        const updatePermissionBanner = (status) => {
+            if (!permissionBanner || !permissionMessage) {
+                return;
             }
-        {% endfor %}
+
+            if (status === "default") {
+                permissionMessage.textContent = "Ative as notificações para receber avisos da agenda e mensagens.";
+                permissionBanner.classList.remove('d-none');
+                permissionButton?.classList.remove('d-none');
+                return;
+            }
+
+            if (status === "denied") {
+                permissionMessage.textContent = "As notificações estão bloqueadas. Reative-as nas configurações do site para voltar a receber alertas.";
+                permissionBanner.classList.remove('d-none');
+                permissionButton?.classList.add('d-none');
+                return;
+            }
+
+            permissionBanner.classList.add('d-none');
+        };
+
+        permissionButton?.addEventListener('click', async () => {
+            const status = await Notification.requestPermission();
+            updatePermissionBanner(status);
+            showFlashNotifications();
+        });
+
+        updatePermissionBanner(Notification.permission);
+        showFlashNotifications();
     });
 </script>
 
@@ -81,7 +120,7 @@
         <div class="container-fluid">
             {% if current_user.is_authenticated and current_user.role == "admin" %}
                 <a href="{{ url_for('painel_admin.index') }}" class="navbar-brand">
- 
+
                     <img src="{{ url_for('static', filename='pastorgato.png') }}" alt="Logo" class="logo-img">
                     <span>PetOrlândia</span>
                 </a>
@@ -197,6 +236,16 @@
             </div>
         </div>
     </nav>
+
+    <div id="notification-permission-banner" class="container d-none" style="margin-top: calc(var(--topbar-height, 56px) + 0.75rem);">
+        <div class="alert alert-info shadow-sm d-flex flex-column flex-lg-row align-items-lg-center justify-content-lg-between gap-2" role="alert">
+            <div class="d-flex align-items-center gap-2">
+                <i class="fas fa-bell text-primary"></i>
+                <span id="notification-permission-message"></span>
+            </div>
+            <button id="notification-permission-button" class="btn btn-sm btn-primary">Ativar notificações</button>
+        </div>
+    </div>
 
     {% if flash_messages %}
         {% for category, message in flash_messages %}
