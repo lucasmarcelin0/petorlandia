@@ -379,3 +379,18 @@
 .clinic-team-container .offcanvas form button.btn-outline-danger {
   min-width: 40px;
 }
+
+/* Acessibilidade: estilo de foco visível */
+a.btn:focus-visible,
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+.form-control:focus-visible,
+.clinic-hero__actions .btn:focus-visible,
+.action-dropdown .btn-icon:focus-visible {
+  outline: 3px solid #4e73df;
+  outline-offset: 3px;
+  box-shadow: 0 0 0 4px rgba(78, 115, 223, 0.25);
+  border-color: #4e73df;
+}
