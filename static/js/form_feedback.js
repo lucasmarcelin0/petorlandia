@@ -2,7 +2,6 @@
   const DEFAULT_LOADING_TEXT = 'Salvando...';
   const DEFAULT_SUCCESS_TEXT = 'Salvo!';
   const DEFAULT_ERROR_TEXT = 'Não foi possível salvar as alterações.';
-  const DEFAULT_TIMEOUT_MESSAGE = 'A operação está demorando mais que o esperado. Verifique sua conexão e tente novamente.';
   const DEFAULT_SUCCESS_DELAY = 2000;
   const DEFAULT_LOADING_TIMEOUT = 5000;
   const DEFAULT_TIMEOUT_MESSAGE = 'O tempo limite foi atingido. Reativamos o botão para que você possa tentar novamente.';
