@@ -14,7 +14,7 @@ from typing import Iterable, Optional, Set, Dict
 from datetime import datetime, timezone, date, timedelta, time
 from dateutil.relativedelta import relativedelta
 from zoneinfo import ZoneInfo
-from PIL import Image
+from PIL import Image, ImageOps
 
 
 from apscheduler.schedulers.background import BackgroundScheduler
@@ -302,6 +302,7 @@ def upload_to_s3(file, filename, folder="uploads") -> str | None:
 
         if content_type and content_type.startswith("image"):
             image = Image.open(file.stream)
+            image = ImageOps.exif_transpose(image)
             image = image.convert("RGB")
             image.thumbnail((1280, 1280))
             buffer = BytesIO()
