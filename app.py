@@ -2764,6 +2764,30 @@ def _accounting_accessible_clinics():
     return clinics, {clinic.id for clinic in clinics if clinic.id}
 
 
+def _select_accounting_clinic(clinics, accessible_ids, requested_clinic_id=None):
+    """Return the clinic to use in accounting views.
+
+    Preference order:
+    1. Explicit request (if accessible)
+    2. The user's own clinic (if accessible)
+    3. First available clinic
+    """
+
+    def _find_clinic(clinic_id):
+        return next((clinic for clinic in clinics if clinic.id == clinic_id), None)
+
+    if requested_clinic_id and requested_clinic_id in accessible_ids:
+        return _find_clinic(requested_clinic_id)
+
+    preferred_clinic_id = getattr(current_user, 'clinica_id', None)
+    if preferred_clinic_id and preferred_clinic_id in accessible_ids:
+        preferred_clinic = _find_clinic(preferred_clinic_id)
+        if preferred_clinic:
+            return preferred_clinic
+
+    return clinics[0] if clinics else None
+
+
 def _parse_month_parameter(month_value):
     base_date = date.today().replace(day=1)
     if not month_value:
@@ -3019,16 +3043,12 @@ def contabilidade_home():
     _ensure_accounting_access()
     clinics, accessible_ids = _accounting_accessible_clinics()
 
-    selected_clinic = None
-    if clinics:
-        requested_id = request.args.get('clinica_id', type=int)
-        if requested_id and requested_id in accessible_ids:
-            selected_clinic = next(
-                (clinic for clinic in clinics if clinic.id == requested_id),
-                clinics[0],
-            )
-        else:
-            selected_clinic = clinics[0]
+    requested_id = request.args.get('clinica_id', type=int)
+    selected_clinic = _select_accounting_clinic(
+        clinics,
+        accessible_ids,
+        requested_clinic_id=requested_id,
+    )
 
     current_month = date.today().replace(day=1)
     notifications = []
@@ -3060,15 +3080,12 @@ def contabilidade_financeiro():
     clinics, accessible_ids = _accounting_accessible_clinics()
 
     requested_clinic_id = request.args.get('clinica_id', type=int)
-    selected_clinic_id = None
-    if requested_clinic_id and requested_clinic_id in accessible_ids:
-        selected_clinic_id = requested_clinic_id
-    elif clinics:
-        selected_clinic_id = clinics[0].id
-
-    selected_clinic = None
-    if selected_clinic_id:
-        selected_clinic = next((c for c in clinics if c.id == selected_clinic_id), None)
+    selected_clinic = _select_accounting_clinic(
+        clinics,
+        accessible_ids,
+        requested_clinic_id=requested_clinic_id,
+    )
+    selected_clinic_id = selected_clinic.id if selected_clinic else None
 
     pj_schema_issue = _pj_payments_schema_issue()
     pj_payments_available = pj_schema_issue is None
@@ -3438,15 +3455,12 @@ def contabilidade_pagamentos():
     clinics, accessible_ids = _accounting_accessible_clinics()
 
     requested_clinic_id = request.args.get('clinica_id', type=int)
-    selected_clinic_id = None
-    if requested_clinic_id and requested_clinic_id in accessible_ids:
-        selected_clinic_id = requested_clinic_id
-    elif clinics:
-        selected_clinic_id = clinics[0].id
-
-    selected_clinic = None
-    if selected_clinic_id:
-        selected_clinic = next((c for c in clinics if c.id == selected_clinic_id), None)
+    selected_clinic = _select_accounting_clinic(
+        clinics,
+        accessible_ids,
+        requested_clinic_id=requested_clinic_id,
+    )
+    selected_clinic_id = selected_clinic.id if selected_clinic else None
 
     selected_month = _parse_month_parameter(request.args.get('mes'))
     start_date = selected_month
@@ -4812,16 +4826,12 @@ def contabilidade_obrigacoes():
     _ensure_accounting_access()
     clinics, accessible_ids = _accounting_accessible_clinics()
 
-    selected_clinic = None
-    if clinics:
-        requested_clinic_id = request.args.get('clinica_id', type=int)
-        if requested_clinic_id and requested_clinic_id in accessible_ids:
-            selected_clinic = next(
-                (clinic for clinic in clinics if clinic.id == requested_clinic_id),
-                clinics[0],
-            )
-        else:
-            selected_clinic = clinics[0]
+    requested_clinic_id = request.args.get('clinica_id', type=int)
+    selected_clinic = _select_accounting_clinic(
+        clinics,
+        accessible_ids,
+        requested_clinic_id=requested_clinic_id,
+    )
 
     month_param = request.args.get('month') or request.args.get('mes')
     if month_param:

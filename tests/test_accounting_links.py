@@ -151,6 +151,46 @@ def test_contabilidade_pagamentos_enforces_active_filters(app, clinic_setup):
         assert final.status_code == 200
 
 
+def test_admin_defaults_to_own_clinic_in_accounting_payments(app):
+    with app.app_context():
+        clinic_alpha = Clinica(nome="Alfa")
+        clinic_beta = Clinica(nome="Beta")
+        db.session.add_all([clinic_alpha, clinic_beta])
+        db.session.flush()
+
+        clinic_beta_id = clinic_beta.id
+
+        admin = User(
+            name="Admin Beta",
+            email="admin.beta@example.com",
+            role="admin",
+            clinica_id=clinic_beta_id,
+        )
+        admin.set_password("senha123")
+        db.session.add(admin)
+        db.session.commit()
+
+    client = app.test_client()
+    with client:
+        login_resp = client.post(
+            "/login",
+            data={"email": "admin.beta@example.com", "password": "senha123"},
+            follow_redirects=True,
+        )
+        assert login_resp.status_code == 200
+
+        response = client.get(
+            "/contabilidade/pagamentos?mes=2024-07",
+            follow_redirects=False,
+        )
+
+        assert response.status_code == 302
+        parsed = urlsplit(response.location)
+        assert parsed.path == "/contabilidade/pagamentos"
+        params = parse_qs(parsed.query)
+        assert params.get("clinica_id") == [str(clinic_beta_id)]
+        assert params.get("mes") == ["2024-07"]
+
 def test_orcamentos_view_uses_selected_filters_in_accounting_link(app, clinic_setup):
     client = app.test_client()
     with client:
