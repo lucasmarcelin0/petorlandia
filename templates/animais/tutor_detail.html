@@ -373,6 +373,7 @@
               <label class="form-label">Sexo</label>
               <select name="sex" class="form-select">
                 <option value="">—</option>
+                <option value="-" {% if a.sex == '-' %}selected{% endif %}>-</option>
                 <option value="Macho" {% if a.sex == 'Macho' %}selected{% endif %}>Macho</option>
                 <option value="Fêmea" {% if a.sex == 'Fêmea' %}selected{% endif %}>Fêmea</option>
               </select>
@@ -477,6 +478,7 @@
               <label class="form-label">Sexo</label>
               <select name="sex" class="form-select">
                 <option value="">—</option>
+                <option value="-">-</option>
                 <option value="Macho">Macho</option>
                 <option value="Fêmea">Fêmea</option>
               </select>

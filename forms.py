@@ -132,7 +132,12 @@ class AnimalForm(FlaskForm):
         validators=[DataRequired()],
     )
     date_of_birth = DateField('Data de Nascimento', format='%Y-%m-%d', validators=[Optional()])
-    sex = SelectField('Sexo', choices=[('Macho', 'Macho'), ('Fêmea', 'Fêmea')], validators=[DataRequired()])
+    sex = SelectField(
+        'Sexo',
+        choices=[('-', '—'), ('Macho', 'Macho'), ('Fêmea', 'Fêmea')],
+        default='-',
+        validators=[DataRequired()],
+    )
     description = TextAreaField('Descrição', validators=[Optional(), Length(max=500)])
     image = FileField('Imagem do Animal', validators=[
     Optional(),

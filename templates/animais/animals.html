@@ -60,6 +60,7 @@
       <div class="col-md-2">
         <select name="sex" class="form-select rounded-pill">
           <option value="">Sexo</option>
+          <option value="-" {% if sex == '-' %}selected{% endif %}>-</option>
           <option value="Macho" {% if sex == 'Macho' %}selected{% endif %}>Macho</option>
           <option value="Fêmea" {% if sex == 'Fêmea' %}selected{% endif %}>Fêmea</option>
         </select>
