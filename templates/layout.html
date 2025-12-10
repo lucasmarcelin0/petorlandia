@@ -42,6 +42,21 @@
         const permissionButton = document.getElementById('notification-permission-button');
         const permissionHelp = document.getElementById('notification-permission-help');
 
+        const openPermissionSettings = () => {
+            const origin = encodeURIComponent(window.location.origin);
+            const isEdge = /Edg\//i.test(navigator.userAgent);
+            const isChrome = /Chrome\//i.test(navigator.userAgent) && !isEdge;
+            if (isEdge) {
+                window.open(`edge://settings/content/siteDetails?site=${origin}`, '_blank');
+                return true;
+            }
+            if (isChrome) {
+                window.open(`chrome://settings/content/siteDetails?site=${origin}`, '_blank');
+                return true;
+            }
+            return false;
+        };
+
         const updateHelp = (text) => {
             if (!permissionHelp) {
                 return;
@@ -93,7 +108,11 @@
                 if (permissionButton) {
                     permissionButton.textContent = "Reativar notificações";
                 }
-                updateHelp('No Chrome, use o cadeado ao lado do endereço e permita notificações. No iOS/macOS, libere em Preferências > Notificações.');
+                const isEdge = /Edg\//i.test(navigator.userAgent);
+                const edgeHelp = 'No Edge, clique no cadeado (ou ícone de permissão) ao lado do endereço, abra Permissões do site e libere Notificações.';
+                const chromeHelp = 'No Chrome, use o cadeado ao lado do endereço e permita notificações.';
+                const commonHelp = 'No iOS/macOS, libere em Preferências > Notificações.';
+                updateHelp(`${isEdge ? edgeHelp : chromeHelp} ${commonHelp}`);
                 permissionBanner.classList.remove('d-none');
                 return;
             }
@@ -103,9 +122,17 @@
         };
 
         permissionButton?.addEventListener('click', async () => {
+            if (Notification.permission === 'denied') {
+                openPermissionSettings();
+            }
+
             const status = await Notification.requestPermission();
             updatePermissionBanner(status);
             showFlashNotifications();
+
+            if (status === 'denied') {
+                openPermissionSettings();
+            }
         });
 
         updatePermissionBanner(Notification.permission);
