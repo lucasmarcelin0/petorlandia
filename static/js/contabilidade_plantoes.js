@@ -444,4 +444,177 @@
       });
     }
   }
+
+  const dailyDataScript = document.getElementById('plantao-daily-data');
+  const dayPicker = document.querySelector('[data-plantao-day-picker]');
+  const timelineContainer = document.querySelector('[data-plantao-day-timeline]');
+  const summaryAlert = document.querySelector('[data-plantao-day-summary]');
+
+  function formatTimeRange(startValue, endValue) {
+    if (!startValue || !endValue) return '';
+    const start = new Date(startValue);
+    const end = new Date(endValue);
+    return `${start.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })} — ${end.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`;
+  }
+
+  function statusClassName(status) {
+    switch (status) {
+      case 'pago':
+        return 'pago';
+      case 'vencido':
+        return 'vencido';
+      case 'pendente':
+        return 'pendente';
+      default:
+        return 'livre';
+    }
+  }
+
+  function formatDayLabel(dateValue) {
+    if (!dateValue) return '';
+    const date = new Date(dateValue);
+    return date.toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long' });
+  }
+
+  function renderTimeline(dayKey, dailyData) {
+    if (!timelineContainer || !summaryAlert) return;
+    const dayData = dailyData[dayKey];
+    if (!dayData) {
+      timelineContainer.innerHTML = '<p class="text-muted mb-0">Nenhum dado para o dia selecionado.</p>';
+      summaryAlert.classList.add('d-none');
+      return;
+    }
+
+    const slots = Array.isArray(dayData.slots) ? dayData.slots.slice() : [];
+    slots.sort((a, b) => new Date(a.inicio) - new Date(b.inicio));
+
+    const overdue = Number(dayData.overdue_unpaid || 0);
+    if (overdue > 0) {
+      summaryAlert.classList.remove('d-none');
+      summaryAlert.innerHTML = '';
+      const icon = document.createElement('i');
+      icon.className = 'fas fa-exclamation-triangle me-2';
+      summaryAlert.appendChild(icon);
+      const strong = document.createElement('strong');
+      strong.textContent = `${overdue} plantão(ões) vencidos sem pagamento neste dia.`;
+      summaryAlert.appendChild(strong);
+      const anchors = slots
+        .filter((slot) => slot.status === 'vencido' && slot.id)
+        .map((slot) => {
+          const link = document.createElement('a');
+          link.href = `#plantao-slot-${slot.id}`;
+          link.className = 'ms-2';
+          link.textContent = `Ver ${slot.turno || 'plantão'}`;
+          return link;
+        });
+      anchors.forEach((link) => summaryAlert.appendChild(link));
+    } else {
+      summaryAlert.classList.add('d-none');
+      summaryAlert.innerHTML = '';
+    }
+
+    if (slots.length === 0) {
+      timelineContainer.innerHTML = '<p class="text-muted mb-0">Nenhum plantão cadastrado para este dia.</p>';
+      return;
+    }
+
+    const fragment = document.createDocumentFragment();
+    slots.forEach((slot) => {
+      const statusKey = statusClassName(slot.status);
+      const card = document.createElement('div');
+      card.className = `plantao-slot-card plantao-slot-card--${statusKey}`;
+      if (slot.id) {
+        card.id = `plantao-slot-${slot.id}`;
+      }
+
+      const header = document.createElement('div');
+      header.className = 'plantao-slot-header';
+
+      const title = document.createElement('div');
+      title.className = 'fw-semibold';
+      title.textContent = slot.turno || 'Plantão';
+      header.appendChild(title);
+
+      const statusBadge = document.createElement('span');
+      statusBadge.className = `plantao-slot-status plantao-slot-status--${statusKey}`;
+      const statusIcon = document.createElement('i');
+      statusIcon.className = statusKey === 'pago' ? 'fas fa-check' : statusKey === 'vencido' ? 'fas fa-exclamation' : 'fas fa-clock';
+      statusBadge.appendChild(statusIcon);
+      const statusLabel = document.createElement('span');
+      statusLabel.textContent = slot.status_label || 'Livre';
+      statusBadge.appendChild(statusLabel);
+      header.appendChild(statusBadge);
+
+      const meta = document.createElement('div');
+      meta.className = 'plantao-slot-meta mt-1';
+
+      const time = document.createElement('div');
+      time.className = 'text-muted';
+      time.innerHTML = `<i class="fas fa-clock me-1"></i>${formatTimeRange(slot.inicio, slot.fim)}`;
+      meta.appendChild(time);
+
+      if (slot.medico) {
+        const medico = document.createElement('div');
+        medico.className = 'text-muted';
+        medico.innerHTML = `<i class="fas fa-user-md me-1"></i>${slot.medico}`;
+        meta.appendChild(medico);
+      }
+
+      const valueInfo = document.createElement('div');
+      valueInfo.className = 'text-muted';
+      valueInfo.innerHTML = `<i class="fas fa-coins me-1"></i>${slot.valor_previsto ? slot.valor_previsto.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : '—'}`;
+      meta.appendChild(valueInfo);
+
+      const body = document.createElement('div');
+      body.className = 'plantao-slot-body';
+      body.appendChild(meta);
+
+      card.appendChild(header);
+      card.appendChild(body);
+      fragment.appendChild(card);
+    });
+
+    timelineContainer.innerHTML = '';
+    timelineContainer.appendChild(fragment);
+  }
+
+  function initDailyTimeline() {
+    if (!dailyDataScript || !dayPicker || !timelineContainer) return;
+    let dailyData = {};
+    try {
+      dailyData = JSON.parse(dailyDataScript.textContent || '{}');
+    } catch (err) {
+      console.error('Não foi possível ler os dados da agenda diária.', err);
+      return;
+    }
+
+    const availableDates = Object.keys(dailyData).sort();
+    function pickDefaultDate() {
+      const today = new Date();
+      const todayKey = today.toISOString().slice(0, 10);
+      if (availableDates.includes(todayKey)) {
+        dayPicker.value = todayKey;
+      } else if (availableDates.length) {
+        dayPicker.value = availableDates[0];
+      }
+    }
+
+    if (!dayPicker.value) {
+      pickDefaultDate();
+    }
+
+    const label = document.createElement('small');
+    label.className = 'text-muted d-block mt-1';
+    label.textContent = `Agenda de ${formatDayLabel(dayPicker.value)}`;
+    dayPicker.insertAdjacentElement('afterend', label);
+
+    dayPicker.addEventListener('change', () => {
+      label.textContent = `Agenda de ${formatDayLabel(dayPicker.value)}`;
+      renderTimeline(dayPicker.value, dailyData);
+    });
+
+    renderTimeline(dayPicker.value, dailyData);
+  }
+
+  initDailyTimeline();
 })();

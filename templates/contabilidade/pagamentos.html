@@ -54,6 +54,161 @@
       border-radius: 999px;
     }
 
+    .plantao-legend {
+      gap: 0.5rem;
+    }
+
+    .plantao-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.35rem;
+      padding: 0.35rem 0.75rem;
+      border-radius: 999px;
+      font-weight: 600;
+      font-size: 0.9rem;
+      border: 1px solid transparent;
+      white-space: nowrap;
+    }
+
+    .plantao-chip__pattern {
+      width: 14px;
+      height: 14px;
+      border-radius: 4px;
+      border: 1px solid #d48c00;
+      background-image: repeating-linear-gradient(
+        45deg,
+        rgba(255, 193, 7, 0.2) 0,
+        rgba(255, 193, 7, 0.2) 8px,
+        rgba(255, 193, 7, 0.35) 8px,
+        rgba(255, 193, 7, 0.35) 16px
+      );
+    }
+
+    .plantao-chip--livre {
+      color: #6c757d;
+      background: #f8f9fa;
+      border-color: #ced4da;
+    }
+
+    .plantao-chip--pendente {
+      color: #084298;
+      background: #dbeafe;
+      border-color: #84c5f4;
+    }
+
+    .plantao-chip--vencido {
+      color: #7a4a00;
+      background: repeating-linear-gradient(
+        45deg,
+        #fff3cd 0,
+        #fff3cd 8px,
+        #ffe8a1 8px,
+        #ffe8a1 16px
+      );
+      border-color: #ffc107;
+    }
+
+    .plantao-chip--pago {
+      color: #0f5132;
+      background: #d1e7dd;
+      border-color: #4ade80;
+    }
+
+    .plantao-timeline {
+      display: flex;
+      flex-direction: column;
+      gap: 0.75rem;
+    }
+
+    .plantao-slot-card {
+      border: 1px solid #e9ecef;
+      border-left-width: 6px;
+      border-radius: 12px;
+      padding: 0.75rem 0.9rem;
+      background: #fff;
+      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.04);
+    }
+
+    .plantao-slot-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.75rem;
+      flex-wrap: wrap;
+    }
+
+    .plantao-slot-meta {
+      display: flex;
+      align-items: center;
+      gap: 0.6rem;
+      flex-wrap: wrap;
+    }
+
+    .plantao-slot-status {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.35rem;
+      padding: 0.25rem 0.6rem;
+      border-radius: 999px;
+      font-weight: 600;
+      font-size: 0.85rem;
+    }
+
+    .plantao-slot-status--livre {
+      color: #6c757d;
+      background: #f8f9fa;
+      border: 1px dashed #ced4da;
+    }
+
+    .plantao-slot-status--pendente {
+      color: #084298;
+      background: #e7f1ff;
+      border: 1px solid #84c5f4;
+    }
+
+    .plantao-slot-status--vencido {
+      color: #7a4a00;
+      background: repeating-linear-gradient(
+        45deg,
+        #fff3cd 0,
+        #fff3cd 8px,
+        #ffe8a1 8px,
+        #ffe8a1 16px
+      );
+      border: 1px solid #ffc107;
+    }
+
+    .plantao-slot-status--pago {
+      color: #0f5132;
+      background: #d1e7dd;
+      border: 1px solid #4ade80;
+    }
+
+    .plantao-slot-card--livre {
+      border-left-color: #ced4da;
+    }
+
+    .plantao-slot-card--pendente {
+      border-left-color: #4098d7;
+    }
+
+    .plantao-slot-card--vencido {
+      border-left-color: #ffc107;
+    }
+
+    .plantao-slot-card--pago {
+      border-left-color: #28a745;
+    }
+
+    .plantao-slot-body {
+      color: #495057;
+      margin-top: 0.35rem;
+    }
+
+    .plantao-slot-body small {
+      color: #6c757d;
+    }
+
     @media (max-width: 1400px) {
       .plantao-calendar-table td {
         min-width: 140px;
@@ -555,6 +710,42 @@
               </div>
             </div>
           </div>
+          <div class="card border-0 shadow-sm mb-4" id="plantao-agenda-diaria">
+            <div class="card-body">
+              <div class="d-flex flex-wrap justify-content-between align-items-start gap-3 mb-3">
+                <div>
+                  <h5 class="mb-1">Agenda diária</h5>
+                  <small class="text-muted">Veja a linha do tempo do dia selecionado, com destaque para pendências.</small>
+                </div>
+                <div class="d-flex flex-column align-items-end gap-1 w-100 w-md-auto">
+                  <label for="plantao-day-picker" class="form-label small mb-1">Dia</label>
+                  <input
+                    type="date"
+                    class="form-control"
+                    id="plantao-day-picker"
+                    data-plantao-day-picker
+                    value="{{ selected_month.strftime('%Y-%m-%d') if selected_month else month_value ~ '-01' }}"
+                    min="{{ month_value ~ '-01' }}"
+                    aria-describedby="plantao-day-summary"
+                  >
+                </div>
+              </div>
+              <div class="d-flex flex-wrap align-items-center plantao-legend" aria-label="Legenda de status da agenda diária">
+                <span class="plantao-chip plantao-chip--livre" title="Horários livres"><i class="fas fa-circle"></i> Cinza: livre</span>
+                <span class="plantao-chip plantao-chip--pendente" title="Agendado futuro ou pendente"><i class="fas fa-clock"></i> Azul: agendado / pendente</span>
+                <span class="plantao-chip plantao-chip--vencido" title="Plantão passado não pago">
+                  <span class="plantao-chip__pattern" aria-hidden="true"></span>
+                  Laranja: não pago (passado)
+                </span>
+                <span class="plantao-chip plantao-chip--pago" title="Plantão pago"><i class="fas fa-check"></i> Verde: pago</span>
+              </div>
+              <div class="alert alert-warning align-items-center gap-2 d-none mt-3" role="alert" data-plantao-day-summary id="plantao-day-summary"></div>
+              <div class="plantao-timeline mt-3" data-plantao-day-timeline aria-live="polite"></div>
+            </div>
+          </div>
+          <script type="application/json" id="plantao-daily-data">
+            {{ plantonista_daily_map | tojson | safe }}
+          </script>
           <div class="table-responsive">
             <table class="table align-middle" data-plantao-table>
               <thead class="table-light">

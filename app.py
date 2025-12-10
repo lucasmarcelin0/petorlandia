@@ -3521,6 +3521,7 @@ def contabilidade_pagamentos():
     plantao_modelos_serialized: list[dict] = []
     plantonista_calendar: list[dict] = []
     plantonista_calendar_weeks: list[list[Optional[dict]]] = []
+    plantonista_daily_map: dict[str, dict] = {}
     plantonista_error: Optional[str] = None
 
     def _coerce_decimal(value):
@@ -3800,6 +3801,7 @@ def contabilidade_pagamentos():
         )
 
         day_cursor = start_date
+        now = datetime.utcnow()
         while day_cursor < end_date:
             day_start_dt = datetime.combine(day_cursor, time.min)
             day_end_dt = datetime.combine(day_cursor + timedelta(days=1), time.min)
@@ -3815,6 +3817,17 @@ def contabilidade_pagamentos():
             valor_previsto_total = Decimal('0.00')
             medicos = set()
             atrasos = 0
+            overdue_unpaid = 0
+            daily_slots: list[dict] = []
+
+            def _slot_status_for_escala(escala: PlantonistaEscala) -> tuple[str, str]:
+                pago = escala.pj_payment and escala.pj_payment.status == 'pago'
+                is_past = escala.fim < now
+                if pago:
+                    return 'pago', 'Pago'
+                if is_past:
+                    return 'vencido', 'Não pago (vencido)'
+                return 'pendente', 'Agendado / pendente'
 
             for escala in day_escalas:
                 status = (escala.status or 'agendado').strip().lower()
@@ -3825,6 +3838,22 @@ def contabilidade_pagamentos():
                     medicos.add(escala.medico_nome)
                 if getattr(escala, 'atrasado', False):
                     atrasos += 1
+                slot_status, slot_status_label = _slot_status_for_escala(escala)
+                if slot_status == 'vencido':
+                    overdue_unpaid += 1
+                daily_slots.append(
+                    {
+                        'id': escala.id,
+                        'turno': escala.turno or 'Plantão',
+                        'inicio': escala.inicio,
+                        'fim': escala.fim,
+                        'medico': escala.medico_nome,
+                        'status': slot_status,
+                        'status_label': slot_status_label,
+                        'valor_previsto': float(escala.valor_previsto or Decimal('0.00')),
+                        'pago': slot_status == 'pago',
+                    }
+                )
 
             total_escalas = len(day_escalas)
             badge_label = 'Livre'
@@ -3843,6 +3872,21 @@ def contabilidade_pagamentos():
                     badge_label = 'Agendado'
                     badge_class = 'badge bg-info text-dark'
 
+            if not daily_slots:
+                daily_slots.append(
+                    {
+                        'id': None,
+                        'turno': 'Livre',
+                        'inicio': day_start_dt,
+                        'fim': day_end_dt,
+                        'medico': None,
+                        'status': 'livre',
+                        'status_label': 'Dia livre',
+                        'valor_previsto': 0.0,
+                        'pago': False,
+                    }
+                )
+
             plantonista_calendar.append(
                 {
                     'date': day_cursor,
@@ -3856,6 +3900,12 @@ def contabilidade_pagamentos():
                     'medicos': sorted(medicos),
                 }
             )
+
+            plantonista_daily_map[day_cursor.isoformat()] = {
+                'date': day_cursor,
+                'overdue_unpaid': overdue_unpaid,
+                'slots': daily_slots,
+            }
 
             day_cursor += timedelta(days=1)
 
@@ -3906,6 +3956,7 @@ def contabilidade_pagamentos():
         plantao_modelos_serialized=plantao_modelos_serialized,
         plantonista_calendar=plantonista_calendar,
         plantonista_calendar_weeks=plantonista_calendar_weeks,
+        plantonista_daily_map=plantonista_daily_map,
         plantonista_status_labels=dict(PLANTONISTA_ESCALA_STATUS_CHOICES),
         plantonista_status_styles=PLANTONISTA_STATUS_STYLES,
         plantonista_error=plantonista_error,
