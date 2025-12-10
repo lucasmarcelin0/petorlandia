@@ -377,11 +377,18 @@
                 <option value="Fêmea" {% if a.sex == 'Fêmea' %}selected{% endif %}>Fêmea</option>
               </select>
             </div>
-            <div class="col-md-3">
-              <label class="form-label">Data de Nascimento</label>
-              <input type="date" name="date_of_birth" class="form-control"
-                     value="{{ a.date_of_birth.strftime('%Y-%m-%d') if a.date_of_birth else '' }}">
+            <div class="col-12">
+              {% set prefixo = 'animal_edit_' ~ a.id %}
+              {% set nome_data = 'date_of_birth' %}
+              {% set nome_idade = 'age' %}
+              {% set nome_unidade = 'age_unit' %}
+              {% set valor_data = animal_forms[a.id].date_of_birth.data.strftime('%d/%m/%Y') if animal_forms[a.id].date_of_birth.data else '' %}
+              {% set valor_data_iso = animal_forms[a.id].date_of_birth.data.strftime('%Y-%m-%d') if animal_forms[a.id].date_of_birth.data else '' %}
+              {% set valor_idade = animal_forms[a.id].age.data %}
+              {% set valor_unidade = animal_forms[a.id].age_unit.data %}
+              {% include 'components/campo_data_idade.html' %}
             </div>
+
             <div class="col-md-3">
               <label class="form-label">Microchip</label>
               <input name="microchip_number" class="form-control" value="{{ a.microchip_number or '' }}">
@@ -474,13 +481,16 @@
                 <option value="Fêmea">Fêmea</option>
               </select>
             </div>
-            <div class="col-md-3">
-              <label class="form-label">Data de Nascimento</label>
-              <input id="animal_dob" name="date_of_birth" type="text" class="form-control">
-            </div>
-            <div class="col-md-3">
-              <label class="form-label">Idade</label>
-              <input id="animal_age" type="number" class="form-control" min="0">
+            <div class="col-12">
+              {% set prefixo = 'novo_animal' %}
+              {% set nome_data = 'date_of_birth' %}
+              {% set nome_idade = 'age' %}
+              {% set nome_unidade = 'age_unit' %}
+              {% set valor_data = new_animal_form.date_of_birth.data.strftime('%d/%m/%Y') if new_animal_form.date_of_birth.data else '' %}
+              {% set valor_data_iso = new_animal_form.date_of_birth.data.strftime('%Y-%m-%d') if new_animal_form.date_of_birth.data else '' %}
+              {% set valor_idade = new_animal_form.age.data %}
+              {% set valor_unidade = new_animal_form.age_unit.data %}
+              {% include 'components/campo_data_idade.html' %}
             </div>
             <div class="col-md-3">
               <label class="form-label">Microchip</label>
@@ -529,6 +539,7 @@
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
 <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
 <script src="https://cdn.jsdelivr.net/npm/flatpickr/dist/l10n/pt.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/inputmask@5.0.8/dist/inputmask.min.js"></script>
 <script src="{{ url_for('static', filename='js/date_mask.js') }}"></script>
 
 
@@ -564,44 +575,6 @@
   }
 
 
-
-  // ========== ANIMAL: Date <-> Age ==========
-  const animalDob = document.getElementById("animal_dob");
-  const animalAge = document.getElementById("animal_age");
-
-  if (animalDob && animalAge) {
-    const animalPicker = flatpickr(animalDob, {
-      locale: "pt",
-      dateFormat: "Y-m-d",
-      altInput: true,
-      altFormat: "d/m/Y",
-      allowInput: false,
-      onReady(selectedDates) {
-        if (selectedDates.length) {
-          updateAgeFromDob(animalAge, selectedDates[0]);
-        } else {
-          updateAgeFromDob(animalAge, null);
-        }
-      },
-      onChange(selectedDates) {
-        updateAgeFromDob(animalAge, selectedDates[0] || null);
-      }
-    });
-
-    animalAge.addEventListener("input", () => {
-      const age = parseInt(animalAge.value, 10);
-      if (Number.isNaN(age)) {
-        if (animalAge.value.trim() === "") {
-          animalPicker.clear();
-          updateAgeFromDob(animalAge, null);
-        }
-        return;
-      }
-
-      const estimatedDOB = getDobFromAge(age);
-      animalPicker.setDate(estimatedDOB, true);
-    });
-  }
 
   // ========== TUTOR: Date <-> Age ==========
   const tutorDob = document.getElementById("tutor_dob");
