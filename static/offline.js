@@ -297,10 +297,10 @@
     if (resp) {
       try { json = await resp.json(); } catch(e) {}
     }
-    const mainMessage = json && json.message ? json.message : (offlineQueued ? 'Formulário enfileirado para sincronização quando voltar a ficar online.' : undefined);
+    const mainMessage = json && json.message ? json.message : undefined;
     const category = json && json.category
       ? json.category
-      : (offlineQueued ? 'warning' : (json && json.success === false || (resp && !resp.ok) ? 'danger' : 'success'));
+      : (json && json.success === false || (resp && !resp.ok) ? 'danger' : 'success');
     if (mainMessage) {
       showFormMessage(form, mainMessage, category);
     }
@@ -345,9 +345,11 @@
       ev.preventDefault();
       const btn=form.querySelector('button[type="submit"]');
       const message = isQueued
-        ? 'Cadastro de tutor enfileirado para sincronizar quando estiver online.'
+        ? null
         : (data && data.message) || 'Tutor salvo com sucesso.';
-      showFormMessage(form, message, isQueued ? 'info' : 'success');
+      if (message) {
+        showFormMessage(form, message, 'success');
+      }
 
       function showTutorPanelMessage(text, category){
         const container = document.getElementById('tutores-adicionados');
@@ -587,9 +589,11 @@
       }
       ev.preventDefault();
       const successMessage = isQueued
-        ? 'Alterações do tutor enfileiradas para sincronização offline.'
+        ? null
         : (data && data.message) || 'Tutor salvo com sucesso.';
-      showFormMessage(form, successMessage, isQueued ? 'info' : 'success');
+      if (successMessage) {
+        showFormMessage(form, successMessage, 'success');
+      }
       setButtonSuccess(getSubmitButton(form));
       const tutor = data ? data.tutor : null;
       if(tutor){
@@ -752,8 +756,10 @@
 
     ev.preventDefault();
 
-    const toastMessage = (data && data.message) || (detail.offlineQueued ? 'Remoção enfileirada para sincronização.' : 'Animal removido.');
-    showToast(toastMessage, detail.offlineQueued ? 'warning' : 'success');
+    if (!detail.offlineQueued) {
+      const toastMessage = (data && data.message) || 'Animal removido.';
+      showToast(toastMessage, 'success');
+    }
 
     const animalId = form.dataset.animalId;
     const isRemovedItem = form.dataset.removedItem === 'true';
