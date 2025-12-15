@@ -203,7 +203,7 @@
 
   const novoTutorForm = document.getElementById('novo-tutor-form');
   if (novoTutorForm) {
-    const requiredFields = ['name', 'email', 'cep', 'rua', 'cidade', 'estado'];
+    const requiredFields = ['name', 'email', 'rua', 'cidade', 'estado'];
     const fieldLabels = {
       name: 'Nome',
       email: 'E-mail',
@@ -248,7 +248,7 @@
 
         const isCep = name === 'cep';
         const isEmpty = !value;
-        const invalidCep = isCep && value.replace(/\D/g, '').length !== 8;
+        const invalidCep = isCep && value && value.replace(/\D/g, '').length !== 8;
 
         if (isEmpty || invalidCep) {
           field.classList.add('is-invalid');
