@@ -14,11 +14,11 @@
       <div class="input-group">
         {% if addr_form %}
 
-          {{ addr_form.cep(class="form-control", id="cep", placeholder="00000-000", onblur="buscarCep(this)") }}
+          {{ addr_form.cep(class="form-control", id="cep", placeholder="00000-000", onblur="buscarCep(this)", required=True, pattern="\\d{5}-?\\d{3}") }}
         {% else %}
           <input type="text" class="form-control" name="cep" id="cep"
                  value="{{ endereco.cep|default('', true) if endereco else '' }}"
-                 placeholder="00000-000" onblur="buscarCep(this)">
+                 placeholder="00000-000" onblur="buscarCep(this)" required pattern="\d{5}-?\d{3}" inputmode="numeric">
 
         {% endif %}
         <button class="btn btn-outline-secondary" type="button" onclick="buscarCep(this)">
@@ -29,6 +29,7 @@
         <span class="spinner-border spinner-border-sm me-1" role="status"></span>
         Buscando CEP...
       </div>
+      <div class="invalid-feedback">Por favor, informe um CEP válido com 8 dígitos.</div>
       {% if addr_form %}
         {% for error in addr_form.cep.errors %}
           <div class="text-danger">{{ error }}</div>
@@ -40,12 +41,12 @@
     <div class="col-md-7">
       <label for="rua" class="form-label fw-semibold">Logradouro <span class="text-danger">*</span></label>
       {% if addr_form %}
-        {{ addr_form.rua(class="form-control", id="rua", placeholder="Nome da rua, avenida, etc.") }}
+        {{ addr_form.rua(class="form-control", id="rua", placeholder="Nome da rua, avenida, etc.", required=True) }}
         {% for error in addr_form.rua.errors %}<div class="text-danger">{{ error }}</div>{% endfor %}
       {% else %}
         <input type="text" class="form-control" name="rua" id="rua"
                value="{{ endereco.rua|default('', true) if endereco else '' }}"
-               placeholder="Nome da rua, avenida, etc.">
+               placeholder="Nome da rua, avenida, etc." required>
       {% endif %}
       <div class="invalid-feedback">Por favor, informe o logradouro</div>
     </div>
@@ -93,12 +94,12 @@
     <div class="col-md-3">
       <label for="cidade" class="form-label fw-semibold">Cidade <span class="text-danger">*</span></label>
       {% if addr_form %}
-        {{ addr_form.cidade(class="form-control", id="cidade", placeholder="Nome da cidade") }}
+        {{ addr_form.cidade(class="form-control", id="cidade", placeholder="Nome da cidade", required=True) }}
         {% for error in addr_form.cidade.errors %}<div class="text-danger">{{ error }}</div>{% endfor %}
       {% else %}
         <input type="text" class="form-control" name="cidade" id="cidade"
                value="{{ endereco.cidade|default('', true) if endereco else '' }}"
-               placeholder="Nome da cidade">
+               placeholder="Nome da cidade" required>
       {% endif %}
       <div class="invalid-feedback">Por favor, informe a cidade</div>
     </div>
@@ -270,7 +271,7 @@ document.addEventListener("DOMContentLoaded", function() {
   if (!form) return;
 
   // Define campos obrigatórios
-  const requiredFields = ['rua', 'cidade', 'estado'];
+  const requiredFields = ['cep', 'rua', 'cidade', 'estado'];
 
   const addressSelect = document.getElementById('addressSelect');
 
@@ -358,7 +359,7 @@ document.addEventListener("DOMContentLoaded", function() {
   const form = addressCard.closest("form");
   if (!form) return;
 
-  const requiredFields = ['rua', 'cidade', 'estado'];
+  const requiredFields = ['cep', 'rua', 'cidade', 'estado'];
   const addressSelect = form.querySelector('#addressSelect');
 
   form.addEventListener("submit", function(e) {

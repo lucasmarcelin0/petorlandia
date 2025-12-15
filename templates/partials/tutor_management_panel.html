@@ -49,15 +49,17 @@
     <h5 class="fw-semibold mb-0">Cadastrar Novo Tutor</h5>
   </div>
 
-  <form id="novo-tutor-form" method="POST" action="{{ url_for('tutores') }}" class="js-tutor-form" data-sync="true">
+  <form id="novo-tutor-form" method="POST" action="{{ url_for('tutores') }}" class="js-tutor-form" data-sync="true" novalidate>
     <div class="row g-3">
       <div class="col-md-6">
         <label class="form-label">Nome</label>
-        <input name="name" class="form-control" required>
+        <input name="name" class="form-control" required minlength="3" maxlength="100">
+        <div class="invalid-feedback">Informe o nome completo do tutor.</div>
       </div>
       <div class="col-md-6">
         <label class="form-label">E-mail</label>
         <input name="email" type="email" class="form-control" required>
+        <div class="invalid-feedback">Informe um e-mail válido.</div>
       </div>
       <div class="col-md-6">
         <label class="form-label">Telefone</label>
@@ -195,6 +197,83 @@
     document.addEventListener('click', e => {
       if (!inputTutor.contains(e.target) && !listaTutor.contains(e.target)) {
         listaTutor.classList.add('d-none');
+      }
+    });
+  }
+
+  const novoTutorForm = document.getElementById('novo-tutor-form');
+  if (novoTutorForm) {
+    const requiredFields = ['name', 'email', 'cep', 'rua', 'cidade', 'estado'];
+    const fieldLabels = {
+      name: 'Nome',
+      email: 'E-mail',
+      cep: 'CEP',
+      rua: 'Logradouro',
+      cidade: 'Cidade',
+      estado: 'Estado'
+    };
+
+    const showValidationMessage = (message) => {
+      if (window.FormFeedback?.showStatus) {
+        window.FormFeedback.showStatus(novoTutorForm, message, 'warning');
+      } else {
+        alert(message);
+      }
+    };
+
+    const clearInvalidState = (field) => {
+      field.classList.remove('is-invalid');
+    };
+
+    requiredFields.forEach((name) => {
+      const field = novoTutorForm.querySelector(`[name="${name}"]`);
+      if (field) {
+        field.addEventListener('input', () => clearInvalidState(field));
+        field.addEventListener('blur', () => {
+          if (field.value.trim()) {
+            clearInvalidState(field);
+          }
+        });
+      }
+    });
+
+    novoTutorForm.addEventListener('submit', (event) => {
+      let hasError = false;
+      const missing = [];
+
+      requiredFields.forEach((name) => {
+        const field = novoTutorForm.querySelector(`[name="${name}"]`);
+        if (!field) return;
+        const value = field.value.trim();
+
+        const isCep = name === 'cep';
+        const isEmpty = !value;
+        const invalidCep = isCep && value.replace(/\D/g, '').length !== 8;
+
+        if (isEmpty || invalidCep) {
+          field.classList.add('is-invalid');
+          missing.push(fieldLabels[name] || name);
+          hasError = true;
+        }
+      });
+
+      const emailField = novoTutorForm.querySelector('[name="email"]');
+      const emailValue = emailField ? emailField.value.trim() : '';
+      if (emailField && emailValue && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailValue)) {
+        emailField.classList.add('is-invalid');
+        missing.push('E-mail válido');
+        hasError = true;
+      }
+
+      if (hasError) {
+        event.preventDefault();
+        event.stopPropagation();
+        const message = missing.length
+          ? `Preencha corretamente: ${missing.join(', ')}.`
+          : 'Revise os campos obrigatórios.';
+        showValidationMessage(message);
+        const firstInvalid = novoTutorForm.querySelector('.is-invalid');
+        firstInvalid?.focus();
       }
     });
   }
