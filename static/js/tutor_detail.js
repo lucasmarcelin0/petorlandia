@@ -129,9 +129,9 @@ document.addEventListener('form-sync-success', (ev) => {
     const tableBody = document.querySelector('#animals-table tbody');
     updateAnimalsEmptyState(tableBody);
     addRemovedAnimalToList(form, detail);
-    const toastMessage = (data && data.message) || (detail.offlineQueued ? 'Remoção enfileirada para sincronização.' : 'Animal removido.');
-    if (typeof showToast === 'function') {
-      showToast(toastMessage, detail.offlineQueued ? 'warning' : 'success');
+    if (!detail.offlineQueued && typeof showToast === 'function') {
+      const toastMessage = (data && data.message) || 'Animal removido.';
+      showToast(toastMessage, 'success');
     }
   }
 });
