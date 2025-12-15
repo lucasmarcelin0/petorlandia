@@ -4961,7 +4961,6 @@ def register():
             return render_template('auth/register.html', form=form, endereco=None)
 
         required_address_labels = {
-            'cep': 'CEP',
             'rua': 'Rua',
             'cidade': 'Cidade',
             'estado': 'Estado',
@@ -5259,7 +5258,6 @@ def profile():
         endereco.estado = request.form.get("estado")
 
         required_address_labels = {
-            'cep': 'CEP',
             'rua': 'Rua',
             'cidade': 'Cidade',
             'estado': 'Estado',
@@ -9865,7 +9863,6 @@ def tutores():
         estado = request.form.get('estado')
 
         required_address_labels = {
-            'cep': 'CEP',
             'rua': 'Rua',
             'cidade': 'Cidade',
             'estado': 'Estado',

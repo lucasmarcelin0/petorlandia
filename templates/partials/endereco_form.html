@@ -8,17 +8,17 @@
     <!-- CEP com máscara e busca automática -->
     <div class="col-md-3">
       <label for="cep" class="form-label fw-semibold">
-        CEP <span class="text-danger">*</span>
+        CEP
         <i class="bi bi-question-circle ms-1" data-bs-toggle="tooltip" title="Digite o CEP para autopreencher o endereço"></i>
       </label>
       <div class="input-group">
         {% if addr_form %}
 
-          {{ addr_form.cep(class="form-control", id="cep", placeholder="00000-000", onblur="buscarCep(this)", required=True, pattern="\\d{5}-?\\d{3}") }}
+          {{ addr_form.cep(class="form-control", id="cep", placeholder="00000-000", onblur="buscarCep(this)", pattern="\\d{5}-?\\d{3}") }}
         {% else %}
           <input type="text" class="form-control" name="cep" id="cep"
                  value="{{ endereco.cep|default('', true) if endereco else '' }}"
-                 placeholder="00000-000" onblur="buscarCep(this)" required pattern="\d{5}-?\d{3}" inputmode="numeric">
+                 placeholder="00000-000" onblur="buscarCep(this)" pattern="\d{5}-?\d{3}" inputmode="numeric">
 
         {% endif %}
         <button class="btn btn-outline-secondary" type="button" onclick="buscarCep(this)">
@@ -271,7 +271,7 @@ document.addEventListener("DOMContentLoaded", function() {
   if (!form) return;
 
   // Define campos obrigatórios
-  const requiredFields = ['cep', 'rua', 'cidade', 'estado'];
+  const requiredFields = ['rua', 'cidade', 'estado'];
 
   const addressSelect = document.getElementById('addressSelect');
 
@@ -359,7 +359,7 @@ document.addEventListener("DOMContentLoaded", function() {
   const form = addressCard.closest("form");
   if (!form) return;
 
-  const requiredFields = ['cep', 'rua', 'cidade', 'estado'];
+  const requiredFields = ['rua', 'cidade', 'estado'];
   const addressSelect = form.querySelector('#addressSelect');
 
   form.addEventListener("submit", function(e) {
