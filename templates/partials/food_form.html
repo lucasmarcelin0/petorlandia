@@ -183,8 +183,8 @@
         <small class="text-muted">Registrado em {{ racao.data_cadastro|format_datetime_brazil('%d/%m/%Y') }}</small>
 
         <div class="mt-2">
-          <button class="btn btn-sm btn-outline-primary me-2" onclick="editarRacao({{ racao.id }})">✏️ Editar</button>
-          <button class="btn btn-sm btn-outline-danger" onclick="excluirRacao({{ racao.id }})">🗑️ Excluir</button>
+          <button type="button" class="btn btn-sm btn-outline-primary me-2" onclick="editarRacao({{ racao.id }})">✏️ Editar</button>
+          <button type="button" class="btn btn-sm btn-outline-danger" onclick="excluirRacao({{ racao.id }})">🗑️ Excluir</button>
         </div>
       </li>
     {% endfor %}
@@ -197,8 +197,16 @@
 <!-- Scripts JS -->
 <script>
 let tipoRacaoSelecionada = null;
+let modalEditarRacaoInstancia = null;
 const buscaRacaoInput = document.getElementById('buscar-racao-nova');
 const sugestoesBuscaRacao = document.getElementById('sugestoes-busca-racao');
+
+function obterModalEditarRacao() {
+  if (!modalEditarRacaoInstancia) {
+    modalEditarRacaoInstancia = new bootstrap.Modal(document.getElementById('modalEditarRacao'));
+  }
+  return modalEditarRacaoInstancia;
+}
 
 function toggleFormTipoRacao() {
   const container = document.getElementById('form-tipo-racao-container');
@@ -349,19 +357,30 @@ function salvarRacaoAnimal() {
 
 
 
+function preencherModalRacao(racao) {
+  document.getElementById('edit-observacoes').value = racao.observacoes_racao || '';
+  document.getElementById('edit-recomendacao').value = racao.recomendacao_custom || '';
+  document.getElementById('edit-preco').value = racao.preco_pago || '';
+  document.getElementById('edit-tamanho').value = racao.tamanho_embalagem || '';
+}
+
 function editarRacao(racaoId) {
   document.getElementById('edit-racao-id').value = racaoId;
 
-  // Limpa ou prepara os campos que ainda existem
-  document.getElementById('edit-observacoes').value = '';
-  document.getElementById('edit-recomendacao').value = '';
-  document.getElementById('edit-preco').value = '';
+  fetch(`/racao/${racaoId}`)
+    .then(resp => resp.json())
+    .then(data => {
+      if (!data.success) {
+        alert(data.error || 'Não foi possível carregar as informações da ração.');
+        return;
+      }
 
-  // Removido: document.getElementById('edit-tamanho').value = '';
-
-  // Mostra o modal (Bootstrap 5)
-  const modal = new bootstrap.Modal(document.getElementById('modalEditarRacao'));
-  modal.show();
+      preencherModalRacao(data.racao || {});
+      obterModalEditarRacao().show();
+    })
+    .catch(() => {
+      alert('Erro ao buscar dados da ração.');
+    });
 }
 
 function confirmarEdicaoRacao() {

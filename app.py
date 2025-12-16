@@ -10941,7 +10941,7 @@ def buscar_racoes():
     ])
 
 
-@app.route('/racao/<int:racao_id>', methods=['PUT', 'DELETE'])
+@app.route('/racao/<int:racao_id>', methods=['GET', 'PUT', 'DELETE'])
 @login_required
 def alterar_racao(racao_id):
     racao = Racao.query.get_or_404(racao_id)
@@ -10951,6 +10951,17 @@ def alterar_racao(racao_id):
 
     if racao.created_by and racao.created_by != current_user.id and getattr(current_user, 'role', '') != 'admin':
         return jsonify({'success': False, 'error': 'Permissão negada.'}), 403
+
+    if request.method == 'GET':
+        return jsonify({
+            'success': True,
+            'racao': {
+                'observacoes_racao': racao.observacoes_racao,
+                'recomendacao_custom': racao.recomendacao_custom,
+                'preco_pago': racao.preco_pago,
+                'tamanho_embalagem': racao.tamanho_embalagem,
+            }
+        })
 
     if request.method == 'DELETE':
         try:
