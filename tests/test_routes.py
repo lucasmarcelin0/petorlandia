@@ -834,6 +834,63 @@ def test_cart_merges_duplicates(monkeypatch, app):
         assert item.quantity == 2
 
 
+def test_cart_add_missing_product_redirects(monkeypatch, app):
+    client = app.test_client()
+
+    with app.app_context():
+        db.drop_all()
+        db.create_all()
+        user = User(id=1, name='Tester', email='x')
+        user.set_password('x')
+        db.session.add(user)
+        db.session.commit()
+
+        import flask_login.utils as login_utils
+        monkeypatch.setattr(login_utils, '_get_user', lambda: user)
+        monkeypatch.setattr(app_module, '_is_admin', lambda: False)
+
+        for idx, fn in enumerate(flask_app.template_context_processors[None]):
+            if fn.__name__ == 'inject_unread_count':
+                flask_app.template_context_processors[None][idx] = lambda: {'unread_messages': 0}
+
+        resp = client.post('/carrinho/adicionar/999', data={'quantity': 1})
+
+        with flask_app.test_request_context():
+            expected_url = url_for('loja')
+
+        assert resp.status_code == 302
+        assert resp.headers['Location'].endswith(expected_url)
+
+
+def test_cart_add_missing_product_json(monkeypatch, app):
+    client = app.test_client()
+
+    with app.app_context():
+        db.drop_all()
+        db.create_all()
+        user = User(id=1, name='Tester', email='x')
+        user.set_password('x')
+        db.session.add(user)
+        db.session.commit()
+
+        import flask_login.utils as login_utils
+        monkeypatch.setattr(login_utils, '_get_user', lambda: user)
+        monkeypatch.setattr(app_module, '_is_admin', lambda: False)
+
+        for idx, fn in enumerate(flask_app.template_context_processors[None]):
+            if fn.__name__ == 'inject_unread_count':
+                flask_app.template_context_processors[None][idx] = lambda: {'unread_messages': 0}
+
+        resp = client.post(
+            '/carrinho/adicionar/999',
+            data={'quantity': 1},
+            headers={'Accept': 'application/json'}
+        )
+
+        assert resp.status_code == 404
+        assert resp.get_json() == {'success': False, 'error': 'product not found'}
+
+
 def test_product_detail_requires_login(app):
     client = app.test_client()
     response = client.get('/produto/1')

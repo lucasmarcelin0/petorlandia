@@ -13943,8 +13943,15 @@ def produto_detail(product_id):
 @app.route("/carrinho/adicionar/<int:product_id>", methods=["POST"])
 @login_required
 def adicionar_carrinho(product_id):
-    product = Product.query.get_or_404(product_id)
+    product = Product.query.get(product_id)
     form = AddToCartForm()
+
+    if not product:
+        if 'application/json' in request.headers.get('Accept', ''):
+            return jsonify(success=False, error='product not found'), 404
+        flash("Produto não encontrado.", "warning")
+        return redirect(url_for("loja"))
+
     if not form.validate_on_submit():
         if 'application/json' in request.headers.get('Accept', ''):
             return jsonify(success=False, error='invalid form'), 400
