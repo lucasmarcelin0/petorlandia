@@ -2,6 +2,7 @@
 import os, sys, pathlib, importlib, logging, uuid, re
 import requests
 from collections import defaultdict, Counter
+import math
 from types import SimpleNamespace
 from io import BytesIO, StringIO
 from concurrent.futures import ThreadPoolExecutor
@@ -12896,20 +12897,47 @@ def admin_tutor_map():
     total_tutores = len(tutors)
     total_animais = Animal.query.filter(Animal.removido_em.is_(None)).count()
 
-    markers = []
+    raw_markers = []
     for tutor in tutors:
         endereco = tutor.endereco
         if not endereco:
             continue
 
-        markers.append({
+        raw_markers.append({
             'id': tutor.id,
             'name': tutor.name,
             'lat': endereco.latitude,
             'lng': endereco.longitude,
             'address': endereco.full,
             'profile_url': url_for('ficha_tutor', tutor_id=tutor.id),
+            'photo': getattr(tutor, 'profile_photo', None),
+            'initials': _user_initials_from_name(getattr(tutor, 'name', None)),
+            'gender': getattr(tutor, 'gender', None),
         })
+
+    markers = []
+    grouped_by_coord = defaultdict(list)
+    for marker in raw_markers:
+        grouped_by_coord[(marker['lat'], marker['lng'])].append(marker)
+
+    for (lat, lng), group in grouped_by_coord.items():
+        if len(group) == 1:
+            markers.append(group[0])
+            continue
+
+        angle_step = (2 * math.pi) / len(group)
+        # Pequeno deslocamento (~20 m) para evitar sobreposição visual dos marcadores
+        offset = 0.0002
+        for idx, marker in enumerate(group):
+            angle = angle_step * idx
+            lat_adjust = math.sin(angle) * offset
+            lng_adjust = (math.cos(angle) * offset) / max(0.0001, math.cos(math.radians(lat)))
+
+            markers.append({
+                **marker,
+                'lat': lat + lat_adjust,
+                'lng': lng + lng_adjust,
+            })
 
     default_center = [-20.7202, -47.8852]
     if markers:
