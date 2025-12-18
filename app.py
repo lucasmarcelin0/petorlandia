@@ -12879,6 +12879,48 @@ def delivery_detail(req_id):
 
 # routes_delivery.py  (ou app.py)
 
+@app.route('/admin/mapa_tutores')
+@login_required
+def admin_tutor_map():
+    if not _is_admin():
+        abort(403)
+
+    tutors = (
+        User.query.join(Endereco, Endereco.id == User.endereco_id)
+        .options(joinedload(User.endereco))
+        .filter(Endereco.latitude.isnot(None), Endereco.longitude.isnot(None))
+        .order_by(User.name)
+        .all()
+    )
+
+    markers = []
+    for tutor in tutors:
+        if not tutor.endereco:
+            continue
+        markers.append({
+            'id': tutor.id,
+            'name': tutor.name,
+            'lat': tutor.endereco.latitude,
+            'lng': tutor.endereco.longitude,
+            'address': tutor.endereco.full,
+            'profile_url': url_for('ficha_tutor', tutor_id=tutor.id),
+        })
+
+    default_center = [-20.7202, -47.8852]
+    if markers:
+        avg_lat = sum(marker['lat'] for marker in markers) / len(markers)
+        avg_lng = sum(marker['lng'] for marker in markers) / len(markers)
+        map_center = [avg_lat, avg_lng]
+    else:
+        map_center = default_center
+
+    return render_template(
+        'admin/tutor_map.html',
+        markers=markers,
+        default_center=map_center,
+    )
+
+
 @app.route("/admin/delivery_overview")
 @login_required
 def delivery_overview():
