@@ -19,6 +19,49 @@ BR_TZ = ZoneInfo("America/Sao_Paulo")
 
 DEFAULT_APPOINTMENT_DURATION_MINUTES = 30
 
+
+def geocode_address(*, cep=None, rua=None, numero=None, bairro=None, cidade=None, estado=None):
+    """Return latitude/longitude using OpenStreetMap when enough address data is available.
+
+    The lookup is best-effort: if the request fails or no match is found, ``None``
+    is returned instead of raising an exception.
+    """
+
+    parts = [
+        (rua or "").strip(),
+        (numero or "").strip(),
+        (bairro or "").strip(),
+        (cidade or "").strip(),
+        (estado or "").strip(),
+        (cep or "").strip(),
+        "Brasil",
+    ]
+
+    query = ", ".join([p for p in parts if p])
+    if not query:
+        return None
+
+    try:
+        response = requests.get(
+            "https://nominatim.openstreetmap.org/search",
+            params={"q": query, "format": "json", "limit": 1, "countrycodes": "br"},
+            headers={"User-Agent": "PetOrlandia/1.0 (+https://petorlandia.com)"},
+            timeout=5,
+        )
+        response.raise_for_status()
+        payload = response.json() or []
+    except requests.RequestException:
+        return None
+
+    try:
+        best_match = payload[0]
+        lat = float(best_match.get("lat"))
+        lon = float(best_match.get("lon"))
+    except (IndexError, TypeError, ValueError):
+        return None
+
+    return lat, lon
+
 APPOINTMENT_KIND_DURATIONS = {
     'consulta': 30,
     'retorno': 30,
