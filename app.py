@@ -12893,6 +12893,9 @@ def admin_tutor_map():
         .all()
     )
 
+    total_tutores = len(tutors)
+    total_animais = Animal.query.filter(Animal.removido_em.is_(None)).count()
+
     markers = []
     for tutor in tutors:
         endereco = tutor.endereco
@@ -12920,6 +12923,8 @@ def admin_tutor_map():
         'admin/tutor_map.html',
         markers=markers,
         default_center=map_center,
+        total_tutores=total_tutores,
+        total_animais=total_animais,
     )
 
 
