@@ -3,6 +3,7 @@
   const BUTTON_RESET_DELAY = 2000;
   const DEFAULT_LOADING_TIMEOUT = 5000;
   const DEFAULT_TIMEOUT_MESSAGE = 'O tempo limite foi atingido. Reativamos o botão para que você possa tentar novamente.';
+  const DEFAULT_FETCH_TIMEOUT = 10000;
 
   function getSubmitButton(form){
     if(!form) return null;
@@ -157,7 +158,10 @@
   }
 
   // Abort fetch requests if no response within given timeout (ms)
-  async function fetchWithTimeout(url, opts={}, timeout=2000){
+  async function fetchWithTimeout(url, opts={}, timeout=DEFAULT_FETCH_TIMEOUT){
+    if(!Number.isFinite(timeout) || timeout <= 0){
+      return fetch(url, opts);
+    }
     const ctrl = new AbortController();
     const timer = setTimeout(() => ctrl.abort(), timeout);
     try {
@@ -210,19 +214,21 @@
   }
 
   window.fetchOrQueue = async function(url, opts={}){
-    const method = opts.method || 'POST';
-    const headers = opts.headers || {};
+    const { timeout, ...fetchOpts } = opts;
+    const method = fetchOpts.method || 'POST';
+    const headers = fetchOpts.headers || {};
     let bodyData = null;
-    if(opts.body instanceof FormData){
-      bodyData = {form:[...opts.body.entries()]};
-    } else if(typeof opts.body === 'string'){
-      bodyData = {text: opts.body};
-    } else if(opts.body){
-      bodyData = {json: opts.body};
+    if(fetchOpts.body instanceof FormData){
+      bodyData = {form:[...fetchOpts.body.entries()]};
+    } else if(typeof fetchOpts.body === 'string'){
+      bodyData = {text: fetchOpts.body};
+    } else if(fetchOpts.body){
+      bodyData = {json: fetchOpts.body};
     }
+    const effectiveTimeout = Number.isFinite(timeout) ? timeout : DEFAULT_FETCH_TIMEOUT;
     if(navigator.onLine){
       try {
-        const resp = await fetchWithTimeout(url, opts);
+        const resp = await fetchWithTimeout(url, fetchOpts, effectiveTimeout);
         // Retorna a resposta mesmo que contenha erro de validação
         if (resp) return resp;
       } catch(e){ /* fallthrough */ }
