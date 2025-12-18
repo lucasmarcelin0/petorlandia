@@ -25,6 +25,10 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  --avatar-size: 140px;
+  width: calc(var(--avatar-size) + 20px);
+  height: calc(var(--avatar-size) + 20px);
+  flex-shrink: 0;
 }
 
 .tutor-avatar .avatar {
@@ -33,6 +37,8 @@
   border-radius: 50%;
   object-fit: cover;
   background: #f7f9fc;
+  width: var(--avatar-size);
+  height: var(--avatar-size);
 }
 
 .tutor-avatar .avatar-ring {
