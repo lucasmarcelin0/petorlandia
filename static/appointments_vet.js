@@ -32,6 +32,32 @@ const STATUS_LABELS = {
   accepted: 'Aceita'
 };
 
+function showToastMessage(message, category = 'info') {
+  if (!message) {
+    return;
+  }
+
+  const toastEl = document.getElementById('actionToast');
+  if (!toastEl) {
+    console.warn('Toast element "actionToast" não encontrado. Mensagem:', message);
+    return;
+  }
+
+  const body = toastEl.querySelector('.toast-body');
+  if (body) {
+    body.textContent = message;
+  }
+
+  if (typeof applyToastTone === 'function') {
+    applyToastTone(toastEl, category);
+  } else {
+    toastEl.classList.remove('bg-danger', 'bg-info', 'bg-success', 'bg-warning', 'bg-primary', 'bg-secondary', 'bg-dark');
+    toastEl.classList.add(`bg-${category}`);
+  }
+
+  bootstrap.Toast.getOrCreateInstance(toastEl).show();
+}
+
 function parseLocalDateTime(value) {
   if (!value) {
     return null;
@@ -367,13 +393,13 @@ async function handleScheduleBulkDelete(root) {
       if (!response.ok) {
         const errorData = await response.json().catch(() => null);
         const message = errorData?.message || 'Não foi possível excluir os horários selecionados.';
-        alert(message);
+        showToastMessage(message, 'danger');
         return { success: false };
       }
       const data = await response.json();
       if (!data?.success) {
         const message = data?.message || 'Não foi possível excluir os horários selecionados.';
-        alert(message);
+        showToastMessage(message, 'danger');
         return { success: false };
       }
       window.location.reload();
@@ -381,12 +407,12 @@ async function handleScheduleBulkDelete(root) {
     } catch (error) {
       if (error?.name === 'AbortError') {
         if (!timedOut) {
-          alert(timeoutMessage);
+          showToastMessage(timeoutMessage, 'warning');
         }
         return { success: false };
       }
       console.error('Erro ao remover horários em lote', error);
-      alert(error?.message || 'Não foi possível excluir os horários selecionados.');
+      showToastMessage(error?.message || 'Não foi possível excluir os horários selecionados.', 'danger');
       return { success: false };
     }
   };
@@ -403,13 +429,13 @@ async function handleScheduleBulkDelete(root) {
         onTimeout: () => {
           timedOut = true;
           controller?.abort();
-          alert(timeoutMessage);
+          showToastMessage(timeoutMessage, 'warning');
         }
       });
     } catch (error) {
       if (error?.name !== 'SavingStateTimeoutError') {
         console.error('Erro ao remover horários em lote', error);
-        alert(error?.message || 'Não foi possível excluir os horários selecionados.');
+        showToastMessage(error?.message || 'Não foi possível excluir os horários selecionados.', 'danger');
       }
     }
   } else {
@@ -1831,11 +1857,11 @@ export async function responderAgendamentoExame(appointmentId, status) {
     if (data?.success) {
       window.location.reload();
     } else {
-      alert(data?.message || 'Erro ao atualizar status.');
+      showToastMessage(data?.message || 'Erro ao atualizar status.', 'danger');
     }
   } catch (error) {
     console.error('Erro ao atualizar status do exame', error);
-    alert('Erro ao atualizar status.');
+    showToastMessage('Erro ao atualizar status.', 'danger');
   }
 }
 
@@ -2314,7 +2340,7 @@ function bindAppointmentModalSave(root) {
     if (result.success) {
       window.location.reload();
     } else {
-      alert(result.message || 'Erro ao salvar');
+      showToastMessage(result.message || 'Erro ao salvar', 'danger');
     }
   });
 }
