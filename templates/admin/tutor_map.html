@@ -1,0 +1,79 @@
+{% extends 'layout.html' %}
+
+{% block head %}
+    {{ super() }}
+    <link
+        rel="stylesheet"
+        href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+        integrity="sha256-o9N1j7kGStb6xqDUCh2RCS1npZV3pqtGk9Ht6F4xk0k="
+        crossorigin=""
+    >
+    <style>
+        #user-map {
+            height: 70vh;
+            min-height: 420px;
+            border-radius: 12px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.08);
+        }
+
+        .leaflet-tooltip {
+            font-weight: 600;
+            letter-spacing: 0.2px;
+        }
+    </style>
+{% endblock %}
+
+{% block main %}
+<div class="card shadow-sm border-0">
+    <div class="card-body">
+        <div class="d-flex align-items-center mb-3">
+            <div class="bg-primary text-white rounded-circle d-flex align-items-center justify-content-center me-3" style="width: 44px; height: 44px;">
+                <i class="fas fa-map-marked-alt"></i>
+            </div>
+            <div>
+                <h4 class="mb-0">Mapa de Tutores</h4>
+                <small class="text-muted">Clique no marcador para abrir a ficha do tutor.</small>
+            </div>
+        </div>
+
+        <div id="user-map"></div>
+
+        {% if not markers %}
+            <div class="alert alert-info mt-3 mb-0">
+                Nenhum tutor com coordenadas cadastradas para exibir no mapa.
+            </div>
+        {% endif %}
+    </div>
+</div>
+
+<script
+    src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+    integrity="sha256-o9N1j7kGStb6xqDUCh2RCS1npZV3pqtGk9Ht6F4xk0k="
+    crossorigin=""
+></script>
+<script>
+    const markers = {{ markers|tojson }};
+    const defaultCenter = {{ default_center|tojson }};
+
+    const map = L.map('user-map', {
+        zoomControl: true,
+    }).setView(defaultCenter, markers.length ? 13 : 12);
+
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+        maxZoom: 19,
+    }).addTo(map);
+
+    if (markers.length) {
+        const bounds = L.latLngBounds([]);
+        markers.forEach((markerData) => {
+            const marker = L.marker([markerData.lat, markerData.lng]).addTo(map);
+            marker.bindTooltip(markerData.name, { permanent: true, direction: 'top', offset: [0, -10] });
+            marker.bindPopup(`<div class="fw-semibold mb-1">${markerData.name}</div><div class="text-muted small">${markerData.address}</div>`);
+            marker.on('click', () => window.location.href = markerData.profile_url);
+            bounds.extend([markerData.lat, markerData.lng]);
+        });
+        map.fitBounds(bounds, { padding: [40, 40] });
+    }
+</script>
+{% endblock %}
