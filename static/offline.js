@@ -175,6 +175,15 @@
     localStorage.setItem(KEY, JSON.stringify(q));
   }
 
+  let offlineNoticeShown = false;
+  function notifyOfflineQueued(form){
+    if(offlineNoticeShown) return;
+    offlineNoticeShown = true;
+    const message = 'Ação salva offline e será sincronizada quando possível.';
+    showFormMessage(form, message, 'info');
+    showToast(message, 'info');
+  }
+
   async function sendQueued(){
     if(!navigator.onLine) return;
     const q = loadQueue();
@@ -290,6 +299,7 @@
 
     if (!resp) {
       offlineQueued = true;
+      notifyOfflineQueued(form);
       setButtonIdle(submitButton);
     }
 
