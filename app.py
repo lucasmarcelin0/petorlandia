@@ -1303,6 +1303,7 @@ from helpers import (
     has_conflict_for_slot,
     has_schedule_conflict,
     has_veterinarian_profile,
+    geocode_address,
     is_slot_available,
     is_veterinarian,
     parse_data_nascimento,
@@ -12888,23 +12889,53 @@ def admin_tutor_map():
     tutors = (
         User.query.join(Endereco, Endereco.id == User.endereco_id)
         .options(joinedload(User.endereco))
-        .filter(Endereco.latitude.isnot(None), Endereco.longitude.isnot(None))
+        .filter(
+            or_(
+                and_(Endereco.latitude.isnot(None), Endereco.longitude.isnot(None)),
+                Endereco.cep.isnot(None),
+            )
+        )
         .order_by(User.name)
         .all()
     )
 
     markers = []
+    updated_geocodes = False
     for tutor in tutors:
-        if not tutor.endereco:
+        endereco = tutor.endereco
+        if not endereco:
             continue
+
+        lat, lng = endereco.latitude, endereco.longitude
+        if lat is None or lng is None:
+            coords = geocode_address(
+                cep=endereco.cep,
+                rua=endereco.rua,
+                numero=endereco.numero,
+                bairro=endereco.bairro,
+                cidade=endereco.cidade,
+                estado=endereco.estado,
+            )
+            if coords:
+                lat, lng = coords
+                endereco.latitude = lat
+                endereco.longitude = lng
+                updated_geocodes = True
+
+        if lat is None or lng is None:
+            continue
+
         markers.append({
             'id': tutor.id,
             'name': tutor.name,
-            'lat': tutor.endereco.latitude,
-            'lng': tutor.endereco.longitude,
-            'address': tutor.endereco.full,
+            'lat': lat,
+            'lng': lng,
+            'address': endereco.full,
             'profile_url': url_for('ficha_tutor', tutor_id=tutor.id),
         })
+
+    if updated_geocodes:
+        db.session.commit()
 
     default_center = [-20.7202, -47.8852]
     if markers:
