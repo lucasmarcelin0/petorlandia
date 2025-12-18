@@ -183,8 +183,20 @@
         <small class="text-muted">Registrado em {{ racao.data_cadastro|format_datetime_brazil('%d/%m/%Y') }}</small>
 
         <div class="mt-2">
-          <button type="button" class="btn btn-sm btn-outline-primary me-2" onclick="editarRacao({{ racao.id }})">✏️ Editar</button>
-          <button type="button" class="btn btn-sm btn-outline-danger" onclick="excluirRacao({{ racao.id }})">🗑️ Excluir</button>
+          <button
+            type="button"
+            class="btn btn-sm btn-outline-primary me-2"
+            onclick="editarRacao({{ racao.id }})"
+          >
+            ✏️ Editar
+          </button>
+          <button
+            type="button"
+            class="btn btn-sm btn-outline-danger"
+            onclick="excluirRacao({{ racao.id }})"
+          >
+            🗑️ Excluir
+          </button>
         </div>
       </li>
     {% endfor %}
