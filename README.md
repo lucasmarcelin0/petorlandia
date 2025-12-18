@@ -119,5 +119,13 @@ address, phone number and CPF in the `payer` object of the preference payload.
 Providing these fields can help reduce fraud rejections and increase approval
 rates.
 
+## Excelência nas funcionalidades de gestão
+
+Para que o produto sustente qualquer estratégia comercial, priorize um
+prontuário eletrônico confiável, agenda compartilhada em tempo real, controles
+financeiros básicos, emissão de documentos e relatórios para a clínica. Mais
+detalhes de como manter estabilidade, segurança e infraestrutura de nuvem estão
+documentados em `docs/gestao_produto.md`.
+
 
 
