@@ -55,6 +55,12 @@
     return DEFAULT_TIMEOUT_MESSAGE;
   }
 
+  function resolveFetchTimeout(form){
+    if(!form) return DEFAULT_FETCH_TIMEOUT;
+    const value = parseTimeout(form.dataset.fetchTimeout || form.dataset.requestTimeout || form.dataset.syncTimeout);
+    return typeof value !== 'undefined' ? value : DEFAULT_FETCH_TIMEOUT;
+  }
+
   function clearLoadingWatchdog(button){
     if(!button || !button.dataset.loadingWatchdog) return;
     clearTimeout(Number(button.dataset.loadingWatchdog));
@@ -292,10 +298,11 @@
     ev.preventDefault();
     setButtonLoading(submitButton, form);
     const data = new FormData(form);
+    const fetchTimeout = resolveFetchTimeout(form);
     let resp = null;
     let offlineQueued = false;
     try {
-      resp = await window.fetchOrQueue(form.action, {method: form.method || 'POST', headers: {'Accept': 'application/json'}, body: data});
+      resp = await window.fetchOrQueue(form.action, {method: form.method || 'POST', headers: {'Accept': 'application/json'}, body: data, timeout: fetchTimeout});
     } catch (error) {
       console.error('Erro ao enviar formulário:', error);
       setButtonIdle(submitButton);
