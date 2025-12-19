@@ -8,7 +8,8 @@
 
 <form id="consulta-form" method="POST"
       action="{{ url_for('update_consulta', consulta_id=consulta.id) }}{% if edit_mode %}?edit=1{% endif %}"
-      class="needs-validation" novalidate data-sync data-target="#historico-consultas">
+      class="needs-validation" novalidate data-sync data-target="#historico-consultas"
+      data-target-endpoint="{{ url_for('historico_consultas_partial', animal_id=animal.id, clinica_id=consulta.clinica_id) }}">
 
   <!-- Seção de Queixa Principal -->
   <div class="mb-3">
