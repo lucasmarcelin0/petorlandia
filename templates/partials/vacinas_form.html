@@ -404,7 +404,7 @@
             }
             vacinas = [];
             renderVacinasTemp();
-            return { success: true };
+            return { success: true, offlineQueued: queued };
           }
           mostrarFeedback('Erro ao salvar vacinas.', 'danger');
           return { success: false };
@@ -415,7 +415,7 @@
         // Offline: registra localmente sem exibir aviso
         vacinas = [];
         renderVacinasTemp();
-        return { success: true };
+        return { success: true, offlineQueued: true };
       }
 
       try {

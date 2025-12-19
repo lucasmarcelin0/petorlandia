@@ -584,19 +584,38 @@
     }
   });
 
-  // Atualiza automaticamente o contêiner do histórico após exclusões
+  function resolveTargetElement(target) {
+    if (!target) return null;
+    const selector = target.trim();
+    if (!selector) return null;
+
+    try {
+      const bySelector = document.querySelector(selector);
+      if (bySelector) return bySelector;
+    } catch (error) {
+      // Ignore selector errors and fallback to ID lookup
+    }
+
+    const normalizedId = selector.startsWith('#') ? selector.slice(1) : selector;
+    return document.getElementById(normalizedId);
+  }
+
+  // Atualiza automaticamente contêineres retornados em respostas JSON (ex.: históricos via AJAX)
   document.addEventListener('form-sync-success', ev => {
     const detail = ev.detail || {};
     const form = detail.form;
     const data = detail.data;
-    if (!form || !form.classList.contains('delete-history-form')) return;
+    const target = form && form.dataset ? form.dataset.target : null;
+    if (!form || !target || !(data && data.html)) return;
+
+    const container = resolveTargetElement(target);
+    if (!container) return;
 
     ev.preventDefault();
-    if (data && data.html && form.dataset.target) {
-      const container = document.getElementById(form.dataset.target);
-      if (container) {
-        container.innerHTML = data.html;
-      }
+    container.innerHTML = data.html;
+
+    if (typeof bindSyncForms === 'function') {
+      bindSyncForms(container);
     }
   });
 
