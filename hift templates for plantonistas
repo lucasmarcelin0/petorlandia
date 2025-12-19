@@ -1,0 +1,423 @@
+[33mcommit 442c9fe00729230f9c778c2bc0cb4efd5b3dbe59[m
+Author: lucasmarcelin0 <66127687+lucasmarcelin0@users.noreply.github.com>
+Date:   Sat Nov 15 21:04:37 2025 -0300
+
+    Add clinic shift templates for plantonistas
+
+[33mcommit cb4d001428a7289614c559955671f5e202f5d9d0[m
+Author: lucasmarcelin0 <66127687+lucasmarcelin0@users.noreply.github.com>
+Date:   Sat Nov 15 19:55:23 2025 -0300
+
+    Add migration for plantonista escalas table
+
+[33mcommit 1d721b7a9db2d577e273ae036d3bf2bd324ee29a[m
+Author: lucasmarcelin0 <66127687+lucasmarcelin0@users.noreply.github.com>
+Date:   Sat Nov 15 19:35:14 2025 -0300
+
+    Add migration for plantao_horas on pj_payments
+
+[33mcommit 1dcd91bc3d2a67e50d0425a02ec00649c2e5238d[m
+Author: lucasmarcelin0 <66127687+lucasmarcelin0@users.noreply.github.com>
+Date:   Sat Nov 15 19:19:35 2025 -0300
+
+    Handle missing plantonista escalas table
+
+[33mcommit c53a138a83c511025aa492285d42ed880e9b3b2e[m
+Author: lucasmarcelin0 <66127687+lucasmarcelin0@users.noreply.github.com>
+Date:   Sat Nov 15 19:06:41 2025 -0300
+
+    fix migration
+
+[33mcommit 75106dc2e44221f49ffc51382071ad4c1cf45e1f[m
+Author: lucasmarcelin0 <66127687+lucasmarcelin0@users.noreply.github.com>
+Date:   Sat Nov 15 18:58:08 2025 -0300
+
+    let's hope it works
+
+[33mcommit 79aced5cf22c4720e1a009f804da3c77340abadf[m
+Merge: 44e6e6e1 9007e584
+Author: lucasmarcelin0 <66127687+lucasmarcelin0@users.noreply.github.com>
+Date:   Sat Nov 15 19:01:51 2025 -0300
+
+    Merge pull request #1337 from lucasmarcelin0/codex/create-data-migration-for-plantonista-escalas
+    
+    Backfill plantonista hours and update payments
+
+[33mcommit 9007e58409a41249ee6dbeb44ca37622a4423b20[m
+Author: lucasmarcelin0 <66127687+lucasmarcelin0@users.noreply.github.com>
+Date:   Sat Nov 15 18:59:42 2025 -0300
+
+    Backfill plantonista escalas and hours
+
+[33mcommit 9c25035e4bdb2fd493141fe6c196df024d3ed977[m
+Author: lucasmarcelin0 <66127687+lucasmarcelin0@users.noreply.github.com>
+Date:   Sat Nov 15 18:50:38 2025 -0300
+
+    Revert "Add plantonista escalas table"
+
+[33mcommit 197ca7b3b0b0d255efab5a822b8672f7e32e456a[m
+Author: lucasmarcelin0 <66127687+lucasmarcelin0@users.noreply.github.com>
+Date:   Sat Nov 15 18:43:57 2025 -0300
+
+    Add plantonista escalas table
+
+[33mcommit 41413072e5760f307588e5a95a2a999001ab4707[m
+Author: lucasmarcelin0 <66127687+lucasmarcelin0@users.noreply.github.com>
+Date:   Sat Nov 15 16:11:13 2025 -0300
+
+    Add tipo_prestador column and improve PJ classification
+
+[33mcommit 339c25ce130490f73a5e6db5e0e9ad100d693972[m
+Author: lucasmarcelin0 <66127687+lucasmarcelin0@users.noreply.github.com>
+Date:   Sat Nov 15 12:43:36 2025 -0300
+
+    Add automated accounting alerts
+
+[33mcommit 5b4295f197ec04a02b3bfe1291be09fdd2d990f8[m
+Author: lucasmarcelin0 <66127687+lucasmarcelin0@users.noreply.github.com>
+Date:   Sat Nov 15 12:11:04 2025 -0300
+
+    feat: implement clinic tax calculations
+
+[33mcommit 256866d353407150cc7e5c58bb4f1baddd3f3222[m
+Author: lucasmarcelin0 <66127687+lucasmarcelin0@users.noreply.github.com>
+Date:   Sat Nov 15 11:55:05 2025 -0300
+
+    Add PJ payment accounting module
+
+[33mcommit e40ac28d9ed067dee28995b22a9203e2b0440887[m
+Author: lucasmarcelin0 <66127687+lucasmarcelin0@users.noreply.github.com>
+Date:   Sat Nov 15 11:30:51 2025 -0300
+
+    feat: add automatic transaction classification
+
+[33mcommit 7f40dcf7b689b939b89071b24155541a6dd26bb4[m
+Author: lucasmarcelin0 <66127687+lucasmarcelin0@users.noreply.github.com>
+Date:   Sat Nov 15 11:11:25 2025 -0300
+
+    Add monthly clinic financial snapshots
+
+[33mcommit 84907b83a969e801670154657514da3d8bee2bcf[m
+Author: lucasmarcelin0 <66127687+lucasmarcelin0@users.noreply.github.com>
+Date:   Sat Nov 15 10:50:27 2025 -0300
+
+    Add payment links to clinic budgets
+
+[33mcommit ebf78249b55b4c1e458f24caf32831e8ba363f5d[m
+Author: lucasmarcelin0 <66127687+lucasmarcelin0@users.noreply.github.com>
+Date:   Sat Nov 15 00:31:30 2025 -0300
+
+    Add clinic inventory movement table
+
+[33mcommit f25f62793020638548d1ebb0961dac4f21918d95[m
+Author: lucasmarcelin0 <66127687+lucasmarcelin0@users.noreply.github.com>
+Date:   Sat Nov 15 00:24:53 2025 -0300
+
+    Ensure bloco orcamento discount columns exist
+
+[33mcommit fdad7784d3351c842016c3894dbb6d9012119e0c[m
+Merge: 6963732b 357b2600
+Author: lucasmarcelin0 <66127687+lucasmarcelin0@users.noreply.github.com>
+Date:   Sat Nov 15 00:21:37 2025 -0300
+
+    Merge pull request #1246 from lucasmarcelin0/codex/fix-undefinedcolumn-error-in-clinic_detail
+    
+    Add migration for clinic inventory thresholds
+
+[33mcommit 6963732be09a0488a8bfc619687f2ac5b3bd79e8[m
+Merge: 59426814 67bea440
+Author: lucasmarcelin0 <66127687+lucasmarcelin0@users.noreply.github.com>
+Date:   Sat Nov 15 00:21:25 2025 -0300
+
+    Merge pull request #1245 from lucasmarcelin0/codex/add-optional-fields-and-payment-button
+    
+    Add discount capture and payment tracking to orçamento blocks
+
+[33mcommit 357b260087777e7b51512e6c015087646badf29f[m
+Author: lucasmarcelin0 <66127687+lucasmarcelin0@users.noreply.github.com>
+Date:   Sat Nov 15 00:21:00 2025 -0300
+
+    Add inventory threshold columns migration
+
+[33mcommit 67bea440b41ad96ee971b19341188bedbeb48938[m
+Author: lucasmarcelin0 <66127687+lucasmarcelin0@users.noreply.github.com>
+Date:   Sat Nov 15 00:20:21 2025 -0300
+
+    Add discount fields and payment tracking to blocos
+
+[33mcommit 9f0132b76f6ce34280b735e16fba46e7ac7318e5[m
+Merge: a422b458 c191a8e0
+Author: lucasmarcelin0 <66127687+lucasmarcelin0@users.noreply.github.com>
+Date:   Sat Nov 15 00:12:25 2025 -0300
+
+    Merge pull request #1237 from lucasmarcelin0/codex/add-columns-and-filters-to-orcamentos-handler
+    
+    Enhance clinic budgets tab with filters and resend tracking
+
+[33mcommit c191a8e0281d85849fd1d36895716128e0dde5b8[m
+Author: lucasmarcelin0 <66127687+lucasmarcelin0@users.noreply.github.com>
+Date:   Sat Nov 15 00:12:06 2025 -0300
+
+    Add filters and status tracking to clinic budgets
+
+[33mcommit c566da48aa1ffa82599902b39e922d15b9ebecaf[m
+Author: lucasmarcelin0 <66127687+lucasmarcelin0@users.noreply.github.com>
+Date:   Sat Nov 15 00:06:18 2025 -0300
+
+    Add payer type support to orcamento items
+
+[33mcommit a82b0d01e5007164432a1d0e0e94042b684400e9[m
+Author: lucasmarcelin0 <66127687+lucasmarcelin0@users.noreply.github.com>
+Date:   Fri Nov 14 23:43:37 2025 -0300
+
+    Add procedure code column to orcamento items
+
+[33mcommit 53f8f1d3c735102d60b52ba023b5b2552ac1918e[m
+Merge: 9dee087b 12858e42
+Author: lucasmarcelin0 <66127687+lucasmarcelin0@users.noreply.github.com>
+Date:   Fri Nov 14 23:39:53 2025 -0300
+
+    Merge pull request #1225 from lucasmarcelin0/codex/fix-missing-column-in-servico_clinica
+    
+    Add procedure code to clinic services
+
+[33mcommit 12858e424f90f92453ef9405bcf6d12f2f8cbbb4[m
+Author: lucasmarcelin0 <66127687+lucasmarcelin0@users.noreply.github.com>
+Date:   Fri Nov 14 23:39:42 2025 -0300
+
+    Add procedure code column to servicos
+
+[33mcommit 28b96d819e813c218ca56579231eb51df2f8f4f2[m
+Author: lucasmarcelin0 <66127687+lucasmarcelin0@users.noreply.github.com>
+Date:   Fri Nov 14 23:34:57 2025 -0300
+
+    Add guardian consent fields to health subscription
+
+[33mcommit 85430a19867848a4975d40f21deea9ad0b14d01e[m
+Author: lucasmarcelin0 <66127687+lucasmarcelin0@users.noreply.github.com>
+Date:   Fri Nov 14 23:31:29 2025 -0300
+
+    Add health coverage tables migration
+
+[33mcommit 4da2aa57b830096de7fdaee19c1a1368dd7918de[m
+Author: lucasmarcelin0 <66127687+lucasmarcelin0@users.noreply.github.com>
+Date:   Fri Nov 14 23:25:33 2025 -0300
+
+    Add migration for consulta authorization columns
+
+[33mcommit ee5539fd87e26e44132a6a0f4b10ef2ec1980d6b[m
+Author: lucasmarcelin0 <66127687+lucasmarcelin0@users.noreply.github.com>
+Date:   Fri Nov 14 23:20:14 2025 -0300
+
+    Add migration for consulta health links
+
+[33mcommit 5c6524fc8207b6a8dc3e0a5f33c1648b1a90a124[m
+Author: lucasmarcelin0 <66127687+lucasmarcelin0@users.noreply.github.com>
+Date:   Fri Nov 14 23:11:35 2025 -0300
+
+    Fix clinic scope migration joins
+
+[33mcommit 22c7f8a9caf7e9c6847431d9cad2922c95d7db91[m
+Author: lucasmarcelin0 <66127687+lucasmarcelin0@users.noreply.github.com>
+Date:   Fri Nov 14 23:06:50 2025 -0300
+
+    Improve clinic scope data backfill
+
+[33mcommit d02e7397232c5671d3cc9159b5a086560f8f4aa0[m
+Author: lucasmarcelin0 <66127687+lucasmarcelin0@users.noreply.github.com>
+Date:   Fri Nov 14 23:01:06 2025 -0300
+
+    Ensure clinic id backfill before migration constraint
+
+[33mcommit 38b86565348bc5963854e0036fea2e465726c1d4[m
+Author: lucasmarcelin0 <66127687+lucasmarcelin0@users.noreply.github.com>
+Date:   Fri Nov 14 22:57:25 2025 -0300
+
+    Backfill clinica id from services in migration
+
+[33mcommit c3b8d96d1aa871294676ff8abe3d72467dcde254[m
+Author: lucasmarcelin0 <66127687+lucasmarcelin0@users.noreply.github.com>
+Date:   Fri Nov 14 22:55:10 2025 -0300
+
+    Fix migration insert params
+
+[33mcommit 7ece33d80a3ee3e26594a8bb4af6e4379bfe47f2[m
+Author: lucasmarcelin0 <66127687+lucasmarcelin0@users.noreply.github.com>
+Date:   Fri Nov 14 22:51:48 2025 -0300
+
+    Handle existing data_share_party_type enum
+
+[33mcommit d2c9cd70378a3d6c7e0a77eaf2c21a7eabd3fb10[m
+Author: lucasmarcelin0 <66127687+lucasmarcelin0@users.noreply.github.com>
+Date:   Fri Nov 14 22:49:19 2025 -0300
+
+    Handle existing data_share enum
+
+[33mcommit ccf4e1d3235aa76b4690d1bca7f2da05d2b33005[m
+Merge: b48079fa 829f34b7
+Author: lucasmarcelin0 <66127687+lucasmarcelin0@users.noreply.github.com>
+Date:   Fri Nov 14 22:36:14 2025 -0300
+
+    Merge pull request #1209 from lucasmarcelin0/codex/auditar-templates-e-ajustar-queries-por-clinica_id
+    
+    Add clinic-scoped budgets and prescriptions
+
+[33mcommit 829f34b7602d673aa8c019a9974b4e361782b9fd[m
+Author: lucasmarcelin0 <66127687+lucasmarcelin0@users.noreply.github.com>
+Date:   Fri Nov 14 22:35:58 2025 -0300
+
+    Scope clinic data across budgets and prescriptions
+
+[33mcommit bbd5fed762b6542c252a7a789c45262c4f96d99a[m
+Author: lucasmarcelin0 <66127687+lucasmarcelin0@users.noreply.github.com>
+Date:   Fri Nov 14 22:31:43 2025 -0300
+
+    Add data share access auditing
+
+[33mcommit 42e283c083b52ddb54ba16a4a6217294bfb6f5a4[m
+Author: lucasmarcelin0 <66127687+lucasmarcelin0@users.noreply.github.com>
+Date:   Tue Nov 11 13:17:03 2025 -0300
+
+    Track prescription author when printing
+
+[33mcommit b4d108f6acb85fcc1c2e324ae5cca4ee178a4eda[m
+Author: lucasmarcelin0 <66127687+lucasmarcelin0@users.noreply.github.com>
+Date:   Mon Nov 10 10:40:35 2025 -0300
+
+    Add admin control for veterinarian membership pricing
+
+[33mcommit c850a77e923e3ead6544d61dd8316aeceaae3219[m
+Author: lucasmarcelin0 <66127687+lucasmarcelin0@users.noreply.github.com>
+Date:   Mon Nov 3 11:24:34 2025 -0300
+
+    Fix down revision for medicamento migration
+
+[33mcommit 1c6a1221759ddde3af39f2074eb2134206cab3e7[m
+Author: lucasmarcelin0 <66127687+lucasmarcelin0@users.noreply.github.com>
+Date:   Mon Nov 3 11:19:59 2025 -0300
+
+    migrations
+
+[33mcommit 5c174f4503eb33941d87060d3df3549c9b508e12[m
+Author: lucasmarcelin0 <66127687+lucasmarcelin0@users.noreply.github.com>
+Date:   Mon Nov 3 10:08:24 2025 -0300
+
+    Allow longer medicamento descriptions
+
+[33mcommit d771e29fe788fd5e4efa0514ddfc32c9f32a6094[m
+Author: lucasmarcelin0 <66127687+lucasmarcelin0@users.noreply.github.com>
+Date:   Mon Nov 3 10:02:56 2025 -0300
+
+    Allow longer prescription instructions
+
+[33mcommit e93d93efaaa7ca146fcd0c20cbc6886ae921078f[m[33m ([m[1;31morigin/codex/fix-undefinedcolumn-error-in-products[m[33m)[m
+Author: lucasmarcelin0 <66127687+lucasmarcelin0@users.noreply.github.com>
+Date:   Mon Oct 20 09:32:58 2025 -0300
+
+    Add is_active column migration for product table
+
+[33mcommit a5849d46a59173abd87738e323fc5dbe24e0e3b0[m[33m ([m[1;31morigin/codex/fix-migration-for-product-is_active-column[m[33m)[m
+Author: lucasmarcelin0 <66127687+lucasmarcelin0@users.noreply.github.com>
+Date:   Mon Oct 20 09:31:50 2025 -0300
+
+    Fix migration to add is_active with default
+
+[33mcommit 22096cdb815d7ea9de548453209b6678d66f1eb8[m
+Author: lucasmarcelin0 <66127687+lucasmarcelin0@users.noreply.github.com>
+Date:   Mon Oct 20 09:26:24 2025 -0300
+
+    Add migration for product is_active column
+
+[33mcommit 7a5414e43664b29bb469d02218e52d6b525c796c[m[33m ([m[1;31morigin/codex/update-fetchwithtimeout-and-add-idempotency-token[m[33m)[m
+Author: lucasmarcelin0 <66127687+lucasmarcelin0@users.noreply.github.com>
+Date:   Fri Oct 17 12:57:09 2025 -0300
+
+    Add idempotent offline submission handling
+
+[33mcommit cbfb83b0b75acd0205c5a0f47221d658d1db59cf[m[33m ([m[1;31morigin/codex/fix-undefined-table-error-in-sql-query[m[33m)[m
+Author: lucasmarcelin0 <66127687+lucasmarcelin0@users.noreply.github.com>
+Date:   Thu Oct 9 12:41:10 2025 -0300
+
+    Add migration for veterinarian memberships
+
+[33mcommit d2e3f372b5d10f0fcff5c89a24836f891107962a[m[33m ([m[1;31morigin/codex/add-user-privacy-setting-for-accounts[m[33m)[m
+Author: lucasmarcelin0 <66127687+lucasmarcelin0@users.noreply.github.com>
+Date:   Thu Oct 9 08:49:47 2025 -0300
+
+    Add clinic-scoped user privacy controls
+
+[33mcommit a63e669d5b0abe7773f9c07643fb830296cee83e[m[33m ([m[1;31morigin/codex/add-can_view_full_calendar-column[m[33m)[m
+Author: lucasmarcelin0 <66127687+lucasmarcelin0@users.noreply.github.com>
+Date:   Tue Oct 7 08:36:16 2025 -0300
+
+    Add calendar access controls for clinic staff
+
+[33mcommit 097d2f7ab5d437e128a0aafb04b6a50bb084b390[m[33m ([m[1;31morigin/codex/add-completion-timestamp-for-consultations[m[33m)[m
+Author: lucasmarcelin0 <66127687+lucasmarcelin0@users.noreply.github.com>
+Date:   Mon Oct 6 08:12:55 2025 -0300
+
+    Track consulta completion timestamps
+
+[33mcommit 4e0973eedf74fee704d3c00d644f75445cc58084[m[33m ([m[1;31morigin/codex/add-appointment-scheduler-details[m[33m)[m
+Author: lucasmarcelin0 <66127687+lucasmarcelin0@users.noreply.github.com>
+Date:   Tue Sep 23 00:52:28 2025 -0300
+
+    Add scheduler metadata to appointment details
+
+[33mcommit 7703f6c2444d06fa81866f3e34f9e105398cd410[m[33m ([m[1;31morigin/codex/adjust-down_revision-for-migration-529be1d96219[m[33m)[m
+Author: lucasmarcelin0 <66127687+lucasmarcelin0@users.noreply.github.com>
+Date:   Sat Sep 20 16:29:20 2025 -0300
+
+    Fix down revision for appointment migration
+
+[33mcommit aa755ed24553d03eedc62f2c47e4d21b4640f545[m[33m ([m[1;31morigin/codex/fix-appointment.kind-default-and-backfill-zl4xyj[m[33m)[m
+Merge: 159b7448 9bea41ab
+Author: lucasmarcelin0 <66127687+lucasmarcelin0@users.noreply.github.com>
+Date:   Sat Sep 20 16:22:17 2025 -0300
+
+    Merge branch 'main' into codex/fix-appointment.kind-default-and-backfill-zl4xyj
+
+[33mcommit 159b744842f6e5e78d9e3de789e9df322589ab4e[m
+Author: lucasmarcelin0 <66127687+lucasmarcelin0@users.noreply.github.com>
+Date:   Sat Sep 20 16:21:10 2025 -0300
+
+    Handle missing medication migration when setting appointment kind
+
+[33mcommit 133c2cc627d84d0c407c6af264161f915ad6fe6f[m[33m ([m[1;31morigin/codex/fix-appointment.kind-default-and-backfill[m[33m)[m
+Author: lucasmarcelin0 <66127687+lucasmarcelin0@users.noreply.github.com>
+Date:   Sat Sep 20 15:59:27 2025 -0300
+
+    Set appointment kind default to general
+
+[33mcommit 8921bf5105a458651fd7d4e2fc32b1face9a4a15[m[33m ([m[1;31morigin/codex/fix-string-data-truncation-error[m[33m)[m
+Author: lucasmarcelin0 <66127687+lucasmarcelin0@users.noreply.github.com>
+Date:   Fri Sep 19 14:25:45 2025 -0300
+
+    Allow long medication instructions and fix collaborator booking
+
+[33mcommit bdb0390c6d02cf98d21ad2d285f5b0b2088f9cc2[m
+Merge: 99de0d6a 1c79fed5
+Author: lucasmarcelin0 <66127687+lucasmarcelin0@users.noreply.github.com>
+Date:   Wed Sep 3 19:47:45 2025 -0300
+
+    Merge pull request #676 from lucasmarcelin0/codex/add-applied-checkbox-to-vaccine-forms
+    
+    Add applied status tracking for vaccines
+
+[33mcommit 921dd23dce1a4f4dc5ab318f72e238dda14d2554[m[33m ([m[1;31morigin/codex/add-post-route-to-apply-vaccine[m[33m)[m
+Author: lucasmarcelin0 <66127687+lucasmarcelin0@users.noreply.github.com>
+Date:   Wed Sep 3 19:44:02 2025 -0300
+
+    Fix migration docstring
+
+[33mcommit 1c79fed50eb840b3235728b94d3b99eabf620366[m[33m ([m[1;31morigin/codex/add-applied-checkbox-to-vaccine-forms[m[33m)[m
+Author: lucasmarcelin0 <66127687+lucasmarcelin0@users.noreply.github.com>
+Date:   Wed Sep 3 19:43:37 2025 -0300
+
+    Add applied tracking to vaccines
+
+[33mcommit 64d49f22d024a81a4329c1002038d8b32af1fa36[m[33m ([m[1;31morigin/codex/add-applied-fields-to-vacina-model-and-migrate[m[33m)[m
+Author: lucasmarcelin0 <66127687+lucasmarcelin0@users.noreply.github.com>
+Date:   Wed Sep 3 19:43:19 2025 -0300
+
+    Add migration for Vacina application fields
