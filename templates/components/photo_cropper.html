@@ -29,6 +29,7 @@
     <button type="button" class="btn btn-primary btn-sm mb-3" onclick="document.getElementById('{{ id }}').click()">
       <i class="fas fa-upload me-1"></i> Escolher imagem
     </button>
+    <p class="text-muted small mb-1">Você também pode colar uma captura de tela (Ctrl+V) diretamente aqui.</p>
 
     <div id="{{ id }}-controls" class="d-flex flex-wrap justify-content-center gap-2 my-2{% if not image_url %} d-none{% endif %}">
       <button type="button" id="{{ id }}-rotate-left" class="btn btn-light btn-sm border" title="Girar 90° à esquerda">
@@ -84,6 +85,31 @@
     let offsetX = parseFloat(offsetXField.value || 0);
     let offsetY = parseFloat(offsetYField.value || 0);
 
+    function loadFile(file) {
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = ev => {
+        if (img) {
+          img.src = ev.target.result;
+          img.style.opacity = '1';
+          rotation = 0;
+          zoom = 1;
+          offsetX = 0;
+          offsetY = 0;
+          showControls();
+          update();
+        }
+      };
+      reader.readAsDataURL(file);
+    }
+
+    function setFileInputFromPaste(file) {
+      if (!fileInput) return;
+      const dataTransfer = new DataTransfer();
+      dataTransfer.items.add(file);
+      fileInput.files = dataTransfer.files;
+    }
+
     function update() {
       if (img) {
         img.style.transform = `translate(${offsetX}px, ${offsetY}px) rotate(${rotation}deg) scale(${zoom})`;
@@ -104,24 +130,24 @@
     if (fileInput) {
       fileInput.addEventListener('change', (e) => {
         const file = e.target.files[0];
-        if (file) {
-          const reader = new FileReader();
-          reader.onload = ev => {
-            if (img) {
-              img.src = ev.target.result;
-              img.style.opacity = '1';
-              rotation = 0;
-              zoom = 1;
-              offsetX = 0;
-              offsetY = 0;
-              showControls();
-              update();
-            }
-          };
-          reader.readAsDataURL(file);
-        }
+        if (file) { loadFile(file); }
       });
     }
+
+    container?.addEventListener('paste', (event) => {
+      const items = event.clipboardData?.items;
+      if (!items) return;
+      for (const item of items) {
+        if (item.kind === 'file' && item.type.startsWith('image/')) {
+          const file = item.getAsFile();
+          if (!file) continue;
+          setFileInputFromPaste(file);
+          loadFile(file);
+          event.preventDefault();
+          break;
+        }
+      }
+    });
 
     // Button event listeners
     rotateLeft?.addEventListener('click', () => { rotation = (rotation - 90 + 360) % 360; update(); });
