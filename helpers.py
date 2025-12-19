@@ -21,46 +21,72 @@ DEFAULT_APPOINTMENT_DURATION_MINUTES = 30
 
 
 def geocode_address(*, cep=None, rua=None, numero=None, bairro=None, cidade=None, estado=None):
-    """Return latitude/longitude using OpenStreetMap when enough address data is available.
+    """Return latitude/longitude using OpenStreetMap with multiple fallbacks.
 
-    The lookup is best-effort: if the request fails or no match is found, ``None``
-    is returned instead of raising an exception.
+    The search tries progressively less specific queries to maximize matches:
+
+    1. Full address with street and number
+    2. Street without number
+    3. Neighborhood + city/state
+    4. City/state or CEP alone
+
+    The first successful result is returned as ``(lat, lon)``. Any request
+    failure or missing result yields ``None`` instead of raising an exception.
     """
 
-    parts = [
-        (rua or "").strip(),
-        (numero or "").strip(),
-        (bairro or "").strip(),
-        (cidade or "").strip(),
-        (estado or "").strip(),
-        (cep or "").strip(),
-        "Brasil",
-    ]
+    def _normalized(part):
+        return (part or "").strip()
 
-    query = ", ".join([p for p in parts if p])
-    if not query:
+    rua = _normalized(rua)
+    numero = _normalized(numero)
+    bairro = _normalized(bairro)
+    cidade = _normalized(cidade)
+    estado = _normalized(estado)
+    cep = _normalized(cep)
+
+    def _build_queries():
+        # Full address (street + number has highest precision)
+        yield ", ".join([p for p in [rua, numero, bairro, cidade, estado, cep, "Brasil"] if p])
+
+        # Drop number when the exact entry is missing (common in OSM)
+        yield ", ".join([p for p in [rua, bairro, cidade, estado, cep, "Brasil"] if p])
+
+        # Prefer neighborhood + city/state when street names are duplicated
+        yield ", ".join([p for p in [bairro, cidade, estado, "Brasil"] if p])
+
+        # Broad search using city/state or CEP alone
+        yield ", ".join([p for p in [cidade, estado, "Brasil"] if p])
+        yield ", ".join([p for p in [cep, "Brasil"] if p])
+
+    queries = [q for q in _build_queries() if q]
+    if not queries:
         return None
 
-    try:
-        response = requests.get(
-            "https://nominatim.openstreetmap.org/search",
-            params={"q": query, "format": "json", "limit": 1, "countrycodes": "br"},
-            headers={"User-Agent": "PetOrlandia/1.0 (+https://petorlandia.com)"},
-            timeout=5,
-        )
-        response.raise_for_status()
-        payload = response.json() or []
-    except requests.RequestException:
-        return None
+    session = requests.Session()
+    session.headers.update({"User-Agent": "PetOrlandia/1.0 (+https://petorlandia.com)"})
 
-    try:
-        best_match = payload[0]
-        lat = float(best_match.get("lat"))
-        lon = float(best_match.get("lon"))
-    except (IndexError, TypeError, ValueError):
-        return None
+    for query in queries:
+        try:
+            response = session.get(
+                "https://nominatim.openstreetmap.org/search",
+                params={"q": query, "format": "json", "limit": 1, "countrycodes": "br"},
+                timeout=5,
+            )
+            response.raise_for_status()
+            payload = response.json() or []
+        except requests.RequestException:
+            continue
 
-    return lat, lon
+        try:
+            best_match = payload[0]
+            lat = float(best_match.get("lat"))
+            lon = float(best_match.get("lon"))
+        except (IndexError, TypeError, ValueError):
+            continue
+
+        return lat, lon
+
+    return None
 
 APPOINTMENT_KIND_DURATIONS = {
     'consulta': 30,
