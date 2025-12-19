@@ -80,6 +80,10 @@ class AddressGeocodeQueue:
                         db.session.commit()
                         self._increment("updated")
                     else:
+                        current_app.logger.info(
+                            "Geocodificação ignorada para o endereço %s (dados incompletos ou não encontrado)",
+                            endereco.id,
+                        )
                         self._increment("skipped")
 
                     self._increment("processed")
