@@ -87,9 +87,7 @@
   function notifyOfflineQueued(form){
     if(offlineNoticeShown) return;
     offlineNoticeShown = true;
-    const message = 'Ação salva offline e será sincronizada quando possível.';
-    showFormMessage(form, message, 'info');
-    showToast(message, 'info');
+    // Intentionally silent: avoid showing popups/toasts when a request is queued offline.
   }
 
   async function sendQueued(){
