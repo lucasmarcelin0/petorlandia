@@ -79,6 +79,7 @@
             <div>
                 <div class="fw-semibold">Processando endereços…</div>
                 <div class="small text-muted" id="geocode-status-text"></div>
+                <div class="mt-2" id="geocode-missing-tutors" style="display: none;"></div>
             </div>
         </div>
 
@@ -199,6 +200,7 @@
     const totalAnimaisEl = document.getElementById('total-animais');
     const geocodeStatusEl = document.getElementById('geocode-status');
     const geocodeStatusText = document.getElementById('geocode-status-text');
+    const geocodeMissingTutors = document.getElementById('geocode-missing-tutors');
 
     const updateTotals = (data) => {
         if (typeof data.total_tutores === 'number') {
@@ -222,6 +224,41 @@
 
     const POLL_INTERVAL = 5000;
 
+    const renderMissingTutors = (missingTutors = []) => {
+        geocodeMissingTutors.innerHTML = '';
+
+        if (!missingTutors.length) {
+            geocodeMissingTutors.style.display = 'none';
+            return;
+        }
+
+        geocodeMissingTutors.style.display = 'block';
+
+        const heading = document.createElement('div');
+        heading.className = 'small text-muted mb-1';
+        heading.textContent = 'Tutores fora do mapa:';
+
+        const list = document.createElement('div');
+        list.className = 'd-flex flex-wrap gap-2';
+
+        missingTutors.forEach((tutor) => {
+            const link = document.createElement('a');
+            link.href = tutor.profile_url;
+            link.className = 'btn btn-sm btn-outline-danger d-inline-flex align-items-center gap-2';
+            link.innerHTML = `
+                <i class="fas fa-map-marker-alt"></i>
+                <span>${tutor.name || 'Tutor sem nome'}</span>
+            `;
+            if (tutor.address) {
+                link.title = tutor.address;
+            }
+            list.appendChild(link);
+        });
+
+        geocodeMissingTutors.appendChild(heading);
+        geocodeMissingTutors.appendChild(list);
+    };
+
     const buildGeocodeMessage = (status) => {
         const processed = status.processed || 0;
         const total = status.total || 0;
@@ -243,12 +280,14 @@
         try {
             const response = await fetch(geocodeStatusEndpoint);
             const status = await response.json();
+            const missingTutors = status.missing_tutors || [];
 
-            if (!status.running && !status.total) {
+            if (!status.running && !status.total && !missingTutors.length) {
                 geocodeStatusEl.style.display = 'none';
             } else {
                 geocodeStatusEl.style.display = 'flex';
                 geocodeStatusText.textContent = buildGeocodeMessage(status);
+                renderMissingTutors(missingTutors);
             }
 
             await refreshMarkers();
