@@ -1325,6 +1325,7 @@ from services import (
     summarize_plan_metrics,
     update_financial_snapshots_daily,
 )
+from services.geocode_queue import AddressGeocodeQueue
 from services.finance import (
     classify_transactions_for_month,
     determine_pj_payment_subcategory,
@@ -1332,6 +1333,9 @@ from services.finance import (
     run_transactions_history_backfill,
 )
 from services.animal_search import search_animals
+
+
+address_geocode_queue = AddressGeocodeQueue(app)
 
 
 def current_user_clinic_id():
@@ -12880,12 +12884,7 @@ def delivery_detail(req_id):
 
 # routes_delivery.py  (ou app.py)
 
-@app.route('/admin/mapa_tutores')
-@login_required
-def admin_tutor_map():
-    if not _is_admin():
-        abort(403)
-
+def _build_tutor_map_data():
     tutors = (
         User.query.join(Endereco, Endereco.id == User.endereco_id)
         .options(joinedload(User.endereco))
@@ -12893,9 +12892,6 @@ def admin_tutor_map():
         .order_by(User.name)
         .all()
     )
-
-    total_tutores = len(tutors)
-    total_animais = Animal.query.filter(Animal.removido_em.is_(None)).count()
 
     raw_markers = []
     for tutor in tutors:
@@ -12947,13 +12943,52 @@ def admin_tutor_map():
     else:
         map_center = default_center
 
-    return render_template(
-        'admin/tutor_map.html',
-        markers=markers,
-        default_center=map_center,
-        total_tutores=total_tutores,
-        total_animais=total_animais,
-    )
+    return {
+        'markers': markers,
+        'default_center': map_center,
+        'total_tutores': len(tutors),
+        'total_animais': Animal.query.filter(Animal.removido_em.is_(None)).count(),
+    }
+
+
+@app.route('/admin/mapa_tutores')
+@login_required
+def admin_tutor_map():
+    if not _is_admin():
+        abort(403)
+
+    map_data = _build_tutor_map_data()
+
+    return render_template('admin/tutor_map.html', **map_data)
+
+
+@app.route('/admin/api/tutor_markers')
+@login_required
+def admin_tutor_markers_api():
+    if not _is_admin():
+        abort(403)
+
+    return jsonify(_build_tutor_map_data())
+
+
+@app.route('/admin/api/geocode_addresses', methods=['POST'])
+@login_required
+def admin_geocode_addresses():
+    if not _is_admin():
+        abort(403)
+
+    started = address_geocode_queue.start()
+    status = address_geocode_queue.status()
+    return jsonify({'started': started, 'status': status}), (202 if started else 200)
+
+
+@app.route('/admin/api/geocode_addresses/status')
+@login_required
+def admin_geocode_status():
+    if not _is_admin():
+        abort(403)
+
+    return jsonify(address_geocode_queue.status())
 
 
 @app.route("/admin/delivery_overview")
