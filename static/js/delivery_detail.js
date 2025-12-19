@@ -1,4 +1,5 @@
 const HIDDEN_CLASS = 'd-none';
+const DEFAULT_ERROR_MESSAGE = 'Não foi possível cancelar o pedido.';
 
 function updateStatusBadge(element, label, badgeClass) {
   if (!element) {
@@ -88,6 +89,108 @@ function updateWorker(section, worker) {
   }
 }
 
+function ensureStatusContainer(form) {
+  let status = form.querySelector('.form-status-message');
+  if (!status) {
+    status = document.createElement('div');
+    status.className = 'form-status-message alert small mt-2';
+    form.appendChild(status);
+  }
+  return status;
+}
+
+function showFormStatus(form, message, variant = 'info') {
+  if (!form) return;
+  if (window.FormFeedback && typeof window.FormFeedback.showStatus === 'function') {
+    window.FormFeedback.showStatus(form, message, variant);
+    return;
+  }
+  const status = ensureStatusContainer(form);
+  status.textContent = message || '';
+  status.classList.remove('d-none');
+  ['success', 'danger', 'warning', 'info'].forEach((v) => {
+    status.classList.remove(`alert-${v}`);
+  });
+  status.classList.add(`alert-${variant}`);
+}
+
+async function submitCancelForm(cancelForm) {
+  const response = await fetch(cancelForm.action, {
+    method: 'POST',
+    body: new FormData(cancelForm),
+    headers: {
+      'X-Requested-With': 'XMLHttpRequest',
+      Accept: 'application/json',
+    },
+  });
+
+  const contentType = response.headers.get('content-type') || '';
+  const isJson = contentType.includes('application/json');
+  const data = isJson ? await response.json() : null;
+
+  if (!response.ok || (data && data.success === false)) {
+    const message = (data && (data.message || data.error)) || DEFAULT_ERROR_MESSAGE;
+    const error = new Error(message);
+    error.response = response;
+    error.data = data;
+    throw error;
+  }
+
+  return data;
+}
+
+function initCancelHandler(root, refreshCallback) {
+  const cancelForm = root.querySelector('[data-cancel-form]');
+  if (!cancelForm) {
+    return;
+  }
+
+  cancelForm.addEventListener('submit', (event) => {
+    event.preventDefault();
+    const run = () => submitCancelForm(cancelForm);
+
+    const onSuccess = (data) => {
+      const message = (data && data.message) || 'Pedido cancelado.';
+      showFormStatus(cancelForm, message, 'info');
+      refreshCallback();
+    };
+
+    const onError = (error) => {
+      showFormStatus(cancelForm, error?.message || DEFAULT_ERROR_MESSAGE, 'danger');
+      console.error('Erro ao cancelar pedido:', error);
+    };
+
+    if (window.FormFeedback && typeof window.FormFeedback.withSavingState === 'function') {
+      window.FormFeedback
+        .withSavingState(cancelForm, run, {
+          loadingText: 'Cancelando...',
+          successText: 'Cancelado',
+          errorMessage: DEFAULT_ERROR_MESSAGE,
+        })
+        .then(onSuccess)
+        .catch(onError);
+    } else {
+      const button = cancelForm.querySelector('button[type="submit"]');
+      if (button) {
+        button.disabled = true;
+      }
+      run()
+        .then((data) => {
+          if (button) {
+            button.disabled = false;
+          }
+          onSuccess(data);
+        })
+        .catch((error) => {
+          if (button) {
+            button.disabled = false;
+          }
+          onError(error);
+        });
+    }
+  });
+}
+
 function initDeliveryDetail() {
   const root = document.querySelector('[data-delivery-detail]');
   if (!root) {
@@ -125,6 +228,7 @@ function initDeliveryDetail() {
   }
 
   refresh();
+  initCancelHandler(root, refresh);
   if (pollInterval > 0) {
     window.setInterval(refresh, pollInterval);
   }
