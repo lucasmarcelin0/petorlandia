@@ -74,17 +74,25 @@
 
         <div id="user-map"></div>
 
+        <div class="alert alert-info d-flex align-items-center mt-3" id="geocode-status" style="display: none;">
+            <div class="spinner-border spinner-border-sm text-primary me-2" role="status"></div>
+            <div>
+                <div class="fw-semibold">Processando endereços…</div>
+                <div class="small text-muted" id="geocode-status-text"></div>
+            </div>
+        </div>
+
         <div class="row g-3 mt-3">
             <div class="col-md-6">
                 <div class="p-3 bg-light border rounded h-100">
                     <div class="text-muted small">Total de tutores</div>
-                    <div class="fs-4 fw-semibold mb-0">{{ total_tutores }}</div>
+                    <div class="fs-4 fw-semibold mb-0" id="total-tutores">{{ total_tutores }}</div>
                 </div>
             </div>
             <div class="col-md-6">
                 <div class="p-3 bg-light border rounded h-100">
                     <div class="text-muted small">Total de animais</div>
-                    <div class="fs-4 fw-semibold mb-0">{{ total_animais }}</div>
+                    <div class="fs-4 fw-semibold mb-0" id="total-animais">{{ total_animais }}</div>
                 </div>
             </div>
         </div>
@@ -101,6 +109,9 @@
 <script>
     const markers = {{ markers|tojson }};
     const defaultCenter = {{ default_center|tojson }};
+    const markersEndpoint = {{ url_for('admin_tutor_markers_api')|tojson }};
+    const geocodeStartEndpoint = {{ url_for('admin_geocode_addresses')|tojson }};
+    const geocodeStatusEndpoint = {{ url_for('admin_geocode_status')|tojson }};
 
     const genderColor = (gender) => {
         const value = (gender || '').toString().toLowerCase();
@@ -148,18 +159,106 @@
         maxZoom: 19,
     }).addTo(map);
 
-    if (markers.length) {
-        const bounds = L.latLngBounds([]);
-        markers.forEach((markerData) => {
-            const marker = L.marker([markerData.lat, markerData.lng], {
-                icon: buildMarkerIcon(markerData),
-            }).addTo(map);
-            marker.bindTooltip(markerData.name, { permanent: true, direction: 'top', offset: [0, -10] });
-            marker.bindPopup(`<div class="fw-semibold mb-1">${markerData.name}</div><div class="text-muted small">${markerData.address}</div>`);
-            marker.on('click', () => window.location.href = markerData.profile_url);
-            bounds.extend([markerData.lat, markerData.lng]);
+    const markerLayer = L.layerGroup().addTo(map);
+    const markerRefs = new Map();
+
+    const addMarker = (markerData) => {
+        const marker = L.marker([markerData.lat, markerData.lng], {
+            icon: buildMarkerIcon(markerData),
         });
+        marker.bindTooltip(markerData.name, { permanent: true, direction: 'top', offset: [0, -10] });
+        marker.bindPopup(`<div class="fw-semibold mb-1">${markerData.name}</div><div class="text-muted small">${markerData.address}</div>`);
+        marker.on('click', () => window.location.href = markerData.profile_url);
+        markerLayer.addLayer(marker);
+        markerRefs.set(markerData.id, marker);
+    };
+
+    const fitToMarkers = () => {
+        if (!markerRefs.size) return;
+        const bounds = L.latLngBounds([]);
+        markerRefs.forEach((marker) => bounds.extend(marker.getLatLng()));
         map.fitBounds(bounds, { padding: [40, 40] });
-    }
+    };
+
+    const syncMarkers = (markerDataList) => {
+        let added = 0;
+        markerDataList.forEach((markerData) => {
+            if (markerRefs.has(markerData.id)) return;
+            addMarker(markerData);
+            added += 1;
+        });
+        if (added) {
+            fitToMarkers();
+        }
+    };
+
+    syncMarkers(markers);
+    fitToMarkers();
+
+    const totalTutoresEl = document.getElementById('total-tutores');
+    const totalAnimaisEl = document.getElementById('total-animais');
+    const geocodeStatusEl = document.getElementById('geocode-status');
+    const geocodeStatusText = document.getElementById('geocode-status-text');
+
+    const updateTotals = (data) => {
+        if (typeof data.total_tutores === 'number') {
+            totalTutoresEl.textContent = data.total_tutores;
+        }
+        if (typeof data.total_animais === 'number') {
+            totalAnimaisEl.textContent = data.total_animais;
+        }
+    };
+
+    const refreshMarkers = async () => {
+        try {
+            const response = await fetch(markersEndpoint);
+            const data = await response.json();
+            syncMarkers(data.markers || []);
+            updateTotals(data);
+        } catch (err) {
+            console.error('Erro ao atualizar marcadores', err);
+        }
+    };
+
+    const POLL_INTERVAL = 5000;
+
+    const refreshGeocodeStatus = async () => {
+        try {
+            const response = await fetch(geocodeStatusEndpoint);
+            const status = await response.json();
+
+            if (!status.running && !status.total) {
+                geocodeStatusEl.style.display = 'none';
+            } else {
+                geocodeStatusEl.style.display = 'flex';
+                const processed = status.processed || 0;
+                const total = status.total || 0;
+                const updated = status.updated || 0;
+                geocodeStatusText.textContent = status.running
+                    ? `Geocodificando ${processed} de ${total} endereços (novos pontos adicionados: ${updated}).`
+                    : `Processo concluído: ${updated} endereços geocodificados de ${total}.`;
+            }
+
+            await refreshMarkers();
+
+            if (status.running) {
+                setTimeout(refreshGeocodeStatus, POLL_INTERVAL);
+            }
+        } catch (err) {
+            console.error('Erro ao consultar status de geocodificação', err);
+        }
+    };
+
+    const startGeocodeQueue = async () => {
+        try {
+            await fetch(geocodeStartEndpoint, { method: 'POST' });
+        } catch (err) {
+            console.error('Erro ao iniciar a geocodificação', err);
+        } finally {
+            refreshGeocodeStatus();
+        }
+    };
+
+    startGeocodeQueue();
 </script>
 {% endblock %}
