@@ -788,6 +788,37 @@
       });
     });
   </script>
+  <script>
+    (() => {
+      const originalAlert = window.alert?.bind(window);
+      const suppressedPatterns = [
+        /ação\s+salva\s+offline/i,
+        /salva\s+offline.*sincronizada/i,
+        /sincronizada\s+quando\s+possível/i,
+      ];
+
+      window.alert = message => {
+        const text = typeof message === 'string' ? message : String(message);
+        const shouldSuppress = suppressedPatterns.some(pattern => pattern.test(text));
+
+        if (shouldSuppress) {
+          const toastEl = document.getElementById('actionToast');
+          if (toastEl) {
+            toastEl.querySelector('.toast-body').textContent = text || 'Ação salva para sincronização quando estiver online.';
+            applyToastTone(toastEl, 'info');
+            bootstrap.Toast.getOrCreateInstance(toastEl).show();
+          } else {
+            console.info('Alerta suprimido:', text);
+          }
+          return;
+        }
+
+        if (originalAlert) {
+          return originalAlert(text);
+        }
+      };
+    })();
+  </script>
   <script src="https://cdn.jsdelivr.net/npm/inputmask@5.0.8/dist/inputmask.min.js"></script>
   <script src="{{ url_for('static', filename='masks.js') }}"></script>
   <script src="{{ url_for('static', filename='avatar_helper.js') }}"></script>
