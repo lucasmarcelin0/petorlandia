@@ -35,7 +35,9 @@
              class="btn btn-outline-dark btn-sm">🖨️ Imprimir</a>
           <form action="{{ url_for('deletar_consulta', consulta_id=c.id) }}"
                 method="POST" class="d-inline delete-history-form" data-sync
-                data-target="historico-consultas" data-confirm="Excluir esta consulta?">
+                data-target="#historico-consultas"
+                data-target-endpoint="{{ url_for('historico_consultas_partial', animal_id=animal.id, clinica_id=c.clinica_id) }}"
+                data-confirm="Excluir esta consulta?">
             <button class="btn btn-outline-danger btn-sm">🗑️</button>
           </form>
         </td>
