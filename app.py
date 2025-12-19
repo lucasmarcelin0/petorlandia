@@ -12951,6 +12951,26 @@ def _build_tutor_map_data():
     }
 
 
+def _build_missing_tutor_geocodes():
+    missing_tutors = (
+        User.query.join(Endereco, Endereco.id == User.endereco_id)
+        .options(joinedload(User.endereco))
+        .filter(or_(Endereco.latitude.is_(None), Endereco.longitude.is_(None)))
+        .order_by(User.name)
+        .all()
+    )
+
+    return [
+        {
+            'id': tutor.id,
+            'name': tutor.name,
+            'address': tutor.endereco.full if tutor.endereco else '',
+            'profile_url': url_for('ficha_tutor', tutor_id=tutor.id),
+        }
+        for tutor in missing_tutors
+    ]
+
+
 @app.route('/admin/mapa_tutores')
 @login_required
 def admin_tutor_map():
@@ -12979,6 +12999,7 @@ def admin_geocode_addresses():
 
     started = address_geocode_queue.start()
     status = address_geocode_queue.status()
+    status['missing_tutors'] = _build_missing_tutor_geocodes()
     return jsonify({'started': started, 'status': status}), (202 if started else 200)
 
 
@@ -12988,7 +13009,10 @@ def admin_geocode_status():
     if not _is_admin():
         abort(403)
 
-    return jsonify(address_geocode_queue.status())
+    status = address_geocode_queue.status()
+    status['missing_tutors'] = _build_missing_tutor_geocodes()
+
+    return jsonify(status)
 
 
 @app.route("/admin/delivery_overview")
