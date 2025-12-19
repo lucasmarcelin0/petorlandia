@@ -473,13 +473,23 @@
     const date = form.querySelector('[name="date"]').value;
     const time = form.querySelector('[name="time"]').value;
     const specialistId = form.querySelector('[name="specialist_id"]').value;
-    const resp = await fetch(`/exam_appointment/${id}/update`, {
+    const button = window.FormFeedback?.getButton?.(form) || null;
+    const { response, queued } = await fetchOrQueue(`/exam_appointment/${id}/update`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
       body: JSON.stringify({ date, time, specialist_id: specialistId })
     });
-    if (resp.ok) {
-      const data = await resp.json();
+
+    if (queued) {
+      if (button && window.FormFeedback?.setQueued) {
+        window.FormFeedback.setQueued(button);
+      }
+      mostrarFeedback('Agendamento aguardando conexão para sincronizar.', 'info');
+      return;
+    }
+
+    if (response && response.ok) {
+      const data = await response.json();
       if (data.html) {
         document.getElementById('historico-agendamentos').innerHTML = data.html;
       }
@@ -522,7 +532,7 @@
           }
           exames = [];
           renderExamesTemp();
-          return { success: true };
+          return { success: true, offlineQueued: queued };
         }
         mostrarFeedback('Erro ao salvar exames.', 'danger');
         return { success: false };
@@ -533,7 +543,7 @@
       // Offline: mantém exames na fila sem mostrar notificação
       exames = [];
       renderExamesTemp();
-      return { success: true };
+      return { success: true, offlineQueued: true };
     }
 
     try {

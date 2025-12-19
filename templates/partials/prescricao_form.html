@@ -592,7 +592,7 @@
         }
         prescricoes = [];
         renderPrescricoesTemp();
-        return { success: true };
+        return { success: true, offlineQueued: queued };
       }
       if (!queued) {
         throw new Error('A resposta não pôde ser processada.');
@@ -600,7 +600,7 @@
       // Offline: ação armazenada para sincronização futura sem exibir pop-up
       prescricoes = [];
       renderPrescricoesTemp();
-      return { success: true };
+      return { success: true, offlineQueued: true };
     }
 
     try {
