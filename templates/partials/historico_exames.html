@@ -9,7 +9,8 @@
       </div>
       <div class="d-flex gap-2">
         <form method="POST" action="{{ url_for('deletar_bloco_exames', bloco_id=bloco.id) }}"
-              class="delete-history-form" data-sync data-target="historico-exames"
+              class="delete-history-form" data-sync data-target="#historico-exames"
+              data-target-endpoint="{{ url_for('historico_exames_partial', animal_id=animal.id) }}"
               data-confirm="Deseja realmente excluir este bloco de exames?">
           <button type="submit" class="btn btn-danger btn-sm">
             <i class="bi bi-trash"></i> Excluir

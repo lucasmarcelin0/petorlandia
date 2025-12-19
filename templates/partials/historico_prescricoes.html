@@ -64,7 +64,8 @@
                   action="{{ url_for('deletar_bloco_prescricao', bloco_id=bloco.id) }}"
                   class="delete-history-form"
                   data-sync
-                  data-target="historico-prescricoes"
+                  data-target="#historico-prescricoes"
+                  data-target-endpoint="{{ url_for('historico_prescricoes_partial', consulta_id=consulta.id) }}"
                   data-confirm="Deseja mesmo excluir este bloco de prescrições?">
               <button class="btn btn-outline-danger btn-sm">
                 <i class="fas fa-trash-alt me-1"></i>Excluir

@@ -1852,6 +1852,33 @@ def _render_prescricao_history(animal, clinic_id):
     )
 
 
+@app.route('/animal/<int:animal_id>/historico_consultas', methods=['GET'])
+@login_required
+def historico_consultas_partial(animal_id):
+    animal = get_animal_or_404(animal_id)
+    clinic_id = request.args.get('clinica_id', type=int) or getattr(animal, 'clinica_id', None) or current_user_clinic_id()
+
+    if clinic_id:
+        ensure_clinic_access(clinic_id)
+
+    historico_query = (
+        Consulta.query
+        .filter_by(animal_id=animal.id, status='finalizada')
+    )
+
+    if clinic_id:
+        historico_query = historico_query.filter_by(clinica_id=clinic_id)
+
+    historico = historico_query.order_by(Consulta.created_at.desc()).all()
+
+    historico_html = render_template(
+        'partials/historico_consultas.html',
+        animal=animal,
+        historico_consultas=historico,
+    )
+    return jsonify({'success': True, 'html': historico_html})
+
+
 MISSING_VET_PROFILE_MESSAGE = (
     "Para visualizar os convites de clínica, finalize seu cadastro de "
     "veterinário informando o CRMV e demais dados profissionais."
@@ -11641,6 +11668,23 @@ def historico_prescricoes_partial(consulta_id):
     return jsonify({'success': True, 'html': historico_html})
 
 
+@app.route('/animal/<int:animal_id>/historico_exames', methods=['GET'])
+@login_required
+def historico_exames_partial(animal_id):
+    animal = get_animal_or_404(animal_id)
+    clinic_id = request.args.get('clinica_id', type=int) or getattr(animal, 'clinica_id', None) or current_user_clinic_id()
+
+    if clinic_id:
+        ensure_clinic_access(clinic_id)
+
+    historico_html = render_template(
+        'partials/historico_exames.html',
+        animal=animal,
+        clinic_scope_id=clinic_id,
+    )
+    return jsonify({'success': True, 'html': historico_html})
+
+
 
 @app.route('/consulta/<int:consulta_id>/prescricao/lote', methods=['POST'])
 @login_required
@@ -18476,6 +18520,19 @@ def salvar_bloco_orcamento(consulta_id):
         bloco.net_total = Decimal('0.00')
     db.session.commit()
     historico_html = _render_orcamento_history(consulta.animal, consulta.clinica_id)
+    return jsonify({'success': True, 'html': historico_html})
+
+
+@app.route('/consulta/<int:consulta_id>/historico_orcamentos', methods=['GET'])
+@login_required
+def historico_orcamentos_partial(consulta_id):
+    consulta = get_consulta_or_404(consulta_id)
+    clinic_id = consulta.clinica_id or current_user_clinic_id() or getattr(consulta.animal, 'clinica_id', None)
+
+    if clinic_id:
+        ensure_clinic_access(clinic_id)
+
+    historico_html = _render_orcamento_history(consulta.animal, clinic_id)
     return jsonify({'success': True, 'html': historico_html})
 
 
