@@ -2,9 +2,10 @@
   const DEFAULT_LOADING_TEXT = 'Salvando...';
   const DEFAULT_SUCCESS_TEXT = 'Salvo!';
   const DEFAULT_ERROR_TEXT = 'Não foi possível salvar as alterações.';
+  const DEFAULT_OFFLINE_TEXT = 'Aguardando sincronização';
   const DEFAULT_SUCCESS_DELAY = 2000;
   const DEFAULT_LOADING_TIMEOUT = 5000;
-  const DEFAULT_TIMEOUT_MESSAGE = 'O tempo limite foi atingido. Reativamos o botão para que você possa tentar novamente.';
+  const DEFAULT_TIMEOUT_MESSAGE = 'Tempo excedido, tente novamente.';
   const STATUS_VARIANTS = ['success', 'danger', 'warning', 'info'];
 
   function getButton(target) {
@@ -139,28 +140,57 @@
     }
   }
 
-  function setSuccess(button, successText, delay) {
+  function setSuccess(button, successTextOrOptions, delay) {
     if (!button) return;
+
+    let text = successTextOrOptions;
+    let timeout = delay;
+    let offlineQueued = false;
+
+    if (successTextOrOptions && typeof successTextOrOptions === 'object' && !Array.isArray(successTextOrOptions)) {
+      const options = successTextOrOptions;
+      if (typeof options.successText === 'string') {
+        text = options.successText;
+      }
+      if (typeof options.delay !== 'undefined') {
+        timeout = options.delay;
+      }
+      offlineQueued = Boolean(options.offlineQueued);
+      if (!text && offlineQueued && typeof options.queuedText === 'string') {
+        text = options.queuedText;
+      }
+    }
+
     ensureOriginal(button);
     clearLoadingTimer(button);
     clearResetTimer(button);
-    const text = successText || button.dataset.successText || DEFAULT_SUCCESS_TEXT;
-    const timeout = Number.isFinite(delay)
-      ? Number(delay)
+
+    const resolvedText = text
+      || (offlineQueued ? button.dataset.queuedText || DEFAULT_OFFLINE_TEXT : null)
+      || button.dataset.successText
+      || DEFAULT_SUCCESS_TEXT;
+
+    const resolvedDelay = Number.isFinite(timeout)
+      ? Number(timeout)
       : Number(button.dataset.successDelay) || DEFAULT_SUCCESS_DELAY;
+
     button.disabled = false;
     button.removeAttribute('aria-busy');
     button.innerHTML = `
-      <span class="me-2">✅</span>
-      <span>${text}</span>
+      <span class="me-2">${offlineQueued ? '☁️' : '✅'}</span>
+      <span>${resolvedText}</span>
     `;
     const timerId = window.setTimeout(() => {
       if (button.dataset.originalHtml) {
         button.innerHTML = button.dataset.originalHtml;
       }
       delete button.dataset.resetTimeout;
-    }, timeout);
+    }, resolvedDelay);
     button.dataset.resetTimeout = String(timerId);
+  }
+
+  function setQueued(button, text, delay) {
+    setSuccess(button, { successText: text, delay, offlineQueued: true });
   }
 
   function clearStatus(form) {
@@ -195,6 +225,7 @@
       keepButton: false,
       successText: undefined,
       resetDelay: undefined,
+      offlineQueued: false,
     };
 
     if (typeof result === 'boolean') {
@@ -217,6 +248,9 @@
       if ('resetDelay' in result && Number.isFinite(result.resetDelay)) {
         normalized.resetDelay = Number(result.resetDelay);
       }
+      if ('offlineQueued' in result) {
+        normalized.offlineQueued = Boolean(result.offlineQueued);
+      }
     }
 
     if (typeof options.success === 'boolean') {
@@ -230,6 +264,9 @@
     }
     if (typeof options.keepButton === 'boolean') {
       normalized.keepButton = options.keepButton;
+    }
+    if (typeof options.offlineQueued === 'boolean') {
+      normalized.offlineQueued = options.offlineQueued;
     }
 
     return normalized;
@@ -304,7 +341,7 @@
       setIdle(button);
       if (form) {
         if (timedOut) {
-          showStatus(form, timeoutMessage, timeoutLevel);
+          showStatus(form, timeoutMessage || DEFAULT_TIMEOUT_MESSAGE, timeoutLevel);
         } else {
           showStatus(form, options.errorMessage || DEFAULT_ERROR_TEXT, 'danger');
         }
@@ -324,7 +361,11 @@
     if (!normalized.keepButton) {
       if (normalized.success) {
         const successText = options.successText || normalized.successText;
-        setSuccess(button, successText, options.successDelay ?? normalized.resetDelay);
+        setSuccess(button, {
+          successText,
+          delay: options.successDelay ?? normalized.resetDelay,
+          offlineQueued: normalized.offlineQueued,
+        });
       } else {
         setIdle(button);
       }
@@ -352,6 +393,7 @@
     if (!form) return;
     const button = getButton(form);
     if (!button) return;
+    const offlineQueued = Boolean(detail.offlineQueued);
 
     const hadError = Boolean((detail.data && detail.data.success === false) || (detail.response && !detail.response.ok));
     if (hadError) {
@@ -362,7 +404,7 @@
     }
 
     const message = detail.data && detail.data.message;
-    setSuccess(button);
+    setSuccess(button, { offlineQueued });
     if (message) {
       showStatus(form, message, 'success');
     } else {
@@ -375,6 +417,7 @@
     setLoading,
     setIdle,
     setSuccess,
+    setQueued,
     showStatus,
     clearStatus,
     withSavingState,

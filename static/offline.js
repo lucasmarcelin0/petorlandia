@@ -1,25 +1,33 @@
 (function(){
   const KEY = 'offline-queue';
-  const BUTTON_RESET_DELAY = 2000;
-  const DEFAULT_LOADING_TIMEOUT = 5000;
-  const DEFAULT_TIMEOUT_MESSAGE = 'O tempo limite foi atingido. Reativamos o botão para que você possa tentar novamente.';
   const DEFAULT_FETCH_TIMEOUT = 10000;
 
   function getSubmitButton(form){
+    if (window.FormFeedback && typeof window.FormFeedback.getButton === 'function') {
+      return window.FormFeedback.getButton(form);
+    }
     if(!form) return null;
     return form.querySelector('button[type="submit"], button:not([type])');
   }
 
-  function clearButtonTimer(button){
-    if(!button || !button.dataset.resetTimer) return;
-    clearTimeout(Number(button.dataset.resetTimer));
-    delete button.dataset.resetTimer;
+  function setFeedbackLoading(button, options = {}) {
+    const feedback = window.FormFeedback;
+    if (feedback && typeof feedback.setLoading === 'function') {
+      feedback.setLoading(button, options);
+    }
   }
 
-  function ensureOriginalLabel(button){
-    if(!button) return;
-    if(!button.dataset.original){
-      button.dataset.original = button.innerHTML;
+  function setFeedbackIdle(button) {
+    const feedback = window.FormFeedback;
+    if (feedback && typeof feedback.setIdle === 'function') {
+      feedback.setIdle(button);
+    }
+  }
+
+  function setFeedbackSuccess(button, options) {
+    const feedback = window.FormFeedback;
+    if (feedback && typeof feedback.setSuccess === 'function') {
+      feedback.setSuccess(button, options);
     }
   }
 
@@ -37,120 +45,10 @@
     return Number.isFinite(numeric) ? numeric : undefined;
   }
 
-  function resolveLoadingTimeout(button, form){
-    const fromButton = button ? parseTimeout(button.dataset.loadingTimeout) : undefined;
-    if(typeof fromButton !== 'undefined') return fromButton;
-    const fromForm = form ? parseTimeout(form.dataset.loadingTimeout) : undefined;
-    if(typeof fromForm !== 'undefined') return fromForm;
-    return DEFAULT_LOADING_TIMEOUT;
-  }
-
-  function resolveTimeoutMessage(button, form){
-    if(button && typeof button.hasAttribute === 'function' && button.hasAttribute('data-timeout-message')){
-      return button.dataset.timeoutMessage || '';
-    }
-    if(form && typeof form.hasAttribute === 'function' && form.hasAttribute('data-timeout-message')){
-      return form.dataset.timeoutMessage || '';
-    }
-    return DEFAULT_TIMEOUT_MESSAGE;
-  }
-
   function resolveFetchTimeout(form){
     if(!form) return DEFAULT_FETCH_TIMEOUT;
     const value = parseTimeout(form.dataset.fetchTimeout || form.dataset.requestTimeout || form.dataset.syncTimeout);
     return typeof value !== 'undefined' ? value : DEFAULT_FETCH_TIMEOUT;
-  }
-
-  function clearLoadingWatchdog(button){
-    if(!button || !button.dataset.loadingWatchdog) return;
-    clearTimeout(Number(button.dataset.loadingWatchdog));
-    delete button.dataset.loadingWatchdog;
-  }
-
-  function setButtonLoading(button, form){
-    if(!button) return;
-    if (window.FormFeedback && typeof window.FormFeedback.setLoading === 'function') {
-      const options = { form };
-      const timeout = resolveLoadingTimeout(button, form);
-      if (typeof timeout !== 'undefined') {
-        options.loadingTimeout = timeout;
-      }
-      const message = resolveTimeoutMessage(button, form);
-      if (typeof message !== 'undefined') {
-        options.timeoutMessage = message;
-      }
-      window.FormFeedback.setLoading(button, options);
-      return;
-    }
-    ensureOriginalLabel(button);
-    clearButtonTimer(button);
-    clearLoadingWatchdog(button);
-    if(button.dataset.loadingText){
-      button.innerHTML = button.dataset.loadingText;
-    }
-    button.disabled = true;
-    button.classList.add('is-loading');
-    const timeout = resolveLoadingTimeout(button, form);
-    if(Number.isFinite(timeout) && timeout > 0){
-      const timer = setTimeout(() => {
-        delete button.dataset.loadingWatchdog;
-        button.disabled = false;
-        button.classList.remove('is-loading');
-        if(button.dataset.original){
-          button.innerHTML = button.dataset.original;
-        }
-        const message = resolveTimeoutMessage(button, form);
-        if(message){
-          showToast(message, 'warning');
-        }
-        const detail = { button, form, message, reason: 'loading-timeout' };
-        const evt = new CustomEvent('form-feedback-timeout', { detail, bubbles: true });
-        button.dispatchEvent(evt);
-      }, timeout);
-      button.dataset.loadingWatchdog = String(timer);
-    }
-  }
-
-  function setButtonIdle(button){
-    if(!button) return;
-    if (window.FormFeedback && typeof window.FormFeedback.setIdle === 'function') {
-      window.FormFeedback.setIdle(button);
-      return;
-    }
-    clearButtonTimer(button);
-    clearLoadingWatchdog(button);
-    button.disabled = false;
-    button.classList.remove('is-loading');
-    if(button.dataset.original){
-      button.innerHTML = button.dataset.original;
-    }
-  }
-
-  function setButtonSuccess(button){
-    if(!button) return;
-    if (window.FormFeedback && typeof window.FormFeedback.setSuccess === 'function') {
-      window.FormFeedback.setSuccess(button);
-      return;
-    }
-    ensureOriginalLabel(button);
-    clearButtonTimer(button);
-    clearLoadingWatchdog(button);
-    button.disabled = false;
-    button.classList.remove('is-loading');
-    const successText = button.dataset.successText;
-    if(successText){
-      button.innerHTML = successText;
-      const delay = Number(button.dataset.successDelay || BUTTON_RESET_DELAY);
-      const timer = setTimeout(() => {
-        if(button.dataset.original){
-          button.innerHTML = button.dataset.original;
-        }
-        delete button.dataset.resetTimer;
-      }, Number.isFinite(delay) ? delay : BUTTON_RESET_DELAY);
-      button.dataset.resetTimer = String(timer);
-    } else if(button.dataset.original){
-      button.innerHTML = button.dataset.original;
-    }
   }
 
   function cacheBust(url){
@@ -232,17 +130,27 @@
       bodyData = {json: fetchOpts.body};
     }
     const effectiveTimeout = Number.isFinite(timeout) ? timeout : DEFAULT_FETCH_TIMEOUT;
-    if(navigator.onLine){
+    const online = navigator.onLine !== false;
+
+    if(online){
       try {
         const resp = await fetchWithTimeout(url, fetchOpts, effectiveTimeout);
-        // Retorna a resposta mesmo que contenha erro de validação
-        if (resp) return resp;
-      } catch(e){ /* fallthrough */ }
+        return { response: resp, queued: false };
+      } catch(e){
+        if (e && e.name === 'AbortError') {
+          const timeoutError = new Error('Tempo limite ao enviar a requisição.');
+          timeoutError.name = 'FetchTimeoutError';
+          timeoutError.cause = e;
+          throw timeoutError;
+        }
+        throw e;
+      }
     }
+
     const q = loadQueue();
     q.push({url, method, headers, body:bodyData});
     saveQueue(q);
-    return null;
+    return { response: null, queued: true };
   };
 
   window.addEventListener('online', sendQueued);
@@ -280,6 +188,7 @@
     if (!form.matches('form[data-sync]')) return;
 
     const submitButton = getSubmitButton(form);
+    const feedback = window.FormFeedback;
 
     const confirmationMessage = form.dataset.confirm || (form.classList.contains('delete-history-form') ? 'Excluir este registro?' : null);
     if (confirmationMessage && !window.confirm(confirmationMessage)) {
@@ -296,64 +205,78 @@
     }
 
     ev.preventDefault();
-    setButtonLoading(submitButton, form);
-    const data = new FormData(form);
-    const fetchTimeout = resolveFetchTimeout(form);
-    let resp = null;
-    let offlineQueued = false;
+    const performSync = async () => {
+      const data = new FormData(form);
+      const fetchTimeout = resolveFetchTimeout(form);
+      let resp = null;
+      let offlineQueued = false;
+
+      const result = await window.fetchOrQueue(form.action, {method: form.method || 'POST', headers: {'Accept': 'application/json'}, body: data, timeout: fetchTimeout});
+      resp = result ? result.response : null;
+      offlineQueued = Boolean(result && result.queued);
+
+      if (offlineQueued) {
+        notifyOfflineQueued(form);
+      }
+
+      let json = null;
+      if (resp) {
+        try { json = await resp.json(); } catch(e) {}
+      }
+      const mainMessage = json && json.message ? json.message : undefined;
+      const category = json && json.category
+        ? json.category
+        : (json && json.success === false || (resp && !resp.ok) ? 'danger' : 'success');
+      if (mainMessage) {
+        showFormMessage(form, mainMessage, category);
+      }
+      if (json && Array.isArray(json.messages)) {
+        json.messages.forEach(entry => {
+          if (!entry) return;
+          if (typeof entry === 'string') {
+            showFormMessage(form, entry, 'info');
+          } else if (entry.message) {
+            showFormMessage(form, entry.message, entry.category || 'info');
+          }
+        });
+      }
+      const isSuccess = offlineQueued || (resp && resp.ok && !(json && json.success === false));
+      if (!isSuccess && !mainMessage && resp && !resp.ok) {
+        const fallback = resp.statusText || 'Falha ao processar o formulário.';
+        showFormMessage(form, fallback, 'danger');
+      }
+
+      const evt = new CustomEvent('form-sync-success', {detail: {form, data: json, response: resp, offlineQueued, success: isSuccess}, cancelable: true});
+      if (offlineQueued) {
+        evt.preventDefault();
+      }
+      document.dispatchEvent(evt);
+      if (!evt.defaultPrevented && !(form.classList && (form.classList.contains('js-tutor-form') || form.id === 'tutor-form'))) {
+        location.reload();
+      }
+
+      return { success: isSuccess, message: mainMessage, level: category, offlineQueued };
+    };
+
+    const errorMessage = 'Não foi possível enviar o formulário. Tente novamente.';
     try {
-      resp = await window.fetchOrQueue(form.action, {method: form.method || 'POST', headers: {'Accept': 'application/json'}, body: data, timeout: fetchTimeout});
+      if (feedback && typeof feedback.withSavingState === 'function' && submitButton) {
+        await feedback.withSavingState(submitButton, performSync, { form, errorMessage });
+      } else {
+        setFeedbackLoading(submitButton, { form });
+        const result = await performSync();
+        if (result && result.offlineQueued) {
+          setFeedbackSuccess(submitButton, { offlineQueued: true });
+        } else if (result && result.success) {
+          setFeedbackSuccess(submitButton);
+        } else {
+          setFeedbackIdle(submitButton);
+        }
+      }
     } catch (error) {
       console.error('Erro ao enviar formulário:', error);
-      setButtonIdle(submitButton);
-      showToast('Não foi possível enviar o formulário. Tente novamente.', 'danger');
-      return;
-    }
-
-    if (!resp) {
-      offlineQueued = true;
-      notifyOfflineQueued(form);
-      setButtonIdle(submitButton);
-    }
-
-    let json = null;
-    if (resp) {
-      try { json = await resp.json(); } catch(e) {}
-    }
-    const mainMessage = json && json.message ? json.message : undefined;
-    const category = json && json.category
-      ? json.category
-      : (json && json.success === false || (resp && !resp.ok) ? 'danger' : 'success');
-    if (mainMessage) {
-      showFormMessage(form, mainMessage, category);
-    }
-    if (json && Array.isArray(json.messages)) {
-      json.messages.forEach(entry => {
-        if (!entry) return;
-        if (typeof entry === 'string') {
-          showFormMessage(form, entry, 'info');
-        } else if (entry.message) {
-          showFormMessage(form, entry.message, entry.category || 'info');
-        }
-      });
-    }
-    const isSuccess = offlineQueued || (resp && resp.ok && !(json && json.success === false));
-    if (!isSuccess && !mainMessage && resp && !resp.ok) {
-      const fallback = resp.statusText || 'Falha ao processar o formulário.';
-      showFormMessage(form, fallback, 'danger');
-    }
-    if (isSuccess && !offlineQueued) {
-      setButtonSuccess(submitButton);
-    } else if (!isSuccess || offlineQueued) {
-      setButtonIdle(submitButton);
-    }
-    const evt = new CustomEvent('form-sync-success', {detail: {form, data: json, response: resp, offlineQueued, success: isSuccess}, cancelable: true});
-    if (offlineQueued) {
-      evt.preventDefault();
-    }
-    document.dispatchEvent(evt);
-    if (!evt.defaultPrevented && !(form.classList && (form.classList.contains('js-tutor-form') || form.id === 'tutor-form'))) {
-      location.reload();
+      showToast(errorMessage, 'danger');
+      setFeedbackIdle(submitButton);
     }
   });
 
@@ -601,13 +524,13 @@
         });
       }
       form.reset();
-      setButtonIdle(btn);
+      setFeedbackIdle(btn);
     } else if(form.id === 'tutor-form'){
       const resp = detail.response;
       if(!(resp && resp.ok) || (data && data.success === false)){
         const message = (data && data.message) || 'Não foi possível salvar o tutor.';
         showFormMessage(form, message, 'danger');
-        setButtonIdle(getSubmitButton(form));
+        setFeedbackIdle(getSubmitButton(form));
         return;
       }
       ev.preventDefault();
@@ -617,7 +540,7 @@
       if (successMessage) {
         showFormMessage(form, successMessage, 'success');
       }
-      setButtonSuccess(getSubmitButton(form));
+      setFeedbackSuccess(getSubmitButton(form), { offlineQueued: isQueued });
       const tutor = data ? data.tutor : null;
       if(tutor){
         const preview = document.getElementById('preview-tutor');
@@ -657,7 +580,7 @@
         if(cont) cont.innerHTML=data.html;
       }
       form.reset();
-      setButtonIdle(form.querySelector('button[type="submit"]'));
+      setFeedbackIdle(form.querySelector('button[type="submit"]'));
     }
   });
 
@@ -773,7 +696,7 @@
     if(ev.defaultPrevented) return;
 
     if((!response || !response.ok || (data && data.success === false)) && !detail.offlineQueued){
-      setButtonIdle(getSubmitButton(form));
+      setFeedbackIdle(getSubmitButton(form));
       return;
     }
 
