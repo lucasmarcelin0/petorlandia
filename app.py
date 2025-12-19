@@ -11685,6 +11685,19 @@ def historico_exames_partial(animal_id):
     return jsonify({'success': True, 'html': historico_html})
 
 
+@app.route('/animal/<int:animal_id>/historico_prescricoes', methods=['GET'])
+@login_required
+def recarregar_historico_prescricoes_ajax(animal_id):
+    """Load prescription history for an animal by animal_id and clinic_id."""
+    animal = get_animal_or_404(animal_id)
+    clinic_id = request.args.get('clinic_id', type=int) or getattr(animal, 'clinica_id', None) or current_user_clinic_id()
+
+    if clinic_id:
+        ensure_clinic_access(clinic_id)
+
+    historico_html = _render_prescricao_history(animal, clinic_id)
+    return jsonify({'success': True, 'html': historico_html})
+
 
 @app.route('/consulta/<int:consulta_id>/prescricao/lote', methods=['POST'])
 @login_required

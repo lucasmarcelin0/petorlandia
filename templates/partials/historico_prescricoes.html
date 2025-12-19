@@ -65,7 +65,7 @@
                   class="delete-history-form"
                   data-sync
                   data-target="#historico-prescricoes"
-                  data-target-endpoint="{{ url_for('historico_prescricoes_partial', consulta_id=consulta.id) }}"
+                  data-target-endpoint="{{ url_for('recarregar_historico_prescricoes_ajax', animal_id=animal.id, clinic_id=clinic_scope_id) }}"
                   data-confirm="Deseja mesmo excluir este bloco de prescrições?">
               <button class="btn btn-outline-danger btn-sm">
                 <i class="fas fa-trash-alt me-1"></i>Excluir
