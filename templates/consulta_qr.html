@@ -340,65 +340,84 @@ function bindSyncForms(root) {
         localStorage.setItem('tabSavedHighlight', pane.id);
       }
 
-      const btn = ev.submitter;
-      if (btn && !btn.querySelector('.spinner-border')) {
-        btn.disabled = true;
-        const sp = document.createElement('span');
-        sp.className = 'spinner-border spinner-border-sm ms-2';
-        sp.setAttribute('role', 'status');
-        btn.appendChild(sp);
-      }
+      const helper = window.FormFeedback;
+      const button = ev.submitter || helper?.getButton?.(form) || form.querySelector('[type="submit"]');
+      const toastEl = document.getElementById('actionToast');
 
-      let data = null;
-      let ok = false;
-      try {
-        const resp = await fetch(form.action, {
-          method: 'POST',
-          headers: {'Accept': 'application/json'},
-          body: new FormData(form)
-        });
-        ok = resp.ok;
-        try { data = await resp.json(); } catch(e) {}
-      } catch(err) {}
+      const executarSalvamento = async () => {
+        let data = null;
+        let ok = false;
+        try {
+          const resp = await fetch(form.action, {
+            method: 'POST',
+            headers: { 'Accept': 'application/json' },
+            body: new FormData(form)
+          });
+          ok = resp.ok;
+          try { data = await resp.json(); } catch (e) { /* JSON opcional */ }
+        } catch (err) {
+          ok = false;
+        }
 
-      if (btn) {
-        btn.querySelector('.spinner-border')?.remove();
-        btn.disabled = false;
-      }
-
-      if (ok && data) {
-        if (form.dataset.target && data.html) {
-          const sel = form.dataset.target;
-          const container = sel.startsWith('#') ? document.querySelector(sel) : document.getElementById(sel);
-          if (container) {
-            container.innerHTML = data.html;
-            bindSyncForms(container);
+        if (ok && data) {
+          if (form.dataset.target && data.html) {
+            const sel = form.dataset.target;
+            const container = sel.startsWith('#') ? document.querySelector(sel) : document.getElementById(sel);
+            if (container) {
+              container.innerHTML = data.html;
+              bindSyncForms(container);
+            }
+          }
+          if (data.tutor_name) {
+            const el = document.getElementById('tutor-name');
+            if (el) el.textContent = data.tutor_name;
+          }
+          if (data.animal_name) {
+            const el = document.getElementById('animal-name');
+            if (el) el.textContent = data.animal_name;
           }
         }
-        if (data.tutor_name) {
-          const el = document.getElementById('tutor-name');
-          if (el) el.textContent = data.tutor_name;
-        }
-        if (data.animal_name) {
-          const el = document.getElementById('animal-name');
-          if (el) el.textContent = data.animal_name;
-        }
-      }
 
-      const toastEl = document.getElementById('actionToast');
-      if (toastEl) {
-        const msg = (data && (data.message || data.error)) || (ok ? 'Salvo com sucesso!' : 'Falha ao salvar');
-        toastEl.querySelector('.toast-body').textContent = msg;
-        toastEl.classList.remove('bg-danger', 'bg-info', 'bg-success');
-        toastEl.classList.add(ok ? 'bg-success' : 'bg-danger');
-        bootstrap.Toast.getOrCreateInstance(toastEl).show();
-      }
+        const message = (data && (data.message || data.error)) || (ok ? 'Salvo com sucesso!' : 'Falha ao salvar');
+        if (helper?.showStatus) {
+          helper.showStatus(form, message, ok ? 'success' : 'danger');
+        }
 
-      if (ok && pane && pane.id) {
-        const link = document.querySelector(`[data-bs-target="#${pane.id}"]`);
-        if (link) {
-          link.classList.add('tab-saved-highlight');
-          setTimeout(() => link.classList.remove('tab-saved-highlight'), 2000);
+        if (toastEl) {
+          toastEl.querySelector('.toast-body').textContent = message;
+          toastEl.classList.remove('bg-danger', 'bg-info', 'bg-success');
+          toastEl.classList.add(ok ? 'bg-success' : 'bg-danger');
+          bootstrap.Toast.getOrCreateInstance(toastEl).show();
+        }
+
+        if (ok && pane && pane.id) {
+          const link = document.querySelector(`[data-bs-target="#${pane.id}"]`);
+          if (link) {
+            link.classList.add('tab-saved-highlight');
+            setTimeout(() => link.classList.remove('tab-saved-highlight'), 2000);
+          }
+        }
+
+        return { success: ok, message, offlineQueued: Boolean(data?.offlineQueued) };
+      };
+
+      if (helper?.withSavingState) {
+        try {
+          await helper.withSavingState(button || form, executarSalvamento, {
+            loadingText: form.dataset.loadingText || 'Salvando...',
+            errorMessage: 'Falha ao salvar',
+          });
+        } catch (error) {
+          if (error?.name !== 'SavingStateTimeoutError') {
+            console.error('Erro ao salvar', error);
+          }
+        }
+      } else {
+        if (button) button.disabled = true;
+        try {
+          await executarSalvamento();
+        } finally {
+          if (button) button.disabled = false;
         }
       }
     });
