@@ -14382,14 +14382,31 @@ def checkout():
 
     form = CheckoutForm()
     _setup_checkout_form(form, preserve_selected=True)
-    if not form.validate_on_submit():
+    prefers_json = (
+        request.accept_mimetypes['application/json'] >=
+        request.accept_mimetypes['text/html']
+    )
+
+    def respond_error(message, category="danger", status=400, errors=None):
+        if prefers_json:
+            payload = {"success": False, "message": message, "category": category}
+            if errors:
+                payload["errors"] = errors
+            return jsonify(payload), status
+        flash(message, category)
         return redirect(url_for("ver_carrinho"))
+
+    if not form.validate_on_submit():
+        return respond_error(
+            "Preencha os campos obrigatórios.",
+            "warning",
+            errors=form.errors,
+        )
 
     # 1️⃣ pedido atual do carrinho
     order = _get_current_order()
     if not order or not order.items:
-        flash("Seu carrinho está vazio.", "warning")
-        return redirect(url_for("ver_carrinho"))
+        return respond_error("Seu carrinho está vazio.", "warning")
 
     address_text = None
     if form.address_id.data is not None and form.address_id.data >= 0:
@@ -14422,8 +14439,7 @@ def checkout():
 
         if missing_required:
             message = 'Preencha os campos obrigatórios do endereço: ' + ', '.join(missing_required) + '.'
-            flash(message, 'warning')
-            return redirect(url_for("ver_carrinho"))
+            return respond_error(message, 'warning', errors={"shipping_address": [message]})
 
         tmp_addr = Endereco(
             cep=cep,
@@ -14547,13 +14563,11 @@ def checkout():
         resp = mp_sdk().preference().create(preference_data)
     except Exception:
         current_app.logger.exception("Erro de conexão com Mercado Pago")
-        flash("Falha ao conectar com Mercado Pago.", "danger")
-        return redirect(url_for("ver_carrinho"))
+        return respond_error("Falha ao conectar com Mercado Pago.")
 
     if resp.get("status") != 201:
         current_app.logger.error("MP error (HTTP %s): %s", resp["status"], resp)
-        flash("Erro ao iniciar pagamento.", "danger")
-        return redirect(url_for("ver_carrinho"))
+        return respond_error("Erro ao iniciar pagamento.")
 
     pref = resp["response"]
     payment.transaction_id = str(pref["id"])       # preference_id
@@ -14561,6 +14575,8 @@ def checkout():
     db.session.commit()
 
     session["last_pending_payment"] = payment.id
+    if prefers_json:
+        return jsonify(success=True, redirect=pref["init_point"])
     return redirect(pref["init_point"])
 
 
