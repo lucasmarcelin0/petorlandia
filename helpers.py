@@ -23,12 +23,9 @@ DEFAULT_APPOINTMENT_DURATION_MINUTES = 30
 def geocode_address(*, cep=None, rua=None, numero=None, bairro=None, cidade=None, estado=None):
     """Return latitude/longitude using OpenStreetMap with multiple fallbacks.
 
-    The search tries progressively less specific queries to maximize matches:
-
-    1. Full address with street and number
-    2. Street without number
-    3. Neighborhood + city/state
-    4. City/state or CEP alone
+    The search prioritizes structured queries (street/number/city/state/CEP) to
+    place markers as close as possible to the real address. When a precise match
+    is not found, it progressively falls back to broader free-text searches.
 
     The first successful result is returned as ``(lat, lon)``. Any request
     failure or missing result yields ``None`` instead of raising an exception.
@@ -44,7 +41,55 @@ def geocode_address(*, cep=None, rua=None, numero=None, bairro=None, cidade=None
     estado = _normalized(estado)
     cep = _normalized(cep)
 
-    def _build_queries():
+    session = requests.Session()
+    session.headers.update({"User-Agent": "PetOrlandia/1.0 (+https://petorlandia.com)"})
+
+    def _extract_coords(payload):
+        try:
+            best_match = payload[0]
+            lat = float(best_match.get("lat"))
+            lon = float(best_match.get("lon"))
+        except (IndexError, TypeError, ValueError):
+            return None
+
+        return lat, lon
+
+    def _request(params: dict) -> tuple[float, float] | None:
+        try:
+            response = session.get(
+                "https://nominatim.openstreetmap.org/search",
+                params={**params, "format": "json", "limit": 1, "countrycodes": "br"},
+                timeout=5,
+            )
+            response.raise_for_status()
+            payload = response.json() or []
+        except requests.RequestException:
+            return None
+
+        return _extract_coords(payload)
+
+    def _build_structured_queries():
+        if not (cidade or estado or cep):
+            return
+
+        common = {
+            "city": cidade or None,
+            "state": estado or None,
+            "postalcode": cep or None,
+            "country": "Brasil",
+        }
+
+        if rua:
+            street_full = " ".join([p for p in [rua, numero] if p])
+            if street_full:
+                yield {**common, "street": street_full, "county": bairro or None}
+            yield {**common, "street": rua, "county": bairro or None}
+
+        if bairro and (cidade or estado):
+            # Bairro + cidade/estado costuma posicionar melhor endereços sem número
+            yield {**common, "city": cidade or None, "county": bairro}
+
+    def _build_free_text_queries():
         # Full address (street + number has highest precision)
         yield ", ".join([p for p in [rua, numero, bairro, cidade, estado, cep, "Brasil"] if p])
 
@@ -58,33 +103,21 @@ def geocode_address(*, cep=None, rua=None, numero=None, bairro=None, cidade=None
         yield ", ".join([p for p in [cidade, estado, "Brasil"] if p])
         yield ", ".join([p for p in [cep, "Brasil"] if p])
 
-    queries = [q for q in _build_queries() if q]
+    # Structured search first (favored by Nominatim for accuracy)
+    for query_params in _build_structured_queries() or []:
+        params = {k: v for k, v in query_params.items() if v}
+        coords = _request(params)
+        if coords:
+            return coords
+
+    queries = [q for q in _build_free_text_queries() if q]
     if not queries:
         return None
 
-    session = requests.Session()
-    session.headers.update({"User-Agent": "PetOrlandia/1.0 (+https://petorlandia.com)"})
-
     for query in queries:
-        try:
-            response = session.get(
-                "https://nominatim.openstreetmap.org/search",
-                params={"q": query, "format": "json", "limit": 1, "countrycodes": "br"},
-                timeout=5,
-            )
-            response.raise_for_status()
-            payload = response.json() or []
-        except requests.RequestException:
-            continue
-
-        try:
-            best_match = payload[0]
-            lat = float(best_match.get("lat"))
-            lon = float(best_match.get("lon"))
-        except (IndexError, TypeError, ValueError):
-            continue
-
-        return lat, lon
+        coords = _request({"q": query})
+        if coords:
+            return coords
 
     return None
 
