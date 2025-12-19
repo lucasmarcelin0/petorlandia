@@ -506,6 +506,82 @@
     } else {
       clearStatus(form);
     }
+
+    const targetSelector = form.dataset ? form.dataset.target : undefined;
+    const targetEndpoint = form.dataset ? form.dataset.targetEndpoint : undefined;
+    const html = detail.data && detail.data.html;
+
+    const resolveTargetContainer = (selector) => {
+      if (!selector) return null;
+      if (/^[#.\[]/.test(selector)) {
+        return document.querySelector(selector);
+      }
+      return document.getElementById(selector);
+    };
+
+    const clearHistoryAlerts = (container) => {
+      if (!container) return;
+      container.querySelectorAll('.historico-recarga-alert').forEach((alertEl) => alertEl.remove());
+    };
+
+    const bindSyncIfAvailable = (container) => {
+      if (typeof bindSyncForms === 'function') {
+        try {
+          bindSyncForms(container);
+        } catch (error) {
+          console.error('Erro ao reconfigurar formulários síncronos:', error);
+        }
+      }
+    };
+
+    const applyHtmlToContainer = (container, targetHtml) => {
+      if (!container || !targetHtml) return false;
+      container.innerHTML = targetHtml;
+      clearHistoryAlerts(container);
+      bindSyncIfAvailable(container);
+      return true;
+    };
+
+    const showTargetWarning = (message, container) => {
+      const warning = message || 'Não foi possível atualizar automaticamente.';
+      if (container) {
+        const alert = document.createElement('div');
+        alert.className = 'alert alert-warning d-flex align-items-center gap-2 my-2';
+        alert.innerHTML = `<i class="bi bi-exclamation-triangle"></i><span>${warning}</span>`;
+        container.prepend(alert);
+      } else if (form) {
+        showStatus(form, warning, 'warning');
+      }
+    };
+
+    const container = resolveTargetContainer(targetSelector);
+
+    if (container && html) {
+      applyHtmlToContainer(container, html);
+      return;
+    }
+
+    if (offlineQueued || !targetEndpoint || !container) {
+      return;
+    }
+
+    fetch(targetEndpoint, { headers: { Accept: 'application/json' } })
+      .then((response) => {
+        if (!response.ok) {
+          throw new Error(`Falha ao buscar destino (${response.status})`);
+        }
+        return response.json();
+      })
+      .then((data) => {
+        if (!data || !data.html) {
+          throw new Error('Resposta sem HTML disponível');
+        }
+        applyHtmlToContainer(container, data.html);
+      })
+      .catch((error) => {
+        console.warn('Erro ao atualizar destino do formulário:', error);
+        showTargetWarning('Salvo, mas não foi possível atualizar a visualização automaticamente.', container);
+      });
   });
 
   window.FormFeedback = {
