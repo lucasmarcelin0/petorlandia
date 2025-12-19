@@ -387,7 +387,7 @@
                 toastEl.querySelector('.toast-body').textContent = 'Ação salva para sincronização quando estiver online.';
                 applyToastTone(toastEl, 'info');
                 new bootstrap.Toast(toastEl).show();
-                return { success: true, message: 'Aguardando conexão para concluir o envio.', level: 'info', successText: 'Sincronizando…', resetDelay: 2500 };
+                return { success: true, message: 'Aguardando conexão para concluir o envio.', level: 'info', successText: 'Sincronizando…', resetDelay: 2500, offlineQueued: true };
               }
               if (response && response.ok) {
                 const data = await response.json();
@@ -434,7 +434,7 @@
               toastEl.querySelector('.toast-body').textContent = 'Ação salva para sincronização quando estiver online.';
               applyToastTone(toastEl, 'info');
               new bootstrap.Toast(toastEl).show();
-              return { success: true, message: 'Aguardando conexão para concluir o envio.', level: 'info', successText: 'Sincronizando…', resetDelay: 2500 };
+              return { success: true, message: 'Aguardando conexão para concluir o envio.', level: 'info', successText: 'Sincronizando…', resetDelay: 2500, offlineQueued: true };
             }
             if (response && response.ok) {
               const data = await response.json();
@@ -489,7 +489,7 @@
               toastEl.querySelector('.toast-body').textContent = 'Ação salva para sincronização quando estiver online.';
               applyToastTone(toastEl, 'info');
               new bootstrap.Toast(toastEl).show();
-              return { success: true, message: 'Aguardando conexão para concluir o envio.', level: 'info', successText: 'Sincronizando…', resetDelay: 2500 };
+              return { success: true, message: 'Aguardando conexão para concluir o envio.', level: 'info', successText: 'Sincronizando…', resetDelay: 2500, offlineQueued: true };
             }
             if (response && response.ok) {
               const data = await response.json();
@@ -536,7 +536,7 @@
               toastEl.querySelector('.toast-body').textContent = 'Ação salva para sincronização quando estiver online.';
               applyToastTone(toastEl, 'info');
               new bootstrap.Toast(toastEl).show();
-              return { success: true, message: 'Aguardando conexão para concluir o envio.', level: 'info', successText: 'Sincronizando…', resetDelay: 2500 };
+              return { success: true, message: 'Aguardando conexão para concluir o envio.', level: 'info', successText: 'Sincronizando…', resetDelay: 2500, offlineQueued: true };
             }
             if (response && response.ok) {
               const data = await response.json();
@@ -575,22 +575,28 @@
           ev.preventDefault();
           const handle = async () => {
             form.querySelectorAll('.text-danger').forEach(el => el.remove());
-            const resp = await fetch(form.action, {
+            const { response, queued } = await fetchOrQueue(form.action, {
               method: form.method || 'POST',
               body: new FormData(form),
               headers: { 'Accept': 'application/json' }
             });
-            if (resp.ok) {
-              const data = await resp.json().catch(() => null);
-              if (data && data.redirect) {
-                window.location = data.redirect;
-                return { success: true, keepButton: true };
-              }
-              window.location.reload();
-              return { success: true, keepButton: true };
+
+            if (queued && window.FormFeedback?.setQueued) {
+              const button = window.FormFeedback.getButton?.(form) || form;
+              window.FormFeedback.setQueued(button);
             }
 
-            const data = await resp.json().catch(() => null);
+            if (response && response.ok) {
+              const data = await response.json().catch(() => null);
+              if (data && data.redirect) {
+                window.location = data.redirect;
+                return { success: true, keepButton: true, offlineQueued: queued };
+              }
+              window.location.reload();
+              return { success: true, keepButton: true, offlineQueued: queued };
+            }
+
+            const data = response ? await response.json().catch(() => null) : null;
             if (data && data.errors) {
               for (const [field, messages] of Object.entries(data.errors)) {
                 const input = form.querySelector(`[name="${field}"]`);
@@ -602,8 +608,10 @@
                 }
               }
             }
-            const message = (data && (data.message || data.error)) || 'Não foi possível concluir o acesso.';
-            return { success: false, message, level: 'danger' };
+            const message = queued
+              ? 'Acesso será concluído quando a conexão voltar.'
+              : (data && (data.message || data.error)) || 'Não foi possível concluir o acesso.';
+            return { success: queued || Boolean(response && response.ok), message, level: queued ? 'info' : 'danger', offlineQueued: queued };
           };
 
           if (window.FormFeedback && typeof window.FormFeedback.withSavingState === 'function') {
@@ -687,7 +695,14 @@
                 }
                 placeholder.dataset.status = 'queued';
               }
-              return { success: true, message: 'Mensagem será enviada assim que a conexão voltar.', level: 'info', successText: 'Sincronizando…', resetDelay: 2500 };
+              return {
+                success: true,
+                message: 'Mensagem será enviada assim que a conexão voltar.',
+                level: 'info',
+                successText: 'Sincronizando…',
+                resetDelay: 2500,
+                offlineQueued: true,
+              };
             }
 
             if (placeholder) {
@@ -722,15 +737,20 @@
             });
 
             if (queued) {
-              form.submit();
-              return { success: true, keepButton: true };
+              if (window.FormFeedback?.setQueued) {
+                const btn = window.FormFeedback.getButton?.(form);
+                if (btn) {
+                  window.FormFeedback.setQueued(btn);
+                }
+              }
+              return { success: true, keepButton: true, offlineQueued: true };
             }
 
             if (response && response.ok) {
               const data = await response.json();
               if (data.redirect) {
                 window.location.href = data.redirect;
-                return { success: true, keepButton: true };
+                return { success: true, keepButton: true, offlineQueued: queued };
               }
               if (data.html) {
                 const target = form.dataset.target;
