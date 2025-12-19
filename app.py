@@ -1311,6 +1311,7 @@ from helpers import (
     unique_items_by_id,
     vaccine_to_event,
     veterinarian_required,
+    geocode_address,
 )
 from services import (
     build_usage_history,
@@ -4952,6 +4953,30 @@ def service_worker():
     return send_from_directory(app.static_folder, 'service-worker.js')
 
 
+def _geocode_endereco(endereco: Endereco | None):
+    """Atualiza latitude/longitude do endereço com base nos campos atuais."""
+
+    if not endereco:
+        return None
+
+    coords = geocode_address(
+        cep=endereco.cep,
+        rua=endereco.rua,
+        numero=endereco.numero,
+        bairro=endereco.bairro,
+        cidade=endereco.cidade,
+        estado=endereco.estado,
+    )
+
+    if coords:
+        endereco.latitude, endereco.longitude = coords
+    else:
+        endereco.latitude = None
+        endereco.longitude = None
+
+    return coords
+
+
 @app.route('/register', methods=['GET', 'POST'])
 def register():
     form = RegistrationForm()
@@ -4993,6 +5018,7 @@ def register():
             cidade=request.form.get('cidade'),
             estado=request.form.get('estado')
         )
+        _geocode_endereco(endereco)
 
         # Upload da foto de perfil para o S3
         photo_url = None
@@ -5280,6 +5306,7 @@ def profile():
             flash(message, 'warning')
             return redirect(url_for('profile'))
 
+        _geocode_endereco(endereco)
         db.session.add(endereco)
 
         # Upload de imagem para S3 (se houver nova)
@@ -9894,6 +9921,7 @@ def tutores():
             cidade=cidade,
             estado=estado
         )
+        _geocode_endereco(endereco)
         db.session.add(endereco)
         db.session.flush()
         novo.endereco_id = endereco.id
@@ -10421,6 +10449,8 @@ def update_tutor(user_id):
         db.session.add(endereco)
         db.session.flush()
         user.endereco_id = endereco.id
+
+    _geocode_endereco(endereco)
 
     # 💾 Commit final
     try:
