@@ -124,6 +124,7 @@
         delete button.dataset.loadingTimeoutId;
         const message = resolveTimeoutMessage(button, form, options);
         const detail = { button, form, message, reason: 'loading-timeout' };
+        setIdle(button);
         if (form && message) {
           showStatus(form, message, 'warning');
         }
@@ -311,12 +312,15 @@
       timeoutId = window.setTimeout(() => {
         timedOut = true;
         const message = timeoutMessage || DEFAULT_TIMEOUT_MESSAGE;
+        setIdle(button);
         if (form && message) {
           showStatus(form, message, timeoutLevel);
         }
         if (typeof options.onTimeout === 'function') {
           try {
-            options.onTimeout(new Error(message));
+            const timeoutError = new Error(message);
+            timeoutError.name = 'SavingStateTimeoutError';
+            options.onTimeout(timeoutError);
           } catch (callbackError) {
             console.error('Erro no callback onTimeout', callbackError);
           }
@@ -341,6 +345,10 @@
     }
 
     const normalized = normalizeResult(result, options);
+
+    if (timedOut) {
+      return normalized;
+    }
 
     if (form && normalized.message) {
       const level = normalized.level || (normalized.success ? 'success' : 'danger');
@@ -401,12 +409,15 @@
       timeoutId = window.setTimeout(() => {
         timedOut = true;
         const message = timeoutMessage || DEFAULT_TIMEOUT_MESSAGE;
+        setIdle(button);
         if (form && message) {
           showStatus(form, message, timeoutLevel);
         }
         if (typeof options.onTimeout === 'function') {
           try {
-            options.onTimeout(new Error(message));
+            const timeoutError = new Error(message);
+            timeoutError.name = 'SavingStateTimeoutError';
+            options.onTimeout(timeoutError);
           } catch (callbackError) {
             console.error('Erro no callback onTimeout', callbackError);
           }
@@ -431,6 +442,10 @@
     }
 
     const normalized = normalizeResult(result, options);
+
+    if (timedOut) {
+      return normalized;
+    }
 
     if (form && normalized.message) {
       const level = normalized.level || (normalized.success ? 'success' : 'danger');
