@@ -222,6 +222,23 @@
 
     const POLL_INTERVAL = 5000;
 
+    const buildGeocodeMessage = (status) => {
+        const processed = status.processed || 0;
+        const total = status.total || 0;
+        const updated = status.updated || 0;
+        const skipped = status.skipped || 0;
+
+        const skippedNote = skipped
+            ? ` Não encontrados: ${skipped}. Revise CEP, bairro e cidade para tentar novamente.`
+            : '';
+
+        if (status.running) {
+            return `Geocodificando ${processed} de ${total} endereços (novos pontos adicionados: ${updated}, não encontrados: ${skipped}).${skippedNote}`;
+        }
+
+        return `Processo concluído: ${updated} endereços geocodificados de ${total}.` + skippedNote;
+    };
+
     const refreshGeocodeStatus = async () => {
         try {
             const response = await fetch(geocodeStatusEndpoint);
@@ -231,12 +248,7 @@
                 geocodeStatusEl.style.display = 'none';
             } else {
                 geocodeStatusEl.style.display = 'flex';
-                const processed = status.processed || 0;
-                const total = status.total || 0;
-                const updated = status.updated || 0;
-                geocodeStatusText.textContent = status.running
-                    ? `Geocodificando ${processed} de ${total} endereços (novos pontos adicionados: ${updated}).`
-                    : `Processo concluído: ${updated} endereços geocodificados de ${total}.`;
+                geocodeStatusText.textContent = buildGeocodeMessage(status);
             }
 
             await refreshMarkers();
