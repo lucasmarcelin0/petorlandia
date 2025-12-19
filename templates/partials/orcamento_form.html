@@ -144,6 +144,7 @@
   {% include 'partials/historico_orcamentos.html' %}
 </div>
 
+<script src="{{ url_for('static', filename='js/unified-history-sync.js') }}"></script>
 <script>
 const consultaId = {{ consulta.id }};
 const clinicId = {{ (consulta.clinica_id or current_user.clinica_id) | tojson }};
@@ -400,39 +401,62 @@ async function removerItemOrcamento(id) {
   }
 }
 
+/**
+ * SIMPLIFIED & UNIFIED: Save budget and update history
+ * Uses the centralized HistorySyncManager for guaranteed reliability
+ */
 async function finalizarBlocoOrcamento() {
   const tbody = document.querySelector('#orcamento-tabela tbody');
-  if (!tbody.children.length) return;
-  if (!clinicId) {
-    alert('Clínica não definida para o orçamento.');
+  if (!tbody.children.length) {
+    if (typeof showToast === 'function') {
+      showToast('Adicione itens ao orçamento', 'warning');
+    }
     return;
   }
+
+  if (!clinicId) {
+    if (typeof showToast === 'function') {
+      showToast('Clínica não definida para o orçamento.', 'danger');
+    }
+    return;
+  }
+
+  const btn = document.querySelector('button[onclick="finalizarBlocoOrcamento()"]');
+  if (!btn) {
+    console.error('Botão de finalizar não encontrado');
+    if (typeof showToast === 'function') {
+      showToast('Erro: botão não encontrado', 'danger');
+    }
+    return;
+  }
+
+  // Prepare data
   const extra = coletarDadosDesconto();
   extra.clinica_id = clinicId;
-  const resp = await fetch(`/consulta/${consultaId}/bloco_orcamento`, {
-    method: 'POST',
-    headers: {'Accept': 'application/json', 'Content-Type': 'application/json'},
-    body: JSON.stringify(extra)
-  });
-  if (resp.ok) {
-    const data = await resp.json();
-    if (data.success) {
-      tbody.innerHTML = '';
-      document.getElementById('orcamento-total').textContent = '0.00';
-      limparCamposDesconto();
-      const historico = document.getElementById('historico-orcamentos');
-      if (data.html) {
-        historico.innerHTML = data.html;
-        if (typeof bindSyncForms === 'function') { bindSyncForms(historico); }
+
+  // Use unified system to save and update history
+  const result = await window.HistorySyncManager.saveAndUpdateHistory(
+    `/consulta/${consultaId}/bloco_orcamento`,
+    extra,
+    'historico-orcamentos',
+    btn,
+    {
+      successMessage: 'Orçamento salvo com sucesso! ✅',
+      errorMessage: 'Erro ao salvar orçamento',
+      timeoutMs: 10000,
+      disableFormAfterSuccess: true,
+      onSuccess: (result) => {
+        // Reset the form state
+        tbody.innerHTML = '';
+        document.getElementById('orcamento-total').textContent = '0.00';
+        limparCamposDesconto();
+      },
+      onError: (error) => {
+        console.error('Falha ao salvar orçamento:', error);
       }
-      if (typeof showToast === 'function') {
-        showToast('Orçamento salvo com sucesso!', 'success');
-      }
-    } else if (typeof showToast === 'function') {
-      showToast(data.message || 'Não foi possível salvar o orçamento.', 'danger');
     }
-  } else if (typeof showToast === 'function') {
-    showToast('Não foi possível salvar o orçamento.', 'danger');
-  }
+  );
+
+  return result;
 }
 </script>

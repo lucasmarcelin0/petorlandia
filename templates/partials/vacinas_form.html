@@ -115,6 +115,7 @@
     {% include 'partials/historico_vacinas.html' %}
   </div>
 
+  <script src="{{ url_for('static', filename='js/unified-history-sync.js') }}"></script>
   <script>
     let vacinas = [];
     let inputVacina, sugestoesVacinas, vacinaSelecionada = null;
@@ -376,6 +377,34 @@
       });
     }
 
+    async function recarregarHistoricoVacinas() {
+      try {
+        const resp = await fetch(`/animal/{{ animal.id }}/historico_vacinas`, {
+          headers: { 'Accept': 'application/json' }
+        });
+        if (!resp.ok) throw new Error('Erro ao buscar histórico');
+        const data = await resp.json();
+        if (data?.success && data.html) {
+          const container = document.getElementById('historico-vacinas');
+          if (container) {
+            container.innerHTML = data.html;
+            if (typeof bindSyncForms === 'function') {
+              bindSyncForms(container);
+            }
+          }
+          return true;
+        }
+        return false;
+      } catch (error) {
+        console.error('Erro ao recarregar histórico de vacinas:', error);
+        return false;
+      }
+    }
+
+    /**
+     * SIMPLIFIED & UNIFIED: Save vaccines and update history
+     * Uses the centralized HistorySyncManager for guaranteed reliability
+     */
     async function finalizarBlocoVacinas() {
       const obs = document.getElementById('observacoes-vacinas').value.trim();
 
@@ -383,62 +412,42 @@
         mostrarFeedback('Adicione pelo menos uma vacina.', 'warning');
         return;
       }
-      const btn = document.getElementById('btn-finalizar-vacinas');
-      const timeoutMessage = 'Não conseguimos confirmar o registro das vacinas. Verifique sua conexão e tente novamente.';
 
-      async function executarSalvamento() {
-        const { response, queued } = await fetchOrQueue(`/animal/{{ animal.id }}/vacinas`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
-          body: JSON.stringify({
-            vacinas,
-            observacoes_gerais: obs
-          })
-        });
-        if (response) {
-          const data = await response.json();
-          if (data.success) {
-            mostrarFeedback('Vacinas registradas com sucesso!');
-            if (data.html) {
-              document.getElementById('historico-vacinas').innerHTML = data.html;
-            }
+      const btn = document.getElementById('btn-finalizar-vacinas');
+      if (!btn) {
+        console.error('Botão de finalizar não encontrado');
+        mostrarFeedback('Erro: botão não encontrado', 'danger');
+        return;
+      }
+
+      // Prepare data
+      const data = {
+        vacinas,
+        observacoes_gerais: obs
+      };
+
+      // Use unified system to save and update history
+      const result = await window.HistorySyncManager.saveAndUpdateHistory(
+        `/animal/{{ animal.id }}/vacinas`,
+        data,
+        'historico-vacinas',
+        btn,
+        {
+          successMessage: 'Vacinas registradas com sucesso! ✅',
+          errorMessage: 'Erro ao salvar vacinas',
+          timeoutMs: 10000,
+          disableFormAfterSuccess: true,
+          onSuccess: (result) => {
+            // Reset the form state
             vacinas = [];
             renderVacinasTemp();
-            return { success: true, offlineQueued: queued };
+          },
+          onError: (error) => {
+            console.error('Falha ao salvar vacinas:', error);
           }
-          mostrarFeedback('Erro ao salvar vacinas.', 'danger');
-          return { success: false };
         }
-        if (!queued) {
-          throw new Error('A resposta não pôde ser processada.');
-        }
-        // Offline: registra localmente sem exibir aviso
-        vacinas = [];
-        renderVacinasTemp();
-        return { success: true, offlineQueued: true };
-      }
+      );
 
-      try {
-        if (window.FormFeedback && typeof window.FormFeedback.withSavingState === 'function') {
-          await window.FormFeedback.withSavingState(btn, executarSalvamento, {
-            loadingText: 'Salvando...',
-            loadingTimeout: 5000,
-            timeoutMessage,
-            timeoutLevel: 'warning',
-            errorMessage: 'Erro ao salvar vacinas.',
-            onTimeout: () => {
-              mostrarFeedback(timeoutMessage, 'warning');
-            }
-          });
-        } else {
-          await executarSalvamento();
-        }
-      } catch (error) {
-        if (error?.name === 'SavingStateTimeoutError') {
-          return;
-        }
-        console.error('Erro ao salvar vacinas', error);
-        mostrarFeedback('Erro ao salvar vacinas.', 'danger');
-      }
+      return result;
     }
   </script>

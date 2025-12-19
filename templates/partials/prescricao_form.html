@@ -168,6 +168,7 @@
     border-style: dashed;
   }
 </style>
+<script src="{{ url_for('static', filename='js/unified-history-sync.js') }}"></script>
 <script>
     let medicamentoSelecionado = null;
     let prescricoes = [];
@@ -633,83 +634,53 @@
   }
 
   // Finalizar e salvar todas as prescrições
+  /**
+   * SIMPLIFIED & UNIFIED: Save prescriptions and update history
+   * Uses the centralized HistorySyncManager for guaranteed reliability
+   */
   async function finalizarBlocoPrescricoes() {
     if (prescricoes.length === 0) {
       mostrarFeedback('Adicione pelo menos um medicamento.', 'warning');
       return;
     }
+
     const btn = document.getElementById('btn-finalizar');
-    const timeoutMessage = 'Não conseguimos confirmar o salvamento da prescrição. Verifique sua conexão e tente novamente.';
-
-    async function executarSalvamento() {
-      const instrucoes = document.getElementById('instrucoes-medicamentos')?.value || '';
-      const { response, queued } = await fetchOrQueue(`/consulta/{{ consulta.id }}/bloco_prescricao`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
-        body: JSON.stringify({
-          prescricoes,
-          instrucoes_gerais: instrucoes
-        })
-      });
-
-      if (response) {
-        const data = await response.json();
-        if (!response.ok || !data.success) {
-          mostrarFeedback(data.message || 'Erro ao salvar prescrição', 'danger');
-          return { success: false };
-        }
-        mostrarFeedback('Prescrição salva com sucesso!', 'success');
-        
-        // Sempre recarrega o histórico para garantir que está atualizado
-        // mesmo se offline ou se houver delay na resposta
-        try {
-          const atualizadoViaFetch = await recarregarHistoricoPrescricoes({ showFailureNotice: false });
-          if (!atualizadoViaFetch && data.html) {
-            aplicarHistoricoPrescricoes(data.html);
-          }
-        } catch (e) {
-          console.error('Erro ao recarregar histórico:', e);
-          if (data.html) {
-            aplicarHistoricoPrescricoes(data.html);
-          }
-        }
-        
-        prescricoes = [];
-        renderPrescricoesTemp();
-        return { success: true, offlineQueued: queued };
-      }
-      if (!queued) {
-        throw new Error('A resposta não pôde ser processada.');
-      }
-      // Offline: ação armazenada para sincronização futura sem exibir pop-up
-      prescricoes = [];
-      renderPrescricoesTemp();
-      await recarregarHistoricoPrescricoes({ showFailureNotice: false });
-      return { success: true, offlineQueued: true };
+    if (!btn) {
+      console.error('Botão de finalizar não encontrado');
+      mostrarFeedback('Erro: botão não encontrado', 'danger');
+      return;
     }
 
-    try {
-      if (window.FormFeedback && typeof window.FormFeedback.withSavingState === 'function') {
-        await window.FormFeedback.withSavingState(btn, executarSalvamento, {
-          loadingText: 'Salvando...',
-          loadingTimeout: 5000,
-          timeoutMessage,
-          timeoutLevel: 'warning',
-          errorMessage: 'Erro ao salvar prescrição',
-          onTimeout: () => {
-            mostrarFeedback(timeoutMessage, 'warning');
-          }
-        });
-      } else {
-        await executarSalvamento();
+    // Prepare data
+    const instrucoes = document.getElementById('instrucoes-medicamentos')?.value || '';
+    const data = {
+      prescricoes,
+      instrucoes_gerais: instrucoes
+    };
+
+    // Use unified system to save and update history
+    const result = await window.HistorySyncManager.saveAndUpdateHistory(
+      `/consulta/{{ consulta.id }}/bloco_prescricao`,
+      data,
+      'historico-prescricoes',
+      btn,
+      {
+        successMessage: 'Prescrição salva com sucesso! ✅',
+        errorMessage: 'Erro ao salvar prescrição',
+        timeoutMs: 10000,
+        disableFormAfterSuccess: true,
+        onSuccess: (result) => {
+          // Reset the form state
+          prescricoes = [];
+          renderPrescricoesTemp();
+        },
+        onError: (error) => {
+          console.error('Falha ao salvar prescrição:', error);
+        }
       }
-    } catch (err) {
-      if (err?.name === 'SavingStateTimeoutError') {
-        return;
-      }
-      console.error('Erro:', err);
-      mostrarFeedback(err.message || 'Erro ao salvar prescrição', 'danger');
-    }
+    );
+
+    return result;
   }
 
   // Event Listeners
