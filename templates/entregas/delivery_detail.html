@@ -147,11 +147,12 @@
   {% if role == 'buyer' %}
   <div class="d-flex justify-content-center gap-3 mt-4">
     {% if cancel_url %}
-    <form action="{{ cancel_url }}" method="post" class="m-0">
+    <form action="{{ cancel_url }}" method="post" class="m-0" data-cancel-form>
       {{ form.hidden_tag() }}
       <button type="submit" class="btn btn-outline-danger">
         <i class="bi bi-x-circle me-1"></i> Cancelar pedido
       </button>
+      <div class="form-status-message alert alert-info d-none small mb-0 mt-2"></div>
     </form>
     {% endif %}
   </div>
