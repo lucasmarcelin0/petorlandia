@@ -659,17 +659,21 @@
           return { success: false };
         }
         mostrarFeedback('Prescrição salva com sucesso!', 'success');
-        let historicoAtualizado = false;
-        if (data.html) {
-          historicoAtualizado = aplicarHistoricoPrescricoes(data.html);
-        }
-        if (!data.html || queued) {
-          const atualizadoViaFetch = await recarregarHistoricoPrescricoes({ showFailureNotice: true });
-          historicoAtualizado = historicoAtualizado || atualizadoViaFetch;
-          if (!atualizadoViaFetch && queued) {
-            sinalizarHistoricoDesatualizado('Prescrição salva para sincronização. O histórico será atualizado ao voltar a ficar online.');
+        
+        // Sempre recarrega o histórico para garantir que está atualizado
+        // mesmo se offline ou se houver delay na resposta
+        try {
+          const atualizadoViaFetch = await recarregarHistoricoPrescricoes({ showFailureNotice: false });
+          if (!atualizadoViaFetch && data.html) {
+            aplicarHistoricoPrescricoes(data.html);
+          }
+        } catch (e) {
+          console.error('Erro ao recarregar histórico:', e);
+          if (data.html) {
+            aplicarHistoricoPrescricoes(data.html);
           }
         }
+        
         prescricoes = [];
         renderPrescricoesTemp();
         return { success: true, offlineQueued: queued };
@@ -680,7 +684,7 @@
       // Offline: ação armazenada para sincronização futura sem exibir pop-up
       prescricoes = [];
       renderPrescricoesTemp();
-      await recarregarHistoricoPrescricoes({ showFailureNotice: true });
+      await recarregarHistoricoPrescricoes({ showFailureNotice: false });
       return { success: true, offlineQueued: true };
     }
 
