@@ -498,7 +498,7 @@
 
     async function executarSalvamento() {
       const instrucoes = document.getElementById('instrucoes-medicamentos')?.value || '';
-      const response = await fetchOrQueue(`/consulta/{{ consulta.id }}/bloco_prescricao`, {
+      const { response, queued } = await fetchOrQueue(`/consulta/{{ consulta.id }}/bloco_prescricao`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
         body: JSON.stringify({
@@ -524,6 +524,9 @@
         prescricoes = [];
         renderPrescricoesTemp();
         return { success: true };
+      }
+      if (!queued) {
+        throw new Error('A resposta não pôde ser processada.');
       }
       // Offline: ação armazenada para sincronização futura sem exibir pop-up
       prescricoes = [];

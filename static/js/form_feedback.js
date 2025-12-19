@@ -4,7 +4,7 @@
   const DEFAULT_ERROR_TEXT = 'Não foi possível salvar as alterações.';
   const DEFAULT_SUCCESS_DELAY = 2000;
   const DEFAULT_LOADING_TIMEOUT = 5000;
-  const DEFAULT_TIMEOUT_MESSAGE = 'O tempo limite foi atingido. Reativamos o botão para que você possa tentar novamente.';
+  const DEFAULT_TIMEOUT_MESSAGE = 'Tempo excedido, tente novamente.';
   const STATUS_VARIANTS = ['success', 'danger', 'warning', 'info'];
 
   function getButton(target) {
@@ -304,7 +304,7 @@
       setIdle(button);
       if (form) {
         if (timedOut) {
-          showStatus(form, timeoutMessage, timeoutLevel);
+          showStatus(form, timeoutMessage || DEFAULT_TIMEOUT_MESSAGE, timeoutLevel);
         } else {
           showStatus(form, options.errorMessage || DEFAULT_ERROR_TEXT, 'danger');
         }

@@ -387,7 +387,7 @@
       const timeoutMessage = 'Não conseguimos confirmar o registro das vacinas. Verifique sua conexão e tente novamente.';
 
       async function executarSalvamento() {
-        const resp = await fetchOrQueue(`/animal/{{ animal.id }}/vacinas`, {
+        const { response, queued } = await fetchOrQueue(`/animal/{{ animal.id }}/vacinas`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
           body: JSON.stringify({
@@ -395,8 +395,8 @@
             observacoes_gerais: obs
           })
         });
-        if (resp) {
-          const data = await resp.json();
+        if (response) {
+          const data = await response.json();
           if (data.success) {
             mostrarFeedback('Vacinas registradas com sucesso!');
             if (data.html) {
@@ -408,6 +408,9 @@
           }
           mostrarFeedback('Erro ao salvar vacinas.', 'danger');
           return { success: false };
+        }
+        if (!queued) {
+          throw new Error('A resposta não pôde ser processada.');
         }
         // Offline: registra localmente sem exibir aviso
         vacinas = [];

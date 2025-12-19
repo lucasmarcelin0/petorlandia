@@ -501,7 +501,7 @@
 
     async function executarSalvamento() {
       const obsGerais = document.getElementById('observacoes-exames')?.value || '';
-      const resp = await fetchOrQueue(`/animal/{{ animal.id }}/bloco_exames`, {
+      const { response, queued } = await fetchOrQueue(`/animal/{{ animal.id }}/bloco_exames`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
         body: JSON.stringify({
@@ -509,8 +509,8 @@
           observacoes_gerais: obsGerais
         })
       });
-      if (resp) {
-        const data = await resp.json();
+      if (response) {
+        const data = await response.json();
         if (data.success) {
           mostrarFeedback('Solicitação de exames salva com sucesso!');
           if (data.html) {
@@ -526,6 +526,9 @@
         }
         mostrarFeedback('Erro ao salvar exames.', 'danger');
         return { success: false };
+      }
+      if (!queued) {
+        throw new Error('A resposta não pôde ser processada.');
       }
       // Offline: mantém exames na fila sem mostrar notificação
       exames = [];
