@@ -368,13 +368,7 @@
 
         event.preventDefault();
         const submitBtn = quickForm.querySelector('button[type="submit"]');
-        const originalText = submitBtn ? submitBtn.innerHTML : '';
-        if (submitBtn) {
-          submitBtn.disabled = true;
-          submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Agendando...';
-        }
-
-        try {
+        const runQuickCreate = async () => {
           const endpoint = quickForm.dataset.plantaoQuickEndpoint || '/contabilidade/pagamentos/plantonistas/quick-create';
           const payload = {
             clinica_id: clinicId,
@@ -401,16 +395,37 @@
 
           if (result.redirect) {
             window.location.href = result.redirect;
-          } else {
-            window.location.reload();
+            return { success: true, keepButton: true };
           }
-        } catch (error) {
-          alert(error.message || 'Erro ao agendar o plantão.');
-        } finally {
+          window.location.reload();
+          return { success: true, keepButton: true };
+        };
+
+        if (window.FormFeedback?.runActionWithFeedback) {
+          window.FormFeedback
+            .runActionWithFeedback(submitBtn || quickForm, runQuickCreate, {
+              loadingText: 'Agendando...',
+              errorMessage: 'Erro ao agendar o plantão.',
+            })
+            .catch((error) => {
+              alert(error.message || 'Erro ao agendar o plantão.');
+            });
+        } else {
+          const originalText = submitBtn ? submitBtn.innerHTML : '';
           if (submitBtn) {
-            submitBtn.disabled = false;
-            submitBtn.innerHTML = originalText || 'Agendar direto';
+            submitBtn.disabled = true;
+            submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Agendando...';
           }
+          runQuickCreate()
+            .catch((error) => {
+              alert(error.message || 'Erro ao agendar o plantão.');
+            })
+            .finally(() => {
+              if (submitBtn) {
+                submitBtn.disabled = false;
+                submitBtn.innerHTML = originalText || 'Agendar direto';
+              }
+            });
         }
       });
     }

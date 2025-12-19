@@ -272,6 +272,106 @@
     return normalized;
   }
 
+  async function runActionWithFeedback(button, action, options = {}) {
+    if (!button) {
+      const promise = typeof action === 'function' ? Promise.resolve().then(() => action()) : Promise.resolve(action);
+      return promise;
+    }
+
+    const form = options.form || (button.form instanceof HTMLFormElement ? button.form : null);
+    if (form) {
+      clearStatus(form);
+    }
+
+    const loadingOptions = { form };
+    if (typeof options.loadingText !== 'undefined') loadingOptions.loadingText = options.loadingText;
+    if (typeof options.loadingTimeout !== 'undefined') loadingOptions.loadingTimeout = options.loadingTimeout;
+    if (Object.prototype.hasOwnProperty.call(options, 'timeoutMessage')) {
+      loadingOptions.timeoutMessage = options.timeoutMessage;
+    }
+
+    setLoading(button, loadingOptions);
+
+    const timeoutMs = resolveLoadingTimeout(button, { ...options, form });
+    const hasTimeout = Number.isFinite(timeoutMs) && timeoutMs > 0;
+    const timeoutMessage = resolveTimeoutMessage(button, form, options);
+    const timeoutLevel = options.timeoutLevel || 'warning';
+    const actionPromise = typeof action === 'function' ? Promise.resolve().then(() => action()) : Promise.resolve(action);
+
+    let timeoutId;
+    let timedOut = false;
+    let result;
+    let racePromise = actionPromise;
+
+    if (hasTimeout) {
+      const timeoutError = new Error(timeoutMessage);
+      timeoutError.name = 'SavingStateTimeoutError';
+      racePromise = Promise.race([
+        actionPromise,
+        new Promise((_, reject) => {
+          timeoutId = window.setTimeout(() => {
+            timedOut = true;
+            reject(timeoutError);
+          }, timeoutMs);
+        })
+      ]);
+    }
+
+    try {
+      result = await racePromise;
+      if (hasTimeout && timeoutId) {
+        window.clearTimeout(timeoutId);
+      }
+    } catch (error) {
+      if (hasTimeout && timeoutId) {
+        window.clearTimeout(timeoutId);
+      }
+      if (timedOut && actionPromise && typeof actionPromise.catch === 'function') {
+        actionPromise.catch(() => {});
+      }
+      if (timedOut && typeof options.onTimeout === 'function') {
+        try {
+          options.onTimeout(error);
+        } catch (callbackError) {
+          console.error('Erro no callback onTimeout', callbackError);
+        }
+      }
+      setIdle(button);
+      if (form) {
+        if (timedOut) {
+          showStatus(form, timeoutMessage || DEFAULT_TIMEOUT_MESSAGE, timeoutLevel);
+        } else {
+          showStatus(form, options.errorMessage || DEFAULT_ERROR_TEXT, 'danger');
+        }
+      }
+      throw error;
+    }
+
+    const normalized = normalizeResult(result, options);
+
+    if (form && normalized.message) {
+      const level = normalized.level || (normalized.success ? 'success' : 'danger');
+      showStatus(form, normalized.message, level);
+    } else if (!normalized.success && form && options.errorMessage) {
+      showStatus(form, options.errorMessage, 'danger');
+    }
+
+    if (!normalized.keepButton) {
+      if (normalized.success) {
+        const successText = options.successText || normalized.successText;
+        setSuccess(button, {
+          successText,
+          delay: options.successDelay ?? normalized.resetDelay,
+          offlineQueued: normalized.offlineQueued,
+        });
+      } else {
+        setIdle(button);
+      }
+    }
+
+    return result;
+  }
+
   async function withSavingState(target, action, options = {}) {
     const button = getButton(target);
     if (!button) {
@@ -420,6 +520,7 @@
     setQueued,
     showStatus,
     clearStatus,
+    runActionWithFeedback,
     withSavingState,
   };
 })();
