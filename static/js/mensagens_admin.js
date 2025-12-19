@@ -61,9 +61,9 @@ function initAdminMessages() {
   const perPage = parseInt(root.dataset.perPage || '10', 10);
   const sections = Array.from(root.querySelectorAll('[data-thread-kind]')).map(createSection);
 
-  function fetchThreads(section, { page = 1, append = false } = {}) {
+  async function fetchThreads(section, { page = 1, append = false } = {}) {
     if (!fetchUrl || section.isLoading) {
-      return;
+      return { success: false };
     }
     section.isLoading = true;
     toggleLoading(section.loadingIndicator, true);
@@ -72,54 +72,62 @@ function initAdminMessages() {
     url.searchParams.set('page', page);
     url.searchParams.set('per_page', perPage);
 
-    fetch(url.toString(), {
-      headers: {
-        Accept: 'application/json',
-      },
-    })
-      .then((response) => {
-        if (!response.ok) {
-          throw new Error('Erro ao carregar as conversas.');
-        }
-        return response.json();
-      })
-      .then((data) => {
-        if (!data.success) {
-          throw new Error(data.message || 'Erro ao carregar as conversas.');
-        }
-        if (!append && section.list) {
-          section.list.innerHTML = '';
-        }
-        if (section.list && data.html) {
-          parseHTML(data.html).forEach((item) => section.list.appendChild(item));
-        }
-        section.nextPage = data.next_page || null;
-        section.element.dataset.nextPage = section.nextPage ? String(section.nextPage) : '';
-        updateLoadMore(section);
-        updateEmptyState(section);
-      })
-      .catch((error) => {
-        if (section.list && !append) {
-          section.list.innerHTML = `<li class="list-group-item text-danger">${error.message}</li>`;
-        }
-      })
-      .finally(() => {
-        section.isLoading = false;
-        toggleLoading(section.loadingIndicator, false);
+    try {
+      const response = await fetch(url.toString(), {
+        headers: {
+          Accept: 'application/json',
+        },
       });
+      if (!response.ok) {
+        throw new Error('Erro ao carregar as conversas.');
+      }
+      const data = await response.json();
+      if (!data.success) {
+        throw new Error(data.message || 'Erro ao carregar as conversas.');
+      }
+      if (!append && section.list) {
+        section.list.innerHTML = '';
+      }
+      if (section.list && data.html) {
+        parseHTML(data.html).forEach((item) => section.list.appendChild(item));
+      }
+      section.nextPage = data.next_page || null;
+      section.element.dataset.nextPage = section.nextPage ? String(section.nextPage) : '';
+      updateLoadMore(section);
+      updateEmptyState(section);
+      return { success: true };
+    } catch (error) {
+      if (section.list && !append) {
+        section.list.innerHTML = `<li class="list-group-item text-danger">${error.message}</li>`;
+      }
+      throw error;
+    } finally {
+      section.isLoading = false;
+      toggleLoading(section.loadingIndicator, false);
+    }
   }
 
-  sections.forEach((section) => {
-    updateLoadMore(section);
-    updateEmptyState(section);
-    if (section.loadMore) {
-      section.loadMore.addEventListener('click', () => {
-        if (section.nextPage) {
-          fetchThreads(section, { page: section.nextPage, append: true });
-        }
-      });
-    }
-  });
+    sections.forEach((section) => {
+      updateLoadMore(section);
+      updateEmptyState(section);
+      if (section.loadMore) {
+        section.loadMore.addEventListener('click', () => {
+          if (!section.nextPage) return;
+
+          const run = () => fetchThreads(section, { page: section.nextPage, append: true });
+
+          if (window.FormFeedback?.runActionWithFeedback) {
+            window.FormFeedback.runActionWithFeedback(section.loadMore, run, {
+              loadingText: 'Carregando...',
+              successDelay: 700,
+              errorMessage: 'Erro ao carregar as conversas.',
+            }).catch(() => {});
+          } else {
+            run();
+          }
+        });
+      }
+    });
 
   if (pollInterval > 0) {
     window.setInterval(() => {
