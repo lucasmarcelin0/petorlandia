@@ -652,7 +652,11 @@ class ClinicStaff(db.Model):
     __tablename__ = 'clinic_staff'
     id = db.Column(db.Integer, primary_key=True)
     clinic_id = db.Column(db.Integer, db.ForeignKey('clinica.id'), nullable=False)
-    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    user_id = db.Column(
+        db.Integer,
+        db.ForeignKey('user.id', ondelete='CASCADE'),
+        nullable=False,
+    )
     can_manage_clients = db.Column(db.Boolean, default=False)
     can_manage_animals = db.Column(db.Boolean, default=False)
     can_manage_staff = db.Column(db.Boolean, default=False)
@@ -660,7 +664,11 @@ class ClinicStaff(db.Model):
     can_manage_inventory = db.Column(db.Boolean, default=False)
 
     clinic = db.relationship('Clinica', backref='staff_members')
-    user = db.relationship('User', backref='clinic_roles')
+    user = db.relationship(
+        'User',
+        backref=db.backref('clinic_roles', cascade='all, delete-orphan'),
+        passive_deletes=True,
+    )
 
 # Convites para que veterinários se associem a uma clínica
 class VetClinicInvite(db.Model):
