@@ -42,8 +42,10 @@ def upgrade():
                type_=sa.Text(),
                existing_nullable=True)
 
-    with op.batch_alter_table('product', schema=None) as batch_op:
-        batch_op.drop_column('is_active')
+    product_columns = [column['name'] for column in inspector.get_columns('product')]
+    if 'is_active' in product_columns:
+        with op.batch_alter_table('product', schema=None) as batch_op:
+            batch_op.drop_column('is_active')
 
     # ### end Alembic commands ###
 
