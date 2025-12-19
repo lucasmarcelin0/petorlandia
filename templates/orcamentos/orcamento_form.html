@@ -2,7 +2,7 @@
 {% block main %}
 <div class="container mt-4">
   <h2>{{ 'Editar' if form.descricao.data else 'Novo' }} Orçamento</h2>
-  <form method="post">
+  <form method="post" class="orcamento-form" data-orcamento-sync>
     {{ form.hidden_tag() }}
     <div class="mb-3">
       {{ form.descricao.label(class="form-label") }}
@@ -10,5 +10,75 @@
     </div>
     {{ form.submit(class="btn btn-primary") }}
   </form>
+  <div class="mt-3" data-orcamento-flash-target></div>
+  <div class="mt-4" data-orcamento-list-target hidden></div>
 </div>
+
+<script>
+  document.addEventListener('DOMContentLoaded', () => {
+    const form = document.querySelector('[data-orcamento-sync]');
+    if (!form) return;
+
+    const listTarget = document.querySelector('[data-orcamento-list-target]');
+    const flashTarget = document.querySelector('[data-orcamento-flash-target]') || document.body;
+
+    function swapFlashMessages(doc) {
+      if (!flashTarget) return;
+      const newAlerts = doc.querySelectorAll('.alert-container');
+      if (!newAlerts.length) return;
+      flashTarget.querySelectorAll('.alert-container').forEach(alert => alert.remove());
+      newAlerts.forEach(alert => {
+        flashTarget.prepend(alert.cloneNode(true));
+      });
+    }
+
+    function swapOrcamentoList(doc) {
+      if (!listTarget) return;
+      const updatedList = doc.querySelector('#orcamento') || doc.querySelector('[data-orcamento-list-target]');
+      if (!updatedList) return;
+      listTarget.innerHTML = updatedList.innerHTML;
+      listTarget.hidden = false;
+    }
+
+    form.addEventListener('submit', async event => {
+      event.preventDefault();
+      const submitButton = form.querySelector('button[type="submit"], button:not([type])');
+
+      const handleSubmit = async () => {
+        const response = await fetch(form.action || window.location.href, {
+          method: 'POST',
+          body: new FormData(form),
+          headers: { 'Accept': 'text/html' },
+        });
+
+        if (!response.ok) {
+          throw new Error('Não foi possível salvar o orçamento.');
+        }
+
+        const html = await response.text();
+        const parsed = new DOMParser().parseFromString(html, 'text/html');
+        swapFlashMessages(parsed);
+        swapOrcamentoList(parsed);
+        return { success: true, message: 'Orçamento salvo com sucesso.' };
+      };
+
+      try {
+        if (window.FormFeedback && typeof window.FormFeedback.withSavingState === 'function') {
+          await window.FormFeedback.withSavingState(submitButton || form, handleSubmit, {
+            form,
+            loadingText: form.dataset.loadingText || 'Salvando...',
+            errorMessage: 'Não foi possível salvar o orçamento.',
+          });
+        } else {
+          await handleSubmit();
+        }
+      } catch (error) {
+        console.error('Falha ao enviar orçamento', error);
+        if (window.FormFeedback && typeof window.FormFeedback.showStatus === 'function') {
+          window.FormFeedback.showStatus(form, error?.message || 'Erro ao salvar orçamento.', 'danger');
+        }
+      }
+    });
+  });
+</script>
 {% endblock %}
