@@ -103,7 +103,7 @@
     <div class="tab-content p-3">
 
       <div class="tab-pane fade show active" id="dados" role="tabpanel" aria-labelledby="dados-tab">
-        <form id="tutor-form" action="{{ url_for('update_tutor', user_id=tutor.id) }}" method="POST" enctype="multipart/form-data" data-sync data-fetch-timeout="45000" data-loading-timeout="0" class="section-card">
+        <form id="tutor-form" action="{{ url_for('update_tutor', user_id=tutor.id) }}" method="POST" enctype="multipart/form-data" data-sync data-fetch-timeout="45000" data-loading-timeout="15000" class="section-card">
           {{ tutor_form.hidden_tag() }}
           <div class="section-card__header">
             <div>

@@ -381,16 +381,16 @@
             ev.preventDefault();
             const url = form.action;
             const handle = async () => {
-              const resp = await fetchOrQueue(url, {method: 'POST', headers: {'Accept': 'application/json'}});
-              if (!resp) {
+              const { response, queued } = await fetchOrQueue(url, {method: 'POST', headers: {'Accept': 'application/json'}});
+              if (queued) {
                 const toastEl = document.getElementById('actionToast');
                 toastEl.querySelector('.toast-body').textContent = 'Ação salva para sincronização quando estiver online.';
                 applyToastTone(toastEl, 'info');
                 new bootstrap.Toast(toastEl).show();
                 return { success: true, message: 'Aguardando conexão para concluir o envio.', level: 'info', successText: 'Sincronizando…', resetDelay: 2500 };
               }
-              if (resp.ok) {
-                const data = await resp.json();
+              if (response && response.ok) {
+                const data = await response.json();
                 if (data.redirect) {
                   window.location.href = data.redirect;
                   return { success: true, keepButton: true };
@@ -424,20 +424,20 @@
         form.addEventListener('submit', async ev => {
           ev.preventDefault();
           const handle = async () => {
-            const resp = await fetchOrQueue(form.action, {
+            const { response, queued } = await fetchOrQueue(form.action, {
               method: form.method,
               body: new FormData(form),
               headers: {'Accept': 'application/json'}
             });
-            if (!resp) {
+            if (queued) {
               const toastEl = document.getElementById('actionToast');
               toastEl.querySelector('.toast-body').textContent = 'Ação salva para sincronização quando estiver online.';
               applyToastTone(toastEl, 'info');
               new bootstrap.Toast(toastEl).show();
               return { success: true, message: 'Aguardando conexão para concluir o envio.', level: 'info', successText: 'Sincronizando…', resetDelay: 2500 };
             }
-            if (resp.ok) {
-              const data = await resp.json();
+            if (response && response.ok) {
+              const data = await response.json();
               if (data.redirect) {
                 window.location.href = data.redirect;
                 return { success: true, keepButton: true };
@@ -483,16 +483,16 @@
           ev.preventDefault();
           const li = form.closest('li');
           const handle = async () => {
-            const resp = await fetchOrQueue(form.action, {method: 'POST', headers: {'Accept': 'application/json'}});
-            if (!resp) {
+            const { response, queued } = await fetchOrQueue(form.action, {method: 'POST', headers: {'Accept': 'application/json'}});
+            if (queued) {
               const toastEl = document.getElementById('actionToast');
               toastEl.querySelector('.toast-body').textContent = 'Ação salva para sincronização quando estiver online.';
               applyToastTone(toastEl, 'info');
               new bootstrap.Toast(toastEl).show();
               return { success: true, message: 'Aguardando conexão para concluir o envio.', level: 'info', successText: 'Sincronizando…', resetDelay: 2500 };
             }
-            if (resp.ok) {
-              const data = await resp.json();
+            if (response && response.ok) {
+              const data = await response.json();
               if (data.deleted || data.status) {
                 li?.remove();
               }
@@ -503,7 +503,7 @@
               return { success: true, message: data.message, level: data.category };
             }
             let data = {};
-            try { data = await resp.json(); } catch (err) {}
+            try { data = response ? await response.json() : {}; } catch (err) {}
             const toastEl = document.getElementById('actionToast');
             toastEl.querySelector('.toast-body').textContent = data.message || 'Erro ao processar ação';
             applyToastTone(toastEl, 'danger');
@@ -526,20 +526,20 @@
         form.addEventListener('submit', async ev => {
           ev.preventDefault();
           const handle = async () => {
-            const resp = await fetchOrQueue(form.action, {
+            const { response, queued } = await fetchOrQueue(form.action, {
               method: 'POST',
               headers: {'Accept': 'application/json'},
               body: new FormData(form)
             });
-            if (!resp) {
+            if (queued) {
               const toastEl = document.getElementById('actionToast');
               toastEl.querySelector('.toast-body').textContent = 'Ação salva para sincronização quando estiver online.';
               applyToastTone(toastEl, 'info');
               new bootstrap.Toast(toastEl).show();
               return { success: true, message: 'Aguardando conexão para concluir o envio.', level: 'info', successText: 'Sincronizando…', resetDelay: 2500 };
             }
-            if (resp.ok) {
-              const data = await resp.json();
+            if (response && response.ok) {
+              const data = await response.json();
               if (data.redirect) {
                 window.location.href = data.redirect;
                 return { success: true, keepButton: true };
@@ -551,7 +551,7 @@
               return { success: true, message: data.message, level: data.category };
             }
             let data = {};
-            try { data = await resp.json(); } catch (err) {}
+            try { data = response ? await response.json() : {}; } catch (err) {}
             const toastEl = document.getElementById('actionToast');
             toastEl.querySelector('.toast-body').textContent = data.message || 'Erro ao processar ação';
             applyToastTone(toastEl, 'danger');
@@ -661,19 +661,14 @@
           }
 
           const handle = async () => {
-            let resp = null;
-            try {
-              resp = await fetchOrQueue(api, {
-                method: 'POST',
-                body: formData,
-                headers: { 'Accept': 'text/html' }
-              });
-            } catch (err) {
-              resp = null;
-            }
+            const { response, queued } = await fetchOrQueue(api, {
+              method: 'POST',
+              body: formData,
+              headers: { 'Accept': 'text/html' }
+            });
 
-            if (resp && resp.ok) {
-              const html = await resp.text();
+            if (response && response.ok) {
+              const html = await response.text();
               if (placeholder) {
                 placeholder.insertAdjacentHTML('afterend', html);
                 placeholder.remove();
@@ -684,7 +679,7 @@
               return { success: true, message: 'Mensagem enviada com sucesso.', level: 'success', successText: 'Enviado!', resetDelay: 1800 };
             }
 
-            if (resp === null) {
+            if (queued) {
               if (placeholder) {
                 const status = placeholder.querySelector('.js-status');
                 if (status) {
@@ -720,19 +715,19 @@
         form.addEventListener('submit', async ev => {
           ev.preventDefault();
           const handle = async () => {
-            const resp = await fetchOrQueue(form.action, {
+            const { response, queued } = await fetchOrQueue(form.action, {
               method: 'POST',
               headers: {'Accept': 'application/json'},
               body: new FormData(form)
             });
 
-            if (!resp) {
+            if (queued) {
               form.submit();
               return { success: true, keepButton: true };
             }
 
-            if (resp.ok) {
-              const data = await resp.json();
+            if (response && response.ok) {
+              const data = await response.json();
               if (data.redirect) {
                 window.location.href = data.redirect;
                 return { success: true, keepButton: true };
@@ -756,7 +751,7 @@
             }
 
             let data = {};
-            try { data = await resp.json(); } catch(e) {}
+            try { data = response ? await response.json() : {}; } catch(e) {}
             const toastEl = document.getElementById('actionToast');
             toastEl.querySelector('.toast-body').textContent = data.message || 'Erro ao processar ação';
             applyToastTone(toastEl, 'danger');

@@ -2,7 +2,7 @@
   const KEY = 'offline-queue';
   const BUTTON_RESET_DELAY = 2000;
   const DEFAULT_LOADING_TIMEOUT = 5000;
-  const DEFAULT_TIMEOUT_MESSAGE = 'O tempo limite foi atingido. Reativamos o botão para que você possa tentar novamente.';
+  const DEFAULT_TIMEOUT_MESSAGE = 'Tempo excedido, tente novamente.';
   const DEFAULT_FETCH_TIMEOUT = 10000;
 
   function getSubmitButton(form){
@@ -232,17 +232,27 @@
       bodyData = {json: fetchOpts.body};
     }
     const effectiveTimeout = Number.isFinite(timeout) ? timeout : DEFAULT_FETCH_TIMEOUT;
-    if(navigator.onLine){
+    const online = navigator.onLine !== false;
+
+    if(online){
       try {
         const resp = await fetchWithTimeout(url, fetchOpts, effectiveTimeout);
-        // Retorna a resposta mesmo que contenha erro de validação
-        if (resp) return resp;
-      } catch(e){ /* fallthrough */ }
+        return { response: resp, queued: false };
+      } catch(e){
+        if (e && e.name === 'AbortError') {
+          const timeoutError = new Error('Tempo limite ao enviar a requisição.');
+          timeoutError.name = 'FetchTimeoutError';
+          timeoutError.cause = e;
+          throw timeoutError;
+        }
+        throw e;
+      }
     }
+
     const q = loadQueue();
     q.push({url, method, headers, body:bodyData});
     saveQueue(q);
-    return null;
+    return { response: null, queued: true };
   };
 
   window.addEventListener('online', sendQueued);
@@ -302,7 +312,9 @@
     let resp = null;
     let offlineQueued = false;
     try {
-      resp = await window.fetchOrQueue(form.action, {method: form.method || 'POST', headers: {'Accept': 'application/json'}, body: data, timeout: fetchTimeout});
+      const result = await window.fetchOrQueue(form.action, {method: form.method || 'POST', headers: {'Accept': 'application/json'}, body: data, timeout: fetchTimeout});
+      resp = result ? result.response : null;
+      offlineQueued = Boolean(result && result.queued);
     } catch (error) {
       console.error('Erro ao enviar formulário:', error);
       setButtonIdle(submitButton);
@@ -310,8 +322,7 @@
       return;
     }
 
-    if (!resp) {
-      offlineQueued = true;
+    if (offlineQueued) {
       notifyOfflineQueued(form);
       setButtonIdle(submitButton);
     }
