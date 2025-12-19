@@ -11621,6 +11621,26 @@ def buscar_apresentacoes():
         return jsonify({"error": str(e)}), 500
 
 
+@app.route('/consulta/<int:consulta_id>/historico_prescricoes', methods=['GET'])
+@login_required
+def historico_prescricoes_partial(consulta_id):
+    consulta = get_consulta_or_404(consulta_id)
+
+    clinic_id = (
+        consulta.clinica_id
+        or current_user_clinic_id()
+        or getattr(consulta.animal, 'clinica_id', None)
+    )
+
+    if not clinic_id:
+        return jsonify({'success': False, 'message': 'Consulta sem clínica definida.'}), 400
+
+    ensure_clinic_access(clinic_id)
+
+    historico_html = _render_prescricao_history(consulta.animal, clinic_id)
+    return jsonify({'success': True, 'html': historico_html})
+
+
 
 @app.route('/consulta/<int:consulta_id>/prescricao/lote', methods=['POST'])
 @login_required

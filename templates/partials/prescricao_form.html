@@ -163,11 +163,87 @@
   .drag-handle {
     cursor: grab;
   }
+
+  .historico-recarga-alert {
+    border-style: dashed;
+  }
 </style>
 <script>
     let medicamentoSelecionado = null;
     let prescricoes = [];
     let prescricaoArrastando = null;
+
+  function aplicarHistoricoPrescricoes(html) {
+    const container = document.getElementById('historico-prescricoes');
+    if (!container || !html) return false;
+
+    container.innerHTML = html;
+
+    if (typeof bindSyncForms === 'function') {
+      bindSyncForms(container);
+    }
+
+    const alerta = container.querySelector('.historico-recarga-alert');
+    if (alerta) {
+      alerta.remove();
+    }
+
+    return true;
+  }
+
+  function sinalizarHistoricoDesatualizado(message) {
+    const container = document.getElementById('historico-prescricoes');
+    if (!container) return;
+
+    let alerta = container.querySelector('.historico-recarga-alert');
+    if (!alerta) {
+      alerta = document.createElement('div');
+      alerta.className = 'alert alert-warning d-flex align-items-center gap-2 historico-recarga-alert';
+      container.prepend(alerta);
+    }
+
+    alerta.innerHTML = `<i class="bi bi-exclamation-triangle"></i><span>${message}</span>`;
+  }
+
+  async function recarregarHistoricoPrescricoes(options = {}) {
+    const { showFailureNotice = true } = options;
+    const container = document.getElementById('historico-prescricoes');
+    if (!container) return false;
+
+    const loading = document.createElement('div');
+    loading.className = 'alert alert-info d-flex align-items-center gap-2 py-2 historico-recarga-alert';
+    loading.innerHTML = '<div class="spinner-border spinner-border-sm" role="status"></div><span>Atualizando histórico...</span>';
+    container.prepend(loading);
+
+    try {
+      const resp = await fetch(`/consulta/{{ consulta.id }}/historico_prescricoes`, {
+        headers: { 'Accept': 'application/json' }
+      });
+
+      if (!resp.ok) {
+        throw new Error('Erro ao buscar histórico');
+      }
+
+      const data = await resp.json();
+      if (!data?.success || !data.html) {
+        throw new Error(data?.message || 'Histórico indisponível');
+      }
+
+      aplicarHistoricoPrescricoes(data.html);
+      return true;
+    } catch (error) {
+      console.error('Erro ao recarregar histórico de prescrições:', error);
+      if (showFailureNotice) {
+        mostrarFeedback('Prescrição salva, mas não foi possível atualizar o histórico automaticamente.', 'warning');
+        sinalizarHistoricoDesatualizado('Histórico não pôde ser recarregado automaticamente. Atualize a página quando possível.');
+      }
+      return false;
+    } finally {
+      if (loading?.parentNode) {
+        loading.remove();
+      }
+    }
+  }
 
   function toggleNovaMedicacao() {
     const container = document.getElementById('nova-medicacao-container');
@@ -583,11 +659,15 @@
           return { success: false };
         }
         mostrarFeedback('Prescrição salva com sucesso!', 'success');
+        let historicoAtualizado = false;
         if (data.html) {
-          const container = document.getElementById('historico-prescricoes');
-          container.innerHTML = data.html;
-          if (typeof bindSyncForms === 'function') {
-            bindSyncForms(container);
+          historicoAtualizado = aplicarHistoricoPrescricoes(data.html);
+        }
+        if (!data.html || queued) {
+          const atualizadoViaFetch = await recarregarHistoricoPrescricoes({ showFailureNotice: true });
+          historicoAtualizado = historicoAtualizado || atualizadoViaFetch;
+          if (!atualizadoViaFetch && queued) {
+            sinalizarHistoricoDesatualizado('Prescrição salva para sincronização. O histórico será atualizado ao voltar a ficar online.');
           }
         }
         prescricoes = [];
@@ -600,6 +680,7 @@
       // Offline: ação armazenada para sincronização futura sem exibir pop-up
       prescricoes = [];
       renderPrescricoesTemp();
+      await recarregarHistoricoPrescricoes({ showFailureNotice: true });
       return { success: true, offlineQueued: true };
     }
 
