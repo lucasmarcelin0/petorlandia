@@ -4,7 +4,8 @@
   const DEFAULT_ERROR_TEXT = 'Não foi possível salvar as alterações.';
   const DEFAULT_OFFLINE_TEXT = 'Aguardando sincronização';
   const DEFAULT_SUCCESS_DELAY = 2000;
-  const DEFAULT_LOADING_TIMEOUT = 5000;
+  const DEFAULT_LOADING_TIMEOUT = 4000;
+  const MAX_LOADING_TIMEOUT = 4000;
   const DEFAULT_TIMEOUT_MESSAGE = 'Tempo excedido, tente novamente.';
   const STATUS_VARIANTS = ['success', 'danger', 'warning', 'info'];
 
@@ -59,22 +60,27 @@
   function resolveLoadingTimeout(button, options = {}) {
     const fromOptions = parseTimeout(options.loadingTimeout);
     if (typeof fromOptions !== 'undefined') {
-      return fromOptions;
+      return limitLoadingTimeout(fromOptions);
     }
     if (button && typeof button.dataset !== 'undefined') {
       const fromButton = parseTimeout(button.dataset.loadingTimeout);
       if (typeof fromButton !== 'undefined') {
-        return fromButton;
+        return limitLoadingTimeout(fromButton);
       }
     }
     const form = options.form || (button && button.form instanceof HTMLFormElement ? button.form : null);
     if (form && form.dataset) {
       const fromForm = parseTimeout(form.dataset.loadingTimeout);
       if (typeof fromForm !== 'undefined') {
-        return fromForm;
+        return limitLoadingTimeout(fromForm);
       }
     }
     return DEFAULT_LOADING_TIMEOUT;
+  }
+
+  function limitLoadingTimeout(timeout) {
+    if (!Number.isFinite(timeout)) return timeout;
+    return Math.min(timeout, MAX_LOADING_TIMEOUT);
   }
 
   function resolveTimeoutMessage(button, form, options = {}) {
@@ -116,7 +122,6 @@
     if (Number.isFinite(timeout) && timeout > 0) {
       const timerId = window.setTimeout(() => {
         delete button.dataset.loadingTimeoutId;
-        setIdle(button);
         const message = resolveTimeoutMessage(button, form, options);
         const detail = { button, form, message, reason: 'loading-timeout' };
         if (form && message) {
@@ -301,24 +306,26 @@
     let timeoutId;
     let timedOut = false;
     let result;
-    let racePromise = actionPromise;
 
     if (hasTimeout) {
-      const timeoutError = new Error(timeoutMessage);
-      timeoutError.name = 'SavingStateTimeoutError';
-      racePromise = Promise.race([
-        actionPromise,
-        new Promise((_, reject) => {
-          timeoutId = window.setTimeout(() => {
-            timedOut = true;
-            reject(timeoutError);
-          }, timeoutMs);
-        })
-      ]);
+      timeoutId = window.setTimeout(() => {
+        timedOut = true;
+        const message = timeoutMessage || DEFAULT_TIMEOUT_MESSAGE;
+        if (form && message) {
+          showStatus(form, message, timeoutLevel);
+        }
+        if (typeof options.onTimeout === 'function') {
+          try {
+            options.onTimeout(new Error(message));
+          } catch (callbackError) {
+            console.error('Erro no callback onTimeout', callbackError);
+          }
+        }
+      }, timeoutMs);
     }
 
     try {
-      result = await racePromise;
+      result = await actionPromise;
       if (hasTimeout && timeoutId) {
         window.clearTimeout(timeoutId);
       }
@@ -326,23 +333,9 @@
       if (hasTimeout && timeoutId) {
         window.clearTimeout(timeoutId);
       }
-      if (timedOut && actionPromise && typeof actionPromise.catch === 'function') {
-        actionPromise.catch(() => {});
-      }
-      if (timedOut && typeof options.onTimeout === 'function') {
-        try {
-          options.onTimeout(error);
-        } catch (callbackError) {
-          console.error('Erro no callback onTimeout', callbackError);
-        }
-      }
       setIdle(button);
       if (form) {
-        if (timedOut) {
-          showStatus(form, timeoutMessage || DEFAULT_TIMEOUT_MESSAGE, timeoutLevel);
-        } else {
-          showStatus(form, options.errorMessage || DEFAULT_ERROR_TEXT, 'danger');
-        }
+        showStatus(form, options.errorMessage || DEFAULT_ERROR_TEXT, 'danger');
       }
       throw error;
     }
@@ -395,7 +388,7 @@
     }
     setLoading(button, loadingOptions);
 
-    const timeoutMs = Number(options.loadingTimeout);
+    const timeoutMs = resolveLoadingTimeout(button, { ...options, form });
     const hasTimeout = Number.isFinite(timeoutMs) && timeoutMs > 0;
     const timeoutMessage = options.timeoutMessage || DEFAULT_TIMEOUT_MESSAGE;
     const timeoutLevel = options.timeoutLevel || 'warning';
@@ -404,23 +397,25 @@
     let timedOut = false;
     let result;
 
-    let racePromise = actionPromise;
     if (hasTimeout) {
-      const timeoutError = new Error(timeoutMessage);
-      timeoutError.name = 'SavingStateTimeoutError';
-      racePromise = Promise.race([
-        actionPromise,
-        new Promise((_, reject) => {
-          timeoutId = window.setTimeout(() => {
-            timedOut = true;
-            reject(timeoutError);
-          }, timeoutMs);
-        })
-      ]);
+      timeoutId = window.setTimeout(() => {
+        timedOut = true;
+        const message = timeoutMessage || DEFAULT_TIMEOUT_MESSAGE;
+        if (form && message) {
+          showStatus(form, message, timeoutLevel);
+        }
+        if (typeof options.onTimeout === 'function') {
+          try {
+            options.onTimeout(new Error(message));
+          } catch (callbackError) {
+            console.error('Erro no callback onTimeout', callbackError);
+          }
+        }
+      }, timeoutMs);
     }
 
     try {
-      result = await racePromise;
+      result = await actionPromise;
       if (hasTimeout && timeoutId) {
         window.clearTimeout(timeoutId);
       }
@@ -428,23 +423,9 @@
       if (hasTimeout && timeoutId) {
         window.clearTimeout(timeoutId);
       }
-      if (timedOut && actionPromise && typeof actionPromise.catch === 'function') {
-        actionPromise.catch(() => {});
-      }
-      if (timedOut && typeof options.onTimeout === 'function') {
-        try {
-          options.onTimeout(error);
-        } catch (callbackError) {
-          console.error('Erro no callback onTimeout', callbackError);
-        }
-      }
       setIdle(button);
       if (form) {
-        if (timedOut) {
-          showStatus(form, timeoutMessage || DEFAULT_TIMEOUT_MESSAGE, timeoutLevel);
-        } else {
-          showStatus(form, options.errorMessage || DEFAULT_ERROR_TEXT, 'danger');
-        }
+        showStatus(form, options.errorMessage || DEFAULT_ERROR_TEXT, 'danger');
       }
       throw error;
     }
