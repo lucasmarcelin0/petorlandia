@@ -5263,15 +5263,15 @@ def login_view():
             login_user(user, remember=form.remember.data)
             if form.remember.data:
                 session.permanent = True
-            if request.accept_mimetypes['application/json'] > request.accept_mimetypes['text/html']:
+            if request.accept_mimetypes['application/json'] >= request.accept_mimetypes['text/html']:
                 return jsonify({'success': True, 'redirect': url_for('index')})
             flash('Login realizado com sucesso!', 'success')
             return redirect(url_for('index'))
         else:
-            if request.accept_mimetypes['application/json'] > request.accept_mimetypes['text/html']:
+            if request.accept_mimetypes['application/json'] >= request.accept_mimetypes['text/html']:
                 return jsonify({'success': False, 'errors': {'email': ['Email ou senha inválidos.']}}), 400
             flash('Email ou senha inválidos.', 'danger')
-    elif request.method == 'POST' and request.accept_mimetypes['application/json'] > request.accept_mimetypes['text/html']:
+    elif request.method == 'POST' and request.accept_mimetypes['application/json'] >= request.accept_mimetypes['text/html']:
         errors = {field: messages for field, messages in form.errors.items()}
         return jsonify({'success': False, 'errors': errors}), 400
     return render_template('auth/login.html', form=form)
