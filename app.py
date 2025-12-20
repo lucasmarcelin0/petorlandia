@@ -6153,6 +6153,7 @@ def inject_default_pickup_address():
 @login_required
 def deletar_animal(animal_id):
     animal = get_animal_or_404(animal_id)
+    tutor_id = animal.user_id
 
     if not (
         current_user.role == 'admin'
@@ -6185,7 +6186,9 @@ def deletar_animal(animal_id):
             restore_available=False,
         )
     flash(message, 'success')
-    return redirect(request.referrer or url_for('list_animals'))
+    if tutor_id:
+        return redirect(url_for('tutor_detail', tutor_id=tutor_id))
+    return redirect(url_for('list_animals'))
 
 
 @app.route('/termo/interesse/<int:animal_id>/<int:user_id>', methods=['GET', 'POST'])

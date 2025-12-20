@@ -45,3 +45,31 @@ def test_deletar_animal_json(monkeypatch, app):
 
     with app.app_context():
         assert Animal.query.get(1).removido_em is not None
+
+
+def test_deletar_animal_redirects_to_tutor(monkeypatch, app):
+    client = app.test_client()
+
+    with app.app_context():
+        db.drop_all()
+        db.create_all()
+        admin = User(id=1, name='Admin', email='admin@test', role='admin', worker='veterinario')
+        admin.set_password('x')
+        animal = Animal(id=1, name='Dog', user_id=admin.id)
+        db.session.add_all([admin, animal])
+        db.session.commit()
+        import flask_login.utils as login_utils
+        fake_admin = type('U', (), {
+            'id': admin.id,
+            'role': 'admin',
+            'worker': 'veterinario',
+            'is_authenticated': True,
+        })()
+        monkeypatch.setattr(login_utils, '_get_user', lambda: fake_admin)
+
+    resp = client.post('/animal/1/deletar')
+    assert resp.status_code == 302
+    assert resp.headers['Location'].endswith('/tutor/1')
+
+    with app.app_context():
+        assert Animal.query.get(1).removido_em is not None
