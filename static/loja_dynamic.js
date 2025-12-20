@@ -49,22 +49,16 @@ function initAddToCartButtons(root=document){
       .then(({ data, isJson, ok }) => {
         if(isJson && ok && data) {
           // Sucesso! Mostrar mensagem
-          const messageHTML = `
-            <div class="d-flex flex-column align-items-center justify-content-center" style="gap: 0.5rem;">
-              <div class="text-success" style="font-size: 1.5rem;">
-                <i class="fa-solid fa-circle-check"></i>
-              </div>
-              <div class="fw-semibold text-success" style="font-size: 0.95rem;">
-                Adicionado!
-              </div>
-            </div>
-          `;
-          btn.innerHTML = messageHTML;
-          btn.className = 'add-to-cart-btn js-add-to-cart';
+          btn.innerHTML = '<i class="fa-solid fa-circle-check me-2"></i>Adicionado com sucesso!';
+          btn.style.background = '#198754';
+          btn.style.borderColor = '#198754';
+          btn.disabled = true;
           
           // Restaura o botão após 2 segundos
           setTimeout(() => {
             btn.innerHTML = originalHTML;
+            btn.style.background = '';
+            btn.style.borderColor = '';
             btn.disabled = false;
             quantityInput.value = '1';
           }, 2000);
