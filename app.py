@@ -14279,7 +14279,8 @@ def aumentar_item_carrinho(item_id):
     item.quantity += 1
     db.session.commit()
     flash("Quantidade atualizada", "success")
-    if 'application/json' in request.headers.get('Accept', ''):
+    wants_json = request.accept_mimetypes.accept_json or request.headers.get('X-Requested-With') == 'XMLHttpRequest'
+    if wants_json:
         total_value = order.total_value()
         total_qty = sum(i.quantity for i in order.items)
         return jsonify(
@@ -14315,7 +14316,8 @@ def diminuir_item_carrinho(item_id):
         category = "success"
         item_qty = item.quantity
     flash(message, category)
-    if 'application/json' in request.headers.get('Accept', ''):
+    wants_json = request.accept_mimetypes.accept_json or request.headers.get('X-Requested-With') == 'XMLHttpRequest'
+    if wants_json:
         total_value = order.total_value()
         total_qty = sum(i.quantity for i in order.items)
         payload = {
