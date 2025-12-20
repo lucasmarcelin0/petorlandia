@@ -1459,3 +1459,49 @@
 .prescricao-card__footer .btn {
   min-width: 110px;
 }
+
+/* Ficha do tutor no perfil do animal */
+.tutor-card {
+  background: radial-gradient(circle at 10% 20%, rgba(13, 110, 253, 0.08), rgba(13, 110, 253, 0.02) 35%),
+              radial-gradient(circle at 90% 0%, rgba(25, 135, 84, 0.08), rgba(25, 135, 84, 0.02) 40%),
+              #ffffff;
+  border: 1px solid rgba(0, 0, 0, 0.04);
+}
+
+.tutor-card__avatar {
+  width: 64px;
+  height: 64px;
+  border-radius: 16px;
+  background: linear-gradient(135deg, rgba(13, 110, 253, 0.12), rgba(25, 135, 84, 0.1));
+  color: #0d6efd;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.75rem;
+  box-shadow: 0 14px 38px -26px rgba(13, 110, 253, 0.55);
+}
+
+.tutor-card__name {
+  color: #0a2c59;
+  text-decoration: none;
+}
+
+.tutor-card__name:hover {
+  color: #0d6efd;
+  text-decoration: underline;
+}
+
+.tutor-card__footer {
+  border-top: 1px solid rgba(0, 0, 0, 0.06);
+}
+
+.tutor-card__badge--muted {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.35rem 0.75rem;
+  border-radius: 999px;
+  background: rgba(108, 117, 125, 0.1);
+  color: #495057;
+  font-weight: 600;
+}
