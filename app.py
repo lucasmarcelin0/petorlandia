@@ -6168,7 +6168,14 @@ def deletar_animal(animal_id):
     if animal.removido_em:
         message = 'Animal já foi removido anteriormente.'
         if 'application/json' in request.headers.get('Accept', ''):
-            return jsonify(message=message, category='warning'), 400
+            return jsonify(
+                message=message,
+                category='warning',
+                deleted=True,
+                status='already_removed',
+                undo_available=False,
+                restore_available=False,
+            ), 200
         flash(message, 'warning')
         return redirect(request.referrer or url_for('ficha_animal', animal_id=animal.id))
 
