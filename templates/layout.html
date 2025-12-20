@@ -421,6 +421,7 @@
       attachDeliveryFormListeners();
 
       document.querySelectorAll('.js-cart-form').forEach(form => {
+        if (form.dataset.skipGlobalHandler === 'true') return;
         form.addEventListener('submit', async ev => {
           ev.preventDefault();
           const handle = async () => {

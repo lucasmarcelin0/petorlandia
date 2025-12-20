@@ -32,7 +32,7 @@
 
           <!-- Formulário -->
           <form action="{{ url_for('adicionar_carrinho', product_id=product.id) }}"
-                method="post" class="js-cart-form">
+                method="post" class="js-cart-form" data-skip-global-handler="true">
             {{ form.hidden_tag() }}
             <div class="d-flex align-items-stretch gap-2">
               <!-- Quantidade -->
