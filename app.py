@@ -6632,6 +6632,8 @@ def planosaude_animal(animal_id):
         flash("Plano de saúde contratado!", "success")
         return redirect(url_for("planosaude_animal", animal_id=animal_id))
 
+    from admin import _is_admin
+
     return render_template(
         "animais/planosaude_animal.html",
         animal=animal,
@@ -6639,6 +6641,7 @@ def planosaude_animal(animal_id):
         subscription=subscription,
         plans=plans_data,
         onboarding=onboarding,
+        show_schedule_button=_is_admin() or is_veterinarian(current_user),
     )
 
 
