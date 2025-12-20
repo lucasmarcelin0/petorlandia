@@ -1505,3 +1505,15 @@
   color: #495057;
   font-weight: 600;
 }
+
+.tutor-card__divider {
+  width: 100%;
+  border-top: 1px dashed rgba(0, 0, 0, 0.08);
+}
+
+.tutor-card__danger-zone {
+  background: rgba(220, 53, 69, 0.04);
+  border: 1px solid rgba(220, 53, 69, 0.15);
+  border-radius: 12px;
+  padding: 0.85rem;
+}
