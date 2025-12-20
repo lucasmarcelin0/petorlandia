@@ -6639,6 +6639,8 @@ def planosaude_animal(animal_id):
         subscription=subscription,
         plans=plans_data,
         onboarding=onboarding,
+        user_cpf=current_user.cpf,
+        animal_microchip=animal.microchip_number,
     )
 
 
