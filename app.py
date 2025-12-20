@@ -5439,14 +5439,28 @@ def list_animals():
     if modo and modo.lower() != 'todos':
         query = query.filter_by(modo=modo)
     else:
-        # Evita mostrar adotados para usuários não autorizados, exceto quando o admin opta por ver todos
         vet_authorized = current_user.is_authenticated and is_veterinarian(current_user)
         collaborator = (
             current_user.is_authenticated
             and getattr(current_user, 'worker', None) == 'colaborador'
         )
-        if not show_all and not (vet_authorized or collaborator):
-            # Para usuários comuns: mostrar animais não adotados OU animais próprios
+        
+        if vet_authorized and not show_all:
+            # Veterinários só podem ver animais perdidos, à venda ou para adoção,
+            # ou então animais cadastrados pela própria clínica
+            allowed = ['perdido', 'venda', 'doação']
+            clinic_id = getattr(current_user.veterinario, 'clinica_id', None) or current_user.clinica_id
+            if clinic_id:
+                query = query.filter(
+                    or_(
+                        Animal.modo.in_(allowed),
+                        Animal.clinica_id == clinic_id
+                    )
+                )
+            else:
+                query = query.filter(Animal.modo.in_(allowed))
+        elif not show_all and not collaborator:
+            # Para usuários comuns e não colaboradores: mostrar animais não adotados OU animais próprios
             if current_user.is_authenticated:
                 query = query.filter(
                     or_(
@@ -5467,21 +5481,6 @@ def list_animals():
         query = query.filter(Animal.age.ilike(f"{age}%"))
     if name_query:
         query = query.filter(Animal.name.ilike(f"%{name_query}%"))
-
-    # Veterinários só podem ver animais perdidos, à venda ou para adoção,
-    # ou então animais cadastrados pela própria clínica
-    if current_user.is_authenticated and is_veterinarian(current_user) and not show_all:
-        allowed = ['perdido', 'venda', 'doação']
-        clinic_id = getattr(current_user.veterinario, 'clinica_id', None) or current_user.clinica_id
-        if clinic_id:
-            query = query.filter(
-                or_(
-                    Animal.modo.in_(allowed),
-                    Animal.clinica_id == clinic_id
-                )
-            )
-        else:
-            query = query.filter(Animal.modo.in_(allowed))
 
     # Ordenação e paginação
     query = query.options(
@@ -5750,7 +5749,9 @@ def chat_view(animal_id):
 @login_required
 def conversa(animal_id, user_id):
     animal = get_animal_or_404(animal_id)
-    outro_usuario = get_user_or_404(user_id)
+    # For conversations about an animal, we should allow users to talk to the animal's owner
+    # even if they're marked as private, so use User.query.get_or_404 instead of get_user_or_404
+    outro_usuario = User.query.get_or_404(user_id)
     interesse_existente = Interest.query.filter_by(
         user_id=outro_usuario.id, animal_id=animal.id).first()
 
