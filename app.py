@@ -2667,7 +2667,8 @@ def reset_password_request():
             return jsonify({'success': False, 'errors': {'email': ['E-mail não encontrado.']}}), 400
         flash('E-mail não encontrado.', 'danger')
     elif request.method == 'POST' and request.accept_mimetypes['application/json'] > request.accept_mimetypes['text/html']:
-        return jsonify({'success': False, 'errors': form.errors}), 400
+        errors = {field: messages for field, messages in form.errors.items()}
+        return jsonify({'success': False, 'errors': errors}), 400
     return render_template('auth/reset_password_request.html', form=form)
 
 
@@ -5076,7 +5077,8 @@ def register():
         return redirect(url_for('index'))
 
     if request.method == 'POST' and request.accept_mimetypes['application/json'] > request.accept_mimetypes['text/html']:
-        return jsonify({'success': False, 'errors': form.errors}), 400
+        errors = {field: messages for field, messages in form.errors.items()}
+        return jsonify({'success': False, 'errors': errors}), 400
 
     return render_template('auth/register.html', form=form, endereco=None)
 
@@ -5270,7 +5272,8 @@ def login_view():
                 return jsonify({'success': False, 'errors': {'email': ['Email ou senha inválidos.']}}), 400
             flash('Email ou senha inválidos.', 'danger')
     elif request.method == 'POST' and request.accept_mimetypes['application/json'] > request.accept_mimetypes['text/html']:
-        return jsonify({'success': False, 'errors': form.errors}), 400
+        errors = {field: messages for field, messages in form.errors.items()}
+        return jsonify({'success': False, 'errors': errors}), 400
     return render_template('auth/login.html', form=form)
 
 
@@ -5381,7 +5384,8 @@ def change_password():
             flash('Senha atualizada com sucesso!', 'success')
             return redirect(url_for('profile'))
     elif request.method == 'POST' and request.accept_mimetypes['application/json'] > request.accept_mimetypes['text/html']:
-        return jsonify({'success': False, 'errors': form.errors}), 400
+        errors = {field: messages for field, messages in form.errors.items()}
+        return jsonify({'success': False, 'errors': errors}), 400
     return render_template('auth/change_password.html', form=form)
 
 
