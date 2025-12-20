@@ -50,10 +50,16 @@ function renderListaEdicao() {
   medicamentos.forEach((m, i) => {
     const card = document.createElement('div');
     card.className = 'card mb-3';
+    card.dataset.index = i;
+    card.setAttribute('draggable', 'true');
+    card.style.cursor = 'grab';
     card.innerHTML = `
       <div class="card-header d-flex justify-content-between align-items-center">
         <span><strong>Medicamento ${i + 1}</strong></span>
-        <button class="btn btn-outline-danger btn-sm" onclick="removerMedicamento(${i})"><i class="fa fa-trash"></i></button>
+        <div class="d-flex align-items-center gap-2">
+          <small class="text-muted">Arraste para reordenar</small>
+          <button class="btn btn-outline-danger btn-sm" onclick="removerMedicamento(${i})"><i class="fa fa-trash"></i></button>
+        </div>
       </div>
       <div class="card-body">
         <div class="form-check form-switch mb-3">
@@ -89,6 +95,10 @@ function renderListaEdicao() {
         `}
       </div>
     `;
+    card.addEventListener('dragstart', handleDragStart);
+    card.addEventListener('dragover', handleDragOver);
+    card.addEventListener('drop', handleDrop);
+    card.addEventListener('dragend', handleDragEnd);
     container.appendChild(card);
   });
   ativarAutocomplete();
@@ -186,6 +196,33 @@ function ativarAutocomplete() {
         });
     });
   });
+}
+
+function handleDragStart(event) {
+  event.dataTransfer.effectAllowed = 'move';
+  event.dataTransfer.setData('text/plain', event.currentTarget.dataset.index);
+  event.currentTarget.classList.add('opacity-50');
+}
+
+function handleDragOver(event) {
+  event.preventDefault();
+  event.dataTransfer.dropEffect = 'move';
+}
+
+function handleDrop(event) {
+  event.preventDefault();
+  const fromIndex = Number(event.dataTransfer.getData('text/plain'));
+  const toIndex = Number(event.currentTarget.dataset.index);
+
+  if (Number.isNaN(fromIndex) || Number.isNaN(toIndex) || fromIndex === toIndex) return;
+
+  const [moved] = medicamentos.splice(fromIndex, 1);
+  medicamentos.splice(toIndex, 0, moved);
+  renderListaEdicao();
+}
+
+function handleDragEnd(event) {
+  event.currentTarget.classList.remove('opacity-50');
 }
 
 renderListaEdicao();
