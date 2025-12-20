@@ -5446,7 +5446,16 @@ def list_animals():
             and getattr(current_user, 'worker', None) == 'colaborador'
         )
         if not show_all and not (vet_authorized or collaborator):
-            query = query.filter(Animal.modo != 'adotado')
+            # Para usuários comuns: mostrar animais não adotados OU animais próprios
+            if current_user.is_authenticated:
+                query = query.filter(
+                    or_(
+                        Animal.modo != 'adotado',
+                        Animal.user_id == current_user.id
+                    )
+                )
+            else:
+                query = query.filter(Animal.modo != 'adotado')
 
     if species_id:
         query = query.filter_by(species_id=species_id)
