@@ -155,11 +155,14 @@ function initAddToCartButtons(root=document){
       .then(({ data, isJson, ok }) => {
         clearTimeout(spinnerTimeout);
         btn.innerHTML = originalHTML;
-        
+
         if(isJson && ok && data) {
           // Sucesso - reseta quantidade e mostra notificação
           if(quantityInput) quantityInput.value = '1';
           showToast(data.message || 'Produto adicionado ao carrinho!', 'success');
+        } else if (isJson && data && data.message) {
+          // Responde com mensagem específica do backend (ex.: CSRF expirado)
+          showToast(data.message, data.category || 'danger');
         } else {
           showToast('Erro ao adicionar ao carrinho', 'danger');
         }

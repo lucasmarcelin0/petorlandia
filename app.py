@@ -14217,7 +14217,7 @@ def produto_detail(product_id):
 def adicionar_carrinho(product_id):
     product = Product.query.get(product_id)
     form = AddToCartForm()
-    is_ajax = (request.headers.get('X-Requested-With') == 'XMLHttpRequest' or 
+    is_ajax = (request.headers.get('X-Requested-With') == 'XMLHttpRequest' or
                'application/json' in request.headers.get('Accept', ''))
 
     if not product:
@@ -14226,10 +14226,24 @@ def adicionar_carrinho(product_id):
         flash("Produto não encontrado.", "warning")
         return redirect(url_for("loja"))
 
+    qty = 1
+
     if not form.validate_on_submit():
-        if is_ajax:
-            return jsonify(success=False, error='invalid form'), 400
-        return redirect(url_for("loja"))
+        # Tenta identificar erros comuns do formulário e responder de forma útil
+        if form.csrf_token.errors:
+            message = "Sua sessão expirou. Recarregue a página e tente novamente."
+            if is_ajax:
+                return jsonify(success=False, error='invalid csrf', message=message, category="warning"), 400
+            flash(message, "warning")
+            return redirect(url_for("loja"))
+
+        # Falha apenas na quantidade? Usa fallback seguro ao invés de retornar 400
+        try:
+            qty = max(1, int(request.form.get("quantity", 1)))
+        except (TypeError, ValueError):
+            qty = 1
+    else:
+        qty = form.quantity.data or 1
 
     order = _get_current_order()
     if not order:
@@ -14237,8 +14251,6 @@ def adicionar_carrinho(product_id):
         db.session.add(order)
         db.session.commit()
         session["current_order"] = order.id
-
-    qty = form.quantity.data or 1
 
     # Verifica se o produto já está no carrinho para somar as quantidades
     item = OrderItem.query.filter_by(order_id=order.id, product_id=product.id).first()
