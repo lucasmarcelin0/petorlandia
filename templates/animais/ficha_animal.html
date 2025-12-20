@@ -103,43 +103,84 @@
       {% include 'partials/documentos.html' %}
     </div>
   <!-- VOLTAR -->
-  <h3>Ficha de {{ animal.name }}</h3>
-  <p><strong>Tutor:</strong>
-    <a href="{{ url_for('ficha_tutor', tutor_id=tutor.id) }}">{{ tutor.name }}</a>
-  </p>
+  <div class="card tutor-card shadow-sm border-0 mb-4">
+    <div class="card-body">
+      <div class="d-flex flex-column flex-md-row align-items-start gap-3">
+        <div class="tutor-card__avatar">
+          <i class="bi bi-people-fill"></i>
+        </div>
+        <div class="flex-fill">
+          <div class="d-flex flex-wrap align-items-center gap-2 mb-2">
+            <span class="badge rounded-pill bg-primary-subtle text-primary fw-semibold">Tutor responsável</span>
+            <span class="badge rounded-pill bg-success-subtle text-success fw-semibold">
+              <i class="bi bi-heart-fill me-1"></i>
+              {{ tutor.animals|length if tutor.animals is not none else 0 }} animais vinculados
+            </span>
+          </div>
+          <h4 class="mb-1">
+            <a class="tutor-card__name" href="{{ url_for('ficha_tutor', tutor_id=tutor.id) }}">{{ tutor.name }}</a>
+          </h4>
+          <p class="text-muted mb-3">Acesse rapidamente os dados de contato e o histórico completo do tutor.</p>
+          <div class="d-flex flex-wrap gap-3 small text-muted">
+            <span class="d-inline-flex align-items-center gap-2">
+              <i class="bi bi-telephone"></i>
+              {{ tutor.phone or 'Telefone não informado' }}
+            </span>
+            <span class="d-inline-flex align-items-center gap-2">
+              <i class="bi bi-envelope"></i>
+              {{ tutor.email or 'E-mail não informado' }}
+            </span>
+            {% if tutor.endereco and tutor.endereco.logradouro %}
+              <span class="d-inline-flex align-items-center gap-2">
+                <i class="bi bi-geo-alt"></i>
+                {{ tutor.endereco.logradouro }}
+              </span>
+            {% endif %}
+          </div>
+        </div>
+        <div class="d-flex flex-column gap-2 w-100 w-md-auto">
+          <a href="{{ url_for('ficha_tutor', tutor_id=tutor.id) }}" class="btn btn-primary w-100">
+            <i class="bi bi-journal-richtext me-2"></i>Ver ficha do tutor
+          </a>
+          {% if current_user.worker == 'veterinario' %}
+            <button type="button" class="btn btn-outline-dark w-100" data-bs-toggle="modal" data-bs-target="#falecimentoModal">
+              <i class="bi bi-x-octagon me-2"></i>Marcar como falecido
+            </button>
+          {% endif %}
+        </div>
+      </div>
 
-<!-- STATUS DE VIDA -->
-{% if animal.is_alive and current_user.worker == 'veterinario' %}
-  <div class="card border-dark p-3 mb-4">
-    <div class="text-start">
-      <button type="button" class="btn btn-outline-dark btn-sm" data-bs-toggle="modal" data-bs-target="#falecimentoModal">
-        ❌ Marcar como falecido
-      </button>
-    </div>
-  </div>
-{% elif not animal.is_alive %}
-  <div class="alert alert-secondary d-flex justify-content-between align-items-center">
-    <div>
-      Este animal foi marcado como <strong>falecido</strong>.
-      {% if animal.falecido_em %}
-        Data do falecimento: {{ animal.falecido_em|format_datetime_brazil('%d/%m/%Y %H:%M') }}
+      {% if not animal.is_alive %}
+        <div class="tutor-card__footer mt-3 pt-3">
+          <div class="d-flex flex-column flex-lg-row align-items-start align-items-lg-center justify-content-between gap-3">
+            <div class="d-flex align-items-center gap-3">
+              <span class="tutor-card__badge--muted">Animal falecido</span>
+              <div class="text-muted">
+                Este animal foi marcado como <strong>falecido</strong>.
+                {% if animal.falecido_em %}
+                  Data do falecimento: {{ animal.falecido_em|format_datetime_brazil('%d/%m/%Y %H:%M') }}
+                {% endif %}
+              </div>
+            </div>
+            {% if current_user.worker == 'veterinario' %}
+              <div class="d-flex flex-wrap gap-2">
+                <form method="POST" action="{{ url_for('reverter_falecimento', animal_id=animal.id) }}" class="js-animal-status js-confirm" data-message="Deseja reverter o falecimento de {{ animal.name }}?">
+                  <button class="btn btn-sm btn-outline-success">
+                    <i class="bi bi-arrow-counterclockwise me-1"></i>Reverter Falecimento
+                  </button>
+                </form>
+                <form method="POST" action="{{ url_for('arquivar_animal', animal_id=animal.id) }}" class="js-animal-status js-confirm" data-message="Tem certeza que deseja excluir este animal permanentemente?">
+                  <button class="btn btn-outline-danger btn-sm" type="submit">
+                    <i class="bi bi-trash3 me-1"></i>Deletar definitivamente
+                  </button>
+                </form>
+              </div>
+            {% endif %}
+          </div>
+        </div>
       {% endif %}
     </div>
-
-    {% if current_user.worker == 'veterinario' %}
-      <form method="POST" action="{{ url_for('reverter_falecimento', animal_id=animal.id) }}" class="js-animal-status js-confirm" data-message="Deseja reverter o falecimento de {{ animal.name }}?">
-        <button class="btn btn-sm btn-outline-success">↩️ Reverter Falecimento</button>
-      </form>
-
-      <!-- Botão: Arquivar definitivamente -->
-      <form method="POST" action="{{ url_for('arquivar_animal', animal_id=animal.id) }}" class="ms-2 js-animal-status js-confirm" data-message="Tem certeza que deseja excluir este animal permanentemente?">
-        <button class="btn btn-outline-danger btn-sm" type="submit">
-          🗑️ Deletar definitivamente
-        </button>
-      </form>
-    {% endif %}
   </div>
-{% endif %}
 
 
 
