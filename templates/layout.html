@@ -594,11 +594,19 @@
               }
 
               if (response && response.ok) {
+                if (response.redirected) {
+                  window.location = response.url;
+                  return { success: true, keepButton: true, offlineQueued: queued };
+                }
+
                 const data = await response.json().catch(() => null);
                 if (data && data.redirect) {
                   window.location = data.redirect;
                   return { success: true, keepButton: true, offlineQueued: queued };
                 }
+
+                // Fallback: reload when we can't parse a JSON payload but the
+                // response was OK (e.g., HTML form redirect response).
                 window.location.reload();
                 return { success: true, keepButton: true, offlineQueued: queued };
               }
