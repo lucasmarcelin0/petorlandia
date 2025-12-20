@@ -120,6 +120,56 @@
     addressSelect.addEventListener('change', toggleNewAddress);
     toggleNewAddress();
   }
+
+  const cartForms = document.querySelectorAll('.js-cart-form');
+  const cartTotal = document.getElementById('cartTotal');
+
+  async function handleCartSubmit(event) {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const listItem = form.closest('li');
+    const quantitySpan = listItem?.querySelector('span');
+    const formData = new FormData(form);
+
+    try {
+      const response = await fetch(form.action, {
+        method: 'POST',
+        headers: {
+          'X-Requested-With': 'XMLHttpRequest'
+        },
+        body: formData
+      });
+
+      if (!response.ok) {
+        window.location.reload();
+        return;
+      }
+
+      const data = await response.json();
+
+      if (data.redirect) {
+        window.location.href = data.redirect;
+        return;
+      }
+
+      if (quantitySpan && typeof data.item_quantity === 'number') {
+        if (data.item_quantity <= 0) {
+          listItem?.remove();
+        } else {
+          quantitySpan.textContent = data.item_quantity;
+        }
+      }
+
+      if (cartTotal && data.order_total_formatted) {
+        cartTotal.textContent = `Total: ${data.order_total_formatted}`;
+      }
+    } catch (error) {
+      console.error('Erro ao atualizar o carrinho', error);
+      window.location.reload();
+    }
+  }
+
+  cartForms.forEach(form => form.addEventListener('submit', handleCartSubmit));
 </script>
 {% endblock %}
 
