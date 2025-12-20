@@ -5752,6 +5752,11 @@ def conversa(animal_id, user_id):
     # For conversations about an animal, we should allow users to talk to the animal's owner
     # even if they're marked as private, so use User.query.get_or_404 instead of get_user_or_404
     outro_usuario = User.query.get_or_404(user_id)
+    
+    # Apenas o tutor ou o próprio interessado podem participar da conversa
+    if animal.user_id not in {current_user.id, user_id} or current_user.id not in {animal.user_id, user_id}:
+        abort(404)
+    
     interesse_existente = Interest.query.filter_by(
         user_id=outro_usuario.id, animal_id=animal.id).first()
 
@@ -5801,8 +5806,10 @@ def conversa(animal_id, user_id):
 def api_conversa_message(animal_id, user_id):
     """Recebe uma nova mensagem da conversa e retorna o HTML renderizado."""
     form = MessageForm()
-    get_animal_or_404(animal_id)
-    outro_usuario = get_user_or_404(user_id)
+    animal = get_animal_or_404(animal_id)
+    outro_usuario = User.query.get_or_404(user_id)
+    if animal.user_id not in {current_user.id, user_id} or current_user.id not in {animal.user_id, user_id}:
+        abort(404)
     if form.validate_on_submit():
         nova_msg = Message(
             sender_id=current_user.id,
