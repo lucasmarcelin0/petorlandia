@@ -5778,13 +5778,16 @@ def chat_view(animal_id):
 @app.route('/conversa/<int:animal_id>/<int:user_id>', methods=['GET', 'POST'])
 @login_required
 def conversa(animal_id, user_id):
-    animal = get_animal_or_404(animal_id)
+    # Bypass strict privacy checks for conversation to allow adoption/interest flow
+    animal = Animal.query.get_or_404(animal_id)
     # For conversations about an animal, we should allow users to talk to the animal's owner
     # even if they're marked as private, so use User.query.get_or_404 instead of get_user_or_404
     outro_usuario = User.query.get_or_404(user_id)
     
     # Apenas o tutor ou o próprio interessado podem participar da conversa
-    if animal.user_id not in {current_user.id, user_id} or current_user.id not in {animal.user_id, user_id}:
+    # Se user_id for o dono, significa que o current_user quer falar com o dono (tudo bem).
+    # Se user_id NÃO for o dono, apenas o dono pode ver (para falar com aquele user).
+    if user_id != animal.user_id and current_user.id != animal.user_id:
         abort(404)
     
     interesse_existente = Interest.query.filter_by(
@@ -5836,9 +5839,9 @@ def conversa(animal_id, user_id):
 def api_conversa_message(animal_id, user_id):
     """Recebe uma nova mensagem da conversa e retorna o HTML renderizado."""
     form = MessageForm()
-    animal = get_animal_or_404(animal_id)
+    animal = Animal.query.get_or_404(animal_id)
     outro_usuario = User.query.get_or_404(user_id)
-    if animal.user_id not in {current_user.id, user_id} or current_user.id not in {animal.user_id, user_id}:
+    if user_id != animal.user_id and current_user.id != animal.user_id:
         abort(404)
     if form.validate_on_submit():
         nova_msg = Message(
