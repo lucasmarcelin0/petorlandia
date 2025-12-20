@@ -6252,8 +6252,9 @@ def deletar_animal(animal_id):
 @app.route('/termo/interesse/<int:animal_id>/<int:user_id>', methods=['GET', 'POST'])
 @login_required
 def termo_interesse(animal_id, user_id):
-    animal = get_animal_or_404(animal_id)
-    interessado = get_user_or_404(user_id)
+    # Bypass strict privacy checks for interest term to allow adoption flow
+    animal = Animal.query.get_or_404(animal_id)
+    interessado = User.query.get_or_404(user_id)
 
     if request.method == 'POST':
         # Verifica se já existe um interesse registrado
