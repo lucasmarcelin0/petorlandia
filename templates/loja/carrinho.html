@@ -94,9 +94,118 @@
     color: var(--bs-primary);
     text-decoration: underline;
   }
+
+  /* Toast estilo Bootstrap */
+  .toast-container {
+    position: fixed;
+    top: 80px;
+    right: 20px;
+    z-index: 9999;
+    pointer-events: none;
+  }
+
+  .toast-notification {
+    display: flex;
+    align-items: center;
+    padding: 12px 20px;
+    margin-bottom: 10px;
+    border-radius: 4px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    animation: slideIn 0.3s ease-out;
+    pointer-events: auto;
+    min-width: 300px;
+  }
+
+  .toast-notification.success {
+    background-color: #d4edda;
+    color: #155724;
+    border: 1px solid #c3e6cb;
+  }
+
+  .toast-notification.info {
+    background-color: #d1ecf1;
+    color: #0c5460;
+    border: 1px solid #bee5eb;
+  }
+
+  .toast-notification.warning {
+    background-color: #fff3cd;
+    color: #856404;
+    border: 1px solid #ffeeba;
+  }
+
+  .toast-notification.danger {
+    background-color: #f8d7da;
+    color: #721c24;
+    border: 1px solid #f5c6cb;
+  }
+
+  @keyframes slideIn {
+    from {
+      transform: translateX(400px);
+      opacity: 0;
+    }
+    to {
+      transform: translateX(0);
+      opacity: 1;
+    }
+  }
+
+  @keyframes slideOut {
+    from {
+      transform: translateX(0);
+      opacity: 1;
+    }
+    to {
+      transform: translateX(400px);
+      opacity: 0;
+    }
+  }
+
+  .toast-notification.removing {
+    animation: slideOut 0.3s ease-out forwards;
+  }
 </style>
 
 <script>
+  // Criar contenedor de toasts
+  function getToastContainer() {
+    let container = document.querySelector('.toast-container');
+    if (!container) {
+      container = document.createElement('div');
+      container.className = 'toast-container';
+      document.body.appendChild(container);
+    }
+    return container;
+  }
+
+  // Mostrar notificação de toast
+  function showToast(message, category = 'success') {
+    const container = getToastContainer();
+    const toast = document.createElement('div');
+    toast.className = `toast-notification ${category}`;
+    toast.textContent = message;
+    
+    container.appendChild(toast);
+    
+    // Auto-remove após 3 segundos
+    const timeout = setTimeout(() => {
+      toast.classList.add('removing');
+      setTimeout(() => {
+        toast.remove();
+      }, 300);
+    }, 3000);
+    
+    // Permite clique para remover imediatamente
+    toast.addEventListener('click', () => {
+      clearTimeout(timeout);
+      toast.classList.add('removing');
+      setTimeout(() => {
+        toast.remove();
+      }, 300);
+    });
+  }
+
   const addressSelect = document.getElementById('addressSelect');
   const addressSearch = document.getElementById('addressSearch');
   const newAddr = document.getElementById('new-address-form');
@@ -125,6 +234,9 @@
   const cartForms = document.querySelectorAll('.js-cart-form');
   const cartButtons = document.querySelectorAll('.js-cart-btn');
   const cartTotal = document.getElementById('cartTotal');
+
+  // Map para rastrear requisições em andamento por item
+  const pendingRequests = new Map();
 
   function updateTotalsFromData(data) {
     if (cartTotal && data?.order_total_formatted) {
@@ -175,7 +287,7 @@
     });
 
     if (!response.ok) {
-      throw new Error('Request failed');
+      throw new Error(`Request failed: ${response.status}`);
     }
 
     return response.json();
@@ -203,6 +315,15 @@
     const form = button.closest('form');
     const listItem = form?.closest('li');
     const quantitySpan = listItem?.querySelector('.js-cart-qty');
+    
+    // Cria uma chave única para este item
+    const itemKey = `${action}-${listItem?.querySelector('[data-unit-price]')?.dataset.unitPrice}`;
+    
+    // Se já há uma requisição pendente para este item, ignora
+    if (pendingRequests.has(itemKey)) {
+      return;
+    }
+    
     const currentQty = parseInt(quantitySpan?.textContent || '0', 10);
     const unitPrice = parseFloat(listItem?.dataset.unitPrice || '0');
     const delta = action === 'increase' ? 1 : -1;
@@ -215,6 +336,7 @@
       } : null
     };
 
+    // Aplica mudança otimista imediatamente
     const optimisticQty = Math.max(0, currentQty + delta);
     if (quantitySpan) {
       quantitySpan.textContent = optimisticQty;
@@ -226,15 +348,39 @@
       cartTotal.textContent = `Total: R$ ${newTotal.toFixed(2)}`;
     }
 
+    // Desabilita o botão imediatamente para evitar cliques múltiplos
     button.disabled = true;
+    const originalHTML = button.innerHTML;
+    
+    // Mostra spinner apenas se demorar mais de 150ms (evita piscar)
+    let spinnerTimeout;
+    spinnerTimeout = setTimeout(() => {
+      button.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>';
+    }, 150);
+
+    // Marca como pendente
+    pendingRequests.set(itemKey, true);
 
     try {
       const data = await sendCartRequest(form);
+      clearTimeout(spinnerTimeout);
+      button.innerHTML = originalHTML;
       applyServerResponse({ data, listItem, quantitySpan });
+      
+      // Mostra notificação apenas para requisições bem-sucedidas
+      if (data?.message) {
+        showToast(data.message, data.category || 'success');
+      }
     } catch (error) {
       console.error('Erro ao atualizar o carrinho', error);
+      clearTimeout(spinnerTimeout);
+      button.innerHTML = originalHTML;
+      // Reverte mudança otimista em caso de erro
       revertOptimisticState({ quantitySpan, ...previousState });
+      showToast('Erro ao atualizar o carrinho. Tente novamente.', 'danger');
     } finally {
+      // Remove marcação de pendente e reabilita botão
+      pendingRequests.delete(itemKey);
       button.disabled = false;
     }
   }

@@ -14282,7 +14282,7 @@ def aumentar_item_carrinho(item_id):
         abort(404)
     item.quantity += 1
     db.session.commit()
-    flash("Quantidade atualizada", "success")
+    
     wants_json = request.accept_mimetypes.accept_json or request.headers.get('X-Requested-With') == 'XMLHttpRequest'
     if wants_json:
         total_value = order.total_value()
@@ -14296,6 +14296,8 @@ def aumentar_item_carrinho(item_id):
             order_total_formatted=f"R$ {total_value:.2f}",
             order_quantity=total_qty,
         )
+    
+    flash("Quantidade atualizada", "success")
     return redirect(url_for("ver_carrinho"))
 
 
@@ -14319,7 +14321,7 @@ def diminuir_item_carrinho(item_id):
         message = "Quantidade atualizada"
         category = "success"
         item_qty = item.quantity
-    flash(message, category)
+    
     wants_json = request.accept_mimetypes.accept_json or request.headers.get('X-Requested-With') == 'XMLHttpRequest'
     if wants_json:
         total_value = order.total_value()
@@ -14336,6 +14338,8 @@ def diminuir_item_carrinho(item_id):
         if total_qty == 0:
             payload["redirect"] = url_for("ver_carrinho")
         return jsonify(**payload)
+    
+    flash(message, category)
     return redirect(url_for("ver_carrinho"))
 
 
