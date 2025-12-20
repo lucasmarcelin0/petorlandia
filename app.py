@@ -5008,13 +5008,14 @@ def _geocode_endereco(endereco: Endereco | None):
 @app.route('/register', methods=['GET', 'POST'])
 def register():
     form = RegistrationForm()
+    is_json_request = request.accept_mimetypes['application/json'] > request.accept_mimetypes['text/html']
 
     if form.validate_on_submit():
         # Verifica se o e-mail já está em uso
         existing_user = User.query.filter_by(email=form.email.data).first()
         if existing_user:
-            if request.accept_mimetypes['application/json'] > request.accept_mimetypes['text/html']:
-                return jsonify({'success': False, 'errors': {'email': ['Email já está em uso.']}}), 400
+            if is_json_request:
+                return jsonify({'success': False, 'errors': {'email': ['Email já está em uso.']}, 'message': 'Email já está em uso.'}), 400
             flash('Email já está em uso.', 'danger')
             return render_template('auth/register.html', form=form, endereco=None)
 
@@ -5031,8 +5032,8 @@ def register():
 
         if required_missing:
             message = 'Preencha os campos obrigatórios do endereço: ' + ', '.join(required_missing) + '.'
-            if request.accept_mimetypes['application/json'] > request.accept_mimetypes['text/html']:
-                return jsonify({'success': False, 'errors': {'endereco': [message]}}), 400
+            if is_json_request:
+                return jsonify({'success': False, 'errors': {'endereco': [message]}, 'message': message}), 400
             flash(message, 'warning')
             return render_template('auth/register.html', form=form, endereco=None)
 
@@ -5066,19 +5067,40 @@ def register():
         )
         user.set_password(form.password.data)
 
-        # Salva no banco
-        db.session.add(endereco)
-        db.session.add(user)
-        db.session.commit()
+        # Salva no banco com tratamento de erros
+        try:
+            db.session.add(endereco)
+            db.session.add(user)
+            db.session.commit()
+        except Exception as e:
+            db.session.rollback()
+            # Verifica se é erro de email duplicado
+            error_message = str(e).lower()
+            if 'unique' in error_message or 'duplicate' in error_message or 'email' in error_message:
+                if is_json_request:
+                    return jsonify({'success': False, 'errors': {'email': ['Email já está em uso.']}, 'message': 'Email já está em uso.'}), 400
+                flash('Email já está em uso.', 'danger')
+            else:
+                if is_json_request:
+                    return jsonify({'success': False, 'errors': {'form': ['Erro ao criar conta. Tente novamente.']}, 'message': 'Erro ao criar conta.'}), 500
+                flash('Erro ao criar conta. Tente novamente.', 'danger')
+            return render_template('auth/register.html', form=form, endereco=None)
 
-        if request.accept_mimetypes['application/json'] > request.accept_mimetypes['text/html']:
+        # Faz login automático do usuário recém-criado
+        login_user(user)
+
+        if is_json_request:
             return jsonify({'success': True, 'redirect': url_for('index')})
         flash('Usuário registrado com sucesso!', 'success')
         return redirect(url_for('index'))
 
-    if request.method == 'POST' and request.accept_mimetypes['application/json'] > request.accept_mimetypes['text/html']:
-        errors = {field: messages for field, messages in form.errors.items()}
-        return jsonify({'success': False, 'errors': errors}), 400
+    if request.method == 'POST' and is_json_request:
+        errors = {}
+        if form.errors:
+            errors = {field: messages for field, messages in form.errors.items()}
+        if not errors:
+            errors = {'form': ['Erro na validação do formulário. Por favor, recarregue a página e tente novamente.']}
+        return jsonify({'success': False, 'errors': errors, 'message': 'Não foi possível processar o registro.'}), 400
 
     return render_template('auth/register.html', form=form, endereco=None)
 
@@ -5257,23 +5279,31 @@ def add_animal():
 @app.route('/login', methods=['GET', 'POST'])
 def login_view():
     form = LoginForm()
+    is_json_request = request.accept_mimetypes['application/json'] > request.accept_mimetypes['text/html']
+    
     if form.validate_on_submit():
         user = User.query.filter_by(email=form.email.data).first()
         if user and user.check_password(form.password.data):
             login_user(user, remember=form.remember.data)
             if form.remember.data:
                 session.permanent = True
-            if request.accept_mimetypes['application/json'] > request.accept_mimetypes['text/html']:
+            if is_json_request:
                 return jsonify({'success': True, 'redirect': url_for('index')})
             flash('Login realizado com sucesso!', 'success')
             return redirect(url_for('index'))
         else:
-            if request.accept_mimetypes['application/json'] > request.accept_mimetypes['text/html']:
-                return jsonify({'success': False, 'errors': {'email': ['Email ou senha inválidos.']}}), 400
+            if is_json_request:
+                return jsonify({'success': False, 'errors': {'email': ['Email ou senha inválidos.']}, 'message': 'Email ou senha inválidos.'}), 400
             flash('Email ou senha inválidos.', 'danger')
-    elif request.method == 'POST' and request.accept_mimetypes['application/json'] > request.accept_mimetypes['text/html']:
-        errors = {field: messages for field, messages in form.errors.items()}
-        return jsonify({'success': False, 'errors': errors}), 400
+    elif request.method == 'POST' and is_json_request:
+        # Captura erros de validação do formulário (incluindo CSRF)
+        errors = {}
+        if form.errors:
+            errors = {field: messages for field, messages in form.errors.items()}
+        # Se não houver erros específicos, pode ser um erro de CSRF
+        if not errors:
+            errors = {'form': ['Erro na validação do formulário. Por favor, recarregue a página e tente novamente.']}
+        return jsonify({'success': False, 'errors': errors, 'message': 'Não foi possível processar o login.'}), 400
     return render_template('auth/login.html', form=form)
 
 

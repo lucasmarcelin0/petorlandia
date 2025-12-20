@@ -1,32 +1,33 @@
 {% from 'components/logo.html' import clinic_logo %}
 <!DOCTYPE html>
 <html lang="pt-br">
+
 <head>
-    {% block head %}
-    {% endblock %}
-    <link rel="icon" type="image/png" href="{{ url_for('static', filename='pastorgato.png') }}">
+  {% block head %}
+  {% endblock %}
+  <link rel="icon" type="image/png" href="{{ url_for('static', filename='pastorgato.png') }}">
 
-    <meta charset="UTF-8">
-    <title>PetOrlândia 🐶</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-    <link rel="manifest" href="{{ url_for('static', filename='manifest.json') }}">
-    <meta name="theme-color" content="#4e73df">
+  <meta charset="UTF-8">
+  <title>PetOrlândia 🐶</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <link rel="manifest" href="{{ url_for('static', filename='manifest.json') }}">
+  <meta name="theme-color" content="#4e73df">
 
-    <!-- Google Fonts -->
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 
-    <!-- Bootstrap 5 -->
-    <link href="{{ url_for('static', filename='bootstrap.min.css') }}" rel="stylesheet">
-    <script src="{{ url_for('static', filename='bootstrap.bundle.min.js') }}"></script>
+  <!-- Bootstrap 5 -->
+  <link href="{{ url_for('static', filename='bootstrap.min.css') }}" rel="stylesheet">
+  <script src="{{ url_for('static', filename='bootstrap.bundle.min.js') }}"></script>
 
-    <!-- Font Awesome 6 -->
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <!-- Font Awesome 6 -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 
-    <link href="{{ url_for('static', filename='images.css') }}" rel="stylesheet">
-    <link href="{{ url_for('static', filename='styles.css') }}" rel="stylesheet">
-    <link href="{{ url_for('static', filename='css/clinic.css') }}" rel="stylesheet">
+  <link href="{{ url_for('static', filename='images.css') }}" rel="stylesheet">
+  <link href="{{ url_for('static', filename='styles.css') }}" rel="stylesheet">
+  <link href="{{ url_for('static', filename='css/clinic.css') }}" rel="stylesheet">
 
 </head>
 
@@ -34,299 +35,303 @@
 
 <!-- Bootstrap Tooltip e Popover -->
 <script>
-    document.addEventListener("DOMContentLoaded", function () {
-        const tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
-        tooltipTriggerList.forEach(function (el) {
-            new bootstrap.Tooltip(el);
-        });
-
-        const popoverTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="popover"]'));
-        popoverTriggerList.forEach(function (el) {
-            new bootstrap.Popover(el);
-        });
+  document.addEventListener("DOMContentLoaded", function () {
+    const tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+    tooltipTriggerList.forEach(function (el) {
+      new bootstrap.Tooltip(el);
     });
+
+    const popoverTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="popover"]'));
+    popoverTriggerList.forEach(function (el) {
+      new bootstrap.Popover(el);
+    });
+  });
 </script>
 
 <script>
-    document.addEventListener("DOMContentLoaded", () => {
-        const navbar = document.querySelector('.navbar');
-        const updateNavbarHeight = () => {
-            if (navbar) {
-                document.documentElement.style.setProperty('--topbar-height', navbar.offsetHeight + 'px');
-            }
-        };
-        updateNavbarHeight();
-        window.addEventListener('resize', updateNavbarHeight);
-    });
+  document.addEventListener("DOMContentLoaded", () => {
+    const navbar = document.querySelector('.navbar');
+    const updateNavbarHeight = () => {
+      if (navbar) {
+        document.documentElement.style.setProperty('--topbar-height', navbar.offsetHeight + 'px');
+      }
+    };
+    updateNavbarHeight();
+    window.addEventListener('resize', updateNavbarHeight);
+  });
 </script>
 
 <body>
-    <nav class="navbar navbar-expand-lg fixed-top navbar-light">
-        <div class="container-fluid">
-            {% if current_user.is_authenticated and current_user.role == "admin" %}
-                <a href="{{ url_for('painel_admin.index') }}" class="navbar-brand">
+  <nav class="navbar navbar-expand-lg fixed-top navbar-light">
+    <div class="container-fluid">
+      {% if current_user.is_authenticated and current_user.role == "admin" %}
+      <a href="{{ url_for('painel_admin.index') }}" class="navbar-brand">
 
-                    <img src="{{ url_for('static', filename='pastorgato.png') }}" alt="Logo" class="logo-img">
-                    <span>PetOrlândia</span>
-                </a>
-            {% else %}
-                <a href="{{ url_for('index') }}" class="navbar-brand">
-                    <img src="{{ url_for('static', filename='pastorgato.png') }}" alt="Logo" class="logo-img">
-                    <span>PetOrlândia</span>
- 
-                </a>
-            {% endif %}
+        <img src="{{ url_for('static', filename='pastorgato.png') }}" alt="Logo" class="logo-img">
+        <span>PetOrlândia</span>
+      </a>
+      {% else %}
+      <a href="{{ url_for('index') }}" class="navbar-brand">
+        <img src="{{ url_for('static', filename='pastorgato.png') }}" alt="Logo" class="logo-img">
+        <span>PetOrlândia</span>
 
-            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
-                <span class="navbar-toggler-icon"></span>
-            </button>
+      </a>
+      {% endif %}
 
-            <div class="collapse navbar-collapse justify-content-end" id="navbarNav">
-                <ul class="navbar-nav align-items-center gap-2">
-                    {% if current_user.is_authenticated and current_user.role == "admin" %}
-                        <li class="nav-item">
-                            <a class="nav-link" href="{{ url_for('delivery_overview') }}">
-                            <i class="fas fa-chart-line me-1 text-primary"></i> Entregas
-                            </a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link" href="{{ url_for('planos_dashboard') }}">
-                                <i class="fas fa-chart-pie me-1 text-success"></i> Planos
-                            </a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link" href="{{ url_for('admin_tutor_map') }}">
-                                <i class="fas fa-map-marked-alt me-1 text-info"></i> Mapa
-                            </a>
-                        </li>
-                    {% endif %}
-                    
-                    <li class="nav-item">
-                        <a class="nav-link" href="{{ url_for('index') }}">
-                            <i class="fas fa-home me-1 text-primary"></i> Início
-                        </a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="{{ url_for('loja') }}">
-                            <i class="fas fa-shopping-bag me-1 text-warning"></i> Loja
-                        </a>
-                    </li>
-                    {% if current_user.is_authenticated %}
-                            {% if current_user.worker == 'delivery' %}
-                                <li class="nav-item">
-                                    <a class="nav-link" href="{{ url_for('list_delivery_requests') }}">
-                                        <i class="fas fa-truck me-1 text-warning"></i> Solicitações
-                                    </a>
-                                </li>
-                            {% endif %}
+      <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+        <span class="navbar-toggler-icon"></span>
+      </button>
 
-                            {% if is_active_veterinarian %}
-                                <li class="nav-item position-relative">
-                                    <a class="nav-link" href="{{ url_for('appointments') }}">
-                                        <i class="fas fa-calendar-alt me-1 text-success"></i> Agenda
-                                        {% set total_pending = pending_exam_count + pending_appointment_count + clinic_pending_appointment_count %}
-                                        {% if total_pending > 0 %}
-                                            <span class="badge rounded-pill bg-danger position-absolute top-0 start-100 translate-middle">{{ total_pending }}</span>
-                                        {% endif %}
-                                    </a>
-                                </li>
-                            {% endif %}
+      <div class="collapse navbar-collapse justify-content-end" id="navbarNav">
+        <ul class="navbar-nav align-items-center gap-2">
+          {% if current_user.is_authenticated and current_user.role == "admin" %}
+          <li class="nav-item">
+            <a class="nav-link" href="{{ url_for('delivery_overview') }}">
+              <i class="fas fa-chart-line me-1 text-primary"></i> Entregas
+            </a>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link" href="{{ url_for('planos_dashboard') }}">
+              <i class="fas fa-chart-pie me-1 text-success"></i> Planos
+            </a>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link" href="{{ url_for('admin_tutor_map') }}">
+              <i class="fas fa-map-marked-alt me-1 text-info"></i> Mapa
+            </a>
+          </li>
+          {% endif %}
 
-                        <li class="nav-item position-relative">
-                            {% if current_user.role == 'admin' %}
-                                <a class="nav-link" href="{{ url_for('mensagens_admin') }}">
-                            {% else %}
-                                <a class="nav-link" href="{{ url_for('mensagens') }}">
-                            {% endif %}
-                                <i class="fas fa-comments me-1 text-info"></i> Mensagens
-                                {% if unread_messages > 0 %}
-                                    <span class="badge rounded-pill bg-danger position-absolute top-0 start-100 translate-middle">
-                                        {{ unread_messages }}
-                                    </span>
-                                {% endif %}
-                            </a>
-                        </li>
+          <li class="nav-item">
+            <a class="nav-link" href="{{ url_for('index') }}">
+              <i class="fas fa-home me-1 text-primary"></i> Início
+            </a>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link" href="{{ url_for('loja') }}">
+              <i class="fas fa-shopping-bag me-1 text-warning"></i> Loja
+            </a>
+          </li>
+          {% if current_user.is_authenticated %}
+          {% if current_user.worker == 'delivery' %}
+          <li class="nav-item">
+            <a class="nav-link" href="{{ url_for('list_delivery_requests') }}">
+              <i class="fas fa-truck me-1 text-warning"></i> Solicitações
+            </a>
+          </li>
+          {% endif %}
 
-                        <li class="nav-item dropdown">
-                            <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">
-                                <i class="fas fa-user-circle me-1 text-primary"></i> {{ current_user.name.split(' ')[0] }}
-                            </a>
-                            <ul class="dropdown-menu dropdown-menu-end">
-                                <li><a class="dropdown-item" href="{{ url_for('profile') }}"><i class="fas fa-user me-2 text-primary"></i> Meu Perfil</a></li>
-                                <li><a class="dropdown-item" href="{{ url_for('minhas_compras') }}"><i class="fas fa-box me-2 text-warning"></i> Minhas Compras</a></li>
-                                {% if current_user.veterinario or (current_user.clinica and current_user.worker == 'colaborador') %}
-                                <li><a class="dropdown-item" href="{{ url_for('minha_clinica') }}"><i class="fas fa-clinic-medical me-2 text-info"></i> Minha Clínica</a></li>
-                                {% endif %}
-                                {% if has_veterinarian_profile_flag %}
-                                <li><a class="dropdown-item" href="{{ url_for('veterinarian_membership') }}"><i class="fas fa-credit-card me-2 text-success"></i> Assinatura de Veterinário</a></li>
-                                {% endif %}
+          {% if is_active_veterinarian %}
+          <li class="nav-item position-relative">
+            <a class="nav-link" href="{{ url_for('appointments') }}">
+              <i class="fas fa-calendar-alt me-1 text-success"></i> Agenda
+              {% set total_pending = pending_exam_count + pending_appointment_count + clinic_pending_appointment_count
+              %}
+              {% if total_pending > 0 %}
+              <span class="badge rounded-pill bg-danger position-absolute top-0 start-100 translate-middle">{{
+                total_pending }}</span>
+              {% endif %}
+            </a>
+          </li>
+          {% endif %}
 
-                                <li><a class="dropdown-item" href="{{ url_for('logout') }}"><i class="fas fa-sign-out-alt me-2 text-danger"></i> Sair</a></li>
-                            </ul>
-                        </li>
-                    {% else %}
-                        <li class="nav-item">
-                            <a class="nav-link" href="{{ url_for('register') }}">
-                            <i class="fas fa-user-plus me-1 text-success"></i> Registrar
-                            </a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link" href="{{ url_for('login_view') }}">
-                            <i class="fas fa-sign-in-alt me-1 text-primary"></i> Entrar
-                            </a>
-                        </li>
-                    {% endif %}
-                </ul>
-            </div>
-        </div>
-    </nav>
+          <li class="nav-item position-relative">
+            {% if current_user.role == 'admin' %}
+            <a class="nav-link" href="{{ url_for('mensagens_admin') }}">
+              {% else %}
+              <a class="nav-link" href="{{ url_for('mensagens') }}">
+                {% endif %}
+                <i class="fas fa-comments me-1 text-info"></i> Mensagens
+                {% if unread_messages > 0 %}
+                <span class="badge rounded-pill bg-danger position-absolute top-0 start-100 translate-middle">
+                  {{ unread_messages }}
+                </span>
+                {% endif %}
+              </a>
+          </li>
 
-    {% if flash_messages %}
-        {% for category, message in flash_messages %}
-            <div class="alert-container">
-                <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
-                    {{ message }}
-                    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-                </div>
-            </div>
-        {% endfor %}
-    {% endif %}
+          <li class="nav-item dropdown">
+            <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+              <i class="fas fa-user-circle me-1 text-primary"></i> {{ current_user.name.split(' ')[0] }}
+            </a>
+            <ul class="dropdown-menu dropdown-menu-end">
+              <li><a class="dropdown-item" href="{{ url_for('profile') }}"><i class="fas fa-user me-2 text-primary"></i>
+                  Meu Perfil</a></li>
+              <li><a class="dropdown-item" href="{{ url_for('minhas_compras') }}"><i
+                    class="fas fa-box me-2 text-warning"></i> Minhas Compras</a></li>
+              {% if current_user.veterinario or (current_user.clinica and current_user.worker == 'colaborador') %}
+              <li><a class="dropdown-item" href="{{ url_for('minha_clinica') }}"><i
+                    class="fas fa-clinic-medical me-2 text-info"></i> Minha Clínica</a></li>
+              {% endif %}
+              {% if has_veterinarian_profile_flag %}
+              <li><a class="dropdown-item" href="{{ url_for('veterinarian_membership') }}"><i
+                    class="fas fa-credit-card me-2 text-success"></i> Assinatura de Veterinário</a></li>
+              {% endif %}
 
-    <!-- Main Content -->
-    <main class="container">
-        {% block main %}
-        {% endblock %}
-    </main>
-
-    <!-- Footer -->
-    <footer>
-        &copy; Lucas Marcelino • PetOrlândia 2025
-        <a
-            href="{{ url_for('secret_game') }}"
-            target="_blank"
-            rel="noopener"
-            class="ms-1 text-decoration-none text-primary"
-            title="Surpresa!"
-        >
-            <i class="fas fa-paw text-primary"></i>
-            <span class="visually-hidden">Abrir o easter egg</span>
-        </a>
-    </footer>
-    <div class="modal fade" id="confirmModal" tabindex="-1" aria-hidden="true">
-        <div class="modal-dialog">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h5 class="modal-title">Confirmação</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
-                </div>
-                <div class="modal-body"></div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
-                    <button type="button" class="btn btn-primary" id="confirmModalOk">Confirmar</button>
-                </div>
-            </div>
-        </div>
+              <li><a class="dropdown-item" href="{{ url_for('logout') }}"><i
+                    class="fas fa-sign-out-alt me-2 text-danger"></i> Sair</a></li>
+            </ul>
+          </li>
+          {% else %}
+          <li class="nav-item">
+            <a class="nav-link" href="{{ url_for('register') }}">
+              <i class="fas fa-user-plus me-1 text-success"></i> Registrar
+            </a>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link" href="{{ url_for('login_view') }}">
+              <i class="fas fa-sign-in-alt me-1 text-primary"></i> Entrar
+            </a>
+          </li>
+          {% endif %}
+        </ul>
+      </div>
     </div>
+  </nav>
 
-    {% block messages %}
-    <div class="position-fixed bottom-0 end-0 p-3 toast-stack" aria-live="polite" aria-atomic="true">
-        <div id="actionToast" class="toast text-white border-0" role="alert" aria-live="assertive" aria-atomic="true">
-            <div class="d-flex">
-                <div class="toast-body"></div>
-                <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Fechar"></button>
-            </div>
-        </div>
+  {% if flash_messages %}
+  {% for category, message in flash_messages %}
+  <div class="alert-container">
+    <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
+      {{ message }}
+      <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
     </div>
+  </div>
+  {% endfor %}
+  {% endif %}
+
+  <!-- Main Content -->
+  <main class="container">
+    {% block main %}
     {% endblock %}
+  </main>
 
-    <!-- Script para desaparecer com transição suave -->
-    <script>
-        document.addEventListener("DOMContentLoaded", () => {
-            const alertContainers = document.querySelectorAll('.alert-container');
+  <!-- Footer -->
+  <footer>
+    &copy; Lucas Marcelino • PetOrlândia 2025
+    <a href="{{ url_for('secret_game') }}" target="_blank" rel="noopener" class="ms-1 text-decoration-none text-primary"
+      title="Surpresa!">
+      <i class="fas fa-paw text-primary"></i>
+      <span class="visually-hidden">Abrir o easter egg</span>
+    </a>
+  </footer>
+  <div class="modal fade" id="confirmModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title">Confirmação</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+        </div>
+        <div class="modal-body"></div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+          <button type="button" class="btn btn-primary" id="confirmModalOk">Confirmar</button>
+        </div>
+      </div>
+    </div>
+  </div>
 
-            setTimeout(() => {
-                alertContainers.forEach(container => {
-                    container.classList.add('shrink');
-                    setTimeout(() => {
-                        container.remove();
-                    }, 600); // tempo igual ao CSS
-                });
-            }, 3000); // aparece por 3 segundos
-        });
-    </script>
+  {% block messages %}
+  <div class="position-fixed bottom-0 end-0 p-3 toast-stack" aria-live="polite" aria-atomic="true">
+    <div id="actionToast" class="toast text-white border-0" role="alert" aria-live="assertive" aria-atomic="true">
+      <div class="d-flex">
+        <div class="toast-body"></div>
+        <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"
+          aria-label="Fechar"></button>
+      </div>
+    </div>
+  </div>
+  {% endblock %}
 
-    <script>
-        const TOAST_BG_CLASSES = ['bg-danger','bg-info','bg-success','bg-warning','bg-primary','bg-secondary','bg-dark','bg-light'];
-
-        function normalizeToastCategory(category) {
-            if (!category) {
-                return 'success';
-            }
-            const normalized = String(category).toLowerCase();
-            if (normalized === 'error') {
-                return 'danger';
-            }
-            const allowed = ['success','danger','warning','info','primary','secondary','dark','light'];
-            return allowed.includes(normalized) ? normalized : 'info';
-        }
-
-        function applyToastTone(toastEl, category) {
-            if (!toastEl) {
-                return;
-            }
-            TOAST_BG_CLASSES.forEach(cls => toastEl.classList.remove(cls));
-            toastEl.classList.add('bg-' + normalizeToastCategory(category));
-        }
-    </script>
-
-    <script>
-        document.addEventListener('DOMContentLoaded', () => {
-            const flashMessages = {{ flash_messages|tojson }};
-            flashMessages.forEach(([category, message], idx) => {
-                setTimeout(() => {
-                    const toastEl = document.getElementById('actionToast');
-                    toastEl.querySelector('.toast-body').textContent = message;
-                    applyToastTone(toastEl, category || 'success');
-                    new bootstrap.Toast(toastEl).show();
-                }, idx * 1000);
-            });
-
-            const confirmModalEl = document.getElementById('confirmModal');
-            const confirmModal = new bootstrap.Modal(confirmModalEl);
-            const confirmBtn = document.getElementById('confirmModalOk');
-            let confirmTarget = null;
-
-            document.querySelectorAll('form.js-confirm').forEach(form => {
-                form.addEventListener('submit', ev => {
-                    if (form.dataset.confirmed) { return; }
-                    ev.preventDefault();
-                    confirmTarget = form;
-                    const msg = form.dataset.message || 'Tem certeza?';
-                    confirmModalEl.querySelector('.modal-body').textContent = msg;
-                    confirmModal.show();
-                });
-            });
-
-            confirmBtn.addEventListener('click', () => {
-                if (confirmTarget) {
-                    confirmTarget.dataset.confirmed = 'true';
-                    confirmTarget.submit();
-                }
-                confirmModal.hide();
-            });
-        });
-    </script>
-
-    {% if MERCADOPAGO_PUBLIC_KEY %}
-    <script src="https://sdk.mercadopago.com/js/v2"></script>
-    <script>
-      const mp = new MercadoPago("{{ MERCADOPAGO_PUBLIC_KEY }}", {locale: 'pt-BR'});
-    </script>
-    {% endif %}
+  <!-- Script para desaparecer com transição suave -->
   <script>
-      if ('serviceWorker' in navigator) {
-        navigator.serviceWorker.register('{{ url_for('service_worker') }}');
+    document.addEventListener("DOMContentLoaded", () => {
+      const alertContainers = document.querySelectorAll('.alert-container');
+
+      setTimeout(() => {
+        alertContainers.forEach(container => {
+          container.classList.add('shrink');
+          setTimeout(() => {
+            container.remove();
+          }, 600); // tempo igual ao CSS
+        });
+      }, 3000); // aparece por 3 segundos
+    });
+  </script>
+
+  <script>
+    const TOAST_BG_CLASSES = ['bg-danger', 'bg-info', 'bg-success', 'bg-warning', 'bg-primary', 'bg-secondary', 'bg-dark', 'bg-light'];
+
+    function normalizeToastCategory(category) {
+      if (!category) {
+        return 'success';
       }
+      const normalized = String(category).toLowerCase();
+      if (normalized === 'error') {
+        return 'danger';
+      }
+      const allowed = ['success', 'danger', 'warning', 'info', 'primary', 'secondary', 'dark', 'light'];
+      return allowed.includes(normalized) ? normalized : 'info';
+    }
+
+    function applyToastTone(toastEl, category) {
+      if (!toastEl) {
+        return;
+      }
+      TOAST_BG_CLASSES.forEach(cls => toastEl.classList.remove(cls));
+      toastEl.classList.add('bg-' + normalizeToastCategory(category));
+    }
+  </script>
+
+  <script>
+    document.addEventListener('DOMContentLoaded', () => {
+      const flashMessages = {{ flash_messages| tojson
+    }};
+    flashMessages.forEach(([category, message], idx) => {
+      setTimeout(() => {
+        const toastEl = document.getElementById('actionToast');
+        toastEl.querySelector('.toast-body').textContent = message;
+        applyToastTone(toastEl, category || 'success');
+        new bootstrap.Toast(toastEl).show();
+      }, idx * 1000);
+    });
+
+    const confirmModalEl = document.getElementById('confirmModal');
+    const confirmModal = new bootstrap.Modal(confirmModalEl);
+    const confirmBtn = document.getElementById('confirmModalOk');
+    let confirmTarget = null;
+
+    document.querySelectorAll('form.js-confirm').forEach(form => {
+      form.addEventListener('submit', ev => {
+        if (form.dataset.confirmed) { return; }
+        ev.preventDefault();
+        confirmTarget = form;
+        const msg = form.dataset.message || 'Tem certeza?';
+        confirmModalEl.querySelector('.modal-body').textContent = msg;
+        confirmModal.show();
+      });
+    });
+
+    confirmBtn.addEventListener('click', () => {
+      if (confirmTarget) {
+        confirmTarget.dataset.confirmed = 'true';
+        confirmTarget.submit();
+      }
+      confirmModal.hide();
+    });
+        });
+  </script>
+
+  {% if MERCADOPAGO_PUBLIC_KEY %}
+  <script src="https://sdk.mercadopago.com/js/v2"></script>
+  <script>
+    const mp = new MercadoPago("{{ MERCADOPAGO_PUBLIC_KEY }}", { locale: 'pt-BR' });
+  </script>
+  {% endif %}
+  <script>
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('{{ url_for('service_worker') }}');
+    }
   </script>
   <script src="{{ url_for('static', filename='offline.js') }}"></script>
   <script src="{{ url_for('static', filename='js/form_feedback.js') }}" defer></script>
@@ -340,7 +345,7 @@
         if (!container) return;
         try {
           const resp = await fetch('/delivery_requests', {
-            headers: {'X-Requested-With': 'XMLHttpRequest'}
+            headers: { 'X-Requested-With': 'XMLHttpRequest' }
           });
           if (!resp.ok) return;
           const data = await resp.json();
@@ -375,7 +380,7 @@
             ev.preventDefault();
             const url = form.action;
             const handle = async () => {
-              const { response, queued } = await fetchOrQueue(url, {method: 'POST', headers: {'Accept': 'application/json'}});
+              const { response, queued } = await fetchOrQueue(url, { method: 'POST', headers: { 'Accept': 'application/json' } });
               if (queued) {
                 const toastEl = document.getElementById('actionToast');
                 toastEl.querySelector('.toast-body').textContent = 'Ação salva para sincronização quando estiver online.';
@@ -422,7 +427,7 @@
             const { response, queued } = await fetchOrQueue(form.action, {
               method: form.method,
               body: new FormData(form),
-              headers: {'Accept': 'application/json'}
+              headers: { 'Accept': 'application/json' }
             });
             if (queued) {
               const toastEl = document.getElementById('actionToast');
@@ -489,7 +494,7 @@
           ev.preventDefault();
           const li = form.closest('li');
           const handle = async () => {
-            const { response, queued } = await fetchOrQueue(form.action, {method: 'POST', headers: {'Accept': 'application/json'}});
+            const { response, queued } = await fetchOrQueue(form.action, { method: 'POST', headers: { 'Accept': 'application/json' } });
             if (queued) {
               const toastEl = document.getElementById('actionToast');
               toastEl.querySelector('.toast-body').textContent = 'Ação salva para sincronização quando estiver online.';
@@ -509,7 +514,7 @@
               return { success: true, message: data.message, level: data.category };
             }
             let data = {};
-            try { data = response ? await response.json() : {}; } catch (err) {}
+            try { data = response ? await response.json() : {}; } catch (err) { }
             const toastEl = document.getElementById('actionToast');
             toastEl.querySelector('.toast-body').textContent = data.message || 'Erro ao processar ação';
             applyToastTone(toastEl, 'danger');
@@ -534,7 +539,7 @@
           const handle = async () => {
             const { response, queued } = await fetchOrQueue(form.action, {
               method: 'POST',
-              headers: {'Accept': 'application/json'},
+              headers: { 'Accept': 'application/json' },
               body: new FormData(form)
             });
             if (queued) {
@@ -557,7 +562,7 @@
               return { success: true, message: data.message, level: data.category };
             }
             let data = {};
-            try { data = response ? await response.json() : {}; } catch (err) {}
+            try { data = response ? await response.json() : {}; } catch (err) { }
             const toastEl = document.getElementById('actionToast');
             toastEl.querySelector('.toast-body').textContent = data.message || 'Erro ao processar ação';
             applyToastTone(toastEl, 'danger');
@@ -582,31 +587,40 @@
           const handle = async () => {
             form.querySelectorAll('.text-danger').forEach(el => el.remove());
             try {
-              const { response, queued } = await fetchOrQueue(form.action, {
+              // Requisições de autenticação usam fetch direto (não offline queue)
+              // pois dependem de CSRF tokens que expiram
+              const response = await fetch(form.action, {
                 method: form.method || 'POST',
                 body: new FormData(form),
                 headers: { 'Accept': 'application/json' }
               });
 
-              if (queued && window.FormFeedback?.setQueued) {
-                const button = window.FormFeedback.getButton?.(form) || form;
-                window.FormFeedback.setQueued(button);
-              }
-
               if (response && response.ok) {
                 const data = await response.json().catch(() => null);
                 if (data && data.redirect) {
-                  window.location = data.redirect;
-                  return { success: true, keepButton: true, offlineQueued: queued };
+                  // Redireciona para a página indicada após login/registro bem-sucedido
+                  window.location.href = data.redirect;
+                  return { success: true, keepButton: true };
                 }
+                // Se não houver redirecionamento explícito, recarrega a página
                 window.location.reload();
-                return { success: true, keepButton: true, offlineQueued: queued };
+                return { success: true, keepButton: true };
               }
 
-              const data = response ? await response.json().catch(() => null) : null;
-              console.log('Form error data:', data);
-              if (data && data.errors) {
-                for (const [field, messages] of Object.entries(data.errors)) {
+              // Tenta parsear JSON de erro
+              let errorData = null;
+              if (response) {
+                try {
+                  errorData = await response.json();
+                } catch (jsonError) {
+                  console.error('Erro ao parsear JSON:', jsonError);
+                }
+              }
+
+              console.log('Form error data:', errorData);
+
+              if (errorData && errorData.errors) {
+                for (const [field, messages] of Object.entries(errorData.errors)) {
                   const input = form.querySelector(`[name="${field}"]`);
                   if (input) {
                     const div = document.createElement('div');
@@ -616,13 +630,12 @@
                   }
                 }
               }
-              const message = queued
-                ? 'Acesso será concluído quando a conexão voltar.'
-                : (data && (data.message || data.error)) || 'Não foi possível concluir o acesso.';
-              return { success: queued || Boolean(response && response.ok), message, level: queued ? 'info' : 'danger', offlineQueued: queued };
+
+              const message = (errorData && (errorData.message || errorData.error)) || 'Não foi possível concluir o acesso.';
+              return { success: false, message, level: 'danger' };
             } catch (error) {
               console.error('Form submission error:', error);
-              return { success: false, message: error.message || 'Erro ao enviar formulário', level: 'danger' };
+              return { success: false, message: 'Erro de conexão. Verifique sua internet e tente novamente.', level: 'danger' };
             }
           };
 
@@ -744,7 +757,7 @@
           const handle = async () => {
             const { response, queued } = await fetchOrQueue(form.action, {
               method: 'POST',
-              headers: {'Accept': 'application/json'},
+              headers: { 'Accept': 'application/json' },
               body: new FormData(form)
             });
 
@@ -783,7 +796,7 @@
             }
 
             let data = {};
-            try { data = response ? await response.json() : {}; } catch(e) {}
+            try { data = response ? await response.json() : {}; } catch (e) { }
             const toastEl = document.getElementById('actionToast');
             toastEl.querySelector('.toast-body').textContent = data.message || 'Erro ao processar ação';
             applyToastTone(toastEl, 'danger');
@@ -840,4 +853,5 @@
   <!-- Page specific scripts -->
   {% block scripts %}{% endblock %}
 </body>
+
 </html>

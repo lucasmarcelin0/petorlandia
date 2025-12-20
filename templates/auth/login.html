@@ -5,7 +5,7 @@
 <div class="container d-flex justify-content-center align-items-center mt-5">
     <div class="card shadow-lg p-4 rounded-4" style="width: 100%; max-width: 450px;">
         <h3 class="mb-4 text-center">🔐 Entrar na PetOrlândia</h3>
-        <form method="POST" class="js-auth-form">
+        <form method="POST" action="{{ url_for('login_view') }}" class="js-auth-form">
             {{ form.hidden_tag() }}
             {{ render_field(form.email, classes='form-control rounded-pill') }}
             {{ render_field(form.password, classes='form-control rounded-pill') }}
