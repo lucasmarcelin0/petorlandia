@@ -114,9 +114,11 @@
     </div>
     {% endif %}
 
+    {% if show_schedule_button %}
     <div class="text-center">
         <a href="{{ url_for('appointments', animal_id=animal.id) }}" class="btn btn-outline-primary rounded-pill">🩺 Agendar Consulta</a>
     </div>
+    {% endif %}
 </div>
 
 <script>
