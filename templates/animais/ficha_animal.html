@@ -145,21 +145,21 @@
               <i class="bi bi-journal-richtext me-2"></i>Ver ficha do tutor
             </a>
           </div>
-          {% if current_user.worker == 'veterinario' %}
-            <div class="tutor-card__divider"></div>
-            <div class="tutor-card__danger-zone">
-              <div class="d-flex align-items-center justify-content-between gap-2 mb-1">
-                <span class="text-muted small text-uppercase fw-semibold">Status do animal</span>
-                <span class="badge text-bg-light border border-danger-subtle text-danger fw-semibold">Ação sensível</span>
-              </div>
-              <p class="text-muted small mb-2">Use apenas para registrar o falecimento do animal.</p>
-              <button type="button" class="btn btn-outline-danger w-100" data-bs-toggle="modal" data-bs-target="#falecimentoModal">
-                <i class="bi bi-x-octagon me-2"></i>Marcar como falecido
-              </button>
-            </div>
-          {% endif %}
         </div>
       </div>
+
+      {% if current_user.worker == 'veterinario' %}
+        <div class="tutor-card__danger-zone mt-3">
+          <div class="d-flex align-items-center justify-content-between gap-2 mb-1">
+            <span class="text-muted small text-uppercase fw-semibold">Status do animal</span>
+            <span class="badge text-bg-light border border-danger-subtle text-danger fw-semibold">Ação sensível</span>
+          </div>
+          <p class="text-muted small mb-2">Use apenas para registrar o falecimento do animal.</p>
+          <button type="button" class="btn btn-outline-danger w-100" data-bs-toggle="modal" data-bs-target="#falecimentoModal">
+            <i class="bi bi-x-octagon me-2"></i>Marcar como falecido
+          </button>
+        </div>
+      {% endif %}
 
       {% if not animal.is_alive %}
         <div class="tutor-card__footer mt-3 pt-3">

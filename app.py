@@ -14213,15 +14213,17 @@ def produto_detail(product_id):
 def adicionar_carrinho(product_id):
     product = Product.query.get(product_id)
     form = AddToCartForm()
+    is_ajax = (request.headers.get('X-Requested-With') == 'XMLHttpRequest' or 
+               'application/json' in request.headers.get('Accept', ''))
 
     if not product:
-        if 'application/json' in request.headers.get('Accept', ''):
+        if is_ajax:
             return jsonify(success=False, error='product not found'), 404
         flash("Produto não encontrado.", "warning")
         return redirect(url_for("loja"))
 
     if not form.validate_on_submit():
-        if 'application/json' in request.headers.get('Accept', ''):
+        if is_ajax:
             return jsonify(success=False, error='invalid form'), 400
         return redirect(url_for("loja"))
 
@@ -14250,10 +14252,12 @@ def adicionar_carrinho(product_id):
 
     db.session.commit()
     flash("Produto adicionado ao carrinho.", "success")
-    if 'application/json' in request.headers.get('Accept', ''):
+    
+    if is_ajax:
         total_value = order.total_value()
         total_qty = sum(i.quantity for i in order.items)
         return jsonify(
+            success=True,
             message="Produto adicionado ao carrinho.",
             category="success",
             item_id=item.id,

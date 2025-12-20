@@ -147,8 +147,10 @@
   /* Botão adicionar */
   .add-to-cart-btn { flex:1 1 auto; border:none; border-radius:6px; padding:.65rem 1rem;
                      font-weight:600; font-size:.95rem; color:#fff;
-                     background:linear-gradient(90deg,var(--primary-color),var(--primary-dark)); }
+                     background:linear-gradient(90deg,var(--primary-color),var(--primary-dark));
+                     transition: all 0.3s ease; }
   .add-to-cart-btn:hover { filter:brightness(1.05); transform:translateY(-2px); }
+  .add-to-cart-btn:disabled { cursor: not-allowed; filter: brightness(0.95); }
 
   /* Carrinho mobile */
   .btn-cart-floating { border-radius:20px; box-shadow:0 12px 26px rgba(0,0,0,.22); }
@@ -174,5 +176,9 @@ document.addEventListener("DOMContentLoaded", () => {
   });
 });
 </script>
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='loja_dynamic.js') }}"></script>
+{% endblock %}
 
 {% endblock %}
