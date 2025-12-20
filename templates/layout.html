@@ -581,6 +581,7 @@
           ev.preventDefault();
           const handle = async () => {
             form.querySelectorAll('.text-danger').forEach(el => el.remove());
+            const fallbackRedirect = form.dataset.successRedirect || form.dataset.redirect || form.dataset.homeUrl || '{{ url_for('index') }}';
             try {
               const { response, queued } = await fetchOrQueue(form.action, {
                 method: form.method || 'POST',
@@ -602,6 +603,11 @@
                 const data = await response.json().catch(() => null);
                 if (data && data.redirect) {
                   window.location = data.redirect;
+                  return { success: true, keepButton: true, offlineQueued: queued };
+                }
+
+                if (fallbackRedirect) {
+                  window.location = fallbackRedirect;
                   return { success: true, keepButton: true, offlineQueued: queued };
                 }
 
