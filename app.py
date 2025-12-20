@@ -2503,22 +2503,30 @@ with app.app_context():
 # ────────────────────────────── fim ─────────────────────────────
 @app.context_processor
 def inject_unread_count():
+    unread = 0
+
     if current_user.is_authenticated:
-        if current_user.role == 'admin':
-            admin_ids = [u.id for u in User.query.filter_by(role='admin').all()]
-            unread = (
-                Message.query
-                .filter(Message.receiver_id.in_(admin_ids), Message.lida.is_(False))
-                .count()
+        try:
+            if current_user.role == 'admin':
+                admin_ids = [u.id for u in User.query.filter_by(role='admin').all()]
+                unread = (
+                    Message.query
+                    .filter(Message.receiver_id.in_(admin_ids), Message.lida.is_(False))
+                    .count()
+                )
+            else:
+                unread = (
+                    Message.query
+                    .filter_by(receiver_id=current_user.id, lida=False)
+                    .count()
+                )
+        except OperationalError as exc:
+            db.session.rollback()
+            current_app.logger.warning(
+                "Falha ao carregar contagem de mensagens não lidas; retornando 0: %s",
+                exc,
+                exc_info=exc,
             )
-        else:
-            unread = (
-                Message.query
-                .filter_by(receiver_id=current_user.id, lida=False)
-                .count()
-            )
-    else:
-        unread = 0
     return dict(unread_messages=unread)
 
 
