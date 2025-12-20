@@ -5432,8 +5432,8 @@ def list_animals():
     show_all = _is_admin() and request.args.get('show_all') == '1'
     name_query = request.args.get('name')
 
-    # Base query: ignora animais removidos
-    query = Animal.query.filter(Animal.removido_em == None)
+    # Base query: ignora animais removidos e sem responsável cadastrado
+    query = Animal.query.filter(Animal.removido_em == None, Animal.owner_id.isnot(None))
 
     # Filtro por modo
     if modo and modo.lower() != 'todos':
