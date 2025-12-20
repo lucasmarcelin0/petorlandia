@@ -437,7 +437,13 @@
               return { success: true, message: 'Aguardando conexão para concluir o envio.', level: 'info', successText: 'Sincronizando…', resetDelay: 2500, offlineQueued: true };
             }
             if (response && response.ok) {
-              const data = await response.json();
+              let data;
+              try {
+                data = await response.json();
+              } catch (err) {
+                window.location.reload();
+                return { success: false, message: 'Erro ao processar resposta', level: 'danger', keepButton: true };
+              }
               if (data.redirect) {
                 window.location.href = data.redirect;
                 return { success: true, keepButton: true };
@@ -449,6 +455,11 @@
               if (data.item_quantity === 0) {
                 const li = form.closest('li');
                 li?.remove();
+              }
+              if (data.order_quantity !== undefined) {
+                document.querySelectorAll('[data-cart-count]').forEach(el => {
+                  el.textContent = data.order_quantity;
+                });
               }
               const totalEl = document.getElementById('cartTotal');
               if (totalEl && data.order_total_formatted) {
