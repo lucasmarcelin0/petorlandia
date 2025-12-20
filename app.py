@@ -13995,14 +13995,21 @@ def _get_current_order():
     order_id = session.get("current_order")
     if not order_id:
         return None
+
     order = Order.query.get(order_id)
+
+    # Se o pedido não existe mais ou pertence a outro usuário, limpa a sessão
+    # para evitar erros e devolve None, permitindo que um novo pedido seja
+    # criado para o usuário atual.
     if not order or order.user_id != current_user.id:
         session.pop("current_order", None)
-        abort(403)
+        return None
+
     # Se o pedido já possui um pagamento concluído não deve ser reutilizado
     if order.payment and order.payment.status == PaymentStatus.COMPLETED:
         session.pop("current_order", None)
         return None
+
     return order
 
 
@@ -14260,7 +14267,7 @@ def aumentar_item_carrinho(item_id):
     """Incrementa a quantidade de um item no carrinho."""
     order = _get_current_order()
     item = OrderItem.query.get_or_404(item_id)
-    if item.order_id != order.id:
+    if not order or item.order_id != order.id:
         abort(404)
     item.quantity += 1
     db.session.commit()
@@ -14286,7 +14293,7 @@ def diminuir_item_carrinho(item_id):
     """Diminui a quantidade de um item; remove se chegar a zero."""
     order = _get_current_order()
     item = OrderItem.query.get_or_404(item_id)
-    if item.order_id != order.id:
+    if not order or item.order_id != order.id:
         abort(404)
     item.quantity -= 1
     if item.quantity <= 0:
