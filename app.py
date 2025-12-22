@@ -5152,15 +5152,17 @@ def _update_coordinates_from_request(endereco: Endereco | None):
     if not endereco:
         return False
 
-    raw_lat = (request.form.get('latitude') or '').strip()
-    raw_lon = (request.form.get('longitude') or '').strip()
+    payload = request.get_json(silent=True) or {}
+
+    raw_lat = (request.form.get('latitude') or payload.get('latitude') or '').strip()
+    raw_lon = (request.form.get('longitude') or payload.get('longitude') or '').strip()
 
     if not raw_lat and not raw_lon:
         return False
 
     try:
-        endereco.latitude = float(raw_lat)
-        endereco.longitude = float(raw_lon)
+        endereco.latitude = float(str(raw_lat).replace(',', '.'))
+        endereco.longitude = float(str(raw_lon).replace(',', '.'))
         return True
     except ValueError:
         endereco.latitude = None
