@@ -349,8 +349,16 @@
       ['#cidade', '#estado'].forEach(selector => {
         const field = addressCard.querySelector(selector);
         if (field) {
-          field.addEventListener('input', () => clearCoordinates(true));
-          field.addEventListener('change', () => clearCoordinates(true));
+          const handleChange = () => {
+            if (!shouldPreserveMinorChanges()) {
+              clearCoordinates(true);
+            } else {
+              updateCoordinatesDisplay();
+            }
+          };
+
+          field.addEventListener('input', handleChange);
+          field.addEventListener('change', handleChange);
         }
       });
     };
@@ -486,6 +494,24 @@
         // Mantém o foco no campo de logradouro para facilitar a edição após o preenchimento automático
         if (ruaField) {
           ruaField.focus();
+        }
+
+        const coordinateManager = getCoordinateManager(addressCard);
+
+        if (coordinateManager && !coordinateManager.shouldPreserveMinorChanges()) {
+          buscarCoordenadasPorEndereco(addressCard, { setStatus: coordinateManager.setStatus })
+            .then(coords => {
+              if (coords?.lat != null && coords?.lon != null) {
+                coordinateManager.setCoordinates(coords.lat, coords.lon);
+                coordinateManager.setStatus?.('Coordenadas atualizadas pelo CEP informado.');
+              } else {
+                coordinateManager.setStatus?.('Não foi possível localizar as coordenadas para este CEP.', true);
+              }
+            })
+            .catch(error => {
+              console.error('Erro ao calcular coordenadas pelo CEP', error);
+              coordinateManager.setStatus?.(error.message || 'Não foi possível calcular a localização pelo CEP.', true);
+            });
         }
       })
       .catch(error => {
