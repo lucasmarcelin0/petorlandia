@@ -608,6 +608,14 @@ class VeterinarianPromotionForm(FlaskForm):
     submit = SubmitField('Promover a Veterinário')
 
 
+class DeliveryPromotionForm(FlaskForm):
+    confirm = BooleanField(
+        'Confirmo a promoção deste usuário a entregador',
+        validators=[DataRequired(message='Confirme a promoção para continuar.')],
+    )
+    submit = SubmitField('Promover a Entregador')
+
+
 class VeterinarianMembershipCheckoutForm(FlaskForm):
     submit = SubmitField('Ativar assinatura')
 

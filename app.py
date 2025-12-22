@@ -14,7 +14,6 @@ from typing import Iterable, Optional, Set, Dict
 
 from datetime import datetime, timezone, date, timedelta, time
 from dateutil.relativedelta import relativedelta
-from zoneinfo import ZoneInfo
 from PIL import Image, ImageOps
 
 
@@ -126,6 +125,7 @@ from werkzeug.utils import secure_filename
 from werkzeug.datastructures import FileStorage
 from werkzeug.routing import BuildError
 from werkzeug.exceptions import NotFound
+from time_utils import BR_TZ, utcnow
 
 db.init_app(app)
 migrate.init_app(app, db, compare_type=True)
@@ -364,13 +364,6 @@ def upload_profile_photo_async(user_id, data, content_type, filename):
                     db.session.commit()
 
     executor.submit(_task)
-
-# ----------------------------------------------------------------
-# 5)  Filtros Jinja para data BR
-# ----------------------------------------------------------------
-
-BR_TZ = ZoneInfo("America/Sao_Paulo")
-
 
 # ----------------------------------------------------------------
 # Nim game with Socket.IO
@@ -1263,6 +1256,7 @@ from forms import (
     ClinicInviteVeterinarianForm,
     ClinicStaffPermissionForm,
     DeleteAccountForm,
+    DeliveryPromotionForm,
     DeliveryRequestForm,
     EditProfileForm,
     InventoryItemForm,
@@ -1417,7 +1411,7 @@ def _shared_user_clause(viewer=None, clinic_scope=None):
     if not parties:
         return None
 
-    now = datetime.utcnow()
+    now = utcnow()
     query = (
         db.session.query(DataShareAccess.user_id)
         .filter(DataShareAccess.user_id.isnot(None))
@@ -1551,7 +1545,7 @@ def _serialize_share_request(req):
     clinic_name = getattr(req.clinic, 'nome', None)
     requester_name = getattr(req.requester, 'name', None)
     status = req.status
-    if status == 'pending' and req.expires_at and req.expires_at <= datetime.utcnow():
+    if status == 'pending' and req.expires_at and req.expires_at <= utcnow():
         status = 'expired'
     return {
         'id': req.id,
@@ -1666,7 +1660,7 @@ def _notify_clinic_share_decision(share_request, approved):
 
 
 def _serialize_tutor_share_payload(user):
-    now = datetime.utcnow()
+    now = utcnow()
     pending = (
         DataShareRequest.query.filter_by(tutor_id=user.id)
         .order_by(DataShareRequest.created_at.desc())
@@ -1700,7 +1694,7 @@ def _serialize_clinic_share_payload(user):
             .filter(DataShareAccess.granted_to_type == DataSharePartyType.clinic)
             .filter(DataShareAccess.granted_to_id.in_(clinic_ids))
             .filter(DataShareAccess.revoked_at.is_(None))
-            .filter(or_(DataShareAccess.expires_at.is_(None), DataShareAccess.expires_at > datetime.utcnow()))
+            .filter(or_(DataShareAccess.expires_at.is_(None), DataShareAccess.expires_at > utcnow()))
             .order_by(DataShareAccess.created_at.desc())
             .limit(25)
             .all()
@@ -2072,36 +2066,51 @@ def _serialize_message_threads(mensagens):
     threads = {}
 
     for mensagem in mensagens:
-        key = (mensagem.sender_id, mensagem.animal_id or None)
         last_timestamp = mensagem.timestamp or datetime.min
+
+        conversation_partner_id = (
+            mensagem.receiver_id
+            if mensagem.sender_id == current_user.id
+            else mensagem.sender_id
+        )
+        conversation_partner = (
+            mensagem.receiver
+            if mensagem.sender_id == current_user.id
+            else mensagem.sender
+        )
+
+        key = (conversation_partner_id, mensagem.animal_id or None)
 
         thread = threads.get(key)
         if thread is None or last_timestamp > thread["last_message_dt"]:
             if mensagem.animal is not None:
                 conversation_url = url_for(
-                    "conversa", animal_id=mensagem.animal_id, user_id=mensagem.sender_id
+                    "conversa",
+                    animal_id=mensagem.animal_id,
+                    user_id=conversation_partner_id,
                 )
                 animal_payload = {
                     "id": mensagem.animal_id,
                     "name": mensagem.animal.name,
                 }
             else:
-                if current_user.role == "admin":
-                    conversation_url = url_for("conversa_admin", user_id=mensagem.sender_id)
-                else:
-                    conversation_url = url_for("conversa_admin", user_id=mensagem.sender_id)
+                conversation_url = url_for(
+                    "conversa_admin", user_id=conversation_partner_id
+                )
                 animal_payload = None
 
-            sender_name = mensagem.sender.name or "Usuário"
-            sender_initial = sender_name.strip()[:1].upper() if sender_name.strip() else "?"
+            partner_name = getattr(conversation_partner, "name", None) or "Usuário"
+            partner_initial = (
+                partner_name.strip()[:1].upper() if partner_name.strip() else "?"
+            )
 
             thread = {
-                "id": f"{mensagem.sender_id}-{mensagem.animal_id or 'admin'}",
+                "id": f"{conversation_partner_id}-{mensagem.animal_id or 'admin'}",
                 "sender": {
-                    "id": mensagem.sender_id,
-                    "name": sender_name,
-                    "profile_photo": mensagem.sender.profile_photo,
-                    "initials": sender_initial,
+                    "id": conversation_partner_id,
+                    "name": partner_name,
+                    "profile_photo": getattr(conversation_partner, "profile_photo", None),
+                    "initials": partner_initial,
                 },
                 "animal": animal_payload,
                 "last_message_dt": last_timestamp,
@@ -2121,6 +2130,11 @@ def _serialize_message_threads(mensagens):
     sorted_threads = sorted(
         threads.values(), key=lambda thread: thread["last_message_dt"], reverse=True
     )
+
+    for thread in sorted_threads:
+        thread.pop("last_message_dt", None)
+
+    return sorted_threads
 
 
 def _user_initials_from_name(full_name: Optional[str]) -> str:
@@ -2160,11 +2174,6 @@ def _build_user_avatar_map(users: Iterable["User"]) -> Dict[int, Dict[str, str]]
         }
 
     return avatar_map
-
-    for thread in sorted_threads:
-        thread.pop("last_message_dt", None)
-
-    return sorted_threads
 
 
 def _ensure_veterinarian_profile(form=None):
@@ -2207,11 +2216,79 @@ def _sync_veterinarian_membership_payment(payment):
     membership.last_payment_id = payment.id
     if payment.status == PaymentStatus.COMPLETED:
         cycle_days = current_app.config.get('VETERINARIAN_MEMBERSHIP_BILLING_DAYS', 30)
-        now = datetime.utcnow()
+        now = utcnow()
         start_from = membership.paid_until if membership.paid_until and membership.paid_until > now else now
         membership.paid_until = start_from + timedelta(days=cycle_days)
         membership.ensure_trial_dates(current_app.config.get('VETERINARIAN_TRIAL_DAYS', 30))
     db.session.add(membership)
+
+
+_HEALTH_ONBOARDING_RE = re.compile(r"health-onboarding-(\d+)")
+
+
+def _resolve_health_onboarding(external_reference: str):
+    match = _HEALTH_ONBOARDING_RE.match(external_reference or "")
+    if not match:
+        return None
+    onboarding_id = int(match.group(1))
+    return HealthPlanOnboarding.query.get(onboarding_id)
+
+
+def _sync_health_subscription_from_onboarding(onboarding, payment_status, payment=None):
+    if not onboarding or payment_status != PaymentStatus.COMPLETED:
+        return
+
+    if not onboarding.animal or onboarding.animal.user_id != onboarding.user_id:
+        current_app.logger.warning(
+            "Onboarding %s ignorado: tutor não corresponde ao animal.",
+            getattr(onboarding, "id", None),
+        )
+        return
+
+    if payment and payment.user_id != onboarding.user_id:
+        current_app.logger.warning(
+            "Pagamento não pertence ao tutor do onboarding %s.",
+            getattr(onboarding, "id", None),
+        )
+        return
+
+    now = utcnow()
+    subscription = (
+        HealthSubscription.query
+        .filter_by(
+            animal_id=onboarding.animal_id,
+            plan_id=onboarding.plan_id,
+            user_id=onboarding.user_id,
+        )
+        .order_by(HealthSubscription.start_date.desc())
+        .first()
+    )
+
+    if subscription:
+        if not subscription.start_date:
+            subscription.start_date = now
+    else:
+        subscription = HealthSubscription(
+            animal_id=onboarding.animal_id,
+            plan_id=onboarding.plan_id,
+            user_id=onboarding.user_id,
+            start_date=now,
+        )
+        db.session.add(subscription)
+
+    subscription.guardian_document = onboarding.guardian_document
+    subscription.animal_document = onboarding.animal_document
+    subscription.contract_reference = onboarding.contract_reference
+    subscription.consent_ip = onboarding.consent_ip
+    subscription.consent_signed_at = onboarding.consent_signed_at
+    subscription.plan_id = onboarding.plan_id
+    subscription.active = True
+
+    if payment:
+        subscription.payment = payment
+
+    onboarding.status = "paid"
+    db.session.add(onboarding)
 
 
 # ----------------------------------------------------------------
@@ -2281,6 +2358,71 @@ def api_cep_lookup(cep: str):
             return jsonify(success=True, data=normalized)
 
     return jsonify(success=False, error='CEP não encontrado'), 404
+
+
+@app.route('/api/geocode/reverse')
+def api_reverse_geocode():
+    """Resolve latitude/longitude into address data for the form.
+
+    This endpoint wraps the public Nominatim API to avoid CORS issues
+    and to normalize the response to the fields expected by the
+    frontend address form.
+    """
+
+    def _state_from_address(address: dict):
+        iso_code = address.get('ISO3166-2-lvl4') or address.get('ISO3166-2-lvl3')
+        if isinstance(iso_code, str) and '-' in iso_code:
+            candidate = iso_code.split('-')[-1]
+            if len(candidate) == 2:
+                return candidate
+        state_code = address.get('state_code')
+        if isinstance(state_code, str) and len(state_code) == 2:
+            return state_code
+        return None
+
+    def _first_of(address: dict, *keys):
+        for key in keys:
+            value = address.get(key)
+            if value:
+                return value
+        return None
+
+    try:
+        lat = float(request.args.get('lat', ''))
+        lon = float(request.args.get('lon', ''))
+    except ValueError:
+        return jsonify(success=False, error='Coordenadas inválidas'), 400
+
+    params = {
+        'format': 'jsonv2',
+        'lat': lat,
+        'lon': lon,
+        'addressdetails': 1,
+    }
+
+    headers = {'User-Agent': 'petorlandia-geocoder/1.0'}
+    try:
+        response = requests.get('https://nominatim.openstreetmap.org/reverse', params=params, headers=headers, timeout=8)
+        response.raise_for_status()
+        payload = response.json()
+    except (requests.RequestException, ValueError):
+        return jsonify(success=False, error='Não foi possível obter o endereço'), 502
+
+    address = payload.get('address') or {}
+    if not address:
+        return jsonify(success=False, error='Endereço não encontrado'), 404
+
+    normalized = {
+        'cep': address.get('postcode'),
+        'logradouro': _first_of(address, 'road', 'residential', 'pedestrian', 'path'),
+        'numero': address.get('house_number'),
+        'complemento': _first_of(address, 'building', 'amenity'),
+        'bairro': _first_of(address, 'suburb', 'neighbourhood', 'city_district'),
+        'localidade': _first_of(address, 'city', 'town', 'village'),
+        'uf': _state_from_address(address),
+    }
+
+    return jsonify(success=True, data=normalized)
 
 
 @app.route('/veterinario/assinatura')
@@ -2412,7 +2554,7 @@ def veterinarian_cancel_trial(membership_id):
     if not membership.is_trial_active():
         flash('O período de avaliação gratuita já havia sido encerrado.', 'info')
     else:
-        membership.trial_ends_at = datetime.utcnow() - timedelta(seconds=1)
+        membership.trial_ends_at = utcnow() - timedelta(seconds=1)
         db.session.add(membership)
         db.session.commit()
         flash('Período de avaliação gratuita cancelado com sucesso.', 'success')
@@ -2544,7 +2686,7 @@ def inject_pending_appointment_count():
     if current_user.is_authenticated and is_veterinarian(current_user):
         from models import Appointment
 
-        now = datetime.utcnow()
+        now = utcnow()
         pending = Appointment.query.filter(
             Appointment.veterinario_id == current_user.veterinario.id,
             Appointment.status == "scheduled",
@@ -2965,7 +3107,7 @@ def _sync_orcamento_payment_classification(record):
     if reference_dt is None:
         reference_dt = created_at
     if reference_dt is None:
-        reference_dt = datetime.utcnow()
+        reference_dt = utcnow()
     elif isinstance(reference_dt, date) and not isinstance(reference_dt, datetime):
         reference_dt = datetime.combine(reference_dt, time.min)
     elif isinstance(reference_dt, datetime) and reference_dt.tzinfo:
@@ -3836,7 +3978,7 @@ def contabilidade_pagamentos():
         )
 
         day_cursor = start_date
-        now = datetime.utcnow()
+        now = utcnow()
         while day_cursor < end_date:
             day_start_dt = datetime.combine(day_cursor, time.min)
             day_end_dt = datetime.combine(day_cursor + timedelta(days=1), time.min)
@@ -4565,7 +4707,7 @@ def contabilidade_plantonistas_novo():
             observacoes=(form.observacoes.data or '').strip() or None,
         )
         if escala.status == 'realizado' and escala.realizado_em is None:
-            escala.realizado_em = datetime.utcnow()
+            escala.realizado_em = utcnow()
 
         if novo_modelo:
             db.session.add(novo_modelo)
@@ -4782,7 +4924,7 @@ def contabilidade_plantonistas_editar(escala_id):
         escala.valor_previsto = form.valor_previsto.data
         escala.status = form.status.data
         if escala.status == 'realizado' and not escala.realizado_em:
-            escala.realizado_em = datetime.utcnow()
+            escala.realizado_em = utcnow()
         elif escala.status != 'realizado':
             escala.realizado_em = None
         escala.nota_fiscal_recebida = form.nota_fiscal_recebida.data
@@ -4837,7 +4979,7 @@ def contabilidade_plantao_confirmar(escala_id):
 
     if escala.status != 'realizado':
         escala.status = 'realizado'
-        escala.realizado_em = datetime.utcnow()
+        escala.realizado_em = utcnow()
         db.session.commit()
         flash('Plantão confirmado como realizado.', 'success')
     else:
@@ -5005,6 +5147,28 @@ def _geocode_endereco(endereco: Endereco | None):
     return coords
 
 
+def _update_coordinates_from_request(endereco: Endereco | None):
+    """Aplica latitude/longitude enviados pelo formulário, se válidos."""
+
+    if not endereco:
+        return False
+
+    raw_lat = (request.form.get('latitude') or '').strip()
+    raw_lon = (request.form.get('longitude') or '').strip()
+
+    if not raw_lat and not raw_lon:
+        return False
+
+    try:
+        endereco.latitude = float(raw_lat)
+        endereco.longitude = float(raw_lon)
+        return True
+    except ValueError:
+        endereco.latitude = None
+        endereco.longitude = None
+        return False
+
+
 @app.route('/register', methods=['GET', 'POST'])
 def register():
     form = RegistrationForm()
@@ -5047,7 +5211,8 @@ def register():
             cidade=request.form.get('cidade'),
             estado=request.form.get('estado')
         )
-        _geocode_endereco(endereco)
+        if not _update_coordinates_from_request(endereco):
+            _geocode_endereco(endereco)
 
         # Upload da foto de perfil para o S3
         photo_url = None
@@ -5366,7 +5531,8 @@ def profile():
             flash(message, 'warning')
             return redirect(url_for('profile'))
 
-        _geocode_endereco(endereco)
+        if not _update_coordinates_from_request(endereco):
+            _geocode_endereco(endereco)
         db.session.add(endereco)
 
         # Upload de imagem para S3 (se houver nova)
@@ -5782,13 +5948,11 @@ def conversa(animal_id, user_id):
     animal = Animal.query.get_or_404(animal_id)
     # For conversations about an animal, we should allow users to talk to the animal's owner
     # even if they're marked as private, so use User.query.get_or_404 instead of get_user_or_404
-    outro_usuario = User.query.get_or_404(user_id)
-    
-    # Apenas o tutor ou o próprio interessado podem participar da conversa
-    # Se user_id for o dono, significa que o current_user quer falar com o dono (tudo bem).
-    # Se user_id NÃO for o dono, apenas o dono pode ver (para falar com aquele user).
-    if user_id != animal.user_id and current_user.id != animal.user_id:
+    if current_user.id not in {animal.user_id, user_id}:
         abort(404)
+
+    interlocutor_id = animal.user_id if current_user.id == user_id else user_id
+    outro_usuario = User.query.get_or_404(interlocutor_id)
     
     interesse_existente = Interest.query.filter_by(
         user_id=outro_usuario.id, animal_id=animal.id).first()
@@ -5840,9 +6004,11 @@ def api_conversa_message(animal_id, user_id):
     """Recebe uma nova mensagem da conversa e retorna o HTML renderizado."""
     form = MessageForm()
     animal = Animal.query.get_or_404(animal_id)
-    outro_usuario = User.query.get_or_404(user_id)
-    if user_id != animal.user_id and current_user.id != animal.user_id:
+    if current_user.id not in {animal.user_id, user_id}:
         abort(404)
+
+    interlocutor_id = animal.user_id if current_user.id == user_id else user_id
+    outro_usuario = User.query.get_or_404(interlocutor_id)
     if form.validate_on_submit():
         nova_msg = Message(
             sender_id=current_user.id,
@@ -5875,6 +6041,7 @@ def conversa_admin(user_id=None):
 
     form = MessageForm()
     promotion_form = None
+    delivery_promotion_form = None
     target_membership = None
     cancel_trial_form = VeterinarianMembershipCancelTrialForm()
     request_new_trial_form = VeterinarianMembershipRequestNewTrialForm()
@@ -5888,6 +6055,7 @@ def conversa_admin(user_id=None):
         admin_ids = [u.id for u in User.query.filter_by(role='admin').all()]
         participant_id = interlocutor.id
         promotion_form = VeterinarianPromotionForm()
+        delivery_promotion_form = DeliveryPromotionForm()
         if has_veterinarian_profile(interlocutor):
             target_membership = ensure_veterinarian_membership(interlocutor.veterinario)
             if target_membership and not hasattr(target_membership, 'is_trial_active'):
@@ -5969,6 +6137,7 @@ def conversa_admin(user_id=None):
         form=form,
         admin=interlocutor,
         promotion_form=promotion_form,
+        delivery_promotion_form=delivery_promotion_form,
         target_membership=target_membership,
         is_admin=is_admin,
         cancel_trial_form=cancel_trial_form,
@@ -6052,6 +6221,44 @@ def admin_promote_veterinarian(user_id):
 
     db.session.commit()
     flash('Usuário promovido a veterinário. Período de avaliação iniciado.', 'success')
+    return redirect(url_for('conversa_admin', user_id=user.id))
+
+
+@app.route('/admin/users/<int:user_id>/promover_entregador', methods=['POST'])
+@login_required
+def admin_promote_delivery(user_id):
+    if not (current_user.is_authenticated and (current_user.role or '').lower() == 'admin'):
+        abort(403)
+
+    user = User.query.get_or_404(user_id)
+    form = DeliveryPromotionForm()
+
+    if not form.validate_on_submit():
+        for field_errors in form.errors.values():
+            for error in field_errors:
+                flash(error, 'danger')
+        return redirect(url_for('conversa_admin', user_id=user.id))
+
+    if (user.worker or '').lower() == 'delivery':
+        flash('Usuário já está registrado como entregador.', 'info')
+        current_app.logger.info(
+            'Admin %s tentou promover usuário %s que já é entregador.',
+            current_user.id,
+            user.id,
+        )
+        return redirect(url_for('conversa_admin', user_id=user.id))
+
+    previous_worker_status = user.worker
+    user.worker = 'delivery'
+    db.session.commit()
+
+    current_app.logger.info(
+        'Admin %s alterou worker de %s para delivery para o usuário %s.',
+        current_user.id,
+        previous_worker_status,
+        user.id,
+    )
+    flash('Usuário promovido a entregador.', 'success')
     return redirect(url_for('conversa_admin', user_id=user.id))
 
 
@@ -6233,7 +6440,7 @@ def deletar_animal(animal_id):
         flash(message, 'warning')
         return redirect(request.referrer or url_for('ficha_animal', animal_id=animal.id))
 
-    animal.removido_em = datetime.utcnow()
+    animal.removido_em = utcnow()
     db.session.commit()
     message = 'Animal marcado como removido. Histórico preservado.'
     if 'application/json' in request.headers.get('Accept', ''):
@@ -6512,7 +6719,7 @@ def termo_transferencia(animal_id, user_id):
                 to_user_id=novo_dono.id,
                 type='adoção' if animal.modo == 'doação' else 'venda',
                 status='concluída',
-                date=datetime.utcnow()
+                date=utcnow()
             )
             db.session.add(transacao)
 
@@ -6647,6 +6854,13 @@ def planosaude_animal(animal_id):
     form.plan_id.choices = [
         (p.id, f"{p.name} - R$ {p.price:.2f}") for p in plans
     ]
+    default_animal_document = animal.microchip_number or str(animal.id)
+    if request.method == "GET":
+        form.tutor_document.data = current_user.cpf
+        form.animal_document.data = default_animal_document
+    else:
+        form.tutor_document.data = form.tutor_document.data or current_user.cpf
+        form.animal_document.data = form.animal_document.data or default_animal_document
     plans_data = [
         {
             "id": p.id,
@@ -6694,6 +6908,8 @@ def planosaude_animal(animal_id):
         onboarding=onboarding,
         user_cpf=current_user.cpf,
         animal_microchip=animal.microchip_number,
+        tutor_document_value=form.tutor_document.data,
+        animal_document_value=form.animal_document.data,
         show_schedule_button=_is_admin() or is_veterinarian(current_user),
     )
 
@@ -6715,6 +6931,9 @@ def contratar_plano(animal_id):
     form.plan_id.choices = [
         (p.id, f"{p.name} - R$ {p.price:.2f}") for p in plans
     ]
+    default_animal_document = animal.microchip_number or str(animal.id)
+    form.tutor_document.data = form.tutor_document.data or current_user.cpf
+    form.animal_document.data = form.animal_document.data or default_animal_document
     if not form.validate_on_submit():
         flash("Selecione um plano válido.", "danger")
         return redirect(url_for("planosaude_animal", animal_id=animal.id))
@@ -6747,6 +6966,8 @@ def contratar_plano(animal_id):
             "currency_id": "BRL",
         },
     }
+
+    preapproval_data["external_reference"] = f"health-onboarding-{onboarding.id}"
 
     try:
         resp = mp_sdk().preapproval().create(preapproval_data)
@@ -6800,8 +7021,8 @@ def validar_plano_consulta(consulta_id):
 
     consulta.health_subscription_id = subscription.id
     consulta.health_plan_id = subscription.plan_id
-    consulta.authorization_reference = f"PRG-{consulta.id}-{int(datetime.utcnow().timestamp())}"
-    consulta.authorization_checked_at = datetime.utcnow()
+    consulta.authorization_reference = f"PRG-{consulta.id}-{int(utcnow().timestamp())}"
+    consulta.authorization_checked_at = utcnow()
     consulta.authorization_notes = form.notes.data or ''
 
     result = evaluate_consulta_coverages(consulta)
@@ -6952,7 +7173,7 @@ def ficha_animal(animal_id):
         }
 
     def _load_events_data():
-        now = datetime.utcnow()
+        now = utcnow()
         vacinas_agendadas = (
             Vacina.query.filter_by(animal_id=animal.id, aplicada=False)
             .filter(Vacina.aplicada_em >= date.today())
@@ -7117,7 +7338,7 @@ def generate_qr(animal_id):
 
     # Gera token
     token = secrets.token_urlsafe(32)
-    expires = datetime.utcnow() + timedelta(minutes=10)  # por exemplo, 10 minutos
+    expires = utcnow() + timedelta(minutes=10)  # por exemplo, 10 minutos
 
     qr_token = ConsultaToken(
         token=token,
@@ -7458,7 +7679,7 @@ def finalizar_consulta(consulta_id):
                 return redirect(url_for('consulta_direct', animal_id=consulta.animal_id, c=consulta.id))
         result = evaluate_consulta_coverages(consulta)
         consulta.authorization_status = result['status']
-        consulta.authorization_checked_at = datetime.utcnow()
+        consulta.authorization_checked_at = utcnow()
         consulta.authorization_notes = '\n'.join(result.get('messages', [])) if result.get('messages') else None
         if result['status'] != 'approved':
             db.session.commit()
@@ -7466,7 +7687,7 @@ def finalizar_consulta(consulta_id):
             return redirect(url_for('consulta_direct', animal_id=consulta.animal_id, c=consulta.id))
 
     consulta.status = 'finalizada'
-    consulta.finalizada_em = datetime.utcnow()
+    consulta.finalizada_em = utcnow()
     appointment = consulta.appointment
     if appointment and appointment.status != 'completed':
         appointment.status = 'completed'
@@ -7569,7 +7790,7 @@ def agendar_retorno(consulta_id):
                     kind='retorno',
                     status='accepted' if same_user else 'scheduled',
                     created_by=current_user.id,
-                    created_at=datetime.utcnow(),
+                    created_at=utcnow(),
                 )
                 db.session.add(appt)
                 db.session.commit()
@@ -7844,7 +8065,7 @@ def minha_clinica():
         staff = c.veterinarios
         upcoming = (
             Appointment.query.filter_by(clinica_id=c.id)
-            .filter(Appointment.scheduled_at >= datetime.utcnow())
+            .filter(Appointment.scheduled_at >= utcnow())
             .order_by(Appointment.scheduled_at)
             .limit(5)
             .all()
@@ -8425,7 +8646,7 @@ def clinic_detail(clinica_id):
         'future_appointments': db.session.query(func.count(Appointment.id))
         .filter(
             Appointment.clinica_id == clinica_id,
-            Appointment.scheduled_at >= datetime.utcnow(),
+            Appointment.scheduled_at >= utcnow(),
             Appointment.status == 'scheduled',
         )
         .scalar()
@@ -8608,7 +8829,7 @@ def clinic_detail(clinica_id):
     today = date.today()
     today_str = today.strftime('%Y-%m-%d')
     next7_str = (today + timedelta(days=7)).strftime('%Y-%m-%d')
-    now_dt = datetime.utcnow()
+    now_dt = utcnow()
 
     try:
         clinic_new_animal_url = url_for('criar_animal', clinica_id=clinica.id)
@@ -8831,7 +9052,7 @@ def resend_clinic_invite(clinica_id, invite_id):
         return redirect(url_for('clinic_detail', clinica_id=clinica.id) + '#veterinarios')
 
     invite.status = 'pending'
-    invite.created_at = datetime.utcnow()
+    invite.created_at = utcnow()
     db.session.commit()
 
     vet_user = invite.veterinario.user if invite.veterinario else None
@@ -9239,7 +9460,7 @@ def atualizar_status_orcamento(orcamento_id):
 
     if orcamento.status != new_status:
         orcamento.status = new_status
-        orcamento.updated_at = datetime.utcnow()
+        orcamento.updated_at = utcnow()
         db.session.add(orcamento)
         db.session.commit()
     else:
@@ -9252,7 +9473,7 @@ def atualizar_status_orcamento(orcamento_id):
         'status': orcamento.status,
         'status_label': ORCAMENTO_STATUS_LABELS.get(orcamento.status, orcamento.status),
         'status_style': ORCAMENTO_STATUS_STYLES.get(orcamento.status, 'secondary'),
-        'updated_at': (orcamento.updated_at or datetime.utcnow()).isoformat() + 'Z',
+        'updated_at': (orcamento.updated_at or utcnow()).isoformat() + 'Z',
     }
 
     if wants_json:
@@ -10015,7 +10236,8 @@ def tutores():
             cidade=cidade,
             estado=estado
         )
-        _geocode_endereco(endereco)
+        if not _update_coordinates_from_request(endereco):
+            _geocode_endereco(endereco)
         db.session.add(endereco)
         db.session.flush()
         novo.endereco_id = endereco.id
@@ -10207,7 +10429,7 @@ def shares_api():
         if pending and pending.is_pending():
             return jsonify(success=False, message='Já existe um pedido pendente para este tutor.', category='warning'), 409
         expires_days = _default_share_duration(payload.get('expires_in_days'))
-        expires_at = datetime.utcnow() + timedelta(days=expires_days)
+        expires_at = utcnow() + timedelta(days=expires_days)
         message = (payload.get('message') or payload.get('grant_reason') or '').strip() or None
         share_request = DataShareRequest(
             tutor_id=tutor.id,
@@ -10243,7 +10465,7 @@ def _ensure_pending(share_request):
 
 
 def _activate_share_request(share_request, expires_in_days=None):
-    now = datetime.utcnow()
+    now = utcnow()
     expires_at = share_request.expires_at
     if expires_in_days:
         expires_at = now + timedelta(days=_default_share_duration(expires_in_days))
@@ -10321,7 +10543,7 @@ def deny_share_request(request_id):
     payload = request.get_json(silent=True) or {}
     reason = (payload.get('reason') or '').strip() or None
     share_request.status = 'denied'
-    share_request.denied_at = datetime.utcnow()
+    share_request.denied_at = utcnow()
     share_request.denial_reason = reason
     db.session.add(share_request)
     db.session.commit()
@@ -10344,7 +10566,7 @@ def confirm_share_request():
     if payload.get('decision', 'approve').lower() == 'deny':
         _ensure_pending(share_request)
         share_request.status = 'denied'
-        share_request.denied_at = datetime.utcnow()
+        share_request.denied_at = utcnow()
         share_request.denial_reason = (payload.get('reason') or '').strip() or None
         db.session.add(share_request)
         db.session.commit()
@@ -10544,7 +10766,8 @@ def update_tutor(user_id):
         db.session.flush()
         user.endereco_id = endereco.id
 
-    _geocode_endereco(endereco)
+    if not _update_coordinates_from_request(endereco):
+        _geocode_endereco(endereco)
 
     # 💾 Commit final
     try:
@@ -10810,7 +11033,7 @@ def update_consulta(consulta_id):
     else:
         # Salva, finaliza e cria nova automaticamente
         consulta.status = 'finalizada'
-        consulta.finalizada_em = datetime.utcnow()
+        consulta.finalizada_em = utcnow()
         appointment = consulta.appointment
         if appointment and appointment.status != 'completed':
             appointment.status = 'completed'
@@ -12384,7 +12607,7 @@ def novo_animal():
             duplicate_conditions.append(and_(Animal.age.isnot(None), Animal.age == idade_registrada))
 
         # Evita duplicação por cliques repetidos considerando cadastros recentes
-        recent_window = datetime.utcnow() - timedelta(minutes=10)
+        recent_window = utcnow() - timedelta(minutes=10)
         duplicate_conditions.append(and_(Animal.date_added >= recent_window))
 
         existing_animal = None
@@ -12554,7 +12777,7 @@ def marcar_como_falecido(animal_id):
     data = request.form.get('falecimento_em')
 
     try:
-        animal.falecido_em = datetime.strptime(data, '%Y-%m-%dT%H:%M') if data else datetime.utcnow()
+        animal.falecido_em = datetime.strptime(data, '%Y-%m-%dT%H:%M') if data else utcnow()
         animal.is_alive = False
         db.session.commit()
         flash(f'{animal.name} foi marcado como falecido.', 'success')
@@ -12884,7 +13107,7 @@ def accept_delivery(req_id):
         return redirect(url_for('list_delivery_requests'))
     req.status = 'em_andamento'
     req.worker_id = current_user.id
-    req.accepted_at = datetime.utcnow()
+    req.accepted_at = utcnow()
     db.session.commit()
     flash('Entrega aceita.', 'success')
     if 'application/json' in request.headers.get('Accept', ''):
@@ -12908,7 +13131,7 @@ def complete_delivery(req_id):
     if req.worker_id != current_user.id:
         abort(403)
     req.status = 'concluida'
-    req.completed_at = datetime.utcnow()
+    req.completed_at = utcnow()
     db.session.commit()
     flash('Entrega concluída.', 'success')
     if 'application/json' in request.headers.get('Accept', ''):
@@ -12925,7 +13148,7 @@ def cancel_delivery(req_id):
     if req.worker_id != current_user.id:
         abort(403)
     req.status = 'cancelada'
-    req.canceled_at = datetime.utcnow()
+    req.canceled_at = utcnow()
     req.canceled_by_id = current_user.id
     db.session.commit()
     flash('Entrega cancelada.', 'info')
@@ -12944,7 +13167,7 @@ def buyer_cancel_delivery(req_id):
         flash('Não é possível cancelar.', 'warning')
         return redirect(url_for('loja'))
     req.status = 'cancelada'
-    req.canceled_at = datetime.utcnow()
+    req.canceled_at = utcnow()
     req.canceled_by_id = current_user.id
     db.session.commit()
     flash('Solicitação cancelada.', 'info')
@@ -13268,7 +13491,7 @@ def admin_set_delivery_status(req_id, status):
         abort(400)
 
     req = DeliveryRequest.query.get_or_404(req_id)
-    now = datetime.utcnow()
+    now = utcnow()
     req.status = status
 
     if status == 'pendente':
@@ -14026,7 +14249,7 @@ def _limpa_pendencia(payment):
         session.pop("last_pending_payment", None)
         return None
 
-    expirou   = (datetime.utcnow() - payment.created_at) > PENDING_TIMEOUT
+    expirou   = (utcnow() - payment.created_at) > PENDING_TIMEOUT
     sem_link  = not getattr(payment, "init_point", None)
 
     if payment.status != PaymentStatus.PENDING or expirou or sem_link:
@@ -14909,17 +15132,20 @@ def notificacoes_mercado_pago():
         except (ValueError, TypeError):
             orcamento_id = None
 
+    onboarding = _resolve_health_onboarding(extref) if extref else None
+    payment_status = status_map.get(status, PaymentStatus.PENDING)
+
     try:
         with db.session.begin():
             pay = Payment.query.filter_by(external_reference=extref).first()
             bloco = BlocoOrcamento.query.get(bloco_id) if bloco_id else None
             orcamento = Orcamento.query.get(orcamento_id) if orcamento_id else None
-            if not pay and not bloco and not orcamento:
+            if not pay and not bloco and not orcamento and not onboarding:
                 current_app.logger.warning("Payment %s not found for external_reference %s", mp_id, extref)
                 return jsonify(error="payment not found"), 404
 
             if pay:
-                pay.status = status_map.get(status, PaymentStatus.PENDING)
+                pay.status = payment_status
                 pay.mercado_pago_id = mp_id
 
                 if pay.external_reference and pay.external_reference.startswith('vet-membership-'):
@@ -14943,7 +15169,7 @@ def notificacoes_mercado_pago():
                 new_payment_status = normalized_status
                 orcamento.payment_status = new_payment_status
                 if new_payment_status == 'paid':
-                    paid_at = _parse_mp_datetime(info.get('date_approved')) or datetime.utcnow()
+                    paid_at = _parse_mp_datetime(info.get('date_approved')) or utcnow()
                     orcamento.paid_at = paid_at
                 else:
                     orcamento.paid_at = None
@@ -14956,6 +15182,9 @@ def notificacoes_mercado_pago():
                 elif status in {'cancelled', 'refunded', 'expired'}:
                     orcamento.status = 'canceled'
                 _sync_orcamento_payment_classification(orcamento)
+
+            if onboarding:
+                _sync_health_subscription_from_onboarding(onboarding, payment_status, pay)
 
     except SQLAlchemyError as e:
         current_app.logger.exception("DB error: %s", e)
@@ -15047,6 +15276,9 @@ def _refresh_mp_status(payment: Payment) -> None:
         payment.status = new_status
         if payment.external_reference and payment.external_reference.startswith('vet-membership-'):
             _sync_veterinarian_membership_payment(payment)
+        if payment.external_reference and payment.external_reference.startswith('health-onboarding-'):
+            onboarding = _resolve_health_onboarding(payment.external_reference)
+            _sync_health_subscription_from_onboarding(onboarding, payment.status, payment)
         db.session.commit()
 
 
@@ -15691,7 +15923,7 @@ def appointments():
                         kind=appointment_form.kind.data,
                         status='accepted' if same_user else 'scheduled',
                         created_by=current_user.id,
-                        created_at=datetime.utcnow(),
+                        created_at=utcnow(),
                     )
                     db.session.add(appt)
                     db.session.commit()
@@ -15715,7 +15947,7 @@ def appointments():
             if not horarios_grouped or horarios_grouped[-1]['dia'] != h.dia_semana:
                 horarios_grouped.append({'dia': h.dia_semana, 'itens': []})
             horarios_grouped[-1]['itens'].append(h)
-        now = datetime.utcnow()
+        now = utcnow()
         today_start_local = datetime.now(BR_TZ).replace(
             hour=0, minute=0, second=0, microsecond=0
         )
@@ -16305,7 +16537,7 @@ def appointments():
                         notes=appointment_form.reason.data,
                         kind=appointment_form.kind.data,
                         created_by=current_user.id,
-                        created_at=datetime.utcnow(),
+                        created_at=utcnow(),
                     )
                     db.session.add(appt)
                     db.session.commit()
@@ -16954,7 +17186,7 @@ def update_appointment_status(appointment_id):
             and not (is_vet or is_collaborator)
         )
 
-    if should_enforce_deadline and appointment.scheduled_at - datetime.utcnow() < timedelta(hours=2):
+    if should_enforce_deadline and appointment.scheduled_at - utcnow() < timedelta(hours=2):
         message = 'Prazo expirado.'
         if wants_json:
             return jsonify({'success': False, 'message': message}), 400
@@ -18028,7 +18260,7 @@ def update_exam_appointment_status(appointment_id):
     status = request.form.get('status') or (request.get_json(silent=True) or {}).get('status')
     if status not in {'confirmed', 'canceled'}:
         return jsonify({'success': False, 'message': 'Status inválido.'}), 400
-    if status == 'confirmed' and datetime.utcnow() > appt.confirm_by:
+    if status == 'confirmed' and utcnow() > appt.confirm_by:
         return jsonify({'success': False, 'message': 'Tempo de confirmação expirado.'}), 400
     appt.status = status
     if status == 'canceled':
@@ -18163,7 +18395,7 @@ def update_exam_appointment_requester(appointment_id):
     }
 
     style = status_styles.get(appt.status, status_styles['pending'])
-    now = datetime.utcnow()
+    now = utcnow()
     time_left_seconds = None
     time_left_display = None
     if appt.confirm_by:
@@ -18406,7 +18638,7 @@ def gerar_link_pagamento_orcamento(orcamento_id):
     orcamento.paid_at = None
     if orcamento.status == 'draft':
         orcamento.status = 'sent'
-    orcamento.updated_at = datetime.utcnow()
+    orcamento.updated_at = utcnow()
     db.session.add(orcamento)
     db.session.flush()
     _sync_orcamento_payment_classification(orcamento)

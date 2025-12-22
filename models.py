@@ -18,6 +18,7 @@ from sqlalchemy import Enum as PgEnum
 from sqlalchemy.orm import synonym, object_session
 from sqlalchemy.ext.hybrid import hybrid_property
 from sqlalchemy.exc import OperationalError, ProgrammingError
+from time_utils import utcnow
 
 
 
@@ -178,7 +179,7 @@ class User(UserMixin, db.Model):
     clinica_id = db.Column(db.Integer, db.ForeignKey('clinica.id'), nullable=True)
     clinica = db.relationship('Clinica', backref='usuarios', foreign_keys=[clinica_id])
     is_private = db.Column(db.Boolean, nullable=False, default=True)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=utcnow)
 
 
 
@@ -230,8 +231,8 @@ class DataShareAccess(db.Model):
     revoked_by = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True)
     revoke_reason = db.Column(db.String(255), nullable=True)
 
-    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
-    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+    created_at = db.Column(db.DateTime, default=utcnow, nullable=False)
+    updated_at = db.Column(db.DateTime, default=utcnow, onupdate=utcnow, nullable=False)
 
     user = db.relationship('User', foreign_keys=[user_id], backref=db.backref('data_share_accesses', cascade='all, delete-orphan'))
     animal = db.relationship('Animal', foreign_keys=[animal_id], backref=db.backref('data_share_accesses', cascade='all, delete-orphan'))
@@ -243,7 +244,7 @@ class DataShareAccess(db.Model):
     def is_active(self):
         if self.revoked_at is not None:
             return False
-        if self.expires_at and self.expires_at <= datetime.utcnow():
+        if self.expires_at and self.expires_at <= utcnow():
             return False
         return True
 
@@ -264,8 +265,8 @@ class DataShareRequest(db.Model):
     approved_by_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True)
     denied_at = db.Column(db.DateTime, nullable=True)
     denial_reason = db.Column(db.String(255), nullable=True)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
-    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+    created_at = db.Column(db.DateTime, default=utcnow, nullable=False)
+    updated_at = db.Column(db.DateTime, default=utcnow, onupdate=utcnow, nullable=False)
 
     tutor = db.relationship('User', foreign_keys=[tutor_id])
     animal = db.relationship('Animal')
@@ -276,7 +277,7 @@ class DataShareRequest(db.Model):
     def is_pending(self):
         if self.status != 'pending':
             return False
-        if self.expires_at and self.expires_at <= datetime.utcnow():
+        if self.expires_at and self.expires_at <= utcnow():
             return False
         return True
 
@@ -294,7 +295,7 @@ class DataShareLog(db.Model):
     request_path = db.Column(db.String(255), nullable=True)
     request_ip = db.Column(db.String(50), nullable=True)
     notes = db.Column(db.Text, nullable=True)
-    occurred_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    occurred_at = db.Column(db.DateTime, default=utcnow, nullable=False)
 
     access = db.relationship('DataShareAccess', backref=db.backref('logs', cascade='all, delete-orphan'))
     actor = db.relationship('User', foreign_keys=[actor_id])
@@ -321,7 +322,7 @@ class Animal(db.Model):
     photo_zoom = db.Column(db.Float, default=1.0)
     photo_offset_x = db.Column(db.Float, default=0.0)
     photo_offset_y = db.Column(db.Float, default=0.0)
-    date_added = db.Column(db.DateTime, default=datetime.utcnow)
+    date_added = db.Column(db.DateTime, default=utcnow)
 
     modo = db.Column(db.String(20), default='doação')
     price = db.Column(db.Float, nullable=True)
@@ -437,7 +438,7 @@ class Transaction(db.Model):
         nullable=False,
     )
     type = db.Column(db.String(20))  # adoção, doação, venda, compra
-    date = db.Column(db.DateTime, default=datetime.utcnow)
+    date = db.Column(db.DateTime, default=utcnow)
     status = db.Column(db.String(20))  # pendente, concluída, cancelada
 
     from_user = db.relationship(
@@ -471,7 +472,7 @@ class Message(db.Model):
     clinica_id = db.Column(db.Integer, db.ForeignKey('clinica.id'), nullable=True)
 
     content = db.Column(db.Text, nullable=False)
-    timestamp = db.Column(db.DateTime, default=datetime.utcnow)
+    timestamp = db.Column(db.DateTime, default=utcnow)
 
     # Relações
     sender = db.relationship('User', foreign_keys=[sender_id], back_populates='sent_messages')
@@ -497,7 +498,7 @@ class Interest(db.Model):
         db.ForeignKey('user.id', ondelete='CASCADE'),
         nullable=False,
     )
-    timestamp = db.Column(db.DateTime, default=datetime.utcnow)
+    timestamp = db.Column(db.DateTime, default=utcnow)
 
     user = db.relationship(
         'User',
@@ -545,7 +546,7 @@ class Consulta(db.Model):
     authorization_reference = db.Column(db.String(80), nullable=True)
     authorization_checked_at = db.Column(db.DateTime, nullable=True)
     authorization_notes = db.Column(db.Text)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=utcnow)
     # Campos principais da consulta
     queixa_principal = db.Column(db.Text)
     historico_clinico = db.Column(db.Text)
@@ -586,11 +587,11 @@ class Orcamento(db.Model):
     clinica_id = db.Column(db.Integer, db.ForeignKey('clinica.id'), nullable=False)
     consulta_id = db.Column(db.Integer, db.ForeignKey('consulta.id'), nullable=True)
     descricao = db.Column(db.String(200), nullable=False)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    created_at = db.Column(db.DateTime, default=utcnow, nullable=False)
     updated_at = db.Column(
         db.DateTime,
-        default=datetime.utcnow,
-        onupdate=datetime.utcnow,
+        default=utcnow,
+        onupdate=utcnow,
         nullable=False,
     )
     status = db.Column(db.String(20), nullable=False, default='draft')
@@ -668,7 +669,7 @@ class BlocoOrcamento(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     animal_id = db.Column(db.Integer, db.ForeignKey('animal.id'), nullable=False)
     clinica_id = db.Column(db.Integer, db.ForeignKey('clinica.id'), nullable=False)
-    data_criacao = db.Column(db.DateTime, default=datetime.utcnow)
+    data_criacao = db.Column(db.DateTime, default=utcnow)
     discount_percent = db.Column(db.Numeric(5, 2), nullable=True)
     discount_value = db.Column(db.Numeric(10, 2), nullable=True)
     tutor_notes = db.Column(db.Text, nullable=True)
@@ -701,7 +702,7 @@ class BlocoPrescricao(db.Model):
     __tablename__ = 'bloco_prescricao'
 
     id = db.Column(db.Integer, primary_key=True)
-    data_criacao = db.Column(db.DateTime, default=datetime.utcnow)
+    data_criacao = db.Column(db.DateTime, default=utcnow)
     saved_by_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True)
     clinica_id = db.Column(db.Integer, db.ForeignKey('clinica.id'), nullable=False)
 
@@ -724,7 +725,7 @@ class Prescricao(db.Model):
     frequencia = db.Column(db.Text)
     duracao = db.Column(db.Text)
     observacoes = db.Column(db.Text)
-    data_prescricao = db.Column(db.DateTime, default=datetime.utcnow)
+    data_prescricao = db.Column(db.DateTime, default=utcnow)
 
     # em Prescricao
     animal_id = db.Column(db.Integer, db.ForeignKey('animal.id'), nullable=False)
@@ -829,7 +830,7 @@ class VetClinicInvite(db.Model):
     clinica_id = db.Column(db.Integer, db.ForeignKey('clinica.id'), nullable=False)
     veterinario_id = db.Column(db.Integer, db.ForeignKey('veterinario.id'), nullable=False)
     status = db.Column(db.String(20), nullable=False, default='pending')
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=utcnow)
 
     clinica = db.relationship('Clinica', backref='vet_invites')
     veterinario = db.relationship('Veterinario', backref='clinic_invites')
@@ -862,7 +863,7 @@ class ClinicInventoryMovement(db.Model):
     quantity_change = db.Column(db.Integer, nullable=False)
     quantity_before = db.Column(db.Integer, nullable=False)
     quantity_after = db.Column(db.Integer, nullable=False)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    created_at = db.Column(db.DateTime, default=utcnow, nullable=False)
 
     clinica = db.relationship('Clinica', backref='inventory_movements')
     item = db.relationship('ClinicInventoryItem', back_populates='movements')
@@ -880,7 +881,7 @@ class ClinicFinancialSnapshot(db.Model):
     total_receitas_servicos = db.Column(db.Numeric(14, 2), nullable=False, default=Decimal('0.00'))
     total_receitas_produtos = db.Column(db.Numeric(14, 2), nullable=False, default=Decimal('0.00'))
     total_receitas_gerais = db.Column(db.Numeric(14, 2), nullable=False, default=Decimal('0.00'))
-    gerado_em = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+    gerado_em = db.Column(db.DateTime, nullable=False, default=utcnow)
 
     clinic = db.relationship(
         'Clinica',
@@ -919,8 +920,8 @@ class ClinicTaxes(db.Model):
     fator_r = db.Column(db.Numeric(6, 4), nullable=False, default=Decimal('0.0000'))
     faixa_simples = db.Column(db.Integer, nullable=True)
     projecao_anual = db.Column(db.Numeric(14, 2), nullable=False, default=Decimal('0.00'))
-    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
-    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+    created_at = db.Column(db.DateTime, default=utcnow, nullable=False)
+    updated_at = db.Column(db.DateTime, default=utcnow, onupdate=utcnow, nullable=False)
 
     clinic = db.relationship(
         'Clinica',
@@ -937,7 +938,7 @@ class ClinicNotification(db.Model):
     message = db.Column(db.Text, nullable=True)
     type = db.Column(db.String(20), nullable=False, default='info')
     month = db.Column(db.Date, nullable=False, index=True)
-    created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime, nullable=False, default=utcnow)
     resolved = db.Column(db.Boolean, nullable=False, default=False)
     resolution_date = db.Column(db.DateTime, nullable=True)
 
@@ -963,7 +964,7 @@ class ClassifiedTransaction(db.Model):
     category = db.Column(db.String(80), nullable=False, index=True)
     subcategory = db.Column(db.String(80), nullable=True)
     raw_id = db.Column(db.String(80), nullable=False)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    created_at = db.Column(db.DateTime, default=utcnow, nullable=False)
 
     clinic = db.relationship(
         'Clinica',
@@ -1003,12 +1004,12 @@ class PJPayment(db.Model):
         server_default='pendente',
     )
     observacoes = db.Column(db.Text, nullable=True)
-    created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime, nullable=False, default=utcnow)
     updated_at = db.Column(
         db.DateTime,
         nullable=False,
-        default=datetime.utcnow,
-        onupdate=datetime.utcnow,
+        default=utcnow,
+        onupdate=utcnow,
     )
 
     clinica_id = synonym('clinic_id')
@@ -1055,8 +1056,8 @@ class PlantonistaEscala(db.Model):
     observacoes = db.Column(db.Text, nullable=True)
     realizado_em = db.Column(db.DateTime, nullable=True)
     pj_payment_id = db.Column(db.Integer, db.ForeignKey('pj_payments.id'), nullable=True)
-    created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
-    updated_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = db.Column(db.DateTime, nullable=False, default=utcnow)
+    updated_at = db.Column(db.DateTime, nullable=False, default=utcnow, onupdate=utcnow)
 
     clinic = db.relationship(
         'Clinica',
@@ -1088,7 +1089,7 @@ class PlantonistaEscala(db.Model):
         referencia = self.fim or self.inicio
         if not referencia:
             return False
-        return referencia < datetime.utcnow()
+        return referencia < utcnow()
 
     def __repr__(self):
         return f"<PlantonistaEscala {self.medico_nome} {self.turno}>"
@@ -1105,8 +1106,8 @@ class PlantaoModelo(db.Model):
     medico_id = db.Column(db.Integer, db.ForeignKey('veterinario.id'), nullable=True, index=True)
     medico_nome = db.Column(db.String(150), nullable=True)
     medico_cnpj = db.Column(db.String(20), nullable=True)
-    created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
-    updated_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = db.Column(db.DateTime, nullable=False, default=utcnow)
+    updated_at = db.Column(db.DateTime, nullable=False, default=utcnow, onupdate=utcnow)
 
     clinic = db.relationship('Clinica', backref=db.backref('plantao_modelos', cascade='all, delete-orphan', lazy=True))
     medico = db.relationship('Veterinario', backref=db.backref('plantao_modelos', lazy=True))
@@ -1173,7 +1174,7 @@ class VeterinarianMembership(db.Model):
         nullable=False,
         unique=True,
     )
-    started_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    started_at = db.Column(db.DateTime, default=utcnow, nullable=False)
     trial_ends_at = db.Column(db.DateTime, nullable=False)
     paid_until = db.Column(db.DateTime, nullable=True)
     last_payment_id = db.Column(db.Integer, db.ForeignKey('payment.id'), nullable=True)
@@ -1185,7 +1186,7 @@ class VeterinarianMembership(db.Model):
     last_payment = db.relationship('Payment', foreign_keys=[last_payment_id])
 
     def _now(self):
-        return datetime.utcnow()
+        return utcnow()
 
     def ensure_trial_dates(self, trial_days: int = 30) -> None:
         """Guarantee that ``started_at`` and ``trial_ends_at`` are populated."""
@@ -1267,8 +1268,8 @@ class VeterinarianSettings(db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
     membership_price = db.Column(db.Numeric(10, 2), nullable=False, default=Decimal('60.00'))
-    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
-    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+    created_at = db.Column(db.DateTime, default=utcnow, nullable=False)
+    updated_at = db.Column(db.DateTime, default=utcnow, onupdate=utcnow, nullable=False)
 
     @classmethod
     def load(cls):
@@ -1337,7 +1338,7 @@ class Appointment(db.Model):
         db.ForeignKey('user.id', ondelete='SET NULL'),
         nullable=True,
     )
-    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    created_at = db.Column(db.DateTime, default=utcnow, nullable=False)
 
     animal = db.relationship(
         'Animal',
@@ -1412,8 +1413,8 @@ def _create_veterinarian_membership(mapper, connection, target):
     if membership is None:
         membership = VeterinarianMembership(
             veterinario_id=target.id,
-            started_at=datetime.utcnow(),
-            trial_ends_at=datetime.utcnow() + timedelta(days=trial_days),
+            started_at=utcnow(),
+            trial_ends_at=utcnow() + timedelta(days=trial_days),
         )
         session.add(membership)
     else:
@@ -1432,7 +1433,7 @@ class ExamAppointment(db.Model):
     requester_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
     scheduled_at = db.Column(db.DateTime, nullable=False)
     status = db.Column(db.String(20), nullable=False, default='pending')
-    request_time = db.Column(db.DateTime, default=datetime.utcnow)
+    request_time = db.Column(db.DateTime, default=utcnow)
     confirm_by = db.Column(db.DateTime)
 
     animal = db.relationship(
@@ -1452,7 +1453,7 @@ class ExamAppointment(db.Model):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         if not self.confirm_by:
-            self.confirm_by = (self.request_time or datetime.utcnow()) + timedelta(hours=2)
+            self.confirm_by = (self.request_time or utcnow()) + timedelta(hours=2)
 
     @property
     def status_display(self):
@@ -1460,7 +1461,7 @@ class ExamAppointment(db.Model):
             return 'Aceito'
         if self.status == 'canceled':
             return 'Cancelado'
-        if self.confirm_by and datetime.utcnow() > self.confirm_by:
+        if self.confirm_by and utcnow() > self.confirm_by:
             return 'Prazo expirado'
         return 'Aguardando aceitação'
 
@@ -1539,7 +1540,7 @@ class BlocoExames(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     animal_id = db.Column(db.Integer, db.ForeignKey('animal.id'), nullable=False)  # <- novo campo
     observacoes_gerais = db.Column(db.Text)
-    data_criacao = db.Column(db.DateTime, default=datetime.utcnow)
+    data_criacao = db.Column(db.DateTime, default=utcnow)
 
     animal = db.relationship('Animal', backref=db.backref('blocos_exames', cascade='all, delete-orphan', lazy=True))
     exames = db.relationship('ExameSolicitado', backref='bloco', cascade='all, delete-orphan')
@@ -1594,7 +1595,7 @@ class Vacina(db.Model):
     aplicada = db.Column(db.Boolean, default=False)
     aplicada_em = db.Column(db.Date)
     aplicada_por = db.Column(db.Integer, db.ForeignKey('user.id'))
-    criada_em = db.Column(db.DateTime, default=datetime.utcnow)
+    criada_em = db.Column(db.DateTime, default=utcnow)
     data = synonym('aplicada_em')
 
     # Registro de quem cadastrou a vacina
@@ -1612,7 +1613,7 @@ class AnimalDocumento(db.Model):
     filename = db.Column(db.String(255), nullable=False)
     file_url = db.Column(db.String(500), nullable=False)
     descricao = db.Column(db.Text, nullable=True)
-    uploaded_at = db.Column(db.DateTime, default=datetime.utcnow)
+    uploaded_at = db.Column(db.DateTime, default=utcnow)
 
     animal = db.relationship('Animal', backref=db.backref('documentos', cascade='all, delete-orphan'))
     veterinario = db.relationship('User')
@@ -1624,7 +1625,7 @@ class Notification(db.Model):
     message = db.Column(db.Text, nullable=False)
     channel = db.Column(db.String(20), nullable=False)
     kind = db.Column(db.String(50), nullable=True)
-    sent_at = db.Column(db.DateTime, default=datetime.utcnow)
+    sent_at = db.Column(db.DateTime, default=utcnow)
 
     user = db.relationship('User', backref=db.backref('notifications', cascade='all, delete-orphan'))
 
@@ -1652,7 +1653,7 @@ class Racao(db.Model):
     recomendacao_custom = db.Column(db.Float)  # se quiser ajustar a recomendação
     observacoes_racao = db.Column(db.Text)
 
-    data_cadastro = db.Column(db.DateTime, default=datetime.utcnow)
+    data_cadastro = db.Column(db.DateTime, default=utcnow)
 
     animal = db.relationship('Animal', backref=db.backref('racoes', lazy=True, cascade='all, delete-orphan'))
     tipo_racao = db.relationship('TipoRacao', backref=db.backref('usos', lazy=True))
@@ -1688,7 +1689,7 @@ class Review(db.Model):
     )
     rating = db.Column(db.Integer, nullable=False)  # 1 a 5
     comment = db.Column(db.Text)
-    date = db.Column(db.DateTime, default=datetime.utcnow)
+    date = db.Column(db.DateTime, default=utcnow)
 
 
 # Fotos extras dos animais
@@ -1757,7 +1758,7 @@ class Order(db.Model):
         nullable=True,
         index=True,
     )
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=utcnow)
     shipping_address = db.Column(db.String(200))
 
     user = db.relationship(
@@ -1830,7 +1831,7 @@ class DeliveryRequest(db.Model):
         db.ForeignKey('user.id', ondelete='CASCADE'),
         nullable=False,
     )
-    requested_at = db.Column(db.DateTime, default=datetime.utcnow)
+    requested_at = db.Column(db.DateTime, default=utcnow)
     status = db.Column(db.String(20), default='pendente')
     worker_id = db.Column(
         db.Integer,
@@ -1924,7 +1925,7 @@ class Payment(db.Model):
     external_reference = db.Column(db.String(255))
     mercado_pago_id    = db.Column(db.String(64))
 
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=utcnow)
 
     user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False, index=True)
     user    = db.relationship(
@@ -1968,7 +1969,7 @@ class HealthSubscription(db.Model):
     payment_id = db.Column(db.Integer, db.ForeignKey('payment.id'))
 
     active = db.Column(db.Boolean, default=False)
-    start_date = db.Column(db.DateTime, default=datetime.utcnow)
+    start_date = db.Column(db.DateTime, default=utcnow)
     end_date = db.Column(db.DateTime, nullable=True)
     guardian_document = db.Column(db.String(40), nullable=True)
     animal_document = db.Column(db.String(60), nullable=True)
@@ -2032,12 +2033,12 @@ class HealthPlanOnboarding(db.Model):
     animal_document = db.Column(db.String(60), nullable=True)
     contract_reference = db.Column(db.String(80), nullable=True)
     extra_notes = db.Column(db.Text, nullable=True)
-    consent_signed_at = db.Column(db.DateTime, default=datetime.utcnow)
+    consent_signed_at = db.Column(db.DateTime, default=utcnow)
     consent_ip = db.Column(db.String(64), nullable=True)
     attachments = db.Column(db.JSON, nullable=True)
     status = db.Column(db.String(20), default='pending_payment')
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=utcnow)
+    updated_at = db.Column(db.DateTime, default=utcnow, onupdate=utcnow)
 
     plan = db.relationship('HealthPlan', backref=db.backref('onboarding_records', cascade='all, delete-orphan'))
     animal = db.relationship('Animal', backref=db.backref('plan_onboardings', cascade='all, delete-orphan'))
@@ -2063,8 +2064,8 @@ class HealthCoverageUsage(db.Model):
     amount_covered = db.Column(db.Numeric(12, 2), default=0)
     status = db.Column(db.String(20), default='pending')
     notes = db.Column(db.Text, nullable=True)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=utcnow)
+    updated_at = db.Column(db.DateTime, default=utcnow, onupdate=utcnow)
 
     subscription = db.relationship('HealthSubscription', back_populates='coverage_usages')
     coverage = db.relationship('HealthCoverage', backref=db.backref('usages', cascade='all, delete-orphan'))
@@ -2084,8 +2085,8 @@ class HealthClaim(db.Model):
     payload = db.Column(db.JSON, nullable=True)
     status = db.Column(db.String(20), default='received')
     response_payload = db.Column(db.JSON, nullable=True)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=utcnow)
+    updated_at = db.Column(db.DateTime, default=utcnow, onupdate=utcnow)
 
     subscription = db.relationship('HealthSubscription', back_populates='claims')
     coverage = db.relationship('HealthCoverage', backref=db.backref('claims', cascade='all, delete-orphan'))

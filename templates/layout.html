@@ -694,13 +694,30 @@
           }
 
           const handle = async () => {
-            const { response, queued } = await fetchOrQueue(api, {
-              method: 'POST',
-              body: formData,
-              headers: { 'Accept': 'text/html' }
-            });
+            let response;
+            let queued = false;
 
-            if (response && response.ok) {
+            try {
+              ({ response, queued } = await fetchOrQueue(api, {
+                method: 'POST',
+                body: formData,
+                headers: { 'Accept': 'text/html' }
+              }));
+            } catch (err) {
+              console.error('Erro ao enviar mensagem:', err);
+              if (placeholder) {
+                const status = placeholder.querySelector('.js-status');
+                if (status) {
+                  status.textContent = 'Falha ao enviar. Tente novamente.';
+                }
+                placeholder.dataset.status = 'error';
+              }
+              return { success: false, message: 'Falha ao enviar a mensagem.', level: 'danger' };
+            }
+
+            const isSuccessful = response && (response.ok || (response.status >= 300 && response.status < 400));
+
+            if (isSuccessful) {
               const html = await response.text();
               if (placeholder) {
                 placeholder.insertAdjacentHTML('afterend', html);

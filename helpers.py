@@ -9,13 +9,9 @@ from datetime import date, datetime, timedelta, timezone, time
 from itertools import groupby
 from dateutil.relativedelta import relativedelta
 from sqlalchemy import case
-from zoneinfo import ZoneInfo
 
 from extensions import db
-
-
-BR_TZ = ZoneInfo("America/Sao_Paulo")
-
+from time_utils import BR_TZ, utcnow
 
 DEFAULT_APPOINTMENT_DURATION_MINUTES = 30
 
@@ -167,8 +163,8 @@ def ensure_veterinarian_membership(veterinario, trial_days: int | None = None):
     if membership is None:
         membership = VeterinarianMembership(
             veterinario=veterinario,
-            started_at=datetime.utcnow(),
-            trial_ends_at=datetime.utcnow() + timedelta(days=trial_days),
+            started_at=utcnow(),
+            trial_ends_at=utcnow() + timedelta(days=trial_days),
         )
         db.session.add(membership)
     else:
