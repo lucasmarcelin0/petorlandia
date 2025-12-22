@@ -2360,6 +2360,71 @@ def api_cep_lookup(cep: str):
     return jsonify(success=False, error='CEP não encontrado'), 404
 
 
+@app.route('/api/geocode/reverse')
+def api_reverse_geocode():
+    """Resolve latitude/longitude into address data for the form.
+
+    This endpoint wraps the public Nominatim API to avoid CORS issues
+    and to normalize the response to the fields expected by the
+    frontend address form.
+    """
+
+    def _state_from_address(address: dict):
+        iso_code = address.get('ISO3166-2-lvl4') or address.get('ISO3166-2-lvl3')
+        if isinstance(iso_code, str) and '-' in iso_code:
+            candidate = iso_code.split('-')[-1]
+            if len(candidate) == 2:
+                return candidate
+        state_code = address.get('state_code')
+        if isinstance(state_code, str) and len(state_code) == 2:
+            return state_code
+        return None
+
+    def _first_of(address: dict, *keys):
+        for key in keys:
+            value = address.get(key)
+            if value:
+                return value
+        return None
+
+    try:
+        lat = float(request.args.get('lat', ''))
+        lon = float(request.args.get('lon', ''))
+    except ValueError:
+        return jsonify(success=False, error='Coordenadas inválidas'), 400
+
+    params = {
+        'format': 'jsonv2',
+        'lat': lat,
+        'lon': lon,
+        'addressdetails': 1,
+    }
+
+    headers = {'User-Agent': 'petorlandia-geocoder/1.0'}
+    try:
+        response = requests.get('https://nominatim.openstreetmap.org/reverse', params=params, headers=headers, timeout=8)
+        response.raise_for_status()
+        payload = response.json()
+    except (requests.RequestException, ValueError):
+        return jsonify(success=False, error='Não foi possível obter o endereço'), 502
+
+    address = payload.get('address') or {}
+    if not address:
+        return jsonify(success=False, error='Endereço não encontrado'), 404
+
+    normalized = {
+        'cep': address.get('postcode'),
+        'logradouro': _first_of(address, 'road', 'residential', 'pedestrian', 'path'),
+        'numero': address.get('house_number'),
+        'complemento': _first_of(address, 'building', 'amenity'),
+        'bairro': _first_of(address, 'suburb', 'neighbourhood', 'city_district'),
+        'localidade': _first_of(address, 'city', 'town', 'village'),
+        'uf': _state_from_address(address),
+    }
+
+    return jsonify(success=True, data=normalized)
+
+
 @app.route('/veterinario/assinatura')
 @login_required
 def veterinarian_membership():
