@@ -23,11 +23,11 @@
     <tbody>
       {% for c in historico_consultas %}
       <tr id="consulta-{{ c.id }}">
-        <td class="text-nowrap">
+        <td class="text-nowrap js-br-time" data-timestamp="{{ (c.finalizada_em or c.created_at)|isoformat_with_tz }}">
           {# Usa finalizada_em se disponível, senão usa created_at #}
           {% set timestamp = c.finalizada_em or c.created_at %}
-          {{ timestamp|format_datetime_brazil('%d/%m/%Y') }}<br>
-          <small class="text-muted">{{ timestamp|format_datetime_brazil('%H:%M') }}</small>
+          <span class="js-br-date">{{ timestamp|format_datetime_brazil('%d/%m/%Y') }}</span><br>
+          <small class="text-muted js-br-time-only">{{ timestamp|format_datetime_brazil('%H:%M') }}</small>
           {% if c.retorno_de_id %}
           <span class="badge bg-info ms-1">Retorno</span>
           {% endif %}

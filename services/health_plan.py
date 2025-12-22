@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from typing import Dict, Iterable, List, Optional
 
@@ -19,7 +19,7 @@ from models import (
     HealthSubscription,
     OrcamentoItem,
 )
-from time_utils import utcnow
+from time_utils import coerce_to_brazil_tz, utcnow
 
 COVERAGE_STATUS_LABELS: Dict[str, str] = {
     'approved': 'Aprovado',
@@ -210,7 +210,25 @@ def summarize_plan_metrics() -> List[Dict[str, object]]:
     return metrics
 
 
-def build_usage_history(plan_id: Optional[int] = None, subscription_id: Optional[int] = None, limit: int = 50) -> List[Dict[str, object]]:
+def _serialize_usage_timestamp(value):
+    """Normalize timestamps for consistent server and client rendering.
+
+    We always emit an explicit UTC ISO string (ending with ``Z``) so that
+    JavaScript clients do not apply an implicit +3h offset when parsing
+    naive values. The localized datetime is returned for server-side
+    formatting when needed.
+    """
+
+    if value is None:
+        return None, None
+
+    localized = coerce_to_brazil_tz(value, allow_naive=True)
+    utc_value = localized.astimezone(timezone.utc)
+    utc_iso = utc_value.isoformat().replace("+00:00", "Z")
+    return utc_iso, localized
+
+
+def build_usage_history(plan_id: Optional[int] = None, subscription_id: Optional[int] = None, limit: int = 50, include_display: bool = False) -> List[Dict[str, object]]:
     query = HealthCoverageUsage.query.options(
         joinedload(HealthCoverageUsage.coverage),
         joinedload(HealthCoverageUsage.subscription).joinedload(HealthSubscription.plan),
@@ -225,20 +243,25 @@ def build_usage_history(plan_id: Optional[int] = None, subscription_id: Optional
     for usage in query.limit(limit).all():
         plan_name = usage.subscription.plan.name if usage.subscription and usage.subscription.plan else None
         animal_name = usage.subscription.animal.name if usage.subscription and usage.subscription.animal else None
-        usages.append(
-            {
-                'id': usage.id,
-                'status': usage.status,
-                'status_label': coverage_label(usage.status),
-                'amount_billed': float(usage.amount_billed or 0),
-                'amount_covered': float(usage.amount_covered or 0),
-                'coverage': usage.coverage.name if usage.coverage else None,
-                'procedure_code': usage.coverage.procedure_code if usage.coverage else None,
-                'plan': plan_name,
-                'animal': animal_name,
-                'created_at': usage.created_at.isoformat() if usage.created_at else None,
-            }
-        )
+        created_at_iso, created_at_local = _serialize_usage_timestamp(usage.created_at)
+
+        record = {
+            'id': usage.id,
+            'status': usage.status,
+            'status_label': coverage_label(usage.status),
+            'amount_billed': float(usage.amount_billed or 0),
+            'amount_covered': float(usage.amount_covered or 0),
+            'coverage': usage.coverage.name if usage.coverage else None,
+            'procedure_code': usage.coverage.procedure_code if usage.coverage else None,
+            'plan': plan_name,
+            'animal': animal_name,
+            'created_at': created_at_iso,
+        }
+
+        if include_display:
+            record['created_at_display'] = created_at_local.strftime('%d/%m/%Y %H:%M') if created_at_local else 'N/D'
+
+        usages.append(record)
     return usages
 
 

@@ -425,6 +425,28 @@ function bindSyncForms(root) {
 }
 
 document.addEventListener('DOMContentLoaded', function() {
+  const brazilDateFormatter = new Intl.DateTimeFormat('pt-BR', { timeZone: 'America/Sao_Paulo', year: 'numeric', month: '2-digit', day: '2-digit' });
+  const brazilTimeFormatter = new Intl.DateTimeFormat('pt-BR', { timeZone: 'America/Sao_Paulo', hour: '2-digit', minute: '2-digit' });
+
+  window.formatBrazilTimestamps = function formatBrazilTimestamps(root = document) {
+    root.querySelectorAll('.js-br-time').forEach(el => {
+      const iso = el.dataset.timestamp;
+      if (!iso) return;
+      const dateObj = new Date(iso);
+      if (Number.isNaN(dateObj.getTime())) return;
+
+      const dateLabel = brazilDateFormatter.format(dateObj);
+      const timeLabel = brazilTimeFormatter.format(dateObj);
+
+      const dateTarget = el.querySelector('.js-br-date');
+      const timeTarget = el.querySelector('.js-br-time-only');
+      if (dateTarget) dateTarget.textContent = dateLabel;
+      if (timeTarget) timeTarget.textContent = timeLabel;
+    });
+  };
+
+  formatBrazilTimestamps();
+
   const hash = window.location.hash;
   if (hash) {
     const hashTab = document.querySelector(`[data-bs-target="${hash}"]`);
@@ -452,6 +474,8 @@ document.addEventListener('DOMContentLoaded', function() {
   }
 
   bindSyncForms(document);
+
+  formatBrazilTimestamps();
 
   // Salvar aba ativa quando muda
   document.getElementById('consultaTabs').addEventListener('shown.bs.tab', function(event) {
@@ -499,6 +523,9 @@ document.addEventListener('form-sync-success', function(ev) {
       if (container) {
         container.innerHTML = data.html;
         bindSyncForms(container);
+        if (typeof formatBrazilTimestamps === 'function') {
+          formatBrazilTimestamps(container);
+        }
       }
     }
     const toastEl = document.getElementById('actionToast');
@@ -519,6 +546,9 @@ document.addEventListener('form-sync-success', function(ev) {
       if (container) {
         container.innerHTML = data.html;
         bindSyncForms(container);
+        if (typeof formatBrazilTimestamps === 'function') {
+          formatBrazilTimestamps(container);
+        }
       }
     }
     const toastEl = document.getElementById('actionToast');
