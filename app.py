@@ -5940,19 +5940,48 @@ def chat_view(animal_id):
     return render_template('chat/conversa.html', animal=animal)
 
 
+def _resolve_animal_conversation(animal_id, user_id):
+    """Return the animal and the interlocutor for a conversation.
+
+    The conversation is always between the animal's owner and another user.
+    We accept URLs that point either to the owner (from interested users) or
+    directly to the interested user (from the owner). Any other combination
+    is blocked to avoid leaking conversations.
+    """
+
+    animal = Animal.query.get_or_404(animal_id)
+    owner_id = animal.user_id
+    is_admin = (current_user.role or '').lower() == 'admin'
+
+    # Admins can jump directly into either side of the conversation. This lets
+    # them answer interested users (user_id == interested) or the owner
+    # (user_id == owner_id) without being incorrectly blocked.
+    if is_admin:
+        if user_id == current_user.id:
+            abort(404)
+
+        interlocutor = User.query.get_or_404(user_id)
+        return animal, interlocutor
+
+    if current_user.id == owner_id:
+        interlocutor_id = user_id
+    elif user_id in {owner_id, current_user.id}:
+        interlocutor_id = owner_id
+    else:
+        abort(404)
+
+    if interlocutor_id == current_user.id:
+        abort(404)
+
+    interlocutor = User.query.get_or_404(interlocutor_id)
+    return animal, interlocutor
+
+
 @app.route('/conversa/<int:animal_id>/<int:user_id>', methods=['GET', 'POST'])
 @login_required
 def conversa(animal_id, user_id):
-    # Bypass strict privacy checks for conversation to allow adoption/interest flow
-    animal = Animal.query.get_or_404(animal_id)
-    # For conversations about an animal, we should allow users to talk to the animal's owner
-    # even if they're marked as private, so use User.query.get_or_404 instead of get_user_or_404
-    if current_user.id not in {animal.user_id, user_id}:
-        abort(404)
+    animal, outro_usuario = _resolve_animal_conversation(animal_id, user_id)
 
-    interlocutor_id = animal.user_id if current_user.id == user_id else user_id
-    outro_usuario = User.query.get_or_404(interlocutor_id)
-    
     interesse_existente = Interest.query.filter_by(
         user_id=outro_usuario.id, animal_id=animal.id).first()
 
@@ -6002,12 +6031,7 @@ def conversa(animal_id, user_id):
 def api_conversa_message(animal_id, user_id):
     """Recebe uma nova mensagem da conversa e retorna o HTML renderizado."""
     form = MessageForm()
-    animal = Animal.query.get_or_404(animal_id)
-    if current_user.id not in {animal.user_id, user_id}:
-        abort(404)
-
-    interlocutor_id = animal.user_id if current_user.id == user_id else user_id
-    outro_usuario = User.query.get_or_404(interlocutor_id)
+    animal, outro_usuario = _resolve_animal_conversation(animal_id, user_id)
     if form.validate_on_submit():
         nova_msg = Message(
             sender_id=current_user.id,
