@@ -158,7 +158,7 @@
       <tbody>
         {% for movement in inventory_movements %}
         <tr>
-          <td>{{ movement.created_at.strftime('%d/%m/%Y %H:%M') }}</td>
+          <td>{{ movement.created_at|format_datetime_brazil('%d/%m/%Y %H:%M') }}</td>
           <td>{{ movement.item.name }}</td>
           <td>
             {% if movement.quantity_change > 0 %}

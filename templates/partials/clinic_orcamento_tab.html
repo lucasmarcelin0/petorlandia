@@ -276,7 +276,7 @@
               </td>
               <td class="text-center" data-label="Atualizado" data-orcamento-updated>
                 {% set updated = o.updated_at or o.created_at %}
-                {{ updated.strftime('%d/%m/%Y %H:%M') if updated else '—' }}
+                {{ updated|format_datetime_brazil('%d/%m/%Y %H:%M') if updated else '—' }}
               </td>
               <td class="text-center" data-label="Envios">
                 <div class="d-flex flex-column gap-1">

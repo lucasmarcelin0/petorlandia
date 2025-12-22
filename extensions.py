@@ -1,4 +1,5 @@
 from contextlib import nullcontext
+from datetime import datetime, timezone
 
 from flask import current_app
 from flask_sqlalchemy import SQLAlchemy
@@ -68,3 +69,29 @@ def _prevent_not_null_violations(session, _flush_context, _instances):
             model_name = mapper.class_.__name__
             columns = ", ".join(missing)
             raise ValueError(f"{model_name} requires values for: {columns}")
+
+
+# Register event listener to ensure datetime columns always have timezone info
+@event.listens_for(db.Model, "load", propagate=True)
+def _receive_load(target, context):
+    """Convert naive datetimes from DateTime(timezone=True) columns to UTC-aware."""
+    try:
+        mapper = inspect(type(target))
+        if mapper is None:
+            return
+        
+        for column in mapper.columns:
+            # Check if this is a datetime column
+            col_type_str = str(column.type)
+            if 'DATETIME' not in col_type_str.upper():
+                continue
+            
+            attr_name = column.key
+            value = getattr(target, attr_name, None)
+            
+            # If naive, assume UTC and set the timezone
+            if isinstance(value, datetime) and value.tzinfo is None:
+                setattr(target, attr_name, value.replace(tzinfo=timezone.utc))
+    except Exception:
+        # Silently ignore any errors
+        pass

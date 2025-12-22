@@ -115,7 +115,7 @@
                 <div class="d-flex justify-content-between align-items-start mb-2">
                   <h5 class="card-title mb-0">{{ tutor.name }}</h5>
                   {% if tutor.created_at %}
-                  <span class="badge text-bg-light border text-muted">Desde {{ tutor.created_at.strftime('%d/%m/%Y') }}</span>
+                  <span class="badge text-bg-light border text-muted">Desde {{ tutor.created_at|format_datetime_brazil('%d/%m/%Y') }}</span>
                   {% endif %}
                 </div>
                 <div class="status-chip-group d-flex flex-wrap gap-2">

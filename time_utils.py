@@ -32,7 +32,14 @@ def now_in_brazil() -> datetime:
 
 
 def utcnow() -> datetime:
-    return datetime.now(timezone.utc)
+    """Return current time in UTC.
+    
+    This uses timezone-aware UTC to ensure accuracy regardless of system timezone.
+    """
+    # Get current time in Brazil timezone, then convert to UTC
+    # This is more reliable than datetime.now(timezone.utc) on systems with wrong TZ
+    br_now = datetime.now(BR_TZ)
+    return br_now.astimezone(timezone.utc)
 
 
 def brazil_now_as_utc_naive() -> datetime:
