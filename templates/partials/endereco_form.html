@@ -244,10 +244,10 @@
         const bairroField = addressCard.querySelector('#bairro');
         const cidadeField = addressCard.querySelector('#cidade');
 
-        if (ruaField) ruaField.value = data.logradouro || "";
-        if (complementoField) complementoField.value = data.complemento || "";
-        if (bairroField) bairroField.value = data.bairro || "";
-        if (cidadeField) cidadeField.value = data.localidade || "";
+        if (ruaField && data.logradouro) ruaField.value = data.logradouro;
+        if (complementoField && data.complemento) complementoField.value = data.complemento;
+        if (bairroField && data.bairro) bairroField.value = data.bairro;
+        if (cidadeField && data.localidade) cidadeField.value = data.localidade;
 
         // Atualiza o select de estado
         const estadoSelect = addressCard.querySelector('#estado');
