@@ -7,6 +7,8 @@
     </button>
   </h5>
   <div class="text-muted small mb-2" data-geo-status></div>
+  <input type="hidden" name="latitude" id="latitude" value="{{ endereco.latitude|default('', true) if endereco else '' }}">
+  <input type="hidden" name="longitude" id="longitude" value="{{ endereco.longitude|default('', true) if endereco else '' }}">
 
   {% set addr_form = form if form is defined and form.cep is defined else None %}
   <div class="row g-3">
@@ -334,6 +336,11 @@
           throw new Error('Coordenadas não encontradas.');
         }
 
+        const latField = addressCard.querySelector('#latitude');
+        const lonField = addressCard.querySelector('#longitude');
+        if (latField) latField.value = latitude;
+        if (lonField) lonField.value = longitude;
+
         setStatus('Encontramos sua localização! Buscando endereço...');
 
         const reverseEndpoint = "{{ url_for('api_reverse_geocode') }}";
@@ -443,6 +450,10 @@
           if (this.value.trim()) {
             this.classList.remove("is-invalid");
           }
+          const latField = document.getElementById('latitude');
+          const lonField = document.getElementById('longitude');
+          if (latField) latField.value = '';
+          if (lonField) lonField.value = '';
         });
       }
     });

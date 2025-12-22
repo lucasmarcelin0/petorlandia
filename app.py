@@ -5147,6 +5147,28 @@ def _geocode_endereco(endereco: Endereco | None):
     return coords
 
 
+def _update_coordinates_from_request(endereco: Endereco | None):
+    """Aplica latitude/longitude enviados pelo formulário, se válidos."""
+
+    if not endereco:
+        return False
+
+    raw_lat = (request.form.get('latitude') or '').strip()
+    raw_lon = (request.form.get('longitude') or '').strip()
+
+    if not raw_lat and not raw_lon:
+        return False
+
+    try:
+        endereco.latitude = float(raw_lat)
+        endereco.longitude = float(raw_lon)
+        return True
+    except ValueError:
+        endereco.latitude = None
+        endereco.longitude = None
+        return False
+
+
 @app.route('/register', methods=['GET', 'POST'])
 def register():
     form = RegistrationForm()
@@ -5189,7 +5211,8 @@ def register():
             cidade=request.form.get('cidade'),
             estado=request.form.get('estado')
         )
-        _geocode_endereco(endereco)
+        if not _update_coordinates_from_request(endereco):
+            _geocode_endereco(endereco)
 
         # Upload da foto de perfil para o S3
         photo_url = None
@@ -5508,7 +5531,8 @@ def profile():
             flash(message, 'warning')
             return redirect(url_for('profile'))
 
-        _geocode_endereco(endereco)
+        if not _update_coordinates_from_request(endereco):
+            _geocode_endereco(endereco)
         db.session.add(endereco)
 
         # Upload de imagem para S3 (se houver nova)
@@ -10211,7 +10235,8 @@ def tutores():
             cidade=cidade,
             estado=estado
         )
-        _geocode_endereco(endereco)
+        if not _update_coordinates_from_request(endereco):
+            _geocode_endereco(endereco)
         db.session.add(endereco)
         db.session.flush()
         novo.endereco_id = endereco.id
@@ -10740,7 +10765,8 @@ def update_tutor(user_id):
         db.session.flush()
         user.endereco_id = endereco.id
 
-    _geocode_endereco(endereco)
+    if not _update_coordinates_from_request(endereco):
+        _geocode_endereco(endereco)
 
     # 💾 Commit final
     try:
