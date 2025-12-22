@@ -125,7 +125,7 @@ from werkzeug.utils import secure_filename
 from werkzeug.datastructures import FileStorage
 from werkzeug.routing import BuildError
 from werkzeug.exceptions import NotFound
-from time_utils import BR_TZ, normalize_to_utc, utcnow
+from time_utils import BR_TZ, coerce_to_brazil_tz, normalize_to_utc, utcnow
 
 db.init_app(app)
 migrate.init_app(app, db, compare_type=True)
@@ -1032,11 +1032,8 @@ def local_date_range_to_utc(start_dt, end_dt):
 @app.template_filter("datetime_brazil")
 def datetime_brazil(value):
     if isinstance(value, datetime):
-        if value.tzinfo is None:
-
-            value = value.replace(tzinfo=timezone.utc)
-
-        return value.astimezone(BR_TZ).strftime("%d/%m/%Y %H:%M")
+        value = coerce_to_brazil_tz(value)
+        return value.strftime("%d/%m/%Y %H:%M")
     return value
 
 @app.template_filter("format_datetime_brazil")
@@ -1045,10 +1042,8 @@ def format_datetime_brazil(value, fmt="%d/%m/%Y %H:%M"):
         return ""
 
     if isinstance(value, datetime):
-        if value.tzinfo is None:
-            value = value.replace(tzinfo=timezone.utc)
-        value = value.astimezone(BR_TZ)
-        return value.strftime(fmt)
+        localized = coerce_to_brazil_tz(value)
+        return localized.strftime(fmt)
 
     if isinstance(value, date):
         return value.strftime(fmt)
@@ -17037,12 +17032,7 @@ def edit_appointment(appointment_id):
             vet_id = int(vet_id)
         except (ValueError, TypeError):
             return jsonify({'success': False, 'message': 'Dados inválidos.'}), 400
-        existing_local = (
-            appointment.scheduled_at
-            .replace(tzinfo=timezone.utc)
-            .astimezone(BR_TZ)
-            .replace(tzinfo=None)
-        )
+        existing_local = coerce_to_brazil_tz(appointment.scheduled_at).replace(tzinfo=None)
         if not is_slot_available(vet_id, scheduled_at_local, kind=appointment.kind) and not (
             vet_id == appointment.veterinario_id and scheduled_at_local == existing_local
         ):
@@ -17823,15 +17813,7 @@ def api_reschedule_appointment(appointment_id):
 
     new_start_utc = normalize_to_utc(new_start)
 
-    if appointment.scheduled_at.tzinfo is None:
-        existing_local = (
-            appointment.scheduled_at
-            .replace(tzinfo=timezone.utc)
-            .astimezone(BR_TZ)
-            .replace(tzinfo=None)
-        )
-    else:
-        existing_local = appointment.scheduled_at.astimezone(BR_TZ).replace(tzinfo=None)
+    existing_local = coerce_to_brazil_tz(appointment.scheduled_at).replace(tzinfo=None)
 
     if (
         not is_slot_available(appointment.veterinario_id, new_start_local, kind=appointment.kind)
@@ -18359,16 +18341,9 @@ def update_exam_appointment_requester(appointment_id):
         if time_left_seconds > 0 and style.get('show_time_left'):
             time_left_display = format_timedelta(time_left)
 
-    confirm_display = (
-        appt.confirm_by.replace(tzinfo=timezone.utc).astimezone(BR_TZ).strftime('%d/%m/%Y %H:%M')
-        if appt.confirm_by
-        else None
-    )
-    confirm_local_value = (
-        appt.confirm_by.replace(tzinfo=timezone.utc).astimezone(BR_TZ).strftime('%Y-%m-%dT%H:%M')
-        if appt.confirm_by
-        else None
-    )
+    confirm_localized = coerce_to_brazil_tz(appt.confirm_by) if appt.confirm_by else None
+    confirm_display = confirm_localized.strftime('%d/%m/%Y %H:%M') if confirm_localized else None
+    confirm_local_value = confirm_localized.strftime('%Y-%m-%dT%H:%M') if confirm_localized else None
 
     return jsonify({
         'success': True,

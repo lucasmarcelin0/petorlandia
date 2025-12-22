@@ -16,3 +16,21 @@ def test_format_datetime_brazil_with_datetime():
     dt = datetime(2024, 1, 31, 15, 0, tzinfo=timezone.utc)
     out = format_datetime_brazil(dt, "%d/%m/%Y %H:%M")
     assert "31/01/2024" in out
+
+
+def test_format_datetime_brazil_with_utc_aware_datetime():
+    dt = datetime(2024, 5, 1, 3, 0, tzinfo=timezone.utc)
+    out = format_datetime_brazil(dt, "%d/%m/%Y %H:%M")
+    assert out.startswith("01/05/2024")
+
+
+def test_format_datetime_brazil_with_naive_utc_value():
+    dt = datetime(2024, 5, 1, 1, 0)
+    out = format_datetime_brazil(dt, "%d/%m/%Y %H:%M")
+    assert out.startswith("01/05/2024")
+
+
+def test_format_datetime_brazil_with_naive_brt_value():
+    dt = datetime(2024, 5, 1, 0, 30)
+    out = format_datetime_brazil(dt, "%d/%m/%Y %H:%M")
+    assert out.startswith("01/05/2024")
