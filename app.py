@@ -16105,10 +16105,12 @@ def appointments():
         upcoming_consultas = []
         for appt in accepted_consultas_in_range:
             scheduled_at = appt.scheduled_at
-            if scheduled_at and scheduled_at >= future_cutoff:
-                upcoming_consultas.append(appt)
-            else:
-                past_accepted_consultas.append(appt)
+            if scheduled_at:
+                scheduled_at_utc = normalize_to_utc(scheduled_at)
+                if scheduled_at_utc >= future_cutoff:
+                    upcoming_consultas.append(appt)
+                    continue
+            past_accepted_consultas.append(appt)
 
         upcoming_exams = (
             ExamAppointment.query.filter_by(specialist_id=veterinario.id, status='confirmed')
