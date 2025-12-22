@@ -11,7 +11,7 @@ from dateutil.relativedelta import relativedelta
 from sqlalchemy import case
 
 from extensions import db
-from time_utils import BR_TZ, utcnow
+from time_utils import BR_TZ, normalize_to_utc, utcnow
 
 DEFAULT_APPOINTMENT_DURATION_MINUTES = 30
 
@@ -934,8 +934,8 @@ def get_available_times(veterinario_id, date, kind='consulta', *, include_booked
     window_local_start = day_start - MAX_APPOINTMENT_DURATION
     window_local_end = day_end + MAX_APPOINTMENT_DURATION
 
-    window_utc_start = window_local_start.replace(tzinfo=BR_TZ).astimezone(timezone.utc).replace(tzinfo=None)
-    window_utc_end = window_local_end.replace(tzinfo=BR_TZ).astimezone(timezone.utc).replace(tzinfo=None)
+    window_utc_start = normalize_to_utc(window_local_start)
+    window_utc_end = normalize_to_utc(window_local_end)
 
     appointments_cache = {}
     exams_cache = {}
@@ -1029,8 +1029,8 @@ def get_weekly_schedule(veterinario_id, start_date, days=7, day_start=time(8, 0)
     # determine slot availability without issuing a query per slot.
     range_start_local = datetime.combine(start_date, day_start)
     range_end_local = datetime.combine(start_date + timedelta(days=days), day_end)
-    range_start_utc = range_start_local.replace(tzinfo=BR_TZ).astimezone(timezone.utc).replace(tzinfo=None)
-    range_end_utc = range_end_local.replace(tzinfo=BR_TZ).astimezone(timezone.utc).replace(tzinfo=None)
+    range_start_utc = normalize_to_utc(range_start_local)
+    range_end_utc = normalize_to_utc(range_end_local)
 
     appointment_rows = (
         Appointment.query
@@ -1086,7 +1086,7 @@ def get_weekly_schedule(veterinario_id, start_date, days=7, day_start=time(8, 0)
         available = []
         booked = []
         for slot in working_slots:
-            current_utc = slot.replace(tzinfo=BR_TZ).astimezone(timezone.utc).replace(tzinfo=None)
+            current_utc = normalize_to_utc(slot)
             time_str = slot.strftime('%H:%M')
             if current_utc in booked_datetimes:
                 booked.append(time_str)
