@@ -528,6 +528,76 @@
     if (estadoField && data.uf) estadoField.value = data.uf;
   }
 
+  function coletarDadosDoEndereco(addressCard) {
+    const cepField = addressCard?.querySelector('#cep');
+    const ruaField = addressCard?.querySelector('#rua');
+    const numeroField = addressCard?.querySelector('#numero');
+    const complementoField = addressCard?.querySelector('#complemento');
+    const bairroField = addressCard?.querySelector('#bairro');
+    const cidadeField = addressCard?.querySelector('#cidade');
+    const estadoField = addressCard?.querySelector('#estado');
+
+    const cep = cepField?.value?.replace(/\D/g, '') || '';
+    const rua = (ruaField?.value || '').trim();
+    const numero = (numeroField?.value || '').trim();
+    const complemento = (complementoField?.value || '').trim();
+    const bairro = (bairroField?.value || '').trim();
+    const cidade = (cidadeField?.value || '').trim();
+    const estado = (estadoField?.value || '').trim();
+
+    return { cep, rua, numero, complemento, bairro, cidade, estado };
+  }
+
+  function buscarCoordenadasPorEndereco(addressCard, { setStatus } = {}) {
+    return new Promise((resolve, reject) => {
+      if (!addressCard) {
+        reject(new Error('Não foi possível identificar o formulário de endereço.'));
+        return;
+      }
+
+      const payload = coletarDadosDoEndereco(addressCard);
+
+      const hasData = Object.entries(payload).some(([key, value]) => {
+        if (key === 'numero' || key === 'complemento') return false;
+        return Boolean(value && value.trim());
+      });
+
+      if (!hasData) {
+        reject(new Error('Informe CEP ou endereço para calcular a localização.'));
+        return;
+      }
+
+      setStatus?.('Buscando coordenadas pelo endereço informado...');
+
+      fetch("{{ url_for('api_forward_geocode') }}", {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+        body: JSON.stringify(payload),
+      })
+        .then(async response => {
+          let data = null;
+          try {
+            data = await response.json();
+          } catch (parseError) {
+            console.warn('Resposta inválida ao calcular coordenadas pelo endereço', parseError);
+          }
+
+          if (!response.ok || !data || data.success === false || !data.data) {
+            const message = (data && (data.error || data.message))
+              ? data.error || data.message
+              : 'Não foi possível calcular a localização pelo endereço informado.';
+            throw new Error(message);
+          }
+
+          return data.data;
+        })
+        .then(coords => resolve(coords))
+        .catch(error => {
+          reject(error);
+        });
+    });
+  }
+
   function preencherComLocalizacao(trigger) {
     const addressCard = trigger ? trigger.closest('[data-address-card]') : document.querySelector('[data-address-card]');
     const status = addressCard ? addressCard.querySelector('[data-geo-status]') : null;
@@ -539,18 +609,53 @@
       status.classList.toggle('text-danger', isError);
     };
 
+    const applyCoordinates = (latitude, longitude) => {
+      if (coordinateManager) {
+        coordinateManager.setCoordinates(latitude, longitude);
+      } else {
+        const latField = addressCard.querySelector('#latitude');
+        const lonField = addressCard.querySelector('#longitude');
+        if (latField) latField.value = latitude;
+        if (lonField) lonField.value = longitude;
+      }
+    };
+
+    const button = trigger instanceof HTMLElement ? trigger : null;
+
+    const restoreButton = () => {
+      if (button) {
+        button.disabled = false;
+        button.classList.remove('disabled');
+      }
+    };
+
+    const fallbackGeocode = () => buscarCoordenadasPorEndereco(addressCard, { setStatus })
+      .then(coords => {
+        if (coords?.lat != null && coords?.lon != null) {
+          applyCoordinates(coords.lat, coords.lon);
+          setStatus('Coordenadas atualizadas pelo endereço informado.');
+        } else {
+          setStatus('Não foi possível calcular a localização pelo endereço informado.', true);
+        }
+      })
+      .catch(error => {
+        console.error('Erro ao calcular coordenadas pelo endereço', error);
+        setStatus(error.message || 'Não foi possível calcular a localização pelo endereço.', true);
+        alert(error.message || 'Erro ao calcular a localização.');
+      })
+      .finally(restoreButton);
+
     if (!addressCard) {
       setStatus('Não foi possível identificar o formulário de endereço.', true);
       return;
     }
 
     if (!('geolocation' in navigator)) {
-      setStatus('Geolocalização não é suportada pelo navegador.', true);
-      alert('Geolocalização não suportada neste navegador.');
+      setStatus('Geolocalização não é suportada pelo navegador. Tentando pelo endereço digitado...');
+      fallbackGeocode();
       return;
     }
 
-    const button = trigger instanceof HTMLElement ? trigger : null;
     if (button) {
       button.disabled = true;
       button.classList.add('disabled');
@@ -565,14 +670,7 @@
           throw new Error('Coordenadas não encontradas.');
         }
 
-        if (coordinateManager) {
-          coordinateManager.setCoordinates(latitude, longitude);
-        } else {
-          const latField = addressCard.querySelector('#latitude');
-          const lonField = addressCard.querySelector('#longitude');
-          if (latField) latField.value = latitude;
-          if (lonField) lonField.value = longitude;
-        }
+        applyCoordinates(latitude, longitude);
 
         setStatus('Encontramos sua localização! Buscando endereço...');
 
@@ -606,23 +704,15 @@
             setStatus(error.message || 'Não foi possível usar a localização.', true);
             alert(error.message || 'Erro ao usar a localização.');
           })
-          .finally(() => {
-            if (button) {
-              button.disabled = false;
-              button.classList.remove('disabled');
-            }
-          });
+          .finally(restoreButton);
       },
       error => {
         let message = 'Não foi possível acessar sua localização.';
         if (error && error.code === error.PERMISSION_DENIED) {
-          message = 'Permita o acesso à localização para preencher o endereço automaticamente.';
+          message = 'Permita o acesso à localização para preencher o endereço automaticamente. Tentando pelo endereço digitado...';
         }
         setStatus(message, true);
-        if (button) {
-          button.disabled = false;
-          button.classList.remove('disabled');
-        }
+        fallbackGeocode();
         alert(message);
       },
       {
