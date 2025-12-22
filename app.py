@@ -2214,6 +2214,74 @@ def _sync_veterinarian_membership_payment(payment):
     db.session.add(membership)
 
 
+_HEALTH_ONBOARDING_RE = re.compile(r"health-onboarding-(\d+)")
+
+
+def _resolve_health_onboarding(external_reference: str):
+    match = _HEALTH_ONBOARDING_RE.match(external_reference or "")
+    if not match:
+        return None
+    onboarding_id = int(match.group(1))
+    return HealthPlanOnboarding.query.get(onboarding_id)
+
+
+def _sync_health_subscription_from_onboarding(onboarding, payment_status, payment=None):
+    if not onboarding or payment_status != PaymentStatus.COMPLETED:
+        return
+
+    if not onboarding.animal or onboarding.animal.user_id != onboarding.user_id:
+        current_app.logger.warning(
+            "Onboarding %s ignorado: tutor não corresponde ao animal.",
+            getattr(onboarding, "id", None),
+        )
+        return
+
+    if payment and payment.user_id != onboarding.user_id:
+        current_app.logger.warning(
+            "Pagamento não pertence ao tutor do onboarding %s.",
+            getattr(onboarding, "id", None),
+        )
+        return
+
+    now = datetime.utcnow()
+    subscription = (
+        HealthSubscription.query
+        .filter_by(
+            animal_id=onboarding.animal_id,
+            plan_id=onboarding.plan_id,
+            user_id=onboarding.user_id,
+        )
+        .order_by(HealthSubscription.start_date.desc())
+        .first()
+    )
+
+    if subscription:
+        if not subscription.start_date:
+            subscription.start_date = now
+    else:
+        subscription = HealthSubscription(
+            animal_id=onboarding.animal_id,
+            plan_id=onboarding.plan_id,
+            user_id=onboarding.user_id,
+            start_date=now,
+        )
+        db.session.add(subscription)
+
+    subscription.guardian_document = onboarding.guardian_document
+    subscription.animal_document = onboarding.animal_document
+    subscription.contract_reference = onboarding.contract_reference
+    subscription.consent_ip = onboarding.consent_ip
+    subscription.consent_signed_at = onboarding.consent_signed_at
+    subscription.plan_id = onboarding.plan_id
+    subscription.active = True
+
+    if payment:
+        subscription.payment = payment
+
+    onboarding.status = "paid"
+    db.session.add(onboarding)
+
+
 # ----------------------------------------------------------------
 # CEP lookup API
 # ----------------------------------------------------------------
@@ -6758,6 +6826,8 @@ def contratar_plano(animal_id):
             "currency_id": "BRL",
         },
     }
+
+    preapproval_data["external_reference"] = f"health-onboarding-{onboarding.id}"
 
     try:
         resp = mp_sdk().preapproval().create(preapproval_data)
@@ -14920,17 +14990,20 @@ def notificacoes_mercado_pago():
         except (ValueError, TypeError):
             orcamento_id = None
 
+    onboarding = _resolve_health_onboarding(extref) if extref else None
+    payment_status = status_map.get(status, PaymentStatus.PENDING)
+
     try:
         with db.session.begin():
             pay = Payment.query.filter_by(external_reference=extref).first()
             bloco = BlocoOrcamento.query.get(bloco_id) if bloco_id else None
             orcamento = Orcamento.query.get(orcamento_id) if orcamento_id else None
-            if not pay and not bloco and not orcamento:
+            if not pay and not bloco and not orcamento and not onboarding:
                 current_app.logger.warning("Payment %s not found for external_reference %s", mp_id, extref)
                 return jsonify(error="payment not found"), 404
 
             if pay:
-                pay.status = status_map.get(status, PaymentStatus.PENDING)
+                pay.status = payment_status
                 pay.mercado_pago_id = mp_id
 
                 if pay.external_reference and pay.external_reference.startswith('vet-membership-'):
@@ -14967,6 +15040,9 @@ def notificacoes_mercado_pago():
                 elif status in {'cancelled', 'refunded', 'expired'}:
                     orcamento.status = 'canceled'
                 _sync_orcamento_payment_classification(orcamento)
+
+            if onboarding:
+                _sync_health_subscription_from_onboarding(onboarding, payment_status, pay)
 
     except SQLAlchemyError as e:
         current_app.logger.exception("DB error: %s", e)
@@ -15058,6 +15134,9 @@ def _refresh_mp_status(payment: Payment) -> None:
         payment.status = new_status
         if payment.external_reference and payment.external_reference.startswith('vet-membership-'):
             _sync_veterinarian_membership_payment(payment)
+        if payment.external_reference and payment.external_reference.startswith('health-onboarding-'):
+            onboarding = _resolve_health_onboarding(payment.external_reference)
+            _sync_health_subscription_from_onboarding(onboarding, payment.status, payment)
         db.session.commit()
 
 
