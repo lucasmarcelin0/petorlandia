@@ -28,7 +28,15 @@ _logger = logging.getLogger(__name__)
 
 
 def now_in_brazil() -> datetime:
-    return datetime.now(BR_TZ)
+    """Return current time in Brazil timezone.
+    
+    This function is robust against system clock issues by using UTC as the
+    reference and converting to Brazil timezone.
+    """
+    # Get UTC time first (most reliable)
+    utc_time = datetime.now(timezone.utc)
+    # Convert to Brazil timezone
+    return utc_time.astimezone(BR_TZ)
 
 
 def utcnow() -> datetime:
@@ -36,10 +44,7 @@ def utcnow() -> datetime:
     
     This uses timezone-aware UTC to ensure accuracy regardless of system timezone.
     """
-    # Get current time in Brazil timezone, then convert to UTC
-    # This is more reliable than datetime.now(timezone.utc) on systems with wrong TZ
-    br_now = datetime.now(BR_TZ)
-    return br_now.astimezone(timezone.utc)
+    return datetime.now(timezone.utc)
 
 
 def brazil_now_as_utc_naive() -> datetime:

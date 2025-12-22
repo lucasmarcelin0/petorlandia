@@ -1,7 +1,7 @@
 """Add veterinarian settings table
 
 Revision ID: d5e2c9a1c3f4
-Revises: 3b4c5d6e7f80
+Revises: 6bb436fe2061
 Create Date: 2024-05-18 00:00:00.000000
 """
 from alembic import op
@@ -11,7 +11,7 @@ from datetime import datetime
 
 # revision identifiers, used by Alembic.
 revision = 'd5e2c9a1c3f4'
-down_revision = '3b4c5d6e7f80'
+down_revision = '6bb436fe2061'
 branch_labels = None
 depends_on = None
 

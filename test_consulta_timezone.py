@@ -83,12 +83,17 @@ def test_timezone_handling():
         print(f"   Formatted as Brazil time: {formatted}")
         print(f"   Expected: 22/12/2025 16:26 (3 hours earlier)")
         
-        # Test with naive datetime (should assume UTC)
+        # Test with naive datetime (Default: assumes Brazil Time)
         test_dt_naive = datetime(2025, 12, 22, 19, 26, 0)
         formatted_naive = format_datetime_brazil(test_dt_naive)
         print(f"\n   Naive datetime: {test_dt_naive}")
-        print(f"   Formatted as Brazil time: {formatted_naive}")
-        print(f"   Expected: 22/12/2025 16:26 (same conversion)")
+        print(f"   Formatted (Default): {formatted_naive}")
+        print(f"   Expected (Default): 22/12/2025 19:26 (Assumes Brazil)")
+
+        # Test with naive datetime (force_utc=True: assumes UTC)
+        formatted_naive_utc = format_datetime_brazil(test_dt_naive, force_utc=True)
+        print(f"   Formatted (force_utc=True): {formatted_naive_utc}")
+        print(f"   Expected (force_utc=True): 22/12/2025 16:26 (Converted from UTC)")
         
         print("\n" + "=" * 60)
         print("✅ Timezone handling test complete!")

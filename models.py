@@ -18,7 +18,7 @@ from sqlalchemy import Enum as PgEnum
 from sqlalchemy.orm import synonym, object_session
 from sqlalchemy.ext.hybrid import hybrid_property
 from sqlalchemy.exc import OperationalError, ProgrammingError
-from time_utils import utcnow
+from time_utils import utcnow, now_in_brazil
 
 
 
@@ -179,7 +179,7 @@ class User(UserMixin, db.Model):
     clinica_id = db.Column(db.Integer, db.ForeignKey('clinica.id'), nullable=True)
     clinica = db.relationship('Clinica', backref='usuarios', foreign_keys=[clinica_id])
     is_private = db.Column(db.Boolean, nullable=False, default=True)
-    created_at = db.Column(db.DateTime(timezone=True), default=utcnow)
+    created_at = db.Column(db.DateTime(timezone=True), default=now_in_brazil)
 
 
 
@@ -295,7 +295,7 @@ class DataShareLog(db.Model):
     request_path = db.Column(db.String(255), nullable=True)
     request_ip = db.Column(db.String(50), nullable=True)
     notes = db.Column(db.Text, nullable=True)
-    occurred_at = db.Column(db.DateTime(timezone=True), default=utcnow, nullable=False)
+    occurred_at = db.Column(db.DateTime(timezone=True), default=now_in_brazil, nullable=False)
 
     access = db.relationship('DataShareAccess', backref=db.backref('logs', cascade='all, delete-orphan'))
     actor = db.relationship('User', foreign_keys=[actor_id])
@@ -322,7 +322,7 @@ class Animal(db.Model):
     photo_zoom = db.Column(db.Float, default=1.0)
     photo_offset_x = db.Column(db.Float, default=0.0)
     photo_offset_y = db.Column(db.Float, default=0.0)
-    date_added = db.Column(db.DateTime(timezone=True), default=utcnow)
+    date_added = db.Column(db.DateTime(timezone=True), default=now_in_brazil)
 
     modo = db.Column(db.String(20), default='doação')
     price = db.Column(db.Float, nullable=True)
@@ -438,7 +438,7 @@ class Transaction(db.Model):
         nullable=False,
     )
     type = db.Column(db.String(20))  # adoção, doação, venda, compra
-    date = db.Column(db.DateTime(timezone=True), default=utcnow)
+    date = db.Column(db.DateTime(timezone=True), default=now_in_brazil)
     status = db.Column(db.String(20))  # pendente, concluída, cancelada
 
     from_user = db.relationship(
@@ -472,7 +472,7 @@ class Message(db.Model):
     clinica_id = db.Column(db.Integer, db.ForeignKey('clinica.id'), nullable=True)
 
     content = db.Column(db.Text, nullable=False)
-    timestamp = db.Column(db.DateTime(timezone=True), default=utcnow)
+    timestamp = db.Column(db.DateTime(timezone=True), default=now_in_brazil)
 
     # Relações
     sender = db.relationship('User', foreign_keys=[sender_id], back_populates='sent_messages')
@@ -498,7 +498,7 @@ class Interest(db.Model):
         db.ForeignKey('user.id', ondelete='CASCADE'),
         nullable=False,
     )
-    timestamp = db.Column(db.DateTime(timezone=True), default=utcnow)
+    timestamp = db.Column(db.DateTime(timezone=True), default=now_in_brazil)
 
     user = db.relationship(
         'User',
@@ -546,7 +546,7 @@ class Consulta(db.Model):
     authorization_reference = db.Column(db.String(80), nullable=True)
     authorization_checked_at = db.Column(db.DateTime(timezone=True), nullable=True)
     authorization_notes = db.Column(db.Text)
-    created_at = db.Column(db.DateTime(timezone=True), default=utcnow, nullable=False)
+    created_at = db.Column(db.DateTime(timezone=True), default=now_in_brazil, nullable=False)
     # Campos principais da consulta
     queixa_principal = db.Column(db.Text)
     historico_clinico = db.Column(db.Text)
@@ -587,11 +587,11 @@ class Orcamento(db.Model):
     clinica_id = db.Column(db.Integer, db.ForeignKey('clinica.id'), nullable=False)
     consulta_id = db.Column(db.Integer, db.ForeignKey('consulta.id'), nullable=True)
     descricao = db.Column(db.String(200), nullable=False)
-    created_at = db.Column(db.DateTime(timezone=True), default=utcnow, nullable=False)
+    created_at = db.Column(db.DateTime(timezone=True), default=now_in_brazil, nullable=False)
     updated_at = db.Column(
         db.DateTime(timezone=True),
-        default=utcnow,
-        onupdate=utcnow,
+        default=now_in_brazil,
+        onupdate=now_in_brazil,
         nullable=False,
     )
     status = db.Column(db.String(20), nullable=False, default='draft')
@@ -669,7 +669,7 @@ class BlocoOrcamento(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     animal_id = db.Column(db.Integer, db.ForeignKey('animal.id'), nullable=False)
     clinica_id = db.Column(db.Integer, db.ForeignKey('clinica.id'), nullable=False)
-    data_criacao = db.Column(db.DateTime(timezone=True), default=utcnow)
+    data_criacao = db.Column(db.DateTime(timezone=True), default=now_in_brazil)
     discount_percent = db.Column(db.Numeric(5, 2), nullable=True)
     discount_value = db.Column(db.Numeric(10, 2), nullable=True)
     tutor_notes = db.Column(db.Text, nullable=True)
@@ -702,7 +702,7 @@ class BlocoPrescricao(db.Model):
     __tablename__ = 'bloco_prescricao'
 
     id = db.Column(db.Integer, primary_key=True)
-    data_criacao = db.Column(db.DateTime(timezone=True), default=utcnow)
+    data_criacao = db.Column(db.DateTime(timezone=True), default=now_in_brazil)
     saved_by_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True)
     clinica_id = db.Column(db.Integer, db.ForeignKey('clinica.id'), nullable=False)
 
@@ -725,7 +725,7 @@ class Prescricao(db.Model):
     frequencia = db.Column(db.Text)
     duracao = db.Column(db.Text)
     observacoes = db.Column(db.Text)
-    data_prescricao = db.Column(db.DateTime(timezone=True), default=utcnow)
+    data_prescricao = db.Column(db.DateTime(timezone=True), default=now_in_brazil)
 
     # em Prescricao
     animal_id = db.Column(db.Integer, db.ForeignKey('animal.id'), nullable=False)
@@ -830,7 +830,7 @@ class VetClinicInvite(db.Model):
     clinica_id = db.Column(db.Integer, db.ForeignKey('clinica.id'), nullable=False)
     veterinario_id = db.Column(db.Integer, db.ForeignKey('veterinario.id'), nullable=False)
     status = db.Column(db.String(20), nullable=False, default='pending')
-    created_at = db.Column(db.DateTime(timezone=True), default=utcnow)
+    created_at = db.Column(db.DateTime(timezone=True), default=now_in_brazil)
 
     clinica = db.relationship('Clinica', backref='vet_invites')
     veterinario = db.relationship('Veterinario', backref='clinic_invites')
@@ -881,7 +881,7 @@ class ClinicFinancialSnapshot(db.Model):
     total_receitas_servicos = db.Column(db.Numeric(14, 2), nullable=False, default=Decimal('0.00'))
     total_receitas_produtos = db.Column(db.Numeric(14, 2), nullable=False, default=Decimal('0.00'))
     total_receitas_gerais = db.Column(db.Numeric(14, 2), nullable=False, default=Decimal('0.00'))
-    gerado_em = db.Column(db.DateTime(timezone=True), nullable=False, default=utcnow)
+    gerado_em = db.Column(db.DateTime(timezone=True), nullable=False, default=now_in_brazil)
 
     clinic = db.relationship(
         'Clinica',
@@ -920,8 +920,8 @@ class ClinicTaxes(db.Model):
     fator_r = db.Column(db.Numeric(6, 4), nullable=False, default=Decimal('0.0000'))
     faixa_simples = db.Column(db.Integer, nullable=True)
     projecao_anual = db.Column(db.Numeric(14, 2), nullable=False, default=Decimal('0.00'))
-    created_at = db.Column(db.DateTime(timezone=True), default=utcnow, nullable=False)
-    updated_at = db.Column(db.DateTime(timezone=True), default=utcnow, onupdate=utcnow, nullable=False)
+    created_at = db.Column(db.DateTime(timezone=True), default=now_in_brazil, nullable=False)
+    updated_at = db.Column(db.DateTime(timezone=True), default=now_in_brazil, onupdate=now_in_brazil, nullable=False)
 
     clinic = db.relationship(
         'Clinica',
@@ -938,7 +938,7 @@ class ClinicNotification(db.Model):
     message = db.Column(db.Text, nullable=True)
     type = db.Column(db.String(20), nullable=False, default='info')
     month = db.Column(db.Date, nullable=False, index=True)
-    created_at = db.Column(db.DateTime(timezone=True), nullable=False, default=utcnow)
+    created_at = db.Column(db.DateTime(timezone=True), nullable=False, default=now_in_brazil)
     resolved = db.Column(db.Boolean, nullable=False, default=False)
     resolution_date = db.Column(db.DateTime(timezone=True), nullable=True)
 
@@ -964,7 +964,7 @@ class ClassifiedTransaction(db.Model):
     category = db.Column(db.String(80), nullable=False, index=True)
     subcategory = db.Column(db.String(80), nullable=True)
     raw_id = db.Column(db.String(80), nullable=False)
-    created_at = db.Column(db.DateTime(timezone=True), default=utcnow, nullable=False)
+    created_at = db.Column(db.DateTime(timezone=True), default=now_in_brazil, nullable=False)
 
     clinic = db.relationship(
         'Clinica',
@@ -1004,12 +1004,12 @@ class PJPayment(db.Model):
         server_default='pendente',
     )
     observacoes = db.Column(db.Text, nullable=True)
-    created_at = db.Column(db.DateTime(timezone=True), nullable=False, default=utcnow)
+    created_at = db.Column(db.DateTime(timezone=True), nullable=False, default=now_in_brazil)
     updated_at = db.Column(
         db.DateTime(timezone=True),
         nullable=False,
-        default=utcnow,
-        onupdate=utcnow,
+        default=now_in_brazil,
+        onupdate=now_in_brazil,
     )
 
     clinica_id = synonym('clinic_id')
@@ -1056,8 +1056,8 @@ class PlantonistaEscala(db.Model):
     observacoes = db.Column(db.Text, nullable=True)
     realizado_em = db.Column(db.DateTime(timezone=True), nullable=True)
     pj_payment_id = db.Column(db.Integer, db.ForeignKey('pj_payments.id'), nullable=True)
-    created_at = db.Column(db.DateTime(timezone=True), nullable=False, default=utcnow)
-    updated_at = db.Column(db.DateTime(timezone=True), nullable=False, default=utcnow, onupdate=utcnow)
+    created_at = db.Column(db.DateTime(timezone=True), nullable=False, default=now_in_brazil)
+    updated_at = db.Column(db.DateTime(timezone=True), nullable=False, default=now_in_brazil, onupdate=now_in_brazil)
 
     clinic = db.relationship(
         'Clinica',
@@ -1443,7 +1443,7 @@ class ExamAppointment(db.Model):
     requester_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
     scheduled_at = db.Column(db.DateTime(timezone=True), nullable=False)
     status = db.Column(db.String(20), nullable=False, default='pending')
-    request_time = db.Column(db.DateTime(timezone=True), default=utcnow)
+    request_time = db.Column(db.DateTime(timezone=True), default=now_in_brazil)
     confirm_by = db.Column(db.DateTime(timezone=True))
 
     animal = db.relationship(
@@ -1550,7 +1550,7 @@ class BlocoExames(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     animal_id = db.Column(db.Integer, db.ForeignKey('animal.id'), nullable=False)  # <- novo campo
     observacoes_gerais = db.Column(db.Text)
-    data_criacao = db.Column(db.DateTime(timezone=True), default=utcnow)
+    data_criacao = db.Column(db.DateTime(timezone=True), default=now_in_brazil)
 
     animal = db.relationship('Animal', backref=db.backref('blocos_exames', cascade='all, delete-orphan', lazy=True))
     exames = db.relationship('ExameSolicitado', backref='bloco', cascade='all, delete-orphan')
@@ -1605,7 +1605,7 @@ class Vacina(db.Model):
     aplicada = db.Column(db.Boolean, default=False)
     aplicada_em = db.Column(db.Date)
     aplicada_por = db.Column(db.Integer, db.ForeignKey('user.id'))
-    criada_em = db.Column(db.DateTime(timezone=True), default=utcnow)
+    criada_em = db.Column(db.DateTime(timezone=True), default=now_in_brazil)
     data = synonym('aplicada_em')
 
     # Registro de quem cadastrou a vacina
@@ -1623,7 +1623,7 @@ class AnimalDocumento(db.Model):
     filename = db.Column(db.String(255), nullable=False)
     file_url = db.Column(db.String(500), nullable=False)
     descricao = db.Column(db.Text, nullable=True)
-    uploaded_at = db.Column(db.DateTime(timezone=True), default=utcnow)
+    uploaded_at = db.Column(db.DateTime(timezone=True), default=now_in_brazil)
 
     animal = db.relationship('Animal', backref=db.backref('documentos', cascade='all, delete-orphan'))
     veterinario = db.relationship('User')
@@ -1635,7 +1635,7 @@ class Notification(db.Model):
     message = db.Column(db.Text, nullable=False)
     channel = db.Column(db.String(20), nullable=False)
     kind = db.Column(db.String(50), nullable=True)
-    sent_at = db.Column(db.DateTime(timezone=True), default=utcnow)
+    sent_at = db.Column(db.DateTime(timezone=True), default=now_in_brazil)
 
     user = db.relationship('User', backref=db.backref('notifications', cascade='all, delete-orphan'))
 
@@ -1663,7 +1663,7 @@ class Racao(db.Model):
     recomendacao_custom = db.Column(db.Float)  # se quiser ajustar a recomendação
     observacoes_racao = db.Column(db.Text)
 
-    data_cadastro = db.Column(db.DateTime(timezone=True), default=utcnow)
+    data_cadastro = db.Column(db.DateTime(timezone=True), default=now_in_brazil)
 
     animal = db.relationship('Animal', backref=db.backref('racoes', lazy=True, cascade='all, delete-orphan'))
     tipo_racao = db.relationship('TipoRacao', backref=db.backref('usos', lazy=True))
@@ -1699,7 +1699,7 @@ class Review(db.Model):
     )
     rating = db.Column(db.Integer, nullable=False)  # 1 a 5
     comment = db.Column(db.Text)
-    date = db.Column(db.DateTime(timezone=True), default=utcnow)
+    date = db.Column(db.DateTime(timezone=True), default=now_in_brazil)
 
 
 # Fotos extras dos animais
@@ -1768,7 +1768,7 @@ class Order(db.Model):
         nullable=True,
         index=True,
     )
-    created_at = db.Column(db.DateTime(timezone=True), default=utcnow)
+    created_at = db.Column(db.DateTime(timezone=True), default=now_in_brazil)
     shipping_address = db.Column(db.String(200))
 
     user = db.relationship(
@@ -1935,7 +1935,7 @@ class Payment(db.Model):
     external_reference = db.Column(db.String(255))
     mercado_pago_id    = db.Column(db.String(64))
 
-    created_at = db.Column(db.DateTime(timezone=True), default=utcnow)
+    created_at = db.Column(db.DateTime(timezone=True), default=now_in_brazil)
 
     user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False, index=True)
     user    = db.relationship(

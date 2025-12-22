@@ -21,23 +21,30 @@
       </tr>
     </thead>
     <tbody>
-        {% for c in historico_consultas %}
-        <tr id="consulta-{{ c.id }}">
-        <td class="text-nowrap">{{ c.created_at|format_datetime_brazil('%d/%m/%Y %H:%M') }}{% if c.retorno_de_id %} <span class="badge bg-info ms-1">Retorno</span>{% endif %}</td>
+      {% for c in historico_consultas %}
+      <tr id="consulta-{{ c.id }}">
+        <td class="text-nowrap">
+          {# Usa finalizada_em se disponível, senão usa created_at #}
+          {% set timestamp = c.finalizada_em or c.created_at %}
+          {{ timestamp|format_datetime_brazil('%d/%m/%Y') }}<br>
+          <small class="text-muted">{{ timestamp|format_datetime_brazil('%H:%M') }}</small>
+          {% if c.retorno_de_id %}
+          <span class="badge bg-info ms-1">Retorno</span>
+          {% endif %}
+        </td>
         <td class="break-word-cell">{{ c.queixa_principal or '—' }}</td>
         <td class="break-word-cell">{{ c.historico_clinico or '—' }}</td>
         <td class="break-word-cell">{{ c.exame_fisico or '—' }}</td>
         <td class="break-word-cell">{{ c.conduta or '—' }}</td>
         <td class="text-end">
           <a href="{{ url_for('consulta_direct', animal_id=animal.id) }}?c={{ c.id }}"
-             class="btn btn-outline-secondary btn-sm">✏️ Editar</a>
-          <a href="{{ url_for('imprimir_consulta', consulta_id=c.id) }}"
-             class="btn btn-outline-dark btn-sm">🖨️ Imprimir</a>
-          <form action="{{ url_for('deletar_consulta', consulta_id=c.id) }}"
-                method="POST" class="d-inline delete-history-form" data-sync
-                data-target="#historico-consultas"
-                data-target-endpoint="{{ url_for('historico_consultas_partial', animal_id=animal.id, clinica_id=c.clinica_id) }}"
-                data-confirm="Excluir esta consulta?">
+            class="btn btn-outline-secondary btn-sm">✏️ Editar</a>
+          <a href="{{ url_for('imprimir_consulta', consulta_id=c.id) }}" class="btn btn-outline-dark btn-sm">🖨️
+            Imprimir</a>
+          <form action="{{ url_for('deletar_consulta', consulta_id=c.id) }}" method="POST"
+            class="d-inline delete-history-form" data-sync data-target="#historico-consultas"
+            data-target-endpoint="{{ url_for('historico_consultas_partial', animal_id=animal.id, clinica_id=c.clinica_id) }}"
+            data-confirm="Excluir esta consulta?">
             <button class="btn btn-outline-danger btn-sm">🗑️</button>
           </form>
         </td>
