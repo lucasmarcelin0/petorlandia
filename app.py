@@ -15964,9 +15964,7 @@ def appointments():
         today_start_local = datetime.now(BR_TZ).replace(
             hour=0, minute=0, second=0, microsecond=0
         )
-        today_start_utc = (
-            today_start_local.astimezone(timezone.utc).replace(tzinfo=None)
-        )
+        today_start_utc = today_start_local.astimezone(timezone.utc)
         start_str = request.args.get('start')
         end_str = request.args.get('end')
         if start_str and end_str:
