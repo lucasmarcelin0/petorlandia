@@ -2,30 +2,26 @@
   <h5 class="mb-3 text-primary d-flex align-items-center">
     <i class="bi bi-geo-alt-fill me-2"></i> Endereço
   </h5>
-  
+
   {% set addr_form = form if form is defined and form.cep is defined else None %}
   <div class="row g-3">
     <!-- CEP com máscara e busca automática -->
     <div class="col-md-3">
       <label for="cep" class="form-label fw-semibold">
-        CEP <span class="text-danger">*</span>
-        <i class="bi bi-question-circle ms-1" data-bs-toggle="tooltip" title="Digite o CEP para autopreencher o endereço"></i>
+        CEP
+        <i class="bi bi-question-circle ms-1" data-bs-toggle="tooltip"
+          title="Digite o CEP para autopreencher o endereço"></i>
       </label>
       <div class="input-group">
         {% if addr_form %}
-<<<<<<< HEAD
-          {{ addr_form.cep(class="form-control", id="cep", placeholder="00000-000", data_mask="00000-000", onblur="buscarCep()") }}
+
+        {{ addr_form.cep(class="form-control", id="cep", placeholder="00000-000", onblur="buscarCep(this)",
+        pattern="\\d{5}-?\\d{3}") }}
         {% else %}
-          <input type="text" class="form-control" name="cep" id="cep"
-                 value="{{ endereco.cep|default('', true) if endereco else '' }}"
-                 placeholder="00000-000" data-mask="00000-000" onblur="buscarCep()">
-=======
-          {{ addr_form.cep(class="form-control", id="cep", placeholder="00000-000", onblur="buscarCep(this)") }}
-        {% else %}
-          <input type="text" class="form-control" name="cep" id="cep"
-                 value="{{ endereco.cep|default('', true) if endereco else '' }}"
-                 placeholder="00000-000" onblur="buscarCep(this)">
->>>>>>> c39f05b (Fix CEP lookup scoping for multiple address forms)
+        <input type="text" class="form-control" name="cep" id="cep"
+          value="{{ endereco.cep|default('', true) if endereco else '' }}" placeholder="00000-000"
+          onblur="buscarCep(this)" pattern="\d{5}-?\d{3}" inputmode="numeric">
+
         {% endif %}
         <button class="btn btn-outline-secondary" type="button" onclick="buscarCep(this)">
           <i class="bi bi-search"></i>
@@ -35,10 +31,11 @@
         <span class="spinner-border spinner-border-sm me-1" role="status"></span>
         Buscando CEP...
       </div>
+      <div class="invalid-feedback">Por favor, informe um CEP válido com 8 dígitos.</div>
       {% if addr_form %}
-        {% for error in addr_form.cep.errors %}
-          <div class="text-danger">{{ error }}</div>
-        {% endfor %}
+      {% for error in addr_form.cep.errors %}
+      <div class="text-danger">{{ error }}</div>
+      {% endfor %}
       {% endif %}
     </div>
 
@@ -46,12 +43,12 @@
     <div class="col-md-7">
       <label for="rua" class="form-label fw-semibold">Logradouro <span class="text-danger">*</span></label>
       {% if addr_form %}
-        {{ addr_form.rua(class="form-control", id="rua", placeholder="Nome da rua, avenida, etc.") }}
-        {% for error in addr_form.rua.errors %}<div class="text-danger">{{ error }}</div>{% endfor %}
+      {{ addr_form.rua(class="form-control", id="rua", placeholder="Nome da rua, avenida, etc.", required=True) }}
+      {% for error in addr_form.rua.errors %}<div class="text-danger">{{ error }}</div>{% endfor %}
       {% else %}
-        <input type="text" class="form-control" name="rua" id="rua"
-               value="{{ endereco.rua|default('', true) if endereco else '' }}"
-               placeholder="Nome da rua, avenida, etc.">
+      <input type="text" class="form-control" name="rua" id="rua"
+        value="{{ endereco.rua|default('', true) if endereco else '' }}" placeholder="Nome da rua, avenida, etc."
+        required>
       {% endif %}
       <div class="invalid-feedback">Por favor, informe o logradouro</div>
     </div>
@@ -60,12 +57,11 @@
     <div class="col-md-2">
       <label for="numero" class="form-label fw-semibold">Número</label>
       {% if addr_form %}
-        {{ addr_form.numero(class="form-control", id="numero", placeholder="Nº") }}
-        {% for error in addr_form.numero.errors %}<div class="text-danger">{{ error }}</div>{% endfor %}
+      {{ addr_form.numero(class="form-control", id="numero", placeholder="Nº") }}
+      {% for error in addr_form.numero.errors %}<div class="text-danger">{{ error }}</div>{% endfor %}
       {% else %}
-        <input type="text" class="form-control" name="numero" id="numero"
-               value="{{ endereco.numero|default('', true) if endereco else '' }}"
-               placeholder="Nº">
+      <input type="text" class="form-control" name="numero" id="numero"
+        value="{{ endereco.numero|default('', true) if endereco else '' }}" placeholder="Nº">
       {% endif %}
     </div>
 
@@ -73,12 +69,11 @@
     <div class="col-md-4">
       <label for="complemento" class="form-label fw-semibold">Complemento</label>
       {% if addr_form %}
-        {{ addr_form.complemento(class="form-control", id="complemento", placeholder="Apto, bloco, etc.") }}
-        {% for error in addr_form.complemento.errors %}<div class="text-danger">{{ error }}</div>{% endfor %}
+      {{ addr_form.complemento(class="form-control", id="complemento", placeholder="Apto, bloco, etc.") }}
+      {% for error in addr_form.complemento.errors %}<div class="text-danger">{{ error }}</div>{% endfor %}
       {% else %}
-        <input type="text" class="form-control" name="complemento" id="complemento"
-               value="{{ endereco.complemento|default('', true) if endereco else '' }}"
-               placeholder="Apto, bloco, etc.">
+      <input type="text" class="form-control" name="complemento" id="complemento"
+        value="{{ endereco.complemento|default('', true) if endereco else '' }}" placeholder="Apto, bloco, etc.">
       {% endif %}
     </div>
 
@@ -86,12 +81,11 @@
     <div class="col-md-4">
       <label for="bairro" class="form-label fw-semibold">Bairro</label>
       {% if addr_form %}
-        {{ addr_form.bairro(class="form-control", id="bairro", placeholder="Nome do bairro") }}
-        {% for error in addr_form.bairro.errors %}<div class="text-danger">{{ error }}</div>{% endfor %}
+      {{ addr_form.bairro(class="form-control", id="bairro", placeholder="Nome do bairro") }}
+      {% for error in addr_form.bairro.errors %}<div class="text-danger">{{ error }}</div>{% endfor %}
       {% else %}
-        <input type="text" class="form-control" name="bairro" id="bairro"
-               value="{{ endereco.bairro|default('', true) if endereco else '' }}"
-               placeholder="Nome do bairro">
+      <input type="text" class="form-control" name="bairro" id="bairro"
+        value="{{ endereco.bairro|default('', true) if endereco else '' }}" placeholder="Nome do bairro">
       {% endif %}
     </div>
 
@@ -99,12 +93,11 @@
     <div class="col-md-3">
       <label for="cidade" class="form-label fw-semibold">Cidade <span class="text-danger">*</span></label>
       {% if addr_form %}
-        {{ addr_form.cidade(class="form-control", id="cidade", placeholder="Nome da cidade") }}
-        {% for error in addr_form.cidade.errors %}<div class="text-danger">{{ error }}</div>{% endfor %}
+      {{ addr_form.cidade(class="form-control", id="cidade", placeholder="Nome da cidade", required=True) }}
+      {% for error in addr_form.cidade.errors %}<div class="text-danger">{{ error }}</div>{% endfor %}
       {% else %}
-        <input type="text" class="form-control" name="cidade" id="cidade"
-               value="{{ endereco.cidade|default('', true) if endereco else '' }}"
-               placeholder="Nome da cidade">
+      <input type="text" class="form-control" name="cidade" id="cidade"
+        value="{{ endereco.cidade|default('', true) if endereco else '' }}" placeholder="Nome da cidade" required>
       {% endif %}
       <div class="invalid-feedback">Por favor, informe a cidade</div>
     </div>
@@ -113,38 +106,38 @@
     <div class="col-md-2">
       <label for="estado" class="form-label fw-semibold">UF <span class="text-danger">*</span></label>
       {% if addr_form %}
-        {{ addr_form.estado(class="form-select", id="estado") }}
-        {% for error in addr_form.estado.errors %}<div class="text-danger">{{ error }}</div>{% endfor %}
+      {{ addr_form.estado(class="form-select", id="estado") }}
+      {% for error in addr_form.estado.errors %}<div class="text-danger">{{ error }}</div>{% endfor %}
       {% else %}
       <select class="form-select" name="estado" id="estado" required>
         <option value="">Selecione</option>
-        <option value="AC" {{ 'selected' if endereco and endereco.estado == 'AC' }}>AC - Acre</option>
-        <option value="AL" {{ 'selected' if endereco and endereco.estado == 'AL' }}>AL - Alagoas</option>
-        <option value="AP" {{ 'selected' if endereco and endereco.estado == 'AP' }}>AP - Amapá</option>
-        <option value="AM" {{ 'selected' if endereco and endereco.estado == 'AM' }}>AM - Amazonas</option>
-        <option value="BA" {{ 'selected' if endereco and endereco.estado == 'BA' }}>BA - Bahia</option>
-        <option value="CE" {{ 'selected' if endereco and endereco.estado == 'CE' }}>CE - Ceará</option>
-        <option value="DF" {{ 'selected' if endereco and endereco.estado == 'DF' }}>DF - Distrito Federal</option>
-        <option value="ES" {{ 'selected' if endereco and endereco.estado == 'ES' }}>ES - Espírito Santo</option>
-        <option value="GO" {{ 'selected' if endereco and endereco.estado == 'GO' }}>GO - Goiás</option>
-        <option value="MA" {{ 'selected' if endereco and endereco.estado == 'MA' }}>MA - Maranhão</option>
-        <option value="MT" {{ 'selected' if endereco and endereco.estado == 'MT' }}>MT - Mato Grosso</option>
-        <option value="MS" {{ 'selected' if endereco and endereco.estado == 'MS' }}>MS - Mato Grosso do Sul</option>
-        <option value="MG" {{ 'selected' if endereco and endereco.estado == 'MG' }}>MG - Minas Gerais</option>
-        <option value="PA" {{ 'selected' if endereco and endereco.estado == 'PA' }}>PA - Pará</option>
-        <option value="PB" {{ 'selected' if endereco and endereco.estado == 'PB' }}>PB - Paraíba</option>
-        <option value="PR" {{ 'selected' if endereco and endereco.estado == 'PR' }}>PR - Paraná</option>
-        <option value="PE" {{ 'selected' if endereco and endereco.estado == 'PE' }}>PE - Pernambuco</option>
-        <option value="PI" {{ 'selected' if endereco and endereco.estado == 'PI' }}>PI - Piauí</option>
-        <option value="RJ" {{ 'selected' if endereco and endereco.estado == 'RJ' }}>RJ - Rio de Janeiro</option>
-        <option value="RN" {{ 'selected' if endereco and endereco.estado == 'RN' }}>RN - Rio Grande do Norte</option>
-        <option value="RS" {{ 'selected' if endereco and endereco.estado == 'RS' }}>RS - Rio Grande do Sul</option>
-        <option value="RO" {{ 'selected' if endereco and endereco.estado == 'RO' }}>RO - Rondônia</option>
-        <option value="RR" {{ 'selected' if endereco and endereco.estado == 'RR' }}>RR - Roraima</option>
-        <option value="SC" {{ 'selected' if endereco and endereco.estado == 'SC' }}>SC - Santa Catarina</option>
-        <option value="SP" {{ 'selected' if endereco and endereco.estado == 'SP' }}>SP - São Paulo</option>
-        <option value="SE" {{ 'selected' if endereco and endereco.estado == 'SE' }}>SE - Sergipe</option>
-        <option value="TO" {{ 'selected' if endereco and endereco.estado == 'TO' }}>TO - Tocantins</option>
+        <option value="AC" {{ 'selected' if endereco and endereco.estado=='AC' }}>AC - Acre</option>
+        <option value="AL" {{ 'selected' if endereco and endereco.estado=='AL' }}>AL - Alagoas</option>
+        <option value="AP" {{ 'selected' if endereco and endereco.estado=='AP' }}>AP - Amapá</option>
+        <option value="AM" {{ 'selected' if endereco and endereco.estado=='AM' }}>AM - Amazonas</option>
+        <option value="BA" {{ 'selected' if endereco and endereco.estado=='BA' }}>BA - Bahia</option>
+        <option value="CE" {{ 'selected' if endereco and endereco.estado=='CE' }}>CE - Ceará</option>
+        <option value="DF" {{ 'selected' if endereco and endereco.estado=='DF' }}>DF - Distrito Federal</option>
+        <option value="ES" {{ 'selected' if endereco and endereco.estado=='ES' }}>ES - Espírito Santo</option>
+        <option value="GO" {{ 'selected' if endereco and endereco.estado=='GO' }}>GO - Goiás</option>
+        <option value="MA" {{ 'selected' if endereco and endereco.estado=='MA' }}>MA - Maranhão</option>
+        <option value="MT" {{ 'selected' if endereco and endereco.estado=='MT' }}>MT - Mato Grosso</option>
+        <option value="MS" {{ 'selected' if endereco and endereco.estado=='MS' }}>MS - Mato Grosso do Sul</option>
+        <option value="MG" {{ 'selected' if endereco and endereco.estado=='MG' }}>MG - Minas Gerais</option>
+        <option value="PA" {{ 'selected' if endereco and endereco.estado=='PA' }}>PA - Pará</option>
+        <option value="PB" {{ 'selected' if endereco and endereco.estado=='PB' }}>PB - Paraíba</option>
+        <option value="PR" {{ 'selected' if endereco and endereco.estado=='PR' }}>PR - Paraná</option>
+        <option value="PE" {{ 'selected' if endereco and endereco.estado=='PE' }}>PE - Pernambuco</option>
+        <option value="PI" {{ 'selected' if endereco and endereco.estado=='PI' }}>PI - Piauí</option>
+        <option value="RJ" {{ 'selected' if endereco and endereco.estado=='RJ' }}>RJ - Rio de Janeiro</option>
+        <option value="RN" {{ 'selected' if endereco and endereco.estado=='RN' }}>RN - Rio Grande do Norte</option>
+        <option value="RS" {{ 'selected' if endereco and endereco.estado=='RS' }}>RS - Rio Grande do Sul</option>
+        <option value="RO" {{ 'selected' if endereco and endereco.estado=='RO' }}>RO - Rondônia</option>
+        <option value="RR" {{ 'selected' if endereco and endereco.estado=='RR' }}>RR - Roraima</option>
+        <option value="SC" {{ 'selected' if endereco and endereco.estado=='SC' }}>SC - Santa Catarina</option>
+        <option value="SP" {{ 'selected' if endereco and endereco.estado=='SP' }}>SP - São Paulo</option>
+        <option value="SE" {{ 'selected' if endereco and endereco.estado=='SE' }}>SE - Sergipe</option>
+        <option value="TO" {{ 'selected' if endereco and endereco.estado=='TO' }}>TO - Tocantins</option>
       </select>
       {% endif %}
       <div class="invalid-feedback">Selecione o estado</div>
@@ -154,246 +147,208 @@
 
 <!-- Toast para mensagens de erro -->
 <div class="position-fixed bottom-0 end-0 p-3" style="z-index: 11">
-  <div id="errorToast" class="toast align-items-center text-white bg-danger border-0" role="alert" aria-live="assertive" aria-atomic="true">
+  <div id="errorToast" class="toast align-items-center text-white bg-danger border-0" role="alert" aria-live="assertive"
+    aria-atomic="true">
     <div class="d-flex">
       <div class="toast-body">
         <i class="bi bi-exclamation-triangle-fill me-2"></i>
         Por favor, preencha todos os campos obrigatórios.
       </div>
-      <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
+      <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"
+        aria-label="Close"></button>
     </div>
   </div>
 </div>
 
 <script>
-// Máscara para CEP
-document.addEventListener("DOMContentLoaded", function() {
-  // Inicializa tooltips
-  const tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
-  tooltipTriggerList.map(function (tooltipTriggerEl) {
-    return new bootstrap.Tooltip(tooltipTriggerEl);
-  });
-
   // Máscara para CEP
-  const cepInput = document.getElementById('cep');
-  if (cepInput) {
-    cepInput.addEventListener('input', function(e) {
-      let value = e.target.value.replace(/\D/g, '');
-      if (value.length > 5) {
-        value = value.substring(0,5) + '-' + value.substring(5,8);
-      }
-      e.target.value = value;
-    });
-  }
-});
-
-function buscarCep(trigger) {
-  const addressCard = trigger ? trigger.closest('[data-address-card]') : document.querySelector('[data-address-card]');
-  if (!addressCard) {
-    return;
-  }
-
-  const cepField = addressCard.querySelector('#cep');
-  if (!cepField) {
-    return;
-  }
-
-  const cep = cepField.value.replace(/\D/g, '');
-  const loading = addressCard.querySelector('#cep-loading');
-  
-  if (cep.length !== 8) {
-    alert("CEP inválido. Digite 8 números.");
-    return;
-  }
-
-  if (loading) {
-    loading.classList.remove("d-none");
-  }
-
-  fetch(`https://viacep.com.br/ws/${cep}/json/`)
-    .then(res => {
-      if (!res.ok) throw new Error("Erro na requisição");
-      return res.json();
-    })
-    .then(data => {
-      if (data.erro) {
-        throw new Error("CEP não encontrado");
-      }
-      
-      // Preenche os campos
-      const ruaField = addressCard.querySelector('#rua');
-      const complementoField = addressCard.querySelector('#complemento');
-      const bairroField = addressCard.querySelector('#bairro');
-      const cidadeField = addressCard.querySelector('#cidade');
-
-      if (ruaField) ruaField.value = data.logradouro || "";
-      if (complementoField) complementoField.value = data.complemento || "";
-      if (bairroField) bairroField.value = data.bairro || "";
-      if (cidadeField) cidadeField.value = data.localidade || "";
-
-      // Atualiza o select de estado
-      const estadoSelect = addressCard.querySelector('#estado');
-      if (estadoSelect && data.uf) {
-        estadoSelect.value = data.uf;
-      }
-
-      // Foca no número (campo que geralmente não vem no CEP)
-      const numeroField = addressCard.querySelector('#numero');
-      if (numeroField) {
-        numeroField.focus();
-      }
-    })
-    .catch(error => {
-      console.error("Erro ao buscar CEP:", error);
-      alert(error.message);
-    })
-    .finally(() => {
-      if (loading) {
-        loading.classList.add("d-none");
-      }
-    });
-}
-
-// Validação melhorada
-document.addEventListener("DOMContentLoaded", function() {
-  document.addEventListener("DOMContentLoaded", function() {
-  const addressContainer = document.currentScript.closest(".card"); 
-  const form = addressContainer.closest("form"); // find the form wrapping this address partial
-  if (!form) return;
-
-  form.addEventListener("submit", function(e) {
-    const requiredFields = ['rua', 'cidade', 'estado'];
-    let isValid = true;
-    
-    requiredFields.forEach(id => {
-      const field = form.querySelector(`#${id}`);
-      if (field && !field.value.trim()) {
-        field.classList.add("is-invalid");
-        isValid = false;
-      } else if (field) {
-        field.classList.remove("is-invalid");
-      }
+  document.addEventListener("DOMContentLoaded", function () {
+    // Inicializa tooltips
+    const tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+    tooltipTriggerList.map(function (tooltipTriggerEl) {
+      return new bootstrap.Tooltip(tooltipTriggerEl);
     });
 
-    if (!isValid) {
-      e.preventDefault();
-      const toast = new bootstrap.Toast(document.getElementById('errorToast'));
-      toast.show();
-    }
-  });
-});
-
-  if (!form) return;
-
-  // Define campos obrigatórios
-  const requiredFields = ['rua', 'cidade', 'estado'];
-
-  const addressSelect = document.getElementById('addressSelect');
-
-  form.addEventListener("submit", function(e) {
-    if (addressSelect && addressSelect.value !== '-1') {
-      // usando endereço salvo - não valida campos vazios
-      return;
-    }
-
-    let isValid = true;
-    
-    requiredFields.forEach(id => {
-      const field = document.getElementById(id);
-      if (!field.value.trim()) {
-        field.classList.add("is-invalid");
-        isValid = false;
-      } else {
-        field.classList.remove("is-invalid");
-      }
-    });
-
-    if (!isValid) {
-      e.preventDefault();
-      const firstInvalid = document.querySelector(".is-invalid");
-      if (firstInvalid) firstInvalid.focus();
-      
-      // Toast de erro (substitui o alert)
-      const toast = new bootstrap.Toast(document.getElementById('errorToast'));
-      toast.show();
-    }
-  });
-
-  // Validação em tempo real
-  requiredFields.forEach(id => {
-    const field = document.getElementById(id);
-    if (field) {
-      field.addEventListener('input', function() {
-        if (this.value.trim()) {
-          this.classList.remove("is-invalid");
+    // Máscara para CEP
+    const cepInput = document.getElementById('cep');
+    if (cepInput) {
+      cepInput.addEventListener('input', function (e) {
+        let value = e.target.value.replace(/\D/g, '');
+        if (value.length > 5) {
+          value = value.substring(0, 5) + '-' + value.substring(5, 8);
         }
+        e.target.value = value;
       });
     }
   });
-});
-</script>
 
-<style>
-/* Estilos para campos inválidos */
-.is-invalid {
-  border-color: #dc3545;
-  background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12' width='12' height='12' fill='none' stroke='%23dc3545'%3e%3ccircle cx='6' cy='6' r='4.5'/%3e%3cpath stroke-linejoin='round' d='M5.8 3.6h.4L6 6.5z'/%3e%3ccircle cx='6' cy='8.2' r='.6' fill='%23dc3545' stroke='none'/%3e%3c/svg%3e");
-  background-repeat: no-repeat;
-  background-position: right calc(0.375em + 0.1875rem) center;
-  background-size: calc(0.75em + 0.375rem) calc(0.75em + 0.375rem);
-  padding-right: calc(1.5em + 0.75rem);
-}
+  function buscarCep(trigger) {
+    const addressCard = trigger ? trigger.closest('[data-address-card]') : document.querySelector('[data-address-card]');
+    if (!addressCard) {
+      return;
+    }
 
-.is-invalid:focus {
-  box-shadow: 0 0 0 0.25rem rgba(220,53,69,.25);
-}
+    const cepField = addressCard.querySelector('#cep');
+    if (!cepField) {
+      return;
+    }
 
-/* Estilo para o card de endereço */
-.card-address {
-  background-color: #f8f9fa;
-  border-left: 4px solid #0d6efd;
-}
+    const cep = cepField.value.replace(/\D/g, '');
+    const loading = addressCard.querySelector('#cep-loading');
 
-/* Tooltip customizado */
-.tooltip-inner {
-  max-width: 300px;
-  padding: 0.5rem 1rem;
-}
+    if (cep.length !== 8) {
+      alert("CEP inválido. Digite 8 números.");
+      return;
+    }
 
-/* Melhoria visual para o select */
-.form-select {
-  cursor: pointer;
-}
-</style>
+    if (loading) {
+      loading.classList.remove("d-none");
+    }
 
-<script>
-document.addEventListener("DOMContentLoaded", function() {
-  const addressCard = document.currentScript.closest(".card");
-  const form = addressCard.closest("form");
-  if (!form) return;
+    const cepEndpointTemplate = "{{ url_for('api_cep_lookup', cep='__CEP__') }}";
+    const requestUrl = cepEndpointTemplate.replace('__CEP__', cep);
 
-  const requiredFields = ['rua', 'cidade', 'estado'];
-  const addressSelect = form.querySelector('#addressSelect');
+    fetch(requestUrl, { headers: { 'Accept': 'application/json' } })
+      .then(async res => {
+        let payload = null;
+        try {
+          payload = await res.json();
+        } catch (jsonError) {
+          console.warn('Resposta inválida da busca de CEP', jsonError);
+        }
 
-  form.addEventListener("submit", function(e) {
-    if (addressSelect && addressSelect.value !== '-1') return;
+        if (!res.ok || !payload || payload.success === false || !payload.data) {
+          const message = payload && (payload.error || payload.message)
+            ? payload.error || payload.message
+            : 'CEP não encontrado';
+          throw new Error(message);
+        }
 
-    let isValid = true;
-    requiredFields.forEach(id => {
-      const field = form.querySelector(`#${id}`);
-      if (field && !field.value.trim()) {
-        field.classList.add("is-invalid");
-        isValid = false;
-      } else if (field) {
-        field.classList.remove("is-invalid");
+        return payload.data;
+      })
+      .then(data => {
+        if (!data) {
+          throw new Error('CEP não encontrado');
+        }
+
+        // Preenche os campos
+        const ruaField = addressCard.querySelector('#rua');
+        const complementoField = addressCard.querySelector('#complemento');
+        const bairroField = addressCard.querySelector('#bairro');
+        const cidadeField = addressCard.querySelector('#cidade');
+
+        if (ruaField) ruaField.value = data.logradouro || "";
+        if (complementoField) complementoField.value = data.complemento || "";
+        if (bairroField) bairroField.value = data.bairro || "";
+        if (cidadeField) cidadeField.value = data.localidade || "";
+
+        // Atualiza o select de estado
+        const estadoSelect = addressCard.querySelector('#estado');
+        if (estadoSelect && data.uf) {
+          estadoSelect.value = data.uf;
+        }
+
+        // Mantém o foco no campo de logradouro para facilitar a edição após o preenchimento automático
+        if (ruaField) {
+          ruaField.focus();
+        }
+      })
+      .catch(error => {
+        console.error("Erro ao buscar CEP:", error);
+        alert(error.message || 'Erro ao buscar CEP. Tente novamente.');
+      })
+      .finally(() => {
+        if (loading) {
+          loading.classList.add("d-none");
+        }
+      });
+  }
+
+  // Validação melhorada
+  document.addEventListener("DOMContentLoaded", function () {
+    const addressCard = document.querySelector('[data-address-card]');
+    const form = addressCard ? addressCard.closest("form") : null; // find the form wrapping this address partial
+    if (!form) return;
+
+    // Define campos obrigatórios
+    const requiredFields = ['rua', 'cidade', 'estado'];
+
+    const addressSelect = document.getElementById('addressSelect');
+
+    form.addEventListener("submit", function (e) {
+      if (addressSelect && addressSelect.value !== '-1') {
+        // usando endereço salvo - não valida campos vazios
+        return;
+      }
+
+      let isValid = true;
+
+      requiredFields.forEach(id => {
+        const field = form.querySelector(`#${id}`);
+        if (field && !field.value.trim()) {
+          field.classList.add("is-invalid");
+          isValid = false;
+        } else if (field) {
+          field.classList.remove("is-invalid");
+        }
+      });
+
+      if (!isValid) {
+        e.preventDefault();
+        const firstInvalid = document.querySelector(".is-invalid");
+        if (firstInvalid) firstInvalid.focus();
+
+        // Toast de erro (substitui o alert)
+        const toastEl = document.getElementById('errorToast');
+        if (toastEl && typeof bootstrap?.Toast === 'function') {
+          new bootstrap.Toast(toastEl).show();
+        }
       }
     });
 
-    if (!isValid) {
-      e.preventDefault(); // stop submit if invalid
-      const toast = new bootstrap.Toast(document.getElementById('errorToast'));
-      toast.show();
-    }
+    // Validação em tempo real
+    requiredFields.forEach(id => {
+      const field = document.getElementById(id);
+      if (field) {
+        field.addEventListener('input', function () {
+          if (this.value.trim()) {
+            this.classList.remove("is-invalid");
+          }
+        });
+      }
+    });
   });
-});
 </script>
+
+<style>
+  /* Estilos para campos inválidos */
+  .is-invalid {
+    border-color: #dc3545;
+    background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12' width='12' height='12' fill='none' stroke='%23dc3545'%3e%3ccircle cx='6' cy='6' r='4.5'/%3e%3cpath stroke-linejoin='round' d='M5.8 3.6h.4L6 6.5z'/%3e%3ccircle cx='6' cy='8.2' r='.6' fill='%23dc3545' stroke='none'/%3e%3c/svg%3e");
+    background-repeat: no-repeat;
+    background-position: right calc(0.375em + 0.1875rem) center;
+    background-size: calc(0.75em + 0.375rem) calc(0.75em + 0.375rem);
+    padding-right: calc(1.5em + 0.75rem);
+  }
+
+  .is-invalid:focus {
+    box-shadow: 0 0 0 0.25rem rgba(220, 53, 69, .25);
+  }
+
+  /* Estilo para o card de endereço */
+  .card-address {
+    background-color: #f8f9fa;
+    border-left: 4px solid #0d6efd;
+  }
+
+  /* Tooltip customizado */
+  .tooltip-inner {
+    max-width: 300px;
+    padding: 0.5rem 1rem;
+  }
+
+  /* Melhoria visual para o select */
+  .form-select {
+    cursor: pointer;
+  }
+</style>
