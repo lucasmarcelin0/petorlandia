@@ -1327,7 +1327,7 @@ class Appointment(db.Model):
         nullable=False,
     )
     veterinario_id = db.Column(db.Integer, db.ForeignKey('veterinario.id'), nullable=False)
-    scheduled_at = db.Column(db.DateTime, nullable=False)
+    scheduled_at = db.Column(db.DateTime(timezone=True), nullable=False)
     status = db.Column(db.String(20), nullable=False, default='scheduled')
     kind = db.Column(db.String(20), nullable=False, default='general')
     notes = db.Column(db.Text, nullable=True)
@@ -1338,7 +1338,7 @@ class Appointment(db.Model):
         db.ForeignKey('user.id', ondelete='SET NULL'),
         nullable=True,
     )
-    created_at = db.Column(db.DateTime, default=utcnow, nullable=False)
+    created_at = db.Column(db.DateTime(timezone=True), default=utcnow, nullable=False)
 
     animal = db.relationship(
         'Animal',
@@ -1431,10 +1431,10 @@ class ExamAppointment(db.Model):
     animal_id = db.Column(db.Integer, db.ForeignKey('animal.id'), nullable=False)
     specialist_id = db.Column(db.Integer, db.ForeignKey('veterinario.id'), nullable=False)
     requester_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
-    scheduled_at = db.Column(db.DateTime, nullable=False)
+    scheduled_at = db.Column(db.DateTime(timezone=True), nullable=False)
     status = db.Column(db.String(20), nullable=False, default='pending')
-    request_time = db.Column(db.DateTime, default=utcnow)
-    confirm_by = db.Column(db.DateTime)
+    request_time = db.Column(db.DateTime(timezone=True), default=utcnow)
+    confirm_by = db.Column(db.DateTime(timezone=True))
 
     animal = db.relationship(
         'Animal',
@@ -1478,8 +1478,8 @@ class AgendaEvento(db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
     titulo = db.Column(db.String(120), nullable=False)
-    inicio = db.Column(db.DateTime, nullable=False)
-    fim = db.Column(db.DateTime, nullable=False)
+    inicio = db.Column(db.DateTime(timezone=True), nullable=False)
+    fim = db.Column(db.DateTime(timezone=True), nullable=False)
     descricao = db.Column(db.Text, nullable=True)
     responsavel_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
     clinica_id = db.Column(db.Integer, db.ForeignKey('clinica.id'), nullable=True)

@@ -125,7 +125,7 @@ from werkzeug.utils import secure_filename
 from werkzeug.datastructures import FileStorage
 from werkzeug.routing import BuildError
 from werkzeug.exceptions import NotFound
-from time_utils import BR_TZ, utcnow
+from time_utils import BR_TZ, normalize_to_utc, utcnow
 
 db.init_app(app)
 migrate.init_app(app, db, compare_type=True)
@@ -1019,18 +1019,12 @@ def nim_disconnect():  # pragma: no cover - exercised via browser
 
 
 def local_date_range_to_utc(start_dt, end_dt):
-    """Convert local date/datetime boundaries to naive UTC datetimes."""
+    """Convert local date/datetime boundaries to UTC-aware values."""
 
     def _convert(value):
         if value is None:
             return None
-        if isinstance(value, date) and not isinstance(value, datetime):
-            value = datetime.combine(value, time.min)
-        if value.tzinfo is None:
-            value = value.replace(tzinfo=BR_TZ)
-        else:
-            value = value.astimezone(BR_TZ)
-        return value.astimezone(timezone.utc).replace(tzinfo=None)
+        return normalize_to_utc(value)
 
     return _convert(start_dt), _convert(end_dt)
 
@@ -7768,12 +7762,7 @@ def agendar_retorno(consulta_id):
         if not is_slot_available(vet_id, scheduled_at_local, kind='retorno'):
             flash('Horário indisponível para o veterinário selecionado.', 'danger')
         else:
-            scheduled_at = (
-                scheduled_at_local
-                .replace(tzinfo=BR_TZ)
-                .astimezone(timezone.utc)
-                .replace(tzinfo=None)
-            )
+            scheduled_at = normalize_to_utc(scheduled_at_local)
             duration = get_appointment_duration('retorno')
             if has_conflict_for_slot(vet_id, scheduled_at_local, duration):
                 flash('Horário indisponível para o veterinário selecionado.', 'danger')
@@ -15889,12 +15878,7 @@ def appointments():
                         'danger',
                     )
                 else:
-                    scheduled_at = (
-                        scheduled_at_local
-                        .replace(tzinfo=BR_TZ)
-                        .astimezone(timezone.utc)
-                        .replace(tzinfo=None)
-                    )
+                    scheduled_at = normalize_to_utc(scheduled_at_local)
                     current_vet = getattr(current_user, 'veterinario', None)
                     selected_vet_id = appointment_form.veterinario_id.data
                     same_user = current_vet and current_vet.id == selected_vet_id
@@ -16485,12 +16469,7 @@ def appointments():
                         'danger'
                     )
                 else:
-                    scheduled_at = (
-                        scheduled_at_local
-                        .replace(tzinfo=BR_TZ)
-                        .astimezone(timezone.utc)
-                        .replace(tzinfo=None)
-                    )
+                    scheduled_at = normalize_to_utc(scheduled_at_local)
                     if appointment_form.kind.data == 'exame':
                         duration = get_appointment_duration('exame')
                         if has_conflict_for_slot(
@@ -17073,12 +17052,7 @@ def edit_appointment(appointment_id):
                 'message': 'Horário indisponível. Já existe uma consulta ou exame nesse intervalo.'
             }), 400
         appointment.veterinario_id = vet_id
-        appointment.scheduled_at = (
-            scheduled_at_local
-            .replace(tzinfo=BR_TZ)
-            .astimezone(timezone.utc)
-            .replace(tzinfo=None)
-        )
+        appointment.scheduled_at = normalize_to_utc(scheduled_at_local)
         if notes is not None:
             appointment.notes = notes
         db.session.commit()
@@ -17844,11 +17818,11 @@ def api_reschedule_appointment(appointment_id):
         return jsonify({'success': False, 'message': 'Horário inválido.'}), 400
 
     if new_start.tzinfo is None:
-        new_start_with_tz = new_start.replace(tzinfo=BR_TZ)
         new_start_local = new_start
     else:
-        new_start_with_tz = new_start.astimezone(BR_TZ)
-        new_start_local = new_start_with_tz.replace(tzinfo=None)
+        new_start_local = new_start.astimezone(BR_TZ).replace(tzinfo=None)
+
+    new_start_utc = normalize_to_utc(new_start)
 
     if appointment.scheduled_at.tzinfo is None:
         existing_local = (
@@ -17869,11 +17843,7 @@ def api_reschedule_appointment(appointment_id):
             'message': 'Horário indisponível. Já existe uma consulta ou exame nesse intervalo.',
         }), 400
 
-    appointment.scheduled_at = (
-        new_start_with_tz
-        .astimezone(timezone.utc)
-        .replace(tzinfo=None)
-    )
+    appointment.scheduled_at = new_start_utc
     db.session.commit()
 
     updated_start = to_timezone_aware(appointment.scheduled_at)
@@ -18189,12 +18159,7 @@ def schedule_exam(animal_id):
     if not all([specialist_id, date_str, time_str]):
         return jsonify({'success': False, 'message': 'Dados incompletos.'}), 400
     scheduled_at_local = datetime.strptime(f"{date_str} {time_str}", '%Y-%m-%d %H:%M')
-    scheduled_at = (
-        scheduled_at_local
-        .replace(tzinfo=BR_TZ)
-        .astimezone(timezone.utc)
-        .replace(tzinfo=None)
-    )
+    scheduled_at = normalize_to_utc(scheduled_at_local)
     # Ensure requested time falls within the veterinarian's available schedule
     available_times = get_available_times(specialist_id, scheduled_at_local.date(), kind='exame')
     if time_str not in available_times:
@@ -18232,13 +18197,14 @@ def schedule_exam(animal_id):
         )
         db.session.add(evento)
         if not same_user:
+            confirm_by_local = to_timezone_aware(appt.confirm_by, target_tz=BR_TZ)
             msg = Message(
                 sender_id=current_user.id,
                 receiver_id=vet.user_id,
                 animal_id=animal_id,
                 content=(
                     f"Exame agendado para {animal.name} em {scheduled_at_local.strftime('%d/%m/%Y %H:%M')}. "
-                    f"Confirme até {appt.confirm_by.replace(tzinfo=timezone.utc).astimezone(BR_TZ).strftime('%H:%M')}"
+                    f"Confirme até {confirm_by_local.strftime('%H:%M') if confirm_by_local else 'N/A'}"
                 ),
             )
             db.session.add(msg)
@@ -18272,7 +18238,7 @@ def update_exam_appointment_status(appointment_id):
         )
         db.session.add(msg)
     elif status == 'confirmed':
-        scheduled_local = appt.scheduled_at.replace(tzinfo=timezone.utc).astimezone(BR_TZ)
+        scheduled_local = to_timezone_aware(appt.scheduled_at, target_tz=BR_TZ)
         msg = Message(
             sender_id=current_user.id,
             receiver_id=appt.requester_id,
@@ -18299,12 +18265,7 @@ def update_exam_appointment(appointment_id):
     if not date_str or not time_str:
         return jsonify({'success': False, 'message': 'Dados incompletos.'}), 400
     scheduled_at_local = datetime.strptime(f"{date_str} {time_str}", '%Y-%m-%d %H:%M')
-    scheduled_at = (
-        scheduled_at_local
-        .replace(tzinfo=BR_TZ)
-        .astimezone(timezone.utc)
-        .replace(tzinfo=None)
-    )
+    scheduled_at = normalize_to_utc(scheduled_at_local)
     duration = get_appointment_duration('exame')
     if has_conflict_for_slot(
         specialist_id,
@@ -18351,12 +18312,7 @@ def update_exam_appointment_requester(appointment_id):
                 confirm_local = datetime.strptime(confirm_by_str, '%Y-%m-%dT%H:%M')
             except (TypeError, ValueError):
                 return jsonify({'success': False, 'message': 'Formato de data inválido.'}), 400
-            confirm_utc = (
-                confirm_local
-                .replace(tzinfo=BR_TZ)
-                .astimezone(timezone.utc)
-                .replace(tzinfo=None)
-            )
+            confirm_utc = normalize_to_utc(confirm_local)
             if appt.confirm_by != confirm_utc:
                 appt.confirm_by = confirm_utc
                 updated = True
