@@ -1,3 +1,5 @@
+import logging
+import os
 from datetime import date, datetime, time, timezone
 from zoneinfo import ZoneInfo
 
@@ -20,6 +22,9 @@ def _coerce_to_datetime(value: datetime | date | str) -> datetime:
     raise TypeError(f"Unsupported datetime-like value: {type(value)!r}")
 
 BR_TZ = ZoneInfo("America/Sao_Paulo")
+
+_require_tz_for_display = os.getenv("BRAZIL_TIME_REQUIRE_TZ", "0").lower() in {"1", "true", "yes"}
+_logger = logging.getLogger(__name__)
 
 
 def now_in_brazil() -> datetime:
@@ -48,3 +53,29 @@ def normalize_to_utc(value, *, local_tz: ZoneInfo = BR_TZ) -> datetime:
     else:
         localized = dt_value.astimezone(local_tz)
     return localized.astimezone(timezone.utc)
+
+
+def coerce_to_brazil_tz(value: datetime, *, allow_naive: bool | None = None) -> datetime:
+    """Normalize ``value`` into a Brazil-timezone-aware ``datetime``.
+
+    When ``allow_naive`` is ``False`` (or ``BRAZIL_TIME_REQUIRE_TZ`` is set),
+    naive values raise ``ValueError`` and are logged. Otherwise, naive values
+    are assumed to be expressed in Brazil's timezone to avoid shifting stored
+    local datetimes when rendering.
+    """
+
+    if not isinstance(value, datetime):
+        raise TypeError(f"Expected datetime, got {type(value)!r}")
+
+    allow_naive = (not _require_tz_for_display) if allow_naive is None else allow_naive
+
+    if value.tzinfo is None:
+        if not allow_naive:
+            _logger.warning("Naive datetime received where timezone-aware was required: %r", value)
+            raise ValueError("Timezone-aware datetime required")
+        _logger.warning("Naive datetime received; assuming America/Sao_Paulo timezone: %r", value)
+        value = value.replace(tzinfo=BR_TZ)
+    else:
+        value = value.astimezone(BR_TZ)
+
+    return value
