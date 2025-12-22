@@ -1042,7 +1042,17 @@ def format_datetime_brazil(value, fmt="%d/%m/%Y %H:%M"):
         return ""
 
     if isinstance(value, datetime):
-        localized = coerce_to_brazil_tz(value)
+        assume_utc_local = os.getenv("BRAZIL_TIME_ASSUME_UTC_LOCAL", "1").lower() in {"1", "true", "yes"}
+
+        if value.tzinfo is None:
+            localized = coerce_to_brazil_tz(value)
+        elif assume_utc_local and value.tzinfo == timezone.utc:
+            # Some records may have been stored with UTC tzinfo even though the
+            # timestamp was captured in local time. Reattach the Brazil timezone
+            # without shifting the clock to avoid showing hours behind.
+            localized = value.replace(tzinfo=BR_TZ)
+        else:
+            localized = coerce_to_brazil_tz(value)
         return localized.strftime(fmt)
 
     if isinstance(value, date):
