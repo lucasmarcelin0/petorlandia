@@ -1042,7 +1042,7 @@ def format_datetime_brazil(value, fmt="%d/%m/%Y %H:%M"):
         return ""
 
     if isinstance(value, datetime):
-        assume_utc_local = os.getenv("BRAZIL_TIME_ASSUME_UTC_LOCAL", "1").lower() in {"1", "true", "yes"}
+        assume_utc_local = os.getenv("BRAZIL_TIME_ASSUME_UTC_LOCAL", "0").lower() in {"1", "true", "yes"}
 
         if value.tzinfo is None:
             localized = coerce_to_brazil_tz(value)
