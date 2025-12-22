@@ -5246,8 +5246,10 @@ def register():
 
     return render_template('auth/register.html', form=form, endereco=None)
 
+
+
+
 def _normalizar_unidade_idade(unidade):
-    """Normaliza a unidade de idade para valores esperados."""
     if not unidade:
         return 'anos'
     texto = unicodedata.normalize('NFKD', str(unidade))
@@ -5260,7 +5262,6 @@ def _normalizar_unidade_idade(unidade):
 
 
 def _formatar_idade(numero, unidade):
-    """Formata idade utilizando unidade normalizada."""
     if numero is None:
         return ''
     unidade_norm = _normalizar_unidade_idade(unidade)
