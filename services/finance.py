@@ -34,6 +34,7 @@ from models import (
     ServicoClinica,
     User,
 )
+from time_utils import utcnow
 
 ZERO = Decimal("0.00")
 _TABLE_COLUMN_CACHE: dict[str, set[str]] = {}
@@ -970,7 +971,7 @@ def _ensure_pending_plantao_notifications(
             continue
         if payment_id not in active_ids and not notice.resolved:
             notice.resolved = True
-            notice.resolution_date = datetime.utcnow()
+            notice.resolution_date = utcnow()
 
 
 def calculate_clinic_taxes(
@@ -1192,7 +1193,7 @@ def generate_clinic_notifications(
         for notice in existing
     }
     seen_keys: set[tuple[str, str, str]] = set()
-    now = datetime.utcnow()
+    now = utcnow()
 
     for alert in alerts:
         message = alert.get("message", "")
@@ -1255,7 +1256,7 @@ def generate_financial_snapshot(clinic_id: int, month: Optional[date | datetime 
 
     snapshot.total_receitas_servicos = service_total
     snapshot.total_receitas_produtos = product_total
-    snapshot.gerado_em = datetime.utcnow()
+    snapshot.gerado_em = utcnow()
     snapshot.refresh_totals()
     db.session.commit()
 

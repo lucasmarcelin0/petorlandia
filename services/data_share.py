@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from datetime import datetime
 from typing import Iterable, Sequence
 
 from flask import has_request_context, request
@@ -11,13 +10,14 @@ from sqlalchemy import and_, or_
 
 from extensions import db
 from models import DataShareAccess, DataShareLog, DataSharePartyType
+from time_utils import utcnow
 
 
 Party = tuple[DataSharePartyType, int]
 
 
-def _now() -> datetime:
-    return datetime.utcnow()
+def _now():
+    return utcnow()
 
 
 def _party_clauses(parties: Sequence[Party]):

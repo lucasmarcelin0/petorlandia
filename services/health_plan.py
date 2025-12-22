@@ -19,6 +19,7 @@ from models import (
     HealthSubscription,
     OrcamentoItem,
 )
+from time_utils import utcnow
 
 COVERAGE_STATUS_LABELS: Dict[str, str] = {
     'approved': 'Aprovado',
@@ -97,7 +98,7 @@ def evaluate_consulta_coverages(consulta: Consulta) -> Dict[str, object]:
     plan = subscription.plan
     overall_status = 'approved'
     messages: List[str] = []
-    now = datetime.utcnow()
+    now = utcnow()
 
     for item in consulta.orcamento_items:
         coverage = _match_coverage(plan, item)
@@ -114,7 +115,7 @@ def evaluate_consulta_coverages(consulta: Consulta) -> Dict[str, object]:
             eligible_amount = max(Decimal('0'), eligible_amount - deductible)
 
         if coverage.waiting_period_days:
-            start_date = subscription.start_date or datetime.utcnow()
+            start_date = subscription.start_date or utcnow()
             eligible_at = start_date + timedelta(days=int(coverage.waiting_period_days))
             if now < eligible_at:
                 item.coverage_status = 'waiting_period'
