@@ -1,9 +1,9 @@
 /**
  * UNIFIED HISTORY SYNCHRONIZATION SYSTEM
- * 
+ *
  * Centralized, reliable solution for updating history after form saves.
  * Prevents duplicate saves by disabling buttons and provides guaranteed feedback.
- * 
+ *
  * Features:
  * - Single source of truth for all history updates
  * - Automatic form disable after successful save
@@ -11,7 +11,8 @@
  * - Clear user feedback at every step
  */
 
-class HistorySyncManager {
+if (!window.HistorySyncManagerClass) {
+  class HistorySyncManager {
   constructor() {
     this.isProcessing = false;
     this.lastSyncTime = {};
@@ -262,10 +263,16 @@ class HistorySyncManager {
   _delay(ms) {
     return new Promise(resolve => setTimeout(resolve, ms));
   }
+  }
+
+  // Expose the constructor to avoid redeclaration errors on repeated script loads
+  window.HistorySyncManagerClass = HistorySyncManager;
 }
 
+const HistorySyncManagerClass = window.HistorySyncManagerClass;
+
 // Global instance
-window.HistorySyncManager = window.HistorySyncManager || new HistorySyncManager();
+window.HistorySyncManager = window.HistorySyncManager || new HistorySyncManagerClass();
 
 /**
  * LEGACY COMPATIBILITY WRAPPER
@@ -282,88 +289,100 @@ window.HistorySyncManager = window.HistorySyncManager || new HistorySyncManager(
  * @param {object} options - Optional configuration
  * @returns {Promise<boolean>} - true if successfully updated, false otherwise
  */
-async function recarregarHistorico(historyType, animalOrConsultaId, options = {}) {
-  const endpoints = {
-    prescricoes: `/consulta/${animalOrConsultaId}/historico_prescricoes`,
-    exames: `/animal/${animalOrConsultaId}/historico_exames`,
-    vacinas: `/animal/${animalOrConsultaId}/historico_vacinas`,
-    orcamentos: `/consulta/${animalOrConsultaId}/historico_orcamentos`,
-  };
+if (!window.recarregarHistorico) {
+  async function recarregarHistorico(historyType, animalOrConsultaId, options = {}) {
+    const endpoints = {
+      prescricoes: `/consulta/${animalOrConsultaId}/historico_prescricoes`,
+      exames: `/animal/${animalOrConsultaId}/historico_exames`,
+      vacinas: `/animal/${animalOrConsultaId}/historico_vacinas`,
+      orcamentos: `/consulta/${animalOrConsultaId}/historico_orcamentos`,
+    };
 
-  const containerIds = {
-    prescricoes: 'historico-prescricoes',
-    exames: 'historico-exames',
-    vacinas: 'historico-vacinas',
-    orcamentos: 'historico-orcamentos',
-  };
+    const containerIds = {
+      prescricoes: 'historico-prescricoes',
+      exames: 'historico-exames',
+      vacinas: 'historico-vacinas',
+      orcamentos: 'historico-orcamentos',
+    };
 
-  const endpoint = endpoints[historyType];
-  const containerId = containerIds[historyType];
+    const endpoint = endpoints[historyType];
+    const containerId = containerIds[historyType];
 
-  if (!endpoint || !containerId) {
-    console.error(`[recarregarHistorico] Unknown history type: ${historyType}`);
-    return false;
-  }
-
-  try {
-    const response = await fetch(endpoint);
-    if (!response.ok) return false;
-    
-    const data = await response.json();
-    if (!data.html) return false;
-
-    const container = document.getElementById(containerId);
-    if (!container) {
-      console.warn(`[recarregarHistorico] Container #${containerId} not found`);
+    if (!endpoint || !containerId) {
+      console.error(`[recarregarHistorico] Unknown history type: ${historyType}`);
       return false;
     }
 
-    container.innerHTML = data.html;
-    return true;
-  } catch (err) {
-    console.error(`[recarregarHistorico] Error reloading ${historyType}:`, err);
-    return false;
+    try {
+      const response = await fetch(endpoint);
+      if (!response.ok) return false;
+
+      const data = await response.json();
+      if (!data.html) return false;
+
+      const container = document.getElementById(containerId);
+      if (!container) {
+        console.warn(`[recarregarHistorico] Container #${containerId} not found`);
+        return false;
+      }
+
+      container.innerHTML = data.html;
+      return true;
+    } catch (err) {
+      console.error(`[recarregarHistorico] Error reloading ${historyType}:`, err);
+      return false;
+    }
   }
+  window.recarregarHistorico = recarregarHistorico;
 }
 
 /**
  * LEGACY: recarregarHistoricoPrescricoes - for backward compatibility
  */
-async function recarregarHistoricoPrescricoes(options = {}) {
-  const showFailureNotice = options.showFailureNotice !== false;
-  const success = await recarregarHistorico('prescricoes', document.querySelector('[data-consulta-id]')?.dataset.consultaId);
-  
-  if (!success && showFailureNotice) {
-    console.warn('[recarregarHistoricoPrescricoes] Failed to reload');
+if (!window.recarregarHistoricoPrescricoes) {
+  async function recarregarHistoricoPrescricoes(options = {}) {
+    const showFailureNotice = options.showFailureNotice !== false;
+    const success = await recarregarHistorico('prescricoes', document.querySelector('[data-consulta-id]')?.dataset.consultaId);
+
+    if (!success && showFailureNotice) {
+      console.warn('[recarregarHistoricoPrescricoes] Failed to reload');
+    }
+
+    return success;
   }
-  
-  return success;
+  window.recarregarHistoricoPrescricoes = recarregarHistoricoPrescricoes;
 }
 
 /**
  * LEGACY: recarregarHistoricoExames - for backward compatibility
  */
-async function recarregarHistoricoExames(options = {}) {
-  const showFailureNotice = options.showFailureNotice !== false;
-  const success = await recarregarHistorico('exames', document.querySelector('[data-animal-id]')?.dataset.animalId);
-  
-  if (!success && showFailureNotice) {
-    console.warn('[recarregarHistoricoExames] Failed to reload');
+if (!window.recarregarHistoricoExames) {
+  async function recarregarHistoricoExames(options = {}) {
+    const showFailureNotice = options.showFailureNotice !== false;
+    const success = await recarregarHistorico('exames', document.querySelector('[data-animal-id]')?.dataset.animalId);
+
+    if (!success && showFailureNotice) {
+      console.warn('[recarregarHistoricoExames] Failed to reload');
+    }
+
+    return success;
   }
-  
-  return success;
+  window.recarregarHistoricoExames = recarregarHistoricoExames;
 }
 
 /**
  * LEGACY: recarregarHistoricoVacinas - for backward compatibility
  */
-async function recarregarHistoricoVacinas(options = {}) {
-  const showFailureNotice = options.showFailureNotice !== false;
-  const success = await recarregarHistorico('vacinas', document.querySelector('[data-animal-id]')?.dataset.animalId);
-  
-  if (!success && showFailureNotice) {
-    console.warn('[recarregarHistoricoVacinas] Failed to reload');
+if (!window.recarregarHistoricoVacinas) {
+  async function recarregarHistoricoVacinas(options = {}) {
+    const showFailureNotice = options.showFailureNotice !== false;
+    const success = await recarregarHistorico('vacinas', document.querySelector('[data-animal-id]')?.dataset.animalId);
+
+    if (!success && showFailureNotice) {
+      console.warn('[recarregarHistoricoVacinas] Failed to reload');
+    }
+
+    return success;
   }
-  
-  return success;
+  window.recarregarHistoricoVacinas = recarregarHistoricoVacinas;
 }
