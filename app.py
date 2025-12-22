@@ -2066,36 +2066,51 @@ def _serialize_message_threads(mensagens):
     threads = {}
 
     for mensagem in mensagens:
-        key = (mensagem.sender_id, mensagem.animal_id or None)
         last_timestamp = mensagem.timestamp or datetime.min
+
+        conversation_partner_id = (
+            mensagem.receiver_id
+            if mensagem.sender_id == current_user.id
+            else mensagem.sender_id
+        )
+        conversation_partner = (
+            mensagem.receiver
+            if mensagem.sender_id == current_user.id
+            else mensagem.sender
+        )
+
+        key = (conversation_partner_id, mensagem.animal_id or None)
 
         thread = threads.get(key)
         if thread is None or last_timestamp > thread["last_message_dt"]:
             if mensagem.animal is not None:
                 conversation_url = url_for(
-                    "conversa", animal_id=mensagem.animal_id, user_id=mensagem.sender_id
+                    "conversa",
+                    animal_id=mensagem.animal_id,
+                    user_id=conversation_partner_id,
                 )
                 animal_payload = {
                     "id": mensagem.animal_id,
                     "name": mensagem.animal.name,
                 }
             else:
-                if current_user.role == "admin":
-                    conversation_url = url_for("conversa_admin", user_id=mensagem.sender_id)
-                else:
-                    conversation_url = url_for("conversa_admin", user_id=mensagem.sender_id)
+                conversation_url = url_for(
+                    "conversa_admin", user_id=conversation_partner_id
+                )
                 animal_payload = None
 
-            sender_name = mensagem.sender.name or "Usuário"
-            sender_initial = sender_name.strip()[:1].upper() if sender_name.strip() else "?"
+            partner_name = getattr(conversation_partner, "name", None) or "Usuário"
+            partner_initial = (
+                partner_name.strip()[:1].upper() if partner_name.strip() else "?"
+            )
 
             thread = {
-                "id": f"{mensagem.sender_id}-{mensagem.animal_id or 'admin'}",
+                "id": f"{conversation_partner_id}-{mensagem.animal_id or 'admin'}",
                 "sender": {
-                    "id": mensagem.sender_id,
-                    "name": sender_name,
-                    "profile_photo": mensagem.sender.profile_photo,
-                    "initials": sender_initial,
+                    "id": conversation_partner_id,
+                    "name": partner_name,
+                    "profile_photo": getattr(conversation_partner, "profile_photo", None),
+                    "initials": partner_initial,
                 },
                 "animal": animal_payload,
                 "last_message_dt": last_timestamp,
@@ -2115,6 +2130,11 @@ def _serialize_message_threads(mensagens):
     sorted_threads = sorted(
         threads.values(), key=lambda thread: thread["last_message_dt"], reverse=True
     )
+
+    for thread in sorted_threads:
+        thread.pop("last_message_dt", None)
+
+    return sorted_threads
 
 
 def _user_initials_from_name(full_name: Optional[str]) -> str:
@@ -2154,11 +2174,6 @@ def _build_user_avatar_map(users: Iterable["User"]) -> Dict[int, Dict[str, str]]
         }
 
     return avatar_map
-
-    for thread in sorted_threads:
-        thread.pop("last_message_dt", None)
-
-    return sorted_threads
 
 
 def _ensure_veterinarian_profile(form=None):
