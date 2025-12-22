@@ -10,6 +10,19 @@
   <input type="hidden" name="latitude" id="latitude" value="{{ endereco.latitude|default('', true) if endereco else '' }}">
   <input type="hidden" name="longitude" id="longitude" value="{{ endereco.longitude|default('', true) if endereco else '' }}">
 
+  <div class="d-flex align-items-center gap-3 mb-2 flex-wrap">
+    <div class="form-check form-switch m-0">
+      <input class="form-check-input" type="checkbox" id="keepCoordinates" checked>
+      <label class="form-check-label" for="keepCoordinates">Manter coordenadas ao ajustar logradouro/número</label>
+    </div>
+    <button type="button" class="btn btn-sm btn-outline-secondary" data-clear-location>
+      <i class="bi bi-eraser"></i>
+      Limpar localização
+    </button>
+  </div>
+  <div class="small text-muted mb-3" data-coordinates-display>Coordenadas não definidas.</div>
+  <div class="border rounded-3 mb-3 d-none" style="height: 220px; min-height: 180px;" data-map-preview></div>
+
   {% set addr_form = form if form is defined and form.cep is defined else None %}
   <div class="row g-3">
     <!-- CEP com máscara e busca automática -->
@@ -168,7 +181,212 @@
 </div>
 
 <script>
-  // Máscara para CEP
+  let leafletPromise = null;
+
+  function getAddressCard(trigger) {
+    return trigger ? trigger.closest('[data-address-card]') : document.querySelector('[data-address-card]');
+  }
+
+  function loadLeafletAssets() {
+    if (window.L) {
+      return Promise.resolve(window.L);
+    }
+
+    if (!leafletPromise) {
+      leafletPromise = new Promise((resolve, reject) => {
+        const existingScript = document.querySelector('script[data-leaflet]');
+        if (existingScript) {
+          existingScript.addEventListener('load', () => resolve(window.L));
+          existingScript.addEventListener('error', reject);
+          return;
+        }
+
+        const link = document.createElement('link');
+        link.rel = 'stylesheet';
+        link.href = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';
+        document.head.appendChild(link);
+
+        const script = document.createElement('script');
+        script.src = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';
+        script.defer = true;
+        script.setAttribute('data-leaflet', 'true');
+        script.onload = () => resolve(window.L);
+        script.onerror = reject;
+        document.head.appendChild(script);
+      });
+    }
+
+    return leafletPromise;
+  }
+
+  function createCoordinateManager(addressCard) {
+    const latField = addressCard.querySelector('#latitude');
+    const lonField = addressCard.querySelector('#longitude');
+    const statusEl = addressCard.querySelector('[data-geo-status]');
+    const keepToggle = addressCard.querySelector('#keepCoordinates');
+    const clearButton = addressCard.querySelector('[data-clear-location]');
+    const display = addressCard.querySelector('[data-coordinates-display]');
+    const mapContainer = addressCard.querySelector('[data-map-preview]');
+
+    let mapInstance = null;
+    let mapMarker = null;
+
+    const setStatus = (message, isError = false) => {
+      if (!statusEl) return;
+      statusEl.textContent = message || '';
+      statusEl.classList.toggle('text-danger', isError);
+    };
+
+    const getCoordinates = () => {
+      const lat = parseFloat(latField?.value);
+      const lon = parseFloat(lonField?.value);
+      if (Number.isFinite(lat) && Number.isFinite(lon)) {
+        return { lat, lon };
+      }
+      return null;
+    };
+
+    const refreshMap = coords => {
+      if (!mapContainer) return;
+
+      if (!coords) {
+        mapContainer.classList.add('d-none');
+        return;
+      }
+
+      mapContainer.classList.remove('d-none');
+
+      loadLeafletAssets()
+        .then(L => {
+          if (!mapInstance) {
+            mapInstance = L.map(mapContainer).setView([coords.lat, coords.lon], 16);
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+              maxZoom: 19,
+              attribution: '&copy; OpenStreetMap contributors'
+            }).addTo(mapInstance);
+
+            mapInstance.on('click', event => {
+              setCoordinates(event.latlng.lat, event.latlng.lng);
+            });
+          } else {
+            mapInstance.setView([coords.lat, coords.lon], mapInstance.getZoom());
+          }
+
+          if (!mapMarker) {
+            mapMarker = L.marker([coords.lat, coords.lon], { draggable: true }).addTo(mapInstance);
+            mapMarker.on('dragend', event => {
+              const position = event.target.getLatLng();
+              setCoordinates(position.lat, position.lng);
+            });
+          } else {
+            mapMarker.setLatLng([coords.lat, coords.lon]);
+          }
+        })
+        .catch(() => {
+          setStatus('Não foi possível carregar o mapa para ajustar a localização.', true);
+        });
+    };
+
+    const updateCoordinatesDisplay = () => {
+      if (!display) return;
+
+      const coords = getCoordinates();
+      const hasCoords = Boolean(coords);
+
+      if (hasCoords) {
+        display.textContent = `Latitude: ${coords.lat.toFixed(6)} | Longitude: ${coords.lon.toFixed(6)}`;
+        display.classList.remove('text-muted');
+      } else {
+        display.textContent = 'Coordenadas não definidas.';
+        display.classList.add('text-muted');
+      }
+
+      if (clearButton) {
+        clearButton.disabled = !hasCoords;
+      }
+
+      refreshMap(coords);
+    };
+
+    const setCoordinates = (lat, lon) => {
+      if (latField) latField.value = lat ?? '';
+      if (lonField) lonField.value = lon ?? '';
+      updateCoordinatesDisplay();
+    };
+
+    const clearCoordinates = (announce = false) => {
+      setCoordinates('', '');
+      if (announce) {
+        setStatus('Coordenadas limpas. Ajuste o endereço ou use a localização novamente.');
+      }
+    };
+
+    const shouldPreserveMinorChanges = () => keepToggle ? keepToggle.checked : true;
+
+    const attachFieldListeners = () => {
+      const preserveFields = ['#rua', '#numero', '#complemento', '#bairro'];
+      preserveFields.forEach(selector => {
+        const field = addressCard.querySelector(selector);
+        if (field) {
+          field.addEventListener('input', () => {
+            if (!shouldPreserveMinorChanges()) {
+              clearCoordinates();
+            } else {
+              updateCoordinatesDisplay();
+            }
+          });
+        }
+      });
+
+      ['#cidade', '#estado'].forEach(selector => {
+        const field = addressCard.querySelector(selector);
+        if (field) {
+          field.addEventListener('input', () => clearCoordinates(true));
+          field.addEventListener('change', () => clearCoordinates(true));
+        }
+      });
+    };
+
+    const attachControls = () => {
+      if (keepToggle) {
+        keepToggle.addEventListener('change', () => {
+          if (!keepToggle.checked) {
+            clearCoordinates(true);
+          } else {
+            updateCoordinatesDisplay();
+          }
+        });
+      }
+
+      if (clearButton) {
+        clearButton.addEventListener('click', () => clearCoordinates(true));
+      }
+    };
+
+    attachFieldListeners();
+    attachControls();
+    updateCoordinatesDisplay();
+
+    return {
+      getCoordinates,
+      setCoordinates,
+      clearCoordinates,
+      updateCoordinatesDisplay,
+      shouldPreserveMinorChanges,
+      setStatus,
+    };
+  }
+
+  function getCoordinateManager(trigger) {
+    const addressCard = getAddressCard(trigger);
+    if (!addressCard) return null;
+    if (!addressCard._coordinateManager) {
+      addressCard._coordinateManager = createCoordinateManager(addressCard);
+    }
+    return addressCard._coordinateManager;
+  }
+
+  // Máscara para CEP e inicializações
   document.addEventListener("DOMContentLoaded", function () {
     // Inicializa tooltips
     const tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
@@ -187,6 +405,8 @@
         e.target.value = value;
       });
     }
+
+    getCoordinateManager();
   });
 
   function buscarCep(trigger) {
@@ -303,6 +523,7 @@
   function preencherComLocalizacao(trigger) {
     const addressCard = trigger ? trigger.closest('[data-address-card]') : document.querySelector('[data-address-card]');
     const status = addressCard ? addressCard.querySelector('[data-geo-status]') : null;
+    const coordinateManager = getCoordinateManager(addressCard);
 
     const setStatus = (message, isError = false) => {
       if (!status) return;
@@ -336,10 +557,14 @@
           throw new Error('Coordenadas não encontradas.');
         }
 
-        const latField = addressCard.querySelector('#latitude');
-        const lonField = addressCard.querySelector('#longitude');
-        if (latField) latField.value = latitude;
-        if (lonField) lonField.value = longitude;
+        if (coordinateManager) {
+          coordinateManager.setCoordinates(latitude, longitude);
+        } else {
+          const latField = addressCard.querySelector('#latitude');
+          const lonField = addressCard.querySelector('#longitude');
+          if (latField) latField.value = latitude;
+          if (lonField) lonField.value = longitude;
+        }
 
         setStatus('Encontramos sua localização! Buscando endereço...');
 
@@ -406,6 +631,8 @@
     const form = addressCard ? addressCard.closest("form") : null; // find the form wrapping this address partial
     if (!form) return;
 
+    const coordinateManager = getCoordinateManager(addressCard);
+
     // Define campos obrigatórios
     const requiredFields = ['rua', 'cidade', 'estado'];
 
@@ -450,10 +677,11 @@
           if (this.value.trim()) {
             this.classList.remove("is-invalid");
           }
-          const latField = document.getElementById('latitude');
-          const lonField = document.getElementById('longitude');
-          if (latField) latField.value = '';
-          if (lonField) lonField.value = '';
+          if (coordinateManager && (this.id === 'cidade' || this.id === 'estado')) {
+            coordinateManager.clearCoordinates(true);
+          } else if (coordinateManager) {
+            coordinateManager.updateCoordinatesDisplay();
+          }
         });
       }
     });
