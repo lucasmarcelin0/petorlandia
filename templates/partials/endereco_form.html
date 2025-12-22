@@ -5,6 +5,10 @@
       <i class="bi bi-crosshair"></i>
       Usar localização atual
     </button>
+    <button type="button" class="btn btn-sm btn-outline-success ms-2" onclick="preencherComLocalizacaoDoMapa(this)">
+      <i class="bi bi-map"></i>
+      Usar localização do mapa
+    </button>
   </h5>
   <div class="text-muted small mb-2" data-geo-status></div>
   <input type="hidden" name="latitude" id="latitude" value="{{ endereco.latitude|default('', true) if endereco else '' }}">
@@ -602,6 +606,39 @@
     return { cep, rua, numero, complemento, bairro, cidade, estado };
   }
 
+  function buscarEnderecoPorCoordenadas(latitude, longitude) {
+    return new Promise((resolve, reject) => {
+      if (latitude == null || longitude == null) {
+        reject(new Error('Coordenadas não informadas.'));
+        return;
+      }
+
+      const reverseEndpoint = "{{ url_for('api_reverse_geocode') }}";
+      const url = `${reverseEndpoint}?lat=${encodeURIComponent(latitude)}&lon=${encodeURIComponent(longitude)}`;
+
+      fetch(url, { headers: { 'Accept': 'application/json' } })
+        .then(async response => {
+          let payload = null;
+          try {
+            payload = await response.json();
+          } catch (parseError) {
+            console.warn('Resposta inválida ao tentar obter endereço por coordenadas', parseError);
+          }
+
+          if (!response.ok || !payload || payload.success === false || !payload.data) {
+            const message = (payload && (payload.error || payload.message))
+              ? payload.error || payload.message
+              : 'Não foi possível obter o endereço pelas coordenadas informadas';
+            throw new Error(message);
+          }
+
+          return payload.data;
+        })
+        .then(resolve)
+        .catch(error => reject(error));
+    });
+  }
+
   function buscarCoordenadasPorEndereco(addressCard, { setStatus } = {}) {
     return new Promise((resolve, reject) => {
       if (!addressCard) {
@@ -728,27 +765,7 @@
 
         setStatus('Encontramos sua localização! Buscando endereço...');
 
-        const reverseEndpoint = "{{ url_for('api_reverse_geocode') }}";
-        const url = `${reverseEndpoint}?lat=${encodeURIComponent(latitude)}&lon=${encodeURIComponent(longitude)}`;
-
-        fetch(url, { headers: { 'Accept': 'application/json' } })
-          .then(async response => {
-            let payload = null;
-            try {
-              payload = await response.json();
-            } catch (parseError) {
-              console.warn('Resposta inválida ao tentar obter endereço por geolocalização', parseError);
-            }
-
-            if (!response.ok || !payload || payload.success === false || !payload.data) {
-              const message = (payload && (payload.error || payload.message))
-                ? payload.error || payload.message
-                : 'Não foi possível obter o endereço pelo GPS';
-              throw new Error(message);
-            }
-
-            return payload.data;
-          })
+        buscarEnderecoPorCoordenadas(latitude, longitude)
           .then(data => {
             preencherEndereco(addressCard, data, { preferCepLookup: true });
             setStatus('Endereço atualizado com base na sua localização.');
@@ -775,6 +792,58 @@
         maximumAge: 30000,
       },
     );
+  }
+
+  function preencherComLocalizacaoDoMapa(trigger) {
+    const addressCard = getAddressCard(trigger);
+    const status = addressCard ? addressCard.querySelector('[data-geo-status]') : null;
+    const coordinateManager = getCoordinateManager(addressCard);
+
+    const setStatus = (message, isError = false) => {
+      if (!status) return;
+      status.textContent = message || '';
+      status.classList.toggle('text-danger', isError);
+    };
+
+    if (!addressCard) {
+      setStatus('Não foi possível identificar o formulário de endereço.', true);
+      return;
+    }
+
+    const coords = coordinateManager?.getCoordinates();
+
+    if (!coords) {
+      setStatus('Selecione um ponto no mapa para buscar o endereço.', true);
+      return;
+    }
+
+    const button = trigger instanceof HTMLElement ? trigger : null;
+
+    if (button) {
+      button.disabled = true;
+      button.classList.add('disabled');
+    }
+
+    const restoreButton = () => {
+      if (button) {
+        button.disabled = false;
+        button.classList.remove('disabled');
+      }
+    };
+
+    setStatus('Buscando endereço a partir do ponto selecionado no mapa...');
+
+    buscarEnderecoPorCoordenadas(coords.lat, coords.lon)
+      .then(data => {
+        preencherEndereco(addressCard, data, { preferCepLookup: true });
+        setStatus('Endereço atualizado com base no ponto selecionado no mapa.');
+      })
+      .catch(error => {
+        console.error('Erro ao obter endereço pelas coordenadas do mapa', error);
+        setStatus(error.message || 'Não foi possível atualizar o endereço com o ponto selecionado.', true);
+        alert(error.message || 'Erro ao buscar endereço pelo mapa.');
+      })
+      .finally(restoreButton);
   }
 
   // Validação melhorada
