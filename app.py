@@ -2449,6 +2449,47 @@ def api_reverse_geocode():
     return jsonify(success=True, data=normalized)
 
 
+@app.route('/api/geocode/address', methods=['POST'])
+def api_forward_geocode():
+    """Resolve an address into coordinates using the same backend helper.
+
+    The frontend uses this when geolocation is unavailable/disabled to still
+    estimate coordinates based on the typed address fields (CEP, street and
+    number). The response mirrors the reverse geocode structure but only
+    returns latitude/longitude.
+    """
+
+    payload = request.get_json(silent=True) or {}
+
+    def _get(field: str):
+        return (request.form.get(field) or payload.get(field) or '').strip()
+
+    cep = _get('cep')
+    rua = _get('rua')
+    numero = _get('numero')
+    bairro = _get('bairro')
+    cidade = _get('cidade')
+    estado = _get('estado')
+
+    if not any([cep, rua, bairro, cidade, estado]):
+        return jsonify(success=False, error='Informe CEP ou endereço para geocodificar'), 400
+
+    coords = geocode_address(
+        cep=cep,
+        rua=rua,
+        numero=numero,
+        bairro=bairro,
+        cidade=cidade,
+        estado=estado,
+    )
+
+    if not coords:
+        return jsonify(success=False, error='Endereço não encontrado'), 404
+
+    lat, lon = coords
+    return jsonify(success=True, data={'lat': lat, 'lon': lon})
+
+
 @app.route('/veterinario/assinatura')
 @login_required
 def veterinarian_membership():
