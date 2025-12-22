@@ -1067,6 +1067,45 @@ def test_conversa_admin_shows_message_for_any_admin(monkeypatch, app):
         assert b'hello' in response.data
 
 
+def test_conversa_allows_current_user_as_url_participant(monkeypatch, app):
+    client = app.test_client()
+
+    with app.app_context():
+        db.drop_all()
+        db.create_all()
+
+        owner = User(id=1, name='Owner', email='owner@test')
+        owner.set_password('x')
+        interested = User(id=2, name='Interested', email='user@test')
+        interested.set_password('x')
+        animal = Animal(id=1, name='Dog', user_id=owner.id)
+
+        db.session.add_all([owner, interested, animal])
+        db.session.commit()
+
+        message = Message(
+            sender_id=owner.id,
+            receiver_id=interested.id,
+            animal_id=animal.id,
+            content='Hello!',
+        )
+        db.session.add(message)
+        db.session.commit()
+
+        import flask_login.utils as login_utils
+        monkeypatch.setattr(login_utils, '_get_user', lambda: interested)
+        monkeypatch.setattr(app_module, '_is_admin', lambda: False)
+
+        for idx, fn in enumerate(flask_app.template_context_processors[None]):
+            if fn.__name__ == 'inject_unread_count':
+                flask_app.template_context_processors[None][idx] = lambda: {'unread_messages': 0}
+
+        response = client.get('/conversa/1/2')
+        assert response.status_code == 200
+        data = response.get_data(as_text=True)
+        assert 'Hello!' in data
+
+
 def test_chat_api_get_post(monkeypatch, app):
     client = app.test_client()
 
