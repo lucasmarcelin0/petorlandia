@@ -1256,6 +1256,7 @@ from forms import (
     ClinicInviteVeterinarianForm,
     ClinicStaffPermissionForm,
     DeleteAccountForm,
+    DeliveryPromotionForm,
     DeliveryRequestForm,
     EditProfileForm,
     InventoryItemForm,
@@ -5936,6 +5937,7 @@ def conversa_admin(user_id=None):
 
     form = MessageForm()
     promotion_form = None
+    delivery_promotion_form = None
     target_membership = None
     cancel_trial_form = VeterinarianMembershipCancelTrialForm()
     request_new_trial_form = VeterinarianMembershipRequestNewTrialForm()
@@ -5949,6 +5951,7 @@ def conversa_admin(user_id=None):
         admin_ids = [u.id for u in User.query.filter_by(role='admin').all()]
         participant_id = interlocutor.id
         promotion_form = VeterinarianPromotionForm()
+        delivery_promotion_form = DeliveryPromotionForm()
         if has_veterinarian_profile(interlocutor):
             target_membership = ensure_veterinarian_membership(interlocutor.veterinario)
             if target_membership and not hasattr(target_membership, 'is_trial_active'):
@@ -6030,6 +6033,7 @@ def conversa_admin(user_id=None):
         form=form,
         admin=interlocutor,
         promotion_form=promotion_form,
+        delivery_promotion_form=delivery_promotion_form,
         target_membership=target_membership,
         is_admin=is_admin,
         cancel_trial_form=cancel_trial_form,
@@ -6113,6 +6117,44 @@ def admin_promote_veterinarian(user_id):
 
     db.session.commit()
     flash('Usuário promovido a veterinário. Período de avaliação iniciado.', 'success')
+    return redirect(url_for('conversa_admin', user_id=user.id))
+
+
+@app.route('/admin/users/<int:user_id>/promover_entregador', methods=['POST'])
+@login_required
+def admin_promote_delivery(user_id):
+    if not (current_user.is_authenticated and (current_user.role or '').lower() == 'admin'):
+        abort(403)
+
+    user = User.query.get_or_404(user_id)
+    form = DeliveryPromotionForm()
+
+    if not form.validate_on_submit():
+        for field_errors in form.errors.values():
+            for error in field_errors:
+                flash(error, 'danger')
+        return redirect(url_for('conversa_admin', user_id=user.id))
+
+    if (user.worker or '').lower() == 'delivery':
+        flash('Usuário já está registrado como entregador.', 'info')
+        current_app.logger.info(
+            'Admin %s tentou promover usuário %s que já é entregador.',
+            current_user.id,
+            user.id,
+        )
+        return redirect(url_for('conversa_admin', user_id=user.id))
+
+    previous_worker_status = user.worker
+    user.worker = 'delivery'
+    db.session.commit()
+
+    current_app.logger.info(
+        'Admin %s alterou worker de %s para delivery para o usuário %s.',
+        current_user.id,
+        previous_worker_status,
+        user.id,
+    )
+    flash('Usuário promovido a entregador.', 'success')
     return redirect(url_for('conversa_admin', user_id=user.id))
 
 

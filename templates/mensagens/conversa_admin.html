@@ -77,6 +77,30 @@
         </form>
         {% endif %}
       {% endif %}
+      {% if is_admin %}
+        <div class="mt-4">
+          <h4 class="h6">Status de entregador</h4>
+          {% if admin.worker == 'delivery' %}
+            <div class="alert alert-success mb-0">Este usuário já está marcado como entregador.</div>
+          {% else %}
+            <p class="mb-2">Este usuário ainda não foi marcado como entregador.</p>
+            {% if delivery_promotion_form %}
+              <form method="post" action="{{ url_for('admin_promote_delivery', user_id=admin.id) }}" class="row g-2 align-items-end">
+                {{ delivery_promotion_form.hidden_tag() }}
+                <div class="col-md-8">
+                  <div class="form-check">
+                    {{ delivery_promotion_form.confirm(class="form-check-input", id=delivery_promotion_form.confirm.id) }}
+                    {{ delivery_promotion_form.confirm.label(class="form-check-label", for=delivery_promotion_form.confirm.id) }}
+                  </div>
+                </div>
+                <div class="col-md-4">
+                  <button type="submit" class="btn btn-outline-success w-100">{{ delivery_promotion_form.submit.label.text }}</button>
+                </div>
+              </form>
+            {% endif %}
+          {% endif %}
+        </div>
+      {% endif %}
     </div>
   </div>
 {% endif %}
