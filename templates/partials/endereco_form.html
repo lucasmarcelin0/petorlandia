@@ -230,6 +230,7 @@
 
     let mapInstance = null;
     let mapMarker = null;
+    let autoGeocodeTimer = null;
 
     const setStatus = (message, isError = false) => {
       if (!statusEl) return;
@@ -331,6 +332,33 @@
 
     const shouldPreserveMinorChanges = () => keepToggle ? keepToggle.checked : true;
 
+    const performAutoGeocode = () => {
+      if (shouldPreserveMinorChanges()) return;
+
+      buscarCoordenadasPorEndereco(addressCard, { setStatus })
+        .then(coords => {
+          if (coords?.lat != null && coords?.lon != null) {
+            setCoordinates(coords.lat, coords.lon);
+            setStatus('Coordenadas atualizadas com base no endereço informado.');
+            return;
+          }
+          setStatus('Não foi possível localizar as coordenadas para o endereço informado.', true);
+        })
+        .catch(error => {
+          console.error('Erro ao recalcular coordenadas pelo endereço', error);
+          setStatus(error?.message || 'Não foi possível recalcular a localização.', true);
+        });
+    };
+
+    const queueAutoGeocode = () => {
+      if (shouldPreserveMinorChanges()) return;
+      if (autoGeocodeTimer) {
+        clearTimeout(autoGeocodeTimer);
+      }
+
+      autoGeocodeTimer = setTimeout(performAutoGeocode, 600);
+    };
+
     const attachFieldListeners = () => {
       const preserveFields = ['#rua', '#numero', '#complemento', '#bairro'];
       preserveFields.forEach(selector => {
@@ -338,10 +366,10 @@
         if (field) {
           field.addEventListener('input', () => {
             if (!shouldPreserveMinorChanges()) {
-              clearCoordinates();
-            } else {
-              updateCoordinatesDisplay();
+              queueAutoGeocode();
+              return;
             }
+            updateCoordinatesDisplay();
           });
         }
       });
@@ -351,10 +379,10 @@
         if (field) {
           const handleChange = () => {
             if (!shouldPreserveMinorChanges()) {
-              clearCoordinates(true);
-            } else {
-              updateCoordinatesDisplay();
+              queueAutoGeocode();
+              return;
             }
+            updateCoordinatesDisplay();
           };
 
           field.addEventListener('input', handleChange);
@@ -367,7 +395,7 @@
       if (keepToggle) {
         keepToggle.addEventListener('change', () => {
           if (!keepToggle.checked) {
-            clearCoordinates(true);
+            queueAutoGeocode();
           } else {
             updateCoordinatesDisplay();
           }
