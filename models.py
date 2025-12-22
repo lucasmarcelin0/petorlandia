@@ -6,7 +6,7 @@ except ImportError:
 from flask_login import UserMixin
 from flask import url_for, request, current_app
 from werkzeug.security import generate_password_hash, check_password_hash
-from datetime import datetime, date, timedelta
+from datetime import datetime, date, timedelta, timezone
 from dateutil.relativedelta import relativedelta
 from decimal import Decimal
 import unicodedata
@@ -1188,6 +1188,14 @@ class VeterinarianMembership(db.Model):
     def _now(self):
         return utcnow()
 
+    @staticmethod
+    def _as_timezone_aware(dt: datetime | None) -> datetime | None:
+        if dt is None:
+            return None
+        if dt.tzinfo is None:
+            return dt.replace(tzinfo=timezone.utc)
+        return dt
+
     def ensure_trial_dates(self, trial_days: int = 30) -> None:
         """Guarantee that ``started_at`` and ``trial_ends_at`` are populated."""
 
@@ -1205,14 +1213,16 @@ class VeterinarianMembership(db.Model):
         self.paid_until = None
 
     def is_trial_active(self) -> bool:
-        if not self.trial_ends_at:
+        trial_end = self._as_timezone_aware(self.trial_ends_at)
+        if not trial_end:
             return False
-        return self._now() <= self.trial_ends_at
+        return self._now() <= trial_end
 
     def has_valid_payment(self) -> bool:
-        if not self.paid_until:
+        paid_until = self._as_timezone_aware(self.paid_until)
+        if not paid_until:
             return False
-        return self._now() <= self.paid_until
+        return self._now() <= paid_until
 
     def is_active(self) -> bool:
         return self.is_trial_active() or self.has_valid_payment()
