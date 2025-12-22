@@ -52,18 +52,20 @@
                     <div id="plan-coverage"></div>
                 </div>
 
-                <!-- Campos obrigatórios simplificados (removidos campos desnecessários) -->
-                <div class="col-md-6">
-                    {{ form.tutor_document.label(class="form-label fw-semibold") }}
-                    {{ form.tutor_document(class="form-control", placeholder="CPF/CNPJ", value=user_cpf or '') }}
+                <!-- Documentos do tutor e do pet (apenas visualização, envio automático) -->
+                <div class="col-12 col-md-6">
+                    <label class="form-label fw-semibold" for="tutor_document">Documento do tutor</label>
+                    <div class="form-control bg-light">{{ tutor_document_value or 'Não informado' }}</div>
+                    {{ form.tutor_document(type="hidden", id="tutor_document", value=tutor_document_value or '') }}
                     {% if form.tutor_document.errors %}
                         <small class="text-danger d-block mt-1">{{ form.tutor_document.errors[0] }}</small>
                     {% endif %}
                 </div>
 
-                <div class="col-md-6">
-                    {{ form.animal_document.label(class="form-label fw-semibold") }}
-                    {{ form.animal_document(class="form-control", placeholder="Microchip ou registro", value=animal_microchip or '') }}
+                <div class="col-12 col-md-6">
+                    <label class="form-label fw-semibold" for="animal_document">Identificador do pet</label>
+                    <div class="form-control bg-light">{{ animal_document_value or 'Não informado' }}</div>
+                    {{ form.animal_document(type="hidden", id="animal_document", value=animal_document_value or '') }}
                     {% if form.animal_document.errors %}
                         <small class="text-danger d-block mt-1">{{ form.animal_document.errors[0] }}</small>
                     {% endif %}

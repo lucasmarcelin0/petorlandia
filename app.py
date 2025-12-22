@@ -6646,6 +6646,13 @@ def planosaude_animal(animal_id):
     form.plan_id.choices = [
         (p.id, f"{p.name} - R$ {p.price:.2f}") for p in plans
     ]
+    default_animal_document = animal.microchip_number or str(animal.id)
+    if request.method == "GET":
+        form.tutor_document.data = current_user.cpf
+        form.animal_document.data = default_animal_document
+    else:
+        form.tutor_document.data = form.tutor_document.data or current_user.cpf
+        form.animal_document.data = form.animal_document.data or default_animal_document
     plans_data = [
         {
             "id": p.id,
@@ -6693,6 +6700,8 @@ def planosaude_animal(animal_id):
         onboarding=onboarding,
         user_cpf=current_user.cpf,
         animal_microchip=animal.microchip_number,
+        tutor_document_value=form.tutor_document.data,
+        animal_document_value=form.animal_document.data,
         show_schedule_button=_is_admin() or is_veterinarian(current_user),
     )
 
@@ -6714,6 +6723,9 @@ def contratar_plano(animal_id):
     form.plan_id.choices = [
         (p.id, f"{p.name} - R$ {p.price:.2f}") for p in plans
     ]
+    default_animal_document = animal.microchip_number or str(animal.id)
+    form.tutor_document.data = form.tutor_document.data or current_user.cpf
+    form.animal_document.data = form.animal_document.data or default_animal_document
     if not form.validate_on_submit():
         flash("Selecione um plano válido.", "danger")
         return redirect(url_for("planosaude_animal", animal_id=animal.id))
