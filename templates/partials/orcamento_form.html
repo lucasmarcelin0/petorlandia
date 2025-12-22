@@ -444,7 +444,7 @@ async function finalizarBlocoOrcamento() {
       successMessage: 'Orçamento salvo com sucesso! ✅',
       errorMessage: 'Erro ao salvar orçamento',
       timeoutMs: 10000,
-      disableFormAfterSuccess: true,
+      disableFormAfterSuccess: false,
       onSuccess: (result) => {
         // Reset the form state
         tbody.innerHTML = '';

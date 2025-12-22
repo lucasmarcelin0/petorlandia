@@ -120,6 +120,13 @@ if (!window.HistorySyncManagerClass) {
         await onSuccess(result);
       }
 
+      // Re-enable the button when we are not locking the entire form
+      if (submitButton && !disableFormAfterSuccess) {
+        submitButton.disabled = false;
+        submitButton.classList.remove('disabled');
+        submitButton.textContent = submitButton.dataset.originalText || 'Salvar';
+      }
+
       return { success: true, message: successMessage, retried };
 
     } catch (error) {
