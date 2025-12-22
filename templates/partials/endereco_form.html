@@ -249,7 +249,9 @@
     const refreshMap = coords => {
       if (!mapContainer) return;
 
-      if (!coords) {
+      const hasCoords = Boolean(coords);
+
+      if (!hasCoords && !mapInstance) {
         mapContainer.classList.add('d-none');
         return;
       }
@@ -259,7 +261,8 @@
       loadLeafletAssets()
         .then(L => {
           if (!mapInstance) {
-            mapInstance = L.map(mapContainer).setView([coords.lat, coords.lon], 16);
+            const fallbackCoords = hasCoords ? [coords.lat, coords.lon] : [-14.235, -51.9253];
+            mapInstance = L.map(mapContainer).setView(fallbackCoords, 16);
             L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
               maxZoom: 19,
               attribution: '&copy; OpenStreetMap contributors'
@@ -268,18 +271,23 @@
             mapInstance.on('click', event => {
               setCoordinates(event.latlng.lat, event.latlng.lng);
             });
-          } else {
+          } else if (hasCoords) {
             mapInstance.setView([coords.lat, coords.lon], mapInstance.getZoom());
           }
 
-          if (!mapMarker) {
-            mapMarker = L.marker([coords.lat, coords.lon], { draggable: true }).addTo(mapInstance);
-            mapMarker.on('dragend', event => {
-              const position = event.target.getLatLng();
-              setCoordinates(position.lat, position.lng);
-            });
-          } else {
-            mapMarker.setLatLng([coords.lat, coords.lon]);
+          if (hasCoords) {
+            if (!mapMarker) {
+              mapMarker = L.marker([coords.lat, coords.lon], { draggable: true }).addTo(mapInstance);
+              mapMarker.on('dragend', event => {
+                const position = event.target.getLatLng();
+                setCoordinates(position.lat, position.lng);
+              });
+            } else {
+              mapMarker.setLatLng([coords.lat, coords.lon]);
+            }
+          } else if (mapMarker) {
+            mapInstance.removeLayer(mapMarker);
+            mapMarker = null;
           }
         })
         .catch(() => {
