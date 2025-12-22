@@ -15,6 +15,10 @@
       <input class="form-check-input" type="checkbox" id="keepCoordinates" checked>
       <label class="form-check-label" for="keepCoordinates">Manter coordenadas ao ajustar logradouro/número</label>
     </div>
+    <button type="button" class="btn btn-sm btn-outline-primary" data-refresh-from-address>
+      <i class="bi bi-arrow-repeat"></i>
+      Atualizar mapa pelo endereço
+    </button>
     <button type="button" class="btn btn-sm btn-outline-secondary" data-clear-location>
       <i class="bi bi-eraser"></i>
       Limpar localização
@@ -225,11 +229,13 @@
     const statusEl = addressCard.querySelector('[data-geo-status]');
     const keepToggle = addressCard.querySelector('#keepCoordinates');
     const clearButton = addressCard.querySelector('[data-clear-location]');
+    const refreshButton = addressCard.querySelector('[data-refresh-from-address]');
     const display = addressCard.querySelector('[data-coordinates-display]');
     const mapContainer = addressCard.querySelector('[data-map-preview]');
 
     let mapInstance = null;
     let mapMarker = null;
+    let autoGeocodeTimer = null;
 
     const setStatus = (message, isError = false) => {
       if (!statusEl) return;
@@ -331,6 +337,38 @@
 
     const shouldPreserveMinorChanges = () => keepToggle ? keepToggle.checked : true;
 
+    const geocodeFromAddress = (force = false) => {
+      if (!force && shouldPreserveMinorChanges()) return Promise.resolve(null);
+
+      return buscarCoordenadasPorEndereco(addressCard, { setStatus })
+        .then(coords => {
+          if (coords?.lat != null && coords?.lon != null) {
+            setCoordinates(coords.lat, coords.lon);
+            setStatus('Coordenadas atualizadas com base no endereço informado.');
+            return coords;
+          }
+          throw new Error('Não foi possível localizar as coordenadas para o endereço informado.');
+        })
+        .catch(error => {
+          console.error('Erro ao recalcular coordenadas pelo endereço', error);
+          setStatus(error?.message || 'Não foi possível recalcular a localização.', true);
+          throw error;
+        });
+    };
+
+    const performAutoGeocode = () => {
+      geocodeFromAddress();
+    };
+
+    const queueAutoGeocode = () => {
+      if (shouldPreserveMinorChanges()) return;
+      if (autoGeocodeTimer) {
+        clearTimeout(autoGeocodeTimer);
+      }
+
+      autoGeocodeTimer = setTimeout(performAutoGeocode, 600);
+    };
+
     const attachFieldListeners = () => {
       const preserveFields = ['#rua', '#numero', '#complemento', '#bairro'];
       preserveFields.forEach(selector => {
@@ -338,10 +376,10 @@
         if (field) {
           field.addEventListener('input', () => {
             if (!shouldPreserveMinorChanges()) {
-              clearCoordinates();
-            } else {
-              updateCoordinatesDisplay();
+              queueAutoGeocode();
+              return;
             }
+            updateCoordinatesDisplay();
           });
         }
       });
@@ -351,10 +389,10 @@
         if (field) {
           const handleChange = () => {
             if (!shouldPreserveMinorChanges()) {
-              clearCoordinates(true);
-            } else {
-              updateCoordinatesDisplay();
+              queueAutoGeocode();
+              return;
             }
+            updateCoordinatesDisplay();
           };
 
           field.addEventListener('input', handleChange);
@@ -367,7 +405,7 @@
       if (keepToggle) {
         keepToggle.addEventListener('change', () => {
           if (!keepToggle.checked) {
-            clearCoordinates(true);
+            queueAutoGeocode();
           } else {
             updateCoordinatesDisplay();
           }
@@ -376,6 +414,19 @@
 
       if (clearButton) {
         clearButton.addEventListener('click', () => clearCoordinates(true));
+      }
+
+      if (refreshButton) {
+        refreshButton.addEventListener('click', () => {
+          refreshButton.disabled = true;
+          refreshButton.classList.add('disabled');
+          geocodeFromAddress(true)
+            .catch(() => { })
+            .finally(() => {
+              refreshButton.disabled = false;
+              refreshButton.classList.remove('disabled');
+            });
+        });
       }
     };
 
@@ -390,6 +441,7 @@
       updateCoordinatesDisplay,
       shouldPreserveMinorChanges,
       setStatus,
+      geocodeFromAddress,
     };
   }
 
