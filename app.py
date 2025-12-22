@@ -16197,7 +16197,9 @@ def appointments():
 
         for consulta in consultas_finalizadas:
             timestamp = _consulta_timestamp(consulta)
-            if not timestamp or not (start_dt_utc <= timestamp < end_dt_utc):
+            timestamp_utc = normalize_to_utc(timestamp) if timestamp else None
+
+            if not timestamp_utc or not (start_dt_utc <= timestamp_utc < end_dt_utc):
                 continue
             relevant_blocks = exam_blocks_by_consulta.get(consulta.id)
             if not relevant_blocks:
