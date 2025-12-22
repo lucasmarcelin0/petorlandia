@@ -1061,6 +1061,31 @@ def format_datetime_brazil(value, fmt="%d/%m/%Y %H:%M"):
     return value
 
 
+@app.template_filter("isoformat_with_tz")
+def isoformat_with_tz(value):
+    """Return an ISO-8601 string with explicit timezone information.
+
+    Datetimes are converted to UTC and rendered with a ``Z`` suffix. Naive
+    datetimes are assumed to be expressed in Brazil's timezone to avoid
+    unintended shifts when the client parses them.
+    """
+
+    if value is None:
+        return ""
+
+    if isinstance(value, datetime):
+        if value.tzinfo is None:
+            value = value.replace(tzinfo=BR_TZ)
+        value = value.astimezone(timezone.utc)
+        return value.isoformat().replace("+00:00", "Z")
+
+    if isinstance(value, date):
+        localized = datetime.combine(value, datetime.min.time(), tzinfo=BR_TZ)
+        return localized.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
+
+    return str(value)
+
+
 @app.template_filter("format_timedelta")
 def format_timedelta(value):
     """Format a ``timedelta`` as ``'Xh Ym'``."""
@@ -6861,7 +6886,7 @@ def planos_dashboard():
     if not _is_admin():
         abort(403)
     metrics = summarize_plan_metrics()
-    history = build_usage_history(limit=25)
+    history = build_usage_history(limit=25, include_display=True)
     return render_template('planos/dashboard.html', metrics=metrics, history=history)
 
 @app.route("/animal/<int:animal_id>/planosaude", methods=["GET", "POST"])
