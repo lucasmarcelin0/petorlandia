@@ -502,11 +502,16 @@
               new bootstrap.Toast(toastEl).show();
               return { success: true, message: 'Aguardando conexão para concluir o envio.', level: 'info', successText: 'Sincronizando…', resetDelay: 2500, offlineQueued: true };
             }
-            if (response && response.ok) {
-              const data = await response.json();
-              if (data.deleted || data.status) {
-                li?.remove();
-              }
+          if (response && response.ok) {
+            let data = {};
+            try {
+              data = await response.json();
+            } catch (err) {
+              console.warn('Não foi possível interpretar a resposta como JSON.', err);
+            }
+            if (data.deleted || data.status) {
+              li?.remove();
+            }
               const toastEl = document.getElementById('actionToast');
               toastEl.querySelector('.toast-body').textContent = data.message || 'Sucesso';
               applyToastTone(toastEl, data.category || 'success');
