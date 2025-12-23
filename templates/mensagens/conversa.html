@@ -16,7 +16,7 @@
 </div>
 
 
-<form method="POST" class="js-msg-form" data-api="{{ url_for('api_conversa_message', animal_id=animal.id, user_id=outro_usuario.id) }}">
+<form method="POST" class="js-msg-form" data-api="{{ url_for('api_conversa_message', animal_id=animal.id, user_id=outro_usuario.id) }}" data-request-timeout="0">
     {{ form.hidden_tag() }}
     <div class="input-group">
 

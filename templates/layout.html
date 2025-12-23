@@ -696,12 +696,15 @@
           const handle = async () => {
             let response;
             let queued = false;
+            const timeoutAttr = form.dataset.requestTimeout || form.dataset.fetchTimeout || form.dataset.syncTimeout;
+            const timeout = Number.isFinite(Number(timeoutAttr)) ? Number(timeoutAttr) : undefined;
 
             try {
               ({ response, queued } = await fetchOrQueue(api, {
                 method: 'POST',
                 body: formData,
-                headers: { 'Accept': 'text/html' }
+                headers: { 'Accept': 'text/html' },
+                timeout
               }));
             } catch (err) {
               console.error('Erro ao enviar mensagem:', err);
