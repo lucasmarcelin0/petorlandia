@@ -2417,30 +2417,11 @@ def api_reverse_geocode():
     except ValueError:
         return jsonify(success=False, error='Coordenadas inválidas'), 400
 
-    def _extract_house_number(payload: dict):
-        address = payload.get('address') or {}
-
-        for key in ('house_number', 'house', 'street_number'):
-            value = address.get(key)
-            if value:
-                return value
-
-        for candidate in (payload.get('name'), payload.get('display_name')):
-            if not candidate:
-                continue
-
-            match = re.search(r"\b(\d{1,6})\b", candidate)
-            if match:
-                return match.group(1)
-
-        return None
-
     params = {
         'format': 'jsonv2',
         'lat': lat,
         'lon': lon,
         'addressdetails': 1,
-        'zoom': 18,
     }
 
     headers = {'User-Agent': 'petorlandia-geocoder/1.0'}
@@ -2458,7 +2439,7 @@ def api_reverse_geocode():
     normalized = {
         'cep': address.get('postcode'),
         'logradouro': _first_of(address, 'road', 'residential', 'pedestrian', 'path'),
-        'numero': _extract_house_number(payload),
+        'numero': address.get('house_number'),
         'complemento': _first_of(address, 'building', 'amenity'),
         'bairro': _first_of(address, 'suburb', 'neighbourhood', 'city_district'),
         'localidade': _first_of(address, 'city', 'town', 'village'),
