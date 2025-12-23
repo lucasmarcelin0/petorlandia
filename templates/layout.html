@@ -489,12 +489,23 @@
   </script>
   <script>
     document.addEventListener('DOMContentLoaded', () => {
+      const getCsrfTokenFromCookie = () => {
+        const match = document.cookie.match(/(?:^|; )csrf_token=([^;]+)/);
+        return match ? decodeURIComponent(match[1]) : '';
+      };
+
       document.querySelectorAll('.js-admin-delivery-form').forEach(form => {
         form.addEventListener('submit', async ev => {
           ev.preventDefault();
           const li = form.closest('li');
           const handle = async () => {
-            const { response, queued } = await fetchOrQueue(form.action, { method: 'POST', headers: { 'Accept': 'application/json' } });
+            const headers = { 'Accept': 'application/json' };
+            const csrfToken = getCsrfTokenFromCookie();
+            if (csrfToken) {
+              headers['X-CSRFToken'] = csrfToken;
+            }
+
+            const { response, queued } = await fetchOrQueue(form.action, { method: 'POST', headers });
             if (queued) {
               const toastEl = document.getElementById('actionToast');
               toastEl.querySelector('.toast-body').textContent = 'Ação salva para sincronização quando estiver online.';
