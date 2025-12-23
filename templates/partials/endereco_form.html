@@ -1,27 +1,34 @@
 <div class="card shadow-sm rounded-4 p-4 mb-4 border-0 bg-light" data-address-card>
-  <h5 class="mb-3 text-primary d-flex align-items-center">
+  <h5 class="mb-1 text-primary d-flex align-items-center">
     <i class="bi bi-geo-alt-fill me-2"></i> Endereço
-    <button type="button" class="btn btn-sm btn-outline-primary ms-3" onclick="preencherComLocalizacao(this)">
+    <button type="button" class="btn btn-sm btn-primary ms-3" onclick="preencherComLocalizacao(this)"
+      title="Atualizar o endereço com a sua localização atual" aria-label="Atualizar com localização atual">
       <i class="bi bi-crosshair"></i>
       Usar localização atual
     </button>
-    <button type="button" class="btn btn-sm btn-outline-success ms-2" onclick="preencherComLocalizacaoDoMapa(this)">
+    <button type="button" class="btn btn-sm btn-outline-success ms-2" onclick="preencherComLocalizacaoDoMapa(this)"
+      title="Buscar o endereço a partir do ponto selecionado no mapa" aria-label="Buscar endereço pelo mapa">
       <i class="bi bi-map"></i>
       Usar localização do mapa
     </button>
   </h5>
+  <p class="text-muted mb-3">Use o mapa ou preencha manualmente. Exemplo: "Av. Paulista, 1000".</p>
   <div class="text-muted small mb-2" data-geo-status></div>
   <input type="hidden" name="latitude" id="latitude" value="{{ endereco.latitude|default('', true) if endereco else '' }}">
   <input type="hidden" name="longitude" id="longitude" value="{{ endereco.longitude|default('', true) if endereco else '' }}">
 
   <div class="d-flex align-items-center gap-3 mb-2 flex-wrap">
-    <div class="form-check form-switch m-0">
+    <div class="form-check form-switch m-0" title="Quando desligado, recalcula as coordenadas ao editar o endereço.">
       <input class="form-check-input" type="checkbox" id="keepCoordinates" checked>
-      <label class="form-check-label" for="keepCoordinates">Manter coordenadas ao ajustar logradouro/número</label>
+      <label class="form-check-label d-flex align-items-center gap-1" for="keepCoordinates">
+        <i class="bi bi-lock"></i>
+        Atualizar coordenadas automaticamente
+      </label>
     </div>
-    <button type="button" class="btn btn-sm btn-outline-secondary" data-clear-location>
+    <button type="button" class="btn btn-sm btn-outline-secondary" data-clear-location
+      title="Remover coordenadas e limpar todos os campos" aria-label="Remover localização e limpar campos">
       <i class="bi bi-eraser"></i>
-      Limpar localização
+      Remover localização
     </button>
   </div>
   <div class="small text-muted mb-3" data-coordinates-display>Coordenadas não definidas.</div>
@@ -32,7 +39,7 @@
     <!-- CEP com máscara e busca automática -->
     <div class="col-md-3">
       <label for="cep" class="form-label fw-semibold">
-        CEP
+        CEP (somente números)
         <i class="bi bi-question-circle ms-1" data-bs-toggle="tooltip"
           title="Digite o CEP para autopreencher o endereço"></i>
       </label>
@@ -65,7 +72,7 @@
 
     <!-- Rua -->
     <div class="col-md-7">
-      <label for="rua" class="form-label fw-semibold">Logradouro <span class="text-danger">*</span></label>
+      <label for="rua" class="form-label fw-semibold">Logradouro (ex.: Av. Paulista) <span class="text-danger">*</span></label>
       {% if addr_form %}
       {{ addr_form.rua(class="form-control", id="rua", placeholder="Nome da rua, avenida, etc.", required=True) }}
       {% for error in addr_form.rua.errors %}<div class="text-danger">{{ error }}</div>{% endfor %}
@@ -79,13 +86,13 @@
 
     <!-- Número -->
     <div class="col-md-2">
-      <label for="numero" class="form-label fw-semibold">Número</label>
+      <label for="numero" class="form-label fw-semibold">Número (somente números)</label>
       {% if addr_form %}
-      {{ addr_form.numero(class="form-control", id="numero", placeholder="Nº") }}
+      {{ addr_form.numero(class="form-control", id="numero", placeholder="Nº", pattern="\\d*", inputmode="numeric") }}
       {% for error in addr_form.numero.errors %}<div class="text-danger">{{ error }}</div>{% endfor %}
       {% else %}
       <input type="text" class="form-control" name="numero" id="numero"
-        value="{{ endereco.numero|default('', true) if endereco else '' }}" placeholder="Nº">
+        value="{{ endereco.numero|default('', true) if endereco else '' }}" placeholder="Nº" pattern="\d*" inputmode="numeric">
       {% endif %}
     </div>
 
@@ -115,7 +122,7 @@
 
     <!-- Cidade -->
     <div class="col-md-3">
-      <label for="cidade" class="form-label fw-semibold">Cidade <span class="text-danger">*</span></label>
+      <label for="cidade" class="form-label fw-semibold">Cidade (ex.: São Paulo) <span class="text-danger">*</span></label>
       {% if addr_form %}
       {{ addr_form.cidade(class="form-control", id="cidade", placeholder="Nome da cidade", required=True) }}
       {% for error in addr_form.cidade.errors %}<div class="text-danger">{{ error }}</div>{% endfor %}
@@ -275,6 +282,7 @@
 
             mapInstance.on('click', event => {
               setCoordinates(event.latlng.lat, event.latlng.lng);
+              setStatus('Coordenadas atualizadas no mapa.');
             });
           } else if (hasCoords) {
             mapInstance.setView([coords.lat, coords.lon], mapInstance.getZoom());
@@ -283,9 +291,11 @@
           if (hasCoords) {
             if (!mapMarker) {
               mapMarker = L.marker([coords.lat, coords.lon], { draggable: true }).addTo(mapInstance);
+              mapMarker.bindTooltip('Arraste para ajustar a localização', { direction: 'top' });
               mapMarker.on('dragend', event => {
                 const position = event.target.getLatLng();
                 setCoordinates(position.lat, position.lng);
+                setStatus('Coordenadas atualizadas no mapa.');
               });
             } else {
               mapMarker.setLatLng([coords.lat, coords.lon]);
@@ -314,9 +324,9 @@
         display.classList.add('text-muted');
       }
 
-      if (clearButton) {
-        clearButton.disabled = !hasCoords;
-      }
+        if (clearButton) {
+          clearButton.disabled = false;
+        }
 
       refreshMap(coords);
     };
@@ -334,7 +344,21 @@
       }
     };
 
-    const shouldPreserveMinorChanges = () => keepToggle ? keepToggle.checked : true;
+    const clearAddressFields = () => {
+      const textFields = addressCard.querySelectorAll('input[type="text"], textarea');
+      textFields.forEach(field => { field.value = ''; field.classList.remove('is-invalid'); });
+
+      const stateSelect = addressCard.querySelector('#estado');
+      if (stateSelect) {
+        stateSelect.value = '';
+        stateSelect.classList.remove('is-invalid');
+      }
+
+      setCoordinates('', '');
+      setStatus('Endereço e coordenadas removidos.');
+    };
+
+    const shouldPreserveMinorChanges = () => keepToggle ? !keepToggle.checked : true;
 
     const performAutoGeocode = () => {
       if (shouldPreserveMinorChanges()) return;
@@ -398,16 +422,18 @@
     const attachControls = () => {
       if (keepToggle) {
         keepToggle.addEventListener('change', () => {
-          if (!keepToggle.checked) {
+          if (keepToggle.checked) {
             queueAutoGeocode();
+            setStatus('Coordenadas serão recalculadas ao alterar o endereço.');
           } else {
             updateCoordinatesDisplay();
+            setStatus('Coordenadas bloqueadas para alterações manuais.');
           }
         });
       }
 
       if (clearButton) {
-        clearButton.addEventListener('click', () => clearCoordinates(true));
+        clearButton.addEventListener('click', () => clearAddressFields());
       }
     };
 
