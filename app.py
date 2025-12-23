@@ -1280,6 +1280,7 @@ from forms import (
     ClinicInviteVeterinarianForm,
     ClinicStaffPermissionForm,
     DeleteAccountForm,
+    DeliveryDemotionForm,
     DeliveryPromotionForm,
     DeliveryRequestForm,
     EditProfileForm,
@@ -6133,6 +6134,7 @@ def conversa_admin(user_id=None):
     form = MessageForm()
     promotion_form = None
     delivery_promotion_form = None
+    delivery_demotion_form = None
     target_membership = None
     cancel_trial_form = VeterinarianMembershipCancelTrialForm()
     request_new_trial_form = VeterinarianMembershipRequestNewTrialForm()
@@ -6147,6 +6149,7 @@ def conversa_admin(user_id=None):
         participant_id = interlocutor.id
         promotion_form = VeterinarianPromotionForm()
         delivery_promotion_form = DeliveryPromotionForm()
+        delivery_demotion_form = DeliveryDemotionForm()
         if has_veterinarian_profile(interlocutor):
             target_membership = ensure_veterinarian_membership(interlocutor.veterinario)
             if target_membership and not hasattr(target_membership, 'is_trial_active'):
@@ -6229,6 +6232,7 @@ def conversa_admin(user_id=None):
         admin=interlocutor,
         promotion_form=promotion_form,
         delivery_promotion_form=delivery_promotion_form,
+        delivery_demotion_form=delivery_demotion_form,
         target_membership=target_membership,
         is_admin=is_admin,
         cancel_trial_form=cancel_trial_form,
@@ -6350,6 +6354,44 @@ def admin_promote_delivery(user_id):
         user.id,
     )
     flash('Usuário promovido a entregador.', 'success')
+    return redirect(url_for('conversa_admin', user_id=user.id))
+
+
+@app.route('/admin/users/<int:user_id>/remover_entregador', methods=['POST'])
+@login_required
+def admin_remove_delivery(user_id):
+    if not (current_user.is_authenticated and (current_user.role or '').lower() == 'admin'):
+        abort(403)
+
+    user = User.query.get_or_404(user_id)
+    form = DeliveryDemotionForm()
+
+    if not form.validate_on_submit():
+        for field_errors in form.errors.values():
+            for error in field_errors:
+                flash(error, 'danger')
+        return redirect(url_for('conversa_admin', user_id=user.id))
+
+    if (user.worker or '').lower() != 'delivery':
+        flash('Usuário não está registrado como entregador.', 'info')
+        current_app.logger.info(
+            'Admin %s tentou remover status de entregador do usuário %s que não possui este status.',
+            current_user.id,
+            user.id,
+        )
+        return redirect(url_for('conversa_admin', user_id=user.id))
+
+    previous_worker_status = user.worker
+    user.worker = None
+    db.session.commit()
+
+    current_app.logger.info(
+        'Admin %s alterou worker de %s para None para o usuário %s.',
+        current_user.id,
+        previous_worker_status,
+        user.id,
+    )
+    flash('Status de entregador removido com sucesso.', 'success')
     return redirect(url_for('conversa_admin', user_id=user.id))
 
 

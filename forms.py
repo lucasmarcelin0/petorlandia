@@ -616,6 +616,10 @@ class DeliveryPromotionForm(FlaskForm):
     submit = SubmitField('Promover a Entregador')
 
 
+class DeliveryDemotionForm(FlaskForm):
+    submit = SubmitField('Cancelar status de entregador')
+
+
 class VeterinarianMembershipCheckoutForm(FlaskForm):
     submit = SubmitField('Ativar assinatura')
 

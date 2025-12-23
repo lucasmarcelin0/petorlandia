@@ -81,7 +81,15 @@
         <div class="mt-4">
           <h4 class="h6">Status de entregador</h4>
           {% if admin.worker == 'delivery' %}
-            <div class="alert alert-success mb-0">Este usuário já está marcado como entregador.</div>
+            <div class="alert alert-success mb-0">
+              Este usuário já está marcado como entregador.
+              {% if delivery_demotion_form %}
+                <form method="post" action="{{ url_for('admin_remove_delivery', user_id=admin.id) }}" class="mt-2">
+                  {{ delivery_demotion_form.hidden_tag() }}
+                  <button type="submit" class="btn btn-outline-danger btn-sm">{{ delivery_demotion_form.submit.label.text }}</button>
+                </form>
+              {% endif %}
+            </div>
           {% else %}
             <p class="mb-2">Este usuário ainda não foi marcado como entregador.</p>
             {% if delivery_promotion_form %}
