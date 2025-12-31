@@ -13224,13 +13224,23 @@ def worker_delivery_detail(req_id):
 
 
 
+def _wants_json_response():
+    accept = (request.headers.get('Accept') or '').lower()
+    xrw = (request.headers.get('X-Requested-With') or '').lower()
+    return 'application/json' in accept or xrw == 'xmlhttprequest'
+
+
 @app.route('/delivery_requests/<int:req_id>/accept', methods=['POST'])
 @login_required
 def accept_delivery(req_id):
     if current_user.worker != 'delivery':
+        if _wants_json_response():
+            return jsonify(message='Apenas entregadores podem realizar esta ação.', category='danger', redirect=None), 403
         abort(403)
     req = DeliveryRequest.query.get_or_404(req_id)
     if req.status != 'pendente':
+        if _wants_json_response():
+            return jsonify(message='Solicitação não disponível.', category='warning', redirect=None), 400
         flash('Solicitação não disponível.', 'warning')
         return redirect(url_for('list_delivery_requests'))
     req.status = 'em_andamento'
@@ -13238,7 +13248,7 @@ def accept_delivery(req_id):
     req.accepted_at = utcnow()
     db.session.commit()
     flash('Entrega aceita.', 'success')
-    if 'application/json' in request.headers.get('Accept', ''):
+    if _wants_json_response():
         return jsonify(
             message='Entrega aceita.',
             category='success',
@@ -13254,16 +13264,20 @@ def accept_delivery(req_id):
 @login_required
 def complete_delivery(req_id):
     if current_user.worker != 'delivery':
+        if _wants_json_response():
+            return jsonify(message='Apenas entregadores podem realizar esta ação.', category='danger', redirect=None), 403
         abort(403)
     req = DeliveryRequest.query.get_or_404(req_id)
     if req.worker_id != current_user.id:
+        if _wants_json_response():
+            return jsonify(message='Você não pode concluir esta entrega.', category='danger', redirect=None), 403
         abort(403)
     req.status = 'concluida'
     req.completed_at = utcnow()
     db.session.commit()
     flash('Entrega concluída.', 'success')
-    if 'application/json' in request.headers.get('Accept', ''):
-        return jsonify(message='Entrega concluída.', category='success')
+    if _wants_json_response():
+        return jsonify(message='Entrega concluída.', category='success', redirect=None)
     return redirect(url_for('list_delivery_requests'))
 
 
@@ -13271,17 +13285,21 @@ def complete_delivery(req_id):
 @login_required
 def cancel_delivery(req_id):
     if current_user.worker != 'delivery':
+        if _wants_json_response():
+            return jsonify(message='Apenas entregadores podem realizar esta ação.', category='danger', redirect=None), 403
         abort(403)
     req = DeliveryRequest.query.get_or_404(req_id)
     if req.worker_id != current_user.id:
+        if _wants_json_response():
+            return jsonify(message='Você não pode cancelar esta entrega.', category='danger', redirect=None), 403
         abort(403)
     req.status = 'cancelada'
     req.canceled_at = utcnow()
     req.canceled_by_id = current_user.id
     db.session.commit()
     flash('Entrega cancelada.', 'info')
-    if 'application/json' in request.headers.get('Accept', ''):
-        return jsonify(message='Entrega cancelada.', category='info')
+    if _wants_json_response():
+        return jsonify(message='Entrega cancelada.', category='info', redirect=None)
     return redirect(url_for('list_delivery_requests'))
 
 
@@ -13290,8 +13308,12 @@ def cancel_delivery(req_id):
 def buyer_cancel_delivery(req_id):
     req = DeliveryRequest.query.get_or_404(req_id)
     if req.requested_by_id != current_user.id:
+        if _wants_json_response():
+            return jsonify(message='Você não pode cancelar esta entrega.', category='danger', redirect=None), 403
         abort(403)
     if req.status in ['concluida', 'cancelada']:
+        if _wants_json_response():
+            return jsonify(message='Não é possível cancelar.', category='warning', redirect=None), 400
         flash('Não é possível cancelar.', 'warning')
         return redirect(url_for('loja'))
     req.status = 'cancelada'
@@ -13299,6 +13321,8 @@ def buyer_cancel_delivery(req_id):
     req.canceled_by_id = current_user.id
     db.session.commit()
     flash('Solicitação cancelada.', 'info')
+    if _wants_json_response():
+        return jsonify(message='Solicitação cancelada.', category='info', redirect=None)
     return redirect(url_for('loja'))
 
 
