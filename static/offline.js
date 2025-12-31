@@ -75,8 +75,27 @@
     }
   }
 
+  function isAuthUrl(url){
+    if(!url) return false;
+    try {
+      const normalized = new URL(url, window.location.origin);
+      return ['login', 'register', 'logout'].some(segment => normalized.pathname.endsWith(`/${segment}`));
+    } catch(err){
+      return false;
+    }
+  }
+
   function loadQueue(){
-    try { return JSON.parse(localStorage.getItem(KEY)) || []; }
+    try {
+      const raw = JSON.parse(localStorage.getItem(KEY)) || [];
+      // Evita replays infinitos de ações de autenticação (ex: /login) que sempre
+      // falham offline e retornam 400 quando reenviadas.
+      const filtered = raw.filter(item => item && item.url && !isAuthUrl(item.url));
+      if(filtered.length !== raw.length){
+        saveQueue(filtered);
+      }
+      return filtered;
+    }
     catch(e){ return []; }
   }
   function saveQueue(q){
@@ -106,7 +125,13 @@
       }
       try {
         const resp = await fetchWithTimeout(item.url, {method:item.method, headers:item.headers, body});
-        if(!resp.ok) throw new Error('fail');
+        if(resp && resp.status >= 400 && resp.status < 500){
+          // Requests que sempre retornam 4xx (ex.: /login sem credenciais) não devem
+          // ficar em loop. Descarta e segue com a fila.
+          q.shift();
+          continue;
+        }
+        if(!resp || !resp.ok) throw new Error('fail');
         q.shift();
       } catch(err){
         break;
