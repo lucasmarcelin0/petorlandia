@@ -376,6 +376,23 @@
       // Torna o atualizador acessível para outros scripts (ex: ações do admin)
       window.refreshDeliverySections = refreshDeliverySections;
 
+      const emitSyncEvent = (detail) => {
+        const event = new CustomEvent('form-sync-success', { detail, cancelable: true });
+        document.dispatchEvent(event);
+        return event;
+      };
+
+      const parseJsonSafe = async (response) => {
+        if (!response) return null;
+        const contentType = response.headers.get('Content-Type') || '';
+        if (!contentType.includes('application/json')) return null;
+        try {
+          return await response.json();
+        } catch (err) {
+          return null;
+        }
+      };
+
       const getCsrfToken = (form) => {
         const formInput = form?.querySelector('input[name="csrf_token"]');
         if (formInput?.value) return formInput.value;
@@ -392,62 +409,78 @@
             ev.preventDefault();
             const url = form.action;
             const handle = async () => {
-              const formData = new FormData(form);
-              const headers = {
-                'Accept': 'application/json',
-                'X-Requested-With': 'XMLHttpRequest',
-              };
-              const csrfToken = getCsrfToken(form);
-              if (csrfToken) headers['X-CSRFToken'] = csrfToken;
-              const { response, queued } = await fetchOrQueue(url, {
-                method: 'POST',
-                body: formData,
-                headers,
-                credentials: 'same-origin',
-              });
-              if (queued) {
-                const toastEl = document.getElementById('actionToast');
-                toastEl.querySelector('.toast-body').textContent = 'Ação salva para sincronização quando estiver online.';
-                applyToastTone(toastEl, 'info');
-                new bootstrap.Toast(toastEl).show();
-                return { success: true, message: 'Aguardando conexão para concluir o envio.', level: 'info', successText: 'Sincronizando…', resetDelay: 2500, offlineQueued: true };
-              }
-              if (response && response.ok) {
-                let data = null;
-                try {
-                  data = await response.json();
-                } catch (err) {
-                  data = null;
+              try {
+                const formData = new FormData(form);
+                const headers = {
+                  'Accept': 'application/json',
+                  'X-Requested-With': 'XMLHttpRequest',
+                };
+                const csrfToken = getCsrfToken(form);
+                if (csrfToken) headers['X-CSRFToken'] = csrfToken;
+
+                const { response, queued } = await fetchOrQueue(url, {
+                  method: 'POST',
+                  body: formData,
+                  headers,
+                  credentials: 'same-origin',
+                });
+
+                if (queued) {
+                  const queuedDetail = { form, data: { message: 'Aguardando conexão para concluir o envio.', category: 'info' }, response: null, offlineQueued: true, success: true };
+                  emitSyncEvent(queuedDetail);
+                  const toastEl = document.getElementById('actionToast');
+                  toastEl.querySelector('.toast-body').textContent = 'Ação salva para sincronização quando estiver online.';
+                  applyToastTone(toastEl, 'info');
+                  new bootstrap.Toast(toastEl).show();
+                  return { success: true, message: queuedDetail.data.message, level: queuedDetail.data.category, successText: 'Sincronizando…', resetDelay: 2500, offlineQueued: true };
                 }
 
-                // Prioriza atualização em tempo real dentro da página de entregas
+                const data = await parseJsonSafe(response);
                 const hasDeliverySections = Boolean(document.getElementById('delivery-sections'));
-                if (data?.redirect && !form.dataset.forceRedirect && hasDeliverySections) {
-                  await refreshDeliverySections();
+
+                if (response && response.ok) {
+                  if (data?.redirect && !form.dataset.forceRedirect && hasDeliverySections) {
+                    await refreshDeliverySections();
+                    const eventDetail = { form, data, response, offlineQueued: false, success: true };
+                    emitSyncEvent(eventDetail);
+                    const toastEl = document.getElementById('actionToast');
+                    toastEl.querySelector('.toast-body').textContent = data?.message || 'Sucesso';
+                    applyToastTone(toastEl, data?.category || 'success');
+                    new bootstrap.Toast(toastEl).show();
+                    return { success: true, message: data?.message, level: data?.category };
+                  }
+
+                  if (data?.redirect) {
+                    window.location.href = data.redirect;
+                    return { success: true, keepButton: true };
+                  }
+
                   const toastEl = document.getElementById('actionToast');
                   toastEl.querySelector('.toast-body').textContent = data?.message || 'Sucesso';
                   applyToastTone(toastEl, data?.category || 'success');
                   new bootstrap.Toast(toastEl).show();
+                  await refreshDeliverySections();
+                  emitSyncEvent({ form, data, response, offlineQueued: false, success: true });
                   return { success: true, message: data?.message, level: data?.category };
                 }
 
-                if (data?.redirect) {
-                  window.location.href = data.redirect;
-                  return { success: true, keepButton: true };
-                }
-
+                const errorMessage = (data && (data.message || data.error)) || 'Erro ao processar ação';
+                const errorCategory = (data && data.category) || 'danger';
+                emitSyncEvent({ form, data, response, offlineQueued: false, success: false });
                 const toastEl = document.getElementById('actionToast');
-                toastEl.querySelector('.toast-body').textContent = data?.message || 'Sucesso';
-                applyToastTone(toastEl, data?.category || 'success');
+                toastEl.querySelector('.toast-body').textContent = errorMessage;
+                applyToastTone(toastEl, errorCategory);
                 new bootstrap.Toast(toastEl).show();
-                await refreshDeliverySections();
-                return { success: true, message: data?.message, level: data?.category };
+                return { success: false, message: errorMessage, level: errorCategory };
+              } catch (error) {
+                console.error('Erro ao enviar formulário de entrega', error);
+                emitSyncEvent({ form, data: { message: error.message, category: 'danger' }, response: null, offlineQueued: false, success: false });
+                const toastEl = document.getElementById('actionToast');
+                toastEl.querySelector('.toast-body').textContent = 'Erro ao processar ação';
+                applyToastTone(toastEl, 'danger');
+                new bootstrap.Toast(toastEl).show();
+                return { success: false, message: 'Erro ao processar ação', level: 'danger' };
               }
-              const toastEl = document.getElementById('actionToast');
-              toastEl.querySelector('.toast-body').textContent = 'Erro ao processar ação';
-              applyToastTone(toastEl, 'danger');
-              new bootstrap.Toast(toastEl).show();
-              return { success: false, message: 'Erro ao processar ação', level: 'danger' };
             };
 
             if (window.FormFeedback && typeof window.FormFeedback.withSavingState === 'function') {
