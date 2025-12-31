@@ -514,15 +514,24 @@
 
                 const errorMessage = (data && (data.message || data.error)) || await parseErrorMessage(response);
                 const errorCategory = (data && data.category) || 'danger';
+                const errorData = {
+                  ...(data || {}),
+                  message: errorMessage,
+                  category: errorCategory,
+                };
                 emitSyncEvent({
                   form,
-                  data,
+                  data: errorData,
                   response,
                   responseOk: false,
                   offlineQueued: false,
                   success: false,
                 });
                 showToast(errorMessage, errorCategory);
+                if (window.FormFeedback?.setMessage) {
+                  const btn = window.FormFeedback.getButton?.(form);
+                  if (btn) window.FormFeedback.setMessage(btn, errorMessage, errorCategory);
+                }
                 return { success: false, message: errorMessage, level: errorCategory };
               } catch (error) {
                 console.error('Erro ao enviar formulário de entrega', error);
