@@ -476,7 +476,14 @@
                 if (successLike) {
                   if (data?.redirect && !form.dataset.forceRedirect && hasDeliverySections) {
                     await refreshDeliverySections();
-                    const eventDetail = { form, data, response, offlineQueued: false, success: true };
+                    const eventDetail = {
+                      form,
+                      data,
+                      response,
+                      responseOk: successLike,
+                      offlineQueued: false,
+                      success: true,
+                    };
                     emitSyncEvent(eventDetail);
                     showToast(data?.message || 'Sucesso', data?.category || 'success');
                     return { success: true, message: data?.message, level: data?.category };
@@ -494,18 +501,39 @@
 
                   showToast(data?.message || 'Sucesso', data?.category || 'success');
                   await refreshDeliverySections();
-                  emitSyncEvent({ form, data, response, offlineQueued: false, success: true });
+                  emitSyncEvent({
+                    form,
+                    data,
+                    response,
+                    responseOk: successLike,
+                    offlineQueued: false,
+                    success: true,
+                  });
                   return { success: true, message: data?.message, level: data?.category };
                 }
 
                 const errorMessage = (data && (data.message || data.error)) || await parseErrorMessage(response);
                 const errorCategory = (data && data.category) || 'danger';
-                emitSyncEvent({ form, data, response, offlineQueued: false, success: false });
+                emitSyncEvent({
+                  form,
+                  data,
+                  response,
+                  responseOk: false,
+                  offlineQueued: false,
+                  success: false,
+                });
                 showToast(errorMessage, errorCategory);
                 return { success: false, message: errorMessage, level: errorCategory };
               } catch (error) {
                 console.error('Erro ao enviar formulário de entrega', error);
-                emitSyncEvent({ form, data: { message: error.message, category: 'danger' }, response: null, offlineQueued: false, success: false });
+                emitSyncEvent({
+                  form,
+                  data: { message: error.message, category: 'danger' },
+                  response: null,
+                  responseOk: false,
+                  offlineQueued: false,
+                  success: false,
+                });
                 const fallback = error?.name === 'FetchTimeoutError'
                   ? 'Tempo limite ao enviar a requisição. Tente novamente.'
                   : 'Erro ao processar ação';
