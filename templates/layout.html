@@ -373,6 +373,17 @@
         }
       };
 
+      // Torna o atualizador acessível para outros scripts (ex: ações do admin)
+      window.refreshDeliverySections = refreshDeliverySections;
+
+      const getCsrfToken = (form) => {
+        const formInput = form?.querySelector('input[name="csrf_token"]');
+        if (formInput?.value) return formInput.value;
+        const meta = document.querySelector('meta[name="csrf-token"]');
+        if (meta?.content) return meta.content;
+        return '';
+      };
+
       const attachDeliveryFormListeners = () => {
         document.querySelectorAll('.js-delivery-form').forEach(form => {
           if (form.dataset.deliveryListenerAttached === 'true') return;
@@ -381,7 +392,19 @@
             ev.preventDefault();
             const url = form.action;
             const handle = async () => {
-              const { response, queued } = await fetchOrQueue(url, { method: 'POST', headers: { 'Accept': 'application/json' } });
+              const formData = new FormData(form);
+              const headers = {
+                'Accept': 'application/json',
+                'X-Requested-With': 'XMLHttpRequest',
+              };
+              const csrfToken = getCsrfToken(form);
+              if (csrfToken) headers['X-CSRFToken'] = csrfToken;
+              const { response, queued } = await fetchOrQueue(url, {
+                method: 'POST',
+                body: formData,
+                headers,
+                credentials: 'same-origin',
+              });
               if (queued) {
                 const toastEl = document.getElementById('actionToast');
                 toastEl.querySelector('.toast-body').textContent = 'Ação salva para sincronização quando estiver online.';
@@ -390,17 +413,35 @@
                 return { success: true, message: 'Aguardando conexão para concluir o envio.', level: 'info', successText: 'Sincronizando…', resetDelay: 2500, offlineQueued: true };
               }
               if (response && response.ok) {
-                const data = await response.json();
-                if (data.redirect) {
+                let data = null;
+                try {
+                  data = await response.json();
+                } catch (err) {
+                  data = null;
+                }
+
+                // Prioriza atualização em tempo real dentro da página de entregas
+                const hasDeliverySections = Boolean(document.getElementById('delivery-sections'));
+                if (data?.redirect && !form.dataset.forceRedirect && hasDeliverySections) {
+                  await refreshDeliverySections();
+                  const toastEl = document.getElementById('actionToast');
+                  toastEl.querySelector('.toast-body').textContent = data?.message || 'Sucesso';
+                  applyToastTone(toastEl, data?.category || 'success');
+                  new bootstrap.Toast(toastEl).show();
+                  return { success: true, message: data?.message, level: data?.category };
+                }
+
+                if (data?.redirect) {
                   window.location.href = data.redirect;
                   return { success: true, keepButton: true };
                 }
+
                 const toastEl = document.getElementById('actionToast');
-                toastEl.querySelector('.toast-body').textContent = data.message || 'Sucesso';
-                applyToastTone(toastEl, data.category || 'success');
+                toastEl.querySelector('.toast-body').textContent = data?.message || 'Sucesso';
+                applyToastTone(toastEl, data?.category || 'success');
                 new bootstrap.Toast(toastEl).show();
                 await refreshDeliverySections();
-                return { success: true, message: data.message, level: data.category };
+                return { success: true, message: data?.message, level: data?.category };
               }
               const toastEl = document.getElementById('actionToast');
               toastEl.querySelector('.toast-body').textContent = 'Erro ao processar ação';
@@ -470,6 +511,11 @@
               toastEl.querySelector('.toast-body').textContent = data.message || 'Sucesso';
               applyToastTone(toastEl, data.category || 'success');
               new bootstrap.Toast(toastEl).show();
+
+              if (typeof window.refreshDeliverySections === 'function') {
+                await window.refreshDeliverySections();
+              }
+
               return { success: true, message: data.message, level: data.category };
             }
             const toastEl = document.getElementById('actionToast');
@@ -498,6 +544,46 @@
         return '';
       };
 
+      const statusConfig = {
+        pendente: { badgeClass: 'bg-warning text-dark', label: 'Pendente' },
+        em_andamento: { badgeClass: 'bg-info text-dark', label: 'Em andamento' },
+        concluida: { badgeClass: 'bg-success', label: 'Concluída' },
+        cancelada: { badgeClass: 'bg-danger', label: 'Cancelada' },
+      };
+
+      const ensurePlaceholderState = (listEl) => {
+        if (!listEl) return;
+        const hasItems = listEl.querySelectorAll('li.list-group-item:not(.js-empty-placeholder)').length > 0;
+        const placeholder = listEl.querySelector('.js-empty-placeholder');
+        if (hasItems) {
+          placeholder?.remove();
+        } else if (!placeholder) {
+          const li = document.createElement('li');
+          li.className = 'list-group-item text-muted js-empty-placeholder';
+          li.textContent = 'Não há registros.';
+          listEl.appendChild(li);
+        }
+      };
+
+      const moveDeliveryCard = (li, status) => {
+        if (!li || !statusConfig[status]) return;
+        const originList = li.closest('ul');
+        const targetList = document.querySelector(`ul[data-delivery-list="${status}"]`);
+        if (!targetList) return;
+
+        const badge = li.querySelector('.badge');
+        if (badge) {
+          badge.className = `badge ${statusConfig[status].badgeClass} ms-2`;
+          badge.textContent = statusConfig[status].label;
+        }
+
+        li.dataset.deliveryStatus = status;
+        targetList.prepend(li);
+
+        ensurePlaceholderState(originList);
+        ensurePlaceholderState(targetList);
+      };
+
       document.querySelectorAll('.js-admin-delivery-form').forEach(form => {
         form.addEventListener('submit', async ev => {
           ev.preventDefault();
@@ -505,34 +591,45 @@
           const handle = async () => {
             const headers = { 'Accept': 'application/json' };
             const csrfToken = getCsrfToken(form);
-            if (csrfToken) {
-              headers['X-CSRFToken'] = csrfToken;
-            }
+            if (csrfToken) headers['X-CSRFToken'] = csrfToken;
 
-            const { response, queued } = await fetchOrQueue(form.action, { method: 'POST', headers });
-            if (queued) {
-              const toastEl = document.getElementById('actionToast');
-              toastEl.querySelector('.toast-body').textContent = 'Ação salva para sincronização quando estiver online.';
-              applyToastTone(toastEl, 'info');
-              new bootstrap.Toast(toastEl).show();
-              return { success: true, message: 'Aguardando conexão para concluir o envio.', level: 'info', successText: 'Sincronizando…', resetDelay: 2500, offlineQueued: true };
-            }
-          if (response && response.ok) {
-            let data = {};
-            try {
-              data = await response.json();
-            } catch (err) {
-              console.warn('Não foi possível interpretar a resposta como JSON.', err);
-            }
-            if (data.deleted || data.status) {
-              li?.remove();
-            }
+            const response = await fetch(form.action, {
+              method: 'POST',
+              headers,
+              body: new FormData(form),
+              credentials: 'same-origin',
+            });
+
+            if (response && response.ok) {
+              let data = {};
+              try {
+                data = await response.json();
+              } catch (err) {
+                console.warn('Não foi possível interpretar a resposta como JSON.', err);
+              }
+
+              if (data.deleted || data.archived) {
+                if (li) {
+                  const originList = li.closest('ul');
+                  li.remove();
+                  ensurePlaceholderState(originList);
+                }
+              } else if (data.status && li) {
+                moveDeliveryCard(li, data.status);
+              }
+
               const toastEl = document.getElementById('actionToast');
               toastEl.querySelector('.toast-body').textContent = data.message || 'Sucesso';
               applyToastTone(toastEl, data.category || 'success');
               new bootstrap.Toast(toastEl).show();
+
+              if (typeof window.refreshDeliverySections === 'function') {
+                await window.refreshDeliverySections();
+              }
+
               return { success: true, message: data.message, level: data.category };
             }
+
             let data = {};
             try { data = response ? await response.json() : {}; } catch (err) { }
             const toastEl = document.getElementById('actionToast');
@@ -557,18 +654,13 @@
         form.addEventListener('submit', async ev => {
           ev.preventDefault();
           const handle = async () => {
-            const { response, queued } = await fetchOrQueue(form.action, {
+            const response = await fetch(form.action, {
               method: 'POST',
               headers: { 'Accept': 'application/json' },
-              body: new FormData(form)
+              body: new FormData(form),
+              credentials: 'same-origin',
             });
-            if (queued) {
-              const toastEl = document.getElementById('actionToast');
-              toastEl.querySelector('.toast-body').textContent = 'Ação salva para sincronização quando estiver online.';
-              applyToastTone(toastEl, 'info');
-              new bootstrap.Toast(toastEl).show();
-              return { success: true, message: 'Aguardando conexão para concluir o envio.', level: 'info', successText: 'Sincronizando…', resetDelay: 2500, offlineQueued: true };
-            }
+
             if (response && response.ok) {
               const data = await response.json();
               if (data.redirect) {
