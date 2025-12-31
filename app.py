@@ -13099,13 +13099,8 @@ def request_delivery(order_id):
 
 from sqlalchemy.orm import selectinload
 
-@app.route("/delivery_requests")
-@login_required
-def list_delivery_requests():
-    """
-    •  Entregador → até 3 pendentes (mais antigas primeiro) + as dele
-    •  Cliente    → só pedidos que ele criou
-    """
+def _delivery_context_for_current_user():
+    """Return sections context and counts for the current user."""
     base = (DeliveryRequest.query
             .filter_by(archived=False)
             .order_by(DeliveryRequest.requested_at.asc())   # FIFO
@@ -13157,14 +13152,33 @@ def list_delivery_requests():
         available_total=available_total,
     )
 
+    counts = {
+        "available_total": available_total,
+        "doing": len(doing),
+        "done": len(done),
+        "canceled": len(canceled),
+    }
+
+    return context, counts
+
+
+def _delivery_sections_payload():
+    context, counts = _delivery_context_for_current_user()
+    html = render_template("entregas/_delivery_sections.html", **context)
+    return html, counts, context
+
+
+@app.route("/delivery_requests")
+@login_required
+def list_delivery_requests():
+    """
+    •  Entregador → até 3 pendentes (mais antigas primeiro) + as dele
+    •  Cliente    → só pedidos que ele criou
+    """
+    context, counts = _delivery_context_for_current_user()
+
     if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
-        html = render_template("entregas/_delivery_sections.html", **context)
-        counts = {
-            "available_total": available_total,
-            "doing": len(doing),
-            "done": len(done),
-            "canceled": len(canceled),
-        }
+        html, counts, _ = _delivery_sections_payload()
         return jsonify(html=html, counts=counts)
 
     return render_template("entregas/delivery_requests.html", **context)
@@ -13249,10 +13263,13 @@ def accept_delivery(req_id):
     db.session.commit()
     flash('Entrega aceita.', 'success')
     if _wants_json_response():
+        html, counts, _ = _delivery_sections_payload()
         return jsonify(
             message='Entrega aceita.',
             category='success',
-            redirect=url_for('worker_delivery_detail', req_id=req.id)
+            redirect=url_for('worker_delivery_detail', req_id=req.id),
+            html=html,
+            counts=counts,
         )
     # ⬇️ redireciona direto ao detalhe unificado
     return redirect(url_for('delivery_detail', req_id=req.id))
@@ -13277,7 +13294,8 @@ def complete_delivery(req_id):
     db.session.commit()
     flash('Entrega concluída.', 'success')
     if _wants_json_response():
-        return jsonify(message='Entrega concluída.', category='success', redirect=None)
+        html, counts, _ = _delivery_sections_payload()
+        return jsonify(message='Entrega concluída.', category='success', redirect=None, html=html, counts=counts)
     return redirect(url_for('list_delivery_requests'))
 
 
@@ -13299,7 +13317,8 @@ def cancel_delivery(req_id):
     db.session.commit()
     flash('Entrega cancelada.', 'info')
     if _wants_json_response():
-        return jsonify(message='Entrega cancelada.', category='info', redirect=None)
+        html, counts, _ = _delivery_sections_payload()
+        return jsonify(message='Entrega cancelada.', category='info', redirect=None, html=html, counts=counts)
     return redirect(url_for('list_delivery_requests'))
 
 
@@ -13322,7 +13341,8 @@ def buyer_cancel_delivery(req_id):
     db.session.commit()
     flash('Solicitação cancelada.', 'info')
     if _wants_json_response():
-        return jsonify(message='Solicitação cancelada.', category='info', redirect=None)
+        html, counts, _ = _delivery_sections_payload()
+        return jsonify(message='Solicitação cancelada.', category='info', redirect=None, html=html, counts=counts)
     return redirect(url_for('loja'))
 
 
