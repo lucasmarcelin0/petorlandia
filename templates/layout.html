@@ -384,7 +384,16 @@
             ev.preventDefault();
             const url = form.action;
             const handle = async () => {
-              const { response, queued } = await fetchOrQueue(url, { method: 'POST', headers: { 'Accept': 'application/json' } });
+              const formData = new FormData(form);
+              const { response, queued } = await fetchOrQueue(url, {
+                method: 'POST',
+                body: formData,
+                headers: {
+                  'Accept': 'application/json',
+                  'X-Requested-With': 'XMLHttpRequest'
+                },
+                credentials: 'same-origin',
+              });
               if (queued) {
                 const toastEl = document.getElementById('actionToast');
                 toastEl.querySelector('.toast-body').textContent = 'Ação salva para sincronização quando estiver online.';
@@ -393,17 +402,22 @@
                 return { success: true, message: 'Aguardando conexão para concluir o envio.', level: 'info', successText: 'Sincronizando…', resetDelay: 2500, offlineQueued: true };
               }
               if (response && response.ok) {
-                const data = await response.json();
-                if (data.redirect) {
+                let data = null;
+                try {
+                  data = await response.json();
+                } catch (err) {
+                  data = null;
+                }
+                if (data?.redirect) {
                   window.location.href = data.redirect;
                   return { success: true, keepButton: true };
                 }
                 const toastEl = document.getElementById('actionToast');
-                toastEl.querySelector('.toast-body').textContent = data.message || 'Sucesso';
-                applyToastTone(toastEl, data.category || 'success');
+                toastEl.querySelector('.toast-body').textContent = data?.message || 'Sucesso';
+                applyToastTone(toastEl, data?.category || 'success');
                 new bootstrap.Toast(toastEl).show();
                 await refreshDeliverySections();
-                return { success: true, message: data.message, level: data.category };
+                return { success: true, message: data?.message, level: data?.category };
               }
               const toastEl = document.getElementById('actionToast');
               toastEl.querySelector('.toast-body').textContent = 'Erro ao processar ação';
