@@ -382,16 +382,39 @@
         return event;
       };
 
-      const parseJsonSafe = async (response) => {
-        if (!response) return null;
-        const contentType = response.headers.get('Content-Type') || '';
-        if (!contentType.includes('application/json')) return null;
-        try {
-          return await response.json();
-        } catch (err) {
-          return null;
+    const parseJsonSafe = async (response) => {
+      if (!response) return null;
+      const contentType = response.headers.get('Content-Type') || '';
+      if (!contentType.includes('application/json')) return null;
+      try {
+        const clone = response.clone();
+        return await clone.json();
+      } catch (err) {
+        return null;
+      }
+    };
+
+    const parseErrorMessage = async (response, fallback = 'Erro ao processar ação') => {
+      if (!response) return fallback;
+      const data = await parseJsonSafe(response);
+      if (data?.message) return data.message;
+      try {
+        const text = await response.clone().text();
+        const cleaned = text.trim();
+        if (cleaned) {
+          return cleaned.length > 180 ? `${cleaned.slice(0, 180)}…` : cleaned;
         }
-      };
+      } catch (err) { /* ignore */ }
+      return fallback;
+    };
+
+    const showToast = (message, category = 'info') => {
+      const toastEl = document.getElementById('actionToast');
+      if (!toastEl) return;
+      toastEl.querySelector('.toast-body').textContent = message || '';
+      applyToastTone(toastEl, category);
+      bootstrap.Toast.getOrCreateInstance(toastEl).show();
+    };
 
       const getCsrfToken = (form) => {
         const formInput = form?.querySelector('input[name="csrf_token"]');
@@ -428,10 +451,7 @@
                 if (queued) {
                   const queuedDetail = { form, data: { message: 'Aguardando conexão para concluir o envio.', category: 'info' }, response: null, offlineQueued: true, success: true };
                   emitSyncEvent(queuedDetail);
-                  const toastEl = document.getElementById('actionToast');
-                  toastEl.querySelector('.toast-body').textContent = 'Ação salva para sincronização quando estiver online.';
-                  applyToastTone(toastEl, 'info');
-                  new bootstrap.Toast(toastEl).show();
+                  showToast('Ação salva para sincronização quando estiver online.', 'info');
                   return { success: true, message: queuedDetail.data.message, level: queuedDetail.data.category, successText: 'Sincronizando…', resetDelay: 2500, offlineQueued: true };
                 }
 
@@ -443,10 +463,7 @@
                     await refreshDeliverySections();
                     const eventDetail = { form, data, response, offlineQueued: false, success: true };
                     emitSyncEvent(eventDetail);
-                    const toastEl = document.getElementById('actionToast');
-                    toastEl.querySelector('.toast-body').textContent = data?.message || 'Sucesso';
-                    applyToastTone(toastEl, data?.category || 'success');
-                    new bootstrap.Toast(toastEl).show();
+                    showToast(data?.message || 'Sucesso', data?.category || 'success');
                     return { success: true, message: data?.message, level: data?.category };
                   }
 
@@ -455,31 +472,25 @@
                     return { success: true, keepButton: true };
                   }
 
-                  const toastEl = document.getElementById('actionToast');
-                  toastEl.querySelector('.toast-body').textContent = data?.message || 'Sucesso';
-                  applyToastTone(toastEl, data?.category || 'success');
-                  new bootstrap.Toast(toastEl).show();
+                  showToast(data?.message || 'Sucesso', data?.category || 'success');
                   await refreshDeliverySections();
                   emitSyncEvent({ form, data, response, offlineQueued: false, success: true });
                   return { success: true, message: data?.message, level: data?.category };
                 }
 
-                const errorMessage = (data && (data.message || data.error)) || 'Erro ao processar ação';
+                const errorMessage = (data && (data.message || data.error)) || await parseErrorMessage(response);
                 const errorCategory = (data && data.category) || 'danger';
                 emitSyncEvent({ form, data, response, offlineQueued: false, success: false });
-                const toastEl = document.getElementById('actionToast');
-                toastEl.querySelector('.toast-body').textContent = errorMessage;
-                applyToastTone(toastEl, errorCategory);
-                new bootstrap.Toast(toastEl).show();
+                showToast(errorMessage, errorCategory);
                 return { success: false, message: errorMessage, level: errorCategory };
               } catch (error) {
                 console.error('Erro ao enviar formulário de entrega', error);
                 emitSyncEvent({ form, data: { message: error.message, category: 'danger' }, response: null, offlineQueued: false, success: false });
-                const toastEl = document.getElementById('actionToast');
-                toastEl.querySelector('.toast-body').textContent = 'Erro ao processar ação';
-                applyToastTone(toastEl, 'danger');
-                new bootstrap.Toast(toastEl).show();
-                return { success: false, message: 'Erro ao processar ação', level: 'danger' };
+                const fallback = error?.name === 'FetchTimeoutError'
+                  ? 'Tempo limite ao enviar a requisição. Tente novamente.'
+                  : 'Erro ao processar ação';
+                showToast(fallback, 'danger');
+                return { success: false, message: fallback, level: 'danger' };
               }
             };
 
