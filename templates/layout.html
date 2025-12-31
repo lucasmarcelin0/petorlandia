@@ -361,6 +361,35 @@
         return status >= 200 && status < 400;
       };
 
+      const applyDeliveryCounts = (counts) => {
+        if (!counts) return;
+        const mapping = {
+          'available-count': counts.available_total,
+          'doing-count': counts.doing,
+          'done-count': counts.done,
+          'canceled-count': counts.canceled,
+        };
+        Object.entries(mapping).forEach(([id, value]) => {
+          const el = document.getElementById(id);
+          if (el) {
+            el.textContent = value;
+          }
+        });
+      };
+
+      const applyDeliveryPayload = (data) => {
+        const container = document.getElementById('delivery-sections');
+        if (data?.html && container) {
+          container.innerHTML = data.html;
+        }
+        if (data?.counts) {
+          applyDeliveryCounts(data.counts);
+        }
+        if (data?.html) {
+          attachDeliveryFormListeners();
+        }
+      };
+
       const refreshDeliverySections = async () => {
         const container = document.getElementById('delivery-sections');
         if (!container) return;
@@ -376,24 +405,7 @@
             data = html ? { html } : null;
           }
 
-          if (data?.html) {
-            container.innerHTML = data.html;
-          }
-          if (data?.counts) {
-            const mapping = {
-              'available-count': data.counts.available_total,
-              'doing-count': data.counts.doing,
-              'done-count': data.counts.done,
-              'canceled-count': data.counts.canceled,
-            };
-            Object.entries(mapping).forEach(([id, value]) => {
-              const el = document.getElementById(id);
-              if (el) {
-                el.textContent = value;
-              }
-            });
-          }
-          attachDeliveryFormListeners();
+          applyDeliveryPayload(data);
         } catch (err) {
           console.error('Erro ao atualizar entregas', err);
         }
@@ -486,8 +498,14 @@
                     (data && data.category) || 'success',
                   );
 
+                  if (hasDeliverySections && data) {
+                    applyDeliveryPayload(data);
+                  }
+
                   if (data?.redirect && !form.dataset.forceRedirect && hasDeliverySections) {
-                    await refreshDeliverySections();
+                    if (!data?.html) {
+                      await refreshDeliverySections();
+                    }
                     const eventDetail = {
                       form,
                       data: successData,
