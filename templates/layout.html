@@ -12,6 +12,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <link rel="manifest" href="{{ url_for('static', filename='manifest.json') }}">
   <meta name="theme-color" content="#4e73df">
+  <meta name="csrf-token" content="{{ csrf_token() }}">
 
   <!-- Google Fonts -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -489,9 +490,12 @@
   </script>
   <script>
     document.addEventListener('DOMContentLoaded', () => {
-      const getCsrfTokenFromCookie = () => {
-        const match = document.cookie.match(/(?:^|; )csrf_token=([^;]+)/);
-        return match ? decodeURIComponent(match[1]) : '';
+      const getCsrfToken = (form) => {
+        const formInput = form?.querySelector('input[name="csrf_token"]');
+        if (formInput?.value) return formInput.value;
+        const meta = document.querySelector('meta[name="csrf-token"]');
+        if (meta?.content) return meta.content;
+        return '';
       };
 
       document.querySelectorAll('.js-admin-delivery-form').forEach(form => {
@@ -500,7 +504,7 @@
           const li = form.closest('li');
           const handle = async () => {
             const headers = { 'Accept': 'application/json' };
-            const csrfToken = getCsrfTokenFromCookie();
+            const csrfToken = getCsrfToken(form);
             if (csrfToken) {
               headers['X-CSRFToken'] = csrfToken;
             }
