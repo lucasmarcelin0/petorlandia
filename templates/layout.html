@@ -419,10 +419,23 @@
                 } catch (err) {
                   data = null;
                 }
+
+                // Prioriza atualização em tempo real dentro da página de entregas
+                const hasDeliverySections = Boolean(document.getElementById('delivery-sections'));
+                if (data?.redirect && !form.dataset.forceRedirect && hasDeliverySections) {
+                  await refreshDeliverySections();
+                  const toastEl = document.getElementById('actionToast');
+                  toastEl.querySelector('.toast-body').textContent = data?.message || 'Sucesso';
+                  applyToastTone(toastEl, data?.category || 'success');
+                  new bootstrap.Toast(toastEl).show();
+                  return { success: true, message: data?.message, level: data?.category };
+                }
+
                 if (data?.redirect) {
                   window.location.href = data.redirect;
                   return { success: true, keepButton: true };
                 }
+
                 const toastEl = document.getElementById('actionToast');
                 toastEl.querySelector('.toast-body').textContent = data?.message || 'Sucesso';
                 applyToastTone(toastEl, data?.category || 'success');
