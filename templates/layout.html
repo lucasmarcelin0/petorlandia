@@ -376,6 +376,14 @@
       // Torna o atualizador acessível para outros scripts (ex: ações do admin)
       window.refreshDeliverySections = refreshDeliverySections;
 
+      const getCsrfToken = (form) => {
+        const formInput = form?.querySelector('input[name="csrf_token"]');
+        if (formInput?.value) return formInput.value;
+        const meta = document.querySelector('meta[name="csrf-token"]');
+        if (meta?.content) return meta.content;
+        return '';
+      };
+
       const attachDeliveryFormListeners = () => {
         document.querySelectorAll('.js-delivery-form').forEach(form => {
           if (form.dataset.deliveryListenerAttached === 'true') return;
@@ -385,13 +393,16 @@
             const url = form.action;
             const handle = async () => {
               const formData = new FormData(form);
+              const headers = {
+                'Accept': 'application/json',
+                'X-Requested-With': 'XMLHttpRequest',
+              };
+              const csrfToken = getCsrfToken(form);
+              if (csrfToken) headers['X-CSRFToken'] = csrfToken;
               const { response, queued } = await fetchOrQueue(url, {
                 method: 'POST',
                 body: formData,
-                headers: {
-                  'Accept': 'application/json',
-                  'X-Requested-With': 'XMLHttpRequest'
-                },
+                headers,
                 credentials: 'same-origin',
               });
               if (queued) {
