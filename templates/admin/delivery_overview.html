@@ -20,12 +20,12 @@
     {% endfor %}
   </ul>
 
-{% macro lista(reqs, pagination, page_var, titulo, cls_badge, lbl_badge, open_page, progress_page, completed_page, canceled_page) %}
+{% macro lista(reqs, pagination, page_var, titulo, cls_badge, lbl_badge, status_key, open_page, progress_page, completed_page, canceled_page) %}
   <h4 class="mt-4 {{ cls_badge }}">{{ titulo }}</h4>
-  <ul class="list-group shadow-sm mb-4">
+  <ul class="list-group shadow-sm mb-4" data-delivery-list="{{ status_key }}">
     {% for r in reqs %}
       {% set ord = r.order %}
-      <li class="list-group-item d-flex flex-column flex-md-row flex-md-wrap align-items-start align-items-md-center gap-2 justify-content-md-between">
+      <li class="list-group-item d-flex flex-column flex-md-row flex-md-wrap align-items-start align-items-md-center gap-2 justify-content-md-between" data-delivery-status="{{ r.status }}">
         <div class="me-3 flex-grow-1">
           <div class="fw-semibold">
             Pedido #{{ r.order_id }}
@@ -97,7 +97,7 @@
         </div>
       </li>
     {% else %}
-      <li class="list-group-item text-muted">Não há registros.</li>
+      <li class="list-group-item text-muted js-empty-placeholder">Não há registros.</li>
     {% endfor %}
   </ul>
   {% if pagination and pagination.has_next %}
@@ -115,16 +115,16 @@
 {% endmacro %}  <!-- ▸ Listas ----------------------------------------------------------- -->
   <div class="row row-cols-1 row-cols-md-4 g-4">
     <div class="col">
-      {{ lista(open_requests, open_pagination, 'open_page', "🟡 Solicitações Abertas",   "bg-warning text-dark", "Pendente", open_page, progress_page, completed_page, canceled_page) }}
+      {{ lista(open_requests, open_pagination, 'open_page', "🟡 Solicitações Abertas",   "bg-warning text-dark", "Pendente", 'pendente', open_page, progress_page, completed_page, canceled_page) }}
     </div>
     <div class="col">
-      {{ lista(in_progress, progress_pagination, 'progress_page', "🔵 Em Andamento",          "bg-info text-dark", "Em andamento", open_page, progress_page, completed_page, canceled_page) }}
+      {{ lista(in_progress, progress_pagination, 'progress_page', "🔵 Em Andamento",          "bg-info text-dark", "Em andamento", 'em_andamento', open_page, progress_page, completed_page, canceled_page) }}
     </div>
     <div class="col">
-      {{ lista(completed, completed_pagination, 'completed_page', "✅ Concluídas",            "bg-success", "Concluída", open_page, progress_page, completed_page, canceled_page) }}
+      {{ lista(completed, completed_pagination, 'completed_page', "✅ Concluídas",            "bg-success", "Concluída", 'concluida', open_page, progress_page, completed_page, canceled_page) }}
     </div>
     <div class="col">
-      {{ lista(canceled, canceled_pagination, 'canceled_page', "❌ Canceladas",            "bg-danger", "Cancelada", open_page, progress_page, completed_page, canceled_page) }}
+      {{ lista(canceled, canceled_pagination, 'canceled_page', "❌ Canceladas",            "bg-danger", "Cancelada", 'cancelada', open_page, progress_page, completed_page, canceled_page) }}
     </div>
   </div>
 
