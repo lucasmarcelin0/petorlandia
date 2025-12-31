@@ -353,6 +353,14 @@
         }
       };
 
+      const isLikelySuccess = (response) => {
+        if (!response) return false;
+        if (response.ok) return true;
+        if (response.type === 'opaqueredirect') return true;
+        const status = Number(response.status) || 0;
+        return status >= 200 && status < 400;
+      };
+
       const refreshDeliverySections = async () => {
         const container = document.getElementById('delivery-sections');
         if (!container) return;
@@ -463,8 +471,9 @@
 
                 const data = await parseJsonSafe(response);
                 const hasDeliverySections = Boolean(document.getElementById('delivery-sections'));
+                const successLike = isLikelySuccess(response);
 
-                if (response && response.ok) {
+                if (successLike) {
                   if (data?.redirect && !form.dataset.forceRedirect && hasDeliverySections) {
                     await refreshDeliverySections();
                     const eventDetail = { form, data, response, offlineQueued: false, success: true };
@@ -475,6 +484,11 @@
 
                   if (data?.redirect) {
                     window.location.href = data.redirect;
+                    return { success: true, keepButton: true };
+                  }
+
+                  if (response?.redirected && response.url) {
+                    window.location.href = response.url;
                     return { success: true, keepButton: true };
                   }
 
