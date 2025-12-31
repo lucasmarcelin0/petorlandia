@@ -509,7 +509,13 @@
               headers['X-CSRFToken'] = csrfToken;
             }
 
-            const { response, queued } = await fetchOrQueue(form.action, { method: 'POST', headers });
+            const formData = new FormData(form);
+
+            const { response, queued } = await fetchOrQueue(form.action, {
+              method: 'POST',
+              headers,
+              body: formData,
+            });
             if (queued) {
               const toastEl = document.getElementById('actionToast');
               toastEl.querySelector('.toast-body').textContent = 'Ação salva para sincronização quando estiver online.';
