@@ -90,7 +90,9 @@
 
       ev.preventDefault();
       const button = getStatusButton(form);
-      const success = detail.success !== false && (!detail.response || detail.response.ok !== false);
+      const success = detail.success !== false
+        && (detail.responseOk !== false)
+        && (!detail.response || detail.response.ok !== false);
       const offlineQueued = Boolean(detail.offlineQueued);
 
       resetButton(button);
