@@ -402,6 +402,12 @@
       // Torna o atualizador acessível para outros scripts (ex: ações do admin)
       window.refreshDeliverySections = refreshDeliverySections;
 
+      const ensureMessageCategory = (payload, fallbackMessage, fallbackCategory) => ({
+        ...(payload || {}),
+        message: (payload && (payload.message || payload.error)) || fallbackMessage,
+        category: (payload && payload.category) || fallbackCategory,
+      });
+
       const emitSyncEvent = (detail) => {
         const event = new CustomEvent('form-sync-success', { detail, cancelable: true });
         document.dispatchEvent(event);
@@ -474,19 +480,25 @@
                 const successLike = isLikelySuccess(response);
 
                 if (successLike) {
+                  const successData = ensureMessageCategory(
+                    data,
+                    (data && (data.message || data.error)) || 'Sucesso',
+                    (data && data.category) || 'success',
+                  );
+
                   if (data?.redirect && !form.dataset.forceRedirect && hasDeliverySections) {
                     await refreshDeliverySections();
                     const eventDetail = {
                       form,
-                      data,
+                      data: successData,
                       response,
                       responseOk: successLike,
                       offlineQueued: false,
                       success: true,
                     };
                     emitSyncEvent(eventDetail);
-                    showToast(data?.message || 'Sucesso', data?.category || 'success');
-                    return { success: true, message: data?.message, level: data?.category };
+                    showToast(successData.message, successData.category);
+                    return { success: true, message: successData.message, level: successData.category };
                   }
 
                   if (data?.redirect) {
@@ -499,30 +511,38 @@
                     return { success: true, keepButton: true };
                   }
 
-                  showToast(data?.message || 'Sucesso', data?.category || 'success');
+                  showToast(successData.message, successData.category);
                   await refreshDeliverySections();
                   emitSyncEvent({
                     form,
-                    data,
+                    data: successData,
                     response,
                     responseOk: successLike,
                     offlineQueued: false,
                     success: true,
                   });
-                  return { success: true, message: data?.message, level: data?.category };
+                  return { success: true, message: successData.message, level: successData.category };
                 }
 
                 const errorMessage = (data && (data.message || data.error)) || await parseErrorMessage(response);
                 const errorCategory = (data && data.category) || 'danger';
+                const errorData = ensureMessageCategory(data, errorMessage, errorCategory);
                 emitSyncEvent({
                   form,
-                  data,
+                  data: errorData,
                   response,
                   responseOk: false,
                   offlineQueued: false,
                   success: false,
                 });
                 showToast(errorMessage, errorCategory);
+                if (window.FormFeedback?.showStatus) {
+                  window.FormFeedback.showStatus(form, errorMessage, errorCategory);
+                }
+                if (window.FormFeedback?.setMessage) {
+                  const btn = window.FormFeedback.getButton?.(form);
+                  if (btn) window.FormFeedback.setMessage(btn, errorMessage, errorCategory);
+                }
                 return { success: false, message: errorMessage, level: errorCategory };
               } catch (error) {
                 console.error('Erro ao enviar formulário de entrega', error);
