@@ -373,6 +373,9 @@
         }
       };
 
+      // Torna o atualizador acessível para outros scripts (ex: ações do admin)
+      window.refreshDeliverySections = refreshDeliverySections;
+
       const attachDeliveryFormListeners = () => {
         document.querySelectorAll('.js-delivery-form').forEach(form => {
           if (form.dataset.deliveryListenerAttached === 'true') return;
@@ -470,6 +473,11 @@
               toastEl.querySelector('.toast-body').textContent = data.message || 'Sucesso';
               applyToastTone(toastEl, data.category || 'success');
               new bootstrap.Toast(toastEl).show();
+
+              if (typeof window.refreshDeliverySections === 'function') {
+                await window.refreshDeliverySections();
+              }
+
               return { success: true, message: data.message, level: data.category };
             }
             const toastEl = document.getElementById('actionToast');
@@ -530,6 +538,11 @@
               toastEl.querySelector('.toast-body').textContent = data.message || 'Sucesso';
               applyToastTone(toastEl, data.category || 'success');
               new bootstrap.Toast(toastEl).show();
+
+              if (typeof window.refreshDeliverySections === 'function') {
+                await window.refreshDeliverySections();
+              }
+
               return { success: true, message: data.message, level: data.category };
             }
 
