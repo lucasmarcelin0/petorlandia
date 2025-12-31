@@ -477,7 +477,7 @@ img {
 
 body {
   font-family: 'Poppins', sans-serif;
-  background: #ff1493;
+  background: linear-gradient(to bottom right, var(--light-color), #ffffff);
   color: #333;
   line-height: 1.6;
   padding-top: calc(var(--topbar-height) + env(safe-area-inset-top));
