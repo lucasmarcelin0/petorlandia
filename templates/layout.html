@@ -341,6 +341,26 @@
 
   <script>
     document.addEventListener('DOMContentLoaded', () => {
+      const parseJsonSafe = async (response) => {
+        if (!response) return null;
+        const contentType = response.headers.get('Content-Type') || '';
+        if (!contentType.includes('application/json')) return null;
+        try {
+          const clone = response.clone();
+          return await clone.json();
+        } catch (err) {
+          return null;
+        }
+      };
+
+      const isLikelySuccess = (response) => {
+        if (!response) return false;
+        if (response.ok) return true;
+        if (response.type === 'opaqueredirect') return true;
+        const status = Number(response.status) || 0;
+        return status >= 200 && status < 400;
+      };
+
       const refreshDeliverySections = async () => {
         const container = document.getElementById('delivery-sections');
         if (!container) return;
@@ -349,11 +369,17 @@
             headers: { 'X-Requested-With': 'XMLHttpRequest' }
           });
           if (!resp.ok) return;
-          const data = await resp.json();
-          if (data.html) {
+
+          let data = await parseJsonSafe(resp);
+          if (!data) {
+            const html = await resp.text();
+            data = html ? { html } : null;
+          }
+
+          if (data?.html) {
             container.innerHTML = data.html;
           }
-          if (data.counts) {
+          if (data?.counts) {
             const mapping = {
               'available-count': data.counts.available_total,
               'doing-count': data.counts.doing,
@@ -381,18 +407,6 @@
         document.dispatchEvent(event);
         return event;
       };
-
-    const parseJsonSafe = async (response) => {
-      if (!response) return null;
-      const contentType = response.headers.get('Content-Type') || '';
-      if (!contentType.includes('application/json')) return null;
-      try {
-        const clone = response.clone();
-        return await clone.json();
-      } catch (err) {
-        return null;
-      }
-    };
 
     const parseErrorMessage = async (response, fallback = 'Erro ao processar ação') => {
       if (!response) return fallback;
@@ -457,8 +471,9 @@
 
                 const data = await parseJsonSafe(response);
                 const hasDeliverySections = Boolean(document.getElementById('delivery-sections'));
+                const successLike = isLikelySuccess(response);
 
-                if (response && response.ok) {
+                if (successLike) {
                   if (data?.redirect && !form.dataset.forceRedirect && hasDeliverySections) {
                     await refreshDeliverySections();
                     const eventDetail = { form, data, response, offlineQueued: false, success: true };
@@ -469,6 +484,11 @@
 
                   if (data?.redirect) {
                     window.location.href = data.redirect;
+                    return { success: true, keepButton: true };
+                  }
+
+                  if (response?.redirected && response.url) {
+                    window.location.href = response.url;
                     return { success: true, keepButton: true };
                   }
 
