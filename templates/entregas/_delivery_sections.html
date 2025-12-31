@@ -32,6 +32,7 @@
       {% if current_user.worker == 'delivery' %}
         {% if req.status == 'pendente' %}
           <form action="{{ url_for('accept_delivery', req_id=req.id) }}" method="post" class="js-delivery-form">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <button class="btn btn-sm btn-primary">Aceitar</button>
           </form>
 
@@ -42,9 +43,11 @@
                Detalhes
             </a>
             <form action="{{ url_for('complete_delivery', req_id=req.id) }}" method="post" class="me-2 js-delivery-form">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
               <button class="btn btn-sm btn-success">Concluir</button>
             </form>
             <form action="{{ url_for('cancel_delivery', req_id=req.id) }}" method="post" class="js-delivery-form">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
               <button class="btn btn-sm btn-outline-danger">Cancelar</button>
             </form>
           </div>
