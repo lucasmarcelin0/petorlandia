@@ -1813,6 +1813,136 @@ def test_accept_delivery_without_location(monkeypatch, app):
         assert data['category'] == 'success'
 
 
+def test_accept_delivery_json_payload(monkeypatch, app):
+    client = app.test_client()
+
+    with app.app_context():
+        db.drop_all()
+        db.create_all()
+
+        worker = User(id=1, name='Worker', email='w@x.com', worker='delivery')
+        worker.set_password('x')
+        buyer = User(id=2, name='Buyer', email='b@x.com')
+        buyer.set_password('x')
+        order = Order(id=1, user_id=2)
+        req = DeliveryRequest(id=1, order_id=1, requested_by_id=2)
+        db.session.add_all([worker, buyer, order, req])
+        db.session.commit()
+
+        import flask_login.utils as login_utils
+        monkeypatch.setattr(login_utils, '_get_user', lambda: worker)
+        monkeypatch.setattr(app_module, '_is_admin', lambda: False)
+
+        resp = client.post(
+            f'/delivery_requests/{req.id}/accept',
+            headers={'Accept': 'application/json'}
+        )
+
+        assert resp.status_code == 200
+        payload = resp.get_json()
+        assert payload['message'] == 'Entrega aceita.'
+        assert payload['category'] == 'success'
+        with flask_app.test_request_context():
+            assert payload['redirect'] == url_for('worker_delivery_detail', req_id=req.id)
+
+
+def test_accept_delivery_denied_json(monkeypatch, app):
+    client = app.test_client()
+
+    with app.app_context():
+        db.drop_all()
+        db.create_all()
+
+        user = User(id=1, name='Tutor', email='t@x.com')
+        user.set_password('x')
+        db.session.add(user)
+        db.session.commit()
+
+        import flask_login.utils as login_utils
+        monkeypatch.setattr(login_utils, '_get_user', lambda: user)
+        monkeypatch.setattr(app_module, '_is_admin', lambda: False)
+
+        resp = client.post(
+            '/delivery_requests/99/accept',
+            headers={'Accept': 'application/json'}
+        )
+
+        assert resp.status_code == 403
+        payload = resp.get_json()
+        assert payload['message'] == 'Apenas entregadores podem realizar esta ação.'
+        assert payload['category'] == 'danger'
+        assert payload['redirect'] is None
+
+
+def test_accept_delivery_invalid_status_json(monkeypatch, app):
+    client = app.test_client()
+
+    with app.app_context():
+        db.drop_all()
+        db.create_all()
+
+        worker = User(id=1, name='Worker', email='w@x.com', worker='delivery')
+        worker.set_password('x')
+        buyer = User(id=2, name='Buyer', email='b@x.com')
+        buyer.set_password('x')
+        order = Order(id=1, user_id=2)
+        req = DeliveryRequest(id=1, order_id=1, requested_by_id=2, status='em_andamento')
+        db.session.add_all([worker, buyer, order, req])
+        db.session.commit()
+
+        import flask_login.utils as login_utils
+        monkeypatch.setattr(login_utils, '_get_user', lambda: worker)
+        monkeypatch.setattr(app_module, '_is_admin', lambda: False)
+
+        resp = client.post(
+            f'/delivery_requests/{req.id}/accept',
+            headers={'Accept': 'application/json'}
+        )
+
+        assert resp.status_code == 400
+        payload = resp.get_json()
+        assert payload['message'] == 'Solicitação não disponível.'
+        assert payload['category'] == 'warning'
+
+
+def test_complete_delivery_csrf_error_returns_json(monkeypatch, app):
+    client = app.test_client()
+
+    with app.app_context():
+        db.drop_all()
+        db.create_all()
+
+        worker = User(id=1, name='Worker', email='w@x.com', worker='delivery')
+        worker.set_password('x')
+        buyer = User(id=2, name='Buyer', email='b@x.com')
+        buyer.set_password('x')
+        order = Order(id=1, user_id=2)
+        req = DeliveryRequest(id=1, order_id=1, requested_by_id=2, worker_id=1)
+        db.session.add_all([worker, buyer, order, req])
+        db.session.commit()
+
+        import flask_login.utils as login_utils
+        monkeypatch.setattr(login_utils, '_get_user', lambda: worker)
+        monkeypatch.setattr(app_module, '_is_admin', lambda: False)
+
+        monkeypatch.setattr(
+            DeliveryRequest.query.__class__,
+            'get_or_404',
+            lambda *a, **k: (_ for _ in ()).throw(app_module.CSRFError('csrf')),
+        )
+
+        resp = client.post(
+            f'/delivery_requests/{req.id}/complete',
+            headers={'Accept': 'application/json'}
+        )
+
+        assert resp.status_code == 400
+        payload = resp.get_json()
+        assert payload['message'] == 'Falha de validação. Recarregue a página e tente novamente.'
+        assert payload['category'] == 'warning'
+        assert payload['redirect'] is None
+
+
 def test_update_tutor_duplicate_cpf(monkeypatch, app):
     client = app.test_client()
 
