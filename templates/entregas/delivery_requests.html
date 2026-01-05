@@ -97,10 +97,11 @@
 
       resetButton(button);
 
+      const payload = detail.data || {};
       const message = offlineQueued
         ? 'Ação será sincronizada assim que houver conexão.'
-        : (detail.data && (detail.data.message || detail.data.error)) || (success ? 'Ação concluída.' : 'Falha ao processar a ação.');
-      const category = offlineQueued ? 'info' : (detail.data && detail.data.category) || (success ? 'success' : 'danger');
+        : payload.message || payload.error || detail.message || (success ? 'Ação concluída.' : 'Falha ao processar a ação.');
+      const category = offlineQueued ? 'info' : payload.category || detail.category || (success ? 'success' : 'danger');
 
       renderInlineStatus(message, category === 'danger' ? 'danger' : category);
       showToastMessage(message, category);

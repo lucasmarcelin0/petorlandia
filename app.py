@@ -37,6 +37,7 @@ from flask import (
     has_request_context,
     make_response,
 )
+from flask_wtf.csrf import CSRFError
 from flask.cli import with_appcontext
 from flask_cors import CORS
 from flask_socketio import SocketIO, disconnect, emit, join_room, leave_room
@@ -13268,35 +13269,53 @@ def _wants_json_response():
     return 'application/json' in accept or xrw == 'xmlhttprequest'
 
 
+def _delivery_error_response(message, category='danger', status=400):
+    payload = {
+        'message': message,
+        'category': category,
+        'redirect': None,
+    }
+    try:
+        html, counts, _ = _delivery_sections_payload()
+        payload.setdefault('html', html)
+        payload.setdefault('counts', counts)
+    except Exception as exc:  # pragma: no cover - fallback only
+        current_app.logger.exception('Erro ao montar payload de entrega', exc_info=exc)
+    return jsonify(payload), status
+
+
 @app.route('/delivery_requests/<int:req_id>/accept', methods=['POST'])
 @login_required
 def accept_delivery(req_id):
-    if current_user.worker != 'delivery':
+    try:
+        if current_user.worker != 'delivery':
+            return _delivery_error_response('Apenas entregadores podem realizar esta ação.', 'danger', 403)
+        req = DeliveryRequest.query.get_or_404(req_id)
+        if req.status != 'pendente':
+            return _delivery_error_response('Solicitação não disponível.', 'warning', 400)
+        req.status = 'em_andamento'
+        req.worker_id = current_user.id
+        req.accepted_at = utcnow()
+        db.session.commit()
+        flash('Entrega aceita.', 'success')
         if _wants_json_response():
-            return jsonify(message='Apenas entregadores podem realizar esta ação.', category='danger', redirect=None), 403
-        abort(403)
-    req = DeliveryRequest.query.get_or_404(req_id)
-    if req.status != 'pendente':
-        if _wants_json_response():
-            return jsonify(message='Solicitação não disponível.', category='warning', redirect=None), 400
-        flash('Solicitação não disponível.', 'warning')
-        return redirect(url_for('list_delivery_requests'))
-    req.status = 'em_andamento'
-    req.worker_id = current_user.id
-    req.accepted_at = utcnow()
-    db.session.commit()
-    flash('Entrega aceita.', 'success')
-    if _wants_json_response():
-        html, counts, _ = _delivery_sections_payload()
-        return jsonify(
-            message='Entrega aceita.',
-            category='success',
-            redirect=url_for('worker_delivery_detail', req_id=req.id),
-            html=html,
-            counts=counts,
-        )
-    # ⬇️ redireciona direto ao detalhe unificado
-    return redirect(url_for('delivery_detail', req_id=req.id))
+            html, counts, _ = _delivery_sections_payload()
+            return jsonify(
+                message='Entrega aceita.',
+                category='success',
+                redirect=url_for('worker_delivery_detail', req_id=req.id),
+                html=html,
+                counts=counts,
+            )
+        # ⬇️ redireciona direto ao detalhe unificado
+        return redirect(url_for('delivery_detail', req_id=req.id))
+    except CSRFError:
+        db.session.rollback()
+        return _delivery_error_response('Falha de validação. Recarregue a página e tente novamente.', 'warning', 400)
+    except Exception as exc:  # pragma: no cover - segurança extra
+        db.session.rollback()
+        current_app.logger.exception('Erro ao aceitar entrega', exc_info=exc)
+        return _delivery_error_response('Erro interno ao processar a entrega.', 'danger', 500)
 
 
 
@@ -13304,70 +13323,81 @@ def accept_delivery(req_id):
 @app.route('/delivery_requests/<int:req_id>/complete', methods=['POST'])
 @login_required
 def complete_delivery(req_id):
-    if current_user.worker != 'delivery':
+    try:
+        if current_user.worker != 'delivery':
+            return _delivery_error_response('Apenas entregadores podem realizar esta ação.', 'danger', 403)
+        req = DeliveryRequest.query.get_or_404(req_id)
+        if req.worker_id != current_user.id:
+            return _delivery_error_response('Você não pode concluir esta entrega.', 'danger', 403)
+        req.status = 'concluida'
+        req.completed_at = utcnow()
+        db.session.commit()
+        flash('Entrega concluída.', 'success')
         if _wants_json_response():
-            return jsonify(message='Apenas entregadores podem realizar esta ação.', category='danger', redirect=None), 403
-        abort(403)
-    req = DeliveryRequest.query.get_or_404(req_id)
-    if req.worker_id != current_user.id:
-        if _wants_json_response():
-            return jsonify(message='Você não pode concluir esta entrega.', category='danger', redirect=None), 403
-        abort(403)
-    req.status = 'concluida'
-    req.completed_at = utcnow()
-    db.session.commit()
-    flash('Entrega concluída.', 'success')
-    if _wants_json_response():
-        html, counts, _ = _delivery_sections_payload()
-        return jsonify(message='Entrega concluída.', category='success', redirect=None, html=html, counts=counts)
-    return redirect(url_for('list_delivery_requests'))
+            html, counts, _ = _delivery_sections_payload()
+            return jsonify(message='Entrega concluída.', category='success', redirect=None, html=html, counts=counts)
+        return redirect(url_for('list_delivery_requests'))
+    except CSRFError:
+        db.session.rollback()
+        return _delivery_error_response('Falha de validação. Recarregue a página e tente novamente.', 'warning', 400)
+    except Exception as exc:  # pragma: no cover - segurança extra
+        db.session.rollback()
+        current_app.logger.exception('Erro ao concluir entrega', exc_info=exc)
+        return _delivery_error_response('Erro interno ao processar a entrega.', 'danger', 500)
 
 
 @app.route('/delivery_requests/<int:req_id>/cancel', methods=['POST'])
 @login_required
 def cancel_delivery(req_id):
-    if current_user.worker != 'delivery':
+    try:
+        if current_user.worker != 'delivery':
+            return _delivery_error_response('Apenas entregadores podem realizar esta ação.', 'danger', 403)
+        req = DeliveryRequest.query.get_or_404(req_id)
+        if req.worker_id != current_user.id:
+            return _delivery_error_response('Você não pode cancelar esta entrega.', 'danger', 403)
+        req.status = 'cancelada'
+        req.canceled_at = utcnow()
+        req.canceled_by_id = current_user.id
+        db.session.commit()
+        flash('Entrega cancelada.', 'info')
         if _wants_json_response():
-            return jsonify(message='Apenas entregadores podem realizar esta ação.', category='danger', redirect=None), 403
-        abort(403)
-    req = DeliveryRequest.query.get_or_404(req_id)
-    if req.worker_id != current_user.id:
-        if _wants_json_response():
-            return jsonify(message='Você não pode cancelar esta entrega.', category='danger', redirect=None), 403
-        abort(403)
-    req.status = 'cancelada'
-    req.canceled_at = utcnow()
-    req.canceled_by_id = current_user.id
-    db.session.commit()
-    flash('Entrega cancelada.', 'info')
-    if _wants_json_response():
-        html, counts, _ = _delivery_sections_payload()
-        return jsonify(message='Entrega cancelada.', category='info', redirect=None, html=html, counts=counts)
-    return redirect(url_for('list_delivery_requests'))
+            html, counts, _ = _delivery_sections_payload()
+            return jsonify(message='Entrega cancelada.', category='info', redirect=None, html=html, counts=counts)
+        return redirect(url_for('list_delivery_requests'))
+    except CSRFError:
+        db.session.rollback()
+        return _delivery_error_response('Falha de validação. Recarregue a página e tente novamente.', 'warning', 400)
+    except Exception as exc:  # pragma: no cover - segurança extra
+        db.session.rollback()
+        current_app.logger.exception('Erro ao cancelar entrega', exc_info=exc)
+        return _delivery_error_response('Erro interno ao processar a entrega.', 'danger', 500)
 
 
 @app.route('/delivery_requests/<int:req_id>/buyer_cancel', methods=['POST'])
 @login_required
 def buyer_cancel_delivery(req_id):
-    req = DeliveryRequest.query.get_or_404(req_id)
-    if req.requested_by_id != current_user.id:
+    try:
+        req = DeliveryRequest.query.get_or_404(req_id)
+        if req.requested_by_id != current_user.id:
+            return _delivery_error_response('Você não pode cancelar esta entrega.', 'danger', 403)
+        if req.status in ['concluida', 'cancelada']:
+            return _delivery_error_response('Não é possível cancelar.', 'warning', 400)
+        req.status = 'cancelada'
+        req.canceled_at = utcnow()
+        req.canceled_by_id = current_user.id
+        db.session.commit()
+        flash('Solicitação cancelada.', 'info')
         if _wants_json_response():
-            return jsonify(message='Você não pode cancelar esta entrega.', category='danger', redirect=None), 403
-        abort(403)
-    if req.status in ['concluida', 'cancelada']:
-        if _wants_json_response():
-            return jsonify(message='Não é possível cancelar.', category='warning', redirect=None), 400
-        flash('Não é possível cancelar.', 'warning')
+            html, counts, _ = _delivery_sections_payload()
+            return jsonify(message='Solicitação cancelada.', category='info', redirect=None, html=html, counts=counts)
         return redirect(url_for('loja'))
-    req.status = 'cancelada'
-    req.canceled_at = utcnow()
-    req.canceled_by_id = current_user.id
-    db.session.commit()
-    flash('Solicitação cancelada.', 'info')
-    if _wants_json_response():
-        html, counts, _ = _delivery_sections_payload()
-        return jsonify(message='Solicitação cancelada.', category='info', redirect=None, html=html, counts=counts)
-    return redirect(url_for('loja'))
+    except CSRFError:
+        db.session.rollback()
+        return _delivery_error_response('Falha de validação. Recarregue a página e tente novamente.', 'warning', 400)
+    except Exception as exc:  # pragma: no cover - segurança extra
+        db.session.rollback()
+        current_app.logger.exception('Erro ao cancelar entrega pelo comprador', exc_info=exc)
+        return _delivery_error_response('Erro interno ao processar a entrega.', 'danger', 500)
 
 
 # routes_delivery.py  (ou app.py)
