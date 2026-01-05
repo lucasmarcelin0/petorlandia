@@ -12837,10 +12837,29 @@ def novo_animal():
                 can_create_animals=True,
                 new_animal_url=url_for('novo_animal'),
             )
+
+            animal_payload = {
+                'id': animal.id,
+                'name': animal.name,
+                'species': animal.species.name if animal.species else None,
+                'breed': animal.breed.name if animal.breed else None,
+                'sex': animal.sex,
+                'image': animal.image,
+                'photo_offset_x': animal.photo_offset_x,
+                'photo_offset_y': animal.photo_offset_y,
+                'photo_rotation': animal.photo_rotation,
+                'photo_zoom': animal.photo_zoom,
+                'links': {
+                    'consulta': url_for('consulta_direct', animal_id=animal.id),
+                    'ficha': url_for('ficha_animal', animal_id=animal.id),
+                    'delete': url_for('deletar_animal', animal_id=animal.id),
+                }
+            }
             return jsonify(
                 message='Animal cadastrado com sucesso!',
                 category='success',
-                html=html
+                html=html,
+                animal=animal_payload
             )
 
         flash('Animal cadastrado com sucesso!', 'success')
