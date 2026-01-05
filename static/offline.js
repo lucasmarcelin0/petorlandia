@@ -166,13 +166,20 @@
           timeoutError.cause = e;
           throw timeoutError;
         }
-        throw e;
+
+        // Se a conexão caiu entre o clique e o envio, trate como offline
+        const q = loadQueue();
+        q.push({url, method, headers, body:bodyData});
+        saveQueue(q);
+        notifyOfflineQueued();
+        return { response: null, queued: true };
       }
     }
 
     const q = loadQueue();
     q.push({url, method, headers, body:bodyData});
     saveQueue(q);
+    notifyOfflineQueued();
     return { response: null, queued: true };
   };
 
