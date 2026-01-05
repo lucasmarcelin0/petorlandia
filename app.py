@@ -2951,7 +2951,12 @@ def _user_is_clinic_owner(user=None):
     if owned_clinics:
         return any(getattr(clinic, "owner_id", None) == user.id for clinic in owned_clinics)
 
-    return Clinica.query.filter_by(owner_id=user.id).first() is not None
+    try:
+        return Clinica.query.filter_by(owner_id=user.id).first() is not None
+    except (OperationalError, ProgrammingError, NoSuchTableError):
+        # Em ambientes de teste ou bancos desatualizados a tabela pode não existir.
+        # Nesses casos consideramos que o usuário não possui clínica.
+        return False
 
 
 def _user_can_access_accounting(user=None):
