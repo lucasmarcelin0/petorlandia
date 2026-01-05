@@ -18,6 +18,13 @@
     </a>
   </div>
 </div>
+{#
+  Nota para mantenedores: o listener global de `.js-delivery-form` definido no layout só
+  intercepta o submit quando `fetchOrQueue` está disponível. Em cenários onde o helper
+  não é carregado (ex.: falhas de rede ou builds legados), o submit segue o fluxo nativo
+  do navegador, garantindo degradação progressiva. O código abaixo apenas reage aos
+  eventos emitidos por esse listener, portanto não altera o comportamento de fallback.
+#}
 <script>
   document.addEventListener('DOMContentLoaded', () => {
     const toastEl = document.getElementById('actionToast');
