@@ -466,6 +466,9 @@
           if (form.dataset.deliveryListenerAttached === 'true') return;
           form.dataset.deliveryListenerAttached = 'true';
           form.addEventListener('submit', async ev => {
+            const canHandle = typeof fetchOrQueue === 'function';
+            if (!canHandle) return;
+
             ev.preventDefault();
             const url = form.action;
             const handle = async () => {
@@ -588,7 +591,23 @@
                   ? 'Tempo limite ao enviar a requisição. Tente novamente.'
                   : 'Erro ao processar ação';
                 showToast(fallback, 'danger');
-                return { success: false, message: fallback, level: 'danger' };
+                const restoreButton = () => {
+                  const button = window.FormFeedback?.getButton?.(form)
+                    || form.querySelector('button[type="submit"], button:not([type])');
+                  if (!button) return;
+                  if (window.FormFeedback?.setIdle) {
+                    window.FormFeedback.setIdle(button);
+                  } else {
+                    button.disabled = false;
+                  }
+                };
+                restoreButton();
+                try {
+                  form.submit();
+                } catch (submitError) {
+                  console.error('Fallback submit falhou', submitError);
+                }
+                return { success: false, message: fallback, level: 'danger', keepButton: true };
               }
             };
 
