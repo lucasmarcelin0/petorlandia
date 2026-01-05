@@ -341,6 +341,11 @@
 
   <script>
     document.addEventListener('DOMContentLoaded', () => {
+      const normalizeFetchResult = (result) => ({
+        response: result && result.response ? result.response : null,
+        queued: Boolean(result && result.queued),
+      });
+
       const parseJsonSafe = async (response) => {
         if (!response) return null;
         const contentType = response.headers.get('Content-Type') || '';
@@ -473,12 +478,12 @@
                 const csrfToken = getCsrfToken(form);
                 if (csrfToken) headers['X-CSRFToken'] = csrfToken;
 
-                const { response, queued } = await fetchOrQueue(url, {
+                const { response, queued } = normalizeFetchResult(await fetchOrQueue(url, {
                   method: 'POST',
                   body: formData,
                   headers,
                   credentials: 'same-origin',
-                });
+                }));
 
                 if (queued) {
                   const queuedDetail = { form, data: { message: 'Aguardando conexão para concluir o envio.', category: 'info' }, response: null, offlineQueued: true, success: true };
@@ -596,11 +601,11 @@
         form.addEventListener('submit', async ev => {
           ev.preventDefault();
           const handle = async () => {
-            const { response, queued } = await fetchOrQueue(form.action, {
+            const { response, queued } = normalizeFetchResult(await fetchOrQueue(form.action, {
               method: form.method,
               body: new FormData(form),
               headers: { 'Accept': 'application/json' }
-            });
+            }));
             if (queued) {
               const toastEl = document.getElementById('actionToast');
               toastEl.querySelector('.toast-body').textContent = 'Ação salva para sincronização quando estiver online.';
@@ -942,12 +947,12 @@
             const timeout = Number.isFinite(Number(timeoutAttr)) ? Number(timeoutAttr) : undefined;
 
             try {
-              ({ response, queued } = await fetchOrQueue(api, {
+              ({ response, queued } = normalizeFetchResult(await fetchOrQueue(api, {
                 method: 'POST',
                 body: formData,
                 headers: { 'Accept': 'text/html' },
                 timeout
-              }));
+              })));
             } catch (err) {
               console.error('Erro ao enviar mensagem:', err);
               if (placeholder) {
@@ -1017,11 +1022,11 @@
         form.addEventListener('submit', async ev => {
           ev.preventDefault();
           const handle = async () => {
-            const { response, queued } = await fetchOrQueue(form.action, {
+            const { response, queued } = normalizeFetchResult(await fetchOrQueue(form.action, {
               method: 'POST',
               headers: { 'Accept': 'application/json' },
               body: new FormData(form)
-            });
+            }));
 
             if (queued) {
               if (window.FormFeedback?.setQueued) {
