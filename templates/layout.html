@@ -550,6 +550,13 @@
                 const errorMessage = (data && (data.message || data.error)) || await parseErrorMessage(response);
                 const errorCategory = (data && data.category) || 'danger';
                 const errorData = ensureMessageCategory(data, errorMessage, errorCategory);
+                if (hasDeliverySections) {
+                  if (data?.html) {
+                    applyDeliveryPayload(data);
+                  } else {
+                    await refreshDeliverySections();
+                  }
+                }
                 emitSyncEvent({
                   form,
                   data: errorData,
@@ -558,15 +565,15 @@
                   offlineQueued: false,
                   success: false,
                 });
-                showToast(errorMessage, errorCategory);
+                showToast(errorData.message, errorData.category);
                 if (window.FormFeedback?.showStatus) {
-                  window.FormFeedback.showStatus(form, errorMessage, errorCategory);
+                  window.FormFeedback.showStatus(form, errorData.message, errorData.category);
                 }
                 if (window.FormFeedback?.setMessage) {
                   const btn = window.FormFeedback.getButton?.(form);
-                  if (btn) window.FormFeedback.setMessage(btn, errorMessage, errorCategory);
+                  if (btn) window.FormFeedback.setMessage(btn, errorData.message, errorData.category);
                 }
-                return { success: false, message: errorMessage, level: errorCategory };
+                return { success: false, message: errorData.message, level: errorData.category };
               } catch (error) {
                 console.error('Erro ao enviar formulário de entrega', error);
                 emitSyncEvent({
