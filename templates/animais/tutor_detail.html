@@ -444,7 +444,7 @@
         <h5 class="modal-title">➕ Novo Animal para {{ tutor.name }}</h5>
         <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
       </div>
-      <form action="{{ url_for('novo_animal') }}" method="POST" enctype="multipart/form-data">
+      <form id="new-animal-form" action="{{ url_for('novo_animal') }}" method="POST" enctype="multipart/form-data" data-sync>
         {{ new_animal_form.hidden_tag() }}
         <div class="modal-body">
           <input type="hidden" name="tutor_id" value="{{ tutor.id }}">
