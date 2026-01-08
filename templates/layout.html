@@ -382,6 +382,18 @@
         });
       };
 
+      const getCsrfToken = (form) => {
+        const formInput = form?.querySelector('input[name="csrf_token"]');
+        if (formInput?.value) return formInput.value;
+        const meta = document.querySelector('meta[name="csrf-token"]');
+        if (meta?.content) return meta.content;
+        return '';
+      };
+
+      // attachDeliveryFormListeners será definido mais adiante,
+      // então usamos uma referência que será populada posteriormente
+      let attachDeliveryFormListenersRef = () => { };
+
       const applyDeliveryPayload = (data) => {
         const container = document.getElementById('delivery-sections');
         if (data?.html && container) {
@@ -391,7 +403,7 @@
           applyDeliveryCounts(data.counts);
         }
         if (data?.html) {
-          attachDeliveryFormListeners();
+          attachDeliveryFormListenersRef();
         }
       };
 
@@ -406,7 +418,7 @@
 
           let data = await parseJsonSafe(resp);
           if (!data) {
-            const html = await resp.text();
+            const html = await resp.clone().text();
             data = html ? { html } : null;
           }
 
@@ -431,34 +443,26 @@
         return event;
       };
 
-    const parseErrorMessage = async (response, fallback = 'Erro ao processar ação') => {
-      if (!response) return fallback;
-      const data = await parseJsonSafe(response);
-      if (data?.message) return data.message;
-      try {
-        const text = await response.clone().text();
-        const cleaned = text.trim();
-        if (cleaned) {
-          return cleaned.length > 180 ? `${cleaned.slice(0, 180)}…` : cleaned;
-        }
-      } catch (err) { /* ignore */ }
-      return fallback;
-    };
+      const parseErrorMessage = async (response, fallback = 'Erro ao processar ação') => {
+        if (!response) return fallback;
+        const data = await parseJsonSafe(response);
+        if (data?.message) return data.message;
+        try {
+          const text = await response.clone().text();
+          const cleaned = text.trim();
+          if (cleaned) {
+            return cleaned.length > 180 ? `${cleaned.slice(0, 180)}…` : cleaned;
+          }
+        } catch (err) { /* ignore */ }
+        return fallback;
+      };
 
-    const showToast = (message, category = 'info') => {
-      const toastEl = document.getElementById('actionToast');
-      if (!toastEl) return;
-      toastEl.querySelector('.toast-body').textContent = message || '';
-      applyToastTone(toastEl, category);
-      bootstrap.Toast.getOrCreateInstance(toastEl).show();
-    };
-
-      const getCsrfToken = (form) => {
-        const formInput = form?.querySelector('input[name="csrf_token"]');
-        if (formInput?.value) return formInput.value;
-        const meta = document.querySelector('meta[name="csrf-token"]');
-        if (meta?.content) return meta.content;
-        return '';
+      const showToast = (message, category = 'info') => {
+        const toastEl = document.getElementById('actionToast');
+        if (!toastEl) return;
+        toastEl.querySelector('.toast-body').textContent = message || '';
+        applyToastTone(toastEl, category);
+        bootstrap.Toast.getOrCreateInstance(toastEl).show();
       };
 
       const attachDeliveryFormListeners = () => {
@@ -619,6 +623,9 @@
           });
         });
       };
+
+      // Atribuir a função real à referência usada em applyDeliveryPayload
+      attachDeliveryFormListenersRef = attachDeliveryFormListeners;
 
       attachDeliveryFormListeners();
 

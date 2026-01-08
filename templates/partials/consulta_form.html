@@ -32,11 +32,38 @@
 
   <!-- Seção de Exame Físico -->
   <div class="mb-3">
-    <label for="exame-fisico" class="form-label fw-bold">
-      <i class="bi bi-clipboard2-check"></i> Exame Físico
+    <label for="exame-fisico" class="form-label fw-bold d-flex align-items-center justify-content-between">
+      <span>
+        <i class="bi bi-clipboard2-check"></i> Exame Físico
+      </span>
+      <button type="button" class="btn btn-sm btn-outline-primary" id="toggle-chronometer" title="Abrir cronômetro">
+        <i class="bi bi-stopwatch"></i> Cronômetro
+      </button>
     </label>
     <textarea id="exame-fisico" name="exame_fisico" class="form-control auto-expand" rows="3"
       placeholder="Descreva os achados do exame físico">{{ consulta.exame_fisico or '' }}</textarea>
+  </div>
+
+  <!-- Cronômetro -->
+  <div id="chronometer-panel" class="chronometer-panel d-none">
+    <div class="chronometer-content">
+      <div class="d-flex justify-content-between align-items-center mb-3">
+        <h5 class="mb-0"><i class="bi bi-stopwatch"></i> Cronômetro</h5>
+        <button type="button" class="btn-close" id="close-chronometer" aria-label="Fechar"></button>
+      </div>
+      <div class="chronometer-display" id="chronometer-display">00:00:00</div>
+      <div class="chronometer-controls d-flex gap-2 justify-content-center">
+        <button type="button" class="btn btn-success" id="start-chronometer">
+          <i class="bi bi-play-fill"></i> Iniciar
+        </button>
+        <button type="button" class="btn btn-danger d-none" id="stop-chronometer">
+          <i class="bi bi-pause-fill"></i> Pausar
+        </button>
+        <button type="button" class="btn btn-secondary" id="reset-chronometer">
+          <i class="bi bi-arrow-clockwise"></i> Resetar
+        </button>
+      </div>
+    </div>
   </div>
 
   <!-- Seção de Conduta -->
@@ -276,5 +303,148 @@
         }
       }
     }
+
+    // --- Cronômetro ---
+    const chronometerPanel = document.getElementById('chronometer-panel');
+    const toggleChronometerBtn = document.getElementById('toggle-chronometer');
+    const closeChronometerBtn = document.getElementById('close-chronometer');
+    const startBtn = document.getElementById('start-chronometer');
+    const stopBtn = document.getElementById('stop-chronometer');
+    const resetBtn = document.getElementById('reset-chronometer');
+    const display = document.getElementById('chronometer-display');
+
+    let chronometerInterval = null;
+    let startTime = 0;
+    let elapsedTime = 0;
+    let isRunning = false;
+
+    function formatTime(ms) {
+      const totalSeconds = Math.floor(ms / 1000);
+      const hours = Math.floor(totalSeconds / 3600);
+      const minutes = Math.floor((totalSeconds % 3600) / 60);
+      const seconds = totalSeconds % 60;
+      return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+    }
+
+    function updateDisplay() {
+      const currentTime = Date.now();
+      const totalElapsed = elapsedTime + (isRunning ? (currentTime - startTime) : 0);
+      display.textContent = formatTime(totalElapsed);
+    }
+
+    function startChronometer() {
+      if (!isRunning) {
+        startTime = Date.now();
+        isRunning = true;
+        chronometerInterval = setInterval(updateDisplay, 100);
+        startBtn.classList.add('d-none');
+        stopBtn.classList.remove('d-none');
+      }
+    }
+
+    function stopChronometer() {
+      if (isRunning) {
+        const currentTime = Date.now();
+        elapsedTime += (currentTime - startTime);
+        isRunning = false;
+        clearInterval(chronometerInterval);
+        startBtn.classList.remove('d-none');
+        stopBtn.classList.add('d-none');
+      }
+    }
+
+    function resetChronometer() {
+      stopChronometer();
+      elapsedTime = 0;
+      startTime = 0;
+      display.textContent = '00:00:00';
+    }
+
+    if (toggleChronometerBtn && chronometerPanel) {
+      toggleChronometerBtn.addEventListener('click', function() {
+        chronometerPanel.classList.toggle('d-none');
+      });
+    }
+
+    if (closeChronometerBtn && chronometerPanel) {
+      closeChronometerBtn.addEventListener('click', function() {
+        chronometerPanel.classList.add('d-none');
+      });
+    }
+
+    if (startBtn) {
+      startBtn.addEventListener('click', startChronometer);
+    }
+
+    if (stopBtn) {
+      stopBtn.addEventListener('click', stopChronometer);
+    }
+
+    if (resetBtn) {
+      resetBtn.addEventListener('click', resetChronometer);
+    }
   });
 </script>
+
+<style>
+  .chronometer-panel {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background: white;
+    border-radius: 1rem;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+    padding: 1.5rem;
+    z-index: 1050;
+    min-width: 300px;
+    max-width: 400px;
+    border: 1px solid #dee2e6;
+  }
+
+  .chronometer-content {
+    text-align: center;
+  }
+
+  .chronometer-display {
+    font-size: 3rem;
+    font-weight: bold;
+    font-family: 'Courier New', monospace;
+    color: #0d6efd;
+    margin: 1.5rem 0;
+    padding: 1rem;
+    background: #f8f9fa;
+    border-radius: 0.5rem;
+    border: 2px solid #e9ecef;
+  }
+
+  .chronometer-controls {
+    margin-top: 1rem;
+  }
+
+  .chronometer-controls .btn {
+    min-width: 100px;
+    font-weight: 500;
+  }
+
+  @media (max-width: 576px) {
+    .chronometer-panel {
+      min-width: 280px;
+      max-width: 90%;
+      padding: 1rem;
+    }
+
+    .chronometer-display {
+      font-size: 2.5rem;
+      margin: 1rem 0;
+    }
+
+    .chronometer-controls {
+      flex-direction: column;
+    }
+
+    .chronometer-controls .btn {
+      width: 100%;
+    }
+  }
+</style>

@@ -4,8 +4,8 @@
   const DEFAULT_ERROR_TEXT = 'Não foi possível salvar as alterações.';
   const DEFAULT_OFFLINE_TEXT = 'Aguardando sincronização';
   const DEFAULT_SUCCESS_DELAY = 2000;
-  const DEFAULT_LOADING_TIMEOUT = 4000;
-  const MAX_LOADING_TIMEOUT = 4000;
+  const DEFAULT_LOADING_TIMEOUT = 10000;
+  const MAX_LOADING_TIMEOUT = 10000;
   const DEFAULT_TIMEOUT_MESSAGE = 'Tempo excedido, tente novamente.';
   const STATUS_VARIANTS = ['success', 'danger', 'warning', 'info'];
 
