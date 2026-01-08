@@ -2,6 +2,43 @@
 {% extends "layout.html" %}
 
 {% block main %}
+<script>
+  // Force refresh when page becomes visible (user navigated back)
+  // Use pageshow event which fires even when page is loaded from cache (back button)
+  window.addEventListener('pageshow', (event) => {
+    // event.persisted is true when page is loaded from cache (back/forward navigation)
+    if (event.persisted || !document.hidden) {
+      console.log('pageshow event - refreshing delivery sections', { persisted: event.persisted, hidden: document.hidden });
+      if (typeof window.refreshDeliverySections === 'function') {
+        window.refreshDeliverySections();
+      } else {
+        // Fallback: reload page if function not available
+        window.location.reload();
+      }
+    }
+  });
+  
+  // Also refresh on visibility change (user switched tabs)
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden && typeof window.refreshDeliverySections === 'function') {
+      console.log('visibilitychange event - refreshing delivery sections');
+      // Small delay to ensure page is fully visible
+      setTimeout(() => {
+        window.refreshDeliverySections();
+      }, 100);
+    }
+  });
+  
+  // Also refresh on page focus (user switched back to tab)
+  window.addEventListener('focus', () => {
+    if (typeof window.refreshDeliverySections === 'function') {
+      console.log('focus event - refreshing delivery sections');
+      setTimeout(() => {
+        window.refreshDeliverySections();
+      }, 100);
+    }
+  });
+</script>
 <div class="container py-4">
 
   <h2 class="fw-bold mb-4">🚚 Minhas Entregas</h2>
@@ -97,9 +134,13 @@
 
       ev.preventDefault();
       const button = getStatusButton(form);
-      const success = detail.success !== false
+      // Prioritize detail.success - if it's explicitly true, treat as success
+      // This handles cases where backend returns error status but action succeeded
+      const success = detail.success === true || (
+        detail.success !== false
         && (detail.responseOk !== false)
-        && (!detail.response || detail.response.ok !== false);
+        && (!detail.response || detail.response.ok !== false)
+      );
       const offlineQueued = Boolean(detail.offlineQueued);
 
       resetButton(button);

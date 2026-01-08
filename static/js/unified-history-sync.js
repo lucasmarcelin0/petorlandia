@@ -204,6 +204,14 @@ if (!window.HistorySyncManagerClass) {
     if (responseHtml) {
       try {
         container.innerHTML = responseHtml;
+        
+        // Format Brazil timestamps after updating the DOM
+        // This ensures timestamps are correctly formatted in Brazil timezone
+        // even when the HTML is inserted via AJAX
+        if (typeof window.formatBrazilTimestamps === 'function') {
+          window.formatBrazilTimestamps(container);
+        }
+        
         return true;
       } catch (err) {
         console.warn(`[HistorySyncManager] Failed to update container directly:`, err);

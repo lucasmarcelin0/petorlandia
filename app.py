@@ -13726,6 +13726,10 @@ def _wants_json_response():
 
 
 def _delivery_error_response(message, category='danger', status=400):
+    # #region agent log
+    with open(r'c:\Users\Visa10\petorlandia\.cursor\debug.log', 'a', encoding='utf-8') as f: f.write(json.dumps({'id':f'log_{int(datetime.now().timestamp()*1000)}_error_resp','timestamp':int(datetime.now().timestamp()*1000),'location':'app.py:13272','message':'_delivery_error_response called','data':{'message':message,'category':category,'status':status},'sessionId':'debug-session','runId':'run1','hypothesisId':'D'})+'\n')
+    # #endregion
+
     payload = {
         'message': message,
         'category': category,
@@ -13744,6 +13748,10 @@ def _delivery_error_response(message, category='danger', status=400):
 @login_required
 def accept_delivery(req_id):
     try:
+        # #region agent log
+        with open(r'c:\Users\Visa10\petorlandia\.cursor\debug.log', 'a', encoding='utf-8') as f: f.write(json.dumps({'id':f'log_{int(datetime.now().timestamp()*1000)}_accept','timestamp':int(datetime.now().timestamp()*1000),'location':'app.py:13289','message':'accept_delivery entry','data':{'req_id':req_id,'user_worker':current_user.worker,'wants_json':_wants_json_response()},'sessionId':'debug-session','runId':'run1','hypothesisId':'A'})+'\n')
+        # #endregion
+
         if current_user.worker != 'delivery':
             return _delivery_error_response('Apenas entregadores podem realizar esta ação.', 'danger', 403)
         req = (
@@ -13765,13 +13773,17 @@ def accept_delivery(req_id):
         flash('Entrega aceita.', 'success')
         if _wants_json_response():
             html, counts, _ = _delivery_sections_payload()
-            return jsonify(
-                message='Entrega aceita.',
-                category='success',
-                redirect=url_for('worker_delivery_detail', req_id=req.id),
-                html=html,
-                counts=counts,
-            )
+            response_data = {
+                'message': 'Entrega aceita.',
+                'category': 'success',
+                'redirect': url_for('worker_delivery_detail', req_id=req.id),
+                'html': html,
+                'counts': counts,
+            }
+            # #region agent log
+            with open(r'c:\Users\Visa10\petorlandia\.cursor\debug.log', 'a', encoding='utf-8') as f: f.write(json.dumps({'id':f'log_{int(datetime.now().timestamp()*1000)}_accept_resp','timestamp':int(datetime.now().timestamp()*1000),'location':'app.py:13303','message':'accept_delivery JSON response','data':{'hasHtml':bool(html),'hasCounts':bool(counts),'hasRedirect':bool(response_data.get('redirect')),'message':response_data.get('message')},'sessionId':'debug-session','runId':'run1','hypothesisId':'A'})+'\n')
+            # #endregion
+            return jsonify(**response_data)
         # ⬇️ redireciona direto ao detalhe unificado
         return redirect(url_for('delivery_detail', req_id=req.id))
     except CSRFError:
@@ -13789,6 +13801,10 @@ def accept_delivery(req_id):
 @login_required
 def complete_delivery(req_id):
     try:
+        # #region agent log
+        with open(r'c:\Users\Visa10\petorlandia\.cursor\debug.log', 'a', encoding='utf-8') as f: f.write(json.dumps({'id':f'log_{int(datetime.now().timestamp()*1000)}_complete','timestamp':int(datetime.now().timestamp()*1000),'location':'app.py:13325','message':'complete_delivery entry','data':{'req_id':req_id,'user_worker':current_user.worker,'wants_json':_wants_json_response()},'sessionId':'debug-session','runId':'run1','hypothesisId':'A'})+'\n')
+        # #endregion
+
         if current_user.worker != 'delivery':
             return _delivery_error_response('Apenas entregadores podem realizar esta ação.', 'danger', 403)
         req = DeliveryRequest.query.get_or_404(req_id)
@@ -13800,7 +13816,11 @@ def complete_delivery(req_id):
         flash('Entrega concluída.', 'success')
         if _wants_json_response():
             html, counts, _ = _delivery_sections_payload()
-            return jsonify(message='Entrega concluída.', category='success', redirect=None, html=html, counts=counts)
+            response_data = {'message': 'Entrega concluída.', 'category': 'success', 'redirect': None, 'html': html, 'counts': counts}
+            # #region agent log
+            with open(r'c:\Users\Visa10\petorlandia\.cursor\debug.log', 'a', encoding='utf-8') as f: f.write(json.dumps({'id':f'log_{int(datetime.now().timestamp()*1000)}_complete_resp','timestamp':int(datetime.now().timestamp()*1000),'location':'app.py:13338','message':'complete_delivery JSON response','data':{'hasHtml':bool(html),'hasCounts':bool(counts),'hasRedirect':bool(response_data.get('redirect')),'message':response_data.get('message')},'sessionId':'debug-session','runId':'run1','hypothesisId':'A'})+'\n')
+            # #endregion
+            return jsonify(**response_data)
         return redirect(url_for('list_delivery_requests'))
     except CSRFError:
         db.session.rollback()
@@ -13815,6 +13835,10 @@ def complete_delivery(req_id):
 @login_required
 def cancel_delivery(req_id):
     try:
+        # #region agent log
+        with open(r'c:\Users\Visa10\petorlandia\.cursor\debug.log', 'a', encoding='utf-8') as f: f.write(json.dumps({'id':f'log_{int(datetime.now().timestamp()*1000)}_cancel','timestamp':int(datetime.now().timestamp()*1000),'location':'app.py:13351','message':'cancel_delivery entry','data':{'req_id':req_id,'user_worker':current_user.worker,'wants_json':_wants_json_response()},'sessionId':'debug-session','runId':'run1','hypothesisId':'A'})+'\n')
+        # #endregion
+
         if current_user.worker != 'delivery':
             return _delivery_error_response('Apenas entregadores podem realizar esta ação.', 'danger', 403)
         req = DeliveryRequest.query.get_or_404(req_id)
@@ -13827,7 +13851,11 @@ def cancel_delivery(req_id):
         flash('Entrega cancelada.', 'info')
         if _wants_json_response():
             html, counts, _ = _delivery_sections_payload()
-            return jsonify(message='Entrega cancelada.', category='info', redirect=None, html=html, counts=counts)
+            response_data = {'message': 'Entrega cancelada.', 'category': 'info', 'redirect': None, 'html': html, 'counts': counts}
+            # #region agent log
+            with open(r'c:\Users\Visa10\petorlandia\.cursor\debug.log', 'a', encoding='utf-8') as f: f.write(json.dumps({'id':f'log_{int(datetime.now().timestamp()*1000)}_cancel_resp','timestamp':int(datetime.now().timestamp()*1000),'location':'app.py:13365','message':'cancel_delivery JSON response','data':{'hasHtml':bool(html),'hasCounts':bool(counts),'hasRedirect':bool(response_data.get('redirect')),'message':response_data.get('message')},'sessionId':'debug-session','runId':'run1','hypothesisId':'A'})+'\n')
+            # #endregion
+            return jsonify(**response_data)
         return redirect(url_for('list_delivery_requests'))
     except CSRFError:
         db.session.rollback()
