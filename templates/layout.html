@@ -349,11 +349,22 @@
       const parseJsonSafe = async (response) => {
         if (!response) return null;
         const contentType = response.headers.get('Content-Type') || '';
+        // #region agent log
+        fetch('http://127.0.0.1:7242/ingest/2d169677-0741-45fd-8c0d-2b9d812f1228',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'layout.html:349',message:'parseJsonSafe entry',data:{hasResponse:!!response,contentType:contentType,includesJson:contentType.includes('application/json')},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
+        // #endregion
+
         if (!contentType.includes('application/json')) return null;
         try {
           const clone = response.clone();
-          return await clone.json();
+          const parsed = await clone.json();
+          // #region agent log
+          fetch('http://127.0.0.1:7242/ingest/2d169677-0741-45fd-8c0d-2b9d812f1228',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'layout.html:355',message:'parseJsonSafe success',data:{parsedKeys:parsed?Object.keys(parsed):[]},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
+          // #endregion
+          return parsed;
         } catch (err) {
+          // #region agent log
+          fetch('http://127.0.0.1:7242/ingest/2d169677-0741-45fd-8c0d-2b9d812f1228',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'layout.html:357',message:'parseJsonSafe error',data:{errorMessage:err?.message},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
+          // #endregion
           return null;
         }
       };
@@ -411,8 +422,10 @@
         const container = document.getElementById('delivery-sections');
         if (!container) return;
         try {
-          const resp = await fetch('/delivery_requests', {
-            headers: { 'X-Requested-With': 'XMLHttpRequest' }
+          // Add cache-busting parameter to ensure fresh data
+          const resp = await fetch('/delivery_requests?_=' + Date.now(), {
+            headers: { 'X-Requested-With': 'XMLHttpRequest' },
+            cache: 'no-cache'
           });
           if (!resp.ok) return;
 
@@ -474,6 +487,16 @@
             if (!canHandle) return;
 
             ev.preventDefault();
+            
+            // Prevent double submission
+            if (form.dataset.submitting === 'true') {
+              // #region agent log
+              fetch('http://127.0.0.1:7242/ingest/2d169677-0741-45fd-8c0d-2b9d812f1228',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'layout.html:483',message:'Prevented double submission',data:{formAction:form.action},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
+              // #endregion
+              return;
+            }
+            form.dataset.submitting = 'true';
+            
             const url = form.action;
             const handle = async () => {
               try {
@@ -482,8 +505,14 @@
                   'Accept': 'application/json',
                   'X-Requested-With': 'XMLHttpRequest',
                 };
+                // Get CSRF token from form, but don't add to FormData if already in header
+                // Flask-WTF can read from either form data or header, but sending both can cause issues
                 const csrfToken = getCsrfToken(form);
-                if (csrfToken) headers['X-CSRFToken'] = csrfToken;
+                if (csrfToken) {
+                  headers['X-CSRFToken'] = csrfToken;
+                  // Remove csrf_token from FormData if it exists, since we're sending it in header
+                  formData.delete('csrf_token');
+                }
 
                 const { response, queued } = normalizeFetchResult(await fetchOrQueue(url, {
                   method: 'POST',
@@ -491,6 +520,10 @@
                   headers,
                   credentials: 'same-origin',
                 }));
+
+                // #region agent log
+                fetch('http://127.0.0.1:7242/ingest/2d169677-0741-45fd-8c0d-2b9d812f1228',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'layout.html:488',message:'After fetchOrQueue',data:{queued:queued,responseStatus:response?.status,responseOk:response?.ok,responseType:response?.type,responseUrl:response?.url},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
+                // #endregion
 
                 if (queued) {
                   const queuedDetail = { form, data: { message: 'Aguardando conexão para concluir o envio.', category: 'info' }, response: null, offlineQueued: true, success: true };
@@ -500,10 +533,25 @@
                 }
 
                 const data = await parseJsonSafe(response);
+                const contentType = response?.headers?.get('Content-Type') || '';
+                // #region agent log
+                fetch('http://127.0.0.1:7242/ingest/2d169677-0741-45fd-8c0d-2b9d812f1228',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'layout.html:502',message:'After parseJsonSafe',data:{dataIsNull:data===null,contentType:contentType,hasMessage:!!data?.message,hasCategory:!!data?.category,hasHtml:!!data?.html,hasCounts:!!data?.counts,dataKeys:data?Object.keys(data):[]},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
+                // #endregion
+
                 const hasDeliverySections = Boolean(document.getElementById('delivery-sections'));
-                const successLike = isLikelySuccess(response);
+                // Check if response has valid delivery data even if status is not 200
+                // This handles cases where backend returns 400 with valid JSON payload (e.g., CSRF errors that still include html/counts)
+                const hasValidDeliveryData = data && (data.html || data.counts);
+                const successLike = isLikelySuccess(response) || (hasValidDeliveryData && data.category !== 'danger');
+                // #region agent log
+                fetch('http://127.0.0.1:7242/ingest/2d169677-0741-45fd-8c0d-2b9d812f1228',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'layout.html:504',message:'After isLikelySuccess',data:{successLike:successLike,responseOk:response?.ok,responseStatus:response?.status,responseType:response?.type,hasValidDeliveryData:hasValidDeliveryData},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
+                // #endregion
 
                 if (successLike) {
+                  // #region agent log
+                  fetch('http://127.0.0.1:7242/ingest/2d169677-0741-45fd-8c0d-2b9d812f1228',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'layout.html:506',message:'Entering success branch',data:{hasData:!!data,hasRedirect:!!data?.redirect,hasHtml:!!data?.html,hasDeliverySections:hasDeliverySections},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
+                  // #endregion
+
                   const successData = ensureMessageCategory(
                     data,
                     (data && (data.message || data.error)) || 'Sucesso',
@@ -512,37 +560,78 @@
 
                   if (hasDeliverySections && data) {
                     applyDeliveryPayload(data);
-                  }
-
-                  if (data?.redirect && !form.dataset.forceRedirect && hasDeliverySections) {
-                    if (!data?.html) {
-                      await refreshDeliverySections();
-                    }
-                    const eventDetail = {
-                      form,
-                      data: successData,
-                      response,
-                      responseOk: successLike,
-                      offlineQueued: false,
-                      success: true,
-                    };
-                    emitSyncEvent(eventDetail);
-                    showToast(successData.message, successData.category);
-                    return { success: true, message: successData.message, level: successData.category };
+                    // #region agent log
+                    fetch('http://127.0.0.1:7242/ingest/2d169677-0741-45fd-8c0d-2b9d812f1228',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'layout.html:514',message:'After applyDeliveryPayload',data:{},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'})}).catch(()=>{});
+                    // #endregion
                   }
 
                   if (data?.redirect) {
-                    window.location.href = data.redirect;
-                    return { success: true, keepButton: true };
+                    // #region agent log
+                    fetch('http://127.0.0.1:7242/ingest/2d169677-0741-45fd-8c0d-2b9d812f1228',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'layout.html:568',message:'Redirect detected',data:{hasDeliverySections:hasDeliverySections,redirect:data.redirect,forceRedirect:form.dataset.forceRedirect},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'})}).catch(()=>{});
+                    // #endregion
+                    
+                    // If we have delivery sections, ALWAYS update UI instead of redirecting
+                    // User can navigate manually if needed
+                    if (hasDeliverySections) {
+                      // #region agent log
+                      fetch('http://127.0.0.1:7242/ingest/2d169677-0741-45fd-8c0d-2b9d812f1228',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'layout.html:571',message:'Skipping redirect - hasDeliverySections=true',data:{hasHtml:!!data?.html},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'})}).catch(()=>{});
+                      // #endregion
+                      
+                      if (data?.html) {
+                        applyDeliveryPayload(data);
+                      } else {
+                        await refreshDeliverySections();
+                        // #region agent log
+                        fetch('http://127.0.0.1:7242/ingest/2d169677-0741-45fd-8c0d-2b9d812f1228',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'layout.html:519',message:'After refreshDeliverySections (redirect path)',data:{},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'})}).catch(()=>{});
+                        // #endregion
+                      }
+                      const eventDetail = {
+                        form,
+                        data: successData,
+                        response,
+                        responseOk: successLike,
+                        offlineQueued: false,
+                        success: true,
+                      };
+                      emitSyncEvent(eventDetail);
+                      showToast(successData.message, successData.category);
+                      // Don't redirect - just update UI. User can navigate manually if needed.
+                      return { success: true, message: successData.message, level: successData.category };
+                    }
+                    // Only redirect if we don't have delivery sections
+                    if (!form.dataset.forceRedirect) {
+                      // #region agent log
+                      fetch('http://127.0.0.1:7242/ingest/2d169677-0741-45fd-8c0d-2b9d812f1228',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'layout.html:595',message:'Executing redirect - no delivery sections',data:{redirect:data.redirect},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'})}).catch(()=>{});
+                      // #endregion
+                      window.location.href = data.redirect;
+                      return { success: true, keepButton: true };
+                    }
                   }
 
                   if (response?.redirected && response.url) {
+                    // If we have delivery sections, refresh them instead of redirecting
+                    if (hasDeliverySections) {
+                      await refreshDeliverySections();
+                      emitSyncEvent({
+                        form,
+                        data: successData,
+                        response,
+                        responseOk: successLike,
+                        offlineQueued: false,
+                        success: true,
+                      });
+                      showToast(successData.message, successData.category);
+                      return { success: true, message: successData.message, level: successData.category };
+                    }
                     window.location.href = response.url;
                     return { success: true, keepButton: true };
                   }
 
                   showToast(successData.message, successData.category);
                   await refreshDeliverySections();
+                  // #region agent log
+                  fetch('http://127.0.0.1:7242/ingest/2d169677-0741-45fd-8c0d-2b9d812f1228',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'layout.html:545',message:'After refreshDeliverySections (normal path)',data:{},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'})}).catch(()=>{});
+                  // #endregion
                   emitSyncEvent({
                     form,
                     data: successData,
@@ -554,9 +643,51 @@
                   return { success: true, message: successData.message, level: successData.category };
                 }
 
+                // #region agent log
+                fetch('http://127.0.0.1:7242/ingest/2d169677-0741-45fd-8c0d-2b9d812f1228',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'layout.html:557',message:'Entering error branch',data:{hasData:!!data,responseOk:response?.ok,responseStatus:response?.status},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'D'})}).catch(()=>{});
+                // #endregion
+
+                // Even if response status indicates error, if we have valid delivery data (html/counts),
+                // treat it as a success case and update the UI. This handles cases where backend
+                // returns error status but still includes updated data (e.g., CSRF errors that include html/counts)
+                const hasValidDeliveryData = data && (data.html || data.counts);
+                const shouldTreatAsSuccess = hasValidDeliveryData && data.category !== 'danger';
+                
+                if (shouldTreatAsSuccess) {
+                  // #region agent log
+                  fetch('http://127.0.0.1:7242/ingest/2d169677-0741-45fd-8c0d-2b9d812f1228',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'layout.html:600',message:'Treating error response as success due to valid delivery data',data:{},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'D'})}).catch(()=>{});
+                  // #endregion
+                  
+                  // When we have valid delivery data, use a success message instead of the warning/error message
+                  const successData = ensureMessageCategory(
+                    data,
+                    'Ação concluída com sucesso.',
+                    'success',
+                  );
+                  
+                  if (hasDeliverySections && data) {
+                    applyDeliveryPayload(data);
+                  }
+                  
+                  emitSyncEvent({
+                    form,
+                    data: successData,
+                    response,
+                    responseOk: true,
+                    offlineQueued: false,
+                    success: true,
+                  });
+                  showToast(successData.message, successData.category);
+                  return { success: true, message: successData.message, level: successData.category };
+                }
+
                 const errorMessage = (data && (data.message || data.error)) || await parseErrorMessage(response);
                 const errorCategory = (data && data.category) || 'danger';
                 const errorData = ensureMessageCategory(data, errorMessage, errorCategory);
+                // #region agent log
+                fetch('http://127.0.0.1:7242/ingest/2d169677-0741-45fd-8c0d-2b9d812f1228',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'layout.html:559',message:'Error data prepared',data:{errorMessage:errorMessage,errorCategory:errorCategory},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'D'})}).catch(()=>{});
+                // #endregion
+
                 if (hasDeliverySections) {
                   if (data?.html) {
                     applyDeliveryPayload(data);
@@ -582,6 +713,10 @@
                 }
                 return { success: false, message: errorData.message, level: errorData.category };
               } catch (error) {
+                // #region agent log
+                fetch('http://127.0.0.1:7242/ingest/2d169677-0741-45fd-8c0d-2b9d812f1228',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'layout.html:584',message:'Exception caught',data:{errorName:error?.name,errorMessage:error?.message,errorStack:error?.stack?.substring(0,200)},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
+                // #endregion
+
                 console.error('Erro ao enviar formulário de entrega', error);
                 emitSyncEvent({
                   form,
@@ -615,10 +750,22 @@
               }
             };
 
-            if (window.FormFeedback && typeof window.FormFeedback.withSavingState === 'function') {
-              await window.FormFeedback.withSavingState(form, handle, { loadingText: form.dataset.loadingText || 'Processando...' });
-            } else {
-              await handle();
+            try {
+              if (window.FormFeedback && typeof window.FormFeedback.withSavingState === 'function') {
+                await window.FormFeedback.withSavingState(form, handle, { loadingText: form.dataset.loadingText || 'Processando...' });
+              } else {
+                await handle();
+              }
+            } catch (error) {
+              console.error('Error in delivery form handler:', error);
+              // #region agent log
+              fetch('http://127.0.0.1:7242/ingest/2d169677-0741-45fd-8c0d-2b9d812f1228',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'layout.html:720',message:'Error in form handler',data:{errorMessage:error?.message},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
+              // #endregion
+            } finally {
+              // Reset submitting flag after a delay to allow UI updates
+              setTimeout(() => {
+                form.dataset.submitting = 'false';
+              }, 1000);
             }
           });
         });

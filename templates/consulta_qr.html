@@ -367,6 +367,11 @@ function bindSyncForms(root) {
             if (container) {
               container.innerHTML = data.html;
               bindSyncForms(container);
+              // Format Brazil timestamps after updating the DOM
+              // This ensures timestamps are correctly formatted in Brazil timezone
+              if (typeof formatBrazilTimestamps === 'function') {
+                formatBrazilTimestamps(container);
+              }
             }
           }
           if (data.tutor_name) {
