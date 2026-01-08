@@ -13290,9 +13290,18 @@ def accept_delivery(req_id):
     try:
         if current_user.worker != 'delivery':
             return _delivery_error_response('Apenas entregadores podem realizar esta ação.', 'danger', 403)
-        req = DeliveryRequest.query.get_or_404(req_id)
+        req = (
+            DeliveryRequest.query
+            .filter_by(id=req_id)
+            .with_for_update()
+            .first()
+        )
+        if not req:
+            abort(404)
         if req.status != 'pendente':
             return _delivery_error_response('Solicitação não disponível.', 'warning', 400)
+        if req.worker_id and req.worker_id != current_user.id:
+            return _delivery_error_response('Entrega já aceita por outro entregador.', 'warning', 409)
         req.status = 'em_andamento'
         req.worker_id = current_user.id
         req.accepted_at = utcnow()
