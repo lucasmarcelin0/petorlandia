@@ -12152,6 +12152,14 @@ def salvar_prescricoes_lote(consulta_id):
 
 @app.route('/consulta/<int:consulta_id>/bloco_prescricao', methods=['POST'])
 @login_required
+def _normalizar_instrucoes_prescricao(texto):
+    if not texto:
+        return ''
+    if not isinstance(texto, str):
+        texto = str(texto)
+    return texto.replace('\r\n', '\n').replace('\r', '\n').strip()
+
+
 def salvar_bloco_prescricao(consulta_id):
     consulta = get_consulta_or_404(consulta_id)
 
@@ -12160,8 +12168,8 @@ def salvar_bloco_prescricao(consulta_id):
 
     dados = request.get_json(silent=True) or {}
     lista_prescricoes = dados.get('prescricoes') or []
-    instrucoes = dados.get('instrucoes_gerais')  # 🟢 AQUI você precisa pegar o campo
-    instrucoes_texto = instrucoes or ''
+    instrucoes = _normalizar_instrucoes_prescricao(dados.get('instrucoes_gerais'))
+    instrucoes_texto = instrucoes
 
     if not lista_prescricoes and not instrucoes_texto.strip():
         return jsonify({'success': False, 'message': 'Informe ao menos uma prescrição ou instruções gerais.'}), 400
@@ -12278,7 +12286,7 @@ def atualizar_bloco_prescricao(bloco_id):
 
     data = request.get_json(silent=True) or {}
     novos_medicamentos = data.get('medicamentos', [])
-    instrucoes = data.get('instrucoes_gerais')
+    instrucoes = _normalizar_instrucoes_prescricao(data.get('instrucoes_gerais'))
 
     # Limpa os medicamentos atuais do bloco
     for p in bloco.prescricoes:
