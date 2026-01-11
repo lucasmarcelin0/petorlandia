@@ -1451,6 +1451,10 @@ body {
   margin-bottom: 0.4rem;
 }
 
+.prescricao-card__note-text {
+  white-space: pre-wrap;
+}
+
 .prescricao-card__footer {
   margin-top: 1.5rem;
   display: flex;

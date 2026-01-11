@@ -12156,11 +12156,12 @@ def salvar_bloco_prescricao(consulta_id):
         return jsonify({'success': False, 'message': 'Apenas veterinários podem prescrever.'}), 403
 
     dados = request.get_json(silent=True) or {}
-    lista_prescricoes = dados.get('prescricoes')
+    lista_prescricoes = dados.get('prescricoes') or []
     instrucoes = dados.get('instrucoes_gerais')  # 🟢 AQUI você precisa pegar o campo
+    instrucoes_texto = instrucoes or ''
 
-    if not lista_prescricoes:
-        return jsonify({'success': False, 'message': 'Nenhuma prescrição recebida.'}), 400
+    if not lista_prescricoes and not instrucoes_texto.strip():
+        return jsonify({'success': False, 'message': 'Informe ao menos uma prescrição ou instruções gerais.'}), 400
 
     clinic_id = (
         consulta.clinica_id

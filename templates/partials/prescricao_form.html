@@ -639,11 +639,6 @@
    * Uses the centralized HistorySyncManager for guaranteed reliability
    */
   async function finalizarBlocoPrescricoes() {
-    if (prescricoes.length === 0) {
-      mostrarFeedback('Adicione pelo menos um medicamento.', 'warning');
-      return;
-    }
-
     const btn = document.getElementById('btn-finalizar');
     if (!btn) {
       console.error('Botão de finalizar não encontrado');
@@ -653,6 +648,10 @@
 
     // Prepare data
     const instrucoes = document.getElementById('instrucoes-medicamentos')?.value || '';
+    if (prescricoes.length === 0 && !instrucoes.trim()) {
+      mostrarFeedback('Adicione pelo menos um medicamento ou instruções gerais.', 'warning');
+      return;
+    }
     const data = {
       prescricoes,
       instrucoes_gerais: instrucoes
