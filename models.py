@@ -175,8 +175,12 @@ class User(UserMixin, db.Model):
     added_by = db.relationship('User', remote_side=[id], backref='users_added')  # 🆕
 
 
-
-    clinica_id = db.Column(db.Integer, db.ForeignKey('clinica.id'), nullable=True)
+    # Usamos use_alter=True para evitar ciclos de FK com Clinica
+    clinica_id = db.Column(
+        db.Integer,
+        db.ForeignKey('clinica.id', use_alter=True, name='fk_user_clinica'),
+        nullable=True,
+    )
     clinica = db.relationship('Clinica', backref='usuarios', foreign_keys=[clinica_id])
     is_private = db.Column(db.Boolean, nullable=False, default=True)
     created_at = db.Column(db.DateTime(timezone=True), default=now_in_brazil)
@@ -748,8 +752,16 @@ class Clinica(db.Model):
     photo_offset_x = db.Column(db.Float, default=0.0)
     photo_offset_y = db.Column(db.Float, default=0.0)
 
-    owner_id = db.Column(db.Integer, db.ForeignKey('user.id'))
-    owner = db.relationship('User', backref=db.backref('clinicas', foreign_keys='Clinica.owner_id'), foreign_keys=[owner_id])
+    owner_id = db.Column(
+        db.Integer,
+        db.ForeignKey('user.id', use_alter=True, name='fk_clinica_owner'),
+    )
+    owner = db.relationship(
+        'User',
+        backref=db.backref('clinicas', foreign_keys='Clinica.owner_id'),
+        foreign_keys=[owner_id],
+        post_update=True,
+    )
 
     veterinarios = db.relationship('Veterinario', backref='clinica', lazy=True)
     veterinarios_associados = db.relationship(
