@@ -105,10 +105,13 @@ app.config.update(SESSION_PERMANENT=True, SESSION_TYPE="filesystem")
 CORS(app, resources={r"/surpresa*": {"origins": "*"}, r"/socket.io/*": {"origins": "*"}})
 async_mode = os.getenv("SOCKETIO_ASYNC_MODE", "eventlet").strip().lower() or None
 if async_mode == "eventlet":
-    try:
-        import eventlet  # noqa: F401  # pragma: no cover - optional dependency
-    except ImportError:  # pragma: no cover - exercised in CI where eventlet is absent
-        async_mode = None
+    if sys.platform.startswith("win") and sys.version_info >= (3, 13):
+        async_mode = "threading"
+    else:
+        try:
+            import eventlet  # noqa: F401  # pragma: no cover - optional dependency
+        except Exception:  # pragma: no cover - fallback when eventlet is unavailable/incompatible
+            async_mode = "threading"
 
 socketio = SocketIO(app, cors_allowed_origins="*", async_mode=async_mode)
 
