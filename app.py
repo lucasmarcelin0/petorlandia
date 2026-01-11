@@ -2160,6 +2160,45 @@ def _serialize_message_threads(mensagens):
         threads.values(), key=lambda thread: thread["last_message_dt"], reverse=True
     )
 
+
+def _user_initials_from_name(full_name: Optional[str]) -> str:
+    """Return a compact set of initials for display-only contexts.
+
+    The function gracefully handles single-word names, multi-word names and
+    missing values while ensuring the returned value is always uppercase.
+    """
+
+    if not full_name:
+        return "?"
+
+    parts = [part for part in full_name.strip().split() if part]
+    if not parts:
+        return "?"
+
+    if len(parts) == 1:
+        return parts[0][:2].upper()
+
+    return (parts[0][0] + parts[-1][0]).upper()
+
+
+def _build_user_avatar_map(users: Iterable["User"]) -> Dict[int, Dict[str, str]]:
+    """Prepare avatar payloads (photo + initials) keyed by user id."""
+
+    avatar_map: Dict[int, Dict[str, str]] = {}
+    for user in users:
+        if not user or getattr(user, "id", None) is None:
+            continue
+
+        if user.id in avatar_map:
+            continue
+
+        avatar_map[user.id] = {
+            "photo": getattr(user, "profile_photo", None),
+            "initials": _user_initials_from_name(getattr(user, "name", None)),
+        }
+
+    return avatar_map
+
     for thread in sorted_threads:
         thread.pop("last_message_dt", None)
 
