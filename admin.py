@@ -524,13 +524,25 @@ from flask import url_for
 
 class AnimalAdminView(MyModelView):
     form_extra_fields = {
-        'image_upload': FileField('Imagem')
+        'image_upload': FileField('Imagem'),
+        'modo': SelectField(
+            'Modo',
+            choices=[
+                ('', 'Não disponível'),
+                ('venda', 'Venda'),
+                ('doação', 'Adoção'),
+                ('doacao', 'Adoção (sem acento)'),
+                ('adotado', 'Adotado'),
+                ('perdido', 'Perdido'),
+            ],
+            description='Valores "adotado" e "perdido" são tratados como não disponível.'
+        ),
     }
 
     column_list = (
         'image', 'name', 'species.name', 'breed.name', 'age', 'peso',
-        'date_of_birth', 'sex', 'status', 'clinica', 'date_added',
-        'added_by'
+        'date_of_birth', 'sex', 'status', 'modo', 'price', 'clinica',
+        'date_added', 'added_by'
     )
 
     column_labels = {
@@ -540,12 +552,15 @@ class AnimalAdminView(MyModelView):
         'date_of_birth': 'Nascimento',
         'peso': 'Peso (kg)',
         'added_by': 'Criado por',
-        'date_added': 'Registrado em'
+        'date_added': 'Registrado em',
+        'modo': 'Modo',
+        'price': 'Preço (R$)'
     }
 
     form_columns = (
         'name', 'species', 'breed', 'age', 'peso', 'date_of_birth',
-        'sex', 'status', 'clinica', 'added_by', 'image_upload'
+        'sex', 'status', 'modo', 'price', 'clinica', 'added_by',
+        'image_upload'
     )
 
     def on_model_change(self, form, model, is_created):
@@ -576,12 +591,21 @@ class AnimalAdminView(MyModelView):
         'status': lambda v, c, m, p: Markup(
             f'<span class="badge bg-{"success" if m.status == "disponível" else "secondary"}">{m.status}</span>'
         ),
-        'added_by': lambda v, c, m, p: m.added_by.name if m.added_by else '—'
+        'added_by': lambda v, c, m, p: m.added_by.name if m.added_by else '—',
+        'modo': lambda v, c, m, p: Markup(
+            '<span class="badge bg-{}">{}</span>'.format(
+                'success' if m.modo == 'venda' else 'info' if m.modo in ('doação', 'doacao') else 'secondary',
+                'Venda' if m.modo == 'venda' else 'Adoção' if m.modo in ('doação', 'doacao') else 'Não disponível'
+            )
+        )
     }
 
     # 🔧 Atualizado para apontar para atributos relacionados
     column_searchable_list = ('name', 'breed.name', 'species.name')
-    column_filters = ('species.name', 'breed.name', 'sex', 'status', 'clinica', 'date_added')
+    column_filters = (
+        'species.name', 'breed.name', 'sex', 'status', 'modo', 'clinica',
+        'date_added'
+    )
 
     column_sortable_list = ('name', 'date_added')
     column_default_sort = ('date_added', True)
