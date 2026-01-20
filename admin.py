@@ -524,7 +524,19 @@ from flask import url_for
 
 class AnimalAdminView(MyModelView):
     form_extra_fields = {
-        'image_upload': FileField('Imagem')
+        'image_upload': FileField('Imagem'),
+        'modo': SelectField(
+            'Modo',
+            choices=[
+                ('', 'Não disponível'),
+                ('venda', 'Venda'),
+                ('doação', 'Adoção'),
+                ('doacao', 'Adoção (sem acento)'),
+                ('adotado', 'Adotado'),
+                ('perdido', 'Perdido'),
+            ],
+            description='Valores "adotado" e "perdido" são tratados como não disponível.'
+        ),
     }
 
     column_list = (
@@ -582,8 +594,8 @@ class AnimalAdminView(MyModelView):
         'added_by': lambda v, c, m, p: m.added_by.name if m.added_by else '—',
         'modo': lambda v, c, m, p: Markup(
             '<span class="badge bg-{}">{}</span>'.format(
-                'success' if m.modo == 'venda' else 'info' if m.modo == 'doacao' else 'secondary',
-                'Venda' if m.modo == 'venda' else 'Adoção' if m.modo == 'doacao' else 'Não disponível'
+                'success' if m.modo == 'venda' else 'info' if m.modo in ('doação', 'doacao') else 'secondary',
+                'Venda' if m.modo == 'venda' else 'Adoção' if m.modo in ('doação', 'doacao') else 'Não disponível'
             )
         )
     }
