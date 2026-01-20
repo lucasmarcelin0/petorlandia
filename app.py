@@ -105,10 +105,13 @@ app.config.update(SESSION_PERMANENT=True, SESSION_TYPE="filesystem")
 CORS(app, resources={r"/surpresa*": {"origins": "*"}, r"/socket.io/*": {"origins": "*"}})
 async_mode = os.getenv("SOCKETIO_ASYNC_MODE", "eventlet").strip().lower() or None
 if async_mode == "eventlet":
-    try:
-        import eventlet  # noqa: F401  # pragma: no cover - optional dependency
-    except ImportError:  # pragma: no cover - exercised in CI where eventlet is absent
-        async_mode = None
+    if sys.platform.startswith("win") and sys.version_info >= (3, 13):
+        async_mode = "threading"
+    else:
+        try:
+            import eventlet  # noqa: F401  # pragma: no cover - optional dependency
+        except Exception:  # pragma: no cover - fallback when eventlet is unavailable/incompatible
+            async_mode = "threading"
 
 socketio = SocketIO(app, cors_allowed_origins="*", async_mode=async_mode)
 
@@ -7297,6 +7300,13 @@ def ficha_animal(animal_id):
             .order_by(Vacina.aplicada_em.desc())
             .all()
         )
+        proxima_vacina = (
+            Vacina.query.filter_by(animal_id=animal.id, aplicada=False)
+            .filter(Vacina.aplicada_em.isnot(None))
+            .filter(Vacina.aplicada_em >= date.today())
+            .order_by(Vacina.aplicada_em)
+            .first()
+        )
         doses_atrasadas = (
             Vacina.query.filter_by(animal_id=animal.id, aplicada=False)
             .filter(Vacina.aplicada_em < date.today())
@@ -7308,6 +7318,7 @@ def ficha_animal(animal_id):
             'blocos_prescricao': blocos_prescricao,
             'blocos_exames': blocos_exames,
             'vacinas_aplicadas': vacinas_aplicadas,
+            'proxima_vacina': proxima_vacina,
             'doses_atrasadas': doses_atrasadas,
         }
 
@@ -12149,6 +12160,14 @@ def salvar_prescricoes_lote(consulta_id):
 
 @app.route('/consulta/<int:consulta_id>/bloco_prescricao', methods=['POST'])
 @login_required
+def _normalizar_instrucoes_prescricao(texto):
+    if not texto:
+        return ''
+    if not isinstance(texto, str):
+        texto = str(texto)
+    return texto.replace('\r\n', '\n').replace('\r', '\n').strip()
+
+
 def salvar_bloco_prescricao(consulta_id):
     consulta = get_consulta_or_404(consulta_id)
 
@@ -12156,11 +12175,12 @@ def salvar_bloco_prescricao(consulta_id):
         return jsonify({'success': False, 'message': 'Apenas veterinários podem prescrever.'}), 403
 
     dados = request.get_json(silent=True) or {}
-    lista_prescricoes = dados.get('prescricoes')
-    instrucoes = dados.get('instrucoes_gerais')  # 🟢 AQUI você precisa pegar o campo
+    lista_prescricoes = dados.get('prescricoes') or []
+    instrucoes = _normalizar_instrucoes_prescricao(dados.get('instrucoes_gerais'))
+    instrucoes_texto = instrucoes
 
-    if not lista_prescricoes:
-        return jsonify({'success': False, 'message': 'Nenhuma prescrição recebida.'}), 400
+    if not lista_prescricoes and not instrucoes_texto.strip():
+        return jsonify({'success': False, 'message': 'Informe ao menos uma prescrição ou instruções gerais.'}), 400
 
     clinic_id = (
         consulta.clinica_id
@@ -12274,7 +12294,7 @@ def atualizar_bloco_prescricao(bloco_id):
 
     data = request.get_json(silent=True) or {}
     novos_medicamentos = data.get('medicamentos', [])
-    instrucoes = data.get('instrucoes_gerais')
+    instrucoes = _normalizar_instrucoes_prescricao(data.get('instrucoes_gerais'))
 
     # Limpa os medicamentos atuais do bloco
     for p in bloco.prescricoes:
