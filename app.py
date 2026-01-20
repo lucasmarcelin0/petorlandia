@@ -7300,6 +7300,13 @@ def ficha_animal(animal_id):
             .order_by(Vacina.aplicada_em.desc())
             .all()
         )
+        proxima_vacina = (
+            Vacina.query.filter_by(animal_id=animal.id, aplicada=False)
+            .filter(Vacina.aplicada_em.isnot(None))
+            .filter(Vacina.aplicada_em >= date.today())
+            .order_by(Vacina.aplicada_em)
+            .first()
+        )
         doses_atrasadas = (
             Vacina.query.filter_by(animal_id=animal.id, aplicada=False)
             .filter(Vacina.aplicada_em < date.today())
@@ -7311,6 +7318,7 @@ def ficha_animal(animal_id):
             'blocos_prescricao': blocos_prescricao,
             'blocos_exames': blocos_exames,
             'vacinas_aplicadas': vacinas_aplicadas,
+            'proxima_vacina': proxima_vacina,
             'doses_atrasadas': doses_atrasadas,
         }
 

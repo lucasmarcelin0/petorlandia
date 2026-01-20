@@ -97,6 +97,23 @@
       </h2>
       <div id="collapseVacinas" class="accordion-collapse collapse" aria-labelledby="headingVacinas" data-bs-parent="#historicoAccordion">
         <div class="accordion-body">
+          {% if proxima_vacina %}
+            <div class="alert alert-info d-flex flex-column flex-md-row align-items-start align-items-md-center justify-content-between gap-2">
+              <div>
+                <strong>📅 Próxima dose</strong>
+                <div class="text-muted small">
+                  {{ proxima_vacina.nome }}
+                  {% if proxima_vacina.tipo %} — {{ proxima_vacina.tipo }}{% endif %}
+                </div>
+              </div>
+              <span class="badge bg-primary">
+                {{ proxima_vacina.aplicada_em|format_datetime_brazil('%d/%m/%Y') if proxima_vacina.aplicada_em else 'Data não informada' }}
+              </span>
+            </div>
+          {% else %}
+            <p class="text-muted small mb-3">📅 Próxima dose: nenhuma agendada.</p>
+          {% endif %}
+
           <h6 class="text-muted">💉 Doses Atrasadas</h6>
           {% if doses_atrasadas %}
             <ul class="list-group mb-2">
