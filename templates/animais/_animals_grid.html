@@ -103,7 +103,12 @@
               </a>
               {% endif %}
 
-              {% if current_user.worker in ['veterinario', 'colaborador'] or animal.owner == current_user %}
+              {% if animal.owner == current_user %}
+              <a href="{{ url_for('ficha_animal', animal_id=animal.id) }}"
+                class="btn btn-outline-success btn-sm rounded-pill">
+                📋 Ver Ficha
+              </a>
+              {% elif current_user.worker in ['veterinario', 'colaborador'] or animal.owner != current_user %}
               <button class="btn btn-outline-success btn-sm rounded-pill" data-bs-toggle="modal"
                 data-bs-target="#modalFicha{{ animal.id }}">
                 📋 Ver Ficha
