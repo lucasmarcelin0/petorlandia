@@ -1,7 +1,7 @@
 {% if animals %}
 <div class="row row-cols-1 row-cols-md-2 row-cols-lg-3 g-4">
   {% for animal in animals %}
-    {% if modo != 'adotado' and animal.modo == 'adotado' and current_user.worker not in ['veterinario', 'colaborador'] %}
+    {% if modo != 'adotado' and animal.modo == 'adotado' and current_user.worker not in ['veterinario', 'colaborador'] and animal.owner != current_user %}
       {# pula esse animal #}
     {% else %}
       {# renderiza normalmente #}
