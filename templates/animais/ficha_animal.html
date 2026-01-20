@@ -138,14 +138,16 @@
             {% endif %}
           </div>
         </div>
-        <div class="d-flex flex-column gap-3 w-100 w-md-auto">
-          <div class="d-flex flex-column gap-2">
-            <div class="text-muted small text-uppercase fw-semibold">Acesso ao tutor</div>
-            <a href="{{ url_for('ficha_tutor', tutor_id=tutor.id) }}" class="btn btn-primary w-100">
-              <i class="bi bi-journal-richtext me-2"></i>Ver ficha do tutor
-            </a>
+        {% if current_user.role == 'admin' or current_user.worker in ['veterinario', 'colaborador'] %}
+          <div class="d-flex flex-column gap-3 w-100 w-md-auto">
+            <div class="d-flex flex-column gap-2">
+              <div class="text-muted small text-uppercase fw-semibold">Acesso ao tutor</div>
+              <a href="{{ url_for('ficha_tutor', tutor_id=tutor.id) }}" class="btn btn-primary w-100">
+                <i class="bi bi-journal-richtext me-2"></i>Ver ficha do tutor
+              </a>
+            </div>
           </div>
-        </div>
+        {% endif %}
       </div>
 
       {% if current_user.worker == 'veterinario' %}
