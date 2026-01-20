@@ -5733,16 +5733,16 @@ def list_animals():
             else:
                 query = query.filter(Animal.modo.in_(allowed))
         elif not show_all and not collaborator:
-            # Para usuários comuns e não colaboradores: mostrar animais não adotados OU animais próprios
+            # Para usuários comuns e não colaboradores: mostrar animais à venda/doação ou próprios
             if current_user.is_authenticated:
                 query = query.filter(
                     or_(
-                        Animal.modo != 'adotado',
-                        Animal.user_id == current_user.id
+                        Animal.user_id == current_user.id,
+                        Animal.modo.in_(["venda", "doação"])
                     )
                 )
             else:
-                query = query.filter(Animal.modo != 'adotado')
+                query = query.filter(Animal.modo.in_(["venda", "doação"]))
 
     if species_id:
         query = query.filter_by(species_id=species_id)
