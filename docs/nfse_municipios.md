@@ -53,3 +53,11 @@
    - regras de campos obrigatórios,
    - listas de serviços, alíquotas e retenções.
 4. Substituir os campos “**a confirmar**” deste documento com as informações oficiais.
+
+## 5) Modelagem de dados e relacionamento com Clinica
+
+As tabelas de NFS-e são relacionais e referenciam a clínica emissora via `clinica_id`:
+
+- **`nfse_issues`**: registro principal por emissão (RPS/NFS-e), com status, protocolo, dados de tomador/prestador, valores e campos de cancelamento/substituição. Relaciona-se com `Clinica` por `clinica_id`.
+- **`nfse_events`**: histórico de eventos por NFS-e (ex.: envio, autorização, cancelamento), com `nfse_issue_id` e `clinica_id` para vincular ao registro principal e à clínica.
+- **`nfse_xmls`**: armazenamento de XMLs de envio/retorno por emissão, vinculados a `nfse_issue_id` e `clinica_id` para rastreabilidade completa da clínica e da nota.
