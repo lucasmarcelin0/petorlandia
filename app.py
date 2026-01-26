@@ -76,8 +76,17 @@ from models import (
     DataShareRequest,
     PlantonistaEscala,
     PlantaoModelo,
+    NfseIssue,
+    NfseXml,
     User,
     Veterinario,
+)
+from services.nfse_queue import (
+    ensure_nfse_issue_for_consulta,
+    process_nfse_issue,
+    process_nfse_queue,
+    queue_nfse_issue,
+    should_emit_async,
 )
 _config_utils_module_name = (
     f"{__package__}.config_utils" if __package__ else "config_utils"
@@ -5194,6 +5203,196 @@ def contabilidade_obrigacoes():
     )
 
 
+@app.route('/contabilidade/nfse')
+@login_required
+def contabilidade_nfse():
+    _ensure_accounting_access()
+    clinics, accessible_ids = _accounting_accessible_clinics()
+
+    requested_id = request.args.get('clinica_id', type=int)
+    selected_clinic = _select_accounting_clinic(
+        clinics,
+        accessible_ids,
+        requested_clinic_id=requested_id,
+    )
+    selected_clinic_id = selected_clinic.id if selected_clinic else None
+
+    status_filter = (request.args.get('status') or '').strip().lower()
+    issues = []
+    queue_count = 0
+    pdf_issue_ids: set[int] = set()
+    if selected_clinic_id:
+        query = NfseIssue.query.filter_by(clinica_id=selected_clinic_id)
+        if status_filter:
+            query = query.filter(NfseIssue.status == status_filter)
+        issues = query.order_by(NfseIssue.created_at.desc()).limit(200).all()
+        queue_count = (
+            NfseIssue.query
+            .filter_by(clinica_id=selected_clinic_id, status="fila")
+            .count()
+        )
+        if issues:
+            issue_ids = [issue.id for issue in issues]
+            pdf_issue_ids = {
+                row.nfse_issue_id
+                for row in (
+                    NfseXml.query
+                    .filter(NfseXml.nfse_issue_id.in_(issue_ids))
+                    .filter(NfseXml.tipo.ilike("%pdf%"))
+                    .all()
+                )
+            }
+
+    statuses = [
+        "fila",
+        "processando",
+        "pendente",
+        "autorizado",
+        "erro",
+        "cancelada",
+        "cancelamento_solicitado",
+    ]
+
+    return render_template(
+        'contabilidade/nfse.html',
+        clinics=clinics,
+        selected_clinic=selected_clinic,
+        issues=issues,
+        statuses=statuses,
+        status_filter=status_filter,
+        queue_count=queue_count,
+        pdf_issue_ids=pdf_issue_ids,
+        async_enabled=bool(selected_clinic and should_emit_async(selected_clinic.municipio_nfse or "")),
+    )
+
+
+@app.route('/contabilidade/nfse/emitir', methods=['POST'])
+@login_required
+def contabilidade_nfse_emitir():
+    _ensure_accounting_access()
+    consulta_id = request.form.get('consulta_id', type=int)
+    if not consulta_id:
+        flash('Informe a consulta para emitir a NFS-e.', 'warning')
+        return redirect(url_for('contabilidade_nfse'))
+
+    consulta = Consulta.query.get_or_404(consulta_id)
+    _, accessible_ids = _accounting_accessible_clinics()
+    if consulta.clinica_id not in accessible_ids:
+        abort(403)
+
+    issue = ensure_nfse_issue_for_consulta(consulta)
+    if not issue:
+        flash('A clínica não possui município NFS-e configurado.', 'warning')
+        return redirect(url_for('contabilidade_nfse', clinica_id=consulta.clinica_id))
+
+    payload = {"consulta_id": consulta.id}
+    try:
+        if should_emit_async(consulta.clinica.municipio_nfse or ""):
+            queue_nfse_issue(issue, "Emissão solicitada manualmente.", payload)
+            flash('Emissão adicionada à fila.', 'success')
+        else:
+            process_nfse_issue(issue, payload)
+            flash('Emissão iniciada com sucesso.', 'success')
+    except Exception as exc:  # noqa: BLE001
+        queue_nfse_issue(
+            issue,
+            "Falha ao emitir; reprocessamento manual necessário.",
+            {"erro": str(exc), **payload},
+        )
+        flash('Falha ao emitir. A solicitação foi enfileirada para reprocessamento.', 'warning')
+
+    return redirect(url_for('contabilidade_nfse', clinica_id=consulta.clinica_id))
+
+
+@app.route('/contabilidade/nfse/processar_fila', methods=['POST'])
+@login_required
+def contabilidade_nfse_processar_fila():
+    _ensure_accounting_access()
+    clinic_id = request.form.get('clinica_id', type=int)
+    limit = request.form.get('limit', type=int) or 10
+    _, accessible_ids = _accounting_accessible_clinics()
+    if clinic_id and clinic_id not in accessible_ids:
+        abort(403)
+
+    result = process_nfse_queue(clinica_id=clinic_id, limit=limit)
+    if result.processed:
+        flash(f'Fila processada: {result.processed} emissão(ões) enviadas.', 'success')
+    if result.failed:
+        flash(f'{result.failed} emissão(ões) falharam. Verifique os detalhes.', 'warning')
+
+    return redirect(url_for('contabilidade_nfse', clinica_id=clinic_id))
+
+
+@app.route('/contabilidade/nfse/<int:issue_id>/reprocessar', methods=['POST'])
+@login_required
+def contabilidade_nfse_reprocessar(issue_id):
+    _ensure_accounting_access()
+    issue = NfseIssue.query.get_or_404(issue_id)
+    _, accessible_ids = _accounting_accessible_clinics()
+    if issue.clinica_id not in accessible_ids:
+        abort(403)
+
+    payload = {"issue_id": issue.id, "manual": True}
+    try:
+        if should_emit_async(issue.clinica.municipio_nfse or ""):
+            queue_nfse_issue(issue, "Reprocessamento manual solicitado.", payload)
+            flash('Emissão retornou para a fila.', 'success')
+        else:
+            process_nfse_issue(issue, payload)
+            flash('Reprocessamento iniciado.', 'success')
+    except Exception as exc:  # noqa: BLE001
+        queue_nfse_issue(
+            issue,
+            "Falha ao reprocessar; retornou para fila.",
+            {"erro": str(exc), **payload},
+        )
+        flash('Falha ao reprocessar. A emissão voltou para fila.', 'warning')
+
+    return redirect(url_for('contabilidade_nfse', clinica_id=issue.clinica_id))
+
+
+@app.route('/contabilidade/nfse/<int:issue_id>/download/<string:kind>')
+@login_required
+def contabilidade_nfse_download(issue_id, kind):
+    _ensure_accounting_access()
+    issue = NfseIssue.query.get_or_404(issue_id)
+    _, accessible_ids = _accounting_accessible_clinics()
+    if issue.clinica_id not in accessible_ids:
+        abort(403)
+
+    kind = kind.lower()
+    if kind == "xml":
+        xml_record = (
+            NfseXml.query
+            .filter_by(nfse_issue_id=issue.id)
+            .order_by(NfseXml.created_at.desc())
+            .first()
+        )
+        xml_content = xml_record.xml if xml_record else (issue.xml_retorno or issue.xml_envio)
+        if not xml_content:
+            abort(404)
+        response = make_response(xml_content)
+        response.headers["Content-Type"] = "application/xml"
+        response.headers["Content-Disposition"] = f"attachment; filename=nfse-{issue.id}.xml"
+        return response
+    if kind == "pdf":
+        pdf_record = (
+            NfseXml.query
+            .filter(NfseXml.nfse_issue_id == issue.id)
+            .filter(NfseXml.tipo.ilike("%pdf%"))
+            .order_by(NfseXml.created_at.desc())
+            .first()
+        )
+        if not pdf_record:
+            abort(404)
+        response = make_response(pdf_record.xml)
+        response.headers["Content-Type"] = "application/pdf"
+        response.headers["Content-Disposition"] = f"attachment; filename=nfse-{issue.id}.pdf"
+        return response
+
+    abort(404)
+
+
 @app.route('/service-worker.js')
 def service_worker():
     return send_from_directory(app.static_folder, 'service-worker.js')
@@ -7857,6 +8056,34 @@ def finalizar_consulta(consulta_id):
         content=resumo,
     )
     db.session.add(msg)
+
+    nfse_issue = ensure_nfse_issue_for_consulta(consulta)
+    if nfse_issue and nfse_issue.status in {None, "fila", "erro", "reprocessar"}:
+        nfse_payload = {
+            "consulta_id": consulta.id,
+            "animal_id": consulta.animal_id,
+            "tutor_id": consulta.animal.user_id,
+        }
+        try:
+            if should_emit_async(consulta.clinica.municipio_nfse or ""):
+                queue_nfse_issue(
+                    nfse_issue,
+                    "Consulta finalizada; emissão aguardando processamento assíncrono.",
+                    nfse_payload,
+                )
+            else:
+                process_nfse_issue(nfse_issue, nfse_payload)
+        except Exception as exc:  # noqa: BLE001 - não interromper o fluxo da consulta
+            queue_nfse_issue(
+                nfse_issue,
+                "Falha ao emitir automaticamente; reprocessamento necessário.",
+                {"erro": str(exc), **nfse_payload},
+            )
+            current_app.logger.exception(
+                "Falha ao emitir NFS-e da consulta %s.",
+                consulta.id,
+                exc_info=exc,
+            )
 
     if appointment:
         db.session.commit()

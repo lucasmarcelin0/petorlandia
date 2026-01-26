@@ -67,3 +67,8 @@ class Config:
 
     INSURER_PORTAL_TOKEN = os.environ.get("INSURER_PORTAL_TOKEN", "petorlandia-insurer")
 
+    NFSE_ASYNC_MUNICIPIOS = [
+        item.strip()
+        for item in os.environ.get("NFSE_ASYNC_MUNICIPIOS", "orlandia,belo horizonte").split(",")
+        if item.strip()
+    ]
