@@ -14395,10 +14395,15 @@ def _mercadopago_notification_url() -> str:
         )
 
     preferred_scheme = current_app.config.get('PREFERRED_URL_SCHEME')
+    forwarded_proto = (request.headers.get('X-Forwarded-Proto') or '').split(',')[0].strip()
     url_kwargs = {'_external': True}
     if preferred_scheme:
         url_kwargs['_scheme'] = preferred_scheme
+    elif forwarded_proto in {'http', 'https'}:
+        url_kwargs['_scheme'] = forwarded_proto
     elif request.is_secure:
+        url_kwargs['_scheme'] = 'https'
+    else:
         url_kwargs['_scheme'] = 'https'
 
     return url_for('notificacoes_mercado_pago', **url_kwargs)
