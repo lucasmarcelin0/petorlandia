@@ -54,6 +54,11 @@
    - listas de serviços, alíquotas e retenções.
 4. Substituir os campos “**a confirmar**” deste documento com as informações oficiais.
 
+## 4.1) Evento de negócio para emissão
+
+- **Evento gatilho**: a NFS-e é criada quando a consulta é finalizada (status `finalizada`).
+- A emissão fica em fila e pode ser processada de forma assíncrona dependendo do município configurado.
+
 ## 5) Modelagem de dados e relacionamento com Clinica
 
 As tabelas de NFS-e são relacionais e referenciam a clínica emissora via `clinica_id`:
