@@ -12,14 +12,41 @@ from decimal import Decimal
 import unicodedata
 import enum
 import uuid
-from sqlalchemy import Enum, event, func, case
+from sqlalchemy import Enum, event, func, case, inspect
 from enum import Enum
 from sqlalchemy import Enum as PgEnum
 from sqlalchemy.orm import synonym, object_session, deferred
 from sqlalchemy.ext.hybrid import hybrid_property
 from sqlalchemy.exc import OperationalError, ProgrammingError
+from functools import lru_cache
 from time_utils import utcnow, now_in_brazil
 
+
+@lru_cache(maxsize=1)
+def _clinica_columns() -> set[str]:
+    try:
+        inspector = inspect(db.engine)
+        return {column["name"] for column in inspector.get_columns("clinica")}
+    except Exception:  # noqa: BLE001 - falhar silenciosamente para ambientes sem migration
+        return set()
+
+
+def clinica_has_column(column_name: str) -> bool:
+    return column_name in _clinica_columns()
+
+
+def get_clinica_field(clinica, column_name: str, default=None):
+    if not clinica or not clinica_has_column(column_name):
+        return default
+    try:
+        value = getattr(clinica, column_name)
+    except (OperationalError, ProgrammingError):
+        session = object_session(clinica)
+        if session:
+            session.rollback()
+        _clinica_columns.cache_clear()
+        return default
+    return value if value is not None else default
 
 
 

@@ -72,6 +72,8 @@ try:
         PaymentStatus,
         VeterinarianMembership,
         VeterinarianSettings,
+        clinica_has_column,
+        get_clinica_field,
     )
 except ImportError:
     from .models import (
@@ -112,6 +114,8 @@ except ImportError:
         PaymentStatus,
         VeterinarianMembership,
         VeterinarianSettings,
+        clinica_has_column,
+        get_clinica_field,
     )
 
 
@@ -340,6 +344,26 @@ class ContabilidadeConfigForm(FlaskForm):
                     ok = False
 
         return ok
+
+
+NFSE_FIELD_NAMES = [
+    "municipio_nfse",
+    "inscricao_municipal",
+    "inscricao_estadual",
+    "regime_tributario",
+    "cnae",
+    "codigo_servico",
+    "aliquota_iss",
+    "aliquota_pis",
+    "aliquota_cofins",
+    "aliquota_csll",
+    "aliquota_ir",
+    "nfse_username",
+    "nfse_password",
+    "nfse_cert_path",
+    "nfse_cert_password",
+    "nfse_token",
+]
 
 # ─── Subform de Endereco ----------------------------------------------------
 class EnderecoInlineForm(ModelView):
@@ -637,14 +661,17 @@ class ContabilidadeConfigView(BaseView):
         clinic = Clinica.query.get(selected_id) if selected_id else None
         if clinic:
             form.existing_values = {
-                "nfse_password": clinic.nfse_password,
-                "nfse_cert_password": clinic.nfse_cert_password,
+                "nfse_password": get_clinica_field(clinic, "nfse_password"),
+                "nfse_cert_password": get_clinica_field(clinic, "nfse_cert_password"),
             }
 
         if request.method == 'GET' and clinic:
-            form.process(obj=clinic)
+            clinic_values = {
+                name: get_clinica_field(clinic, name) for name in NFSE_FIELD_NAMES
+            }
+            form.process(data=clinic_values)
             form.clinica_id.data = clinic.id
-            form.municipio_nfse.data = clinic.municipio_nfse or ""
+            form.municipio_nfse.data = clinic_values.get("municipio_nfse") or ""
             form.nfse_password.data = ""
             form.nfse_cert_password.data = ""
 
@@ -654,26 +681,10 @@ class ContabilidadeConfigView(BaseView):
                 flash("Clínica não encontrada.", "danger")
                 return redirect(self.get_url('.index'))
 
-            field_names = [
-                "municipio_nfse",
-                "inscricao_municipal",
-                "inscricao_estadual",
-                "regime_tributario",
-                "cnae",
-                "codigo_servico",
-                "aliquota_iss",
-                "aliquota_pis",
-                "aliquota_cofins",
-                "aliquota_csll",
-                "aliquota_ir",
-                "nfse_username",
-                "nfse_password",
-                "nfse_cert_path",
-                "nfse_cert_password",
-                "nfse_token",
-            ]
             password_fields = {"nfse_password", "nfse_cert_password"}
-            for name in field_names:
+            for name in NFSE_FIELD_NAMES:
+                if not clinica_has_column(name):
+                    continue
                 value = getattr(form, name).data
                 if name in password_fields and not value:
                     continue

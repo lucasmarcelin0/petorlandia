@@ -80,6 +80,7 @@ from models import (
     NfseXml,
     User,
     Veterinario,
+    get_clinica_field,
 )
 from services.nfse_queue import (
     ensure_nfse_issue_for_consulta,
@@ -5268,11 +5269,14 @@ def contabilidade_nfse():
         queue_count=queue_count,
         pdf_issue_ids=pdf_issue_ids,
         cancel_rules=(
-            get_nfse_cancel_rules(selected_clinic.municipio_nfse or "")
+            get_nfse_cancel_rules(get_clinica_field(selected_clinic, "municipio_nfse", ""))
             if selected_clinic
             else None
         ),
-        async_enabled=bool(selected_clinic and should_emit_async(selected_clinic.municipio_nfse or "")),
+        async_enabled=bool(
+            selected_clinic
+            and should_emit_async(get_clinica_field(selected_clinic, "municipio_nfse", ""))
+        ),
     )
 
 
@@ -5297,7 +5301,7 @@ def contabilidade_nfse_emitir():
 
     payload = {"consulta_id": consulta.id}
     try:
-        if should_emit_async(consulta.clinica.municipio_nfse or ""):
+        if should_emit_async(get_clinica_field(consulta.clinica, "municipio_nfse", "")):
             queue_nfse_issue(issue, "Emissão solicitada manualmente.", payload)
             flash('Emissão adicionada à fila.', 'success')
         else:
@@ -5344,7 +5348,7 @@ def contabilidade_nfse_reprocessar(issue_id):
 
     payload = {"issue_id": issue.id, "manual": True}
     try:
-        if should_emit_async(issue.clinica.municipio_nfse or ""):
+        if should_emit_async(get_clinica_field(issue.clinica, "municipio_nfse", "")):
             queue_nfse_issue(issue, "Reprocessamento manual solicitado.", payload)
             flash('Emissão retornou para a fila.', 'success')
         else:
@@ -5372,7 +5376,7 @@ def contabilidade_nfse_cancelar(issue_id):
 
     reason_code = request.form.get('reason_code')
     reason_description = request.form.get('reason_description')
-    rules = get_nfse_cancel_rules(issue.clinica.municipio_nfse or "")
+    rules = get_nfse_cancel_rules(get_clinica_field(issue.clinica, "municipio_nfse", ""))
     errors = validate_nfse_cancel_request(
         issue,
         rules,
@@ -5412,7 +5416,7 @@ def contabilidade_nfse_substituir(issue_id):
     reason_code = request.form.get('reason_code')
     reason_description = request.form.get('reason_description')
     substituida_por_nfse = request.form.get('substituida_por_nfse')
-    rules = get_nfse_cancel_rules(issue.clinica.municipio_nfse or "")
+    rules = get_nfse_cancel_rules(get_clinica_field(issue.clinica, "municipio_nfse", ""))
     errors = validate_nfse_cancel_request(
         issue,
         rules,
@@ -8161,7 +8165,7 @@ def finalizar_consulta(consulta_id):
             "tutor_id": consulta.animal.user_id,
         }
         try:
-            if should_emit_async(consulta.clinica.municipio_nfse or ""):
+            if should_emit_async(get_clinica_field(consulta.clinica, "municipio_nfse", "")):
                 queue_nfse_issue(
                     nfse_issue,
                     "Consulta finalizada; emissão aguardando processamento assíncrono.",
