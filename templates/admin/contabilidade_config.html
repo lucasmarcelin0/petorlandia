@@ -1,0 +1,290 @@
+{% extends 'admin/master.html' %}
+
+{% block body %}
+<div class="container-fluid py-4">
+  <div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-4">
+    <h2 class="h3 mb-0">Configurações Contábeis</h2>
+  </div>
+
+  <div class="row g-4">
+    <div class="col-12 col-lg-8">
+      <div class="card shadow-sm border-0">
+        <div class="card-body">
+          <p class="text-muted mb-4">
+            Preencha os dados fiscais e credenciais da NFS-e. As validações abaixo são aplicadas conforme o município selecionado.
+          </p>
+
+          <form method="post">
+            {{ form.hidden_tag() }}
+
+            <div class="row g-3">
+              <div class="col-12 col-md-6">
+                <label class="form-label" for="clinica_id">{{ form.clinica_id.label }}</label>
+                {{ form.clinica_id(class_='form-select', id='clinica_id') }}
+                {% if form.clinica_id.errors %}
+                  <div class="text-danger small mt-1">
+                    {% for error in form.clinica_id.errors %}
+                      <div>{{ error }}</div>
+                    {% endfor %}
+                  </div>
+                {% endif %}
+              </div>
+              <div class="col-12 col-md-6">
+                <label class="form-label" for="municipio_nfse">{{ form.municipio_nfse.label }}</label>
+                {{ form.municipio_nfse(class_='form-select', id='municipio_nfse') }}
+                {% if form.municipio_nfse.errors %}
+                  <div class="text-danger small mt-1">
+                    {% for error in form.municipio_nfse.errors %}
+                      <div>{{ error }}</div>
+                    {% endfor %}
+                  </div>
+                {% endif %}
+              </div>
+            </div>
+
+            {% if clinic %}
+              <div class="alert alert-light border mt-3 mb-4">
+                <strong>{{ clinic.nome }}</strong>
+                {% if clinic.cnpj %}
+                  <span class="text-muted">• CNPJ {{ clinic.cnpj }}</span>
+                {% endif %}
+              </div>
+            {% endif %}
+
+            <h5 class="mt-4">Inscrições e Regime</h5>
+            <div class="row g-3">
+              <div class="col-12 col-md-6">
+                <label class="form-label" for="inscricao_municipal">{{ form.inscricao_municipal.label }}</label>
+                {{ form.inscricao_municipal(class_='form-control', id='inscricao_municipal') }}
+                {% if form.inscricao_municipal.errors %}
+                  <div class="text-danger small mt-1">
+                    {% for error in form.inscricao_municipal.errors %}
+                      <div>{{ error }}</div>
+                    {% endfor %}
+                  </div>
+                {% endif %}
+              </div>
+              <div class="col-12 col-md-6">
+                <label class="form-label" for="inscricao_estadual">{{ form.inscricao_estadual.label }}</label>
+                {{ form.inscricao_estadual(class_='form-control', id='inscricao_estadual') }}
+                {% if form.inscricao_estadual.errors %}
+                  <div class="text-danger small mt-1">
+                    {% for error in form.inscricao_estadual.errors %}
+                      <div>{{ error }}</div>
+                    {% endfor %}
+                  </div>
+                {% endif %}
+              </div>
+              <div class="col-12 col-md-6">
+                <label class="form-label" for="regime_tributario">{{ form.regime_tributario.label }}</label>
+                {{ form.regime_tributario(class_='form-select', id='regime_tributario') }}
+                {% if form.regime_tributario.errors %}
+                  <div class="text-danger small mt-1">
+                    {% for error in form.regime_tributario.errors %}
+                      <div>{{ error }}</div>
+                    {% endfor %}
+                  </div>
+                {% endif %}
+              </div>
+            </div>
+
+            <h5 class="mt-4">Serviço e CNAE</h5>
+            <div class="row g-3">
+              <div class="col-12 col-md-6">
+                <label class="form-label" for="cnae">{{ form.cnae.label }}</label>
+                {{ form.cnae(class_='form-control', id='cnae', placeholder='0000-0/00') }}
+                {% if form.cnae.errors %}
+                  <div class="text-danger small mt-1">
+                    {% for error in form.cnae.errors %}
+                      <div>{{ error }}</div>
+                    {% endfor %}
+                  </div>
+                {% endif %}
+              </div>
+              <div class="col-12 col-md-6">
+                <label class="form-label" for="codigo_servico">{{ form.codigo_servico.label }}</label>
+                {{ form.codigo_servico(class_='form-control', id='codigo_servico') }}
+                {% if form.codigo_servico.errors %}
+                  <div class="text-danger small mt-1">
+                    {% for error in form.codigo_servico.errors %}
+                      <div>{{ error }}</div>
+                    {% endfor %}
+                  </div>
+                {% endif %}
+              </div>
+            </div>
+
+            <h5 class="mt-4">Alíquotas</h5>
+            <div class="row g-3">
+              <div class="col-12 col-md-4">
+                <label class="form-label" for="aliquota_iss">{{ form.aliquota_iss.label }}</label>
+                {{ form.aliquota_iss(class_='form-control', id='aliquota_iss') }}
+                {% if form.aliquota_iss.errors %}
+                  <div class="text-danger small mt-1">
+                    {% for error in form.aliquota_iss.errors %}
+                      <div>{{ error }}</div>
+                    {% endfor %}
+                  </div>
+                {% endif %}
+              </div>
+              <div class="col-12 col-md-4">
+                <label class="form-label" for="aliquota_pis">{{ form.aliquota_pis.label }}</label>
+                {{ form.aliquota_pis(class_='form-control', id='aliquota_pis') }}
+                {% if form.aliquota_pis.errors %}
+                  <div class="text-danger small mt-1">
+                    {% for error in form.aliquota_pis.errors %}
+                      <div>{{ error }}</div>
+                    {% endfor %}
+                  </div>
+                {% endif %}
+              </div>
+              <div class="col-12 col-md-4">
+                <label class="form-label" for="aliquota_cofins">{{ form.aliquota_cofins.label }}</label>
+                {{ form.aliquota_cofins(class_='form-control', id='aliquota_cofins') }}
+                {% if form.aliquota_cofins.errors %}
+                  <div class="text-danger small mt-1">
+                    {% for error in form.aliquota_cofins.errors %}
+                      <div>{{ error }}</div>
+                    {% endfor %}
+                  </div>
+                {% endif %}
+              </div>
+              <div class="col-12 col-md-4">
+                <label class="form-label" for="aliquota_csll">{{ form.aliquota_csll.label }}</label>
+                {{ form.aliquota_csll(class_='form-control', id='aliquota_csll') }}
+                {% if form.aliquota_csll.errors %}
+                  <div class="text-danger small mt-1">
+                    {% for error in form.aliquota_csll.errors %}
+                      <div>{{ error }}</div>
+                    {% endfor %}
+                  </div>
+                {% endif %}
+              </div>
+              <div class="col-12 col-md-4">
+                <label class="form-label" for="aliquota_ir">{{ form.aliquota_ir.label }}</label>
+                {{ form.aliquota_ir(class_='form-control', id='aliquota_ir') }}
+                {% if form.aliquota_ir.errors %}
+                  <div class="text-danger small mt-1">
+                    {% for error in form.aliquota_ir.errors %}
+                      <div>{{ error }}</div>
+                    {% endfor %}
+                  </div>
+                {% endif %}
+              </div>
+            </div>
+
+            <h5 class="mt-4">Credenciais NFS-e</h5>
+            <div class="row g-3">
+              <div class="col-12 col-md-6">
+                <label class="form-label" for="nfse_username">{{ form.nfse_username.label }}</label>
+                {{ form.nfse_username(class_='form-control', id='nfse_username') }}
+                {% if form.nfse_username.errors %}
+                  <div class="text-danger small mt-1">
+                    {% for error in form.nfse_username.errors %}
+                      <div>{{ error }}</div>
+                    {% endfor %}
+                  </div>
+                {% endif %}
+              </div>
+              <div class="col-12 col-md-6">
+                <label class="form-label" for="nfse_password">{{ form.nfse_password.label }}</label>
+                {{ form.nfse_password(class_='form-control', id='nfse_password', placeholder='••••••') }}
+                {% if form.nfse_password.errors %}
+                  <div class="text-danger small mt-1">
+                    {% for error in form.nfse_password.errors %}
+                      <div>{{ error }}</div>
+                    {% endfor %}
+                  </div>
+                {% endif %}
+              </div>
+              <div class="col-12 col-md-6">
+                <label class="form-label" for="nfse_cert_path">{{ form.nfse_cert_path.label }}</label>
+                {{ form.nfse_cert_path(class_='form-control', id='nfse_cert_path') }}
+                {% if form.nfse_cert_path.errors %}
+                  <div class="text-danger small mt-1">
+                    {% for error in form.nfse_cert_path.errors %}
+                      <div>{{ error }}</div>
+                    {% endfor %}
+                  </div>
+                {% endif %}
+              </div>
+              <div class="col-12 col-md-6">
+                <label class="form-label" for="nfse_cert_password">{{ form.nfse_cert_password.label }}</label>
+                {{ form.nfse_cert_password(class_='form-control', id='nfse_cert_password', placeholder='••••••') }}
+                {% if form.nfse_cert_password.errors %}
+                  <div class="text-danger small mt-1">
+                    {% for error in form.nfse_cert_password.errors %}
+                      <div>{{ error }}</div>
+                    {% endfor %}
+                  </div>
+                {% endif %}
+              </div>
+              <div class="col-12 col-md-6">
+                <label class="form-label" for="nfse_token">{{ form.nfse_token.label }}</label>
+                {{ form.nfse_token(class_='form-control', id='nfse_token') }}
+                {% if form.nfse_token.errors %}
+                  <div class="text-danger small mt-1">
+                    {% for error in form.nfse_token.errors %}
+                      <div>{{ error }}</div>
+                    {% endfor %}
+                  </div>
+                {% endif %}
+              </div>
+            </div>
+
+            <div class="mt-4">
+              {{ form.submit(class_='btn btn-primary') }}
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-12 col-lg-4">
+      <div class="card shadow-sm border-0">
+        <div class="card-body">
+          <h5 class="card-title">Regras por município</h5>
+          <p class="text-muted small">Campos exigidos e formatos mínimos aplicados na validação.</p>
+          <ul class="list-unstyled small mb-0">
+            <li class="mb-3">
+              <strong>Orlândia (SP)</strong>
+              <ul class="mb-0">
+                <li>Inscrição municipal (apenas números)</li>
+                <li>Regime tributário</li>
+                <li>CNAE (0000-0/00 ou 7 dígitos)</li>
+                <li>Código de serviço (3 a 6 dígitos)</li>
+                <li>Alíquota ISS</li>
+                <li>Usuário e senha NFS-e</li>
+              </ul>
+            </li>
+            <li>
+              <strong>Belo Horizonte (MG)</strong>
+              <ul class="mb-0">
+                <li>Inscrição municipal (apenas números)</li>
+                <li>CNAE (0000-0/00 ou 7 dígitos)</li>
+                <li>Código de serviço (4 a 6 dígitos)</li>
+                <li>Certificado e senha</li>
+              </ul>
+            </li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block tail %}
+  {{ super() }}
+  <script>
+    const clinicSelect = document.getElementById('clinica_id');
+    if (clinicSelect) {
+      clinicSelect.addEventListener('change', (event) => {
+        const value = event.target.value;
+        if (value) {
+          window.location.href = `{{ url_for('contabilidadeconfigview.index') }}?clinica_id=${value}`;
+        }
+      });
+    }
+  </script>
+{% endblock %}

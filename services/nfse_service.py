@@ -20,6 +20,7 @@ class NfseCredentials:
     cert_password: Optional[str] = None
     username: Optional[str] = None
     password: Optional[str] = None
+    token: Optional[str] = None
     issuer_cnpj: Optional[str] = None
     issuer_inscricao_municipal: Optional[str] = None
 
@@ -86,15 +87,29 @@ class NfseCredentialProvider:
         clinica_key = str(clinica.id)
         payload = per_municipio.get(clinica_key) or per_municipio.get("default") or {}
         if payload:
-            return NfseCredentials(
+            base_credentials = NfseCredentials(
                 cert_path=payload.get("cert_path"),
                 cert_password=payload.get("cert_password"),
                 username=payload.get("username"),
                 password=payload.get("password"),
+                token=payload.get("token"),
                 issuer_cnpj=payload.get("issuer_cnpj") or clinica.cnpj,
                 issuer_inscricao_municipal=payload.get("issuer_inscricao_municipal"),
             )
-        return _credentials_from_env(clinica, municipio_key)
+        else:
+            base_credentials = _credentials_from_env(clinica, municipio_key)
+
+        return NfseCredentials(
+            cert_path=clinica.nfse_cert_path or base_credentials.cert_path,
+            cert_password=clinica.nfse_cert_password or base_credentials.cert_password,
+            username=clinica.nfse_username or base_credentials.username,
+            password=clinica.nfse_password or base_credentials.password,
+            token=clinica.nfse_token or base_credentials.token,
+            issuer_cnpj=base_credentials.issuer_cnpj or clinica.cnpj,
+            issuer_inscricao_municipal=(
+                clinica.inscricao_municipal or base_credentials.issuer_inscricao_municipal
+            ),
+        )
 
 
 class NfseService:
@@ -381,6 +396,7 @@ def _credentials_from_env(clinica: Clinica, municipio_key: str) -> NfseCredentia
         cert_password=_env("CERT_PASSWORD"),
         username=_env("USERNAME"),
         password=_env("PASSWORD"),
+        token=_env("TOKEN"),
         issuer_cnpj=_env("ISSUER_CNPJ") or clinica.cnpj,
         issuer_inscricao_municipal=_env("ISSUER_IM"),
     )
