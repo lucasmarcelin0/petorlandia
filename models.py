@@ -15,7 +15,7 @@ import uuid
 from sqlalchemy import Enum, event, func, case
 from enum import Enum
 from sqlalchemy import Enum as PgEnum
-from sqlalchemy.orm import synonym, object_session
+from sqlalchemy.orm import synonym, object_session, deferred
 from sqlalchemy.ext.hybrid import hybrid_property
 from sqlalchemy.exc import OperationalError, ProgrammingError
 from time_utils import utcnow, now_in_brazil
@@ -747,22 +747,22 @@ class Clinica(db.Model):
     photo_zoom = db.Column(db.Float, default=1.0)
     photo_offset_x = db.Column(db.Float, default=0.0)
     photo_offset_y = db.Column(db.Float, default=0.0)
-    inscricao_municipal = db.Column(db.String(40))
-    inscricao_estadual = db.Column(db.String(40))
-    regime_tributario = db.Column(db.String(60))
-    cnae = db.Column(db.String(20))
-    codigo_servico = db.Column(db.String(30))
-    aliquota_iss = db.Column(db.Numeric(5, 2))
-    aliquota_pis = db.Column(db.Numeric(5, 2))
-    aliquota_cofins = db.Column(db.Numeric(5, 2))
-    aliquota_csll = db.Column(db.Numeric(5, 2))
-    aliquota_ir = db.Column(db.Numeric(5, 2))
-    municipio_nfse = db.Column(db.String(60))
-    nfse_username = db.Column(db.String(120))
-    nfse_password = db.Column(db.String(120))
-    nfse_cert_path = db.Column(db.String(200))
-    nfse_cert_password = db.Column(db.String(120))
-    nfse_token = db.Column(db.String(200))
+    inscricao_municipal = deferred(db.Column(db.String(40)))
+    inscricao_estadual = deferred(db.Column(db.String(40)))
+    regime_tributario = deferred(db.Column(db.String(60)))
+    cnae = deferred(db.Column(db.String(20)))
+    codigo_servico = deferred(db.Column(db.String(30)))
+    aliquota_iss = deferred(db.Column(db.Numeric(5, 2)))
+    aliquota_pis = deferred(db.Column(db.Numeric(5, 2)))
+    aliquota_cofins = deferred(db.Column(db.Numeric(5, 2)))
+    aliquota_csll = deferred(db.Column(db.Numeric(5, 2)))
+    aliquota_ir = deferred(db.Column(db.Numeric(5, 2)))
+    municipio_nfse = deferred(db.Column(db.String(60)))
+    nfse_username = deferred(db.Column(db.String(120)))
+    nfse_password = deferred(db.Column(db.String(120)))
+    nfse_cert_path = deferred(db.Column(db.String(200)))
+    nfse_cert_password = deferred(db.Column(db.String(120)))
+    nfse_token = deferred(db.Column(db.String(200)))
 
     owner_id = db.Column(db.Integer, db.ForeignKey('user.id'))
     owner = db.relationship('User', backref=db.backref('clinicas', foreign_keys='Clinica.owner_id'), foreign_keys=[owner_id])
