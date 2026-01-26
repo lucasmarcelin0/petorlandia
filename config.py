@@ -72,3 +72,17 @@ class Config:
         for item in os.environ.get("NFSE_ASYNC_MUNICIPIOS", "orlandia,belo horizonte").split(",")
         if item.strip()
     ]
+
+    # Regras de cancelamento/substituição por município (ajuste conforme regras oficiais).
+    NFSE_CANCEL_RULES = {
+        "orlandia": {
+            "deadline_days": int(os.environ.get("NFSE_CANCEL_DEADLINE_ORLANDIA", "30")),
+            "require_reason": True,
+            "allowed_reasons": [],
+        },
+        "belo_horizonte": {
+            "deadline_days": int(os.environ.get("NFSE_CANCEL_DEADLINE_BELO_HORIZONTE", "30")),
+            "require_reason": True,
+            "allowed_reasons": [],
+        },
+    }

@@ -112,6 +112,21 @@
           <button class="btn btn-outline-secondary btn-sm" type="submit">Filtrar</button>
         </form>
       </div>
+      {% if selected_clinic and cancel_rules %}
+        <div class="alert alert-light border small mb-3">
+          <strong>Regras do município:</strong>
+          {% if cancel_rules.deadline_days %}
+            Prazo de cancelamento/substituição: {{ cancel_rules.deadline_days }} dia(s).
+          {% else %}
+            Prazo de cancelamento/substituição: a definir.
+          {% endif %}
+          {% if cancel_rules.require_reason %}
+            Motivo obrigatório.
+          {% else %}
+            Motivo opcional.
+          {% endif %}
+        </div>
+      {% endif %}
 
       {% if selected_clinic %}
       <div class="table-responsive">
@@ -137,7 +152,8 @@
               'autorizado': 'bg-success',
               'erro': 'bg-danger',
               'cancelada': 'bg-dark',
-              'cancelamento_solicitado': 'bg-warning text-dark'
+              'cancelamento_solicitado': 'bg-warning text-dark',
+              'substituicao_solicitada': 'bg-info text-dark'
             }.get(status_value, 'bg-light text-dark') %}
             <tr>
               <td>
@@ -167,6 +183,56 @@
                 <form method="post" action="{{ url_for('contabilidade_nfse_reprocessar', issue_id=issue.id) }}">
                   <button class="btn btn-outline-primary btn-sm" type="submit">Reprocessar</button>
                 </form>
+                {% set can_cancel = issue.numero_nfse and status_value not in ['cancelada', 'cancelamento_solicitado', 'substituicao_solicitada'] %}
+                {% if can_cancel %}
+                <details class="mt-2">
+                  <summary class="small text-primary">Cancelar/Substituir</summary>
+                  <form method="post" action="{{ url_for('contabilidade_nfse_cancelar', issue_id=issue.id) }}" class="mt-2">
+                    <div class="mb-2">
+                      <label class="form-label small text-muted mb-1" for="reason_code_{{ issue.id }}">Motivo</label>
+                      {% if cancel_rules and cancel_rules.allowed_reasons %}
+                        <select id="reason_code_{{ issue.id }}" name="reason_code" class="form-select form-select-sm">
+                          <option value="">Selecione</option>
+                          {% for reason in cancel_rules.allowed_reasons %}
+                            <option value="{{ reason.code }}">{{ reason.label }}</option>
+                          {% endfor %}
+                        </select>
+                      {% else %}
+                        <input id="reason_code_{{ issue.id }}" name="reason_code" class="form-control form-control-sm" placeholder="Código do motivo">
+                      {% endif %}
+                    </div>
+                    <div class="mb-2">
+                      <label class="form-label small text-muted mb-1" for="reason_desc_{{ issue.id }}">Descrição</label>
+                      <input id="reason_desc_{{ issue.id }}" name="reason_description" class="form-control form-control-sm" placeholder="Descrição do motivo">
+                    </div>
+                    <button class="btn btn-outline-danger btn-sm w-100" type="submit">Solicitar cancelamento</button>
+                  </form>
+                  <form method="post" action="{{ url_for('contabilidade_nfse_substituir', issue_id=issue.id) }}" class="mt-3">
+                    <div class="mb-2">
+                      <label class="form-label small text-muted mb-1" for="reason_code_sub_{{ issue.id }}">Motivo</label>
+                      {% if cancel_rules and cancel_rules.allowed_reasons %}
+                        <select id="reason_code_sub_{{ issue.id }}" name="reason_code" class="form-select form-select-sm">
+                          <option value="">Selecione</option>
+                          {% for reason in cancel_rules.allowed_reasons %}
+                            <option value="{{ reason.code }}">{{ reason.label }}</option>
+                          {% endfor %}
+                        </select>
+                      {% else %}
+                        <input id="reason_code_sub_{{ issue.id }}" name="reason_code" class="form-control form-control-sm" placeholder="Código do motivo">
+                      {% endif %}
+                    </div>
+                    <div class="mb-2">
+                      <label class="form-label small text-muted mb-1" for="reason_desc_sub_{{ issue.id }}">Descrição</label>
+                      <input id="reason_desc_sub_{{ issue.id }}" name="reason_description" class="form-control form-control-sm" placeholder="Descrição do motivo">
+                    </div>
+                    <div class="mb-2">
+                      <label class="form-label small text-muted mb-1" for="substituta_{{ issue.id }}">NFS-e substituta</label>
+                      <input id="substituta_{{ issue.id }}" name="substituida_por_nfse" class="form-control form-control-sm" placeholder="Número da nota substituta">
+                    </div>
+                    <button class="btn btn-outline-warning btn-sm w-100" type="submit">Solicitar substituição</button>
+                  </form>
+                </details>
+                {% endif %}
               </td>
             </tr>
             {% else %}

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass
+from datetime import timedelta
 from typing import Any, Optional
 
 from flask import current_app
@@ -17,6 +18,13 @@ class NfseQueueResult:
     processed: int
     failed: int
     errors: list[str]
+
+
+@dataclass
+class NfseCancelRules:
+    deadline_days: Optional[int]
+    require_reason: bool
+    allowed_reasons: list[dict[str, str]]
 
 
 def ensure_nfse_issue_for_consulta(consulta: Consulta) -> Optional[NfseIssue]:
@@ -158,6 +166,119 @@ def should_emit_async(municipio: str) -> bool:
     normalized = _normalize_municipio(municipio)
     configured_normalized = {_normalize_municipio(item) for item in configured}
     return normalized in configured_normalized
+
+
+def get_nfse_cancel_rules(municipio: str) -> NfseCancelRules:
+    config = current_app.config.get("NFSE_CANCEL_RULES", {})
+    normalized = _normalize_municipio(municipio or "")
+    payload = config.get(normalized, {})
+    return NfseCancelRules(
+        deadline_days=payload.get("deadline_days"),
+        require_reason=bool(payload.get("require_reason", False)),
+        allowed_reasons=list(payload.get("allowed_reasons") or []),
+    )
+
+
+def validate_nfse_cancel_request(
+    issue: NfseIssue,
+    rules: NfseCancelRules,
+    reason_code: Optional[str],
+    reason_description: Optional[str],
+    substituicao: bool,
+    substituida_por_nfse: Optional[str],
+) -> list[str]:
+    errors: list[str] = []
+    if issue.status in {"cancelada", "cancelamento_solicitado", "substituicao_solicitada"}:
+        errors.append("A NFS-e já está em cancelamento/substituição.")
+    if not issue.numero_nfse:
+        errors.append("A NFS-e ainda não possui número para cancelamento/substituição.")
+
+    reason_code = (reason_code or "").strip()
+    reason_description = (reason_description or "").strip()
+
+    if rules.require_reason and not (reason_code or reason_description):
+        errors.append("Informe o motivo exigido pelo município.")
+
+    if reason_code and rules.allowed_reasons:
+        allowed_codes = {item.get("code") for item in rules.allowed_reasons}
+        if reason_code not in allowed_codes:
+            errors.append("O motivo informado não é permitido pelo município.")
+
+    if rules.deadline_days:
+        base_date = issue.data_emissao or issue.created_at
+        if base_date:
+            deadline = base_date + timedelta(days=rules.deadline_days)
+            if utcnow() > deadline:
+                errors.append("Prazo de cancelamento/substituição expirado para este município.")
+
+    if substituicao and not (substituida_por_nfse or "").strip():
+        errors.append("Informe o número da NFS-e substituta.")
+
+    return errors
+
+
+def request_nfse_cancel(
+    issue: NfseIssue,
+    reason_code: Optional[str],
+    reason_description: Optional[str],
+    payload: Optional[dict[str, Any]] = None,
+) -> None:
+    municipio = issue.clinica.municipio_nfse if issue.clinica else ""
+    service = NfseService()
+    result = service.cancelar_nfse(issue, payload or {}, municipio)
+    reason_text = _format_nfse_reason(reason_code, reason_description)
+    issue.cancelamento_motivo = reason_text
+    issue.cancelamento_protocolo = result.protocolo or issue.cancelamento_protocolo
+    issue.updated_at = utcnow()
+    db.session.add(issue)
+    _register_nfse_event(
+        issue=issue,
+        event_type="cancelamento_solicitado",
+        status=result.status,
+        descricao=reason_text or "Cancelamento solicitado.",
+        payload={
+            "reason_code": reason_code,
+            "reason_description": reason_description,
+            "protocolo": result.protocolo,
+        },
+    )
+    db.session.commit()
+
+
+def request_nfse_substitution(
+    issue: NfseIssue,
+    reason_code: Optional[str],
+    reason_description: Optional[str],
+    substituida_por_nfse: str,
+    payload: Optional[dict[str, Any]] = None,
+) -> None:
+    reason_text = _format_nfse_reason(reason_code, reason_description)
+    issue.status = "substituicao_solicitada"
+    issue.cancelamento_motivo = reason_text
+    issue.substituida_por_nfse = substituida_por_nfse.strip()
+    issue.updated_at = utcnow()
+    db.session.add(issue)
+    _register_nfse_event(
+        issue=issue,
+        event_type="substituicao_solicitada",
+        status=issue.status,
+        descricao=reason_text or "Substituição solicitada.",
+        payload={
+            "reason_code": reason_code,
+            "reason_description": reason_description,
+            "substituida_por_nfse": substituida_por_nfse,
+            **(payload or {}),
+        },
+    )
+    db.session.commit()
+
+
+def _format_nfse_reason(reason_code: Optional[str], reason_description: Optional[str]) -> str:
+    code = (reason_code or "").strip()
+    description = (reason_description or "").strip()
+    if code and description:
+        return f"{code} - {description}"
+    return description or code
 
 
 def _register_nfse_event(

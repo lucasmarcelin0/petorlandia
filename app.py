@@ -83,10 +83,14 @@ from models import (
 )
 from services.nfse_queue import (
     ensure_nfse_issue_for_consulta,
+    get_nfse_cancel_rules,
     process_nfse_issue,
     process_nfse_queue,
     queue_nfse_issue,
+    request_nfse_cancel,
+    request_nfse_substitution,
     should_emit_async,
+    validate_nfse_cancel_request,
 )
 _config_utils_module_name = (
     f"{__package__}.config_utils" if __package__ else "config_utils"
@@ -5251,6 +5255,7 @@ def contabilidade_nfse():
         "erro",
         "cancelada",
         "cancelamento_solicitado",
+        "substituicao_solicitada",
     ]
 
     return render_template(
@@ -5262,6 +5267,11 @@ def contabilidade_nfse():
         status_filter=status_filter,
         queue_count=queue_count,
         pdf_issue_ids=pdf_issue_ids,
+        cancel_rules=(
+            get_nfse_cancel_rules(selected_clinic.municipio_nfse or "")
+            if selected_clinic
+            else None
+        ),
         async_enabled=bool(selected_clinic and should_emit_async(selected_clinic.municipio_nfse or "")),
     )
 
@@ -5347,6 +5357,92 @@ def contabilidade_nfse_reprocessar(issue_id):
             {"erro": str(exc), **payload},
         )
         flash('Falha ao reprocessar. A emissão voltou para fila.', 'warning')
+
+    return redirect(url_for('contabilidade_nfse', clinica_id=issue.clinica_id))
+
+
+@app.route('/contabilidade/nfse/<int:issue_id>/cancelar', methods=['POST'])
+@login_required
+def contabilidade_nfse_cancelar(issue_id):
+    _ensure_accounting_access()
+    issue = NfseIssue.query.get_or_404(issue_id)
+    _, accessible_ids = _accounting_accessible_clinics()
+    if issue.clinica_id not in accessible_ids:
+        abort(403)
+
+    reason_code = request.form.get('reason_code')
+    reason_description = request.form.get('reason_description')
+    rules = get_nfse_cancel_rules(issue.clinica.municipio_nfse or "")
+    errors = validate_nfse_cancel_request(
+        issue,
+        rules,
+        reason_code,
+        reason_description,
+        substituicao=False,
+        substituida_por_nfse=None,
+    )
+    if errors:
+        flash(" ".join(errors), 'warning')
+        return redirect(url_for('contabilidade_nfse', clinica_id=issue.clinica_id))
+
+    payload = {
+        "issue_id": issue.id,
+        "reason_code": reason_code,
+        "reason_description": reason_description,
+    }
+    try:
+        request_nfse_cancel(issue, reason_code, reason_description, payload)
+        flash('Cancelamento solicitado.', 'success')
+    except Exception as exc:  # noqa: BLE001
+        current_app.logger.exception('Erro ao solicitar cancelamento NFS-e', exc_info=exc)
+        flash('Erro ao solicitar cancelamento. Tente novamente.', 'danger')
+
+    return redirect(url_for('contabilidade_nfse', clinica_id=issue.clinica_id))
+
+
+@app.route('/contabilidade/nfse/<int:issue_id>/substituir', methods=['POST'])
+@login_required
+def contabilidade_nfse_substituir(issue_id):
+    _ensure_accounting_access()
+    issue = NfseIssue.query.get_or_404(issue_id)
+    _, accessible_ids = _accounting_accessible_clinics()
+    if issue.clinica_id not in accessible_ids:
+        abort(403)
+
+    reason_code = request.form.get('reason_code')
+    reason_description = request.form.get('reason_description')
+    substituida_por_nfse = request.form.get('substituida_por_nfse')
+    rules = get_nfse_cancel_rules(issue.clinica.municipio_nfse or "")
+    errors = validate_nfse_cancel_request(
+        issue,
+        rules,
+        reason_code,
+        reason_description,
+        substituicao=True,
+        substituida_por_nfse=substituida_por_nfse,
+    )
+    if errors:
+        flash(" ".join(errors), 'warning')
+        return redirect(url_for('contabilidade_nfse', clinica_id=issue.clinica_id))
+
+    payload = {
+        "issue_id": issue.id,
+        "reason_code": reason_code,
+        "reason_description": reason_description,
+        "substituida_por_nfse": substituida_por_nfse,
+    }
+    try:
+        request_nfse_substitution(
+            issue,
+            reason_code,
+            reason_description,
+            substituida_por_nfse,
+            payload,
+        )
+        flash('Substituição solicitada.', 'success')
+    except Exception as exc:  # noqa: BLE001
+        current_app.logger.exception('Erro ao solicitar substituição NFS-e', exc_info=exc)
+        flash('Erro ao solicitar substituição. Tente novamente.', 'danger')
 
     return redirect(url_for('contabilidade_nfse', clinica_id=issue.clinica_id))
 
