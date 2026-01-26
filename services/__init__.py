@@ -18,3 +18,12 @@ from .health_plan import (  # noqa: F401
     insurer_token_valid,
     summarize_plan_metrics,
 )
+from .nfse_service import (  # noqa: F401
+    BeloHorizonteAdapter,
+    NfseAdapter,
+    NfseCredentialProvider,
+    NfseCredentials,
+    NfseOperationResult,
+    NfseService,
+    OrlandiaAdapter,
+)
