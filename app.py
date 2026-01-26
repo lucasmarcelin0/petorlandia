@@ -14387,7 +14387,12 @@ def _mercadopago_notification_url() -> str:
 
     configured = (current_app.config.get('MERCADOPAGO_NOTIFICATION_URL') or '').strip()
     if configured:
-        return configured
+        parsed = urlparse(configured)
+        if not parsed.scheme:
+            parsed = urlparse(f'https://{configured}')
+        if parsed.scheme and parsed.netloc:
+            return parsed.geturl()
+        raise ValueError('MERCADOPAGO_NOTIFICATION_URL inválida.')
 
     if not has_request_context():
         raise RuntimeError(
@@ -14395,13 +14400,28 @@ def _mercadopago_notification_url() -> str:
         )
 
     preferred_scheme = current_app.config.get('PREFERRED_URL_SCHEME')
-    url_kwargs = {'_external': True}
-    if preferred_scheme:
-        url_kwargs['_scheme'] = preferred_scheme
-    elif request.is_secure:
-        url_kwargs['_scheme'] = 'https'
+    forwarded_proto = (request.headers.get('X-Forwarded-Proto') or '').split(',')[0].strip()
+    forwarded_host = (request.headers.get('X-Forwarded-Host') or '').split(',')[0].strip()
+    host = forwarded_host or request.host
+    if not host:
+        raise ValueError('Host indisponível para montar a URL de notificação.')
 
-    return url_for('notificacoes_mercado_pago', **url_kwargs)
+    if '://' in host:
+        host = urlparse(host).netloc or host
+
+    if preferred_scheme:
+        scheme = preferred_scheme
+    elif forwarded_proto in {'http', 'https'}:
+        scheme = forwarded_proto
+    else:
+        scheme = 'https'
+
+    path = url_for('notificacoes_mercado_pago', _external=False)
+    notification_url = f'{scheme}://{host}{path}'
+    parsed = urlparse(notification_url)
+    if not parsed.scheme or not parsed.netloc:
+        raise ValueError('URL de notificação gerada inválida.')
+    return notification_url
 
 
 def _criar_preferencia_pagamento(items, external_reference: str, back_url: str):
@@ -14420,10 +14440,18 @@ def _criar_preferencia_pagamento(items, external_reference: str, back_url: str):
         })
 
     back_urls = {key: back_url for key in ('success', 'failure', 'pending')}
+    try:
+        notification_url = _mercadopago_notification_url()
+    except ValueError as exc:
+        current_app.logger.error('URL de notificação do Mercado Pago inválida: %s', exc)
+        raise PaymentPreferenceError(
+            'URL de notificação do Mercado Pago inválida. Configure MERCADOPAGO_NOTIFICATION_URL.',
+            status_code=400,
+        ) from exc
     preference_data = {
         'items': normalized_items,
         'external_reference': external_reference,
-        'notification_url': _mercadopago_notification_url(),
+        'notification_url': notification_url,
         'statement_descriptor': current_app.config.get('MERCADOPAGO_STATEMENT_DESCRIPTOR'),
         'back_urls': back_urls,
     }
@@ -15522,10 +15550,17 @@ def checkout():
         s: url_for("payment_status", payment_id=payment.id, _external=True)
         for s in ("success", "failure", "pending")
     }
+    try:
+        notification_url = _mercadopago_notification_url()
+    except ValueError as exc:
+        current_app.logger.error('URL de notificação do Mercado Pago inválida: %s', exc)
+        return respond_error(
+            'URL de notificação do Mercado Pago inválida. Configure MERCADOPAGO_NOTIFICATION_URL.',
+        )
     preference_data = {
         "items": items,
         "external_reference": payment.external_reference,
-        "notification_url":   _mercadopago_notification_url(),
+        "notification_url":   notification_url,
         "payment_methods":    {"installments": 1},
         "statement_descriptor": current_app.config.get("MERCADOPAGO_STATEMENT_DESCRIPTOR"),
         "binary_mode": current_app.config.get("MERCADOPAGO_BINARY_MODE", False),
@@ -19214,10 +19249,19 @@ def pagar_consulta_orcamento(consulta_id):
         s: url_for('consulta_direct', animal_id=consulta.animal_id, _external=True)
         for s in ('success', 'failure', 'pending')
     }
+    try:
+        notification_url = _mercadopago_notification_url()
+    except ValueError as exc:
+        current_app.logger.error('URL de notificação do Mercado Pago inválida: %s', exc)
+        flash(
+            'URL de notificação do Mercado Pago inválida. Configure MERCADOPAGO_NOTIFICATION_URL.',
+            'danger',
+        )
+        return redirect(url_for('consulta_direct', animal_id=consulta.animal_id))
     preference_data = {
         'items': items,
         'external_reference': f'consulta-{consulta.id}',
-        'notification_url': _mercadopago_notification_url(),
+        'notification_url': notification_url,
         'statement_descriptor': current_app.config.get('MERCADOPAGO_STATEMENT_DESCRIPTOR'),
         'back_urls': back_urls,
     }

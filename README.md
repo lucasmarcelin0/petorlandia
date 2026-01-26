@@ -63,12 +63,17 @@ application:
 export MERCADOPAGO_ACCESS_TOKEN="<your access token>"
 export MERCADOPAGO_PUBLIC_KEY="<your public key>"
 export MERCADOPAGO_WEBHOOK_SECRET="<random secret>"
+export MERCADOPAGO_NOTIFICATION_URL="https://www.seudominio.com.br/notificacoes"
 export MERCADOPAGO_STATEMENT_DESCRIPTOR="PETORLANDIA"
 export MERCADOPAGO_BINARY_MODE=0
 ```
 
 `MERCADOPAGO_WEBHOOK_SECRET` **must** be set so webhook signatures can be
 verified. When unset, notifications will be rejected.
+`MERCADOPAGO_NOTIFICATION_URL` must point to a public HTTPS URL that Mercado
+Pago can reach (for example, your production domain). If it is missing or does
+not include a scheme, payment preferences will fail with an invalid notification
+URL error.
 
 These credentials are used when generating checkout preferences and embedding
 payment widgets. Never commit your real keys into version control.
@@ -126,6 +131,5 @@ prontuário eletrônico confiável, agenda compartilhada em tempo real, controle
 financeiros básicos, emissão de documentos e relatórios para a clínica. Mais
 detalhes de como manter estabilidade, segurança e infraestrutura de nuvem estão
 documentados em `docs/gestao_produto.md`.
-
 
 
