@@ -20,6 +20,14 @@
         <p class="text-muted mb-0">
           Evento de negócio: <strong>finalização da consulta</strong> cria uma emissão na fila de NFS-e.
         </p>
+        <div class="mt-3">
+          <h6 class="mb-2">Como emitir (passo a passo)</h6>
+          <ol class="text-muted small mb-0">
+            <li>Selecione a clínica para carregar a fila.</li>
+            <li>Confira se a emissão está na fila e clique em <strong>Processar fila</strong>.</li>
+            <li>Após processar, acompanhe o status e faça o download do PDF/XML.</li>
+          </ol>
+        </div>
       </div>
       {% if clinics %}
       <form method="get" class="ms-lg-auto">
@@ -64,6 +72,11 @@
             </form>
             {% endif %}
           </div>
+          {% if selected_clinic %}
+            <div class="alert alert-info small mt-3 mb-0">
+              Dica: se uma emissão ficar em <strong>erro</strong>, clique em <strong>Reprocessar</strong> para tentar novamente.
+            </div>
+          {% endif %}
         </div>
       </div>
     </div>
@@ -71,7 +84,7 @@
     <div class="col-lg-4">
       <div class="card shadow-sm h-100">
         <div class="card-body">
-          <h6 class="mb-2">Emissão manual</h6>
+          <h6 class="mb-2">Emissão manual (casos pontuais)</h6>
           <p class="text-muted small mb-3">
             Use quando precisar emitir uma NFS-e retroativa para uma consulta já finalizada.
           </p>
@@ -81,6 +94,9 @@
               <input id="consulta_id" name="consulta_id" type="number" class="form-control" placeholder="ID da consulta">
             </div>
             <button class="btn btn-primary w-100" type="submit">Emitir NFS-e</button>
+            <p class="text-muted small mt-2 mb-0">
+              Se não souber o ID, finalize a consulta normalmente para entrar na fila automaticamente.
+            </p>
           </form>
         </div>
       </div>
@@ -244,7 +260,9 @@
         </table>
       </div>
       {% else %}
-        <p class="text-muted mb-0">Selecione uma clínica para visualizar emissões.</p>
+        <div class="alert alert-warning mb-0">
+          Selecione uma clínica para visualizar emissões e processar a fila.
+        </div>
       {% endif %}
     </div>
   </div>
