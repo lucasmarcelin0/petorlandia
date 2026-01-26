@@ -823,6 +823,73 @@ class ClinicStaff(db.Model):
         passive_deletes=True,
     )
 
+
+class NfseIssue(db.Model):
+    __tablename__ = 'nfse_issues'
+    id = db.Column(db.Integer, primary_key=True)
+    clinica_id = db.Column(db.Integer, db.ForeignKey('clinica.id'), nullable=False)
+    internal_identifier = db.Column(db.String(80), nullable=True)
+    rps = db.Column(db.String(50), nullable=True)
+    numero_nfse = db.Column(db.String(50), nullable=True)
+    serie = db.Column(db.String(50), nullable=True)
+    protocolo = db.Column(db.String(80), nullable=True)
+    status = db.Column(db.String(40), nullable=True)
+    data_emissao = db.Column(db.DateTime(timezone=True), nullable=True)
+    valor_total = db.Column(db.Numeric(12, 2), nullable=True)
+    valor_iss = db.Column(db.Numeric(12, 2), nullable=True)
+    tomador = db.Column(db.Text, nullable=True)
+    prestador = db.Column(db.Text, nullable=True)
+    xml_envio = db.Column(db.Text, nullable=True)
+    xml_retorno = db.Column(db.Text, nullable=True)
+    cancelada_em = db.Column(db.DateTime(timezone=True), nullable=True)
+    cancelamento_motivo = db.Column(db.String(255), nullable=True)
+    cancelamento_protocolo = db.Column(db.String(80), nullable=True)
+    substituida_por_nfse = db.Column(db.String(50), nullable=True)
+    substitui_nfse = db.Column(db.String(50), nullable=True)
+    erro_codigo = db.Column(db.String(50), nullable=True)
+    erro_mensagem = db.Column(db.Text, nullable=True)
+    erro_detalhes = db.Column(db.Text, nullable=True)
+    erro_em = db.Column(db.DateTime(timezone=True), nullable=True)
+    created_at = db.Column(db.DateTime(timezone=True), default=utcnow)
+    updated_at = db.Column(db.DateTime(timezone=True), default=utcnow, onupdate=utcnow)
+
+    clinica = db.relationship('Clinica', backref=db.backref('nfse_issues', cascade='all, delete-orphan'))
+    eventos = db.relationship('NfseEvent', back_populates='nfse_issue', cascade='all, delete-orphan')
+    xmls = db.relationship('NfseXml', back_populates='nfse_issue', cascade='all, delete-orphan')
+
+
+class NfseEvent(db.Model):
+    __tablename__ = 'nfse_events'
+    id = db.Column(db.Integer, primary_key=True)
+    clinica_id = db.Column(db.Integer, db.ForeignKey('clinica.id'), nullable=False)
+    nfse_issue_id = db.Column(db.Integer, db.ForeignKey('nfse_issues.id'), nullable=False)
+    event_type = db.Column(db.String(50), nullable=False)
+    status = db.Column(db.String(40), nullable=True)
+    protocolo = db.Column(db.String(80), nullable=True)
+    descricao = db.Column(db.Text, nullable=True)
+    payload = db.Column(db.Text, nullable=True)
+    data_evento = db.Column(db.DateTime(timezone=True), default=utcnow)
+
+    clinica = db.relationship('Clinica', backref=db.backref('nfse_events', cascade='all, delete-orphan'))
+    nfse_issue = db.relationship('NfseIssue', back_populates='eventos')
+
+
+class NfseXml(db.Model):
+    __tablename__ = 'nfse_xmls'
+    id = db.Column(db.Integer, primary_key=True)
+    clinica_id = db.Column(db.Integer, db.ForeignKey('clinica.id'), nullable=False)
+    nfse_issue_id = db.Column(db.Integer, db.ForeignKey('nfse_issues.id'), nullable=False)
+    rps = db.Column(db.String(50), nullable=True)
+    numero_nfse = db.Column(db.String(50), nullable=True)
+    serie = db.Column(db.String(50), nullable=True)
+    tipo = db.Column(db.String(30), nullable=False)
+    protocolo = db.Column(db.String(80), nullable=True)
+    xml = db.Column(db.Text, nullable=False)
+    created_at = db.Column(db.DateTime(timezone=True), default=utcnow)
+
+    clinica = db.relationship('Clinica', backref=db.backref('nfse_xmls', cascade='all, delete-orphan'))
+    nfse_issue = db.relationship('NfseIssue', back_populates='xmls')
+
 # Convites para que veterinários se associem a uma clínica
 class VetClinicInvite(db.Model):
     __tablename__ = 'vet_clinic_invite'
@@ -2164,4 +2231,3 @@ def _format_age_label(number, unit):
     else:
         suffix = 'ano' if number == 1 else 'anos'
     return f"{number} {suffix}"
-
