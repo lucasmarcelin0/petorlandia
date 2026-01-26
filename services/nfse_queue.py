@@ -8,7 +8,7 @@ from typing import Any, Optional
 from flask import current_app
 
 from extensions import db
-from models import Consulta, NfseEvent, NfseIssue
+from models import Consulta, NfseEvent, NfseIssue, get_clinica_field
 from services.nfse_service import NfseService, _normalize_municipio
 from time_utils import utcnow
 
@@ -28,7 +28,8 @@ class NfseCancelRules:
 
 
 def ensure_nfse_issue_for_consulta(consulta: Consulta) -> Optional[NfseIssue]:
-    if not consulta.clinica or not consulta.clinica.municipio_nfse:
+    municipio = get_clinica_field(consulta.clinica, "municipio_nfse", "")
+    if not consulta.clinica or not municipio:
         return None
 
     internal_identifier = f"consulta:{consulta.id}"
@@ -93,7 +94,8 @@ def queue_nfse_issue(issue: NfseIssue, reason: str, payload: Optional[dict[str, 
 
 
 def process_nfse_issue(issue: NfseIssue, payload: Optional[dict[str, Any]] = None) -> None:
-    if not issue.clinica or not issue.clinica.municipio_nfse:
+    municipio = get_clinica_field(issue.clinica, "municipio_nfse", "")
+    if not issue.clinica or not municipio:
         raise ValueError("Clínica sem município NFS-e configurado.")
 
     issue.status = "processando"
@@ -109,7 +111,6 @@ def process_nfse_issue(issue: NfseIssue, payload: Optional[dict[str, Any]] = Non
     db.session.commit()
 
     service = NfseService()
-    municipio = issue.clinica.municipio_nfse
     result = service.emitir_nfse(issue, payload or {}, municipio)
     _register_nfse_event(
         issue=issue,
@@ -223,7 +224,7 @@ def request_nfse_cancel(
     reason_description: Optional[str],
     payload: Optional[dict[str, Any]] = None,
 ) -> None:
-    municipio = issue.clinica.municipio_nfse if issue.clinica else ""
+    municipio = get_clinica_field(issue.clinica, "municipio_nfse", "")
     service = NfseService()
     result = service.cancelar_nfse(issue, payload or {}, municipio)
     reason_text = _format_nfse_reason(reason_code, reason_description)
