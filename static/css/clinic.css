@@ -385,6 +385,19 @@
   z-index: 11;
 }
 
+.toast-success-only {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.25rem;
+  padding: 0.5rem 0.75rem;
+}
+
+.toast-success-icon {
+  color: #28a745;
+  font-weight: 700;
+}
+
 .card-surface-muted {
   background: #f8f9fa;
 }
