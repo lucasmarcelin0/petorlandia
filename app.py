@@ -114,6 +114,13 @@ app.config.from_object("config.Config")
 app.config["SQLALCHEMY_DATABASE_URI"] = normalize_database_uri(
     app.config.get("SQLALCHEMY_DATABASE_URI")
 )
+# Add pool settings for PostgreSQL (not supported by SQLite)
+_resolved_uri = app.config.get("SQLALCHEMY_DATABASE_URI", "")
+if _resolved_uri and ("postgresql" in _resolved_uri or "postgres" in _resolved_uri):
+    engine_opts = app.config.get("SQLALCHEMY_ENGINE_OPTIONS", {})
+    engine_opts.setdefault("pool_size", 5)
+    engine_opts.setdefault("max_overflow", 10)
+    app.config["SQLALCHEMY_ENGINE_OPTIONS"] = engine_opts
 app.config.setdefault("FRONTEND_URL", "http://127.0.0.1:5000")
 app.config.update(SESSION_PERMANENT=True, SESSION_TYPE="filesystem")
 CORS(app, resources={r"/surpresa*": {"origins": "*"}, r"/socket.io/*": {"origins": "*"}})
@@ -2735,9 +2742,44 @@ with app.app_context():
 
 # (rotas podem ser definidas em módulos separados e registrados via blueprint)
 # ────────────────────────────── fim ─────────────────────────────
+
+# Performance: cache for context processor results (short TTL)
+_context_cache = {}
+_CONTEXT_CACHE_TTL = 30  # seconds
+
+
+def _get_cached_context(user_id: int, key: str):
+    """Get cached context value if not expired."""
+    cache_key = f"{user_id}:{key}"
+    if cache_key in _context_cache:
+        value, timestamp = _context_cache[cache_key]
+        if (datetime.now(timezone.utc) - timestamp).total_seconds() < _CONTEXT_CACHE_TTL:
+            return value
+    return None
+
+
+def _set_cached_context(user_id: int, key: str, value):
+    """Cache context value with timestamp."""
+    cache_key = f"{user_id}:{key}"
+    _context_cache[cache_key] = (value, datetime.now(timezone.utc))
+    # Cleanup old entries periodically (keep cache small)
+    if len(_context_cache) > 1000:
+        now = datetime.now(timezone.utc)
+        expired = [k for k, (_, ts) in _context_cache.items()
+                   if (now - ts).total_seconds() > _CONTEXT_CACHE_TTL * 2]
+        for k in expired:
+            _context_cache.pop(k, None)
+    return value
+
+
 @app.context_processor
 def inject_unread_count():
     if current_user.is_authenticated:
+        user_id = current_user.id
+        cached = _get_cached_context(user_id, 'unread_messages')
+        if cached is not None:
+            return dict(unread_messages=cached)
+
         if current_user.role == 'admin':
             admin_ids = [u.id for u in User.query.filter_by(role='admin').all()]
             unread = (
@@ -2751,6 +2793,7 @@ def inject_unread_count():
                 .filter_by(receiver_id=current_user.id, lida=False)
                 .count()
             )
+        _set_cached_context(user_id, 'unread_messages', unread)
     else:
         unread = 0
     return dict(unread_messages=unread)
@@ -2759,11 +2802,18 @@ def inject_unread_count():
 @app.context_processor
 def inject_pending_exam_count():
     if current_user.is_authenticated and is_veterinarian(current_user):
+        user_id = current_user.id
+        cached = _get_cached_context(user_id, 'pending_exam_count')
+        if cached is not None:
+            seen = session.get('exam_pending_seen_count', 0)
+            return dict(pending_exam_count=max(cached - seen, 0))
+
         from models import ExamAppointment
 
         pending = ExamAppointment.query.filter_by(
             specialist_id=current_user.veterinario.id, status='pending'
         ).count()
+        _set_cached_context(user_id, 'pending_exam_count', pending)
         seen = session.get('exam_pending_seen_count', 0)
         pending = max(pending - seen, 0)
     else:
@@ -2776,6 +2826,12 @@ def inject_pending_appointment_count():
     """Expose count of upcoming appointments requiring vet action."""
 
     if current_user.is_authenticated and is_veterinarian(current_user):
+        user_id = current_user.id
+        cached = _get_cached_context(user_id, 'pending_appointment_count')
+        if cached is not None:
+            seen = session.get('appointment_pending_seen_count', 0)
+            return dict(pending_appointment_count=max(cached - seen, 0))
+
         from models import Appointment
 
         now = utcnow()
@@ -2784,6 +2840,7 @@ def inject_pending_appointment_count():
             Appointment.status == "scheduled",
             Appointment.scheduled_at >= now + timedelta(hours=2),
         ).count()
+        _set_cached_context(user_id, 'pending_appointment_count', pending)
         seen = session.get('appointment_pending_seen_count', 0)
         pending = max(pending - seen, 0)
     else:
@@ -2810,10 +2867,17 @@ def inject_clinic_pending_appointment_count():
     """Expose count of scheduled appointments in the clinic excluding the current vet."""
 
     if current_user.is_authenticated and is_veterinarian(current_user):
+        user_id = current_user.id
+        cached = _get_cached_context(user_id, 'clinic_pending_appointment_count')
+        if cached is not None:
+            seen = session.get("clinic_pending_seen_count", 0)
+            return dict(clinic_pending_appointment_count=max(cached - seen, 0))
+
         pending_query = _clinic_pending_appointments_query(
             getattr(current_user, "veterinario", None)
         )
         pending = pending_query.count() if pending_query is not None else 0
+        _set_cached_context(user_id, 'clinic_pending_appointment_count', pending)
         seen = session.get("clinic_pending_seen_count", 0)
         pending = max(pending - seen, 0)
     else:
@@ -2846,11 +2910,17 @@ def inject_veterinarian_membership_context():
 @app.context_processor
 def inject_clinic_invite_count():
     if current_user.is_authenticated and has_veterinarian_profile(current_user):
+        user_id = current_user.id
+        cached = _get_cached_context(user_id, 'pending_clinic_invites')
+        if cached is not None:
+            return dict(pending_clinic_invites=cached)
+
         from models import VetClinicInvite
 
         pending = VetClinicInvite.query.filter_by(
             veterinario_id=current_user.veterinario.id, status='pending'
         ).count()
+        _set_cached_context(user_id, 'pending_clinic_invites', pending)
     else:
         pending = 0
     return dict(pending_clinic_invites=pending)

@@ -10,6 +10,7 @@ class Config:
     )
     SQLALCHEMY_TRACK_MODIFICATIONS = False
     # Evita erros "server closed the connection unexpectedly" ao testar conexões do pool
+    # Note: pool_size/max_overflow are added dynamically in app.py for PostgreSQL only
     SQLALCHEMY_ENGINE_OPTIONS = {
         "pool_pre_ping": True,
         "pool_recycle": 300,
@@ -17,6 +18,12 @@ class Config:
     SESSION_TYPE = "filesystem"
     SESSION_PERMANENT = True
     PERMANENT_SESSION_LIFETIME = timedelta(days=365)
+
+    # Performance: cache static files for 1 hour (overridden by env var for dev)
+    SEND_FILE_MAX_AGE_DEFAULT = int(os.environ.get("SEND_FILE_MAX_AGE_DEFAULT", "3600"))
+
+    # Performance: disable template auto-reload unless in debug mode
+    TEMPLATES_AUTO_RELOAD = os.environ.get("TEMPLATES_AUTO_RELOAD", "").lower() in ("1", "true", "yes")
 
     # Configurações do Flask-Mail (Gmail)
     MAIL_SERVER = 'smtp.gmail.com'
