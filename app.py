@@ -6097,13 +6097,18 @@ def list_animals():
     if modo and modo.lower() != 'todos':
         query = query.filter_by(modo=modo)
     else:
+        # Admins can see all animals without filtering
+        is_admin_user = _is_admin()
         vet_authorized = current_user.is_authenticated and is_veterinarian(current_user)
         collaborator = (
             current_user.is_authenticated
             and getattr(current_user, 'worker', None) == 'colaborador'
         )
-        
-        if vet_authorized and not show_all:
+
+        if is_admin_user or show_all:
+            # Admins and show_all mode: no additional filtering
+            pass
+        elif vet_authorized:
             # Veterinários só podem ver animais perdidos, à venda ou para adoção,
             # ou então animais cadastrados pela própria clínica
             allowed = ['perdido', 'venda', 'doação']
@@ -6117,7 +6122,7 @@ def list_animals():
                 )
             else:
                 query = query.filter(Animal.modo.in_(allowed))
-        elif not show_all and not collaborator:
+        elif not collaborator:
             # Para usuários comuns e não colaboradores: mostrar animais à venda/doação ou próprios
             if current_user.is_authenticated:
                 query = query.filter(
