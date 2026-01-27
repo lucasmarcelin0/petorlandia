@@ -539,6 +539,9 @@
       container.innerHTML = targetHtml;
       clearHistoryAlerts(container);
       bindSyncIfAvailable(container);
+      if (typeof formatBrazilTimestamps === 'function') {
+        formatBrazilTimestamps(container);
+      }
       return true;
     };
 
