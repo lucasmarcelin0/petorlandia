@@ -2744,6 +2744,7 @@ with app.app_context():
 # ────────────────────────────── fim ─────────────────────────────
 
 # Performance: cache for context processor results (short TTL)
+import time as _time_module
 _context_cache = {}
 _CONTEXT_CACHE_TTL = 30  # seconds
 
@@ -2751,9 +2752,10 @@ _CONTEXT_CACHE_TTL = 30  # seconds
 def _get_cached_context(user_id: int, key: str):
     """Get cached context value if not expired."""
     cache_key = f"{user_id}:{key}"
-    if cache_key in _context_cache:
-        value, timestamp = _context_cache[cache_key]
-        if (datetime.now(timezone.utc) - timestamp).total_seconds() < _CONTEXT_CACHE_TTL:
+    entry = _context_cache.get(cache_key)
+    if entry is not None:
+        value, timestamp = entry
+        if _time_module.time() - timestamp < _CONTEXT_CACHE_TTL:
             return value
     return None
 
@@ -2761,12 +2763,12 @@ def _get_cached_context(user_id: int, key: str):
 def _set_cached_context(user_id: int, key: str, value):
     """Cache context value with timestamp."""
     cache_key = f"{user_id}:{key}"
-    _context_cache[cache_key] = (value, datetime.now(timezone.utc))
+    _context_cache[cache_key] = (value, _time_module.time())
     # Cleanup old entries periodically (keep cache small)
-    if len(_context_cache) > 1000:
-        now = datetime.now(timezone.utc)
-        expired = [k for k, (_, ts) in _context_cache.items()
-                   if (now - ts).total_seconds() > _CONTEXT_CACHE_TTL * 2]
+    if len(_context_cache) > 500:
+        now = _time_module.time()
+        expired = [k for k, (_, ts) in list(_context_cache.items())
+                   if now - ts > _CONTEXT_CACHE_TTL * 2]
         for k in expired:
             _context_cache.pop(k, None)
     return value
