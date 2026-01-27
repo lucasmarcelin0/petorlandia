@@ -2933,6 +2933,12 @@ def inject_accounting_access_flag():
     return dict(can_access_accounting=_user_can_access_accounting())
 
 
+@app.context_processor
+def inject_current_app():
+    """Make current_app available in templates for view_functions checks."""
+    return dict(current_app=current_app)
+
+
 s = URLSafeTimedSerializer(app.config['SECRET_KEY'])
 
 @app.route('/reset_password_request', methods=['GET', 'POST'])
