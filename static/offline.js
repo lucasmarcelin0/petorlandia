@@ -281,7 +281,8 @@
         evt.preventDefault();
       }
       document.dispatchEvent(evt);
-      if (!evt.defaultPrevented && !(form.classList && (form.classList.contains('js-tutor-form') || form.id === 'tutor-form'))) {
+      const isTutorForm = form.classList && (form.classList.contains('js-tutor-form') || form.id === 'tutor-form');
+      if (!evt.defaultPrevented && !isTutorForm && !form.hasAttribute('data-sync')) {
         location.reload();
       }
 
@@ -630,6 +631,37 @@
     return document.getElementById(normalizedId);
   }
 
+  function formatBrazilTimestampsSafe(root = document) {
+    if (typeof window.formatBrazilTimestamps === 'function') {
+      window.formatBrazilTimestamps(root);
+      return;
+    }
+
+    const brazilDateFormatter = new Intl.DateTimeFormat('pt-BR', {
+      timeZone: 'America/Sao_Paulo',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    });
+    const brazilTimeFormatter = new Intl.DateTimeFormat('pt-BR', {
+      timeZone: 'America/Sao_Paulo',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+
+    root.querySelectorAll('.js-br-time').forEach((el) => {
+      const iso = el.dataset.timestamp;
+      if (!iso) return;
+      const dateObj = new Date(iso);
+      if (Number.isNaN(dateObj.getTime())) return;
+
+      const dateTarget = el.querySelector('.js-br-date');
+      const timeTarget = el.querySelector('.js-br-time-only');
+      if (dateTarget) dateTarget.textContent = brazilDateFormatter.format(dateObj);
+      if (timeTarget) timeTarget.textContent = brazilTimeFormatter.format(dateObj);
+    });
+  }
+
   // Atualiza automaticamente contêineres retornados em respostas JSON (ex.: históricos via AJAX)
   document.addEventListener('form-sync-success', ev => {
     const detail = ev.detail || {};
@@ -647,6 +679,8 @@
     if (typeof bindSyncForms === 'function') {
       bindSyncForms(container);
     }
+
+    formatBrazilTimestampsSafe(container);
   });
 
   function updateAnimalsEmptyState(tableBody){
