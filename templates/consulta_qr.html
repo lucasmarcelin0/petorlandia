@@ -367,6 +367,9 @@ function bindSyncForms(root) {
             if (container) {
               container.innerHTML = data.html;
               bindSyncForms(container);
+              if (typeof formatBrazilTimestamps === 'function') {
+                formatBrazilTimestamps(container);
+              }
             }
           }
           if (data.tutor_name) {
