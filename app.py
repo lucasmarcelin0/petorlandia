@@ -1851,15 +1851,21 @@ def get_consulta_or_404(consulta_id, *, viewer=None, clinic_scope=None):
 
 
 def _filter_records_by_clinic(records, clinic_id):
-    """Return a list limited to the given clinic id (if provided)."""
+    """Return a list limited to the given clinic id.
+
+    If clinic_id is None, returns an empty list to prevent data leakage
+    between clinics.
+    """
 
     if not records:
         return []
 
+    if not clinic_id:
+        # No clinic context - return empty to prevent showing other clinics' data
+        return []
+
     items = list(records)
-    if clinic_id:
-        return [item for item in items if getattr(item, 'clinica_id', None) == clinic_id]
-    return items
+    return [item for item in items if getattr(item, 'clinica_id', None) == clinic_id]
 
 
 def _clinic_orcamento_blocks(animal, clinic_id):
@@ -1899,15 +1905,16 @@ def historico_consultas_partial(animal_id):
     if clinic_id:
         ensure_clinic_access(clinic_id)
 
-    historico_query = (
-        Consulta.query
-        .filter_by(animal_id=animal.id, status='finalizada')
-    )
-
+    # Only show history if we have a valid clinic_id to prevent data leakage
     if clinic_id:
-        historico_query = historico_query.filter_by(clinica_id=clinic_id)
-
-    historico = historico_query.order_by(Consulta.created_at.desc()).all()
+        historico = (
+            Consulta.query
+            .filter_by(animal_id=animal.id, status='finalizada', clinica_id=clinic_id)
+            .order_by(Consulta.created_at.desc())
+            .all()
+        )
+    else:
+        historico = []
 
     historico_html = render_template(
         'partials/historico_consultas.html',
@@ -7964,13 +7971,19 @@ def consulta_direct(animal_id):
                     consulta = consulta_vinculada
 
             if not consulta:
-                consulta = (
-                    Consulta.query
-                    .filter_by(animal_id=animal.id, status='in_progress', clinica_id=clinica_id)
-                    .first()
-                )
+                # Only search for existing consulta if we have a valid clinic_id
+                if clinica_id:
+                    consulta = (
+                        Consulta.query
+                        .filter_by(animal_id=animal.id, status='in_progress', clinica_id=clinica_id)
+                        .first()
+                    )
 
             if not consulta:
+                # Require clinic_id to create new consultas
+                if not clinica_id:
+                    flash('Não foi possível determinar a clínica. Verifique seu cadastro de veterinário.', 'danger')
+                    return redirect(url_for('index'))
                 consulta = Consulta(
                     animal_id=animal.id,
                     created_by=current_user.id,
@@ -8001,7 +8014,7 @@ def consulta_direct(animal_id):
         consulta = None
 
     historico = []
-    if is_veterinarian(current_user):
+    if is_veterinarian(current_user) and clinica_id:
         historico = (
             Consulta.query
             .filter_by(animal_id=animal.id, status='finalizada', clinica_id=clinica_id)
@@ -11490,6 +11503,18 @@ def update_consulta(consulta_id):
         if wants_json:
             return jsonify(success=False, message=message, category='danger'), 403
         return redirect(url_for('index'))
+
+    # Ensure consulta has a clinic_id for proper isolation
+    if not consulta.clinica_id:
+        clinic_id = current_user_clinic_id()
+        if clinic_id:
+            consulta.clinica_id = clinic_id
+        else:
+            message = 'Consulta sem clínica associada. Verifique seu cadastro.'
+            flash(message, 'danger')
+            if wants_json:
+                return jsonify(success=False, message=message, category='danger'), 400
+            return redirect(url_for('index'))
 
     # Atualiza os campos
     consulta.queixa_principal = request.form.get('queixa_principal')

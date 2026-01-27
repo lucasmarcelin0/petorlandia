@@ -2,7 +2,7 @@
 {% if clinic_id is none %}
   {% if current_user.worker == 'veterinario' and current_user.veterinario %}
     {% set clinic_id = current_user.veterinario.clinica_id %}
-  {% else %}
+  {% elif current_user.clinica_id %}
     {% set clinic_id = current_user.clinica_id %}
   {% endif %}
 {% endif %}
@@ -10,7 +10,8 @@
 {% if clinic_id %}
   {% set blocos = blocos | selectattr('clinica_id', 'equalto', clinic_id) | list %}
 {% else %}
-  {% set blocos = blocos | list %}
+  {# When no clinic_id is available, show empty list to prevent data leakage #}
+  {% set blocos = [] %}
 {% endif %}
 {% if blocos %}
 <div class="card mb-3">

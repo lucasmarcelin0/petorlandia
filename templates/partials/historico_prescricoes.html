@@ -1,9 +1,17 @@
 {% set clinic_id = clinic_scope_id if clinic_scope_id is defined else None %}
+{% if clinic_id is none %}
+  {% if current_user.worker == 'veterinario' and current_user.veterinario %}
+    {% set clinic_id = current_user.veterinario.clinica_id %}
+  {% elif current_user.clinica_id %}
+    {% set clinic_id = current_user.clinica_id %}
+  {% endif %}
+{% endif %}
 {% set blocos = blocos_prescricao if blocos_prescricao is defined else animal.blocos_prescricao %}
 {% if clinic_id %}
   {% set blocos = blocos | selectattr('clinica_id', 'equalto', clinic_id) | list %}
 {% else %}
-  {% set blocos = blocos | list %}
+  {# When no clinic_id is available, show empty list to prevent data leakage #}
+  {% set blocos = [] %}
 {% endif %}
 {% if blocos %}
 <div class="prescricao-history card mb-3">
