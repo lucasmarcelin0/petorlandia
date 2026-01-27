@@ -32,20 +32,50 @@ const STATUS_LABELS = {
   accepted: 'Aceita'
 };
 
-function showToastMessage(message, category = 'info') {
+function normalizeToastMessage(message) {
   if (!message) {
+    return '';
+  }
+  if (message instanceof Error) {
+    return message.message || 'Erro inesperado.';
+  }
+  if (typeof message === 'string') {
+    return message;
+  }
+  if (Array.isArray(message)) {
+    return message.map((item) => normalizeToastMessage(item)).filter(Boolean).join(' ');
+  }
+  if (typeof message === 'object') {
+    if (typeof message.message === 'string') {
+      return message.message;
+    }
+    if (typeof message.error === 'string') {
+      return message.error;
+    }
+    try {
+      return JSON.stringify(message);
+    } catch (error) {
+      return 'Erro inesperado.';
+    }
+  }
+  return String(message);
+}
+
+function showToastMessage(message, category = 'info') {
+  const normalizedMessage = normalizeToastMessage(message);
+  if (!normalizedMessage) {
     return;
   }
 
   const toastEl = document.getElementById('actionToast');
   if (!toastEl) {
-    console.warn('Toast element "actionToast" não encontrado. Mensagem:', message);
+    console.warn('Toast element "actionToast" não encontrado. Mensagem:', normalizedMessage);
     return;
   }
 
   const body = toastEl.querySelector('.toast-body');
   if (body) {
-    body.textContent = message;
+    body.textContent = normalizedMessage;
   }
 
   if (typeof applyToastTone === 'function') {
