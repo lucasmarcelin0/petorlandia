@@ -204,6 +204,9 @@ if (!window.HistorySyncManagerClass) {
     if (responseHtml) {
       try {
         container.innerHTML = responseHtml;
+        if (typeof formatBrazilTimestamps === 'function') {
+          formatBrazilTimestamps(container);
+        }
         return true;
       } catch (err) {
         console.warn(`[HistorySyncManager] Failed to update container directly:`, err);
@@ -334,6 +337,9 @@ if (!window.recarregarHistorico) {
       }
 
       container.innerHTML = data.html;
+      if (typeof formatBrazilTimestamps === 'function') {
+        formatBrazilTimestamps(container);
+      }
       return true;
     } catch (err) {
       console.error(`[recarregarHistorico] Error reloading ${historyType}:`, err);
