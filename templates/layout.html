@@ -282,6 +282,42 @@
       TOAST_BG_CLASSES.forEach(cls => toastEl.classList.remove(cls));
       toastEl.classList.add('bg-' + normalizeToastCategory(category));
     }
+
+    function setToastMessage(toastEl, message, category) {
+      if (!toastEl) {
+        return { toneCategory: normalizeToastCategory(category) };
+      }
+
+      const body = toastEl.querySelector('.toast-body');
+      if (!body) {
+        return { toneCategory: normalizeToastCategory(category) };
+      }
+
+      const normalized = normalizeToastCategory(category);
+      const isObject = message && typeof message === 'object';
+      const isEmpty = message === undefined || message === null || message === '';
+
+      body.classList.remove('toast-success-only');
+
+      if ((isObject || isEmpty) && normalized === 'success') {
+        body.innerHTML = '<span class="toast-success-icon" aria-hidden="true">✅</span><span class="visually-hidden">Sucesso</span>';
+        body.classList.add('toast-success-only');
+        return { toneCategory: normalized };
+      }
+
+      if (typeof message === 'string') {
+        body.textContent = message;
+        return { toneCategory: normalized };
+      }
+
+      if (isObject) {
+        body.textContent = message.message || 'Erro ao processar ação';
+        return { toneCategory: normalized };
+      }
+
+      body.textContent = String(message || '');
+      return { toneCategory: normalized };
+    }
   </script>
 
   <script>
@@ -291,8 +327,8 @@
     flashMessages.forEach(([category, message], idx) => {
       setTimeout(() => {
         const toastEl = document.getElementById('actionToast');
-        toastEl.querySelector('.toast-body').textContent = message;
-        applyToastTone(toastEl, category || 'success');
+        const { toneCategory } = setToastMessage(toastEl, message, category || 'success');
+        applyToastTone(toastEl, toneCategory);
         new bootstrap.Toast(toastEl).show();
       }, idx * 1000);
     });
@@ -460,8 +496,8 @@
       const showToast = (message, category = 'info') => {
         const toastEl = document.getElementById('actionToast');
         if (!toastEl) return;
-        toastEl.querySelector('.toast-body').textContent = message || '';
-        applyToastTone(toastEl, category);
+        const { toneCategory } = setToastMessage(toastEl, message || '', category);
+        applyToastTone(toastEl, toneCategory);
         bootstrap.Toast.getOrCreateInstance(toastEl).show();
       };
 
@@ -641,8 +677,8 @@
             }));
             if (queued) {
               const toastEl = document.getElementById('actionToast');
-              toastEl.querySelector('.toast-body').textContent = 'Ação salva para sincronização quando estiver online.';
-              applyToastTone(toastEl, 'info');
+              const { toneCategory } = setToastMessage(toastEl, 'Ação salva para sincronização quando estiver online.', 'info');
+              applyToastTone(toastEl, toneCategory);
               new bootstrap.Toast(toastEl).show();
               return { success: true, message: 'Aguardando conexão para concluir o envio.', level: 'info', successText: 'Sincronizando…', resetDelay: 2500, offlineQueued: true };
             }
@@ -676,8 +712,8 @@
                 totalEl.textContent = 'Total:\u00A0' + data.order_total_formatted;
               }
               const toastEl = document.getElementById('actionToast');
-              toastEl.querySelector('.toast-body').textContent = data.message || 'Sucesso';
-              applyToastTone(toastEl, data.category || 'success');
+              const { toneCategory } = setToastMessage(toastEl, data.message || '', data.category || 'success');
+              applyToastTone(toastEl, toneCategory);
               new bootstrap.Toast(toastEl).show();
 
               if (typeof window.refreshDeliverySections === 'function') {
@@ -687,8 +723,8 @@
               return { success: true, message: data.message, level: data.category };
             }
             const toastEl = document.getElementById('actionToast');
-            toastEl.querySelector('.toast-body').textContent = 'Erro ao processar ação';
-            applyToastTone(toastEl, 'danger');
+            const { toneCategory } = setToastMessage(toastEl, 'Erro ao processar ação', 'danger');
+            applyToastTone(toastEl, toneCategory);
             new bootstrap.Toast(toastEl).show();
             return { success: false, message: 'Erro ao processar ação', level: 'danger' };
           };
@@ -787,8 +823,8 @@
               }
 
               const toastEl = document.getElementById('actionToast');
-              toastEl.querySelector('.toast-body').textContent = data.message || 'Sucesso';
-              applyToastTone(toastEl, data.category || 'success');
+              const { toneCategory } = setToastMessage(toastEl, data.message || '', data.category || 'success');
+              applyToastTone(toastEl, toneCategory);
               new bootstrap.Toast(toastEl).show();
 
               if (typeof window.refreshDeliverySections === 'function') {
@@ -801,8 +837,8 @@
             let data = {};
             try { data = response ? await response.json() : {}; } catch (err) { }
             const toastEl = document.getElementById('actionToast');
-            toastEl.querySelector('.toast-body').textContent = data.message || 'Erro ao processar ação';
-            applyToastTone(toastEl, 'danger');
+            const { toneCategory } = setToastMessage(toastEl, data.message || 'Erro ao processar ação', 'danger');
+            applyToastTone(toastEl, toneCategory);
             new bootstrap.Toast(toastEl).show();
             return { success: false, message: data.message || 'Erro ao processar ação', level: 'danger' };
           };
@@ -836,16 +872,16 @@
                 return { success: true, keepButton: true };
               }
               const toastEl = document.getElementById('actionToast');
-              toastEl.querySelector('.toast-body').textContent = data.message || 'Sucesso';
-              applyToastTone(toastEl, data.category || 'success');
+              const { toneCategory } = setToastMessage(toastEl, data.message || '', data.category || 'success');
+              applyToastTone(toastEl, toneCategory);
               new bootstrap.Toast(toastEl).show();
               return { success: true, message: data.message, level: data.category };
             }
             let data = {};
             try { data = response ? await response.json() : {}; } catch (err) { }
             const toastEl = document.getElementById('actionToast');
-            toastEl.querySelector('.toast-body').textContent = data.message || 'Erro ao processar ação';
-            applyToastTone(toastEl, 'danger');
+            const { toneCategory } = setToastMessage(toastEl, data.message || 'Erro ao processar ação', 'danger');
+            applyToastTone(toastEl, toneCategory);
             new bootstrap.Toast(toastEl).show();
             return { success: false, message: data.message || 'Erro ao processar ação', level: 'danger' };
           };
@@ -1088,8 +1124,8 @@
               }
               if (data.message) {
                 const toastEl = document.getElementById('actionToast');
-                toastEl.querySelector('.toast-body').textContent = data.message;
-                applyToastTone(toastEl, data.category || 'success');
+                const { toneCategory } = setToastMessage(toastEl, data.message, data.category || 'success');
+                applyToastTone(toastEl, toneCategory);
                 new bootstrap.Toast(toastEl).show();
               }
               return { success: true, message: data.message, level: data.category };
@@ -1098,8 +1134,8 @@
             let data = {};
             try { data = response ? await response.json() : {}; } catch (e) { }
             const toastEl = document.getElementById('actionToast');
-            toastEl.querySelector('.toast-body').textContent = data.message || 'Erro ao processar ação';
-            applyToastTone(toastEl, 'danger');
+            const { toneCategory } = setToastMessage(toastEl, data.message || 'Erro ao processar ação', 'danger');
+            applyToastTone(toastEl, toneCategory);
             new bootstrap.Toast(toastEl).show();
             return { success: false, message: data.message || 'Erro ao processar ação', level: 'danger' };
           };
@@ -1129,8 +1165,8 @@
         if (shouldSuppress) {
           const toastEl = document.getElementById('actionToast');
           if (toastEl) {
-            toastEl.querySelector('.toast-body').textContent = text || 'Ação salva para sincronização quando estiver online.';
-            applyToastTone(toastEl, 'info');
+            const { toneCategory } = setToastMessage(toastEl, text || 'Ação salva para sincronização quando estiver online.', 'info');
+            applyToastTone(toastEl, toneCategory);
             bootstrap.Toast.getOrCreateInstance(toastEl).show();
           } else {
             console.info('Alerta suprimido:', text);
