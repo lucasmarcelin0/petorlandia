@@ -11,6 +11,37 @@
  * - Clear user feedback at every step
  */
 
+const applyBrazilTimestampFormatting = (root = document) => {
+  if (typeof window.formatBrazilTimestamps === 'function') {
+    window.formatBrazilTimestamps(root);
+    return;
+  }
+
+  const brazilDateFormatter = new Intl.DateTimeFormat('pt-BR', {
+    timeZone: 'America/Sao_Paulo',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  });
+  const brazilTimeFormatter = new Intl.DateTimeFormat('pt-BR', {
+    timeZone: 'America/Sao_Paulo',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+
+  root.querySelectorAll('.js-br-time').forEach((el) => {
+    const iso = el.dataset.timestamp;
+    if (!iso) return;
+    const dateObj = new Date(iso);
+    if (Number.isNaN(dateObj.getTime())) return;
+
+    const dateTarget = el.querySelector('.js-br-date');
+    const timeTarget = el.querySelector('.js-br-time-only');
+    if (dateTarget) dateTarget.textContent = brazilDateFormatter.format(dateObj);
+    if (timeTarget) timeTarget.textContent = brazilTimeFormatter.format(dateObj);
+  });
+};
+
 if (!window.HistorySyncManagerClass) {
   class HistorySyncManager {
   constructor() {
@@ -204,9 +235,7 @@ if (!window.HistorySyncManagerClass) {
     if (responseHtml) {
       try {
         container.innerHTML = responseHtml;
-        if (typeof formatBrazilTimestamps === 'function') {
-          formatBrazilTimestamps(container);
-        }
+        applyBrazilTimestampFormatting(container);
         return true;
       } catch (err) {
         console.warn(`[HistorySyncManager] Failed to update container directly:`, err);
@@ -337,9 +366,7 @@ if (!window.recarregarHistorico) {
       }
 
       container.innerHTML = data.html;
-      if (typeof formatBrazilTimestamps === 'function') {
-        formatBrazilTimestamps(container);
-      }
+      applyBrazilTimestampFormatting(container);
       return true;
     } catch (err) {
       console.error(`[recarregarHistorico] Error reloading ${historyType}:`, err);
