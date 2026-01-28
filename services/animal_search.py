@@ -9,7 +9,8 @@ from sqlalchemy import func, or_, true
 from sqlalchemy.orm import joinedload
 
 from extensions import db
-from models import Animal, Appointment
+from models import Animal
+from models.agenda import Appointment
 
 DEFAULT_LIMIT = 50
 VALID_SORTS = {"name_asc", "recent_added", "recent_attended"}
