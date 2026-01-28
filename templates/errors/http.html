@@ -1,0 +1,14 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8" />
+    <title>{{ error.code }} - {{ error.name }}</title>
+  </head>
+  <body>
+    <main>
+      <h1>{{ error.code }} - {{ error.name }}</h1>
+      <p>{{ error.description }}</p>
+      <p>Request ID: {{ g.request_id }}</p>
+    </main>
+  </body>
+</html>

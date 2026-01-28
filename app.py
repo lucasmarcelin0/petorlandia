@@ -170,13 +170,21 @@ socketio = SocketIO(app, cors_allowed_origins="*", async_mode=async_mode)
 @app.template_filter('date_now')
 def date_now(format_string='%Y-%m-%d'):
     return datetime.now(BR_TZ).strftime(format_string)
-from extensions import db, migrate, mail, login, session as session_ext, babel
+from extensions import (
+    db,
+    migrate,
+    mail,
+    login,
+    session as session_ext,
+    babel,
+    configure_logging,
+)
 from flask_login import login_user, logout_user, current_user, login_required
 from flask_mail import Message as MailMessage      #  ←  adicione esta linha
 from werkzeug.utils import secure_filename
 from werkzeug.datastructures import FileStorage
 from werkzeug.routing import BuildError
-from werkzeug.exceptions import NotFound
+from werkzeug.exceptions import HTTPException, NotFound
 from time_utils import BR_TZ, coerce_to_brazil_tz, normalize_to_utc, utcnow
 
 db.init_app(app)
@@ -186,6 +194,62 @@ login.init_app(app)
 session_ext.init_app(app)
 babel.init_app(app)
 app.config.setdefault("BABEL_DEFAULT_LOCALE", "pt_BR")
+configure_logging(app)
+
+
+@app.before_request
+def _attach_request_id():
+    g.request_id = request.headers.get("X-Request-ID") or str(uuid.uuid4())
+
+
+@app.after_request
+def _set_request_id_header(response):
+    response.headers["X-Request-ID"] = getattr(g, "request_id", "")
+    return response
+
+
+@app.errorhandler(HTTPException)
+def handle_http_exception(err):
+    current_app.logger.warning(
+        "http_exception",
+        extra={
+            "path": request.path,
+            "status_code": err.code,
+            "request_id": getattr(g, "request_id", None),
+        },
+    )
+    wants_json = (
+        request.accept_mimetypes["application/json"]
+        >= request.accept_mimetypes["text/html"]
+    )
+    if wants_json:
+        payload = {
+            "error": err.name,
+            "message": err.description,
+            "request_id": getattr(g, "request_id", None),
+        }
+        return jsonify(payload), err.code
+    return render_template("errors/http.html", error=err), err.code
+
+
+@app.errorhandler(Exception)
+def handle_unhandled_exception(err):
+    current_app.logger.exception(
+        "unhandled_error",
+        extra={"path": request.path, "request_id": getattr(g, "request_id", None)},
+    )
+    wants_json = (
+        request.accept_mimetypes["application/json"]
+        >= request.accept_mimetypes["text/html"]
+    )
+    if wants_json:
+        payload = {
+            "error": "Internal Server Error",
+            "message": "Unexpected error.",
+            "request_id": getattr(g, "request_id", None),
+        }
+        return jsonify(payload), 500
+    return render_template("errors/500.html"), 500
 
 # ----------------------------------------------------------------
 # 3a)  Runtime safety checks for legacy databases

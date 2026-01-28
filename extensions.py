@@ -1,8 +1,9 @@
 from contextlib import nullcontext
 from datetime import datetime, timezone
+import logging
 from weakref import WeakKeyDictionary
 
-from flask import current_app
+from flask import current_app, g, has_request_context, request
 from flask_sqlalchemy import SQLAlchemy
 from flask_migrate import Migrate
 from flask_mail import Mail
@@ -35,6 +36,39 @@ mail = Mail()
 login = LoginManager()
 session = Session()
 babel = Babel()
+
+
+class RequestContextFilter(logging.Filter):
+    """Attach request context metadata to log records."""
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        if has_request_context():
+            record.request_id = getattr(g, "request_id", None)
+            record.path = request.path
+            record.method = request.method
+        else:
+            record.request_id = "-"
+            record.path = "-"
+            record.method = "-"
+        return True
+
+
+def configure_logging(app) -> None:
+    """Configure structured logging for the application."""
+    handler = logging.StreamHandler()
+    formatter = logging.Formatter(
+        "ts=%(asctime)s level=%(levelname)s logger=%(name)s "
+        "msg=%(message)s request_id=%(request_id)s method=%(method)s path=%(path)s"
+    )
+    handler.setFormatter(formatter)
+    handler.addFilter(RequestContextFilter())
+    handler.petorlandia_handler = True
+
+    if not any(getattr(existing, "petorlandia_handler", False) for existing in app.logger.handlers):
+        app.logger.addHandler(handler)
+
+    app.logger.setLevel(app.config.get("LOG_LEVEL", "INFO"))
+    app.logger.propagate = False
 
 
 @event.listens_for(db.session, "before_flush")
