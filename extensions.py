@@ -10,6 +10,7 @@ from flask_mail import Mail
 from flask_login import LoginManager
 from flask_session import Session
 from flask_babel import Babel
+from flask_wtf import CSRFProtect
 from sqlalchemy import event, inspect
 
 # Cache for datetime column names per model class (performance optimization)
@@ -36,6 +37,7 @@ mail = Mail()
 login = LoginManager()
 session = Session()
 babel = Babel()
+csrf = CSRFProtect()
 
 
 class RequestContextFilter(logging.Filter):
