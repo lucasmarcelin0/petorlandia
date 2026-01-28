@@ -6500,18 +6500,28 @@ def api_conversa_message(animal_id, user_id):
     """Recebe uma nova mensagem da conversa e retorna o HTML renderizado."""
     form = MessageForm()
     animal, outro_usuario = _resolve_animal_conversation(animal_id, user_id)
-    if form.validate_on_submit():
-        nova_msg = Message(
-            sender_id=current_user.id,
-            receiver_id=outro_usuario.id,
-            animal_id=animal_id,
-            content=form.content.data,
-            lida=False
-        )
-        db.session.add(nova_msg)
-        db.session.commit()
-        return render_template('components/message.html', msg=nova_msg)
-    return '', 400
+    if not form.validate_on_submit():
+        # CSRF can fail after dyno restart (filesystem sessions lost).
+        # Fall back to manual content validation since @login_required
+        # already guarantees the user is authenticated.
+        if form.errors.keys() - {'csrf_token'}:
+            current_app.logger.warning('api_conversa_message validation failed for user %s: %s', current_user.id, form.errors)
+            return jsonify(error='Falha de validação. Recarregue a página e tente novamente.'), 400
+        content = request.form.get('content', '').strip()
+        if not content or len(content) > 1000:
+            return jsonify(error='Mensagem vazia ou muito longa.'), 400
+    else:
+        content = form.content.data
+    nova_msg = Message(
+        sender_id=current_user.id,
+        receiver_id=outro_usuario.id,
+        animal_id=animal_id,
+        content=content,
+        lida=False
+    )
+    db.session.add(nova_msg)
+    db.session.commit()
+    return render_template('components/message.html', msg=nova_msg)
 
 
 @app.route('/conversa_admin', methods=['GET', 'POST'])
@@ -6660,22 +6670,29 @@ def api_conversa_admin_message(user_id=None):
         interlocutor = admin_user
 
     form = MessageForm()
-    if form.validate_on_submit():
-        nova_msg = Message(
-            sender_id=current_user.id,
-            receiver_id=interlocutor.id,
-            content=form.content.data,
-            lida=False,
-        )
-        db.session.add(nova_msg)
-        _notify_admin_message(
-            receiver=interlocutor,
-            sender=current_user,
-            message_content=form.content.data,
-        )
-        db.session.commit()
-        return render_template('components/message.html', msg=nova_msg)
-    return '', 400
+    if not form.validate_on_submit():
+        if form.errors.keys() - {'csrf_token'}:
+            current_app.logger.warning('api_conversa_admin_message validation failed for user %s: %s', current_user.id, form.errors)
+            return jsonify(error='Falha de validação. Recarregue a página e tente novamente.'), 400
+        content = request.form.get('content', '').strip()
+        if not content or len(content) > 1000:
+            return jsonify(error='Mensagem vazia ou muito longa.'), 400
+    else:
+        content = form.content.data
+    nova_msg = Message(
+        sender_id=current_user.id,
+        receiver_id=interlocutor.id,
+        content=content,
+        lida=False,
+    )
+    db.session.add(nova_msg)
+    _notify_admin_message(
+        receiver=interlocutor,
+        sender=current_user,
+        message_content=content,
+    )
+    db.session.commit()
+    return render_template('components/message.html', msg=nova_msg)
 
 
 @app.route('/admin/users/<int:user_id>/promover_veterinario', methods=['POST'])
@@ -6908,26 +6925,6 @@ def mensagens_admin():
         gerais_next=2 if gerais_has_more else None,
         per_page=per_page,
     )
-
-
-@app.context_processor
-def inject_unread_count():
-    if current_user.is_authenticated:
-        if current_user.role == 'admin':
-            admin_ids = [u.id for u in User.query.filter_by(role='admin').all()]
-            unread = (
-                Message.query
-                .filter(Message.receiver_id.in_(admin_ids), Message.lida.is_(False))
-                .count()
-            )
-        else:
-            unread = (
-                Message.query
-                .filter_by(receiver_id=current_user.id, lida=False)
-                .count()
-            )
-        return dict(unread_messages=unread)
-    return dict(unread_messages=0)
 
 
 @app.context_processor

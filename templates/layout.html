@@ -1084,6 +1084,14 @@
     };
 
     document.addEventListener('DOMContentLoaded', () => {
+      const getMsgCsrfToken = (form) => {
+        const formInput = form?.querySelector('input[name="csrf_token"]');
+        if (formInput?.value) return formInput.value;
+        const meta = document.querySelector('meta[name="csrf-token"]');
+        if (meta?.content) return meta.content;
+        return '';
+      };
+
       document.querySelectorAll('.js-msg-form').forEach(form => {
         form.addEventListener('submit', async ev => {
           ev.preventDefault();
@@ -1127,23 +1135,30 @@
             const timeoutAttr = form.dataset.requestTimeout || form.dataset.fetchTimeout || form.dataset.syncTimeout;
             const timeout = Number.isFinite(Number(timeoutAttr)) ? Number(timeoutAttr) : undefined;
 
+            const fetchHeaders = { 'Accept': 'text/html' };
+            const csrfToken = getMsgCsrfToken(form);
+            if (csrfToken) fetchHeaders['X-CSRFToken'] = csrfToken;
+
             try {
-              ({ response, queued } = normalizeFetchResult(await fetchOrQueue(api, {
+              const result = await fetchOrQueue(api, {
                 method: 'POST',
                 body: formData,
-                headers: { 'Accept': 'text/html' },
+                headers: fetchHeaders,
                 timeout
-              })));
+              });
+              response = result && result.response ? result.response : null;
+              queued = Boolean(result && result.queued);
             } catch (err) {
               console.error('Erro ao enviar mensagem:', err);
+              const errText = (err && err.message) || 'Erro de rede. Verifique sua conexão.';
               if (placeholder) {
                 const status = placeholder.querySelector('.js-status');
                 if (status) {
-                  status.textContent = 'Falha ao enviar. Tente novamente.';
+                  status.textContent = errText;
                 }
                 placeholder.dataset.status = 'error';
               }
-              return { success: false, message: 'Falha ao enviar a mensagem.', level: 'danger' };
+              return { success: false, message: errText, level: 'danger' };
             }
 
             const isSuccessful = response && (response.ok || (response.status >= 300 && response.status < 400));
@@ -1178,14 +1193,22 @@
               };
             }
 
+            let errorMessage = 'Falha ao enviar. Tente novamente.';
+            try {
+              const ct = response && response.headers.get('Content-Type') || '';
+              if (ct.includes('application/json')) {
+                const errData = await response.json();
+                if (errData && errData.error) errorMessage = errData.error;
+              }
+            } catch (_) {}
             if (placeholder) {
               const status = placeholder.querySelector('.js-status');
               if (status) {
-                status.textContent = 'Falha ao enviar. Tente novamente.';
+                status.textContent = errorMessage;
               }
               placeholder.dataset.status = 'error';
             }
-            return { success: false, message: 'Falha ao enviar a mensagem.', level: 'danger' };
+            return { success: false, message: errorMessage, level: 'danger' };
           };
 
           if (window.FormFeedback && typeof window.FormFeedback.withSavingState === 'function') {
