@@ -119,7 +119,6 @@ from services.payments import (
     apply_payment_to_orcamento,
     create_payment_preference,
 )
-from repositories import AppointmentRepository, ClinicRepository
 _config_utils_module_name = (
     f"{__package__}.config_utils" if __package__ else "config_utils"
 )
@@ -3077,9 +3076,8 @@ def _user_is_clinic_owner(user=None):
     if owned_clinics:
         return any(getattr(clinic, "owner_id", None) == user.id for clinic in owned_clinics)
 
-    clinic_repo = ClinicRepository()
     try:
-        return clinic_repo.first_by_owner(user.id) is not None
+        return Clinica.query.filter_by(owner_id=user.id).first() is not None
     except (OperationalError, ProgrammingError, NoSuchTableError):
         # Em ambientes de teste ou bancos desatualizados a tabela pode não existir.
         # Nesses casos consideramos que o usuário não possui clínica.
@@ -3116,9 +3114,8 @@ def _accounting_accessible_clinics():
     """Return (clinics, clinic_ids) accessible for the accounting module."""
 
     clinics = []
-    clinic_repo = ClinicRepository()
     if _is_admin():
-        clinics = clinic_repo.list_all_ordered()
+        clinics = Clinica.query.order_by(Clinica.nome.asc()).all()
         return clinics, {clinic.id for clinic in clinics if clinic.id}
 
     accessible_ids = set()
@@ -3132,7 +3129,9 @@ def _accounting_accessible_clinics():
     existing_ids = {clinic.id for clinic in clinics if clinic.id}
     missing_ids = [cid for cid in accessible_ids if cid and cid not in existing_ids]
     if missing_ids:
-        clinics.extend(clinic_repo.list_by_ids(missing_ids))
+        clinics.extend(
+            Clinica.query.filter(Clinica.id.in_(missing_ids)).order_by(Clinica.nome.asc()).all()
+        )
 
     clinics.sort(key=lambda clinic: (clinic.nome or '').lower())
     return clinics, {clinic.id for clinic in clinics if clinic.id}
@@ -8756,7 +8755,6 @@ def _build_clinic_theme(clinica):
 
 @login_required
 def clinic_detail(clinica_id):
-    appointment_repo = AppointmentRepository()
     if _is_admin():
         clinica = Clinica.query.get_or_404(clinica_id)
     else:
@@ -9118,8 +9116,24 @@ def clinic_detail(clinica_id):
         if value:
             kind_labels.setdefault(value, label)
 
-    clinic_status_values = appointment_repo.get_distinct_statuses(clinica_id)
-    clinic_kind_values = appointment_repo.get_distinct_kinds(clinica_id)
+    clinic_status_values = {
+        status
+        for (status,) in (
+            db.session.query(Appointment.status)
+            .filter(Appointment.clinica_id == clinica_id)
+            .distinct()
+        )
+        if status
+    }
+    clinic_kind_values = {
+        kind
+        for (kind,) in (
+            db.session.query(Appointment.kind)
+            .filter(Appointment.clinica_id == clinica_id)
+            .distinct()
+        )
+        if kind
+    }
 
     for status in clinic_status_values:
         status_labels.setdefault(status, status.replace('_', ' ').title())
@@ -9158,14 +9172,19 @@ def clinic_detail(clinica_id):
 
     start_dt_utc, end_dt_utc = local_date_range_to_utc(start_dt, end_dt)
 
-    appointments = appointment_repo.list_filtered(
-        clinic_id=clinica_id,
-        start_dt_utc=start_dt_utc,
-        end_dt_utc=end_dt_utc,
-        vet_id=vet_filter_id,
-        status=status_filter or None,
-        kind=type_filter or None,
-    )
+    appointments_query = Appointment.query.filter_by(clinica_id=clinica_id)
+    if start_dt_utc:
+        appointments_query = appointments_query.filter(Appointment.scheduled_at >= start_dt_utc)
+    if end_dt_utc:
+        appointments_query = appointments_query.filter(Appointment.scheduled_at < end_dt_utc)
+    if vet_filter_id:
+        appointments_query = appointments_query.filter(Appointment.veterinario_id == vet_filter_id)
+    if status_filter:
+        appointments_query = appointments_query.filter(Appointment.status == status_filter)
+    if type_filter:
+        appointments_query = appointments_query.filter(Appointment.kind == type_filter)
+
+    appointments = appointments_query.order_by(Appointment.scheduled_at).all()
     appointments_grouped = group_appointments_by_day(appointments)
     appointments_events = []
     if appointment_view == 'calendar':
@@ -16041,8 +16060,7 @@ def appointments():
     is_vet = is_veterinarian(current_user)
     if worker == 'veterinario' and not is_vet:
         worker = 'tutor'
-    clinic_repo = ClinicRepository()
-    calendar_access_scope = get_calendar_access_scope(current_user, clinic_repo)
+    calendar_access_scope = get_calendar_access_scope(current_user)
 
     def _redirect_to_current_appointments():
         query_args = request.args.to_dict(flat=False)
@@ -16128,7 +16146,11 @@ def appointments():
             if clinica_id and clinica_id not in clinic_ids:
                 clinic_ids.append(clinica_id)
         clinic_ids = calendar_access_scope.filter_clinic_ids(clinic_ids)
-        associated_clinics = clinic_repo.list_by_ids(clinic_ids) if clinic_ids else []
+        associated_clinics = (
+            Clinica.query.filter(Clinica.id.in_(clinic_ids)).all()
+            if clinic_ids
+            else []
+        )
         calendar_summary_clinic_ids = clinic_ids
         if getattr(veterinario, "id", None) is not None:
             calendar_summary_vets = [
@@ -17459,25 +17481,19 @@ def manage_appointments():
         flash('Acesso restrito.', 'danger')
         return redirect(url_for('index'))
 
-    appointment_repo = AppointmentRepository()
     wants_json = 'application/json' in request.headers.get('Accept', '')
     page = max(request.args.get('page', type=int, default=1), 1)
     per_page = request.args.get('per_page', type=int, default=20)
     per_page = max(1, min(per_page or 20, 100))
 
-    clinic_id = None
+    query = Appointment.query.order_by(Appointment.scheduled_at)
     if current_user.role != 'admin':
         if is_vet:
-            clinic_id = current_user.veterinario.clinica_id
+            query = query.filter_by(clinica_id=current_user.veterinario.clinica_id)
         elif is_collaborator:
-            clinic_id = current_user.clinica_id
+            query = query.filter_by(clinica_id=current_user.clinica_id)
 
-    pagination = appointment_repo.paginate_for_management(
-        is_admin=current_user.role == 'admin',
-        clinic_id=clinic_id,
-        page=page,
-        per_page=per_page,
-    )
+    pagination = query.paginate(page=page, per_page=per_page, error_out=False)
     appointments = pagination.items
 
     if wants_json:
