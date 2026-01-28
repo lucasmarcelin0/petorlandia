@@ -177,6 +177,7 @@ from extensions import (
     login,
     session as session_ext,
     babel,
+    csrf,
     configure_logging,
 )
 from flask_login import login_user, logout_user, current_user, login_required
@@ -193,6 +194,7 @@ mail.init_app(app)
 login.init_app(app)
 session_ext.init_app(app)
 babel.init_app(app)
+csrf.init_app(app)
 app.config.setdefault("BABEL_DEFAULT_LOCALE", "pt_BR")
 configure_logging(app)
 
@@ -7610,6 +7612,7 @@ def validar_plano_consulta(consulta_id):
 
 
 
+@csrf.exempt
 def api_criar_sinistro():
     token = request.headers.get('X-Insurer-Token')
     if not insurer_token_valid(token):
@@ -7639,6 +7642,7 @@ def api_criar_sinistro():
     return jsonify({'id': claim.id, 'status': claim.status}), 201
 
 
+@csrf.exempt
 def api_status_sinistro(claim_id):
     token = request.headers.get('X-Insurer-Token')
     if not insurer_token_valid(token):
@@ -7656,6 +7660,7 @@ def api_status_sinistro(claim_id):
     })
 
 
+@csrf.exempt
 def api_historico_uso(plan_id):
     token = request.headers.get('X-Insurer-Token')
     if not insurer_token_valid(token):
@@ -7665,6 +7670,7 @@ def api_historico_uso(plan_id):
     return jsonify({'plan_id': plan_id, 'historico': history})
 
 
+@csrf.exempt
 def api_status_autorizacao(consulta_id):
     token = request.headers.get('X-Insurer-Token')
     if not insurer_token_valid(token):
@@ -15636,6 +15642,7 @@ def verify_mp_signature(req, secret: str) -> bool:
         return False
     return True
 
+@csrf.exempt
 def notificacoes_mercado_pago():
     if request.method == "GET":
         return jsonify(status="pong"), 200
