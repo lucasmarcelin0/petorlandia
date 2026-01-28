@@ -4,8 +4,10 @@ from __future__ import annotations
 
 from typing import Iterable, Optional
 
+from sqlalchemy.orm import selectinload
+
 from extensions import db
-from models import Appointment
+from models import Appointment, Veterinario
 
 
 class AppointmentRepository:
@@ -15,7 +17,10 @@ class AppointmentRepository:
         self._session = session or db.session
 
     def _base_query(self):
-        return Appointment.query
+        return Appointment.query.options(
+            selectinload(Appointment.tutor),
+            selectinload(Appointment.veterinario).selectinload(Veterinario.user),
+        )
 
     def list_by_clinic(self, clinic_id: int):
         return self._base_query().filter_by(clinica_id=clinic_id).all()

@@ -119,7 +119,12 @@ from services.payments import (
     apply_payment_to_orcamento,
     create_payment_preference,
 )
-from repositories import AppointmentRepository, ClinicRepository
+from repositories import (
+    AppointmentRepository,
+    ClinicRepository,
+    ConsultaRepository,
+    MessageRepository,
+)
 _config_utils_module_name = (
     f"{__package__}.config_utils" if __package__ else "config_utils"
 )
@@ -2001,19 +2006,25 @@ def _render_prescricao_history(animal, clinic_id):
 def historico_consultas_partial(animal_id):
     animal = get_animal_or_404(animal_id)
     clinic_id = request.args.get('clinica_id', type=int) or getattr(animal, 'clinica_id', None) or current_user_clinic_id()
+    page = max(request.args.get('page', type=int, default=1), 1)
+    per_page = request.args.get('per_page', type=int, default=20)
+    per_page = max(1, min(per_page or 20, 100))
 
     if clinic_id:
         ensure_clinic_access(clinic_id)
 
     # Only show history if we have a valid clinic_id to prevent data leakage
     if clinic_id:
-        historico = (
-            Consulta.query
-            .filter_by(animal_id=animal.id, status='finalizada', clinica_id=clinic_id)
-            .order_by(Consulta.created_at.desc())
-            .all()
+        consulta_repo = ConsultaRepository()
+        pagination = consulta_repo.paginate_history(
+            animal_id=animal.id,
+            clinic_id=clinic_id,
+            page=page,
+            per_page=per_page,
         )
+        historico = pagination.items
     else:
+        pagination = None
         historico = []
 
     historico_html = render_template(
@@ -2021,7 +2032,8 @@ def historico_consultas_partial(animal_id):
         animal=animal,
         historico_consultas=historico,
     )
-    return jsonify({'success': True, 'html': historico_html})
+    next_page = pagination.next_num if pagination and pagination.has_next else None
+    return jsonify({'success': True, 'html': historico_html, 'next_page': next_page, 'page': page})
 
 
 MISSING_VET_PROFILE_MESSAGE = (
@@ -2094,22 +2106,32 @@ def _build_vet_invites_context(response_form=None, vet_profile_form=None):
     }
 
 
-def _get_inbox_messages():
+def _get_inbox_messages(page: int, per_page: int):
     """Return received messages with sender information for current user."""
     if not current_user.is_authenticated:
-        return []
+        return [], None
 
-    mensagens = (
-        Message.query.options(
-            selectinload(Message.sender),
-            selectinload(Message.animal),
-        )
-        .filter_by(receiver_id=current_user.id)
-        .order_by(Message.timestamp.desc().nullslast())
+    message_repo = MessageRepository()
+    pagination = message_repo.paginate_inbox(
+        receiver_id=current_user.id,
+        page=page,
+        per_page=per_page,
+    )
+    mensagens = [mensagem for mensagem in pagination.items if mensagem.sender is not None]
+    return mensagens, pagination
+
+
+def _get_unread_message_counts(receiver_id: int) -> dict[tuple[int, Optional[int]], int]:
+    """Return unread message counts keyed by (sender_id, animal_id)."""
+    if receiver_id is None:
+        return {}
+    rows = (
+        db.session.query(Message.sender_id, Message.animal_id, db.func.count())
+        .filter(Message.receiver_id == receiver_id, Message.lida.is_(False))
+        .group_by(Message.sender_id, Message.animal_id)
         .all()
     )
-
-    return [mensagem for mensagem in mensagens if mensagem.sender is not None]
+    return {(sender_id, animal_id): count for sender_id, animal_id, count in rows}
 
 
 def _notify_admin_message(receiver, sender, message_content, conversation_url=None):
@@ -2193,10 +2215,12 @@ def _notify_admin_message(receiver, sender, message_content, conversation_url=No
         )
 
 
-def _render_messages_page(mensagens=None, **extra_context):
+def _render_messages_page(mensagens=None, pagination=None, **extra_context):
     """Render the messages page with optional overrides for clinic invites."""
     if mensagens is None:
-        mensagens = _get_inbox_messages()
+        page = extra_context.get("page", 1)
+        per_page = extra_context.get("per_page", 20)
+        mensagens, pagination = _get_inbox_messages(page=page, per_page=per_page)
 
     context_overrides = extra_context.copy()
     response_form = context_overrides.pop("clinic_invite_form", None)
@@ -2208,13 +2232,18 @@ def _render_messages_page(mensagens=None, **extra_context):
     )
     clinic_invite_context.update(context_overrides)
     clinic_invite_context["mensagens"] = mensagens
+    clinic_invite_context["pagination"] = pagination
+    clinic_invite_context["unread_counts"] = _get_unread_message_counts(
+        current_user.id
+    )
 
     return render_template("mensagens/mensagens.html", **clinic_invite_context)
 
 
-def _serialize_message_threads(mensagens):
+def _serialize_message_threads(mensagens, unread_counts=None):
     """Aggregate messages into conversation threads for the authenticated user."""
     threads = {}
+    unread_lookup = unread_counts or {}
 
     for mensagem in mensagens:
         last_timestamp = mensagem.timestamp or datetime.min
@@ -2266,7 +2295,10 @@ def _serialize_message_threads(mensagens):
                 "animal": animal_payload,
                 "last_message_dt": last_timestamp,
                 "last_message_at": last_timestamp.isoformat(),
-                "unread_count": 0,
+                "unread_count": unread_lookup.get(
+                    (conversation_partner_id, mensagem.animal_id or None),
+                    0,
+                ),
                 "conversation_url": conversation_url,
             }
             threads[key] = thread
@@ -2275,7 +2307,7 @@ def _serialize_message_threads(mensagens):
                 thread["last_message_dt"] = last_timestamp
                 thread["last_message_at"] = last_timestamp.isoformat()
 
-        if not mensagem.lida:
+        if unread_counts is None and not mensagem.lida:
             threads[key]["unread_count"] += 1
 
     sorted_threads = sorted(
@@ -6397,15 +6429,29 @@ def aceitar_interesse(message_id):
 
 @login_required
 def mensagens():
-    return _render_messages_page()
+    page = max(request.args.get('page', type=int, default=1), 1)
+    per_page = request.args.get('per_page', type=int, default=20)
+    per_page = max(1, min(per_page or 20, 50))
+    mensagens, pagination = _get_inbox_messages(page=page, per_page=per_page)
+    return _render_messages_page(
+        mensagens=mensagens,
+        pagination=pagination,
+        page=page,
+        per_page=per_page,
+    )
 
 
 @login_required
 def api_message_threads():
     """Return aggregated conversation threads for the authenticated user."""
-    mensagens = _get_inbox_messages()
-    threads = _serialize_message_threads(mensagens)
-    return jsonify({"threads": threads})
+    page = max(request.args.get('page', type=int, default=1), 1)
+    per_page = request.args.get('per_page', type=int, default=20)
+    per_page = max(1, min(per_page or 20, 50))
+    mensagens, pagination = _get_inbox_messages(page=page, per_page=per_page)
+    unread_counts = _get_unread_message_counts(current_user.id)
+    threads = _serialize_message_threads(mensagens, unread_counts=unread_counts)
+    next_page = pagination.next_num if pagination and pagination.has_next else None
+    return jsonify({"threads": threads, "next_page": next_page, "page": page})
 
 
 @login_required
@@ -6413,13 +6459,17 @@ def chat_messages(animal_id):
     """API simples para listar e criar mensagens relacionadas a um animal."""
     Animal.query.get_or_404(animal_id)
     if request.method == 'GET':
-        mensagens = (
-            Message.query
-            .filter_by(animal_id=animal_id)
-            .order_by(Message.timestamp)
-            .all()
+        page = max(request.args.get('page', type=int, default=1), 1)
+        per_page = request.args.get('per_page', type=int, default=50)
+        per_page = max(1, min(per_page or 50, 200))
+        message_repo = MessageRepository()
+        pagination = message_repo.list_animal_messages(
+            animal_id=animal_id,
+            page=page,
+            per_page=per_page,
         )
-        return jsonify([
+        mensagens = list(reversed(pagination.items))
+        response = jsonify([
             {
                 'id': m.id,
                 'sender_id': m.sender_id,
@@ -6431,6 +6481,11 @@ def chat_messages(animal_id):
             }
             for m in mensagens
         ])
+        response.headers['X-Next-Page'] = (
+            str(pagination.next_num) if pagination.has_next else ''
+        )
+        response.headers['X-Page'] = str(page)
+        return response
 
     data = request.get_json() or {}
     nova_msg = Message(
@@ -6510,12 +6565,18 @@ def conversa(animal_id, user_id):
 
     form = MessageForm()
 
-    # Busca todas as mensagens entre current_user e outro_usuario sobre o animal
-    mensagens = Message.query.filter(
-        Message.animal_id == animal.id,
-        ((Message.sender_id == current_user.id) & (Message.receiver_id == outro_usuario.id)) |
-        ((Message.sender_id == outro_usuario.id) & (Message.receiver_id == current_user.id))
-    ).order_by(Message.timestamp).all()
+    page = max(request.args.get('page', type=int, default=1), 1)
+    per_page = request.args.get('per_page', type=int, default=30)
+    per_page = max(1, min(per_page or 30, 200))
+    message_repo = MessageRepository()
+    pagination = message_repo.list_conversation(
+        animal_id=animal.id,
+        user_id=current_user.id,
+        other_id=outro_usuario.id,
+        page=page,
+        per_page=per_page,
+    )
+    mensagens = list(reversed(pagination.items))
 
     # Enviando nova mensagem
     if form.validate_on_submit():
@@ -6545,7 +6606,10 @@ def conversa(animal_id, user_id):
         form=form,
         animal=animal,
         outro_usuario=outro_usuario,
-        interesse_existente=interesse_existente
+        interesse_existente=interesse_existente,
+        page=page,
+        next_page=pagination.next_num if pagination.has_next else None,
+        per_page=per_page,
     )
 
 
@@ -6631,15 +6695,17 @@ def conversa_admin(user_id=None):
                 elif getattr(target_membership, 'id', None) is None:
                     db.session.flush()
 
-    mensagens = (
-        Message.query
-        .filter(
-            ((Message.sender_id.in_(admin_ids)) & (Message.receiver_id == participant_id)) |
-            ((Message.sender_id == participant_id) & (Message.receiver_id.in_(admin_ids)))
-        )
-        .order_by(Message.timestamp)
-        .all()
+    page = max(request.args.get('page', type=int, default=1), 1)
+    per_page = request.args.get('per_page', type=int, default=30)
+    per_page = max(1, min(per_page or 30, 200))
+    message_repo = MessageRepository()
+    pagination = message_repo.list_admin_conversation(
+        admin_ids=admin_ids,
+        participant_id=participant_id,
+        page=page,
+        per_page=per_page,
     )
+    mensagens = list(reversed(pagination.items))
 
     if form.validate_on_submit():
         nova_msg = Message(
@@ -6700,6 +6766,9 @@ def conversa_admin(user_id=None):
         can_cancel_trial=can_cancel_trial,
         request_new_trial_form=request_new_trial_form,
         can_request_new_trial=can_request_new_trial,
+        page=page,
+        next_page=pagination.next_num if pagination.has_next else None,
+        per_page=per_page,
     )
 
 
@@ -6871,24 +6940,14 @@ def mensagens_admin():
     per_page = max(1, min(per_page or 10, 50))
     kind = request.args.get('kind', 'animals')
 
+    message_repo = MessageRepository()
     admin_ids = [u.id for u in User.query.filter_by(role='admin').all()]
 
     def _build_query(target_kind):
-        query = (
-            Message.query
-            .options(
-                selectinload(Message.sender),
-                selectinload(Message.receiver),
-                selectinload(Message.animal),
-            )
-            .filter((Message.sender_id.in_(admin_ids)) | (Message.receiver_id.in_(admin_ids)))
-            .order_by(Message.timestamp.desc())
+        return message_repo.admin_threads_query(
+            admin_ids=admin_ids,
+            kind=target_kind,
         )
-        if target_kind == 'animals':
-            query = query.filter(Message.animal_id.isnot(None))
-        else:
-            query = query.filter(Message.animal_id.is_(None))
-        return query
 
     def _collect_threads(query):
         seen = set()
