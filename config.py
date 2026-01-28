@@ -21,6 +21,7 @@ class Config:
     SESSION_TYPE = "filesystem"
     SESSION_PERMANENT = True
     PERMANENT_SESSION_LIFETIME = timedelta(days=365)
+    WTF_CSRF_TIME_LIMIT = None  # CSRF token valid for entire session lifetime
 
     # Performance: cache static files for 1 hour (overridden by env var for dev)
     SEND_FILE_MAX_AGE_DEFAULT = int(os.environ.get("SEND_FILE_MAX_AGE_DEFAULT", "3600"))
