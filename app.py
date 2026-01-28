@@ -2354,7 +2354,6 @@ def _sync_health_subscription_from_onboarding(onboarding, payment_status, paymen
 # ----------------------------------------------------------------
 
 
-@app.route('/api/cep/<cep>')
 def api_cep_lookup(cep: str):
     """Lookup CEP information using a list of public providers.
 
@@ -2418,7 +2417,6 @@ def api_cep_lookup(cep: str):
     return jsonify(success=False, error='CEP não encontrado'), 404
 
 
-@app.route('/api/geocode/reverse')
 def api_reverse_geocode():
     """Resolve latitude/longitude into address data for the form.
 
@@ -2483,7 +2481,6 @@ def api_reverse_geocode():
     return jsonify(success=True, data=normalized)
 
 
-@app.route('/api/geocode/address', methods=['POST'])
 def api_forward_geocode():
     """Resolve an address into coordinates using the same backend helper.
 
@@ -2941,7 +2938,6 @@ def inject_current_app():
 
 s = URLSafeTimedSerializer(app.config['SECRET_KEY'])
 
-@app.route('/reset_password_request', methods=['GET', 'POST'])
 def reset_password_request():
     form = ResetPasswordRequestForm()
     if form.validate_on_submit():
@@ -2985,7 +2981,6 @@ def reset_password_request():
 
 
 
-@app.route('/reset_password/<token>', methods=['GET', 'POST'])
 def reset_password(token):
     try:
         email = s.loads(token, salt='password-reset-salt', max_age=3600)  # 1 hour
@@ -3389,7 +3384,6 @@ def classify_transactions_history(months, clinic_ids, reference_month, verbose):
     )
 
 
-@app.route('/contabilidade')
 @login_required
 def contabilidade_home():
     _ensure_accounting_access()
@@ -3425,7 +3419,6 @@ def contabilidade_home():
     )
 
 
-@app.route('/contabilidade/financeiro')
 @login_required
 def contabilidade_financeiro():
     _ensure_accounting_access()
@@ -3800,7 +3793,6 @@ def _pj_payments_schema_issue() -> Optional[tuple[str, str]]:
     return issue
 
 
-@app.route('/contabilidade/pagamentos')
 @login_required
 def contabilidade_pagamentos():
     _ensure_accounting_access()
@@ -4557,7 +4549,6 @@ def _prefill_plantao_fields_on_form(form, escala):
 
 
 
-@app.route('/contabilidade/pagamentos/novo', methods=['GET', 'POST'])
 @login_required
 def contabilidade_pagamentos_novo():
     _ensure_accounting_access()
@@ -4649,7 +4640,6 @@ def contabilidade_pagamentos_novo():
     )
 
 
-@app.route('/contabilidade/pagamentos/<int:payment_id>/editar', methods=['GET', 'POST'])
 @login_required
 def contabilidade_pagamentos_editar(payment_id):
     _ensure_accounting_access()
@@ -4744,7 +4734,6 @@ def contabilidade_pagamentos_editar(payment_id):
     )
 
 
-@app.route('/contabilidade/pagamentos/<int:payment_id>/delete', methods=['POST'])
 @login_required
 def contabilidade_pagamentos_delete(payment_id):
     _ensure_accounting_access()
@@ -4774,7 +4763,6 @@ def contabilidade_pagamentos_delete(payment_id):
     return redirect(url_for('contabilidade_pagamentos', clinica_id=clinic_id, mes=month_value))
 
 
-@app.route('/contabilidade/pagamentos/<int:payment_id>/marcar_pago', methods=['POST'])
 @login_required
 def contabilidade_pagamentos_marcar_pago(payment_id):
     _ensure_accounting_access()
@@ -4808,7 +4796,6 @@ def contabilidade_pagamentos_marcar_pago(payment_id):
     return redirect(url_for('contabilidade_pagamentos', clinica_id=payment.clinic_id, mes=month_value))
 
 
-@app.route('/contabilidade/pagamentos/plantonistas/novo', methods=['GET', 'POST'])
 @login_required
 def contabilidade_plantonistas_novo():
     _ensure_accounting_access()
@@ -4921,7 +4908,6 @@ def contabilidade_plantonistas_novo():
     )
 
 
-@app.route('/contabilidade/pagamentos/plantonistas/quick-create', methods=['POST'])
 @login_required
 def contabilidade_plantonistas_quick_create():
     _ensure_accounting_access()
@@ -5038,7 +5024,6 @@ def contabilidade_plantonistas_quick_create():
     })
 
 
-@app.route('/contabilidade/pagamentos/plantonistas/<int:escala_id>/editar', methods=['GET', 'POST'])
 @login_required
 def contabilidade_plantonistas_editar(escala_id):
     _ensure_accounting_access()
@@ -5143,7 +5128,6 @@ def contabilidade_plantonistas_editar(escala_id):
     )
 
 
-@app.route('/contabilidade/pagamentos/plantao/<int:escala_id>/confirmar', methods=['POST'])
 @login_required
 def contabilidade_plantao_confirmar(escala_id):
     _ensure_accounting_access()
@@ -5171,7 +5155,6 @@ def contabilidade_plantao_confirmar(escala_id):
     )
 
 
-@app.route('/contabilidade/pagamentos/plantao/<int:escala_id>/gerar_pagamento', methods=['POST'])
 @login_required
 def contabilidade_plantao_gerar_pagamento(escala_id):
     _ensure_accounting_access()
@@ -5223,7 +5206,6 @@ def contabilidade_plantao_gerar_pagamento(escala_id):
     )
 
 
-@app.route('/contabilidade/obrigacoes')
 @login_required
 def contabilidade_obrigacoes():
     _ensure_accounting_access()
@@ -5293,7 +5275,6 @@ def contabilidade_obrigacoes():
     )
 
 
-@app.route('/contabilidade/nfse')
 @login_required
 def contabilidade_nfse():
     _ensure_accounting_access()
@@ -5365,7 +5346,6 @@ def contabilidade_nfse():
     )
 
 
-@app.route('/contabilidade/nfse/emitir', methods=['POST'])
 @login_required
 def contabilidade_nfse_emitir():
     _ensure_accounting_access()
@@ -5403,7 +5383,6 @@ def contabilidade_nfse_emitir():
     return redirect(url_for('contabilidade_nfse', clinica_id=consulta.clinica_id))
 
 
-@app.route('/contabilidade/nfse/processar_fila', methods=['POST'])
 @login_required
 def contabilidade_nfse_processar_fila():
     _ensure_accounting_access()
@@ -5422,7 +5401,6 @@ def contabilidade_nfse_processar_fila():
     return redirect(url_for('contabilidade_nfse', clinica_id=clinic_id))
 
 
-@app.route('/contabilidade/nfse/<int:issue_id>/reprocessar', methods=['POST'])
 @login_required
 def contabilidade_nfse_reprocessar(issue_id):
     _ensure_accounting_access()
@@ -5450,7 +5428,6 @@ def contabilidade_nfse_reprocessar(issue_id):
     return redirect(url_for('contabilidade_nfse', clinica_id=issue.clinica_id))
 
 
-@app.route('/contabilidade/nfse/<int:issue_id>/cancelar', methods=['POST'])
 @login_required
 def contabilidade_nfse_cancelar(issue_id):
     _ensure_accounting_access()
@@ -5489,7 +5466,6 @@ def contabilidade_nfse_cancelar(issue_id):
     return redirect(url_for('contabilidade_nfse', clinica_id=issue.clinica_id))
 
 
-@app.route('/contabilidade/nfse/<int:issue_id>/substituir', methods=['POST'])
 @login_required
 def contabilidade_nfse_substituir(issue_id):
     _ensure_accounting_access()
@@ -5536,7 +5512,6 @@ def contabilidade_nfse_substituir(issue_id):
     return redirect(url_for('contabilidade_nfse', clinica_id=issue.clinica_id))
 
 
-@app.route('/contabilidade/nfse/<int:issue_id>/download/<string:kind>')
 @login_required
 def contabilidade_nfse_download(issue_id, kind):
     _ensure_accounting_access()
@@ -5631,7 +5606,6 @@ def _update_coordinates_from_request(endereco: Endereco | None):
         return False
 
 
-@app.route('/register', methods=['GET', 'POST'])
 def register():
     form = RegistrationForm()
     is_json_request = request.accept_mimetypes['application/json'] > request.accept_mimetypes['text/html']
@@ -5903,7 +5877,6 @@ def add_animal():
     )
 
 
-@app.route('/login', methods=['GET', 'POST'])
 def login_view():
     form = LoginForm()
     is_json_request = request.accept_mimetypes['application/json'] > request.accept_mimetypes['text/html']
@@ -5934,14 +5907,12 @@ def login_view():
     return render_template('auth/login.html', form=form)
 
 
-@app.route('/logout')
 @login_required
 def logout():
     logout_user()
     flash('Você saiu com sucesso!', 'success')
     return redirect(url_for('index'))
 
-@app.route('/profile', methods=['GET', 'POST'])
 @login_required
 def profile():
     # Garante que current_user.endereco exista para pré-preenchimento
@@ -6025,7 +5996,6 @@ def profile():
     )
 
 
-@app.route('/change_password', methods=['GET', 'POST'])
 @login_required
 def change_password():
     form = ChangePasswordForm()
@@ -6047,7 +6017,6 @@ def change_password():
     return render_template('auth/change_password.html', form=form)
 
 
-@app.route('/delete_account', methods=['POST'])
 @login_required
 def delete_account():
     form = DeleteAccountForm()
@@ -6290,7 +6259,6 @@ def editar_animal(animal_id):
                            breed_list=breed_list)
 
 
-@app.route('/mensagem/<int:animal_id>', methods=['GET', 'POST'])
 @login_required
 def enviar_mensagem(animal_id):
     animal = get_animal_or_404(animal_id)
@@ -6317,7 +6285,6 @@ def enviar_mensagem(animal_id):
     return render_template('mensagens/enviar_mensagem.html', form=form, animal=animal)
 
 
-@app.route('/mensagem/<int:message_id>/aceitar', methods=['POST'])
 @login_required
 def aceitar_interesse(message_id):
     mensagem = Message.query.get_or_404(message_id)
@@ -6335,13 +6302,11 @@ def aceitar_interesse(message_id):
     return redirect(url_for('conversa', animal_id=animal.id, user_id=mensagem.sender_id))
 
 
-@app.route('/mensagens')
 @login_required
 def mensagens():
     return _render_messages_page()
 
 
-@app.route('/api/messages/threads')
 @login_required
 def api_message_threads():
     """Return aggregated conversation threads for the authenticated user."""
@@ -6350,7 +6315,6 @@ def api_message_threads():
     return jsonify({"threads": threads})
 
 
-@app.route('/chat/<int:animal_id>', methods=['GET', 'POST'])
 @login_required
 def chat_messages(animal_id):
     """API simples para listar e criar mensagens relacionadas a um animal."""
@@ -6401,7 +6365,6 @@ def chat_messages(animal_id):
     )
 
 
-@app.route('/chat/<int:animal_id>/view')
 @login_required
 def chat_view(animal_id):
     animal = get_animal_or_404(animal_id)
@@ -6445,7 +6408,6 @@ def _resolve_animal_conversation(animal_id, user_id):
     return animal, interlocutor
 
 
-@app.route('/conversa/<int:animal_id>/<int:user_id>', methods=['GET', 'POST'])
 @login_required
 def conversa(animal_id, user_id):
     animal, outro_usuario = _resolve_animal_conversation(animal_id, user_id)
@@ -6494,7 +6456,6 @@ def conversa(animal_id, user_id):
     )
 
 
-@app.route('/api/conversa/<int:animal_id>/<int:user_id>', methods=['POST'])
 @login_required
 def api_conversa_message(animal_id, user_id):
     """Recebe uma nova mensagem da conversa e retorna o HTML renderizado."""
@@ -6514,8 +6475,6 @@ def api_conversa_message(animal_id, user_id):
     return '', 400
 
 
-@app.route('/conversa_admin', methods=['GET', 'POST'])
-@app.route('/conversa_admin/<int:user_id>', methods=['GET', 'POST'])
 @login_required
 def conversa_admin(user_id=None):
     """Permite conversar diretamente com o administrador.
@@ -6641,8 +6600,6 @@ def conversa_admin(user_id=None):
     )
 
 
-@app.route('/api/conversa_admin', methods=['POST'])
-@app.route('/api/conversa_admin/<int:user_id>', methods=['POST'])
 @login_required
 def api_conversa_admin_message(user_id=None):
     """Recebe nova mensagem na conversa com o admin e retorna HTML."""
@@ -6678,7 +6635,6 @@ def api_conversa_admin_message(user_id=None):
     return '', 400
 
 
-@app.route('/admin/users/<int:user_id>/promover_veterinario', methods=['POST'])
 @login_required
 def admin_promote_veterinarian(user_id):
     if not (current_user.is_authenticated and (current_user.role or '').lower() == 'admin'):
@@ -6718,7 +6674,6 @@ def admin_promote_veterinarian(user_id):
     return redirect(url_for('conversa_admin', user_id=user.id))
 
 
-@app.route('/admin/users/<int:user_id>/promover_entregador', methods=['POST'])
 @login_required
 def admin_promote_delivery(user_id):
     if not (current_user.is_authenticated and (current_user.role or '').lower() == 'admin'):
@@ -6756,7 +6711,6 @@ def admin_promote_delivery(user_id):
     return redirect(url_for('conversa_admin', user_id=user.id))
 
 
-@app.route('/admin/users/<int:user_id>/remover_entregador', methods=['POST'])
 @login_required
 def admin_remove_delivery(user_id):
     if not (current_user.is_authenticated and (current_user.role or '').lower() == 'admin'):
@@ -6794,7 +6748,6 @@ def admin_remove_delivery(user_id):
     return redirect(url_for('conversa_admin', user_id=user.id))
 
 
-@app.route('/mensagens_admin')
 @login_required
 def mensagens_admin():
     """Lista as conversas iniciadas pelos usuários com o administrador."""
@@ -7333,7 +7286,6 @@ def gerar_termo(animal_id, tipo):
         abort(404)
 
 
-@app.route("/plano-saude")
 @login_required
 def plano_saude_overview():
     # animais ativos do tutor
@@ -7361,7 +7313,6 @@ def plano_saude_overview():
     )
 
 
-@app.route('/admin/planos/dashboard')
 @login_required
 def planos_dashboard():
     from admin import _is_admin
@@ -7371,7 +7322,6 @@ def planos_dashboard():
     history = build_usage_history(limit=25, include_display=True)
     return render_template('planos/dashboard.html', metrics=metrics, history=history)
 
-@app.route("/animal/<int:animal_id>/planosaude", methods=["GET", "POST"])
 @login_required
 def planosaude_animal(animal_id):
     animal = get_animal_or_404(animal_id)
@@ -7447,7 +7397,6 @@ def planosaude_animal(animal_id):
 
 
 
-@app.route("/plano-saude/<int:animal_id>/contratar", methods=["POST"])
 @login_required
 def contratar_plano(animal_id):
     """Inicia a assinatura de um plano de saúde via Mercado Pago."""
@@ -7522,7 +7471,6 @@ def contratar_plano(animal_id):
     return redirect(init_point)
 
 
-@app.route('/consulta/<int:consulta_id>/validar-plano', methods=['POST'])
 @login_required
 def validar_plano_consulta(consulta_id):
     consulta = get_consulta_or_404(consulta_id)
@@ -7574,7 +7522,6 @@ def validar_plano_consulta(consulta_id):
 
 
 
-@app.route('/api/seguradoras/sinistros', methods=['POST'])
 def api_criar_sinistro():
     token = request.headers.get('X-Insurer-Token')
     if not insurer_token_valid(token):
@@ -7604,7 +7551,6 @@ def api_criar_sinistro():
     return jsonify({'id': claim.id, 'status': claim.status}), 201
 
 
-@app.route('/api/seguradoras/sinistros/<int:claim_id>')
 def api_status_sinistro(claim_id):
     token = request.headers.get('X-Insurer-Token')
     if not insurer_token_valid(token):
@@ -7622,7 +7568,6 @@ def api_status_sinistro(claim_id):
     })
 
 
-@app.route('/api/seguradoras/planos/<int:plan_id>/historico')
 def api_historico_uso(plan_id):
     token = request.headers.get('X-Insurer-Token')
     if not insurer_token_valid(token):
@@ -7632,7 +7577,6 @@ def api_historico_uso(plan_id):
     return jsonify({'plan_id': plan_id, 'historico': history})
 
 
-@app.route('/api/seguradoras/consultas/<int:consulta_id>/autorizacao')
 def api_status_autorizacao(consulta_id):
     token = request.headers.get('X-Insurer-Token')
     if not insurer_token_valid(token):
@@ -8585,13 +8529,11 @@ def buscar_tutores():
     return jsonify(resultados)
 
 
-@app.route('/clinicas')
 def clinicas():
     clinicas = clinicas_do_usuario().all()
     return render_template('clinica/clinicas.html', clinicas=clinicas)
 
 
-@app.route('/minha-clinica', methods=['GET', 'POST'])
 @login_required
 def minha_clinica():
     clinicas = clinicas_do_usuario().all()
@@ -8884,7 +8826,6 @@ def _build_clinic_theme(clinica):
     return theme
 
 
-@app.route('/clinica/<int:clinica_id>', methods=['GET', 'POST'])
 @login_required
 def clinic_detail(clinica_id):
     if _is_admin():
@@ -9574,7 +9515,6 @@ def clinic_detail(clinica_id):
     )
 
 
-@app.route('/clinica/<int:clinica_id>/convites/<int:invite_id>/cancel', methods=['POST'])
 @login_required
 def cancel_clinic_invite(clinica_id, invite_id):
     """Cancel a pending clinic invite."""
@@ -9600,7 +9540,6 @@ def cancel_clinic_invite(clinica_id, invite_id):
     return redirect(url_for('clinic_detail', clinica_id=clinica.id) + '#veterinarios')
 
 
-@app.route('/clinica/<int:clinica_id>/convites/<int:invite_id>/resend', methods=['POST'])
 @login_required
 def resend_clinic_invite(clinica_id, invite_id):
     """Resend a declined clinic invite."""
@@ -9633,7 +9572,6 @@ def resend_clinic_invite(clinica_id, invite_id):
     return redirect(url_for('clinic_detail', clinica_id=clinica.id) + '#veterinarios')
 
 
-@app.route('/clinica/<int:clinica_id>/veterinario', methods=['POST'])
 @login_required
 def create_clinic_veterinario(clinica_id):
     """Create a new veterinarian linked to a clinic."""
@@ -9679,7 +9617,6 @@ def create_clinic_veterinario(clinica_id):
     return redirect(url_for('clinic_detail', clinica_id=clinica.id) + '#veterinarios')
 
 
-@app.route('/convites/clinica', methods=['GET', 'POST'])
 @login_required
 def clinic_invites():
     """List pending clinic invitations for the logged veterinarian."""
@@ -9726,7 +9663,6 @@ def clinic_invites():
     return anchor_redirect
 
 
-@app.route('/convites/<int:invite_id>/<string:action>', methods=['POST'])
 @login_required
 def respond_clinic_invite(invite_id, action):
     """Accept or decline a clinic invitation."""
@@ -9758,7 +9694,6 @@ def respond_clinic_invite(invite_id, action):
     return redirect(url_for('clinic_invites'))
 
 
-@app.route('/clinica/<int:clinica_id>/estoque', methods=['GET', 'POST'])
 @login_required
 def clinic_stock(clinica_id):
     clinica = Clinica.query.get_or_404(clinica_id)
@@ -9833,7 +9768,6 @@ def clinic_stock(clinica_id):
     )
 
 
-@app.route('/estoque/item/<int:item_id>/atualizar', methods=['POST'])
 @login_required
 def update_inventory_item(item_id):
     item = ClinicInventoryItem.query.get_or_404(item_id)
@@ -9896,7 +9830,6 @@ def update_inventory_item(item_id):
     return redirect(url_for('clinic_detail', clinica_id=clinica.id) + '#estoque')
 
 
-@app.route('/clinica/<int:clinica_id>/novo_orcamento', methods=['GET', 'POST'])
 @login_required
 def novo_orcamento(clinica_id):
     clinica = Clinica.query.get_or_404(clinica_id)
@@ -9919,7 +9852,6 @@ def novo_orcamento(clinica_id):
     return render_template('orcamentos/orcamento_form.html', form=form, clinica=clinica)
 
 
-@app.route('/orcamento/<int:orcamento_id>/editar', methods=['GET', 'POST'])
 @login_required
 def editar_orcamento(orcamento_id):
     orcamento = Orcamento.query.get_or_404(orcamento_id)
@@ -9941,7 +9873,6 @@ def editar_orcamento(orcamento_id):
     return render_template('orcamentos/orcamento_form.html', form=form, clinica=orcamento.clinica)
 
 
-@app.route('/orcamento/<int:orcamento_id>/enviar', methods=['POST'])
 @login_required
 def enviar_orcamento(orcamento_id):
     orcamento = Orcamento.query.get_or_404(orcamento_id)
@@ -10004,7 +9935,6 @@ def enviar_orcamento(orcamento_id):
     return redirect(redirect_url)
 
 
-@app.route('/orcamento/<int:orcamento_id>/status', methods=['PATCH'])
 @login_required
 def atualizar_status_orcamento(orcamento_id):
     orcamento = Orcamento.query.get_or_404(orcamento_id)
@@ -10052,7 +9982,6 @@ def atualizar_status_orcamento(orcamento_id):
     return redirect(request.referrer or url_for('clinic_detail', clinica_id=orcamento.clinica_id) + '#orcamento')
 
 
-@app.route('/clinica/<int:clinica_id>/orcamentos')
 @login_required
 def orcamentos(clinica_id):
     clinica = Clinica.query.get_or_404(clinica_id)
@@ -10076,7 +10005,6 @@ def orcamentos(clinica_id):
     )
 
 
-@app.route('/dashboard/orcamentos')
 @login_required
 def dashboard_orcamentos():
     from collections import defaultdict
@@ -10238,7 +10166,6 @@ def dashboard_orcamentos():
     )
 
 
-@app.route('/clinica/<int:clinica_id>/dashboard')
 @login_required
 def clinic_dashboard(clinica_id):
     clinic = Clinica.query.get_or_404(clinica_id)
@@ -10259,7 +10186,6 @@ def clinic_dashboard(clinica_id):
     return render_template('clinica/clinic_dashboard.html', clinic=clinic, staff=staff)
 
 
-@app.route('/clinica/<int:clinica_id>/funcionarios', methods=['GET', 'POST'])
 @login_required
 def clinic_staff(clinica_id):
     clinic = Clinica.query.get_or_404(clinica_id)
@@ -10335,7 +10261,6 @@ def clinic_staff(clinica_id):
     )
 
 
-@app.route('/clinica/<int:clinica_id>/funcionario/<int:user_id>/permissoes', methods=['GET', 'POST'])
 @login_required
 def clinic_staff_permissions(clinica_id, user_id):
     clinic = Clinica.query.get_or_404(clinica_id)
@@ -10370,7 +10295,6 @@ def clinic_staff_permissions(clinica_id, user_id):
     return render_template('clinica/clinic_staff_permissions.html', form=form, clinic=clinic)
 
 
-@app.route('/clinica/<int:clinica_id>/funcionario/<int:user_id>/remove', methods=['POST'])
 @login_required
 def remove_funcionario(clinica_id, user_id):
     clinica = Clinica.query.get_or_404(clinica_id)
@@ -10390,7 +10314,6 @@ def remove_funcionario(clinica_id, user_id):
     return redirect(url_for('clinic_detail', clinica_id=clinica_id))
 
 
-@app.route('/clinica/<int:clinica_id>/horario/<int:horario_id>/delete', methods=['POST'])
 @login_required
 def delete_clinic_hour(clinica_id, horario_id):
     clinica = Clinica.query.get_or_404(clinica_id)
@@ -10407,7 +10330,6 @@ def delete_clinic_hour(clinica_id, horario_id):
     return redirect(url_for('clinic_detail', clinica_id=clinica_id))
 
 
-@app.route('/clinica/<int:clinica_id>/veterinario/<int:veterinario_id>/remove', methods=['POST'])
 @login_required
 def remove_veterinario(clinica_id, veterinario_id):
     clinica = Clinica.query.get_or_404(clinica_id)
@@ -10426,7 +10348,6 @@ def remove_veterinario(clinica_id, veterinario_id):
     return redirect(url_for('clinic_detail', clinica_id=clinica_id))
 
 
-@app.route('/clinica/<int:clinica_id>/especialista/<int:veterinario_id>/remove', methods=['POST'])
 @login_required
 def remove_specialist(clinica_id, veterinario_id):
     clinica = Clinica.query.get_or_404(clinica_id)
@@ -10444,10 +10365,6 @@ def remove_specialist(clinica_id, veterinario_id):
     return redirect(url_for('clinic_detail', clinica_id=clinica_id) + '#especialistas')
 
 
-@app.route(
-    '/clinica/<int:clinica_id>/veterinario/<int:veterinario_id>/schedule/<int:horario_id>/delete',
-    methods=['POST'],
-)
 @login_required
 def delete_vet_schedule_clinic(clinica_id, veterinario_id, horario_id):
     clinica = Clinica.query.get_or_404(clinica_id)
@@ -10465,13 +10382,11 @@ def delete_vet_schedule_clinic(clinica_id, veterinario_id, horario_id):
     return redirect(url_for('clinic_detail', clinica_id=clinica_id))
 
 
-@app.route('/veterinarios')
 def veterinarios():
     veterinarios = Veterinario.query.all()
     return render_template('veterinarios/veterinarios.html', veterinarios=veterinarios)
 
 
-@app.route('/veterinario/<int:veterinario_id>')
 def vet_detail(veterinario_id):
     from models import Animal, User  # import local para evitar ciclos
 
@@ -10644,7 +10559,6 @@ def vet_detail(veterinario_id):
 
 
 
-@app.route('/admin/veterinario/<int:veterinario_id>/especialidades', methods=['GET', 'POST'])
 @login_required
 def edit_vet_specialties(veterinario_id):
     # Apenas o próprio veterinário ou um administrador pode alterar especialidades
@@ -10960,7 +10874,6 @@ def _share_request_target_animals(tutor_id, animal_id):
     return animal
 
 
-@app.route('/api/shares', methods=['GET', 'POST'])
 @login_required
 def shares_api():
     if request.method == 'POST':
@@ -11088,7 +11001,6 @@ def _activate_share_request(share_request, expires_in_days=None):
     return access
 
 
-@app.route('/api/shares/<int:request_id>/approve', methods=['POST'])
 @login_required
 def approve_share_request(request_id):
     if not _is_tutor_portal_user(current_user):
@@ -11102,7 +11014,6 @@ def approve_share_request(request_id):
     return jsonify(success=True, request=_serialize_share_request(share_request), access=_serialize_share_access(access))
 
 
-@app.route('/api/shares/<int:request_id>/deny', methods=['POST'])
 @login_required
 def deny_share_request(request_id):
     if not _is_tutor_portal_user(current_user):
@@ -11120,7 +11031,6 @@ def deny_share_request(request_id):
     return jsonify(success=True, request=_serialize_share_request(share_request))
 
 
-@app.route('/api/shares/confirm', methods=['POST'])
 @login_required
 def confirm_share_request():
     if not _is_tutor_portal_user(current_user):
@@ -11148,7 +11058,6 @@ def confirm_share_request():
     return jsonify(success=True, request=_serialize_share_request(share_request), access=_serialize_share_access(access))
 
 
-@app.route('/api/share-requests/<string:token>', methods=['GET'])
 @login_required
 def share_request_detail(token):
     if not _is_tutor_portal_user(current_user):
@@ -13479,7 +13388,6 @@ def arquivar_animal(animal_id):
 
 
 
-@app.route('/orders/new', methods=['GET', 'POST'])
 @login_required
 def create_order():
     if current_user.worker != 'delivery':
@@ -13536,7 +13444,6 @@ def create_order():
  
 
 
-@app.route('/orders/<int:order_id>/request_delivery', methods=['POST'])
 @login_required
 def request_delivery(order_id):
     if current_user.worker != 'delivery':      # só entregadores podem solicitar
@@ -13649,7 +13556,6 @@ def _delivery_sections_payload():
     return html, counts, context
 
 
-@app.route("/delivery_requests")
 @login_required
 def list_delivery_requests():
     """
@@ -13665,7 +13571,6 @@ def list_delivery_requests():
     return render_template("entregas/delivery_requests.html", **context)
 
 
-@app.route("/api/delivery_counts")
 @login_required
 def api_delivery_counts():
     """Return delivery counts for the current user."""
@@ -13695,7 +13600,6 @@ def api_delivery_counts():
 
 
 # --- Compatibilidade admin ---------------------------------
-@app.route("/admin/delivery/<int:req_id>")
 @login_required
 def admin_delivery_detail(req_id):
     # se quiser, mantenha restrição de admin aqui
@@ -13704,7 +13608,6 @@ def admin_delivery_detail(req_id):
     return redirect(url_for("delivery_detail", req_id=req_id))
 
 # --- Compatibilidade entregador ----------------------------
-@app.route("/worker/delivery/<int:req_id>")
 @login_required
 def worker_delivery_detail(req_id):
     # garante que o usuário é entregador e dono da entrega
@@ -13740,7 +13643,6 @@ def _delivery_error_response(message, category='danger', status=400):
     return jsonify(payload), status
 
 
-@app.route('/delivery_requests/<int:req_id>/accept', methods=['POST'])
 @login_required
 def accept_delivery(req_id):
     try:
@@ -13785,7 +13687,6 @@ def accept_delivery(req_id):
 
 
 
-@app.route('/delivery_requests/<int:req_id>/complete', methods=['POST'])
 @login_required
 def complete_delivery(req_id):
     try:
@@ -13811,7 +13712,6 @@ def complete_delivery(req_id):
         return _delivery_error_response('Erro interno ao processar a entrega.', 'danger', 500)
 
 
-@app.route('/delivery_requests/<int:req_id>/cancel', methods=['POST'])
 @login_required
 def cancel_delivery(req_id):
     try:
@@ -13838,7 +13738,6 @@ def cancel_delivery(req_id):
         return _delivery_error_response('Erro interno ao processar a entrega.', 'danger', 500)
 
 
-@app.route('/delivery_requests/<int:req_id>/buyer_cancel', methods=['POST'])
 @login_required
 def buyer_cancel_delivery(req_id):
     try:
@@ -13869,7 +13768,6 @@ def buyer_cancel_delivery(req_id):
 from sqlalchemy.orm import joinedload
 
 
-@app.route("/delivery/<int:req_id>")
 @login_required
 def delivery_detail(req_id):
     """Detalhe da entrega para admin, entregador ou comprador."""
@@ -14059,7 +13957,6 @@ def _build_missing_tutor_geocodes():
     ]
 
 
-@app.route('/admin/mapa_tutores')
 @login_required
 def admin_tutor_map():
     if not _is_admin():
@@ -14070,7 +13967,6 @@ def admin_tutor_map():
     return render_template('admin/tutor_map.html', **map_data)
 
 
-@app.route('/admin/api/tutor_markers')
 @login_required
 def admin_tutor_markers_api():
     if not _is_admin():
@@ -14079,7 +13975,6 @@ def admin_tutor_markers_api():
     return jsonify(_build_tutor_map_data())
 
 
-@app.route('/admin/api/geocode_addresses', methods=['POST'])
 @login_required
 def admin_geocode_addresses():
     if not _is_admin():
@@ -14091,7 +13986,6 @@ def admin_geocode_addresses():
     return jsonify({'started': started, 'status': status}), (202 if started else 200)
 
 
-@app.route('/admin/api/geocode_addresses/status')
 @login_required
 def admin_geocode_status():
     if not _is_admin():
@@ -14103,7 +13997,6 @@ def admin_geocode_status():
     return jsonify(status)
 
 
-@app.route("/admin/delivery_overview")
 @login_required
 def delivery_overview():
     if not _is_admin():
@@ -14171,7 +14064,6 @@ def delivery_overview():
     )
 
 
-@app.route('/admin/delivery_requests/<int:req_id>/status/<status>', methods=['POST'])
 @login_required
 def admin_set_delivery_status(req_id, status):
     if not _is_admin():
@@ -14218,7 +14110,6 @@ def admin_set_delivery_status(req_id, status):
     return redirect(url_for('delivery_overview'))
 
 
-@app.route('/admin/delivery_requests/<int:req_id>/delete', methods=['POST'])
 @login_required
 def admin_delete_delivery(req_id):
     if not _is_admin():
@@ -14233,7 +14124,6 @@ def admin_delete_delivery(req_id):
     return redirect(url_for('delivery_overview'))
 
 
-@app.route('/admin/delivery_requests/<int:req_id>/archive', methods=['POST'])
 @login_required
 def admin_archive_delivery(req_id):
     if not _is_admin():
@@ -14247,7 +14137,6 @@ def admin_archive_delivery(req_id):
     return redirect(url_for('delivery_overview'))
 
 
-@app.route('/admin/delivery_requests/<int:req_id>/unarchive', methods=['POST'])
 @login_required
 def admin_unarchive_delivery(req_id):
     if not _is_admin():
@@ -14261,7 +14150,6 @@ def admin_unarchive_delivery(req_id):
     return redirect(url_for('delivery_archive'))
 
 
-@app.route('/admin/delivery_archive')
 @login_required
 def delivery_archive():
     if not _is_admin():
@@ -14283,7 +14171,6 @@ def delivery_archive():
     return render_template('admin/delivery_archive_admin.html', requests=reqs)
 
 
-@app.route('/admin/data-share-logs')
 @login_required
 def admin_data_share_logs():
     if not _is_admin():
@@ -14431,7 +14318,6 @@ def _export_data_share_logs_pdf(logs):
     )
 
 
-@app.route('/delivery_archive')
 @login_required
 def delivery_archive_user():
     base = (
@@ -15057,7 +14943,6 @@ def _build_loja_query(search_term: str, filtro: str):
     return query
 
 
-@app.route("/loja")
 @login_required
 def loja():
     pagamento_pendente = None
@@ -15092,7 +14977,6 @@ def loja():
     )
 
 
-@app.route("/loja/data")
 @login_required
 def loja_data():
     search_term = request.args.get("q", "").strip()
@@ -15135,7 +15019,6 @@ def loja_data():
     return html
 
 
-@app.route('/produto/<int:product_id>', methods=['GET', 'POST'])
 @login_required
 def produto_detail(product_id):
     """Exibe detalhes do produto e permite edições para administradores."""
@@ -15187,7 +15070,6 @@ def produto_detail(product_id):
 # --------------------------------------------------------
 #  ADICIONAR AO CARRINHO
 # --------------------------------------------------------
-@app.route("/carrinho/adicionar/<int:product_id>", methods=["POST"])
 @login_required
 def adicionar_carrinho(product_id):
     product = Product.query.get(product_id)
@@ -15263,7 +15145,6 @@ def adicionar_carrinho(product_id):
 # --------------------------------------------------------
 #  ATUALIZAR QUANTIDADE DO ITEM DO CARRINHO
 # --------------------------------------------------------
-@app.route("/carrinho/increase/<int:item_id>", methods=["POST"])
 @login_required
 def aumentar_item_carrinho(item_id):
     """Incrementa a quantidade de um item no carrinho."""
@@ -15292,7 +15173,6 @@ def aumentar_item_carrinho(item_id):
     return redirect(url_for("ver_carrinho"))
 
 
-@app.route("/carrinho/decrease/<int:item_id>", methods=["POST"])
 @login_required
 def diminuir_item_carrinho(item_id):
     """Diminui a quantidade de um item; remove se chegar a zero."""
@@ -15339,7 +15219,6 @@ def diminuir_item_carrinho(item_id):
 # --------------------------------------------------------
 from forms import CheckoutForm, EditAddressForm
 
-@app.route("/carrinho", methods=["GET", "POST"])
 @login_required
 def ver_carrinho():
     # 1) Cria o form
@@ -15370,7 +15249,6 @@ def ver_carrinho():
     )
 
 
-@app.route('/carrinho/salvar_endereco', methods=['POST'])
 @login_required
 def carrinho_salvar_endereco():
     """Salva um novo endereço informado no carrinho."""
@@ -15398,7 +15276,6 @@ def carrinho_salvar_endereco():
     return redirect(url_for('ver_carrinho'))
 
 
-@app.route("/checkout/confirm", methods=["POST"])
 @login_required
 def checkout_confirm():
     """Mostra um resumo antes de redirecionar ao pagamento externo."""
@@ -15467,7 +15344,6 @@ import json, logging, os
 from flask import current_app, redirect, url_for, flash, session
 from flask_login import login_required, current_user
 
-@app.route("/checkout", methods=["POST"])
 @login_required
 def checkout():
     current_app.logger.setLevel(logging.DEBUG)
@@ -15760,7 +15636,6 @@ def verify_mp_signature(req, secret: str) -> bool:
         return False
     return True
 
-@app.route("/notificacoes", methods=["POST", "GET"])
 def notificacoes_mercado_pago():
     if request.method == "GET":
         return jsonify(status="pong"), 200
@@ -15978,7 +15853,6 @@ def _refresh_mp_status(payment: Payment) -> None:
         db.session.commit()
 
 
-@app.route("/pagamento/<status>")
 def legacy_pagamento(status):
     extref = request.args.get("external_reference")
     payment = None
@@ -16012,7 +15886,6 @@ def legacy_pagamento(status):
     return redirect(url_for("payment_status", payment_id=payment.id, status=mp_status))
 
 
-@app.route("/order/<int:order_id>/edit_address", methods=["GET", "POST"])
 @login_required
 def edit_order_address(order_id):
     order = Order.query.get_or_404(order_id)
@@ -16032,7 +15905,6 @@ def edit_order_address(order_id):
     return render_template("loja/edit_address.html", form=form, payment_id=payment_id)
 
 
-@app.route("/payment_status/<int:payment_id>")
 def payment_status(payment_id):
     payment = Payment.query.get_or_404(payment_id)
 
@@ -16083,7 +15955,6 @@ def payment_status(payment_id):
     )
 
 
-@app.route("/api/payment_status/<int:payment_id>")
 def api_payment_status(payment_id):
     payment = Payment.query.get_or_404(payment_id)
     if current_user.is_authenticated and payment.user_id != current_user.id:
@@ -16098,7 +15969,6 @@ def api_payment_status(payment_id):
 from sqlalchemy.orm import joinedload
 
 
-@app.route("/minhas-compras")
 @login_required
 def minhas_compras():
     page = request.args.get("page", 1, type=int)
@@ -16121,7 +15991,6 @@ def minhas_compras():
 
 
 
-@app.route("/api/minhas-compras")
 @login_required
 def api_minhas_compras():
     orders = (Order.query
@@ -16141,7 +16010,6 @@ def api_minhas_compras():
     return jsonify(data)
 
 
-@app.route("/pedido/<int:order_id>")
 @login_required
 def pedido_detail(order_id):
     order = (Order.query
@@ -16220,7 +16088,6 @@ def pedido_detail(order_id):
 
 
 
-@app.route('/appointments/<int:appointment_id>/confirmation')
 @login_required
 def appointment_confirmation(appointment_id):
     appointment = Appointment.query.get_or_404(appointment_id)
@@ -16229,7 +16096,6 @@ def appointment_confirmation(appointment_id):
     return render_template('agendamentos/appointment_confirmation.html', appointment=appointment)
 
 
-@app.route('/appointments', methods=['GET', 'POST'])
 @login_required
 def appointments():
     from models import ExamAppointment, Veterinario, Clinica, User
@@ -17312,14 +17178,12 @@ def appointments():
         )
 
 
-@app.route('/appointments/calendar')
 @login_required
 def appointments_calendar():
     """Página experimental de calendário para tutores."""
     return render_template('agendamentos/appointments_calendar.html')
 
 
-@app.route('/appointments/<int:veterinario_id>/schedule/<int:horario_id>/edit', methods=['POST'])
 @login_required
 def edit_vet_schedule_slot(veterinario_id, horario_id):
     wants_json = (
@@ -17530,7 +17394,6 @@ def edit_vet_schedule_slot(veterinario_id, horario_id):
     return redirect_response
 
 
-@app.route('/appointments/<int:veterinario_id>/schedule/bulk_delete', methods=['POST'])
 @login_required
 def bulk_delete_vet_schedule(veterinario_id):
     from models import Veterinario, VetSchedule
@@ -17631,7 +17494,6 @@ def bulk_delete_vet_schedule(veterinario_id):
     return redirect(request.referrer or url_for('appointments'))
 
 
-@app.route('/appointments/<int:veterinario_id>/schedule/<int:horario_id>/delete', methods=['POST'])
 @login_required
 def delete_vet_schedule(veterinario_id, horario_id):
     if not (
@@ -17651,13 +17513,11 @@ def delete_vet_schedule(veterinario_id, horario_id):
     return redirect(url_for('appointments'))
 
 
-@app.route('/appointments/pending')
 @login_required
 def pending_appointments():
     return redirect(url_for('appointments'))
 
 
-@app.route('/appointments/manage')
 @login_required
 def manage_appointments():
     is_vet = is_veterinarian(current_user)
@@ -17707,7 +17567,6 @@ def manage_appointments():
     )
 
 
-@app.route('/appointments/<int:appointment_id>/edit', methods=['GET', 'POST'])
 @login_required
 def edit_appointment(appointment_id):
     appointment = Appointment.query.get_or_404(appointment_id)
@@ -17778,7 +17637,6 @@ def edit_appointment(appointment_id):
     return render_template('agendamentos/edit_appointment.html', appointment=appointment, veterinarios=veterinarios)
 
 
-@app.route('/appointments/<int:appointment_id>/status', methods=['POST'])
 @login_required
 def update_appointment_status(appointment_id):
     """Update the status of an appointment."""
@@ -17890,7 +17748,6 @@ def update_appointment_status(appointment_id):
     return redirect(request.referrer or url_for('appointments'))
 
 
-@app.route('/appointments/<int:appointment_id>/delete', methods=['POST'])
 @login_required
 def delete_appointment(appointment_id):
     appointment = Appointment.query.get_or_404(appointment_id)
@@ -17963,7 +17820,6 @@ def _serialize_calendar_pet(pet):
     }
 
 
-@app.route('/api/my_pets')
 @login_required
 def api_my_pets():
     """Return the authenticated tutor's pets ordered by recency."""
@@ -17982,7 +17838,6 @@ def api_my_pets():
     return jsonify([_serialize_calendar_pet(p) for p in pets])
 
 
-@app.route('/api/clinic_pets')
 @login_required
 def api_clinic_pets():
     """Return pets associated with the current clinic (or admin selection)."""
@@ -18054,7 +17909,6 @@ def api_clinic_pets():
     return jsonify([_serialize_calendar_pet(p) for p in pets])
 
 
-@app.route('/api/my_appointments')
 @login_required
 def api_my_appointments():
     """Return the current user's appointments as calendar events."""
@@ -18423,7 +18277,6 @@ def api_my_appointments():
     return jsonify(events)
 
 
-@app.route('/api/user_appointments/<int:user_id>')
 @login_required
 def api_user_appointments(user_id):
     """Return appointments for the selected user (admin only)."""
@@ -18480,7 +18333,6 @@ def api_user_appointments(user_id):
     return jsonify(events)
 
 
-@app.route('/api/appointments/<int:appointment_id>/reschedule', methods=['POST'])
 @login_required
 def api_reschedule_appointment(appointment_id):
     """Update the schedule of an appointment after drag & drop operations."""
@@ -18550,7 +18402,6 @@ def api_reschedule_appointment(appointment_id):
     })
 
 
-@app.route('/api/clinic_appointments/<int:clinica_id>')
 @login_required
 def api_clinic_appointments(clinica_id):
     """Return appointments for a clinic as calendar events."""
@@ -18649,7 +18500,6 @@ def api_clinic_appointments(clinica_id):
     return jsonify(events)
 
 
-@app.route('/api/vet_appointments/<int:veterinario_id>')
 @login_required
 def api_vet_appointments(veterinario_id):
     """Return appointments for a veterinarian as calendar events."""
@@ -18793,7 +18643,6 @@ def api_vet_appointments(veterinario_id):
     return jsonify(events)
 
 
-@app.route('/api/specialists')
 def api_specialists():
     from models import Veterinario, Specialty
     specialty_id = request.args.get('specialty_id', type=int)
@@ -18811,14 +18660,12 @@ def api_specialists():
     ])
 
 
-@app.route('/api/specialties')
 def api_specialties():
     from models import Specialty
     specs = Specialty.query.order_by(Specialty.nome).all()
     return jsonify([{ 'id': s.id, 'nome': s.nome } for s in specs])
 
 
-@app.route('/api/specialist/<int:veterinario_id>/available_times')
 def api_specialist_available_times(veterinario_id):
     date_str = request.args.get('date')
     if not date_str:
@@ -18835,7 +18682,6 @@ def api_specialist_available_times(veterinario_id):
     return jsonify(times)
 
 
-@app.route('/api/specialist/<int:veterinario_id>/weekly_schedule')
 def api_specialist_weekly_schedule(veterinario_id):
     start_str = request.args.get('start')
     days = int(request.args.get('days', 7))
@@ -18844,7 +18690,6 @@ def api_specialist_weekly_schedule(veterinario_id):
     return jsonify(data)
 
 
-@app.route('/animal/<int:animal_id>/schedule_exam', methods=['POST'])
 @login_required
 def schedule_exam(animal_id):
     from models import ExamAppointment, AgendaEvento, Veterinario, Animal, Message
@@ -18912,7 +18757,6 @@ def schedule_exam(animal_id):
     return jsonify({'success': True, 'confirm_by': confirm_by, 'html': html})
 
 
-@app.route('/exam_appointment/<int:appointment_id>/status', methods=['POST'])
 @login_required
 def update_exam_appointment_status(appointment_id):
     from models import ExamAppointment, Message
@@ -18949,7 +18793,6 @@ def update_exam_appointment_status(appointment_id):
     return jsonify({'success': True})
 
 
-@app.route('/exam_appointment/<int:appointment_id>/update', methods=['POST'])
 @login_required
 def update_exam_appointment(appointment_id):
     from models import ExamAppointment
@@ -18981,7 +18824,6 @@ def update_exam_appointment(appointment_id):
     return jsonify({'success': True, 'html': html})
 
 
-@app.route('/exam_appointment/<int:appointment_id>/requester_update', methods=['POST'])
 @login_required
 def update_exam_appointment_requester(appointment_id):
     from models import ExamAppointment
@@ -19079,7 +18921,6 @@ def update_exam_appointment_requester(appointment_id):
     })
 
 
-@app.route('/exam_appointment/<int:appointment_id>/delete', methods=['POST'])
 @login_required
 def delete_exam_appointment(appointment_id):
     from models import ExamAppointment
@@ -19092,7 +18933,6 @@ def delete_exam_appointment(appointment_id):
     return jsonify({'success': True, 'html': html})
 
 
-@app.route('/animal/<int:animal_id>/exam_appointments')
 @login_required
 def animal_exam_appointments(animal_id):
     from models import ExamAppointment
@@ -19597,6 +19437,10 @@ def atualizar_bloco_orcamento(bloco_id):
     historico_html = _render_orcamento_history(bloco.animal, bloco.clinica_id)
     return jsonify(success=True, html=historico_html)
 
+
+from blueprint_utils import register_domain_blueprints
+
+register_domain_blueprints(app)
 
 if __name__ == "__main__":
     # Usa a porta 8080 se existir no ambiente (como no Docker), senão usa 5000
