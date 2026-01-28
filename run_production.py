@@ -16,7 +16,10 @@ os.environ.setdefault("FLASK_ENV", "production")
 # Disable template auto-reload for speed
 os.environ.setdefault("TEMPLATES_AUTO_RELOAD", "0")
 
-from app import app, socketio
+from app import socketio
+from app_factory import create_app
+
+app = create_app()
 
 
 def main():
