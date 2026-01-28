@@ -1,0 +1,270 @@
+{% extends "layout.html" %}
+{% set titulo = "NFS-e" %}
+{% set subtitulo = "Emissões e acompanhamento" %}
+
+{% block main %}
+<div class="container mt-4">
+  <h2 class="mb-3">{{ titulo }}</h2>
+
+  <nav aria-label="breadcrumb">
+    <ol class="breadcrumb">
+      <li class="breadcrumb-item"><a href="/contabilidade">Contabilidade</a></li>
+      <li class="breadcrumb-item active" aria-current="page">{{ titulo }}</li>
+    </ol>
+  </nav>
+
+  <div class="card shadow-sm p-4 mt-3">
+    <div class="d-flex flex-column flex-lg-row justify-content-between align-items-lg-center gap-3">
+      <div>
+        <h5 class="mb-1">{{ subtitulo }}</h5>
+        <p class="text-muted mb-0">
+          Evento de negócio: <strong>finalização da consulta</strong> cria uma emissão na fila de NFS-e.
+        </p>
+        <div class="mt-3">
+          <h6 class="mb-2">Como emitir (passo a passo)</h6>
+          <ol class="text-muted small mb-0">
+            <li>Selecione a clínica para carregar a fila.</li>
+            <li>Confira se a emissão está na fila e clique em <strong>Processar fila</strong>.</li>
+            <li>Após processar, acompanhe o status e faça o download do PDF/XML.</li>
+          </ol>
+        </div>
+      </div>
+      {% if clinics %}
+      <form method="get" class="ms-lg-auto">
+        <label class="form-label small text-muted mb-1" for="clinica-select">Clínica</label>
+        <select id="clinica-select" name="clinica_id" class="form-select" onchange="this.form.submit()">
+          {% for clinic in clinics %}
+            <option value="{{ clinic.id }}" {% if selected_clinic and clinic.id == selected_clinic.id %}selected{% endif %}>
+              {{ clinic.nome or 'Clínica' }}
+            </option>
+          {% endfor %}
+        </select>
+      </form>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="row g-3 mt-2">
+    <div class="col-lg-8">
+      <div class="card shadow-sm h-100">
+        <div class="card-body">
+          <div class="d-flex flex-column flex-md-row justify-content-between gap-2">
+            <div>
+              <h6 class="mb-1">Fila de emissão</h6>
+              <p class="text-muted mb-0 small">
+                {% if selected_clinic %}
+                  {{ queue_count }} emissão(ões) aguardando processamento{% if async_enabled %} (modo assíncrono){% endif %}.
+                {% else %}
+                  Selecione uma clínica para visualizar a fila.
+                {% endif %}
+              </p>
+            </div>
+            {% if selected_clinic %}
+            <form method="post" action="{{ url_for('contabilidade_nfse_processar_fila') }}" class="d-flex gap-2 align-items-end">
+              <input type="hidden" name="clinica_id" value="{{ selected_clinic.id }}">
+              <div>
+                <label class="form-label small text-muted mb-1" for="limit">Limite</label>
+                <input id="limit" name="limit" type="number" min="1" max="100" value="10" class="form-control form-control-sm">
+              </div>
+              <button class="btn btn-outline-primary btn-sm" type="submit">
+                Processar fila
+              </button>
+            </form>
+            {% endif %}
+          </div>
+          {% if selected_clinic %}
+            <div class="alert alert-info small mt-3 mb-0">
+              Dica: se uma emissão ficar em <strong>erro</strong>, clique em <strong>Reprocessar</strong> para tentar novamente.
+            </div>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+
+    <div class="col-lg-4">
+      <div class="card shadow-sm h-100">
+        <div class="card-body">
+          <h6 class="mb-2">Emissão manual (casos pontuais)</h6>
+          <p class="text-muted small mb-3">
+            Use quando precisar emitir uma NFS-e retroativa para uma consulta já finalizada.
+          </p>
+          <form method="post" action="{{ url_for('contabilidade_nfse_emitir') }}">
+            <div class="mb-2">
+              <label class="form-label small text-muted" for="consulta_id">Consulta</label>
+              <input id="consulta_id" name="consulta_id" type="number" class="form-control" placeholder="ID da consulta">
+            </div>
+            <button class="btn btn-primary w-100" type="submit">Emitir NFS-e</button>
+            <p class="text-muted small mt-2 mb-0">
+              Se não souber o ID, finalize a consulta normalmente para entrar na fila automaticamente.
+            </p>
+          </form>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card shadow-sm mt-4">
+    <div class="card-body">
+      <div class="d-flex flex-column flex-lg-row justify-content-between align-items-lg-center gap-2 mb-3">
+        <div>
+          <h6 class="mb-1">Acompanhamento das emissões</h6>
+          <p class="text-muted mb-0 small">
+            Status, protocolo e número retornados pela prefeitura/operadora.
+          </p>
+        </div>
+        <form method="get" class="d-flex flex-wrap gap-2 align-items-center">
+          {% if selected_clinic %}
+            <input type="hidden" name="clinica_id" value="{{ selected_clinic.id }}">
+          {% endif %}
+          <label class="form-label small text-muted mb-0" for="status">Status</label>
+          <select id="status" name="status" class="form-select form-select-sm">
+            <option value="">Todos</option>
+            {% for status in statuses %}
+              <option value="{{ status }}" {% if status_filter == status %}selected{% endif %}>
+                {{ status.replace('_', ' ').title() }}
+              </option>
+            {% endfor %}
+          </select>
+          <button class="btn btn-outline-secondary btn-sm" type="submit">Filtrar</button>
+        </form>
+      </div>
+      {% if selected_clinic and cancel_rules %}
+        <div class="alert alert-light border small mb-3">
+          <strong>Regras do município:</strong>
+          {% if cancel_rules.deadline_days %}
+            Prazo de cancelamento/substituição: {{ cancel_rules.deadline_days }} dia(s).
+          {% else %}
+            Prazo de cancelamento/substituição: a definir.
+          {% endif %}
+          {% if cancel_rules.require_reason %}
+            Motivo obrigatório.
+          {% else %}
+            Motivo opcional.
+          {% endif %}
+        </div>
+      {% endif %}
+
+      {% if selected_clinic %}
+      <div class="table-responsive">
+        <table class="table table-striped align-middle">
+          <thead>
+            <tr>
+              <th>Emissão</th>
+              <th>Evento</th>
+              <th>Status</th>
+              <th>Protocolo</th>
+              <th>Nº NFS-e</th>
+              <th>Downloads</th>
+              <th>Ações</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for issue in issues %}
+            {% set status_value = issue.status or 'pendente' %}
+            {% set status_class = {
+              'fila': 'bg-secondary',
+              'processando': 'bg-warning text-dark',
+              'pendente': 'bg-info',
+              'autorizado': 'bg-success',
+              'erro': 'bg-danger',
+              'cancelada': 'bg-dark',
+              'cancelamento_solicitado': 'bg-warning text-dark',
+              'substituicao_solicitada': 'bg-info text-dark'
+            }.get(status_value, 'bg-light text-dark') %}
+            <tr>
+              <td>
+                <div class="fw-semibold">#{{ issue.id }}</div>
+                <div class="text-muted small">{{ issue.created_at.strftime('%d/%m/%Y %H:%M') if issue.created_at else '—' }}</div>
+              </td>
+              <td>
+                <div class="fw-semibold">{{ issue.internal_identifier or '—' }}</div>
+                <div class="text-muted small">RPS: {{ issue.rps or '—' }}</div>
+              </td>
+              <td><span class="badge {{ status_class }}">{{ status_value }}</span></td>
+              <td>{{ issue.protocolo or '—' }}</td>
+              <td>{{ issue.numero_nfse or '—' }}</td>
+              <td class="d-flex flex-column gap-2">
+                <a class="btn btn-outline-secondary btn-sm" href="{{ url_for('contabilidade_nfse_download', issue_id=issue.id, kind='xml') }}">
+                  XML
+                </a>
+                {% if issue.id in pdf_issue_ids %}
+                  <a class="btn btn-outline-secondary btn-sm" href="{{ url_for('contabilidade_nfse_download', issue_id=issue.id, kind='pdf') }}">
+                    PDF
+                  </a>
+                {% else %}
+                  <button class="btn btn-outline-secondary btn-sm" type="button" disabled>PDF</button>
+                {% endif %}
+              </td>
+              <td>
+                <form method="post" action="{{ url_for('contabilidade_nfse_reprocessar', issue_id=issue.id) }}">
+                  <button class="btn btn-outline-primary btn-sm" type="submit">Reprocessar</button>
+                </form>
+                {% set can_cancel = issue.numero_nfse and status_value not in ['cancelada', 'cancelamento_solicitado', 'substituicao_solicitada'] %}
+                {% if can_cancel %}
+                <details class="mt-2">
+                  <summary class="small text-primary">Cancelar/Substituir</summary>
+                  <form method="post" action="{{ url_for('contabilidade_nfse_cancelar', issue_id=issue.id) }}" class="mt-2">
+                    <div class="mb-2">
+                      <label class="form-label small text-muted mb-1" for="reason_code_{{ issue.id }}">Motivo</label>
+                      {% if cancel_rules and cancel_rules.allowed_reasons %}
+                        <select id="reason_code_{{ issue.id }}" name="reason_code" class="form-select form-select-sm">
+                          <option value="">Selecione</option>
+                          {% for reason in cancel_rules.allowed_reasons %}
+                            <option value="{{ reason.code }}">{{ reason.label }}</option>
+                          {% endfor %}
+                        </select>
+                      {% else %}
+                        <input id="reason_code_{{ issue.id }}" name="reason_code" class="form-control form-control-sm" placeholder="Código do motivo">
+                      {% endif %}
+                    </div>
+                    <div class="mb-2">
+                      <label class="form-label small text-muted mb-1" for="reason_desc_{{ issue.id }}">Descrição</label>
+                      <input id="reason_desc_{{ issue.id }}" name="reason_description" class="form-control form-control-sm" placeholder="Descrição do motivo">
+                    </div>
+                    <button class="btn btn-outline-danger btn-sm w-100" type="submit">Solicitar cancelamento</button>
+                  </form>
+                  <form method="post" action="{{ url_for('contabilidade_nfse_substituir', issue_id=issue.id) }}" class="mt-3">
+                    <div class="mb-2">
+                      <label class="form-label small text-muted mb-1" for="reason_code_sub_{{ issue.id }}">Motivo</label>
+                      {% if cancel_rules and cancel_rules.allowed_reasons %}
+                        <select id="reason_code_sub_{{ issue.id }}" name="reason_code" class="form-select form-select-sm">
+                          <option value="">Selecione</option>
+                          {% for reason in cancel_rules.allowed_reasons %}
+                            <option value="{{ reason.code }}">{{ reason.label }}</option>
+                          {% endfor %}
+                        </select>
+                      {% else %}
+                        <input id="reason_code_sub_{{ issue.id }}" name="reason_code" class="form-control form-control-sm" placeholder="Código do motivo">
+                      {% endif %}
+                    </div>
+                    <div class="mb-2">
+                      <label class="form-label small text-muted mb-1" for="reason_desc_sub_{{ issue.id }}">Descrição</label>
+                      <input id="reason_desc_sub_{{ issue.id }}" name="reason_description" class="form-control form-control-sm" placeholder="Descrição do motivo">
+                    </div>
+                    <div class="mb-2">
+                      <label class="form-label small text-muted mb-1" for="substituta_{{ issue.id }}">NFS-e substituta</label>
+                      <input id="substituta_{{ issue.id }}" name="substituida_por_nfse" class="form-control form-control-sm" placeholder="Número da nota substituta">
+                    </div>
+                    <button class="btn btn-outline-warning btn-sm w-100" type="submit">Solicitar substituição</button>
+                  </form>
+                </details>
+                {% endif %}
+              </td>
+            </tr>
+            {% else %}
+            <tr>
+              <td colspan="7" class="text-muted">Nenhuma emissão encontrada.</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% else %}
+        <div class="alert alert-warning mb-0">
+          Selecione uma clínica para visualizar emissões e processar a fila.
+        </div>
+      {% endif %}
+    </div>
+  </div>
+</div>
+{% endblock %}

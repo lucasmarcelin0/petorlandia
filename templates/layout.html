@@ -340,11 +340,12 @@
   <script src="{{ url_for('static', filename='js/listing_panels.js') }}"></script>
 
   <script>
+    const normalizeFetchResult = (result) => ({
+      response: result && result.response ? result.response : null,
+      queued: Boolean(result && result.queued),
+    });
+
     document.addEventListener('DOMContentLoaded', () => {
-      const normalizeFetchResult = (result) => ({
-        response: result && result.response ? result.response : null,
-        queued: Boolean(result && result.queued),
-      });
 
       const parseJsonSafe = async (response) => {
         if (!response) return null;

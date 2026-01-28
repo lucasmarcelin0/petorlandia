@@ -1,5 +1,6 @@
 from contextlib import nullcontext
 from datetime import datetime, timezone
+from weakref import WeakKeyDictionary
 
 from flask import current_app
 from flask_sqlalchemy import SQLAlchemy
@@ -9,6 +10,10 @@ from flask_login import LoginManager
 from flask_session import Session
 from flask_babel import Babel
 from sqlalchemy import event, inspect
+
+# Cache for datetime column names per model class (performance optimization)
+_datetime_columns_cache: WeakKeyDictionary = WeakKeyDictionary()
+
 
 class TestingAwareSQLAlchemy(SQLAlchemy):
     """SQLAlchemy helper that drops tables before ``create_all`` in tests."""
@@ -71,24 +76,40 @@ def _prevent_not_null_violations(session, _flush_context, _instances):
             raise ValueError(f"{model_name} requires values for: {columns}")
 
 
+def _get_datetime_columns(model_class):
+    """Return cached list of datetime column names for a model class."""
+    if model_class in _datetime_columns_cache:
+        return _datetime_columns_cache[model_class]
+
+    try:
+        mapper = inspect(model_class)
+        if mapper is None:
+            return ()
+        datetime_cols = tuple(
+            column.key
+            for column in mapper.columns
+            if 'DATETIME' in str(column.type).upper()
+        )
+        _datetime_columns_cache[model_class] = datetime_cols
+        return datetime_cols
+    except Exception:
+        return ()
+
+
 # Register event listener to ensure datetime columns always have timezone info
 @event.listens_for(db.Model, "load", propagate=True)
 def _receive_load(target, context):
-    """Convert naive datetimes from DateTime(timezone=True) columns to UTC-aware."""
+    """Convert naive datetimes from DateTime(timezone=True) columns to UTC-aware.
+
+    Uses cached column names per model class for better performance.
+    """
     try:
-        mapper = inspect(type(target))
-        if mapper is None:
+        datetime_columns = _get_datetime_columns(type(target))
+        if not datetime_columns:
             return
-        
-        for column in mapper.columns:
-            # Check if this is a datetime column
-            col_type_str = str(column.type)
-            if 'DATETIME' not in col_type_str.upper():
-                continue
-            
-            attr_name = column.key
+
+        for attr_name in datetime_columns:
             value = getattr(target, attr_name, None)
-            
             # If naive, assume UTC and set the timezone
             if isinstance(value, datetime) and value.tzinfo is None:
                 setattr(target, attr_name, value.replace(tzinfo=timezone.utc))

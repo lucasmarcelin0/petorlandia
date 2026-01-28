@@ -76,8 +76,22 @@ from models import (
     DataShareRequest,
     PlantonistaEscala,
     PlantaoModelo,
+    NfseIssue,
+    NfseXml,
     User,
     Veterinario,
+    get_clinica_field,
+)
+from services.nfse_queue import (
+    ensure_nfse_issue_for_consulta,
+    get_nfse_cancel_rules,
+    process_nfse_issue,
+    process_nfse_queue,
+    queue_nfse_issue,
+    request_nfse_cancel,
+    request_nfse_substitution,
+    should_emit_async,
+    validate_nfse_cancel_request,
 )
 _config_utils_module_name = (
     f"{__package__}.config_utils" if __package__ else "config_utils"
@@ -100,6 +114,13 @@ app.config.from_object("config.Config")
 app.config["SQLALCHEMY_DATABASE_URI"] = normalize_database_uri(
     app.config.get("SQLALCHEMY_DATABASE_URI")
 )
+# Add pool settings for PostgreSQL (not supported by SQLite)
+_resolved_uri = app.config.get("SQLALCHEMY_DATABASE_URI", "")
+if _resolved_uri and ("postgresql" in _resolved_uri or "postgres" in _resolved_uri):
+    engine_opts = app.config.get("SQLALCHEMY_ENGINE_OPTIONS", {})
+    engine_opts.setdefault("pool_size", 5)
+    engine_opts.setdefault("max_overflow", 10)
+    app.config["SQLALCHEMY_ENGINE_OPTIONS"] = engine_opts
 app.config.setdefault("FRONTEND_URL", "http://127.0.0.1:5000")
 app.config.update(SESSION_PERMANENT=True, SESSION_TYPE="filesystem")
 CORS(app, resources={r"/surpresa*": {"origins": "*"}, r"/socket.io/*": {"origins": "*"}})
@@ -1837,15 +1858,21 @@ def get_consulta_or_404(consulta_id, *, viewer=None, clinic_scope=None):
 
 
 def _filter_records_by_clinic(records, clinic_id):
-    """Return a list limited to the given clinic id (if provided)."""
+    """Return a list limited to the given clinic id.
+
+    If clinic_id is None, returns an empty list to prevent data leakage
+    between clinics.
+    """
 
     if not records:
         return []
 
+    if not clinic_id:
+        # No clinic context - return empty to prevent showing other clinics' data
+        return []
+
     items = list(records)
-    if clinic_id:
-        return [item for item in items if getattr(item, 'clinica_id', None) == clinic_id]
-    return items
+    return [item for item in items if getattr(item, 'clinica_id', None) == clinic_id]
 
 
 def _clinic_orcamento_blocks(animal, clinic_id):
@@ -1885,15 +1912,16 @@ def historico_consultas_partial(animal_id):
     if clinic_id:
         ensure_clinic_access(clinic_id)
 
-    historico_query = (
-        Consulta.query
-        .filter_by(animal_id=animal.id, status='finalizada')
-    )
-
+    # Only show history if we have a valid clinic_id to prevent data leakage
     if clinic_id:
-        historico_query = historico_query.filter_by(clinica_id=clinic_id)
-
-    historico = historico_query.order_by(Consulta.created_at.desc()).all()
+        historico = (
+            Consulta.query
+            .filter_by(animal_id=animal.id, status='finalizada', clinica_id=clinic_id)
+            .order_by(Consulta.created_at.desc())
+            .all()
+        )
+    else:
+        historico = []
 
     historico_html = render_template(
         'partials/historico_consultas.html',
@@ -2714,9 +2742,46 @@ with app.app_context():
 
 # (rotas podem ser definidas em módulos separados e registrados via blueprint)
 # ────────────────────────────── fim ─────────────────────────────
+
+# Performance: cache for context processor results (short TTL)
+import time as _time_module
+_context_cache = {}
+_CONTEXT_CACHE_TTL = 30  # seconds
+
+
+def _get_cached_context(user_id: int, key: str):
+    """Get cached context value if not expired."""
+    cache_key = f"{user_id}:{key}"
+    entry = _context_cache.get(cache_key)
+    if entry is not None:
+        value, timestamp = entry
+        if _time_module.time() - timestamp < _CONTEXT_CACHE_TTL:
+            return value
+    return None
+
+
+def _set_cached_context(user_id: int, key: str, value):
+    """Cache context value with timestamp."""
+    cache_key = f"{user_id}:{key}"
+    _context_cache[cache_key] = (value, _time_module.time())
+    # Cleanup old entries periodically (keep cache small)
+    if len(_context_cache) > 500:
+        now = _time_module.time()
+        expired = [k for k, (_, ts) in list(_context_cache.items())
+                   if now - ts > _CONTEXT_CACHE_TTL * 2]
+        for k in expired:
+            _context_cache.pop(k, None)
+    return value
+
+
 @app.context_processor
 def inject_unread_count():
     if current_user.is_authenticated:
+        user_id = current_user.id
+        cached = _get_cached_context(user_id, 'unread_messages')
+        if cached is not None:
+            return dict(unread_messages=cached)
+
         if current_user.role == 'admin':
             admin_ids = [u.id for u in User.query.filter_by(role='admin').all()]
             unread = (
@@ -2730,6 +2795,7 @@ def inject_unread_count():
                 .filter_by(receiver_id=current_user.id, lida=False)
                 .count()
             )
+        _set_cached_context(user_id, 'unread_messages', unread)
     else:
         unread = 0
     return dict(unread_messages=unread)
@@ -2738,11 +2804,18 @@ def inject_unread_count():
 @app.context_processor
 def inject_pending_exam_count():
     if current_user.is_authenticated and is_veterinarian(current_user):
+        user_id = current_user.id
+        cached = _get_cached_context(user_id, 'pending_exam_count')
+        if cached is not None:
+            seen = session.get('exam_pending_seen_count', 0)
+            return dict(pending_exam_count=max(cached - seen, 0))
+
         from models import ExamAppointment
 
         pending = ExamAppointment.query.filter_by(
             specialist_id=current_user.veterinario.id, status='pending'
         ).count()
+        _set_cached_context(user_id, 'pending_exam_count', pending)
         seen = session.get('exam_pending_seen_count', 0)
         pending = max(pending - seen, 0)
     else:
@@ -2755,6 +2828,12 @@ def inject_pending_appointment_count():
     """Expose count of upcoming appointments requiring vet action."""
 
     if current_user.is_authenticated and is_veterinarian(current_user):
+        user_id = current_user.id
+        cached = _get_cached_context(user_id, 'pending_appointment_count')
+        if cached is not None:
+            seen = session.get('appointment_pending_seen_count', 0)
+            return dict(pending_appointment_count=max(cached - seen, 0))
+
         from models import Appointment
 
         now = utcnow()
@@ -2763,6 +2842,7 @@ def inject_pending_appointment_count():
             Appointment.status == "scheduled",
             Appointment.scheduled_at >= now + timedelta(hours=2),
         ).count()
+        _set_cached_context(user_id, 'pending_appointment_count', pending)
         seen = session.get('appointment_pending_seen_count', 0)
         pending = max(pending - seen, 0)
     else:
@@ -2789,10 +2869,17 @@ def inject_clinic_pending_appointment_count():
     """Expose count of scheduled appointments in the clinic excluding the current vet."""
 
     if current_user.is_authenticated and is_veterinarian(current_user):
+        user_id = current_user.id
+        cached = _get_cached_context(user_id, 'clinic_pending_appointment_count')
+        if cached is not None:
+            seen = session.get("clinic_pending_seen_count", 0)
+            return dict(clinic_pending_appointment_count=max(cached - seen, 0))
+
         pending_query = _clinic_pending_appointments_query(
             getattr(current_user, "veterinario", None)
         )
         pending = pending_query.count() if pending_query is not None else 0
+        _set_cached_context(user_id, 'clinic_pending_appointment_count', pending)
         seen = session.get("clinic_pending_seen_count", 0)
         pending = max(pending - seen, 0)
     else:
@@ -2825,11 +2912,17 @@ def inject_veterinarian_membership_context():
 @app.context_processor
 def inject_clinic_invite_count():
     if current_user.is_authenticated and has_veterinarian_profile(current_user):
+        user_id = current_user.id
+        cached = _get_cached_context(user_id, 'pending_clinic_invites')
+        if cached is not None:
+            return dict(pending_clinic_invites=cached)
+
         from models import VetClinicInvite
 
         pending = VetClinicInvite.query.filter_by(
             veterinario_id=current_user.veterinario.id, status='pending'
         ).count()
+        _set_cached_context(user_id, 'pending_clinic_invites', pending)
     else:
         pending = 0
     return dict(pending_clinic_invites=pending)
@@ -2838,6 +2931,12 @@ def inject_clinic_invite_count():
 @app.context_processor
 def inject_accounting_access_flag():
     return dict(can_access_accounting=_user_can_access_accounting())
+
+
+@app.context_processor
+def inject_current_app():
+    """Make current_app available in templates for view_functions checks."""
+    return dict(current_app=current_app)
 
 
 s = URLSafeTimedSerializer(app.config['SECRET_KEY'])
@@ -5194,6 +5293,291 @@ def contabilidade_obrigacoes():
     )
 
 
+@app.route('/contabilidade/nfse')
+@login_required
+def contabilidade_nfse():
+    _ensure_accounting_access()
+    clinics, accessible_ids = _accounting_accessible_clinics()
+
+    requested_id = request.args.get('clinica_id', type=int)
+    selected_clinic = _select_accounting_clinic(
+        clinics,
+        accessible_ids,
+        requested_clinic_id=requested_id,
+    )
+    selected_clinic_id = selected_clinic.id if selected_clinic else None
+
+    status_filter = (request.args.get('status') or '').strip().lower()
+    issues = []
+    queue_count = 0
+    pdf_issue_ids: set[int] = set()
+    if selected_clinic_id:
+        query = NfseIssue.query.filter_by(clinica_id=selected_clinic_id)
+        if status_filter:
+            query = query.filter(NfseIssue.status == status_filter)
+        issues = query.order_by(NfseIssue.created_at.desc()).limit(200).all()
+        queue_count = (
+            NfseIssue.query
+            .filter_by(clinica_id=selected_clinic_id, status="fila")
+            .count()
+        )
+        if issues:
+            issue_ids = [issue.id for issue in issues]
+            pdf_issue_ids = {
+                row.nfse_issue_id
+                for row in (
+                    NfseXml.query
+                    .filter(NfseXml.nfse_issue_id.in_(issue_ids))
+                    .filter(NfseXml.tipo.ilike("%pdf%"))
+                    .all()
+                )
+            }
+
+    statuses = [
+        "fila",
+        "processando",
+        "pendente",
+        "autorizado",
+        "erro",
+        "cancelada",
+        "cancelamento_solicitado",
+        "substituicao_solicitada",
+    ]
+
+    return render_template(
+        'contabilidade/nfse.html',
+        clinics=clinics,
+        selected_clinic=selected_clinic,
+        issues=issues,
+        statuses=statuses,
+        status_filter=status_filter,
+        queue_count=queue_count,
+        pdf_issue_ids=pdf_issue_ids,
+        cancel_rules=(
+            get_nfse_cancel_rules(get_clinica_field(selected_clinic, "municipio_nfse", ""))
+            if selected_clinic
+            else None
+        ),
+        async_enabled=bool(
+            selected_clinic
+            and should_emit_async(get_clinica_field(selected_clinic, "municipio_nfse", ""))
+        ),
+    )
+
+
+@app.route('/contabilidade/nfse/emitir', methods=['POST'])
+@login_required
+def contabilidade_nfse_emitir():
+    _ensure_accounting_access()
+    consulta_id = request.form.get('consulta_id', type=int)
+    if not consulta_id:
+        flash('Informe a consulta para emitir a NFS-e.', 'warning')
+        return redirect(url_for('contabilidade_nfse'))
+
+    consulta = Consulta.query.get_or_404(consulta_id)
+    _, accessible_ids = _accounting_accessible_clinics()
+    if consulta.clinica_id not in accessible_ids:
+        abort(403)
+
+    issue = ensure_nfse_issue_for_consulta(consulta)
+    if not issue:
+        flash('A clínica não possui município NFS-e configurado.', 'warning')
+        return redirect(url_for('contabilidade_nfse', clinica_id=consulta.clinica_id))
+
+    payload = {"consulta_id": consulta.id}
+    try:
+        if should_emit_async(get_clinica_field(consulta.clinica, "municipio_nfse", "")):
+            queue_nfse_issue(issue, "Emissão solicitada manualmente.", payload)
+            flash('Emissão adicionada à fila.', 'success')
+        else:
+            process_nfse_issue(issue, payload)
+            flash('Emissão iniciada com sucesso.', 'success')
+    except Exception as exc:  # noqa: BLE001
+        queue_nfse_issue(
+            issue,
+            "Falha ao emitir; reprocessamento manual necessário.",
+            {"erro": str(exc), **payload},
+        )
+        flash('Falha ao emitir. A solicitação foi enfileirada para reprocessamento.', 'warning')
+
+    return redirect(url_for('contabilidade_nfse', clinica_id=consulta.clinica_id))
+
+
+@app.route('/contabilidade/nfse/processar_fila', methods=['POST'])
+@login_required
+def contabilidade_nfse_processar_fila():
+    _ensure_accounting_access()
+    clinic_id = request.form.get('clinica_id', type=int)
+    limit = request.form.get('limit', type=int) or 10
+    _, accessible_ids = _accounting_accessible_clinics()
+    if clinic_id and clinic_id not in accessible_ids:
+        abort(403)
+
+    result = process_nfse_queue(clinica_id=clinic_id, limit=limit)
+    if result.processed:
+        flash(f'Fila processada: {result.processed} emissão(ões) enviadas.', 'success')
+    if result.failed:
+        flash(f'{result.failed} emissão(ões) falharam. Verifique os detalhes.', 'warning')
+
+    return redirect(url_for('contabilidade_nfse', clinica_id=clinic_id))
+
+
+@app.route('/contabilidade/nfse/<int:issue_id>/reprocessar', methods=['POST'])
+@login_required
+def contabilidade_nfse_reprocessar(issue_id):
+    _ensure_accounting_access()
+    issue = NfseIssue.query.get_or_404(issue_id)
+    _, accessible_ids = _accounting_accessible_clinics()
+    if issue.clinica_id not in accessible_ids:
+        abort(403)
+
+    payload = {"issue_id": issue.id, "manual": True}
+    try:
+        if should_emit_async(get_clinica_field(issue.clinica, "municipio_nfse", "")):
+            queue_nfse_issue(issue, "Reprocessamento manual solicitado.", payload)
+            flash('Emissão retornou para a fila.', 'success')
+        else:
+            process_nfse_issue(issue, payload)
+            flash('Reprocessamento iniciado.', 'success')
+    except Exception as exc:  # noqa: BLE001
+        queue_nfse_issue(
+            issue,
+            "Falha ao reprocessar; retornou para fila.",
+            {"erro": str(exc), **payload},
+        )
+        flash('Falha ao reprocessar. A emissão voltou para fila.', 'warning')
+
+    return redirect(url_for('contabilidade_nfse', clinica_id=issue.clinica_id))
+
+
+@app.route('/contabilidade/nfse/<int:issue_id>/cancelar', methods=['POST'])
+@login_required
+def contabilidade_nfse_cancelar(issue_id):
+    _ensure_accounting_access()
+    issue = NfseIssue.query.get_or_404(issue_id)
+    _, accessible_ids = _accounting_accessible_clinics()
+    if issue.clinica_id not in accessible_ids:
+        abort(403)
+
+    reason_code = request.form.get('reason_code')
+    reason_description = request.form.get('reason_description')
+    rules = get_nfse_cancel_rules(get_clinica_field(issue.clinica, "municipio_nfse", ""))
+    errors = validate_nfse_cancel_request(
+        issue,
+        rules,
+        reason_code,
+        reason_description,
+        substituicao=False,
+        substituida_por_nfse=None,
+    )
+    if errors:
+        flash(" ".join(errors), 'warning')
+        return redirect(url_for('contabilidade_nfse', clinica_id=issue.clinica_id))
+
+    payload = {
+        "issue_id": issue.id,
+        "reason_code": reason_code,
+        "reason_description": reason_description,
+    }
+    try:
+        request_nfse_cancel(issue, reason_code, reason_description, payload)
+        flash('Cancelamento solicitado.', 'success')
+    except Exception as exc:  # noqa: BLE001
+        current_app.logger.exception('Erro ao solicitar cancelamento NFS-e', exc_info=exc)
+        flash('Erro ao solicitar cancelamento. Tente novamente.', 'danger')
+
+    return redirect(url_for('contabilidade_nfse', clinica_id=issue.clinica_id))
+
+
+@app.route('/contabilidade/nfse/<int:issue_id>/substituir', methods=['POST'])
+@login_required
+def contabilidade_nfse_substituir(issue_id):
+    _ensure_accounting_access()
+    issue = NfseIssue.query.get_or_404(issue_id)
+    _, accessible_ids = _accounting_accessible_clinics()
+    if issue.clinica_id not in accessible_ids:
+        abort(403)
+
+    reason_code = request.form.get('reason_code')
+    reason_description = request.form.get('reason_description')
+    substituida_por_nfse = request.form.get('substituida_por_nfse')
+    rules = get_nfse_cancel_rules(get_clinica_field(issue.clinica, "municipio_nfse", ""))
+    errors = validate_nfse_cancel_request(
+        issue,
+        rules,
+        reason_code,
+        reason_description,
+        substituicao=True,
+        substituida_por_nfse=substituida_por_nfse,
+    )
+    if errors:
+        flash(" ".join(errors), 'warning')
+        return redirect(url_for('contabilidade_nfse', clinica_id=issue.clinica_id))
+
+    payload = {
+        "issue_id": issue.id,
+        "reason_code": reason_code,
+        "reason_description": reason_description,
+        "substituida_por_nfse": substituida_por_nfse,
+    }
+    try:
+        request_nfse_substitution(
+            issue,
+            reason_code,
+            reason_description,
+            substituida_por_nfse,
+            payload,
+        )
+        flash('Substituição solicitada.', 'success')
+    except Exception as exc:  # noqa: BLE001
+        current_app.logger.exception('Erro ao solicitar substituição NFS-e', exc_info=exc)
+        flash('Erro ao solicitar substituição. Tente novamente.', 'danger')
+
+    return redirect(url_for('contabilidade_nfse', clinica_id=issue.clinica_id))
+
+
+@app.route('/contabilidade/nfse/<int:issue_id>/download/<string:kind>')
+@login_required
+def contabilidade_nfse_download(issue_id, kind):
+    _ensure_accounting_access()
+    issue = NfseIssue.query.get_or_404(issue_id)
+    _, accessible_ids = _accounting_accessible_clinics()
+    if issue.clinica_id not in accessible_ids:
+        abort(403)
+
+    kind = kind.lower()
+    if kind == "xml":
+        xml_record = (
+            NfseXml.query
+            .filter_by(nfse_issue_id=issue.id)
+            .order_by(NfseXml.created_at.desc())
+            .first()
+        )
+        xml_content = xml_record.xml if xml_record else (issue.xml_retorno or issue.xml_envio)
+        if not xml_content:
+            abort(404)
+        response = make_response(xml_content)
+        response.headers["Content-Type"] = "application/xml"
+        response.headers["Content-Disposition"] = f"attachment; filename=nfse-{issue.id}.xml"
+        return response
+    if kind == "pdf":
+        pdf_record = (
+            NfseXml.query
+            .filter(NfseXml.nfse_issue_id == issue.id)
+            .filter(NfseXml.tipo.ilike("%pdf%"))
+            .order_by(NfseXml.created_at.desc())
+            .first()
+        )
+        if not pdf_record:
+            abort(404)
+        response = make_response(pdf_record.xml)
+        response.headers["Content-Type"] = "application/pdf"
+        response.headers["Content-Disposition"] = f"attachment; filename=nfse-{issue.id}.pdf"
+        return response
+
+    abort(404)
+
+
 @app.route('/service-worker.js')
 def service_worker():
     return send_from_directory(app.static_folder, 'service-worker.js')
@@ -5713,13 +6097,18 @@ def list_animals():
     if modo and modo.lower() != 'todos':
         query = query.filter_by(modo=modo)
     else:
+        # Admins can see all animals without filtering
+        is_admin_user = _is_admin()
         vet_authorized = current_user.is_authenticated and is_veterinarian(current_user)
         collaborator = (
             current_user.is_authenticated
             and getattr(current_user, 'worker', None) == 'colaborador'
         )
-        
-        if vet_authorized and not show_all:
+
+        if is_admin_user or show_all:
+            # Admins and show_all mode: no additional filtering
+            pass
+        elif vet_authorized:
             # Veterinários só podem ver animais perdidos, à venda ou para adoção,
             # ou então animais cadastrados pela própria clínica
             allowed = ['perdido', 'venda', 'doação']
@@ -5733,7 +6122,7 @@ def list_animals():
                 )
             else:
                 query = query.filter(Animal.modo.in_(allowed))
-        elif not show_all and not collaborator:
+        elif not collaborator:
             # Para usuários comuns e não colaboradores: mostrar animais à venda/doação ou próprios
             if current_user.is_authenticated:
                 query = query.filter(
@@ -7665,13 +8054,19 @@ def consulta_direct(animal_id):
                     consulta = consulta_vinculada
 
             if not consulta:
-                consulta = (
-                    Consulta.query
-                    .filter_by(animal_id=animal.id, status='in_progress', clinica_id=clinica_id)
-                    .first()
-                )
+                # Only search for existing consulta if we have a valid clinic_id
+                if clinica_id:
+                    consulta = (
+                        Consulta.query
+                        .filter_by(animal_id=animal.id, status='in_progress', clinica_id=clinica_id)
+                        .first()
+                    )
 
             if not consulta:
+                # Require clinic_id to create new consultas
+                if not clinica_id:
+                    flash('Não foi possível determinar a clínica. Verifique seu cadastro de veterinário.', 'danger')
+                    return redirect(url_for('index'))
                 consulta = Consulta(
                     animal_id=animal.id,
                     created_by=current_user.id,
@@ -7702,7 +8097,7 @@ def consulta_direct(animal_id):
         consulta = None
 
     historico = []
-    if is_veterinarian(current_user):
+    if is_veterinarian(current_user) and clinica_id:
         historico = (
             Consulta.query
             .filter_by(animal_id=animal.id, status='finalizada', clinica_id=clinica_id)
@@ -7857,6 +8252,34 @@ def finalizar_consulta(consulta_id):
         content=resumo,
     )
     db.session.add(msg)
+
+    nfse_issue = ensure_nfse_issue_for_consulta(consulta)
+    if nfse_issue and nfse_issue.status in {None, "fila", "erro", "reprocessar"}:
+        nfse_payload = {
+            "consulta_id": consulta.id,
+            "animal_id": consulta.animal_id,
+            "tutor_id": consulta.animal.user_id,
+        }
+        try:
+            if should_emit_async(get_clinica_field(consulta.clinica, "municipio_nfse", "")):
+                queue_nfse_issue(
+                    nfse_issue,
+                    "Consulta finalizada; emissão aguardando processamento assíncrono.",
+                    nfse_payload,
+                )
+            else:
+                process_nfse_issue(nfse_issue, nfse_payload)
+        except Exception as exc:  # noqa: BLE001 - não interromper o fluxo da consulta
+            queue_nfse_issue(
+                nfse_issue,
+                "Falha ao emitir automaticamente; reprocessamento necessário.",
+                {"erro": str(exc), **nfse_payload},
+            )
+            current_app.logger.exception(
+                "Falha ao emitir NFS-e da consulta %s.",
+                consulta.id,
+                exc_info=exc,
+            )
 
     if appointment:
         db.session.commit()
@@ -11164,6 +11587,18 @@ def update_consulta(consulta_id):
             return jsonify(success=False, message=message, category='danger'), 403
         return redirect(url_for('index'))
 
+    # Ensure consulta has a clinic_id for proper isolation
+    if not consulta.clinica_id:
+        clinic_id = current_user_clinic_id()
+        if clinic_id:
+            consulta.clinica_id = clinic_id
+        else:
+            message = 'Consulta sem clínica associada. Verifique seu cadastro.'
+            flash(message, 'danger')
+            if wants_json:
+                return jsonify(success=False, message=message, category='danger'), 400
+            return redirect(url_for('index'))
+
     # Atualiza os campos
     consulta.queixa_principal = request.form.get('queixa_principal')
     consulta.historico_clinico = request.form.get('historico_clinico')
@@ -14096,10 +14531,15 @@ def _mercadopago_notification_url() -> str:
         )
 
     preferred_scheme = current_app.config.get('PREFERRED_URL_SCHEME')
+    forwarded_proto = (request.headers.get('X-Forwarded-Proto') or '').split(',')[0].strip()
     url_kwargs = {'_external': True}
     if preferred_scheme:
         url_kwargs['_scheme'] = preferred_scheme
+    elif forwarded_proto in {'http', 'https'}:
+        url_kwargs['_scheme'] = forwarded_proto
     elif request.is_secure:
+        url_kwargs['_scheme'] = 'https'
+    else:
         url_kwargs['_scheme'] = 'https'
 
     return url_for('notificacoes_mercado_pago', **url_kwargs)

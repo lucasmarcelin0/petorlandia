@@ -83,5 +83,17 @@
         </div>
     </div>
 
+    <div class="card shadow-sm mt-4">
+        <div class="card-body d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3">
+            <div>
+                <h5 class="mb-1">Emissões NFS-e</h5>
+                <p class="text-muted mb-0">Acompanhe protocolos, status e downloads das notas fiscais de serviço.</p>
+            </div>
+            <a class="btn btn-outline-primary" href="{{ url_for('contabilidade_nfse', clinica_id=selected_clinic.id) if selected_clinic else url_for('contabilidade_nfse') }}">
+                Ir para emissões
+            </a>
+        </div>
+    </div>
+
 </div>
 {% endblock %}

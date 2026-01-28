@@ -1,16 +1,25 @@
 from flask_admin import Admin, BaseView, expose
 from flask_admin.contrib.sqla import ModelView
 from flask_admin.menu import MenuLink
-from flask import redirect, url_for, flash, current_app
+from flask import redirect, url_for, flash, current_app, request
 from flask_login import current_user, login_required
 from flask_wtf import FlaskForm
-from wtforms import SelectField, DateField, FileField, DecimalField, SubmitField
+from wtforms import (
+    SelectField,
+    DateField,
+    FileField,
+    DecimalField,
+    SubmitField,
+    StringField,
+    PasswordField,
+)
 from markupsafe import Markup
 import os
 import uuid
 from werkzeug.utils import secure_filename
 from sqlalchemy import func
 from decimal import Decimal
+import re
 
 def _is_admin():
     """Return True if the current user has the admin role."""
@@ -63,6 +72,8 @@ try:
         PaymentStatus,
         VeterinarianMembership,
         VeterinarianSettings,
+        clinica_has_column,
+        get_clinica_field,
     )
 except ImportError:
     from .models import (
@@ -103,6 +114,8 @@ except ImportError:
         PaymentStatus,
         VeterinarianMembership,
         VeterinarianSettings,
+        clinica_has_column,
+        get_clinica_field,
     )
 
 
@@ -191,6 +204,167 @@ class VeterinarianSettingsForm(FlaskForm):
     submit = SubmitField('Salvar alterações')
 
 
+def _normalize_municipio(municipio: str) -> str:
+    normalized = (municipio or "").strip().lower().replace("-", " ")
+    normalized = normalized.replace("á", "a").replace("â", "a").replace("ã", "a")
+    normalized = normalized.replace("é", "e").replace("ê", "e")
+    normalized = normalized.replace("í", "i")
+    normalized = normalized.replace("ó", "o").replace("ô", "o")
+    normalized = normalized.replace("ú", "u")
+    normalized = " ".join(normalized.split())
+    if normalized in {"bh", "belo horizonte", "belo horizonte mg", "belo horizonte/mg"}:
+        return "belo_horizonte"
+    if normalized in {"orlandia", "orlandia sp", "orlandia/sp"}:
+        return "orlandia"
+    return normalized.replace(" ", "_")
+
+
+class ContabilidadeConfigForm(FlaskForm):
+    clinica_id = SelectField(
+        "Clínica",
+        coerce=int,
+        validators=[validators.DataRequired(message="Selecione uma clínica.")],
+    )
+    municipio_nfse = SelectField(
+        "Município (NFS-e)",
+        choices=[
+            ("", "Selecione um município"),
+            ("orlandia", "Orlândia (SP)"),
+            ("belo_horizonte", "Belo Horizonte (MG)"),
+        ],
+        validators=[validators.DataRequired(message="Informe o município da NFS-e.")],
+    )
+    inscricao_municipal = StringField("Inscrição municipal")
+    inscricao_estadual = StringField("Inscrição estadual")
+    regime_tributario = SelectField(
+        "Regime tributário",
+        choices=[
+            ("", "Selecione o regime"),
+            ("simples_nacional", "Simples Nacional"),
+            ("lucro_presumido", "Lucro Presumido"),
+            ("lucro_real", "Lucro Real"),
+        ],
+    )
+    cnae = StringField("CNAE")
+    codigo_servico = StringField("Código de serviço")
+    aliquota_iss = DecimalField(
+        "Alíquota ISS (%)",
+        places=2,
+        validators=[validators.Optional(), validators.NumberRange(min=0)],
+    )
+    aliquota_pis = DecimalField(
+        "Alíquota PIS (%)",
+        places=2,
+        validators=[validators.Optional(), validators.NumberRange(min=0)],
+    )
+    aliquota_cofins = DecimalField(
+        "Alíquota COFINS (%)",
+        places=2,
+        validators=[validators.Optional(), validators.NumberRange(min=0)],
+    )
+    aliquota_csll = DecimalField(
+        "Alíquota CSLL (%)",
+        places=2,
+        validators=[validators.Optional(), validators.NumberRange(min=0)],
+    )
+    aliquota_ir = DecimalField(
+        "Alíquota IR (%)",
+        places=2,
+        validators=[validators.Optional(), validators.NumberRange(min=0)],
+    )
+    nfse_username = StringField("Usuário NFS-e")
+    nfse_password = PasswordField("Senha NFS-e")
+    nfse_cert_path = StringField("Caminho do certificado")
+    nfse_cert_password = PasswordField("Senha do certificado")
+    nfse_token = StringField("Token/Chave NFS-e")
+    submit = SubmitField("Salvar configurações")
+
+    def __init__(self, *args, **kwargs):
+        self.existing_values = kwargs.pop("existing_values", {})
+        super().__init__(*args, **kwargs)
+
+    def validate(self, extra_validators=None):
+        is_valid = super().validate(extra_validators)
+        if not is_valid:
+            return False
+
+        municipio_key = _normalize_municipio(self.municipio_nfse.data)
+        rules = {
+            "orlandia": {
+                "label": "Orlândia (SP)",
+                "required": [
+                    "inscricao_municipal",
+                    "regime_tributario",
+                    "cnae",
+                    "codigo_servico",
+                    "aliquota_iss",
+                    "nfse_username",
+                    "nfse_password",
+                ],
+                "formats": {
+                    "inscricao_municipal": r"^\d{1,12}$",
+                    "cnae": r"^(\d{7}|\d{4}-?\d/\d{2})$",
+                    "codigo_servico": r"^\d{3,6}$",
+                },
+            },
+            "belo_horizonte": {
+                "label": "Belo Horizonte (MG)",
+                "required": [
+                    "inscricao_municipal",
+                    "cnae",
+                    "codigo_servico",
+                    "nfse_cert_path",
+                    "nfse_cert_password",
+                ],
+                "formats": {
+                    "inscricao_municipal": r"^\d{1,15}$",
+                    "cnae": r"^(\d{7}|\d{4}-?\d/\d{2})$",
+                    "codigo_servico": r"^\d{4,6}$",
+                },
+            },
+        }
+
+        rule = rules.get(municipio_key)
+        if not rule:
+            return True
+
+        ok = True
+        for field_name in rule["required"]:
+            field = getattr(self, field_name)
+            if field.data in (None, "", []) and not self.existing_values.get(field_name):
+                field.errors.append(f"Campo obrigatório para {rule['label']}.")
+                ok = False
+
+        for field_name, pattern in rule.get("formats", {}).items():
+            field = getattr(self, field_name)
+            if field.data:
+                value = str(field.data).strip()
+                if not re.fullmatch(pattern, value):
+                    field.errors.append(f"Formato inválido para {rule['label']}.")
+                    ok = False
+
+        return ok
+
+
+NFSE_FIELD_NAMES = [
+    "municipio_nfse",
+    "inscricao_municipal",
+    "inscricao_estadual",
+    "regime_tributario",
+    "cnae",
+    "codigo_servico",
+    "aliquota_iss",
+    "aliquota_pis",
+    "aliquota_cofins",
+    "aliquota_csll",
+    "aliquota_ir",
+    "nfse_username",
+    "nfse_password",
+    "nfse_cert_path",
+    "nfse_cert_password",
+    "nfse_token",
+]
+
 # ─── Subform de Endereco ----------------------------------------------------
 class EnderecoInlineForm(ModelView):
     form_columns = ("rua", "numero", "bairro", "cidade", "estado", "cep")
@@ -231,7 +405,6 @@ class PickupLocationView(ModelView):
 
 
 
-import re
 
 class UserAdminView(MyModelView):
     form_extra_fields = {
@@ -463,6 +636,79 @@ class ClinicaAdmin(MyModelView):
                 f'<img src="{obj.logotipo}" alt="Logotipo atual" '
                 f'style="max-height:150px;margin-top:10px;">'
             )
+
+
+class ContabilidadeConfigView(BaseView):
+    def is_accessible(self):
+        return _is_admin()
+
+    def inaccessible_callback(self, name, **kwargs):
+        flash("Acesso restrito à administração.", "danger")
+        return redirect(url_for('login_view'))
+
+    @expose('/', methods=['GET', 'POST'])
+    @login_required
+    def index(self):
+        form = ContabilidadeConfigForm()
+        clinics = Clinica.query.order_by(Clinica.nome).all()
+        form.clinica_id.choices = [(clinic.id, clinic.nome) for clinic in clinics]
+        selected_id = request.args.get("clinica_id", type=int)
+        if not selected_id and form.clinica_id.data:
+            selected_id = form.clinica_id.data
+        if not selected_id and clinics:
+            selected_id = clinics[0].id
+
+        clinic = Clinica.query.get(selected_id) if selected_id else None
+        if clinic:
+            form.existing_values = {
+                "nfse_password": get_clinica_field(clinic, "nfse_password"),
+                "nfse_cert_password": get_clinica_field(clinic, "nfse_cert_password"),
+            }
+
+        if request.method == 'GET' and clinic:
+            clinic_values = {
+                name: get_clinica_field(clinic, name) for name in NFSE_FIELD_NAMES
+            }
+            form.process(data=clinic_values)
+            form.clinica_id.data = clinic.id
+            form.municipio_nfse.data = clinic_values.get("municipio_nfse") or ""
+            form.nfse_password.data = ""
+            form.nfse_cert_password.data = ""
+
+        if form.validate_on_submit():
+            clinic = Clinica.query.get(form.clinica_id.data)
+            if not clinic:
+                flash("Clínica não encontrada.", "danger")
+                return redirect(self.get_url('.index'))
+
+            password_fields = {"nfse_password", "nfse_cert_password"}
+            for name in NFSE_FIELD_NAMES:
+                if not clinica_has_column(name):
+                    continue
+                value = getattr(form, name).data
+                if name in password_fields and not value:
+                    continue
+                if isinstance(value, str) and not value:
+                    value = None
+                setattr(clinic, name, value)
+
+            db.session.add(clinic)
+            try:
+                db.session.commit()
+            except Exception:  # noqa: BLE001
+                db.session.rollback()
+                current_app.logger.exception("Erro ao salvar configurações contábeis")
+                flash("Não foi possível salvar as configurações. Tente novamente.", "danger")
+            else:
+                flash("Configurações contábeis atualizadas com sucesso.", "success")
+                return redirect(self.get_url('.index', clinica_id=clinic.id))
+
+        return self.render(
+            "admin/contabilidade_config.html",
+            form=form,
+            clinic=clinic,
+            clinics=clinics,
+        )
 
 
 class ClinicHoursAdmin(MyModelView):
@@ -739,6 +985,10 @@ def init_admin(app):
         Clinica, db.session,
         name='Clínicas', category='Cadastros',
         menu_icon_type='fa', menu_icon_value='fa-hospital'
+    ))
+    admin.add_view(ContabilidadeConfigView(
+        name='Configurações Contábeis', category='Contabilidade',
+        menu_icon_type='fa', menu_icon_value='fa-calculator'
     ))
     admin.add_view(ClinicHoursAdmin(
         ClinicHours, db.session,

@@ -2,7 +2,7 @@
 {% if clinic_id is none %}
   {% if current_user.worker == 'veterinario' and current_user.veterinario %}
     {% set clinic_id = current_user.veterinario.clinica_id %}
-  {% else %}
+  {% elif current_user.clinica_id %}
     {% set clinic_id = current_user.clinica_id %}
   {% endif %}
 {% endif %}
@@ -10,7 +10,8 @@
 {% if clinic_id %}
   {% set blocos = blocos | selectattr('clinica_id', 'equalto', clinic_id) | list %}
 {% else %}
-  {% set blocos = blocos | list %}
+  {# When no clinic_id is available, show empty list to prevent data leakage #}
+  {% set blocos = [] %}
 {% endif %}
 {% if blocos %}
 <div class="card mb-3">
@@ -71,7 +72,7 @@
         {% endif %}
       </div>
       <div class="d-flex flex-wrap gap-2 mt-3">
-        <form method="POST" action="{{ url_for('deletar_bloco_orcamento', bloco_id=bloco.id) }}" class="d-inline delete-history-form" data-sync data-target="#historico-orcamentos" data-target-endpoint="{{ url_for('historico_orcamentos_partial', consulta_id=consulta.id if consulta is defined else bloco.consulta_id) }}" data-confirm="Deseja mesmo excluir este orçamento?">
+        <form method="POST" action="{{ url_for('deletar_bloco_orcamento', bloco_id=bloco.id) }}" class="d-inline delete-history-form" data-sync data-target="#historico-orcamentos"{% if consulta is defined %} data-target-endpoint="{{ url_for('historico_orcamentos_partial', consulta_id=consulta.id) }}"{% endif %} data-confirm="Deseja mesmo excluir este orçamento?">
           <button class="btn btn-danger btn-sm">🗑 Excluir</button>
         </form>
         <a href="{{ url_for('imprimir_bloco_orcamento', bloco_id=bloco.id) }}" class="btn btn-outline-secondary btn-sm" target="_blank">🖨 Imprimir</a>

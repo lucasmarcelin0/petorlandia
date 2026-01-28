@@ -10,13 +10,23 @@ class Config:
     )
     SQLALCHEMY_TRACK_MODIFICATIONS = False
     # Evita erros "server closed the connection unexpectedly" ao testar conexões do pool
+    # Note: pool_size/max_overflow are added dynamically in app.py for PostgreSQL only
     SQLALCHEMY_ENGINE_OPTIONS = {
         "pool_pre_ping": True,
         "pool_recycle": 300,
+        "connect_args": {
+            "connect_timeout": 10,  # 10 seconds connection timeout
+        },
     }
     SESSION_TYPE = "filesystem"
     SESSION_PERMANENT = True
     PERMANENT_SESSION_LIFETIME = timedelta(days=365)
+
+    # Performance: cache static files for 1 hour (overridden by env var for dev)
+    SEND_FILE_MAX_AGE_DEFAULT = int(os.environ.get("SEND_FILE_MAX_AGE_DEFAULT", "3600"))
+
+    # Performance: disable template auto-reload unless in debug mode
+    TEMPLATES_AUTO_RELOAD = os.environ.get("TEMPLATES_AUTO_RELOAD", "").lower() in ("1", "true", "yes")
 
     # Configurações do Flask-Mail (Gmail)
     MAIL_SERVER = 'smtp.gmail.com'
@@ -67,3 +77,22 @@ class Config:
 
     INSURER_PORTAL_TOKEN = os.environ.get("INSURER_PORTAL_TOKEN", "petorlandia-insurer")
 
+    NFSE_ASYNC_MUNICIPIOS = [
+        item.strip()
+        for item in os.environ.get("NFSE_ASYNC_MUNICIPIOS", "orlandia,belo horizonte").split(",")
+        if item.strip()
+    ]
+
+    # Regras de cancelamento/substituição por município (ajuste conforme regras oficiais).
+    NFSE_CANCEL_RULES = {
+        "orlandia": {
+            "deadline_days": int(os.environ.get("NFSE_CANCEL_DEADLINE_ORLANDIA", "30")),
+            "require_reason": True,
+            "allowed_reasons": [],
+        },
+        "belo_horizonte": {
+            "deadline_days": int(os.environ.get("NFSE_CANCEL_DEADLINE_BELO_HORIZONTE", "30")),
+            "require_reason": True,
+            "allowed_reasons": [],
+        },
+    }
