@@ -58,10 +58,24 @@ PROJECT_ROOT = pathlib.Path(__file__).resolve().parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
 try:
-    models_pkg = importlib.import_module("petorlandia.models")
-except ModuleNotFoundError:
     models_pkg = importlib.import_module("models")
+except ModuleNotFoundError:
+    models_pkg = importlib.import_module("petorlandia.models")
 sys.modules["models"] = models_pkg
+sys.modules.setdefault("petorlandia.models", models_pkg)
+
+
+def _alias_model_modules(source_prefix: str, target_prefix: str) -> None:
+    for module_name, module in list(sys.modules.items()):
+        if module_name.startswith(f"{source_prefix}."):
+            alias = module_name.replace(source_prefix, target_prefix, 1)
+            sys.modules.setdefault(alias, module)
+
+
+if models_pkg.__name__ == "models":
+    _alias_model_modules("models", "petorlandia.models")
+else:
+    _alias_model_modules("petorlandia.models", "models")
 
 # 📌 Expose every model name (CamelCase) globally
 globals().update({
