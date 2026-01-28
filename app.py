@@ -93,6 +93,18 @@ from services.nfse_queue import (
     should_emit_async,
     validate_nfse_cancel_request,
 )
+from services.appointments import (
+    ReturnAppointmentDTO,
+    finalize_consulta_flow,
+    schedule_return_appointment,
+)
+from services.payments import (
+    PaymentItemDTO,
+    PaymentPreferenceDTO,
+    apply_payment_to_bloco,
+    apply_payment_to_orcamento,
+    create_payment_preference,
+)
 _config_utils_module_name = (
     f"{__package__}.config_utils" if __package__ else "config_utils"
 )
@@ -8153,107 +8165,25 @@ def finalizar_consulta(consulta_id):
         flash('Apenas veterinários podem finalizar consultas.', 'danger')
         return redirect(url_for('index'))
 
-    if consulta.orcamento_items:
-        from models import HealthSubscription
-        if not consulta.health_subscription_id:
-            active_sub = (
-                HealthSubscription.query
-                .filter_by(animal_id=consulta.animal_id, active=True)
-                .first()
-            )
-            if active_sub:
-                flash('Associe e valide o plano de saúde antes de finalizar a consulta.', 'warning')
-                return redirect(url_for('consulta_direct', animal_id=consulta.animal_id, c=consulta.id))
-        result = evaluate_consulta_coverages(consulta)
-        consulta.authorization_status = result['status']
-        consulta.authorization_checked_at = utcnow()
-        consulta.authorization_notes = '\n'.join(result.get('messages', [])) if result.get('messages') else None
-        if result['status'] != 'approved':
-            db.session.commit()
-            flash('Cobertura não aprovada. Revise o orçamento ou contate a seguradora.', 'danger')
-            return redirect(url_for('consulta_direct', animal_id=consulta.animal_id, c=consulta.id))
-
-    consulta.status = 'finalizada'
-    consulta.finalizada_em = utcnow()
-    appointment = consulta.appointment
-    if appointment and appointment.status != 'completed':
-        appointment.status = 'completed'
-
-    # Mensagem de resumo para o tutor
-    resumo = (
-        f"Consulta do {consulta.animal.name} finalizada.\n"
-        f"Queixa: {consulta.queixa_principal or 'N/A'}\n"
-        f"Conduta: {consulta.conduta or 'N/A'}\n"
-        f"Prescrição: {consulta.prescricao or 'N/A'}"
+    outcome = finalize_consulta_flow(
+        consulta=consulta,
+        actor_id=current_user.id,
+        actor_vet_id=getattr(getattr(current_user, "veterinario", None), "id", None),
+        clinic_id=current_user_clinic_id(),
     )
-    msg = Message(
-        sender_id=current_user.id,
-        receiver_id=consulta.animal.owner.id,
-        animal_id=consulta.animal_id,
-        content=resumo,
-    )
-    db.session.add(msg)
-
-    nfse_issue = ensure_nfse_issue_for_consulta(consulta)
-    if nfse_issue and nfse_issue.status in {None, "fila", "erro", "reprocessar"}:
-        nfse_payload = {
-            "consulta_id": consulta.id,
-            "animal_id": consulta.animal_id,
-            "tutor_id": consulta.animal.user_id,
-        }
-        try:
-            if should_emit_async(get_clinica_field(consulta.clinica, "municipio_nfse", "")):
-                queue_nfse_issue(
-                    nfse_issue,
-                    "Consulta finalizada; emissão aguardando processamento assíncrono.",
-                    nfse_payload,
-                )
-            else:
-                process_nfse_issue(nfse_issue, nfse_payload)
-        except Exception as exc:  # noqa: BLE001 - não interromper o fluxo da consulta
-            queue_nfse_issue(
-                nfse_issue,
-                "Falha ao emitir automaticamente; reprocessamento necessário.",
-                {"erro": str(exc), **nfse_payload},
-            )
-            current_app.logger.exception(
-                "Falha ao emitir NFS-e da consulta %s.",
-                consulta.id,
-                exc_info=exc,
-            )
-
-    if appointment:
-        db.session.commit()
-        flash('Consulta finalizada e retorno já agendado.', 'success')
+    if outcome.status == "blocked":
+        flash(outcome.message, outcome.category)
+        return redirect(url_for('consulta_direct', animal_id=consulta.animal_id, c=consulta.id))
+    if outcome.status == "completed":
+        flash(outcome.message, outcome.category)
         return redirect(url_for('consulta_direct', animal_id=consulta.animal_id))
 
-    # Prepara formulário de retorno com dados padrão
-    form = AppointmentForm()
-    form.populate_animals(
-        [consulta.animal],
-        restrict_tutors=True,
-        selected_tutor_id=getattr(consulta.animal, 'user_id', None),
-        allow_all_option=False,
+    flash(outcome.message, outcome.category)
+    return render_template(
+        'agendamentos/confirmar_retorno.html',
+        consulta=consulta,
+        form=outcome.form,
     )
-    form.animal_id.data = consulta.animal.id
-    from models import Veterinario
-
-    vets = (
-        Veterinario.query.filter_by(
-            clinica_id=current_user_clinic_id()
-        ).all()
-    )
-    form.veterinario_id.choices = [(v.id, v.user.name) for v in vets]
-    form.veterinario_id.data = consulta.veterinario.veterinario.id
-
-    dias_retorno = current_app.config.get('DEFAULT_RETURN_DAYS', 7)
-    data_recomendada = (datetime.now(BR_TZ) + timedelta(days=dias_retorno)).date()
-    form.date.data = data_recomendada
-    form.time.data = time(10, 0)
-
-    db.session.commit()
-    flash('Consulta finalizada e registrada no histórico! Agende o retorno.', 'success')
-    return render_template('agendamentos/confirmar_retorno.html', consulta=consulta, form=form)
 
 
 @app.route('/agendar_retorno/<int:consulta_id>', methods=['POST'])
@@ -8278,33 +8208,19 @@ def agendar_retorno(consulta_id):
     )
     form.veterinario_id.choices = [(v.id, v.user.name) for v in vets]
     if form.validate_on_submit():
-        scheduled_at_local = datetime.combine(form.date.data, form.time.data)
-        vet_id = form.veterinario_id.data
-        if not is_slot_available(vet_id, scheduled_at_local, kind='retorno'):
-            flash('Horário indisponível para o veterinário selecionado.', 'danger')
-        else:
-            scheduled_at = normalize_to_utc(scheduled_at_local)
-            duration = get_appointment_duration('retorno')
-            if has_conflict_for_slot(vet_id, scheduled_at_local, duration):
-                flash('Horário indisponível para o veterinário selecionado.', 'danger')
-            else:
-                current_vet = getattr(current_user, 'veterinario', None)
-                same_user = current_vet and current_vet.id == vet_id
-                appt = Appointment(
-                    consulta_id=consulta.id,
-                    animal_id=consulta.animal_id,
-                    tutor_id=consulta.animal.owner.id,
-                    veterinario_id=vet_id,
-                    scheduled_at=scheduled_at,
-                    notes=form.reason.data,
-                    kind='retorno',
-                    status='accepted' if same_user else 'scheduled',
-                    created_by=current_user.id,
-                    created_at=utcnow(),
-                )
-                db.session.add(appt)
-                db.session.commit()
-                flash('Retorno agendado com sucesso.', 'success')
+        payload = ReturnAppointmentDTO(
+            date=form.date.data,
+            time=form.time.data,
+            veterinarian_id=form.veterinario_id.data,
+            reason=form.reason.data,
+        )
+        result = schedule_return_appointment(
+            consulta=consulta,
+            actor_id=current_user.id,
+            actor_vet_id=getattr(getattr(current_user, "veterinario", None), "id", None),
+            payload=payload,
+        )
+        flash(result.message, result.category)
     else:
         flash('Erro ao agendar retorno.', 'danger')
     return redirect(url_for('consulta_direct', animal_id=consulta.animal_id))
@@ -19076,20 +18992,25 @@ def pagar_orcamento(bloco_id):
         return redirect(url_for('consulta_direct', animal_id=bloco.animal_id))
 
     items = [
-        {
-            'id': str(it.id),
-            'title': it.descricao,
-            'quantity': 1,
-            'unit_price': float(it.valor),
-        }
+        PaymentItemDTO(
+            item_id=str(it.id),
+            title=it.descricao,
+            quantity=1,
+            unit_price=float(it.valor),
+        )
         for it in bloco.itens
     ]
 
     try:
-        preference_info = _criar_preferencia_pagamento(
-            items,
-            f'bloco_orcamento-{bloco.id}',
-            url_for('consulta_direct', animal_id=bloco.animal_id, _external=True),
+        preference = create_payment_preference(
+            PaymentPreferenceDTO(
+                items=items,
+                external_reference=f'bloco_orcamento-{bloco.id}',
+                back_url=url_for(
+                    'consulta_direct', animal_id=bloco.animal_id, _external=True
+                ),
+            ),
+            _criar_preferencia_pagamento,
         )
     except PaymentPreferenceError as exc:
         if request.accept_mimetypes.accept_json:
@@ -19097,22 +19018,21 @@ def pagar_orcamento(bloco_id):
         flash(str(exc), 'danger')
         return redirect(url_for('consulta_direct', animal_id=bloco.animal_id))
 
-    bloco.payment_link = preference_info['payment_url']
-    bloco.payment_reference = preference_info['payment_reference']
-    bloco.payment_status = 'pending'
-    db.session.flush()
-    _sync_orcamento_payment_classification(bloco)
-    db.session.commit()
+    apply_payment_to_bloco(
+        bloco=bloco,
+        preference=preference,
+        sync_payment_classification=_sync_orcamento_payment_classification,
+    )
     if request.accept_mimetypes.accept_json:
         historico_html = _render_orcamento_history(bloco.animal, bloco.clinica_id)
         return jsonify({
             'success': True,
-            'redirect_url': bloco.payment_link,
-            'payment_status': bloco.payment_status,
+            'redirect_url': preference.payment_url,
+            'payment_status': preference.payment_status,
             'html': historico_html,
             'message': 'Link de pagamento gerado com sucesso.'
         })
-    return redirect(bloco.payment_link)
+    return redirect(preference.payment_url)
 
 
 @app.route('/orcamento/<int:orcamento_id>/pagar', methods=['POST'])
@@ -19124,43 +19044,48 @@ def gerar_link_pagamento_orcamento(orcamento_id):
         return jsonify({'success': False, 'message': 'Nenhum item no orçamento.'}), 400
 
     items = [
-        {
-            'id': str(item.id),
-            'title': item.descricao,
-            'quantity': 1,
-            'unit_price': float(item.valor),
-        }
+        PaymentItemDTO(
+            item_id=str(item.id),
+            title=item.descricao,
+            quantity=1,
+            unit_price=float(item.valor),
+        )
         for item in orcamento.items
     ]
 
     try:
-        preference_info = _criar_preferencia_pagamento(
-            items,
-            f'orcamento-{orcamento.id}',
-            url_for('clinic_detail', clinica_id=orcamento.clinica_id, _external=True),
+        preference = create_payment_preference(
+            PaymentPreferenceDTO(
+                items=items,
+                external_reference=f'orcamento-{orcamento.id}',
+                back_url=url_for(
+                    'clinic_detail',
+                    clinica_id=orcamento.clinica_id,
+                    _external=True,
+                ),
+            ),
+            _criar_preferencia_pagamento,
         )
     except PaymentPreferenceError as exc:
         return jsonify({'success': False, 'message': str(exc)}), exc.status_code
 
-    orcamento.payment_link = preference_info['payment_url']
-    orcamento.payment_reference = preference_info['payment_reference']
-    orcamento.payment_status = 'pending'
-    orcamento.paid_at = None
-    if orcamento.status == 'draft':
-        orcamento.status = 'sent'
-    orcamento.updated_at = utcnow()
-    db.session.add(orcamento)
-    db.session.flush()
-    _sync_orcamento_payment_classification(orcamento)
-    db.session.commit()
+    apply_payment_to_orcamento(
+        orcamento=orcamento,
+        preference=preference,
+        sync_payment_classification=_sync_orcamento_payment_classification,
+    )
 
-    payment_status_label = ORCAMENTO_PAYMENT_STATUS_LABELS.get(orcamento.payment_status, orcamento.payment_status)
-    payment_status_style = ORCAMENTO_PAYMENT_STATUS_STYLES.get(orcamento.payment_status, 'secondary')
+    payment_status_label = ORCAMENTO_PAYMENT_STATUS_LABELS.get(
+        orcamento.payment_status, orcamento.payment_status
+    )
+    payment_status_style = ORCAMENTO_PAYMENT_STATUS_STYLES.get(
+        orcamento.payment_status, 'secondary'
+    )
 
     return jsonify({
         'success': True,
-        'payment_link': orcamento.payment_link,
-        'payment_status': orcamento.payment_status,
+        'payment_link': preference.payment_url,
+        'payment_status': preference.payment_status,
         'payment_status_label': payment_status_label,
         'payment_status_style': payment_status_style,
         'status': orcamento.status,
