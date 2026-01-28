@@ -1,5 +1,5 @@
 from app import app, db
-from models import Payment
+from models.loja import Payment
 
 with app.app_context():
     pagamentos = Payment.query.filter(Payment.amount == None).all()

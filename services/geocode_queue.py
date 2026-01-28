@@ -7,7 +7,7 @@ from sqlalchemy import or_
 
 from extensions import db
 from helpers import geocode_address
-from models import Endereco
+from models.usuarios import Endereco
 
 
 class AddressGeocodeQueue:
@@ -100,4 +100,3 @@ class AddressGeocodeQueue:
             if key not in self._stats:
                 return
             self._stats[key] += 1
-

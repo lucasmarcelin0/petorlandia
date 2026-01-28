@@ -357,7 +357,7 @@ def has_conflict_for_slot(
 ):
     """Return ``True`` when the slot conflicts with existing appointments/exams."""
 
-    from models import Appointment, ExamAppointment
+    from models.agenda import Appointment, ExamAppointment
 
     if start_local.tzinfo is None:
         start_local_with_tz = start_local.replace(tzinfo=BR_TZ)
@@ -522,7 +522,7 @@ def login_required(f):
 
 def is_slot_available(veterinario_id, scheduled_at, kind='consulta'):
     """Return ``True`` if the veterinarian can take an appointment of ``kind``."""
-    from models import VetSchedule
+    from models.agenda import VetSchedule
 
     weekday_map = {
         0: 'Segunda',
@@ -602,7 +602,7 @@ def clinicas_do_usuario():
 
 def has_schedule_conflict(veterinario_id, dia_semana, hora_inicio, hora_fim, exclude_id=None):
     """Verifica se já existe horário que conflita para o veterinário."""
-    from models import VetSchedule
+    from models.agenda import VetSchedule
 
     query = VetSchedule.query.filter_by(
         veterinario_id=veterinario_id, dia_semana=dia_semana
@@ -909,7 +909,7 @@ def get_available_times(veterinario_id, date, kind='consulta', *, include_booked
     booked slots is returned. Otherwise only the list of available times is
     returned for backwards compatibility.
     """
-    from models import Appointment, ExamAppointment, VetSchedule
+    from models.agenda import Appointment, ExamAppointment, VetSchedule
 
     weekday_map = ['Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado', 'Domingo']
     dia_semana = weekday_map[date.weekday()]
@@ -1014,7 +1014,7 @@ def get_weekly_schedule(veterinario_id, start_date, days=7, day_start=time(8, 0)
     arrays of available times, booked times and slots when the vet does
     not work. All times are returned as strings in ``HH:MM`` format.
     """
-    from models import VetSchedule, Appointment, ExamAppointment
+    from models.agenda import Appointment, ExamAppointment, VetSchedule
 
     step = timedelta(minutes=30)
     weekday_map = ['Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado', 'Domingo']
@@ -1122,4 +1122,3 @@ def group_vet_schedules_by_day(schedules):
         ]
         for dia, items in groupby(sorted_scheds, key=lambda s: s.dia_semana)
     }
-
