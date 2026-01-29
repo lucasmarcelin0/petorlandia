@@ -32,6 +32,8 @@ __all__ = [
     "PlantonistaEscala",
     "PlantaoModelo",
     "VetSchedule",
+    "PagamentoPlantonista",
+    "CoberturaPlantonista",
     "DeliveryRequest",
     "Order",
     "OrderItem",
@@ -50,4 +52,6 @@ __all__ = [
     "Veterinario",
     "VeterinarianMembership",
     "VeterinarianSettings",
+    "ClinicInventory",
+    "ClinicInventoryMovement",
 ]
