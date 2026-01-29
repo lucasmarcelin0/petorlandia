@@ -148,6 +148,15 @@ if _resolved_uri and ("postgresql" in _resolved_uri or "postgres" in _resolved_u
     engine_opts.setdefault("pool_size", 5)
     engine_opts.setdefault("max_overflow", 10)
     app.config["SQLALCHEMY_ENGINE_OPTIONS"] = engine_opts
+elif _resolved_uri and _resolved_uri.startswith("sqlite"):
+    engine_opts = dict(app.config.get("SQLALCHEMY_ENGINE_OPTIONS", {}))
+    connect_args = dict(engine_opts.get("connect_args", {}))
+    connect_args.pop("connect_timeout", None)
+    if connect_args:
+        engine_opts["connect_args"] = connect_args
+    else:
+        engine_opts.pop("connect_args", None)
+    app.config["SQLALCHEMY_ENGINE_OPTIONS"] = engine_opts
 app.config.setdefault("FRONTEND_URL", "http://127.0.0.1:5000")
 app.config.update(SESSION_PERMANENT=True, SESSION_TYPE="filesystem")
 CORS(app, resources={r"/surpresa*": {"origins": "*"}, r"/socket.io/*": {"origins": "*"}})
