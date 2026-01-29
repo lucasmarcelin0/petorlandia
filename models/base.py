@@ -951,6 +951,7 @@ class ClinicInventoryItem(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     clinica_id = db.Column(db.Integer, db.ForeignKey('clinica.id'), nullable=False)
     name = db.Column(db.String(120), nullable=False)
+    categoria = db.Column(db.String(120), nullable=True)
     quantity = db.Column(db.Integer, default=0)
     unit = db.Column(db.String(50))
     min_quantity = db.Column(db.Integer, nullable=True)
@@ -963,20 +964,33 @@ class ClinicInventoryItem(db.Model):
         cascade='all, delete-orphan',
     )
 
+    nome = synonym('name')
+    quantidade = synonym('quantity')
+    unidade = synonym('unit')
+
+
+ClinicInventory = ClinicInventoryItem
+
 
 class ClinicInventoryMovement(db.Model):
     __tablename__ = 'clinic_inventory_movement'
 
     id = db.Column(db.Integer, primary_key=True)
-    clinica_id = db.Column(db.Integer, db.ForeignKey('clinica.id'), nullable=False)
+    clinica_id = db.Column(db.Integer, db.ForeignKey('clinica.id'), nullable=True)
     item_id = db.Column(db.Integer, db.ForeignKey('clinic_inventory_item.id', ondelete='CASCADE'), nullable=False)
-    quantity_change = db.Column(db.Integer, nullable=False)
-    quantity_before = db.Column(db.Integer, nullable=False)
-    quantity_after = db.Column(db.Integer, nullable=False)
+    quantity_change = db.Column(db.Integer, nullable=True, default=0)
+    quantity_before = db.Column(db.Integer, nullable=True, default=0)
+    quantity_after = db.Column(db.Integer, nullable=True, default=0)
+    tipo = db.Column(db.String(20), nullable=True)
+    motivo = db.Column(db.String(200), nullable=True)
+    responsavel_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True)
     created_at = db.Column(db.DateTime(timezone=True), default=utcnow, nullable=False)
 
     clinica = db.relationship('Clinica', backref='inventory_movements')
     item = db.relationship('ClinicInventoryItem', back_populates='movements')
+
+    inventory_id = synonym('item_id')
+    quantidade = synonym('quantity_change')
 
 
 class ClinicFinancialSnapshot(db.Model):
@@ -1203,6 +1217,70 @@ class PlantonistaEscala(db.Model):
 
     def __repr__(self):
         return f"<PlantonistaEscala {self.medico_nome} {self.turno}>"
+
+
+class PagamentoPlantonista(db.Model):
+    __tablename__ = 'pagamento_plantonista'
+    __table_args__ = (
+        db.CheckConstraint('valor_total >= 0', name='ck_pagamento_plantonista_valor_positive'),
+        db.CheckConstraint("status IN ('pendente','pago')", name='ck_pagamento_plantonista_status'),
+    )
+
+    id = db.Column(db.Integer, primary_key=True)
+    veterinario_id = db.Column(db.Integer, db.ForeignKey('veterinario.id'), nullable=False, index=True)
+    clinica_id = db.Column(db.Integer, db.ForeignKey('clinica.id'), nullable=False, index=True)
+    mes_referencia = db.Column(db.Date, nullable=False)
+    valor_total = db.Column(db.Numeric(14, 2), nullable=False)
+    status = db.Column(
+        db.String(20),
+        nullable=False,
+        default='pendente',
+        server_default='pendente',
+    )
+    created_at = db.Column(db.DateTime(timezone=True), nullable=False, default=now_in_brazil)
+    updated_at = db.Column(
+        db.DateTime(timezone=True),
+        nullable=False,
+        default=now_in_brazil,
+        onupdate=now_in_brazil,
+    )
+
+    veterinario = db.relationship('Veterinario', backref=db.backref('pagamentos_plantao', lazy=True))
+    clinica = db.relationship('Clinica', backref=db.backref('pagamentos_plantao', lazy=True))
+
+    def is_paid(self):
+        return self.status == 'pago'
+
+    def __repr__(self):
+        return f"<PagamentoPlantonista {self.veterinario_id} {self.mes_referencia}>"
+
+
+class CoberturaPlantonista(db.Model):
+    __tablename__ = 'cobertura_plantonista'
+    __table_args__ = (
+        db.CheckConstraint('valor_hora >= 0', name='ck_cobertura_plantonista_valor_hora_positive'),
+    )
+
+    id = db.Column(db.Integer, primary_key=True)
+    pagamento_id = db.Column(
+        db.Integer,
+        db.ForeignKey('pagamento_plantonista.id'),
+        nullable=False,
+        index=True,
+    )
+    data = db.Column(db.Date, nullable=False)
+    hora_inicio = db.Column(db.Time, nullable=False)
+    hora_fim = db.Column(db.Time, nullable=False)
+    valor_hora = db.Column(db.Numeric(14, 2), nullable=False)
+    created_at = db.Column(db.DateTime(timezone=True), nullable=False, default=now_in_brazil)
+
+    pagamento = db.relationship(
+        'PagamentoPlantonista',
+        backref=db.backref('coberturas', cascade='all, delete-orphan', lazy=True),
+    )
+
+    def __repr__(self):
+        return f"<CoberturaPlantonista {self.data} {self.valor_hora}>"
 
 
 class PlantaoModelo(db.Model):
