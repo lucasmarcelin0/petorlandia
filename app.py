@@ -147,6 +147,9 @@ if _resolved_uri and ("postgresql" in _resolved_uri or "postgres" in _resolved_u
     engine_opts = app.config.get("SQLALCHEMY_ENGINE_OPTIONS", {})
     engine_opts.setdefault("pool_size", 5)
     engine_opts.setdefault("max_overflow", 10)
+    connect_args = dict(engine_opts.get("connect_args", {}))
+    connect_args.setdefault("connect_timeout", 10)
+    engine_opts["connect_args"] = connect_args
     app.config["SQLALCHEMY_ENGINE_OPTIONS"] = engine_opts
 elif _resolved_uri and _resolved_uri.startswith("sqlite"):
     engine_opts = dict(app.config.get("SQLALCHEMY_ENGINE_OPTIONS", {}))
