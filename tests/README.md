@@ -122,6 +122,9 @@ pytest tests/test_accessibility_ui.py -v
 
 # Existing tests
 pytest tests/test_routes.py -v
+
+# Route registry smoke tests
+pytest tests/test_route_registry.py -v
 ```
 
 ### Run with Coverage
