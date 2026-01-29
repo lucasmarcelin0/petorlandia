@@ -146,10 +146,13 @@ async function handleDeleteSubmit(event) {
   if (!confirm('Excluir permanentemente este animal?')) return;
 
   try {
+    const csrfToken = form.querySelector('input[name="csrf_token"]')?.value
+      || document.querySelector('meta[name="csrf-token"]')?.content || '';
     const response = await fetch(form.action, {
       method: 'POST',
       headers: {
-        Accept: 'application/json'
+        Accept: 'application/json',
+        'X-CSRFToken': csrfToken
       }
     });
 

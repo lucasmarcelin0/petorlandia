@@ -12,7 +12,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <link rel="manifest" href="{{ url_for('static', filename='manifest.json') }}">
   <meta name="theme-color" content="#4e73df">
-  <meta name="csrf-token" content="{{ csrf_token() if csrf_token is defined else '' }}">
+  <meta name="csrf-token" content="{{ csrf_token() }}">
 
   <!-- Google Fonts -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -647,11 +647,9 @@
                 // #region agent log
                 fetch('http://127.0.0.1:7242/ingest/2d169677-0741-45fd-8c0d-2b9d812f1228',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'layout.html:557',message:'Entering error branch',data:{hasData:!!data,responseOk:response?.ok,responseStatus:response?.status},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'D'})}).catch(()=>{});
                 // #endregion
-
                 // Even if response status indicates error, if we have valid delivery data (html/counts),
                 // treat it as a success case and update the UI. This handles cases where backend
                 // returns error status but still includes updated data (e.g., CSRF errors that include html/counts)
-                const hasValidDeliveryData = data && (data.html || data.counts);
                 const shouldTreatAsSuccess = hasValidDeliveryData && data.category !== 'danger';
                 
                 if (shouldTreatAsSuccess) {
@@ -1140,14 +1138,16 @@
             if (csrfToken) fetchHeaders['X-CSRFToken'] = csrfToken;
 
             try {
-              const result = await fetchOrQueue(api, {
+              // Para mensagens, usar fetch direto sem offline queue (CSRF tokens expiram)
+              response = await fetch(api, {
                 method: 'POST',
                 body: formData,
                 headers: fetchHeaders,
-                timeout
+                credentials: 'same-origin'
               });
-              response = result && result.response ? result.response : null;
-              queued = Boolean(result && result.queued);
+              
+              // Log para debugging
+              console.log('Message fetch result:', { status: response?.status, statusText: response?.statusText });
             } catch (err) {
               console.error('Erro ao enviar mensagem:', err);
               const errText = (err && err.message) || 'Erro de rede. Verifique sua conexão.';
@@ -1164,15 +1164,20 @@
             const isSuccessful = response && (response.ok || (response.status >= 300 && response.status < 400));
 
             if (isSuccessful) {
-              const html = await response.text();
-              if (placeholder) {
-                placeholder.insertAdjacentHTML('afterend', html);
-                placeholder.remove();
-              } else if (container) {
-                container.insertAdjacentHTML('beforeend', html);
-                container.scrollTop = container.scrollHeight;
+              try {
+                const html = await response.text();
+                if (placeholder) {
+                  placeholder.insertAdjacentHTML('afterend', html);
+                  placeholder.remove();
+                } else if (container) {
+                  container.insertAdjacentHTML('beforeend', html);
+                  container.scrollTop = container.scrollHeight;
+                }
+                return { success: true, message: 'Mensagem enviada com sucesso.', level: 'success', successText: 'Enviado!', resetDelay: 1800 };
+              } catch (parseErr) {
+                console.error('Erro ao processar resposta HTML:', parseErr);
+                return { success: false, message: 'Erro ao processar resposta do servidor.', level: 'danger' };
               }
-              return { success: true, message: 'Mensagem enviada com sucesso.', level: 'success', successText: 'Enviado!', resetDelay: 1800 };
             }
 
             if (queued) {
@@ -1191,9 +1196,7 @@
                 resetDelay: 2500,
                 offlineQueued: true,
               };
-            }
-
-            let errorMessage = 'Falha ao enviar. Tente novamente.';
+            }            let errorMessage = 'Falha ao enviar. Tente novamente.';
             try {
               const ct = response && response.headers.get('Content-Type') || '';
               if (ct.includes('application/json')) {
@@ -1323,6 +1326,26 @@
   <script src="{{ url_for('static', filename='js/navbar-dropdown.js') }}"></script>
   <!-- Page specific scripts -->
   {% block scripts %}{% endblock %}
+  <script>
+  (function(){
+    var token = (document.querySelector('meta[name="csrf-token"]') || {}).content || '';
+    if (!token) return;
+    var mgr = window.HistorySyncManager;
+    if (!mgr || !mgr._performSave) return;
+    mgr._performSave = async function(endpoint, data, timeoutMs) {
+      var controller = new AbortController();
+      var tid = setTimeout(function(){ controller.abort(); }, timeoutMs);
+      try {
+        return await fetch(endpoint, {
+          method: 'POST',
+          headers: {'Content-Type':'application/json','Accept':'application/json','X-CSRFToken': token},
+          body: JSON.stringify(data),
+          signal: controller.signal
+        });
+      } finally { clearTimeout(tid); }
+    };
+  })();
+  </script>
 </body>
 
 </html>

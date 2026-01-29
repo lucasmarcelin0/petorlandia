@@ -52,20 +52,18 @@
                     <div id="plan-coverage"></div>
                 </div>
 
-                <!-- Documentos do tutor e do pet (apenas visualização, envio automático) -->
+                <!-- Documentos do tutor e do pet (editáveis) -->
                 <div class="col-12 col-md-6">
-                    <label class="form-label fw-semibold" for="tutor_document">Documento do tutor</label>
-                    <div class="form-control bg-light">{{ tutor_document_value or 'Não informado' }}</div>
-                    {{ form.tutor_document(type="hidden", id="tutor_document", value=tutor_document_value or '') }}
+                    <label class="form-label fw-semibold" for="tutor_document">Documento do tutor (CPF/CNPJ)</label>
+                    {{ form.tutor_document(class="form-control", id="tutor_document", placeholder="Seu CPF ou CNPJ") }}
                     {% if form.tutor_document.errors %}
                         <small class="text-danger d-block mt-1">{{ form.tutor_document.errors[0] }}</small>
                     {% endif %}
                 </div>
 
                 <div class="col-12 col-md-6">
-                    <label class="form-label fw-semibold" for="animal_document">Identificador do pet</label>
-                    <div class="form-control bg-light">{{ animal_document_value or 'Não informado' }}</div>
-                    {{ form.animal_document(type="hidden", id="animal_document", value=animal_document_value or '') }}
+                    <label class="form-label fw-semibold" for="animal_document">Identificador do {{ animal.name }} (microchip, RG, etc)</label>
+                    {{ form.animal_document(class="form-control", id="animal_document", placeholder="Microchip ou número de registro") }}
                     {% if form.animal_document.errors %}
                         <small class="text-danger d-block mt-1">{{ form.animal_document.errors[0] }}</small>
                     {% endif %}

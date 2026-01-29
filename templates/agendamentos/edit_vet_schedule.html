@@ -6,7 +6,7 @@
      data-calendar-collapse-id="{{ vet_calendar_collapse_id }}"
      data-vet-id="{{ veterinario.id }}"
      data-appointments-base-url="{{ url_for('appointments') }}"
-     data-csrf-token="{{ csrf_token() if csrf_token is defined else '' }}"
+     data-csrf-token="{{ csrf_token() }}"
      data-exam-default-confirm-hours="{{ exam_confirm_default_hours }}">
   <!-- Cabeçalho melhorado -->
   <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-4">

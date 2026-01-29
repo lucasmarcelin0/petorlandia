@@ -73,6 +73,7 @@
       </div>
       <div class="d-flex flex-wrap gap-2 mt-3">
         <form method="POST" action="{{ url_for('deletar_bloco_orcamento', bloco_id=bloco.id) }}" class="d-inline delete-history-form" data-sync data-target="#historico-orcamentos"{% if consulta is defined %} data-target-endpoint="{{ url_for('historico_orcamentos_partial', consulta_id=consulta.id) }}"{% endif %} data-confirm="Deseja mesmo excluir este orçamento?">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
           <button class="btn btn-danger btn-sm">🗑 Excluir</button>
         </form>
         <a href="{{ url_for('imprimir_bloco_orcamento', bloco_id=bloco.id) }}" class="btn btn-outline-secondary btn-sm" target="_blank">🖨 Imprimir</a>

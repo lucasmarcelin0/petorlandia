@@ -12,6 +12,7 @@
               class="delete-history-form" data-sync data-target="#historico-exames"
               data-target-endpoint="{{ url_for('historico_exames_partial', animal_id=animal.id) }}"
               data-confirm="Deseja realmente excluir este bloco de exames?">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
           <button type="submit" class="btn btn-danger btn-sm">
             <i class="bi bi-trash"></i> Excluir
           </button>

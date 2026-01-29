@@ -77,7 +77,7 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     return document.querySelector('[data-switcher-colab]');
   })();
-  const csrfToken = '{{ csrf_token() if csrf_token is defined else '' }}';
+  const csrfToken = '{{ csrf_token() }}';
   const clinicId = {{ clinic_id|default(none)|tojson }};
   const adminInitialView = {{ (admin_selected_view or '')|tojson }};
   const defaultSource = {{ ('clinic' if clinic_id else 'user')|tojson }};

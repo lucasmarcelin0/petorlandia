@@ -1,20 +1,76 @@
 # PetOrlândia
 
-This project is a Flask application for managing pets. The repository now includes basic unit tests.
+A comprehensive Flask application for managing veterinary clinics, pets, appointments, and business operations.
 
-## Running the tests
+## 🚀 Quick Start
 
-1. Install dependencies:
+### Prerequisites
+- Python 3.8+
+- PostgreSQL or compatible database
+- pip (Python package manager)
+
+### Installation
+
+1. **Install dependencies:**
    ```bash
    pip install -r requirements.txt
    ```
 
-2. Execute the tests with `pytest`:
+2. **Configure environment:**
+   - Copy `.env.example` to `.env` (if available)
+   - Set required variables: `FLASK_APP`, `FLASK_ENV`, `SQLALCHEMY_DATABASE_URI`
+
+3. **Run migrations:**
    ```bash
-   pytest
+   flask db upgrade
    ```
 
-The tests run without needing external services or a database connection.
+4. **Start the application:**
+   ```bash
+   flask run
+   # or for production-like mode:
+   python run_production.py
+   ```
+
+### Running Tests
+
+Execute tests with `pytest` (no external services required):
+```bash
+pytest
+```
+
+## 📖 Documentation
+
+Full documentation is available in the [`docs/`](docs/) folder:
+
+- **[📚 Documentation Index](docs/INDEX.md)** - Complete guide to all documentation
+- **[🏗️ Architecture Guide](docs/ARCHITECTURE.md)** *(to be created)*
+- **[🤝 Contributing Guide](docs/CONTRIBUTING.md)** - How to contribute to the project
+- **[🧪 Testing & Validation](docs/TESTING_AND_VALIDATION.md)** - Testing guidelines
+- **[⚙️ API Reference](docs/API.md)** *(to be created)*
+
+### Troubleshooting & Common Issues
+
+Check [`docs/correcciones/`](docs/correcciones/) for solutions to known issues:
+- [Timezone Fixes](docs/correcciones/TIMEZONE_FIX_SUMMARY.md)
+- [Migration Fixes](docs/correcciones/CORRECAO_MIGRATIONS.md)
+- [Heroku Deployment](docs/correcciones/HEROKU_FIX_SUMMARY.md)
+
+## 🛠️ Development & Maintenance
+
+### Using Maintenance Scripts
+
+Utility scripts for development and operations are in [`scripts/`](scripts/):
+
+```bash
+# Health check
+python scripts/health_check.py
+
+# Help with scripts
+cat scripts/README.md
+```
+
+See [scripts/README.md](scripts/README.md) for available scripts and how to create new ones.
 
 ## Contabilidade — Backfill histórico
 

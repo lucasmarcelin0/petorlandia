@@ -125,7 +125,7 @@
     {% endfor %}
 </div>
 
-<form method="POST" class="js-msg-form" data-request-timeout="0" {% if is_admin %}data-api="{{ url_for('api_conversa_admin_message', user_id=admin.id) }}"{% else %}data-api="{{ url_for('api_conversa_admin_message') }}"{% endif %}>
+<form method="POST" class="js-msg-form" data-request-timeout="30000" {% if is_admin %}data-api="{{ url_for('api_conversa_admin_message', user_id=admin.id) }}"{% else %}data-api="{{ url_for('api_conversa_admin_message', user_id=current_user.id) }}"{% endif %}>
     {{ form.hidden_tag() }}
     <div class="input-group">
         {{ form.content(class="form-control", placeholder="Digite sua mensagem...") }}

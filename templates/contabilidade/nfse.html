@@ -61,6 +61,7 @@
             </div>
             {% if selected_clinic %}
             <form method="post" action="{{ url_for('contabilidade_nfse_processar_fila') }}" class="d-flex gap-2 align-items-end">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
               <input type="hidden" name="clinica_id" value="{{ selected_clinic.id }}">
               <div>
                 <label class="form-label small text-muted mb-1" for="limit">Limite</label>
@@ -89,6 +90,7 @@
             Use quando precisar emitir uma NFS-e retroativa para uma consulta já finalizada.
           </p>
           <form method="post" action="{{ url_for('contabilidade_nfse_emitir') }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <div class="mb-2">
               <label class="form-label small text-muted" for="consulta_id">Consulta</label>
               <input id="consulta_id" name="consulta_id" type="number" class="form-control" placeholder="ID da consulta">

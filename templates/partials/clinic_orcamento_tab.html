@@ -464,7 +464,8 @@
                 method: 'PATCH',
                 headers: {
                   'Content-Type': 'application/json',
-                  'Accept': 'application/json'
+                  'Accept': 'application/json',
+                  'X-CSRFToken': '{{ csrf_token() }}'
                 },
                 body: JSON.stringify({ status })
               });
@@ -562,7 +563,7 @@
             button.disabled = true;
             button.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>';
             try {
-              const resp = await fetch(endpoint, { method: 'POST', headers: { 'Accept': 'application/json' } });
+              const resp = await fetch(endpoint, { method: 'POST', headers: { 'Accept': 'application/json', 'X-CSRFToken': '{{ csrf_token() }}' } });
               const data = await resp.json();
               if (!resp.ok || !data.success) {
                 showToast((data && data.message) || 'Não foi possível gerar o link.', 'danger');

@@ -150,7 +150,7 @@ function salvarEdicaoBloco(bloco_id) {
 
   fetch(`/bloco_prescricao/${bloco_id}/atualizar`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', 'X-CSRFToken': '{{ csrf_token() }}' },
     body: JSON.stringify({ medicamentos: payload, instrucoes_gerais: instrucoesGerais })
   })
   .then(res => res.json())

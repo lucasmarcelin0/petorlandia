@@ -276,7 +276,7 @@
       try {
         const resp = await fetch(url, {
           method,
-          headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+          headers: { 'Content-Type': 'application/json', 'Accept': 'application/json', 'X-CSRFToken': '{{ csrf_token() }}' },
           body: JSON.stringify(payload)
         });
         const data = await resp.json();
@@ -297,7 +297,7 @@
       if (!vacinaSelecionada) return;
       if (!confirm('Deseja excluir este modelo?')) return;
       try {
-        const resp = await fetch(`/vacina_modelo/${vacinaSelecionada.id}`, { method: 'DELETE' });
+        const resp = await fetch(`/vacina_modelo/${vacinaSelecionada.id}`, { method: 'DELETE', headers: { 'X-CSRFToken': '{{ csrf_token() }}' } });
         const data = await resp.json();
         if (data.success) {
           mostrarFeedback('Vacina excluída.');

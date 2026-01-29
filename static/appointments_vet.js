@@ -287,7 +287,9 @@ function getCsrfToken(root) {
     return root.dataset.csrfToken;
   }
   const tokenInput = document.querySelector('input[name="csrf_token"]');
-  return tokenInput ? tokenInput.value : '';
+  if (tokenInput) return tokenInput.value;
+  const metaTag = document.querySelector('meta[name="csrf-token"]');
+  return metaTag ? metaTag.content : '';
 }
 
 function getScheduleSelectInputs(root) {
@@ -385,7 +387,8 @@ async function handleScheduleBulkDelete(root) {
         method: 'POST',
         headers: {
           'X-Requested-With': 'XMLHttpRequest',
-          Accept: 'application/json'
+          Accept: 'application/json',
+          'X-CSRFToken': getCsrfToken(root)
         },
         body: formData,
         signal: controller?.signal
@@ -1846,7 +1849,8 @@ export async function responderAgendamentoExame(appointmentId, status) {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        Accept: 'application/json'
+        Accept: 'application/json',
+        'X-CSRFToken': getCsrfToken()
       },
       body: JSON.stringify({ status })
     });

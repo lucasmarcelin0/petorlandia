@@ -7487,25 +7487,32 @@ def planosaude_animal(animal_id):
 
 
 
-@login_required
 def contratar_plano(animal_id):
     """Inicia a assinatura de um plano de saúde via Mercado Pago."""
+    # Check authentication manually to handle JSON requests properly
+    if not current_user.is_authenticated:
+        is_json_request = request.accept_mimetypes['application/json'] > request.accept_mimetypes['text/html']
+        if is_json_request:
+            return jsonify({'success': False, 'message': 'Você precisa estar logado para contratar um plano.', 'redirect': url_for('login_view')}), 401
+        return redirect(url_for('login_view'))
+    
     animal = get_animal_or_404(animal_id)
 
     if animal.owner != current_user:
         flash("Você não tem permissão para contratar este plano.", "danger")
         return redirect(url_for("planosaude_animal", animal_id=animal.id))
 
+    # Create form and populate with POST data
     form = SubscribePlanForm()
     from models import HealthPlan, HealthPlanOnboarding
     plans = HealthPlan.query.all()
     form.plan_id.choices = [
         (p.id, f"{p.name} - R$ {p.price:.2f}") for p in plans
     ]
-    default_animal_document = animal.microchip_number or str(animal.id)
-    form.tutor_document.data = form.tutor_document.data or current_user.cpf
-    form.animal_document.data = form.animal_document.data or default_animal_document
+    
+    # Check if form validates on POST
     if not form.validate_on_submit():
+        app.logger.warning(f"Form validation errors: {form.errors}")
         flash("Selecione um plano válido.", "danger")
         return redirect(url_for("planosaude_animal", animal_id=animal.id))
 
@@ -7541,14 +7548,16 @@ def contratar_plano(animal_id):
     preapproval_data["external_reference"] = f"health-onboarding-{onboarding.id}"
 
     try:
+        app.logger.info(f"Creating Mercado Pago preapproval with data: {preapproval_data}")
         resp = mp_sdk().preapproval().create(preapproval_data)
-    except Exception:  # pragma: no cover - network failures
-        app.logger.exception("Erro de conexão com Mercado Pago")
+        app.logger.info(f"Mercado Pago response: {resp}")
+    except Exception as e:  # pragma: no cover - network failures
+        app.logger.exception(f"Erro de conexão com Mercado Pago: {e}")
         flash("Falha ao conectar com Mercado Pago.", "danger")
         return redirect(url_for("planosaude_animal", animal_id=animal.id))
 
     if resp.get("status") not in {200, 201}:
-        app.logger.error("MP error (HTTP %s): %s", resp.get("status"), resp)
+        app.logger.error(f"MP error (HTTP {resp.get('status')}): {resp}")
         flash("Erro ao iniciar assinatura.", "danger")
         return redirect(url_for("planosaude_animal", animal_id=animal.id))
 
@@ -11640,6 +11649,21 @@ def salvar_racao(animal_id):
         db.session.rollback()
         print(f"Erro ao salvar ração: {e}")
         return jsonify({'success': False, 'error': 'Erro técnico ao salvar ração.'}), 500
+
+
+@app.route('/api/tipos_racao', methods=['GET'])
+@login_required
+def api_tipos_racao():
+    """Retorna lista de tipos de ração em JSON para atualização dinâmica"""
+    tipos = TipoRacao.query.order_by(TipoRacao.marca, TipoRacao.linha).all()
+    return jsonify({
+        'success': True,
+        'tipos': [{
+            'id': t.id,
+            'marca': t.marca,
+            'linha': t.linha
+        } for t in tipos]
+    })
 
 
 @app.route('/tipo_racao', methods=['POST'])

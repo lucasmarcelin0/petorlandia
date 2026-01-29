@@ -137,11 +137,14 @@ function initAddToCartButtons(root=document){
       
       // Submete via AJAX
       const formData = new FormData(form);
+      const csrfToken = form.querySelector('input[name="csrf_token"]')?.value
+        || document.querySelector('meta[name="csrf-token"]')?.content || '';
       fetch(form.action, {
         method: 'POST',
         body: formData,
         headers: {
-          'X-Requested-With': 'XMLHttpRequest'
+          'X-Requested-With': 'XMLHttpRequest',
+          'X-CSRFToken': csrfToken
         }
       })
       .then(response => {
