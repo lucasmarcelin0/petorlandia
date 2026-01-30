@@ -23,6 +23,9 @@ def app():
         WTF_CSRF_ENABLED=False,
     )
     with app.app_context():
+        if hasattr(db, "engines"):
+            db.engines.pop(None, None)
+            db.engines.pop(app, None)
         db.create_all()
         yield app
         db.session.remove()

@@ -12,11 +12,8 @@ from models import User, Clinica, Veterinario, Animal, Consulta
 def app():
     flask_app.config.update(TESTING=True, WTF_CSRF_ENABLED=False, SQLALCHEMY_DATABASE_URI="sqlite:///:memory:")
     with flask_app.app_context():
-        db.drop_all()
         db.create_all()
     yield flask_app
-    with flask_app.app_context():
-        db.session.remove()
 
 
 def login(monkeypatch, user):

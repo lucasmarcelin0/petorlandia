@@ -63,12 +63,12 @@ class RegistrationForm(FlaskForm):
     name = StringField(
         'Nome',
         validators=[DataRequired(message="Nome é obrigatório"), Length(min=2, max=120)],
-        render_kw={"required": True},
+        render_kw={"required": True, "aria-required": "true"},
     )
     email = EmailField(
         'Email',
         validators=[DataRequired(message="Email é obrigatório"), Email()],
-        render_kw={"required": True},
+        render_kw={"required": True, "aria-required": "true"},
     )
     phone = StringField('Telefone', validators=[Optional(), Length(min=8, max=20)])
     address = StringField('Endereço', validators=[Optional(), Length(max=200)])
@@ -85,7 +85,7 @@ class RegistrationForm(FlaskForm):
     password = PasswordField(
         'Senha',
         validators=[DataRequired(message="Senha é obrigatória"), Length(min=6)],
-        render_kw={"required": True},
+        render_kw={"required": True, "aria-required": "true"},
     )
     confirm_password = PasswordField(
         'Confirme a senha',
@@ -93,7 +93,7 @@ class RegistrationForm(FlaskForm):
             DataRequired(message="Confirmação de senha é obrigatória"),
             EqualTo('password', message='As senhas devem coincidir')
         ],
-        render_kw={"required": True},
+        render_kw={"required": True, "aria-required": "true"},
     )
 
     submit = SubmitField('Cadastrar')
