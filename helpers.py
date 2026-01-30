@@ -9,6 +9,7 @@ from datetime import date, datetime, timedelta, timezone, time
 from itertools import groupby
 from dateutil.relativedelta import relativedelta
 from sqlalchemy import case
+from sqlalchemy.orm import object_session
 
 from extensions import db
 from time_utils import BR_TZ, normalize_to_utc, utcnow
@@ -182,7 +183,14 @@ def has_veterinarian_profile(user) -> bool:
     compatible with legacy data while still ensuring the profile exists.
     """
 
-    return bool(user and getattr(user, 'veterinario', None))
+    if not user:
+        return False
+
+    user_session = object_session(user)
+    if user_session is not None and not user_session.is_active:
+        return False
+
+    return bool(getattr(user, 'veterinario', None))
 
 
 def has_professional_access(user=None) -> bool:
