@@ -6,7 +6,7 @@
     {% if current_user.is_authenticated %}
         <!-- Área pessoal -->
         <div class="card shadow-sm p-4 rounded-4 mt-5 mb-4 card-surface-muted">
-            <h5 class="mb-2">Bem-vindo(a)! O que você deseja fazer hoje?</h5>
+            <h1 class="mb-2">Bem-vindo(a)! O que você deseja fazer hoje?</h1>
             <p class="text-muted small">Escolha um atalho abaixo para ir direto à ação desejada.</p>
 
             <div class="d-flex flex-wrap justify-content-center gap-3 mt-2">
@@ -36,6 +36,7 @@
     {% else %}
         <!-- Visitante não autenticado -->
         <div class="card shadow-lg p-5 rounded-4 mt-5 card-surface-white">
+            <h1 class="visually-hidden">PetOrlandia</h1>
             <div class="text-center">
                 <img src="{{ url_for('static', filename='logo_pet.png') }}"
                      alt="Logo PetOrlândia"

@@ -44,8 +44,13 @@ def client(monkeypatch):
         id = 1
         is_authenticated = True
     monkeypatch.setattr(login_utils, '_get_user', lambda: FakeUser())
+    with flask_app.app_context():
+        db.drop_all()
+        db.create_all()
     with flask_app.test_client() as client:
         yield client
+    with flask_app.app_context():
+        db.session.remove()
 
 
 def test_schedule_requires_active_subscription(client, monkeypatch):

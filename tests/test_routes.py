@@ -38,7 +38,12 @@ def app():
         WTF_CSRF_ENABLED=False,
         SQLALCHEMY_DATABASE_URI="sqlite:///:memory:"
     )
+    with flask_app.app_context():
+        db.drop_all()
+        db.create_all()
     yield flask_app
+    with flask_app.app_context():
+        db.session.remove()
 
 
 def login(client, user_id):

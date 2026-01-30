@@ -15,6 +15,7 @@ from wtforms import (
     DateTimeField,
     TimeField,
     HiddenField,
+    EmailField,
 )
 from wtforms.validators import (
     DataRequired,
@@ -64,7 +65,7 @@ class RegistrationForm(FlaskForm):
         validators=[DataRequired(message="Nome é obrigatório"), Length(min=2, max=120)],
         render_kw={"required": True},
     )
-    email = StringField(
+    email = EmailField(
         'Email',
         validators=[DataRequired(message="Email é obrigatório"), Email()],
         render_kw={"required": True},

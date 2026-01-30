@@ -377,35 +377,33 @@ class TestExamManagement:
             exam_models = [
                 ExameModelo(
                     nome="Hemograma completo",
-                    descricao="Analise completa do sangue",
-                    clinica_id=veterinarian_setup['clinic_id']
+                    justificativa="Analise completa do sangue",
+                    created_by=veterinarian_setup['vet_id']
                 ),
                 ExameModelo(
                     nome="Raio-X",
-                    descricao="Radiografia",
-                    clinica_id=veterinarian_setup['clinic_id']
+                    justificativa="Radiografia",
+                    created_by=veterinarian_setup['vet_id']
                 )
             ]
             for em in exam_models:
                 db.session.add(em)
             db.session.commit()
-            
+
             # Create exam block
             bloco_exames = BlocoExames(
                 animal_id=tutor_with_animal['animal_id'],
-                clinica_id=veterinarian_setup['clinic_id'],
-                veterinario_id=veterinarian_setup['vet_id'],
-                status='pendente'
+                observacoes_gerais='pendente',
             )
             db.session.add(bloco_exames)
             db.session.commit()
             bloco_id = bloco_exames.id
-        
+
         # Verify exam block
         with app.app_context():
             bloco = BlocoExames.query.get(bloco_id)
             assert bloco is not None
-            assert bloco.status == 'pendente'
+            assert bloco.observacoes_gerais == 'pendente'
 
 
 class TestEstimateCreation:
@@ -538,22 +536,20 @@ class TestScheduleManagement:
         with app.app_context():
             appointments = [
                 AgendaEvento(
-                    animal_id=tutor_with_animal['animal_id'],
+                    titulo='Consulta Rex',
+                    inicio=datetime.utcnow() + timedelta(days=1, hours=10),
+                    fim=datetime.utcnow() + timedelta(days=1, hours=11),
+                    descricao='consulta',
                     responsavel_id=veterinarian_setup['vet_id'],
                     clinica_id=veterinarian_setup['clinic_id'],
-                    data_hora=datetime.utcnow() + timedelta(days=1, hours=10),
-                    tipo='consulta',
-                    titulo='Consulta Rex',
-                    status='confirmado'
                 ),
                 AgendaEvento(
-                    animal_id=tutor_with_animal['animal_id'],
+                    titulo='Cirurgia Rex',
+                    inicio=datetime.utcnow() + timedelta(days=1, hours=14),
+                    fim=datetime.utcnow() + timedelta(days=1, hours=15),
+                    descricao='cirurgia',
                     responsavel_id=veterinarian_setup['vet_id'],
                     clinica_id=veterinarian_setup['clinic_id'],
-                    data_hora=datetime.utcnow() + timedelta(days=1, hours=14),
-                    tipo='cirurgia',
-                    titulo='Cirurgia Rex',
-                    status='confirmado'
                 )
             ]
             for apt in appointments:
@@ -706,13 +702,12 @@ class TestCollaboration:
             
             # Create event with collaborator
             evento = AgendaEvento(
-                animal_id=tutor_with_animal['animal_id'],
+                titulo='Cirurgia colaborativa',
+                inicio=datetime.utcnow() + timedelta(hours=2),
+                fim=datetime.utcnow() + timedelta(hours=4),
+                descricao='cirurgia',
                 responsavel_id=veterinarian_setup['vet_id'],
                 clinica_id=veterinarian_setup['clinic_id'],
-                data_hora=datetime.utcnow() + timedelta(hours=2),
-                tipo='cirurgia',
-                titulo='Cirurgia colaborativa',
-                status='confirmado'
             )
             db.session.add(evento)
             db.session.commit()

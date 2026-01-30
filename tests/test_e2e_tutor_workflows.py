@@ -389,7 +389,7 @@ class TestAppointmentWorkflow:
         
         # Verify appointment was created
         with app.app_context():
-            evento = AgendaEvento.query.filter_by(animal_id=animal_id).first()
+            evento = AgendaEvento.query.filter_by(responsavel_id=veterinarian_with_clinic['vet_id']).first()
             assert evento is not None or response.status_code == 200  # May have different implementation
     
     def test_view_appointments(self, client, tutor, species_and_breeds, veterinarian_with_clinic, app):
@@ -408,13 +408,12 @@ class TestAppointmentWorkflow:
             
             # Create appointment
             evento = AgendaEvento(
-                animal_id=animal.id,
+                titulo='Consulta Luna',
+                inicio=datetime.utcnow() + timedelta(days=3),
+                fim=datetime.utcnow() + timedelta(days=3, hours=1),
+                descricao='consulta',
                 responsavel_id=veterinarian_with_clinic['vet_id'],
                 clinica_id=veterinarian_with_clinic['clinic_id'],
-                data_hora=datetime.utcnow() + timedelta(days=3),
-                tipo='consulta',
-                titulo='Consulta Luna',
-                status='confirmado'
             )
             db.session.add(evento)
             db.session.commit()

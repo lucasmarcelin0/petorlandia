@@ -32,27 +32,27 @@
     <p class="text-muted small mb-1">Você também pode colar uma captura de tela (Ctrl+V) diretamente aqui.</p>
 
     <div id="{{ id }}-controls" class="d-flex flex-wrap justify-content-center gap-2 my-2{% if not image_url %} d-none{% endif %}">
-      <button type="button" id="{{ id }}-rotate-left" class="btn btn-light btn-sm border" title="Girar 90° à esquerda">
+      <button type="button" id="{{ id }}-rotate-left" class="btn btn-light btn-sm border" title="Girar 90° à esquerda" aria-label="Girar 90° à esquerda">
         <i class="fas fa-undo"></i>
       </button>
-      <button type="button" id="{{ id }}-rotate-right" class="btn btn-light btn-sm border" title="Girar 90° à direita">
+      <button type="button" id="{{ id }}-rotate-right" class="btn btn-light btn-sm border" title="Girar 90° à direita" aria-label="Girar 90° à direita">
         <i class="fas fa-redo"></i>
       </button>
-      <button type="button" id="{{ id }}-zoom-out" class="btn btn-light btn-sm border" title="Diminuir zoom">
+      <button type="button" id="{{ id }}-zoom-out" class="btn btn-light btn-sm border" title="Diminuir zoom" aria-label="Diminuir zoom">
         <i class="fas fa-search-minus"></i>
       </button>
-      <button type="button" id="{{ id }}-zoom-in" class="btn btn-light btn-sm border" title="Aumentar zoom">
+      <button type="button" id="{{ id }}-zoom-in" class="btn btn-light btn-sm border" title="Aumentar zoom" aria-label="Aumentar zoom">
         <i class="fas fa-search-plus"></i>
       </button>
-      <button type="button" id="{{ id }}-reset" class="btn btn-light btn-sm border" title="Redefinir">
+      <button type="button" id="{{ id }}-reset" class="btn btn-light btn-sm border" title="Redefinir" aria-label="Redefinir">
         <i class="fas fa-sync-alt"></i>
       </button>
     </div>
 
-    {{ rot_field(class='d-none', id=id + '-rotation') }}
-    {{ zoom_field(class='d-none', id=id + '-zoom') }}
-    {{ offset_x_field(class='d-none', id=id + '-offset_x') }}
-    {{ offset_y_field(class='d-none', id=id + '-offset_y') }}
+    {{ rot_field(class='d-none', id=id + '-rotation', type='hidden') }}
+    {{ zoom_field(class='d-none', id=id + '-zoom', type='hidden') }}
+    {{ offset_x_field(class='d-none', id=id + '-offset_x', type='hidden') }}
+    {{ offset_y_field(class='d-none', id=id + '-offset_y', type='hidden') }}
   </div>
 </div>
 

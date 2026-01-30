@@ -1915,8 +1915,9 @@ def get_animal_or_404(animal_id, *, viewer=None, clinic_scope=None):
 
     animal = Animal.query.get_or_404(animal_id)
     owner_access = bool(viewer and animal.user_id == viewer.id)
+    added_by_access = bool(viewer and animal.added_by_id and animal.added_by_id == viewer.id)
     shared_access = _resolve_shared_access_for_animal(animal, viewer=viewer, clinic_scope=clinic_scope)
-    if not shared_access and not owner_access:
+    if not shared_access and not owner_access and not added_by_access:
         ensure_clinic_access(animal.clinica_id)
     elif shared_access:
         _log_data_share(
@@ -1928,7 +1929,7 @@ def get_animal_or_404(animal_id, *, viewer=None, clinic_scope=None):
         )
 
     tutor_id = getattr(animal, "user_id", None)
-    if tutor_id:
+    if tutor_id and animal.clinica_id:
         visibility_clause = _user_visibility_clause(viewer=viewer, clinic_scope=clinic_scope)
         tutor_visible = (
             db.session.query(User.id)
@@ -1936,7 +1937,7 @@ def get_animal_or_404(animal_id, *, viewer=None, clinic_scope=None):
             .filter(visibility_clause)
             .first()
         )
-        if not tutor_visible and not (shared_access or owner_access):
+        if not tutor_visible and not (shared_access or owner_access or added_by_access):
             abort(404)
 
     return animal

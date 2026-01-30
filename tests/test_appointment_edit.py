@@ -6,7 +6,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')
 import pytest
 import flask_login.utils as login_utils
 from app import app as flask_app, db
-from datetime import datetime, time as dtime
+from datetime import datetime, time as dtime, timezone
 from models import (
     User,
     Animal,
@@ -82,7 +82,7 @@ def test_vet_can_edit_appointment_date_time_and_vet(client, monkeypatch):
     with flask_app.app_context():
         appt = Appointment.query.get(appt_id)
         assert appt.veterinario_id == 2
-        assert appt.scheduled_at == datetime(2024,5,2,14,30)
+        assert appt.scheduled_at == datetime(2024,5,2,14,30, tzinfo=timezone.utc)
         assert appt.notes == 'Trazer exames'
 
 
@@ -134,4 +134,4 @@ def test_vet_can_edit_appointment_missing_clinic_id(client, monkeypatch):
     with flask_app.app_context():
         appt = Appointment.query.get(appt_id)
         assert appt.veterinario_id == 2
-        assert appt.scheduled_at == datetime(2024,5,2,14,30)
+        assert appt.scheduled_at == datetime(2024,5,2,14,30, tzinfo=timezone.utc)

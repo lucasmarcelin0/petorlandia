@@ -26,8 +26,10 @@ def app():
         if hasattr(db, "engines"):
             db.engines.pop(None, None)
             db.engines.pop(app, None)
+        db.create_all()
         yield app
         db.session.remove()
+        db.drop_all()
 
 
 @pytest.fixture()
