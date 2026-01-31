@@ -5870,6 +5870,20 @@ def contabilidade_nfse_orcamento(orcamento_id: int):
         for item in orcamento.items
     ]
 
+    endereco_payload = (
+        {
+            "cep": tomador.endereco.cep,
+            "logradouro": tomador.endereco.rua,
+            "numero": tomador.endereco.numero,
+            "complemento": tomador.endereco.complemento,
+            "bairro": tomador.endereco.bairro,
+            "cidade": tomador.endereco.cidade,
+            "estado": tomador.endereco.estado,
+        }
+        if tomador and tomador.endereco
+        else None
+    )
+
     payload = {
         "id": orcamento.id,
         "consulta_id": orcamento.consulta_id,
@@ -5893,7 +5907,8 @@ def contabilidade_nfse_orcamento(orcamento_id: int):
                 "cpf_cnpj": tomador.cpf,
                 "email": tomador.email,
                 "telefone": tomador.phone,
-                "endereco": tomador.address,
+                "endereco": endereco_payload,
+                "endereco_texto": tomador.address,
             }
             if tomador
             else None
@@ -5931,6 +5946,24 @@ def contabilidade_nfse_emitir():
         )
 
     payload = {"consulta_id": consulta.id}
+    tomador_payload = {
+        "nome": request.form.get('tomador_nome') or None,
+        "cpf_cnpj": request.form.get('tomador_documento') or None,
+        "email": request.form.get('tomador_email') or None,
+        "telefone": request.form.get('tomador_telefone') or None,
+    }
+    endereco_payload = {
+        "cep": request.form.get('tomador_cep') or None,
+        "cidade": request.form.get('tomador_municipio') or None,
+        "estado": request.form.get('tomador_uf') or None,
+        "logradouro": request.form.get('tomador_logradouro') or None,
+        "numero": request.form.get('tomador_numero') or None,
+        "bairro": request.form.get('tomador_bairro') or None,
+    }
+    if any(endereco_payload.values()):
+        tomador_payload["endereco"] = endereco_payload
+    if any(value for value in tomador_payload.values()):
+        payload["tomador"] = tomador_payload
     try:
         if should_emit_async(get_clinica_field(consulta.clinica, "municipio_nfse", "")):
             queue_nfse_issue(issue, "Emissão solicitada manualmente.", payload)
