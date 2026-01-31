@@ -37,6 +37,11 @@ def get_blueprint():
         methods=["POST"],
     )
     bp.add_url_rule(
+        "/fiscal/exports/xmls",
+        view_func=lazy_view("fiscal_exports_xmls"),
+        methods=["GET"],
+    )
+    bp.add_url_rule(
         "/fiscal/onboarding",
         view_func=lazy_view("fiscal_onboarding_start"),
         methods=["GET"],

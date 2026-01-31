@@ -20028,6 +20028,13 @@ if _fiscal_onboarding_path.exists():
     fiscal_onboarding_start = _fiscal_onboarding_routes.fiscal_onboarding_start
     fiscal_onboarding_step = _fiscal_onboarding_routes.fiscal_onboarding_step
 
+_fiscal_exports_path = pathlib.Path(__file__).resolve().parent / "app" / "routes" / "fiscal_exports.py"
+if _fiscal_exports_path.exists():
+    _spec = importlib.util.spec_from_file_location("fiscal_exports_routes", _fiscal_exports_path)
+    _fiscal_exports_routes = importlib.util.module_from_spec(_spec)
+    _spec.loader.exec_module(_fiscal_exports_routes)
+    fiscal_exports_xmls = _fiscal_exports_routes.fiscal_exports_xmls
+
 register_domain_blueprints(app)
 
 if __name__ == "__main__":
