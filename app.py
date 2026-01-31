@@ -6051,6 +6051,11 @@ def contabilidade_nfse_orcamento(orcamento_id: int):
     if orcamento.clinica_id not in accessible_ids:
         return jsonify({"error": "Sem acesso ao orçamento informado."}), 403
 
+    payload = _build_nfse_orcamento_payload(orcamento)
+    return jsonify(payload)
+
+
+def _build_nfse_orcamento_payload(orcamento: Orcamento) -> dict:
     consulta = orcamento.consulta
     animal = consulta.animal if consulta else None
     tomador = animal.owner if animal else None
@@ -6078,7 +6083,7 @@ def contabilidade_nfse_orcamento(orcamento_id: int):
         else None
     )
 
-    payload = {
+    return {
         "id": orcamento.id,
         "consulta_id": orcamento.consulta_id,
         "descricao": orcamento.descricao,
@@ -6108,6 +6113,68 @@ def contabilidade_nfse_orcamento(orcamento_id: int):
             else None
         ),
     }
+
+
+def _build_nfse_emissor_payload(clinica: Clinica) -> dict:
+    def _to_float(value):
+        return float(value) if value is not None else None
+
+    return {
+        "id": clinica.id,
+        "nome": clinica.nome,
+        "cnpj": clinica.cnpj,
+        "email": clinica.email,
+        "telefone": clinica.telefone,
+        "endereco": clinica.endereco,
+        "inscricao_municipal": get_clinica_field(clinica, "inscricao_municipal", None),
+        "inscricao_estadual": get_clinica_field(clinica, "inscricao_estadual", None),
+        "regime_tributario": get_clinica_field(clinica, "regime_tributario", None),
+        "cnae": get_clinica_field(clinica, "cnae", None),
+        "codigo_servico": get_clinica_field(clinica, "codigo_servico", None),
+        "aliquota_iss": _to_float(get_clinica_field(clinica, "aliquota_iss", None)),
+        "aliquota_pis": _to_float(get_clinica_field(clinica, "aliquota_pis", None)),
+        "aliquota_cofins": _to_float(get_clinica_field(clinica, "aliquota_cofins", None)),
+        "aliquota_csll": _to_float(get_clinica_field(clinica, "aliquota_csll", None)),
+        "aliquota_ir": _to_float(get_clinica_field(clinica, "aliquota_ir", None)),
+        "municipio_nfse": get_clinica_field(clinica, "municipio_nfse", None),
+        "fiscal_ready": clinica.fiscal_ready_status,
+    }
+
+
+@login_required
+def contabilidade_nfse_consolidado():
+    _ensure_accounting_access()
+    clinica_id = request.args.get("clinica_id", type=int)
+    orcamento_id = request.args.get("orcamento_id", type=int)
+    if not clinica_id or not orcamento_id:
+        return jsonify({"error": "Informe clinica_id e orcamento_id."}), 400
+
+    _, accessible_ids = _accounting_accessible_clinics()
+    if clinica_id not in accessible_ids:
+        return jsonify({"error": "Sem acesso à clínica informada."}), 403
+
+    clinica = Clinica.query.get(clinica_id)
+    if not clinica:
+        return jsonify({"error": "Clínica não encontrada."}), 404
+
+    orcamento = (
+        Orcamento.query
+        .options(
+            joinedload(Orcamento.consulta)
+            .joinedload(Consulta.animal)
+            .joinedload(Animal.owner),
+        )
+        .get(orcamento_id)
+    )
+    if not orcamento:
+        return jsonify({"error": "Orçamento não encontrado."}), 404
+    if orcamento.clinica_id not in accessible_ids:
+        return jsonify({"error": "Sem acesso ao orçamento informado."}), 403
+    if orcamento.clinica_id != clinica_id:
+        return jsonify({"error": "Orçamento não pertence à clínica informada."}), 400
+
+    payload = _build_nfse_orcamento_payload(orcamento)
+    payload["emissor"] = _build_nfse_emissor_payload(clinica)
     return jsonify(payload)
 
 
