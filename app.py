@@ -120,6 +120,7 @@ from services.fiscal.nfse_service import (
     create_nfse_document,
     queue_emit_nfse,
 )
+from services.billing.close_appointment import close_appointment
 from services.appointments import (
     ReturnAppointmentDTO,
     finalize_consulta_flow,
@@ -1853,6 +1854,7 @@ def fiscal_document_status(document_id: int):
         {
             "id": document.id,
             "status": document.status.value if document.status else document.status,
+            "access_key": document.access_key,
             "nfse_number": document.nfse_number,
             "verification_code": document.verification_code,
             "error_message": document.error_message,
@@ -8662,6 +8664,37 @@ def finalizar_consulta(consulta_id):
         return redirect(url_for('consulta_direct', animal_id=consulta.animal_id, c=consulta.id))
     if outcome.status == "completed":
         flash(outcome.message, outcome.category)
+        return redirect(url_for('consulta_direct', animal_id=consulta.animal_id))
+
+    flash(outcome.message, outcome.category)
+    return render_template(
+        'agendamentos/confirmar_retorno.html',
+        consulta=consulta,
+        form=outcome.form,
+    )
+
+
+@app.route('/finalizar_consulta/<int:consulta_id>/fechar', methods=['POST'])
+@login_required
+def finalizar_consulta_e_fechar(consulta_id):
+    consulta = get_consulta_or_404(consulta_id)
+    if not is_veterinarian(current_user):
+        flash('Apenas veterinários podem finalizar consultas.', 'danger')
+        return redirect(url_for('index'))
+
+    outcome = finalize_consulta_flow(
+        consulta=consulta,
+        actor_id=current_user.id,
+        actor_vet_id=getattr(getattr(current_user, "veterinario", None), "id", None),
+        clinic_id=current_user_clinic_id(),
+    )
+    if outcome.status == "blocked":
+        flash(outcome.message, outcome.category)
+        return redirect(url_for('consulta_direct', animal_id=consulta.animal_id, c=consulta.id))
+    if outcome.status == "completed":
+        flash(outcome.message, outcome.category)
+        if consulta.appointment:
+            return redirect(url_for('appointment_close', appointment_id=consulta.appointment.id))
         return redirect(url_for('consulta_direct', animal_id=consulta.animal_id))
 
     flash(outcome.message, outcome.category)
@@ -17650,6 +17683,64 @@ def appointment_emit_nfse(appointment_id: int):
     queue_emit_nfse(document.id)
     flash("Emissão de NFS-e enfileirada.", "success")
     return redirect(url_for("fiscal_document_detail", document_id=document.id))
+
+
+@app.route("/appointments/<int:appointment_id>/close", methods=["GET", "POST"])
+@login_required
+def appointment_close(appointment_id: int):
+    appointment = Appointment.query.get_or_404(appointment_id)
+    if not appointment.clinica_id:
+        abort(403)
+
+    clinic_id = current_user_clinic_id()
+    if clinic_id and appointment.clinica_id != clinic_id and (current_user.role or "").lower() != "admin":
+        abort(403)
+
+    consulta = appointment.consulta
+    items = list(consulta.orcamento_items) if consulta and consulta.orcamento_items else []
+    service_items = [item for item in items if item.servico_id]
+    product_items = [item for item in items if not item.servico_id]
+
+    nfse_document = (
+        FiscalDocument.query.filter_by(
+            related_type="appointment",
+            related_id=appointment.id,
+            doc_type=FiscalDocumentType.NFSE,
+        )
+        .order_by(FiscalDocument.created_at.desc())
+        .first()
+    )
+    nfe_document = (
+        FiscalDocument.query.filter_by(
+            related_type="appointment",
+            related_id=appointment.id,
+            doc_type=FiscalDocumentType.NFE,
+        )
+        .order_by(FiscalDocument.created_at.desc())
+        .first()
+    )
+
+    if request.method == "POST":
+        if not appointment.clinica or not appointment.clinica.fiscal_emitter:
+            flash("Clínica sem emissor fiscal configurado.", "warning")
+        else:
+            result = close_appointment(appointment)
+            nfse_document = result.nfse_document
+            nfe_document = result.nfe_document
+            if not service_items and not product_items:
+                flash("Nenhum item fiscal para emissão.", "warning")
+            else:
+                flash("Fechamento fiscal enfileirado.", "success")
+
+    return render_template(
+        "appointment_close.html",
+        appointment=appointment,
+        consulta=consulta,
+        service_items=service_items,
+        product_items=product_items,
+        nfse_document=nfse_document,
+        nfe_document=nfe_document,
+    )
 
 
 @login_required
