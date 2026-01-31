@@ -260,6 +260,31 @@ def handle_http_exception(err):
     return render_template("errors/http.html", error=err), err.code
 
 
+@app.errorhandler(CSRFError)
+def handle_csrf_error(err):
+    current_app.logger.warning(
+        "csrf_error",
+        extra={
+            "path": request.path,
+            "status_code": 400,
+            "request_id": getattr(g, "request_id", None),
+        },
+    )
+    wants_json = (
+        request.accept_mimetypes["application/json"]
+        >= request.accept_mimetypes["text/html"]
+    )
+    if wants_json:
+        payload = {
+            "error": "CSRF token missing or invalid",
+            "message": "Falha de validação. Recarregue a página e tente novamente.",
+            "errors": {"csrf_token": ["Falha de validação. Recarregue a página e tente novamente."]},
+            "request_id": getattr(g, "request_id", None),
+        }
+        return jsonify(payload), 400
+    return render_template("errors/http.html", error=err), 400
+
+
 @app.errorhandler(Exception)
 def handle_unhandled_exception(err):
     current_app.logger.exception(
