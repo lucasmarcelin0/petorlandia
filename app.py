@@ -279,6 +279,7 @@ def handle_unhandled_exception(err):
 
 _inventory_threshold_columns_checked = False
 _inventory_movement_table_checked = False
+_inventory_movement_columns_checked = False
 _clinic_notifications_table_checked = False
 _plantao_modelos_table_checked = False
 
@@ -358,6 +359,64 @@ def _ensure_inventory_movement_table() -> None:
         pass
     finally:
         _inventory_movement_table_checked = True
+
+
+def _ensure_inventory_movement_columns() -> None:
+    """Add missing inventory movement columns when migrations are skipped."""
+
+    global _inventory_movement_columns_checked
+    if _inventory_movement_columns_checked:
+        return
+
+    try:
+        inspector = inspect(db.engine)
+        if not inspector.has_table("clinic_inventory_movement"):
+            return
+        existing_columns = {
+            column["name"] for column in inspector.get_columns("clinic_inventory_movement")
+        }
+    except Exception:  # pragma: no cover - engine init failures
+        return
+
+    statements = []
+    if "clinica_id" not in existing_columns:
+        statements.append("ALTER TABLE clinic_inventory_movement ADD COLUMN clinica_id INTEGER")
+    if "item_id" not in existing_columns:
+        statements.append("ALTER TABLE clinic_inventory_movement ADD COLUMN item_id INTEGER")
+    if "quantity_change" not in existing_columns:
+        statements.append(
+            "ALTER TABLE clinic_inventory_movement ADD COLUMN quantity_change INTEGER"
+        )
+    if "quantity_before" not in existing_columns:
+        statements.append(
+            "ALTER TABLE clinic_inventory_movement ADD COLUMN quantity_before INTEGER"
+        )
+    if "quantity_after" not in existing_columns:
+        statements.append(
+            "ALTER TABLE clinic_inventory_movement ADD COLUMN quantity_after INTEGER"
+        )
+    if "tipo" not in existing_columns:
+        statements.append("ALTER TABLE clinic_inventory_movement ADD COLUMN tipo VARCHAR(20)")
+    if "motivo" not in existing_columns:
+        statements.append("ALTER TABLE clinic_inventory_movement ADD COLUMN motivo VARCHAR(200)")
+    if "responsavel_id" not in existing_columns:
+        statements.append(
+            "ALTER TABLE clinic_inventory_movement ADD COLUMN responsavel_id INTEGER"
+        )
+    if "created_at" not in existing_columns:
+        statements.append(
+            "ALTER TABLE clinic_inventory_movement ADD COLUMN created_at TIMESTAMP WITH TIME ZONE"
+        )
+
+    if statements:
+        for statement in statements:
+            try:
+                with db.engine.begin() as connection:
+                    connection.execute(text(statement))
+            except ProgrammingError:
+                continue
+
+    _inventory_movement_columns_checked = True
 
 
 def _ensure_clinic_notifications_table() -> bool:
@@ -9134,6 +9193,7 @@ def clinic_detail(clinica_id):
     if show_inventory:
         _ensure_inventory_threshold_columns()
         _ensure_inventory_movement_table()
+        _ensure_inventory_movement_columns()
         inventory_items = (
             ClinicInventoryItem.query
             .filter_by(clinica_id=clinica.id)
@@ -9961,6 +10021,9 @@ def clinic_stock(clinica_id):
         abort(403)
 
     inventory_form = InventoryItemForm()
+    _ensure_inventory_threshold_columns()
+    _ensure_inventory_movement_table()
+    _ensure_inventory_movement_columns()
     if inventory_form.validate_on_submit():
         min_qty = inventory_form.min_quantity.data
         max_qty = inventory_form.max_quantity.data
