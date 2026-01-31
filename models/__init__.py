@@ -24,6 +24,15 @@ from .usuarios import (
     VeterinarianMembership,
     VeterinarianSettings,
 )
+from .fiscal import (
+    FiscalCertificate,
+    FiscalCounter,
+    FiscalDocument,
+    FiscalDocumentStatus,
+    FiscalDocumentType,
+    FiscalEmitter,
+    FiscalEvent,
+)
 
 __all__ = [
     "AgendaEvento",
@@ -52,6 +61,13 @@ __all__ = [
     "Veterinario",
     "VeterinarianMembership",
     "VeterinarianSettings",
+    "FiscalCertificate",
+    "FiscalCounter",
+    "FiscalDocument",
+    "FiscalDocumentStatus",
+    "FiscalDocumentType",
+    "FiscalEmitter",
+    "FiscalEvent",
     "ClinicInventory",
     "ClinicInventoryMovement",
 ]

@@ -26,6 +26,7 @@ def register_domain_blueprints(app):
         auth,
         clinica,
         financeiro,
+        fiscal,
         loja,
         mensagens,
         planos,
@@ -54,6 +55,10 @@ def register_domain_blueprints(app):
     financeiro_bp = financeiro.get_blueprint()
     if financeiro_bp.name not in app.blueprints:
         _register_with_alias(app, financeiro_bp)
+
+    fiscal_bp = fiscal.get_blueprint()
+    if fiscal_bp.name not in app.blueprints:
+        _register_with_alias(app, fiscal_bp)
 
     planos_bp = planos.get_blueprint()
     if planos_bp.name not in app.blueprints:

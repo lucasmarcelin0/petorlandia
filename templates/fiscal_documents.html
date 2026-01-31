@@ -1,0 +1,93 @@
+{% extends "layout.html" %}
+
+{% block head %}
+<title>Documentos Fiscais</title>
+{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+  <div class="d-flex align-items-center justify-content-between mb-3">
+    <div>
+      <h2 class="mb-1">Documentos Fiscais</h2>
+      <p class="text-muted mb-0">Acompanhe NF-e e NFS-e emitidas pela clínica.</p>
+    </div>
+  </div>
+
+  <div class="card mb-4">
+    <div class="card-body">
+      <form class="row g-3" method="get" action="{{ url_for('fiscal_documents') }}">
+        <div class="col-md-3">
+          <label class="form-label" for="doc_type">Tipo</label>
+          <select class="form-select" id="doc_type" name="doc_type">
+            <option value="">Todos</option>
+            {% for option in doc_types %}
+            <option value="{{ option }}" {% if doc_type == option %}selected{% endif %}>{{ option }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-md-3">
+          <label class="form-label" for="status">Status</label>
+          <select class="form-select" id="status" name="status">
+            <option value="">Todos</option>
+            {% for option in status_options %}
+            <option value="{{ option }}" {% if status == option %}selected{% endif %}>{{ option }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-md-3">
+          <label class="form-label" for="start_date">Período inicial</label>
+          <input class="form-control" id="start_date" name="start_date" type="date" value="{{ start_date }}">
+        </div>
+        <div class="col-md-3">
+          <label class="form-label" for="end_date">Período final</label>
+          <input class="form-control" id="end_date" name="end_date" type="date" value="{{ end_date }}">
+        </div>
+        <div class="col-12 d-flex justify-content-end">
+          <button class="btn btn-primary" type="submit">Filtrar</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div class="card shadow-sm">
+    <div class="card-body">
+      {% if documents %}
+      <div class="table-responsive">
+        <table class="table table-striped align-middle">
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Tipo</th>
+              <th>Status</th>
+              <th>Série/Número</th>
+              <th>Chave/Número</th>
+              <th>Emissão</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for doc in documents %}
+            <tr>
+              <td>{{ doc.id }}</td>
+              <td>{{ doc.doc_type.value if doc.doc_type else doc.doc_type }}</td>
+              <td>{{ doc.status.value if doc.status else doc.status }}</td>
+              <td>{{ doc.series or '-' }}/{{ doc.number or '-' }}</td>
+              <td>{{ doc.access_key or doc.nfse_number or '-' }}</td>
+              <td>{{ doc.created_at.strftime('%d/%m/%Y %H:%M') if doc.created_at else '-' }}</td>
+              <td>
+                <a class="btn btn-sm btn-outline-primary" href="{{ url_for('fiscal_document_detail', document_id=doc.id) }}">
+                  Detalhar
+                </a>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% else %}
+      <p class="text-muted mb-0">Nenhum documento fiscal encontrado.</p>
+      {% endif %}
+    </div>
+  </div>
+</div>
+{% endblock %}
