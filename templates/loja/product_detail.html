@@ -30,37 +30,7 @@
 
   {% if is_admin %}
   <hr>
-  <h4>Editar Produto</h4>
-  <form method="post" enctype="multipart/form-data">
-    {{ update_form.hidden_tag() }}
-    <div class="mb-3">
-      {{ update_form.name.label(class="form-label") }}
-      {{ update_form.name(class="form-control") }}
-    </div>
-    <div class="mb-3">
-      {{ update_form.description.label(class="form-label") }}
-      {{ update_form.description(class="form-control") }}
-    </div>
-    <div class="row">
-      <div class="col-md-4 mb-3">
-        {{ update_form.price.label(class="form-label") }}
-        {{ update_form.price(class="form-control") }}
-      </div>
-      <div class="col-md-4 mb-3">
-        {{ update_form.stock.label(class="form-label") }}
-        {{ update_form.stock(class="form-control") }}
-      </div>
-      <div class="col-md-4 mb-3">
-        {{ update_form.mp_category_id.label(class="form-label") }}
-        {{ update_form.mp_category_id(class="form-control") }}
-      </div>
-      <div class="col-md-4 mb-3">
-        {{ update_form.image_upload.label(class="form-label") }}
-        {{ update_form.image_upload(class="form-control") }}
-      </div>
-    </div>
-    <button type="submit" class="btn btn-success" name="upd-submit">{{ update_form.submit.label.text }}</button>
-  </form>
+  {% include "products_edit.html" %}
 
   <hr>
   <h4>Adicionar Foto</h4>

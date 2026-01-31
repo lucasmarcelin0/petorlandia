@@ -1919,6 +1919,15 @@ class Product(db.Model):
     stock = db.Column(db.Integer, default=0)
     image_url = db.Column(db.String(200))
     mp_category_id = db.Column(db.String(50), default="others")
+    ncm = db.Column(db.String(10))
+    cfop = db.Column(db.String(10))
+    cst = db.Column(db.String(5))
+    csosn = db.Column(db.String(5))
+    origem = db.Column(db.String(2))
+    unidade = db.Column(db.String(10))
+    aliquota_icms = db.Column(db.Numeric(10, 4))
+    aliquota_pis = db.Column(db.Numeric(10, 4))
+    aliquota_cofins = db.Column(db.Numeric(10, 4))
 
     # Items de pedido associados ao produto. O cascade facilita remover os
     # OrderItem relacionados quando o produto é excluído.

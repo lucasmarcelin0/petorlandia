@@ -15461,6 +15461,15 @@ def produto_detail(product_id):
             product.price = float(update_form.price.data or 0)
             product.stock = update_form.stock.data
             product.mp_category_id = (update_form.mp_category_id.data or "others").strip()
+            product.ncm = (update_form.ncm.data or "").strip() or None
+            product.cfop = (update_form.cfop.data or "").strip() or None
+            product.cst = (update_form.cst.data or "").strip() or None
+            product.csosn = (update_form.csosn.data or "").strip() or None
+            product.origem = (update_form.origem.data or "").strip() or None
+            product.unidade = (update_form.unidade.data or "").strip() or None
+            product.aliquota_icms = update_form.aliquota_icms.data
+            product.aliquota_pis = update_form.aliquota_pis.data
+            product.aliquota_cofins = update_form.aliquota_cofins.data
             if update_form.image_upload.data:
                 file = update_form.image_upload.data
                 filename = secure_filename(file.filename)
