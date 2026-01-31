@@ -1,0 +1,78 @@
+{% extends "layout.html" %}
+
+{% block head %}
+<title>Certificado Fiscal</title>
+{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+  <div class="d-flex flex-column flex-md-row align-items-md-center justify-content-between mb-3">
+    <div>
+      <h2 class="mb-1">Certificado A1</h2>
+      <p class="text-muted mb-0">Envie o certificado do emissor fiscal para NF-e/NFS-e.</p>
+    </div>
+    <a class="btn btn-outline-secondary mt-3 mt-md-0" href="{{ url_for('fiscal_settings') }}">
+      Voltar para configurações
+    </a>
+  </div>
+
+  <div class="card shadow-sm mb-4">
+    <div class="card-body">
+      <h5 class="card-title">Upload do certificado (.pfx)</h5>
+      <p class="text-muted">Emissor: {{ emitter.razao_social }} (CNPJ {{ emitter.cnpj }})</p>
+      <form method="post" enctype="multipart/form-data" action="{{ url_for('fiscal_certificate_upload') }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
+        <div class="row g-3">
+          <div class="col-md-7">
+            <label class="form-label" for="pfx_file">Arquivo PFX *</label>
+            <input class="form-control" type="file" id="pfx_file" name="pfx_file" accept=".pfx" required>
+          </div>
+          <div class="col-md-5">
+            <label class="form-label" for="pfx_password">Senha do certificado *</label>
+            <input class="form-control" type="password" id="pfx_password" name="pfx_password" required>
+          </div>
+        </div>
+        <div class="mt-4 d-flex justify-content-end">
+          <button class="btn btn-primary" type="submit">Enviar certificado</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div class="card shadow-sm">
+    <div class="card-body">
+      <h5 class="card-title">Certificados enviados</h5>
+      {% if certificates %}
+      <div class="table-responsive">
+        <table class="table table-striped align-middle">
+          <thead>
+            <tr>
+              <th scope="col">Fingerprint</th>
+              <th scope="col">CNPJ</th>
+              <th scope="col">Validade</th>
+              <th scope="col">Enviado em</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for certificate in certificates %}
+            <tr>
+              <td class="text-monospace">{{ certificate.fingerprint_sha256[:16] }}...</td>
+              <td>{{ certificate.subject_cnpj }}</td>
+              <td>
+                {{ certificate.valid_from.strftime('%d/%m/%Y') if certificate.valid_from }}
+                até
+                {{ certificate.valid_to.strftime('%d/%m/%Y') if certificate.valid_to }}
+              </td>
+              <td>{{ certificate.created_at.strftime('%d/%m/%Y %H:%M') if certificate.created_at }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% else %}
+      <p class="text-muted mb-0">Nenhum certificado enviado ainda.</p>
+      {% endif %}
+    </div>
+  </div>
+</div>
+{% endblock %}
