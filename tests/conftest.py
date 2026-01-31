@@ -23,9 +23,12 @@ def app():
         WTF_CSRF_ENABLED=False,
     )
     with app.app_context():
+<<<<<<< HEAD
         if hasattr(db, "engines"):
             db.engines.pop(None, None)
             db.engines.pop(app, None)
+=======
+>>>>>>> 2b55935b (claude é fraco, não consegue fazer nada sem passar do limite)
         db.create_all()
         yield app
         db.session.remove()

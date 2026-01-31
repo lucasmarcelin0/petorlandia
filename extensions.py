@@ -18,7 +18,7 @@ _datetime_columns_cache: WeakKeyDictionary = WeakKeyDictionary()
 
 
 class TestingAwareSQLAlchemy(SQLAlchemy):
-    """SQLAlchemy helper that drops tables before ``create_all`` in tests."""
+    """SQLAlchemy helper that resets the database before ``create_all`` in tests."""
 
     def create_all(self, bind="__all__", app=None, **_kwargs):  # type: ignore[override]
         app_obj = app or current_app
@@ -26,7 +26,11 @@ class TestingAwareSQLAlchemy(SQLAlchemy):
         with ctx:
             if app_obj and app_obj.config.get("TESTING"):
                 uri = str(app_obj.config.get("SQLALCHEMY_DATABASE_URI", ""))
-                if uri.startswith("sqlite"):
+                if ":memory:" in uri:
+                    # Dispose the engine to get a fresh in-memory database,
+                    # avoiding stale state from circular FK drop_all failures.
+                    self.engine.dispose()
+                elif uri.startswith("sqlite"):
                     super().drop_all(bind_key=bind)
             return super().create_all(bind_key=bind)
 

@@ -4,7 +4,20 @@
       "Bash(python:*)",
       "Bash(git add:*)",
       "Bash(git commit:*)",
-      "Bash(grep:*)"
+      "Bash(grep:*)",
+      "Bash(for:*)",
+      "Bash(do if ! grep -q \"def app\\(\" \"$f\")",
+      "Bash(! grep -q \"def client\\(\" \"$f\")",
+      "Bash(! grep -q \"def app_context\\(\" \"$f\")",
+      "Bash(then echo \"$f\")",
+      "Bash(fi)",
+      "Bash(done)",
+      "Bash(do if grep -q \"def test_.*\\\\\\(.*\\\\bapp\\\\b\\\\|client\\\\b\\\\\\)\" \"$f\")",
+      "Bash(then echo \"$f has app/client params\")",
+      "Bash(if ! grep -q \"def app\\(\" \"$f\")",
+      "Bash(then echo \"  -> No local fixtures!\")",
+      "Bash(while read f)",
+      "Bash(then basename \"$f\")"
     ]
   }
 }
