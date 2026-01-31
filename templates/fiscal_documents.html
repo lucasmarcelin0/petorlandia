@@ -62,45 +62,67 @@
         <table class="table table-striped align-middle">
           <thead>
             <tr>
-              <th>#</th>
-              <th>Tipo</th>
+              <th>Nota nº</th>
               <th>Status</th>
-              <th>Referência clínica</th>
-              <th>Serviços/Valor</th>
-              <th>Série/Número</th>
-              <th>Chave/Número</th>
-              <th>Emissão</th>
+              <th>🐶 Animal</th>
+              <th>👤 Tutor</th>
+              <th>📄 Orçamento</th>
+              <th>Data</th>
+              <th>Aceite</th>
               <th></th>
             </tr>
           </thead>
           <tbody>
             {% for doc in documents %}
             <tr>
-              <td>{{ doc.id }}</td>
-              <td>{{ doc.doc_type.value if doc.doc_type else doc.doc_type }}</td>
+              <td>
+                <div class="fw-semibold">{{ doc.nfse_number or doc.number or doc.id }}</div>
+                <div class="text-muted small">{{ doc.doc_type.value if doc.doc_type else doc.doc_type }}</div>
+              </td>
               {% set status_value = doc.status.value if doc.status else doc.status %}
-              {% set status_label = 'Emitindo…' if status_value in ['QUEUED', 'PROCESSING'] else status_value %}
-              <td>{{ status_label }}</td>
+              {% set status_labels = {
+                'DRAFT': 'Rascunho',
+                'QUEUED': 'Enfileirada',
+                'PROCESSING': 'Emitindo',
+                'AUTHORIZED': 'Emitida',
+                'REJECTED': 'Rejeitada',
+                'FAILED': 'Erro',
+                'CANCELED': 'Cancelada'
+              } %}
+              {% set status_badges = {
+                'DRAFT': 'bg-secondary',
+                'QUEUED': 'bg-warning text-dark',
+                'PROCESSING': 'bg-info text-dark',
+                'AUTHORIZED': 'bg-success',
+                'REJECTED': 'bg-danger',
+                'FAILED': 'bg-danger',
+                'CANCELED': 'bg-light text-dark'
+              } %}
+              {% set status_label = status_labels.get(status_value, status_value) %}
               <td>
-                <div class="fw-semibold">{{ doc.human_reference or '-' }}</div>
-                <div class="text-muted small">
-                  {{ doc.tutor_name or '-' }} · {{ doc.animal_name or '-' }}
-                </div>
+                <span class="badge {{ status_badges.get(status_value, 'bg-secondary') }}">{{ status_label }}</span>
               </td>
+              <td>{{ doc.animal_name or '—' }}</td>
+              <td>{{ doc.tutor_name or '—' }}</td>
               <td>
+                <div class="fw-semibold">{{ doc.human_reference or '—' }}</div>
                 {% set services = doc.service_descriptions %}
-                <div>{{ services | join(', ') if services else '-' }}</div>
-                <div class="text-muted small">
-                  {% if doc.total_amount is not none %}
-                  {{ doc.total_amount | currency_br }}
-                  {% else %}
-                  -
-                  {% endif %}
-                </div>
+                <div class="text-muted small">{{ services | join(', ') if services else 'Sem serviços registrados' }}</div>
               </td>
-              <td>{{ doc.series or '-' }}/{{ doc.number or '-' }}</td>
-              <td>{{ doc.access_key or doc.nfse_number or '-' }}</td>
-              <td>{{ doc.created_at.strftime('%d/%m/%Y %H:%M') if doc.created_at else '-' }}</td>
+              <td>
+                <div>{{ doc.created_at.strftime('%d/%m/%Y') if doc.created_at else '-' }}</div>
+                <div class="text-muted small">{{ doc.created_at.strftime('%H:%M') if doc.created_at else '' }}</div>
+              </td>
+              <td>
+                {% if doc.authorized_at %}
+                <div class="badge bg-success">Aceita</div>
+                <div class="text-muted small">{{ doc.authorized_at.strftime('%d/%m/%Y %H:%M') }}</div>
+                {% elif status_value in ['REJECTED', 'FAILED', 'CANCELED'] %}
+                <span class="badge bg-light text-dark">Sem aceite</span>
+                {% else %}
+                <span class="badge bg-warning text-dark">Pendente</span>
+                {% endif %}
+              </td>
               <td>
                 <a class="btn btn-sm btn-outline-primary" href="{{ url_for('fiscal_document_detail', document_id=doc.id) }}">
                   Detalhar
