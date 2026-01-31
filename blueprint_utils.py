@@ -1,3 +1,10 @@
+def _is_blueprint_registered(app, blueprint):
+    if blueprint.name in app.blueprints:
+        return True
+    prefix = f"{blueprint.name}."
+    return any(endpoint.startswith(prefix) for endpoint in app.view_functions)
+
+
 def _register_with_alias(app, blueprint):
     app.register_blueprint(blueprint)
     prefix = f"{blueprint.name}."
@@ -33,41 +40,41 @@ def register_domain_blueprints(app):
     )
 
     clinica_bp = clinica.get_blueprint()
-    if clinica_bp.name not in app.blueprints:
+    if not _is_blueprint_registered(app, clinica_bp):
         _register_with_alias(app, clinica_bp)
 
     agendamentos_bp = agendamentos.get_blueprint()
-    if agendamentos_bp.name not in app.blueprints:
+    if not _is_blueprint_registered(app, agendamentos_bp):
         _register_with_alias(app, agendamentos_bp)
 
     loja_bp = loja.get_blueprint()
-    if loja_bp.name not in app.blueprints:
+    if not _is_blueprint_registered(app, loja_bp):
         _register_with_alias(app, loja_bp)
 
     auth_bp = auth.get_blueprint()
-    if auth_bp.name not in app.blueprints:
+    if not _is_blueprint_registered(app, auth_bp):
         _register_with_alias(app, auth_bp)
 
     mensagens_bp = mensagens.get_blueprint()
-    if mensagens_bp.name not in app.blueprints:
+    if not _is_blueprint_registered(app, mensagens_bp):
         _register_with_alias(app, mensagens_bp)
 
     financeiro_bp = financeiro.get_blueprint()
-    if financeiro_bp.name not in app.blueprints:
+    if not _is_blueprint_registered(app, financeiro_bp):
         _register_with_alias(app, financeiro_bp)
 
     fiscal_bp = fiscal.get_blueprint()
-    if fiscal_bp.name not in app.blueprints:
+    if not _is_blueprint_registered(app, fiscal_bp):
         _register_with_alias(app, fiscal_bp)
 
     planos_bp = planos.get_blueprint()
-    if planos_bp.name not in app.blueprints:
+    if not _is_blueprint_registered(app, planos_bp):
         _register_with_alias(app, planos_bp)
 
     admin_bp = admin.get_blueprint()
-    if admin_bp.name not in app.blueprints:
+    if not _is_blueprint_registered(app, admin_bp):
         _register_with_alias(app, admin_bp)
 
     api_bp = api.get_blueprint()
-    if api_bp.name not in app.blueprints:
+    if not _is_blueprint_registered(app, api_bp):
         _register_with_alias(app, api_bp)
