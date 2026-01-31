@@ -78,6 +78,13 @@
         </form>
         <a href="{{ url_for('imprimir_bloco_orcamento', bloco_id=bloco.id) }}" class="btn btn-outline-secondary btn-sm" target="_blank">🖨 Imprimir</a>
         <a href="{{ url_for('editar_bloco_orcamento', bloco_id=bloco.id) }}" class="btn btn-outline-primary btn-sm">✏️ Editar</a>
+        {% if consulta is defined %}
+        <form method="POST" action="{{ url_for('contabilidade_nfse_emitir') }}" class="d-inline">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <input type="hidden" name="consulta_id" value="{{ consulta.id }}">
+          <button class="btn btn-outline-dark btn-sm">🧾 Emitir nota fiscal</button>
+        </form>
+        {% endif %}
         <button type="button" class="btn btn-outline-success btn-sm" onclick="enviarBlocoParaPagamento({{ bloco.id }})">💳 Enviar para pagamento</button>
         {% if bloco.payment_link %}
         <a href="{{ bloco.payment_link }}" target="_blank" class="btn btn-outline-info btn-sm">🔗 Link atual</a>
