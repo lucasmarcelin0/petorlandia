@@ -48,3 +48,24 @@ para criptografar credenciais NFS-e (usuário, senha, certificado, token).
 - Evitar salvar credenciais em variáveis globais por longos períodos.
 - Monitorar acessos à variável de ambiente e auditar mudanças.
 - Revisar permissões de usuários administrativos periodicamente.
+
+## Criptografia de XMLs NFS-e
+
+Os XMLs gerados durante emissão/consulta/cancelamento são armazenados na tabela
+`nfse_xmls` com criptografia por clínica. O campo `xml` guarda o conteúdo já
+criptografado e a chave é derivada da `FISCAL_MASTER_KEY` combinada com o
+`clinica_id`, garantindo segregação entre clínicas.
+
+### Fluxo resumido
+
+1. **Emissão/consulta/cancelamento**: o serviço de NFS-e criptografa o XML antes de
+   persistir o registro em `nfse_xmls`.
+2. **Download**: no endpoint de download contábil, o XML é descriptografado apenas
+   no momento de servir o arquivo ao usuário autorizado.
+3. **Logs**: mensagens de erro usam XML compactado/redigido, evitando exposição
+   de payloads completos.
+
+### Observações
+
+- Sem `FISCAL_MASTER_KEY`, a aplicação não consegue descriptografar XMLs.
+- O comportamento é idempotente: XML já criptografado não é reprocessado.

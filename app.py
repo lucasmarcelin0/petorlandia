@@ -136,7 +136,12 @@ from services.payments import (
     apply_payment_to_orcamento,
     create_payment_preference,
 )
-from security.crypto import MissingMasterKeyError, encrypt_bytes, encrypt_text
+from security.crypto import (
+    MissingMasterKeyError,
+    decrypt_text_for_clinic,
+    encrypt_bytes,
+    encrypt_text,
+)
 from repositories import AppointmentRepository, ClinicRepository
 _config_utils_module_name = (
     f"{__package__}.config_utils" if __package__ else "config_utils"
@@ -6681,6 +6686,17 @@ def contabilidade_nfse_download(issue_id, kind):
         xml_content = xml_record.xml if xml_record else (issue.xml_retorno or issue.xml_envio)
         if not xml_content:
             abort(404)
+        try:
+            if xml_record:
+                xml_content = xml_record.get_xml_plaintext()
+            else:
+                xml_content = decrypt_text_for_clinic(issue.clinica_id, xml_content)
+        except MissingMasterKeyError:
+            current_app.logger.error(
+                "FISCAL_MASTER_KEY ausente; não foi possível descriptografar XML da NFS-e %s.",
+                issue.id,
+            )
+            abort(500)
         response = make_response(xml_content)
         response.headers["Content-Type"] = "application/xml"
         response.headers["Content-Disposition"] = f"attachment; filename=nfse-{issue.id}.xml"
