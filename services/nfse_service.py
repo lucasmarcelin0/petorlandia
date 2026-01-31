@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from datetime import datetime
 import os
 from typing import Any, Dict, Optional, Protocol
+from xml.etree import ElementTree as ET
 
 from flask import current_app, has_app_context
 
@@ -168,6 +169,7 @@ class NfseService:
         result: NfseOperationResult,
         operation: str,
     ) -> None:
+        _enrich_nfse_error(result)
         issue.status = result.status
         if result.protocolo:
             issue.protocolo = result.protocolo
@@ -381,6 +383,73 @@ def _normalize_municipio(municipio: str) -> str:
     if normalized in {"orlandia", "orlandia sp", "orlandia/sp"}:
         return "orlandia"
     return normalized.replace(" ", "_")
+
+
+def _enrich_nfse_error(result: NfseOperationResult) -> None:
+    if result.success:
+        return
+    message = (result.mensagem or "").strip() or None
+    code = (result.erro_codigo or "").strip() or None
+    details = (result.erro_detalhes or "").strip() or None
+    parsed_code, parsed_message, parsed_details = _parse_nfse_error_xml(result.xml_response or "")
+    message = message or parsed_message
+    code = code or parsed_code
+    details = details or parsed_details
+    if not message and result.xml_response:
+        message = "Não foi possível processar a resposta da NFS-e."
+        details = details or _compact_xml(result.xml_response)
+    result.mensagem = message
+    result.erro_codigo = code
+    result.erro_detalhes = details
+
+
+def _parse_nfse_error_xml(xml_text: str) -> tuple[Optional[str], Optional[str], Optional[str]]:
+    if not xml_text:
+        return None, None, None
+    try:
+        root = ET.fromstring(xml_text)
+    except ET.ParseError:
+        return None, None, None
+
+    def _local(tag: str) -> str:
+        return tag.split("}", 1)[-1].lower()
+
+    def _text(elem) -> Optional[str]:
+        text = "".join(elem.itertext()).strip()
+        return text or None
+
+    fault_string = None
+    fault_code = None
+    detail_text = None
+    message = None
+    code = None
+    details = None
+
+    for elem in root.iter():
+        tag = _local(elem.tag)
+        if tag == "faultstring" and not fault_string:
+            fault_string = _text(elem)
+        if tag == "faultcode" and not fault_code:
+            fault_code = _text(elem)
+        if tag in {"detail", "details", "detalhe", "detalhes"} and not detail_text:
+            detail_text = _text(elem)
+        if tag in {"mensagemerro", "mensagem", "descricao", "erro", "error"} and not message:
+            message = _text(elem)
+        if tag in {"codigo", "codigoerro", "code"} and not code:
+            code = _text(elem)
+
+    return (
+        code or fault_code,
+        message or fault_string,
+        detail_text,
+    )
+
+
+def _compact_xml(xml_text: str, max_length: int = 500) -> str:
+    compact = " ".join(xml_text.split())
+    if len(compact) <= max_length:
+        return compact
+    return f"{compact[:max_length].rstrip()}..."
 
 
 def _credentials_from_env(clinica: Clinica, municipio_key: str) -> NfseCredentials:
