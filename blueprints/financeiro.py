@@ -85,6 +85,10 @@ def get_blueprint():
         view_func=lazy_view("contabilidade_nfse_consolidado"),
     )
     bp.add_url_rule(
+        "/contabilidade/nfse/preview",
+        view_func=lazy_view("contabilidade_nfse_preview"),
+    )
+    bp.add_url_rule(
         "/contabilidade/nfse/emitir",
         view_func=lazy_view("contabilidade_nfse_emitir"),
         methods=["POST"],

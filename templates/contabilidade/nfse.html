@@ -429,6 +429,9 @@
                 </div>
               </div>
             </div>
+            <a class="btn btn-outline-primary w-100 mb-2 disabled" data-nfse-preview href="#">
+              Pré-visualizar NFS-e
+            </a>
             <button class="btn btn-primary w-100" type="submit">Emitir NFS-e</button>
             <p class="text-muted small mt-2 mb-0">
               Se não souber o ID, finalize a consulta normalmente para entrar na fila automaticamente.
@@ -649,6 +652,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const summaryEmpty = form.querySelector('[data-nfse-summary-empty]');
   const itemsList = form.querySelector('[data-nfse-items]');
   const totalField = form.querySelector('[data-nfse-total]');
+  const previewButton = form.querySelector('[data-nfse-preview]');
   const fields = {
     orcamento_id: form.querySelector('[data-nfse-field="orcamento_id"]'),
     consulta_id: form.querySelector('[data-nfse-field="consulta_id"]'),
@@ -704,6 +708,22 @@ document.addEventListener('DOMContentLoaded', () => {
       totalField.textContent = currencyFormatter.format(payload.valor_total || 0);
     }
     renderItems(payload.itens || []);
+  };
+
+  const updatePreviewLink = () => {
+    if (!previewButton || !fields.orcamento_id) {
+      return;
+    }
+    const value = fields.orcamento_id.value?.trim();
+    if (!value) {
+      previewButton.classList.add('disabled');
+      previewButton.setAttribute('aria-disabled', 'true');
+      previewButton.href = '#';
+      return;
+    }
+    previewButton.classList.remove('disabled');
+    previewButton.removeAttribute('aria-disabled');
+    previewButton.href = `/contabilidade/nfse/preview?orcamento_id=${encodeURIComponent(value)}`;
   };
 
   const setFieldValue = (field, value, {force = false} = {}) => {
@@ -802,6 +822,11 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     renderItems([]);
   };
+
+  if (fields.orcamento_id) {
+    fields.orcamento_id.addEventListener('input', updatePreviewLink);
+  }
+  updatePreviewLink();
 
   const onlyDigits = (value) => (value || '').replace(/\D/g, '');
 

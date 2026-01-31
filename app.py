@@ -114,6 +114,7 @@ from services.nfse_queue import (
     should_emit_async,
     validate_nfse_cancel_request,
 )
+from services.nfse_service import _normalize_municipio
 from services.fiscal.certificate import parse_pfx
 from services.fiscal.nfse_service import (
     build_nfse_payload_from_appointment,
@@ -5764,6 +5765,83 @@ def contabilidade_obrigacoes():
     )
 
 
+def _nfse_required_fields_by_municipio() -> dict[str, list[str]]:
+    return {
+        "orlandia": [
+            "inscricao_municipal",
+            "regime_tributario",
+            "cnae",
+            "codigo_servico",
+            "aliquota_iss",
+            "nfse_username",
+            "nfse_password",
+        ],
+        "belo_horizonte": [
+            "inscricao_municipal",
+            "cnae",
+            "codigo_servico",
+            "nfse_cert_path",
+            "nfse_cert_password",
+        ],
+    }
+
+
+def _nfse_field_labels() -> dict[str, str]:
+    return {
+        "inscricao_municipal": "Inscrição municipal",
+        "regime_tributario": "Regime tributário",
+        "cnae": "CNAE",
+        "codigo_servico": "Código de serviço",
+        "aliquota_iss": "Alíquota ISS",
+        "nfse_username": "Usuário NFS-e",
+        "nfse_password": "Senha NFS-e",
+        "nfse_cert_path": "Certificado NFS-e",
+        "nfse_cert_password": "Senha do certificado",
+    }
+
+
+def _nfse_missing_fields(clinic: Clinica) -> tuple[list[str], str]:
+    municipio_key = (get_clinica_field(clinic, "municipio_nfse", "") or "").strip().lower()
+    required_fields = _nfse_required_fields_by_municipio().get(municipio_key, [])
+    labels = _nfse_field_labels()
+    missing_fields = []
+    for field in required_fields:
+        current_value = get_clinica_field(clinic, field, "")
+        if current_value in (None, "", []):
+            missing_fields.append(labels.get(field, field))
+    return missing_fields, municipio_key
+
+
+def _nfse_certificate_status(clinic: Clinica, municipio_key: str) -> tuple[bool, str]:
+    required_fields = _nfse_required_fields_by_municipio().get(municipio_key, [])
+    certificate_required = "nfse_cert_path" in required_fields or "nfse_cert_password" in required_fields
+    if not certificate_required:
+        return True, "Não exigido para este município."
+
+    certificate = (
+        FiscalCertificate.query.join(FiscalEmitter, FiscalCertificate.emitter_id == FiscalEmitter.id)
+        .filter(FiscalEmitter.clinic_id == clinic.id)
+        .order_by(FiscalCertificate.created_at.desc())
+        .first()
+    )
+    if certificate and certificate.valid_to:
+        is_valid = certificate.valid_to >= datetime.now(timezone.utc)
+        if is_valid:
+            return True, f"Válido até {certificate.valid_to.strftime('%d/%m/%Y')}."
+        return False, f"Vencido em {certificate.valid_to.strftime('%d/%m/%Y')}."
+    if clinic.nfse_cert_path and clinic.nfse_cert_password:
+        return True, "Certificado configurado."
+    return False, "Certificado não informado."
+
+
+def _nfse_betha_status(clinic: Clinica, municipio_key: str) -> tuple[bool, str]:
+    if municipio_key != "orlandia":
+        return True, "Não se aplica ao município."
+    if get_clinica_field(clinic, "fiscal_ready", False):
+        return True, "Teste de comunicação concluído."
+    return False, "Teste de comunicação pendente."
+
+
 @login_required
 def contabilidade_nfse():
     _ensure_accounting_access()
@@ -5839,41 +5917,7 @@ def contabilidade_nfse():
             "nfse_cert_path": get_clinica_field(selected_clinic, "nfse_cert_path", "") or "",
             "nfse_token": get_clinica_field(selected_clinic, "nfse_token", "") or "",
         }
-        required_by_municipio = {
-            "orlandia": [
-                "inscricao_municipal",
-                "regime_tributario",
-                "cnae",
-                "codigo_servico",
-                "aliquota_iss",
-                "nfse_username",
-                "nfse_password",
-            ],
-            "belo_horizonte": [
-                "inscricao_municipal",
-                "cnae",
-                "codigo_servico",
-                "nfse_cert_path",
-                "nfse_cert_password",
-            ],
-        }
-        field_labels = {
-            "inscricao_municipal": "Inscrição municipal",
-            "regime_tributario": "Regime tributário",
-            "cnae": "CNAE",
-            "codigo_servico": "Código de serviço",
-            "aliquota_iss": "Alíquota ISS",
-            "nfse_username": "Usuário NFS-e",
-            "nfse_password": "Senha NFS-e",
-            "nfse_cert_path": "Certificado NFS-e",
-            "nfse_cert_password": "Senha do certificado",
-        }
-        municipio_key = (nfse_settings.get("municipio_nfse") or "").strip().lower()
-        required_fields = required_by_municipio.get(municipio_key, [])
-        for field in required_fields:
-            current_value = get_clinica_field(selected_clinic, field, "")
-            if current_value in (None, "", []):
-                nfse_missing_fields.append(field_labels.get(field, field))
+        nfse_missing_fields, _municipio_key = _nfse_missing_fields(selected_clinic)
 
     return render_template(
         'contabilidade/nfse.html',
@@ -5982,35 +6026,8 @@ def contabilidade_nfse_configurar():
         flash("Não foi possível salvar as configurações. Tente novamente.", "danger")
     else:
         municipio_key = (get_clinica_field(clinic, "municipio_nfse", "") or "").strip().lower()
-        required_by_municipio = {
-            "orlandia": [
-                "inscricao_municipal",
-                "regime_tributario",
-                "cnae",
-                "codigo_servico",
-                "aliquota_iss",
-                "nfse_username",
-                "nfse_password",
-            ],
-            "belo_horizonte": [
-                "inscricao_municipal",
-                "cnae",
-                "codigo_servico",
-                "nfse_cert_path",
-                "nfse_cert_password",
-            ],
-        }
-        labels = {
-            "inscricao_municipal": "Inscrição municipal",
-            "regime_tributario": "Regime tributário",
-            "cnae": "CNAE",
-            "codigo_servico": "Código de serviço",
-            "aliquota_iss": "Alíquota ISS",
-            "nfse_username": "Usuário NFS-e",
-            "nfse_password": "Senha NFS-e",
-            "nfse_cert_path": "Certificado NFS-e",
-            "nfse_cert_password": "Senha do certificado",
-        }
+        required_by_municipio = _nfse_required_fields_by_municipio()
+        labels = _nfse_field_labels()
         missing_fields = []
         for field in required_by_municipio.get(municipio_key, []):
             if get_clinica_field(clinic, field, "") in (None, "", []):
@@ -6054,6 +6071,128 @@ def contabilidade_nfse_orcamento(orcamento_id: int):
 
     payload = _build_nfse_orcamento_payload(orcamento)
     return jsonify(payload)
+
+
+@login_required
+def contabilidade_nfse_preview():
+    _ensure_accounting_access()
+    orcamento_id = request.args.get("orcamento_id", type=int)
+    if not orcamento_id:
+        flash("Informe o orçamento para pré-visualizar a NFS-e.", "warning")
+        return redirect(url_for("contabilidade_nfse"))
+
+    orcamento = (
+        Orcamento.query
+        .options(
+            joinedload(Orcamento.consulta)
+            .joinedload(Consulta.animal)
+            .joinedload(Animal.owner),
+            joinedload(Orcamento.clinica),
+        )
+        .get(orcamento_id)
+    )
+    if not orcamento:
+        flash("Orçamento não encontrado.", "danger")
+        return redirect(url_for("contabilidade_nfse"))
+
+    _, accessible_ids = _accounting_accessible_clinics()
+    if orcamento.clinica_id not in accessible_ids:
+        abort(403)
+
+    consulta = orcamento.consulta
+    animal = consulta.animal if consulta else None
+    tutor = animal.owner if animal else None
+    clinica = orcamento.clinica
+    municipio = get_clinica_field(clinica, "municipio_nfse", "") or ""
+    municipio_key = _normalize_municipio(municipio) if municipio else ""
+    municipio_labels = {
+        "orlandia": "Orlândia (SP)",
+        "belo_horizonte": "Belo Horizonte (MG)",
+    }
+    municipio_label = municipio_labels.get(municipio_key, municipio or "Não informado")
+
+    nfse_missing_fields, municipio_key = _nfse_missing_fields(clinica)
+    cadastro_ok = not nfse_missing_fields
+    certificado_ok, certificado_msg = _nfse_certificate_status(clinica, municipio_key)
+    betha_ok, betha_msg = _nfse_betha_status(clinica, municipio_key)
+
+    checks = [
+        {"label": "Certificado válido", "ok": certificado_ok, "detail": certificado_msg},
+        {
+            "label": "Cadastro fiscal completo",
+            "ok": cadastro_ok,
+            "detail": "Todos os dados obrigatórios estão preenchidos."
+            if cadastro_ok
+            else "Faltam informações obrigatórias.",
+        },
+        {"label": "Comunicação Betha disponível", "ok": betha_ok, "detail": betha_msg},
+    ]
+
+    blocking_errors = []
+    if not consulta:
+        blocking_errors.append("O orçamento não está vinculado a uma consulta.")
+    if nfse_missing_fields:
+        blocking_errors.append(
+            "Cadastro fiscal incompleto: "
+            + ", ".join(nfse_missing_fields)
+            + ". Atualize as configurações da NFS-e."
+        )
+    if not certificado_ok:
+        blocking_errors.append("Certificado fiscal inválido ou ausente. Atualize o certificado antes de emitir.")
+    if not betha_ok:
+        blocking_errors.append("Teste de comunicação com a Betha pendente. Finalize o wizard fiscal.")
+
+    can_emit = bool(consulta) and cadastro_ok and certificado_ok and betha_ok
+
+    emission_result = None
+    if request.args.get("emissao") == "1" and consulta:
+        issue = NfseIssue.query.filter_by(
+            clinica_id=clinica.id,
+            internal_identifier=f"consulta:{consulta.id}",
+        ).order_by(NfseIssue.created_at.desc()).first()
+        if issue and issue.numero_nfse:
+            emission_result = {
+                "status": "success",
+                "title": f"Nota Fiscal nº {issue.numero_nfse}",
+                "subtitle": f"Consulta – {animal.name if animal else 'Paciente'}"
+                f" (tutora {tutor.name if tutor else 'não informada'})",
+                "suggestion": "Você pode baixar o PDF/XML na lista de emissões.",
+            }
+        elif issue and (issue.status == "erro" or issue.erro_mensagem):
+            reason = issue.erro_mensagem or "Não foi possível emitir a nota."
+            emission_result = {
+                "status": "error",
+                "title": "Não foi possível emitir a nota",
+                "subtitle": f"Motivo: {reason}",
+                "suggestion": (
+                    "Sugestão: revise o item de serviço e o cadastro fiscal "
+                    "nas configurações da NFS-e e tente novamente."
+                ),
+            }
+        else:
+            emission_result = {
+                "status": "info",
+                "title": "Emissão enviada para processamento",
+                "subtitle": (
+                    "A nota foi enviada e está sendo processada. "
+                    "Acompanhe o status na listagem de emissões."
+                ),
+                "suggestion": "Aguarde alguns instantes e atualize a tela.",
+            }
+
+    return render_template(
+        "contabilidade/nfse_preview.html",
+        orcamento=orcamento,
+        consulta=consulta,
+        animal=animal,
+        tutor=tutor,
+        clinica=clinica,
+        municipio_label=municipio_label,
+        checks=checks,
+        blocking_errors=blocking_errors,
+        can_emit=can_emit,
+        emission_result=emission_result,
+    )
 
 
 def _build_nfse_orcamento_payload(orcamento: Orcamento) -> dict:
@@ -6187,6 +6326,11 @@ def contabilidade_nfse_emitir():
     atendimento_id = request.form.get('atendimento_id', type=int)
     origin_param = "orcamento_id" if orcamento_id else ("atendimento_id" if atendimento_id else None)
     origin_id = orcamento_id or atendimento_id
+    orcamento = None
+    if orcamento_id:
+        orcamento = Orcamento.query.options(joinedload(Orcamento.consulta)).get(orcamento_id)
+        if orcamento and not consulta_id:
+            consulta_id = orcamento.consulta_id
     if not consulta_id:
         flash('Informe a consulta para emitir a NFS-e.', 'warning')
         return redirect(url_for('contabilidade_nfse', **({origin_param: origin_id} if origin_param else {})))
@@ -6195,6 +6339,18 @@ def contabilidade_nfse_emitir():
     _, accessible_ids = _accounting_accessible_clinics()
     if consulta.clinica_id not in accessible_ids:
         abort(403)
+    if orcamento is None and consulta.orcamento:
+        orcamento = consulta.orcamento
+
+    nfse_missing_fields, municipio_key = _nfse_missing_fields(consulta.clinica)
+    cadastro_ok = not nfse_missing_fields
+    certificado_ok, _certificado_msg = _nfse_certificate_status(consulta.clinica, municipio_key)
+    betha_ok, _betha_msg = _nfse_betha_status(consulta.clinica, municipio_key)
+    if not (cadastro_ok and certificado_ok and betha_ok):
+        flash("Antes de emitir, revise as pendências fiscais na pré-visualização.", "warning")
+        if orcamento:
+            return redirect(url_for("contabilidade_nfse_preview", orcamento_id=orcamento.id))
+        return redirect(url_for('contabilidade_nfse', **({origin_param: origin_id} if origin_param else {})))
 
     issue = ensure_nfse_issue_for_consulta(consulta)
     if not issue:
@@ -6234,15 +6390,21 @@ def contabilidade_nfse_emitir():
             process_nfse_issue(issue, payload)
             flash('Emissão iniciada com sucesso.', 'success')
     except Exception as exc:  # noqa: BLE001
+        current_app.logger.exception("Falha ao emitir NFS-e manualmente.")
+        issue.erro_mensagem = "Não foi possível emitir a nota agora."
+        db.session.add(issue)
+        db.session.commit()
         queue_nfse_issue(
             issue,
             "Falha ao emitir; reprocessamento manual necessário.",
-            {"erro": str(exc), **payload},
+            payload,
         )
-        flash('Falha ao emitir. A solicitação foi enfileirada para reprocessamento.', 'warning')
+        flash('Não foi possível emitir a nota. Verifique as configurações fiscais.', 'warning')
 
     return redirect(
-        url_for(
+        url_for("contabilidade_nfse_preview", orcamento_id=orcamento.id, emissao=1)
+        if orcamento
+        else url_for(
             'contabilidade_nfse',
             clinica_id=consulta.clinica_id,
             **({origin_param: origin_id} if origin_param else {}),
