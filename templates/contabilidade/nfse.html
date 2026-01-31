@@ -31,6 +31,9 @@
       </div>
       {% if clinics %}
       <form method="get" class="ms-lg-auto">
+        {% if origin_id and origin_param %}
+          <input type="hidden" name="{{ origin_param }}" value="{{ origin_id }}">
+        {% endif %}
         <label class="form-label small text-muted mb-1" for="clinica-select">Clínica</label>
         <select id="clinica-select" name="clinica_id" class="form-select" onchange="this.form.submit()">
           {% for clinic in clinics %}
@@ -63,6 +66,9 @@
             <form method="post" action="{{ url_for('contabilidade_nfse_processar_fila') }}" class="d-flex gap-2 align-items-end">
               <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
               <input type="hidden" name="clinica_id" value="{{ selected_clinic.id }}">
+              {% if origin_id and origin_param %}
+                <input type="hidden" name="{{ origin_param }}" value="{{ origin_id }}">
+              {% endif %}
               <div>
                 <label class="form-label small text-muted mb-1" for="limit">Limite</label>
                 <input id="limit" name="limit" type="number" min="1" max="100" value="10" class="form-control form-control-sm">
@@ -91,6 +97,9 @@
           </p>
           <form method="post" action="{{ url_for('contabilidade_nfse_emitir') }}">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            {% if origin_id and origin_param %}
+              <input type="hidden" name="{{ origin_param }}" value="{{ origin_id }}">
+            {% endif %}
             <div class="mb-2">
               <label class="form-label small text-muted" for="consulta_id">Consulta</label>
               <input id="consulta_id" name="consulta_id" type="number" class="form-control" placeholder="ID da consulta">
@@ -117,6 +126,9 @@
         <form method="get" class="d-flex flex-wrap gap-2 align-items-center">
           {% if selected_clinic %}
             <input type="hidden" name="clinica_id" value="{{ selected_clinic.id }}">
+          {% endif %}
+          {% if origin_id and origin_param %}
+            <input type="hidden" name="{{ origin_param }}" value="{{ origin_id }}">
           {% endif %}
           <label class="form-label small text-muted mb-0" for="status">Status</label>
           <select id="status" name="status" class="form-select form-select-sm">
@@ -199,6 +211,9 @@
               </td>
               <td>
                 <form method="post" action="{{ url_for('contabilidade_nfse_reprocessar', issue_id=issue.id) }}">
+                  {% if origin_id and origin_param %}
+                    <input type="hidden" name="{{ origin_param }}" value="{{ origin_id }}">
+                  {% endif %}
                   <button class="btn btn-outline-primary btn-sm" type="submit">Reprocessar</button>
                 </form>
                 {% set can_cancel = issue.numero_nfse and status_value not in ['cancelada', 'cancelamento_solicitado', 'substituicao_solicitada'] %}
@@ -206,6 +221,9 @@
                 <details class="mt-2">
                   <summary class="small text-primary">Cancelar/Substituir</summary>
                   <form method="post" action="{{ url_for('contabilidade_nfse_cancelar', issue_id=issue.id) }}" class="mt-2">
+                    {% if origin_id and origin_param %}
+                      <input type="hidden" name="{{ origin_param }}" value="{{ origin_id }}">
+                    {% endif %}
                     <div class="mb-2">
                       <label class="form-label small text-muted mb-1" for="reason_code_{{ issue.id }}">Motivo</label>
                       {% if cancel_rules and cancel_rules.allowed_reasons %}
@@ -226,6 +244,9 @@
                     <button class="btn btn-outline-danger btn-sm w-100" type="submit">Solicitar cancelamento</button>
                   </form>
                   <form method="post" action="{{ url_for('contabilidade_nfse_substituir', issue_id=issue.id) }}" class="mt-3">
+                    {% if origin_id and origin_param %}
+                      <input type="hidden" name="{{ origin_param }}" value="{{ origin_id }}">
+                    {% endif %}
                     <div class="mb-2">
                       <label class="form-label small text-muted mb-1" for="reason_code_sub_{{ issue.id }}">Motivo</label>
                       {% if cancel_rules and cancel_rules.allowed_reasons %}
