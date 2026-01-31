@@ -25,6 +25,7 @@ from time_utils import utcnow, now_in_brazil
 from security.crypto import (
     MissingMasterKeyError,
     decrypt_text,
+    decrypt_text_for_clinic,
     encrypt_text,
     looks_encrypted_text,
 )
@@ -1044,11 +1045,20 @@ class NfseXml(db.Model):
     serie = db.Column(db.String(50), nullable=True)
     tipo = db.Column(db.String(30), nullable=False)
     protocolo = db.Column(db.String(80), nullable=True)
+    # Conteúdo XML é armazenado criptografado por clínica.
     xml = db.Column(db.Text, nullable=False)
     created_at = db.Column(db.DateTime(timezone=True), default=utcnow)
 
     clinica = db.relationship('Clinica', backref=db.backref('nfse_xmls', cascade='all, delete-orphan'))
     nfse_issue = db.relationship('NfseIssue', back_populates='xmls')
+
+    def get_xml_plaintext(self) -> str:
+        try:
+            return decrypt_text_for_clinic(self.clinica_id, self.xml)
+        except InvalidToken:
+            return self.xml
+        except MissingMasterKeyError:
+            raise
 
 # Convites para que veterinários se associem a uma clínica
 class VetClinicInvite(db.Model):

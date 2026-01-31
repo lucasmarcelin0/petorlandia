@@ -8,12 +8,14 @@ import os
 from typing import Any, Dict, Optional, Protocol
 from xml.etree import ElementTree as ET
 
+import logging
+
 from flask import current_app, has_app_context
 from cryptography.fernet import InvalidToken
 
 from extensions import db
 from models import Clinica, NfseIssue, NfseXml
-from security.crypto import MissingMasterKeyError, decrypt_text
+from security.crypto import MissingMasterKeyError, decrypt_text, encrypt_text_for_clinic
 from time_utils import utcnow
 
 
@@ -496,6 +498,21 @@ def _credentials_from_env(clinica: Clinica, municipio_key: str) -> NfseCredentia
 
 
 def _record_xml(issue: NfseIssue, result: NfseOperationResult, operation: str) -> None:
+    logger = current_app.logger if has_app_context() else logging.getLogger(__name__)
+
+    def _encrypt_payload(xml_text: str) -> str:
+        try:
+            return encrypt_text_for_clinic(issue.clinica_id, xml_text)
+        except MissingMasterKeyError as exc:
+            logger.error(
+                "Falha ao criptografar XML da NFS-e para clinica %s (issue %s).",
+                issue.clinica_id,
+                issue.id,
+            )
+            raise RuntimeError(
+                "FISCAL_MASTER_KEY ausente; não foi possível criptografar XML da NFS-e."
+            ) from exc
+
     if result.xml_request:
         db.session.add(
             NfseXml(
@@ -506,7 +523,7 @@ def _record_xml(issue: NfseIssue, result: NfseOperationResult, operation: str) -
                 serie=result.serie or issue.serie,
                 protocolo=result.protocolo or issue.protocolo,
                 tipo=f"{operation}_envio",
-                xml=result.xml_request,
+                xml=_encrypt_payload(result.xml_request),
             )
         )
     if result.xml_response:
@@ -519,6 +536,6 @@ def _record_xml(issue: NfseIssue, result: NfseOperationResult, operation: str) -
                 serie=result.serie or issue.serie,
                 protocolo=result.protocolo or issue.protocolo,
                 tipo=f"{operation}_retorno",
-                xml=result.xml_response,
+                xml=_encrypt_payload(result.xml_response),
             )
         )
