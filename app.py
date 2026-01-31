@@ -5768,6 +5768,10 @@ def contabilidade_nfse():
     clinics, accessible_ids = _accounting_accessible_clinics()
 
     requested_id = request.args.get('clinica_id', type=int)
+    orcamento_id = request.args.get('orcamento_id', type=int)
+    atendimento_id = request.args.get('atendimento_id', type=int)
+    origin_param = "orcamento_id" if orcamento_id else ("atendimento_id" if atendimento_id else None)
+    origin_id = orcamento_id or atendimento_id
     selected_clinic = _select_accounting_clinic(
         clinics,
         accessible_ids,
@@ -5821,6 +5825,8 @@ def contabilidade_nfse():
         status_filter=status_filter,
         queue_count=queue_count,
         pdf_issue_ids=pdf_issue_ids,
+        origin_param=origin_param,
+        origin_id=origin_id,
         cancel_rules=(
             get_nfse_cancel_rules(get_clinica_field(selected_clinic, "municipio_nfse", ""))
             if selected_clinic
@@ -5837,9 +5843,13 @@ def contabilidade_nfse():
 def contabilidade_nfse_emitir():
     _ensure_accounting_access()
     consulta_id = request.form.get('consulta_id', type=int)
+    orcamento_id = request.form.get('orcamento_id', type=int)
+    atendimento_id = request.form.get('atendimento_id', type=int)
+    origin_param = "orcamento_id" if orcamento_id else ("atendimento_id" if atendimento_id else None)
+    origin_id = orcamento_id or atendimento_id
     if not consulta_id:
         flash('Informe a consulta para emitir a NFS-e.', 'warning')
-        return redirect(url_for('contabilidade_nfse'))
+        return redirect(url_for('contabilidade_nfse', **({origin_param: origin_id} if origin_param else {})))
 
     consulta = Consulta.query.get_or_404(consulta_id)
     _, accessible_ids = _accounting_accessible_clinics()
@@ -5849,7 +5859,13 @@ def contabilidade_nfse_emitir():
     issue = ensure_nfse_issue_for_consulta(consulta)
     if not issue:
         flash('A clínica não possui município NFS-e configurado.', 'warning')
-        return redirect(url_for('contabilidade_nfse', clinica_id=consulta.clinica_id))
+        return redirect(
+            url_for(
+                'contabilidade_nfse',
+                clinica_id=consulta.clinica_id,
+                **({origin_param: origin_id} if origin_param else {}),
+            )
+        )
 
     payload = {"consulta_id": consulta.id}
     try:
@@ -5867,13 +5883,23 @@ def contabilidade_nfse_emitir():
         )
         flash('Falha ao emitir. A solicitação foi enfileirada para reprocessamento.', 'warning')
 
-    return redirect(url_for('contabilidade_nfse', clinica_id=consulta.clinica_id))
+    return redirect(
+        url_for(
+            'contabilidade_nfse',
+            clinica_id=consulta.clinica_id,
+            **({origin_param: origin_id} if origin_param else {}),
+        )
+    )
 
 
 @login_required
 def contabilidade_nfse_processar_fila():
     _ensure_accounting_access()
     clinic_id = request.form.get('clinica_id', type=int)
+    orcamento_id = request.form.get('orcamento_id', type=int)
+    atendimento_id = request.form.get('atendimento_id', type=int)
+    origin_param = "orcamento_id" if orcamento_id else ("atendimento_id" if atendimento_id else None)
+    origin_id = orcamento_id or atendimento_id
     limit = request.form.get('limit', type=int) or 10
     _, accessible_ids = _accounting_accessible_clinics()
     if clinic_id and clinic_id not in accessible_ids:
@@ -5885,13 +5911,23 @@ def contabilidade_nfse_processar_fila():
     if result.failed:
         flash(f'{result.failed} emissão(ões) falharam. Verifique os detalhes.', 'warning')
 
-    return redirect(url_for('contabilidade_nfse', clinica_id=clinic_id))
+    return redirect(
+        url_for(
+            'contabilidade_nfse',
+            clinica_id=clinic_id,
+            **({origin_param: origin_id} if origin_param else {}),
+        )
+    )
 
 
 @login_required
 def contabilidade_nfse_reprocessar(issue_id):
     _ensure_accounting_access()
     issue = NfseIssue.query.get_or_404(issue_id)
+    orcamento_id = request.form.get('orcamento_id', type=int)
+    atendimento_id = request.form.get('atendimento_id', type=int)
+    origin_param = "orcamento_id" if orcamento_id else ("atendimento_id" if atendimento_id else None)
+    origin_id = orcamento_id or atendimento_id
     _, accessible_ids = _accounting_accessible_clinics()
     if issue.clinica_id not in accessible_ids:
         abort(403)
@@ -5912,13 +5948,23 @@ def contabilidade_nfse_reprocessar(issue_id):
         )
         flash('Falha ao reprocessar. A emissão voltou para fila.', 'warning')
 
-    return redirect(url_for('contabilidade_nfse', clinica_id=issue.clinica_id))
+    return redirect(
+        url_for(
+            'contabilidade_nfse',
+            clinica_id=issue.clinica_id,
+            **({origin_param: origin_id} if origin_param else {}),
+        )
+    )
 
 
 @login_required
 def contabilidade_nfse_cancelar(issue_id):
     _ensure_accounting_access()
     issue = NfseIssue.query.get_or_404(issue_id)
+    orcamento_id = request.form.get('orcamento_id', type=int)
+    atendimento_id = request.form.get('atendimento_id', type=int)
+    origin_param = "orcamento_id" if orcamento_id else ("atendimento_id" if atendimento_id else None)
+    origin_id = orcamento_id or atendimento_id
     _, accessible_ids = _accounting_accessible_clinics()
     if issue.clinica_id not in accessible_ids:
         abort(403)
@@ -5936,7 +5982,13 @@ def contabilidade_nfse_cancelar(issue_id):
     )
     if errors:
         flash(" ".join(errors), 'warning')
-        return redirect(url_for('contabilidade_nfse', clinica_id=issue.clinica_id))
+        return redirect(
+            url_for(
+                'contabilidade_nfse',
+                clinica_id=issue.clinica_id,
+                **({origin_param: origin_id} if origin_param else {}),
+            )
+        )
 
     payload = {
         "issue_id": issue.id,
@@ -5950,13 +6002,23 @@ def contabilidade_nfse_cancelar(issue_id):
         current_app.logger.exception('Erro ao solicitar cancelamento NFS-e', exc_info=exc)
         flash('Erro ao solicitar cancelamento. Tente novamente.', 'danger')
 
-    return redirect(url_for('contabilidade_nfse', clinica_id=issue.clinica_id))
+    return redirect(
+        url_for(
+            'contabilidade_nfse',
+            clinica_id=issue.clinica_id,
+            **({origin_param: origin_id} if origin_param else {}),
+        )
+    )
 
 
 @login_required
 def contabilidade_nfse_substituir(issue_id):
     _ensure_accounting_access()
     issue = NfseIssue.query.get_or_404(issue_id)
+    orcamento_id = request.form.get('orcamento_id', type=int)
+    atendimento_id = request.form.get('atendimento_id', type=int)
+    origin_param = "orcamento_id" if orcamento_id else ("atendimento_id" if atendimento_id else None)
+    origin_id = orcamento_id or atendimento_id
     _, accessible_ids = _accounting_accessible_clinics()
     if issue.clinica_id not in accessible_ids:
         abort(403)
@@ -5975,7 +6037,13 @@ def contabilidade_nfse_substituir(issue_id):
     )
     if errors:
         flash(" ".join(errors), 'warning')
-        return redirect(url_for('contabilidade_nfse', clinica_id=issue.clinica_id))
+        return redirect(
+            url_for(
+                'contabilidade_nfse',
+                clinica_id=issue.clinica_id,
+                **({origin_param: origin_id} if origin_param else {}),
+            )
+        )
 
     payload = {
         "issue_id": issue.id,
@@ -5996,7 +6064,13 @@ def contabilidade_nfse_substituir(issue_id):
         current_app.logger.exception('Erro ao solicitar substituição NFS-e', exc_info=exc)
         flash('Erro ao solicitar substituição. Tente novamente.', 'danger')
 
-    return redirect(url_for('contabilidade_nfse', clinica_id=issue.clinica_id))
+    return redirect(
+        url_for(
+            'contabilidade_nfse',
+            clinica_id=issue.clinica_id,
+            **({origin_param: origin_id} if origin_param else {}),
+        )
+    )
 
 
 @login_required

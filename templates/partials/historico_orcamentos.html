@@ -82,6 +82,7 @@
         <form method="POST" action="{{ url_for('contabilidade_nfse_emitir') }}" class="d-inline">
           <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
           <input type="hidden" name="consulta_id" value="{{ consulta.id }}">
+          <input type="hidden" name="orcamento_id" value="{{ consulta.id }}">
           <button class="btn btn-outline-dark btn-sm">🧾 Emitir nota fiscal</button>
         </form>
         {% endif %}
