@@ -18358,7 +18358,7 @@ def appointment_emit_nfse(appointment_id: int):
         emitter_id=appointment.clinica.fiscal_emitter.id,
         payload=payload,
     )
-    queue_emit_nfse(document.id)
+    queue_emit_nfse(document.id, clinic_id=appointment.clinica_id)
     flash("Emissão de NFS-e enfileirada.", "success")
     return redirect(url_for("fiscal_document_detail", document_id=document.id))
 

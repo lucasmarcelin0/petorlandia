@@ -37,6 +37,8 @@ def create_nfse_document(
     if not emitter:
         raise ValueError("Emissor fiscal não encontrado.")
 
+    _ensure_related_clinic_consistency(related_type, related_id, emitter.clinic_id)
+
     series = str(payload.get("serie") or "1")
     number = reserve_next_number(emitter.id, FiscalDocumentType.NFSE, series)
 
@@ -110,10 +112,18 @@ def create_nfse_draft_from_orcamento(orcamento_id: int) -> FiscalDocument:
     return document
 
 
-def queue_emit_nfse(document_id: int) -> None:
+def queue_emit_nfse(document_id: int, clinic_id: int | None = None) -> None:
     document = db.session.get(FiscalDocument, document_id)
     if not document:
         raise ValueError("Documento fiscal não encontrado.")
+    if clinic_id is not None and document.clinic_id != clinic_id:
+        _audit_scope_violation(
+            document,
+            action="queue_emit_nfse",
+            expected_clinic_id=clinic_id,
+            emitter_clinic_id=document.emitter.clinic_id if document.emitter else None,
+        )
+        raise ValueError("Documento fiscal fora do escopo da clínica.")
 
     if document.status in {
         FiscalDocumentStatus.AUTHORIZED,
@@ -133,10 +143,10 @@ def queue_emit_nfse(document_id: int) -> None:
 
     from app.jobs.fiscal_tasks import emit_nfse
 
-    emit_nfse.delay(document_id)
+    emit_nfse.delay(document_id, clinic_id=document.clinic_id)
 
 
-def emit_nfse_sync(document_id: int) -> FiscalDocument:
+def emit_nfse_sync(document_id: int, clinic_id: int | None = None) -> FiscalDocument:
     document = db.session.get(FiscalDocument, document_id)
     if not document:
         raise ValueError("Documento fiscal não encontrado.")
@@ -158,6 +168,7 @@ def emit_nfse_sync(document_id: int) -> FiscalDocument:
         emitter = document.emitter
         if not emitter:
             raise ValueError("Emissor fiscal não configurado.")
+        _ensure_document_scope(document, emitter, "emit_nfse_sync", clinic_id)
 
         certificate = _get_active_certificate(emitter.id)
         if not certificate:
@@ -207,7 +218,7 @@ def emit_nfse_sync(document_id: int) -> FiscalDocument:
         return document
 
 
-def poll_nfse(document_id: int) -> FiscalDocument:
+def poll_nfse(document_id: int, clinic_id: int | None = None) -> FiscalDocument:
     document = db.session.get(FiscalDocument, document_id)
     if not document:
         raise ValueError("Documento fiscal não encontrado.")
@@ -216,8 +227,11 @@ def poll_nfse(document_id: int) -> FiscalDocument:
 
     try:
         emitter = document.emitter
-        certificate = _get_active_certificate(emitter.id) if emitter else None
-        if not emitter or not certificate:
+        if not emitter:
+            raise ValueError("Configuração fiscal incompleta.")
+        _ensure_document_scope(document, emitter, "poll_nfse", clinic_id)
+        certificate = _get_active_certificate(emitter.id)
+        if not certificate:
             raise ValueError("Configuração fiscal incompleta.")
 
         client = _build_betha_client(emitter, certificate)
@@ -286,7 +300,11 @@ def poll_nfse(document_id: int) -> FiscalDocument:
         return document
 
 
-def cancel_nfse_document(document_id: int, reason: Optional[str] = None) -> FiscalDocument:
+def cancel_nfse_document(
+    document_id: int,
+    reason: Optional[str] = None,
+    clinic_id: int | None = None,
+) -> FiscalDocument:
     document = db.session.get(FiscalDocument, document_id)
     if not document:
         raise ValueError("Documento fiscal não encontrado.")
@@ -294,8 +312,11 @@ def cancel_nfse_document(document_id: int, reason: Optional[str] = None) -> Fisc
         return document
 
     emitter = document.emitter
-    certificate = _get_active_certificate(emitter.id) if emitter else None
-    if not emitter or not certificate:
+    if not emitter:
+        raise ValueError("Configuração fiscal incompleta.")
+    _ensure_document_scope(document, emitter, "cancel_nfse_document", clinic_id)
+    certificate = _get_active_certificate(emitter.id)
+    if not certificate:
         raise ValueError("Configuração fiscal incompleta.")
 
     client = _build_betha_client(emitter, certificate)
@@ -347,6 +368,30 @@ def _normalize_payload(document: FiscalDocument, emitter: FiscalEmitter) -> dict
     return payload
 
 
+def _ensure_related_clinic_consistency(
+    related_type: str,
+    related_id: int,
+    emitter_clinic_id: int | None,
+) -> None:
+    if not emitter_clinic_id:
+        raise ValueError("Emissor fiscal sem clínica associada.")
+
+    related_clinic_id = None
+    if related_type == "appointment":
+        appointment = db.session.get(Appointment, related_id)
+        if not appointment:
+            raise ValueError("Atendimento não encontrado.")
+        related_clinic_id = appointment.clinica_id
+    elif related_type == "orcamento":
+        orcamento = db.session.get(Orcamento, related_id)
+        if not orcamento:
+            raise ValueError("Orçamento não encontrado.")
+        related_clinic_id = orcamento.clinica_id
+
+    if related_clinic_id is not None and related_clinic_id != emitter_clinic_id:
+        raise ValueError("Emissor fiscal não pertence à clínica do documento.")
+
+
 def _humanize_betha_error(message: str | None) -> str:
     if not message:
         return "Não foi possível emitir a NFS-e no momento."
@@ -360,6 +405,53 @@ def _humanize_betha_error(message: str | None) -> str:
     if "servico" in text or "serviço" in text or "item" in text:
         return "Serviço não configurado para emissão fiscal."
     return "Não foi possível emitir a NFS-e no momento."
+
+
+def _ensure_document_scope(
+    document: FiscalDocument,
+    emitter: FiscalEmitter,
+    action: str,
+    expected_clinic_id: int | None,
+) -> None:
+    if document.clinic_id != emitter.clinic_id:
+        _audit_scope_violation(
+            document,
+            action=action,
+            expected_clinic_id=expected_clinic_id,
+            emitter_clinic_id=emitter.clinic_id,
+        )
+        raise ValueError("Documento fiscal fora do escopo da clínica.")
+    if expected_clinic_id is not None and document.clinic_id != expected_clinic_id:
+        _audit_scope_violation(
+            document,
+            action=action,
+            expected_clinic_id=expected_clinic_id,
+            emitter_clinic_id=emitter.clinic_id,
+        )
+        raise ValueError("Documento fiscal fora do escopo da clínica.")
+
+
+def _audit_scope_violation(
+    document: FiscalDocument,
+    action: str,
+    expected_clinic_id: int | None,
+    emitter_clinic_id: int | None,
+) -> None:
+    message_parts = [
+        f"Acesso fora do escopo bloqueado em {action}.",
+        f"document_clinic_id={document.clinic_id}",
+    ]
+    if expected_clinic_id is not None:
+        message_parts.append(f"expected_clinic_id={expected_clinic_id}")
+    if emitter_clinic_id is not None:
+        message_parts.append(f"emitter_clinic_id={emitter_clinic_id}")
+    _log_event(
+        document,
+        "scope_violation",
+        document.status.value,
+        error_message=" ".join(message_parts),
+    )
+    db.session.commit()
 
 
 def _get_active_certificate(emitter_id: int) -> FiscalCertificate | None:

@@ -48,11 +48,11 @@ _retry_kwargs = {
 
 
 @celery_app.task(name="jobs.emit_nfse", **_retry_kwargs)
-def emit_nfse(document_id: int) -> dict:
+def emit_nfse(document_id: int, clinic_id: int | None = None) -> dict:
     document = _mark_processing(document_id)
     logger.info("Emitindo NFSe para documento %s", document_id)
     if document:
-        emit_nfse_sync(document.id)
+        emit_nfse_sync(document.id, clinic_id=clinic_id)
         db.session.refresh(document)
     return {"document_id": document_id, "status": document.status.value if document else None}
 
@@ -68,11 +68,11 @@ def emit_nfe(document_id: int) -> dict:
 
 
 @celery_app.task(name="jobs.poll_nfse", **_retry_kwargs)
-def poll_nfse(document_id: int) -> dict:
+def poll_nfse(document_id: int, clinic_id: int | None = None) -> dict:
     document = _mark_processing(document_id)
     logger.info("Consultando NFSe para documento %s", document_id)
     if document:
-        poll_nfse(document.id)
+        poll_nfse(document.id, clinic_id=clinic_id)
         db.session.refresh(document)
     return {"document_id": document_id, "status": document.status.value if document else None}
 
