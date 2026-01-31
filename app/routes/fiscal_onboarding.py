@@ -16,6 +16,8 @@ from models import (
     FiscalDocumentType,
     FiscalEmitter,
     FiscalEvent,
+    clinica_has_column,
+    get_clinica_field,
 )
 from security.crypto import encrypt_bytes, encrypt_text
 from services.fiscal.certificate import parse_pfx
@@ -111,7 +113,8 @@ def fiscal_onboarding_step(step: int):
     step1_complete = _emitter_is_complete(emitter)
     step2_complete = bool(certificates)
     step3_complete = bool(comm_tested_at) and emission_doc is not None
-    wizard_steps = _wizard_steps(step1_complete, step2_complete, step3_complete, clinic.fiscal_ready)
+    clinic_ready = get_clinica_field(clinic, "fiscal_ready", False)
+    wizard_steps = _wizard_steps(step1_complete, step2_complete, step3_complete, clinic_ready)
 
     if request.method == "POST":
         if step == 1:
@@ -276,9 +279,16 @@ def fiscal_onboarding_step(step: int):
                 flash("Conclua os passos anteriores antes de aceitar.", "warning")
                 return redirect(url_for("fiscal_onboarding_step", step=step))
 
-            clinic.fiscal_ready = True
-            db.session.commit()
-            flash("Wizard fiscal concluído! Sua clínica está pronta para emissão.", "success")
+            if clinica_has_column("fiscal_ready"):
+                clinic.fiscal_ready = True
+                db.session.commit()
+                clinic_ready = True
+                flash("Wizard fiscal concluído! Sua clínica está pronta para emissão.", "success")
+            else:
+                flash(
+                    "Atualização fiscal pendente: execute as migrações antes de concluir o aceite.",
+                    "warning",
+                )
             return redirect(url_for("fiscal_onboarding_step", step=4))
 
     if step == 1:
@@ -319,6 +329,7 @@ def fiscal_onboarding_step(step: int):
         emission_doc=emission_doc,
         wizard_steps=wizard_steps,
         current_step=step,
+        clinic_ready=clinic_ready,
         step1_complete=step1_complete,
         step2_complete=step2_complete,
         step3_complete=step3_complete,
