@@ -8674,6 +8674,37 @@ def finalizar_consulta(consulta_id):
     )
 
 
+@app.route('/finalizar_consulta/<int:consulta_id>/fechar', methods=['POST'])
+@login_required
+def finalizar_consulta_e_fechar(consulta_id):
+    consulta = get_consulta_or_404(consulta_id)
+    if not is_veterinarian(current_user):
+        flash('Apenas veterinários podem finalizar consultas.', 'danger')
+        return redirect(url_for('index'))
+
+    outcome = finalize_consulta_flow(
+        consulta=consulta,
+        actor_id=current_user.id,
+        actor_vet_id=getattr(getattr(current_user, "veterinario", None), "id", None),
+        clinic_id=current_user_clinic_id(),
+    )
+    if outcome.status == "blocked":
+        flash(outcome.message, outcome.category)
+        return redirect(url_for('consulta_direct', animal_id=consulta.animal_id, c=consulta.id))
+    if outcome.status == "completed":
+        flash(outcome.message, outcome.category)
+        if consulta.appointment:
+            return redirect(url_for('appointment_close', appointment_id=consulta.appointment.id))
+        return redirect(url_for('consulta_direct', animal_id=consulta.animal_id))
+
+    flash(outcome.message, outcome.category)
+    return render_template(
+        'agendamentos/confirmar_retorno.html',
+        consulta=consulta,
+        form=outcome.form,
+    )
+
+
 @app.route('/agendar_retorno/<int:consulta_id>', methods=['POST'])
 @login_required
 def agendar_retorno(consulta_id):
