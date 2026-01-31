@@ -20,6 +20,7 @@ from werkzeug.utils import secure_filename
 from sqlalchemy import func
 from decimal import Decimal
 import re
+from security.crypto import MissingMasterKeyError, encrypt_text
 
 def _is_admin():
     """Return True if the current user has the admin role."""
@@ -682,6 +683,13 @@ class ContabilidadeConfigView(BaseView):
                 return redirect(self.get_url('.index'))
 
             password_fields = {"nfse_password", "nfse_cert_password"}
+            sensitive_fields = {
+                "nfse_username",
+                "nfse_password",
+                "nfse_cert_path",
+                "nfse_cert_password",
+                "nfse_token",
+            }
             for name in NFSE_FIELD_NAMES:
                 if not clinica_has_column(name):
                     continue
@@ -690,6 +698,15 @@ class ContabilidadeConfigView(BaseView):
                     continue
                 if isinstance(value, str) and not value:
                     value = None
+                if value is not None and name in sensitive_fields:
+                    try:
+                        value = encrypt_text(value)
+                    except MissingMasterKeyError:
+                        flash(
+                            "Chave fiscal não configurada. Configure FISCAL_MASTER_KEY antes de salvar.",
+                            "danger",
+                        )
+                        return redirect(self.get_url('.index', clinica_id=clinic.id))
                 setattr(clinic, name, value)
 
             db.session.add(clinic)

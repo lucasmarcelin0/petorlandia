@@ -61,6 +61,7 @@ if __name__ == '__main__':
 - `backup_db.py` - Realizar backup do banco de dados
 - `health_check.py` - Verificar saúde da aplicação
 - `fixtures/seed_data.py` - Carregar dados de teste
+- `nfse_encrypt_backfill.py` - Criptografar credenciais NFS-e já existentes
 
 ## 🎯 Categorias de Scripts
 

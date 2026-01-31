@@ -9,9 +9,11 @@ from typing import Any, Dict, Optional, Protocol
 from xml.etree import ElementTree as ET
 
 from flask import current_app, has_app_context
+from cryptography.fernet import InvalidToken
 
 from extensions import db
 from models import Clinica, NfseIssue, NfseXml
+from security.crypto import MissingMasterKeyError, decrypt_text
 from time_utils import utcnow
 
 
@@ -83,6 +85,18 @@ class NfseCredentialProvider:
         self._config = config or {}
 
     def get_credentials(self, clinica: Clinica, municipio: str) -> NfseCredentials:
+        def _decrypt_if_needed(value: Optional[str]) -> Optional[str]:
+            if not value:
+                return None
+            try:
+                return decrypt_text(value)
+            except InvalidToken:
+                return value
+            except MissingMasterKeyError as exc:
+                raise RuntimeError(
+                    "FISCAL_MASTER_KEY ausente; não foi possível descriptografar credenciais NFS-e."
+                ) from exc
+
         municipio_key = _normalize_municipio(municipio)
         per_municipio = self._config.get(municipio_key, {})
         clinica_key = str(clinica.id)
@@ -101,11 +115,21 @@ class NfseCredentialProvider:
             base_credentials = _credentials_from_env(clinica, municipio_key)
 
         return NfseCredentials(
-            cert_path=clinica.nfse_cert_path or base_credentials.cert_path,
-            cert_password=clinica.nfse_cert_password or base_credentials.cert_password,
-            username=clinica.nfse_username or base_credentials.username,
-            password=clinica.nfse_password or base_credentials.password,
-            token=clinica.nfse_token or base_credentials.token,
+            cert_path=_decrypt_if_needed(
+                clinica.get_nfse_encrypted("nfse_cert_path") or base_credentials.cert_path
+            ),
+            cert_password=_decrypt_if_needed(
+                clinica.get_nfse_encrypted("nfse_cert_password") or base_credentials.cert_password
+            ),
+            username=_decrypt_if_needed(
+                clinica.get_nfse_encrypted("nfse_username") or base_credentials.username
+            ),
+            password=_decrypt_if_needed(
+                clinica.get_nfse_encrypted("nfse_password") or base_credentials.password
+            ),
+            token=_decrypt_if_needed(
+                clinica.get_nfse_encrypted("nfse_token") or base_credentials.token
+            ),
             issuer_cnpj=base_credentials.issuer_cnpj or clinica.cnpj,
             issuer_inscricao_municipal=(
                 clinica.inscricao_municipal or base_credentials.issuer_inscricao_municipal

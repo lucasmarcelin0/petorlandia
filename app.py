@@ -136,7 +136,7 @@ from services.payments import (
     apply_payment_to_orcamento,
     create_payment_preference,
 )
-from security.crypto import encrypt_bytes, encrypt_text
+from security.crypto import MissingMasterKeyError, encrypt_bytes, encrypt_text
 from repositories import AppointmentRepository, ClinicRepository
 _config_utils_module_name = (
     f"{__package__}.config_utils" if __package__ else "config_utils"
@@ -5983,6 +5983,13 @@ def contabilidade_nfse_configurar():
         "aliquota_ir",
     }
     password_fields = {"nfse_password", "nfse_cert_password"}
+    sensitive_fields = {
+        "nfse_username",
+        "nfse_password",
+        "nfse_cert_path",
+        "nfse_cert_password",
+        "nfse_token",
+    }
     updatable_fields = [
         "municipio_nfse",
         "inscricao_municipal",
@@ -6028,6 +6035,21 @@ def contabilidade_nfse_configurar():
         else:
             if value == "":
                 value = None
+        if value is not None and field_name in sensitive_fields:
+            try:
+                value = encrypt_text(value)
+            except MissingMasterKeyError:
+                flash(
+                    "Chave fiscal não configurada. Configure FISCAL_MASTER_KEY antes de salvar.",
+                    "danger",
+                )
+                return redirect(
+                    url_for(
+                        'contabilidade_nfse',
+                        clinica_id=clinic_id,
+                        **({origin_param: origin_id} if origin_param else {}),
+                    )
+                )
         setattr(clinic, field_name, value)
 
     db.session.add(clinic)
