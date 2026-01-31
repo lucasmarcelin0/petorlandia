@@ -10,7 +10,7 @@
     <div class="row g-3 align-items-start">
       <div class="col-12 col-lg-3">
         <small class="text-muted d-block">Valor total</small>
-        <div class="fw-semibold fs-5">{{ consulta.total_orcamento | currency_br }}</div>
+        <div class="fw-semibold fs-5" data-orcamento-summary-total>{{ consulta.total_orcamento | currency_br }}</div>
       </div>
       <div class="col-12 col-lg-3">
         <small class="text-muted d-block">Paciente</small>
@@ -22,18 +22,15 @@
       </div>
       <div class="col-12 col-lg-3">
         <small class="text-muted d-block">Itens principais</small>
-        {% if total_items %}
-          <div class="fw-semibold">
-            {% for item in resumo_items %}
-              <span class="d-block">{{ item.descricao }}</span>
-            {% endfor %}
-            {% if resumo_extra > 0 %}
-              <span class="text-muted small">+{{ resumo_extra }} item(ns)</span>
-            {% endif %}
-          </div>
-        {% else %}
-          <div class="text-muted">Nenhum item adicionado ainda.</div>
-        {% endif %}
+        <div class="fw-semibold" data-orcamento-summary-items>
+          {% for item in resumo_items %}
+            <span class="d-block">{{ item.descricao }}</span>
+          {% endfor %}
+          {% if resumo_extra > 0 %}
+            <span class="text-muted small" data-orcamento-summary-extra>+{{ resumo_extra }} item(ns)</span>
+          {% endif %}
+        </div>
+        <div class="text-muted {% if total_items %}d-none{% endif %}" data-orcamento-summary-empty>Nenhum item adicionado ainda.</div>
       </div>
     </div>
   </div>
@@ -202,6 +199,9 @@ const discountPercentInput = document.getElementById('desconto-percentual');
 const discountValueInput = document.getElementById('desconto-valor');
 const totalSummaryValue = document.getElementById('resumo-total-bruto');
 const totalWithDiscountSummary = document.getElementById('resumo-total-com-desconto');
+const summaryTotalValue = document.querySelector('[data-orcamento-summary-total]');
+const summaryItemsList = document.querySelector('[data-orcamento-summary-items]');
+const summaryEmpty = document.querySelector('[data-orcamento-summary-empty]');
 let isSyncingDiscounts = false;
 
 function toggleNovoServico() {
@@ -293,6 +293,48 @@ function getOrcamentoTotal() {
 
 function formatCurrency(value) {
   return `R$ ${value.toFixed(2)}`;
+}
+
+function formatCurrencyBr(value) {
+  if (typeof Intl !== 'undefined' && Intl.NumberFormat) {
+    return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
+  }
+  return `R$ ${value.toFixed(2)}`.replace('.', ',');
+}
+
+function updateSummaryTotal(total) {
+  if (!summaryTotalValue || typeof total !== 'number') return;
+  summaryTotalValue.textContent = formatCurrencyBr(total);
+}
+
+function updateSummaryItems() {
+  if (!summaryItemsList && !summaryEmpty) return;
+  const rows = Array.from(document.querySelectorAll('#orcamento-tabela tbody tr'));
+  const descriptions = rows
+    .map(row => row.querySelector('td:first-child span:not(.badge)')?.textContent?.trim())
+    .filter(Boolean);
+  const shown = descriptions.slice(0, 3);
+  const extraCount = descriptions.length - shown.length;
+
+  if (!descriptions.length) {
+    if (summaryItemsList) summaryItemsList.innerHTML = '';
+    summaryItemsList?.querySelector('[data-orcamento-summary-extra]')?.remove();
+    if (summaryEmpty) summaryEmpty.classList.remove('d-none');
+    return;
+  }
+
+  if (summaryEmpty) summaryEmpty.classList.add('d-none');
+  if (summaryItemsList) {
+    summaryItemsList.innerHTML = shown.map(text => `<span class="d-block">${text}</span>`).join('');
+  }
+  summaryItemsList?.querySelector('[data-orcamento-summary-extra]')?.remove();
+  if (summaryItemsList && extraCount > 0) {
+    const extraEl = document.createElement('span');
+    extraEl.className = 'text-muted small';
+    extraEl.dataset.orcamentoSummaryExtra = '';
+    extraEl.textContent = `+${extraCount} item(ns)`;
+    summaryItemsList.appendChild(extraEl);
+  }
 }
 
 function updateTotalsSummary() {
@@ -391,6 +433,7 @@ function limparCamposDesconto() {
 function initFormControls() {
   initPayerControls();
   initDiscountControls();
+  updateSummaryItems();
 }
 
 if (document.readyState === 'loading') {
@@ -436,6 +479,8 @@ async function adicionarItemOrcamento() {
     document.getElementById('servico-id').value = '';
     document.getElementById('valor-personalizado').value = '';
     applyPayerFilter();
+    updateSummaryTotal(data.total);
+    updateSummaryItems();
   }
 }
 
@@ -443,8 +488,12 @@ async function removerItemOrcamento(id) {
   const resp = await fetch(`/consulta/orcamento_item/${id}`, {method:'DELETE', headers: {'X-CSRFToken': '{{ csrf_token() }}'}});
   if (resp.ok) {
     document.querySelector(`#orcamento-tabela tr[data-id='${id}']`).remove();
-    await resp.json();
+    const data = await resp.json();
     updateOrcamentoTotal();
+    if (typeof data.total === 'number') {
+      updateSummaryTotal(data.total);
+    }
+    updateSummaryItems();
   }
 }
 
