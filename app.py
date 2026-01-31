@@ -20020,6 +20020,14 @@ def atualizar_bloco_orcamento(bloco_id):
 
 from blueprint_utils import register_domain_blueprints
 
+_fiscal_onboarding_path = pathlib.Path(__file__).resolve().parent / "app" / "routes" / "fiscal_onboarding.py"
+if _fiscal_onboarding_path.exists():
+    _spec = importlib.util.spec_from_file_location("fiscal_onboarding_routes", _fiscal_onboarding_path)
+    _fiscal_onboarding_routes = importlib.util.module_from_spec(_spec)
+    _spec.loader.exec_module(_fiscal_onboarding_routes)
+    fiscal_onboarding_start = _fiscal_onboarding_routes.fiscal_onboarding_start
+    fiscal_onboarding_step = _fiscal_onboarding_routes.fiscal_onboarding_step
+
 register_domain_blueprints(app)
 
 if __name__ == "__main__":

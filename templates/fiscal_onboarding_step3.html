@@ -1,0 +1,69 @@
+{% extends "layout.html" %}
+
+{% block head %}
+<title>Wizard fiscal · Testes</title>
+{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+  <div class="d-flex flex-column flex-md-row align-items-md-center justify-content-between mb-3">
+    <div>
+      <h2 class="mb-1">Wizard fiscal</h2>
+      <p class="text-muted mb-0">Passo 3 de 4 — Teste de comunicação e emissão.</p>
+    </div>
+  </div>
+
+  <div class="mb-4 d-flex flex-wrap gap-2">
+    {% for step in wizard_steps %}
+    <span class="badge {% if step.number == current_step %}text-bg-primary{% elif step.complete %}text-bg-success{% else %}text-bg-secondary{% endif %}">
+      {{ step.number }}. {{ step.title }}
+    </span>
+    {% endfor %}
+  </div>
+
+  <div class="row g-3">
+    <div class="col-lg-6">
+      <div class="card shadow-sm h-100">
+        <div class="card-body">
+          <h5 class="card-title">Teste de comunicação (Betha + SEFAZ homolog)</h5>
+          <p class="text-muted">Confirma que a integração está preparada para falar com os provedores.</p>
+          {% if comm_tested_at %}
+          <div class="alert alert-success">Último teste marcado em {{ comm_tested_at }}.</div>
+          {% else %}
+          <div class="alert alert-warning">Teste pendente.</div>
+          {% endif %}
+          <form method="post" action="{{ url_for('fiscal_onboarding_step', step=3) }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
+            <input type="hidden" name="action" value="communication_test" />
+            <button class="btn btn-outline-primary" type="submit">Executar teste</button>
+          </form>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-lg-6">
+      <div class="card shadow-sm h-100">
+        <div class="card-body">
+          <h5 class="card-title">Teste de emissão (documento dummy)</h5>
+          <p class="text-muted">Cria um documento fictício para validar o fluxo sem vincular a uma venda real.</p>
+          {% if emission_doc %}
+          <div class="alert alert-success">Documento dummy criado (ID {{ emission_doc.id }}).</div>
+          {% else %}
+          <div class="alert alert-warning">Nenhum documento de teste criado ainda.</div>
+          {% endif %}
+          <form method="post" action="{{ url_for('fiscal_onboarding_step', step=3) }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
+            <input type="hidden" name="action" value="emission_test" />
+            <button class="btn btn-outline-primary" type="submit">Criar documento dummy</button>
+          </form>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="mt-4 d-flex justify-content-between">
+    <a class="btn btn-outline-secondary" href="{{ url_for('fiscal_onboarding_step', step=2) }}">Voltar</a>
+    <a class="btn btn-primary" href="{{ url_for('fiscal_onboarding_step', step=4) }}">Continuar</a>
+  </div>
+</div>
+{% endblock %}
