@@ -141,13 +141,6 @@
 </div>
 {% if consulta %}
 <div class="d-flex flex-wrap justify-content-end gap-2 mt-3">
-  <form method="POST" action="{{ url_for('finalizar_consulta_e_fechar', consulta_id=consulta.id) }}">
-    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-    <button type="submit" class="btn btn-success">
-      <i class="bi bi-check2-circle"></i>
-      Finalizar e fechar atendimento
-    </button>
-  </form>
   {% if consulta.appointment %}
   <a href="{{ url_for('appointment_close', appointment_id=consulta.appointment.id) }}" class="btn btn-outline-primary">
     <i class="bi bi-receipt"></i>
