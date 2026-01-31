@@ -95,14 +95,101 @@
           <p class="text-muted small mb-3">
             Use quando precisar emitir uma NFS-e retroativa para uma consulta já finalizada.
           </p>
-          <form method="post" action="{{ url_for('contabilidade_nfse_emitir') }}">
+          <form method="post" action="{{ url_for('contabilidade_nfse_emitir') }}" data-nfse-orcamento-form data-orcamento-endpoint="{{ url_for('contabilidade_nfse_orcamento', orcamento_id=0) }}">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-            {% if origin_id and origin_param %}
+            {% if origin_id and origin_param and origin_param != 'orcamento_id' %}
               <input type="hidden" name="{{ origin_param }}" value="{{ origin_id }}">
             {% endif %}
             <div class="mb-2">
+              <label class="form-label small text-muted" for="orcamento_id">Orçamento</label>
+              <input
+                id="orcamento_id"
+                name="orcamento_id"
+                type="number"
+                class="form-control"
+                placeholder="ID do orçamento"
+                value="{% if origin_param == 'orcamento_id' %}{{ origin_id }}{% endif %}"
+                data-nfse-field="orcamento_id"
+              >
+            </div>
+            <div class="mb-2">
               <label class="form-label small text-muted" for="consulta_id">Consulta</label>
-              <input id="consulta_id" name="consulta_id" type="number" class="form-control" placeholder="ID da consulta">
+              <input
+                id="consulta_id"
+                name="consulta_id"
+                type="number"
+                class="form-control"
+                placeholder="ID da consulta"
+                data-nfse-field="consulta_id"
+              >
+            </div>
+            <div class="mb-2">
+              <label class="form-label small text-muted" for="nfse-paciente">Paciente</label>
+              <input
+                id="nfse-paciente"
+                type="text"
+                class="form-control"
+                placeholder="Nome do paciente"
+                readonly
+                data-nfse-field="paciente_nome"
+              >
+            </div>
+            <div class="mb-2">
+              <label class="form-label small text-muted" for="nfse-tomador">Tomador</label>
+              <input
+                id="nfse-tomador"
+                type="text"
+                class="form-control"
+                placeholder="Nome do tomador"
+                readonly
+                data-nfse-field="tomador_nome"
+              >
+            </div>
+            <div class="mb-2">
+              <label class="form-label small text-muted" for="nfse-tomador-documento">CPF/CNPJ</label>
+              <input
+                id="nfse-tomador-documento"
+                type="text"
+                class="form-control"
+                placeholder="Documento do tomador"
+                readonly
+                data-nfse-field="tomador_documento"
+              >
+            </div>
+            <div class="mb-2">
+              <label class="form-label small text-muted" for="nfse-tomador-email">E-mail</label>
+              <input
+                id="nfse-tomador-email"
+                type="email"
+                class="form-control"
+                placeholder="E-mail do tomador"
+                readonly
+                data-nfse-field="tomador_email"
+              >
+            </div>
+            <div class="mb-3">
+              <label class="form-label small text-muted" for="nfse-tomador-telefone">Telefone</label>
+              <input
+                id="nfse-tomador-telefone"
+                type="text"
+                class="form-control"
+                placeholder="Telefone do tomador"
+                readonly
+                data-nfse-field="tomador_telefone"
+              >
+            </div>
+            <div class="card border-0 bg-light mb-3" data-nfse-summary>
+              <div class="card-body p-3">
+                <h6 class="mb-2">Resumo da Nota</h6>
+                <p class="text-muted small mb-2" data-nfse-summary-empty>
+                  Informe um orçamento para visualizar o resumo antes de enviar.
+                </p>
+                <ul class="list-group list-group-flush mb-2" data-nfse-items hidden></ul>
+                <div class="d-flex justify-content-between align-items-center border-top pt-2">
+                  <strong>Total do orçamento</strong>
+                  <strong data-nfse-total>R$ 0,00</strong>
+                </div>
+              </div>
             </div>
             <button class="btn btn-primary w-100" type="submit">Emitir NFS-e</button>
             <p class="text-muted small mt-2 mb-0">
@@ -290,4 +377,148 @@
     </div>
   </div>
 </div>
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+  const form = document.querySelector('[data-nfse-orcamento-form]');
+  if (!form) {
+    return;
+  }
+  const endpointTemplate = form.dataset.orcamentoEndpoint;
+  const summary = form.querySelector('[data-nfse-summary]');
+  const summaryEmpty = form.querySelector('[data-nfse-summary-empty]');
+  const itemsList = form.querySelector('[data-nfse-items]');
+  const totalField = form.querySelector('[data-nfse-total]');
+  const fields = {
+    orcamento_id: form.querySelector('[data-nfse-field="orcamento_id"]'),
+    consulta_id: form.querySelector('[data-nfse-field="consulta_id"]'),
+    paciente_nome: form.querySelector('[data-nfse-field="paciente_nome"]'),
+    tomador_nome: form.querySelector('[data-nfse-field="tomador_nome"]'),
+    tomador_documento: form.querySelector('[data-nfse-field="tomador_documento"]'),
+    tomador_email: form.querySelector('[data-nfse-field="tomador_email"]'),
+    tomador_telefone: form.querySelector('[data-nfse-field="tomador_telefone"]'),
+  };
+
+  const currencyFormatter = new Intl.NumberFormat('pt-BR', {
+    style: 'currency',
+    currency: 'BRL',
+  });
+
+  const setSummaryMessage = (message) => {
+    if (summaryEmpty) {
+      summaryEmpty.textContent = message;
+      summaryEmpty.hidden = !message;
+    }
+  };
+
+  const renderItems = (items = []) => {
+    if (!itemsList) {
+      return;
+    }
+    itemsList.innerHTML = '';
+    if (!items.length) {
+      itemsList.hidden = true;
+      return;
+    }
+    itemsList.hidden = false;
+    items.forEach((item) => {
+      const li = document.createElement('li');
+      li.className = 'list-group-item d-flex justify-content-between align-items-center';
+      li.innerHTML = `
+        <span>${item.descricao || 'Item'}</span>
+        <span>${currencyFormatter.format(item.valor || 0)}</span>
+      `;
+      itemsList.appendChild(li);
+    });
+  };
+
+  const updateSummary = (payload) => {
+    if (totalField) {
+      totalField.textContent = currencyFormatter.format(payload.valor_total || 0);
+    }
+    renderItems(payload.itens || []);
+  };
+
+  const populateFields = (payload) => {
+    if (fields.consulta_id) {
+      fields.consulta_id.value = payload.consulta_id || '';
+    }
+    if (fields.paciente_nome) {
+      fields.paciente_nome.value = payload.paciente?.nome || '';
+    }
+    if (fields.tomador_nome) {
+      fields.tomador_nome.value = payload.tomador?.nome || '';
+    }
+    if (fields.tomador_documento) {
+      fields.tomador_documento.value = payload.tomador?.cpf_cnpj || '';
+    }
+    if (fields.tomador_email) {
+      fields.tomador_email.value = payload.tomador?.email || '';
+    }
+    if (fields.tomador_telefone) {
+      fields.tomador_telefone.value = payload.tomador?.telefone || '';
+    }
+  };
+
+  const clearFields = () => {
+    if (fields.consulta_id) {
+      fields.consulta_id.value = '';
+    }
+    if (fields.paciente_nome) {
+      fields.paciente_nome.value = '';
+    }
+    if (fields.tomador_nome) {
+      fields.tomador_nome.value = '';
+    }
+    if (fields.tomador_documento) {
+      fields.tomador_documento.value = '';
+    }
+    if (fields.tomador_email) {
+      fields.tomador_email.value = '';
+    }
+    if (fields.tomador_telefone) {
+      fields.tomador_telefone.value = '';
+    }
+    if (totalField) {
+      totalField.textContent = currencyFormatter.format(0);
+    }
+    renderItems([]);
+  };
+
+  const loadOrcamento = async (orcamentoId) => {
+    if (!orcamentoId) {
+      setSummaryMessage('Informe um orçamento para visualizar o resumo antes de enviar.');
+      clearFields();
+      return;
+    }
+    if (!endpointTemplate) {
+      return;
+    }
+    setSummaryMessage('Carregando orçamento...');
+    try {
+      const endpoint = endpointTemplate.replace(/0$/, String(orcamentoId));
+      const response = await fetch(endpoint, {headers: {'Accept': 'application/json'}});
+      const payload = await response.json();
+      if (!response.ok) {
+        throw new Error(payload.error || 'Não foi possível carregar o orçamento.');
+      }
+      populateFields(payload);
+      updateSummary(payload);
+      setSummaryMessage('');
+    } catch (error) {
+      console.error(error);
+      setSummaryMessage('Não foi possível carregar o orçamento informado.');
+      clearFields();
+    }
+  };
+
+  if (fields.orcamento_id && fields.orcamento_id.value) {
+    loadOrcamento(fields.orcamento_id.value);
+  }
+  if (fields.orcamento_id) {
+    fields.orcamento_id.addEventListener('change', (event) => {
+      loadOrcamento(event.target.value);
+    });
+  }
+});
+</script>
 {% endblock %}

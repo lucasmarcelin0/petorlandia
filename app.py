@@ -5840,6 +5840,69 @@ def contabilidade_nfse():
 
 
 @login_required
+def contabilidade_nfse_orcamento(orcamento_id: int):
+    _ensure_accounting_access()
+    _, accessible_ids = _accounting_accessible_clinics()
+    orcamento = (
+        Orcamento.query
+        .options(
+            joinedload(Orcamento.consulta)
+            .joinedload(Consulta.animal)
+            .joinedload(Animal.owner),
+        )
+        .get(orcamento_id)
+    )
+    if not orcamento:
+        return jsonify({"error": "Orçamento não encontrado."}), 404
+    if orcamento.clinica_id not in accessible_ids:
+        return jsonify({"error": "Sem acesso ao orçamento informado."}), 403
+
+    consulta = orcamento.consulta
+    animal = consulta.animal if consulta else None
+    tomador = animal.owner if animal else None
+    items = [
+        {
+            "id": item.id,
+            "descricao": item.descricao,
+            "valor": float(item.valor or 0),
+            "payer_type": item.effective_payer_type,
+        }
+        for item in orcamento.items
+    ]
+
+    payload = {
+        "id": orcamento.id,
+        "consulta_id": orcamento.consulta_id,
+        "descricao": orcamento.descricao,
+        "valor_total": float(orcamento.total or 0),
+        "itens": items,
+        "paciente": (
+            {
+                "id": animal.id,
+                "nome": animal.name,
+                "especie": animal.species,
+                "raca": animal.breed,
+            }
+            if animal
+            else None
+        ),
+        "tomador": (
+            {
+                "id": tomador.id,
+                "nome": tomador.name,
+                "cpf_cnpj": tomador.cpf,
+                "email": tomador.email,
+                "telefone": tomador.phone,
+                "endereco": tomador.address,
+            }
+            if tomador
+            else None
+        ),
+    }
+    return jsonify(payload)
+
+
+@login_required
 def contabilidade_nfse_emitir():
     _ensure_accounting_access()
     consulta_id = request.form.get('consulta_id', type=int)
