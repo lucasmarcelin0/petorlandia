@@ -18,6 +18,7 @@ Bem-vindo à documentação centralizada do projeto PetOrlândia!
 - [form_feedback_checklist.md](form_feedback_checklist.md) - Checklist de feedback de formulários
 - [gestao_produto.md](gestao_produto.md) - Gestão de produtos
 - [nfse_municipios.md](nfse_municipios.md) - Configuração NFSe por município
+- [nfse_security.md](nfse_security.md) - Segurança e rotação de chave NFS-e
 - [veterinarian_access_audit.md](veterinarian_access_audit.md) - Auditoria de acesso de veterinários
 
 ### 🧪 Testes e Qualidade

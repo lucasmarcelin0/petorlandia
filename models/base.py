@@ -19,8 +19,15 @@ from sqlalchemy import Enum as PgEnum
 from sqlalchemy.orm import synonym, object_session, deferred
 from sqlalchemy.ext.hybrid import hybrid_property
 from sqlalchemy.exc import OperationalError, ProgrammingError
+from cryptography.fernet import InvalidToken
 from functools import lru_cache
 from time_utils import utcnow, now_in_brazil
+from security.crypto import (
+    MissingMasterKeyError,
+    decrypt_text,
+    encrypt_text,
+    looks_encrypted_text,
+)
 
 
 @lru_cache(maxsize=1)
@@ -49,6 +56,28 @@ def get_clinica_field(clinica, column_name: str, default=None):
         return default
     return value if value is not None else default
 
+
+def _encrypt_nfse_value(value):
+    if value is None:
+        return None
+    if isinstance(value, str) and value == "":
+        return None
+    if isinstance(value, str) and looks_encrypted_text(value):
+        return value
+    return encrypt_text(value)
+
+
+def _decrypt_nfse_value(value):
+    if value is None:
+        return None
+    if not isinstance(value, str):
+        return value
+    if not looks_encrypted_text(value):
+        return value
+    try:
+        return decrypt_text(value)
+    except (InvalidToken, MissingMasterKeyError):
+        return value
 
 
 class Endereco(db.Model):
@@ -786,16 +815,71 @@ class Clinica(db.Model):
     aliquota_csll = deferred(db.Column(db.Numeric(5, 2)))
     aliquota_ir = deferred(db.Column(db.Numeric(5, 2)))
     municipio_nfse = deferred(db.Column(db.String(60)))
-    nfse_username = deferred(db.Column(db.String(120)))
-    nfse_password = deferred(db.Column(db.String(120)))
-    nfse_cert_path = deferred(db.Column(db.String(200)))
-    nfse_cert_password = deferred(db.Column(db.String(120)))
-    nfse_token = deferred(db.Column(db.String(200)))
+    _nfse_username = deferred(db.Column("nfse_username", db.String(120)))
+    _nfse_password = deferred(db.Column("nfse_password", db.String(120)))
+    _nfse_cert_path = deferred(db.Column("nfse_cert_path", db.String(200)))
+    _nfse_cert_password = deferred(db.Column("nfse_cert_password", db.String(120)))
+    _nfse_token = deferred(db.Column("nfse_token", db.String(200)))
     fiscal_ready = deferred(db.Column(db.Boolean, default=False))
+
+    _nfse_encrypted_fields = {
+        "nfse_username": "_nfse_username",
+        "nfse_password": "_nfse_password",
+        "nfse_cert_path": "_nfse_cert_path",
+        "nfse_cert_password": "_nfse_cert_password",
+        "nfse_token": "_nfse_token",
+    }
 
     @property
     def fiscal_ready_status(self) -> bool:
         return bool(get_clinica_field(self, "fiscal_ready", False))
+
+    def get_nfse_encrypted(self, field_name: str):
+        attr_name = self._nfse_encrypted_fields.get(field_name, field_name)
+        return getattr(self, attr_name)
+
+    def _get_nfse_username(self):
+        return _decrypt_nfse_value(self._nfse_username)
+
+    def _set_nfse_username(self, value):
+        self._nfse_username = _encrypt_nfse_value(value)
+
+    nfse_username = synonym("_nfse_username", descriptor=property(_get_nfse_username, _set_nfse_username))
+
+    def _get_nfse_password(self):
+        return _decrypt_nfse_value(self._nfse_password)
+
+    def _set_nfse_password(self, value):
+        self._nfse_password = _encrypt_nfse_value(value)
+
+    nfse_password = synonym("_nfse_password", descriptor=property(_get_nfse_password, _set_nfse_password))
+
+    def _get_nfse_cert_path(self):
+        return _decrypt_nfse_value(self._nfse_cert_path)
+
+    def _set_nfse_cert_path(self, value):
+        self._nfse_cert_path = _encrypt_nfse_value(value)
+
+    nfse_cert_path = synonym("_nfse_cert_path", descriptor=property(_get_nfse_cert_path, _set_nfse_cert_path))
+
+    def _get_nfse_cert_password(self):
+        return _decrypt_nfse_value(self._nfse_cert_password)
+
+    def _set_nfse_cert_password(self, value):
+        self._nfse_cert_password = _encrypt_nfse_value(value)
+
+    nfse_cert_password = synonym(
+        "_nfse_cert_password",
+        descriptor=property(_get_nfse_cert_password, _set_nfse_cert_password),
+    )
+
+    def _get_nfse_token(self):
+        return _decrypt_nfse_value(self._nfse_token)
+
+    def _set_nfse_token(self, value):
+        self._nfse_token = _encrypt_nfse_value(value)
+
+    nfse_token = synonym("_nfse_token", descriptor=property(_get_nfse_token, _set_nfse_token))
 
     owner_id = db.Column(db.Integer, db.ForeignKey('user.id'))
     owner = db.relationship('User', backref=db.backref('clinicas', foreign_keys='Clinica.owner_id'), foreign_keys=[owner_id])

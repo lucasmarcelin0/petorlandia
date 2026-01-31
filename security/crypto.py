@@ -11,6 +11,12 @@ from cryptography.fernet import Fernet
 class MissingMasterKeyError(RuntimeError):
     """Raised when the master key is not configured."""
 
+FERNET_PREFIX = "gAAAA"
+
+
+def looks_encrypted_text(value: str) -> bool:
+    return isinstance(value, str) and value.startswith(FERNET_PREFIX)
+
 
 @lru_cache(maxsize=1)
 def _get_fernet() -> Fernet:
