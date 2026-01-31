@@ -11,7 +11,15 @@
       <h2 class="mb-1">Documento Fiscal #{{ document.id }}</h2>
       <p class="text-muted mb-0">Detalhes e histórico de eventos.</p>
     </div>
-    <a class="btn btn-outline-secondary" href="{{ url_for('fiscal_documents') }}">Voltar</a>
+    <div class="d-flex gap-2">
+      {% if document.status and document.status.value not in ['CANCELED', 'REJECTED'] %}
+      <form method="post" action="{{ url_for('fiscal_document_cancel', document_id=document.id) }}">
+        {% if csrf_token is defined %}{{ csrf_token() }}{% endif %}
+        <button class="btn btn-outline-danger" type="submit">Cancelar NFS-e</button>
+      </form>
+      {% endif %}
+      <a class="btn btn-outline-secondary" href="{{ url_for('fiscal_documents') }}">Voltar</a>
+    </div>
   </div>
 
   <div class="row g-4">

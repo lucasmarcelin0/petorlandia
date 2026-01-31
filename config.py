@@ -111,3 +111,12 @@ class Config:
             "allowed_reasons": [],
         },
     }
+
+    NFSE_BETHA_WSDL = {
+        "recepcionar_lote_rps": os.environ.get("NFSE_BETHA_WSDL_RECEPCIONAR_LOTE_RPS", ""),
+        "consultar_situacao_lote_rps": os.environ.get(
+            "NFSE_BETHA_WSDL_CONSULTAR_SITUACAO_LOTE_RPS", ""
+        ),
+        "consultar_nfse_por_rps": os.environ.get("NFSE_BETHA_WSDL_CONSULTAR_NFSE_POR_RPS", ""),
+        "cancelar_nfse": os.environ.get("NFSE_BETHA_WSDL_CANCELAR_NFSE", ""),
+    }

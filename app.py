@@ -114,6 +114,12 @@ from services.nfse_queue import (
     validate_nfse_cancel_request,
 )
 from services.fiscal.certificate import parse_pfx
+from services.fiscal.nfse_service import (
+    build_nfse_payload_from_appointment,
+    cancel_nfse_document,
+    create_nfse_document,
+    queue_emit_nfse,
+)
 from services.appointments import (
     ReturnAppointmentDTO,
     finalize_consulta_flow,
@@ -1809,6 +1815,40 @@ def fiscal_document_detail(document_id: int):
         events=events,
         payload_pretty=payload_pretty,
     )
+
+
+@login_required
+def fiscal_document_status(document_id: int):
+    clinic_id = current_user_clinic_id()
+    if not clinic_id:
+        abort(403)
+
+    document = FiscalDocument.query.filter_by(id=document_id, clinic_id=clinic_id).first_or_404()
+    return jsonify(
+        {
+            "id": document.id,
+            "status": document.status.value if document.status else document.status,
+            "nfse_number": document.nfse_number,
+            "verification_code": document.verification_code,
+            "error_message": document.error_message,
+        }
+    )
+
+
+@login_required
+def fiscal_document_cancel(document_id: int):
+    clinic_id = current_user_clinic_id()
+    if not clinic_id:
+        abort(403)
+
+    document = FiscalDocument.query.filter_by(id=document_id, clinic_id=clinic_id).first_or_404()
+    try:
+        cancel_nfse_document(document.id)
+        flash("Cancelamento solicitado.", "success")
+    except Exception as exc:  # noqa: BLE001
+        current_app.logger.exception("Erro ao cancelar NFS-e", exc_info=exc)
+        flash("Erro ao solicitar cancelamento.", "danger")
+    return redirect(url_for("fiscal_document_detail", document_id=document.id))
 
 
 def _collect_clinic_ids(viewer=None, clinic_scope=None):
@@ -17508,12 +17548,26 @@ def appointments():
                 vac.scheduled_at = datetime.combine(vac.aplicada_em, time.min, tzinfo=BR_TZ)
             form = None
         appointments_grouped = group_appointments_by_day(appointments)
+        nfse_documents_by_appointment = {}
+        if appointments:
+            appointment_ids = [appt.id for appt in appointments]
+            nfse_documents = (
+                FiscalDocument.query
+                .filter(FiscalDocument.related_type == "appointment")
+                .filter(FiscalDocument.related_id.in_(appointment_ids))
+                .order_by(FiscalDocument.created_at.desc())
+                .all()
+            )
+            for doc in nfse_documents:
+                if doc.related_id not in nfse_documents_by_appointment:
+                    nfse_documents_by_appointment[doc.related_id] = doc
         exam_appointments_grouped = group_appointments_by_day(exam_appointments)
         vaccine_appointments_grouped = group_appointments_by_day(vaccine_appointments)
         if request.headers.get('X-Partial') == 'appointments_table' or request.args.get('partial') == 'appointments_table':
             return render_template(
                 'partials/appointments_table.html',
                 appointments_grouped=appointments_grouped,
+                nfse_documents_by_appointment=nfse_documents_by_appointment,
             )
 
         return render_template(
@@ -17534,7 +17588,34 @@ def appointments():
             admin_default_selection_value=admin_default_selection_value,
             calendar_summary_vets=calendar_summary_vets,
             calendar_summary_clinic_ids=calendar_summary_clinic_ids,
+            nfse_documents_by_appointment=nfse_documents_by_appointment,
         )
+
+
+@login_required
+def appointment_emit_nfse(appointment_id: int):
+    appointment = Appointment.query.get_or_404(appointment_id)
+    if not appointment.clinica_id:
+        abort(403)
+
+    clinic_id = current_user_clinic_id()
+    if clinic_id and appointment.clinica_id != clinic_id and (current_user.role or '').lower() != 'admin':
+        abort(403)
+
+    if not appointment.clinica or not appointment.clinica.fiscal_emitter:
+        flash("Clínica sem emissor fiscal configurado.", "warning")
+        return redirect(url_for("appointments"))
+
+    payload = build_nfse_payload_from_appointment(appointment)
+    document = create_nfse_document(
+        related_type="appointment",
+        related_id=appointment.id,
+        emitter_id=appointment.clinica.fiscal_emitter.id,
+        payload=payload,
+    )
+    queue_emit_nfse(document.id)
+    flash("Emissão de NFS-e enfileirada.", "success")
+    return redirect(url_for("fiscal_document_detail", document_id=document.id))
 
 
 @login_required

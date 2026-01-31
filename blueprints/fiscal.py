@@ -26,5 +26,15 @@ def get_blueprint():
         view_func=lazy_view("fiscal_document_detail"),
         methods=["GET"],
     )
+    bp.add_url_rule(
+        "/fiscal/documents/<int:document_id>/status",
+        view_func=lazy_view("fiscal_document_status"),
+        methods=["GET"],
+    )
+    bp.add_url_rule(
+        "/fiscal/documents/<int:document_id>/cancel",
+        view_func=lazy_view("fiscal_document_cancel"),
+        methods=["POST"],
+    )
 
     return bp
