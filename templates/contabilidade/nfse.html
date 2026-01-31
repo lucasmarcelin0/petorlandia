@@ -641,6 +641,7 @@ document.addEventListener('DOMContentLoaded', () => {
     tomador_numero: form.querySelector('[data-nfse-field="tomador_numero"]'),
     tomador_bairro: form.querySelector('[data-nfse-field="tomador_bairro"]'),
   };
+  let lastOrcamentoId = null;
 
   const currencyFormatter = new Intl.NumberFormat('pt-BR', {
     style: 'currency',
@@ -682,44 +683,57 @@ document.addEventListener('DOMContentLoaded', () => {
     renderItems(payload.itens || []);
   };
 
+  const setFieldValue = (field, value, {force = false} = {}) => {
+    if (!field) {
+      return;
+    }
+    if (!force && field.dataset.nfseDirty === 'true') {
+      return;
+    }
+    field.value = value || '';
+  };
+
   const populateFields = (payload) => {
     if (fields.consulta_id) {
-      fields.consulta_id.value = payload.consulta_id || '';
+      setFieldValue(fields.consulta_id, payload.consulta_id);
     }
     if (fields.paciente_nome) {
-      fields.paciente_nome.value = payload.paciente?.nome || '';
+      setFieldValue(fields.paciente_nome, payload.paciente?.nome);
     }
     if (fields.tomador_nome) {
-      fields.tomador_nome.value = payload.tomador?.nome || '';
+      setFieldValue(fields.tomador_nome, payload.tomador?.nome);
     }
     if (fields.tomador_documento) {
-      fields.tomador_documento.value = payload.tomador?.cpf_cnpj || '';
+      setFieldValue(fields.tomador_documento, payload.tomador?.cpf_cnpj);
     }
     if (fields.tomador_email) {
-      fields.tomador_email.value = payload.tomador?.email || '';
+      setFieldValue(fields.tomador_email, payload.tomador?.email);
     }
     if (fields.tomador_telefone) {
-      fields.tomador_telefone.value = payload.tomador?.telefone || '';
+      setFieldValue(fields.tomador_telefone, payload.tomador?.telefone);
     }
     const endereco = payload.tomador?.endereco;
     const enderecoTexto = payload.tomador?.endereco_texto || payload.tomador?.endereco || '';
     if (fields.tomador_cep) {
-      fields.tomador_cep.value = endereco?.cep || '';
+      setFieldValue(fields.tomador_cep, endereco?.cep);
     }
     if (fields.tomador_municipio) {
-      fields.tomador_municipio.value = endereco?.cidade || '';
+      setFieldValue(fields.tomador_municipio, endereco?.cidade);
     }
     if (fields.tomador_uf) {
-      fields.tomador_uf.value = endereco?.estado || '';
+      setFieldValue(fields.tomador_uf, endereco?.estado);
     }
     if (fields.tomador_logradouro) {
-      fields.tomador_logradouro.value = endereco?.logradouro || endereco?.rua || enderecoTexto || '';
+      setFieldValue(
+        fields.tomador_logradouro,
+        endereco?.logradouro || endereco?.rua || enderecoTexto,
+      );
     }
     if (fields.tomador_numero) {
-      fields.tomador_numero.value = endereco?.numero || '';
+      setFieldValue(fields.tomador_numero, endereco?.numero);
     }
     if (fields.tomador_bairro) {
-      fields.tomador_bairro.value = endereco?.bairro || '';
+      setFieldValue(fields.tomador_bairro, endereco?.bairro);
     }
   };
 
@@ -834,20 +848,29 @@ document.addEventListener('DOMContentLoaded', () => {
 
   const validateMunicipio = (value) => {
     if (!value) {
-      return true;
+      return false;
     }
     return value.trim().length >= 2;
   };
 
   const validateUf = (value) => {
     if (!value) {
-      return true;
+      return false;
     }
     return /^[A-Za-z]{2}$/.test(value.trim());
   };
 
-  const setFieldValidity = (field, isValid) => {
+  const hasAnyValue = (value) => (value || '').trim().length > 0;
+
+  const hasAddressDetails = () => [fields.tomador_cep, fields.tomador_logradouro, fields.tomador_numero, fields.tomador_bairro]
+    .some((field) => field && hasAnyValue(field.value));
+
+  const setFieldValidity = (field, isValid, {required = false} = {}) => {
     if (!field) {
+      return true;
+    }
+    if (!required && !hasAnyValue(field.value)) {
+      field.classList.remove('is-invalid', 'is-valid');
       return true;
     }
     if (isValid) {
@@ -860,21 +883,25 @@ document.addEventListener('DOMContentLoaded', () => {
     return isValid;
   };
 
-  const validateField = (field, validator) => {
+  const validateField = (field, validator, {required = false} = {}) => {
     if (!field) {
       return true;
     }
-    return setFieldValidity(field, validator(field.value));
+    if (!required && !hasAnyValue(field.value)) {
+      return setFieldValidity(field, true, {required});
+    }
+    return setFieldValidity(field, validator(field.value), {required});
   };
 
   const validateAll = () => {
+    const addressRequired = hasAddressDetails();
     const validations = [
-      validateField(fields.tomador_documento, validateCpfCnpj),
+      validateField(fields.tomador_nome, validateMunicipio, {required: true}),
+      validateField(fields.tomador_documento, validateCpfCnpj, {required: true}),
       validateField(fields.tomador_email, validateEmail),
-      validateField(fields.tomador_cep, validateCep),
-      validateField(fields.tomador_municipio, validateMunicipio),
-      validateField(fields.tomador_uf, validateUf),
-      validateField(fields.tomador_nome, validateMunicipio),
+      validateField(fields.tomador_cep, validateCep, {required: addressRequired}),
+      validateField(fields.tomador_municipio, validateMunicipio, {required: addressRequired}),
+      validateField(fields.tomador_uf, validateUf, {required: addressRequired}),
     ];
     return validations.every(Boolean);
   };
@@ -883,6 +910,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!orcamentoId) {
       setSummaryMessage('Informe um orçamento para visualizar o resumo antes de enviar.');
       clearFields();
+      lastOrcamentoId = null;
       return;
     }
     if (!endpointTemplate) {
@@ -890,6 +918,14 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     setSummaryMessage('Carregando orçamento...');
     try {
+      if (lastOrcamentoId !== String(orcamentoId)) {
+        Object.values(fields).forEach((field) => {
+          if (field) {
+            delete field.dataset.nfseDirty;
+          }
+        });
+        lastOrcamentoId = String(orcamentoId);
+      }
       const endpoint = endpointTemplate.replace(/0$/, String(orcamentoId));
       const response = await fetch(endpoint, {headers: {'Accept': 'application/json'}});
       const payload = await response.json();
@@ -917,18 +953,34 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   [
-    [fields.tomador_documento, validateCpfCnpj],
-    [fields.tomador_email, validateEmail],
-    [fields.tomador_cep, validateCep],
-    [fields.tomador_municipio, validateMunicipio],
-    [fields.tomador_uf, validateUf],
-    [fields.tomador_nome, validateMunicipio],
-  ].forEach(([field, validator]) => {
+    [fields.tomador_nome, validateMunicipio, {required: true}],
+    [fields.tomador_documento, validateCpfCnpj, {required: true}],
+    [fields.tomador_email, validateEmail, {required: false}],
+    [fields.tomador_cep, validateCep, {required: () => hasAddressDetails()}],
+    [fields.tomador_municipio, validateMunicipio, {required: () => hasAddressDetails()}],
+    [fields.tomador_uf, validateUf, {required: () => hasAddressDetails()}],
+  ].forEach(([field, validator, options]) => {
     if (!field) {
       return;
     }
-    field.addEventListener('input', () => validateField(field, validator));
-    field.addEventListener('blur', () => validateField(field, validator));
+    field.addEventListener('input', () => {
+      field.dataset.nfseDirty = 'true';
+      const required = typeof options.required === 'function' ? options.required() : options.required;
+      validateField(field, validator, {required});
+    });
+    field.addEventListener('blur', () => {
+      const required = typeof options.required === 'function' ? options.required() : options.required;
+      validateField(field, validator, {required});
+    });
+  });
+
+  Object.values(fields).forEach((field) => {
+    if (!field) {
+      return;
+    }
+    field.addEventListener('input', () => {
+      field.dataset.nfseDirty = 'true';
+    });
   });
 
   form.addEventListener('submit', (event) => {
