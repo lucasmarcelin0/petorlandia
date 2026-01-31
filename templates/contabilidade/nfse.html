@@ -519,7 +519,27 @@
                 <div class="fw-semibold">{{ issue.internal_identifier or '—' }}</div>
                 <div class="text-muted small">RPS: {{ issue.rps or '—' }}</div>
               </td>
-              <td><span class="badge {{ status_class }}">{{ status_value }}</span></td>
+              <td>
+                <span class="badge {{ status_class }}">{{ status_value }}</span>
+                {% if issue.erro_mensagem or issue.erro_codigo or issue.erro_detalhes %}
+                  <div class="small text-danger mt-1">
+                    {% if issue.erro_mensagem %}
+                      <div><strong>Erro:</strong> {{ issue.erro_mensagem }}</div>
+                    {% else %}
+                      <div><strong>Erro:</strong> Falha ao processar a NFS-e.</div>
+                    {% endif %}
+                    {% if issue.erro_codigo %}
+                      <div>Código: {{ issue.erro_codigo }}</div>
+                    {% endif %}
+                    {% if issue.erro_detalhes %}
+                      <details class="mt-1">
+                        <summary class="small">Detalhes técnicos</summary>
+                        <div class="text-muted">{{ issue.erro_detalhes }}</div>
+                      </details>
+                    {% endif %}
+                  </div>
+                {% endif %}
+              </td>
               <td>{{ issue.protocolo or '—' }}</td>
               <td>{{ issue.numero_nfse or '—' }}</td>
               <td class="d-flex flex-column gap-2">
