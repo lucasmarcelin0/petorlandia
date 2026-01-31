@@ -111,13 +111,29 @@ def create_nfse_draft_from_orcamento(orcamento_id: int) -> FiscalDocument:
 
 
 def queue_emit_nfse(document_id: int) -> None:
-    try:
-        from app.jobs.fiscal_tasks import emit_nfse
+    document = db.session.get(FiscalDocument, document_id)
+    if not document:
+        raise ValueError("Documento fiscal não encontrado.")
 
-        emit_nfse.delay(document_id)
-    except Exception:  # noqa: BLE001 - fallback para ambientes sem celery
-        current_app.logger.warning("Fila Celery indisponível, processando emissão local.")
-        emit_nfse_sync(document_id)
+    if document.status in {
+        FiscalDocumentStatus.AUTHORIZED,
+        FiscalDocumentStatus.CANCELED,
+    }:
+        return
+    if document.status == FiscalDocumentStatus.PROCESSING:
+        return
+
+    if document.status in {
+        FiscalDocumentStatus.DRAFT,
+        FiscalDocumentStatus.REJECTED,
+        FiscalDocumentStatus.FAILED,
+    }:
+        _transition_status(document, FiscalDocumentStatus.QUEUED, "queued")
+        db.session.commit()
+
+    from app.jobs.fiscal_tasks import emit_nfse
+
+    emit_nfse.delay(document_id)
 
 
 def emit_nfse_sync(document_id: int) -> FiscalDocument:
@@ -126,120 +142,148 @@ def emit_nfse_sync(document_id: int) -> FiscalDocument:
         raise ValueError("Documento fiscal não encontrado.")
     if document.status == FiscalDocumentStatus.AUTHORIZED:
         return document
+    if document.status in {FiscalDocumentStatus.CANCELED}:
+        return document
+    if document.status in {FiscalDocumentStatus.REJECTED, FiscalDocumentStatus.FAILED}:
+        return document
+    try:
+        if document.status == FiscalDocumentStatus.DRAFT:
+            _transition_status(document, FiscalDocumentStatus.QUEUED, "queued")
+        if document.status == FiscalDocumentStatus.QUEUED:
+            _transition_status(document, FiscalDocumentStatus.PROCESSING, "sending")
+        else:
+            _log_event(document, "sending", FiscalDocumentStatus.PROCESSING.value)
+        db.session.commit()
 
-    document.status = FiscalDocumentStatus.PROCESSING
-    db.session.add(document)
-    db.session.commit()
-    _log_event(document, "sending", FiscalDocumentStatus.PROCESSING.value)
+        emitter = document.emitter
+        if not emitter:
+            raise ValueError("Emissor fiscal não configurado.")
 
-    emitter = document.emitter
-    if not emitter:
-        raise ValueError("Emissor fiscal não configurado.")
+        certificate = _get_active_certificate(emitter.id)
+        if not certificate:
+            raise ValueError("Certificado fiscal A1 não encontrado.")
 
-    certificate = _get_active_certificate(emitter.id)
-    if not certificate:
-        raise ValueError("Certificado fiscal A1 não encontrado.")
-
-    payload = _normalize_payload(document, emitter)
-    lote_xml = build_lote_xml([payload])
-    signed_xml = sign_betha_xml(
-        lote_xml,
-        pfx_bytes=decrypt_bytes(certificate.pfx_encrypted),
-        password=decrypt_text(certificate.pfx_password_encrypted),
-    )
-
-    client = _build_betha_client(emitter, certificate)
-    response = client.recepcionar_lote_rps({"Xml": signed_xml})
-
-    document.xml_signed = signed_xml
-    document.protocol = _extract_xml_value(response.response_xml or "", "Protocolo")
-    if response.success:
-        document.status = FiscalDocumentStatus.PROCESSING
-        _log_event(
-            document,
-            "recepcionar_lote",
-            FiscalDocumentStatus.PROCESSING.value,
-            request_xml=_redact_xml(response.request_xml),
-            response_xml=_redact_xml(response.response_xml),
-            protocol=document.protocol,
+        payload = _normalize_payload(document, emitter)
+        lote_xml = build_lote_xml([payload])
+        signed_xml = sign_betha_xml(
+            lote_xml,
+            pfx_bytes=decrypt_bytes(certificate.pfx_encrypted),
+            password=decrypt_text(certificate.pfx_password_encrypted),
         )
-    else:
-        document.status = FiscalDocumentStatus.REJECTED
-        document.error_message = response.error_message
-        _log_event(
-            document,
-            "recepcionar_lote",
-            FiscalDocumentStatus.REJECTED.value,
-            request_xml=_redact_xml(response.request_xml),
-            response_xml=_redact_xml(response.response_xml),
-            protocol=document.protocol,
-            error_message=response.error_message,
-        )
-    db.session.add(document)
-    db.session.commit()
-    return document
+
+        client = _build_betha_client(emitter, certificate)
+        response = client.recepcionar_lote_rps({"Xml": signed_xml})
+
+        document.xml_signed = signed_xml
+        document.protocol = _extract_xml_value(response.response_xml or "", "Protocolo")
+        if response.success:
+            _log_event(
+                document,
+                "recepcionar_lote",
+                FiscalDocumentStatus.PROCESSING.value,
+                request_xml=_redact_xml(response.request_xml),
+                response_xml=_redact_xml(response.response_xml),
+                protocol=document.protocol,
+            )
+        else:
+            _transition_status(document, FiscalDocumentStatus.REJECTED, "recepcionar_lote")
+            document.error_message = _humanize_betha_error(response.error_message)
+            _log_event(
+                document,
+                "recepcionar_lote",
+                FiscalDocumentStatus.REJECTED.value,
+                request_xml=_redact_xml(response.request_xml),
+                response_xml=_redact_xml(response.response_xml),
+                protocol=document.protocol,
+                error_message=document.error_message,
+            )
+        db.session.add(document)
+        db.session.commit()
+        return document
+    except Exception as exc:  # noqa: BLE001
+        current_app.logger.exception("Falha ao emitir NFS-e", exc_info=exc)
+        _mark_failed(document, _humanize_betha_error(str(exc)), "emitir_nfse")
+        db.session.commit()
+        return document
 
 
 def poll_nfse(document_id: int) -> FiscalDocument:
     document = db.session.get(FiscalDocument, document_id)
     if not document:
         raise ValueError("Documento fiscal não encontrado.")
+    if document.status == FiscalDocumentStatus.QUEUED:
+        _transition_status(document, FiscalDocumentStatus.PROCESSING, "processing")
 
-    emitter = document.emitter
-    certificate = _get_active_certificate(emitter.id) if emitter else None
-    if not emitter or not certificate:
-        raise ValueError("Configuração fiscal incompleta.")
+    try:
+        emitter = document.emitter
+        certificate = _get_active_certificate(emitter.id) if emitter else None
+        if not emitter or not certificate:
+            raise ValueError("Configuração fiscal incompleta.")
 
-    client = _build_betha_client(emitter, certificate)
-    protocol = document.protocol
-    if not protocol:
-        raise ValueError("Protocolo não encontrado para consulta.")
+        client = _build_betha_client(emitter, certificate)
+        protocol = document.protocol
+        if not protocol:
+            raise ValueError("Protocolo não encontrado para consulta.")
 
-    status_response = client.consultar_situacao_lote_rps({"Protocolo": protocol})
-    _log_event(
-        document,
-        "consultar_situacao",
-        document.status.value,
-        request_xml=_redact_xml(status_response.request_xml),
-        response_xml=_redact_xml(status_response.response_xml),
-    )
-
-    if status_response.success and _is_lote_processado(status_response.response_xml or ""):
-        rps_payload = {
-            "IdentificacaoRps": {
-                "Numero": document.number,
-                "Serie": document.series,
-                "Tipo": "1",
-            },
-            "Prestador": {
-                "Cnpj": emitter.cnpj,
-                "InscricaoMunicipal": emitter.inscricao_municipal,
-            },
-        }
-        nfse_response = client.consultar_nfse_por_rps(rps_payload)
-        document.nfse_number = _extract_xml_value(nfse_response.response_xml or "", "Numero")
-        document.verification_code = _extract_xml_value(
-            nfse_response.response_xml or "",
-            "CodigoVerificacao",
-        )
-        document.xml_authorized = nfse_response.response_xml
-        if nfse_response.success:
-            document.status = FiscalDocumentStatus.AUTHORIZED
-            document.authorized_at = now_in_brazil()
-        else:
-            document.status = FiscalDocumentStatus.REJECTED
-            document.error_message = nfse_response.error_message
+        status_response = client.consultar_situacao_lote_rps({"Protocolo": protocol})
         _log_event(
             document,
-            "consultar_nfse",
+            "consultar_situacao",
             document.status.value,
-            request_xml=_redact_xml(nfse_response.request_xml),
-            response_xml=_redact_xml(nfse_response.response_xml),
-            error_message=nfse_response.error_message,
+            request_xml=_redact_xml(status_response.request_xml),
+            response_xml=_redact_xml(status_response.response_xml),
         )
-    db.session.add(document)
-    db.session.commit()
-    return document
+        if not status_response.success:
+            _mark_failed(
+                document,
+                _humanize_betha_error(status_response.error_message),
+                "consultar_situacao",
+            )
+            db.session.add(document)
+            db.session.commit()
+            return document
+
+        if _is_lote_processado(status_response.response_xml or ""):
+            rps_payload = {
+                "IdentificacaoRps": {
+                    "Numero": document.number,
+                    "Serie": document.series,
+                    "Tipo": "1",
+                },
+                "Prestador": {
+                    "Cnpj": emitter.cnpj,
+                    "InscricaoMunicipal": emitter.inscricao_municipal,
+                },
+            }
+            nfse_response = client.consultar_nfse_por_rps(rps_payload)
+            document.nfse_number = _extract_xml_value(nfse_response.response_xml or "", "Numero")
+            document.verification_code = _extract_xml_value(
+                nfse_response.response_xml or "",
+                "CodigoVerificacao",
+            )
+            document.xml_authorized = nfse_response.response_xml
+            if nfse_response.success:
+                _transition_status(document, FiscalDocumentStatus.AUTHORIZED, "consultar_nfse")
+                document.authorized_at = now_in_brazil()
+            else:
+                _transition_status(document, FiscalDocumentStatus.REJECTED, "consultar_nfse")
+                document.error_message = _humanize_betha_error(nfse_response.error_message)
+            _log_event(
+                document,
+                "consultar_nfse",
+                document.status.value,
+                request_xml=_redact_xml(nfse_response.request_xml),
+                response_xml=_redact_xml(nfse_response.response_xml),
+                error_message=document.error_message,
+            )
+        db.session.add(document)
+        db.session.commit()
+        return document
+    except Exception as exc:  # noqa: BLE001
+        current_app.logger.exception("Falha ao consultar NFS-e", exc_info=exc)
+        _mark_failed(document, _humanize_betha_error(str(exc)), "consultar_nfse")
+        db.session.commit()
+        return document
 
 
 def cancel_nfse_document(document_id: int, reason: Optional[str] = None) -> FiscalDocument:
@@ -270,18 +314,18 @@ def cancel_nfse_document(document_id: int, reason: Optional[str] = None) -> Fisc
     }
     response = client.cancelar_nfse(payload)
     if response.success:
-        document.status = FiscalDocumentStatus.CANCELED
+        _transition_status(document, FiscalDocumentStatus.CANCELED, "cancelar_nfse")
         document.canceled_at = now_in_brazil()
     else:
-        document.status = FiscalDocumentStatus.REJECTED
-        document.error_message = response.error_message
+        _transition_status(document, FiscalDocumentStatus.REJECTED, "cancelar_nfse")
+        document.error_message = _humanize_betha_error(response.error_message)
     _log_event(
         document,
         "cancelar_nfse",
         document.status.value,
         request_xml=_redact_xml(response.request_xml),
         response_xml=_redact_xml(response.response_xml),
-        error_message=response.error_message,
+        error_message=document.error_message,
     )
     db.session.add(document)
     db.session.commit()
@@ -301,6 +345,21 @@ def _normalize_payload(document: FiscalDocument, emitter: FiscalEmitter) -> dict
     payload["prestador"].setdefault("endereco", emitter.endereco_json or {})
 
     return payload
+
+
+def _humanize_betha_error(message: str | None) -> str:
+    if not message:
+        return "Não foi possível emitir a NFS-e no momento."
+    text = message.lower()
+    if any(key in text for key in ["certificado", "certificate", "pfx", "pkcs"]):
+        return "Certificado digital vencido ou inválido."
+    if "timeout" in text or "timed out" in text or "tempo esgotado" in text:
+        return "Prefeitura indisponível, tentaremos novamente."
+    if "schema" in text or "xsd" in text:
+        return "Dados fiscais incompletos."
+    if "servico" in text or "serviço" in text or "item" in text:
+        return "Serviço não configurado para emissão fiscal."
+    return "Não foi possível emitir a NFS-e no momento."
 
 
 def _get_active_certificate(emitter_id: int) -> FiscalCertificate | None:
@@ -328,6 +387,52 @@ def _build_betha_client(emitter: FiscalEmitter, certificate: FiscalCertificate) 
         pfx_bytes=decrypt_bytes(certificate.pfx_encrypted),
         pfx_password=decrypt_text(certificate.pfx_password_encrypted),
     )
+
+
+def _can_transition_status(
+    current: FiscalDocumentStatus,
+    target: FiscalDocumentStatus,
+) -> bool:
+    if current == target:
+        return True
+    transitions = {
+        FiscalDocumentStatus.DRAFT: {FiscalDocumentStatus.QUEUED},
+        FiscalDocumentStatus.QUEUED: {FiscalDocumentStatus.PROCESSING, FiscalDocumentStatus.FAILED},
+        FiscalDocumentStatus.PROCESSING: {
+            FiscalDocumentStatus.AUTHORIZED,
+            FiscalDocumentStatus.REJECTED,
+            FiscalDocumentStatus.FAILED,
+        },
+        FiscalDocumentStatus.REJECTED: {FiscalDocumentStatus.QUEUED, FiscalDocumentStatus.FAILED},
+        FiscalDocumentStatus.FAILED: {FiscalDocumentStatus.QUEUED},
+        FiscalDocumentStatus.AUTHORIZED: {FiscalDocumentStatus.CANCELED},
+        FiscalDocumentStatus.CANCELED: set(),
+    }
+    return target in transitions.get(current, set())
+
+
+def _transition_status(
+    document: FiscalDocument,
+    target: FiscalDocumentStatus,
+    event_type: str,
+) -> None:
+    current = document.status
+    if current == target:
+        return
+    if not _can_transition_status(current, target):
+        raise ValueError(f"Transição fiscal inválida: {current.value} -> {target.value}")
+    document.status = target
+    _log_event(document, event_type, target.value)
+
+
+def _mark_failed(document: FiscalDocument, error_message: str, event_type: str) -> None:
+    if document.status != FiscalDocumentStatus.FAILED and _can_transition_status(
+        document.status,
+        FiscalDocumentStatus.FAILED,
+    ):
+        document.status = FiscalDocumentStatus.FAILED
+    document.error_message = error_message
+    _log_event(document, event_type, document.status.value, error_message=error_message)
 
 
 def _log_event(

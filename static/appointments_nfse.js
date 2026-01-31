@@ -1,4 +1,13 @@
 const NFSE_FINAL_STATUSES = new Set(['AUTHORIZED', 'REJECTED', 'FAILED', 'CANCELED']);
+const NFSE_STATUS_LABELS = {
+  QUEUED: 'Emitindo…',
+  PROCESSING: 'Emitindo…',
+};
+
+function formatNfseStatus(status) {
+  if (!status) return status;
+  return NFSE_STATUS_LABELS[status] || status;
+}
 
 async function refreshNfseStatus(el) {
   const documentId = el.dataset.documentId;
@@ -10,7 +19,7 @@ async function refreshNfseStatus(el) {
     if (!resp.ok) return;
     const data = await resp.json();
     if (data.status) {
-      el.textContent = data.status;
+      el.textContent = formatNfseStatus(data.status);
       el.dataset.status = data.status;
       if (NFSE_FINAL_STATUSES.has(data.status)) {
         el.dataset.nfsePoll = 'false';
@@ -29,6 +38,9 @@ function initNfsePolling() {
     const status = el.dataset.status || '';
     if (!NFSE_FINAL_STATUSES.has(status)) {
       el.dataset.nfsePoll = 'true';
+    }
+    if (status) {
+      el.textContent = formatNfseStatus(status);
     }
   });
 

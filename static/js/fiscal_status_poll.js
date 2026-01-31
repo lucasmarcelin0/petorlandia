@@ -1,4 +1,13 @@
 const FINAL_STATUSES = new Set(['AUTHORIZED', 'REJECTED', 'FAILED', 'CANCELED']);
+const STATUS_LABELS = {
+  QUEUED: 'Emitindo…',
+  PROCESSING: 'Emitindo…',
+};
+
+function formatStatus(status) {
+  if (!status) return status;
+  return STATUS_LABELS[status] || status;
+}
 
 async function refreshFiscalStatus(card) {
   const documentId = card.dataset.documentId;
@@ -11,7 +20,7 @@ async function refreshFiscalStatus(card) {
     const data = await resp.json();
     const statusEl = card.querySelector('[data-fiscal-status]');
     if (statusEl && data.status) {
-      statusEl.textContent = data.status;
+      statusEl.textContent = formatStatus(data.status);
       statusEl.dataset.status = data.status;
     }
     const fieldMap = {
@@ -44,6 +53,10 @@ function initFiscalPolling() {
     const status = card.querySelector('[data-fiscal-status]')?.dataset.status || '';
     if (!FINAL_STATUSES.has(status)) {
       card.dataset.fiscalPoll = 'true';
+    }
+    const statusEl = card.querySelector('[data-fiscal-status]');
+    if (statusEl && status) {
+      statusEl.textContent = formatStatus(status);
     }
   });
 

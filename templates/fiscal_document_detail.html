@@ -27,11 +27,13 @@
       <div class="card shadow-sm mb-4">
         <div class="card-body">
           <h5 class="card-title">Resumo</h5>
+          {% set status_value = document.status.value if document.status else document.status %}
+          {% set status_label = 'Emitindo…' if status_value in ['QUEUED', 'PROCESSING'] else status_value %}
           <dl class="row mb-0">
             <dt class="col-5">Tipo</dt>
             <dd class="col-7">{{ document.doc_type.value if document.doc_type else document.doc_type }}</dd>
             <dt class="col-5">Status</dt>
-            <dd class="col-7">{{ document.status.value if document.status else document.status }}</dd>
+            <dd class="col-7">{{ status_label }}</dd>
             <dt class="col-5">Série/Número</dt>
             <dd class="col-7">{{ document.series or '-' }}/{{ document.number or '-' }}</dd>
             <dt class="col-5">Chave/Número</dt>
