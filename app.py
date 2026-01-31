@@ -100,6 +100,7 @@ from models import (
     NfseXml,
     User,
     Veterinario,
+    clinica_has_column,
     get_clinica_field,
 )
 from services.nfse_queue import (
@@ -5816,6 +5817,63 @@ def contabilidade_nfse():
         "substituicao_solicitada",
     ]
 
+    municipio_options = [
+        {"value": "", "label": "Selecione um município"},
+        {"value": "orlandia", "label": "Orlândia (SP)"},
+        {"value": "belo_horizonte", "label": "Belo Horizonte (MG)"},
+    ]
+
+    nfse_settings = {}
+    nfse_missing_fields = []
+    if selected_clinic:
+        nfse_settings = {
+            "municipio_nfse": get_clinica_field(selected_clinic, "municipio_nfse", "") or "",
+            "inscricao_municipal": get_clinica_field(selected_clinic, "inscricao_municipal", "") or "",
+            "inscricao_estadual": get_clinica_field(selected_clinic, "inscricao_estadual", "") or "",
+            "regime_tributario": get_clinica_field(selected_clinic, "regime_tributario", "") or "",
+            "cnae": get_clinica_field(selected_clinic, "cnae", "") or "",
+            "codigo_servico": get_clinica_field(selected_clinic, "codigo_servico", "") or "",
+            "aliquota_iss": get_clinica_field(selected_clinic, "aliquota_iss", "") or "",
+            "nfse_username": get_clinica_field(selected_clinic, "nfse_username", "") or "",
+            "nfse_cert_path": get_clinica_field(selected_clinic, "nfse_cert_path", "") or "",
+            "nfse_token": get_clinica_field(selected_clinic, "nfse_token", "") or "",
+        }
+        required_by_municipio = {
+            "orlandia": [
+                "inscricao_municipal",
+                "regime_tributario",
+                "cnae",
+                "codigo_servico",
+                "aliquota_iss",
+                "nfse_username",
+                "nfse_password",
+            ],
+            "belo_horizonte": [
+                "inscricao_municipal",
+                "cnae",
+                "codigo_servico",
+                "nfse_cert_path",
+                "nfse_cert_password",
+            ],
+        }
+        field_labels = {
+            "inscricao_municipal": "Inscrição municipal",
+            "regime_tributario": "Regime tributário",
+            "cnae": "CNAE",
+            "codigo_servico": "Código de serviço",
+            "aliquota_iss": "Alíquota ISS",
+            "nfse_username": "Usuário NFS-e",
+            "nfse_password": "Senha NFS-e",
+            "nfse_cert_path": "Certificado NFS-e",
+            "nfse_cert_password": "Senha do certificado",
+        }
+        municipio_key = (nfse_settings.get("municipio_nfse") or "").strip().lower()
+        required_fields = required_by_municipio.get(municipio_key, [])
+        for field in required_fields:
+            current_value = get_clinica_field(selected_clinic, field, "")
+            if current_value in (None, "", []):
+                nfse_missing_fields.append(field_labels.get(field, field))
+
     return render_template(
         'contabilidade/nfse.html',
         clinics=clinics,
@@ -5827,6 +5885,9 @@ def contabilidade_nfse():
         pdf_issue_ids=pdf_issue_ids,
         origin_param=origin_param,
         origin_id=origin_id,
+        municipio_options=municipio_options,
+        nfse_settings=nfse_settings,
+        nfse_missing_fields=nfse_missing_fields,
         cancel_rules=(
             get_nfse_cancel_rules(get_clinica_field(selected_clinic, "municipio_nfse", ""))
             if selected_clinic
@@ -5836,6 +5897,139 @@ def contabilidade_nfse():
             selected_clinic
             and should_emit_async(get_clinica_field(selected_clinic, "municipio_nfse", ""))
         ),
+    )
+
+
+@login_required
+def contabilidade_nfse_configurar():
+    _ensure_accounting_access()
+    clinic_id = request.form.get('clinica_id', type=int)
+    orcamento_id = request.form.get('orcamento_id', type=int)
+    atendimento_id = request.form.get('atendimento_id', type=int)
+    origin_param = "orcamento_id" if orcamento_id else ("atendimento_id" if atendimento_id else None)
+    origin_id = orcamento_id or atendimento_id
+    _, accessible_ids = _accounting_accessible_clinics()
+    if clinic_id and clinic_id not in accessible_ids:
+        abort(403)
+
+    clinic = Clinica.query.get_or_404(clinic_id) if clinic_id else None
+    if not clinic:
+        flash("Selecione uma clínica para atualizar as configurações.", "warning")
+        return redirect(url_for('contabilidade_nfse'))
+
+    decimal_fields = {
+        "aliquota_iss",
+        "aliquota_pis",
+        "aliquota_cofins",
+        "aliquota_csll",
+        "aliquota_ir",
+    }
+    password_fields = {"nfse_password", "nfse_cert_password"}
+    updatable_fields = [
+        "municipio_nfse",
+        "inscricao_municipal",
+        "inscricao_estadual",
+        "regime_tributario",
+        "cnae",
+        "codigo_servico",
+        "aliquota_iss",
+        "aliquota_pis",
+        "aliquota_cofins",
+        "aliquota_csll",
+        "aliquota_ir",
+        "nfse_username",
+        "nfse_password",
+        "nfse_cert_path",
+        "nfse_cert_password",
+        "nfse_token",
+    ]
+
+    for field_name in updatable_fields:
+        if not clinica_has_column(field_name):
+            continue
+        value = request.form.get(field_name)
+        if field_name in password_fields and not value:
+            continue
+        if value is not None and isinstance(value, str):
+            value = value.strip()
+        if field_name in decimal_fields:
+            if value in (None, ""):
+                value = None
+            else:
+                try:
+                    value = Decimal(value.replace(",", "."))
+                except (AttributeError, InvalidOperation):
+                    flash("Informe uma alíquota válida.", "warning")
+                    return redirect(
+                        url_for(
+                            'contabilidade_nfse',
+                            clinica_id=clinic_id,
+                            **({origin_param: origin_id} if origin_param else {}),
+                        )
+                    )
+        else:
+            if value == "":
+                value = None
+        setattr(clinic, field_name, value)
+
+    db.session.add(clinic)
+    try:
+        db.session.commit()
+    except Exception:  # noqa: BLE001
+        db.session.rollback()
+        current_app.logger.exception("Erro ao salvar configurações da NFS-e")
+        flash("Não foi possível salvar as configurações. Tente novamente.", "danger")
+    else:
+        municipio_key = (get_clinica_field(clinic, "municipio_nfse", "") or "").strip().lower()
+        required_by_municipio = {
+            "orlandia": [
+                "inscricao_municipal",
+                "regime_tributario",
+                "cnae",
+                "codigo_servico",
+                "aliquota_iss",
+                "nfse_username",
+                "nfse_password",
+            ],
+            "belo_horizonte": [
+                "inscricao_municipal",
+                "cnae",
+                "codigo_servico",
+                "nfse_cert_path",
+                "nfse_cert_password",
+            ],
+        }
+        labels = {
+            "inscricao_municipal": "Inscrição municipal",
+            "regime_tributario": "Regime tributário",
+            "cnae": "CNAE",
+            "codigo_servico": "Código de serviço",
+            "aliquota_iss": "Alíquota ISS",
+            "nfse_username": "Usuário NFS-e",
+            "nfse_password": "Senha NFS-e",
+            "nfse_cert_path": "Certificado NFS-e",
+            "nfse_cert_password": "Senha do certificado",
+        }
+        missing_fields = []
+        for field in required_by_municipio.get(municipio_key, []):
+            if get_clinica_field(clinic, field, "") in (None, "", []):
+                missing_fields.append(labels.get(field, field))
+        if missing_fields:
+            flash(
+                "Configurações salvas, mas faltam dados obrigatórios: "
+                + ", ".join(missing_fields)
+                + ".",
+                "warning",
+            )
+        else:
+            flash("Configurações da NFS-e atualizadas com sucesso.", "success")
+
+    return redirect(
+        url_for(
+            'contabilidade_nfse',
+            clinica_id=clinic_id,
+            **({origin_param: origin_id} if origin_param else {}),
+        )
     )
 
 
