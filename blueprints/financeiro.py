@@ -72,6 +72,11 @@ def get_blueprint():
         view_func=lazy_view("contabilidade_nfse"),
     )
     bp.add_url_rule(
+        "/contabilidade/nfse/configurar",
+        view_func=lazy_view("contabilidade_nfse_configurar"),
+        methods=["POST"],
+    )
+    bp.add_url_rule(
         "/contabilidade/nfse/orcamento/<int:orcamento_id>",
         view_func=lazy_view("contabilidade_nfse_orcamento"),
     )

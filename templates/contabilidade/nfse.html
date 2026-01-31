@@ -47,6 +47,155 @@
     </div>
   </div>
 
+  {% if selected_clinic %}
+  <div class="card shadow-sm p-4 mt-3">
+    <div class="d-flex flex-column flex-lg-row justify-content-between align-items-lg-center gap-3">
+      <div>
+        <h5 class="mb-1">Configurações essenciais da NFS-e</h5>
+        <p class="text-muted mb-0">
+          Complete os dados fiscais da clínica para evitar erros na emissão automática.
+        </p>
+        {% if nfse_missing_fields %}
+          <div class="alert alert-warning small mt-3 mb-0">
+            Ainda faltam informações obrigatórias: {{ nfse_missing_fields | join(', ') }}.
+          </div>
+        {% endif %}
+      </div>
+      <span class="badge bg-light text-dark border align-self-start align-self-lg-center">
+        Clínica selecionada: {{ selected_clinic.nome or 'Clínica' }}
+      </span>
+    </div>
+    <form method="post" action="{{ url_for('contabilidade_nfse_configurar') }}" class="mt-4">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <input type="hidden" name="clinica_id" value="{{ selected_clinic.id }}">
+      {% if origin_id and origin_param %}
+        <input type="hidden" name="{{ origin_param }}" value="{{ origin_id }}">
+      {% endif %}
+      <div class="row g-3">
+        <div class="col-12 col-md-4">
+          <label class="form-label small text-muted" for="municipio_nfse">Município (NFS-e)</label>
+          <select id="municipio_nfse" name="municipio_nfse" class="form-select">
+            {% for option in municipio_options %}
+              <option value="{{ option.value }}" {% if nfse_settings.municipio_nfse == option.value %}selected{% endif %}>
+                {{ option.label }}
+              </option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-12 col-md-4">
+          <label class="form-label small text-muted" for="inscricao_municipal">Inscrição municipal</label>
+          <input
+            id="inscricao_municipal"
+            name="inscricao_municipal"
+            type="text"
+            class="form-control"
+            value="{{ nfse_settings.inscricao_municipal }}"
+          >
+        </div>
+        <div class="col-12 col-md-4">
+          <label class="form-label small text-muted" for="regime_tributario">Regime tributário</label>
+          <select id="regime_tributario" name="regime_tributario" class="form-select">
+            <option value="">Selecione o regime</option>
+            <option value="simples_nacional" {% if nfse_settings.regime_tributario == 'simples_nacional' %}selected{% endif %}>Simples Nacional</option>
+            <option value="lucro_presumido" {% if nfse_settings.regime_tributario == 'lucro_presumido' %}selected{% endif %}>Lucro Presumido</option>
+            <option value="lucro_real" {% if nfse_settings.regime_tributario == 'lucro_real' %}selected{% endif %}>Lucro Real</option>
+          </select>
+        </div>
+        <div class="col-12 col-md-4">
+          <label class="form-label small text-muted" for="cnae">CNAE</label>
+          <input
+            id="cnae"
+            name="cnae"
+            type="text"
+            class="form-control"
+            value="{{ nfse_settings.cnae }}"
+            placeholder="0000-0/00"
+          >
+        </div>
+        <div class="col-12 col-md-4">
+          <label class="form-label small text-muted" for="codigo_servico">Código de serviço</label>
+          <input
+            id="codigo_servico"
+            name="codigo_servico"
+            type="text"
+            class="form-control"
+            value="{{ nfse_settings.codigo_servico }}"
+          >
+        </div>
+        <div class="col-12 col-md-4">
+          <label class="form-label small text-muted" for="aliquota_iss">Alíquota ISS (%)</label>
+          <input
+            id="aliquota_iss"
+            name="aliquota_iss"
+            type="number"
+            class="form-control"
+            step="0.01"
+            min="0"
+            value="{{ nfse_settings.aliquota_iss }}"
+          >
+        </div>
+        <div class="col-12 col-md-4">
+          <label class="form-label small text-muted" for="nfse_username">Usuário NFS-e</label>
+          <input
+            id="nfse_username"
+            name="nfse_username"
+            type="text"
+            class="form-control"
+            value="{{ nfse_settings.nfse_username }}"
+          >
+        </div>
+        <div class="col-12 col-md-4">
+          <label class="form-label small text-muted" for="nfse_password">Senha NFS-e</label>
+          <input
+            id="nfse_password"
+            name="nfse_password"
+            type="password"
+            class="form-control"
+            placeholder="Deixe em branco para manter"
+          >
+        </div>
+        <div class="col-12 col-md-4">
+          <label class="form-label small text-muted" for="nfse_token">Token/Chave NFS-e</label>
+          <input
+            id="nfse_token"
+            name="nfse_token"
+            type="text"
+            class="form-control"
+            value="{{ nfse_settings.nfse_token }}"
+          >
+        </div>
+        <div class="col-12 col-md-6">
+          <label class="form-label small text-muted" for="nfse_cert_path">Caminho do certificado</label>
+          <input
+            id="nfse_cert_path"
+            name="nfse_cert_path"
+            type="text"
+            class="form-control"
+            value="{{ nfse_settings.nfse_cert_path }}"
+            placeholder="/caminho/arquivo.pfx"
+          >
+        </div>
+        <div class="col-12 col-md-6">
+          <label class="form-label small text-muted" for="nfse_cert_password">Senha do certificado</label>
+          <input
+            id="nfse_cert_password"
+            name="nfse_cert_password"
+            type="password"
+            class="form-control"
+            placeholder="Deixe em branco para manter"
+          >
+        </div>
+      </div>
+      <div class="d-flex flex-column flex-sm-row gap-2 mt-3">
+        <button class="btn btn-primary" type="submit">Salvar configurações</button>
+        <span class="text-muted small align-self-center">
+          Dica: mantenha esses dados atualizados para evitar falhas no processamento automático.
+        </span>
+      </div>
+    </form>
+  </div>
+  {% endif %}
+
   <div class="row g-3 mt-2">
     <div class="col-lg-8">
       <div class="card shadow-sm h-100">
