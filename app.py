@@ -118,6 +118,7 @@ from services.fiscal.certificate import parse_pfx
 from services.fiscal.nfse_service import (
     build_nfse_payload_from_appointment,
     cancel_nfse_document,
+    create_nfse_draft_from_orcamento,
     create_nfse_document,
     queue_emit_nfse,
 )
@@ -10804,15 +10805,30 @@ def atualizar_status_orcamento(orcamento_id):
         flash(message, 'danger')
         return redirect(request.referrer or url_for('clinic_detail', clinica_id=orcamento.clinica_id) + '#orcamento')
 
+    previous_status = orcamento.status
+    draft_message = None
     if orcamento.status != new_status:
         orcamento.status = new_status
         orcamento.updated_at = utcnow()
         db.session.add(orcamento)
         db.session.commit()
+        if new_status == "approved" and previous_status != "approved":
+            try:
+                create_nfse_draft_from_orcamento(orcamento.id)
+                draft_message = "Documento fiscal em rascunho criado."
+            except ValueError as exc:
+                current_app.logger.warning(
+                    "Não foi possível criar documento fiscal para orçamento %s: %s",
+                    orcamento.id,
+                    exc,
+                )
+                draft_message = str(exc)
     else:
         db.session.commit()
 
     message = 'Status atualizado com sucesso.'
+    if draft_message:
+        message = f"{message} {draft_message}"
     response_payload = {
         'success': True,
         'message': message,

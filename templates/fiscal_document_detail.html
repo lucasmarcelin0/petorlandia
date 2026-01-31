@@ -46,6 +46,31 @@
         </div>
       </div>
 
+      <div class="card shadow-sm mb-4">
+        <div class="card-body">
+          <h5 class="card-title">Contexto clínico</h5>
+          <dl class="row mb-0">
+            <dt class="col-5">Referência</dt>
+            <dd class="col-7">{{ document.human_reference or '-' }}</dd>
+            <dt class="col-5">Tutor</dt>
+            <dd class="col-7">{{ document.tutor_name or '-' }}</dd>
+            <dt class="col-5">Paciente</dt>
+            <dd class="col-7">{{ document.animal_name or '-' }}</dd>
+            <dt class="col-5">Serviços</dt>
+            {% set services = document.service_descriptions %}
+            <dd class="col-7">{{ services | join(', ') if services else '-' }}</dd>
+            <dt class="col-5">Valor</dt>
+            <dd class="col-7">
+              {% if document.total_amount is not none %}
+              {{ document.total_amount | currency_br }}
+              {% else %}
+              -
+              {% endif %}
+            </dd>
+          </dl>
+        </div>
+      </div>
+
       <div class="card shadow-sm">
         <div class="card-body">
           <h5 class="card-title">Histórico de eventos</h5>
