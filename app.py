@@ -6491,6 +6491,40 @@ def contabilidade_nfse_reprocessar(issue_id):
 
 
 @login_required
+def contabilidade_nfse_contexto(issue_id):
+    _ensure_accounting_access()
+    issue = NfseIssue.query.get_or_404(issue_id)
+    orcamento_id = request.form.get('orcamento_id', type=int)
+    atendimento_id = request.form.get('atendimento_id', type=int)
+    origin_param = "orcamento_id" if orcamento_id else ("atendimento_id" if atendimento_id else None)
+    origin_id = orcamento_id or atendimento_id
+    _, accessible_ids = _accounting_accessible_clinics()
+    if issue.clinica_id not in accessible_ids:
+        abort(403)
+
+    payload = dict(issue.tomador_payload)
+    updates = {
+        "tutor_nome": (request.form.get("tutor_nome") or "").strip() or None,
+        "tutor_documento": (request.form.get("tutor_documento") or "").strip() or None,
+        "animal_nome": (request.form.get("animal_nome") or "").strip() or None,
+    }
+    payload.update(updates)
+    issue.tomador = json.dumps(payload, ensure_ascii=False)
+    issue.updated_at = utcnow()
+    db.session.add(issue)
+    db.session.commit()
+    flash("Dados atualizados para esta emissão.", "success")
+
+    return redirect(
+        url_for(
+            'contabilidade_nfse',
+            clinica_id=issue.clinica_id,
+            **({origin_param: origin_id} if origin_param else {}),
+        )
+    )
+
+
+@login_required
 def contabilidade_nfse_cancelar(issue_id):
     _ensure_accounting_access()
     issue = NfseIssue.query.get_or_404(issue_id)

@@ -7,6 +7,7 @@ from flask_login import UserMixin
 from flask import url_for, request, current_app
 from werkzeug.security import generate_password_hash, check_password_hash
 from datetime import datetime, date, timedelta, timezone
+import json
 from dateutil.relativedelta import relativedelta
 from decimal import Decimal
 import unicodedata
@@ -904,6 +905,33 @@ class NfseIssue(db.Model):
     clinica = db.relationship('Clinica', backref=db.backref('nfse_issues', cascade='all, delete-orphan'))
     eventos = db.relationship('NfseEvent', back_populates='nfse_issue', cascade='all, delete-orphan')
     xmls = db.relationship('NfseXml', back_populates='nfse_issue', cascade='all, delete-orphan')
+
+    @property
+    def tomador_payload(self) -> dict:
+        if not self.tomador:
+            return {}
+        if isinstance(self.tomador, dict):
+            return self.tomador
+        try:
+            payload = json.loads(self.tomador)
+        except (TypeError, ValueError):
+            return {}
+        return payload if isinstance(payload, dict) else {}
+
+    @property
+    def tutor_display_name(self) -> str | None:
+        payload = self.tomador_payload
+        return payload.get("tutor_nome") or payload.get("nome") or payload.get("tomador_nome")
+
+    @property
+    def tutor_documento(self) -> str | None:
+        payload = self.tomador_payload
+        return payload.get("tutor_documento") or payload.get("cpf_cnpj")
+
+    @property
+    def animal_display_name(self) -> str | None:
+        payload = self.tomador_payload
+        return payload.get("animal_nome")
 
 
 class NfseEvent(db.Model):

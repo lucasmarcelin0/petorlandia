@@ -104,6 +104,11 @@ def get_blueprint():
         methods=["POST"],
     )
     bp.add_url_rule(
+        "/contabilidade/nfse/<int:issue_id>/contexto",
+        view_func=lazy_view("contabilidade_nfse_contexto"),
+        methods=["POST"],
+    )
+    bp.add_url_rule(
         "/contabilidade/nfse/<int:issue_id>/cancelar",
         view_func=lazy_view("contabilidade_nfse_cancelar"),
         methods=["POST"],
