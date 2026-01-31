@@ -11,6 +11,7 @@ from lxml import etree
 
 from extensions import db
 from models import (
+    Appointment,
     FiscalCertificate,
     FiscalDocument,
     FiscalDocumentStatus,
@@ -54,6 +55,40 @@ def create_nfe_document(
         payload_json=payload,
         related_type="order",
         related_id=order.id,
+    )
+    db.session.add(document)
+    db.session.flush()
+    _log_event(document, "queued", FiscalDocumentStatus.QUEUED.value)
+    db.session.commit()
+    return document
+
+
+def create_nfe_document_for_appointment(
+    appointment_id: int,
+    emitter_id: int,
+    payload: dict[str, Any],
+) -> FiscalDocument:
+    emitter = db.session.get(FiscalEmitter, emitter_id)
+    if not emitter:
+        raise ValueError("Emissor fiscal não encontrado.")
+
+    appointment = db.session.get(Appointment, appointment_id)
+    if not appointment:
+        raise ValueError("Atendimento não encontrado.")
+
+    series = str(payload.get("serie") or "1")
+    number = reserve_next_number(emitter.id, FiscalDocumentType.NFE, series)
+
+    document = FiscalDocument(
+        emitter_id=emitter.id,
+        clinic_id=emitter.clinic_id,
+        doc_type=FiscalDocumentType.NFE,
+        status=FiscalDocumentStatus.QUEUED,
+        series=series,
+        number=number,
+        payload_json=payload,
+        related_type="appointment",
+        related_id=appointment.id,
     )
     db.session.add(document)
     db.session.flush()
@@ -285,8 +320,6 @@ def _normalize_payload(
 ) -> dict[str, Any]:
     payload = dict(document.payload_json or {})
     order = db.session.get(Order, document.related_id) if document.related_type == "order" else None
-    if not order:
-        raise ValueError("Pedido relacionado não encontrado.")
 
     access_key, c_dv, c_nf = _generate_access_key(emitter, document)
     ide = {
@@ -332,16 +365,27 @@ def _normalize_payload(
         "CRT": _crt_from_regime(emitter.regime_tributario),
     }
 
-    dest_user = order.user
-    endereco_dest = _build_dest_address(order, emitter)
-    dest = {
-        "CPF": getattr(dest_user, "cpf", None) if dest_user else None,
-        "xNome": dest_user.name if dest_user else "Consumidor final",
-        "enderDest": endereco_dest,
-        "indIEDest": "9",
-    }
+    if order:
+        dest_user = order.user
+        endereco_dest = _build_dest_address(order, emitter)
+        dest = {
+            "CPF": getattr(dest_user, "cpf", None) if dest_user else None,
+            "xNome": dest_user.name if dest_user else "Consumidor final",
+            "enderDest": endereco_dest,
+            "indIEDest": "9",
+        }
+        items, totals = _build_items(order, emitter)
+    else:
+        raw_items = payload.get("items") or []
+        if not raw_items:
+            raise ValueError("Itens da NF-e não informados.")
+        dest = dict(payload.get("dest") or {})
+        dest.setdefault("xNome", "Consumidor final")
+        if "enderDest" not in dest:
+            dest["enderDest"] = _default_dest_address(emitter)
+        dest.setdefault("indIEDest", "9")
+        items, totals = _build_items_from_payload(raw_items, emitter)
 
-    items, totals = _build_items(order, emitter)
     return {
         "access_key": access_key,
         "ide": ide,
@@ -431,10 +475,104 @@ def _build_items(order: Order, emitter: FiscalEmitter) -> tuple[list[dict[str, A
     return items, totals
 
 
+def _build_items_from_payload(
+    raw_items: list[dict[str, Any]],
+    emitter: FiscalEmitter,
+) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    items: list[dict[str, Any]] = []
+    v_prod_total = Decimal("0")
+    v_icms_total = Decimal("0")
+    v_pis_total = Decimal("0")
+    v_cofins_total = Decimal("0")
+
+    simples = _crt_from_regime(emitter.regime_tributario) == 1
+    for index, item in enumerate(raw_items, start=1):
+        quantity = Decimal(str(item.get("quantity") or 1))
+        unit_price = Decimal(str(item.get("unit_price") or 0))
+        v_prod = quantity * unit_price
+        aliquota_icms = Decimal(str(item.get("aliquota_icms") or 0))
+        aliquota_pis = Decimal(str(item.get("aliquota_pis") or 0))
+        aliquota_cofins = Decimal(str(item.get("aliquota_cofins") or 0))
+        v_icms = (v_prod * aliquota_icms) / Decimal("100")
+        v_pis = (v_prod * aliquota_pis) / Decimal("100")
+        v_cofins = (v_prod * aliquota_cofins) / Decimal("100")
+
+        v_prod_total += v_prod
+        v_icms_total += v_icms
+        v_pis_total += v_pis
+        v_cofins_total += v_cofins
+
+        items.append(
+            {
+                "nItem": index,
+                "cProd": str(item.get("code") or item.get("product_id") or index),
+                "cEAN": "SEM GTIN",
+                "xProd": item.get("name") or "Produto",
+                "NCM": item.get("ncm") or "00000000",
+                "CFOP": item.get("cfop") or "5102",
+                "uCom": item.get("unit") or "UN",
+                "qCom": _format_decimal(quantity),
+                "vUnCom": _format_decimal(unit_price),
+                "vProd": _format_decimal(v_prod),
+                "cEANTrib": "SEM GTIN",
+                "uTrib": item.get("unit") or "UN",
+                "qTrib": _format_decimal(quantity),
+                "vUnTrib": _format_decimal(unit_price),
+                "indTot": "1",
+                "orig": item.get("orig") or "0",
+                "cst": None if simples else (item.get("cst") or "00"),
+                "csosn": (item.get("csosn") or "102") if simples else None,
+                "aliquota_icms": aliquota_icms,
+                "vICMS": v_icms,
+                "aliquota_pis": aliquota_pis,
+                "vPIS": v_pis,
+                "aliquota_cofins": aliquota_cofins,
+                "vCOFINS": v_cofins,
+            }
+        )
+
+    totals = {
+        "vBC": _format_decimal(v_prod_total),
+        "vICMS": _format_decimal(v_icms_total),
+        "vICMSDeson": "0.00",
+        "vFCP": "0.00",
+        "vBCST": "0.00",
+        "vST": "0.00",
+        "vFCPST": "0.00",
+        "vFCPSTRet": "0.00",
+        "vProd": _format_decimal(v_prod_total),
+        "vFrete": "0.00",
+        "vSeg": "0.00",
+        "vDesc": "0.00",
+        "vII": "0.00",
+        "vIPI": "0.00",
+        "vIPIDevol": "0.00",
+        "vPIS": _format_decimal(v_pis_total),
+        "vCOFINS": _format_decimal(v_cofins_total),
+        "vOutro": "0.00",
+        "vNF": _format_decimal(v_prod_total),
+    }
+    return items, totals
+
+
 def _build_dest_address(order: Order, emitter: FiscalEmitter) -> dict[str, Any]:
     endereco_texto = (order.shipping_address or "").strip()
     return {
         "xLgr": endereco_texto or "Endereço não informado",
+        "nro": "S/N",
+        "xBairro": "Centro",
+        "cMun": emitter.municipio_ibge or "",
+        "xMun": (emitter.endereco_json or {}).get("cidade"),
+        "UF": emitter.uf,
+        "CEP": (emitter.endereco_json or {}).get("cep"),
+        "cPais": "1058",
+        "xPais": "BRASIL",
+    }
+
+
+def _default_dest_address(emitter: FiscalEmitter) -> dict[str, Any]:
+    return {
+        "xLgr": "Endereço não informado",
         "nro": "S/N",
         "xBairro": "Centro",
         "cMun": emitter.municipio_ibge or "",
