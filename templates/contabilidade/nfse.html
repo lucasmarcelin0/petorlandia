@@ -127,10 +127,10 @@
               <label class="form-label small text-muted" for="nfse-paciente">Paciente</label>
               <input
                 id="nfse-paciente"
+                name="paciente_nome"
                 type="text"
                 class="form-control"
                 placeholder="Nome do paciente"
-                readonly
                 data-nfse-field="paciente_nome"
               >
             </div>
@@ -138,45 +138,134 @@
               <label class="form-label small text-muted" for="nfse-tomador">Tomador</label>
               <input
                 id="nfse-tomador"
+                name="tomador_nome"
                 type="text"
                 class="form-control"
                 placeholder="Nome do tomador"
-                readonly
                 data-nfse-field="tomador_nome"
               >
+              <div class="invalid-feedback">
+                Informe o nome do tomador.
+              </div>
             </div>
             <div class="mb-2">
               <label class="form-label small text-muted" for="nfse-tomador-documento">CPF/CNPJ</label>
               <input
                 id="nfse-tomador-documento"
+                name="tomador_documento"
                 type="text"
                 class="form-control"
                 placeholder="Documento do tomador"
-                readonly
                 data-nfse-field="tomador_documento"
               >
+              <div class="invalid-feedback">
+                CPF/CNPJ inválido.
+              </div>
             </div>
             <div class="mb-2">
               <label class="form-label small text-muted" for="nfse-tomador-email">E-mail</label>
               <input
                 id="nfse-tomador-email"
+                name="tomador_email"
                 type="email"
                 class="form-control"
                 placeholder="E-mail do tomador"
-                readonly
                 data-nfse-field="tomador_email"
               >
+              <div class="invalid-feedback">
+                Informe um e-mail válido.
+              </div>
             </div>
             <div class="mb-3">
               <label class="form-label small text-muted" for="nfse-tomador-telefone">Telefone</label>
               <input
                 id="nfse-tomador-telefone"
+                name="tomador_telefone"
                 type="text"
                 class="form-control"
                 placeholder="Telefone do tomador"
-                readonly
                 data-nfse-field="tomador_telefone"
               >
+            </div>
+            <div class="row g-2 mb-2">
+              <div class="col-sm-5">
+                <label class="form-label small text-muted" for="nfse-tomador-cep">CEP</label>
+                <input
+                  id="nfse-tomador-cep"
+                  name="tomador_cep"
+                  type="text"
+                  class="form-control"
+                  placeholder="00000-000"
+                  data-nfse-field="tomador_cep"
+                >
+                <div class="invalid-feedback">
+                  CEP inválido.
+                </div>
+              </div>
+              <div class="col-sm-5">
+                <label class="form-label small text-muted" for="nfse-tomador-municipio">Município</label>
+                <input
+                  id="nfse-tomador-municipio"
+                  name="tomador_municipio"
+                  type="text"
+                  class="form-control"
+                  placeholder="Cidade"
+                  data-nfse-field="tomador_municipio"
+                >
+                <div class="invalid-feedback">
+                  Informe o município.
+                </div>
+              </div>
+              <div class="col-sm-2">
+                <label class="form-label small text-muted" for="nfse-tomador-uf">UF</label>
+                <input
+                  id="nfse-tomador-uf"
+                  name="tomador_uf"
+                  type="text"
+                  class="form-control"
+                  maxlength="2"
+                  placeholder="UF"
+                  data-nfse-field="tomador_uf"
+                >
+                <div class="invalid-feedback">
+                  UF inválida.
+                </div>
+              </div>
+            </div>
+            <div class="mb-2">
+              <label class="form-label small text-muted" for="nfse-tomador-logradouro">Logradouro</label>
+              <input
+                id="nfse-tomador-logradouro"
+                name="tomador_logradouro"
+                type="text"
+                class="form-control"
+                placeholder="Rua/Av."
+                data-nfse-field="tomador_logradouro"
+              >
+            </div>
+            <div class="row g-2 mb-3">
+              <div class="col-sm-6">
+                <label class="form-label small text-muted" for="nfse-tomador-numero">Número</label>
+                <input
+                  id="nfse-tomador-numero"
+                  name="tomador_numero"
+                  type="text"
+                  class="form-control"
+                  placeholder="Número"
+                  data-nfse-field="tomador_numero"
+                >
+              </div>
+              <div class="col-sm-6">
+                <label class="form-label small text-muted" for="nfse-tomador-bairro">Bairro</label>
+                <input
+                  id="nfse-tomador-bairro"
+                  name="tomador_bairro"
+                  type="text"
+                  class="form-control"
+                  placeholder="Bairro"
+                  data-nfse-field="tomador_bairro"
+                >
+              </div>
             </div>
             <div class="card border-0 bg-light mb-3" data-nfse-summary>
               <div class="card-body p-3">
@@ -396,6 +485,12 @@ document.addEventListener('DOMContentLoaded', () => {
     tomador_documento: form.querySelector('[data-nfse-field="tomador_documento"]'),
     tomador_email: form.querySelector('[data-nfse-field="tomador_email"]'),
     tomador_telefone: form.querySelector('[data-nfse-field="tomador_telefone"]'),
+    tomador_cep: form.querySelector('[data-nfse-field="tomador_cep"]'),
+    tomador_municipio: form.querySelector('[data-nfse-field="tomador_municipio"]'),
+    tomador_uf: form.querySelector('[data-nfse-field="tomador_uf"]'),
+    tomador_logradouro: form.querySelector('[data-nfse-field="tomador_logradouro"]'),
+    tomador_numero: form.querySelector('[data-nfse-field="tomador_numero"]'),
+    tomador_bairro: form.querySelector('[data-nfse-field="tomador_bairro"]'),
   };
 
   const currencyFormatter = new Intl.NumberFormat('pt-BR', {
@@ -457,6 +552,26 @@ document.addEventListener('DOMContentLoaded', () => {
     if (fields.tomador_telefone) {
       fields.tomador_telefone.value = payload.tomador?.telefone || '';
     }
+    const endereco = payload.tomador?.endereco;
+    const enderecoTexto = payload.tomador?.endereco_texto || payload.tomador?.endereco || '';
+    if (fields.tomador_cep) {
+      fields.tomador_cep.value = endereco?.cep || '';
+    }
+    if (fields.tomador_municipio) {
+      fields.tomador_municipio.value = endereco?.cidade || '';
+    }
+    if (fields.tomador_uf) {
+      fields.tomador_uf.value = endereco?.estado || '';
+    }
+    if (fields.tomador_logradouro) {
+      fields.tomador_logradouro.value = endereco?.logradouro || endereco?.rua || enderecoTexto || '';
+    }
+    if (fields.tomador_numero) {
+      fields.tomador_numero.value = endereco?.numero || '';
+    }
+    if (fields.tomador_bairro) {
+      fields.tomador_bairro.value = endereco?.bairro || '';
+    }
   };
 
   const clearFields = () => {
@@ -478,10 +593,141 @@ document.addEventListener('DOMContentLoaded', () => {
     if (fields.tomador_telefone) {
       fields.tomador_telefone.value = '';
     }
+    if (fields.tomador_cep) {
+      fields.tomador_cep.value = '';
+    }
+    if (fields.tomador_municipio) {
+      fields.tomador_municipio.value = '';
+    }
+    if (fields.tomador_uf) {
+      fields.tomador_uf.value = '';
+    }
+    if (fields.tomador_logradouro) {
+      fields.tomador_logradouro.value = '';
+    }
+    if (fields.tomador_numero) {
+      fields.tomador_numero.value = '';
+    }
+    if (fields.tomador_bairro) {
+      fields.tomador_bairro.value = '';
+    }
     if (totalField) {
       totalField.textContent = currencyFormatter.format(0);
     }
     renderItems([]);
+  };
+
+  const onlyDigits = (value) => (value || '').replace(/\D/g, '');
+
+  const validateCpf = (value) => {
+    const digits = onlyDigits(value);
+    if (digits.length !== 11 || /^(\d)\1{10}$/.test(digits)) {
+      return false;
+    }
+    const calcDigit = (base, factor) => {
+      let total = 0;
+      for (let i = 0; i < base.length; i += 1) {
+        total += Number(base[i]) * (factor - i);
+      }
+      const remainder = (total * 10) % 11;
+      return remainder === 10 ? 0 : remainder;
+    };
+    const digit1 = calcDigit(digits.slice(0, 9), 10);
+    const digit2 = calcDigit(digits.slice(0, 10), 11);
+    return digit1 === Number(digits[9]) && digit2 === Number(digits[10]);
+  };
+
+  const validateCnpj = (value) => {
+    const digits = onlyDigits(value);
+    if (digits.length !== 14 || /^(\d)\1{13}$/.test(digits)) {
+      return false;
+    }
+    const calcDigit = (base, factors) => {
+      let total = 0;
+      for (let i = 0; i < factors.length; i += 1) {
+        total += Number(base[i]) * factors[i];
+      }
+      const remainder = total % 11;
+      return remainder < 2 ? 0 : 11 - remainder;
+    };
+    const digit1 = calcDigit(digits.slice(0, 12), [5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2]);
+    const digit2 = calcDigit(digits.slice(0, 13), [6, 5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2]);
+    return digit1 === Number(digits[12]) && digit2 === Number(digits[13]);
+  };
+
+  const validateCpfCnpj = (value) => {
+    if (!value) {
+      return true;
+    }
+    const digits = onlyDigits(value);
+    if (digits.length === 11) {
+      return validateCpf(value);
+    }
+    if (digits.length === 14) {
+      return validateCnpj(value);
+    }
+    return false;
+  };
+
+  const validateEmail = (value) => {
+    if (!value) {
+      return true;
+    }
+    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
+  };
+
+  const validateCep = (value) => {
+    if (!value) {
+      return true;
+    }
+    return onlyDigits(value).length === 8;
+  };
+
+  const validateMunicipio = (value) => {
+    if (!value) {
+      return true;
+    }
+    return value.trim().length >= 2;
+  };
+
+  const validateUf = (value) => {
+    if (!value) {
+      return true;
+    }
+    return /^[A-Za-z]{2}$/.test(value.trim());
+  };
+
+  const setFieldValidity = (field, isValid) => {
+    if (!field) {
+      return true;
+    }
+    if (isValid) {
+      field.classList.remove('is-invalid');
+      field.classList.add('is-valid');
+    } else {
+      field.classList.add('is-invalid');
+      field.classList.remove('is-valid');
+    }
+    return isValid;
+  };
+
+  const validateField = (field, validator) => {
+    if (!field) {
+      return true;
+    }
+    return setFieldValidity(field, validator(field.value));
+  };
+
+  const validateAll = () => {
+    const validations = [
+      validateField(fields.tomador_documento, validateCpfCnpj),
+      validateField(fields.tomador_email, validateEmail),
+      validateField(fields.tomador_cep, validateCep),
+      validateField(fields.tomador_municipio, validateMunicipio),
+      validateField(fields.tomador_uf, validateUf),
+      validateField(fields.tomador_nome, validateMunicipio),
+    ];
+    return validations.every(Boolean);
   };
 
   const loadOrcamento = async (orcamentoId) => {
@@ -503,6 +749,7 @@ document.addEventListener('DOMContentLoaded', () => {
       }
       populateFields(payload);
       updateSummary(payload);
+      validateAll();
       setSummaryMessage('');
     } catch (error) {
       console.error(error);
@@ -519,6 +766,28 @@ document.addEventListener('DOMContentLoaded', () => {
       loadOrcamento(event.target.value);
     });
   }
+
+  [
+    [fields.tomador_documento, validateCpfCnpj],
+    [fields.tomador_email, validateEmail],
+    [fields.tomador_cep, validateCep],
+    [fields.tomador_municipio, validateMunicipio],
+    [fields.tomador_uf, validateUf],
+    [fields.tomador_nome, validateMunicipio],
+  ].forEach(([field, validator]) => {
+    if (!field) {
+      return;
+    }
+    field.addEventListener('input', () => validateField(field, validator));
+    field.addEventListener('blur', () => validateField(field, validator));
+  });
+
+  form.addEventListener('submit', (event) => {
+    if (!validateAll()) {
+      event.preventDefault();
+      event.stopPropagation();
+    }
+  });
 });
 </script>
 {% endblock %}
