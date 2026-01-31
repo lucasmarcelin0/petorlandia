@@ -287,11 +287,12 @@ def _ensure_inventory_threshold_columns() -> None:
     """Add inventory threshold columns when the migration wasn't applied.
 
     Some self-hosted deployments might skip Alembic migrations, which means
-    new columns such as ``min_quantity``/``max_quantity`` are missing and the
-    ``ClinicInventoryItem`` queries fail immediately.  We opportunistically
-    add those columns the first time the clinic inventory is accessed so the
-    UI keeps working even on older databases.  This is intentionally defensive
-    and becomes a no-op once the Alembic migration runs.
+    new columns such as ``categoria``/``min_quantity``/``max_quantity`` are
+    missing and the ``ClinicInventoryItem`` queries fail immediately.  We
+    opportunistically add those columns the first time the clinic inventory is
+    accessed so the UI keeps working even on older databases.  This is
+    intentionally defensive and becomes a no-op once the Alembic migration
+    runs.
     """
 
     global _inventory_threshold_columns_checked
@@ -307,6 +308,10 @@ def _ensure_inventory_threshold_columns() -> None:
         return
 
     statements = []
+    if "categoria" not in existing_columns:
+        statements.append(
+            "ALTER TABLE clinic_inventory_item ADD COLUMN categoria VARCHAR(120)"
+        )
     if "min_quantity" not in existing_columns:
         statements.append("ALTER TABLE clinic_inventory_item ADD COLUMN min_quantity INTEGER")
     if "max_quantity" not in existing_columns:
