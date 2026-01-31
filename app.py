@@ -5865,6 +5865,8 @@ def contabilidade_nfse():
     atendimento_id = request.args.get('atendimento_id', type=int)
     origin_param = "orcamento_id" if orcamento_id else ("atendimento_id" if atendimento_id else None)
     origin_id = orcamento_id or atendimento_id
+    if requested_id and requested_id not in accessible_ids and not _is_admin():
+        abort(403)
     selected_clinic = _select_accounting_clinic(
         clinics,
         accessible_ids,
