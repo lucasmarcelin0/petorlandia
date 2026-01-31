@@ -1,0 +1,94 @@
+{% extends "layout.html" %}
+
+{% block head %}
+<title>Detalhe do Documento Fiscal</title>
+{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+  <div class="d-flex align-items-center justify-content-between mb-3">
+    <div>
+      <h2 class="mb-1">Documento Fiscal #{{ document.id }}</h2>
+      <p class="text-muted mb-0">Detalhes e histórico de eventos.</p>
+    </div>
+    <a class="btn btn-outline-secondary" href="{{ url_for('fiscal_documents') }}">Voltar</a>
+  </div>
+
+  <div class="row g-4">
+    <div class="col-lg-5">
+      <div class="card shadow-sm mb-4">
+        <div class="card-body">
+          <h5 class="card-title">Resumo</h5>
+          <dl class="row mb-0">
+            <dt class="col-5">Tipo</dt>
+            <dd class="col-7">{{ document.doc_type.value if document.doc_type else document.doc_type }}</dd>
+            <dt class="col-5">Status</dt>
+            <dd class="col-7">{{ document.status.value if document.status else document.status }}</dd>
+            <dt class="col-5">Série/Número</dt>
+            <dd class="col-7">{{ document.series or '-' }}/{{ document.number or '-' }}</dd>
+            <dt class="col-5">Chave/Número</dt>
+            <dd class="col-7">{{ document.access_key or document.nfse_number or '-' }}</dd>
+            <dt class="col-5">Protocolo</dt>
+            <dd class="col-7">{{ document.protocol or '-' }}</dd>
+            <dt class="col-5">Código verificação</dt>
+            <dd class="col-7">{{ document.verification_code or '-' }}</dd>
+            <dt class="col-5">Erro</dt>
+            <dd class="col-7 text-danger">{{ document.error_message or '-' }}</dd>
+          </dl>
+        </div>
+      </div>
+
+      <div class="card shadow-sm">
+        <div class="card-body">
+          <h5 class="card-title">Histórico de eventos</h5>
+          {% if events %}
+          <ul class="list-group list-group-flush">
+            {% for event in events %}
+            <li class="list-group-item">
+              <div class="d-flex justify-content-between">
+                <strong>{{ event.event_type }}</strong>
+                <span class="text-muted">{{ event.created_at.strftime('%d/%m/%Y %H:%M') if event.created_at else '' }}</span>
+              </div>
+              <div>Status: {{ event.status or '-' }}</div>
+              {% if event.error_message %}
+              <div class="text-danger">{{ event.error_message }}</div>
+              {% endif %}
+            </li>
+            {% endfor %}
+          </ul>
+          {% else %}
+          <p class="text-muted mb-0">Nenhum evento registrado.</p>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+
+    <div class="col-lg-7">
+      <div class="card shadow-sm mb-4">
+        <div class="card-body">
+          <h5 class="card-title">Payload normalizado</h5>
+          {% if payload_pretty %}
+          <pre class="bg-light p-3 rounded small">{{ payload_pretty }}</pre>
+          {% else %}
+          <p class="text-muted mb-0">Sem payload registrado.</p>
+          {% endif %}
+        </div>
+      </div>
+
+      <div class="card shadow-sm">
+        <div class="card-body">
+          <h5 class="card-title">XML e retorno</h5>
+          <div class="mb-3">
+            <label class="form-label">XML assinado</label>
+            <textarea class="form-control" rows="6" readonly>{{ document.xml_signed or '' }}</textarea>
+          </div>
+          <div>
+            <label class="form-label">XML autorizado</label>
+            <textarea class="form-control" rows="6" readonly>{{ document.xml_authorized or '' }}</textarea>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

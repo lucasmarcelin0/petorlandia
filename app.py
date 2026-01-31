@@ -88,6 +88,11 @@ from models import (
     DataShareAccess,
     DataSharePartyType,
     DataShareRequest,
+    FiscalDocument,
+    FiscalDocumentStatus,
+    FiscalDocumentType,
+    FiscalEmitter,
+    FiscalEvent,
     PlantonistaEscala,
     PlantaoModelo,
     NfseIssue,
@@ -1495,6 +1500,167 @@ def current_user_clinic_id():
     if has_veterinarian_profile(current_user):
         return getattr(current_user.veterinario, 'clinica_id', None)
     return current_user.clinica_id
+
+
+FISCAL_UF_CODES = {
+    "AC", "AL", "AM", "AP", "BA", "CE", "DF", "ES", "GO", "MA", "MG", "MS", "MT",
+    "PA", "PB", "PE", "PI", "PR", "RJ", "RN", "RO", "RR", "RS", "SC", "SE", "SP", "TO",
+}
+
+
+def _normalize_cnpj(value: str | None) -> str:
+    return "".join(ch for ch in (value or "") if ch.isdigit())
+
+
+def _validate_cnpj_format(value: str | None) -> bool:
+    digits = _normalize_cnpj(value)
+    return len(digits) == 14
+
+
+def _normalize_uf(value: str | None) -> str:
+    return (value or "").strip().upper()
+
+
+@login_required
+def fiscal_settings():
+    clinic_id = current_user_clinic_id()
+    if not clinic_id:
+        abort(403)
+
+    emitter = FiscalEmitter.query.filter_by(clinic_id=clinic_id).first()
+
+    if request.method == "POST":
+        cnpj = request.form.get("cnpj", "").strip()
+        uf = _normalize_uf(request.form.get("uf"))
+        if cnpj and not _validate_cnpj_format(cnpj):
+            flash("Informe um CNPJ válido com 14 dígitos.", "warning")
+            return render_template(
+                "fiscal_settings.html",
+                emitter=emitter,
+                incomplete=True,
+                uf_codes=sorted(FISCAL_UF_CODES),
+            )
+        if uf and uf not in FISCAL_UF_CODES:
+            flash("Informe uma UF válida.", "warning")
+            return render_template(
+                "fiscal_settings.html",
+                emitter=emitter,
+                incomplete=True,
+                uf_codes=sorted(FISCAL_UF_CODES),
+            )
+
+        data = {
+            "cnpj": cnpj,
+            "razao_social": request.form.get("razao_social", "").strip(),
+            "nome_fantasia": request.form.get("nome_fantasia", "").strip(),
+            "inscricao_municipal": request.form.get("inscricao_municipal", "").strip(),
+            "inscricao_estadual": request.form.get("inscricao_estadual", "").strip(),
+            "municipio_ibge": request.form.get("municipio_ibge", "").strip(),
+            "uf": uf,
+            "regime_tributario": request.form.get("regime_tributario", "").strip(),
+        }
+
+        if emitter is None:
+            emitter = FiscalEmitter(clinic_id=clinic_id, **data)
+            db.session.add(emitter)
+        else:
+            for key, value in data.items():
+                setattr(emitter, key, value)
+
+        db.session.commit()
+        flash("Configuração fiscal salva com sucesso.", "success")
+
+    incomplete = any(
+        not getattr(emitter, field)
+        for field in ("cnpj", "razao_social", "municipio_ibge", "uf", "regime_tributario")
+    ) if emitter else True
+
+    return render_template(
+        "fiscal_settings.html",
+        emitter=emitter,
+        incomplete=incomplete,
+        uf_codes=sorted(FISCAL_UF_CODES),
+    )
+
+
+@login_required
+def fiscal_documents():
+    clinic_id = current_user_clinic_id()
+    if not clinic_id:
+        abort(403)
+
+    query = FiscalDocument.query.filter_by(clinic_id=clinic_id)
+    doc_type = request.args.get("doc_type")
+    status = request.args.get("status")
+    start_date = request.args.get("start_date")
+    end_date = request.args.get("end_date")
+
+    if doc_type:
+        try:
+            query = query.filter(
+                FiscalDocument.doc_type == FiscalDocumentType[doc_type.upper()]
+            )
+        except KeyError:
+            flash("Tipo de documento inválido.", "warning")
+
+    if status:
+        try:
+            query = query.filter(
+                FiscalDocument.status == FiscalDocumentStatus[status.upper()]
+            )
+        except KeyError:
+            flash("Status fiscal inválido.", "warning")
+
+    if start_date:
+        try:
+            start_dt = datetime.strptime(start_date, "%Y-%m-%d")
+            query = query.filter(FiscalDocument.created_at >= start_dt)
+        except ValueError:
+            flash("Data inicial inválida.", "warning")
+    if end_date:
+        try:
+            end_dt = datetime.strptime(end_date, "%Y-%m-%d") + timedelta(days=1)
+            query = query.filter(FiscalDocument.created_at < end_dt)
+        except ValueError:
+            flash("Data final inválida.", "warning")
+
+    documents = query.order_by(FiscalDocument.created_at.desc()).all()
+
+    return render_template(
+        "fiscal_documents.html",
+        documents=documents,
+        doc_type=doc_type or "",
+        status=status or "",
+        start_date=start_date or "",
+        end_date=end_date or "",
+        doc_types=[doc_type.value for doc_type in FiscalDocumentType],
+        status_options=[status.value for status in FiscalDocumentStatus],
+    )
+
+
+@login_required
+def fiscal_document_detail(document_id: int):
+    clinic_id = current_user_clinic_id()
+    if not clinic_id:
+        abort(403)
+
+    document = FiscalDocument.query.filter_by(id=document_id, clinic_id=clinic_id).first_or_404()
+    events = (
+        FiscalEvent.query
+        .filter_by(document_id=document.id)
+        .order_by(FiscalEvent.created_at.asc())
+        .all()
+    )
+    payload_pretty = ""
+    if document.payload_json:
+        payload_pretty = json.dumps(document.payload_json, ensure_ascii=False, indent=2)
+
+    return render_template(
+        "fiscal_document_detail.html",
+        document=document,
+        events=events,
+        payload_pretty=payload_pretty,
+    )
 
 
 def _collect_clinic_ids(viewer=None, clinic_scope=None):

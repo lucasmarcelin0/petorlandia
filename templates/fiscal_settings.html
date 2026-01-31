@@ -1,0 +1,72 @@
+{% extends "layout.html" %}
+
+{% block head %}
+<title>Configuração Fiscal</title>
+{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+  <div class="d-flex flex-column flex-md-row align-items-md-center justify-content-between mb-3">
+    <div>
+      <h2 class="mb-1">Configuração Fiscal</h2>
+      <p class="text-muted mb-0">Cadastre os dados do emissor para NF-e/NFS-e.</p>
+    </div>
+    {% if incomplete %}
+    <span class="badge text-bg-warning mt-3 mt-md-0">Configuração fiscal incompleta</span>
+    {% else %}
+    <span class="badge text-bg-success mt-3 mt-md-0">Configuração fiscal completa</span>
+    {% endif %}
+  </div>
+
+  <div class="card shadow-sm">
+    <div class="card-body">
+      <form id="fiscal-settings-form" method="post" action="{{ url_for('fiscal_settings') }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
+        <div class="row g-3">
+          <div class="col-md-4">
+            <label class="form-label" for="cnpj">CNPJ *</label>
+            <input class="form-control" id="cnpj" name="cnpj" maxlength="18" value="{{ emitter.cnpj if emitter else '' }}" required>
+          </div>
+          <div class="col-md-8">
+            <label class="form-label" for="razao_social">Razão social *</label>
+            <input class="form-control" id="razao_social" name="razao_social" value="{{ emitter.razao_social if emitter else '' }}" required>
+          </div>
+          <div class="col-md-6">
+            <label class="form-label" for="nome_fantasia">Nome fantasia</label>
+            <input class="form-control" id="nome_fantasia" name="nome_fantasia" value="{{ emitter.nome_fantasia if emitter else '' }}">
+          </div>
+          <div class="col-md-3">
+            <label class="form-label" for="inscricao_municipal">Inscrição municipal</label>
+            <input class="form-control" id="inscricao_municipal" name="inscricao_municipal" value="{{ emitter.inscricao_municipal if emitter else '' }}">
+          </div>
+          <div class="col-md-3">
+            <label class="form-label" for="inscricao_estadual">Inscrição estadual</label>
+            <input class="form-control" id="inscricao_estadual" name="inscricao_estadual" value="{{ emitter.inscricao_estadual if emitter else '' }}">
+          </div>
+          <div class="col-md-3">
+            <label class="form-label" for="municipio_ibge">Município IBGE *</label>
+            <input class="form-control" id="municipio_ibge" name="municipio_ibge" maxlength="10" value="{{ emitter.municipio_ibge if emitter else '' }}" required>
+          </div>
+          <div class="col-md-3">
+            <label class="form-label" for="uf">UF *</label>
+            <select class="form-select" id="uf" name="uf" required>
+              <option value="">Selecione</option>
+              {% for uf_code in uf_codes %}
+              <option value="{{ uf_code }}" {% if emitter and emitter.uf == uf_code %}selected{% endif %}>{{ uf_code }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="col-md-6">
+            <label class="form-label" for="regime_tributario">Regime tributário *</label>
+            <input class="form-control" id="regime_tributario" name="regime_tributario" value="{{ emitter.regime_tributario if emitter else '' }}" required>
+          </div>
+        </div>
+        <div class="mt-4 d-flex justify-content-end">
+          <button class="btn btn-primary" type="submit">Salvar configuração</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+<script src="{{ url_for('static', filename='js/fiscal_settings.js') }}"></script>
+{% endblock %}
