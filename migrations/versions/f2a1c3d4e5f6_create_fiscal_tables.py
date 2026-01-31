@@ -2,6 +2,7 @@
 
 from alembic import op
 import sqlalchemy as sa
+from sqlalchemy.dialects import postgresql
 
 
 # revision identifiers, used by Alembic.
@@ -15,13 +16,32 @@ def upgrade():
     bind = op.get_bind()
     inspector = sa.inspect(bind)
 
-    fiscal_document_type = sa.Enum(
+    fiscal_document_type_enum = postgresql.ENUM(
+        "NFSE",
+        "NFE",
+        name="fiscal_document_type",
+    )
+    fiscal_document_status_enum = postgresql.ENUM(
+        "DRAFT",
+        "QUEUED",
+        "SENDING",
+        "PROCESSING",
+        "AUTHORIZED",
+        "REJECTED",
+        "FAILED",
+        "CANCELED",
+        name="fiscal_document_status",
+    )
+    fiscal_document_type_enum.create(bind, checkfirst=True)
+    fiscal_document_status_enum.create(bind, checkfirst=True)
+
+    fiscal_document_type = postgresql.ENUM(
         "NFSE",
         "NFE",
         name="fiscal_document_type",
         create_type=False,
     )
-    fiscal_document_status = sa.Enum(
+    fiscal_document_status = postgresql.ENUM(
         "DRAFT",
         "QUEUED",
         "SENDING",
@@ -33,8 +53,6 @@ def upgrade():
         name="fiscal_document_status",
         create_type=False,
     )
-    fiscal_document_type.create(bind, checkfirst=True)
-    fiscal_document_status.create(bind, checkfirst=True)
 
     if "fiscal_emitters" not in inspector.get_table_names():
         op.create_table(
@@ -150,5 +168,5 @@ def downgrade():
     op.drop_table("fiscal_emitters")
 
     bind = op.get_bind()
-    sa.Enum(name="fiscal_document_status").drop(bind, checkfirst=True)
-    sa.Enum(name="fiscal_document_type").drop(bind, checkfirst=True)
+    postgresql.ENUM(name="fiscal_document_status").drop(bind, checkfirst=True)
+    postgresql.ENUM(name="fiscal_document_type").drop(bind, checkfirst=True)
