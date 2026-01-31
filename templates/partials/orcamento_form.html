@@ -2,6 +2,43 @@
 
 <h5 class="mb-3">Orçamento da Consulta</h5>
 
+{% set resumo_items = consulta.orcamento_items[:3] %}
+{% set total_items = consulta.orcamento_items|length %}
+{% set resumo_extra = total_items - resumo_items|length %}
+<div class="card border-0 shadow-sm mb-4">
+  <div class="card-body">
+    <div class="row g-3 align-items-start">
+      <div class="col-12 col-lg-3">
+        <small class="text-muted d-block">Valor total</small>
+        <div class="fw-semibold fs-5">{{ consulta.total_orcamento | currency_br }}</div>
+      </div>
+      <div class="col-12 col-lg-3">
+        <small class="text-muted d-block">Paciente</small>
+        <div class="fw-semibold">{{ consulta.animal.name }}</div>
+      </div>
+      <div class="col-12 col-lg-3">
+        <small class="text-muted d-block">Data</small>
+        <div class="fw-semibold">{{ consulta.created_at | format_datetime_brazil("%d/%m/%Y") }}</div>
+      </div>
+      <div class="col-12 col-lg-3">
+        <small class="text-muted d-block">Itens principais</small>
+        {% if total_items %}
+          <div class="fw-semibold">
+            {% for item in resumo_items %}
+              <span class="d-block">{{ item.descricao }}</span>
+            {% endfor %}
+            {% if resumo_extra > 0 %}
+              <span class="text-muted small">+{{ resumo_extra }} item(ns)</span>
+            {% endif %}
+          </div>
+        {% else %}
+          <div class="text-muted">Nenhum item adicionado ainda.</div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+
 <div class="d-flex flex-column flex-md-row align-items-md-center justify-content-between mb-3 gap-2">
   <div class="btn-group" role="group" aria-label="Tipo de pagador">
     <input type="radio" class="btn-check" name="payer-toggle" id="payer-plan" autocomplete="off" value="plan" {% if default_payer_type == 'plan' %}checked{% endif %}>
