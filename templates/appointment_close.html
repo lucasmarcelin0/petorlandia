@@ -12,6 +12,22 @@
       <p class="text-muted mb-0">
         Atendimento #{{ appointment.id }} · {{ appointment.animal.name if appointment.animal else 'Animal não informado' }}
       </p>
+      {% if nfse_document or nfe_document %}
+      <p class="text-muted mb-0">
+        Nota vinculada:
+        {% if nfse_document %}
+        <a href="{{ url_for('fiscal_document_detail', document_id=nfse_document.id) }}">
+          NFS-e {{ nfse_document.nfse_number or nfse_document.id }}
+        </a>
+        {% endif %}
+        {% if nfse_document and nfe_document %} · {% endif %}
+        {% if nfe_document %}
+        <a href="{{ url_for('fiscal_document_detail', document_id=nfe_document.id) }}">
+          NF-e {{ nfe_document.number or nfe_document.id }}
+        </a>
+        {% endif %}
+      </p>
+      {% endif %}
     </div>
     <form method="post">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">

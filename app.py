@@ -1832,6 +1832,14 @@ def fiscal_document_detail(document_id: int):
         abort(403)
 
     document = FiscalDocument.query.filter_by(id=document_id, clinic_id=clinic_id).first_or_404()
+    appointment = None
+    if document.related_type == "appointment" and document.related_id:
+        from models import Appointment
+
+        appointment = Appointment.query.filter_by(
+            id=document.related_id,
+            clinica_id=clinic_id,
+        ).first()
     events = (
         FiscalEvent.query
         .filter_by(document_id=document.id)
@@ -1845,6 +1853,7 @@ def fiscal_document_detail(document_id: int):
     return render_template(
         "fiscal_document_detail.html",
         document=document,
+        appointment=appointment,
         events=events,
         payload_pretty=payload_pretty,
     )
