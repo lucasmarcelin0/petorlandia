@@ -1,0 +1,72 @@
+{% extends "layout.html" %}
+
+{% block head %}
+<title>Wizard fiscal · Certificado A1</title>
+{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+  <div class="d-flex flex-column flex-md-row align-items-md-center justify-content-between mb-3">
+    <div>
+      <h2 class="mb-1">Wizard fiscal</h2>
+      <p class="text-muted mb-0">Passo 2 de 4 — Certificado A1.</p>
+    </div>
+  </div>
+
+  <div class="mb-4 d-flex flex-wrap gap-2">
+    {% for step in wizard_steps %}
+    <span class="badge {% if step.number == current_step %}text-bg-primary{% elif step.complete %}text-bg-success{% else %}text-bg-secondary{% endif %}">
+      {{ step.number }}. {{ step.title }}
+    </span>
+    {% endfor %}
+  </div>
+
+  <div class="row g-3">
+    <div class="col-lg-6">
+      <div class="card shadow-sm h-100">
+        <div class="card-body">
+          <h5 class="card-title">Enviar certificado A1</h5>
+          <p class="text-muted">Envie o arquivo .pfx do emissor e a senha correspondente.</p>
+          <form method="post" action="{{ url_for('fiscal_onboarding_step', step=2) }}" enctype="multipart/form-data">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
+            <div class="mb-3">
+              <label class="form-label" for="pfx_file">Arquivo .pfx *</label>
+              <input class="form-control" id="pfx_file" name="pfx_file" type="file" accept=".pfx" required>
+            </div>
+            <div class="mb-3">
+              <label class="form-label" for="pfx_password">Senha do certificado</label>
+              <input class="form-control" id="pfx_password" name="pfx_password" type="password">
+            </div>
+            <button class="btn btn-primary" type="submit">Enviar certificado</button>
+          </form>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-lg-6">
+      <div class="card shadow-sm h-100">
+        <div class="card-body">
+          <h5 class="card-title">Certificados enviados</h5>
+          {% if certificates %}
+          <ul class="list-group list-group-flush">
+            {% for cert in certificates %}
+            <li class="list-group-item">
+              <div class="fw-semibold">Fingerprint {{ cert.fingerprint_sha256[:12] }}...</div>
+              <small class="text-muted">Válido de {{ cert.valid_from.strftime('%d/%m/%Y') if cert.valid_from else '—' }} até {{ cert.valid_to.strftime('%d/%m/%Y') if cert.valid_to else '—' }}</small>
+            </li>
+            {% endfor %}
+          </ul>
+          {% else %}
+          <p class="text-muted mb-0">Nenhum certificado enviado ainda.</p>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="mt-4 d-flex justify-content-between">
+    <a class="btn btn-outline-secondary" href="{{ url_for('fiscal_onboarding_step', step=1) }}">Voltar</a>
+    <a class="btn btn-primary" href="{{ url_for('fiscal_onboarding_step', step=3) }}">Continuar</a>
+  </div>
+</div>
+{% endblock %}

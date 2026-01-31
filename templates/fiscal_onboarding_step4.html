@@ -1,0 +1,65 @@
+{% extends "layout.html" %}
+
+{% block head %}
+<title>Wizard fiscal · Aceite</title>
+{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+  <div class="d-flex flex-column flex-md-row align-items-md-center justify-content-between mb-3">
+    <div>
+      <h2 class="mb-1">Wizard fiscal</h2>
+      <p class="text-muted mb-0">Passo 4 de 4 — Aceite e conclusão.</p>
+    </div>
+  </div>
+
+  <div class="mb-4 d-flex flex-wrap gap-2">
+    {% for step in wizard_steps %}
+    <span class="badge {% if step.number == current_step %}text-bg-primary{% elif step.complete %}text-bg-success{% else %}text-bg-secondary{% endif %}">
+      {{ step.number }}. {{ step.title }}
+    </span>
+    {% endfor %}
+  </div>
+
+  <div class="card shadow-sm">
+    <div class="card-body">
+      <h5 class="card-title">Checklist do onboarding</h5>
+      <ul class="list-group list-group-flush mb-3">
+        <li class="list-group-item d-flex justify-content-between align-items-center">
+          Dados do emissor
+          <span class="badge {% if step1_complete %}text-bg-success{% else %}text-bg-secondary{% endif %}">
+            {% if step1_complete %}Concluído{% else %}Pendente{% endif %}
+          </span>
+        </li>
+        <li class="list-group-item d-flex justify-content-between align-items-center">
+          Certificado A1
+          <span class="badge {% if step2_complete %}text-bg-success{% else %}text-bg-secondary{% endif %}">
+            {% if step2_complete %}Concluído{% else %}Pendente{% endif %}
+          </span>
+        </li>
+        <li class="list-group-item d-flex justify-content-between align-items-center">
+          Testes de comunicação e emissão
+          <span class="badge {% if step3_complete %}text-bg-success{% else %}text-bg-secondary{% endif %}">
+            {% if step3_complete %}Concluído{% else %}Pendente{% endif %}
+          </span>
+        </li>
+      </ul>
+
+      {% if clinic.fiscal_ready %}
+      <div class="alert alert-success">Sua clínica já está pronta para emissão fiscal.</div>
+      {% else %}
+      <p class="text-muted">Ao aceitar, marcamos a clínica como pronta para emissão fiscal.</p>
+      <form method="post" action="{{ url_for('fiscal_onboarding_step', step=4) }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
+        <button class="btn btn-primary" type="submit">Aceitar e concluir wizard</button>
+      </form>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="mt-4 d-flex justify-content-between">
+    <a class="btn btn-outline-secondary" href="{{ url_for('fiscal_onboarding_step', step=3) }}">Voltar</a>
+    <a class="btn btn-outline-primary" href="{{ url_for('fiscal_documents') }}">Ir para documentos fiscais</a>
+  </div>
+</div>
+{% endblock %}

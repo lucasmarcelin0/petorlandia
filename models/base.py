@@ -790,6 +790,7 @@ class Clinica(db.Model):
     nfse_cert_path = deferred(db.Column(db.String(200)))
     nfse_cert_password = deferred(db.Column(db.String(120)))
     nfse_token = deferred(db.Column(db.String(200)))
+    fiscal_ready = db.Column(db.Boolean, default=False)
 
     owner_id = db.Column(db.Integer, db.ForeignKey('user.id'))
     owner = db.relationship('User', backref=db.backref('clinicas', foreign_keys='Clinica.owner_id'), foreign_keys=[owner_id])
