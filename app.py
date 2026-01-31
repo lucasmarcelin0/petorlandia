@@ -1817,7 +1817,11 @@ def fiscal_documents():
         start_date=start_date or "",
         end_date=end_date or "",
         doc_types=[doc_type.value for doc_type in FiscalDocumentType],
-        status_options=[status.value for status in FiscalDocumentStatus],
+        status_options=[
+            status.value
+            for status in FiscalDocumentStatus
+            if status != FiscalDocumentStatus.SENDING
+        ],
     )
 
 

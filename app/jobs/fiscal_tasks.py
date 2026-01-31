@@ -5,7 +5,7 @@ import logging
 
 from app.jobs.celery_app import celery_app
 from extensions import db
-from models import FiscalDocument, FiscalDocumentStatus
+from models import FiscalDocument, FiscalDocumentStatus, FiscalEvent
 from services.fiscal.nfse_service import emit_nfse_sync, poll_nfse
 from services.fiscal.nfe_service import emit_nfe_sync, poll_nfe as poll_nfe_sync
 
@@ -20,6 +20,13 @@ def _mark_processing(document_id: int) -> FiscalDocument | None:
 
     if document.status == FiscalDocumentStatus.QUEUED:
         document.status = FiscalDocumentStatus.PROCESSING
+        db.session.add(
+            FiscalEvent(
+                document_id=document.id,
+                event_type="processing",
+                status=document.status.value,
+            )
+        )
         db.session.commit()
         logger.info("Fiscal document %s set to PROCESSING", document_id)
     else:

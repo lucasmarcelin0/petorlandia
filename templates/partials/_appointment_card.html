@@ -9,6 +9,7 @@
 {% set can_start_consulta = current_user.worker in ['veterinario', 'colaborador'] %}
 {% set nfse_doc = nfse_documents_by_appointment.get(appt.id) if nfse_documents_by_appointment is defined else None %}
 {% set nfse_status = nfse_doc.status.value if nfse_doc and nfse_doc.status else (nfse_doc.status if nfse_doc else None) %}
+{% set nfse_status_label = 'Emitindo…' if nfse_status in ['QUEUED', 'PROCESSING'] else nfse_status %}
 {% set can_emit_nfse = current_user.worker in ['veterinario', 'colaborador'] or (current_user.role or '') == 'admin' %}
 <div
   class="{{ card_classes.strip() }}"
@@ -189,7 +190,7 @@
               data-document-id="{{ nfse_doc.id }}"
               data-status="{{ nfse_status }}"
             >
-              {{ nfse_status or '—' }}
+              {{ nfse_status_label or '—' }}
             </a>
           </span>
         </div>

@@ -78,7 +78,9 @@
             <tr>
               <td>{{ doc.id }}</td>
               <td>{{ doc.doc_type.value if doc.doc_type else doc.doc_type }}</td>
-              <td>{{ doc.status.value if doc.status else doc.status }}</td>
+              {% set status_value = doc.status.value if doc.status else doc.status %}
+              {% set status_label = 'Emitindo…' if status_value in ['QUEUED', 'PROCESSING'] else status_value %}
+              <td>{{ status_label }}</td>
               <td>
                 <div class="fw-semibold">{{ doc.human_reference or '-' }}</div>
                 <div class="text-muted small">

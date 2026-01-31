@@ -36,6 +36,7 @@
           <p class="text-muted mb-0">Nenhum item de serviço neste atendimento.</p>
           {% elif nfse_document %}
           {% set nfse_status = nfse_document.status.value if nfse_document.status else nfse_document.status %}
+          {% set nfse_status_label = 'Emitindo…' if nfse_status in ['QUEUED', 'PROCESSING'] else nfse_status %}
           <p class="mb-1">
             Status:
             <span
@@ -43,7 +44,7 @@
               data-fiscal-status
               data-status="{{ nfse_status }}"
             >
-              {{ nfse_status or '—' }}
+              {{ nfse_status_label or '—' }}
             </span>
           </p>
           <p class="mb-1">
@@ -80,6 +81,7 @@
           <p class="text-muted mb-0">Nenhum item de produto neste atendimento.</p>
           {% elif nfe_document %}
           {% set nfe_status = nfe_document.status.value if nfe_document.status else nfe_document.status %}
+          {% set nfe_status_label = 'Emitindo…' if nfe_status in ['QUEUED', 'PROCESSING'] else nfe_status %}
           <p class="mb-1">
             Status:
             <span
@@ -87,7 +89,7 @@
               data-fiscal-status
               data-status="{{ nfe_status }}"
             >
-              {{ nfe_status or '—' }}
+              {{ nfe_status_label or '—' }}
             </span>
           </p>
           <p class="mb-3">
