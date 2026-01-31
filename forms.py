@@ -694,6 +694,15 @@ class ProductUpdateForm(FlaskForm):
     price = DecimalField('Preço', validators=[DataRequired()])
     stock = IntegerField('Estoque', validators=[DataRequired()])
     mp_category_id = StringField('Categoria MP', validators=[Optional(), Length(max=50)])
+    ncm = StringField('NCM', validators=[Optional(), Length(max=10)])
+    cfop = StringField('CFOP', validators=[Optional(), Length(max=10)])
+    cst = StringField('CST', validators=[Optional(), Length(max=5)])
+    csosn = StringField('CSOSN', validators=[Optional(), Length(max=5)])
+    origem = StringField('Origem', validators=[Optional(), Length(max=2)])
+    unidade = StringField('Unidade', validators=[Optional(), Length(max=10)])
+    aliquota_icms = DecimalField('Alíquota ICMS', validators=[Optional()])
+    aliquota_pis = DecimalField('Alíquota PIS', validators=[Optional()])
+    aliquota_cofins = DecimalField('Alíquota COFINS', validators=[Optional()])
     image_upload = FileField('Imagem', validators=[FileAllowed(['jpg', 'jpeg', 'png', 'gif'], 'Apenas imagens!')])
     submit = SubmitField('Salvar')
 
@@ -1003,4 +1012,3 @@ class AppointmentForm(FlaskForm):
         veterinario = query.filter(Veterinario.id == field.data).first()
         if not veterinario:
             raise ValidationError('Selecione um veterinário válido para esta clínica.')
-
