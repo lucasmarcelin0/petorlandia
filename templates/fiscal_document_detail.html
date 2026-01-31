@@ -33,6 +33,13 @@
         {{ document.human_reference or 'Referência clínica não informada' }}
         · <span class="badge {{ status_badges.get(status_value, 'bg-secondary') }}">{{ status_label }}</span>
       </p>
+      {% if appointment %}
+      {% set appointment_date = appointment.scheduled_at or document.created_at %}
+      <p class="text-muted small mb-0">
+        Essa nota refere-se à consulta de {{ appointment.animal.name if appointment.animal else document.animal_name or 'Paciente não informado' }}
+        realizada em {{ appointment_date.strftime('%d/%m/%Y') if appointment_date else 'data não informada' }}.
+      </p>
+      {% endif %}
     </div>
     <div class="d-flex gap-2">
       {% if status_value in ['FAILED', 'REJECTED'] %}
@@ -64,6 +71,14 @@
         <div class="card-body">
           <h5 class="card-title">Resumo clínico</h5>
           <dl class="row mb-0">
+            {% if appointment %}
+            <dt class="col-5">Atendimento</dt>
+            <dd class="col-7">
+              <a href="{{ url_for('appointment_close', appointment_id=appointment.id) }}">
+                Atendimento #{{ appointment.id }}
+              </a>
+            </dd>
+            {% endif %}
             <dt class="col-5">Tutor</dt>
             <dd class="col-7">{{ document.tutor_name or '—' }}</dd>
             <dt class="col-5">Paciente</dt>
