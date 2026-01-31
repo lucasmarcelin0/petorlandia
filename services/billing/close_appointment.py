@@ -51,7 +51,7 @@ def close_appointment(appointment: Appointment) -> CloseAppointmentDocuments:
                 emitter_id=appointment.clinica.fiscal_emitter.id,
                 payload=payload,
             )
-            queue_emit_nfse(nfse_document.id)
+            queue_emit_nfse(nfse_document.id, clinic_id=appointment.clinica_id)
 
     if product_items:
         nfe_document = _latest_document(appointment.id, FiscalDocumentType.NFE)
