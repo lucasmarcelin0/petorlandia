@@ -65,6 +65,8 @@
               <th>#</th>
               <th>Tipo</th>
               <th>Status</th>
+              <th>Referência clínica</th>
+              <th>Serviços/Valor</th>
               <th>Série/Número</th>
               <th>Chave/Número</th>
               <th>Emissão</th>
@@ -77,6 +79,23 @@
               <td>{{ doc.id }}</td>
               <td>{{ doc.doc_type.value if doc.doc_type else doc.doc_type }}</td>
               <td>{{ doc.status.value if doc.status else doc.status }}</td>
+              <td>
+                <div class="fw-semibold">{{ doc.human_reference or '-' }}</div>
+                <div class="text-muted small">
+                  {{ doc.tutor_name or '-' }} · {{ doc.animal_name or '-' }}
+                </div>
+              </td>
+              <td>
+                {% set services = doc.service_descriptions %}
+                <div>{{ services | join(', ') if services else '-' }}</div>
+                <div class="text-muted small">
+                  {% if doc.total_amount is not none %}
+                  {{ doc.total_amount | currency_br }}
+                  {% else %}
+                  -
+                  {% endif %}
+                </div>
+              </td>
               <td>{{ doc.series or '-' }}/{{ doc.number or '-' }}</td>
               <td>{{ doc.access_key or doc.nfse_number or '-' }}</td>
               <td>{{ doc.created_at.strftime('%d/%m/%Y %H:%M') if doc.created_at else '-' }}</td>

@@ -17,6 +17,7 @@ from models import (
     FiscalDocumentType,
     FiscalEmitter,
     FiscalEvent,
+    Orcamento,
 )
 from providers.nfse.betha import build_lote_xml, sign_betha_xml
 from providers.nfse.betha.client import BethaNfseClient
@@ -53,6 +54,58 @@ def create_nfse_document(
     db.session.add(document)
     db.session.flush()
     _log_event(document, "queued", FiscalDocumentStatus.QUEUED.value)
+    db.session.commit()
+    return document
+
+
+def create_nfse_draft_from_orcamento(orcamento_id: int) -> FiscalDocument:
+    orcamento = db.session.get(Orcamento, orcamento_id)
+    if not orcamento:
+        raise ValueError("Orçamento não encontrado.")
+
+    emitter = FiscalEmitter.query.filter_by(clinic_id=orcamento.clinica_id).first()
+    if not emitter:
+        raise ValueError("Emissor fiscal não configurado para a clínica.")
+
+    existing = (
+        FiscalDocument.query.filter_by(
+            clinic_id=orcamento.clinica_id,
+            doc_type=FiscalDocumentType.NFSE,
+            source_type="ORCAMENTO",
+            source_id=orcamento.id,
+        )
+        .order_by(FiscalDocument.created_at.desc())
+        .first()
+    )
+    if existing:
+        return existing
+
+    payload = build_nfse_payload_from_orcamento(orcamento)
+    paciente = payload.get("paciente") or {}
+    tomador = payload.get("tomador") or {}
+    animal_name = paciente.get("nome")
+    tutor_name = tomador.get("nome")
+    human_reference = _build_orcamento_human_reference(
+        orcamento.descricao,
+        animal_name,
+        tutor_name,
+    )
+
+    document = FiscalDocument(
+        emitter_id=emitter.id,
+        clinic_id=orcamento.clinica_id,
+        doc_type=FiscalDocumentType.NFSE,
+        status=FiscalDocumentStatus.DRAFT,
+        payload_json=payload,
+        source_type="ORCAMENTO",
+        source_id=orcamento.id,
+        related_type="orcamento",
+        related_id=orcamento.id,
+        human_reference=human_reference,
+        animal_name=animal_name,
+        tutor_name=tutor_name,
+    )
+    db.session.add(document)
     db.session.commit()
     return document
 
@@ -373,3 +426,62 @@ def build_nfse_payload_from_appointment(appointment: Appointment) -> dict[str, A
         "consulta_id": appointment.consulta_id,
     }
     return payload
+
+
+def build_nfse_payload_from_orcamento(orcamento: Orcamento) -> dict[str, Any]:
+    consulta = orcamento.consulta
+    animal = consulta.animal if consulta else None
+    tomador = animal.owner if animal else None
+    items = [
+        {
+            "id": item.id,
+            "descricao": item.descricao,
+            "valor": float(item.valor or 0),
+            "payer_type": item.effective_payer_type,
+        }
+        for item in orcamento.items
+    ]
+
+    return {
+        "id": orcamento.id,
+        "consulta_id": orcamento.consulta_id,
+        "descricao": orcamento.descricao,
+        "valor_total": float(orcamento.total or 0),
+        "itens": items,
+        "paciente": (
+            {
+                "id": animal.id,
+                "nome": animal.name,
+                "especie": animal.species,
+                "raca": animal.breed,
+            }
+            if animal
+            else None
+        ),
+        "tomador": (
+            {
+                "id": tomador.id,
+                "nome": tomador.name,
+                "cpf_cnpj": tomador.cpf,
+                "email": tomador.email,
+                "telefone": tomador.phone,
+                "endereco_texto": tomador.address,
+            }
+            if tomador
+            else None
+        ),
+    }
+
+
+def _build_orcamento_human_reference(
+    descricao: str | None,
+    animal_name: str | None,
+    tutor_name: str | None,
+) -> str:
+    base = (descricao or "Orçamento").strip()
+    reference = base
+    if animal_name:
+        reference = f"{reference} - {animal_name}"
+    if tutor_name:
+        reference = f"{reference} (tutor {tutor_name})"
+    return reference

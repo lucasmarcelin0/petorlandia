@@ -127,8 +127,13 @@ class FiscalDocument(db.Model):
     pdf_path = db.Column(db.String(255))
     error_code = db.Column(db.String(50))
     error_message = db.Column(db.Text)
+    source_type = db.Column(db.String(40))
+    source_id = db.Column(db.Integer)
     related_type = db.Column(db.String(40))
     related_id = db.Column(db.Integer)
+    human_reference = db.Column(db.String(255))
+    animal_name = db.Column(db.String(120))
+    tutor_name = db.Column(db.String(120))
     created_at = db.Column(db.DateTime(timezone=True), default=now_in_brazil)
     updated_at = db.Column(
         db.DateTime(timezone=True),
@@ -145,6 +150,32 @@ class FiscalDocument(db.Model):
         back_populates="document",
         cascade="all, delete-orphan",
     )
+
+    @property
+    def service_descriptions(self) -> list[str]:
+        payload = self.payload_json or {}
+        descriptions = [
+            item.get("descricao")
+            for item in (payload.get("itens") or [])
+            if item.get("descricao")
+        ]
+        if not descriptions:
+            servico = payload.get("servico") or {}
+            if servico.get("descricao"):
+                descriptions.append(servico["descricao"])
+        if not descriptions and payload.get("descricao"):
+            descriptions.append(payload["descricao"])
+        return descriptions
+
+    @property
+    def total_amount(self):
+        payload = self.payload_json or {}
+        if payload.get("valor_total") is not None:
+            return payload["valor_total"]
+        servico = payload.get("servico") or {}
+        if servico.get("valor") is not None:
+            return servico["valor"]
+        return None
 
 
 class FiscalEvent(db.Model):
