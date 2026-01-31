@@ -42,8 +42,14 @@
           <label class="form-label" for="end_date">Período final</label>
           <input class="form-control" id="end_date" name="end_date" type="date" value="{{ end_date }}">
         </div>
-        <div class="col-12 d-flex justify-content-end">
+        <div class="col-12 d-flex justify-content-end gap-2">
           <button class="btn btn-primary" type="submit">Filtrar</button>
+          <a
+            class="btn btn-outline-secondary"
+            href="{{ url_for('fiscal_exports_xmls', start_date=start_date, end_date=end_date, doc_type=doc_type) }}"
+          >
+            Exportar XMLs
+          </a>
         </div>
       </form>
     </div>
