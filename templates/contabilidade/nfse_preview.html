@@ -1,0 +1,129 @@
+{% extends "layout.html" %}
+{% set titulo = "Pré-visualização Fiscal do Orçamento" %}
+
+{% block main %}
+<div class="container mt-4">
+  <h2 class="mb-3">{{ titulo }}</h2>
+
+  <nav aria-label="breadcrumb">
+    <ol class="breadcrumb">
+      <li class="breadcrumb-item"><a href="/contabilidade">Contabilidade</a></li>
+      <li class="breadcrumb-item"><a href="{{ url_for('contabilidade_nfse') }}">NFS-e</a></li>
+      <li class="breadcrumb-item active" aria-current="page">Pré-visualização</li>
+    </ol>
+  </nav>
+
+  {% if emission_result %}
+    {% set alert_class = {
+      'success': 'alert-success',
+      'error': 'alert-danger',
+      'info': 'alert-info'
+    }.get(emission_result.status, 'alert-info') %}
+    <div class="alert {{ alert_class }} d-flex flex-column gap-1">
+      <strong>
+        {% if emission_result.status == 'success' %}✔{% endif %}
+        {% if emission_result.status == 'error' %}❌{% endif %}
+        {{ emission_result.title }}
+      </strong>
+      <span>{{ emission_result.subtitle }}</span>
+      <span class="small text-muted">{{ emission_result.suggestion }}</span>
+    </div>
+  {% endif %}
+
+  <div class="row g-4">
+    <div class="col-lg-7">
+      <div class="card shadow-sm h-100">
+        <div class="card-body">
+          <h5 class="mb-3">Resumo fiscal</h5>
+          <div class="row g-3">
+            <div class="col-md-6">
+              <div class="text-muted small">Tipo de nota</div>
+              <div class="fw-semibold">NFS-e</div>
+            </div>
+            <div class="col-md-6">
+              <div class="text-muted small">Valor total</div>
+              <div class="fw-semibold">{{ orcamento.total | currency_br }}</div>
+            </div>
+            <div class="col-md-6">
+              <div class="text-muted small">Município</div>
+              <div class="fw-semibold">{{ municipio_label }}</div>
+            </div>
+            <div class="col-md-6">
+              <div class="text-muted small">Nº do orçamento</div>
+              <div class="fw-semibold">#{{ orcamento.id }}</div>
+            </div>
+            <div class="col-md-6">
+              <div class="text-muted small">🐶 Animal</div>
+              <div class="fw-semibold">{{ animal.name if animal else 'Não informado' }}</div>
+            </div>
+            <div class="col-md-6">
+              <div class="text-muted small">👤 Tutor</div>
+              <div class="fw-semibold">{{ tutor.name if tutor else 'Não informado' }}</div>
+            </div>
+          </div>
+
+          <hr class="my-4">
+
+          <h6 class="mb-2">Status fiscal</h6>
+          <ul class="list-group list-group-flush">
+            {% for check in checks %}
+              <li class="list-group-item d-flex justify-content-between align-items-start gap-3">
+                <div>
+                  <div class="fw-semibold">{{ check.label }}</div>
+                  <div class="text-muted small">{{ check.detail }}</div>
+                </div>
+                {% if check.ok %}
+                  <span class="badge bg-success">OK</span>
+                {% else %}
+                  <span class="badge bg-danger">Pendente</span>
+                {% endif %}
+              </li>
+            {% endfor %}
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-lg-5">
+      <div class="card shadow-sm">
+        <div class="card-body">
+          <h5 class="mb-3">Aceite antes de emitir</h5>
+          {% if blocking_errors %}
+            <div class="alert alert-warning">
+              <strong>Antes de emitir, corrija:</strong>
+              <ul class="mb-0 mt-2">
+                {% for error in blocking_errors %}
+                  <li>{{ error }}</li>
+                {% endfor %}
+              </ul>
+            </div>
+          {% else %}
+            <div class="alert alert-success">
+              Tudo certo! Você pode emitir a NFS-e com segurança.
+            </div>
+          {% endif %}
+
+          <form method="post" action="{{ url_for('contabilidade_nfse_emitir') }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="orcamento_id" value="{{ orcamento.id }}">
+            {% if consulta %}
+              <input type="hidden" name="consulta_id" value="{{ consulta.id }}">
+            {% endif %}
+            <button class="btn btn-primary w-100" type="submit" {% if not can_emit %}disabled{% endif %}>
+              Emitir NFS-e
+            </button>
+          </form>
+
+          <div class="small text-muted mt-3">
+            O botão é habilitado somente quando todos os status fiscais estão OK.
+          </div>
+
+          <a class="btn btn-link mt-3 px-0" href="{{ url_for('contabilidade_nfse') }}">
+            Voltar para NFS-e
+          </a>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
