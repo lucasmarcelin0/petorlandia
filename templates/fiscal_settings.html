@@ -11,11 +11,16 @@
       <h2 class="mb-1">Configuração Fiscal</h2>
       <p class="text-muted mb-0">Cadastre os dados do emissor para NF-e/NFS-e.</p>
     </div>
-    {% if incomplete %}
-    <span class="badge text-bg-warning mt-3 mt-md-0">Configuração fiscal incompleta</span>
-    {% else %}
-    <span class="badge text-bg-success mt-3 mt-md-0">Configuração fiscal completa</span>
-    {% endif %}
+    <div class="d-flex flex-column flex-sm-row gap-2 mt-3 mt-md-0">
+      <a class="btn btn-outline-primary" href="{{ url_for('fiscal_certificate_upload') }}">
+        Enviar certificado A1
+      </a>
+      {% if incomplete %}
+      <span class="badge text-bg-warning align-self-start align-self-sm-center">Configuração fiscal incompleta</span>
+      {% else %}
+      <span class="badge text-bg-success align-self-start align-self-sm-center">Configuração fiscal completa</span>
+      {% endif %}
+    </div>
   </div>
 
   <div class="card shadow-sm">

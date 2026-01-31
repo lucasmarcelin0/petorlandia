@@ -12,6 +12,11 @@ def get_blueprint():
         methods=["GET", "POST"],
     )
     bp.add_url_rule(
+        "/fiscal/certificate",
+        view_func=app_module.fiscal_certificate_upload,
+        methods=["GET", "POST"],
+    )
+    bp.add_url_rule(
         "/fiscal/documents",
         view_func=app_module.fiscal_documents,
         methods=["GET"],

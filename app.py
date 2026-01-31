@@ -92,6 +92,7 @@ from models import (
     FiscalDocumentStatus,
     FiscalDocumentType,
     FiscalEmitter,
+    FiscalCertificate,
     FiscalEvent,
     PlantonistaEscala,
     PlantaoModelo,
@@ -112,6 +113,7 @@ from services.nfse_queue import (
     should_emit_async,
     validate_nfse_cancel_request,
 )
+from services.fiscal.certificate import parse_pfx
 from services.appointments import (
     ReturnAppointmentDTO,
     finalize_consulta_flow,
@@ -124,6 +126,7 @@ from services.payments import (
     apply_payment_to_orcamento,
     create_payment_preference,
 )
+from security.crypto import encrypt_bytes, encrypt_text
 from repositories import AppointmentRepository, ClinicRepository
 _config_utils_module_name = (
     f"{__package__}.config_utils" if __package__ else "config_utils"
@@ -1580,6 +1583,87 @@ def fiscal_settings():
         emitter=emitter,
         incomplete=incomplete,
         uf_codes=sorted(FISCAL_UF_CODES),
+    )
+
+
+@login_required
+def fiscal_certificate_upload():
+    clinic_id = current_user_clinic_id()
+    if not clinic_id:
+        abort(403)
+
+    emitter = FiscalEmitter.query.filter_by(clinic_id=clinic_id).first()
+    if emitter is None or not emitter.cnpj:
+        flash("Cadastre o emissor fiscal antes de enviar o certificado.", "warning")
+        return redirect(url_for("fiscal_settings"))
+
+    if request.method == "POST":
+        pfx_file = request.files.get("pfx_file")
+        password = request.form.get("pfx_password") or ""
+
+        if not pfx_file or pfx_file.filename == "":
+            flash("Selecione um arquivo .pfx.", "warning")
+            return render_template(
+                "fiscal_certificate_upload.html",
+                emitter=emitter,
+                certificates=[],
+            )
+
+        try:
+            pfx_bytes = pfx_file.read()
+            if not pfx_bytes:
+                raise ValueError("Arquivo PFX vazio.")
+            info = parse_pfx(pfx_bytes, password)
+        except Exception as exc:
+            flash(f"Não foi possível ler o certificado: {exc}", "danger")
+            return render_template(
+                "fiscal_certificate_upload.html",
+                emitter=emitter,
+                certificates=[],
+            )
+
+        emitter_cnpj = _normalize_cnpj(emitter.cnpj)
+        subject_cnpj = info.get("subject_cnpj") or ""
+        if not subject_cnpj:
+            flash("Não foi possível identificar o CNPJ do certificado.", "danger")
+            return render_template(
+                "fiscal_certificate_upload.html",
+                emitter=emitter,
+                certificates=[],
+            )
+        if subject_cnpj != emitter_cnpj:
+            flash("O CNPJ do certificado não corresponde ao emissor fiscal.", "danger")
+            return render_template(
+                "fiscal_certificate_upload.html",
+                emitter=emitter,
+                certificates=[],
+            )
+
+        certificate = FiscalCertificate(
+            emitter_id=emitter.id,
+            pfx_encrypted=encrypt_bytes(pfx_bytes),
+            pfx_password_encrypted=encrypt_text(password),
+            fingerprint_sha256=info["fingerprint_sha256"],
+            valid_from=info["valid_from"],
+            valid_to=info["valid_to"],
+            subject_cnpj=subject_cnpj,
+        )
+        db.session.add(certificate)
+        db.session.commit()
+        flash("Certificado fiscal enviado com sucesso.", "success")
+        return redirect(url_for("fiscal_certificate_upload"))
+
+    certificates = (
+        FiscalCertificate.query
+        .filter_by(emitter_id=emitter.id)
+        .order_by(FiscalCertificate.created_at.desc())
+        .all()
+    )
+
+    return render_template(
+        "fiscal_certificate_upload.html",
+        emitter=emitter,
+        certificates=certificates,
     )
 
 
