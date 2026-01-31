@@ -5,6 +5,7 @@ from blueprints.utils import lazy_view
 
 def get_blueprint():
     bp = Blueprint("mensagens_routes", __name__)
+    conversa_admin_view = lazy_view("conversa_admin")
 
     bp.add_url_rule(
         "/mensagem/<int:animal_id>",
@@ -33,12 +34,12 @@ def get_blueprint():
     )
     bp.add_url_rule(
         "/conversa_admin",
-        view_func=lazy_view("conversa_admin"),
+        view_func=conversa_admin_view,
         methods=["GET", "POST"],
     )
     bp.add_url_rule(
         "/conversa_admin/<int:user_id>",
-        view_func=lazy_view("conversa_admin"),
+        view_func=conversa_admin_view,
         methods=["GET", "POST"],
     )
     bp.add_url_rule(
