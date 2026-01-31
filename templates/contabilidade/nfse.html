@@ -493,6 +493,7 @@
             <tr>
               <th>Emissão</th>
               <th>Evento</th>
+              <th>Tutor/Paciente</th>
               <th>Status</th>
               <th>Protocolo</th>
               <th>Nº NFS-e</th>
@@ -513,14 +514,27 @@
               'cancelamento_solicitado': 'bg-warning text-dark',
               'substituicao_solicitada': 'bg-info text-dark'
             }.get(status_value, 'bg-light text-dark') %}
-            <tr>
+            {% set tomador_payload = issue.tomador_payload %}
+            {% set tutor_nome = issue.tutor_display_name %}
+            {% set animal_nome = issue.animal_display_name %}
+            <tr class="{% if status_value == 'processando' %}table-warning{% endif %}">
               <td>
                 <div class="fw-semibold">#{{ issue.id }}</div>
                 <div class="text-muted small">{{ issue.created_at.strftime('%d/%m/%Y %H:%M') if issue.created_at else '—' }}</div>
+                {% if status_value == 'processando' %}
+                  <div class="small text-warning fw-semibold">Processando agora</div>
+                {% endif %}
               </td>
               <td>
                 <div class="fw-semibold">{{ issue.internal_identifier or '—' }}</div>
                 <div class="text-muted small">RPS: {{ issue.rps or '—' }}</div>
+              </td>
+              <td>
+                <div class="fw-semibold">{{ tutor_nome or 'Tutor não informado' }}</div>
+                <div class="text-muted small">Paciente: {{ animal_nome or 'Não informado' }}</div>
+                {% if not tutor_nome or not animal_nome %}
+                  <div class="text-warning small">Dados incompletos</div>
+                {% endif %}
               </td>
               <td>
                 <span class="badge {{ status_class }}">{{ status_value }}</span>
@@ -565,6 +579,28 @@
                   {% endif %}
                   <button class="btn btn-outline-primary btn-sm" type="submit">Reprocessar</button>
                 </form>
+                <details class="mt-2">
+                  <summary class="small text-primary">Completar dados</summary>
+                  <form method="post" action="{{ url_for('contabilidade_nfse_contexto', issue_id=issue.id) }}" class="mt-2">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    {% if origin_id and origin_param %}
+                      <input type="hidden" name="{{ origin_param }}" value="{{ origin_id }}">
+                    {% endif %}
+                    <div class="mb-2">
+                      <label class="form-label small text-muted mb-1" for="tutor_nome_{{ issue.id }}">Tutor</label>
+                      <input id="tutor_nome_{{ issue.id }}" name="tutor_nome" class="form-control form-control-sm" value="{{ tutor_nome or '' }}" placeholder="Nome do tutor">
+                    </div>
+                    <div class="mb-2">
+                      <label class="form-label small text-muted mb-1" for="tutor_documento_{{ issue.id }}">CPF/CNPJ</label>
+                      <input id="tutor_documento_{{ issue.id }}" name="tutor_documento" class="form-control form-control-sm" value="{{ issue.tutor_documento or '' }}" placeholder="Documento do tutor">
+                    </div>
+                    <div class="mb-2">
+                      <label class="form-label small text-muted mb-1" for="animal_nome_{{ issue.id }}">Paciente</label>
+                      <input id="animal_nome_{{ issue.id }}" name="animal_nome" class="form-control form-control-sm" value="{{ animal_nome or '' }}" placeholder="Nome do paciente">
+                    </div>
+                    <button class="btn btn-outline-secondary btn-sm w-100" type="submit">Salvar dados</button>
+                  </form>
+                </details>
                 {% set can_cancel = issue.numero_nfse and status_value not in ['cancelada', 'cancelamento_solicitado', 'substituicao_solicitada'] %}
                 {% if can_cancel %}
                 <details class="mt-2">
@@ -627,7 +663,7 @@
             </tr>
             {% else %}
             <tr>
-              <td colspan="7" class="text-muted">Nenhuma emissão encontrada.</td>
+              <td colspan="8" class="text-muted">Nenhuma emissão encontrada.</td>
             </tr>
             {% endfor %}
           </tbody>
