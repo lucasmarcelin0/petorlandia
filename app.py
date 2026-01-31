@@ -5867,8 +5867,11 @@ def contabilidade_nfse():
     origin_id = orcamento_id or atendimento_id
     if requested_id and requested_id not in accessible_ids and not _is_admin():
         abort(403)
+    visible_clinics = clinics
+    if not _is_admin():
+        visible_clinics = [clinic for clinic in clinics if clinic.id in accessible_ids]
     selected_clinic = _select_accounting_clinic(
-        clinics,
+        visible_clinics,
         accessible_ids,
         requested_clinic_id=requested_id,
     )
@@ -5936,7 +5939,7 @@ def contabilidade_nfse():
 
     return render_template(
         'contabilidade/nfse.html',
-        clinics=clinics,
+        clinics=visible_clinics,
         selected_clinic=selected_clinic,
         issues=issues,
         statuses=statuses,
