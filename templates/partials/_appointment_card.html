@@ -7,6 +7,9 @@
 {% set status_label = status_labels.get(appt.status, 'Atualizado') %}
 {% set card_classes = 'appointment-card appointment-row ' + (appt.status or '') %}
 {% set can_start_consulta = current_user.worker in ['veterinario', 'colaborador'] %}
+{% set nfse_doc = nfse_documents_by_appointment.get(appt.id) if nfse_documents_by_appointment is defined else None %}
+{% set nfse_status = nfse_doc.status.value if nfse_doc and nfse_doc.status else (nfse_doc.status if nfse_doc else None) %}
+{% set can_emit_nfse = current_user.worker in ['veterinario', 'colaborador'] or (current_user.role or '') == 'admin' %}
 <div
   class="{{ card_classes.strip() }}"
   data-appointment-id="{{ appt.id }}"
@@ -75,6 +78,18 @@
               <i class="fa-solid fa-ellipsis"></i>
             </button>
             <ul class="dropdown-menu dropdown-menu-end">
+              {% if can_emit_nfse %}
+              <li>
+                <form method="POST" action="{{ url_for('appointment_emit_nfse', appointment_id=appt.id) }}">
+                  {% if csrf_token is defined %}{{ csrf_token() }}{% endif %}
+                  <button class="dropdown-item d-flex align-items-center gap-2" title="Emitir NFS-e">
+                    <i class="fa-solid fa-file-invoice"></i>
+                    Emitir NFS-e
+                  </button>
+                </form>
+              </li>
+              <li><hr class="dropdown-divider"></li>
+              {% endif %}
               <li>
                 <a class="dropdown-item d-flex align-items-center gap-2" href="{{ url_for('ficha_tutor', tutor_id=appt.tutor_id) }}">
                   <i class="fa-solid fa-user"></i>
@@ -156,6 +171,24 @@
           <span class="appointment-card__meta-value">{{ appt.kind_display or appt.kind|capitalize }}</span>
         </div>
       </div>
+      {% if nfse_doc %}
+      <div class="appointment-card__meta-item">
+        <span class="appointment-card__icon is-kind"><i class="fa-solid fa-file-invoice"></i></span>
+        <div>
+          <span class="appointment-card__meta-label">NFS-e</span>
+          <span class="appointment-card__meta-value">
+            <a
+              href="{{ url_for('fiscal_document_detail', document_id=nfse_doc.id) }}"
+              data-nfse-status
+              data-document-id="{{ nfse_doc.id }}"
+              data-status="{{ nfse_status }}"
+            >
+              {{ nfse_status or '—' }}
+            </a>
+          </span>
+        </div>
+      </div>
+      {% endif %}
     </div>
   </div>
 </div>

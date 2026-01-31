@@ -58,6 +58,11 @@ def get_blueprint():
         methods=["GET", "POST"],
     )
     bp.add_url_rule(
+        "/appointments/<int:appointment_id>/nfse",
+        view_func=lazy_view("appointment_emit_nfse"),
+        methods=["POST"],
+    )
+    bp.add_url_rule(
         "/appointments/<int:appointment_id>/status",
         view_func=lazy_view("update_appointment_status"),
         methods=["POST"],

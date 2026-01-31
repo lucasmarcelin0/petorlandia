@@ -6,6 +6,7 @@ import logging
 from app.jobs.celery_app import celery_app
 from extensions import db
 from models import FiscalDocument, FiscalDocumentStatus
+from services.fiscal.nfse_service import emit_nfse_sync, poll_nfse
 
 logger = logging.getLogger(__name__)
 
@@ -42,6 +43,9 @@ _retry_kwargs = {
 def emit_nfse(document_id: int) -> dict:
     document = _mark_processing(document_id)
     logger.info("Emitindo NFSe para documento %s", document_id)
+    if document:
+        emit_nfse_sync(document.id)
+        db.session.refresh(document)
     return {"document_id": document_id, "status": document.status.value if document else None}
 
 
@@ -56,6 +60,9 @@ def emit_nfe(document_id: int) -> dict:
 def poll_nfse(document_id: int) -> dict:
     document = _mark_processing(document_id)
     logger.info("Consultando NFSe para documento %s", document_id)
+    if document:
+        poll_nfse(document.id)
+        db.session.refresh(document)
     return {"document_id": document_id, "status": document.status.value if document else None}
 
 
