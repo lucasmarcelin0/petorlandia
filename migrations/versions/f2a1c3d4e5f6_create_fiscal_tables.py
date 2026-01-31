@@ -15,7 +15,12 @@ def upgrade():
     bind = op.get_bind()
     inspector = sa.inspect(bind)
 
-    fiscal_document_type = sa.Enum("NFSE", "NFE", name="fiscal_document_type")
+    fiscal_document_type = sa.Enum(
+        "NFSE",
+        "NFE",
+        name="fiscal_document_type",
+        create_type=False,
+    )
     fiscal_document_status = sa.Enum(
         "DRAFT",
         "QUEUED",
@@ -26,6 +31,7 @@ def upgrade():
         "FAILED",
         "CANCELED",
         name="fiscal_document_status",
+        create_type=False,
     )
     fiscal_document_type.create(bind, checkfirst=True)
     fiscal_document_status.create(bind, checkfirst=True)
