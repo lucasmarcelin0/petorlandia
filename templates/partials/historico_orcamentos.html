@@ -16,20 +16,31 @@
 {% if blocos %}
 <div class="card mb-3">
   <div class="card-body">
-    <h5 class="card-title">💰 Histórico de Orçamentos</h5>
+    <h5 class="card-title">Histórico de Orçamentos</h5>
     {% for bloco in blocos|reverse %}
     <div class="border rounded p-3 mb-3">
       <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center mb-2">
         <h6 class="text-muted mb-0">Orçamento feito em {{ bloco.data_criacao|format_datetime_brazil('%d/%m/%Y %H:%M') }}</h6>
-        {% set status = bloco.payment_status or 'draft' %}
-        {% set status_map = {
-          'draft': ('Pendente', 'bg-secondary'),
-          'pending': ('Aguardando pagamento', 'bg-warning text-dark'),
-          'paid': ('Pago', 'bg-success'),
-          'failed': ('Pagamento falhou', 'bg-danger')
-        } %}
-        {% set label, badge = status_map.get(status, status_map['draft']) %}
-        <span class="badge {{ badge }} mt-2 mt-md-0">{{ label }}</span>
+        <div class="d-flex align-items-center gap-2 mt-2 mt-md-0">
+          {% set status = bloco.payment_status or 'draft' %}
+          {% set status_map = {
+            'draft': ('Pendente', 'bg-secondary'),
+            'pending': ('Aguardando pagamento', 'bg-warning text-dark'),
+            'paid': ('Pago', 'bg-success'),
+            'failed': ('Pagamento falhou', 'bg-danger')
+          } %}
+          {% set label, badge = status_map.get(status, status_map['draft']) %}
+          <span class="badge {{ badge }}">{{ label }}</span>
+          {# NFS-e eligibility badge for items with payer_type=particular #}
+          {% set particular_items = bloco.itens | selectattr('payer_type', 'equalto', 'particular') | list %}
+          {% set null_payer_items = bloco.itens | selectattr('payer_type', 'equalto', none) | list %}
+          {% set nfse_eligible_items = particular_items + null_payer_items %}
+          {% if nfse_eligible_items %}
+            <span class="badge bg-light text-success border border-success" style="font-size: 0.72rem;">
+              <i class="fas fa-file-invoice fa-xs me-1"></i>NFS-e
+            </span>
+          {% endif %}
+        </div>
       </div>
       {% set payer_groups = [
         ('plan', 'Plano', 'bg-info text-dark'),
@@ -74,21 +85,32 @@
       <div class="d-flex flex-wrap gap-2 mt-3">
         <form method="POST" action="{{ url_for('deletar_bloco_orcamento', bloco_id=bloco.id) }}" class="d-inline delete-history-form" data-sync data-target="#historico-orcamentos"{% if consulta is defined %} data-target-endpoint="{{ url_for('historico_orcamentos_partial', consulta_id=consulta.id) }}"{% endif %} data-confirm="Deseja mesmo excluir este orçamento?">
           <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-          <button class="btn btn-danger btn-sm">🗑 Excluir</button>
+          <button class="btn btn-danger btn-sm"><i class="fas fa-trash-alt me-1"></i>Excluir</button>
         </form>
-        <a href="{{ url_for('imprimir_bloco_orcamento', bloco_id=bloco.id) }}" class="btn btn-outline-secondary btn-sm" target="_blank">🖨 Imprimir</a>
-        <a href="{{ url_for('editar_bloco_orcamento', bloco_id=bloco.id) }}" class="btn btn-outline-primary btn-sm">✏️ Editar</a>
-        {% if consulta is defined %}
-        <form method="POST" action="{{ url_for('contabilidade_nfse_emitir') }}" class="d-inline">
-          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-          <input type="hidden" name="consulta_id" value="{{ consulta.id }}">
-          <input type="hidden" name="orcamento_id" value="{{ consulta.id }}">
-          <button class="btn btn-outline-dark btn-sm">🧾 Emitir nota fiscal</button>
-        </form>
+        <a href="{{ url_for('imprimir_bloco_orcamento', bloco_id=bloco.id) }}" class="btn btn-outline-secondary btn-sm" target="_blank"><i class="fas fa-print me-1"></i>Imprimir</a>
+        <a href="{{ url_for('editar_bloco_orcamento', bloco_id=bloco.id) }}" class="btn btn-outline-primary btn-sm"><i class="fas fa-edit me-1"></i>Editar</a>
+        {% if consulta is defined and bloco.orcamento_id %}
+          {# Link to pre-filled NFS-e preview with correct orcamento_id #}
+          {% set particular_items = bloco.itens | selectattr('payer_type', 'equalto', 'particular') | list %}
+          {% set null_payer_items = bloco.itens | selectattr('payer_type', 'equalto', none) | list %}
+          {% if (particular_items + null_payer_items) %}
+          <a href="{{ url_for('contabilidade_nfse_preview', orcamento_id=bloco.orcamento_id) }}" class="btn btn-outline-dark btn-sm">
+            <i class="fas fa-file-invoice me-1"></i>Emitir NFS-e
+          </a>
+          {% endif %}
+        {% elif consulta is defined %}
+          {# Fallback: use bloco.id as orcamento reference if no orcamento_id #}
+          {% set particular_items = bloco.itens | selectattr('payer_type', 'equalto', 'particular') | list %}
+          {% set null_payer_items = bloco.itens | selectattr('payer_type', 'equalto', none) | list %}
+          {% if (particular_items + null_payer_items) %}
+          <a href="{{ url_for('contabilidade_nfse') }}?orcamento_id={{ bloco.id }}" class="btn btn-outline-dark btn-sm">
+            <i class="fas fa-file-invoice me-1"></i>Emitir NFS-e
+          </a>
+          {% endif %}
         {% endif %}
-        <button type="button" class="btn btn-outline-success btn-sm" onclick="enviarBlocoParaPagamento({{ bloco.id }})">💳 Enviar para pagamento</button>
+        <button type="button" class="btn btn-outline-success btn-sm" onclick="enviarBlocoParaPagamento({{ bloco.id }})"><i class="fas fa-credit-card me-1"></i>Enviar para pagamento</button>
         {% if bloco.payment_link %}
-        <a href="{{ bloco.payment_link }}" target="_blank" class="btn btn-outline-info btn-sm">🔗 Link atual</a>
+        <a href="{{ bloco.payment_link }}" target="_blank" class="btn btn-outline-info btn-sm"><i class="fas fa-link me-1"></i>Link atual</a>
         {% endif %}
       </div>
     </div>

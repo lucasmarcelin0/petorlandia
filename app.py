@@ -6250,9 +6250,19 @@ def _build_nfse_orcamento_payload(orcamento: Orcamento) -> dict:
             "descricao": item.descricao,
             "valor": float(item.valor or 0),
             "payer_type": item.effective_payer_type,
+            "servico_id": item.servico_id,
+            "procedure_code": item.procedure_code,
         }
         for item in orcamento.items
     ]
+
+    particular_items = [
+        i for i in items if i["payer_type"] == "particular"
+    ]
+    particular_total = sum(i["valor"] for i in particular_items)
+
+    desc_lines = [i["descricao"] for i in particular_items if i["descricao"]]
+    discriminacao = "; ".join(desc_lines) if desc_lines else (orcamento.descricao or "")
 
     endereco_payload = (
         {
@@ -6273,6 +6283,8 @@ def _build_nfse_orcamento_payload(orcamento: Orcamento) -> dict:
         "consulta_id": orcamento.consulta_id,
         "descricao": orcamento.descricao,
         "valor_total": float(orcamento.total or 0),
+        "valor_particular": particular_total,
+        "discriminacao": discriminacao,
         "itens": items,
         "paciente": (
             {

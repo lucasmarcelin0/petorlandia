@@ -2,128 +2,258 @@
 {% set titulo = "Pré-visualização Fiscal do Orçamento" %}
 
 {% block main %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/nfse_flow.css') }}">
 <div class="container mt-4">
-  <h2 class="mb-3">{{ titulo }}</h2>
+  <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-2 mb-3">
+    <div>
+      <h2 class="mb-1">{{ titulo }}</h2>
+      <nav aria-label="breadcrumb">
+        <ol class="breadcrumb mb-0">
+          <li class="breadcrumb-item"><a href="/contabilidade">Contabilidade</a></li>
+          <li class="breadcrumb-item"><a href="{{ url_for('contabilidade_nfse') }}">NFS-e</a></li>
+          <li class="breadcrumb-item active" aria-current="page">Pré-visualização</li>
+        </ol>
+      </nav>
+    </div>
+    <span class="badge bg-light text-dark border px-3 py-2">
+      <i class="fas fa-file-invoice me-1"></i> Orçamento #{{ orcamento.id }}
+    </span>
+  </div>
 
-  <nav aria-label="breadcrumb">
-    <ol class="breadcrumb">
-      <li class="breadcrumb-item"><a href="/contabilidade">Contabilidade</a></li>
-      <li class="breadcrumb-item"><a href="{{ url_for('contabilidade_nfse') }}">NFS-e</a></li>
-      <li class="breadcrumb-item active" aria-current="page">Pré-visualização</li>
-    </ol>
-  </nav>
+  {# --- Flow Stepper --- #}
+  <ol class="nfse-stepper" aria-label="Etapas do fluxo fiscal">
+    <li class="nfse-stepper__step nfse-stepper__step--done">Consulta</li>
+    <li class="nfse-stepper__connector nfse-stepper__connector--done" aria-hidden="true"></li>
+    <li class="nfse-stepper__step nfse-stepper__step--done">Orçamento</li>
+    <li class="nfse-stepper__connector nfse-stepper__connector--done" aria-hidden="true"></li>
+    <li class="nfse-stepper__step nfse-stepper__step--active">Emissão NFS-e</li>
+    <li class="nfse-stepper__connector" aria-hidden="true"></li>
+    <li class="nfse-stepper__step">Acompanhamento</li>
+  </ol>
 
+  {# --- Emission Result Alert --- #}
   {% if emission_result %}
     {% set alert_class = {
       'success': 'alert-success',
       'error': 'alert-danger',
       'info': 'alert-info'
     }.get(emission_result.status, 'alert-info') %}
-    <div class="alert {{ alert_class }} d-flex flex-column gap-1">
-      <strong>
-        {% if emission_result.status == 'success' %}✔{% endif %}
-        {% if emission_result.status == 'error' %}❌{% endif %}
-        {{ emission_result.title }}
-      </strong>
-      <span>{{ emission_result.subtitle }}</span>
-      <span class="small text-muted">{{ emission_result.suggestion }}</span>
+    {% set alert_icon = {
+      'success': 'fa-circle-check',
+      'error': 'fa-circle-xmark',
+      'info': 'fa-circle-info'
+    }.get(emission_result.status, 'fa-circle-info') %}
+    <div class="alert {{ alert_class }} d-flex align-items-start gap-3" role="alert">
+      <i class="fas {{ alert_icon }} fs-5 mt-1"></i>
+      <div>
+        <strong>{{ emission_result.title }}</strong>
+        <div>{{ emission_result.subtitle }}</div>
+        <div class="small mt-1 opacity-75">{{ emission_result.suggestion }}</div>
+        {% if emission_result.status == 'success' %}
+        <a href="{{ url_for('contabilidade_nfse') }}" class="btn btn-sm btn-outline-success mt-2">
+          <i class="fas fa-list me-1"></i> Ver na listagem
+        </a>
+        {% endif %}
+      </div>
     </div>
   {% endif %}
 
-  <div class="row g-4">
-    <div class="col-lg-7">
-      <div class="card shadow-sm h-100">
+  <div class="nfse-emission-grid">
+    {# --- Left Column: Fiscal Summary --- #}
+    <div>
+      <div class="card shadow-sm mb-3">
         <div class="card-body">
-          <h5 class="mb-3">Resumo fiscal</h5>
-          <div class="row g-3">
-            <div class="col-md-6">
-              <div class="text-muted small">Tipo de nota</div>
-              <div class="fw-semibold">NFS-e</div>
-            </div>
-            <div class="col-md-6">
-              <div class="text-muted small">Valor total</div>
-              <div class="fw-semibold">{{ orcamento.total | currency_br }}</div>
-            </div>
-            <div class="col-md-6">
-              <div class="text-muted small">Município</div>
-              <div class="fw-semibold">{{ municipio_label }}</div>
-            </div>
-            <div class="col-md-6">
-              <div class="text-muted small">Nº do orçamento</div>
-              <div class="fw-semibold">#{{ orcamento.id }}</div>
-            </div>
-            <div class="col-md-6">
-              <div class="text-muted small">🐶 Animal</div>
-              <div class="fw-semibold">{{ animal.name if animal else 'Não informado' }}</div>
-            </div>
-            <div class="col-md-6">
-              <div class="text-muted small">👤 Tutor</div>
-              <div class="fw-semibold">{{ tutor.name if tutor else 'Não informado' }}</div>
+          <h5 class="mb-3"><i class="fas fa-file-invoice-dollar me-2 text-primary"></i>Resumo fiscal</h5>
+
+          <div class="nfse-readonly-section mb-3">
+            <div class="row g-3">
+              <div class="col-sm-6">
+                <span class="nfse-readonly-label">Tipo de nota</span>
+                <span class="nfse-readonly-value">NFS-e</span>
+              </div>
+              <div class="col-sm-6">
+                <span class="nfse-readonly-label">Valor total</span>
+                <span class="nfse-readonly-value fw-bold text-primary fs-5">{{ orcamento.total | currency_br }}</span>
+              </div>
+              <div class="col-sm-6">
+                <span class="nfse-readonly-label">Município</span>
+                <span class="nfse-readonly-value">{{ municipio_label }}</span>
+              </div>
+              <div class="col-sm-6">
+                <span class="nfse-readonly-label">Nº do orçamento</span>
+                <span class="nfse-readonly-value">#{{ orcamento.id }}</span>
+              </div>
             </div>
           </div>
 
-          <hr class="my-4">
-
-          <h6 class="mb-2">Status fiscal</h6>
-          <ul class="list-group list-group-flush">
-            {% for check in checks %}
-              <li class="list-group-item d-flex justify-content-between align-items-start gap-3">
-                <div>
-                  <div class="fw-semibold">{{ check.label }}</div>
-                  <div class="text-muted small">{{ check.detail }}</div>
-                </div>
-                {% if check.ok %}
-                  <span class="badge bg-success">OK</span>
-                {% else %}
-                  <span class="badge bg-danger">Pendente</span>
+          {# --- Patient / Tutor Info --- #}
+          <div class="nfse-readonly-section mb-3">
+            <div class="row g-3">
+              <div class="col-sm-6">
+                <span class="nfse-readonly-label"><i class="fas fa-paw me-1"></i> Paciente</span>
+                <span class="nfse-readonly-value">{{ animal.name if animal else 'Não informado' }}</span>
+                {% if animal and animal.species %}
+                  <div class="small text-muted">{{ animal.species }}{% if animal.breed %} — {{ animal.breed }}{% endif %}</div>
                 {% endif %}
-              </li>
+              </div>
+              <div class="col-sm-6">
+                <span class="nfse-readonly-label"><i class="fas fa-user me-1"></i> Tutor (Tomador)</span>
+                <span class="nfse-readonly-value">{{ tutor.name if tutor else 'Não informado' }}</span>
+                {% if tutor and tutor.cpf %}
+                  <div class="small text-muted">CPF/CNPJ: {{ tutor.cpf }}</div>
+                {% endif %}
+                {% if tutor and tutor.email %}
+                  <div class="small text-muted">{{ tutor.email }}</div>
+                {% endif %}
+              </div>
+            </div>
+          </div>
+
+          {# --- Budget Items Preview --- #}
+          {% if orcamento.items %}
+          <h6 class="mb-2 mt-3"><i class="fas fa-list-ul me-1"></i> Itens do orçamento</h6>
+          <ul class="nfse-item-list">
+            {% for item in orcamento.items %}
+            <li class="nfse-item-list__item">
+              <span>
+                {% if item.effective_payer_type == 'particular' or not item.effective_payer_type %}
+                  <span class="badge bg-secondary me-1" style="font-size: 0.7rem;">Particular</span>
+                {% else %}
+                  <span class="badge bg-info text-dark me-1" style="font-size: 0.7rem;">Plano</span>
+                {% endif %}
+                {{ item.descricao }}
+              </span>
+              <span class="fw-semibold">R$ {{ '%.2f'|format(item.valor or 0) }}</span>
+            </li>
             {% endfor %}
           </ul>
+          <div class="d-flex justify-content-between align-items-center mt-2 pt-2 border-top">
+            <strong>Total</strong>
+            <strong class="text-primary">{{ orcamento.total | currency_br }}</strong>
+          </div>
+          {% endif %}
+        </div>
+      </div>
+
+      {# --- Fiscal Status Checks --- #}
+      <div class="card shadow-sm">
+        <div class="card-body">
+          <h5 class="mb-3"><i class="fas fa-clipboard-check me-2 text-primary"></i>Status fiscal</h5>
+          {% for check in checks %}
+            {% set check_class = 'nfse-config-check--ok' if check.ok else 'nfse-config-check--error' %}
+            <div class="nfse-config-check {{ check_class }} d-flex align-items-start gap-3">
+              <div class="nfse-config-check__icon">
+                {% if check.ok %}
+                  <i class="fas fa-check fa-sm"></i>
+                {% else %}
+                  <i class="fas fa-times fa-sm"></i>
+                {% endif %}
+              </div>
+              <div>
+                <div class="fw-semibold">{{ check.label }}</div>
+                <div class="small" style="opacity: 0.8;">{{ check.detail }}</div>
+              </div>
+            </div>
+          {% endfor %}
         </div>
       </div>
     </div>
 
-    <div class="col-lg-5">
-      <div class="card shadow-sm">
+    {# --- Right Column: Emission Action --- #}
+    <div>
+      <div class="card shadow-sm border-primary" style="border-width: 2px;">
         <div class="card-body">
-          <h5 class="mb-3">Aceite antes de emitir</h5>
+          <h5 class="mb-3"><i class="fas fa-paper-plane me-2 text-primary"></i>Confirmar emissão</h5>
+
           {% if blocking_errors %}
-            <div class="alert alert-warning">
-              <strong>Antes de emitir, corrija:</strong>
-              <ul class="mb-0 mt-2">
-                {% for error in blocking_errors %}
-                  <li>{{ error }}</li>
-                {% endfor %}
-              </ul>
+            <div class="alert alert-warning d-flex align-items-start gap-2">
+              <i class="fas fa-exclamation-triangle mt-1"></i>
+              <div>
+                <strong>Antes de emitir, corrija:</strong>
+                <ul class="mb-0 mt-2">
+                  {% for error in blocking_errors %}
+                    <li>{{ error }}</li>
+                  {% endfor %}
+                </ul>
+              </div>
             </div>
           {% else %}
-            <div class="alert alert-success">
-              Tudo certo! Você pode emitir a NFS-e com segurança.
+            <div class="alert alert-success d-flex align-items-center gap-2">
+              <i class="fas fa-check-circle"></i>
+              <span>Tudo certo! Você pode emitir a NFS-e com segurança.</span>
             </div>
           {% endif %}
 
-          <form method="post" action="{{ url_for('contabilidade_nfse_emitir') }}">
+          {# --- Summary Card --- #}
+          <div class="nfse-summary-card mb-3">
+            <div class="nfse-summary-card__label">Valor da nota</div>
+            <div class="nfse-summary-card__total">{{ orcamento.total | currency_br }}</div>
+            {% if tutor %}
+            <div class="small text-muted mt-1">
+              Tomador: {{ tutor.name }}{% if tutor.cpf %} ({{ tutor.cpf }}){% endif %}
+            </div>
+            {% endif %}
+            {% if consulta %}
+            <div class="small text-muted">
+              Consulta #{{ consulta.id }}
+            </div>
+            {% endif %}
+          </div>
+
+          {# --- Emission Form --- #}
+          <form method="post" action="{{ url_for('contabilidade_nfse_emitir') }}" id="nfse-emit-form">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <input type="hidden" name="orcamento_id" value="{{ orcamento.id }}">
             {% if consulta %}
               <input type="hidden" name="consulta_id" value="{{ consulta.id }}">
             {% endif %}
-            <button class="btn btn-primary w-100" type="submit" {% if not can_emit %}disabled{% endif %}>
-              Emitir NFS-e
+
+            <button
+              class="btn btn-primary btn-lg w-100 nfse-emit-btn justify-content-center"
+              type="submit"
+              id="btn-emitir"
+              {% if not can_emit %}disabled{% endif %}
+            >
+              <i class="fas fa-paper-plane"></i>
+              Confirmar e Emitir NFS-e
             </button>
           </form>
 
-          <div class="small text-muted mt-3">
+          {% if not can_emit %}
+          <div class="small text-muted mt-3 text-center">
+            <i class="fas fa-lock me-1"></i>
             O botão é habilitado somente quando todos os status fiscais estão OK.
           </div>
+          {% endif %}
 
-          <a class="btn btn-link mt-3 px-0" href="{{ url_for('contabilidade_nfse') }}">
-            Voltar para NFS-e
-          </a>
+          <hr class="my-3">
+
+          <div class="d-flex flex-column gap-2">
+            <a class="btn btn-outline-secondary btn-sm" href="{{ url_for('contabilidade_nfse') }}">
+              <i class="fas fa-arrow-left me-1"></i> Voltar para NFS-e
+            </a>
+            {% if consulta %}
+            <a class="btn btn-outline-secondary btn-sm" href="{{ url_for('consulta_direct', animal_id=consulta.animal_id, c=consulta.id) }}#orcamento">
+              <i class="fas fa-receipt me-1"></i> Ver orçamento na consulta
+            </a>
+            {% endif %}
+          </div>
         </div>
       </div>
     </div>
   </div>
 </div>
+
+<script>
+(function() {
+  const form = document.getElementById('nfse-emit-form');
+  const btn = document.getElementById('btn-emitir');
+  if (form && btn) {
+    form.addEventListener('submit', function() {
+      btn.disabled = true;
+      btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span> Emitindo...';
+    });
+  }
+})();
+</script>
 {% endblock %}
