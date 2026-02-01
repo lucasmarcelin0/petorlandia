@@ -3,216 +3,181 @@
 {% set subtitulo = "Emissões e acompanhamento" %}
 
 {% block main %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/nfse_flow.css') }}">
 <div class="container mt-4">
-  <h2 class="mb-3">{{ titulo }}</h2>
-
-  <nav aria-label="breadcrumb">
-    <ol class="breadcrumb">
-      <li class="breadcrumb-item"><a href="/contabilidade">Contabilidade</a></li>
-      <li class="breadcrumb-item active" aria-current="page">{{ titulo }}</li>
-    </ol>
-  </nav>
-
-  <div class="card shadow-sm p-4 mt-3">
-    <div class="d-flex flex-column flex-lg-row justify-content-between align-items-lg-center gap-3">
-      <div>
-        <h5 class="mb-1">{{ subtitulo }}</h5>
-        <p class="text-muted mb-0">
-          Evento de negócio: <strong>finalização da consulta</strong> cria uma emissão na fila de NFS-e.
-        </p>
-        <div class="mt-3">
-          <h6 class="mb-2">Como emitir (passo a passo)</h6>
-          <ol class="text-muted small mb-0">
-            <li>Selecione a clínica para carregar a fila.</li>
-            <li>Confira se a emissão está na fila e clique em <strong>Processar fila</strong>.</li>
-            <li>Após processar, acompanhe o status e faça o download do PDF/XML.</li>
-          </ol>
-        </div>
-      </div>
-      {% if clinics %}
-      <form method="get" class="ms-lg-auto">
-        {% if origin_id and origin_param %}
-          <input type="hidden" name="{{ origin_param }}" value="{{ origin_id }}">
-        {% endif %}
-        <label class="form-label small text-muted mb-1" for="clinica-select">Clínica</label>
-        <select id="clinica-select" name="clinica_id" class="form-select" onchange="this.form.submit()">
-          {% for clinic in clinics %}
-            <option value="{{ clinic.id }}" {% if selected_clinic and clinic.id == selected_clinic.id %}selected{% endif %}>
-              {{ clinic.nome or 'Clínica' }}
-            </option>
-          {% endfor %}
-        </select>
-      </form>
-      {% endif %}
+  <div class="d-flex flex-column flex-lg-row justify-content-between align-items-lg-center gap-2 mb-3">
+    <div>
+      <h2 class="mb-1">{{ titulo }}</h2>
+      <nav aria-label="breadcrumb">
+        <ol class="breadcrumb mb-0">
+          <li class="breadcrumb-item"><a href="/contabilidade">Contabilidade</a></li>
+          <li class="breadcrumb-item active" aria-current="page">{{ titulo }}</li>
+        </ol>
+      </nav>
     </div>
-  </div>
-
-  {% if selected_clinic %}
-  <div class="card shadow-sm p-4 mt-3">
-    <div class="d-flex flex-column flex-lg-row justify-content-between align-items-lg-center gap-3">
-      <div>
-        <h5 class="mb-1">Configurações essenciais da NFS-e</h5>
-        <p class="text-muted mb-0">
-          Complete os dados fiscais da clínica para evitar erros na emissão automática.
-        </p>
-        {% if nfse_missing_fields %}
-          <div class="alert alert-warning small mt-3 mb-0">
-            Ainda faltam informações obrigatórias: {{ nfse_missing_fields | join(', ') }}.
-          </div>
-        {% endif %}
-      </div>
-      <span class="badge bg-light text-dark border align-self-start align-self-lg-center">
-        Clínica selecionada: {{ selected_clinic.nome or 'Clínica' }}
-      </span>
-    </div>
-    <form method="post" action="{{ url_for('contabilidade_nfse_configurar') }}" class="mt-4">
-      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-      <input type="hidden" name="clinica_id" value="{{ selected_clinic.id }}">
+    {% if clinics %}
+    <form method="get" class="ms-lg-auto">
       {% if origin_id and origin_param %}
         <input type="hidden" name="{{ origin_param }}" value="{{ origin_id }}">
       {% endif %}
-      <div class="row g-3">
-        <div class="col-12 col-md-4">
-          <label class="form-label small text-muted" for="municipio_nfse">Município (NFS-e)</label>
-          <select id="municipio_nfse" name="municipio_nfse" class="form-select">
-            {% for option in municipio_options %}
-              <option value="{{ option.value }}" {% if nfse_settings.municipio_nfse == option.value %}selected{% endif %}>
-                {{ option.label }}
-              </option>
-            {% endfor %}
-          </select>
-        </div>
-        <div class="col-12 col-md-4">
-          <label class="form-label small text-muted" for="inscricao_municipal">Inscrição municipal</label>
-          <input
-            id="inscricao_municipal"
-            name="inscricao_municipal"
-            type="text"
-            class="form-control"
-            value="{{ nfse_settings.inscricao_municipal }}"
-          >
-        </div>
-        <div class="col-12 col-md-4">
-          <label class="form-label small text-muted" for="regime_tributario">Regime tributário</label>
-          <select id="regime_tributario" name="regime_tributario" class="form-select">
-            <option value="">Selecione o regime</option>
-            <option value="simples_nacional" {% if nfse_settings.regime_tributario == 'simples_nacional' %}selected{% endif %}>Simples Nacional</option>
-            <option value="lucro_presumido" {% if nfse_settings.regime_tributario == 'lucro_presumido' %}selected{% endif %}>Lucro Presumido</option>
-            <option value="lucro_real" {% if nfse_settings.regime_tributario == 'lucro_real' %}selected{% endif %}>Lucro Real</option>
-          </select>
-        </div>
-        <div class="col-12 col-md-4">
-          <label class="form-label small text-muted" for="cnae">CNAE</label>
-          <input
-            id="cnae"
-            name="cnae"
-            type="text"
-            class="form-control"
-            value="{{ nfse_settings.cnae }}"
-            placeholder="0000-0/00"
-          >
-        </div>
-        <div class="col-12 col-md-4">
-          <label class="form-label small text-muted" for="codigo_servico">Código de serviço</label>
-          <input
-            id="codigo_servico"
-            name="codigo_servico"
-            type="text"
-            class="form-control"
-            value="{{ nfse_settings.codigo_servico }}"
-          >
-        </div>
-        <div class="col-12 col-md-4">
-          <label class="form-label small text-muted" for="aliquota_iss">Alíquota ISS (%)</label>
-          <input
-            id="aliquota_iss"
-            name="aliquota_iss"
-            type="number"
-            class="form-control"
-            step="0.01"
-            min="0"
-            value="{{ nfse_settings.aliquota_iss }}"
-          >
-        </div>
-        <div class="col-12 col-md-4">
-          <label class="form-label small text-muted" for="nfse_username">Usuário NFS-e</label>
-          <input
-            id="nfse_username"
-            name="nfse_username"
-            type="text"
-            class="form-control"
-            value="{{ nfse_settings.nfse_username }}"
-          >
-        </div>
-        <div class="col-12 col-md-4">
-          <label class="form-label small text-muted" for="nfse_password">Senha NFS-e</label>
-          <input
-            id="nfse_password"
-            name="nfse_password"
-            type="password"
-            class="form-control"
-            placeholder="Deixe em branco para manter"
-          >
-        </div>
-        <div class="col-12 col-md-4">
-          <label class="form-label small text-muted" for="nfse_token">Token/Chave NFS-e</label>
-          <input
-            id="nfse_token"
-            name="nfse_token"
-            type="text"
-            class="form-control"
-            value="{{ nfse_settings.nfse_token }}"
-          >
-        </div>
-        <div class="col-12 col-md-6">
-          <label class="form-label small text-muted" for="nfse_cert_path">Caminho do certificado</label>
-          <input
-            id="nfse_cert_path"
-            name="nfse_cert_path"
-            type="text"
-            class="form-control"
-            value="{{ nfse_settings.nfse_cert_path }}"
-            placeholder="/caminho/arquivo.pfx"
-          >
-        </div>
-        <div class="col-12 col-md-6">
-          <label class="form-label small text-muted" for="nfse_cert_password">Senha do certificado</label>
-          <input
-            id="nfse_cert_password"
-            name="nfse_cert_password"
-            type="password"
-            class="form-control"
-            placeholder="Deixe em branco para manter"
-          >
-        </div>
-      </div>
-      <div class="d-flex flex-column flex-sm-row gap-2 mt-3">
-        <button class="btn btn-primary" type="submit">Salvar configurações</button>
-        <span class="text-muted small align-self-center">
-          Dica: mantenha esses dados atualizados para evitar falhas no processamento automático.
-        </span>
-      </div>
+      <label class="form-label small text-muted mb-1" for="clinica-select">Clínica</label>
+      <select id="clinica-select" name="clinica_id" class="form-select" onchange="this.form.submit()">
+        {% for clinic in clinics %}
+          <option value="{{ clinic.id }}" {% if selected_clinic and clinic.id == selected_clinic.id %}selected{% endif %}>
+            {{ clinic.nome or 'Clínica' }}
+          </option>
+        {% endfor %}
+      </select>
     </form>
+    {% endif %}
+  </div>
+
+  {# --- Flow Stepper --- #}
+  <ol class="nfse-stepper" aria-label="Etapas do fluxo fiscal">
+    <li class="nfse-stepper__step nfse-stepper__step--done">Consulta</li>
+    <li class="nfse-stepper__connector nfse-stepper__connector--done" aria-hidden="true"></li>
+    <li class="nfse-stepper__step nfse-stepper__step--done">Orçamento</li>
+    <li class="nfse-stepper__connector nfse-stepper__connector--active" aria-hidden="true"></li>
+    <li class="nfse-stepper__step nfse-stepper__step--active">Emissão NFS-e</li>
+    <li class="nfse-stepper__connector" aria-hidden="true"></li>
+    <li class="nfse-stepper__step">Acompanhamento</li>
+  </ol>
+
+  {# --- Proactive Fiscal Config Validation --- #}
+  {% if selected_clinic %}
+    {% if nfse_missing_fields %}
+    <div class="nfse-config-check nfse-config-check--error d-flex align-items-start gap-3 mb-3">
+      <div class="nfse-config-check__icon">
+        <i class="fas fa-exclamation-triangle fa-sm"></i>
+      </div>
+      <div class="flex-grow-1">
+        <div class="fw-semibold">Configuração fiscal incompleta</div>
+        <div class="text-muted small">
+          Faltam dados obrigatórios: <strong>{{ nfse_missing_fields | join(', ') }}</strong>.
+          A emissão de NFS-e ficará bloqueada até que sejam preenchidos.
+        </div>
+        <button class="btn btn-sm btn-outline-danger mt-2" type="button" data-bs-toggle="collapse" data-bs-target="#nfse-config-section">
+          <i class="fas fa-cog me-1"></i>Abrir configurações
+        </button>
+      </div>
+    </div>
+    {% else %}
+    <div class="nfse-config-check nfse-config-check--ok d-flex align-items-center gap-3 mb-3">
+      <div class="nfse-config-check__icon">
+        <i class="fas fa-check fa-sm"></i>
+      </div>
+      <div class="flex-grow-1">
+        <div class="fw-semibold">Configuração fiscal completa</div>
+        <div class="text-muted small">{{ selected_clinic.nome or 'Clínica' }} pode emitir NFS-e.</div>
+      </div>
+      <button class="btn btn-sm btn-outline-secondary" type="button" data-bs-toggle="collapse" data-bs-target="#nfse-config-section">
+        <i class="fas fa-cog me-1"></i>Configurações
+      </button>
+    </div>
+    {% endif %}
+  {% endif %}
+
+  {# --- Collapsible Config Section --- #}
+  {% if selected_clinic %}
+  <div class="collapse {% if nfse_missing_fields %}show{% endif %}" id="nfse-config-section">
+    <div class="card shadow-sm p-4 mb-4">
+      <div class="d-flex justify-content-between align-items-center mb-3">
+        <h5 class="mb-0">Configurações essenciais da NFS-e</h5>
+        <span class="badge bg-light text-dark border">{{ selected_clinic.nome or 'Clínica' }}</span>
+      </div>
+      <form method="post" action="{{ url_for('contabilidade_nfse_configurar') }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="clinica_id" value="{{ selected_clinic.id }}">
+        {% if origin_id and origin_param %}
+          <input type="hidden" name="{{ origin_param }}" value="{{ origin_id }}">
+        {% endif %}
+        <div class="row g-3">
+          <div class="col-12 col-md-4">
+            <label class="form-label small text-muted" for="municipio_nfse">Município (NFS-e)</label>
+            <select id="municipio_nfse" name="municipio_nfse" class="form-select">
+              {% for option in municipio_options %}
+                <option value="{{ option.value }}" {% if nfse_settings.municipio_nfse == option.value %}selected{% endif %}>
+                  {{ option.label }}
+                </option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="col-12 col-md-4">
+            <label class="form-label small text-muted" for="inscricao_municipal">Inscrição municipal</label>
+            <input id="inscricao_municipal" name="inscricao_municipal" type="text" class="form-control" value="{{ nfse_settings.inscricao_municipal }}">
+          </div>
+          <div class="col-12 col-md-4">
+            <label class="form-label small text-muted" for="regime_tributario">Regime tributário</label>
+            <select id="regime_tributario" name="regime_tributario" class="form-select">
+              <option value="">Selecione o regime</option>
+              <option value="simples_nacional" {% if nfse_settings.regime_tributario == 'simples_nacional' %}selected{% endif %}>Simples Nacional</option>
+              <option value="lucro_presumido" {% if nfse_settings.regime_tributario == 'lucro_presumido' %}selected{% endif %}>Lucro Presumido</option>
+              <option value="lucro_real" {% if nfse_settings.regime_tributario == 'lucro_real' %}selected{% endif %}>Lucro Real</option>
+            </select>
+          </div>
+          <div class="col-12 col-md-4">
+            <label class="form-label small text-muted" for="cnae">CNAE</label>
+            <input id="cnae" name="cnae" type="text" class="form-control" value="{{ nfse_settings.cnae }}" placeholder="0000-0/00">
+          </div>
+          <div class="col-12 col-md-4">
+            <label class="form-label small text-muted" for="codigo_servico">Código de serviço</label>
+            <input id="codigo_servico" name="codigo_servico" type="text" class="form-control" value="{{ nfse_settings.codigo_servico }}">
+          </div>
+          <div class="col-12 col-md-4">
+            <label class="form-label small text-muted" for="aliquota_iss">Alíquota ISS (%)</label>
+            <input id="aliquota_iss" name="aliquota_iss" type="number" class="form-control" step="0.01" min="0" value="{{ nfse_settings.aliquota_iss }}">
+          </div>
+          <div class="col-12 col-md-4">
+            <label class="form-label small text-muted" for="nfse_username">Usuário NFS-e</label>
+            <input id="nfse_username" name="nfse_username" type="text" class="form-control" value="{{ nfse_settings.nfse_username }}">
+          </div>
+          <div class="col-12 col-md-4">
+            <label class="form-label small text-muted" for="nfse_password">Senha NFS-e</label>
+            <input id="nfse_password" name="nfse_password" type="password" class="form-control" placeholder="Deixe em branco para manter">
+          </div>
+          <div class="col-12 col-md-4">
+            <label class="form-label small text-muted" for="nfse_token">Token/Chave NFS-e</label>
+            <input id="nfse_token" name="nfse_token" type="text" class="form-control" value="{{ nfse_settings.nfse_token }}">
+          </div>
+          <div class="col-12 col-md-6">
+            <label class="form-label small text-muted" for="nfse_cert_path">Caminho do certificado</label>
+            <input id="nfse_cert_path" name="nfse_cert_path" type="text" class="form-control" value="{{ nfse_settings.nfse_cert_path }}" placeholder="/caminho/arquivo.pfx">
+          </div>
+          <div class="col-12 col-md-6">
+            <label class="form-label small text-muted" for="nfse_cert_password">Senha do certificado</label>
+            <input id="nfse_cert_password" name="nfse_cert_password" type="password" class="form-control" placeholder="Deixe em branco para manter">
+          </div>
+        </div>
+        <div class="d-flex flex-column flex-sm-row gap-2 mt-3">
+          <button class="btn btn-primary" type="submit">Salvar configurações</button>
+          <span class="text-muted small align-self-center">
+            Mantenha esses dados atualizados para evitar falhas no processamento automático.
+          </span>
+        </div>
+      </form>
+    </div>
   </div>
   {% endif %}
 
-  <div class="row g-3 mt-2">
-    <div class="col-lg-8">
-      <div class="card shadow-sm h-100">
+  {# --- Two-Column: Queue + Manual Emission --- #}
+  <div class="nfse-emission-grid mb-4">
+    {# LEFT COLUMN: Queue Management + Budget Data (read-only) #}
+    <div>
+      <div class="card shadow-sm mb-3">
         <div class="card-body">
-          <div class="d-flex flex-column flex-md-row justify-content-between gap-2">
+          <div class="d-flex flex-column flex-md-row justify-content-between gap-2 mb-3">
             <div>
-              <h6 class="mb-1">Fila de emissão</h6>
+              <h6 class="mb-1"><i class="fas fa-layer-group me-1 text-primary"></i>Fila de emissão</h6>
               <p class="text-muted mb-0 small">
                 {% if selected_clinic %}
-                  {{ queue_count }} emissão(ões) aguardando processamento{% if async_enabled %} (modo assíncrono){% endif %}.
+                  <span class="fw-semibold text-dark">{{ queue_count }}</span> emissão(ões) aguardando{% if async_enabled %} (modo assíncrono){% endif %}.
                 {% else %}
                   Selecione uma clínica para visualizar a fila.
                 {% endif %}
               </p>
             </div>
             {% if selected_clinic %}
-            <form method="post" action="{{ url_for('contabilidade_nfse_processar_fila') }}" class="d-flex gap-2 align-items-end">
+            <form method="post" action="{{ url_for('contabilidade_nfse_processar_fila') }}" class="d-flex gap-2 align-items-end flex-shrink-0">
               <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
               <input type="hidden" name="clinica_id" value="{{ selected_clinic.id }}">
               {% if origin_id and origin_param %}
@@ -220,221 +185,210 @@
               {% endif %}
               <div>
                 <label class="form-label small text-muted mb-1" for="limit">Limite</label>
-                <input id="limit" name="limit" type="number" min="1" max="100" value="10" class="form-control form-control-sm">
+                <input id="limit" name="limit" type="number" min="1" max="100" value="10" class="form-control form-control-sm" style="width:5rem;">
               </div>
-              <button class="btn btn-outline-primary btn-sm" type="submit">
-                Processar fila
+              <button class="btn btn-primary btn-sm nfse-emit-btn" type="submit" {% if not selected_clinic or nfse_missing_fields %}disabled{% endif %}>
+                <i class="fas fa-play me-1"></i>Processar fila
               </button>
             </form>
             {% endif %}
           </div>
-          {% if selected_clinic %}
-            <div class="alert alert-info small mt-3 mb-0">
-              Dica: se uma emissão ficar em <strong>erro</strong>, clique em <strong>Reprocessar</strong> para tentar novamente.
+          {% if selected_clinic and nfse_missing_fields %}
+            <div class="alert alert-warning small mb-0 d-flex align-items-center gap-2">
+              <i class="fas fa-lock"></i>
+              <span>Processamento bloqueado: preencha as <strong>configurações fiscais</strong> acima para habilitar.</span>
+            </div>
+          {% elif selected_clinic %}
+            <div class="alert alert-info small mb-0">
+              Ao finalizar uma consulta com orçamento <strong>Particular</strong>, a NFS-e entra automaticamente na fila.
+              Se ficar em <strong>erro</strong>, use <strong>Reprocessar</strong> na tabela abaixo.
             </div>
           {% endif %}
         </div>
       </div>
+
+      {# Budget data preview (read-only) -- shown when orcamento is loaded #}
+      <div class="card shadow-sm" id="nfse-budget-preview" hidden>
+        <div class="card-body">
+          <div class="d-flex justify-content-between align-items-center mb-3">
+            <h6 class="mb-0"><i class="fas fa-file-invoice me-1 text-muted"></i>Dados do Orçamento</h6>
+            <span class="nfse-eligible-badge" data-nfse-badge>
+              <i class="fas fa-receipt"></i>Elegível para NFS-e
+            </span>
+          </div>
+          <div class="nfse-readonly-section mb-3">
+            <div class="row g-2">
+              <div class="col-sm-4">
+                <span class="nfse-readonly-label">Orçamento</span>
+                <span class="nfse-readonly-value" data-nfse-ro="orcamento_id">--</span>
+              </div>
+              <div class="col-sm-4">
+                <span class="nfse-readonly-label">Consulta</span>
+                <span class="nfse-readonly-value" data-nfse-ro="consulta_id">--</span>
+              </div>
+              <div class="col-sm-4">
+                <span class="nfse-readonly-label">Paciente</span>
+                <span class="nfse-readonly-value" data-nfse-ro="paciente_nome">--</span>
+              </div>
+            </div>
+          </div>
+          <div class="nfse-readonly-section mb-3">
+            <span class="nfse-readonly-label">Tomador (Tutor)</span>
+            <div class="row g-2 mt-1">
+              <div class="col-sm-6">
+                <span class="nfse-readonly-value" data-nfse-ro="tomador_nome">--</span>
+              </div>
+              <div class="col-sm-6">
+                <span class="text-muted small" data-nfse-ro="tomador_documento">--</span>
+              </div>
+            </div>
+          </div>
+          <div class="nfse-summary-card">
+            <span class="nfse-summary-card__label">Itens do orçamento</span>
+            <ul class="nfse-item-list mt-2" data-nfse-ro-items></ul>
+            <div class="d-flex justify-content-between align-items-center border-top pt-2 mt-2">
+              <span class="nfse-summary-card__label">Total</span>
+              <span class="nfse-summary-card__total" data-nfse-ro-total>R$ 0,00</span>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
 
-    <div class="col-lg-4">
+    {# RIGHT COLUMN: NFS-e Controls & Manual Emission #}
+    <div>
       <div class="card shadow-sm h-100">
         <div class="card-body">
-          <h6 class="mb-2">Emissão manual (casos pontuais)</h6>
+          <h6 class="mb-1"><i class="fas fa-file-invoice-dollar me-1 text-primary"></i>Emissão de NFS-e</h6>
           <p class="text-muted small mb-3">
-            Use quando precisar emitir uma NFS-e retroativa para uma consulta já finalizada.
+            Informe o orçamento para preencher automaticamente. Dados obrigatórios do tomador podem ser ajustados.
           </p>
           <form method="post" action="{{ url_for('contabilidade_nfse_emitir') }}" data-nfse-orcamento-form data-orcamento-endpoint="{{ url_for('contabilidade_nfse_orcamento', orcamento_id=0) }}">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             {% if origin_id and origin_param and origin_param != 'orcamento_id' %}
               <input type="hidden" name="{{ origin_param }}" value="{{ origin_id }}">
             {% endif %}
-            <div class="mb-2">
-              <label class="form-label small text-muted" for="orcamento_id">Orçamento</label>
-              <input
-                id="orcamento_id"
-                name="orcamento_id"
-                type="number"
-                class="form-control"
-                placeholder="ID do orçamento"
-                value="{% if origin_param == 'orcamento_id' %}{{ origin_id }}{% endif %}"
-                data-nfse-field="orcamento_id"
-              >
-            </div>
-            <div class="mb-2">
-              <label class="form-label small text-muted" for="consulta_id">Consulta</label>
-              <input
-                id="consulta_id"
-                name="consulta_id"
-                type="number"
-                class="form-control"
-                placeholder="ID da consulta"
-                data-nfse-field="consulta_id"
-              >
-            </div>
-            <div class="mb-2">
-              <label class="form-label small text-muted" for="nfse-paciente">Paciente</label>
-              <input
-                id="nfse-paciente"
-                name="paciente_nome"
-                type="text"
-                class="form-control"
-                placeholder="Nome do paciente"
-                data-nfse-field="paciente_nome"
-              >
-            </div>
-            <div class="mb-2">
-              <label class="form-label small text-muted" for="nfse-tomador">Tomador</label>
-              <input
-                id="nfse-tomador"
-                name="tomador_nome"
-                type="text"
-                class="form-control"
-                placeholder="Nome do tomador"
-                data-nfse-field="tomador_nome"
-              >
-              <div class="invalid-feedback">
-                Informe o nome do tomador.
-              </div>
-            </div>
-            <div class="mb-2">
-              <label class="form-label small text-muted" for="nfse-tomador-documento">CPF/CNPJ</label>
-              <input
-                id="nfse-tomador-documento"
-                name="tomador_documento"
-                type="text"
-                class="form-control"
-                placeholder="Documento do tomador"
-                data-nfse-field="tomador_documento"
-              >
-              <div class="invalid-feedback">
-                CPF/CNPJ inválido.
-              </div>
-            </div>
-            <div class="mb-2">
-              <label class="form-label small text-muted" for="nfse-tomador-email">E-mail</label>
-              <input
-                id="nfse-tomador-email"
-                name="tomador_email"
-                type="email"
-                class="form-control"
-                placeholder="E-mail do tomador"
-                data-nfse-field="tomador_email"
-              >
-              <div class="invalid-feedback">
-                Informe um e-mail válido.
-              </div>
-            </div>
+
+            {# Orçamento ID with auto-load #}
             <div class="mb-3">
-              <label class="form-label small text-muted" for="nfse-tomador-telefone">Telefone</label>
-              <input
-                id="nfse-tomador-telefone"
-                name="tomador_telefone"
-                type="text"
-                class="form-control"
-                placeholder="Telefone do tomador"
-                data-nfse-field="tomador_telefone"
-              >
+              <label class="form-label small text-muted fw-semibold" for="orcamento_id">
+                <i class="fas fa-search me-1"></i>Orçamento
+              </label>
+              <div class="input-group">
+                <input
+                  id="orcamento_id"
+                  name="orcamento_id"
+                  type="number"
+                  class="form-control"
+                  placeholder="ID do orçamento"
+                  value="{% if origin_param == 'orcamento_id' %}{{ origin_id }}{% endif %}"
+                  data-nfse-field="orcamento_id"
+                >
+                <button class="btn btn-outline-secondary" type="button" data-nfse-load-btn title="Carregar dados do orçamento">
+                  <i class="fas fa-sync-alt"></i>
+                </button>
+              </div>
+              <div class="form-text" data-nfse-load-status></div>
             </div>
-            <div class="row g-2 mb-2">
-              <div class="col-sm-5">
-                <label class="form-label small text-muted" for="nfse-tomador-cep">CEP</label>
-                <input
-                  id="nfse-tomador-cep"
-                  name="tomador_cep"
-                  type="text"
-                  class="form-control"
-                  placeholder="00000-000"
-                  data-nfse-field="tomador_cep"
-                >
-                <div class="invalid-feedback">
-                  CEP inválido.
-                </div>
+
+            {# Hidden consulta_id #}
+            <input type="hidden" name="consulta_id" data-nfse-field="consulta_id">
+
+            {# Tomador Fields (editable) #}
+            <div class="border rounded p-3 mb-3">
+              <div class="d-flex justify-content-between align-items-center mb-2">
+                <span class="fw-semibold small text-uppercase text-muted">Dados do Tomador</span>
+                <span class="badge bg-light text-muted small" data-nfse-autofill-badge hidden>Preenchido automaticamente</span>
               </div>
-              <div class="col-sm-5">
-                <label class="form-label small text-muted" for="nfse-tomador-municipio">Município</label>
-                <input
-                  id="nfse-tomador-municipio"
-                  name="tomador_municipio"
-                  type="text"
-                  class="form-control"
-                  placeholder="Cidade"
-                  data-nfse-field="tomador_municipio"
-                >
-                <div class="invalid-feedback">
-                  Informe o município.
+              <div class="row g-2">
+                <div class="col-sm-8">
+                  <label class="form-label small text-muted" for="nfse-tomador">Nome</label>
+                  <input id="nfse-tomador" name="tomador_nome" type="text" class="form-control form-control-sm" placeholder="Nome do tomador" data-nfse-field="tomador_nome">
+                  <div class="invalid-feedback">Informe o nome do tomador.</div>
                 </div>
-              </div>
-              <div class="col-sm-2">
-                <label class="form-label small text-muted" for="nfse-tomador-uf">UF</label>
-                <input
-                  id="nfse-tomador-uf"
-                  name="tomador_uf"
-                  type="text"
-                  class="form-control"
-                  maxlength="2"
-                  placeholder="UF"
-                  data-nfse-field="tomador_uf"
-                >
-                <div class="invalid-feedback">
-                  UF inválida.
+                <div class="col-sm-4">
+                  <label class="form-label small text-muted" for="nfse-tomador-documento">CPF/CNPJ</label>
+                  <input id="nfse-tomador-documento" name="tomador_documento" type="text" class="form-control form-control-sm" placeholder="Documento" data-nfse-field="tomador_documento">
+                  <div class="invalid-feedback">CPF/CNPJ inválido.</div>
+                </div>
+                <div class="col-sm-6">
+                  <label class="form-label small text-muted" for="nfse-tomador-email">E-mail</label>
+                  <input id="nfse-tomador-email" name="tomador_email" type="email" class="form-control form-control-sm" placeholder="E-mail" data-nfse-field="tomador_email">
+                  <div class="invalid-feedback">E-mail inválido.</div>
+                </div>
+                <div class="col-sm-6">
+                  <label class="form-label small text-muted" for="nfse-tomador-telefone">Telefone</label>
+                  <input id="nfse-tomador-telefone" name="tomador_telefone" type="text" class="form-control form-control-sm" placeholder="Telefone" data-nfse-field="tomador_telefone">
                 </div>
               </div>
             </div>
-            <div class="mb-2">
-              <label class="form-label small text-muted" for="nfse-tomador-logradouro">Logradouro</label>
-              <input
-                id="nfse-tomador-logradouro"
-                name="tomador_logradouro"
-                type="text"
-                class="form-control"
-                placeholder="Rua/Av."
-                data-nfse-field="tomador_logradouro"
-              >
-            </div>
-            <div class="row g-2 mb-3">
-              <div class="col-sm-6">
-                <label class="form-label small text-muted" for="nfse-tomador-numero">Número</label>
-                <input
-                  id="nfse-tomador-numero"
-                  name="tomador_numero"
-                  type="text"
-                  class="form-control"
-                  placeholder="Número"
-                  data-nfse-field="tomador_numero"
-                >
-              </div>
-              <div class="col-sm-6">
-                <label class="form-label small text-muted" for="nfse-tomador-bairro">Bairro</label>
-                <input
-                  id="nfse-tomador-bairro"
-                  name="tomador_bairro"
-                  type="text"
-                  class="form-control"
-                  placeholder="Bairro"
-                  data-nfse-field="tomador_bairro"
-                >
-              </div>
-            </div>
-            <div class="card border-0 bg-light mb-3" data-nfse-summary>
-              <div class="card-body p-3">
-                <h6 class="mb-2">Resumo da Nota</h6>
-                <p class="text-muted small mb-2" data-nfse-summary-empty>
-                  Informe um orçamento para visualizar o resumo antes de enviar.
-                </p>
-                <ul class="list-group list-group-flush mb-2" data-nfse-items hidden></ul>
-                <div class="d-flex justify-content-between align-items-center border-top pt-2">
-                  <strong>Total do orçamento</strong>
-                  <strong data-nfse-total>R$ 0,00</strong>
+
+            {# Address (collapsible) #}
+            <div class="mb-3">
+              <button class="btn btn-sm btn-link text-muted px-0 nfse-config-toggle" type="button" data-bs-toggle="collapse" data-bs-target="#nfse-address-section" aria-expanded="false">
+                <i class="fas fa-chevron-down me-1"></i>Endereço do tomador
+              </button>
+              <div class="collapse" id="nfse-address-section">
+                <div class="border rounded p-3 mt-2">
+                  <div class="row g-2">
+                    <div class="col-sm-4">
+                      <label class="form-label small text-muted" for="nfse-tomador-cep">CEP</label>
+                      <input id="nfse-tomador-cep" name="tomador_cep" type="text" class="form-control form-control-sm" placeholder="00000-000" data-nfse-field="tomador_cep">
+                      <div class="invalid-feedback">CEP inválido.</div>
+                    </div>
+                    <div class="col-sm-5">
+                      <label class="form-label small text-muted" for="nfse-tomador-municipio">Município</label>
+                      <input id="nfse-tomador-municipio" name="tomador_municipio" type="text" class="form-control form-control-sm" placeholder="Cidade" data-nfse-field="tomador_municipio">
+                      <div class="invalid-feedback">Informe o município.</div>
+                    </div>
+                    <div class="col-sm-3">
+                      <label class="form-label small text-muted" for="nfse-tomador-uf">UF</label>
+                      <input id="nfse-tomador-uf" name="tomador_uf" type="text" class="form-control form-control-sm" maxlength="2" placeholder="UF" data-nfse-field="tomador_uf">
+                      <div class="invalid-feedback">UF inválida.</div>
+                    </div>
+                    <div class="col-12">
+                      <label class="form-label small text-muted" for="nfse-tomador-logradouro">Logradouro</label>
+                      <input id="nfse-tomador-logradouro" name="tomador_logradouro" type="text" class="form-control form-control-sm" placeholder="Rua/Av." data-nfse-field="tomador_logradouro">
+                    </div>
+                    <div class="col-sm-4">
+                      <label class="form-label small text-muted" for="nfse-tomador-numero">Número</label>
+                      <input id="nfse-tomador-numero" name="tomador_numero" type="text" class="form-control form-control-sm" placeholder="Nº" data-nfse-field="tomador_numero">
+                    </div>
+                    <div class="col-sm-8">
+                      <label class="form-label small text-muted" for="nfse-tomador-bairro">Bairro</label>
+                      <input id="nfse-tomador-bairro" name="tomador_bairro" type="text" class="form-control form-control-sm" placeholder="Bairro" data-nfse-field="tomador_bairro">
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
-            <a class="btn btn-outline-primary w-100 mb-2 disabled" data-nfse-preview href="#">
-              Pré-visualizar NFS-e
-            </a>
-            <button class="btn btn-primary w-100" type="submit">Emitir NFS-e</button>
-            <p class="text-muted small mt-2 mb-0">
-              Se não souber o ID, finalize a consulta normalmente para entrar na fila automaticamente.
+
+            {# Hidden paciente_nome #}
+            <input type="hidden" name="paciente_nome" data-nfse-field="paciente_nome">
+
+            {# Summary + Action Buttons #}
+            <div class="nfse-summary-card mb-3" data-nfse-summary>
+              <span class="nfse-summary-card__label">Resumo da Nota</span>
+              <p class="text-muted small mb-2 mt-1" data-nfse-summary-empty>
+                Informe um orçamento para visualizar o resumo.
+              </p>
+              <ul class="nfse-item-list mt-2" data-nfse-items hidden></ul>
+              <div class="d-flex justify-content-between align-items-center border-top pt-2 mt-2">
+                <strong class="small">Total</strong>
+                <strong class="text-primary" data-nfse-total>R$ 0,00</strong>
+              </div>
+            </div>
+
+            <div class="d-grid gap-2">
+              <a class="btn btn-outline-primary disabled" data-nfse-preview href="#">
+                <i class="fas fa-eye me-1"></i>Pré-visualizar NFS-e
+              </a>
+              <button class="btn btn-primary nfse-emit-btn" type="submit" {% if nfse_missing_fields %}disabled{% endif %}>
+                <i class="fas fa-paper-plane me-1"></i>Confirmar e Emitir NFS-e
+              </button>
+            </div>
+            <p class="text-muted small mt-2 mb-0 text-center">
+              Sem o ID? Finalize a consulta para entrar na fila automaticamente.
             </p>
           </form>
         </div>
@@ -442,253 +396,299 @@
     </div>
   </div>
 
-  <div class="card shadow-sm mt-4">
+  {# --- Unified Tracking Table --- #}
+  <div class="card shadow-sm" id="nfse-tracking">
     <div class="card-body">
       <div class="d-flex flex-column flex-lg-row justify-content-between align-items-lg-center gap-2 mb-3">
         <div>
-          <h6 class="mb-1">Acompanhamento das emissões</h6>
+          <h5 class="mb-1"><i class="fas fa-list-check me-1 text-primary"></i>Acompanhamento das emissões</h5>
           <p class="text-muted mb-0 small">
-            Status, protocolo e número retornados pela prefeitura/operadora.
+            Lista unificada de todas as NFS-e. Filtre por status para encontrar rapidamente.
           </p>
         </div>
-        <form method="get" class="d-flex flex-wrap gap-2 align-items-center">
+        {# Pill Filters #}
+        <form method="get" class="nfse-tracking-filters" id="nfse-filter-form">
           {% if selected_clinic %}
             <input type="hidden" name="clinica_id" value="{{ selected_clinic.id }}">
           {% endif %}
           {% if origin_id and origin_param %}
             <input type="hidden" name="{{ origin_param }}" value="{{ origin_id }}">
           {% endif %}
-          <label class="form-label small text-muted mb-0" for="status">Status</label>
-          <select id="status" name="status" class="form-select form-select-sm">
-            <option value="">Todos</option>
-            {% for status in statuses %}
-              <option value="{{ status }}" {% if status_filter == status %}selected{% endif %}>
-                {{ status.replace('_', ' ').title() }}
-              </option>
-            {% endfor %}
-          </select>
-          <button class="btn btn-outline-secondary btn-sm" type="submit">Filtrar</button>
+          <input type="hidden" name="status" id="nfse-status-input" value="{{ status_filter }}">
+          {% set filter_labels = {
+            '': 'Todos',
+            'fila': 'Na fila',
+            'processando': 'Processando',
+            'autorizado': 'Autorizado',
+            'erro': 'Erro',
+            'cancelada': 'Cancelada'
+          } %}
+          {% for value, label in filter_labels.items() %}
+            {% set filter_style = {
+              '': 'btn-outline-dark',
+              'fila': 'btn-outline-secondary',
+              'processando': 'btn-outline-warning',
+              'autorizado': 'btn-outline-success',
+              'erro': 'btn-outline-danger',
+              'cancelada': 'btn-outline-dark'
+            }.get(value, 'btn-outline-secondary') %}
+            <button type="button"
+              class="btn {{ filter_style }} {% if status_filter == value %}active{% endif %}"
+              data-nfse-filter="{{ value }}">
+              {{ label }}
+            </button>
+          {% endfor %}
         </form>
       </div>
+
       {% if selected_clinic and cancel_rules %}
-        <div class="alert alert-light border small mb-3">
-          <strong>Regras do município:</strong>
-          {% if cancel_rules.deadline_days %}
-            Prazo de cancelamento/substituição: {{ cancel_rules.deadline_days }} dia(s).
-          {% else %}
-            Prazo de cancelamento/substituição: a definir.
-          {% endif %}
-          {% if cancel_rules.require_reason %}
-            Motivo obrigatório.
-          {% else %}
-            Motivo opcional.
-          {% endif %}
+        <div class="alert alert-light border small mb-3 d-flex align-items-center gap-2">
+          <i class="fas fa-info-circle text-muted"></i>
+          <span>
+            <strong>Regras do município:</strong>
+            {% if cancel_rules.deadline_days %}
+              Prazo de cancelamento: {{ cancel_rules.deadline_days }} dia(s).
+            {% endif %}
+            {% if cancel_rules.require_reason %}Motivo obrigatório.{% endif %}
+          </span>
         </div>
       {% endif %}
 
       {% if selected_clinic %}
       <div class="table-responsive">
-        <table class="table table-striped align-middle">
-          <thead>
+        <table class="table align-middle mb-0">
+          <thead class="table-light">
             <tr>
-              <th>Emissão</th>
-              <th>Evento</th>
-              <th>Tutor/Paciente</th>
-              <th>Status</th>
-              <th>Protocolo</th>
-              <th>Nº NFS-e</th>
-              <th>Downloads</th>
-              <th>Ações</th>
+              <th class="small text-uppercase text-muted">Emissão</th>
+              <th class="small text-uppercase text-muted">Origem</th>
+              <th class="small text-uppercase text-muted">Tutor / Paciente</th>
+              <th class="small text-uppercase text-muted">Status</th>
+              <th class="small text-uppercase text-muted">Protocolo / Nº</th>
+              <th class="small text-uppercase text-muted text-end">Ações</th>
             </tr>
           </thead>
           <tbody>
             {% for issue in issues %}
             {% set status_value = issue.status or 'pendente' %}
-            {% set status_class = {
-              'fila': 'bg-secondary',
-              'processando': 'bg-warning text-dark',
-              'pendente': 'bg-info',
-              'autorizado': 'bg-success',
-              'erro': 'bg-danger',
-              'cancelada': 'bg-dark',
-              'cancelamento_solicitado': 'bg-warning text-dark',
-              'substituicao_solicitada': 'bg-info text-dark'
-            }.get(status_value, 'bg-light text-dark') %}
             {% set tomador_payload = issue.tomador_payload %}
             {% set tutor_nome = issue.tutor_display_name %}
             {% set animal_nome = issue.animal_display_name %}
-            <tr class="{% if status_value == 'processando' %}table-warning{% endif %}">
+            <tr class="nfse-tracking-row {% if status_value == 'processando' %}nfse-tracking-row--processing{% elif status_value == 'erro' %}nfse-tracking-row--error{% endif %}">
               <td>
                 <div class="fw-semibold">#{{ issue.id }}</div>
                 <div class="text-muted small">{{ issue.created_at.strftime('%d/%m/%Y %H:%M') if issue.created_at else '—' }}</div>
-                {% if status_value == 'processando' %}
-                  <div class="small text-warning fw-semibold">Processando agora</div>
-                {% endif %}
               </td>
               <td>
-                <div class="fw-semibold">{{ issue.internal_identifier or '—' }}</div>
+                <div class="fw-semibold small">{{ issue.internal_identifier or '—' }}</div>
                 <div class="text-muted small">RPS: {{ issue.rps or '—' }}</div>
               </td>
               <td>
                 <div class="fw-semibold">{{ tutor_nome or 'Tutor não informado' }}</div>
-                <div class="text-muted small">Paciente: {{ animal_nome or 'Não informado' }}</div>
+                <div class="text-muted small">{{ animal_nome or 'Paciente não informado' }}</div>
                 {% if not tutor_nome or not animal_nome %}
-                  <div class="text-warning small">Dados incompletos</div>
+                  <span class="badge bg-warning bg-opacity-10 text-warning small">Dados incompletos</span>
                 {% endif %}
               </td>
               <td>
-                <span class="badge {{ status_class }}">{{ status_value }}</span>
-                {% if issue.erro_mensagem or issue.erro_codigo or issue.erro_detalhes %}
-                  <div class="small text-danger mt-1">
-                    {% if issue.erro_mensagem %}
-                      <div><strong>Erro:</strong> {{ issue.erro_mensagem }}</div>
-                    {% else %}
-                      <div><strong>Erro:</strong> Falha ao processar a NFS-e.</div>
-                    {% endif %}
+                <span class="nfse-status-badge nfse-status-badge--{{ status_value }}">
+                  {% if status_value == 'processando' %}<i class="fas fa-spinner fa-spin"></i>{% endif %}
+                  {% if status_value == 'autorizado' %}<i class="fas fa-check-circle"></i>{% endif %}
+                  {% if status_value == 'erro' %}<i class="fas fa-times-circle"></i>{% endif %}
+                  {% if status_value == 'fila' %}<i class="fas fa-clock"></i>{% endif %}
+                  {% if status_value == 'cancelada' %}<i class="fas fa-ban"></i>{% endif %}
+                  {{ status_value.replace('_', ' ').title() }}
+                </span>
+                {% if issue.erro_mensagem or issue.erro_codigo %}
+                  <div class="nfse-error-detail">
+                    <strong>{{ issue.erro_mensagem or 'Falha ao processar a NFS-e.' }}</strong>
                     {% if issue.erro_codigo %}
-                      <div>Código: {{ issue.erro_codigo }}</div>
+                      <div class="small">Código: {{ issue.erro_codigo }}</div>
                     {% endif %}
                     {% if issue.erro_detalhes %}
                       <details class="mt-1">
                         <summary class="small">Detalhes técnicos</summary>
-                        <div class="text-muted">{{ issue.erro_detalhes }}</div>
+                        <div class="text-muted small mt-1">{{ issue.erro_detalhes }}</div>
                       </details>
                     {% endif %}
                   </div>
                 {% endif %}
               </td>
-              <td>{{ issue.protocolo or '—' }}</td>
-              <td>{{ issue.numero_nfse or '—' }}</td>
-              <td class="d-flex flex-column gap-2">
-                <a class="btn btn-outline-secondary btn-sm" href="{{ url_for('contabilidade_nfse_download', issue_id=issue.id, kind='xml') }}">
-                  XML
-                </a>
-                {% if issue.id in pdf_issue_ids %}
-                  <a class="btn btn-outline-secondary btn-sm" href="{{ url_for('contabilidade_nfse_download', issue_id=issue.id, kind='pdf') }}">
-                    PDF
-                  </a>
+              <td>
+                {% if issue.protocolo %}
+                  <div class="small"><span class="text-muted">Prot.:</span> {{ issue.protocolo }}</div>
+                {% endif %}
+                {% if issue.numero_nfse %}
+                  <div class="fw-semibold"><span class="text-muted small">Nº:</span> {{ issue.numero_nfse }}</div>
                 {% else %}
-                  <button class="btn btn-outline-secondary btn-sm" type="button" disabled>PDF</button>
+                  <span class="text-muted">—</span>
                 {% endif %}
               </td>
               <td>
-                <form method="post" action="{{ url_for('contabilidade_nfse_reprocessar', issue_id=issue.id) }}">
-                  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                  {% if origin_id and origin_param %}
-                    <input type="hidden" name="{{ origin_param }}" value="{{ origin_id }}">
+                <div class="nfse-actions justify-content-end">
+                  {# Reprocess button (always visible for non-final) #}
+                  {% if status_value in ['fila', 'erro', 'processando', 'pendente'] %}
+                  <form method="post" action="{{ url_for('contabilidade_nfse_reprocessar', issue_id=issue.id) }}" class="d-inline">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    {% if origin_id and origin_param %}
+                      <input type="hidden" name="{{ origin_param }}" value="{{ origin_id }}">
+                    {% endif %}
+                    <button class="btn btn-outline-primary btn-sm" type="submit" title="Reprocessar">
+                      <i class="fas fa-redo me-1"></i>Reprocessar
+                    </button>
+                  </form>
                   {% endif %}
-                  <button class="btn btn-outline-primary btn-sm" type="submit">Reprocessar</button>
-                </form>
-                <details class="mt-2">
-                  <summary class="small text-primary">Completar dados</summary>
-                  <form method="post" action="{{ url_for('contabilidade_nfse_contexto', issue_id=issue.id) }}" class="mt-2">
-                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                    {% if origin_id and origin_param %}
-                      <input type="hidden" name="{{ origin_param }}" value="{{ origin_id }}">
-                    {% endif %}
-                    <div class="mb-2">
-                      <label class="form-label small text-muted mb-1" for="tutor_nome_{{ issue.id }}">Tutor</label>
-                      <input id="tutor_nome_{{ issue.id }}" name="tutor_nome" class="form-control form-control-sm" value="{{ tutor_nome or '' }}" placeholder="Nome do tutor">
-                    </div>
-                    <div class="mb-2">
-                      <label class="form-label small text-muted mb-1" for="tutor_documento_{{ issue.id }}">CPF/CNPJ</label>
-                      <input id="tutor_documento_{{ issue.id }}" name="tutor_documento" class="form-control form-control-sm" value="{{ issue.tutor_documento or '' }}" placeholder="Documento do tutor">
-                    </div>
-                    <div class="mb-2">
-                      <label class="form-label small text-muted mb-1" for="animal_nome_{{ issue.id }}">Paciente</label>
-                      <input id="animal_nome_{{ issue.id }}" name="animal_nome" class="form-control form-control-sm" value="{{ animal_nome or '' }}" placeholder="Nome do paciente">
-                    </div>
-                    <button class="btn btn-outline-secondary btn-sm w-100" type="submit">Salvar dados</button>
-                  </form>
-                </details>
-                {% set can_cancel = issue.numero_nfse and status_value not in ['cancelada', 'cancelamento_solicitado', 'substituicao_solicitada'] %}
-                {% if can_cancel %}
-                <details class="mt-2">
-                  <summary class="small text-primary">Cancelar/Substituir</summary>
-                  <form method="post" action="{{ url_for('contabilidade_nfse_cancelar', issue_id=issue.id) }}" class="mt-2">
-                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                    {% if origin_id and origin_param %}
-                      <input type="hidden" name="{{ origin_param }}" value="{{ origin_id }}">
-                    {% endif %}
-                    <div class="mb-2">
-                      <label class="form-label small text-muted mb-1" for="reason_code_{{ issue.id }}">Motivo</label>
-                      {% if cancel_rules and cancel_rules.allowed_reasons %}
-                        <select id="reason_code_{{ issue.id }}" name="reason_code" class="form-select form-select-sm">
-                          <option value="">Selecione</option>
-                          {% for reason in cancel_rules.allowed_reasons %}
-                            <option value="{{ reason.code }}">{{ reason.label }}</option>
-                          {% endfor %}
-                        </select>
-                      {% else %}
-                        <input id="reason_code_{{ issue.id }}" name="reason_code" class="form-control form-control-sm" placeholder="Código do motivo">
+
+                  {# Downloads #}
+                  <a class="btn btn-outline-secondary btn-sm" href="{{ url_for('contabilidade_nfse_download', issue_id=issue.id, kind='xml') }}" title="Baixar XML">
+                    <i class="fas fa-file-code me-1"></i>XML
+                  </a>
+                  {% if issue.id in pdf_issue_ids %}
+                    <a class="btn btn-outline-secondary btn-sm" href="{{ url_for('contabilidade_nfse_download', issue_id=issue.id, kind='pdf') }}" title="Baixar PDF">
+                      <i class="fas fa-file-pdf me-1"></i>PDF
+                    </a>
+                  {% endif %}
+
+                  {# Expand details button #}
+                  <button class="btn btn-outline-secondary btn-sm" type="button" data-bs-toggle="collapse" data-bs-target="#nfse-detail-{{ issue.id }}" title="Detalhes">
+                    <i class="fas fa-ellipsis-h"></i>
+                  </button>
+                </div>
+
+                {# Collapsible details row #}
+                <div class="collapse mt-2" id="nfse-detail-{{ issue.id }}">
+                  {# Complete data form #}
+                  <div class="border rounded p-2 mb-2">
+                    <div class="fw-semibold small mb-1">Completar dados</div>
+                    <form method="post" action="{{ url_for('contabilidade_nfse_contexto', issue_id=issue.id) }}">
+                      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                      {% if origin_id and origin_param %}
+                        <input type="hidden" name="{{ origin_param }}" value="{{ origin_id }}">
                       {% endif %}
-                    </div>
-                    <div class="mb-2">
-                      <label class="form-label small text-muted mb-1" for="reason_desc_{{ issue.id }}">Descrição</label>
-                      <input id="reason_desc_{{ issue.id }}" name="reason_description" class="form-control form-control-sm" placeholder="Descrição do motivo">
-                    </div>
-                    <button class="btn btn-outline-danger btn-sm w-100" type="submit">Solicitar cancelamento</button>
-                  </form>
-                  <form method="post" action="{{ url_for('contabilidade_nfse_substituir', issue_id=issue.id) }}" class="mt-3">
-                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                    {% if origin_id and origin_param %}
-                      <input type="hidden" name="{{ origin_param }}" value="{{ origin_id }}">
-                    {% endif %}
-                    <div class="mb-2">
-                      <label class="form-label small text-muted mb-1" for="reason_code_sub_{{ issue.id }}">Motivo</label>
-                      {% if cancel_rules and cancel_rules.allowed_reasons %}
-                        <select id="reason_code_sub_{{ issue.id }}" name="reason_code" class="form-select form-select-sm">
-                          <option value="">Selecione</option>
-                          {% for reason in cancel_rules.allowed_reasons %}
-                            <option value="{{ reason.code }}">{{ reason.label }}</option>
-                          {% endfor %}
-                        </select>
-                      {% else %}
-                        <input id="reason_code_sub_{{ issue.id }}" name="reason_code" class="form-control form-control-sm" placeholder="Código do motivo">
+                      <div class="row g-1 mb-1">
+                        <div class="col-12">
+                          <input name="tutor_nome" class="form-control form-control-sm" value="{{ tutor_nome or '' }}" placeholder="Tutor">
+                        </div>
+                        <div class="col-sm-6">
+                          <input name="tutor_documento" class="form-control form-control-sm" value="{{ issue.tutor_documento or '' }}" placeholder="CPF/CNPJ">
+                        </div>
+                        <div class="col-sm-6">
+                          <input name="animal_nome" class="form-control form-control-sm" value="{{ animal_nome or '' }}" placeholder="Paciente">
+                        </div>
+                      </div>
+                      <button class="btn btn-outline-secondary btn-sm w-100" type="submit">Salvar dados</button>
+                    </form>
+                  </div>
+
+                  {# Cancel/Replace forms #}
+                  {% set can_cancel = issue.numero_nfse and status_value not in ['cancelada', 'cancelamento_solicitado', 'substituicao_solicitada'] %}
+                  {% if can_cancel %}
+                  <div class="border rounded p-2">
+                    <div class="fw-semibold small mb-1">Cancelar / Substituir</div>
+                    <form method="post" action="{{ url_for('contabilidade_nfse_cancelar', issue_id=issue.id) }}" class="mb-2">
+                      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                      {% if origin_id and origin_param %}
+                        <input type="hidden" name="{{ origin_param }}" value="{{ origin_id }}">
                       {% endif %}
-                    </div>
-                    <div class="mb-2">
-                      <label class="form-label small text-muted mb-1" for="reason_desc_sub_{{ issue.id }}">Descrição</label>
-                      <input id="reason_desc_sub_{{ issue.id }}" name="reason_description" class="form-control form-control-sm" placeholder="Descrição do motivo">
-                    </div>
-                    <div class="mb-2">
-                      <label class="form-label small text-muted mb-1" for="substituta_{{ issue.id }}">NFS-e substituta</label>
-                      <input id="substituta_{{ issue.id }}" name="substituida_por_nfse" class="form-control form-control-sm" placeholder="Número da nota substituta">
-                    </div>
-                    <button class="btn btn-outline-warning btn-sm w-100" type="submit">Solicitar substituição</button>
-                  </form>
-                </details>
-                {% endif %}
+                      <div class="row g-1 mb-1">
+                        <div class="col-sm-6">
+                          {% if cancel_rules and cancel_rules.allowed_reasons %}
+                            <select name="reason_code" class="form-select form-select-sm">
+                              <option value="">Motivo</option>
+                              {% for reason in cancel_rules.allowed_reasons %}
+                                <option value="{{ reason.code }}">{{ reason.label }}</option>
+                              {% endfor %}
+                            </select>
+                          {% else %}
+                            <input name="reason_code" class="form-control form-control-sm" placeholder="Motivo">
+                          {% endif %}
+                        </div>
+                        <div class="col-sm-6">
+                          <input name="reason_description" class="form-control form-control-sm" placeholder="Descrição">
+                        </div>
+                      </div>
+                      <button class="btn btn-outline-danger btn-sm w-100" type="submit">Cancelar NFS-e</button>
+                    </form>
+                    <form method="post" action="{{ url_for('contabilidade_nfse_substituir', issue_id=issue.id) }}">
+                      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                      {% if origin_id and origin_param %}
+                        <input type="hidden" name="{{ origin_param }}" value="{{ origin_id }}">
+                      {% endif %}
+                      <div class="row g-1 mb-1">
+                        <div class="col-sm-4">
+                          {% if cancel_rules and cancel_rules.allowed_reasons %}
+                            <select name="reason_code" class="form-select form-select-sm">
+                              <option value="">Motivo</option>
+                              {% for reason in cancel_rules.allowed_reasons %}
+                                <option value="{{ reason.code }}">{{ reason.label }}</option>
+                              {% endfor %}
+                            </select>
+                          {% else %}
+                            <input name="reason_code" class="form-control form-control-sm" placeholder="Motivo">
+                          {% endif %}
+                        </div>
+                        <div class="col-sm-4">
+                          <input name="reason_description" class="form-control form-control-sm" placeholder="Descrição">
+                        </div>
+                        <div class="col-sm-4">
+                          <input name="substituida_por_nfse" class="form-control form-control-sm" placeholder="Nº substituta">
+                        </div>
+                      </div>
+                      <button class="btn btn-outline-warning btn-sm w-100" type="submit">Substituir</button>
+                    </form>
+                  </div>
+                  {% endif %}
+                </div>
               </td>
             </tr>
             {% else %}
             <tr>
-              <td colspan="8" class="text-muted">Nenhuma emissão encontrada.</td>
+              <td colspan="6">
+                <div class="nfse-empty-state">
+                  <div class="nfse-empty-state__icon"><i class="fas fa-file-invoice"></i></div>
+                  <p class="text-muted mb-0">Nenhuma emissão encontrada{% if status_filter %} com o filtro "{{ status_filter }}"{% endif %}.</p>
+                </div>
+              </td>
             </tr>
             {% endfor %}
           </tbody>
         </table>
       </div>
       {% else %}
-        <div class="alert alert-warning mb-0">
-          Selecione uma clínica para visualizar emissões e processar a fila.
+        <div class="nfse-empty-state">
+          <div class="nfse-empty-state__icon"><i class="fas fa-building"></i></div>
+          <p class="text-muted">Selecione uma clínica para visualizar emissões e processar a fila.</p>
         </div>
       {% endif %}
     </div>
   </div>
 </div>
+
 <script>
 document.addEventListener('DOMContentLoaded', () => {
+  /* --- Pill Filter Navigation --- */
+  document.querySelectorAll('[data-nfse-filter]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const input = document.getElementById('nfse-status-input');
+      if (input) input.value = btn.dataset.nfseFilter;
+      const form = document.getElementById('nfse-filter-form');
+      if (form) form.submit();
+    });
+  });
+
+  /* --- Emission Form Logic --- */
   const form = document.querySelector('[data-nfse-orcamento-form]');
-  if (!form) {
-    return;
-  }
+  if (!form) return;
+
   const endpointTemplate = form.dataset.orcamentoEndpoint;
-  const summary = form.querySelector('[data-nfse-summary]');
+  const budgetPreview = document.getElementById('nfse-budget-preview');
   const summaryEmpty = form.querySelector('[data-nfse-summary-empty]');
   const itemsList = form.querySelector('[data-nfse-items]');
   const totalField = form.querySelector('[data-nfse-total]');
   const previewButton = form.querySelector('[data-nfse-preview]');
+  const loadBtn = form.querySelector('[data-nfse-load-btn]');
+  const loadStatus = form.querySelector('[data-nfse-load-status]');
+  const autofillBadge = form.querySelector('[data-nfse-autofill-badge]');
+
   const fields = {
     orcamento_id: form.querySelector('[data-nfse-field="orcamento_id"]'),
     consulta_id: form.querySelector('[data-nfse-field="consulta_id"]'),
@@ -704,53 +704,69 @@ document.addEventListener('DOMContentLoaded', () => {
     tomador_numero: form.querySelector('[data-nfse-field="tomador_numero"]'),
     tomador_bairro: form.querySelector('[data-nfse-field="tomador_bairro"]'),
   };
+
   let lastOrcamentoId = null;
+  const fmt = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' });
 
-  const currencyFormatter = new Intl.NumberFormat('pt-BR', {
-    style: 'currency',
-    currency: 'BRL',
-  });
-
-  const setSummaryMessage = (message) => {
-    if (summaryEmpty) {
-      summaryEmpty.textContent = message;
-      summaryEmpty.hidden = !message;
+  const setStatus = (msg, type) => {
+    if (loadStatus) {
+      loadStatus.textContent = msg;
+      loadStatus.className = `form-text text-${type || 'muted'}`;
     }
   };
 
-  const renderItems = (items = []) => {
-    if (!itemsList) {
-      return;
-    }
+  const setSummaryMessage = (msg) => {
+    if (summaryEmpty) { summaryEmpty.textContent = msg; summaryEmpty.hidden = !msg; }
+  };
+
+  const renderItems = (items) => {
+    if (!itemsList) return;
     itemsList.innerHTML = '';
-    if (!items.length) {
-      itemsList.hidden = true;
-      return;
-    }
+    if (!items || !items.length) { itemsList.hidden = true; return; }
     itemsList.hidden = false;
-    items.forEach((item) => {
+    items.forEach(item => {
       const li = document.createElement('li');
-      li.className = 'list-group-item d-flex justify-content-between align-items-center';
-      li.innerHTML = `
-        <span>${item.descricao || 'Item'}</span>
-        <span>${currencyFormatter.format(item.valor || 0)}</span>
-      `;
+      li.className = 'nfse-item-list__item';
+      li.innerHTML = `<span>${item.descricao || 'Item'}</span><span class="fw-semibold">${fmt.format(item.valor || 0)}</span>`;
       itemsList.appendChild(li);
     });
   };
 
-  const updateSummary = (payload) => {
-    if (totalField) {
-      totalField.textContent = currencyFormatter.format(payload.valor_total || 0);
+  const updateReadonly = (payload) => {
+    if (!budgetPreview) return;
+    budgetPreview.hidden = false;
+    const set = (key, val) => {
+      const el = budgetPreview.querySelector(`[data-nfse-ro="${key}"]`);
+      if (el) el.textContent = val || '--';
+    };
+    set('orcamento_id', '#' + (payload.id || ''));
+    set('consulta_id', payload.consulta_id ? '#' + payload.consulta_id : '--');
+    set('paciente_nome', payload.paciente?.nome);
+    set('tomador_nome', payload.tomador?.nome);
+    set('tomador_documento', payload.tomador?.cpf_cnpj);
+
+    const roItems = budgetPreview.querySelector('[data-nfse-ro-items]');
+    if (roItems) {
+      roItems.innerHTML = '';
+      (payload.itens || []).forEach(item => {
+        const li = document.createElement('li');
+        li.className = 'nfse-item-list__item';
+        li.innerHTML = `<span>${item.descricao || 'Item'}</span><span class="fw-semibold">${fmt.format(item.valor || 0)}</span>`;
+        roItems.appendChild(li);
+      });
     }
+    const roTotal = budgetPreview.querySelector('[data-nfse-ro-total]');
+    if (roTotal) roTotal.textContent = fmt.format(payload.valor_total || 0);
+  };
+
+  const updateSummary = (payload) => {
+    if (totalField) totalField.textContent = fmt.format(payload.valor_total || 0);
     renderItems(payload.itens || []);
   };
 
   const updatePreviewLink = () => {
-    if (!previewButton || !fields.orcamento_id) {
-      return;
-    }
-    const value = fields.orcamento_id.value?.trim();
+    if (!previewButton || !fields.orcamento_id) return;
+    const value = (fields.orcamento_id.value || '').trim();
     if (!value) {
       previewButton.classList.add('disabled');
       previewButton.setAttribute('aria-disabled', 'true');
@@ -762,101 +778,49 @@ document.addEventListener('DOMContentLoaded', () => {
     previewButton.href = `/contabilidade/nfse/preview?orcamento_id=${encodeURIComponent(value)}`;
   };
 
-  const setFieldValue = (field, value, {force = false} = {}) => {
-    if (!field) {
-      return;
-    }
-    if (!force && field.dataset.nfseDirty === 'true') {
-      return;
-    }
+  const setFieldValue = (field, value, opts) => {
+    if (!field) return;
+    if (!(opts && opts.force) && field.dataset.nfseDirty === 'true') return;
     field.value = value || '';
   };
 
   const populateFields = (payload) => {
-    if (fields.consulta_id) {
-      setFieldValue(fields.consulta_id, payload.consulta_id);
-    }
-    if (fields.paciente_nome) {
-      setFieldValue(fields.paciente_nome, payload.paciente?.nome);
-    }
-    if (fields.tomador_nome) {
-      setFieldValue(fields.tomador_nome, payload.tomador?.nome);
-    }
-    if (fields.tomador_documento) {
-      setFieldValue(fields.tomador_documento, payload.tomador?.cpf_cnpj);
-    }
-    if (fields.tomador_email) {
-      setFieldValue(fields.tomador_email, payload.tomador?.email);
-    }
-    if (fields.tomador_telefone) {
-      setFieldValue(fields.tomador_telefone, payload.tomador?.telefone);
-    }
+    setFieldValue(fields.consulta_id, payload.consulta_id);
+    setFieldValue(fields.paciente_nome, payload.paciente?.nome);
+    setFieldValue(fields.tomador_nome, payload.tomador?.nome);
+    setFieldValue(fields.tomador_documento, payload.tomador?.cpf_cnpj);
+    setFieldValue(fields.tomador_email, payload.tomador?.email);
+    setFieldValue(fields.tomador_telefone, payload.tomador?.telefone);
     const endereco = payload.tomador?.endereco;
-    const enderecoTexto = payload.tomador?.endereco_texto || payload.tomador?.endereco || '';
-    if (fields.tomador_cep) {
-      setFieldValue(fields.tomador_cep, endereco?.cep);
-    }
-    if (fields.tomador_municipio) {
-      setFieldValue(fields.tomador_municipio, endereco?.cidade);
-    }
-    if (fields.tomador_uf) {
-      setFieldValue(fields.tomador_uf, endereco?.estado);
-    }
-    if (fields.tomador_logradouro) {
-      setFieldValue(
-        fields.tomador_logradouro,
-        endereco?.logradouro || endereco?.rua || enderecoTexto,
-      );
-    }
-    if (fields.tomador_numero) {
-      setFieldValue(fields.tomador_numero, endereco?.numero);
-    }
-    if (fields.tomador_bairro) {
-      setFieldValue(fields.tomador_bairro, endereco?.bairro);
+    const enderecoTexto = payload.tomador?.endereco_texto || '';
+    setFieldValue(fields.tomador_cep, endereco?.cep);
+    setFieldValue(fields.tomador_municipio, endereco?.cidade);
+    setFieldValue(fields.tomador_uf, endereco?.estado);
+    setFieldValue(fields.tomador_logradouro, endereco?.logradouro || endereco?.rua || enderecoTexto);
+    setFieldValue(fields.tomador_numero, endereco?.numero);
+    setFieldValue(fields.tomador_bairro, endereco?.bairro);
+
+    if (autofillBadge) autofillBadge.hidden = false;
+
+    // Auto-expand address if we have data
+    if (endereco && (endereco.cep || endereco.logradouro)) {
+      const addrSection = document.getElementById('nfse-address-section');
+      if (addrSection && !addrSection.classList.contains('show')) {
+        new bootstrap.Collapse(addrSection, { toggle: true });
+      }
     }
   };
 
   const clearFields = () => {
-    if (fields.consulta_id) {
-      fields.consulta_id.value = '';
-    }
-    if (fields.paciente_nome) {
-      fields.paciente_nome.value = '';
-    }
-    if (fields.tomador_nome) {
-      fields.tomador_nome.value = '';
-    }
-    if (fields.tomador_documento) {
-      fields.tomador_documento.value = '';
-    }
-    if (fields.tomador_email) {
-      fields.tomador_email.value = '';
-    }
-    if (fields.tomador_telefone) {
-      fields.tomador_telefone.value = '';
-    }
-    if (fields.tomador_cep) {
-      fields.tomador_cep.value = '';
-    }
-    if (fields.tomador_municipio) {
-      fields.tomador_municipio.value = '';
-    }
-    if (fields.tomador_uf) {
-      fields.tomador_uf.value = '';
-    }
-    if (fields.tomador_logradouro) {
-      fields.tomador_logradouro.value = '';
-    }
-    if (fields.tomador_numero) {
-      fields.tomador_numero.value = '';
-    }
-    if (fields.tomador_bairro) {
-      fields.tomador_bairro.value = '';
-    }
-    if (totalField) {
-      totalField.textContent = currencyFormatter.format(0);
-    }
+    ['consulta_id','paciente_nome','tomador_nome','tomador_documento','tomador_email',
+     'tomador_telefone','tomador_cep','tomador_municipio','tomador_uf',
+     'tomador_logradouro','tomador_numero','tomador_bairro'].forEach(key => {
+      if (fields[key]) fields[key].value = '';
+    });
+    if (totalField) totalField.textContent = fmt.format(0);
     renderItems([]);
+    if (budgetPreview) budgetPreview.hidden = true;
+    if (autofillBadge) autofillBadge.hidden = true;
   };
 
   if (fields.orcamento_id) {
@@ -864,166 +828,87 @@ document.addEventListener('DOMContentLoaded', () => {
   }
   updatePreviewLink();
 
-  const onlyDigits = (value) => (value || '').replace(/\D/g, '');
+  /* --- Validation --- */
+  const onlyDigits = v => (v || '').replace(/\D/g, '');
 
-  const validateCpf = (value) => {
-    const digits = onlyDigits(value);
-    if (digits.length !== 11 || /^(\d)\1{10}$/.test(digits)) {
-      return false;
-    }
-    const calcDigit = (base, factor) => {
-      let total = 0;
-      for (let i = 0; i < base.length; i += 1) {
-        total += Number(base[i]) * (factor - i);
-      }
-      const remainder = (total * 10) % 11;
-      return remainder === 10 ? 0 : remainder;
-    };
-    const digit1 = calcDigit(digits.slice(0, 9), 10);
-    const digit2 = calcDigit(digits.slice(0, 10), 11);
-    return digit1 === Number(digits[9]) && digit2 === Number(digits[10]);
+  const validateCpf = v => {
+    const d = onlyDigits(v);
+    if (d.length !== 11 || /^(\d)\1{10}$/.test(d)) return false;
+    const calc = (base, factor) => { let t = 0; for (let i = 0; i < base.length; i++) t += +base[i] * (factor - i); const r = (t * 10) % 11; return r === 10 ? 0 : r; };
+    return calc(d.slice(0,9),10) === +d[9] && calc(d.slice(0,10),11) === +d[10];
   };
-
-  const validateCnpj = (value) => {
-    const digits = onlyDigits(value);
-    if (digits.length !== 14 || /^(\d)\1{13}$/.test(digits)) {
-      return false;
-    }
-    const calcDigit = (base, factors) => {
-      let total = 0;
-      for (let i = 0; i < factors.length; i += 1) {
-        total += Number(base[i]) * factors[i];
-      }
-      const remainder = total % 11;
-      return remainder < 2 ? 0 : 11 - remainder;
-    };
-    const digit1 = calcDigit(digits.slice(0, 12), [5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2]);
-    const digit2 = calcDigit(digits.slice(0, 13), [6, 5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2]);
-    return digit1 === Number(digits[12]) && digit2 === Number(digits[13]);
+  const validateCnpj = v => {
+    const d = onlyDigits(v);
+    if (d.length !== 14 || /^(\d)\1{13}$/.test(d)) return false;
+    const calc = (base, f) => { let t = 0; for (let i = 0; i < f.length; i++) t += +base[i] * f[i]; const r = t % 11; return r < 2 ? 0 : 11 - r; };
+    return calc(d.slice(0,12),[5,4,3,2,9,8,7,6,5,4,3,2]) === +d[12] && calc(d.slice(0,13),[6,5,4,3,2,9,8,7,6,5,4,3,2]) === +d[13];
   };
+  const validateCpfCnpj = v => { if (!v) return true; const d = onlyDigits(v); return d.length === 11 ? validateCpf(v) : d.length === 14 ? validateCnpj(v) : false; };
+  const validateEmail = v => !v || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v);
+  const validateCep = v => !v || onlyDigits(v).length === 8;
+  const validateMunicipio = v => v && v.trim().length >= 2;
+  const validateUf = v => v && /^[A-Za-z]{2}$/.test(v.trim());
+  const hasAnyValue = v => (v || '').trim().length > 0;
+  const hasAddressDetails = () => [fields.tomador_cep, fields.tomador_logradouro, fields.tomador_numero, fields.tomador_bairro].some(f => f && hasAnyValue(f.value));
 
-  const validateCpfCnpj = (value) => {
-    if (!value) {
-      return true;
-    }
-    const digits = onlyDigits(value);
-    if (digits.length === 11) {
-      return validateCpf(value);
-    }
-    if (digits.length === 14) {
-      return validateCnpj(value);
-    }
-    return false;
-  };
-
-  const validateEmail = (value) => {
-    if (!value) {
-      return true;
-    }
-    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
-  };
-
-  const validateCep = (value) => {
-    if (!value) {
-      return true;
-    }
-    return onlyDigits(value).length === 8;
-  };
-
-  const validateMunicipio = (value) => {
-    if (!value) {
-      return false;
-    }
-    return value.trim().length >= 2;
-  };
-
-  const validateUf = (value) => {
-    if (!value) {
-      return false;
-    }
-    return /^[A-Za-z]{2}$/.test(value.trim());
-  };
-
-  const hasAnyValue = (value) => (value || '').trim().length > 0;
-
-  const hasAddressDetails = () => [fields.tomador_cep, fields.tomador_logradouro, fields.tomador_numero, fields.tomador_bairro]
-    .some((field) => field && hasAnyValue(field.value));
-
-  const setFieldValidity = (field, isValid, {required = false} = {}) => {
-    if (!field) {
-      return true;
-    }
-    if (!required && !hasAnyValue(field.value)) {
-      field.classList.remove('is-invalid', 'is-valid');
-      return true;
-    }
-    if (isValid) {
-      field.classList.remove('is-invalid');
-      field.classList.add('is-valid');
-    } else {
-      field.classList.add('is-invalid');
-      field.classList.remove('is-valid');
-    }
+  const setFieldValidity = (field, isValid, opts) => {
+    if (!field) return true;
+    const required = opts && opts.required;
+    if (!required && !hasAnyValue(field.value)) { field.classList.remove('is-invalid','is-valid'); return true; }
+    field.classList.toggle('is-invalid', !isValid);
+    field.classList.toggle('is-valid', isValid);
     return isValid;
   };
-
-  const validateField = (field, validator, {required = false} = {}) => {
-    if (!field) {
-      return true;
-    }
-    if (!required && !hasAnyValue(field.value)) {
-      return setFieldValidity(field, true, {required});
-    }
-    return setFieldValidity(field, validator(field.value), {required});
+  const validateField = (field, validator, opts) => {
+    if (!field) return true;
+    const required = opts && opts.required;
+    if (!required && !hasAnyValue(field.value)) return setFieldValidity(field, true, opts);
+    return setFieldValidity(field, validator(field.value), opts);
   };
-
   const validateAll = () => {
-    const addressRequired = hasAddressDetails();
-    const validations = [
+    const addrReq = hasAddressDetails();
+    return [
       validateField(fields.tomador_nome, validateMunicipio, {required: true}),
       validateField(fields.tomador_documento, validateCpfCnpj, {required: true}),
       validateField(fields.tomador_email, validateEmail),
-      validateField(fields.tomador_cep, validateCep, {required: addressRequired}),
-      validateField(fields.tomador_municipio, validateMunicipio, {required: addressRequired}),
-      validateField(fields.tomador_uf, validateUf, {required: addressRequired}),
-    ];
-    return validations.every(Boolean);
+      validateField(fields.tomador_cep, validateCep, {required: addrReq}),
+      validateField(fields.tomador_municipio, validateMunicipio, {required: addrReq}),
+      validateField(fields.tomador_uf, validateUf, {required: addrReq}),
+    ].every(Boolean);
   };
 
+  /* --- Load Budget --- */
   const loadOrcamento = async (orcamentoId) => {
     if (!orcamentoId) {
-      setSummaryMessage('Informe um orçamento para visualizar o resumo antes de enviar.');
+      setSummaryMessage('Informe um orçamento para visualizar o resumo.');
       clearFields();
       lastOrcamentoId = null;
+      setStatus('', 'muted');
       return;
     }
-    if (!endpointTemplate) {
-      return;
-    }
+    if (!endpointTemplate) return;
+    setStatus('Carregando...', 'primary');
     setSummaryMessage('Carregando orçamento...');
     try {
       if (lastOrcamentoId !== String(orcamentoId)) {
-        Object.values(fields).forEach((field) => {
-          if (field) {
-            delete field.dataset.nfseDirty;
-          }
-        });
+        Object.values(fields).forEach(f => { if (f) delete f.dataset.nfseDirty; });
         lastOrcamentoId = String(orcamentoId);
       }
       const endpoint = endpointTemplate.replace(/0$/, String(orcamentoId));
-      const response = await fetch(endpoint, {headers: {'Accept': 'application/json'}});
+      const response = await fetch(endpoint, { headers: { 'Accept': 'application/json' } });
       const payload = await response.json();
-      if (!response.ok) {
-        throw new Error(payload.error || 'Não foi possível carregar o orçamento.');
-      }
+      if (!response.ok) throw new Error(payload.error || 'Não foi possível carregar.');
       populateFields(payload);
       updateSummary(payload);
+      updateReadonly(payload);
       validateAll();
       setSummaryMessage('');
+      setStatus('Orçamento carregado com sucesso.', 'success');
     } catch (error) {
       console.error(error);
       setSummaryMessage('Não foi possível carregar o orçamento informado.');
       clearFields();
+      setStatus(error.message || 'Erro ao carregar.', 'danger');
     }
   };
 
@@ -1031,11 +916,13 @@ document.addEventListener('DOMContentLoaded', () => {
     loadOrcamento(fields.orcamento_id.value);
   }
   if (fields.orcamento_id) {
-    fields.orcamento_id.addEventListener('change', (event) => {
-      loadOrcamento(event.target.value);
-    });
+    fields.orcamento_id.addEventListener('change', e => loadOrcamento(e.target.value));
+  }
+  if (loadBtn && fields.orcamento_id) {
+    loadBtn.addEventListener('click', () => loadOrcamento(fields.orcamento_id.value));
   }
 
+  /* --- Field validation bindings --- */
   [
     [fields.tomador_nome, validateMunicipio, {required: true}],
     [fields.tomador_documento, validateCpfCnpj, {required: true}],
@@ -1044,34 +931,19 @@ document.addEventListener('DOMContentLoaded', () => {
     [fields.tomador_municipio, validateMunicipio, {required: () => hasAddressDetails()}],
     [fields.tomador_uf, validateUf, {required: () => hasAddressDetails()}],
   ].forEach(([field, validator, options]) => {
-    if (!field) {
-      return;
-    }
-    field.addEventListener('input', () => {
-      field.dataset.nfseDirty = 'true';
-      const required = typeof options.required === 'function' ? options.required() : options.required;
-      validateField(field, validator, {required});
-    });
-    field.addEventListener('blur', () => {
-      const required = typeof options.required === 'function' ? options.required() : options.required;
-      validateField(field, validator, {required});
-    });
+    if (!field) return;
+    const getRequired = () => typeof options.required === 'function' ? options.required() : options.required;
+    field.addEventListener('input', () => { field.dataset.nfseDirty = 'true'; validateField(field, validator, {required: getRequired()}); });
+    field.addEventListener('blur', () => validateField(field, validator, {required: getRequired()}));
   });
 
-  Object.values(fields).forEach((field) => {
-    if (!field) {
-      return;
-    }
-    field.addEventListener('input', () => {
-      field.dataset.nfseDirty = 'true';
-    });
+  Object.values(fields).forEach(field => {
+    if (!field) return;
+    field.addEventListener('input', () => { field.dataset.nfseDirty = 'true'; });
   });
 
-  form.addEventListener('submit', (event) => {
-    if (!validateAll()) {
-      event.preventDefault();
-      event.stopPropagation();
-    }
+  form.addEventListener('submit', event => {
+    if (!validateAll()) { event.preventDefault(); event.stopPropagation(); }
   });
 });
 </script>
