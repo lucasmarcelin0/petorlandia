@@ -244,10 +244,14 @@
             </div>
           </div>
           <div class="nfse-summary-card">
-            <span class="nfse-summary-card__label">Itens do orçamento</span>
-            <ul class="nfse-item-list mt-2" data-nfse-ro-items></ul>
+            <div class="d-flex align-items-center gap-2 mb-2">
+              <i class="fas fa-list-ul text-primary"></i>
+              <span class="nfse-summary-card__label mb-0">Serviços do orçamento</span>
+            </div>
+            <p class="text-muted small mb-0" data-nfse-ro-items-empty>Carregue um orçamento para ver os serviços.</p>
+            <ul class="nfse-item-list" data-nfse-ro-items></ul>
             <div class="d-flex justify-content-between align-items-center border-top pt-2 mt-2">
-              <span class="nfse-summary-card__label">Total</span>
+              <strong>Total do orçamento</strong>
               <span class="nfse-summary-card__total" data-nfse-ro-total>R$ 0,00</span>
             </div>
           </div>
@@ -368,14 +372,24 @@
 
             {# Summary + Action Buttons #}
             <div class="nfse-summary-card mb-3" data-nfse-summary>
-              <span class="nfse-summary-card__label">Resumo da Nota</span>
-              <p class="text-muted small mb-2 mt-1" data-nfse-summary-empty>
-                Informe um orçamento para visualizar o resumo.
+              <div class="d-flex align-items-center gap-2 mb-2">
+                <i class="fas fa-receipt text-primary"></i>
+                <span class="nfse-summary-card__label mb-0">Resumo da Nota</span>
+              </div>
+              <p class="text-muted small mb-2" data-nfse-summary-empty>
+                Informe um orçamento para visualizar os serviços e valores.
               </p>
-              <ul class="nfse-item-list mt-2" data-nfse-items hidden></ul>
-              <div class="d-flex justify-content-between align-items-center border-top pt-2 mt-2">
-                <strong class="small">Total</strong>
-                <strong class="text-primary" data-nfse-total>R$ 0,00</strong>
+              <div data-nfse-summary-content hidden>
+                <div class="small fw-semibold text-muted text-uppercase mb-1">Serviços</div>
+                <ul class="nfse-item-list" data-nfse-items></ul>
+                <div class="d-flex justify-content-between align-items-center border-top pt-2 mt-2">
+                  <span class="fw-semibold">Total da nota</span>
+                  <span class="nfse-summary-card__total" data-nfse-total>R$ 0,00</span>
+                </div>
+                <div class="d-flex justify-content-between align-items-center mt-1" data-nfse-particular-row hidden>
+                  <span class="small text-muted">Somente particular (NFS-e)</span>
+                  <span class="small fw-semibold text-success" data-nfse-particular-total>R$ 0,00</span>
+                </div>
               </div>
             </div>
 
@@ -462,6 +476,7 @@
               <th class="small text-uppercase text-muted">Emissão</th>
               <th class="small text-uppercase text-muted">Origem</th>
               <th class="small text-uppercase text-muted">Tutor / Paciente</th>
+              <th class="small text-uppercase text-muted text-end">Valor</th>
               <th class="small text-uppercase text-muted">Status</th>
               <th class="small text-uppercase text-muted">Protocolo / Nº</th>
               <th class="small text-uppercase text-muted text-end">Ações</th>
@@ -487,6 +502,13 @@
                 <div class="text-muted small">{{ animal_nome or 'Paciente não informado' }}</div>
                 {% if not tutor_nome or not animal_nome %}
                   <span class="badge bg-warning bg-opacity-10 text-warning small">Dados incompletos</span>
+                {% endif %}
+              </td>
+              <td class="text-end">
+                {% if issue.valor_total %}
+                  <span class="fw-semibold">R$ {{ '%.2f'|format(issue.valor_total) }}</span>
+                {% else %}
+                  <span class="text-muted">—</span>
                 {% endif %}
               </td>
               <td>
@@ -642,7 +664,7 @@
             </tr>
             {% else %}
             <tr>
-              <td colspan="6">
+              <td colspan="7">
                 <div class="nfse-empty-state">
                   <div class="nfse-empty-state__icon"><i class="fas fa-file-invoice"></i></div>
                   <p class="text-muted mb-0">Nenhuma emissão encontrada{% if status_filter %} com o filtro "{{ status_filter }}"{% endif %}.</p>
@@ -715,8 +737,13 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   };
 
+  const summaryContent = form.querySelector('[data-nfse-summary-content]');
+  const particularRow = form.querySelector('[data-nfse-particular-row]');
+  const particularTotal = form.querySelector('[data-nfse-particular-total]');
+
   const setSummaryMessage = (msg) => {
     if (summaryEmpty) { summaryEmpty.textContent = msg; summaryEmpty.hidden = !msg; }
+    if (summaryContent && msg) summaryContent.hidden = true;
   };
 
   const renderItems = (items) => {
@@ -727,7 +754,10 @@ document.addEventListener('DOMContentLoaded', () => {
     items.forEach(item => {
       const li = document.createElement('li');
       li.className = 'nfse-item-list__item';
-      li.innerHTML = `<span>${item.descricao || 'Item'}</span><span class="fw-semibold">${fmt.format(item.valor || 0)}</span>`;
+      const payerBadge = item.payer_type === 'plan'
+        ? '<span class="badge bg-info text-dark me-1" style="font-size:0.65rem">Plano</span>'
+        : '<span class="badge bg-secondary me-1" style="font-size:0.65rem">Particular</span>';
+      li.innerHTML = `<span>${payerBadge}${item.descricao || 'Item'}</span><span class="fw-semibold">${fmt.format(item.valor || 0)}</span>`;
       itemsList.appendChild(li);
     });
   };
@@ -746,14 +776,24 @@ document.addEventListener('DOMContentLoaded', () => {
     set('tomador_documento', payload.tomador?.cpf_cnpj);
 
     const roItems = budgetPreview.querySelector('[data-nfse-ro-items]');
+    const roItemsEmpty = budgetPreview.querySelector('[data-nfse-ro-items-empty]');
     if (roItems) {
       roItems.innerHTML = '';
-      (payload.itens || []).forEach(item => {
-        const li = document.createElement('li');
-        li.className = 'nfse-item-list__item';
-        li.innerHTML = `<span>${item.descricao || 'Item'}</span><span class="fw-semibold">${fmt.format(item.valor || 0)}</span>`;
-        roItems.appendChild(li);
-      });
+      const items = payload.itens || [];
+      if (items.length) {
+        if (roItemsEmpty) roItemsEmpty.hidden = true;
+        items.forEach(item => {
+          const li = document.createElement('li');
+          li.className = 'nfse-item-list__item';
+          const payerBadge = item.payer_type === 'plan'
+            ? '<span class="badge bg-info text-dark me-1" style="font-size:0.65rem">Plano</span>'
+            : '<span class="badge bg-secondary me-1" style="font-size:0.65rem">Particular</span>';
+          li.innerHTML = `<span>${payerBadge}${item.descricao || 'Item'}</span><span class="fw-semibold">${fmt.format(item.valor || 0)}</span>`;
+          roItems.appendChild(li);
+        });
+      } else {
+        if (roItemsEmpty) roItemsEmpty.hidden = false;
+      }
     }
     const roTotal = budgetPreview.querySelector('[data-nfse-ro-total]');
     if (roTotal) roTotal.textContent = fmt.format(payload.valor_total || 0);
@@ -762,6 +802,13 @@ document.addEventListener('DOMContentLoaded', () => {
   const updateSummary = (payload) => {
     if (totalField) totalField.textContent = fmt.format(payload.valor_total || 0);
     renderItems(payload.itens || []);
+    if (summaryContent) summaryContent.hidden = false;
+    // Show particular-only total when there are mixed payer types
+    const items = payload.itens || [];
+    const hasMixed = items.some(i => i.payer_type === 'plan') && items.some(i => i.payer_type !== 'plan');
+    const partTotal = payload.valor_particular != null ? payload.valor_particular : items.filter(i => i.payer_type !== 'plan').reduce((s,i) => s + (i.valor||0), 0);
+    if (particularRow) particularRow.hidden = !hasMixed;
+    if (particularTotal) particularTotal.textContent = fmt.format(partTotal);
   };
 
   const updatePreviewLink = () => {
@@ -821,6 +868,8 @@ document.addEventListener('DOMContentLoaded', () => {
     renderItems([]);
     if (budgetPreview) budgetPreview.hidden = true;
     if (autofillBadge) autofillBadge.hidden = true;
+    if (summaryContent) summaryContent.hidden = true;
+    if (particularRow) particularRow.hidden = true;
   };
 
   if (fields.orcamento_id) {
