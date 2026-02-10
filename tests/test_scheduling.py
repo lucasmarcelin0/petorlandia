@@ -44,6 +44,8 @@ def client(monkeypatch):
         id = 1
         is_authenticated = True
     monkeypatch.setattr(login_utils, '_get_user', lambda: FakeUser())
+    with flask_app.app_context():
+        db.create_all()
     with flask_app.test_client() as client:
         yield client
 

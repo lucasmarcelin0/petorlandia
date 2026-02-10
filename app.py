@@ -58,10 +58,24 @@ PROJECT_ROOT = pathlib.Path(__file__).resolve().parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
 try:
-    models_pkg = importlib.import_module("petorlandia.models")
-except ModuleNotFoundError:
     models_pkg = importlib.import_module("models")
+except ModuleNotFoundError:
+    models_pkg = importlib.import_module("petorlandia.models")
 sys.modules["models"] = models_pkg
+sys.modules.setdefault("petorlandia.models", models_pkg)
+
+
+def _alias_model_modules(source_prefix: str, target_prefix: str) -> None:
+    for module_name, module in list(sys.modules.items()):
+        if module_name.startswith(f"{source_prefix}."):
+            alias = module_name.replace(source_prefix, target_prefix, 1)
+            sys.modules.setdefault(alias, module)
+
+
+if models_pkg.__name__ == "models":
+    _alias_model_modules("models", "petorlandia.models")
+else:
+    _alias_model_modules("petorlandia.models", "models")
 
 # 📌 Expose every model name (CamelCase) globally
 globals().update({
@@ -74,12 +88,19 @@ from models import (
     DataShareAccess,
     DataSharePartyType,
     DataShareRequest,
+    FiscalDocument,
+    FiscalDocumentStatus,
+    FiscalDocumentType,
+    FiscalEmitter,
+    FiscalCertificate,
+    FiscalEvent,
     PlantonistaEscala,
     PlantaoModelo,
     NfseIssue,
     NfseXml,
     User,
     Veterinario,
+    clinica_has_column,
     get_clinica_field,
 )
 from services.nfse_queue import (
@@ -93,6 +114,35 @@ from services.nfse_queue import (
     should_emit_async,
     validate_nfse_cancel_request,
 )
+from services.nfse_service import _normalize_municipio
+from services.fiscal.certificate import parse_pfx
+from services.fiscal.nfse_service import (
+    build_nfse_payload_from_appointment,
+    cancel_nfse_document,
+    create_nfse_draft_from_orcamento,
+    create_nfse_document,
+    queue_emit_nfse,
+)
+from services.billing.close_appointment import close_appointment
+from services.appointments import (
+    ReturnAppointmentDTO,
+    finalize_consulta_flow,
+    schedule_return_appointment,
+)
+from services.payments import (
+    PaymentItemDTO,
+    PaymentPreferenceDTO,
+    apply_payment_to_bloco,
+    apply_payment_to_orcamento,
+    create_payment_preference,
+)
+from security.crypto import (
+    MissingMasterKeyError,
+    decrypt_text_for_clinic,
+    encrypt_bytes,
+    encrypt_text,
+)
+from repositories import AppointmentRepository, ClinicRepository
 _config_utils_module_name = (
     f"{__package__}.config_utils" if __package__ else "config_utils"
 )
@@ -120,6 +170,18 @@ if _resolved_uri and ("postgresql" in _resolved_uri or "postgres" in _resolved_u
     engine_opts = app.config.get("SQLALCHEMY_ENGINE_OPTIONS", {})
     engine_opts.setdefault("pool_size", 5)
     engine_opts.setdefault("max_overflow", 10)
+    connect_args = dict(engine_opts.get("connect_args", {}))
+    connect_args.setdefault("connect_timeout", 10)
+    engine_opts["connect_args"] = connect_args
+    app.config["SQLALCHEMY_ENGINE_OPTIONS"] = engine_opts
+elif _resolved_uri and _resolved_uri.startswith("sqlite"):
+    engine_opts = dict(app.config.get("SQLALCHEMY_ENGINE_OPTIONS", {}))
+    connect_args = dict(engine_opts.get("connect_args", {}))
+    connect_args.pop("connect_timeout", None)
+    if connect_args:
+        engine_opts["connect_args"] = connect_args
+    else:
+        engine_opts.pop("connect_args", None)
     app.config["SQLALCHEMY_ENGINE_OPTIONS"] = engine_opts
 app.config.setdefault("FRONTEND_URL", "http://127.0.0.1:5000")
 app.config.update(SESSION_PERMANENT=True, SESSION_TYPE="filesystem")
@@ -143,13 +205,22 @@ socketio = SocketIO(app, cors_allowed_origins="*", async_mode=async_mode)
 @app.template_filter('date_now')
 def date_now(format_string='%Y-%m-%d'):
     return datetime.now(BR_TZ).strftime(format_string)
-from extensions import db, migrate, mail, login, session as session_ext, babel
+from extensions import (
+    db,
+    migrate,
+    mail,
+    login,
+    session as session_ext,
+    babel,
+    csrf,
+    configure_logging,
+)
 from flask_login import login_user, logout_user, current_user, login_required
 from flask_mail import Message as MailMessage      #  ←  adicione esta linha
 from werkzeug.utils import secure_filename
 from werkzeug.datastructures import FileStorage
 from werkzeug.routing import BuildError
-from werkzeug.exceptions import NotFound
+from werkzeug.exceptions import HTTPException, NotFound
 from time_utils import BR_TZ, coerce_to_brazil_tz, normalize_to_utc, utcnow
 
 db.init_app(app)
@@ -158,7 +229,89 @@ mail.init_app(app)
 login.init_app(app)
 session_ext.init_app(app)
 babel.init_app(app)
+csrf.init_app(app)
 app.config.setdefault("BABEL_DEFAULT_LOCALE", "pt_BR")
+configure_logging(app)
+
+
+@app.before_request
+def _attach_request_id():
+    g.request_id = request.headers.get("X-Request-ID") or str(uuid.uuid4())
+
+
+@app.after_request
+def _set_request_id_header(response):
+    response.headers["X-Request-ID"] = getattr(g, "request_id", "")
+    return response
+
+
+@app.errorhandler(HTTPException)
+def handle_http_exception(err):
+    current_app.logger.warning(
+        "http_exception",
+        extra={
+            "path": request.path,
+            "status_code": err.code,
+            "request_id": getattr(g, "request_id", None),
+        },
+    )
+    wants_json = (
+        request.accept_mimetypes["application/json"]
+        >= request.accept_mimetypes["text/html"]
+    )
+    if wants_json:
+        payload = {
+            "error": err.name,
+            "message": err.description,
+            "request_id": getattr(g, "request_id", None),
+        }
+        return jsonify(payload), err.code
+    return render_template("errors/http.html", error=err), err.code
+
+
+@app.errorhandler(CSRFError)
+def handle_csrf_error(err):
+    current_app.logger.warning(
+        "csrf_error",
+        extra={
+            "path": request.path,
+            "status_code": 400,
+            "request_id": getattr(g, "request_id", None),
+        },
+    )
+    wants_json = (
+        request.accept_mimetypes["application/json"]
+        >= request.accept_mimetypes["text/html"]
+    )
+    if wants_json:
+        payload = {
+            "error": "CSRF token missing or invalid",
+            "message": "Falha de validação. Recarregue a página e tente novamente.",
+            "errors": {"csrf_token": ["Falha de validação. Recarregue a página e tente novamente."]},
+            "request_id": getattr(g, "request_id", None),
+        }
+        return jsonify(payload), 400
+    return render_template("errors/http.html", error=err), 400
+
+
+@app.errorhandler(Exception)
+def handle_unhandled_exception(err):
+    current_app.logger.exception(
+        "unhandled_error",
+        extra={"path": request.path, "request_id": getattr(g, "request_id", None)},
+    )
+    wants_json = (
+        request.accept_mimetypes["application/json"]
+        >= request.accept_mimetypes["text/html"]
+    )
+    if wants_json:
+        payload = {
+            "error": "Internal Server Error",
+            "message": "Unexpected error.",
+            "request_id": getattr(g, "request_id", None),
+        }
+        return jsonify(payload), 500
+    return render_template("errors/500.html"), 500
 
 # ----------------------------------------------------------------
 # 3a)  Runtime safety checks for legacy databases
@@ -166,6 +319,7 @@ app.config.setdefault("BABEL_DEFAULT_LOCALE", "pt_BR")
 
 _inventory_threshold_columns_checked = False
 _inventory_movement_table_checked = False
+_inventory_movement_columns_checked = False
 _clinic_notifications_table_checked = False
 _plantao_modelos_table_checked = False
 
@@ -174,11 +328,12 @@ def _ensure_inventory_threshold_columns() -> None:
     """Add inventory threshold columns when the migration wasn't applied.
 
     Some self-hosted deployments might skip Alembic migrations, which means
-    new columns such as ``min_quantity``/``max_quantity`` are missing and the
-    ``ClinicInventoryItem`` queries fail immediately.  We opportunistically
-    add those columns the first time the clinic inventory is accessed so the
-    UI keeps working even on older databases.  This is intentionally defensive
-    and becomes a no-op once the Alembic migration runs.
+    new columns such as ``categoria``/``min_quantity``/``max_quantity`` are
+    missing and the ``ClinicInventoryItem`` queries fail immediately.  We
+    opportunistically add those columns the first time the clinic inventory is
+    accessed so the UI keeps working even on older databases.  This is
+    intentionally defensive and becomes a no-op once the Alembic migration
+    runs.
     """
 
     global _inventory_threshold_columns_checked
@@ -194,6 +349,10 @@ def _ensure_inventory_threshold_columns() -> None:
         return
 
     statements = []
+    if "categoria" not in existing_columns:
+        statements.append(
+            "ALTER TABLE clinic_inventory_item ADD COLUMN categoria VARCHAR(120)"
+        )
     if "min_quantity" not in existing_columns:
         statements.append("ALTER TABLE clinic_inventory_item ADD COLUMN min_quantity INTEGER")
     if "max_quantity" not in existing_columns:
@@ -240,6 +399,64 @@ def _ensure_inventory_movement_table() -> None:
         pass
     finally:
         _inventory_movement_table_checked = True
+
+
+def _ensure_inventory_movement_columns() -> None:
+    """Add missing inventory movement columns when migrations are skipped."""
+
+    global _inventory_movement_columns_checked
+    if _inventory_movement_columns_checked:
+        return
+
+    try:
+        inspector = inspect(db.engine)
+        if not inspector.has_table("clinic_inventory_movement"):
+            return
+        existing_columns = {
+            column["name"] for column in inspector.get_columns("clinic_inventory_movement")
+        }
+    except Exception:  # pragma: no cover - engine init failures
+        return
+
+    statements = []
+    if "clinica_id" not in existing_columns:
+        statements.append("ALTER TABLE clinic_inventory_movement ADD COLUMN clinica_id INTEGER")
+    if "item_id" not in existing_columns:
+        statements.append("ALTER TABLE clinic_inventory_movement ADD COLUMN item_id INTEGER")
+    if "quantity_change" not in existing_columns:
+        statements.append(
+            "ALTER TABLE clinic_inventory_movement ADD COLUMN quantity_change INTEGER"
+        )
+    if "quantity_before" not in existing_columns:
+        statements.append(
+            "ALTER TABLE clinic_inventory_movement ADD COLUMN quantity_before INTEGER"
+        )
+    if "quantity_after" not in existing_columns:
+        statements.append(
+            "ALTER TABLE clinic_inventory_movement ADD COLUMN quantity_after INTEGER"
+        )
+    if "tipo" not in existing_columns:
+        statements.append("ALTER TABLE clinic_inventory_movement ADD COLUMN tipo VARCHAR(20)")
+    if "motivo" not in existing_columns:
+        statements.append("ALTER TABLE clinic_inventory_movement ADD COLUMN motivo VARCHAR(200)")
+    if "responsavel_id" not in existing_columns:
+        statements.append(
+            "ALTER TABLE clinic_inventory_movement ADD COLUMN responsavel_id INTEGER"
+        )
+    if "created_at" not in existing_columns:
+        statements.append(
+            "ALTER TABLE clinic_inventory_movement ADD COLUMN created_at TIMESTAMP WITH TIME ZONE"
+        )
+
+    if statements:
+        for statement in statements:
+            try:
+                with db.engine.begin() as connection:
+                    connection.execute(text(statement))
+            except ProgrammingError:
+                continue
+
+    _inventory_movement_columns_checked = True
 
 
 def _ensure_clinic_notifications_table() -> bool:
@@ -1392,6 +1609,296 @@ def current_user_clinic_id():
     return current_user.clinica_id
 
 
+FISCAL_UF_CODES = {
+    "AC", "AL", "AM", "AP", "BA", "CE", "DF", "ES", "GO", "MA", "MG", "MS", "MT",
+    "PA", "PB", "PE", "PI", "PR", "RJ", "RN", "RO", "RR", "RS", "SC", "SE", "SP", "TO",
+}
+
+
+def _normalize_cnpj(value: str | None) -> str:
+    return "".join(ch for ch in (value or "") if ch.isdigit())
+
+
+def _validate_cnpj_format(value: str | None) -> bool:
+    digits = _normalize_cnpj(value)
+    return len(digits) == 14
+
+
+def _normalize_uf(value: str | None) -> str:
+    return (value or "").strip().upper()
+
+
+@login_required
+def fiscal_settings():
+    clinic_id = current_user_clinic_id()
+    if not clinic_id:
+        abort(403)
+
+    emitter = FiscalEmitter.query.filter_by(clinic_id=clinic_id).first()
+
+    if request.method == "POST":
+        cnpj = request.form.get("cnpj", "").strip()
+        uf = _normalize_uf(request.form.get("uf"))
+        if cnpj and not _validate_cnpj_format(cnpj):
+            flash("Informe um CNPJ válido com 14 dígitos.", "warning")
+            return render_template(
+                "fiscal_settings.html",
+                emitter=emitter,
+                incomplete=True,
+                uf_codes=sorted(FISCAL_UF_CODES),
+            )
+        if uf and uf not in FISCAL_UF_CODES:
+            flash("Informe uma UF válida.", "warning")
+            return render_template(
+                "fiscal_settings.html",
+                emitter=emitter,
+                incomplete=True,
+                uf_codes=sorted(FISCAL_UF_CODES),
+            )
+
+        data = {
+            "cnpj": cnpj,
+            "razao_social": request.form.get("razao_social", "").strip(),
+            "nome_fantasia": request.form.get("nome_fantasia", "").strip(),
+            "inscricao_municipal": request.form.get("inscricao_municipal", "").strip(),
+            "inscricao_estadual": request.form.get("inscricao_estadual", "").strip(),
+            "municipio_ibge": request.form.get("municipio_ibge", "").strip(),
+            "uf": uf,
+            "regime_tributario": request.form.get("regime_tributario", "").strip(),
+        }
+
+        if emitter is None:
+            emitter = FiscalEmitter(clinic_id=clinic_id, **data)
+            db.session.add(emitter)
+        else:
+            for key, value in data.items():
+                setattr(emitter, key, value)
+
+        db.session.commit()
+        flash("Configuração fiscal salva com sucesso.", "success")
+
+    incomplete = any(
+        not getattr(emitter, field)
+        for field in ("cnpj", "razao_social", "municipio_ibge", "uf", "regime_tributario")
+    ) if emitter else True
+
+    return render_template(
+        "fiscal_settings.html",
+        emitter=emitter,
+        incomplete=incomplete,
+        uf_codes=sorted(FISCAL_UF_CODES),
+    )
+
+
+@login_required
+def fiscal_certificate_upload():
+    clinic_id = current_user_clinic_id()
+    if not clinic_id:
+        abort(403)
+
+    emitter = FiscalEmitter.query.filter_by(clinic_id=clinic_id).first()
+    if emitter is None or not emitter.cnpj:
+        flash("Cadastre o emissor fiscal antes de enviar o certificado.", "warning")
+        return redirect(url_for("fiscal_settings"))
+
+    if request.method == "POST":
+        pfx_file = request.files.get("pfx_file")
+        password = request.form.get("pfx_password") or ""
+
+        if not pfx_file or pfx_file.filename == "":
+            flash("Selecione um arquivo .pfx.", "warning")
+            return render_template(
+                "fiscal_certificate_upload.html",
+                emitter=emitter,
+                certificates=[],
+            )
+
+        try:
+            pfx_bytes = pfx_file.read()
+            if not pfx_bytes:
+                raise ValueError("Arquivo PFX vazio.")
+            info = parse_pfx(pfx_bytes, password)
+        except Exception as exc:
+            flash(f"Não foi possível ler o certificado: {exc}", "danger")
+            return render_template(
+                "fiscal_certificate_upload.html",
+                emitter=emitter,
+                certificates=[],
+            )
+
+        emitter_cnpj = _normalize_cnpj(emitter.cnpj)
+        subject_cnpj = info.get("subject_cnpj") or ""
+        if not subject_cnpj:
+            flash("Não foi possível identificar o CNPJ do certificado.", "danger")
+            return render_template(
+                "fiscal_certificate_upload.html",
+                emitter=emitter,
+                certificates=[],
+            )
+        if subject_cnpj != emitter_cnpj:
+            flash("O CNPJ do certificado não corresponde ao emissor fiscal.", "danger")
+            return render_template(
+                "fiscal_certificate_upload.html",
+                emitter=emitter,
+                certificates=[],
+            )
+
+        certificate = FiscalCertificate(
+            emitter_id=emitter.id,
+            pfx_encrypted=encrypt_bytes(pfx_bytes),
+            pfx_password_encrypted=encrypt_text(password),
+            fingerprint_sha256=info["fingerprint_sha256"],
+            valid_from=info["valid_from"],
+            valid_to=info["valid_to"],
+            subject_cnpj=subject_cnpj,
+        )
+        db.session.add(certificate)
+        db.session.commit()
+        flash("Certificado fiscal enviado com sucesso.", "success")
+        return redirect(url_for("fiscal_certificate_upload"))
+
+    certificates = (
+        FiscalCertificate.query
+        .filter_by(emitter_id=emitter.id)
+        .order_by(FiscalCertificate.created_at.desc())
+        .all()
+    )
+
+    return render_template(
+        "fiscal_certificate_upload.html",
+        emitter=emitter,
+        certificates=certificates,
+    )
+
+
+@login_required
+def fiscal_documents():
+    clinic_id = current_user_clinic_id()
+    if not clinic_id:
+        abort(403)
+
+    query = FiscalDocument.query.filter_by(clinic_id=clinic_id)
+    doc_type = request.args.get("doc_type")
+    status = request.args.get("status")
+    start_date = request.args.get("start_date")
+    end_date = request.args.get("end_date")
+
+    if doc_type:
+        try:
+            query = query.filter(
+                FiscalDocument.doc_type == FiscalDocumentType[doc_type.upper()]
+            )
+        except KeyError:
+            flash("Tipo de documento inválido.", "warning")
+
+    if status:
+        try:
+            query = query.filter(
+                FiscalDocument.status == FiscalDocumentStatus[status.upper()]
+            )
+        except KeyError:
+            flash("Status fiscal inválido.", "warning")
+
+    if start_date:
+        try:
+            start_dt = datetime.strptime(start_date, "%Y-%m-%d")
+            query = query.filter(FiscalDocument.created_at >= start_dt)
+        except ValueError:
+            flash("Data inicial inválida.", "warning")
+    if end_date:
+        try:
+            end_dt = datetime.strptime(end_date, "%Y-%m-%d") + timedelta(days=1)
+            query = query.filter(FiscalDocument.created_at < end_dt)
+        except ValueError:
+            flash("Data final inválida.", "warning")
+
+    documents = query.order_by(FiscalDocument.created_at.desc()).all()
+
+    return render_template(
+        "fiscal_documents.html",
+        documents=documents,
+        doc_type=doc_type or "",
+        status=status or "",
+        start_date=start_date or "",
+        end_date=end_date or "",
+        doc_types=[doc_type.value for doc_type in FiscalDocumentType],
+        status_options=[
+            status.value
+            for status in FiscalDocumentStatus
+            if status != FiscalDocumentStatus.SENDING
+        ],
+    )
+
+
+@login_required
+def fiscal_document_detail(document_id: int):
+    clinic_id = current_user_clinic_id()
+    if not clinic_id:
+        abort(403)
+
+    document = FiscalDocument.query.filter_by(id=document_id, clinic_id=clinic_id).first_or_404()
+    appointment = None
+    if document.related_type == "appointment" and document.related_id:
+        from models import Appointment
+
+        appointment = Appointment.query.filter_by(
+            id=document.related_id,
+            clinica_id=clinic_id,
+        ).first()
+    events = (
+        FiscalEvent.query
+        .filter_by(document_id=document.id)
+        .order_by(FiscalEvent.created_at.asc())
+        .all()
+    )
+    payload_pretty = ""
+    if document.payload_json:
+        payload_pretty = json.dumps(document.payload_json, ensure_ascii=False, indent=2)
+
+    return render_template(
+        "fiscal_document_detail.html",
+        document=document,
+        appointment=appointment,
+        events=events,
+        payload_pretty=payload_pretty,
+    )
+
+
+@login_required
+def fiscal_document_status(document_id: int):
+    clinic_id = current_user_clinic_id()
+    if not clinic_id:
+        abort(403)
+
+    document = FiscalDocument.query.filter_by(id=document_id, clinic_id=clinic_id).first_or_404()
+    return jsonify(
+        {
+            "id": document.id,
+            "status": document.status.value if document.status else document.status,
+            "access_key": document.access_key,
+            "nfse_number": document.nfse_number,
+            "verification_code": document.verification_code,
+            "error_message": document.error_message,
+        }
+    )
+
+
+@login_required
+def fiscal_document_cancel(document_id: int):
+    clinic_id = current_user_clinic_id()
+    if not clinic_id:
+        abort(403)
+
+    document = FiscalDocument.query.filter_by(id=document_id, clinic_id=clinic_id).first_or_404()
+    try:
+        cancel_nfse_document(document.id)
+        flash("Cancelamento solicitado.", "success")
+    except Exception as exc:  # noqa: BLE001
+        current_app.logger.exception("Erro ao cancelar NFS-e", exc_info=exc)
+        flash("Erro ao solicitar cancelamento.", "danger")
+    return redirect(url_for("fiscal_document_detail", document_id=document.id))
+
+
 def _collect_clinic_ids(viewer=None, clinic_scope=None):
     """Return a set with clinic IDs derived from the viewer and scope hints."""
     clinic_ids = set()
@@ -1810,8 +2317,9 @@ def get_animal_or_404(animal_id, *, viewer=None, clinic_scope=None):
 
     animal = Animal.query.get_or_404(animal_id)
     owner_access = bool(viewer and animal.user_id == viewer.id)
+    added_by_access = bool(viewer and animal.added_by_id and animal.added_by_id == viewer.id)
     shared_access = _resolve_shared_access_for_animal(animal, viewer=viewer, clinic_scope=clinic_scope)
-    if not shared_access and not owner_access:
+    if not shared_access and not owner_access and not added_by_access:
         ensure_clinic_access(animal.clinica_id)
     elif shared_access:
         _log_data_share(
@@ -1823,7 +2331,7 @@ def get_animal_or_404(animal_id, *, viewer=None, clinic_scope=None):
         )
 
     tutor_id = getattr(animal, "user_id", None)
-    if tutor_id:
+    if tutor_id and animal.clinica_id:
         visibility_clause = _user_visibility_clause(viewer=viewer, clinic_scope=clinic_scope)
         tutor_visible = (
             db.session.query(User.id)
@@ -1831,7 +2339,7 @@ def get_animal_or_404(animal_id, *, viewer=None, clinic_scope=None):
             .filter(visibility_clause)
             .first()
         )
-        if not tutor_visible and not (shared_access or owner_access):
+        if not tutor_visible and not (shared_access or owner_access or added_by_access):
             abort(404)
 
     return animal
@@ -2354,7 +2862,6 @@ def _sync_health_subscription_from_onboarding(onboarding, payment_status, paymen
 # ----------------------------------------------------------------
 
 
-@app.route('/api/cep/<cep>')
 def api_cep_lookup(cep: str):
     """Lookup CEP information using a list of public providers.
 
@@ -2418,7 +2925,6 @@ def api_cep_lookup(cep: str):
     return jsonify(success=False, error='CEP não encontrado'), 404
 
 
-@app.route('/api/geocode/reverse')
 def api_reverse_geocode():
     """Resolve latitude/longitude into address data for the form.
 
@@ -2483,7 +2989,6 @@ def api_reverse_geocode():
     return jsonify(success=True, data=normalized)
 
 
-@app.route('/api/geocode/address', methods=['POST'])
 def api_forward_geocode():
     """Resolve an address into coordinates using the same backend helper.
 
@@ -2941,7 +3446,6 @@ def inject_current_app():
 
 s = URLSafeTimedSerializer(app.config['SECRET_KEY'])
 
-@app.route('/reset_password_request', methods=['GET', 'POST'])
 def reset_password_request():
     form = ResetPasswordRequestForm()
     if form.validate_on_submit():
@@ -2985,7 +3489,6 @@ def reset_password_request():
 
 
 
-@app.route('/reset_password/<token>', methods=['GET', 'POST'])
 def reset_password(token):
     try:
         email = s.loads(token, salt='password-reset-salt', max_age=3600)  # 1 hour
@@ -3055,8 +3558,9 @@ def _user_is_clinic_owner(user=None):
     if owned_clinics:
         return any(getattr(clinic, "owner_id", None) == user.id for clinic in owned_clinics)
 
+    clinic_repo = ClinicRepository()
     try:
-        return Clinica.query.filter_by(owner_id=user.id).first() is not None
+        return clinic_repo.first_by_owner(user.id) is not None
     except (OperationalError, ProgrammingError, NoSuchTableError):
         # Em ambientes de teste ou bancos desatualizados a tabela pode não existir.
         # Nesses casos consideramos que o usuário não possui clínica.
@@ -3093,8 +3597,9 @@ def _accounting_accessible_clinics():
     """Return (clinics, clinic_ids) accessible for the accounting module."""
 
     clinics = []
+    clinic_repo = ClinicRepository()
     if _is_admin():
-        clinics = Clinica.query.order_by(Clinica.nome.asc()).all()
+        clinics = clinic_repo.list_all_ordered()
         return clinics, {clinic.id for clinic in clinics if clinic.id}
 
     accessible_ids = set()
@@ -3108,9 +3613,7 @@ def _accounting_accessible_clinics():
     existing_ids = {clinic.id for clinic in clinics if clinic.id}
     missing_ids = [cid for cid in accessible_ids if cid and cid not in existing_ids]
     if missing_ids:
-        clinics.extend(
-            Clinica.query.filter(Clinica.id.in_(missing_ids)).order_by(Clinica.nome.asc()).all()
-        )
+        clinics.extend(clinic_repo.list_by_ids(missing_ids))
 
     clinics.sort(key=lambda clinic: (clinic.nome or '').lower())
     return clinics, {clinic.id for clinic in clinics if clinic.id}
@@ -3389,7 +3892,6 @@ def classify_transactions_history(months, clinic_ids, reference_month, verbose):
     )
 
 
-@app.route('/contabilidade')
 @login_required
 def contabilidade_home():
     _ensure_accounting_access()
@@ -3425,7 +3927,6 @@ def contabilidade_home():
     )
 
 
-@app.route('/contabilidade/financeiro')
 @login_required
 def contabilidade_financeiro():
     _ensure_accounting_access()
@@ -3800,7 +4301,6 @@ def _pj_payments_schema_issue() -> Optional[tuple[str, str]]:
     return issue
 
 
-@app.route('/contabilidade/pagamentos')
 @login_required
 def contabilidade_pagamentos():
     _ensure_accounting_access()
@@ -4557,7 +5057,6 @@ def _prefill_plantao_fields_on_form(form, escala):
 
 
 
-@app.route('/contabilidade/pagamentos/novo', methods=['GET', 'POST'])
 @login_required
 def contabilidade_pagamentos_novo():
     _ensure_accounting_access()
@@ -4649,7 +5148,6 @@ def contabilidade_pagamentos_novo():
     )
 
 
-@app.route('/contabilidade/pagamentos/<int:payment_id>/editar', methods=['GET', 'POST'])
 @login_required
 def contabilidade_pagamentos_editar(payment_id):
     _ensure_accounting_access()
@@ -4744,7 +5242,6 @@ def contabilidade_pagamentos_editar(payment_id):
     )
 
 
-@app.route('/contabilidade/pagamentos/<int:payment_id>/delete', methods=['POST'])
 @login_required
 def contabilidade_pagamentos_delete(payment_id):
     _ensure_accounting_access()
@@ -4774,7 +5271,6 @@ def contabilidade_pagamentos_delete(payment_id):
     return redirect(url_for('contabilidade_pagamentos', clinica_id=clinic_id, mes=month_value))
 
 
-@app.route('/contabilidade/pagamentos/<int:payment_id>/marcar_pago', methods=['POST'])
 @login_required
 def contabilidade_pagamentos_marcar_pago(payment_id):
     _ensure_accounting_access()
@@ -4808,7 +5304,6 @@ def contabilidade_pagamentos_marcar_pago(payment_id):
     return redirect(url_for('contabilidade_pagamentos', clinica_id=payment.clinic_id, mes=month_value))
 
 
-@app.route('/contabilidade/pagamentos/plantonistas/novo', methods=['GET', 'POST'])
 @login_required
 def contabilidade_plantonistas_novo():
     _ensure_accounting_access()
@@ -4921,7 +5416,6 @@ def contabilidade_plantonistas_novo():
     )
 
 
-@app.route('/contabilidade/pagamentos/plantonistas/quick-create', methods=['POST'])
 @login_required
 def contabilidade_plantonistas_quick_create():
     _ensure_accounting_access()
@@ -5038,7 +5532,6 @@ def contabilidade_plantonistas_quick_create():
     })
 
 
-@app.route('/contabilidade/pagamentos/plantonistas/<int:escala_id>/editar', methods=['GET', 'POST'])
 @login_required
 def contabilidade_plantonistas_editar(escala_id):
     _ensure_accounting_access()
@@ -5143,7 +5636,6 @@ def contabilidade_plantonistas_editar(escala_id):
     )
 
 
-@app.route('/contabilidade/pagamentos/plantao/<int:escala_id>/confirmar', methods=['POST'])
 @login_required
 def contabilidade_plantao_confirmar(escala_id):
     _ensure_accounting_access()
@@ -5171,7 +5663,6 @@ def contabilidade_plantao_confirmar(escala_id):
     )
 
 
-@app.route('/contabilidade/pagamentos/plantao/<int:escala_id>/gerar_pagamento', methods=['POST'])
 @login_required
 def contabilidade_plantao_gerar_pagamento(escala_id):
     _ensure_accounting_access()
@@ -5223,7 +5714,6 @@ def contabilidade_plantao_gerar_pagamento(escala_id):
     )
 
 
-@app.route('/contabilidade/obrigacoes')
 @login_required
 def contabilidade_obrigacoes():
     _ensure_accounting_access()
@@ -5293,15 +5783,100 @@ def contabilidade_obrigacoes():
     )
 
 
-@app.route('/contabilidade/nfse')
+def _nfse_required_fields_by_municipio() -> dict[str, list[str]]:
+    return {
+        "orlandia": [
+            "inscricao_municipal",
+            "regime_tributario",
+            "cnae",
+            "codigo_servico",
+            "aliquota_iss",
+            "nfse_username",
+            "nfse_password",
+        ],
+        "belo_horizonte": [
+            "inscricao_municipal",
+            "cnae",
+            "codigo_servico",
+            "nfse_cert_path",
+            "nfse_cert_password",
+        ],
+    }
+
+
+def _nfse_field_labels() -> dict[str, str]:
+    return {
+        "inscricao_municipal": "Inscrição municipal",
+        "regime_tributario": "Regime tributário",
+        "cnae": "CNAE",
+        "codigo_servico": "Código de serviço",
+        "aliquota_iss": "Alíquota ISS",
+        "nfse_username": "Usuário NFS-e",
+        "nfse_password": "Senha NFS-e",
+        "nfse_cert_path": "Certificado NFS-e",
+        "nfse_cert_password": "Senha do certificado",
+    }
+
+
+def _nfse_missing_fields(clinic: Clinica) -> tuple[list[str], str]:
+    municipio_key = (get_clinica_field(clinic, "municipio_nfse", "") or "").strip().lower()
+    required_fields = _nfse_required_fields_by_municipio().get(municipio_key, [])
+    labels = _nfse_field_labels()
+    missing_fields = []
+    for field in required_fields:
+        current_value = get_clinica_field(clinic, field, "")
+        if current_value in (None, "", []):
+            missing_fields.append(labels.get(field, field))
+    return missing_fields, municipio_key
+
+
+def _nfse_certificate_status(clinic: Clinica, municipio_key: str) -> tuple[bool, str]:
+    required_fields = _nfse_required_fields_by_municipio().get(municipio_key, [])
+    certificate_required = "nfse_cert_path" in required_fields or "nfse_cert_password" in required_fields
+    if not certificate_required:
+        return True, "Não exigido para este município."
+
+    certificate = (
+        FiscalCertificate.query.join(FiscalEmitter, FiscalCertificate.emitter_id == FiscalEmitter.id)
+        .filter(FiscalEmitter.clinic_id == clinic.id)
+        .order_by(FiscalCertificate.created_at.desc())
+        .first()
+    )
+    if certificate and certificate.valid_to:
+        is_valid = certificate.valid_to >= datetime.now(timezone.utc)
+        if is_valid:
+            return True, f"Válido até {certificate.valid_to.strftime('%d/%m/%Y')}."
+        return False, f"Vencido em {certificate.valid_to.strftime('%d/%m/%Y')}."
+    if clinic.nfse_cert_path and clinic.nfse_cert_password:
+        return True, "Certificado configurado."
+    return False, "Certificado não informado."
+
+
+def _nfse_betha_status(clinic: Clinica, municipio_key: str) -> tuple[bool, str]:
+    if municipio_key != "orlandia":
+        return True, "Não se aplica ao município."
+    if get_clinica_field(clinic, "fiscal_ready", False):
+        return True, "Teste de comunicação concluído."
+    return False, "Teste de comunicação pendente."
+
+
 @login_required
 def contabilidade_nfse():
     _ensure_accounting_access()
     clinics, accessible_ids = _accounting_accessible_clinics()
 
     requested_id = request.args.get('clinica_id', type=int)
+    orcamento_id = request.args.get('orcamento_id', type=int)
+    atendimento_id = request.args.get('atendimento_id', type=int)
+    origin_param = "orcamento_id" if orcamento_id else ("atendimento_id" if atendimento_id else None)
+    origin_id = orcamento_id or atendimento_id
+    if requested_id and requested_id not in accessible_ids and not _is_admin():
+        abort(403)
+    visible_clinics = clinics
+    if not _is_admin():
+        visible_clinics = [clinic for clinic in clinics if clinic.id in accessible_ids]
     selected_clinic = _select_accounting_clinic(
-        clinics,
+        visible_clinics,
         accessible_ids,
         requested_clinic_id=requested_id,
     )
@@ -5344,15 +5919,43 @@ def contabilidade_nfse():
         "substituicao_solicitada",
     ]
 
+    municipio_options = [
+        {"value": "", "label": "Selecione um município"},
+        {"value": "orlandia", "label": "Orlândia (SP)"},
+        {"value": "belo_horizonte", "label": "Belo Horizonte (MG)"},
+    ]
+
+    nfse_settings = {}
+    nfse_missing_fields = []
+    if selected_clinic:
+        nfse_settings = {
+            "municipio_nfse": get_clinica_field(selected_clinic, "municipio_nfse", "") or "",
+            "inscricao_municipal": get_clinica_field(selected_clinic, "inscricao_municipal", "") or "",
+            "inscricao_estadual": get_clinica_field(selected_clinic, "inscricao_estadual", "") or "",
+            "regime_tributario": get_clinica_field(selected_clinic, "regime_tributario", "") or "",
+            "cnae": get_clinica_field(selected_clinic, "cnae", "") or "",
+            "codigo_servico": get_clinica_field(selected_clinic, "codigo_servico", "") or "",
+            "aliquota_iss": get_clinica_field(selected_clinic, "aliquota_iss", "") or "",
+            "nfse_username": get_clinica_field(selected_clinic, "nfse_username", "") or "",
+            "nfse_cert_path": get_clinica_field(selected_clinic, "nfse_cert_path", "") or "",
+            "nfse_token": get_clinica_field(selected_clinic, "nfse_token", "") or "",
+        }
+        nfse_missing_fields, _municipio_key = _nfse_missing_fields(selected_clinic)
+
     return render_template(
         'contabilidade/nfse.html',
-        clinics=clinics,
+        clinics=visible_clinics,
         selected_clinic=selected_clinic,
         issues=issues,
         statuses=statuses,
         status_filter=status_filter,
         queue_count=queue_count,
         pdf_issue_ids=pdf_issue_ids,
+        origin_param=origin_param,
+        origin_id=origin_id,
+        municipio_options=municipio_options,
+        nfse_settings=nfse_settings,
+        nfse_missing_fields=nfse_missing_fields,
         cancel_rules=(
             get_nfse_cancel_rules(get_clinica_field(selected_clinic, "municipio_nfse", ""))
             if selected_clinic
@@ -5365,26 +5968,477 @@ def contabilidade_nfse():
     )
 
 
-@app.route('/contabilidade/nfse/emitir', methods=['POST'])
+@login_required
+def contabilidade_nfse_configurar():
+    _ensure_accounting_access()
+    clinic_id = request.form.get('clinica_id', type=int)
+    orcamento_id = request.form.get('orcamento_id', type=int)
+    atendimento_id = request.form.get('atendimento_id', type=int)
+    origin_param = "orcamento_id" if orcamento_id else ("atendimento_id" if atendimento_id else None)
+    origin_id = orcamento_id or atendimento_id
+    _, accessible_ids = _accounting_accessible_clinics()
+    if clinic_id and clinic_id not in accessible_ids:
+        abort(403)
+
+    clinic = Clinica.query.get_or_404(clinic_id) if clinic_id else None
+    if not clinic:
+        flash("Selecione uma clínica para atualizar as configurações.", "warning")
+        return redirect(url_for('contabilidade_nfse'))
+
+    decimal_fields = {
+        "aliquota_iss",
+        "aliquota_pis",
+        "aliquota_cofins",
+        "aliquota_csll",
+        "aliquota_ir",
+    }
+    password_fields = {"nfse_password", "nfse_cert_password"}
+    sensitive_fields = {
+        "nfse_username",
+        "nfse_password",
+        "nfse_cert_path",
+        "nfse_cert_password",
+        "nfse_token",
+    }
+    updatable_fields = [
+        "municipio_nfse",
+        "inscricao_municipal",
+        "inscricao_estadual",
+        "regime_tributario",
+        "cnae",
+        "codigo_servico",
+        "aliquota_iss",
+        "aliquota_pis",
+        "aliquota_cofins",
+        "aliquota_csll",
+        "aliquota_ir",
+        "nfse_username",
+        "nfse_password",
+        "nfse_cert_path",
+        "nfse_cert_password",
+        "nfse_token",
+    ]
+
+    for field_name in updatable_fields:
+        if not clinica_has_column(field_name):
+            continue
+        value = request.form.get(field_name)
+        if field_name in password_fields and not value:
+            continue
+        if value is not None and isinstance(value, str):
+            value = value.strip()
+        if field_name in decimal_fields:
+            if value in (None, ""):
+                value = None
+            else:
+                try:
+                    value = Decimal(value.replace(",", "."))
+                except (AttributeError, InvalidOperation):
+                    flash("Informe uma alíquota válida.", "warning")
+                    return redirect(
+                        url_for(
+                            'contabilidade_nfse',
+                            clinica_id=clinic_id,
+                            **({origin_param: origin_id} if origin_param else {}),
+                        )
+                    )
+        else:
+            if value == "":
+                value = None
+        if value is not None and field_name in sensitive_fields:
+            try:
+                value = encrypt_text(value)
+            except MissingMasterKeyError:
+                flash(
+                    "Chave fiscal não configurada. Configure FISCAL_MASTER_KEY antes de salvar.",
+                    "danger",
+                )
+                return redirect(
+                    url_for(
+                        'contabilidade_nfse',
+                        clinica_id=clinic_id,
+                        **({origin_param: origin_id} if origin_param else {}),
+                    )
+                )
+        setattr(clinic, field_name, value)
+
+    db.session.add(clinic)
+    try:
+        db.session.commit()
+    except Exception:  # noqa: BLE001
+        db.session.rollback()
+        current_app.logger.exception("Erro ao salvar configurações da NFS-e")
+        flash("Não foi possível salvar as configurações. Tente novamente.", "danger")
+    else:
+        municipio_key = (get_clinica_field(clinic, "municipio_nfse", "") or "").strip().lower()
+        required_by_municipio = _nfse_required_fields_by_municipio()
+        labels = _nfse_field_labels()
+        missing_fields = []
+        for field in required_by_municipio.get(municipio_key, []):
+            if get_clinica_field(clinic, field, "") in (None, "", []):
+                missing_fields.append(labels.get(field, field))
+        if missing_fields:
+            flash(
+                "Configurações salvas, mas faltam dados obrigatórios: "
+                + ", ".join(missing_fields)
+                + ".",
+                "warning",
+            )
+        else:
+            flash("Configurações da NFS-e atualizadas com sucesso.", "success")
+
+    return redirect(
+        url_for(
+            'contabilidade_nfse',
+            clinica_id=clinic_id,
+            **({origin_param: origin_id} if origin_param else {}),
+        )
+    )
+
+
+@login_required
+def contabilidade_nfse_orcamento(orcamento_id: int):
+    _ensure_accounting_access()
+    _, accessible_ids = _accounting_accessible_clinics()
+    orcamento = (
+        Orcamento.query
+        .options(
+            joinedload(Orcamento.consulta)
+            .joinedload(Consulta.animal)
+            .joinedload(Animal.owner),
+        )
+        .get(orcamento_id)
+    )
+    if not orcamento:
+        return jsonify({"error": "Orçamento não encontrado."}), 404
+    if orcamento.clinica_id not in accessible_ids:
+        return jsonify({"error": "Sem acesso ao orçamento informado."}), 403
+
+    payload = _build_nfse_orcamento_payload(orcamento)
+    return jsonify(payload)
+
+
+@login_required
+def contabilidade_nfse_preview():
+    _ensure_accounting_access()
+    orcamento_id = request.args.get("orcamento_id", type=int)
+    if not orcamento_id:
+        flash("Informe o orçamento para pré-visualizar a NFS-e.", "warning")
+        return redirect(url_for("contabilidade_nfse"))
+
+    orcamento = (
+        Orcamento.query
+        .options(
+            joinedload(Orcamento.consulta)
+            .joinedload(Consulta.animal)
+            .joinedload(Animal.owner),
+            joinedload(Orcamento.clinica),
+        )
+        .get(orcamento_id)
+    )
+    if not orcamento:
+        flash("Orçamento não encontrado.", "danger")
+        return redirect(url_for("contabilidade_nfse"))
+
+    _, accessible_ids = _accounting_accessible_clinics()
+    if orcamento.clinica_id not in accessible_ids:
+        abort(403)
+
+    consulta = orcamento.consulta
+    animal = consulta.animal if consulta else None
+    tutor = animal.owner if animal else None
+    clinica = orcamento.clinica
+    municipio = get_clinica_field(clinica, "municipio_nfse", "") or ""
+    municipio_key = _normalize_municipio(municipio) if municipio else ""
+    municipio_labels = {
+        "orlandia": "Orlândia (SP)",
+        "belo_horizonte": "Belo Horizonte (MG)",
+    }
+    municipio_label = municipio_labels.get(municipio_key, municipio or "Não informado")
+
+    nfse_missing_fields, municipio_key = _nfse_missing_fields(clinica)
+    cadastro_ok = not nfse_missing_fields
+    certificado_ok, certificado_msg = _nfse_certificate_status(clinica, municipio_key)
+    betha_ok, betha_msg = _nfse_betha_status(clinica, municipio_key)
+
+    checks = [
+        {"label": "Certificado válido", "ok": certificado_ok, "detail": certificado_msg},
+        {
+            "label": "Cadastro fiscal completo",
+            "ok": cadastro_ok,
+            "detail": "Todos os dados obrigatórios estão preenchidos."
+            if cadastro_ok
+            else "Faltam informações obrigatórias.",
+        },
+        {"label": "Comunicação Betha disponível", "ok": betha_ok, "detail": betha_msg},
+    ]
+
+    blocking_errors = []
+    if not consulta:
+        blocking_errors.append("O orçamento não está vinculado a uma consulta.")
+    if nfse_missing_fields:
+        blocking_errors.append(
+            "Cadastro fiscal incompleto: "
+            + ", ".join(nfse_missing_fields)
+            + ". Atualize as configurações da NFS-e."
+        )
+    if not certificado_ok:
+        blocking_errors.append("Certificado fiscal inválido ou ausente. Atualize o certificado antes de emitir.")
+    if not betha_ok:
+        blocking_errors.append("Teste de comunicação com a Betha pendente. Finalize o wizard fiscal.")
+
+    can_emit = bool(consulta) and cadastro_ok and certificado_ok and betha_ok
+
+    emission_result = None
+    if request.args.get("emissao") == "1" and consulta:
+        issue = NfseIssue.query.filter_by(
+            clinica_id=clinica.id,
+            internal_identifier=f"consulta:{consulta.id}",
+        ).order_by(NfseIssue.created_at.desc()).first()
+        if issue and issue.numero_nfse:
+            emission_result = {
+                "status": "success",
+                "title": f"Nota Fiscal nº {issue.numero_nfse}",
+                "subtitle": f"Consulta – {animal.name if animal else 'Paciente'}"
+                f" (tutora {tutor.name if tutor else 'não informada'})",
+                "suggestion": "Você pode baixar o PDF/XML na lista de emissões.",
+            }
+        elif issue and (issue.status == "erro" or issue.erro_mensagem):
+            reason = issue.erro_mensagem or "Não foi possível emitir a nota."
+            emission_result = {
+                "status": "error",
+                "title": "Não foi possível emitir a nota",
+                "subtitle": f"Motivo: {reason}",
+                "suggestion": (
+                    "Sugestão: revise o item de serviço e o cadastro fiscal "
+                    "nas configurações da NFS-e e tente novamente."
+                ),
+            }
+        else:
+            emission_result = {
+                "status": "info",
+                "title": "Emissão enviada para processamento",
+                "subtitle": (
+                    "A nota foi enviada e está sendo processada. "
+                    "Acompanhe o status na listagem de emissões."
+                ),
+                "suggestion": "Aguarde alguns instantes e atualize a tela.",
+            }
+
+    return render_template(
+        "contabilidade/nfse_preview.html",
+        orcamento=orcamento,
+        consulta=consulta,
+        animal=animal,
+        tutor=tutor,
+        clinica=clinica,
+        municipio_label=municipio_label,
+        checks=checks,
+        blocking_errors=blocking_errors,
+        can_emit=can_emit,
+        emission_result=emission_result,
+    )
+
+
+def _build_nfse_orcamento_payload(orcamento: Orcamento) -> dict:
+    consulta = orcamento.consulta
+    animal = consulta.animal if consulta else None
+    tomador = animal.owner if animal else None
+    items = [
+        {
+            "id": item.id,
+            "descricao": item.descricao,
+            "valor": float(item.valor or 0),
+            "payer_type": item.effective_payer_type,
+            "servico_id": item.servico_id,
+            "procedure_code": item.procedure_code,
+        }
+        for item in orcamento.items
+    ]
+
+    particular_items = [
+        i for i in items if i["payer_type"] == "particular"
+    ]
+    particular_total = sum(i["valor"] for i in particular_items)
+
+    desc_lines = [i["descricao"] for i in particular_items if i["descricao"]]
+    discriminacao = "; ".join(desc_lines) if desc_lines else (orcamento.descricao or "")
+
+    endereco_payload = (
+        {
+            "cep": tomador.endereco.cep,
+            "logradouro": tomador.endereco.rua,
+            "numero": tomador.endereco.numero,
+            "complemento": tomador.endereco.complemento,
+            "bairro": tomador.endereco.bairro,
+            "cidade": tomador.endereco.cidade,
+            "estado": tomador.endereco.estado,
+        }
+        if tomador and tomador.endereco
+        else None
+    )
+
+    return {
+        "id": orcamento.id,
+        "consulta_id": orcamento.consulta_id,
+        "descricao": orcamento.descricao,
+        "valor_total": float(orcamento.total or 0),
+        "valor_particular": particular_total,
+        "discriminacao": discriminacao,
+        "itens": items,
+        "paciente": (
+            {
+                "id": animal.id,
+                "nome": animal.name,
+                "especie": animal.species,
+                "raca": animal.breed,
+            }
+            if animal
+            else None
+        ),
+        "tomador": (
+            {
+                "id": tomador.id,
+                "nome": tomador.name,
+                "cpf_cnpj": tomador.cpf,
+                "email": tomador.email,
+                "telefone": tomador.phone,
+                "endereco": endereco_payload,
+                "endereco_texto": tomador.address,
+            }
+            if tomador
+            else None
+        ),
+    }
+
+
+def _build_nfse_emissor_payload(clinica: Clinica) -> dict:
+    def _to_float(value):
+        return float(value) if value is not None else None
+
+    return {
+        "id": clinica.id,
+        "nome": clinica.nome,
+        "cnpj": clinica.cnpj,
+        "email": clinica.email,
+        "telefone": clinica.telefone,
+        "endereco": clinica.endereco,
+        "inscricao_municipal": get_clinica_field(clinica, "inscricao_municipal", None),
+        "inscricao_estadual": get_clinica_field(clinica, "inscricao_estadual", None),
+        "regime_tributario": get_clinica_field(clinica, "regime_tributario", None),
+        "cnae": get_clinica_field(clinica, "cnae", None),
+        "codigo_servico": get_clinica_field(clinica, "codigo_servico", None),
+        "aliquota_iss": _to_float(get_clinica_field(clinica, "aliquota_iss", None)),
+        "aliquota_pis": _to_float(get_clinica_field(clinica, "aliquota_pis", None)),
+        "aliquota_cofins": _to_float(get_clinica_field(clinica, "aliquota_cofins", None)),
+        "aliquota_csll": _to_float(get_clinica_field(clinica, "aliquota_csll", None)),
+        "aliquota_ir": _to_float(get_clinica_field(clinica, "aliquota_ir", None)),
+        "municipio_nfse": get_clinica_field(clinica, "municipio_nfse", None),
+        "fiscal_ready": clinica.fiscal_ready_status,
+    }
+
+
+@login_required
+def contabilidade_nfse_consolidado():
+    _ensure_accounting_access()
+    clinica_id = request.args.get("clinica_id", type=int)
+    orcamento_id = request.args.get("orcamento_id", type=int)
+    if not clinica_id or not orcamento_id:
+        return jsonify({"error": "Informe clinica_id e orcamento_id."}), 400
+
+    _, accessible_ids = _accounting_accessible_clinics()
+    if clinica_id not in accessible_ids:
+        return jsonify({"error": "Sem acesso à clínica informada."}), 403
+
+    clinica = Clinica.query.get(clinica_id)
+    if not clinica:
+        return jsonify({"error": "Clínica não encontrada."}), 404
+
+    orcamento = (
+        Orcamento.query
+        .options(
+            joinedload(Orcamento.consulta)
+            .joinedload(Consulta.animal)
+            .joinedload(Animal.owner),
+        )
+        .get(orcamento_id)
+    )
+    if not orcamento:
+        return jsonify({"error": "Orçamento não encontrado."}), 404
+    if orcamento.clinica_id not in accessible_ids:
+        return jsonify({"error": "Sem acesso ao orçamento informado."}), 403
+    if orcamento.clinica_id != clinica_id:
+        return jsonify({"error": "Orçamento não pertence à clínica informada."}), 400
+
+    payload = _build_nfse_orcamento_payload(orcamento)
+    payload["emissor"] = _build_nfse_emissor_payload(clinica)
+    return jsonify(payload)
+
+
 @login_required
 def contabilidade_nfse_emitir():
     _ensure_accounting_access()
     consulta_id = request.form.get('consulta_id', type=int)
+    orcamento_id = request.form.get('orcamento_id', type=int)
+    atendimento_id = request.form.get('atendimento_id', type=int)
+    origin_param = "orcamento_id" if orcamento_id else ("atendimento_id" if atendimento_id else None)
+    origin_id = orcamento_id or atendimento_id
+    orcamento = None
+    if orcamento_id:
+        orcamento = Orcamento.query.options(joinedload(Orcamento.consulta)).get(orcamento_id)
+        if orcamento and not consulta_id:
+            consulta_id = orcamento.consulta_id
     if not consulta_id:
         flash('Informe a consulta para emitir a NFS-e.', 'warning')
-        return redirect(url_for('contabilidade_nfse'))
+        return redirect(url_for('contabilidade_nfse', **({origin_param: origin_id} if origin_param else {})))
 
     consulta = Consulta.query.get_or_404(consulta_id)
     _, accessible_ids = _accounting_accessible_clinics()
     if consulta.clinica_id not in accessible_ids:
         abort(403)
+    if orcamento is None and consulta.orcamento:
+        orcamento = consulta.orcamento
+
+    nfse_missing_fields, municipio_key = _nfse_missing_fields(consulta.clinica)
+    cadastro_ok = not nfse_missing_fields
+    certificado_ok, _certificado_msg = _nfse_certificate_status(consulta.clinica, municipio_key)
+    betha_ok, _betha_msg = _nfse_betha_status(consulta.clinica, municipio_key)
+    if not (cadastro_ok and certificado_ok and betha_ok):
+        flash("Antes de emitir, revise as pendências fiscais na pré-visualização.", "warning")
+        if orcamento:
+            return redirect(url_for("contabilidade_nfse_preview", orcamento_id=orcamento.id))
+        return redirect(url_for('contabilidade_nfse', **({origin_param: origin_id} if origin_param else {})))
 
     issue = ensure_nfse_issue_for_consulta(consulta)
     if not issue:
         flash('A clínica não possui município NFS-e configurado.', 'warning')
-        return redirect(url_for('contabilidade_nfse', clinica_id=consulta.clinica_id))
+        return redirect(
+            url_for(
+                'contabilidade_nfse',
+                clinica_id=consulta.clinica_id,
+                **({origin_param: origin_id} if origin_param else {}),
+            )
+        )
 
     payload = {"consulta_id": consulta.id}
+    tomador_payload = {
+        "nome": request.form.get('tomador_nome') or None,
+        "cpf_cnpj": request.form.get('tomador_documento') or None,
+        "email": request.form.get('tomador_email') or None,
+        "telefone": request.form.get('tomador_telefone') or None,
+    }
+    endereco_payload = {
+        "cep": request.form.get('tomador_cep') or None,
+        "cidade": request.form.get('tomador_municipio') or None,
+        "estado": request.form.get('tomador_uf') or None,
+        "logradouro": request.form.get('tomador_logradouro') or None,
+        "numero": request.form.get('tomador_numero') or None,
+        "bairro": request.form.get('tomador_bairro') or None,
+    }
+    if any(endereco_payload.values()):
+        tomador_payload["endereco"] = endereco_payload
+    if any(value for value in tomador_payload.values()):
+        payload["tomador"] = tomador_payload
     try:
         if should_emit_async(get_clinica_field(consulta.clinica, "municipio_nfse", "")):
             queue_nfse_issue(issue, "Emissão solicitada manualmente.", payload)
@@ -5393,21 +6447,36 @@ def contabilidade_nfse_emitir():
             process_nfse_issue(issue, payload)
             flash('Emissão iniciada com sucesso.', 'success')
     except Exception as exc:  # noqa: BLE001
+        current_app.logger.exception("Falha ao emitir NFS-e manualmente.")
+        issue.erro_mensagem = "Não foi possível emitir a nota agora."
+        db.session.add(issue)
+        db.session.commit()
         queue_nfse_issue(
             issue,
             "Falha ao emitir; reprocessamento manual necessário.",
-            {"erro": str(exc), **payload},
+            payload,
         )
-        flash('Falha ao emitir. A solicitação foi enfileirada para reprocessamento.', 'warning')
+        flash('Não foi possível emitir a nota. Verifique as configurações fiscais.', 'warning')
 
-    return redirect(url_for('contabilidade_nfse', clinica_id=consulta.clinica_id))
+    return redirect(
+        url_for("contabilidade_nfse_preview", orcamento_id=orcamento.id, emissao=1)
+        if orcamento
+        else url_for(
+            'contabilidade_nfse',
+            clinica_id=consulta.clinica_id,
+            **({origin_param: origin_id} if origin_param else {}),
+        )
+    )
 
 
-@app.route('/contabilidade/nfse/processar_fila', methods=['POST'])
 @login_required
 def contabilidade_nfse_processar_fila():
     _ensure_accounting_access()
     clinic_id = request.form.get('clinica_id', type=int)
+    orcamento_id = request.form.get('orcamento_id', type=int)
+    atendimento_id = request.form.get('atendimento_id', type=int)
+    origin_param = "orcamento_id" if orcamento_id else ("atendimento_id" if atendimento_id else None)
+    origin_id = orcamento_id or atendimento_id
     limit = request.form.get('limit', type=int) or 10
     _, accessible_ids = _accounting_accessible_clinics()
     if clinic_id and clinic_id not in accessible_ids:
@@ -5419,14 +6488,23 @@ def contabilidade_nfse_processar_fila():
     if result.failed:
         flash(f'{result.failed} emissão(ões) falharam. Verifique os detalhes.', 'warning')
 
-    return redirect(url_for('contabilidade_nfse', clinica_id=clinic_id))
+    return redirect(
+        url_for(
+            'contabilidade_nfse',
+            clinica_id=clinic_id,
+            **({origin_param: origin_id} if origin_param else {}),
+        )
+    )
 
 
-@app.route('/contabilidade/nfse/<int:issue_id>/reprocessar', methods=['POST'])
 @login_required
 def contabilidade_nfse_reprocessar(issue_id):
     _ensure_accounting_access()
     issue = NfseIssue.query.get_or_404(issue_id)
+    orcamento_id = request.form.get('orcamento_id', type=int)
+    atendimento_id = request.form.get('atendimento_id', type=int)
+    origin_param = "orcamento_id" if orcamento_id else ("atendimento_id" if atendimento_id else None)
+    origin_id = orcamento_id or atendimento_id
     _, accessible_ids = _accounting_accessible_clinics()
     if issue.clinica_id not in accessible_ids:
         abort(403)
@@ -5447,14 +6525,57 @@ def contabilidade_nfse_reprocessar(issue_id):
         )
         flash('Falha ao reprocessar. A emissão voltou para fila.', 'warning')
 
-    return redirect(url_for('contabilidade_nfse', clinica_id=issue.clinica_id))
+    return redirect(
+        url_for(
+            'contabilidade_nfse',
+            clinica_id=issue.clinica_id,
+            **({origin_param: origin_id} if origin_param else {}),
+        )
+    )
 
 
-@app.route('/contabilidade/nfse/<int:issue_id>/cancelar', methods=['POST'])
+@login_required
+def contabilidade_nfse_contexto(issue_id):
+    _ensure_accounting_access()
+    issue = NfseIssue.query.get_or_404(issue_id)
+    orcamento_id = request.form.get('orcamento_id', type=int)
+    atendimento_id = request.form.get('atendimento_id', type=int)
+    origin_param = "orcamento_id" if orcamento_id else ("atendimento_id" if atendimento_id else None)
+    origin_id = orcamento_id or atendimento_id
+    _, accessible_ids = _accounting_accessible_clinics()
+    if issue.clinica_id not in accessible_ids:
+        abort(403)
+
+    payload = dict(issue.tomador_payload)
+    updates = {
+        "tutor_nome": (request.form.get("tutor_nome") or "").strip() or None,
+        "tutor_documento": (request.form.get("tutor_documento") or "").strip() or None,
+        "animal_nome": (request.form.get("animal_nome") or "").strip() or None,
+    }
+    payload.update(updates)
+    issue.tomador = json.dumps(payload, ensure_ascii=False)
+    issue.updated_at = utcnow()
+    db.session.add(issue)
+    db.session.commit()
+    flash("Dados atualizados para esta emissão.", "success")
+
+    return redirect(
+        url_for(
+            'contabilidade_nfse',
+            clinica_id=issue.clinica_id,
+            **({origin_param: origin_id} if origin_param else {}),
+        )
+    )
+
+
 @login_required
 def contabilidade_nfse_cancelar(issue_id):
     _ensure_accounting_access()
     issue = NfseIssue.query.get_or_404(issue_id)
+    orcamento_id = request.form.get('orcamento_id', type=int)
+    atendimento_id = request.form.get('atendimento_id', type=int)
+    origin_param = "orcamento_id" if orcamento_id else ("atendimento_id" if atendimento_id else None)
+    origin_id = orcamento_id or atendimento_id
     _, accessible_ids = _accounting_accessible_clinics()
     if issue.clinica_id not in accessible_ids:
         abort(403)
@@ -5472,7 +6593,13 @@ def contabilidade_nfse_cancelar(issue_id):
     )
     if errors:
         flash(" ".join(errors), 'warning')
-        return redirect(url_for('contabilidade_nfse', clinica_id=issue.clinica_id))
+        return redirect(
+            url_for(
+                'contabilidade_nfse',
+                clinica_id=issue.clinica_id,
+                **({origin_param: origin_id} if origin_param else {}),
+            )
+        )
 
     payload = {
         "issue_id": issue.id,
@@ -5486,14 +6613,23 @@ def contabilidade_nfse_cancelar(issue_id):
         current_app.logger.exception('Erro ao solicitar cancelamento NFS-e', exc_info=exc)
         flash('Erro ao solicitar cancelamento. Tente novamente.', 'danger')
 
-    return redirect(url_for('contabilidade_nfse', clinica_id=issue.clinica_id))
+    return redirect(
+        url_for(
+            'contabilidade_nfse',
+            clinica_id=issue.clinica_id,
+            **({origin_param: origin_id} if origin_param else {}),
+        )
+    )
 
 
-@app.route('/contabilidade/nfse/<int:issue_id>/substituir', methods=['POST'])
 @login_required
 def contabilidade_nfse_substituir(issue_id):
     _ensure_accounting_access()
     issue = NfseIssue.query.get_or_404(issue_id)
+    orcamento_id = request.form.get('orcamento_id', type=int)
+    atendimento_id = request.form.get('atendimento_id', type=int)
+    origin_param = "orcamento_id" if orcamento_id else ("atendimento_id" if atendimento_id else None)
+    origin_id = orcamento_id or atendimento_id
     _, accessible_ids = _accounting_accessible_clinics()
     if issue.clinica_id not in accessible_ids:
         abort(403)
@@ -5512,7 +6648,13 @@ def contabilidade_nfse_substituir(issue_id):
     )
     if errors:
         flash(" ".join(errors), 'warning')
-        return redirect(url_for('contabilidade_nfse', clinica_id=issue.clinica_id))
+        return redirect(
+            url_for(
+                'contabilidade_nfse',
+                clinica_id=issue.clinica_id,
+                **({origin_param: origin_id} if origin_param else {}),
+            )
+        )
 
     payload = {
         "issue_id": issue.id,
@@ -5533,10 +6675,15 @@ def contabilidade_nfse_substituir(issue_id):
         current_app.logger.exception('Erro ao solicitar substituição NFS-e', exc_info=exc)
         flash('Erro ao solicitar substituição. Tente novamente.', 'danger')
 
-    return redirect(url_for('contabilidade_nfse', clinica_id=issue.clinica_id))
+    return redirect(
+        url_for(
+            'contabilidade_nfse',
+            clinica_id=issue.clinica_id,
+            **({origin_param: origin_id} if origin_param else {}),
+        )
+    )
 
 
-@app.route('/contabilidade/nfse/<int:issue_id>/download/<string:kind>')
 @login_required
 def contabilidade_nfse_download(issue_id, kind):
     _ensure_accounting_access()
@@ -5556,6 +6703,17 @@ def contabilidade_nfse_download(issue_id, kind):
         xml_content = xml_record.xml if xml_record else (issue.xml_retorno or issue.xml_envio)
         if not xml_content:
             abort(404)
+        try:
+            if xml_record:
+                xml_content = xml_record.get_xml_plaintext()
+            else:
+                xml_content = decrypt_text_for_clinic(issue.clinica_id, xml_content)
+        except MissingMasterKeyError:
+            current_app.logger.error(
+                "FISCAL_MASTER_KEY ausente; não foi possível descriptografar XML da NFS-e %s.",
+                issue.id,
+            )
+            abort(500)
         response = make_response(xml_content)
         response.headers["Content-Type"] = "application/xml"
         response.headers["Content-Disposition"] = f"attachment; filename=nfse-{issue.id}.xml"
@@ -5631,7 +6789,6 @@ def _update_coordinates_from_request(endereco: Endereco | None):
         return False
 
 
-@app.route('/register', methods=['GET', 'POST'])
 def register():
     form = RegistrationForm()
     is_json_request = request.accept_mimetypes['application/json'] > request.accept_mimetypes['text/html']
@@ -5903,7 +7060,6 @@ def add_animal():
     )
 
 
-@app.route('/login', methods=['GET', 'POST'])
 def login_view():
     form = LoginForm()
     is_json_request = request.accept_mimetypes['application/json'] > request.accept_mimetypes['text/html']
@@ -5934,14 +7090,12 @@ def login_view():
     return render_template('auth/login.html', form=form)
 
 
-@app.route('/logout')
 @login_required
 def logout():
     logout_user()
     flash('Você saiu com sucesso!', 'success')
     return redirect(url_for('index'))
 
-@app.route('/profile', methods=['GET', 'POST'])
 @login_required
 def profile():
     # Garante que current_user.endereco exista para pré-preenchimento
@@ -6025,7 +7179,6 @@ def profile():
     )
 
 
-@app.route('/change_password', methods=['GET', 'POST'])
 @login_required
 def change_password():
     form = ChangePasswordForm()
@@ -6047,7 +7200,6 @@ def change_password():
     return render_template('auth/change_password.html', form=form)
 
 
-@app.route('/delete_account', methods=['POST'])
 @login_required
 def delete_account():
     form = DeleteAccountForm()
@@ -6290,7 +7442,6 @@ def editar_animal(animal_id):
                            breed_list=breed_list)
 
 
-@app.route('/mensagem/<int:animal_id>', methods=['GET', 'POST'])
 @login_required
 def enviar_mensagem(animal_id):
     animal = get_animal_or_404(animal_id)
@@ -6317,7 +7468,6 @@ def enviar_mensagem(animal_id):
     return render_template('mensagens/enviar_mensagem.html', form=form, animal=animal)
 
 
-@app.route('/mensagem/<int:message_id>/aceitar', methods=['POST'])
 @login_required
 def aceitar_interesse(message_id):
     mensagem = Message.query.get_or_404(message_id)
@@ -6335,13 +7485,11 @@ def aceitar_interesse(message_id):
     return redirect(url_for('conversa', animal_id=animal.id, user_id=mensagem.sender_id))
 
 
-@app.route('/mensagens')
 @login_required
 def mensagens():
     return _render_messages_page()
 
 
-@app.route('/api/messages/threads')
 @login_required
 def api_message_threads():
     """Return aggregated conversation threads for the authenticated user."""
@@ -6350,7 +7498,6 @@ def api_message_threads():
     return jsonify({"threads": threads})
 
 
-@app.route('/chat/<int:animal_id>', methods=['GET', 'POST'])
 @login_required
 def chat_messages(animal_id):
     """API simples para listar e criar mensagens relacionadas a um animal."""
@@ -6401,7 +7548,6 @@ def chat_messages(animal_id):
     )
 
 
-@app.route('/chat/<int:animal_id>/view')
 @login_required
 def chat_view(animal_id):
     animal = get_animal_or_404(animal_id)
@@ -6445,7 +7591,6 @@ def _resolve_animal_conversation(animal_id, user_id):
     return animal, interlocutor
 
 
-@app.route('/conversa/<int:animal_id>/<int:user_id>', methods=['GET', 'POST'])
 @login_required
 def conversa(animal_id, user_id):
     animal, outro_usuario = _resolve_animal_conversation(animal_id, user_id)
@@ -6494,28 +7639,35 @@ def conversa(animal_id, user_id):
     )
 
 
-@app.route('/api/conversa/<int:animal_id>/<int:user_id>', methods=['POST'])
 @login_required
 def api_conversa_message(animal_id, user_id):
     """Recebe uma nova mensagem da conversa e retorna o HTML renderizado."""
     form = MessageForm()
     animal, outro_usuario = _resolve_animal_conversation(animal_id, user_id)
-    if form.validate_on_submit():
-        nova_msg = Message(
-            sender_id=current_user.id,
-            receiver_id=outro_usuario.id,
-            animal_id=animal_id,
-            content=form.content.data,
-            lida=False
-        )
-        db.session.add(nova_msg)
-        db.session.commit()
-        return render_template('components/message.html', msg=nova_msg)
-    return '', 400
+    if not form.validate_on_submit():
+        # CSRF can fail after dyno restart (filesystem sessions lost).
+        # Fall back to manual content validation since @login_required
+        # already guarantees the user is authenticated.
+        if form.errors.keys() - {'csrf_token'}:
+            current_app.logger.warning('api_conversa_message validation failed for user %s: %s', current_user.id, form.errors)
+            return jsonify(error='Falha de validação. Recarregue a página e tente novamente.'), 400
+        content = request.form.get('content', '').strip()
+        if not content or len(content) > 1000:
+            return jsonify(error='Mensagem vazia ou muito longa.'), 400
+    else:
+        content = form.content.data
+    nova_msg = Message(
+        sender_id=current_user.id,
+        receiver_id=outro_usuario.id,
+        animal_id=animal_id,
+        content=content,
+        lida=False
+    )
+    db.session.add(nova_msg)
+    db.session.commit()
+    return render_template('components/message.html', msg=nova_msg)
 
 
-@app.route('/conversa_admin', methods=['GET', 'POST'])
-@app.route('/conversa_admin/<int:user_id>', methods=['GET', 'POST'])
 @login_required
 def conversa_admin(user_id=None):
     """Permite conversar diretamente com o administrador.
@@ -6641,8 +7793,6 @@ def conversa_admin(user_id=None):
     )
 
 
-@app.route('/api/conversa_admin', methods=['POST'])
-@app.route('/api/conversa_admin/<int:user_id>', methods=['POST'])
 @login_required
 def api_conversa_admin_message(user_id=None):
     """Recebe nova mensagem na conversa com o admin e retorna HTML."""
@@ -6660,25 +7810,31 @@ def api_conversa_admin_message(user_id=None):
         interlocutor = admin_user
 
     form = MessageForm()
-    if form.validate_on_submit():
-        nova_msg = Message(
-            sender_id=current_user.id,
-            receiver_id=interlocutor.id,
-            content=form.content.data,
-            lida=False,
-        )
-        db.session.add(nova_msg)
-        _notify_admin_message(
-            receiver=interlocutor,
-            sender=current_user,
-            message_content=form.content.data,
-        )
-        db.session.commit()
-        return render_template('components/message.html', msg=nova_msg)
-    return '', 400
+    if not form.validate_on_submit():
+        if form.errors.keys() - {'csrf_token'}:
+            current_app.logger.warning('api_conversa_admin_message validation failed for user %s: %s', current_user.id, form.errors)
+            return jsonify(error='Falha de validação. Recarregue a página e tente novamente.'), 400
+        content = request.form.get('content', '').strip()
+        if not content or len(content) > 1000:
+            return jsonify(error='Mensagem vazia ou muito longa.'), 400
+    else:
+        content = form.content.data
+    nova_msg = Message(
+        sender_id=current_user.id,
+        receiver_id=interlocutor.id,
+        content=content,
+        lida=False,
+    )
+    db.session.add(nova_msg)
+    _notify_admin_message(
+        receiver=interlocutor,
+        sender=current_user,
+        message_content=content,
+    )
+    db.session.commit()
+    return render_template('components/message.html', msg=nova_msg)
 
 
-@app.route('/admin/users/<int:user_id>/promover_veterinario', methods=['POST'])
 @login_required
 def admin_promote_veterinarian(user_id):
     if not (current_user.is_authenticated and (current_user.role or '').lower() == 'admin'):
@@ -6718,7 +7874,6 @@ def admin_promote_veterinarian(user_id):
     return redirect(url_for('conversa_admin', user_id=user.id))
 
 
-@app.route('/admin/users/<int:user_id>/promover_entregador', methods=['POST'])
 @login_required
 def admin_promote_delivery(user_id):
     if not (current_user.is_authenticated and (current_user.role or '').lower() == 'admin'):
@@ -6756,7 +7911,6 @@ def admin_promote_delivery(user_id):
     return redirect(url_for('conversa_admin', user_id=user.id))
 
 
-@app.route('/admin/users/<int:user_id>/remover_entregador', methods=['POST'])
 @login_required
 def admin_remove_delivery(user_id):
     if not (current_user.is_authenticated and (current_user.role or '').lower() == 'admin'):
@@ -6794,7 +7948,6 @@ def admin_remove_delivery(user_id):
     return redirect(url_for('conversa_admin', user_id=user.id))
 
 
-@app.route('/mensagens_admin')
 @login_required
 def mensagens_admin():
     """Lista as conversas iniciadas pelos usuários com o administrador."""
@@ -6908,26 +8061,6 @@ def mensagens_admin():
         gerais_next=2 if gerais_has_more else None,
         per_page=per_page,
     )
-
-
-@app.context_processor
-def inject_unread_count():
-    if current_user.is_authenticated:
-        if current_user.role == 'admin':
-            admin_ids = [u.id for u in User.query.filter_by(role='admin').all()]
-            unread = (
-                Message.query
-                .filter(Message.receiver_id.in_(admin_ids), Message.lida.is_(False))
-                .count()
-            )
-        else:
-            unread = (
-                Message.query
-                .filter_by(receiver_id=current_user.id, lida=False)
-                .count()
-            )
-        return dict(unread_messages=unread)
-    return dict(unread_messages=0)
 
 
 @app.context_processor
@@ -7333,7 +8466,6 @@ def gerar_termo(animal_id, tipo):
         abort(404)
 
 
-@app.route("/plano-saude")
 @login_required
 def plano_saude_overview():
     # animais ativos do tutor
@@ -7361,7 +8493,6 @@ def plano_saude_overview():
     )
 
 
-@app.route('/admin/planos/dashboard')
 @login_required
 def planos_dashboard():
     from admin import _is_admin
@@ -7371,7 +8502,6 @@ def planos_dashboard():
     history = build_usage_history(limit=25, include_display=True)
     return render_template('planos/dashboard.html', metrics=metrics, history=history)
 
-@app.route("/animal/<int:animal_id>/planosaude", methods=["GET", "POST"])
 @login_required
 def planosaude_animal(animal_id):
     animal = get_animal_or_404(animal_id)
@@ -7447,26 +8577,32 @@ def planosaude_animal(animal_id):
 
 
 
-@app.route("/plano-saude/<int:animal_id>/contratar", methods=["POST"])
-@login_required
 def contratar_plano(animal_id):
     """Inicia a assinatura de um plano de saúde via Mercado Pago."""
+    # Check authentication manually to handle JSON requests properly
+    if not current_user.is_authenticated:
+        is_json_request = request.accept_mimetypes['application/json'] > request.accept_mimetypes['text/html']
+        if is_json_request:
+            return jsonify({'success': False, 'message': 'Você precisa estar logado para contratar um plano.', 'redirect': url_for('login_view')}), 401
+        return redirect(url_for('login_view'))
+    
     animal = get_animal_or_404(animal_id)
 
     if animal.owner != current_user:
         flash("Você não tem permissão para contratar este plano.", "danger")
         return redirect(url_for("planosaude_animal", animal_id=animal.id))
 
+    # Create form and populate with POST data
     form = SubscribePlanForm()
     from models import HealthPlan, HealthPlanOnboarding
     plans = HealthPlan.query.all()
     form.plan_id.choices = [
         (p.id, f"{p.name} - R$ {p.price:.2f}") for p in plans
     ]
-    default_animal_document = animal.microchip_number or str(animal.id)
-    form.tutor_document.data = form.tutor_document.data or current_user.cpf
-    form.animal_document.data = form.animal_document.data or default_animal_document
+    
+    # Check if form validates on POST
     if not form.validate_on_submit():
+        app.logger.warning(f"Form validation errors: {form.errors}")
         flash("Selecione um plano válido.", "danger")
         return redirect(url_for("planosaude_animal", animal_id=animal.id))
 
@@ -7502,14 +8638,16 @@ def contratar_plano(animal_id):
     preapproval_data["external_reference"] = f"health-onboarding-{onboarding.id}"
 
     try:
+        app.logger.info(f"Creating Mercado Pago preapproval with data: {preapproval_data}")
         resp = mp_sdk().preapproval().create(preapproval_data)
-    except Exception:  # pragma: no cover - network failures
-        app.logger.exception("Erro de conexão com Mercado Pago")
+        app.logger.info(f"Mercado Pago response: {resp}")
+    except Exception as e:  # pragma: no cover - network failures
+        app.logger.exception(f"Erro de conexão com Mercado Pago: {e}")
         flash("Falha ao conectar com Mercado Pago.", "danger")
         return redirect(url_for("planosaude_animal", animal_id=animal.id))
 
     if resp.get("status") not in {200, 201}:
-        app.logger.error("MP error (HTTP %s): %s", resp.get("status"), resp)
+        app.logger.error(f"MP error (HTTP {resp.get('status')}): {resp}")
         flash("Erro ao iniciar assinatura.", "danger")
         return redirect(url_for("planosaude_animal", animal_id=animal.id))
 
@@ -7522,7 +8660,6 @@ def contratar_plano(animal_id):
     return redirect(init_point)
 
 
-@app.route('/consulta/<int:consulta_id>/validar-plano', methods=['POST'])
 @login_required
 def validar_plano_consulta(consulta_id):
     consulta = get_consulta_or_404(consulta_id)
@@ -7574,7 +8711,7 @@ def validar_plano_consulta(consulta_id):
 
 
 
-@app.route('/api/seguradoras/sinistros', methods=['POST'])
+@csrf.exempt
 def api_criar_sinistro():
     token = request.headers.get('X-Insurer-Token')
     if not insurer_token_valid(token):
@@ -7604,7 +8741,7 @@ def api_criar_sinistro():
     return jsonify({'id': claim.id, 'status': claim.status}), 201
 
 
-@app.route('/api/seguradoras/sinistros/<int:claim_id>')
+@csrf.exempt
 def api_status_sinistro(claim_id):
     token = request.headers.get('X-Insurer-Token')
     if not insurer_token_valid(token):
@@ -7622,7 +8759,7 @@ def api_status_sinistro(claim_id):
     })
 
 
-@app.route('/api/seguradoras/planos/<int:plan_id>/historico')
+@csrf.exempt
 def api_historico_uso(plan_id):
     token = request.headers.get('X-Insurer-Token')
     if not insurer_token_valid(token):
@@ -7632,7 +8769,7 @@ def api_historico_uso(plan_id):
     return jsonify({'plan_id': plan_id, 'historico': history})
 
 
-@app.route('/api/seguradoras/consultas/<int:consulta_id>/autorizacao')
+@csrf.exempt
 def api_status_autorizacao(consulta_id):
     token = request.headers.get('X-Insurer-Token')
     if not insurer_token_valid(token):
@@ -8212,107 +9349,56 @@ def finalizar_consulta(consulta_id):
         flash('Apenas veterinários podem finalizar consultas.', 'danger')
         return redirect(url_for('index'))
 
-    if consulta.orcamento_items:
-        from models import HealthSubscription
-        if not consulta.health_subscription_id:
-            active_sub = (
-                HealthSubscription.query
-                .filter_by(animal_id=consulta.animal_id, active=True)
-                .first()
-            )
-            if active_sub:
-                flash('Associe e valide o plano de saúde antes de finalizar a consulta.', 'warning')
-                return redirect(url_for('consulta_direct', animal_id=consulta.animal_id, c=consulta.id))
-        result = evaluate_consulta_coverages(consulta)
-        consulta.authorization_status = result['status']
-        consulta.authorization_checked_at = utcnow()
-        consulta.authorization_notes = '\n'.join(result.get('messages', [])) if result.get('messages') else None
-        if result['status'] != 'approved':
-            db.session.commit()
-            flash('Cobertura não aprovada. Revise o orçamento ou contate a seguradora.', 'danger')
-            return redirect(url_for('consulta_direct', animal_id=consulta.animal_id, c=consulta.id))
-
-    consulta.status = 'finalizada'
-    consulta.finalizada_em = utcnow()
-    appointment = consulta.appointment
-    if appointment and appointment.status != 'completed':
-        appointment.status = 'completed'
-
-    # Mensagem de resumo para o tutor
-    resumo = (
-        f"Consulta do {consulta.animal.name} finalizada.\n"
-        f"Queixa: {consulta.queixa_principal or 'N/A'}\n"
-        f"Conduta: {consulta.conduta or 'N/A'}\n"
-        f"Prescrição: {consulta.prescricao or 'N/A'}"
+    outcome = finalize_consulta_flow(
+        consulta=consulta,
+        actor_id=current_user.id,
+        actor_vet_id=getattr(getattr(current_user, "veterinario", None), "id", None),
+        clinic_id=current_user_clinic_id(),
     )
-    msg = Message(
-        sender_id=current_user.id,
-        receiver_id=consulta.animal.owner.id,
-        animal_id=consulta.animal_id,
-        content=resumo,
-    )
-    db.session.add(msg)
-
-    nfse_issue = ensure_nfse_issue_for_consulta(consulta)
-    if nfse_issue and nfse_issue.status in {None, "fila", "erro", "reprocessar"}:
-        nfse_payload = {
-            "consulta_id": consulta.id,
-            "animal_id": consulta.animal_id,
-            "tutor_id": consulta.animal.user_id,
-        }
-        try:
-            if should_emit_async(get_clinica_field(consulta.clinica, "municipio_nfse", "")):
-                queue_nfse_issue(
-                    nfse_issue,
-                    "Consulta finalizada; emissão aguardando processamento assíncrono.",
-                    nfse_payload,
-                )
-            else:
-                process_nfse_issue(nfse_issue, nfse_payload)
-        except Exception as exc:  # noqa: BLE001 - não interromper o fluxo da consulta
-            queue_nfse_issue(
-                nfse_issue,
-                "Falha ao emitir automaticamente; reprocessamento necessário.",
-                {"erro": str(exc), **nfse_payload},
-            )
-            current_app.logger.exception(
-                "Falha ao emitir NFS-e da consulta %s.",
-                consulta.id,
-                exc_info=exc,
-            )
-
-    if appointment:
-        db.session.commit()
-        flash('Consulta finalizada e retorno já agendado.', 'success')
+    if outcome.status == "blocked":
+        flash(outcome.message, outcome.category)
+        return redirect(url_for('consulta_direct', animal_id=consulta.animal_id, c=consulta.id))
+    if outcome.status == "completed":
+        flash(outcome.message, outcome.category)
         return redirect(url_for('consulta_direct', animal_id=consulta.animal_id))
 
-    # Prepara formulário de retorno com dados padrão
-    form = AppointmentForm()
-    form.populate_animals(
-        [consulta.animal],
-        restrict_tutors=True,
-        selected_tutor_id=getattr(consulta.animal, 'user_id', None),
-        allow_all_option=False,
+    flash(outcome.message, outcome.category)
+    return render_template(
+        'agendamentos/confirmar_retorno.html',
+        consulta=consulta,
+        form=outcome.form,
     )
-    form.animal_id.data = consulta.animal.id
-    from models import Veterinario
 
-    vets = (
-        Veterinario.query.filter_by(
-            clinica_id=current_user_clinic_id()
-        ).all()
+
+@app.route('/finalizar_consulta/<int:consulta_id>/fechar', methods=['POST'])
+@login_required
+def finalizar_consulta_e_fechar(consulta_id):
+    consulta = get_consulta_or_404(consulta_id)
+    if not is_veterinarian(current_user):
+        flash('Apenas veterinários podem finalizar consultas.', 'danger')
+        return redirect(url_for('index'))
+
+    outcome = finalize_consulta_flow(
+        consulta=consulta,
+        actor_id=current_user.id,
+        actor_vet_id=getattr(getattr(current_user, "veterinario", None), "id", None),
+        clinic_id=current_user_clinic_id(),
     )
-    form.veterinario_id.choices = [(v.id, v.user.name) for v in vets]
-    form.veterinario_id.data = consulta.veterinario.veterinario.id
+    if outcome.status == "blocked":
+        flash(outcome.message, outcome.category)
+        return redirect(url_for('consulta_direct', animal_id=consulta.animal_id, c=consulta.id))
+    if outcome.status == "completed":
+        flash(outcome.message, outcome.category)
+        if consulta.appointment:
+            return redirect(url_for('appointment_close', appointment_id=consulta.appointment.id))
+        return redirect(url_for('consulta_direct', animal_id=consulta.animal_id))
 
-    dias_retorno = current_app.config.get('DEFAULT_RETURN_DAYS', 7)
-    data_recomendada = (datetime.now(BR_TZ) + timedelta(days=dias_retorno)).date()
-    form.date.data = data_recomendada
-    form.time.data = time(10, 0)
-
-    db.session.commit()
-    flash('Consulta finalizada e registrada no histórico! Agende o retorno.', 'success')
-    return render_template('agendamentos/confirmar_retorno.html', consulta=consulta, form=form)
+    flash(outcome.message, outcome.category)
+    return render_template(
+        'agendamentos/confirmar_retorno.html',
+        consulta=consulta,
+        form=outcome.form,
+    )
 
 
 @app.route('/agendar_retorno/<int:consulta_id>', methods=['POST'])
@@ -8337,33 +9423,19 @@ def agendar_retorno(consulta_id):
     )
     form.veterinario_id.choices = [(v.id, v.user.name) for v in vets]
     if form.validate_on_submit():
-        scheduled_at_local = datetime.combine(form.date.data, form.time.data)
-        vet_id = form.veterinario_id.data
-        if not is_slot_available(vet_id, scheduled_at_local, kind='retorno'):
-            flash('Horário indisponível para o veterinário selecionado.', 'danger')
-        else:
-            scheduled_at = normalize_to_utc(scheduled_at_local)
-            duration = get_appointment_duration('retorno')
-            if has_conflict_for_slot(vet_id, scheduled_at_local, duration):
-                flash('Horário indisponível para o veterinário selecionado.', 'danger')
-            else:
-                current_vet = getattr(current_user, 'veterinario', None)
-                same_user = current_vet and current_vet.id == vet_id
-                appt = Appointment(
-                    consulta_id=consulta.id,
-                    animal_id=consulta.animal_id,
-                    tutor_id=consulta.animal.owner.id,
-                    veterinario_id=vet_id,
-                    scheduled_at=scheduled_at,
-                    notes=form.reason.data,
-                    kind='retorno',
-                    status='accepted' if same_user else 'scheduled',
-                    created_by=current_user.id,
-                    created_at=utcnow(),
-                )
-                db.session.add(appt)
-                db.session.commit()
-                flash('Retorno agendado com sucesso.', 'success')
+        payload = ReturnAppointmentDTO(
+            date=form.date.data,
+            time=form.time.data,
+            veterinarian_id=form.veterinario_id.data,
+            reason=form.reason.data,
+        )
+        result = schedule_return_appointment(
+            consulta=consulta,
+            actor_id=current_user.id,
+            actor_vet_id=getattr(getattr(current_user, "veterinario", None), "id", None),
+            payload=payload,
+        )
+        flash(result.message, result.category)
     else:
         flash('Erro ao agendar retorno.', 'danger')
     return redirect(url_for('consulta_direct', animal_id=consulta.animal_id))
@@ -8585,13 +9657,11 @@ def buscar_tutores():
     return jsonify(resultados)
 
 
-@app.route('/clinicas')
 def clinicas():
     clinicas = clinicas_do_usuario().all()
     return render_template('clinica/clinicas.html', clinicas=clinicas)
 
 
-@app.route('/minha-clinica', methods=['GET', 'POST'])
 @login_required
 def minha_clinica():
     clinicas = clinicas_do_usuario().all()
@@ -8884,9 +9954,9 @@ def _build_clinic_theme(clinica):
     return theme
 
 
-@app.route('/clinica/<int:clinica_id>', methods=['GET', 'POST'])
 @login_required
 def clinic_detail(clinica_id):
+    appointment_repo = AppointmentRepository()
     if _is_admin():
         clinica = Clinica.query.get_or_404(clinica_id)
     else:
@@ -8917,6 +9987,7 @@ def clinic_detail(clinica_id):
     if show_inventory:
         _ensure_inventory_threshold_columns()
         _ensure_inventory_movement_table()
+        _ensure_inventory_movement_columns()
         inventory_items = (
             ClinicInventoryItem.query
             .filter_by(clinica_id=clinica.id)
@@ -9248,24 +10319,8 @@ def clinic_detail(clinica_id):
         if value:
             kind_labels.setdefault(value, label)
 
-    clinic_status_values = {
-        status
-        for (status,) in (
-            db.session.query(Appointment.status)
-            .filter(Appointment.clinica_id == clinica_id)
-            .distinct()
-        )
-        if status
-    }
-    clinic_kind_values = {
-        kind
-        for (kind,) in (
-            db.session.query(Appointment.kind)
-            .filter(Appointment.clinica_id == clinica_id)
-            .distinct()
-        )
-        if kind
-    }
+    clinic_status_values = appointment_repo.get_distinct_statuses(clinica_id)
+    clinic_kind_values = appointment_repo.get_distinct_kinds(clinica_id)
 
     for status in clinic_status_values:
         status_labels.setdefault(status, status.replace('_', ' ').title())
@@ -9304,19 +10359,14 @@ def clinic_detail(clinica_id):
 
     start_dt_utc, end_dt_utc = local_date_range_to_utc(start_dt, end_dt)
 
-    appointments_query = Appointment.query.filter_by(clinica_id=clinica_id)
-    if start_dt_utc:
-        appointments_query = appointments_query.filter(Appointment.scheduled_at >= start_dt_utc)
-    if end_dt_utc:
-        appointments_query = appointments_query.filter(Appointment.scheduled_at < end_dt_utc)
-    if vet_filter_id:
-        appointments_query = appointments_query.filter(Appointment.veterinario_id == vet_filter_id)
-    if status_filter:
-        appointments_query = appointments_query.filter(Appointment.status == status_filter)
-    if type_filter:
-        appointments_query = appointments_query.filter(Appointment.kind == type_filter)
-
-    appointments = appointments_query.order_by(Appointment.scheduled_at).all()
+    appointments = appointment_repo.list_filtered(
+        clinic_id=clinica_id,
+        start_dt_utc=start_dt_utc,
+        end_dt_utc=end_dt_utc,
+        vet_id=vet_filter_id,
+        status=status_filter or None,
+        kind=type_filter or None,
+    )
     appointments_grouped = group_appointments_by_day(appointments)
     appointments_events = []
     if appointment_view == 'calendar':
@@ -9574,7 +10624,6 @@ def clinic_detail(clinica_id):
     )
 
 
-@app.route('/clinica/<int:clinica_id>/convites/<int:invite_id>/cancel', methods=['POST'])
 @login_required
 def cancel_clinic_invite(clinica_id, invite_id):
     """Cancel a pending clinic invite."""
@@ -9600,7 +10649,6 @@ def cancel_clinic_invite(clinica_id, invite_id):
     return redirect(url_for('clinic_detail', clinica_id=clinica.id) + '#veterinarios')
 
 
-@app.route('/clinica/<int:clinica_id>/convites/<int:invite_id>/resend', methods=['POST'])
 @login_required
 def resend_clinic_invite(clinica_id, invite_id):
     """Resend a declined clinic invite."""
@@ -9633,7 +10681,6 @@ def resend_clinic_invite(clinica_id, invite_id):
     return redirect(url_for('clinic_detail', clinica_id=clinica.id) + '#veterinarios')
 
 
-@app.route('/clinica/<int:clinica_id>/veterinario', methods=['POST'])
 @login_required
 def create_clinic_veterinario(clinica_id):
     """Create a new veterinarian linked to a clinic."""
@@ -9679,7 +10726,6 @@ def create_clinic_veterinario(clinica_id):
     return redirect(url_for('clinic_detail', clinica_id=clinica.id) + '#veterinarios')
 
 
-@app.route('/convites/clinica', methods=['GET', 'POST'])
 @login_required
 def clinic_invites():
     """List pending clinic invitations for the logged veterinarian."""
@@ -9726,7 +10772,6 @@ def clinic_invites():
     return anchor_redirect
 
 
-@app.route('/convites/<int:invite_id>/<string:action>', methods=['POST'])
 @login_required
 def respond_clinic_invite(invite_id, action):
     """Accept or decline a clinic invitation."""
@@ -9758,7 +10803,6 @@ def respond_clinic_invite(invite_id, action):
     return redirect(url_for('clinic_invites'))
 
 
-@app.route('/clinica/<int:clinica_id>/estoque', methods=['GET', 'POST'])
 @login_required
 def clinic_stock(clinica_id):
     clinica = Clinica.query.get_or_404(clinica_id)
@@ -9771,6 +10815,9 @@ def clinic_stock(clinica_id):
         abort(403)
 
     inventory_form = InventoryItemForm()
+    _ensure_inventory_threshold_columns()
+    _ensure_inventory_movement_table()
+    _ensure_inventory_movement_columns()
     if inventory_form.validate_on_submit():
         min_qty = inventory_form.min_quantity.data
         max_qty = inventory_form.max_quantity.data
@@ -9833,7 +10880,6 @@ def clinic_stock(clinica_id):
     )
 
 
-@app.route('/estoque/item/<int:item_id>/atualizar', methods=['POST'])
 @login_required
 def update_inventory_item(item_id):
     item = ClinicInventoryItem.query.get_or_404(item_id)
@@ -9896,7 +10942,6 @@ def update_inventory_item(item_id):
     return redirect(url_for('clinic_detail', clinica_id=clinica.id) + '#estoque')
 
 
-@app.route('/clinica/<int:clinica_id>/novo_orcamento', methods=['GET', 'POST'])
 @login_required
 def novo_orcamento(clinica_id):
     clinica = Clinica.query.get_or_404(clinica_id)
@@ -9919,7 +10964,6 @@ def novo_orcamento(clinica_id):
     return render_template('orcamentos/orcamento_form.html', form=form, clinica=clinica)
 
 
-@app.route('/orcamento/<int:orcamento_id>/editar', methods=['GET', 'POST'])
 @login_required
 def editar_orcamento(orcamento_id):
     orcamento = Orcamento.query.get_or_404(orcamento_id)
@@ -9941,7 +10985,6 @@ def editar_orcamento(orcamento_id):
     return render_template('orcamentos/orcamento_form.html', form=form, clinica=orcamento.clinica)
 
 
-@app.route('/orcamento/<int:orcamento_id>/enviar', methods=['POST'])
 @login_required
 def enviar_orcamento(orcamento_id):
     orcamento = Orcamento.query.get_or_404(orcamento_id)
@@ -10004,7 +11047,6 @@ def enviar_orcamento(orcamento_id):
     return redirect(redirect_url)
 
 
-@app.route('/orcamento/<int:orcamento_id>/status', methods=['PATCH'])
 @login_required
 def atualizar_status_orcamento(orcamento_id):
     orcamento = Orcamento.query.get_or_404(orcamento_id)
@@ -10027,15 +11069,30 @@ def atualizar_status_orcamento(orcamento_id):
         flash(message, 'danger')
         return redirect(request.referrer or url_for('clinic_detail', clinica_id=orcamento.clinica_id) + '#orcamento')
 
+    previous_status = orcamento.status
+    draft_message = None
     if orcamento.status != new_status:
         orcamento.status = new_status
         orcamento.updated_at = utcnow()
         db.session.add(orcamento)
         db.session.commit()
+        if new_status == "approved" and previous_status != "approved":
+            try:
+                create_nfse_draft_from_orcamento(orcamento.id)
+                draft_message = "Documento fiscal em rascunho criado."
+            except ValueError as exc:
+                current_app.logger.warning(
+                    "Não foi possível criar documento fiscal para orçamento %s: %s",
+                    orcamento.id,
+                    exc,
+                )
+                draft_message = str(exc)
     else:
         db.session.commit()
 
     message = 'Status atualizado com sucesso.'
+    if draft_message:
+        message = f"{message} {draft_message}"
     response_payload = {
         'success': True,
         'message': message,
@@ -10052,7 +11109,6 @@ def atualizar_status_orcamento(orcamento_id):
     return redirect(request.referrer or url_for('clinic_detail', clinica_id=orcamento.clinica_id) + '#orcamento')
 
 
-@app.route('/clinica/<int:clinica_id>/orcamentos')
 @login_required
 def orcamentos(clinica_id):
     clinica = Clinica.query.get_or_404(clinica_id)
@@ -10076,7 +11132,6 @@ def orcamentos(clinica_id):
     )
 
 
-@app.route('/dashboard/orcamentos')
 @login_required
 def dashboard_orcamentos():
     from collections import defaultdict
@@ -10238,7 +11293,6 @@ def dashboard_orcamentos():
     )
 
 
-@app.route('/clinica/<int:clinica_id>/dashboard')
 @login_required
 def clinic_dashboard(clinica_id):
     clinic = Clinica.query.get_or_404(clinica_id)
@@ -10259,7 +11313,6 @@ def clinic_dashboard(clinica_id):
     return render_template('clinica/clinic_dashboard.html', clinic=clinic, staff=staff)
 
 
-@app.route('/clinica/<int:clinica_id>/funcionarios', methods=['GET', 'POST'])
 @login_required
 def clinic_staff(clinica_id):
     clinic = Clinica.query.get_or_404(clinica_id)
@@ -10335,7 +11388,6 @@ def clinic_staff(clinica_id):
     )
 
 
-@app.route('/clinica/<int:clinica_id>/funcionario/<int:user_id>/permissoes', methods=['GET', 'POST'])
 @login_required
 def clinic_staff_permissions(clinica_id, user_id):
     clinic = Clinica.query.get_or_404(clinica_id)
@@ -10370,7 +11422,6 @@ def clinic_staff_permissions(clinica_id, user_id):
     return render_template('clinica/clinic_staff_permissions.html', form=form, clinic=clinic)
 
 
-@app.route('/clinica/<int:clinica_id>/funcionario/<int:user_id>/remove', methods=['POST'])
 @login_required
 def remove_funcionario(clinica_id, user_id):
     clinica = Clinica.query.get_or_404(clinica_id)
@@ -10390,7 +11441,6 @@ def remove_funcionario(clinica_id, user_id):
     return redirect(url_for('clinic_detail', clinica_id=clinica_id))
 
 
-@app.route('/clinica/<int:clinica_id>/horario/<int:horario_id>/delete', methods=['POST'])
 @login_required
 def delete_clinic_hour(clinica_id, horario_id):
     clinica = Clinica.query.get_or_404(clinica_id)
@@ -10407,7 +11457,6 @@ def delete_clinic_hour(clinica_id, horario_id):
     return redirect(url_for('clinic_detail', clinica_id=clinica_id))
 
 
-@app.route('/clinica/<int:clinica_id>/veterinario/<int:veterinario_id>/remove', methods=['POST'])
 @login_required
 def remove_veterinario(clinica_id, veterinario_id):
     clinica = Clinica.query.get_or_404(clinica_id)
@@ -10426,7 +11475,6 @@ def remove_veterinario(clinica_id, veterinario_id):
     return redirect(url_for('clinic_detail', clinica_id=clinica_id))
 
 
-@app.route('/clinica/<int:clinica_id>/especialista/<int:veterinario_id>/remove', methods=['POST'])
 @login_required
 def remove_specialist(clinica_id, veterinario_id):
     clinica = Clinica.query.get_or_404(clinica_id)
@@ -10444,10 +11492,6 @@ def remove_specialist(clinica_id, veterinario_id):
     return redirect(url_for('clinic_detail', clinica_id=clinica_id) + '#especialistas')
 
 
-@app.route(
-    '/clinica/<int:clinica_id>/veterinario/<int:veterinario_id>/schedule/<int:horario_id>/delete',
-    methods=['POST'],
-)
 @login_required
 def delete_vet_schedule_clinic(clinica_id, veterinario_id, horario_id):
     clinica = Clinica.query.get_or_404(clinica_id)
@@ -10465,13 +11509,11 @@ def delete_vet_schedule_clinic(clinica_id, veterinario_id, horario_id):
     return redirect(url_for('clinic_detail', clinica_id=clinica_id))
 
 
-@app.route('/veterinarios')
 def veterinarios():
     veterinarios = Veterinario.query.all()
     return render_template('veterinarios/veterinarios.html', veterinarios=veterinarios)
 
 
-@app.route('/veterinario/<int:veterinario_id>')
 def vet_detail(veterinario_id):
     from models import Animal, User  # import local para evitar ciclos
 
@@ -10644,7 +11686,6 @@ def vet_detail(veterinario_id):
 
 
 
-@app.route('/admin/veterinario/<int:veterinario_id>/especialidades', methods=['GET', 'POST'])
 @login_required
 def edit_vet_specialties(veterinario_id):
     # Apenas o próprio veterinário ou um administrador pode alterar especialidades
@@ -10960,7 +12001,6 @@ def _share_request_target_animals(tutor_id, animal_id):
     return animal
 
 
-@app.route('/api/shares', methods=['GET', 'POST'])
 @login_required
 def shares_api():
     if request.method == 'POST':
@@ -11088,7 +12128,6 @@ def _activate_share_request(share_request, expires_in_days=None):
     return access
 
 
-@app.route('/api/shares/<int:request_id>/approve', methods=['POST'])
 @login_required
 def approve_share_request(request_id):
     if not _is_tutor_portal_user(current_user):
@@ -11102,7 +12141,6 @@ def approve_share_request(request_id):
     return jsonify(success=True, request=_serialize_share_request(share_request), access=_serialize_share_access(access))
 
 
-@app.route('/api/shares/<int:request_id>/deny', methods=['POST'])
 @login_required
 def deny_share_request(request_id):
     if not _is_tutor_portal_user(current_user):
@@ -11120,7 +12158,6 @@ def deny_share_request(request_id):
     return jsonify(success=True, request=_serialize_share_request(share_request))
 
 
-@app.route('/api/shares/confirm', methods=['POST'])
 @login_required
 def confirm_share_request():
     if not _is_tutor_portal_user(current_user):
@@ -11148,7 +12185,6 @@ def confirm_share_request():
     return jsonify(success=True, request=_serialize_share_request(share_request), access=_serialize_share_access(access))
 
 
-@app.route('/api/share-requests/<string:token>', methods=['GET'])
 @login_required
 def share_request_detail(token):
     if not _is_tutor_portal_user(current_user):
@@ -11753,6 +12789,21 @@ def salvar_racao(animal_id):
         db.session.rollback()
         print(f"Erro ao salvar ração: {e}")
         return jsonify({'success': False, 'error': 'Erro técnico ao salvar ração.'}), 500
+
+
+@app.route('/api/tipos_racao', methods=['GET'])
+@login_required
+def api_tipos_racao():
+    """Retorna lista de tipos de ração em JSON para atualização dinâmica"""
+    tipos = TipoRacao.query.order_by(TipoRacao.marca, TipoRacao.linha).all()
+    return jsonify({
+        'success': True,
+        'tipos': [{
+            'id': t.id,
+            'marca': t.marca,
+            'linha': t.linha
+        } for t in tipos]
+    })
 
 
 @app.route('/tipo_racao', methods=['POST'])
@@ -13197,8 +14248,10 @@ def novo_animal():
             duplicate_conditions.append(and_(Animal.age.isnot(None), Animal.age == idade_registrada))
 
         # Evita duplicação por cliques repetidos considerando cadastros recentes
+        # Only use the time window when no other identifying conditions exist
         recent_window = utcnow() - timedelta(minutes=10)
-        duplicate_conditions.append(and_(Animal.date_added >= recent_window))
+        if not duplicate_conditions:
+            duplicate_conditions.append(Animal.date_added >= recent_window)
 
         existing_animal = None
         if duplicate_conditions:
@@ -13479,7 +14532,6 @@ def arquivar_animal(animal_id):
 
 
 
-@app.route('/orders/new', methods=['GET', 'POST'])
 @login_required
 def create_order():
     if current_user.worker != 'delivery':
@@ -13536,7 +14588,6 @@ def create_order():
  
 
 
-@app.route('/orders/<int:order_id>/request_delivery', methods=['POST'])
 @login_required
 def request_delivery(order_id):
     if current_user.worker != 'delivery':      # só entregadores podem solicitar
@@ -13649,7 +14700,6 @@ def _delivery_sections_payload():
     return html, counts, context
 
 
-@app.route("/delivery_requests")
 @login_required
 def list_delivery_requests():
     """
@@ -13665,7 +14715,6 @@ def list_delivery_requests():
     return render_template("entregas/delivery_requests.html", **context)
 
 
-@app.route("/api/delivery_counts")
 @login_required
 def api_delivery_counts():
     """Return delivery counts for the current user."""
@@ -13695,7 +14744,6 @@ def api_delivery_counts():
 
 
 # --- Compatibilidade admin ---------------------------------
-@app.route("/admin/delivery/<int:req_id>")
 @login_required
 def admin_delivery_detail(req_id):
     # se quiser, mantenha restrição de admin aqui
@@ -13704,7 +14752,6 @@ def admin_delivery_detail(req_id):
     return redirect(url_for("delivery_detail", req_id=req_id))
 
 # --- Compatibilidade entregador ----------------------------
-@app.route("/worker/delivery/<int:req_id>")
 @login_required
 def worker_delivery_detail(req_id):
     # garante que o usuário é entregador e dono da entrega
@@ -13744,7 +14791,6 @@ def _delivery_error_response(message, category='danger', status=400):
     return jsonify(payload), status
 
 
-@app.route('/delivery_requests/<int:req_id>/accept', methods=['POST'])
 @login_required
 def accept_delivery(req_id):
     try:
@@ -13797,7 +14843,6 @@ def accept_delivery(req_id):
 
 
 
-@app.route('/delivery_requests/<int:req_id>/complete', methods=['POST'])
 @login_required
 def complete_delivery(req_id):
     try:
@@ -13831,7 +14876,6 @@ def complete_delivery(req_id):
         return _delivery_error_response('Erro interno ao processar a entrega.', 'danger', 500)
 
 
-@app.route('/delivery_requests/<int:req_id>/cancel', methods=['POST'])
 @login_required
 def cancel_delivery(req_id):
     try:
@@ -13866,7 +14910,6 @@ def cancel_delivery(req_id):
         return _delivery_error_response('Erro interno ao processar a entrega.', 'danger', 500)
 
 
-@app.route('/delivery_requests/<int:req_id>/buyer_cancel', methods=['POST'])
 @login_required
 def buyer_cancel_delivery(req_id):
     try:
@@ -13897,7 +14940,6 @@ def buyer_cancel_delivery(req_id):
 from sqlalchemy.orm import joinedload
 
 
-@app.route("/delivery/<int:req_id>")
 @login_required
 def delivery_detail(req_id):
     """Detalhe da entrega para admin, entregador ou comprador."""
@@ -14087,7 +15129,6 @@ def _build_missing_tutor_geocodes():
     ]
 
 
-@app.route('/admin/mapa_tutores')
 @login_required
 def admin_tutor_map():
     if not _is_admin():
@@ -14098,7 +15139,6 @@ def admin_tutor_map():
     return render_template('admin/tutor_map.html', **map_data)
 
 
-@app.route('/admin/api/tutor_markers')
 @login_required
 def admin_tutor_markers_api():
     if not _is_admin():
@@ -14107,7 +15147,6 @@ def admin_tutor_markers_api():
     return jsonify(_build_tutor_map_data())
 
 
-@app.route('/admin/api/geocode_addresses', methods=['POST'])
 @login_required
 def admin_geocode_addresses():
     if not _is_admin():
@@ -14119,7 +15158,6 @@ def admin_geocode_addresses():
     return jsonify({'started': started, 'status': status}), (202 if started else 200)
 
 
-@app.route('/admin/api/geocode_addresses/status')
 @login_required
 def admin_geocode_status():
     if not _is_admin():
@@ -14131,7 +15169,6 @@ def admin_geocode_status():
     return jsonify(status)
 
 
-@app.route("/admin/delivery_overview")
 @login_required
 def delivery_overview():
     if not _is_admin():
@@ -14199,7 +15236,6 @@ def delivery_overview():
     )
 
 
-@app.route('/admin/delivery_requests/<int:req_id>/status/<status>', methods=['POST'])
 @login_required
 def admin_set_delivery_status(req_id, status):
     if not _is_admin():
@@ -14246,7 +15282,6 @@ def admin_set_delivery_status(req_id, status):
     return redirect(url_for('delivery_overview'))
 
 
-@app.route('/admin/delivery_requests/<int:req_id>/delete', methods=['POST'])
 @login_required
 def admin_delete_delivery(req_id):
     if not _is_admin():
@@ -14261,7 +15296,6 @@ def admin_delete_delivery(req_id):
     return redirect(url_for('delivery_overview'))
 
 
-@app.route('/admin/delivery_requests/<int:req_id>/archive', methods=['POST'])
 @login_required
 def admin_archive_delivery(req_id):
     if not _is_admin():
@@ -14275,7 +15309,6 @@ def admin_archive_delivery(req_id):
     return redirect(url_for('delivery_overview'))
 
 
-@app.route('/admin/delivery_requests/<int:req_id>/unarchive', methods=['POST'])
 @login_required
 def admin_unarchive_delivery(req_id):
     if not _is_admin():
@@ -14289,7 +15322,6 @@ def admin_unarchive_delivery(req_id):
     return redirect(url_for('delivery_archive'))
 
 
-@app.route('/admin/delivery_archive')
 @login_required
 def delivery_archive():
     if not _is_admin():
@@ -14311,7 +15343,6 @@ def delivery_archive():
     return render_template('admin/delivery_archive_admin.html', requests=reqs)
 
 
-@app.route('/admin/data-share-logs')
 @login_required
 def admin_data_share_logs():
     if not _is_admin():
@@ -14459,7 +15490,6 @@ def _export_data_share_logs_pdf(logs):
     )
 
 
-@app.route('/delivery_archive')
 @login_required
 def delivery_archive_user():
     base = (
@@ -14818,10 +15848,14 @@ def _get_recent_animais(
             last_reference = func.coalesce(last_appt.c.last_at, Animal.date_added)
     else:
         query = base_query
-        if effective_user_id:
+        viewer = current_user if current_user.is_authenticated else None
+        is_admin = viewer and getattr(viewer, 'role', None) == 'admin'
+        if effective_user_id and not is_admin:
             query = query.filter(Animal.added_by_id == effective_user_id)
 
     query = apply_search_filters(query)
+    if search_value:
+        query = query.distinct()
     query = apply_sorting(query, last_reference)
     pagination = query.paginate(page=page, per_page=per_page, error_out=False)
 
@@ -14944,7 +15978,9 @@ def _get_recent_tutores(
             query = query.filter(User.clinica_id.in_(clinic_ids))
     else:
         query = User.query.filter(User.created_at != None)
-        if effective_user_id:
+        viewer = current_user if current_user.is_authenticated else None
+        is_admin = viewer and getattr(viewer, 'role', None) == 'admin'
+        if effective_user_id and not is_admin:
             query = query.filter(User.added_by_id == effective_user_id)
 
     query = apply_search_filters(query)
@@ -15085,7 +16121,6 @@ def _build_loja_query(search_term: str, filtro: str):
     return query
 
 
-@app.route("/loja")
 @login_required
 def loja():
     pagamento_pendente = None
@@ -15120,7 +16155,6 @@ def loja():
     )
 
 
-@app.route("/loja/data")
 @login_required
 def loja_data():
     search_term = request.args.get("q", "").strip()
@@ -15163,7 +16197,6 @@ def loja_data():
     return html
 
 
-@app.route('/produto/<int:product_id>', methods=['GET', 'POST'])
 @login_required
 def produto_detail(product_id):
     """Exibe detalhes do produto e permite edições para administradores."""
@@ -15180,6 +16213,15 @@ def produto_detail(product_id):
             product.price = float(update_form.price.data or 0)
             product.stock = update_form.stock.data
             product.mp_category_id = (update_form.mp_category_id.data or "others").strip()
+            product.ncm = (update_form.ncm.data or "").strip() or None
+            product.cfop = (update_form.cfop.data or "").strip() or None
+            product.cst = (update_form.cst.data or "").strip() or None
+            product.csosn = (update_form.csosn.data or "").strip() or None
+            product.origem = (update_form.origem.data or "").strip() or None
+            product.unidade = (update_form.unidade.data or "").strip() or None
+            product.aliquota_icms = update_form.aliquota_icms.data
+            product.aliquota_pis = update_form.aliquota_pis.data
+            product.aliquota_cofins = update_form.aliquota_cofins.data
             if update_form.image_upload.data:
                 file = update_form.image_upload.data
                 filename = secure_filename(file.filename)
@@ -15215,7 +16257,6 @@ def produto_detail(product_id):
 # --------------------------------------------------------
 #  ADICIONAR AO CARRINHO
 # --------------------------------------------------------
-@app.route("/carrinho/adicionar/<int:product_id>", methods=["POST"])
 @login_required
 def adicionar_carrinho(product_id):
     product = Product.query.get(product_id)
@@ -15291,7 +16332,6 @@ def adicionar_carrinho(product_id):
 # --------------------------------------------------------
 #  ATUALIZAR QUANTIDADE DO ITEM DO CARRINHO
 # --------------------------------------------------------
-@app.route("/carrinho/increase/<int:item_id>", methods=["POST"])
 @login_required
 def aumentar_item_carrinho(item_id):
     """Incrementa a quantidade de um item no carrinho."""
@@ -15320,7 +16360,6 @@ def aumentar_item_carrinho(item_id):
     return redirect(url_for("ver_carrinho"))
 
 
-@app.route("/carrinho/decrease/<int:item_id>", methods=["POST"])
 @login_required
 def diminuir_item_carrinho(item_id):
     """Diminui a quantidade de um item; remove se chegar a zero."""
@@ -15367,7 +16406,6 @@ def diminuir_item_carrinho(item_id):
 # --------------------------------------------------------
 from forms import CheckoutForm, EditAddressForm
 
-@app.route("/carrinho", methods=["GET", "POST"])
 @login_required
 def ver_carrinho():
     # 1) Cria o form
@@ -15398,7 +16436,6 @@ def ver_carrinho():
     )
 
 
-@app.route('/carrinho/salvar_endereco', methods=['POST'])
 @login_required
 def carrinho_salvar_endereco():
     """Salva um novo endereço informado no carrinho."""
@@ -15426,7 +16463,6 @@ def carrinho_salvar_endereco():
     return redirect(url_for('ver_carrinho'))
 
 
-@app.route("/checkout/confirm", methods=["POST"])
 @login_required
 def checkout_confirm():
     """Mostra um resumo antes de redirecionar ao pagamento externo."""
@@ -15495,7 +16531,6 @@ import json, logging, os
 from flask import current_app, redirect, url_for, flash, session
 from flask_login import login_required, current_user
 
-@app.route("/checkout", methods=["POST"])
 @login_required
 def checkout():
     current_app.logger.setLevel(logging.DEBUG)
@@ -15788,7 +16823,7 @@ def verify_mp_signature(req, secret: str) -> bool:
         return False
     return True
 
-@app.route("/notificacoes", methods=["POST", "GET"])
+@csrf.exempt
 def notificacoes_mercado_pago():
     if request.method == "GET":
         return jsonify(status="pong"), 200
@@ -16006,7 +17041,6 @@ def _refresh_mp_status(payment: Payment) -> None:
         db.session.commit()
 
 
-@app.route("/pagamento/<status>")
 def legacy_pagamento(status):
     extref = request.args.get("external_reference")
     payment = None
@@ -16040,7 +17074,6 @@ def legacy_pagamento(status):
     return redirect(url_for("payment_status", payment_id=payment.id, status=mp_status))
 
 
-@app.route("/order/<int:order_id>/edit_address", methods=["GET", "POST"])
 @login_required
 def edit_order_address(order_id):
     order = Order.query.get_or_404(order_id)
@@ -16060,7 +17093,6 @@ def edit_order_address(order_id):
     return render_template("loja/edit_address.html", form=form, payment_id=payment_id)
 
 
-@app.route("/payment_status/<int:payment_id>")
 def payment_status(payment_id):
     payment = Payment.query.get_or_404(payment_id)
 
@@ -16111,7 +17143,6 @@ def payment_status(payment_id):
     )
 
 
-@app.route("/api/payment_status/<int:payment_id>")
 def api_payment_status(payment_id):
     payment = Payment.query.get_or_404(payment_id)
     if current_user.is_authenticated and payment.user_id != current_user.id:
@@ -16126,7 +17157,6 @@ def api_payment_status(payment_id):
 from sqlalchemy.orm import joinedload
 
 
-@app.route("/minhas-compras")
 @login_required
 def minhas_compras():
     page = request.args.get("page", 1, type=int)
@@ -16149,7 +17179,6 @@ def minhas_compras():
 
 
 
-@app.route("/api/minhas-compras")
 @login_required
 def api_minhas_compras():
     orders = (Order.query
@@ -16169,7 +17198,6 @@ def api_minhas_compras():
     return jsonify(data)
 
 
-@app.route("/pedido/<int:order_id>")
 @login_required
 def pedido_detail(order_id):
     order = (Order.query
@@ -16248,7 +17276,6 @@ def pedido_detail(order_id):
 
 
 
-@app.route('/appointments/<int:appointment_id>/confirmation')
 @login_required
 def appointment_confirmation(appointment_id):
     appointment = Appointment.query.get_or_404(appointment_id)
@@ -16257,7 +17284,6 @@ def appointment_confirmation(appointment_id):
     return render_template('agendamentos/appointment_confirmation.html', appointment=appointment)
 
 
-@app.route('/appointments', methods=['GET', 'POST'])
 @login_required
 def appointments():
     from models import ExamAppointment, Veterinario, Clinica, User
@@ -16267,7 +17293,8 @@ def appointments():
     is_vet = is_veterinarian(current_user)
     if worker == 'veterinario' and not is_vet:
         worker = 'tutor'
-    calendar_access_scope = get_calendar_access_scope(current_user)
+    clinic_repo = ClinicRepository()
+    calendar_access_scope = get_calendar_access_scope(current_user, clinic_repo)
 
     def _redirect_to_current_appointments():
         query_args = request.args.to_dict(flat=False)
@@ -16353,11 +17380,7 @@ def appointments():
             if clinica_id and clinica_id not in clinic_ids:
                 clinic_ids.append(clinica_id)
         clinic_ids = calendar_access_scope.filter_clinic_ids(clinic_ids)
-        associated_clinics = (
-            Clinica.query.filter(Clinica.id.in_(clinic_ids)).all()
-            if clinic_ids
-            else []
-        )
+        associated_clinics = clinic_repo.list_by_ids(clinic_ids) if clinic_ids else []
         calendar_summary_clinic_ids = clinic_ids
         if getattr(veterinario, "id", None) is not None:
             calendar_summary_vets = [
@@ -17311,12 +18334,26 @@ def appointments():
                 vac.scheduled_at = datetime.combine(vac.aplicada_em, time.min, tzinfo=BR_TZ)
             form = None
         appointments_grouped = group_appointments_by_day(appointments)
+        nfse_documents_by_appointment = {}
+        if appointments:
+            appointment_ids = [appt.id for appt in appointments]
+            nfse_documents = (
+                FiscalDocument.query
+                .filter(FiscalDocument.related_type == "appointment")
+                .filter(FiscalDocument.related_id.in_(appointment_ids))
+                .order_by(FiscalDocument.created_at.desc())
+                .all()
+            )
+            for doc in nfse_documents:
+                if doc.related_id not in nfse_documents_by_appointment:
+                    nfse_documents_by_appointment[doc.related_id] = doc
         exam_appointments_grouped = group_appointments_by_day(exam_appointments)
         vaccine_appointments_grouped = group_appointments_by_day(vaccine_appointments)
         if request.headers.get('X-Partial') == 'appointments_table' or request.args.get('partial') == 'appointments_table':
             return render_template(
                 'partials/appointments_table.html',
                 appointments_grouped=appointments_grouped,
+                nfse_documents_by_appointment=nfse_documents_by_appointment,
             )
 
         return render_template(
@@ -17337,17 +18374,100 @@ def appointments():
             admin_default_selection_value=admin_default_selection_value,
             calendar_summary_vets=calendar_summary_vets,
             calendar_summary_clinic_ids=calendar_summary_clinic_ids,
+            nfse_documents_by_appointment=nfse_documents_by_appointment,
         )
 
 
-@app.route('/appointments/calendar')
+@login_required
+def appointment_emit_nfse(appointment_id: int):
+    appointment = Appointment.query.get_or_404(appointment_id)
+    if not appointment.clinica_id:
+        abort(403)
+
+    clinic_id = current_user_clinic_id()
+    if clinic_id and appointment.clinica_id != clinic_id and (current_user.role or '').lower() != 'admin':
+        abort(403)
+
+    if not appointment.clinica or not appointment.clinica.fiscal_emitter:
+        flash("Clínica sem emissor fiscal configurado.", "warning")
+        return redirect(url_for("appointments"))
+
+    payload = build_nfse_payload_from_appointment(appointment)
+    document = create_nfse_document(
+        related_type="appointment",
+        related_id=appointment.id,
+        emitter_id=appointment.clinica.fiscal_emitter.id,
+        payload=payload,
+    )
+    queue_emit_nfse(document.id, clinic_id=appointment.clinica_id)
+    flash("Emissão de NFS-e enfileirada.", "success")
+    return redirect(url_for("fiscal_document_detail", document_id=document.id))
+
+
+@app.route("/appointments/<int:appointment_id>/close", methods=["GET", "POST"])
+@login_required
+def appointment_close(appointment_id: int):
+    appointment = Appointment.query.get_or_404(appointment_id)
+    if not appointment.clinica_id:
+        abort(403)
+
+    clinic_id = current_user_clinic_id()
+    if clinic_id and appointment.clinica_id != clinic_id and (current_user.role or "").lower() != "admin":
+        abort(403)
+
+    consulta = appointment.consulta
+    items = list(consulta.orcamento_items) if consulta and consulta.orcamento_items else []
+    service_items = [item for item in items if item.servico_id]
+    product_items = [item for item in items if not item.servico_id]
+
+    nfse_document = (
+        FiscalDocument.query.filter_by(
+            related_type="appointment",
+            related_id=appointment.id,
+            doc_type=FiscalDocumentType.NFSE,
+        )
+        .order_by(FiscalDocument.created_at.desc())
+        .first()
+    )
+    nfe_document = (
+        FiscalDocument.query.filter_by(
+            related_type="appointment",
+            related_id=appointment.id,
+            doc_type=FiscalDocumentType.NFE,
+        )
+        .order_by(FiscalDocument.created_at.desc())
+        .first()
+    )
+
+    if request.method == "POST":
+        if not appointment.clinica or not appointment.clinica.fiscal_emitter:
+            flash("Clínica sem emissor fiscal configurado.", "warning")
+        else:
+            result = close_appointment(appointment)
+            nfse_document = result.nfse_document
+            nfe_document = result.nfe_document
+            if not service_items and not product_items:
+                flash("Nenhum item fiscal para emissão.", "warning")
+            else:
+                flash("Fechamento fiscal enfileirado.", "success")
+
+    return render_template(
+        "appointment_close.html",
+        appointment=appointment,
+        consulta=consulta,
+        service_items=service_items,
+        product_items=product_items,
+        nfse_document=nfse_document,
+        nfe_document=nfe_document,
+    )
+
+
 @login_required
 def appointments_calendar():
     """Página experimental de calendário para tutores."""
     return render_template('agendamentos/appointments_calendar.html')
 
 
-@app.route('/appointments/<int:veterinario_id>/schedule/<int:horario_id>/edit', methods=['POST'])
 @login_required
 def edit_vet_schedule_slot(veterinario_id, horario_id):
     wants_json = (
@@ -17558,7 +18678,6 @@ def edit_vet_schedule_slot(veterinario_id, horario_id):
     return redirect_response
 
 
-@app.route('/appointments/<int:veterinario_id>/schedule/bulk_delete', methods=['POST'])
 @login_required
 def bulk_delete_vet_schedule(veterinario_id):
     from models import Veterinario, VetSchedule
@@ -17659,7 +18778,6 @@ def bulk_delete_vet_schedule(veterinario_id):
     return redirect(request.referrer or url_for('appointments'))
 
 
-@app.route('/appointments/<int:veterinario_id>/schedule/<int:horario_id>/delete', methods=['POST'])
 @login_required
 def delete_vet_schedule(veterinario_id, horario_id):
     if not (
@@ -17679,13 +18797,11 @@ def delete_vet_schedule(veterinario_id, horario_id):
     return redirect(url_for('appointments'))
 
 
-@app.route('/appointments/pending')
 @login_required
 def pending_appointments():
     return redirect(url_for('appointments'))
 
 
-@app.route('/appointments/manage')
 @login_required
 def manage_appointments():
     is_vet = is_veterinarian(current_user)
@@ -17694,19 +18810,25 @@ def manage_appointments():
         flash('Acesso restrito.', 'danger')
         return redirect(url_for('index'))
 
+    appointment_repo = AppointmentRepository()
     wants_json = 'application/json' in request.headers.get('Accept', '')
     page = max(request.args.get('page', type=int, default=1), 1)
     per_page = request.args.get('per_page', type=int, default=20)
     per_page = max(1, min(per_page or 20, 100))
 
-    query = Appointment.query.order_by(Appointment.scheduled_at)
+    clinic_id = None
     if current_user.role != 'admin':
         if is_vet:
-            query = query.filter_by(clinica_id=current_user.veterinario.clinica_id)
+            clinic_id = current_user.veterinario.clinica_id
         elif is_collaborator:
-            query = query.filter_by(clinica_id=current_user.clinica_id)
+            clinic_id = current_user.clinica_id
 
-    pagination = query.paginate(page=page, per_page=per_page, error_out=False)
+    pagination = appointment_repo.paginate_for_management(
+        is_admin=current_user.role == 'admin',
+        clinic_id=clinic_id,
+        page=page,
+        per_page=per_page,
+    )
     appointments = pagination.items
 
     if wants_json:
@@ -17735,7 +18857,6 @@ def manage_appointments():
     )
 
 
-@app.route('/appointments/<int:appointment_id>/edit', methods=['GET', 'POST'])
 @login_required
 def edit_appointment(appointment_id):
     appointment = Appointment.query.get_or_404(appointment_id)
@@ -17806,7 +18927,6 @@ def edit_appointment(appointment_id):
     return render_template('agendamentos/edit_appointment.html', appointment=appointment, veterinarios=veterinarios)
 
 
-@app.route('/appointments/<int:appointment_id>/status', methods=['POST'])
 @login_required
 def update_appointment_status(appointment_id):
     """Update the status of an appointment."""
@@ -17918,7 +19038,6 @@ def update_appointment_status(appointment_id):
     return redirect(request.referrer or url_for('appointments'))
 
 
-@app.route('/appointments/<int:appointment_id>/delete', methods=['POST'])
 @login_required
 def delete_appointment(appointment_id):
     appointment = Appointment.query.get_or_404(appointment_id)
@@ -17991,7 +19110,6 @@ def _serialize_calendar_pet(pet):
     }
 
 
-@app.route('/api/my_pets')
 @login_required
 def api_my_pets():
     """Return the authenticated tutor's pets ordered by recency."""
@@ -18010,7 +19128,6 @@ def api_my_pets():
     return jsonify([_serialize_calendar_pet(p) for p in pets])
 
 
-@app.route('/api/clinic_pets')
 @login_required
 def api_clinic_pets():
     """Return pets associated with the current clinic (or admin selection)."""
@@ -18082,7 +19199,6 @@ def api_clinic_pets():
     return jsonify([_serialize_calendar_pet(p) for p in pets])
 
 
-@app.route('/api/my_appointments')
 @login_required
 def api_my_appointments():
     """Return the current user's appointments as calendar events."""
@@ -18451,7 +19567,6 @@ def api_my_appointments():
     return jsonify(events)
 
 
-@app.route('/api/user_appointments/<int:user_id>')
 @login_required
 def api_user_appointments(user_id):
     """Return appointments for the selected user (admin only)."""
@@ -18508,7 +19623,6 @@ def api_user_appointments(user_id):
     return jsonify(events)
 
 
-@app.route('/api/appointments/<int:appointment_id>/reschedule', methods=['POST'])
 @login_required
 def api_reschedule_appointment(appointment_id):
     """Update the schedule of an appointment after drag & drop operations."""
@@ -18578,7 +19692,6 @@ def api_reschedule_appointment(appointment_id):
     })
 
 
-@app.route('/api/clinic_appointments/<int:clinica_id>')
 @login_required
 def api_clinic_appointments(clinica_id):
     """Return appointments for a clinic as calendar events."""
@@ -18677,7 +19790,6 @@ def api_clinic_appointments(clinica_id):
     return jsonify(events)
 
 
-@app.route('/api/vet_appointments/<int:veterinario_id>')
 @login_required
 def api_vet_appointments(veterinario_id):
     """Return appointments for a veterinarian as calendar events."""
@@ -18821,7 +19933,6 @@ def api_vet_appointments(veterinario_id):
     return jsonify(events)
 
 
-@app.route('/api/specialists')
 def api_specialists():
     from models import Veterinario, Specialty
     specialty_id = request.args.get('specialty_id', type=int)
@@ -18839,14 +19950,12 @@ def api_specialists():
     ])
 
 
-@app.route('/api/specialties')
 def api_specialties():
     from models import Specialty
     specs = Specialty.query.order_by(Specialty.nome).all()
     return jsonify([{ 'id': s.id, 'nome': s.nome } for s in specs])
 
 
-@app.route('/api/specialist/<int:veterinario_id>/available_times')
 def api_specialist_available_times(veterinario_id):
     date_str = request.args.get('date')
     if not date_str:
@@ -18863,7 +19972,6 @@ def api_specialist_available_times(veterinario_id):
     return jsonify(times)
 
 
-@app.route('/api/specialist/<int:veterinario_id>/weekly_schedule')
 def api_specialist_weekly_schedule(veterinario_id):
     start_str = request.args.get('start')
     days = int(request.args.get('days', 7))
@@ -18872,7 +19980,6 @@ def api_specialist_weekly_schedule(veterinario_id):
     return jsonify(data)
 
 
-@app.route('/animal/<int:animal_id>/schedule_exam', methods=['POST'])
 @login_required
 def schedule_exam(animal_id):
     from models import ExamAppointment, AgendaEvento, Veterinario, Animal, Message
@@ -18940,7 +20047,6 @@ def schedule_exam(animal_id):
     return jsonify({'success': True, 'confirm_by': confirm_by, 'html': html})
 
 
-@app.route('/exam_appointment/<int:appointment_id>/status', methods=['POST'])
 @login_required
 def update_exam_appointment_status(appointment_id):
     from models import ExamAppointment, Message
@@ -18977,7 +20083,6 @@ def update_exam_appointment_status(appointment_id):
     return jsonify({'success': True})
 
 
-@app.route('/exam_appointment/<int:appointment_id>/update', methods=['POST'])
 @login_required
 def update_exam_appointment(appointment_id):
     from models import ExamAppointment
@@ -19009,7 +20114,6 @@ def update_exam_appointment(appointment_id):
     return jsonify({'success': True, 'html': html})
 
 
-@app.route('/exam_appointment/<int:appointment_id>/requester_update', methods=['POST'])
 @login_required
 def update_exam_appointment_requester(appointment_id):
     from models import ExamAppointment
@@ -19107,7 +20211,6 @@ def update_exam_appointment_requester(appointment_id):
     })
 
 
-@app.route('/exam_appointment/<int:appointment_id>/delete', methods=['POST'])
 @login_required
 def delete_exam_appointment(appointment_id):
     from models import ExamAppointment
@@ -19120,7 +20223,6 @@ def delete_exam_appointment(appointment_id):
     return jsonify({'success': True, 'html': html})
 
 
-@app.route('/animal/<int:animal_id>/exam_appointments')
 @login_required
 def animal_exam_appointments(animal_id):
     from models import ExamAppointment
@@ -19239,20 +20341,25 @@ def pagar_orcamento(bloco_id):
         return redirect(url_for('consulta_direct', animal_id=bloco.animal_id))
 
     items = [
-        {
-            'id': str(it.id),
-            'title': it.descricao,
-            'quantity': 1,
-            'unit_price': float(it.valor),
-        }
+        PaymentItemDTO(
+            item_id=str(it.id),
+            title=it.descricao,
+            quantity=1,
+            unit_price=float(it.valor),
+        )
         for it in bloco.itens
     ]
 
     try:
-        preference_info = _criar_preferencia_pagamento(
-            items,
-            f'bloco_orcamento-{bloco.id}',
-            url_for('consulta_direct', animal_id=bloco.animal_id, _external=True),
+        preference = create_payment_preference(
+            PaymentPreferenceDTO(
+                items=items,
+                external_reference=f'bloco_orcamento-{bloco.id}',
+                back_url=url_for(
+                    'consulta_direct', animal_id=bloco.animal_id, _external=True
+                ),
+            ),
+            _criar_preferencia_pagamento,
         )
     except PaymentPreferenceError as exc:
         if request.accept_mimetypes.accept_json:
@@ -19260,22 +20367,21 @@ def pagar_orcamento(bloco_id):
         flash(str(exc), 'danger')
         return redirect(url_for('consulta_direct', animal_id=bloco.animal_id))
 
-    bloco.payment_link = preference_info['payment_url']
-    bloco.payment_reference = preference_info['payment_reference']
-    bloco.payment_status = 'pending'
-    db.session.flush()
-    _sync_orcamento_payment_classification(bloco)
-    db.session.commit()
+    apply_payment_to_bloco(
+        bloco=bloco,
+        preference=preference,
+        sync_payment_classification=_sync_orcamento_payment_classification,
+    )
     if request.accept_mimetypes.accept_json:
         historico_html = _render_orcamento_history(bloco.animal, bloco.clinica_id)
         return jsonify({
             'success': True,
-            'redirect_url': bloco.payment_link,
-            'payment_status': bloco.payment_status,
+            'redirect_url': preference.payment_url,
+            'payment_status': preference.payment_status,
             'html': historico_html,
             'message': 'Link de pagamento gerado com sucesso.'
         })
-    return redirect(bloco.payment_link)
+    return redirect(preference.payment_url)
 
 
 @app.route('/orcamento/<int:orcamento_id>/pagar', methods=['POST'])
@@ -19287,43 +20393,48 @@ def gerar_link_pagamento_orcamento(orcamento_id):
         return jsonify({'success': False, 'message': 'Nenhum item no orçamento.'}), 400
 
     items = [
-        {
-            'id': str(item.id),
-            'title': item.descricao,
-            'quantity': 1,
-            'unit_price': float(item.valor),
-        }
+        PaymentItemDTO(
+            item_id=str(item.id),
+            title=item.descricao,
+            quantity=1,
+            unit_price=float(item.valor),
+        )
         for item in orcamento.items
     ]
 
     try:
-        preference_info = _criar_preferencia_pagamento(
-            items,
-            f'orcamento-{orcamento.id}',
-            url_for('clinic_detail', clinica_id=orcamento.clinica_id, _external=True),
+        preference = create_payment_preference(
+            PaymentPreferenceDTO(
+                items=items,
+                external_reference=f'orcamento-{orcamento.id}',
+                back_url=url_for(
+                    'clinic_detail',
+                    clinica_id=orcamento.clinica_id,
+                    _external=True,
+                ),
+            ),
+            _criar_preferencia_pagamento,
         )
     except PaymentPreferenceError as exc:
         return jsonify({'success': False, 'message': str(exc)}), exc.status_code
 
-    orcamento.payment_link = preference_info['payment_url']
-    orcamento.payment_reference = preference_info['payment_reference']
-    orcamento.payment_status = 'pending'
-    orcamento.paid_at = None
-    if orcamento.status == 'draft':
-        orcamento.status = 'sent'
-    orcamento.updated_at = utcnow()
-    db.session.add(orcamento)
-    db.session.flush()
-    _sync_orcamento_payment_classification(orcamento)
-    db.session.commit()
+    apply_payment_to_orcamento(
+        orcamento=orcamento,
+        preference=preference,
+        sync_payment_classification=_sync_orcamento_payment_classification,
+    )
 
-    payment_status_label = ORCAMENTO_PAYMENT_STATUS_LABELS.get(orcamento.payment_status, orcamento.payment_status)
-    payment_status_style = ORCAMENTO_PAYMENT_STATUS_STYLES.get(orcamento.payment_status, 'secondary')
+    payment_status_label = ORCAMENTO_PAYMENT_STATUS_LABELS.get(
+        orcamento.payment_status, orcamento.payment_status
+    )
+    payment_status_style = ORCAMENTO_PAYMENT_STATUS_STYLES.get(
+        orcamento.payment_status, 'secondary'
+    )
 
     return jsonify({
         'success': True,
-        'payment_link': orcamento.payment_link,
-        'payment_status': orcamento.payment_status,
+        'payment_link': preference.payment_url,
+        'payment_status': preference.payment_status,
         'payment_status_label': payment_status_label,
         'payment_status_style': payment_status_style,
         'status': orcamento.status,
@@ -19625,6 +20736,25 @@ def atualizar_bloco_orcamento(bloco_id):
     historico_html = _render_orcamento_history(bloco.animal, bloco.clinica_id)
     return jsonify(success=True, html=historico_html)
 
+
+from blueprint_utils import register_domain_blueprints
+
+_fiscal_onboarding_path = pathlib.Path(__file__).resolve().parent / "app" / "routes" / "fiscal_onboarding.py"
+if _fiscal_onboarding_path.exists():
+    _spec = importlib.util.spec_from_file_location("fiscal_onboarding_routes", _fiscal_onboarding_path)
+    _fiscal_onboarding_routes = importlib.util.module_from_spec(_spec)
+    _spec.loader.exec_module(_fiscal_onboarding_routes)
+    fiscal_onboarding_start = _fiscal_onboarding_routes.fiscal_onboarding_start
+    fiscal_onboarding_step = _fiscal_onboarding_routes.fiscal_onboarding_step
+
+_fiscal_exports_path = pathlib.Path(__file__).resolve().parent / "app" / "routes" / "fiscal_exports.py"
+if _fiscal_exports_path.exists():
+    _spec = importlib.util.spec_from_file_location("fiscal_exports_routes", _fiscal_exports_path)
+    _fiscal_exports_routes = importlib.util.module_from_spec(_spec)
+    _spec.loader.exec_module(_fiscal_exports_routes)
+    fiscal_exports_xmls = _fiscal_exports_routes.fiscal_exports_xmls
+
+register_domain_blueprints(app)
 
 if __name__ == "__main__":
     # Usa a porta 8080 se existir no ambiente (como no Docker), senão usa 5000

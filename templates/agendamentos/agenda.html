@@ -116,7 +116,7 @@
 document.addEventListener('DOMContentLoaded', function() {
   var calendarEl = document.getElementById('calendar');
   if (calendarEl) {
-    var csrfToken = '{{ csrf_token() if csrf_token is defined else '' }}';
+    var csrfToken = '{{ csrf_token() }}';
     var calendar;
     var eventTypeLabels = {
       consulta: 'Consultas',

@@ -1,5 +1,65 @@
+# Virtual Environment
+venv/
+env/
+.venv
+*.egg-info/
+
+# Python
 __pycache__/
-flask_session/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Environment & Configuration
 .env
+.env.local
+.env.*.local
+instance/
+config/secret_key
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+
+# Logs
 *.log
-"venv/" 
+logs/
+
+# Flask/Session
+flask_session/
+.coverage
+.pytest_cache/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Temporary
+*.tmp
+*.temp
+*.bak
+*.backup
+
+# Development
+debug/
+tmp/
+
+# Build
+dist/
+build/
+*.egg-info/
+
+# IDEs & Editors
+.vscode/*
+!.vscode/settings.json
+!.vscode/launch.json
+

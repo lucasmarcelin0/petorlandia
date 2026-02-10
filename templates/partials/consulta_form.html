@@ -10,6 +10,7 @@
   action="{{ url_for('update_consulta', consulta_id=consulta.id) }}{% if edit_mode %}?edit=1{% endif %}"
   class="needs-validation" novalidate data-sync data-target="#historico-consultas"
   data-target-endpoint="{{ url_for('historico_consultas_partial', animal_id=animal.id, clinica_id=consulta.clinica_id) }}">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 
   <!-- Seção de Queixa Principal -->
   <div class="mb-3">
@@ -87,6 +88,16 @@
     {% endif %}
   </div>
 </form>
+{% if consulta %}
+<div class="d-flex flex-wrap gap-2 mt-3">
+  {% if consulta.appointment %}
+  <a href="{{ url_for('appointment_close', appointment_id=consulta.appointment.id) }}" class="btn btn-outline-primary">
+    <i class="bi bi-receipt"></i>
+    Abrir fechamento fiscal
+  </a>
+  {% endif %}
+</div>
+{% endif %}
 
 <div id="retorno-container">
   {% if consulta.appointment %}
@@ -100,6 +111,7 @@
         <a href="#" class="card-link editar-retorno">Editar</a>
         <form method="POST" action="{{ url_for('delete_appointment', appointment_id=consulta.appointment.id) }}"
           class="d-inline delete-appointment-form" data-sync>
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
           <button type="submit" class="btn btn-link p-0 card-link">Excluir</button>
         </form>
         <a href="{{ url_for('consulta_direct', animal_id=animal.id) }}" class="card-link start-return-link">Iniciar
@@ -256,7 +268,7 @@
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
-              'X-CSRFToken': '{{ csrf_token() if csrf_token is defined else '' }}',
+              'X-CSRFToken': '{{ csrf_token() }}',
               'Accept': 'application/json'
             },
             body: JSON.stringify(payload)

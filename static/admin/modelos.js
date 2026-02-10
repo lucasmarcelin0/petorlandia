@@ -8,9 +8,10 @@ async function criarExameModelo(modalId){
     return;
   }
   try{
+    const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content || '';
     const resp = await fetch('/exame_modelo', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+      headers: { 'Content-Type': 'application/json', 'Accept': 'application/json', 'X-CSRFToken': csrfToken },
       body: JSON.stringify({ nome, justificativa })
     });
     if(!resp.ok) throw new Error();
@@ -52,9 +53,10 @@ async function salvarNovaMedicacao(modalId){
     return;
   }
   try{
+    const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content || '';
     const res = await fetch('/medicamento_modelo', {
       method:'POST',
-      headers:{ 'Content-Type':'application/json', 'Accept':'application/json' },
+      headers:{ 'Content-Type':'application/json', 'Accept':'application/json', 'X-CSRFToken': csrfToken },
       body: JSON.stringify({ nome, principio_ativo: principio })
     });
     const data = await res.json();

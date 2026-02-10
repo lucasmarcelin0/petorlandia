@@ -286,6 +286,26 @@ function toggleFormRacaoAnimal() {
   container.style.display = container.style.display === 'none' ? 'block' : 'none';
 }
 
+function atualizarListaTiposRacao() {
+  fetch('/api/tipos_racao')
+    .then(resp => resp.json())
+    .then(data => {
+      if (data.success) {
+        const select = document.getElementById('tipo_racao_id');
+        const opcaoAtual = select.value;
+        select.innerHTML = '<option value="">-- Selecione uma ração --</option>';
+        data.tipos.forEach(tipo => {
+          const option = document.createElement('option');
+          option.value = tipo.id;
+          option.textContent = `${tipo.marca}${tipo.linha ? ' — ' + tipo.linha : ''}`;
+          select.appendChild(option);
+        });
+        if (opcaoAtual) select.value = opcaoAtual;
+      }
+    })
+    .catch(err => console.error('Erro ao atualizar lista:', err));
+}
+
 function salvarTipoRacao() {
   const payload = {
     marca: document.getElementById('marca').value,
@@ -300,14 +320,27 @@ function salvarTipoRacao() {
 
   fetch(url, {
     method: method,
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 
+      'Content-Type': 'application/json',
+      'X-CSRFToken': '{{ csrf_token() }}'
+    },
     body: JSON.stringify(payload)
   })
     .then(resp => resp.json())
     .then(data => {
       if (data.success) {
         alert(tipoRacaoSelecionada ? 'Tipo de ração atualizado!' : 'Tipo de ração cadastrado com sucesso!');
-        location.reload();
+        // Atualizar lista dinamicamente
+        atualizarListaTiposRacao();
+        // Limpar formulário
+        document.getElementById('marca').value = '';
+        document.getElementById('linha').value = '';
+        document.getElementById('recomendacao').value = '';
+        document.getElementById('peso_pacote_kg').value = '15';
+        document.getElementById('obs_tipo_racao').value = '';
+        tipoRacaoSelecionada = null;
+        // Fechar formulário
+        document.getElementById('form-tipo-racao-container').style.display = 'none';
       } else {
         alert('Erro: ' + (data.error || 'Falha ao salvar'));
       }
@@ -320,7 +353,10 @@ function salvarTipoRacao() {
 
 function excluirTipoRacao() {
   if (!tipoRacaoSelecionada || !confirm('Tem certeza que deseja excluir esta ração?')) return;
-  fetch(`/tipo_racao/${tipoRacaoSelecionada.id}`, { method: 'DELETE' })
+  fetch(`/tipo_racao/${tipoRacaoSelecionada.id}`, { 
+    method: 'DELETE',
+    headers: { 'X-CSRFToken': '{{ csrf_token() }}' }
+  })
     .then(resp => resp.json())
     .then(data => {
       if (data.success) {
@@ -345,7 +381,10 @@ function salvarRacaoAnimal() {
 
   fetch(`/animal/${animalId}/racoes`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 
+      'Content-Type': 'application/json',
+      'X-CSRFToken': '{{ csrf_token() }}'
+    },
     body: JSON.stringify(payload)
   })
   .then(resp => resp.json())

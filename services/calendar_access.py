@@ -7,10 +7,12 @@ from typing import Iterable, List, Optional, Sequence, Set, Union
 
 from flask_login import AnonymousUserMixin
 
+from repositories import ClinicRepository
+
 try:
-    from models import ClinicStaff, Clinica
+    from models import ClinicStaff
 except ImportError:  # pragma: no cover - fallback for local package layout
-    from petorlandia.models import ClinicStaff, Clinica
+    from petorlandia.models import ClinicStaff
 
 
 VetLike = Union[object, dict]
@@ -154,7 +156,9 @@ def _user_is_authenticated(user: object) -> bool:
     return bool(getattr(user, 'is_authenticated', False))
 
 
-def get_calendar_access_scope(user: object) -> CalendarAccessScope:
+def get_calendar_access_scope(
+    user: object, clinic_repository: ClinicRepository | None = None
+) -> CalendarAccessScope:
     """Return the calendar access scope for ``user``.
 
     Admins and clinic owners can see the full calendar (no filtering). Staff
@@ -176,9 +180,8 @@ def get_calendar_access_scope(user: object) -> CalendarAccessScope:
     if not staff_memberships:
         return CalendarAccessScope()
 
-    owned_clinic_ids = {
-        clinic.id for clinic in Clinica.query.filter_by(owner_id=user_id).all()
-    }
+    clinic_repo = clinic_repository or ClinicRepository()
+    owned_clinic_ids = clinic_repo.list_owned_ids(user_id)
 
     memberships_by_clinic: dict[int, list[ClinicStaff]] = {}
     for membership in staff_memberships:

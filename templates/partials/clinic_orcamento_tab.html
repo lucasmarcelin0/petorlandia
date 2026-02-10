@@ -313,6 +313,13 @@
                       <a href="{{ url_for('editar_orcamento', orcamento_id=o.id) }}" class="btn btn-sm btn-outline-secondary">Ver/Editar</a>
                     {% endif %}
                     <a href="{{ url_for('imprimir_orcamento', consulta_id=consulta.id) }}" class="btn btn-sm btn-outline-secondary" target="_blank">Imprimir</a>
+                    {# NFS-e shortcut: link to pre-filled preview for budgets with particular items #}
+                    {% set has_particular = o.items | selectattr('effective_payer_type', 'equalto', 'particular') | list %}
+                    {% if has_particular %}
+                    <a href="{{ url_for('contabilidade_nfse_preview', orcamento_id=o.id) }}" class="btn btn-sm btn-outline-dark" title="Emitir NFS-e">
+                      <i class="fas fa-file-invoice me-1"></i>NFS-e
+                    </a>
+                    {% endif %}
                   {% else %}
                     <a href="{{ url_for('editar_orcamento', orcamento_id=o.id) }}" class="btn btn-sm btn-outline-secondary">Ver/Editar</a>
                     <a href="{{ url_for('imprimir_orcamento_padrao', orcamento_id=o.id) }}" class="btn btn-sm btn-outline-secondary" target="_blank">Imprimir</a>
@@ -464,7 +471,8 @@
                 method: 'PATCH',
                 headers: {
                   'Content-Type': 'application/json',
-                  'Accept': 'application/json'
+                  'Accept': 'application/json',
+                  'X-CSRFToken': '{{ csrf_token() }}'
                 },
                 body: JSON.stringify({ status })
               });
@@ -562,7 +570,7 @@
             button.disabled = true;
             button.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>';
             try {
-              const resp = await fetch(endpoint, { method: 'POST', headers: { 'Accept': 'application/json' } });
+              const resp = await fetch(endpoint, { method: 'POST', headers: { 'Accept': 'application/json', 'X-CSRFToken': '{{ csrf_token() }}' } });
               const data = await resp.json();
               if (!resp.ok || !data.success) {
                 showToast((data && data.message) || 'Não foi possível gerar o link.', 'danger');

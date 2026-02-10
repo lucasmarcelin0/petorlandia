@@ -7,10 +7,12 @@
       </div>
       <div class="modal-body">
         <form method="POST" action="{{ url_for('marcar_como_falecido', animal_id=animal.id) }}" class="mb-3 js-animal-status js-confirm" data-message="Deseja marcar {{ animal.name }} como falecido agora?">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
           <input type="hidden" name="falecimento_em" value="">
           <button class="btn btn-dark w-100" type="submit">✅ Falecido agora</button>
         </form>
         <form method="POST" action="{{ url_for('marcar_como_falecido', animal_id=animal.id) }}" class="js-animal-status js-confirm" data-message="Deseja marcar {{ animal.name }} como falecido?">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
           <div class="mb-2">
             <label for="falecimento_em_modal" class="form-label mb-1">Data e hora do falecimento:</label>
             <input type="datetime-local" name="falecimento_em" id="falecimento_em_modal" class="form-control form-control-sm">

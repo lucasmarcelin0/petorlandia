@@ -45,6 +45,7 @@
             class="d-inline delete-history-form" data-sync data-target="#historico-consultas"
             data-target-endpoint="{{ url_for('historico_consultas_partial', animal_id=animal.id, clinica_id=c.clinica_id) }}"
             data-confirm="Excluir esta consulta?">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <button class="btn btn-outline-danger btn-sm">🗑️</button>
           </form>
         </td>

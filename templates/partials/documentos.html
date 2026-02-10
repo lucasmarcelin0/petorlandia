@@ -34,6 +34,7 @@ document.getElementById('toggle-termos-{{ animal.id }}').addEventListener('click
               {% endif %}
               {% if current_user.role == 'admin' or (current_user.worker == 'veterinario' and current_user.id == d.veterinario_id) %}
               <form action="{{ url_for('delete_document', animal_id=animal.id, doc_id=d.id) }}" method="post" class="d-inline">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <button class="btn btn-sm btn-outline-danger" onclick="return confirm('Excluir documento?')">Excluir</button>
               </form>
               {% endif %}
@@ -48,6 +49,7 @@ document.getElementById('toggle-termos-{{ animal.id }}').addEventListener('click
 
 {% if current_user.worker == 'veterinario' %}
 <form action="{{ url_for('upload_document', animal_id=animal.id) }}" method="post" enctype="multipart/form-data" class="mt-2">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
   <div class="mb-2">
     <input type="file" name="documento" class="form-control form-control-sm" required>
   </div>

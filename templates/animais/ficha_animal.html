@@ -118,7 +118,11 @@
             </span>
           </div>
           <h4 class="mb-1">
-            <a class="tutor-card__name" href="{{ url_for('ficha_tutor', tutor_id=tutor.id) }}">{{ tutor.name }}</a>
+            {% if current_user.role == 'admin' or current_user.worker in ['veterinario', 'colaborador'] %}
+              <a class="tutor-card__name" href="{{ url_for('ficha_tutor', tutor_id=tutor.id) }}">{{ tutor.name }}</a>
+            {% else %}
+              <span class="tutor-card__name">{{ tutor.name }}</span>
+            {% endif %}
           </h4>
           <p class="text-muted mb-3">Acesse rapidamente os dados de contato e o histórico completo do tutor.</p>
           <div class="d-flex flex-wrap gap-3 small text-muted">

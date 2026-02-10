@@ -10,7 +10,7 @@
   class="tutor-calendar"
   data-events-url="{{ events_url }}"
   data-pets-url="{{ pets_url }}"
-  data-csrf-token="{{ csrf_token() if csrf_token is defined else '' }}"
+  data-csrf-token="{{ csrf_token() }}"
   data-url-animal-profile="{{ url_for('ficha_animal', animal_id=0) }}"
   data-url-tutor-profile="{{ url_for('ficha_tutor', tutor_id=0) }}"
   data-url-consulta="{{ url_for('consulta_direct', animal_id=0) }}"

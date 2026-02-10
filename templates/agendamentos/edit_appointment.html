@@ -42,7 +42,7 @@ document.getElementById('edit-form').addEventListener('submit', async function(e
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      'X-CSRFToken': '{{ csrf_token() if csrf_token is defined else "" }}'
+      'X-CSRFToken': '{{ csrf_token() }}'
     },
     body: JSON.stringify(data)
   });

@@ -87,6 +87,12 @@ function addRemovedAnimalToList(form, detail = {}) {
   deleteForm.dataset.animalBreed = animalBreed;
   deleteForm.dataset.removedItem = 'true';
 
+  const csrfInput = document.createElement('input');
+  csrfInput.type = 'hidden';
+  csrfInput.name = 'csrf_token';
+  csrfInput.value = document.querySelector('meta[name="csrf-token"]')?.content || '';
+  deleteForm.appendChild(csrfInput);
+
   const deleteButton = document.createElement('button');
   deleteButton.type = 'submit';
   deleteButton.className = 'btn btn-sm btn-danger';
@@ -202,6 +208,12 @@ function createAnimalRow(animal) {
     deleteForm.dataset.animalName = animal.name || '';
     deleteForm.dataset.animalSpecies = animal.species || '';
     deleteForm.dataset.animalBreed = animal.breed || '';
+
+    const csrfInput = document.createElement('input');
+    csrfInput.type = 'hidden';
+    csrfInput.name = 'csrf_token';
+    csrfInput.value = document.querySelector('meta[name="csrf-token"]')?.content || '';
+    deleteForm.appendChild(csrfInput);
 
     const deleteButton = document.createElement('button');
     deleteButton.type = 'submit';

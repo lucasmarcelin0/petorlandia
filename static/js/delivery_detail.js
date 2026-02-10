@@ -115,12 +115,15 @@ function showFormStatus(form, message, variant = 'info') {
 }
 
 async function submitCancelForm(cancelForm) {
+  const csrfToken = cancelForm.querySelector('input[name="csrf_token"]')?.value
+    || document.querySelector('meta[name="csrf-token"]')?.content || '';
   const response = await fetch(cancelForm.action, {
     method: 'POST',
     body: new FormData(cancelForm),
     headers: {
       'X-Requested-With': 'XMLHttpRequest',
       Accept: 'application/json',
+      'X-CSRFToken': csrfToken,
     },
   });
 

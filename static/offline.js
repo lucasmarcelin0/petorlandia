@@ -241,7 +241,14 @@
       let resp = null;
       let offlineQueued = false;
 
-      const result = await window.fetchOrQueue(form.action, {method: form.method || 'POST', headers: {'Accept': 'application/json'}, body: data, timeout: fetchTimeout});
+      // Extract CSRF token from form if present
+      const csrfTokenInput = form.querySelector('input[name="csrf_token"]');
+      const headers = {'Accept': 'application/json'};
+      if (csrfTokenInput && csrfTokenInput.value) {
+        headers['X-CSRFToken'] = csrfTokenInput.value;
+      }
+
+      const result = await window.fetchOrQueue(form.action, {method: form.method || 'POST', headers: headers, body: data, timeout: fetchTimeout});
       resp = result ? result.response : null;
       offlineQueued = Boolean(result && result.queued);
 
@@ -721,6 +728,12 @@
     deleteForm.dataset.animalSpecies = animalSpecies;
     deleteForm.dataset.animalBreed = animalBreed;
     deleteForm.dataset.removedItem = 'true';
+
+    const csrfInput = document.createElement('input');
+    csrfInput.type = 'hidden';
+    csrfInput.name = 'csrf_token';
+    csrfInput.value = document.querySelector('meta[name="csrf-token"]')?.content || '';
+    deleteForm.appendChild(csrfInput);
 
     const deleteButton = document.createElement('button');
     deleteButton.type = 'submit';

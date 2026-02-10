@@ -1,0 +1,133 @@
+{% extends "layout.html" %}
+
+{% block head %}
+<title>Fechar atendimento</title>
+{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+  <div class="d-flex flex-column flex-md-row align-items-md-center justify-content-between gap-3 mb-4">
+    <div>
+      <h2 class="mb-1">Fechar atendimento</h2>
+      <p class="text-muted mb-0">
+        Atendimento #{{ appointment.id }} · {{ appointment.animal.name if appointment.animal else 'Animal não informado' }}
+      </p>
+      {% if nfse_document or nfe_document %}
+      <p class="text-muted mb-0">
+        Nota vinculada:
+        {% if nfse_document %}
+        <a href="{{ url_for('fiscal_document_detail', document_id=nfse_document.id) }}">
+          NFS-e {{ nfse_document.nfse_number or nfse_document.id }}
+        </a>
+        {% endif %}
+        {% if nfse_document and nfe_document %} · {% endif %}
+        {% if nfe_document %}
+        <a href="{{ url_for('fiscal_document_detail', document_id=nfe_document.id) }}">
+          NF-e {{ nfe_document.number or nfe_document.id }}
+        </a>
+        {% endif %}
+      </p>
+      {% endif %}
+    </div>
+    <form method="post">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <button type="submit" class="btn btn-primary">
+        <i class="fa-solid fa-file-invoice me-1"></i>
+        Fechar atendimento
+      </button>
+    </form>
+  </div>
+
+  <div class="row g-3">
+    <div class="col-lg-6">
+      <div class="card h-100" data-fiscal-card {% if nfse_document %}data-document-id="{{ nfse_document.id }}"{% endif %}>
+        <div class="card-body">
+          <div class="d-flex align-items-center justify-content-between mb-2">
+            <h5 class="card-title mb-0">NFS-e (serviços)</h5>
+            <span class="badge bg-primary">
+              {{ service_items|length }} item{{ '' if service_items|length == 1 else 's' }}
+            </span>
+          </div>
+          {% if not service_items %}
+          <p class="text-muted mb-0">Nenhum item de serviço neste atendimento.</p>
+          {% elif nfse_document %}
+          {% set nfse_status = nfse_document.status.value if nfse_document.status else nfse_document.status %}
+          {% set nfse_status_label = 'Emitindo…' if nfse_status in ['QUEUED', 'PROCESSING'] else nfse_status %}
+          <p class="mb-1">
+            Status:
+            <span
+              class="fw-semibold"
+              data-fiscal-status
+              data-status="{{ nfse_status }}"
+            >
+              {{ nfse_status_label or '—' }}
+            </span>
+          </p>
+          <p class="mb-1">
+            Número:
+            <span data-fiscal-field="nfse_number">{{ nfse_document.nfse_number or '—' }}</span>
+          </p>
+          <p class="mb-3">
+            Código de verificação:
+            <span data-fiscal-field="verification_code">{{ nfse_document.verification_code or '—' }}</span>
+          </p>
+          <p class="text-danger small" data-fiscal-field="error_message">
+            {{ nfse_document.error_message or '' }}
+          </p>
+          <a class="btn btn-outline-primary btn-sm" href="{{ url_for('fiscal_document_detail', document_id=nfse_document.id) }}">
+            Ver detalhes
+          </a>
+          {% else %}
+          <p class="text-muted mb-0">NFS-e aguardando fechamento.</p>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+
+    <div class="col-lg-6">
+      <div class="card h-100" data-fiscal-card {% if nfe_document %}data-document-id="{{ nfe_document.id }}"{% endif %}>
+        <div class="card-body">
+          <div class="d-flex align-items-center justify-content-between mb-2">
+            <h5 class="card-title mb-0">NF-e (produtos)</h5>
+            <span class="badge bg-secondary">
+              {{ product_items|length }} item{{ '' if product_items|length == 1 else 's' }}
+            </span>
+          </div>
+          {% if not product_items %}
+          <p class="text-muted mb-0">Nenhum item de produto neste atendimento.</p>
+          {% elif nfe_document %}
+          {% set nfe_status = nfe_document.status.value if nfe_document.status else nfe_document.status %}
+          {% set nfe_status_label = 'Emitindo…' if nfe_status in ['QUEUED', 'PROCESSING'] else nfe_status %}
+          <p class="mb-1">
+            Status:
+            <span
+              class="fw-semibold"
+              data-fiscal-status
+              data-status="{{ nfe_status }}"
+            >
+              {{ nfe_status_label or '—' }}
+            </span>
+          </p>
+          <p class="mb-3">
+            Chave de acesso:
+            <span data-fiscal-field="access_key">{{ nfe_document.access_key or '—' }}</span>
+          </p>
+          <p class="text-danger small" data-fiscal-field="error_message">
+            {{ nfe_document.error_message or '' }}
+          </p>
+          <a class="btn btn-outline-primary btn-sm" href="{{ url_for('fiscal_document_detail', document_id=nfe_document.id) }}">
+            Ver detalhes
+          </a>
+          {% else %}
+          <p class="text-muted mb-0">NF-e aguardando fechamento.</p>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/fiscal_status_poll.js') }}"></script>
+{% endblock %}

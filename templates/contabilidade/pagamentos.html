@@ -881,7 +881,7 @@
               action="{{ url_for('contabilidade_plantonistas_novo') }}"
               data-plantao-quick-form
               data-plantao-quick-endpoint="{{ url_for('contabilidade_plantonistas_quick_create') }}"
-              data-plantao-csrf="{{ csrf_token() if csrf_token is defined else '' }}">
+              data-plantao-csrf="{{ csrf_token() }}">
           <input type="hidden" name="clinica_id" value="{{ selected_clinic_id or '' }}">
           <input type="hidden" name="mes" value="{{ month_value }}">
           <input type="hidden" name="dia" data-plantao-dia-input>

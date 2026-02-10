@@ -1,11 +1,16 @@
 (function () {
   async function postJSON(url, payload) {
+    const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content || '';
+    const headers = {
+      'Content-Type': 'application/json',
+      'Accept': 'application/json'
+    };
+    if (csrfToken) {
+      headers['X-CSRFToken'] = csrfToken;
+    }
     const resp = await fetch(url, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Accept': 'application/json'
-      },
+      headers,
       body: JSON.stringify(payload || {})
     });
     let data = {};

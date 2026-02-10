@@ -1,0 +1,142 @@
+{% extends "layout.html" %}
+
+{% block head %}
+<title>Documentos Fiscais</title>
+{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+  <div class="d-flex align-items-center justify-content-between mb-3">
+    <div>
+      <h2 class="mb-1">Documentos Fiscais</h2>
+      <p class="text-muted mb-0">Acompanhe NF-e e NFS-e emitidas pela clínica.</p>
+    </div>
+  </div>
+
+  <div class="card mb-4">
+    <div class="card-body">
+      <form class="row g-3" method="get" action="{{ url_for('fiscal_documents') }}">
+        <div class="col-md-3">
+          <label class="form-label" for="doc_type">Tipo</label>
+          <select class="form-select" id="doc_type" name="doc_type">
+            <option value="">Todos</option>
+            {% for option in doc_types %}
+            <option value="{{ option }}" {% if doc_type == option %}selected{% endif %}>{{ option }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-md-3">
+          <label class="form-label" for="status">Status</label>
+          <select class="form-select" id="status" name="status">
+            <option value="">Todos</option>
+            {% for option in status_options %}
+            <option value="{{ option }}" {% if status == option %}selected{% endif %}>{{ option }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-md-3">
+          <label class="form-label" for="start_date">Período inicial</label>
+          <input class="form-control" id="start_date" name="start_date" type="date" value="{{ start_date }}">
+        </div>
+        <div class="col-md-3">
+          <label class="form-label" for="end_date">Período final</label>
+          <input class="form-control" id="end_date" name="end_date" type="date" value="{{ end_date }}">
+        </div>
+        <div class="col-12 d-flex justify-content-end gap-2">
+          <button class="btn btn-primary" type="submit">Filtrar</button>
+          <a
+            class="btn btn-outline-secondary"
+            href="{{ url_for('fiscal_exports_xmls', start_date=start_date, end_date=end_date, doc_type=doc_type) }}"
+          >
+            Exportar XMLs
+          </a>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div class="card shadow-sm">
+    <div class="card-body">
+      {% if documents %}
+      <div class="table-responsive">
+        <table class="table table-striped align-middle">
+          <thead>
+            <tr>
+              <th>Nota nº</th>
+              <th>Status</th>
+              <th>🐶 Animal</th>
+              <th>👤 Tutor</th>
+              <th>📄 Orçamento</th>
+              <th>Data</th>
+              <th>Aceite</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for doc in documents %}
+            <tr>
+              <td>
+                <div class="fw-semibold">{{ doc.nfse_number or doc.number or doc.id }}</div>
+                <div class="text-muted small">{{ doc.doc_type.value if doc.doc_type else doc.doc_type }}</div>
+              </td>
+              {% set status_value = doc.status.value if doc.status else doc.status %}
+              {% set status_labels = {
+                'DRAFT': 'Rascunho',
+                'QUEUED': 'Enfileirada',
+                'PROCESSING': 'Emitindo',
+                'AUTHORIZED': 'Emitida',
+                'REJECTED': 'Rejeitada',
+                'FAILED': 'Erro',
+                'CANCELED': 'Cancelada'
+              } %}
+              {% set status_badges = {
+                'DRAFT': 'bg-secondary',
+                'QUEUED': 'bg-warning text-dark',
+                'PROCESSING': 'bg-info text-dark',
+                'AUTHORIZED': 'bg-success',
+                'REJECTED': 'bg-danger',
+                'FAILED': 'bg-danger',
+                'CANCELED': 'bg-light text-dark'
+              } %}
+              {% set status_label = status_labels.get(status_value, status_value) %}
+              <td>
+                <span class="badge {{ status_badges.get(status_value, 'bg-secondary') }}">{{ status_label }}</span>
+              </td>
+              <td>{{ doc.animal_name or '—' }}</td>
+              <td>{{ doc.tutor_name or '—' }}</td>
+              <td>
+                <div class="fw-semibold">{{ doc.human_reference or '—' }}</div>
+                {% set services = doc.service_descriptions %}
+                <div class="text-muted small">{{ services | join(', ') if services else 'Sem serviços registrados' }}</div>
+              </td>
+              <td>
+                <div>{{ doc.created_at.strftime('%d/%m/%Y') if doc.created_at else '-' }}</div>
+                <div class="text-muted small">{{ doc.created_at.strftime('%H:%M') if doc.created_at else '' }}</div>
+              </td>
+              <td>
+                {% if doc.authorized_at %}
+                <div class="badge bg-success">Aceita</div>
+                <div class="text-muted small">{{ doc.authorized_at.strftime('%d/%m/%Y %H:%M') }}</div>
+                {% elif status_value in ['REJECTED', 'FAILED', 'CANCELED'] %}
+                <span class="badge bg-light text-dark">Sem aceite</span>
+                {% else %}
+                <span class="badge bg-warning text-dark">Pendente</span>
+                {% endif %}
+              </td>
+              <td>
+                <a class="btn btn-sm btn-outline-primary" href="{{ url_for('fiscal_document_detail', document_id=doc.id) }}">
+                  Detalhar
+                </a>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% else %}
+      <p class="text-muted mb-0">Nenhum documento fiscal encontrado.</p>
+      {% endif %}
+    </div>
+  </div>
+</div>
+{% endblock %}

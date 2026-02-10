@@ -332,7 +332,7 @@
     try {
       const resp = await fetch(url, {
         method,
-        headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'Accept': 'application/json', 'X-CSRFToken': '{{ csrf_token() }}' },
         body: JSON.stringify(payload)
       });
       const data = await resp.json();
@@ -364,7 +364,7 @@
     if (!medicamentoSelecionado?.id) return;
     if (!confirm('Deseja realmente excluir este medicamento?')) return;
     try {
-      const resp = await fetch(`/medicamento/${medicamentoSelecionado.id}`, { method: 'DELETE' });
+      const resp = await fetch(`/medicamento/${medicamentoSelecionado.id}`, { method: 'DELETE', headers: { 'X-CSRFToken': '{{ csrf_token() }}' } });
       const data = await resp.json().catch(() => ({}));
       if (!resp.ok || data.success === false) throw new Error(data.message || 'Erro');
 

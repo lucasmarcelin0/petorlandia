@@ -335,7 +335,7 @@
           action="{{ url_for('edit_vet_schedule_slot', veterinario_id=0, horario_id=0) }}"
           data-action-template="{{ url_for('edit_vet_schedule_slot', veterinario_id=0, horario_id=0) }}"
         >
-          <input type="hidden" name="schedule-csrf_token" value="{{ csrf_token() if csrf_token is defined else '' }}">
+          <input type="hidden" name="schedule-csrf_token" value="{{ csrf_token() }}">
           <input type="hidden" id="schedule-slot-id">
           <div class="alert alert-primary d-flex align-items-start gap-3 small shadow-sm mb-4" role="status">
             <i class="bi bi-info-circle-fill fs-5"></i>
@@ -497,6 +497,7 @@
 </script>
 <script type="module" src="{{ url_for('static', filename='appointments_table.js') }}"></script>
 <script type="module" src="{{ url_for('static', filename='appointments_new_consulta.js') }}"></script>
+<script src="{{ url_for('static', filename='appointments_nfse.js') }}"></script>
 <script>
 document.addEventListener('DOMContentLoaded', () => {
   let vetField = {% if form %}document.getElementById('{{ form.veterinario_id.id }}'){% else %}null{% endif %};

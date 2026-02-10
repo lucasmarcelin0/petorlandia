@@ -1,0 +1,270 @@
+{% extends "layout.html" %}
+
+{% block head %}
+<title>Detalhe do Documento Fiscal</title>
+{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+  <div class="d-flex align-items-center justify-content-between mb-3">
+    <div>
+      {% set status_value = document.status.value if document.status else document.status %}
+      {% set status_labels = {
+        'DRAFT': 'Rascunho',
+        'QUEUED': 'Enfileirada',
+        'PROCESSING': 'Emitindo',
+        'AUTHORIZED': 'Emitida',
+        'REJECTED': 'Rejeitada',
+        'FAILED': 'Erro',
+        'CANCELED': 'Cancelada'
+      } %}
+      {% set status_badges = {
+        'DRAFT': 'bg-secondary',
+        'QUEUED': 'bg-warning text-dark',
+        'PROCESSING': 'bg-info text-dark',
+        'AUTHORIZED': 'bg-success',
+        'REJECTED': 'bg-danger',
+        'FAILED': 'bg-danger',
+        'CANCELED': 'bg-light text-dark'
+      } %}
+      {% set status_label = status_labels.get(status_value, status_value) %}
+      <h2 class="mb-1">Nota fiscal {{ document.nfse_number or document.number or document.id }}</h2>
+      <p class="text-muted mb-0">
+        {{ document.human_reference or 'Referência clínica não informada' }}
+        · <span class="badge {{ status_badges.get(status_value, 'bg-secondary') }}">{{ status_label }}</span>
+      </p>
+      {% if appointment %}
+      {% set appointment_date = appointment.scheduled_at or document.created_at %}
+      <p class="text-muted small mb-0">
+        Essa nota refere-se à consulta de {{ appointment.animal.name if appointment.animal else document.animal_name or 'Paciente não informado' }}
+        realizada em {{ appointment_date.strftime('%d/%m/%Y') if appointment_date else 'data não informada' }}.
+      </p>
+      {% endif %}
+    </div>
+    <div class="d-flex gap-2">
+      {% if status_value in ['FAILED', 'REJECTED'] %}
+      <button class="btn btn-outline-primary" type="button" disabled title="Reemissão disponível em breve">
+        Reemitir
+      </button>
+      {% endif %}
+      {% if status_value == 'AUTHORIZED' %}
+      <form method="post" action="{{ url_for('fiscal_document_cancel', document_id=document.id) }}">
+        {% if csrf_token is defined %}{{ csrf_token() }}{% endif %}
+        <button class="btn btn-outline-danger" type="submit">Cancelar</button>
+      </form>
+      {% endif %}
+      <button
+        class="btn {{ 'btn-success' if status_value == 'AUTHORIZED' else 'btn-outline-secondary' }}"
+        type="button"
+        disabled
+        title="Aceite {{ 'confirmado' if status_value == 'AUTHORIZED' else 'pendente' }}"
+      >
+        Aceite
+      </button>
+      <a class="btn btn-outline-secondary" href="{{ url_for('fiscal_documents') }}">Voltar</a>
+    </div>
+  </div>
+
+  <div class="row g-4">
+    <div class="col-lg-5">
+      <div class="card shadow-sm mb-4">
+        <div class="card-body">
+          <h5 class="card-title">Resumo clínico</h5>
+          <dl class="row mb-0">
+            {% if appointment %}
+            <dt class="col-5">Atendimento</dt>
+            <dd class="col-7">
+              <a href="{{ url_for('appointment_close', appointment_id=appointment.id) }}">
+                Atendimento #{{ appointment.id }}
+              </a>
+            </dd>
+            {% endif %}
+            <dt class="col-5">Tutor</dt>
+            <dd class="col-7">{{ document.tutor_name or '—' }}</dd>
+            <dt class="col-5">Paciente</dt>
+            <dd class="col-7">{{ document.animal_name or '—' }}</dd>
+            <dt class="col-5">Orçamento</dt>
+            <dd class="col-7">{{ document.human_reference or '—' }}</dd>
+            <dt class="col-5">Serviços</dt>
+            {% set services = document.service_descriptions %}
+            <dd class="col-7">{{ services | join(', ') if services else 'Sem serviços registrados' }}</dd>
+            <dt class="col-5">Valor</dt>
+            <dd class="col-7">
+              {% if document.total_amount is not none %}
+              {{ document.total_amount | currency_br }}
+              {% else %}
+              -
+              {% endif %}
+            </dd>
+            <dt class="col-5">Aceite</dt>
+            <dd class="col-7">
+              {% if document.authorized_at %}
+              {{ document.authorized_at.strftime('%d/%m/%Y %H:%M') }}
+              {% else %}
+              Pendente
+              {% endif %}
+            </dd>
+          </dl>
+        </div>
+      </div>
+
+      <div class="card shadow-sm">
+        <div class="card-body">
+          <h5 class="card-title">Linha do tempo fiscal</h5>
+          {% set timeline = namespace(queued_at=None, emitted_at=None, emitted_status=None, emitted_error=None) %}
+          {% for event in events %}
+            {% set event_status = event.status or '' %}
+            {% if not timeline.queued_at and event_status in ['QUEUED', 'PROCESSING'] %}
+              {% set timeline.queued_at = event.created_at %}
+            {% endif %}
+            {% if not timeline.emitted_at and event_status in ['AUTHORIZED', 'REJECTED', 'FAILED', 'CANCELED'] %}
+              {% set timeline.emitted_at = event.created_at %}
+              {% set timeline.emitted_status = event_status %}
+              {% set timeline.emitted_error = event.error_message %}
+            {% endif %}
+          {% endfor %}
+          <ul class="list-group list-group-flush">
+            <li class="list-group-item d-flex justify-content-between align-items-start">
+              <div>
+                <div class="fw-semibold">Criada</div>
+                <div class="text-muted small">Nota registrada no sistema.</div>
+              </div>
+              <div class="text-muted small">{{ document.created_at.strftime('%d/%m/%Y %H:%M') if document.created_at else '-' }}</div>
+            </li>
+            <li class="list-group-item d-flex justify-content-between align-items-start">
+              <div>
+                <div class="fw-semibold">Enfileirada</div>
+                <div class="text-muted small">
+                  {% if timeline.queued_at or status_value in ['QUEUED', 'PROCESSING', 'AUTHORIZED', 'REJECTED', 'FAILED', 'CANCELED'] %}
+                  Envio fiscal em andamento.
+                  {% else %}
+                  Aguardando envio para o provedor.
+                  {% endif %}
+                </div>
+              </div>
+              <div class="text-muted small">
+                {% if timeline.queued_at %}
+                {{ timeline.queued_at.strftime('%d/%m/%Y %H:%M') }}
+                {% elif status_value in ['QUEUED', 'PROCESSING', 'AUTHORIZED', 'REJECTED', 'FAILED', 'CANCELED'] %}
+                {{ document.updated_at.strftime('%d/%m/%Y %H:%M') if document.updated_at else '-' }}
+                {% else %}
+                —
+                {% endif %}
+              </div>
+            </li>
+            <li class="list-group-item d-flex justify-content-between align-items-start">
+              <div>
+                <div class="fw-semibold">Emitida / Erro</div>
+                <div class="text-muted small">
+                  {% if status_value == 'AUTHORIZED' %}
+                  Emissão confirmada pelo provedor.
+                  {% elif status_value in ['FAILED', 'REJECTED'] %}
+                  Falha na emissão. {{ document.error_message or timeline.emitted_error or 'Verifique os detalhes abaixo.' }}
+                  {% elif status_value == 'CANCELED' %}
+                  Nota cancelada junto ao provedor.
+                  {% else %}
+                  Ainda aguardando resposta do provedor.
+                  {% endif %}
+                </div>
+              </div>
+              <div class="text-muted small">
+                {% if document.authorized_at %}
+                {{ document.authorized_at.strftime('%d/%m/%Y %H:%M') }}
+                {% elif document.canceled_at %}
+                {{ document.canceled_at.strftime('%d/%m/%Y %H:%M') }}
+                {% elif timeline.emitted_at %}
+                {{ timeline.emitted_at.strftime('%d/%m/%Y %H:%M') }}
+                {% else %}
+                —
+                {% endif %}
+              </div>
+            </li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-lg-7">
+      <div class="card shadow-sm mb-4">
+        <div class="card-body">
+          <h5 class="card-title">Mensagens e auditoria</h5>
+          {% set status_messages = {
+            'DRAFT': 'Documento salvo, aguardando envio.',
+            'QUEUED': 'Documento enfileirado para emissão.',
+            'PROCESSING': 'Documento em processamento no provedor.',
+            'AUTHORIZED': 'Documento autorizado com sucesso.',
+            'REJECTED': 'Documento rejeitado pelo provedor.',
+            'FAILED': 'Falha na emissão do documento.',
+            'CANCELED': 'Documento cancelado.'
+          } %}
+          <p class="mb-3">{{ status_messages.get(status_value, 'Status fiscal atualizado.') }}</p>
+          {% if document.error_message %}
+          <div class="alert alert-danger py-2">{{ document.error_message }}</div>
+          {% endif %}
+          {% if events %}
+          <ul class="list-group list-group-flush">
+            {% for event in events %}
+            <li class="list-group-item">
+              <div class="d-flex flex-wrap justify-content-between gap-2">
+                <div>
+                  <div class="fw-semibold">{{ event.event_type|replace('_', ' ')|title }}</div>
+                  <div class="text-muted small">Status: {{ event.status or '—' }}</div>
+                </div>
+                <div class="text-muted small">{{ event.created_at.strftime('%d/%m/%Y %H:%M') if event.created_at else '' }}</div>
+              </div>
+              {% if event.error_message %}
+              <div class="text-danger small mt-1">{{ event.error_message }}</div>
+              {% endif %}
+            </li>
+            {% endfor %}
+          </ul>
+          {% else %}
+          <p class="text-muted mb-0">Nenhum evento registrado.</p>
+          {% endif %}
+        </div>
+      </div>
+
+      <div class="card shadow-sm mb-4">
+        <div class="card-body">
+          <h5 class="card-title">Dados técnicos</h5>
+          <dl class="row mb-0">
+            <dt class="col-4">Tipo</dt>
+            <dd class="col-8">{{ document.doc_type.value if document.doc_type else document.doc_type }}</dd>
+            <dt class="col-4">Série/Número</dt>
+            <dd class="col-8">{{ document.series or '-' }}/{{ document.number or '-' }}</dd>
+            <dt class="col-4">Chave/Número</dt>
+            <dd class="col-8">{{ document.access_key or document.nfse_number or '-' }}</dd>
+            <dt class="col-4">Protocolo</dt>
+            <dd class="col-8">{{ document.protocol or '-' }}</dd>
+            <dt class="col-4">Código verificação</dt>
+            <dd class="col-8">{{ document.verification_code or '-' }}</dd>
+          </dl>
+        </div>
+      </div>
+
+      <div class="card shadow-sm">
+        <div class="card-body">
+          <h5 class="card-title">Payload e XMLs</h5>
+          {% if payload_pretty %}
+          <div class="mb-3">
+            <label class="form-label">Payload normalizado</label>
+            <pre class="bg-light p-3 rounded small">{{ payload_pretty }}</pre>
+          </div>
+          {% endif %}
+          {% if not payload_pretty %}
+          <p class="text-muted mb-3">Sem payload registrado.</p>
+          {% endif %}
+          <div class="mb-3">
+            <label class="form-label">XML assinado</label>
+            <textarea class="form-control" rows="6" readonly>{{ document.xml_signed or '' }}</textarea>
+          </div>
+          <div>
+            <label class="form-label">XML autorizado</label>
+            <textarea class="form-control" rows="6" readonly>{{ document.xml_authorized or '' }}</textarea>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

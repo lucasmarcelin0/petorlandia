@@ -41,6 +41,7 @@
 <p><strong>Data:</strong> {{ data_atual }}</p>
 
 <form method="POST">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <div class="form-check mb-3">
         <input class="form-check-input" type="checkbox" id="concordo" required>
         <label class="form-check-label" for="concordo">
@@ -51,6 +52,7 @@
 </form>
 
 <form action="{{ url_for('upload_document', animal_id=animal.id) }}" method="post" enctype="multipart/form-data" class="mt-3">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <input type="hidden" name="descricao" value="termo_interesse">
     <input type="file" id="termo_interesse_assinado" name="documento" class="d-none" onchange="this.form.submit()">
     <button type="button" class="btn btn-secondary" onclick="document.getElementById('termo_interesse_assinado').click()">Enviar termo assinado</button>

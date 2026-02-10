@@ -1,9 +1,21 @@
 import os
+from typing import Optional
 from datetime import timedelta
 
 
+def _env_optional(name: str) -> Optional[str]:
+    return os.environ.get(name) or None
+
+
+def _env_bool(name: str, default: bool = False) -> bool:
+    value = os.environ.get(name)
+    if value is None:
+        return default
+    return value.strip().lower() in {"1", "true", "yes", "on"}
+
+
 class Config:
-    SECRET_KEY = "dev-key"  # substitua por uma variável segura em produção
+    SECRET_KEY = os.environ.get("SECRET_KEY", os.urandom(32))
     SQLALCHEMY_DATABASE_URI = os.environ.get(
         "SQLALCHEMY_DATABASE_URI",
         "postgresql://u82pgjdcmkbq7v:p0204cb9289674b66bfcbb9248eaf9d6a71e2dece2722fe22d6bd976c77b411e6@c2hbg00ac72j9d.cluster-czrs8kj4isg7.us-east-1.rds.amazonaws.com:5432/d2nnmcuqa8ljli",
@@ -14,13 +26,11 @@ class Config:
     SQLALCHEMY_ENGINE_OPTIONS = {
         "pool_pre_ping": True,
         "pool_recycle": 300,
-        "connect_args": {
-            "connect_timeout": 10,  # 10 seconds connection timeout
-        },
     }
     SESSION_TYPE = "filesystem"
     SESSION_PERMANENT = True
     PERMANENT_SESSION_LIFETIME = timedelta(days=365)
+    WTF_CSRF_TIME_LIMIT = None  # CSRF token valid for entire session lifetime
 
     # Performance: cache static files for 1 hour (overridden by env var for dev)
     SEND_FILE_MAX_AGE_DEFAULT = int(os.environ.get("SEND_FILE_MAX_AGE_DEFAULT", "3600"))
@@ -29,18 +39,23 @@ class Config:
     TEMPLATES_AUTO_RELOAD = os.environ.get("TEMPLATES_AUTO_RELOAD", "").lower() in ("1", "true", "yes")
 
     # Configurações do Flask-Mail (Gmail)
-    MAIL_SERVER = 'smtp.gmail.com'
-    MAIL_PORT = 587
-    MAIL_USE_TLS = True
-    MAIL_USE_SSL = False
-    MAIL_USERNAME = 'gpt.assistente.orlandia@gmail.com'
-    MAIL_PASSWORD = 'toso zrgb uuwx nzkp'  # Use a senha de app, não a senha normal da conta
-    MAIL_DEFAULT_SENDER = ('PetOrlândia', 'gpt.assistente.orlandia@gmail.com')
+    MAIL_SERVER = os.environ.get("MAIL_SERVER", "smtp.gmail.com")
+    MAIL_PORT = int(os.environ.get("MAIL_PORT", "587"))
+    MAIL_USE_TLS = _env_bool("MAIL_USE_TLS", True)
+    MAIL_USE_SSL = _env_bool("MAIL_USE_SSL", False)
+    MAIL_USERNAME = _env_optional("MAIL_USERNAME")
+    MAIL_PASSWORD = _env_optional("MAIL_PASSWORD")
+    _mail_sender_email = _env_optional("MAIL_DEFAULT_SENDER_EMAIL")
+    MAIL_DEFAULT_SENDER = (
+        (os.environ.get("MAIL_DEFAULT_SENDER_NAME", "PetOrlândia"), _mail_sender_email)
+        if _mail_sender_email
+        else None
+    )
 
     # Token de acesso do Mercado Pago usado na integração de pagamentos
-    MERCADOPAGO_ACCESS_TOKEN = os.environ.get("MERCADOPAGO_ACCESS_TOKEN", "APP_USR-6670170005169574-071911-23502e25ef4bc98e3e2f9706cd082550-99814908")
-    MERCADOPAGO_PUBLIC_KEY = os.environ.get("MERCADOPAGO_PUBLIC_KEY", "APP_USR-2b9a9bff-692b-4de8-9b90-ce9aa758ca14")
-    MERCADOPAGO_WEBHOOK_SECRET = os.environ.get("MERCADOPAGO_WEBHOOK_SECRET", "add6cb517c10e98c1decbe37a4290a41b45a9b3b1d04a5d368babd18a2969d44")
+    MERCADOPAGO_ACCESS_TOKEN = _env_optional("MERCADOPAGO_ACCESS_TOKEN")
+    MERCADOPAGO_PUBLIC_KEY = _env_optional("MERCADOPAGO_PUBLIC_KEY")
+    MERCADOPAGO_WEBHOOK_SECRET = _env_optional("MERCADOPAGO_WEBHOOK_SECRET")
 
     # Opções adicionais de integração com o Mercado Pago
     MERCADOPAGO_STATEMENT_DESCRIPTOR = os.environ.get("MERCADOPAGO_STATEMENT_DESCRIPTOR", "PETORLANDIA")
@@ -95,4 +110,13 @@ class Config:
             "require_reason": True,
             "allowed_reasons": [],
         },
+    }
+
+    NFSE_BETHA_WSDL = {
+        "recepcionar_lote_rps": os.environ.get("NFSE_BETHA_WSDL_RECEPCIONAR_LOTE_RPS", ""),
+        "consultar_situacao_lote_rps": os.environ.get(
+            "NFSE_BETHA_WSDL_CONSULTAR_SITUACAO_LOTE_RPS", ""
+        ),
+        "consultar_nfse_por_rps": os.environ.get("NFSE_BETHA_WSDL_CONSULTAR_NFSE_POR_RPS", ""),
+        "cancelar_nfse": os.environ.get("NFSE_BETHA_WSDL_CANCELAR_NFSE", ""),
     }

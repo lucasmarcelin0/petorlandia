@@ -6,7 +6,7 @@
     {% if current_user.is_authenticated %}
         <!-- Área pessoal -->
         <div class="card shadow-sm p-4 rounded-4 mt-5 mb-4 card-surface-muted">
-            <h5 class="mb-2">Bem-vindo(a)! O que você deseja fazer hoje?</h5>
+            <h1 class="mb-2">Bem-vindo(a)! O que você deseja fazer hoje?</h1>
             <p class="text-muted small">Escolha um atalho abaixo para ir direto à ação desejada.</p>
 
             <div class="d-flex flex-wrap justify-content-center gap-3 mt-2">
@@ -36,6 +36,7 @@
     {% else %}
         <!-- Visitante não autenticado -->
         <div class="card shadow-lg p-5 rounded-4 mt-5 card-surface-white">
+            <h1 class="visually-hidden">PetOrlandia</h1>
             <div class="text-center">
                 <img src="{{ url_for('static', filename='logo_pet.png') }}"
                      alt="Logo PetOrlândia"
@@ -58,7 +59,7 @@
     {% if current_user.is_authenticated and (current_user.worker == 'colaborador' or is_active_veterinarian) %}
     <!-- Área profissional -->
         <div class="card shadow-lg p-4 rounded-4 mb-5 card-surface-white">
-            <h5 class="mb-2">Área profissional</h5>
+            <h2 class="mb-2 h5">Área profissional</h2>
             <p class="text-muted small">Atalhos para gerenciar atendimentos, animais e tutores.</p>
             <div class="d-flex flex-wrap justify-content-center gap-3">
                 <a href="{{ url_for('novo_animal') }}" class="btn btn-outline-primary rounded-pill shadow-sm px-4 py-2"
@@ -90,7 +91,7 @@
         {% set owner_with_access = owned_clinics|length > 0 and can_access_accounting %}
         {% if has_admin_role or has_admin_worker or owner_with_access %}
         <div class="card shadow-lg p-4 rounded-4 mb-5 accounting-card card-surface-white">
-            <h5 class="mb-2 text-center">Contabilidade</h5>
+            <h2 class="mb-2 text-center h5">Contabilidade</h2>
             <p class="text-muted small text-center">Escolha um painel para acompanhar receitas, pagamentos e obrigações.</p>
             <div class="d-flex flex-wrap justify-content-center gap-3">
                 <a href="/contabilidade/financeiro" class="btn accounting-btn accounting-btn--finance">
@@ -117,7 +118,7 @@
     {% if current_user.is_authenticated and current_user.worker == 'delivery' %}
     <!-- Área de Entregas -->
         <div class="card shadow-lg p-4 rounded-4 mb-5 card-surface-white">
-            <h5 class="mb-2">Área de Entregas</h5>
+            <h2 class="mb-2 h5">Área de Entregas</h2>
             <p class="text-muted small">Acesse pedidos e confirme entregas rapidamente.</p>
             <div class="d-flex flex-wrap justify-content-center gap-3">
                 <a href="{{ url_for('list_delivery_requests') }}" class="btn btn-outline-secondary rounded-pill shadow-sm px-4 py-2">

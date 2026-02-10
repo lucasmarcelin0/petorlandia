@@ -1,6 +1,6 @@
 {% from 'components/logo.html' import clinic_logo %}
 <!DOCTYPE html>
-<html lang="pt-br">
+<html lang="pt-BR">
 
 <head>
   {% block head %}
@@ -12,7 +12,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <link rel="manifest" href="{{ url_for('static', filename='manifest.json') }}">
   <meta name="theme-color" content="#4e73df">
-  <meta name="csrf-token" content="{{ csrf_token() if csrf_token is defined else '' }}">
+  <meta name="csrf-token" content="{{ csrf_token() }}">
 
   <!-- Google Fonts -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -1084,6 +1084,14 @@
     };
 
     document.addEventListener('DOMContentLoaded', () => {
+      const getMsgCsrfToken = (form) => {
+        const formInput = form?.querySelector('input[name="csrf_token"]');
+        if (formInput?.value) return formInput.value;
+        const meta = document.querySelector('meta[name="csrf-token"]');
+        if (meta?.content) return meta.content;
+        return '';
+      };
+
       document.querySelectorAll('.js-msg-form').forEach(form => {
         form.addEventListener('submit', async ev => {
           ev.preventDefault();
@@ -1127,37 +1135,51 @@
             const timeoutAttr = form.dataset.requestTimeout || form.dataset.fetchTimeout || form.dataset.syncTimeout;
             const timeout = Number.isFinite(Number(timeoutAttr)) ? Number(timeoutAttr) : undefined;
 
+            const fetchHeaders = { 'Accept': 'text/html' };
+            const csrfToken = getMsgCsrfToken(form);
+            if (csrfToken) fetchHeaders['X-CSRFToken'] = csrfToken;
+
             try {
-              ({ response, queued } = normalizeFetchResult(await fetchOrQueue(api, {
+              // Para mensagens, usar fetch direto sem offline queue (CSRF tokens expiram)
+              response = await fetch(api, {
                 method: 'POST',
                 body: formData,
-                headers: { 'Accept': 'text/html' },
-                timeout
-              })));
+                headers: fetchHeaders,
+                credentials: 'same-origin'
+              });
+              
+              // Log para debugging
+              console.log('Message fetch result:', { status: response?.status, statusText: response?.statusText });
             } catch (err) {
               console.error('Erro ao enviar mensagem:', err);
+              const errText = (err && err.message) || 'Erro de rede. Verifique sua conexão.';
               if (placeholder) {
                 const status = placeholder.querySelector('.js-status');
                 if (status) {
-                  status.textContent = 'Falha ao enviar. Tente novamente.';
+                  status.textContent = errText;
                 }
                 placeholder.dataset.status = 'error';
               }
-              return { success: false, message: 'Falha ao enviar a mensagem.', level: 'danger' };
+              return { success: false, message: errText, level: 'danger' };
             }
 
             const isSuccessful = response && (response.ok || (response.status >= 300 && response.status < 400));
 
             if (isSuccessful) {
-              const html = await response.text();
-              if (placeholder) {
-                placeholder.insertAdjacentHTML('afterend', html);
-                placeholder.remove();
-              } else if (container) {
-                container.insertAdjacentHTML('beforeend', html);
-                container.scrollTop = container.scrollHeight;
+              try {
+                const html = await response.text();
+                if (placeholder) {
+                  placeholder.insertAdjacentHTML('afterend', html);
+                  placeholder.remove();
+                } else if (container) {
+                  container.insertAdjacentHTML('beforeend', html);
+                  container.scrollTop = container.scrollHeight;
+                }
+                return { success: true, message: 'Mensagem enviada com sucesso.', level: 'success', successText: 'Enviado!', resetDelay: 1800 };
+              } catch (parseErr) {
+                console.error('Erro ao processar resposta HTML:', parseErr);
+                return { success: false, message: 'Erro ao processar resposta do servidor.', level: 'danger' };
               }
-              return { success: true, message: 'Mensagem enviada com sucesso.', level: 'success', successText: 'Enviado!', resetDelay: 1800 };
             }
 
             if (queued) {
@@ -1176,16 +1198,22 @@
                 resetDelay: 2500,
                 offlineQueued: true,
               };
-            }
-
+            }            let errorMessage = 'Falha ao enviar. Tente novamente.';
+            try {
+              const ct = response && response.headers.get('Content-Type') || '';
+              if (ct.includes('application/json')) {
+                const errData = await response.json();
+                if (errData && errData.error) errorMessage = errData.error;
+              }
+            } catch (_) {}
             if (placeholder) {
               const status = placeholder.querySelector('.js-status');
               if (status) {
-                status.textContent = 'Falha ao enviar. Tente novamente.';
+                status.textContent = errorMessage;
               }
               placeholder.dataset.status = 'error';
             }
-            return { success: false, message: 'Falha ao enviar a mensagem.', level: 'danger' };
+            return { success: false, message: errorMessage, level: 'danger' };
           };
 
           if (window.FormFeedback && typeof window.FormFeedback.withSavingState === 'function') {
@@ -1300,6 +1328,26 @@
   <script src="{{ url_for('static', filename='js/navbar-dropdown.js') }}"></script>
   <!-- Page specific scripts -->
   {% block scripts %}{% endblock %}
+  <script>
+  (function(){
+    var token = (document.querySelector('meta[name="csrf-token"]') || {}).content || '';
+    if (!token) return;
+    var mgr = window.HistorySyncManager;
+    if (!mgr || !mgr._performSave) return;
+    mgr._performSave = async function(endpoint, data, timeoutMs) {
+      var controller = new AbortController();
+      var tid = setTimeout(function(){ controller.abort(); }, timeoutMs);
+      try {
+        return await fetch(endpoint, {
+          method: 'POST',
+          headers: {'Content-Type':'application/json','Accept':'application/json','X-CSRFToken': token},
+          body: JSON.stringify(data),
+          signal: controller.signal
+        });
+      } finally { clearTimeout(tid); }
+    };
+  })();
+  </script>
 </body>
 
 </html>

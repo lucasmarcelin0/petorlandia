@@ -1,5 +1,5 @@
 <form id="edit-appointment-form">
-  <input type="hidden" id="csrf_token" value="{{ csrf_token() if csrf_token is defined else '' }}">
+  <input type="hidden" id="csrf_token" value="{{ csrf_token() }}">
   <div class="mb-3">
     <label for="edit-date" class="form-label">Data</label>
     <input type="date" id="edit-date" class="form-control" value="{{ appointment.scheduled_at|format_datetime_brazil('%Y-%m-%d') }}">

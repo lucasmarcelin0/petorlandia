@@ -182,10 +182,13 @@ function initAppointmentsAdmin() {
       submitButton,
       async ({ signal }) => {
         try {
+          const csrfToken = form.querySelector('input[name="csrf_token"]')?.value
+            || document.querySelector('meta[name="csrf-token"]')?.content || '';
           const response = await fetch(form.action, {
             method: 'POST',
             headers: {
               Accept: 'application/json',
+              'X-CSRFToken': csrfToken,
             },
             body: new FormData(form),
             signal,

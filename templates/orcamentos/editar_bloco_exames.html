@@ -168,7 +168,7 @@ function salvarBlocoExames(blocoId, consultaId) {
 
   fetch(`/bloco_exames/${blocoId}/atualizar`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', 'X-CSRFToken': '{{ csrf_token() }}' },
     body: JSON.stringify({ exames, observacoes_gerais })
   })
   .then(res => res.json())

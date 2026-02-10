@@ -265,6 +265,7 @@
                             data-animal-name="{{ a.name }}"
                             data-animal-species="{{ a.species }}"
                             data-animal-breed="{{ a.breed }}">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                         <button type="submit" class="btn btn-outline-danger btn-sm">
                           <i class="fas fa-trash"></i>
                         </button>
@@ -307,6 +308,7 @@
                           data-animal-species="{{ r.species }}"
                           data-animal-breed="{{ r.breed }}"
                           data-removed-item="true">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                       <button type="submit" class="btn btn-sm btn-danger">❌ Excluir Definitivamente</button>
                     </form>
                   </li>

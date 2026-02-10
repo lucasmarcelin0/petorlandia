@@ -16,6 +16,8 @@ def app():
         WTF_CSRF_ENABLED=False,
         SQLALCHEMY_DATABASE_URI="sqlite:///:memory:",
     )
+    with flask_app.app_context():
+        db.create_all()
     yield flask_app
 
 

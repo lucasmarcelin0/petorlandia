@@ -1,7 +1,0 @@
-<div class="mb-2 {% if msg.sender_id == current_user.id %}text-end{% endif %}">
-    <div class="p-2 rounded {% if msg.sender_id == current_user.id %}bg-info-subtle{% else %}bg-light{% endif %}">
-        <small>{{ msg.sender.name }}:</small><br>
-        {{ msg.content }}
-        <div class="text-muted small">{{ msg.timestamp|format_datetime_brazil('%d/%m %H:%M') }}</div>
-    </div>
-</div>
