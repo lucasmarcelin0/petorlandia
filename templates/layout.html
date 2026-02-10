@@ -1140,16 +1140,14 @@
             if (csrfToken) fetchHeaders['X-CSRFToken'] = csrfToken;
 
             try {
-              // Para mensagens, usar fetch direto sem offline queue (CSRF tokens expiram)
-              response = await fetch(api, {
+              const result = await fetchOrQueue(api, {
                 method: 'POST',
                 body: formData,
                 headers: fetchHeaders,
-                credentials: 'same-origin'
+                timeout
               });
-              
-              // Log para debugging
-              console.log('Message fetch result:', { status: response?.status, statusText: response?.statusText });
+              response = result && result.response ? result.response : null;
+              queued = Boolean(result && result.queued);
             } catch (err) {
               console.error('Erro ao enviar mensagem:', err);
               const errText = (err && err.message) || 'Erro de rede. Verifique sua conexão.';
@@ -1198,7 +1196,9 @@
                 resetDelay: 2500,
                 offlineQueued: true,
               };
-            }            let errorMessage = 'Falha ao enviar. Tente novamente.';
+            }
+
+            let errorMessage = 'Falha ao enviar. Tente novamente.';
             try {
               const ct = response && response.headers.get('Content-Type') || '';
               if (ct.includes('application/json')) {
