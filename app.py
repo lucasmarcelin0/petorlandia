@@ -3281,49 +3281,57 @@ def _set_cached_context(user_id: int, key: str, value):
 
 @app.context_processor
 def inject_unread_count():
-    if current_user.is_authenticated:
-        user_id = current_user.id
-        cached = _get_cached_context(user_id, 'unread_messages')
-        if cached is not None:
-            return dict(unread_messages=cached)
+    try:
+        if current_user.is_authenticated:
+            user_id = current_user.id
+            cached = _get_cached_context(user_id, 'unread_messages')
+            if cached is not None:
+                return dict(unread_messages=cached)
 
-        if current_user.role == 'admin':
-            admin_ids = [u.id for u in User.query.filter_by(role='admin').all()]
-            unread = (
-                Message.query
-                .filter(Message.receiver_id.in_(admin_ids), Message.lida.is_(False))
-                .count()
-            )
+            if current_user.role == 'admin':
+                admin_ids = [u.id for u in User.query.filter_by(role='admin').all()]
+                unread = (
+                    Message.query
+                    .filter(Message.receiver_id.in_(admin_ids), Message.lida.is_(False))
+                    .count()
+                )
+            else:
+                unread = (
+                    Message.query
+                    .filter_by(receiver_id=current_user.id, lida=False)
+                    .count()
+                )
+            _set_cached_context(user_id, 'unread_messages', unread)
         else:
-            unread = (
-                Message.query
-                .filter_by(receiver_id=current_user.id, lida=False)
-                .count()
-            )
-        _set_cached_context(user_id, 'unread_messages', unread)
-    else:
+            unread = 0
+    except Exception:
+        db.session.rollback()
         unread = 0
     return dict(unread_messages=unread)
 
 
 @app.context_processor
 def inject_pending_exam_count():
-    if current_user.is_authenticated and is_veterinarian(current_user):
-        user_id = current_user.id
-        cached = _get_cached_context(user_id, 'pending_exam_count')
-        if cached is not None:
+    try:
+        if current_user.is_authenticated and is_veterinarian(current_user):
+            user_id = current_user.id
+            cached = _get_cached_context(user_id, 'pending_exam_count')
+            if cached is not None:
+                seen = session.get('exam_pending_seen_count', 0)
+                return dict(pending_exam_count=max(cached - seen, 0))
+
+            from models import ExamAppointment
+
+            pending = ExamAppointment.query.filter_by(
+                specialist_id=current_user.veterinario.id, status='pending'
+            ).count()
+            _set_cached_context(user_id, 'pending_exam_count', pending)
             seen = session.get('exam_pending_seen_count', 0)
-            return dict(pending_exam_count=max(cached - seen, 0))
-
-        from models import ExamAppointment
-
-        pending = ExamAppointment.query.filter_by(
-            specialist_id=current_user.veterinario.id, status='pending'
-        ).count()
-        _set_cached_context(user_id, 'pending_exam_count', pending)
-        seen = session.get('exam_pending_seen_count', 0)
-        pending = max(pending - seen, 0)
-    else:
+            pending = max(pending - seen, 0)
+        else:
+            pending = 0
+    except Exception:
+        db.session.rollback()
         pending = 0
     return dict(pending_exam_count=pending)
 
@@ -3332,25 +3340,29 @@ def inject_pending_exam_count():
 def inject_pending_appointment_count():
     """Expose count of upcoming appointments requiring vet action."""
 
-    if current_user.is_authenticated and is_veterinarian(current_user):
-        user_id = current_user.id
-        cached = _get_cached_context(user_id, 'pending_appointment_count')
-        if cached is not None:
+    try:
+        if current_user.is_authenticated and is_veterinarian(current_user):
+            user_id = current_user.id
+            cached = _get_cached_context(user_id, 'pending_appointment_count')
+            if cached is not None:
+                seen = session.get('appointment_pending_seen_count', 0)
+                return dict(pending_appointment_count=max(cached - seen, 0))
+
+            from models import Appointment
+
+            now = utcnow()
+            pending = Appointment.query.filter(
+                Appointment.veterinario_id == current_user.veterinario.id,
+                Appointment.status == "scheduled",
+                Appointment.scheduled_at >= now + timedelta(hours=2),
+            ).count()
+            _set_cached_context(user_id, 'pending_appointment_count', pending)
             seen = session.get('appointment_pending_seen_count', 0)
-            return dict(pending_appointment_count=max(cached - seen, 0))
-
-        from models import Appointment
-
-        now = utcnow()
-        pending = Appointment.query.filter(
-            Appointment.veterinario_id == current_user.veterinario.id,
-            Appointment.status == "scheduled",
-            Appointment.scheduled_at >= now + timedelta(hours=2),
-        ).count()
-        _set_cached_context(user_id, 'pending_appointment_count', pending)
-        seen = session.get('appointment_pending_seen_count', 0)
-        pending = max(pending - seen, 0)
-    else:
+            pending = max(pending - seen, 0)
+        else:
+            pending = 0
+    except Exception:
+        db.session.rollback()
         pending = 0
     return dict(pending_appointment_count=pending)
 
@@ -15855,7 +15867,7 @@ def _get_recent_animais(
 
     query = apply_search_filters(query)
     if search_value:
-        query = query.distinct()
+        query = query.group_by(Animal.id)
     query = apply_sorting(query, last_reference)
     pagination = query.paginate(page=page, per_page=per_page, error_out=False)
 
