@@ -266,6 +266,7 @@ def handle_http_exception(err):
             "request_id": getattr(g, "request_id", None),
         }
         return jsonify(payload), err.code
+    db.session.rollback()
     return render_template("errors/http.html", error=err), err.code
 
 
@@ -291,6 +292,7 @@ def handle_csrf_error(err):
             "request_id": getattr(g, "request_id", None),
         }
         return jsonify(payload), 400
+    db.session.rollback()
     return render_template("errors/http.html", error=err), 400
 
 
@@ -311,6 +313,7 @@ def handle_unhandled_exception(err):
             "request_id": getattr(g, "request_id", None),
         }
         return jsonify(payload), 500
+    db.session.rollback()
     return render_template("errors/500.html"), 500
 
 # ----------------------------------------------------------------
@@ -15868,6 +15871,9 @@ def _get_recent_animais(
     query = apply_search_filters(query)
     if search_value:
         query = query.group_by(Animal.id)
+        # Wrap last_reference in max() so it's valid with GROUP BY
+        if last_reference is not None:
+            last_reference = func.max(last_reference)
     query = apply_sorting(query, last_reference)
     pagination = query.paginate(page=page, per_page=per_page, error_out=False)
 
