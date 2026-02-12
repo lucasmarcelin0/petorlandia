@@ -8989,6 +8989,11 @@ def delete_document(animal_id, doc_id):
 def editar_ficha_animal(animal_id):
     animal = get_animal_or_404(animal_id)
 
+    # Apenas veterinários podem acessar
+    if current_user.role != 'veterinario':
+        flash("Acesso restrito a veterinários.", "danger")
+        return redirect(url_for('ficha_animal', animal_id=animal.id))
+
     # Dados fictícios para fins de edição simples (substituir por formulário real depois)
     if request.method == 'POST':
         nova_vacina = request.form.get("vacina")
@@ -9002,7 +9007,7 @@ def editar_ficha_animal(animal_id):
         flash("Informacões adicionadas com sucesso (simulação).", "success")
         return redirect(url_for('ficha_animal', animal_id=animal.id))
 
-    return render_template("editar_ficha.html", animal=animal)
+    return render_template("animais/editar_ficha.html", animal=animal)
 
 
 @app.route('/generate_qr/<int:animal_id>')
