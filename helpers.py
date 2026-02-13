@@ -717,16 +717,6 @@ def appointment_to_event(appointment):
         'notes': getattr(appointment, 'notes', None),
     }
 
-    consulta = getattr(appointment, 'consulta', None)
-    if consulta:
-        extra_props.update(
-            {
-                'consultaId': getattr(consulta, 'id', None),
-                'consultaStatus': getattr(consulta, 'status', None),
-                'consultaRetornoDeId': getattr(consulta, 'retorno_de_id', None),
-            }
-        )
-
     return _build_calendar_event(
         event_id=f"appointment-{appointment.id}",
         title=title,
