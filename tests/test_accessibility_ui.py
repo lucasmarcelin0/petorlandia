@@ -7,6 +7,7 @@ and UI/UX elements to ensure the application is usable by everyone.
 import pytest
 import os
 import re
+from pathlib import Path
 os.environ["SQLALCHEMY_DATABASE_URI"] = "sqlite:///:memory:"
 
 from app import app as flask_app, db
@@ -562,7 +563,7 @@ class TestErrorPages:
         html = soup.get_text().lower()
         
         # Should mention "404" or "not found"
-        assert '404' in html or 'nao encontrad' in html or 'not found' in html
+        assert '404' in html or 'não encontrado' in html or 'nao encontrado' in html or 'not found' in html
 
 
 class TestPrintStyles:
@@ -570,9 +571,21 @@ class TestPrintStyles:
     
     def test_print_media_query_exists(self):
         """CSS should include print media queries for print-friendly pages."""
-        # This would require checking CSS files
-        # Document the expectation
-        assert True, "CSS should include @media print rules for better printing"
+        css_paths = [
+            Path('static/styles.css'),
+            Path('static/print.css'),
+        ]
+
+        css_content = []
+        existing_files = []
+        for css_path in css_paths:
+            if css_path.exists():
+                existing_files.append(css_path)
+                css_content.append(css_path.read_text(encoding='utf-8', errors='ignore').lower())
+
+        assert existing_files, 'Nenhum arquivo CSS esperado foi encontrado para validação de impressão.'
+        merged_css = '\n'.join(css_content)
+        assert '@media print' in merged_css or '@page' in merged_css
 
 
 class TestSEO:
