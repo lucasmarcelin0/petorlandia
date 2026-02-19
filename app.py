@@ -216,7 +216,7 @@ from extensions import (
     configure_logging,
 )
 from flask_login import login_user, logout_user, current_user, login_required
-from flask_mail import Message as MailMessage      #  ←  adicione esta linha
+from flask_mail import Message as MailMessage
 from werkzeug.utils import secure_filename
 from werkzeug.datastructures import FileStorage
 from werkzeug.routing import BuildError
@@ -8555,9 +8555,7 @@ def planosaude_animal(animal_id):
     )
 
     if form.validate_on_submit():
-        # TODO: processar contratação do plano aqui…
-        flash("Plano de saúde contratado!", "success")
-        return redirect(url_for("planosaude_animal", animal_id=animal_id))
+        return contratar_plano(animal_id)
 
     from admin import _is_admin
 
