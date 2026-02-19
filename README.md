@@ -46,6 +46,7 @@ Full documentation is available in the [`docs/`](docs/) folder:
 - **[📚 Documentation Index](docs/INDEX.md)** - Complete guide to all documentation
 - **[🏗️ Architecture Guide](docs/ARCHITECTURE.md)** *(to be created)*
 - **[🤝 Contributing Guide](docs/CONTRIBUTING.md)** - How to contribute to the project
+- **[🧭 Revisão de propósito e melhorias](docs/revisao_proposito_e_melhorias.md)** - Diagnóstico detalhado da aplicação e roadmap de evolução
 - **[🧪 Testing & Validation](docs/TESTING_AND_VALIDATION.md)** - Testing guidelines
 - **[⚙️ API Reference](docs/API.md)** *(to be created)*
 
@@ -182,6 +183,5 @@ prontuário eletrônico confiável, agenda compartilhada em tempo real, controle
 financeiros básicos, emissão de documentos e relatórios para a clínica. Mais
 detalhes de como manter estabilidade, segurança e infraestrutura de nuvem estão
 documentados em `docs/gestao_produto.md`.
-
 
 

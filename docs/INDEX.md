@@ -11,6 +11,7 @@ Bem-vindo à documentação centralizada do projeto PetOrlândia!
 ### 🏗️ Arquitetura e Estrutura
 - [ARCHITECTURE.md](ARCHITECTURE.md) - Estrutura técnica da aplicação *(a ser criado)*
 - [API.md](API.md) - Referência de endpoints da API *(a ser criado)*
+- [revisao_proposito_e_melhorias.md](revisao_proposito_e_melhorias.md) - Revisão detalhada do propósito da aplicação e plano de melhoria
 - [multi_clinic_guide.md](multi_clinic_guide.md) - Guia de múltiplas clínicas
 
 ### 💼 Funcionalidades
