@@ -1010,10 +1010,24 @@
   <script>
     document.addEventListener('DOMContentLoaded', () => {
       document.querySelectorAll('.js-auth-form').forEach(form => {
+        const ensureGlobalError = () => {
+          let alert = form.querySelector('.js-auth-global-error');
+          if (!alert) {
+            alert = document.createElement('div');
+            alert.className = 'alert alert-danger d-none js-auth-global-error';
+            alert.setAttribute('role', 'alert');
+            form.prepend(alert);
+          }
+          return alert;
+        };
+
         form.addEventListener('submit', async ev => {
           ev.preventDefault();
           const handle = async () => {
             form.querySelectorAll('.text-danger').forEach(el => el.remove());
+            const globalError = ensureGlobalError();
+            globalError.textContent = '';
+            globalError.classList.add('d-none');
             try {
               // Requisições de autenticação usam fetch direto (não offline queue)
               // pois dependem de CSRF tokens que expiram
@@ -1048,14 +1062,25 @@
               console.log('Form error data:', errorData);
 
               if (errorData && errorData.errors) {
+                const globalMessages = [];
                 for (const [field, messages] of Object.entries(errorData.errors)) {
                   const input = form.querySelector(`[name="${field}"]`);
-                  if (input) {
+                  const text = Array.isArray(messages) ? messages.join(', ') : messages;
+                  const shouldRenderGlobal = !input || input.type === 'hidden' || ['csrf_token', 'form', 'endereco'].includes(field);
+
+                  if (!shouldRenderGlobal) {
                     const div = document.createElement('div');
                     div.className = 'text-danger';
-                    div.textContent = Array.isArray(messages) ? messages.join(', ') : messages;
+                    div.textContent = text;
                     input.insertAdjacentElement('afterend', div);
+                  } else if (text) {
+                    globalMessages.push(text);
                   }
+                }
+
+                if (globalMessages.length) {
+                  globalError.textContent = globalMessages.join(' ');
+                  globalError.classList.remove('d-none');
                 }
               }
 
