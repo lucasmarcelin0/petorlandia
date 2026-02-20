@@ -51,6 +51,7 @@
 
   <form id="novo-tutor-form" method="POST" action="{{ url_for('tutores') }}" class="js-tutor-form" data-sync="true" novalidate>
     {{ form.hidden_tag() if form else '' }}
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <div class="row g-3">
       <div class="col-md-6">
         <label class="form-label">Nome</label>
