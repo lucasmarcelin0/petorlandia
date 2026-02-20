@@ -1593,11 +1593,15 @@ document.addEventListener('DOMContentLoaded', () => {
         formData.append('schedule-submit', submitter && submitter.value ? submitter.value : 'Salvar');
       }
 
+      const csrfToken = scheduleForm.querySelector('[name="schedule-csrf_token"]')?.value
+        || document.querySelector('meta[name="csrf-token"]')?.content
+        || '';
       const response = await fetch(actionUrl, {
         method: 'POST',
         body: formData,
         headers: {
           'X-Requested-With': 'XMLHttpRequest',
+          ...(csrfToken ? { 'X-CSRFToken': csrfToken } : {}),
         },
         credentials: 'same-origin',
       });
