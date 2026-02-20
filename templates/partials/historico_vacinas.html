@@ -124,7 +124,7 @@ function salvarEdicaoVacina(id) {
 
   fetch(`/vacina/${id}`, {
     method: 'PUT',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', 'X-CSRFToken': document.querySelector('meta[name="csrf-token"]')?.content || '' },
     body: JSON.stringify({ nome, tipo, fabricante, doses_totais, intervalo_dias, frequencia, aplicada, aplicada_em, observacoes })
   })
   .then(res => res.json())
@@ -144,7 +144,7 @@ function salvarEdicaoVacina(id) {
 
 function excluirVacina(id) {
   if (!confirm('Deseja mesmo remover esta vacina?')) return;
-  fetch(`/vacina/${id}`, { method: 'DELETE' })
+  fetch(`/vacina/${id}`, { method: 'DELETE', headers: { 'X-CSRFToken': document.querySelector('meta[name="csrf-token"]')?.content || '' } })
     .then(res => res.json())
     .then(d => {
       if (d.success) {

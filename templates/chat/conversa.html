@@ -33,8 +33,11 @@ document.getElementById('chat-form').addEventListener('submit', async (e) => {
     if (!content) return;
     await fetch(`/chat/${animalId}`, {
         method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({sender_id: currentUserId, receiver_id: receiverId, content})
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': document.querySelector('meta[name="csrf-token"]')?.content || ''
+        },
+        body: JSON.stringify({receiver_id: receiverId, content})
     });
     document.getElementById('content').value = '';
     loadMessages();

@@ -7501,7 +7501,19 @@ def api_message_threads():
 @login_required
 def chat_messages(animal_id):
     """API simples para listar e criar mensagens relacionadas a um animal."""
-    Animal.query.get_or_404(animal_id)
+    animal = Animal.query.get_or_404(animal_id)
+    is_admin = (current_user.role or '').lower() == 'admin'
+
+    is_participant = db.session.query(
+        Message.id
+    ).filter(
+        Message.animal_id == animal_id,
+        or_(Message.sender_id == current_user.id, Message.receiver_id == current_user.id),
+    ).first() is not None
+
+    if not is_admin and current_user.id != animal.user_id and not is_participant:
+        return jsonify({'message': 'Você não tem permissão para acessar esta conversa.'}), 403
+
     if request.method == 'GET':
         mensagens = (
             Message.query
@@ -7522,13 +7534,39 @@ def chat_messages(animal_id):
             for m in mensagens
         ])
 
-    data = request.get_json() or {}
+    data = request.get_json(silent=True) or {}
+    receiver_id = data.get('receiver_id')
+    content = (data.get('content') or '').strip()
+
+    if not receiver_id:
+        return jsonify({'message': 'Destinatário obrigatório.'}), 400
+    if not content:
+        return jsonify({'message': 'Mensagem não pode estar vazia.'}), 400
+
+    try:
+        receiver_id = int(receiver_id)
+    except (TypeError, ValueError):
+        return jsonify({'message': 'Destinatário inválido.'}), 400
+
+    if receiver_id == current_user.id:
+        return jsonify({'message': 'Você não pode enviar mensagem para si mesmo.'}), 400
+
+    receiver = User.query.get(receiver_id)
+    if receiver is None:
+        return jsonify({'message': 'Destinatário não encontrado.'}), 404
+
+    if not is_admin:
+        if current_user.id != animal.user_id and receiver_id != animal.user_id:
+            return jsonify({'message': 'Você só pode enviar mensagens para o tutor deste animal.'}), 403
+        if current_user.id == animal.user_id and receiver_id == animal.user_id:
+            return jsonify({'message': 'Destinatário inválido.'}), 400
+
     nova_msg = Message(
-        sender_id=data.get('sender_id', current_user.id),
-        receiver_id=data['receiver_id'],
+        sender_id=current_user.id,
+        receiver_id=receiver_id,
         animal_id=animal_id,
         clinica_id=data.get('clinica_id'),
-        content=data['content'],
+        content=content,
     )
     db.session.add(nova_msg)
     db.session.commit()
