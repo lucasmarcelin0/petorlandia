@@ -251,6 +251,7 @@
     state.page = page;
 
     const requestUrl = buildRequestUrl(panel, config, state);
+    const canNavigateFallback = shouldNavigateFallback(config.fetchUrl);
 
     const previousController = activeControllers.get(panel);
     if (previousController) {
@@ -274,14 +275,18 @@
         return;
       }
       console.error('Listing panel request failed, falling back to navigation.', error);
-      window.location.href = requestUrl.toString();
+      if (canNavigateFallback) {
+        window.location.href = requestUrl.toString();
+      }
       return;
     } finally {
       activeControllers.delete(panel);
     }
 
     if (!response || !response.ok) {
-      window.location.href = requestUrl.toString();
+      if (canNavigateFallback) {
+        window.location.href = requestUrl.toString();
+      }
       return;
     }
 
@@ -290,12 +295,16 @@
       payload = await response.json();
     } catch (error) {
       console.error('Invalid JSON response for listing panel.', error);
-      window.location.href = requestUrl.toString();
+      if (canNavigateFallback) {
+        window.location.href = requestUrl.toString();
+      }
       return;
     }
 
     if (!payload || typeof payload.html !== 'string') {
-      window.location.href = requestUrl.toString();
+      if (canNavigateFallback) {
+        window.location.href = requestUrl.toString();
+      }
       return;
     }
 
@@ -308,6 +317,15 @@
     panel.dispatchEvent(new CustomEvent('listingpanel:updated', {
       detail: { panel, state: { ...state } },
     }));
+  }
+
+  function shouldNavigateFallback(fetchUrl) {
+    try {
+      const requestPath = new URL(fetchUrl || window.location.pathname, window.location.origin).pathname;
+      return requestPath === window.location.pathname;
+    } catch (error) {
+      return false;
+    }
   }
 
   function buildRequestUrl(panel, config, state) {
