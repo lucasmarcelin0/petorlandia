@@ -24,6 +24,7 @@ from .usuarios import (
     VeterinarianMembership,
     VeterinarianSettings,
 )
+from .oauth import OAuthAuthorizationCode, OAuthClient, OAuthToken
 from .fiscal import (
     FiscalCertificate,
     FiscalCounter,
@@ -61,6 +62,9 @@ __all__ = [
     "Veterinario",
     "VeterinarianMembership",
     "VeterinarianSettings",
+    "OAuthAuthorizationCode",
+    "OAuthClient",
+    "OAuthToken",
     "FiscalCertificate",
     "FiscalCounter",
     "FiscalDocument",

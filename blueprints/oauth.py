@@ -1,0 +1,21 @@
+from flask import Blueprint
+
+from blueprints.utils import lazy_view
+
+
+def get_blueprint():
+    bp = Blueprint("oauth_routes", __name__)
+
+    bp.add_url_rule("/oauth/authorize", view_func=lazy_view("oauth_authorize"), methods=["GET", "POST"])
+    bp.add_url_rule("/oauth/token", view_func=lazy_view("oauth_token"), methods=["POST"])
+    bp.add_url_rule(
+        "/.well-known/openid-configuration",
+        view_func=lazy_view("openid_configuration"),
+        methods=["GET"],
+    )
+    bp.add_url_rule("/.well-known/jwks.json", view_func=lazy_view("jwks"), methods=["GET"])
+    bp.add_url_rule("/oauth/userinfo", view_func=lazy_view("oauth_userinfo"), methods=["GET"])
+    bp.add_url_rule("/oauth/revoke", view_func=lazy_view("oauth_revoke"), methods=["POST"])
+    bp.add_url_rule("/oauth/introspect", view_func=lazy_view("oauth_introspect"), methods=["POST"])
+
+    return bp
