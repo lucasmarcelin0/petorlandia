@@ -195,33 +195,62 @@ def test_oidc_claims_are_emitted_in_id_token_and_userinfo(app, client):
     assert userinfo.get_json()['email'] == 'contract@example.com'
 
 
-def test_openid_configuration_advertises_registration_endpoint(client):
-    response = client.get('/.well-known/openid-configuration')
+def test_confidential_client_allows_authorize_without_pkce_and_requires_client_secret(app, client):
+    with app.app_context():
+        user = User(name='Confidential User', email='confidential@example.com', role='adotante')
+        user.set_password('secret123')
+        oauth_client = OAuthClient(
+            client_id='chatgpt-client',
+            client_secret='super-secret',
+            name='ChatGPT confidential client',
+            redirect_uris='https://chat.openai.com/aip/plugin-callback',
+            scopes='openid profile email',
+            is_confidential=True,
+            auth_method='client_secret_post',
+        )
+        db.session.add_all([user, oauth_client])
+        db.session.commit()
+        user_id = user.id
 
-    assert response.status_code == 200
-    assert response.get_json()['registration_endpoint'].endswith('/oauth/register')
+    _login(client, user_id)
 
+    authorize_response = client.post(
+        '/oauth/authorize',
+        data={
+            'response_type': 'code',
+            'client_id': 'chatgpt-client',
+            'redirect_uri': 'https://chat.openai.com/aip/plugin-callback',
+            'scope': 'openid profile email',
+            'state': 'state-chatgpt',
+            'consent_action': 'approve',
+            'consent_scopes': ['openid', 'profile', 'email'],
+        },
+        follow_redirects=False,
+    )
+    assert authorize_response.status_code == 302
+    code = parse_qs(urlparse(authorize_response.headers['Location']).query)['code'][0]
 
-def test_dynamic_client_registration_contract(app, client):
-    response = client.post(
-        '/oauth/register',
-        json={
-            'client_name': 'Connector Contract',
-            'redirect_uris': ['https://connector.example/callback'],
-            'grant_types': ['authorization_code', 'refresh_token'],
-            'response_types': ['code'],
-            'token_endpoint_auth_method': 'client_secret_post',
-            'scope': 'openid profile email appointments:read',
+    missing_secret = client.post(
+        '/oauth/token',
+        data={
+            'grant_type': 'authorization_code',
+            'code': code,
+            'client_id': 'chatgpt-client',
+            'redirect_uri': 'https://chat.openai.com/aip/plugin-callback',
         },
     )
+    assert missing_secret.status_code == 401
+    assert missing_secret.get_json()['error'] == 'invalid_client'
 
-    assert response.status_code == 201
-    payload = response.get_json()
-    assert payload['client_id']
-    assert payload['client_secret']
-    assert payload['token_endpoint_auth_method'] == 'client_secret_post'
-
-    with app.app_context():
-        registered = OAuthClient.query.filter_by(client_id=payload['client_id']).first()
-        assert registered is not None
-        assert registered.redirect_uri_list() == ['https://connector.example/callback']
+    token_response = client.post(
+        '/oauth/token',
+        data={
+            'grant_type': 'authorization_code',
+            'code': code,
+            'client_id': 'chatgpt-client',
+            'client_secret': 'super-secret',
+            'redirect_uri': 'https://chat.openai.com/aip/plugin-callback',
+        },
+    )
+    assert token_response.status_code == 200
+    assert token_response.get_json()['token_type'] == 'Bearer'

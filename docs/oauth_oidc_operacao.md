@@ -68,6 +68,29 @@ O PetOrlândia aceita apenas:
 - **NextAuth / custom OIDC**: confirme `checks: ["pkce", "state", "nonce"]` quando aplicável.
 - **Mobile (Android/iOS)**: use Authorization Code + PKCE, nunca implicit flow.
 
+
+## Integração com ChatGPT (OAuth pronto para produção)
+
+O PetOrlândia agora aceita dois perfis no Authorization Code:
+
+- **Cliente público**: PKCE obrigatório (`S256`).
+- **Cliente confidencial** (ex.: integração do ChatGPT): PKCE opcional, porém autenticação no token endpoint com `client_secret_post` é obrigatória.
+
+### Checklist para cadastrar o cliente do ChatGPT
+
+1. Crie um `OAuthClient` com:
+   - `is_confidential=True`
+   - `auth_method=client_secret_post`
+   - `client_secret` forte
+   - `redirect_uris` contendo exatamente o callback configurado no ChatGPT
+2. No ChatGPT, configure:
+   - Authorization URL: `https://<dominio-publico>/oauth/authorize`
+   - Token URL: `https://<dominio-publico>/oauth/token`
+   - Client ID/Secret iguais aos do `OAuthClient`
+3. Garanta HTTPS público no domínio (`issuer` e redirect precisam ser válidos externamente).
+
+> Se o cliente for público/mobile/web SPA, mantenha PKCE obrigatório como já está implementado.
+
 ## Exemplo de troca de `code` por token
 
 ```bash

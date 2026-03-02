@@ -117,6 +117,16 @@ def test_index_page(app):
     assert response.status_code == 200
 
 
+def test_oauth_authorization_server_metadata_includes_dynamic_registration(app):
+    client = app.test_client()
+    response = client.get('/.well-known/oauth-authorization-server')
+
+    assert response.status_code == 200
+    payload = response.get_json()
+    assert payload is not None
+    assert payload['registration_endpoint'].endswith('/oauth/register')
+
+
 def test_index_hides_professional_area_when_membership_inactive(monkeypatch, app):
     client = app.test_client()
 
