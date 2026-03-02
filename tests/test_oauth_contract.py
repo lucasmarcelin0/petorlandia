@@ -193,3 +193,35 @@ def test_oidc_claims_are_emitted_in_id_token_and_userinfo(app, client):
     assert userinfo.status_code == 200
     assert userinfo.get_json()['sub'] == str(user_id)
     assert userinfo.get_json()['email'] == 'contract@example.com'
+
+
+def test_openid_configuration_advertises_registration_endpoint(client):
+    response = client.get('/.well-known/openid-configuration')
+
+    assert response.status_code == 200
+    assert response.get_json()['registration_endpoint'].endswith('/oauth/register')
+
+
+def test_dynamic_client_registration_contract(app, client):
+    response = client.post(
+        '/oauth/register',
+        json={
+            'client_name': 'Connector Contract',
+            'redirect_uris': ['https://connector.example/callback'],
+            'grant_types': ['authorization_code', 'refresh_token'],
+            'response_types': ['code'],
+            'token_endpoint_auth_method': 'client_secret_post',
+            'scope': 'openid profile email appointments:read',
+        },
+    )
+
+    assert response.status_code == 201
+    payload = response.get_json()
+    assert payload['client_id']
+    assert payload['client_secret']
+    assert payload['token_endpoint_auth_method'] == 'client_secret_post'
+
+    with app.app_context():
+        registered = OAuthClient.query.filter_by(client_id=payload['client_id']).first()
+        assert registered is not None
+        assert registered.redirect_uri_list() == ['https://connector.example/callback']

@@ -7665,6 +7665,70 @@ def oauth_token():
     return _oauth_error_response('unsupported_grant_type', 'Only authorization_code and refresh_token grants are supported.')
 
 
+@csrf.exempt
+def oauth_dynamic_client_registration():
+    payload = request.get_json(silent=True) or {}
+
+    redirect_uris = payload.get('redirect_uris')
+    if not isinstance(redirect_uris, list) or not redirect_uris:
+        return _oauth_error_response('invalid_redirect_uri', 'redirect_uris must be a non-empty array of HTTPS URLs.')
+
+    normalized_redirect_uris = []
+    for uri in redirect_uris:
+        candidate = (uri or '').strip()
+        parsed = urlparse(candidate)
+        if not candidate or parsed.scheme.lower() != 'https' or not parsed.netloc:
+            return _oauth_error_response('invalid_redirect_uri', 'redirect_uris must contain only HTTPS URLs.')
+        normalized_redirect_uris.append(candidate)
+
+    supported_grants = {'authorization_code', 'refresh_token'}
+    grant_types = payload.get('grant_types') or ['authorization_code']
+    if not isinstance(grant_types, list) or not grant_types or any(g not in supported_grants for g in grant_types):
+        return _oauth_error_response('invalid_client_metadata', 'Unsupported grant_types requested.')
+
+    response_types = payload.get('response_types') or ['code']
+    if not isinstance(response_types, list) or set(response_types) != {'code'}:
+        return _oauth_error_response('invalid_client_metadata', 'Only response_types=["code"] is supported.')
+
+    token_endpoint_auth_method = (payload.get('token_endpoint_auth_method') or 'none').strip()
+    if token_endpoint_auth_method not in {'none', 'client_secret_post'}:
+        return _oauth_error_response('invalid_client_metadata', 'Unsupported token_endpoint_auth_method.')
+
+    requested_scope = str(payload.get('scope') or 'openid profile email').strip()
+    scope = _oauth_normalize_scope(requested_scope)
+    if not scope:
+        return _oauth_error_response('invalid_scope', 'No valid scope was requested.')
+
+    client = OAuthClient(
+        client_id=secrets.token_urlsafe(24),
+        client_secret=secrets.token_urlsafe(32) if token_endpoint_auth_method == 'client_secret_post' else None,
+        name=str(payload.get('client_name') or 'Dynamic Client').strip()[:120] or 'Dynamic Client',
+        redirect_uris='\n'.join(normalized_redirect_uris),
+        grant_types=' '.join(grant_types),
+        scopes=scope,
+        auth_method=token_endpoint_auth_method,
+        is_confidential=token_endpoint_auth_method == 'client_secret_post',
+    )
+    db.session.add(client)
+    db.session.commit()
+
+    response_payload = {
+        'client_id': client.client_id,
+        'client_id_issued_at': int(client.created_at.timestamp()) if client.created_at else int(utcnow().timestamp()),
+        'client_name': client.name,
+        'redirect_uris': normalized_redirect_uris,
+        'grant_types': grant_types,
+        'response_types': ['code'],
+        'token_endpoint_auth_method': token_endpoint_auth_method,
+        'scope': scope,
+    }
+    if client.client_secret:
+        response_payload['client_secret'] = client.client_secret
+        response_payload['client_secret_expires_at'] = 0
+
+    return jsonify(response_payload), 201
+
+
 def openid_configuration():
     issuer = _oauth_issuer()
     return jsonify({
@@ -7673,6 +7737,7 @@ def openid_configuration():
         'token_endpoint': f'{issuer}/oauth/token',
         'userinfo_endpoint': f'{issuer}/oauth/userinfo',
         'jwks_uri': f'{issuer}/.well-known/jwks.json',
+        'registration_endpoint': f'{issuer}/oauth/register',
         'response_types_supported': ['code'],
         'subject_types_supported': ['public'],
         'id_token_signing_alg_values_supported': ['RS256'],
