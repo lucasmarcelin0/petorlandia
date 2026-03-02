@@ -2302,7 +2302,7 @@ def ensure_clinic_access(clinica_id):
         abort(404)
     if current_user.is_authenticated and current_user.role == 'admin':
         return
-    if current_user_clinic_id() != clinica_id:
+    if clinica_id not in _collect_clinic_ids(viewer=current_user):
         abort(404)
 
 

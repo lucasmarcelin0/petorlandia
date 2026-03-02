@@ -117,6 +117,38 @@ def test_colaborador_can_access_other_clinic_consulta(monkeypatch, app):
         assert resp.status_code == 200
 
 
+def test_vet_secondary_clinic_can_open_consulta_link(monkeypatch, app):
+    client = app.test_client()
+    with app.app_context():
+        db.create_all()
+        c1 = Clinica(nome="Clinic One")
+        c2 = Clinica(nome="Clinic Two")
+        tutor = User(name="Tutor", email="tutor4@example.com", password_hash="x", clinica=c2)
+        animal = Animal(name="Luna", owner=tutor, clinica=c2)
+        vet_user = User(name="Vet", email="vet-sec@example.com", password_hash="x", worker="veterinario")
+        vet = Veterinario(user=vet_user, crmv="123", clinica=c1)
+        vet.clinicas.append(c2)
+        db.session.add_all([c1, c2, tutor, animal, vet_user, vet])
+        db.session.flush()
+        consulta = Consulta(
+            animal_id=animal.id,
+            created_by=vet_user.id,
+            clinica_id=c2.id,
+            status='in_progress',
+            queixa_principal='retorno',
+        )
+        db.session.add(consulta)
+        db.session.commit()
+        consulta_id = consulta.id
+        animal_id = animal.id
+        login(monkeypatch, vet_user)
+
+        resp = client.get(f"/consulta/{animal_id}?c={consulta_id}")
+
+        assert resp.status_code == 200
+        assert b"retorno" in resp.data
+
+
 def test_admin_can_access_any_consulta(monkeypatch, app):
     client = app.test_client()
     with app.app_context():
