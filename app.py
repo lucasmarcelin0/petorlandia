@@ -269,16 +269,17 @@ def handle_http_exception(err):
         >= request.accept_mimetypes["text/html"]
     )
 
+    is_route_miss_404 = isinstance(err, NotFound) and getattr(request, "routing_exception", None) is not None
     if (
-        err.code == 404
-        and not wants_json
+        is_route_miss_404
+        and request.accept_mimetypes["text/html"] >= request.accept_mimetypes["application/json"]
         and request.method == 'GET'
         and not request.path.startswith('/static/')
         and current_user.is_authenticated
         and has_veterinarian_profile(current_user)
     ):
         membership = ensure_veterinarian_membership(getattr(current_user, 'veterinario', None))
-        if membership and not membership.is_active() and request.endpoint != 'veterinarian_membership':
+        if membership and not membership.is_active():
             flash('Sua assinatura de veterinário expirou. Renove para continuar acessando as funcionalidades.', 'warning')
             return redirect(url_for('veterinarian_membership'))
 
