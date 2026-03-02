@@ -7301,10 +7301,27 @@ def _oauth_requires_pkce(client: OAuthClient) -> bool:
 def _oauth_validate_client_secret(client: OAuthClient, provided_secret: str) -> bool:
     if not client.is_confidential:
         return True
-    if client.auth_method != 'client_secret_post':
+    if client.auth_method not in {'client_secret_post', 'client_secret_basic'}:
         return False
     expected_secret = (client.client_secret or '').strip()
     return bool(expected_secret) and secrets.compare_digest(expected_secret, provided_secret or '')
+
+
+def _oauth_extract_client_credentials() -> tuple[str, str]:
+    client_id = request.form.get('client_id', '').strip()
+    client_secret = request.form.get('client_secret', '').strip()
+
+    auth_header = request.headers.get('Authorization', '')
+    if auth_header.lower().startswith('basic '):
+        encoded = auth_header[6:].strip()
+        try:
+            decoded = base64.b64decode(encoded).decode('utf-8')
+            basic_client_id, basic_client_secret = decoded.split(':', 1)
+        except Exception:
+            return '', ''
+        return basic_client_id.strip(), basic_client_secret
+
+    return client_id, client_secret
 
 
 def _oauth_extract_bearer_token() -> str | None:
@@ -7518,10 +7535,9 @@ def oauth_token():
     grant_type = request.form.get('grant_type', '').strip()
     if grant_type == 'authorization_code':
         code = request.form.get('code', '').strip()
-        client_id = request.form.get('client_id', '').strip()
+        client_id, client_secret = _oauth_extract_client_credentials()
         redirect_uri = request.form.get('redirect_uri', '').strip()
         code_verifier = request.form.get('code_verifier', '').strip()
-        client_secret = request.form.get('client_secret', '').strip()
 
         if not all([code, client_id, redirect_uri]):
             return _oauth_error_response('invalid_request', 'code, client_id and redirect_uri are required.')
@@ -7609,9 +7625,8 @@ def oauth_token():
         })
 
     if grant_type == 'refresh_token':
-        client_id = request.form.get('client_id', '').strip()
+        client_id, client_secret = _oauth_extract_client_credentials()
         refresh_token_value = request.form.get('refresh_token', '').strip()
-        client_secret = request.form.get('client_secret', '').strip()
         if not client_id or not refresh_token_value:
             return _oauth_error_response('invalid_request', 'client_id and refresh_token are required.')
 
@@ -7700,7 +7715,7 @@ def oauth_dynamic_client_registration():
         return _oauth_error_response('invalid_client_metadata', 'Only response_types=["code"] is supported.')
 
     token_endpoint_auth_method = (payload.get('token_endpoint_auth_method') or 'none').strip()
-    if token_endpoint_auth_method not in {'none', 'client_secret_post'}:
+    if token_endpoint_auth_method not in {'none', 'client_secret_post', 'client_secret_basic'}:
         return _oauth_error_response('invalid_client_metadata', 'Unsupported token_endpoint_auth_method.')
 
     requested_scope = str(payload.get('scope') or 'openid profile email').strip()
@@ -7710,13 +7725,13 @@ def oauth_dynamic_client_registration():
 
     client = OAuthClient(
         client_id=secrets.token_urlsafe(24),
-        client_secret=secrets.token_urlsafe(32) if token_endpoint_auth_method == 'client_secret_post' else None,
+        client_secret=secrets.token_urlsafe(32) if token_endpoint_auth_method in {'client_secret_post', 'client_secret_basic'} else None,
         name=str(payload.get('client_name') or 'Dynamic Client').strip()[:120] or 'Dynamic Client',
         redirect_uris='\n'.join(normalized_redirect_uris),
         grant_types=' '.join(grant_types),
         scopes=scope,
         auth_method=token_endpoint_auth_method,
-        is_confidential=token_endpoint_auth_method == 'client_secret_post',
+        is_confidential=token_endpoint_auth_method in {'client_secret_post', 'client_secret_basic'},
     )
     db.session.add(client)
     db.session.commit()
@@ -7751,7 +7766,7 @@ def openid_configuration():
         'subject_types_supported': ['public'],
         'id_token_signing_alg_values_supported': ['RS256'],
         'scopes_supported': ['openid', 'profile', 'email', 'pets:read', 'appointments:read'],
-        'token_endpoint_auth_methods_supported': ['none', 'client_secret_post'],
+        'token_endpoint_auth_methods_supported': ['none', 'client_secret_post', 'client_secret_basic'],
         'grant_types_supported': ['authorization_code', 'refresh_token'],
         'claims_supported': ['sub', 'email', 'name'],
     })
