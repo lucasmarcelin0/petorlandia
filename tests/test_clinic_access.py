@@ -149,6 +149,40 @@ def test_vet_secondary_clinic_can_open_consulta_link(monkeypatch, app):
         assert b"retorno" in resp.data
 
 
+def test_client_clinic_link_does_not_grant_clinic_access(monkeypatch, app):
+    client = app.test_client()
+    with app.app_context():
+        db.create_all()
+        c1 = Clinica(nome="Clinic One")
+        c2 = Clinica(nome="Clinic Two")
+        tutor = User(name="Tutor", email="tutor-client@example.com", password_hash="x", clinica=c2)
+        animal = Animal(name="Nina", owner=tutor, clinica=c2)
+        vet_user = User(
+            name="Vet",
+            email="vet-client-link@example.com",
+            password_hash="x",
+            worker="veterinario",
+            clinica=c2,
+        )
+        vet = Veterinario(user=vet_user, crmv="987", clinica=c1)
+        db.session.add_all([c1, c2, tutor, animal, vet_user, vet])
+        db.session.flush()
+        consulta = Consulta(
+            animal_id=animal.id,
+            created_by=vet_user.id,
+            clinica_id=c2.id,
+            status='in_progress',
+            queixa_principal='avaliacao',
+        )
+        db.session.add(consulta)
+        db.session.commit()
+
+        login(monkeypatch, vet_user)
+        resp = client.get(f"/consulta/{animal.id}?c={consulta.id}")
+
+        assert resp.status_code == 404
+
+
 def test_admin_can_access_any_consulta(monkeypatch, app):
     client = app.test_client()
     with app.app_context():

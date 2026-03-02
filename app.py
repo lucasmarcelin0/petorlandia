@@ -101,7 +101,10 @@ from models import (
     NfseXml,
     OAuthAuthorizationCode,
     OAuthClient,
-    OAuthToken,
+    OAuthAccessToken,
+    OAuthConsent,
+    OAuthJwkKey,
+    OAuthRefreshToken,
     User,
     Veterinario,
     clinica_has_column,
@@ -2320,8 +2323,40 @@ def ensure_clinic_access(clinica_id):
         abort(404)
     if current_user.is_authenticated and current_user.role == 'admin':
         return
-    if clinica_id not in _collect_clinic_ids(viewer=current_user):
+    if clinica_id not in _viewer_operational_clinic_ids(current_user):
         abort(404)
+
+
+def _viewer_operational_clinic_ids(viewer):
+    """Return clinic IDs where the viewer can operate as staff/owner."""
+
+    clinic_ids = []
+    if not viewer:
+        return clinic_ids
+
+    if _user_is_clinic_owner(viewer):
+        for clinic in getattr(viewer, 'clinicas', []) or []:
+            clinic_id = getattr(clinic, 'id', None)
+            if clinic_id and clinic_id not in clinic_ids:
+                clinic_ids.append(clinic_id)
+
+    worker_role = (getattr(viewer, 'worker', None) or '').lower()
+    if worker_role == 'colaborador':
+        viewer_clinic = getattr(viewer, 'clinica_id', None)
+        if viewer_clinic and viewer_clinic not in clinic_ids:
+            clinic_ids.append(viewer_clinic)
+
+    vet_profile = getattr(viewer, 'veterinario', None)
+    for clinic_id in _veterinarian_accessible_clinic_ids(vet_profile):
+        if clinic_id not in clinic_ids:
+            clinic_ids.append(clinic_id)
+
+    for role in getattr(viewer, 'clinic_roles', []) or []:
+        clinic_id = getattr(role, 'clinic_id', None)
+        if clinic_id and clinic_id not in clinic_ids:
+            clinic_ids.append(clinic_id)
+
+    return clinic_ids
 
 
 def _coerce_int(value):
@@ -7146,6 +7181,38 @@ def _oauth_get_signing_keys():
     if _OAUTH_PRIVATE_JWK is not None and _OAUTH_PUBLIC_JWK is not None:
         return _OAUTH_PRIVATE_JWK, _OAUTH_PUBLIC_JWK
 
+    active_key = OAuthJwkKey.active_key()
+    if active_key is None:
+        private_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+        private_pem = private_key.private_bytes(
+            encoding=serialization.Encoding.PEM,
+            format=serialization.PrivateFormat.PKCS8,
+            encryption_algorithm=serialization.NoEncryption(),
+        )
+        public_pem = private_key.public_key().public_bytes(
+            encoding=serialization.Encoding.PEM,
+            format=serialization.PublicFormat.SubjectPublicKeyInfo,
+        )
+        active_key = OAuthJwkKey(
+            kid=OAuthJwkKey.build_kid(public_pem),
+            kty='RSA',
+            private_pem=private_pem.decode('utf-8'),
+            public_pem=public_pem.decode('utf-8'),
+            status='active',
+            valid_from=utcnow(),
+        )
+        db.session.add(active_key)
+        db.session.commit()
+
+    _OAUTH_PRIVATE_JWK = JsonWebKey.import_key(active_key.private_pem.encode('utf-8'), {'kid': active_key.kid})
+    _OAUTH_PUBLIC_JWK = JsonWebKey.import_key(active_key.public_pem.encode('utf-8'), {'kid': active_key.kid})
+    return _OAUTH_PRIVATE_JWK, _OAUTH_PUBLIC_JWK
+
+
+def _oauth_rotate_signing_key(grace_seconds: int = 86400):
+    current = OAuthJwkKey.active_key()
+    now = utcnow()
+
     private_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
     private_pem = private_key.private_bytes(
         encoding=serialization.Encoding.PEM,
@@ -7156,10 +7223,29 @@ def _oauth_get_signing_keys():
         encoding=serialization.Encoding.PEM,
         format=serialization.PublicFormat.SubjectPublicKeyInfo,
     )
-    kid = hashlib.sha256(public_pem).hexdigest()[:12]
-    _OAUTH_PRIVATE_JWK = JsonWebKey.import_key(private_pem, {'kid': kid})
-    _OAUTH_PUBLIC_JWK = JsonWebKey.import_key(public_pem, {'kid': kid})
-    return _OAUTH_PRIVATE_JWK, _OAUTH_PUBLIC_JWK
+    next_key = OAuthJwkKey(
+        kid=OAuthJwkKey.build_kid(public_pem),
+        kty='RSA',
+        private_pem=private_pem.decode('utf-8'),
+        public_pem=public_pem.decode('utf-8'),
+        status='active',
+        valid_from=now,
+        rotated_from_kid=current.kid if current else None,
+    )
+
+    if current is not None:
+        current.status = 'retired'
+        current.valid_until = now
+        current.grace_until = now + timedelta(seconds=grace_seconds)
+        db.session.add(current)
+
+    db.session.add(next_key)
+    db.session.commit()
+
+    global _OAUTH_PRIVATE_JWK, _OAUTH_PUBLIC_JWK
+    _OAUTH_PRIVATE_JWK = None
+    _OAUTH_PUBLIC_JWK = None
+    return _oauth_get_signing_keys()
 
 
 def _pkce_s256(verifier: str) -> str:
@@ -7171,8 +7257,38 @@ def _oauth_error_response(error: str, description: str, status_code: int = 400):
     return jsonify({'error': error, 'error_description': description}), status_code
 
 
+def _oauth_allowed_scopes() -> set[str]:
+    configured = app.config.get('OAUTH_ALLOWED_SCOPES', 'openid profile email')
+    return {scope.strip() for scope in str(configured).split() if scope.strip()}
+
+
+def _oauth_normalize_scope(scope_raw: str, client: OAuthClient | None = None) -> str:
+    requested = {item.strip() for item in (scope_raw or '').split() if item.strip()}
+    if not requested:
+        requested = {'openid', 'profile', 'email'}
+
+    allowed = _oauth_allowed_scopes()
+    if client:
+        allowed = allowed.intersection({item.strip() for item in (client.scopes or '').split() if item.strip()})
+
+    if not requested.issubset(allowed):
+        raise ValueError('Requested scope is not allowed.')
+
+    ordered_scopes = [scope for scope in ['openid', 'profile', 'email'] if scope in requested]
+    return ' '.join(ordered_scopes)
+
+
 def _oauth_client_redirect_valid(client: OAuthClient, redirect_uri: str) -> bool:
-    return redirect_uri in client.redirect_uri_list()
+    parsed = urlparse(redirect_uri)
+    if parsed.scheme not in ('https', 'http') or not parsed.netloc or parsed.fragment:
+        return False
+
+    for allowed_uri in client.redirect_uri_list():
+        if '*' in allowed_uri:
+            continue
+        if redirect_uri == allowed_uri:
+            return True
+    return False
 
 
 def _oauth_extract_bearer_token() -> str | None:
@@ -7182,11 +7298,43 @@ def _oauth_extract_bearer_token() -> str | None:
     return request.values.get('access_token')
 
 
+def _oauth_log_event(event: str, **fields):
+    current_app.logger.info(
+        event,
+        extra={
+            'request_id': getattr(g, 'request_id', None),
+            'client_id': fields.get('client_id'),
+            'user_id': fields.get('user_id'),
+            'grant_type': fields.get('grant_type'),
+        },
+    )
+
+
+def _oauth_revoke_refresh_family(refresh_token: OAuthRefreshToken):
+    now = utcnow()
+    family_tokens = OAuthRefreshToken.query.filter_by(
+        client_id=refresh_token.client_id,
+        user_id=refresh_token.user_id,
+        family_id=refresh_token.family_id,
+    ).all()
+    token_ids = [token.id for token in family_tokens]
+    for token in family_tokens:
+        if token.revoked_at is None:
+            token.revoked_at = now
+            db.session.add(token)
+
+    if token_ids:
+        for access in OAuthAccessToken.query.filter(OAuthAccessToken.refresh_token_id.in_(token_ids)).all():
+            if access.revoked_at is None:
+                access.revoked_at = now
+                db.session.add(access)
+
+
 def oauth_authorize():
     response_type = request.values.get('response_type', '').strip()
     client_id = request.values.get('client_id', '').strip()
     redirect_uri = request.values.get('redirect_uri', '').strip()
-    scope = request.values.get('scope', 'openid').strip() or 'openid'
+    scope_raw = request.values.get('scope', '').strip()
     state = request.values.get('state', '').strip()
     nonce = request.values.get('nonce', '').strip() or None
     code_challenge = request.values.get('code_challenge', '').strip()
@@ -7209,6 +7357,13 @@ def oauth_authorize():
     if not _oauth_client_redirect_valid(client, redirect_uri):
         return _oauth_error_response('invalid_request', 'redirect_uri is not allowed for this client.')
 
+    try:
+        scope = _oauth_normalize_scope(scope_raw, client)
+    except ValueError as exc:
+        return _oauth_error_response('invalid_scope', str(exc))
+
+    requested_scopes = scope.split()
+
     if not current_user.is_authenticated:
         login_url = url_for('login_view', next=request.url)
         return redirect(login_url)
@@ -7217,6 +7372,10 @@ def oauth_authorize():
         if request.form.get('consent_action') != 'approve':
             query = urlencode({'error': 'access_denied', 'state': state})
             return redirect(f'{redirect_uri}?{query}')
+
+        consented_scopes = set(request.form.getlist('consent_scopes'))
+        if set(requested_scopes) != consented_scopes:
+            return _oauth_error_response('invalid_scope', 'Explicit consent is required for each requested scope.')
 
         auth_code = OAuthAuthorizationCode(
             code=secrets.token_urlsafe(48),
@@ -7228,10 +7387,11 @@ def oauth_authorize():
             state=state,
             code_challenge=code_challenge,
             code_challenge_method='S256',
-            expires_at=OAuthAuthorizationCode.new_expiration(),
+            expires_at=OAuthAuthorizationCode.new_expiration(app.config.get('OAUTH_AUTHORIZATION_CODE_EXPIRES_IN', 300)),
         )
         db.session.add(auth_code)
         db.session.commit()
+        _oauth_log_event('oauth_authorization_code_issued', client_id=client_id, user_id=current_user.id, grant_type='authorization_code')
 
         query = urlencode({'code': auth_code.code, 'state': state})
         return redirect(f'{redirect_uri}?{query}')
@@ -7240,6 +7400,7 @@ def oauth_authorize():
         'auth/oauth_consent.html',
         client=client,
         scope=scope,
+        requested_scopes=requested_scopes,
         state=state,
         redirect_uri=redirect_uri,
         response_type=response_type,
@@ -7253,72 +7414,154 @@ def oauth_authorize():
 
 @csrf.exempt
 def oauth_token():
-    if request.form.get('grant_type') != 'authorization_code':
-        return _oauth_error_response('unsupported_grant_type', 'Only authorization_code grant is supported.')
+    grant_type = request.form.get('grant_type', '').strip()
+    if grant_type == 'authorization_code':
+        code = request.form.get('code', '').strip()
+        client_id = request.form.get('client_id', '').strip()
+        redirect_uri = request.form.get('redirect_uri', '').strip()
+        code_verifier = request.form.get('code_verifier', '').strip()
 
-    code = request.form.get('code', '').strip()
-    client_id = request.form.get('client_id', '').strip()
-    redirect_uri = request.form.get('redirect_uri', '').strip()
-    code_verifier = request.form.get('code_verifier', '').strip()
+        if not all([code, client_id, redirect_uri, code_verifier]):
+            return _oauth_error_response('invalid_request', 'code, client_id, redirect_uri and code_verifier are required.')
 
-    if not all([code, client_id, redirect_uri, code_verifier]):
-        return _oauth_error_response('invalid_request', 'code, client_id, redirect_uri and code_verifier are required.')
+        client = OAuthClient.query.filter_by(client_id=client_id).first()
+        if not client:
+            return _oauth_error_response('invalid_client', 'Unknown OAuth client.', 401)
 
-    client = OAuthClient.query.filter_by(client_id=client_id).first()
-    if not client:
-        return _oauth_error_response('invalid_client', 'Unknown OAuth client.', 401)
+        auth_code = OAuthAuthorizationCode.query.filter_by(code=code, client_id=client_id).first()
+        if not auth_code:
+            return _oauth_error_response('invalid_grant', 'Authorization code is invalid.')
+        if not auth_code.is_active:
+            return _oauth_error_response('invalid_grant', 'Authorization code is expired or already used.')
+        if auth_code.redirect_uri != redirect_uri:
+            return _oauth_error_response('invalid_grant', 'redirect_uri does not match authorization request.')
+        if _pkce_s256(code_verifier) != auth_code.code_challenge:
+            return _oauth_error_response('invalid_grant', 'code_verifier is invalid.')
 
-    auth_code = OAuthAuthorizationCode.query.filter_by(code=code, client_id=client_id).first()
-    if not auth_code:
-        return _oauth_error_response('invalid_grant', 'Authorization code is invalid.')
-    if auth_code.used_at is not None or auth_code.expires_at <= utcnow():
-        return _oauth_error_response('invalid_grant', 'Authorization code is expired or already used.')
-    if auth_code.redirect_uri != redirect_uri:
-        return _oauth_error_response('invalid_grant', 'redirect_uri does not match authorization request.')
-    if _pkce_s256(code_verifier) != auth_code.code_challenge:
-        return _oauth_error_response('invalid_grant', 'code_verifier is invalid.')
+        now_ts = int(utcnow().timestamp())
+        expires_in = int(app.config.get('OAUTH_ACCESS_TOKEN_EXPIRES_IN', 900))
+        access_token = secrets.token_urlsafe(48)
+        private_jwk, _ = _oauth_get_signing_keys()
 
-    now_ts = int(utcnow().timestamp())
-    expires_in = int(app.config.get('OAUTH_ACCESS_TOKEN_EXPIRES_IN', 3600))
-    access_token = secrets.token_urlsafe(48)
-    private_jwk, _ = _oauth_get_signing_keys()
+        user = User.query.get(auth_code.user_id)
+        claims = {
+            'iss': _oauth_issuer(),
+            'sub': str(auth_code.user_id),
+            'aud': client_id,
+            'iat': now_ts,
+            'exp': now_ts + expires_in,
+            'email': user.email if user else '',
+            'name': user.name if user else '',
+        }
+        if auth_code.nonce:
+            claims['nonce'] = auth_code.nonce
 
-    user = User.query.get(auth_code.user_id)
-    claims = {
-        'iss': _oauth_issuer(),
-        'sub': str(auth_code.user_id),
-        'aud': client_id,
-        'iat': now_ts,
-        'exp': now_ts + expires_in,
-        'email': user.email if user else '',
-        'name': user.name if user else '',
-    }
-    if auth_code.nonce:
-        claims['nonce'] = auth_code.nonce
+        id_token = jwt.encode({'alg': 'RS256', 'kid': private_jwk.as_dict().get('kid')}, claims, private_jwk).decode('utf-8')
 
-    id_token = jwt.encode({'alg': 'RS256', 'kid': private_jwk.as_dict().get('kid')}, claims, private_jwk).decode('utf-8')
+        refresh_expires_in = int(app.config.get('OAUTH_REFRESH_TOKEN_EXPIRES_IN', 2592000))
+        refresh_token = OAuthRefreshToken(
+            client_id=client_id,
+            user_id=auth_code.user_id,
+            refresh_token=secrets.token_urlsafe(48),
+            scope=auth_code.scope,
+            expires_at=utcnow() + timedelta(seconds=refresh_expires_in),
+        )
+        token = OAuthAccessToken(
+            client_id=client_id,
+            user_id=auth_code.user_id,
+            access_token=access_token,
+            token_type='Bearer',
+            scope=auth_code.scope,
+            id_token=id_token,
+            refresh_token_id=refresh_token.id,
+            expires_at=utcnow() + timedelta(seconds=expires_in),
+        )
+        auth_code.used_at = utcnow()
+        consent = OAuthConsent.query.filter_by(user_id=auth_code.user_id, client_id=client_id).first()
+        if consent is None:
+            consent = OAuthConsent(user_id=auth_code.user_id, client_id=client_id, scopes=auth_code.scope)
+        else:
+            consent.scopes = auth_code.scope
+            consent.revoked_at = None
+        db.session.add(refresh_token)
+        db.session.flush()
+        token.refresh_token_id = refresh_token.id
+        db.session.add(token)
+        db.session.add(consent)
+        db.session.add(auth_code)
+        db.session.commit()
+        _oauth_log_event('oauth_token_issued', client_id=client_id, user_id=auth_code.user_id, grant_type='authorization_code')
 
-    token = OAuthToken(
-        client_id=client_id,
-        user_id=auth_code.user_id,
-        access_token=access_token,
-        token_type='Bearer',
-        scope=auth_code.scope,
-        id_token=id_token,
-        expires_at=utcnow() + timedelta(seconds=expires_in),
-    )
-    auth_code.used_at = utcnow()
-    db.session.add(token)
-    db.session.add(auth_code)
-    db.session.commit()
+        return jsonify({
+            'access_token': access_token,
+            'token_type': 'Bearer',
+            'expires_in': expires_in,
+            'scope': auth_code.scope,
+            'id_token': id_token,
+            'refresh_token': refresh_token.refresh_token,
+        })
 
-    return jsonify({
-        'access_token': access_token,
-        'token_type': 'Bearer',
-        'expires_in': expires_in,
-        'scope': auth_code.scope,
-        'id_token': id_token,
-    })
+    if grant_type == 'refresh_token':
+        client_id = request.form.get('client_id', '').strip()
+        refresh_token_value = request.form.get('refresh_token', '').strip()
+        if not client_id or not refresh_token_value:
+            return _oauth_error_response('invalid_request', 'client_id and refresh_token are required.')
+
+        client = OAuthClient.query.filter_by(client_id=client_id).first()
+        if not client:
+            return _oauth_error_response('invalid_client', 'Unknown OAuth client.', 401)
+
+        refresh = OAuthRefreshToken.query.filter_by(refresh_token=refresh_token_value, client_id=client_id).first()
+        if not refresh:
+            return _oauth_error_response('invalid_grant', 'Refresh token is invalid.')
+
+        if not refresh.is_active:
+            _oauth_revoke_refresh_family(refresh)
+            db.session.commit()
+            _oauth_log_event('oauth_refresh_token_reuse_detected', client_id=client_id, user_id=refresh.user_id, grant_type='refresh_token')
+            return _oauth_error_response('invalid_grant', 'Refresh token reuse detected; token family revoked.')
+
+        now = utcnow()
+        refresh_expires_in = int(app.config.get('OAUTH_REFRESH_TOKEN_EXPIRES_IN', 2592000))
+        access_expires_in = int(app.config.get('OAUTH_ACCESS_TOKEN_EXPIRES_IN', 900))
+
+        new_refresh = OAuthRefreshToken(
+            client_id=client_id,
+            user_id=refresh.user_id,
+            refresh_token=secrets.token_urlsafe(48),
+            scope=refresh.scope,
+            family_id=refresh.family_id,
+            expires_at=now + timedelta(seconds=refresh_expires_in),
+        )
+        db.session.add(new_refresh)
+        db.session.flush()
+
+        refresh.revoked_at = now
+        refresh.replaced_by_jti = new_refresh.jti
+        db.session.add(refresh)
+
+        new_access = OAuthAccessToken(
+            client_id=client_id,
+            user_id=refresh.user_id,
+            access_token=secrets.token_urlsafe(48),
+            token_type='Bearer',
+            scope=refresh.scope,
+            refresh_token_id=new_refresh.id,
+            expires_at=now + timedelta(seconds=access_expires_in),
+        )
+        db.session.add(new_access)
+        db.session.commit()
+        _oauth_log_event('oauth_token_issued', client_id=client_id, user_id=refresh.user_id, grant_type='refresh_token')
+
+        return jsonify({
+            'access_token': new_access.access_token,
+            'token_type': 'Bearer',
+            'expires_in': access_expires_in,
+            'scope': refresh.scope,
+            'refresh_token': new_refresh.refresh_token,
+        })
+
+    return _oauth_error_response('unsupported_grant_type', 'Only authorization_code and refresh_token grants are supported.')
 
 
 def openid_configuration():
@@ -7334,14 +7577,19 @@ def openid_configuration():
         'id_token_signing_alg_values_supported': ['RS256'],
         'scopes_supported': ['openid', 'profile', 'email'],
         'token_endpoint_auth_methods_supported': ['none', 'client_secret_post'],
-        'grant_types_supported': ['authorization_code'],
+        'grant_types_supported': ['authorization_code', 'refresh_token'],
         'claims_supported': ['sub', 'email', 'name'],
     })
 
 
 def jwks():
-    _, public_jwk = _oauth_get_signing_keys()
-    return jsonify({'keys': [public_jwk.as_dict(is_private=False)]})
+    keys = []
+    for key in OAuthJwkKey.public_key_set():
+        keys.append(JsonWebKey.import_key(key.public_pem.encode('utf-8'), {'kid': key.kid}).as_dict(is_private=False))
+    if not keys:
+        _, public_jwk = _oauth_get_signing_keys()
+        keys = [public_jwk.as_dict(is_private=False)]
+    return jsonify({'keys': keys})
 
 
 def oauth_userinfo():
@@ -7349,7 +7597,7 @@ def oauth_userinfo():
     if not access_token:
         return _oauth_error_response('invalid_request', 'Missing bearer access token.', 401)
 
-    token = OAuthToken.query.filter_by(access_token=access_token).first()
+    token = OAuthAccessToken.query.filter_by(access_token=access_token).first()
     if not token or not token.is_active:
         return _oauth_error_response('invalid_token', 'Access token is invalid or expired.', 401)
 
@@ -7366,11 +7614,16 @@ def oauth_revoke():
     if not token_value:
         return _oauth_error_response('invalid_request', 'token is required.')
 
-    token = OAuthToken.query.filter_by(access_token=token_value).first()
+    token = OAuthAccessToken.query.filter_by(access_token=token_value).first()
     if token and token.revoked_at is None:
-        token.revoked_at = utcnow()
+        token.revoke()
         db.session.add(token)
+        if token.refresh_token_id:
+            refresh = OAuthRefreshToken.query.get(token.refresh_token_id)
+            if refresh and refresh.revoked_at is None:
+                _oauth_revoke_refresh_family(refresh)
         db.session.commit()
+        _oauth_log_event('oauth_token_revoked', client_id=token.client_id, user_id=token.user_id, grant_type='token_revoke')
 
     return ('', 200)
 
@@ -7381,7 +7634,7 @@ def oauth_introspect():
     if not token_value:
         return _oauth_error_response('invalid_request', 'token is required.')
 
-    token = OAuthToken.query.filter_by(access_token=token_value).first()
+    token = OAuthAccessToken.query.filter_by(access_token=token_value).first()
     if not token or not token.is_active:
         return jsonify({'active': False})
 
@@ -9995,7 +10248,7 @@ def minha_clinica():
                 current_user.veterinario.clinica_id = clinica.id
             current_user.clinica_id = clinica.id
             db.session.commit()
-            return redirect(url_for('clinic_detail', clinica_id=clinica.id))
+            return redirect(url_for('clinic_detail', clinica_id=clinica.id) + '#clinica')
         return render_template('clinica/create_clinic.html', form=form)
 
     preferred_clinic_id = None
@@ -10007,10 +10260,10 @@ def minha_clinica():
     if preferred_clinic_id:
         preferred_clinic = next((c for c in clinicas if c.id == preferred_clinic_id), None)
         if preferred_clinic:
-            return redirect(url_for('clinic_detail', clinica_id=preferred_clinic.id))
+            return redirect(url_for('clinic_detail', clinica_id=preferred_clinic.id) + '#clinica')
 
     if len(clinicas) == 1:
-        return redirect(url_for('clinic_detail', clinica_id=clinicas[0].id))
+        return redirect(url_for('clinic_detail', clinica_id=clinicas[0].id) + '#clinica')
     overview = []
     for c in clinicas:
         staff = c.veterinarios

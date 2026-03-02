@@ -30,7 +30,15 @@ class Config:
     SESSION_TYPE = "filesystem"
     SESSION_PERMANENT = True
     PERMANENT_SESSION_LIFETIME = timedelta(days=365)
+    SESSION_COOKIE_SECURE = _env_bool("SESSION_COOKIE_SECURE", True)
+    SESSION_COOKIE_HTTPONLY = True
+    SESSION_COOKIE_SAMESITE = os.environ.get("SESSION_COOKIE_SAMESITE", "Lax")
     WTF_CSRF_TIME_LIMIT = None  # CSRF token valid for entire session lifetime
+
+    OAUTH_AUTHORIZATION_CODE_EXPIRES_IN = int(os.environ.get("OAUTH_AUTHORIZATION_CODE_EXPIRES_IN", "300"))
+    OAUTH_ACCESS_TOKEN_EXPIRES_IN = int(os.environ.get("OAUTH_ACCESS_TOKEN_EXPIRES_IN", "900"))
+    OAUTH_REFRESH_TOKEN_EXPIRES_IN = int(os.environ.get("OAUTH_REFRESH_TOKEN_EXPIRES_IN", "2592000"))
+    OAUTH_ALLOWED_SCOPES = os.environ.get("OAUTH_ALLOWED_SCOPES", "openid profile email")
 
     # Performance: cache static files for 1 hour (overridden by env var for dev)
     SEND_FILE_MAX_AGE_DEFAULT = int(os.environ.get("SEND_FILE_MAX_AGE_DEFAULT", "3600"))
