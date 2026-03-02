@@ -24,5 +24,7 @@ def get_blueprint():
     bp.add_url_rule("/oauth/revoke", view_func=lazy_view("oauth_revoke"), methods=["POST"])
     bp.add_url_rule("/oauth/introspect", view_func=lazy_view("oauth_introspect"), methods=["POST"])
     bp.add_url_rule("/oauth/register", view_func=lazy_view("oauth_dynamic_client_registration"), methods=["POST"])
+    # MCP server endpoint — JSON-RPC 2.0 over HTTP (POST) and OPTIONS for CORS preflight
+    bp.add_url_rule("/mcp", view_func=lazy_view("mcp_server"), methods=["POST", "OPTIONS"])
 
     return bp

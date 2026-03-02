@@ -209,6 +209,12 @@ CORS(app, resources={
         "methods": ["GET", "POST", "OPTIONS"],
         "allow_headers": ["Content-Type", "Authorization"],
     },
+    # MCP server endpoint — Claude and ChatGPT connect here after OAuth
+    r"/mcp": {
+        "origins": "*",
+        "methods": ["POST", "OPTIONS"],
+        "allow_headers": ["Content-Type", "Authorization"],
+    },
 })
 async_mode = os.getenv("SOCKETIO_ASYNC_MODE", "eventlet").strip().lower() or None
 if async_mode == "eventlet":
@@ -7869,6 +7875,145 @@ def oauth_introspect():
         'token_type': token.token_type,
         'exp': int(token.expires_at.timestamp()),
     })
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# MCP SERVER  (Model Context Protocol — JSON-RPC 2.0 over HTTP)
+# Endpoint: POST /mcp
+# Auth:     Bearer token (issued by /oauth/token)
+# Clients:  Claude, ChatGPT, and any MCP-compatible AI assistant
+# ─────────────────────────────────────────────────────────────────────────────
+
+def _mcp_ok(req_id, result):
+    return jsonify({'jsonrpc': '2.0', 'id': req_id, 'result': result})
+
+
+def _mcp_err(req_id, code, message):
+    return jsonify({'jsonrpc': '2.0', 'id': req_id, 'error': {'code': code, 'message': message}})
+
+
+@csrf.exempt
+def mcp_server():
+    """MCP server — handles JSON-RPC 2.0 requests from Claude and ChatGPT."""
+
+    # ── Authentication ────────────────────────────────────────────────────────
+    bearer = _oauth_extract_bearer_token()
+    if not bearer:
+        return _mcp_err(None, -32001, 'Unauthorized: Bearer token required'), 401
+
+    token_obj = OAuthAccessToken.query.filter_by(access_token=bearer).first()
+    if not token_obj or not token_obj.is_active:
+        return _mcp_err(None, -32001, 'Unauthorized: invalid or expired token'), 401
+
+    user = User.query.get(token_obj.user_id)
+    if not user:
+        return _mcp_err(None, -32001, 'Unauthorized: user not found'), 401
+
+    # ── Parse JSON-RPC ────────────────────────────────────────────────────────
+    data = request.get_json(silent=True) or {}
+    method = data.get('method', '')
+    req_id = data.get('id')
+    params = data.get('params') or {}
+
+    # ── initialize ────────────────────────────────────────────────────────────
+    if method == 'initialize':
+        return _mcp_ok(req_id, {
+            'protocolVersion': '2024-11-05',
+            'serverInfo': {'name': 'PetOrlândia', 'version': '1.0.0'},
+            'capabilities': {'tools': {}},
+        })
+
+    # ── notifications/initialized (client ack — no body needed) ───────────────
+    if method in ('notifications/initialized', 'initialized'):
+        return ('', 204)
+
+    # ── tools/list ───────────────────────────────────────────────────────────
+    if method == 'tools/list':
+        tools = [
+            {
+                'name': 'listar_meus_pets',
+                'description': (
+                    'Lista todos os animais (pets) cadastrados na conta do usuário autenticado. '
+                    'Retorna nome, espécie, raça, sexo, idade e peso de cada animal.'
+                ),
+                'inputSchema': {'type': 'object', 'properties': {}, 'required': []},
+            },
+            {
+                'name': 'listar_agendamentos',
+                'description': (
+                    'Lista os agendamentos veterinários do usuário autenticado. '
+                    'Aceita filtro opcional por status: scheduled, completed ou cancelled.'
+                ),
+                'inputSchema': {
+                    'type': 'object',
+                    'properties': {
+                        'status': {
+                            'type': 'string',
+                            'enum': ['scheduled', 'completed', 'cancelled'],
+                            'description': 'Filtrar pelo status do agendamento (opcional).',
+                        }
+                    },
+                    'required': [],
+                },
+            },
+        ]
+        return _mcp_ok(req_id, {'tools': tools})
+
+    # ── tools/call ───────────────────────────────────────────────────────────
+    if method == 'tools/call':
+        tool_name = params.get('name', '')
+        tool_args = params.get('arguments') or {}
+
+        if tool_name == 'listar_meus_pets':
+            animals = (
+                Animal.query
+                .filter_by(user_id=user.id, removido_em=None)
+                .order_by(Animal.name)
+                .all()
+            )
+            pets = []
+            for a in animals:
+                # species/breed may be ORM relationships or plain strings
+                spec = getattr(a, 'species', None)
+                spec_name = spec.name if hasattr(spec, 'name') else str(spec or '')
+                brd = getattr(a, 'breed', None)
+                brd_name = brd.name if hasattr(brd, 'name') else str(brd or '')
+                pets.append({
+                    'id': a.id,
+                    'nome': a.name,
+                    'especie': spec_name or None,
+                    'raca': brd_name or None,
+                    'sexo': a.sex,
+                    'idade': a.age,
+                    'peso_kg': a.peso,
+                    'nascimento': a.date_of_birth.isoformat() if a.date_of_birth else None,
+                })
+            text = json.dumps(pets, ensure_ascii=False, indent=2) if pets else '[]'
+            return _mcp_ok(req_id, {'content': [{'type': 'text', 'text': text}]})
+
+        if tool_name == 'listar_agendamentos':
+            q = Appointment.query.filter_by(tutor_id=user.id)
+            status_filter = str(tool_args.get('status', '') or '').strip()
+            if status_filter:
+                q = q.filter(Appointment.status == status_filter)
+            appts = q.order_by(Appointment.scheduled_at.desc()).limit(50).all()
+            data_out = []
+            for a in appts:
+                data_out.append({
+                    'id': a.id,
+                    'pet': a.animal.name if a.animal else None,
+                    'data': a.scheduled_at.isoformat() if a.scheduled_at else None,
+                    'status': a.status,
+                    'tipo': a.kind,
+                    'notas': a.notes,
+                })
+            text = json.dumps(data_out, ensure_ascii=False, indent=2) if data_out else '[]'
+            return _mcp_ok(req_id, {'content': [{'type': 'text', 'text': text}]})
+
+        return _mcp_err(req_id, -32601, f'Tool not found: {tool_name}')
+
+    # ── unknown method ────────────────────────────────────────────────────────
+    return _mcp_err(req_id, -32601, f'Method not found: {method}')
 
 
 @login_required
