@@ -9693,8 +9693,17 @@ def minha_clinica():
             return redirect(url_for('clinic_detail', clinica_id=clinica.id))
         return render_template('clinica/create_clinic.html', form=form)
 
-    if _is_admin() and current_user.clinica_id:
-        return redirect(url_for('clinic_detail', clinica_id=current_user.clinica_id))
+    preferred_clinic_id = None
+    if getattr(current_user, 'veterinario', None) and current_user.veterinario.clinica_id:
+        preferred_clinic_id = current_user.veterinario.clinica_id
+    elif current_user.clinica_id:
+        preferred_clinic_id = current_user.clinica_id
+
+    if preferred_clinic_id:
+        preferred_clinic = next((c for c in clinicas if c.id == preferred_clinic_id), None)
+        if preferred_clinic:
+            return redirect(url_for('clinic_detail', clinica_id=preferred_clinic.id))
+
     if len(clinicas) == 1:
         return redirect(url_for('clinic_detail', clinica_id=clinicas[0].id))
     overview = []
