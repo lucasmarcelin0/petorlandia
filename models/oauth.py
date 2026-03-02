@@ -51,8 +51,8 @@ class OAuthAuthorizationCode(db.Model):
     created_at = db.Column(db.DateTime(timezone=True), server_default=func.now(), nullable=False)
 
     @classmethod
-    def new_expiration(cls):
-        return utcnow() + timedelta(minutes=10)
+    def new_expiration(cls, expires_in_seconds: int = 300):
+        return utcnow() + timedelta(seconds=max(1, int(expires_in_seconds)))
 
     @property
     def is_active(self) -> bool:

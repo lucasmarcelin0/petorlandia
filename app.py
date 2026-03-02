@@ -7271,8 +7271,38 @@ def _oauth_error_response(error: str, description: str, status_code: int = 400):
     return jsonify({'error': error, 'error_description': description}), status_code
 
 
+def _oauth_allowed_scopes() -> set[str]:
+    configured = app.config.get('OAUTH_ALLOWED_SCOPES', 'openid profile email')
+    return {scope.strip() for scope in str(configured).split() if scope.strip()}
+
+
+def _oauth_normalize_scope(scope_raw: str, client: OAuthClient | None = None) -> str:
+    requested = {item.strip() for item in (scope_raw or '').split() if item.strip()}
+    if not requested:
+        requested = {'openid', 'profile', 'email'}
+
+    allowed = _oauth_allowed_scopes()
+    if client:
+        allowed = allowed.intersection({item.strip() for item in (client.scopes or '').split() if item.strip()})
+
+    if not requested.issubset(allowed):
+        raise ValueError('Requested scope is not allowed.')
+
+    ordered_scopes = [scope for scope in ['openid', 'profile', 'email'] if scope in requested]
+    return ' '.join(ordered_scopes)
+
+
 def _oauth_client_redirect_valid(client: OAuthClient, redirect_uri: str) -> bool:
-    return redirect_uri in client.redirect_uri_list()
+    parsed = urlparse(redirect_uri)
+    if parsed.scheme not in ('https', 'http') or not parsed.netloc or parsed.fragment:
+        return False
+
+    for allowed_uri in client.redirect_uri_list():
+        if '*' in allowed_uri:
+            continue
+        if redirect_uri == allowed_uri:
+            return True
+    return False
 
 
 def _oauth_extract_bearer_token() -> str | None:
@@ -7282,11 +7312,43 @@ def _oauth_extract_bearer_token() -> str | None:
     return request.values.get('access_token')
 
 
+def _oauth_log_event(event: str, **fields):
+    current_app.logger.info(
+        event,
+        extra={
+            'request_id': getattr(g, 'request_id', None),
+            'client_id': fields.get('client_id'),
+            'user_id': fields.get('user_id'),
+            'grant_type': fields.get('grant_type'),
+        },
+    )
+
+
+def _oauth_revoke_refresh_family(refresh_token: OAuthRefreshToken):
+    now = utcnow()
+    family_tokens = OAuthRefreshToken.query.filter_by(
+        client_id=refresh_token.client_id,
+        user_id=refresh_token.user_id,
+        family_id=refresh_token.family_id,
+    ).all()
+    token_ids = [token.id for token in family_tokens]
+    for token in family_tokens:
+        if token.revoked_at is None:
+            token.revoked_at = now
+            db.session.add(token)
+
+    if token_ids:
+        for access in OAuthAccessToken.query.filter(OAuthAccessToken.refresh_token_id.in_(token_ids)).all():
+            if access.revoked_at is None:
+                access.revoked_at = now
+                db.session.add(access)
+
+
 def oauth_authorize():
     response_type = request.values.get('response_type', '').strip()
     client_id = request.values.get('client_id', '').strip()
     redirect_uri = request.values.get('redirect_uri', '').strip()
-    scope = request.values.get('scope', 'openid').strip() or 'openid'
+    scope_raw = request.values.get('scope', '').strip()
     state = request.values.get('state', '').strip()
     nonce = request.values.get('nonce', '').strip() or None
     code_challenge = request.values.get('code_challenge', '').strip()
@@ -7309,6 +7371,13 @@ def oauth_authorize():
     if not _oauth_client_redirect_valid(client, redirect_uri):
         return _oauth_error_response('invalid_request', 'redirect_uri is not allowed for this client.')
 
+    try:
+        scope = _oauth_normalize_scope(scope_raw, client)
+    except ValueError as exc:
+        return _oauth_error_response('invalid_scope', str(exc))
+
+    requested_scopes = scope.split()
+
     if not current_user.is_authenticated:
         login_url = url_for('login_view', next=request.url)
         return redirect(login_url)
@@ -7317,6 +7386,10 @@ def oauth_authorize():
         if request.form.get('consent_action') != 'approve':
             query = urlencode({'error': 'access_denied', 'state': state})
             return redirect(f'{redirect_uri}?{query}')
+
+        consented_scopes = set(request.form.getlist('consent_scopes'))
+        if set(requested_scopes) != consented_scopes:
+            return _oauth_error_response('invalid_scope', 'Explicit consent is required for each requested scope.')
 
         auth_code = OAuthAuthorizationCode(
             code=secrets.token_urlsafe(48),
@@ -7328,10 +7401,11 @@ def oauth_authorize():
             state=state,
             code_challenge=code_challenge,
             code_challenge_method='S256',
-            expires_at=OAuthAuthorizationCode.new_expiration(),
+            expires_at=OAuthAuthorizationCode.new_expiration(app.config.get('OAUTH_AUTHORIZATION_CODE_EXPIRES_IN', 300)),
         )
         db.session.add(auth_code)
         db.session.commit()
+        _oauth_log_event('oauth_authorization_code_issued', client_id=client_id, user_id=current_user.id, grant_type='authorization_code')
 
         query = urlencode({'code': auth_code.code, 'state': state})
         return redirect(f'{redirect_uri}?{query}')
@@ -7340,6 +7414,7 @@ def oauth_authorize():
         'auth/oauth_consent.html',
         client=client,
         scope=scope,
+        requested_scopes=requested_scopes,
         state=state,
         redirect_uri=redirect_uri,
         response_type=response_type,
@@ -7353,92 +7428,154 @@ def oauth_authorize():
 
 @csrf.exempt
 def oauth_token():
-    if request.form.get('grant_type') != 'authorization_code':
-        return _oauth_error_response('unsupported_grant_type', 'Only authorization_code grant is supported.')
+    grant_type = request.form.get('grant_type', '').strip()
+    if grant_type == 'authorization_code':
+        code = request.form.get('code', '').strip()
+        client_id = request.form.get('client_id', '').strip()
+        redirect_uri = request.form.get('redirect_uri', '').strip()
+        code_verifier = request.form.get('code_verifier', '').strip()
 
-    code = request.form.get('code', '').strip()
-    client_id = request.form.get('client_id', '').strip()
-    redirect_uri = request.form.get('redirect_uri', '').strip()
-    code_verifier = request.form.get('code_verifier', '').strip()
+        if not all([code, client_id, redirect_uri, code_verifier]):
+            return _oauth_error_response('invalid_request', 'code, client_id, redirect_uri and code_verifier are required.')
 
-    if not all([code, client_id, redirect_uri, code_verifier]):
-        return _oauth_error_response('invalid_request', 'code, client_id, redirect_uri and code_verifier are required.')
+        client = OAuthClient.query.filter_by(client_id=client_id).first()
+        if not client:
+            return _oauth_error_response('invalid_client', 'Unknown OAuth client.', 401)
 
-    client = OAuthClient.query.filter_by(client_id=client_id).first()
-    if not client:
-        return _oauth_error_response('invalid_client', 'Unknown OAuth client.', 401)
+        auth_code = OAuthAuthorizationCode.query.filter_by(code=code, client_id=client_id).first()
+        if not auth_code:
+            return _oauth_error_response('invalid_grant', 'Authorization code is invalid.')
+        if not auth_code.is_active:
+            return _oauth_error_response('invalid_grant', 'Authorization code is expired or already used.')
+        if auth_code.redirect_uri != redirect_uri:
+            return _oauth_error_response('invalid_grant', 'redirect_uri does not match authorization request.')
+        if _pkce_s256(code_verifier) != auth_code.code_challenge:
+            return _oauth_error_response('invalid_grant', 'code_verifier is invalid.')
 
-    auth_code = OAuthAuthorizationCode.query.filter_by(code=code, client_id=client_id).first()
-    if not auth_code:
-        return _oauth_error_response('invalid_grant', 'Authorization code is invalid.')
-    if not auth_code.is_active:
-        return _oauth_error_response('invalid_grant', 'Authorization code is expired or already used.')
-    if auth_code.redirect_uri != redirect_uri:
-        return _oauth_error_response('invalid_grant', 'redirect_uri does not match authorization request.')
-    if _pkce_s256(code_verifier) != auth_code.code_challenge:
-        return _oauth_error_response('invalid_grant', 'code_verifier is invalid.')
+        now_ts = int(utcnow().timestamp())
+        expires_in = int(app.config.get('OAUTH_ACCESS_TOKEN_EXPIRES_IN', 900))
+        access_token = secrets.token_urlsafe(48)
+        private_jwk, _ = _oauth_get_signing_keys()
 
-    now_ts = int(utcnow().timestamp())
-    expires_in = int(app.config.get('OAUTH_ACCESS_TOKEN_EXPIRES_IN', 3600))
-    access_token = secrets.token_urlsafe(48)
-    private_jwk, _ = _oauth_get_signing_keys()
+        user = User.query.get(auth_code.user_id)
+        claims = {
+            'iss': _oauth_issuer(),
+            'sub': str(auth_code.user_id),
+            'aud': client_id,
+            'iat': now_ts,
+            'exp': now_ts + expires_in,
+            'email': user.email if user else '',
+            'name': user.name if user else '',
+        }
+        if auth_code.nonce:
+            claims['nonce'] = auth_code.nonce
 
-    user = User.query.get(auth_code.user_id)
-    claims = {
-        'iss': _oauth_issuer(),
-        'sub': str(auth_code.user_id),
-        'aud': client_id,
-        'iat': now_ts,
-        'exp': now_ts + expires_in,
-        'email': user.email if user else '',
-        'name': user.name if user else '',
-    }
-    if auth_code.nonce:
-        claims['nonce'] = auth_code.nonce
+        id_token = jwt.encode({'alg': 'RS256', 'kid': private_jwk.as_dict().get('kid')}, claims, private_jwk).decode('utf-8')
 
-    id_token = jwt.encode({'alg': 'RS256', 'kid': private_jwk.as_dict().get('kid')}, claims, private_jwk).decode('utf-8')
+        refresh_expires_in = int(app.config.get('OAUTH_REFRESH_TOKEN_EXPIRES_IN', 2592000))
+        refresh_token = OAuthRefreshToken(
+            client_id=client_id,
+            user_id=auth_code.user_id,
+            refresh_token=secrets.token_urlsafe(48),
+            scope=auth_code.scope,
+            expires_at=utcnow() + timedelta(seconds=refresh_expires_in),
+        )
+        token = OAuthAccessToken(
+            client_id=client_id,
+            user_id=auth_code.user_id,
+            access_token=access_token,
+            token_type='Bearer',
+            scope=auth_code.scope,
+            id_token=id_token,
+            refresh_token_id=refresh_token.id,
+            expires_at=utcnow() + timedelta(seconds=expires_in),
+        )
+        auth_code.used_at = utcnow()
+        consent = OAuthConsent.query.filter_by(user_id=auth_code.user_id, client_id=client_id).first()
+        if consent is None:
+            consent = OAuthConsent(user_id=auth_code.user_id, client_id=client_id, scopes=auth_code.scope)
+        else:
+            consent.scopes = auth_code.scope
+            consent.revoked_at = None
+        db.session.add(refresh_token)
+        db.session.flush()
+        token.refresh_token_id = refresh_token.id
+        db.session.add(token)
+        db.session.add(consent)
+        db.session.add(auth_code)
+        db.session.commit()
+        _oauth_log_event('oauth_token_issued', client_id=client_id, user_id=auth_code.user_id, grant_type='authorization_code')
 
-    refresh_expires_in = int(app.config.get('OAUTH_REFRESH_TOKEN_EXPIRES_IN', 2592000))
-    refresh_token = OAuthRefreshToken(
-        client_id=client_id,
-        user_id=auth_code.user_id,
-        refresh_token=secrets.token_urlsafe(48),
-        scope=auth_code.scope,
-        expires_at=utcnow() + timedelta(seconds=refresh_expires_in),
-    )
-    token = OAuthAccessToken(
-        client_id=client_id,
-        user_id=auth_code.user_id,
-        access_token=access_token,
-        token_type='Bearer',
-        scope=auth_code.scope,
-        id_token=id_token,
-        refresh_token_id=refresh_token.id,
-        expires_at=utcnow() + timedelta(seconds=expires_in),
-    )
-    auth_code.used_at = utcnow()
-    consent = OAuthConsent.query.filter_by(user_id=auth_code.user_id, client_id=client_id).first()
-    if consent is None:
-        consent = OAuthConsent(user_id=auth_code.user_id, client_id=client_id, scopes=auth_code.scope)
-    else:
-        consent.scopes = auth_code.scope
-        consent.revoked_at = None
-    db.session.add(refresh_token)
-    db.session.flush()
-    token.refresh_token_id = refresh_token.id
-    db.session.add(token)
-    db.session.add(consent)
-    db.session.add(auth_code)
-    db.session.commit()
+        return jsonify({
+            'access_token': access_token,
+            'token_type': 'Bearer',
+            'expires_in': expires_in,
+            'scope': auth_code.scope,
+            'id_token': id_token,
+            'refresh_token': refresh_token.refresh_token,
+        })
 
-    return jsonify({
-        'access_token': access_token,
-        'token_type': 'Bearer',
-        'expires_in': expires_in,
-        'scope': auth_code.scope,
-        'id_token': id_token,
-        'refresh_token': refresh_token.refresh_token,
-    })
+    if grant_type == 'refresh_token':
+        client_id = request.form.get('client_id', '').strip()
+        refresh_token_value = request.form.get('refresh_token', '').strip()
+        if not client_id or not refresh_token_value:
+            return _oauth_error_response('invalid_request', 'client_id and refresh_token are required.')
+
+        client = OAuthClient.query.filter_by(client_id=client_id).first()
+        if not client:
+            return _oauth_error_response('invalid_client', 'Unknown OAuth client.', 401)
+
+        refresh = OAuthRefreshToken.query.filter_by(refresh_token=refresh_token_value, client_id=client_id).first()
+        if not refresh:
+            return _oauth_error_response('invalid_grant', 'Refresh token is invalid.')
+
+        if not refresh.is_active:
+            _oauth_revoke_refresh_family(refresh)
+            db.session.commit()
+            _oauth_log_event('oauth_refresh_token_reuse_detected', client_id=client_id, user_id=refresh.user_id, grant_type='refresh_token')
+            return _oauth_error_response('invalid_grant', 'Refresh token reuse detected; token family revoked.')
+
+        now = utcnow()
+        refresh_expires_in = int(app.config.get('OAUTH_REFRESH_TOKEN_EXPIRES_IN', 2592000))
+        access_expires_in = int(app.config.get('OAUTH_ACCESS_TOKEN_EXPIRES_IN', 900))
+
+        new_refresh = OAuthRefreshToken(
+            client_id=client_id,
+            user_id=refresh.user_id,
+            refresh_token=secrets.token_urlsafe(48),
+            scope=refresh.scope,
+            family_id=refresh.family_id,
+            expires_at=now + timedelta(seconds=refresh_expires_in),
+        )
+        db.session.add(new_refresh)
+        db.session.flush()
+
+        refresh.revoked_at = now
+        refresh.replaced_by_jti = new_refresh.jti
+        db.session.add(refresh)
+
+        new_access = OAuthAccessToken(
+            client_id=client_id,
+            user_id=refresh.user_id,
+            access_token=secrets.token_urlsafe(48),
+            token_type='Bearer',
+            scope=refresh.scope,
+            refresh_token_id=new_refresh.id,
+            expires_at=now + timedelta(seconds=access_expires_in),
+        )
+        db.session.add(new_access)
+        db.session.commit()
+        _oauth_log_event('oauth_token_issued', client_id=client_id, user_id=refresh.user_id, grant_type='refresh_token')
+
+        return jsonify({
+            'access_token': new_access.access_token,
+            'token_type': 'Bearer',
+            'expires_in': access_expires_in,
+            'scope': refresh.scope,
+            'refresh_token': new_refresh.refresh_token,
+        })
+
+    return _oauth_error_response('unsupported_grant_type', 'Only authorization_code and refresh_token grants are supported.')
 
 
 def openid_configuration():
@@ -7454,7 +7591,7 @@ def openid_configuration():
         'id_token_signing_alg_values_supported': ['RS256'],
         'scopes_supported': ['openid', 'profile', 'email'],
         'token_endpoint_auth_methods_supported': ['none', 'client_secret_post'],
-        'grant_types_supported': ['authorization_code'],
+        'grant_types_supported': ['authorization_code', 'refresh_token'],
         'claims_supported': ['sub', 'email', 'name'],
     })
 
@@ -7498,9 +7635,9 @@ def oauth_revoke():
         if token.refresh_token_id:
             refresh = OAuthRefreshToken.query.get(token.refresh_token_id)
             if refresh and refresh.revoked_at is None:
-                refresh.revoked_at = utcnow()
-                db.session.add(refresh)
+                _oauth_revoke_refresh_family(refresh)
         db.session.commit()
+        _oauth_log_event('oauth_token_revoked', client_id=token.client_id, user_id=token.user_id, grant_type='token_revoke')
 
     return ('', 200)
 
