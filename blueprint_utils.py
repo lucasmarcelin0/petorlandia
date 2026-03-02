@@ -36,6 +36,7 @@ def register_domain_blueprints(app):
         fiscal,
         loja,
         mensagens,
+        oauth,
         planos,
     )
 
@@ -74,6 +75,11 @@ def register_domain_blueprints(app):
     admin_bp = admin.get_blueprint()
     if not _is_blueprint_registered(app, admin_bp):
         _register_with_alias(app, admin_bp)
+
+
+    oauth_bp = oauth.get_blueprint()
+    if not _is_blueprint_registered(app, oauth_bp):
+        _register_with_alias(app, oauth_bp)
 
     api_bp = api.get_blueprint()
     if not _is_blueprint_registered(app, api_bp):
