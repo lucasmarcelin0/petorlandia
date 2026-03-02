@@ -579,7 +579,7 @@ def is_slot_available(veterinario_id, scheduled_at, kind='consulta'):
 
 def clinicas_do_usuario():
     """Retorna query de ``Clinica`` filtrada pelo usuário atual."""
-    from models import Clinica
+    from models import Clinica, ClinicStaff
 
     if not current_user.is_authenticated:
         return Clinica.query.filter(False)
@@ -599,13 +599,38 @@ def clinicas_do_usuario():
             )
         return query
 
+    clinic_ids = []
+    default_id = None
+
     if getattr(current_user, "veterinario", None) and current_user.veterinario.clinica_id:
-        return Clinica.query.filter_by(id=current_user.veterinario.clinica_id)
+        default_id = current_user.veterinario.clinica_id
+        clinic_ids.append(default_id)
 
     if current_user.clinica_id:
-        return Clinica.query.filter_by(id=current_user.clinica_id)
+        if default_id is None:
+            default_id = current_user.clinica_id
+        clinic_ids.append(current_user.clinica_id)
 
-    return Clinica.query.filter_by(owner_id=current_user.id)
+    owner_clinic_ids = [
+        clinic_id
+        for clinic_id, in Clinica.query.with_entities(Clinica.id).filter_by(owner_id=current_user.id).all()
+    ]
+    clinic_ids.extend(owner_clinic_ids)
+
+    staff_clinic_ids = [
+        clinic_id
+        for clinic_id, in ClinicStaff.query.with_entities(ClinicStaff.clinic_id).filter_by(user_id=current_user.id).all()
+    ]
+    clinic_ids.extend(staff_clinic_ids)
+
+    unique_ids = list(dict.fromkeys(clinic_ids))
+    if not unique_ids:
+        return Clinica.query.filter(False)
+
+    query = Clinica.query.filter(Clinica.id.in_(unique_ids))
+    if default_id:
+        query = query.order_by(case((Clinica.id == default_id, 0), else_=1))
+    return query
 
 
 def has_schedule_conflict(veterinario_id, dia_semana, hora_inicio, hora_fim, exclude_id=None):

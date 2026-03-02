@@ -160,7 +160,7 @@
                   Meu Perfil</a></li>
               <li><a class="dropdown-item" href="{{ url_for('minhas_compras') }}"><i
                     class="fas fa-box me-2 text-warning"></i> Minhas Compras</a></li>
-              {% if current_user.veterinario or (current_user.clinica and current_user.worker == 'colaborador') %}
+              {% if has_clinic_access %}
               <li><a class="dropdown-item" href="{{ url_for('minha_clinica') }}"><i
                     class="fas fa-clinic-medical me-2 text-info"></i> Minha Clínica</a></li>
               {% endif %}
