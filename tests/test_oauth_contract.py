@@ -193,3 +193,64 @@ def test_oidc_claims_are_emitted_in_id_token_and_userinfo(app, client):
     assert userinfo.status_code == 200
     assert userinfo.get_json()['sub'] == str(user_id)
     assert userinfo.get_json()['email'] == 'contract@example.com'
+
+
+def test_confidential_client_allows_authorize_without_pkce_and_requires_client_secret(app, client):
+    with app.app_context():
+        user = User(name='Confidential User', email='confidential@example.com', role='adotante')
+        user.set_password('secret123')
+        oauth_client = OAuthClient(
+            client_id='chatgpt-client',
+            client_secret='super-secret',
+            name='ChatGPT confidential client',
+            redirect_uris='https://chat.openai.com/aip/plugin-callback',
+            scopes='openid profile email',
+            is_confidential=True,
+            auth_method='client_secret_post',
+        )
+        db.session.add_all([user, oauth_client])
+        db.session.commit()
+        user_id = user.id
+
+    _login(client, user_id)
+
+    authorize_response = client.post(
+        '/oauth/authorize',
+        data={
+            'response_type': 'code',
+            'client_id': 'chatgpt-client',
+            'redirect_uri': 'https://chat.openai.com/aip/plugin-callback',
+            'scope': 'openid profile email',
+            'state': 'state-chatgpt',
+            'consent_action': 'approve',
+            'consent_scopes': ['openid', 'profile', 'email'],
+        },
+        follow_redirects=False,
+    )
+    assert authorize_response.status_code == 302
+    code = parse_qs(urlparse(authorize_response.headers['Location']).query)['code'][0]
+
+    missing_secret = client.post(
+        '/oauth/token',
+        data={
+            'grant_type': 'authorization_code',
+            'code': code,
+            'client_id': 'chatgpt-client',
+            'redirect_uri': 'https://chat.openai.com/aip/plugin-callback',
+        },
+    )
+    assert missing_secret.status_code == 401
+    assert missing_secret.get_json()['error'] == 'invalid_client'
+
+    token_response = client.post(
+        '/oauth/token',
+        data={
+            'grant_type': 'authorization_code',
+            'code': code,
+            'client_id': 'chatgpt-client',
+            'client_secret': 'super-secret',
+            'redirect_uri': 'https://chat.openai.com/aip/plugin-callback',
+        },
+    )
+    assert token_response.status_code == 200
+    assert token_response.get_json()['token_type'] == 'Bearer'

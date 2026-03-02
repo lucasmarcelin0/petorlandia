@@ -7294,6 +7294,19 @@ def _oauth_client_redirect_valid(client: OAuthClient, redirect_uri: str) -> bool
     return False
 
 
+def _oauth_requires_pkce(client: OAuthClient) -> bool:
+    return not bool(client.is_confidential)
+
+
+def _oauth_validate_client_secret(client: OAuthClient, provided_secret: str) -> bool:
+    if not client.is_confidential:
+        return True
+    if client.auth_method != 'client_secret_post':
+        return False
+    expected_secret = (client.client_secret or '').strip()
+    return bool(expected_secret) and secrets.compare_digest(expected_secret, provided_secret or '')
+
+
 def _oauth_extract_bearer_token() -> str | None:
     auth_header = request.headers.get('Authorization', '')
     if auth_header.lower().startswith('bearer '):
@@ -7434,14 +7447,16 @@ def oauth_authorize():
         return _oauth_error_response('invalid_request', 'redirect_uri is required.')
     if not state:
         return _oauth_error_response('invalid_request', 'state is required.')
-    if not code_challenge or code_challenge_method != 'S256':
-        return _oauth_error_response('invalid_request', 'PKCE with code_challenge_method=S256 is required.')
 
     client = OAuthClient.query.filter_by(client_id=client_id).first()
     if not client:
         return _oauth_error_response('invalid_client', 'Unknown OAuth client.', 401)
     if not _oauth_client_redirect_valid(client, redirect_uri):
         return _oauth_error_response('invalid_request', 'redirect_uri is not allowed for this client.')
+
+    requires_pkce = _oauth_requires_pkce(client)
+    if requires_pkce and (not code_challenge or code_challenge_method != 'S256'):
+        return _oauth_error_response('invalid_request', 'PKCE with code_challenge_method=S256 is required.')
 
     try:
         scope = _oauth_normalize_scope(scope_raw, client)
@@ -7471,8 +7486,8 @@ def oauth_authorize():
             scope=scope,
             nonce=nonce,
             state=state,
-            code_challenge=code_challenge,
-            code_challenge_method='S256',
+            code_challenge=code_challenge if requires_pkce else '',
+            code_challenge_method='S256' if requires_pkce else 'none',
             expires_at=OAuthAuthorizationCode.new_expiration(app.config.get('OAUTH_AUTHORIZATION_CODE_EXPIRES_IN', 300)),
         )
         db.session.add(auth_code)
@@ -7506,13 +7521,16 @@ def oauth_token():
         client_id = request.form.get('client_id', '').strip()
         redirect_uri = request.form.get('redirect_uri', '').strip()
         code_verifier = request.form.get('code_verifier', '').strip()
+        client_secret = request.form.get('client_secret', '').strip()
 
-        if not all([code, client_id, redirect_uri, code_verifier]):
-            return _oauth_error_response('invalid_request', 'code, client_id, redirect_uri and code_verifier are required.')
+        if not all([code, client_id, redirect_uri]):
+            return _oauth_error_response('invalid_request', 'code, client_id and redirect_uri are required.')
 
         client = OAuthClient.query.filter_by(client_id=client_id).first()
         if not client:
             return _oauth_error_response('invalid_client', 'Unknown OAuth client.', 401)
+        if not _oauth_validate_client_secret(client, client_secret):
+            return _oauth_error_response('invalid_client', 'client authentication failed.', 401)
 
         auth_code = OAuthAuthorizationCode.query.filter_by(code=code, client_id=client_id).first()
         if not auth_code:
@@ -7521,8 +7539,11 @@ def oauth_token():
             return _oauth_error_response('invalid_grant', 'Authorization code is expired or already used.')
         if auth_code.redirect_uri != redirect_uri:
             return _oauth_error_response('invalid_grant', 'redirect_uri does not match authorization request.')
-        if _pkce_s256(code_verifier) != auth_code.code_challenge:
-            return _oauth_error_response('invalid_grant', 'code_verifier is invalid.')
+        if auth_code.code_challenge_method == 'S256':
+            if not code_verifier:
+                return _oauth_error_response('invalid_request', 'code_verifier is required for PKCE-enabled authorization codes.')
+            if _pkce_s256(code_verifier) != auth_code.code_challenge:
+                return _oauth_error_response('invalid_grant', 'code_verifier is invalid.')
 
         now_ts = int(utcnow().timestamp())
         expires_in = int(app.config.get('OAUTH_ACCESS_TOKEN_EXPIRES_IN', 900))
@@ -7590,12 +7611,15 @@ def oauth_token():
     if grant_type == 'refresh_token':
         client_id = request.form.get('client_id', '').strip()
         refresh_token_value = request.form.get('refresh_token', '').strip()
+        client_secret = request.form.get('client_secret', '').strip()
         if not client_id or not refresh_token_value:
             return _oauth_error_response('invalid_request', 'client_id and refresh_token are required.')
 
         client = OAuthClient.query.filter_by(client_id=client_id).first()
         if not client:
             return _oauth_error_response('invalid_client', 'Unknown OAuth client.', 401)
+        if not _oauth_validate_client_secret(client, client_secret):
+            return _oauth_error_response('invalid_client', 'client authentication failed.', 401)
 
         refresh = OAuthRefreshToken.query.filter_by(refresh_token=refresh_token_value, client_id=client_id).first()
         if not refresh:
