@@ -45,6 +45,7 @@ djangorestframework-camel-case==1.4.2
 dnspython==2.7.0
 drf-spectacular==0.29.0
 email_validator==2.2.0
+eventlet==0.39.1
 face==24.0.0
 filetype==1.2.0
 Flask==3.1.0
