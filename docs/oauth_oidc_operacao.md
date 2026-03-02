@@ -36,6 +36,38 @@ GET https://<dominio-publico>/oauth/authorize?
   code_challenge_method=S256
 ```
 
+## Erro comum: `PKCE with code_challenge_method=S256 is required.`
+
+Esse erro indica que o cliente tentou iniciar o fluxo Authorization Code sem enviar PKCE obrigatório no padrão exigido pelo servidor.
+
+O PetOrlândia aceita apenas:
+
+- `code_challenge_method=S256`
+- `code_challenge` (na chamada `/oauth/authorize`)
+- `code_verifier` correspondente (na chamada `/oauth/token`)
+
+### Como corrigir rapidamente
+
+1. Gere um `code_verifier` aleatório (43 a 128 caracteres URL-safe).
+2. Calcule o `code_challenge = BASE64URL(SHA256(code_verifier))`.
+3. Envie no authorize:
+   - `code_challenge=<valor calculado>`
+   - `code_challenge_method=S256`
+4. Na troca do code por token, envie o mesmo `code_verifier` original.
+
+### Armadilhas mais frequentes
+
+- Não enviar `code_challenge_method` (ou enviar `plain` em vez de `S256`).
+- Trocar o `code_verifier` entre authorize e token.
+- Fazer URL encoding incorreto do `code_challenge`.
+- Cliente OAuth configurado em modo público, mas SDK sem PKCE habilitado.
+
+### Configuração em SDKs (resumo)
+
+- **Auth0 / oidc-client / AppAuth**: habilite explicitamente `usePkce`/`pkce: true`.
+- **NextAuth / custom OIDC**: confirme `checks: ["pkce", "state", "nonce"]` quando aplicável.
+- **Mobile (Android/iOS)**: use Authorization Code + PKCE, nunca implicit flow.
+
 ## Exemplo de troca de `code` por token
 
 ```bash
