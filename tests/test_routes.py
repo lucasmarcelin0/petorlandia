@@ -281,6 +281,63 @@ def test_veterinarian_membership_route_allows_admin(monkeypatch, app):
     assert response.status_code == 200
 
 
+def test_expired_veterinarian_membership_redirects_on_404(monkeypatch, app):
+    client = app.test_client()
+
+    with app.app_context():
+        db.drop_all()
+        db.create_all()
+
+        vet_user = User(
+            id=1,
+            name='Vet Expirado',
+            email='vet.expirado@test',
+            role='veterinario',
+            worker='veterinario',
+        )
+        vet_user.set_password('test')
+        vet_profile = Veterinario(user=vet_user, crmv='CRMV999')
+        membership = VeterinarianMembership(
+            veterinario=vet_profile,
+            started_at=datetime(2024, 1, 1, 12, 0, 0),
+            trial_ends_at=datetime(2024, 1, 2, 12, 0, 0),
+            paid_until=None,
+        )
+        db.session.add_all([vet_user, vet_profile, membership])
+        db.session.commit()
+
+        import flask_login.utils as login_utils
+
+        vet_user_id = vet_user.id
+        monkeypatch.setattr(login_utils, '_get_user', lambda: User.query.get(vet_user_id))
+
+    response = client.get('/rota-que-nao-existe', follow_redirects=False)
+
+    assert response.status_code == 302
+    assert response.headers['Location'].endswith('/veterinario/assinatura')
+
+
+def test_404_keeps_not_found_for_non_veterinarian(monkeypatch, app):
+    client = app.test_client()
+
+    with app.app_context():
+        db.drop_all()
+        db.create_all()
+
+        user = User(id=1, name='Tutor', email='tutor@test', role='tutor')
+        user.set_password('test')
+        db.session.add(user)
+        db.session.commit()
+
+        import flask_login.utils as login_utils
+
+        monkeypatch.setattr(login_utils, '_get_user', lambda: user)
+
+    response = client.get('/rota-que-nao-existe', follow_redirects=False)
+
+    assert response.status_code == 404
+
+
 def test_register_page(app):
     client = app.test_client()
     response = client.get('/register')
