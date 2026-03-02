@@ -10012,7 +10012,7 @@ def minha_clinica():
                 current_user.veterinario.clinica_id = clinica.id
             current_user.clinica_id = clinica.id
             db.session.commit()
-            return redirect(url_for('clinic_detail', clinica_id=clinica.id))
+            return redirect(url_for('clinic_detail', clinica_id=clinica.id) + '#clinica')
         return render_template('clinica/create_clinic.html', form=form)
 
     preferred_clinic_id = None
@@ -10024,10 +10024,10 @@ def minha_clinica():
     if preferred_clinic_id:
         preferred_clinic = next((c for c in clinicas if c.id == preferred_clinic_id), None)
         if preferred_clinic:
-            return redirect(url_for('clinic_detail', clinica_id=preferred_clinic.id))
+            return redirect(url_for('clinic_detail', clinica_id=preferred_clinic.id) + '#clinica')
 
     if len(clinicas) == 1:
-        return redirect(url_for('clinic_detail', clinica_id=clinicas[0].id))
+        return redirect(url_for('clinic_detail', clinica_id=clinicas[0].id) + '#clinica')
     overview = []
     for c in clinicas:
         staff = c.veterinarios
