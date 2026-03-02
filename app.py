@@ -7,6 +7,7 @@ from types import SimpleNamespace
 from io import BytesIO, StringIO
 from concurrent.futures import ThreadPoolExecutor
 from decimal import Decimal, InvalidOperation
+from functools import wraps
 from urllib.parse import urlparse, parse_qs, urlencode
 from typing import Iterable, Optional, Set, Dict
 
@@ -7273,7 +7274,7 @@ def _oauth_error_response(error: str, description: str, status_code: int = 400):
 
 
 def _oauth_allowed_scopes() -> set[str]:
-    configured = app.config.get('OAUTH_ALLOWED_SCOPES', 'openid profile email')
+    configured = app.config.get('OAUTH_ALLOWED_SCOPES', 'openid profile email pets:read appointments:read')
     return {scope.strip() for scope in str(configured).split() if scope.strip()}
 
 
@@ -7289,7 +7290,9 @@ def _oauth_normalize_scope(scope_raw: str, client: OAuthClient | None = None) ->
     if not requested.issubset(allowed):
         raise ValueError('Requested scope is not allowed.')
 
-    ordered_scopes = [scope for scope in ['openid', 'profile', 'email'] if scope in requested]
+    scope_order = ['openid', 'profile', 'email', 'pets:read', 'appointments:read']
+    ordered_scopes = [scope for scope in scope_order if scope in requested]
+    ordered_scopes.extend(sorted(requested.difference(set(scope_order))))
     return ' '.join(ordered_scopes)
 
 
@@ -7311,6 +7314,89 @@ def _oauth_extract_bearer_token() -> str | None:
     if auth_header.lower().startswith('bearer '):
         return auth_header[7:].strip()
     return request.values.get('access_token')
+
+
+def _integration_error(code: str, message: str, status_code: int, **details):
+    payload = {
+        'error': {
+            'code': code,
+            'message': message,
+        }
+    }
+    if details:
+        payload['error']['details'] = details
+    return jsonify(payload), status_code
+
+
+def _integration_ok(data, status_code: int = 200):
+    return jsonify({'data': data}), status_code
+
+
+def _integration_user_clinic_id(user: User) -> int | None:
+    if has_veterinarian_profile(user):
+        membership = ensure_veterinarian_membership(getattr(user, 'veterinario', None))
+        return membership.clinica_id if membership else None
+    return getattr(user, 'clinica_id', None)
+
+
+def integration_bearer_required(*required_scopes: str):
+    required_scope_set = {scope for scope in required_scopes if scope}
+
+    def decorator(view):
+        @wraps(view)
+        def wrapped(*args, **kwargs):
+            access_token = _oauth_extract_bearer_token()
+            if not access_token:
+                return _integration_error(
+                    'missing_bearer_token',
+                    'Missing bearer access token.',
+                    401,
+                )
+
+            token = OAuthAccessToken.query.filter_by(access_token=access_token).first()
+            if not token or not token.is_active:
+                return _integration_error(
+                    'invalid_access_token',
+                    'Access token is invalid or expired.',
+                    401,
+                )
+
+            token_scope_set = {item.strip() for item in (token.scope or '').split() if item.strip()}
+            missing_scopes = sorted(required_scope_set.difference(token_scope_set))
+            if missing_scopes:
+                return _integration_error(
+                    'insufficient_scope',
+                    'Access token does not grant the required scope.',
+                    403,
+                    required_scopes=sorted(required_scope_set),
+                    granted_scopes=sorted(token_scope_set),
+                    missing_scopes=missing_scopes,
+                )
+
+            auth_user = User.query.get(token.user_id)
+            if not auth_user:
+                return _integration_error(
+                    'invalid_token_subject',
+                    'Token subject is not available anymore.',
+                    401,
+                )
+
+            role = (getattr(auth_user, 'role', '') or '').lower()
+            g.integration_auth = {
+                'sub': str(token.user_id),
+                'user_id': token.user_id,
+                'client_id': token.client_id,
+                'scopes': sorted(token_scope_set),
+                'role': role,
+                'worker': getattr(auth_user, 'worker', None),
+            }
+            g.integration_token = token
+            g.integration_current_user = auth_user
+            return view(*args, **kwargs)
+
+        return wrapped
+
+    return decorator
 
 
 def _oauth_log_event(event: str, **fields):
@@ -7590,7 +7676,7 @@ def openid_configuration():
         'response_types_supported': ['code'],
         'subject_types_supported': ['public'],
         'id_token_signing_alg_values_supported': ['RS256'],
-        'scopes_supported': ['openid', 'profile', 'email'],
+        'scopes_supported': ['openid', 'profile', 'email', 'pets:read', 'appointments:read'],
         'token_endpoint_auth_methods_supported': ['none', 'client_secret_post'],
         'grant_types_supported': ['authorization_code', 'refresh_token'],
         'claims_supported': ['sub', 'email', 'name'],
@@ -19691,6 +19777,90 @@ def _serialize_calendar_pet(pet):
         "age_display": pet.age_display if hasattr(pet, "age_display") else None,
         "clinica_id": getattr(pet, "clinica_id", None),
     }
+
+
+@integration_bearer_required('profile')
+def api_integrations_me():
+    auth_user = g.integration_current_user
+    return _integration_ok({
+        'sub': str(auth_user.id),
+        'user_id': auth_user.id,
+        'name': auth_user.name,
+        'email': auth_user.email,
+        'role': auth_user.role,
+        'worker': getattr(auth_user, 'worker', None),
+        'clinica_id': _integration_user_clinic_id(auth_user),
+    })
+
+
+@integration_bearer_required('pets:read')
+def api_integrations_pets():
+    auth_user = g.integration_current_user
+
+    query = (
+        Animal.query
+        .options(
+            joinedload(Animal.species),
+            joinedload(Animal.breed),
+            joinedload(Animal.owner),
+        )
+        .filter(Animal.removido_em.is_(None))
+    )
+
+    role = (getattr(auth_user, 'role', '') or '').lower()
+    if role == 'admin':
+        clinic_id = request.args.get('clinica_id', type=int)
+        if clinic_id:
+            query = query.filter(Animal.clinica_id == clinic_id)
+    elif has_professional_access(auth_user):
+        clinic_id = _integration_user_clinic_id(auth_user)
+        if not clinic_id:
+            return _integration_ok([])
+        query = query.filter(Animal.clinica_id == clinic_id)
+    else:
+        query = query.filter(Animal.user_id == auth_user.id)
+
+    pets = query.order_by(Animal.date_added.desc()).all()
+    return _integration_ok([_serialize_calendar_pet(pet) for pet in pets])
+
+
+@integration_bearer_required('appointments:read')
+def api_integrations_appointments():
+    auth_user = g.integration_current_user
+    query = Appointment.query
+    role = (getattr(auth_user, 'role', '') or '').lower()
+
+    if role == 'admin':
+        clinic_id = request.args.get('clinica_id', type=int)
+        if clinic_id:
+            query = query.filter(Appointment.clinica_id == clinic_id)
+    elif has_veterinarian_profile(auth_user):
+        veterinarian = getattr(auth_user, 'veterinario', None)
+        if not veterinarian:
+            return _integration_ok([])
+        query = query.filter(Appointment.veterinario_id == veterinarian.id)
+    elif getattr(auth_user, 'worker', None) == 'colaborador':
+        clinic_id = _integration_user_clinic_id(auth_user)
+        if not clinic_id:
+            return _integration_ok([])
+        query = query.filter(Appointment.clinica_id == clinic_id)
+    else:
+        query = query.filter(Appointment.tutor_id == auth_user.id)
+
+    appointments = query.order_by(Appointment.scheduled_at.desc()).limit(200).all()
+    payload = [
+        {
+            'id': item.id,
+            'scheduled_at': item.scheduled_at.isoformat() if item.scheduled_at else None,
+            'status': item.status,
+            'animal_id': item.animal_id,
+            'tutor_id': item.tutor_id,
+            'veterinario_id': item.veterinario_id,
+            'clinica_id': item.clinica_id,
+        }
+        for item in appointments
+    ]
+    return _integration_ok(payload)
 
 
 @login_required
