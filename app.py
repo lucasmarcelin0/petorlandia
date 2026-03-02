@@ -3439,6 +3439,24 @@ def inject_accounting_access_flag():
 
 
 @app.context_processor
+def inject_has_clinic_access():
+    """Expose whether the current user can access at least one clinic."""
+    if not current_user.is_authenticated:
+        return dict(has_clinic_access=False)
+
+    from models import Clinica
+
+    has_clinic_access = (
+        clinicas_do_usuario()
+        .with_entities(Clinica.id)
+        .limit(1)
+        .first()
+        is not None
+    )
+    return dict(has_clinic_access=has_clinic_access)
+
+
+@app.context_processor
 def inject_current_app():
     """Make current_app available in templates for view_functions checks."""
     return dict(current_app=current_app)
