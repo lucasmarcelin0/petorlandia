@@ -101,7 +101,10 @@ from models import (
     NfseXml,
     OAuthAuthorizationCode,
     OAuthClient,
-    OAuthToken,
+    OAuthAccessToken,
+    OAuthConsent,
+    OAuthJwkKey,
+    OAuthRefreshToken,
     User,
     Veterinario,
     clinica_has_column,
@@ -7163,6 +7166,38 @@ def _oauth_get_signing_keys():
     if _OAUTH_PRIVATE_JWK is not None and _OAUTH_PUBLIC_JWK is not None:
         return _OAUTH_PRIVATE_JWK, _OAUTH_PUBLIC_JWK
 
+    active_key = OAuthJwkKey.active_key()
+    if active_key is None:
+        private_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+        private_pem = private_key.private_bytes(
+            encoding=serialization.Encoding.PEM,
+            format=serialization.PrivateFormat.PKCS8,
+            encryption_algorithm=serialization.NoEncryption(),
+        )
+        public_pem = private_key.public_key().public_bytes(
+            encoding=serialization.Encoding.PEM,
+            format=serialization.PublicFormat.SubjectPublicKeyInfo,
+        )
+        active_key = OAuthJwkKey(
+            kid=OAuthJwkKey.build_kid(public_pem),
+            kty='RSA',
+            private_pem=private_pem.decode('utf-8'),
+            public_pem=public_pem.decode('utf-8'),
+            status='active',
+            valid_from=utcnow(),
+        )
+        db.session.add(active_key)
+        db.session.commit()
+
+    _OAUTH_PRIVATE_JWK = JsonWebKey.import_key(active_key.private_pem.encode('utf-8'), {'kid': active_key.kid})
+    _OAUTH_PUBLIC_JWK = JsonWebKey.import_key(active_key.public_pem.encode('utf-8'), {'kid': active_key.kid})
+    return _OAUTH_PRIVATE_JWK, _OAUTH_PUBLIC_JWK
+
+
+def _oauth_rotate_signing_key(grace_seconds: int = 86400):
+    current = OAuthJwkKey.active_key()
+    now = utcnow()
+
     private_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
     private_pem = private_key.private_bytes(
         encoding=serialization.Encoding.PEM,
@@ -7173,10 +7208,29 @@ def _oauth_get_signing_keys():
         encoding=serialization.Encoding.PEM,
         format=serialization.PublicFormat.SubjectPublicKeyInfo,
     )
-    kid = hashlib.sha256(public_pem).hexdigest()[:12]
-    _OAUTH_PRIVATE_JWK = JsonWebKey.import_key(private_pem, {'kid': kid})
-    _OAUTH_PUBLIC_JWK = JsonWebKey.import_key(public_pem, {'kid': kid})
-    return _OAUTH_PRIVATE_JWK, _OAUTH_PUBLIC_JWK
+    next_key = OAuthJwkKey(
+        kid=OAuthJwkKey.build_kid(public_pem),
+        kty='RSA',
+        private_pem=private_pem.decode('utf-8'),
+        public_pem=public_pem.decode('utf-8'),
+        status='active',
+        valid_from=now,
+        rotated_from_kid=current.kid if current else None,
+    )
+
+    if current is not None:
+        current.status = 'retired'
+        current.valid_until = now
+        current.grace_until = now + timedelta(seconds=grace_seconds)
+        db.session.add(current)
+
+    db.session.add(next_key)
+    db.session.commit()
+
+    global _OAUTH_PRIVATE_JWK, _OAUTH_PUBLIC_JWK
+    _OAUTH_PRIVATE_JWK = None
+    _OAUTH_PUBLIC_JWK = None
+    return _oauth_get_signing_keys()
 
 
 def _pkce_s256(verifier: str) -> str:
@@ -7288,7 +7342,7 @@ def oauth_token():
     auth_code = OAuthAuthorizationCode.query.filter_by(code=code, client_id=client_id).first()
     if not auth_code:
         return _oauth_error_response('invalid_grant', 'Authorization code is invalid.')
-    if auth_code.used_at is not None or auth_code.expires_at <= utcnow():
+    if not auth_code.is_active:
         return _oauth_error_response('invalid_grant', 'Authorization code is expired or already used.')
     if auth_code.redirect_uri != redirect_uri:
         return _oauth_error_response('invalid_grant', 'redirect_uri does not match authorization request.')
@@ -7315,17 +7369,36 @@ def oauth_token():
 
     id_token = jwt.encode({'alg': 'RS256', 'kid': private_jwk.as_dict().get('kid')}, claims, private_jwk).decode('utf-8')
 
-    token = OAuthToken(
+    refresh_expires_in = int(app.config.get('OAUTH_REFRESH_TOKEN_EXPIRES_IN', 2592000))
+    refresh_token = OAuthRefreshToken(
+        client_id=client_id,
+        user_id=auth_code.user_id,
+        refresh_token=secrets.token_urlsafe(48),
+        scope=auth_code.scope,
+        expires_at=utcnow() + timedelta(seconds=refresh_expires_in),
+    )
+    token = OAuthAccessToken(
         client_id=client_id,
         user_id=auth_code.user_id,
         access_token=access_token,
         token_type='Bearer',
         scope=auth_code.scope,
         id_token=id_token,
+        refresh_token_id=refresh_token.id,
         expires_at=utcnow() + timedelta(seconds=expires_in),
     )
     auth_code.used_at = utcnow()
+    consent = OAuthConsent.query.filter_by(user_id=auth_code.user_id, client_id=client_id).first()
+    if consent is None:
+        consent = OAuthConsent(user_id=auth_code.user_id, client_id=client_id, scopes=auth_code.scope)
+    else:
+        consent.scopes = auth_code.scope
+        consent.revoked_at = None
+    db.session.add(refresh_token)
+    db.session.flush()
+    token.refresh_token_id = refresh_token.id
     db.session.add(token)
+    db.session.add(consent)
     db.session.add(auth_code)
     db.session.commit()
 
@@ -7335,6 +7408,7 @@ def oauth_token():
         'expires_in': expires_in,
         'scope': auth_code.scope,
         'id_token': id_token,
+        'refresh_token': refresh_token.refresh_token,
     })
 
 
@@ -7357,8 +7431,13 @@ def openid_configuration():
 
 
 def jwks():
-    _, public_jwk = _oauth_get_signing_keys()
-    return jsonify({'keys': [public_jwk.as_dict(is_private=False)]})
+    keys = []
+    for key in OAuthJwkKey.public_key_set():
+        keys.append(JsonWebKey.import_key(key.public_pem.encode('utf-8'), {'kid': key.kid}).as_dict(is_private=False))
+    if not keys:
+        _, public_jwk = _oauth_get_signing_keys()
+        keys = [public_jwk.as_dict(is_private=False)]
+    return jsonify({'keys': keys})
 
 
 def oauth_userinfo():
@@ -7366,7 +7445,7 @@ def oauth_userinfo():
     if not access_token:
         return _oauth_error_response('invalid_request', 'Missing bearer access token.', 401)
 
-    token = OAuthToken.query.filter_by(access_token=access_token).first()
+    token = OAuthAccessToken.query.filter_by(access_token=access_token).first()
     if not token or not token.is_active:
         return _oauth_error_response('invalid_token', 'Access token is invalid or expired.', 401)
 
@@ -7383,10 +7462,15 @@ def oauth_revoke():
     if not token_value:
         return _oauth_error_response('invalid_request', 'token is required.')
 
-    token = OAuthToken.query.filter_by(access_token=token_value).first()
+    token = OAuthAccessToken.query.filter_by(access_token=token_value).first()
     if token and token.revoked_at is None:
-        token.revoked_at = utcnow()
+        token.revoke()
         db.session.add(token)
+        if token.refresh_token_id:
+            refresh = OAuthRefreshToken.query.get(token.refresh_token_id)
+            if refresh and refresh.revoked_at is None:
+                refresh.revoked_at = utcnow()
+                db.session.add(refresh)
         db.session.commit()
 
     return ('', 200)
@@ -7398,7 +7482,7 @@ def oauth_introspect():
     if not token_value:
         return _oauth_error_response('invalid_request', 'token is required.')
 
-    token = OAuthToken.query.filter_by(access_token=token_value).first()
+    token = OAuthAccessToken.query.filter_by(access_token=token_value).first()
     if not token or not token.is_active:
         return jsonify({'active': False})
 
