@@ -26,10 +26,22 @@ from models import (
     Clinica,
     Orcamento,
 )
-from flask import url_for
+from flask import abort, url_for
 from datetime import datetime, timedelta
 from types import SimpleNamespace
 from urllib.parse import quote
+
+
+def _test_inroute_abort_404_view():
+    abort(404)
+
+
+if "test_abort404_for_expired_membership" not in flask_app.view_functions:
+    flask_app.add_url_rule(
+        "/__test_abort_404_expired_vet__",
+        "test_abort404_for_expired_membership",
+        _test_inroute_abort_404_view,
+    )
 
 @pytest.fixture
 def app():
@@ -127,7 +139,8 @@ def test_index_hides_professional_area_when_membership_inactive(monkeypatch, app
 
         import flask_login.utils as login_utils
 
-        monkeypatch.setattr(login_utils, '_get_user', lambda: user)
+        user_id = user.id
+        monkeypatch.setattr(login_utils, '_get_user', lambda: User.query.get(user_id))
         monkeypatch.setattr(app_module, '_is_admin', lambda: False)
 
         for idx, fn in enumerate(flask_app.template_context_processors[None]):
@@ -164,7 +177,8 @@ def test_index_shows_professional_area_for_active_vet_without_worker_flag(monkey
 
         import flask_login.utils as login_utils
 
-        monkeypatch.setattr(login_utils, '_get_user', lambda: user)
+        user_id = user.id
+        monkeypatch.setattr(login_utils, '_get_user', lambda: User.query.get(user_id))
         monkeypatch.setattr(app_module, '_is_admin', lambda: False)
 
         for idx, fn in enumerate(flask_app.template_context_processors[None]):
@@ -317,6 +331,42 @@ def test_expired_veterinarian_membership_redirects_on_404(monkeypatch, app):
     assert response.headers['Location'].endswith('/veterinario/assinatura')
 
 
+
+def test_expired_veterinarian_membership_keeps_inroute_404(monkeypatch, app):
+    client = app.test_client()
+
+    with app.app_context():
+        db.drop_all()
+        db.create_all()
+
+        vet_user = User(
+            id=1,
+            name='Vet Expirado',
+            email='vet.expirado@test',
+            role='veterinario',
+            worker='veterinario',
+        )
+        vet_user.set_password('test')
+        vet_profile = Veterinario(user=vet_user, crmv='CRMV998')
+        membership = VeterinarianMembership(
+            veterinario=vet_profile,
+            started_at=datetime(2024, 1, 1, 12, 0, 0),
+            trial_ends_at=datetime(2024, 1, 2, 12, 0, 0),
+            paid_until=None,
+        )
+        db.session.add_all([vet_user, vet_profile, membership])
+        db.session.commit()
+
+        import flask_login.utils as login_utils
+
+        vet_user_id = vet_user.id
+        monkeypatch.setattr(login_utils, '_get_user', lambda: User.query.get(vet_user_id))
+
+    response = client.get('/__test_abort_404_expired_vet__', follow_redirects=False)
+
+    assert response.status_code == 404
+
+
 def test_404_keeps_not_found_for_non_veterinarian(monkeypatch, app):
     client = app.test_client()
 
@@ -331,8 +381,8 @@ def test_404_keeps_not_found_for_non_veterinarian(monkeypatch, app):
 
         import flask_login.utils as login_utils
 
-        monkeypatch.setattr(login_utils, '_get_user', lambda: user)
-
+        user_id = user.id
+        monkeypatch.setattr(login_utils, '_get_user', lambda: User.query.get(user_id))
     response = client.get('/rota-que-nao-existe', follow_redirects=False)
 
     assert response.status_code == 404
