@@ -4,6 +4,7 @@ import sys
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 import pytest
+import base64
 import app as app_module
 from app import app as flask_app, mp_sdk, db
 from io import BytesIO
@@ -29,7 +30,7 @@ from models import (
 from flask import abort, url_for
 from datetime import datetime, timedelta
 from types import SimpleNamespace
-from urllib.parse import quote
+from urllib.parse import quote, parse_qs, urlparse
 
 
 def _test_inroute_abort_404_view():
@@ -125,8 +126,71 @@ def test_oauth_authorization_server_metadata_includes_dynamic_registration(app):
     payload = response.get_json()
     assert payload is not None
     assert payload['registration_endpoint'].endswith('/oauth/register')
+    assert 'client_secret_basic' in payload['token_endpoint_auth_methods_supported']
 
 
+
+
+def test_dynamic_registration_supports_client_secret_basic(app):
+    client = app.test_client()
+
+    registration = client.post(
+        '/oauth/register',
+        json={
+            'client_name': 'Basic client',
+            'redirect_uris': ['https://client.example/callback'],
+            'token_endpoint_auth_method': 'client_secret_basic',
+            'grant_types': ['authorization_code', 'refresh_token'],
+            'response_types': ['code'],
+            'scope': 'openid profile email',
+        },
+    )
+
+    assert registration.status_code == 201
+    payload = registration.get_json()
+    assert payload['token_endpoint_auth_method'] == 'client_secret_basic'
+
+    with app.app_context():
+        user = User(name='Basic User', email='basic-user@test', role='adotante')
+        user.set_password('test')
+        db.session.add(user)
+        db.session.commit()
+        user_id = user.id
+
+    login(client, user_id)
+
+    authorize_response = client.post(
+        '/oauth/authorize',
+        data={
+            'response_type': 'code',
+            'client_id': payload['client_id'],
+            'redirect_uri': 'https://client.example/callback',
+            'scope': 'openid profile email',
+            'state': 'state-basic',
+            'code_challenge': 'Z_P4EKbGwIkA01e3Y5fp4tMCvn_Ae5nUw7qY7XwkTrQ',
+            'code_challenge_method': 'S256',
+            'consent_action': 'approve',
+            'consent_scopes': ['openid', 'profile', 'email'],
+        },
+        follow_redirects=False,
+    )
+
+    code = parse_qs(urlparse(authorize_response.headers['Location']).query)['code'][0]
+    credentials = base64.b64encode(f"{payload['client_id']}:{payload['client_secret']}".encode('utf-8')).decode('utf-8')
+
+    token_response = client.post(
+        '/oauth/token',
+        data={
+            'grant_type': 'authorization_code',
+            'code': code,
+            'redirect_uri': 'https://client.example/callback',
+            'code_verifier': 'verifier',
+        },
+        headers={'Authorization': f'Basic {credentials}'},
+    )
+
+    assert token_response.status_code == 200
+    assert token_response.get_json()['token_type'] == 'Bearer'
 def test_index_hides_professional_area_when_membership_inactive(monkeypatch, app):
     client = app.test_client()
 
