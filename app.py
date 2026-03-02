@@ -212,8 +212,9 @@ CORS(app, resources={
     # MCP server endpoint — Claude and ChatGPT connect here after OAuth
     r"/mcp": {
         "origins": "*",
-        "methods": ["POST", "OPTIONS"],
+        "methods": ["GET", "POST", "OPTIONS"],
         "allow_headers": ["Content-Type", "Authorization"],
+        "expose_headers": ["WWW-Authenticate"],
     },
 })
 async_mode = os.getenv("SOCKETIO_ASYNC_MODE", "eventlet").strip().lower() or None
@@ -7879,8 +7880,9 @@ def oauth_introspect():
 
 # ─────────────────────────────────────────────────────────────────────────────
 # MCP SERVER  (Model Context Protocol — JSON-RPC 2.0 over HTTP)
-# Endpoint: POST /mcp
+# Endpoint: GET|POST /mcp
 # Auth:     Bearer token (issued by /oauth/token)
+# Discovery: /.well-known/oauth-protected-resource  (RFC 9396 / MCP spec)
 # Clients:  Claude, ChatGPT, and any MCP-compatible AI assistant
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -7892,24 +7894,57 @@ def _mcp_err(req_id, code, message):
     return jsonify({'jsonrpc': '2.0', 'id': req_id, 'error': {'code': code, 'message': message}})
 
 
+def _mcp_unauthorized():
+    """Return 401 with WWW-Authenticate so that OAuth clients know how to auth."""
+    issuer = _oauth_issuer()
+    resource_url = f'{issuer}/mcp'
+    metadata_url = f'{issuer}/.well-known/oauth-protected-resource'
+    resp = make_response(
+        jsonify({'jsonrpc': '2.0', 'id': None,
+                 'error': {'code': -32001, 'message': 'Unauthorized: Bearer token required'}}),
+        401,
+    )
+    resp.headers['WWW-Authenticate'] = (
+        f'Bearer realm="{resource_url}",'
+        f' resource_metadata="{metadata_url}",'
+        f' as_uri="{issuer}"'
+    )
+    return resp
+
+
 @csrf.exempt
 def mcp_server():
-    """MCP server — handles JSON-RPC 2.0 requests from Claude and ChatGPT."""
+    """MCP server — handles GET (capability probe) and POST (JSON-RPC) from Claude/ChatGPT."""
 
-    # ── Authentication ────────────────────────────────────────────────────────
+    # ── GET: unauthenticated capability probe or SSE handshake ───────────────
+    # Claude may send a plain GET before OAuth to verify server existence.
+    # Return a JSON description (no auth required) so discovery succeeds.
+    if request.method == 'GET':
+        issuer = _oauth_issuer()
+        return jsonify({
+            'server': 'PetOrlândia MCP',
+            'version': '1.0.0',
+            'protocol': 'mcp/2024-11-05',
+            'authorization_required': True,
+            'authorization_server': issuer,
+        })
+
+    # ── POST: authenticated JSON-RPC ─────────────────────────────────────────
+
+    # Authentication
     bearer = _oauth_extract_bearer_token()
     if not bearer:
-        return _mcp_err(None, -32001, 'Unauthorized: Bearer token required'), 401
+        return _mcp_unauthorized()
 
     token_obj = OAuthAccessToken.query.filter_by(access_token=bearer).first()
     if not token_obj or not token_obj.is_active:
-        return _mcp_err(None, -32001, 'Unauthorized: invalid or expired token'), 401
+        return _mcp_unauthorized()
 
     user = User.query.get(token_obj.user_id)
     if not user:
-        return _mcp_err(None, -32001, 'Unauthorized: user not found'), 401
+        return _mcp_unauthorized()
 
-    # ── Parse JSON-RPC ────────────────────────────────────────────────────────
+    # Parse JSON-RPC
     data = request.get_json(silent=True) or {}
     method = data.get('method', '')
     req_id = data.get('id')
@@ -7923,7 +7958,7 @@ def mcp_server():
             'capabilities': {'tools': {}},
         })
 
-    # ── notifications/initialized (client ack — no body needed) ───────────────
+    # ── notifications/initialized (client ack — no response body needed) ─────
     if method in ('notifications/initialized', 'initialized'):
         return ('', 204)
 
@@ -7973,7 +8008,6 @@ def mcp_server():
             )
             pets = []
             for a in animals:
-                # species/breed may be ORM relationships or plain strings
                 spec = getattr(a, 'species', None)
                 spec_name = spec.name if hasattr(spec, 'name') else str(spec or '')
                 brd = getattr(a, 'breed', None)
@@ -7997,16 +8031,17 @@ def mcp_server():
             if status_filter:
                 q = q.filter(Appointment.status == status_filter)
             appts = q.order_by(Appointment.scheduled_at.desc()).limit(50).all()
-            data_out = []
-            for a in appts:
-                data_out.append({
+            data_out = [
+                {
                     'id': a.id,
                     'pet': a.animal.name if a.animal else None,
                     'data': a.scheduled_at.isoformat() if a.scheduled_at else None,
                     'status': a.status,
                     'tipo': a.kind,
                     'notas': a.notes,
-                })
+                }
+                for a in appts
+            ]
             text = json.dumps(data_out, ensure_ascii=False, indent=2) if data_out else '[]'
             return _mcp_ok(req_id, {'content': [{'type': 'text', 'text': text}]})
 
@@ -8014,6 +8049,23 @@ def mcp_server():
 
     # ── unknown method ────────────────────────────────────────────────────────
     return _mcp_err(req_id, -32601, f'Method not found: {method}')
+
+
+@csrf.exempt
+def mcp_protected_resource_metadata():
+    """RFC 9396 / MCP spec: advertises the authorization server for this resource.
+
+    This endpoint tells OAuth clients (Claude, ChatGPT) which authorization
+    server protects the /mcp resource, enabling discovery even when the
+    connector URL uses a path (e.g. https://www.petorlandia.com.br/mcp).
+    """
+    issuer = _oauth_issuer()
+    return jsonify({
+        'resource': f'{issuer}/mcp',
+        'authorization_servers': [issuer],
+        'bearer_methods_supported': ['header'],
+        'resource_documentation': f'{issuer}/mcp',
+    })
 
 
 @login_required
