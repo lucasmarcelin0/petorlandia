@@ -13,6 +13,12 @@ def get_blueprint():
         view_func=lazy_view("openid_configuration"),
         methods=["GET"],
     )
+    bp.add_url_rule(
+        "/.well-known/oauth-authorization-server",
+        endpoint="oauth_authorization_server_metadata",
+        view_func=lazy_view("openid_configuration"),
+        methods=["GET"],
+    )
     bp.add_url_rule("/.well-known/jwks.json", view_func=lazy_view("jwks"), methods=["GET"])
     bp.add_url_rule("/oauth/userinfo", view_func=lazy_view("oauth_userinfo"), methods=["GET"])
     bp.add_url_rule("/oauth/revoke", view_func=lazy_view("oauth_revoke"), methods=["POST"])
