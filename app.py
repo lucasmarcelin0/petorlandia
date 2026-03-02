@@ -193,7 +193,23 @@ elif _resolved_uri and _resolved_uri.startswith("sqlite"):
     app.config["SQLALCHEMY_ENGINE_OPTIONS"] = engine_opts
 app.config.setdefault("FRONTEND_URL", "http://127.0.0.1:5000")
 app.config.update(SESSION_PERMANENT=True, SESSION_TYPE="filesystem")
-CORS(app, resources={r"/surpresa*": {"origins": "*"}, r"/socket.io/*": {"origins": "*"}})
+CORS(app, resources={
+    r"/surpresa*": {"origins": "*"},
+    r"/socket.io/*": {"origins": "*"},
+    # OAuth 2.0 / OpenID Connect endpoints must be accessible from any origin
+    # so that external clients (Claude, ChatGPT, etc.) can perform dynamic
+    # client registration (RFC 7591) and token exchange (RFC 6749).
+    r"/.well-known/*": {
+        "origins": "*",
+        "methods": ["GET", "OPTIONS"],
+        "allow_headers": ["Content-Type", "Authorization"],
+    },
+    r"/oauth/*": {
+        "origins": "*",
+        "methods": ["GET", "POST", "OPTIONS"],
+        "allow_headers": ["Content-Type", "Authorization"],
+    },
+})
 async_mode = os.getenv("SOCKETIO_ASYNC_MODE", "eventlet").strip().lower() or None
 if async_mode == "eventlet":
     if sys.platform.startswith("win") and sys.version_info >= (3, 13):
@@ -7769,6 +7785,8 @@ def openid_configuration():
         'token_endpoint_auth_methods_supported': ['none', 'client_secret_post'],
         'grant_types_supported': ['authorization_code', 'refresh_token'],
         'claims_supported': ['sub', 'email', 'name'],
+        # PKCE (RFC 7636) — required by Claude and ChatGPT connectors
+        'code_challenge_methods_supported': ['S256'],
     })
 
 

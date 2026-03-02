@@ -17,7 +17,11 @@
       "Bash(if ! grep -q \"def app\\(\" \"$f\")",
       "Bash(then echo \"  -> No local fixtures!\")",
       "Bash(while read f)",
-      "Bash(then basename \"$f\")"
+      "Bash(then basename \"$f\")",
+      "Bash(git pull:*)",
+      "Bash(git reset:*)",
+      "Bash(heroku logs:*)",
+      "WebFetch(domain:www.petorlandia.com.br)"
     ]
   }
 }

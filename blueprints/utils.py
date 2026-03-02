@@ -21,4 +21,16 @@ def lazy_view(view_name: str) -> Callable[..., Any]:
     _view.__name__ = view_name
     _view.__qualname__ = view_name
     _view.__doc__ = f"Proxy for app.{view_name}"
+
+    # Propagate csrf_exempt from the actual view function so that
+    # @csrf.exempt decorators applied in app.py take effect even when
+    # the route is registered through this lazy proxy.
+    try:
+        app_module = _load_app_module()
+        actual_func = getattr(app_module, view_name, None)
+        if actual_func is not None and getattr(actual_func, "csrf_exempt", False):
+            _view.csrf_exempt = True  # type: ignore[attr-defined]
+    except Exception:
+        pass
+
     return _view
