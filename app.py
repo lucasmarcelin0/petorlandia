@@ -2305,8 +2305,40 @@ def ensure_clinic_access(clinica_id):
         abort(404)
     if current_user.is_authenticated and current_user.role == 'admin':
         return
-    if clinica_id not in _collect_clinic_ids(viewer=current_user):
+    if clinica_id not in _viewer_operational_clinic_ids(current_user):
         abort(404)
+
+
+def _viewer_operational_clinic_ids(viewer):
+    """Return clinic IDs where the viewer can operate as staff/owner."""
+
+    clinic_ids = []
+    if not viewer:
+        return clinic_ids
+
+    if _user_is_clinic_owner(viewer):
+        for clinic in getattr(viewer, 'clinicas', []) or []:
+            clinic_id = getattr(clinic, 'id', None)
+            if clinic_id and clinic_id not in clinic_ids:
+                clinic_ids.append(clinic_id)
+
+    worker_role = (getattr(viewer, 'worker', None) or '').lower()
+    if worker_role == 'colaborador':
+        viewer_clinic = getattr(viewer, 'clinica_id', None)
+        if viewer_clinic and viewer_clinic not in clinic_ids:
+            clinic_ids.append(viewer_clinic)
+
+    vet_profile = getattr(viewer, 'veterinario', None)
+    for clinic_id in _veterinarian_accessible_clinic_ids(vet_profile):
+        if clinic_id not in clinic_ids:
+            clinic_ids.append(clinic_id)
+
+    for role in getattr(viewer, 'clinic_roles', []) or []:
+        clinic_id = getattr(role, 'clinic_id', None)
+        if clinic_id and clinic_id not in clinic_ids:
+            clinic_ids.append(clinic_id)
+
+    return clinic_ids
 
 
 def _coerce_int(value):
