@@ -931,7 +931,10 @@ class ClinicHours(db.Model):
     hora_abertura = db.Column(db.Time, nullable=False)
     hora_fechamento = db.Column(db.Time, nullable=False)
 
-    clinica = db.relationship('Clinica', backref='horarios')
+    clinica = db.relationship(
+        'Clinica',
+        backref=db.backref('horarios', cascade='all, delete-orphan'),
+    )
 
 
 class ClinicStaff(db.Model):
@@ -950,7 +953,10 @@ class ClinicStaff(db.Model):
     can_manage_inventory = db.Column(db.Boolean, default=False)
     can_view_full_calendar = db.Column(db.Boolean, default=True, nullable=False)
 
-    clinic = db.relationship('Clinica', backref='staff_members')
+    clinic = db.relationship(
+        'Clinica',
+        backref=db.backref('staff_members', cascade='all, delete-orphan'),
+    )
     user = db.relationship(
         'User',
         backref=db.backref('clinic_roles', cascade='all, delete-orphan'),
