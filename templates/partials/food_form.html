@@ -233,14 +233,18 @@ function toggleFormTipoRacao() {
   }
 }
 
+let _debounceTimerBuscaRacao;
 buscaRacaoInput.addEventListener('input', () => {
   const q = buscaRacaoInput.value.trim();
   if (q.length < 2) {
+    clearTimeout(_debounceTimerBuscaRacao);
     sugestoesBuscaRacao.innerHTML = '';
     sugestoesBuscaRacao.style.display = 'none';
     return;
   }
 
+  clearTimeout(_debounceTimerBuscaRacao);
+  _debounceTimerBuscaRacao = setTimeout(() => {
   fetch(`/buscar_racoes?q=${encodeURIComponent(q)}`)
     .then(resp => resp.json())
     .then(data => {
@@ -272,6 +276,7 @@ buscaRacaoInput.addEventListener('input', () => {
       sugestoesBuscaRacao.innerHTML = '<li class="list-group-item text-danger">Erro ao buscar</li>';
       sugestoesBuscaRacao.style.display = 'block';
     });
+  }, 350);
 });
 
 document.addEventListener('click', (e) => {

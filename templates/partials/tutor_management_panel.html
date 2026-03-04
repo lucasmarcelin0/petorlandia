@@ -170,21 +170,26 @@
       listaTutor.classList.remove('d-none');
     };
 
-    inputTutor.addEventListener('input', async () => {
+    let _debounceTimerBuscaTutor;
+    inputTutor.addEventListener('input', () => {
       const q = inputTutor.value.trim();
       if (q.length < 2) {
+        clearTimeout(_debounceTimerBuscaTutor);
         listaTutor.classList.add('d-none');
         listaTutor.innerHTML = '';
         return;
       }
 
-      try {
-        const data = await carregarTutores(q);
-        renderResultados(data);
-      } catch (error) {
-        console.error('Não foi possível buscar tutores.', error);
-        listaTutor.classList.add('d-none');
-      }
+      clearTimeout(_debounceTimerBuscaTutor);
+      _debounceTimerBuscaTutor = setTimeout(async () => {
+        try {
+          const data = await carregarTutores(q);
+          renderResultados(data);
+        } catch (error) {
+          console.error('Não foi possível buscar tutores.', error);
+          listaTutor.classList.add('d-none');
+        }
+      }, 350);
     });
 
     if (filterContainer) {

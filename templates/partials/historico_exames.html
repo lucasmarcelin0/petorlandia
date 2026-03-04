@@ -188,16 +188,19 @@ function removerExame(button) {
   }
 }
 
+const _sugerirExamesTimers = new WeakMap();
 function sugerirExames(input) {
   const lista = input.nextElementSibling;
   const q = input.value.trim();
 
-  // 🚨 Block any fetch if input is too short
   if (!q || q.length < 2) {
+    clearTimeout(_sugerirExamesTimers.get(input));
     lista.innerHTML = '';
     return;
   }
 
+  clearTimeout(_sugerirExamesTimers.get(input));
+  _sugerirExamesTimers.set(input, setTimeout(() => {
   fetch(`/buscar_exames?q=${encodeURIComponent(q)}`)
     .then(r => {
       if (!r.ok) {
@@ -224,6 +227,7 @@ function sugerirExames(input) {
       console.error('Erro ao buscar exames:', err);
       lista.innerHTML = '';
     });
+  }, 350));
 }
 
 

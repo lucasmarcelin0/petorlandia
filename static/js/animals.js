@@ -87,7 +87,6 @@ async function loadAnimals(params, { pushState = true } = {}) {
     initializePopovers();
   } catch (error) {
     console.error(error);
-    window.location.href = requestUrl;
     return;
   } finally {
     animalsContainer.removeAttribute('aria-busy');

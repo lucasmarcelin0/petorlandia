@@ -141,15 +141,18 @@
         if (!aplicadaCheckbox.checked) aplicadaEmInput.value = '';
       });
 
+      let _debounceTimerInputVacina;
       inputVacina.addEventListener('input', function () {
         const q = this.value.trim();
-        console.log("🟡 Buscando vacina:", q);
 
         if (q.length < 2) {
+          clearTimeout(_debounceTimerInputVacina);
           sugestoesVacinas.innerHTML = '';
           return;
         }
 
+        clearTimeout(_debounceTimerInputVacina);
+        _debounceTimerInputVacina = setTimeout(() => {
         fetch(`/buscar_vacinas?q=${encodeURIComponent(q)}`)
           .then(res => res.json())
           .then(data => {
@@ -189,6 +192,7 @@
           .catch(err => {
             console.error("❌ Erro no autocomplete:", err);
           });
+        }, 350);
       });
 
       // Fecha sugestões ao clicar fora
@@ -201,32 +205,37 @@
         }
       });
 
+      let _debounceTimerBuscaVacina;
       buscaVacinaInput.addEventListener('input', () => {
         const q = buscaVacinaInput.value.trim();
         if (q.length < 2) {
+          clearTimeout(_debounceTimerBuscaVacina);
           sugestoesBuscaVacina.innerHTML = '';
           sugestoesBuscaVacina.style.display = 'none';
           return;
         }
-        fetch(`/buscar_vacinas?q=${encodeURIComponent(q)}`)
-          .then(r => r.json())
-          .then(data => {
-            sugestoesBuscaVacina.innerHTML = '';
-            if (!data.length) {
-              sugestoesBuscaVacina.innerHTML = '<li class="list-group-item text-muted">Nenhuma vacina encontrada</li>';
+        clearTimeout(_debounceTimerBuscaVacina);
+        _debounceTimerBuscaVacina = setTimeout(() => {
+          fetch(`/buscar_vacinas?q=${encodeURIComponent(q)}`)
+            .then(r => r.json())
+            .then(data => {
+              sugestoesBuscaVacina.innerHTML = '';
+              if (!data.length) {
+                sugestoesBuscaVacina.innerHTML = '<li class="list-group-item text-muted">Nenhuma vacina encontrada</li>';
+                sugestoesBuscaVacina.style.display = 'block';
+                return;
+              }
+              data.forEach(v => {
+                const li = document.createElement('li');
+                li.className = 'list-group-item list-group-item-action';
+                li.textContent = v.nome;
+                li.onclick = () => openVacinaCard(v);
+                sugestoesBuscaVacina.appendChild(li);
+              });
               sugestoesBuscaVacina.style.display = 'block';
-              return;
-            }
-            data.forEach(v => {
-              const li = document.createElement('li');
-              li.className = 'list-group-item list-group-item-action';
-              li.textContent = v.nome;
-              li.onclick = () => openVacinaCard(v);
-              sugestoesBuscaVacina.appendChild(li);
-            });
-            sugestoesBuscaVacina.style.display = 'block';
-          })
-          .catch(err => console.error('Erro busca vacina modelo:', err));
+            })
+            .catch(err => console.error('Erro busca vacina modelo:', err));
+        }, 350);
       });
 
       renderVacinasTemp();

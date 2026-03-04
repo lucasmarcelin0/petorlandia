@@ -202,7 +202,7 @@
       }
 
 
-      inputExame.addEventListener('input', function () {
+      inputExame.addEventListener('input', debounce(function () {
         const query = this.value;
         if (query.length < 2) {
           sugestoes.innerHTML = '';
@@ -237,7 +237,7 @@
             sugestoes.appendChild(li);
           }
           });
-      });
+      }, 350));
 
       if (buscarNovo) {
         const debounceBusca = debounce(function () {
