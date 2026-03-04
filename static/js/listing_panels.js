@@ -240,7 +240,7 @@
 
   function scheduleFetch(panel, page) {
     clearTimeout(debounceTimers.get(panel));
-    const timer = window.setTimeout(() => fetchPage(panel, page), 250);
+    const timer = window.setTimeout(() => fetchPage(panel, page), 400);
     debounceTimers.set(panel, timer);
   }
 
@@ -251,7 +251,7 @@
     state.page = page;
 
     const requestUrl = buildRequestUrl(panel, config, state);
-    const canNavigateFallback = shouldNavigateFallback(config.fetchUrl);
+    const canNavigateFallback = shouldNavigateFallback(config.fetchUrl, state);
 
     const previousController = activeControllers.get(panel);
     if (previousController) {
@@ -319,7 +319,12 @@
     }));
   }
 
-  function shouldNavigateFallback(fetchUrl) {
+  function shouldNavigateFallback(fetchUrl, state) {
+    // Never fall back to full navigation when the user has an active search
+    // query – that would reload the page and wipe what they typed.
+    if (state && state.search) {
+      return false;
+    }
     try {
       const requestPath = new URL(fetchUrl || window.location.pathname, window.location.origin).pathname;
       return requestPath === window.location.pathname;
@@ -387,11 +392,10 @@
       }
     }
 
-    const newFilter = newPanel.querySelector(config.filterSelector);
-    if (newFilter && filterInput) {
-      filterInput.value = newFilter.value;
-      state.search = filterInput.value.trim();
-    }
+    // Do not overwrite the filter input value with the server-rendered value.
+    // The user may have typed additional characters while the request was in
+    // flight; resetting the input to the stale server value causes letters to
+    // disappear. state.search is already up-to-date from the 'input' listener.
 
     const newSort = newPanel.querySelector(config.sortSelector);
     if (newSort && sortSelect) {
