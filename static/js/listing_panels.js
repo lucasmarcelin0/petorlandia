@@ -251,7 +251,6 @@
     state.page = page;
 
     const requestUrl = buildRequestUrl(panel, config, state);
-    const canNavigateFallback = shouldNavigateFallback(config.fetchUrl, state);
 
     const previousController = activeControllers.get(panel);
     if (previousController) {
@@ -274,19 +273,14 @@
       if (error.name === 'AbortError') {
         return;
       }
-      console.error('Listing panel request failed, falling back to navigation.', error);
-      if (canNavigateFallback) {
-        window.location.href = requestUrl.toString();
-      }
+      console.error('Listing panel request failed.', error);
       return;
     } finally {
       activeControllers.delete(panel);
     }
 
     if (!response || !response.ok) {
-      if (canNavigateFallback) {
-        window.location.href = requestUrl.toString();
-      }
+      console.warn('Listing panel received non-ok response:', response?.status);
       return;
     }
 
@@ -295,16 +289,11 @@
       payload = await response.json();
     } catch (error) {
       console.error('Invalid JSON response for listing panel.', error);
-      if (canNavigateFallback) {
-        window.location.href = requestUrl.toString();
-      }
       return;
     }
 
     if (!payload || typeof payload.html !== 'string') {
-      if (canNavigateFallback) {
-        window.location.href = requestUrl.toString();
-      }
+      console.warn('Listing panel response missing html payload.');
       return;
     }
 
@@ -317,20 +306,6 @@
     panel.dispatchEvent(new CustomEvent('listingpanel:updated', {
       detail: { panel, state: { ...state } },
     }));
-  }
-
-  function shouldNavigateFallback(fetchUrl, state) {
-    // Never fall back to full navigation when the user has an active search
-    // query – that would reload the page and wipe what they typed.
-    if (state && state.search) {
-      return false;
-    }
-    try {
-      const requestPath = new URL(fetchUrl || window.location.pathname, window.location.origin).pathname;
-      return requestPath === window.location.pathname;
-    } catch (error) {
-      return false;
-    }
   }
 
   function buildRequestUrl(panel, config, state) {
