@@ -240,7 +240,7 @@
 
   function scheduleFetch(panel, page) {
     clearTimeout(debounceTimers.get(panel));
-    const timer = window.setTimeout(() => fetchPage(panel, page), 250);
+    const timer = window.setTimeout(() => fetchPage(panel, page), 400);
     debounceTimers.set(panel, timer);
   }
 
@@ -251,7 +251,6 @@
     state.page = page;
 
     const requestUrl = buildRequestUrl(panel, config, state);
-    const canNavigateFallback = shouldNavigateFallback(config.fetchUrl);
 
     const previousController = activeControllers.get(panel);
     if (previousController) {
@@ -274,19 +273,14 @@
       if (error.name === 'AbortError') {
         return;
       }
-      console.error('Listing panel request failed, falling back to navigation.', error);
-      if (canNavigateFallback) {
-        window.location.href = requestUrl.toString();
-      }
+      console.error('Listing panel request failed.', error);
       return;
     } finally {
       activeControllers.delete(panel);
     }
 
     if (!response || !response.ok) {
-      if (canNavigateFallback) {
-        window.location.href = requestUrl.toString();
-      }
+      console.warn('Listing panel received non-ok response:', response?.status);
       return;
     }
 
@@ -295,16 +289,11 @@
       payload = await response.json();
     } catch (error) {
       console.error('Invalid JSON response for listing panel.', error);
-      if (canNavigateFallback) {
-        window.location.href = requestUrl.toString();
-      }
       return;
     }
 
     if (!payload || typeof payload.html !== 'string') {
-      if (canNavigateFallback) {
-        window.location.href = requestUrl.toString();
-      }
+      console.warn('Listing panel response missing html payload.');
       return;
     }
 
@@ -317,15 +306,6 @@
     panel.dispatchEvent(new CustomEvent('listingpanel:updated', {
       detail: { panel, state: { ...state } },
     }));
-  }
-
-  function shouldNavigateFallback(fetchUrl) {
-    try {
-      const requestPath = new URL(fetchUrl || window.location.pathname, window.location.origin).pathname;
-      return requestPath === window.location.pathname;
-    } catch (error) {
-      return false;
-    }
   }
 
   function buildRequestUrl(panel, config, state) {
@@ -387,11 +367,10 @@
       }
     }
 
-    const newFilter = newPanel.querySelector(config.filterSelector);
-    if (newFilter && filterInput) {
-      filterInput.value = newFilter.value;
-      state.search = filterInput.value.trim();
-    }
+    // Do not overwrite the filter input value with the server-rendered value.
+    // The user may have typed additional characters while the request was in
+    // flight; resetting the input to the stale server value causes letters to
+    // disappear. state.search is already up-to-date from the 'input' listener.
 
     const newSort = newPanel.querySelector(config.sortSelector);
     if (newSort && sortSelect) {
