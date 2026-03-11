@@ -7505,7 +7505,7 @@ def oauth_authorize():
 
     client = OAuthClient.query.filter_by(client_id=client_id).first()
     if not client:
-        return _oauth_error_response('invalid_client', 'Unknown OAuth client.', 401)
+        return _oauth_error_response('invalid_client', 'Unknown OAuth client. Register the client at /oauth/register or provision it in oauth_client.', 401)
     if not _oauth_client_redirect_valid(client, redirect_uri):
         return _oauth_error_response('invalid_request', 'redirect_uri is not allowed for this client.')
 
@@ -7582,7 +7582,7 @@ def oauth_token():
 
         client = OAuthClient.query.filter_by(client_id=client_id).first()
         if not client:
-            return _oauth_error_response('invalid_client', 'Unknown OAuth client.', 401)
+            return _oauth_error_response('invalid_client', 'Unknown OAuth client. Register the client at /oauth/register or provision it in oauth_client.', 401)
         if not _oauth_validate_client_secret(client, client_secret):
             return _oauth_error_response('invalid_client', 'client authentication failed.', 401)
 
@@ -7670,7 +7670,7 @@ def oauth_token():
 
         client = OAuthClient.query.filter_by(client_id=client_id).first()
         if not client:
-            return _oauth_error_response('invalid_client', 'Unknown OAuth client.', 401)
+            return _oauth_error_response('invalid_client', 'Unknown OAuth client. Register the client at /oauth/register or provision it in oauth_client.', 401)
         if not _oauth_validate_client_secret(client, client_secret):
             return _oauth_error_response('invalid_client', 'client authentication failed.', 401)
 
