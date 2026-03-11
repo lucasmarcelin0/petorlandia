@@ -1,6 +1,7 @@
 # ───────────────────────────  app.py  ───────────────────────────
 import os, sys, pathlib, importlib, logging, uuid, re, secrets, hashlib, base64
 import requests
+import html
 from collections import defaultdict, Counter
 import math
 from types import SimpleNamespace
@@ -7484,6 +7485,93 @@ def _oauth_revoke_refresh_family(refresh_token: OAuthRefreshToken):
                 db.session.add(access)
 
 
+
+def _oauth_render_consent_page(
+    *,
+    client_name: str,
+    scope: str,
+    requested_scopes: list[str],
+    state: str,
+    redirect_uri: str,
+    response_type: str,
+    client_id: str,
+    nonce: str | None,
+    code_challenge: str,
+    code_challenge_method: str,
+    csrf_token_value: str,
+):
+    def _escape(value: str | None) -> str:
+        return html.escape(str(value or ''), quote=True)
+
+    hidden_fields = {
+        'csrf_token': csrf_token_value,
+        'response_type': response_type,
+        'client_id': client_id,
+        'redirect_uri': redirect_uri,
+        'scope': scope,
+        'state': state,
+        'nonce': nonce or '',
+        'code_challenge': code_challenge,
+        'code_challenge_method': code_challenge_method,
+    }
+    hidden_html = '\n'.join(
+        f'<input type="hidden" name="{_escape(key)}" value="{_escape(value)}">'
+        for key, value in hidden_fields.items()
+    )
+
+    checkbox_html = '\n'.join(
+        (
+            f'<div style="margin-bottom:8px;">'
+            f'<label for="scope_{index}" style="cursor:pointer;">'
+            f'<input id="scope_{index}" type="checkbox" name="consent_scopes" value="{_escape(item)}" checked required> '
+            f'{_escape(item)}'
+            f'</label>'
+            f'</div>'
+        )
+        for index, item in enumerate(requested_scopes, start=1)
+    )
+
+    page = (
+        '<!doctype html>'
+        '<html lang="pt-BR">'
+        '<head>'
+        '<meta charset="utf-8">'
+        '<meta name="viewport" content="width=device-width, initial-scale=1">'
+        '<title>Consentimento OAuth</title>'
+        '<style>'
+        'body{font-family:Arial,sans-serif;background:#f6f8fa;color:#24292f;margin:0;padding:24px;}'
+        '.card{max-width:520px;margin:0 auto;background:#fff;border:1px solid #d0d7de;border-radius:12px;padding:20px;}'
+        '.actions{display:flex;gap:12px;margin-top:16px;}'
+        'button{padding:10px 16px;border-radius:8px;border:1px solid #d0d7de;cursor:pointer;font-weight:600;}'
+        '.primary{background:#1f6feb;color:#fff;border-color:#1f6feb;}'
+        '.secondary{background:#fff;color:#24292f;}'
+        '</style>'
+        '</head>'
+        '<body>'
+        '<main class="card">'
+        '<h1 style="margin-top:0;">Autorizar acesso</h1>'
+        f'<p><strong>{_escape(client_name)}</strong> solicita acesso a sua conta.</p>'
+        '<form method="post">'
+        f'{hidden_html}'
+        '<p><strong>Escopos solicitados:</strong></p>'
+        f'{checkbox_html}'
+        '<div class="actions">'
+        '<button class="primary" type="submit" name="consent_action" value="approve">Autorizar</button>'
+        '<button class="secondary" type="submit" name="consent_action" value="deny">Negar</button>'
+        '</div>'
+        '</form>'
+        '</main>'
+        '</body>'
+        '</html>'
+    )
+
+    response = make_response(page, 200)
+    response.headers['Content-Type'] = 'text/html; charset=utf-8'
+    response.headers['Cache-Control'] = 'no-store'
+    response.headers['Pragma'] = 'no-cache'
+    return response
+
+
 def oauth_authorize():
     response_type = request.values.get('response_type', '').strip()
     client_id = request.values.get('client_id', '').strip()
@@ -7505,8 +7593,10 @@ def oauth_authorize():
 
     client = OAuthClient.query.filter_by(client_id=client_id).first()
     if not client:
+        _oauth_log_event('oauth_authorize_unknown_client', client_id=client_id, user_id=getattr(current_user, 'id', None), grant_type='authorization_code')
         return _oauth_error_response('invalid_client', 'Unknown OAuth client. Register the client at /oauth/register or provision it in oauth_client.', 401)
     if not _oauth_client_redirect_valid(client, redirect_uri):
+        _oauth_log_event('oauth_authorize_invalid_redirect_uri', client_id=client_id, user_id=getattr(current_user, 'id', None), grant_type='authorization_code')
         return _oauth_error_response('invalid_request', 'redirect_uri is not allowed for this client.')
 
     requires_pkce = _oauth_requires_pkce(client)
@@ -7550,11 +7640,9 @@ def oauth_authorize():
         _oauth_log_event('oauth_authorization_code_issued', client_id=client_id, user_id=current_user.id, grant_type='authorization_code')
 
         query = urlencode({'code': auth_code.code, 'state': state})
-        return redirect(f'{redirect_uri}?{query}')
-
-    return render_template(
-        'auth/oauth_consent.html',
-        client=client,
+        return redirect(f'{redirect_uri}?{query}')
+    return _oauth_render_consent_page(
+        client_name=client.name,
         scope=scope,
         requested_scopes=requested_scopes,
         state=state,
@@ -7564,9 +7652,8 @@ def oauth_authorize():
         nonce=nonce,
         code_challenge=code_challenge,
         code_challenge_method=code_challenge_method,
-        csrf_token=generate_csrf(),
+        csrf_token_value=generate_csrf(),
     )
-
 
 @csrf.exempt
 def oauth_token():
