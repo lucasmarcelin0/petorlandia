@@ -48,6 +48,13 @@ DDD_PADRAO = os.getenv("SFA_DDD_PADRAO", "16")
 PREFIXO_PAIS = os.getenv("SFA_PREFIXO_PAIS", "55")
 GRUPO_PENDENTE = "PENDENTE_REVISAO"
 
+# Credenciais Google — fallback para arquivo local de desenvolvimento
+_DEFAULT_CREDS_FILE = os.path.join(
+    os.path.dirname(os.path.dirname(__file__)), "sfao-490521-33285b0a1503.json"
+)
+if not os.getenv("SFA_GOOGLE_CREDENTIALS_FILE") and os.path.exists(_DEFAULT_CREDS_FILE):
+    os.environ["SFA_GOOGLE_CREDENTIALS_FILE"] = _DEFAULT_CREDS_FILE
+
 # Planilha SINAN no Google Sheets
 SHEET_ID_SINAN = os.getenv(
     "SFA_SHEET_ID_SINAN",

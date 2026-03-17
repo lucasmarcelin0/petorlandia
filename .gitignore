@@ -63,3 +63,7 @@ build/
 !.vscode/settings.json
 !.vscode/launch.json
 
+# Google Service Account Credentials
+sfao-490521-33285b0a1503.json
+sfao-490521-33285b0a1503
+
