@@ -29,7 +29,9 @@ from decimal import Decimal
 from typing import Optional
 from urllib.parse import quote
 
+from extensions import db
 from flask import current_app, url_for
+from sqlalchemy.exc import InternalError, NoSuchTableError, OperationalError, ProgrammingError
 
 log = logging.getLogger("sfa_service")
 
@@ -43,7 +45,7 @@ DIAS_LEMBRETE = int(os.getenv("SFA_DIAS_LEMBRETE", "2"))
 DIAS_SEM_T0_ALERTA = int(os.getenv("SFA_DIAS_SEM_T0_ALERTA", "5"))
 TOLERANCIA_ALERTA_DIAS = int(os.getenv("SFA_TOLERANCIA_ALERTA_DIAS", "1"))
 NOME_PESQUISADOR = os.getenv("SFA_NOME_PESQUISADOR", "Lucas")
-EMAIL_PESQUISADOR = os.getenv("SFA_EMAIL_PESQUISADOR", "lukemarki3@gmail.com")
+EMAIL_PESQUISADOR = os.getenv("SFA_EMAIL_PESQUISADOR", "lucas.marcbh.lm@gmail.com")
 DDD_PADRAO = os.getenv("SFA_DDD_PADRAO", "16")
 PREFIXO_PAIS = os.getenv("SFA_PREFIXO_PAIS", "55")
 GRUPO_PENDENTE = "PENDENTE_REVISAO"
@@ -138,6 +140,25 @@ def normalizar_telefone(tel: str) -> str:
 def link_whatsapp(telefone_normalizado: str, mensagem: str) -> str:
     """Gera URL click-to-chat WhatsApp com mensagem pré-preenchida."""
     return f"https://wa.me/{telefone_normalizado}?text={quote(mensagem)}"
+
+
+def _safe_query_all(model):
+    """Retorna model.query.all() ou [] se a tabela não existir."""
+    try:
+        return model.query.all()
+    except (ProgrammingError, OperationalError, NoSuchTableError, InternalError):
+        db.session.rollback()
+        log.warning("SFA: tabela não encontrada ao consultar %s", getattr(model, "__tablename__", str(model)), exc_info=False)
+        return []
+
+
+def _safe_query_limit(query_fn, limit=10):
+    try:
+        return query_fn().limit(limit).all()
+    except (ProgrammingError, OperationalError, NoSuchTableError, InternalError):
+        db.session.rollback()
+        log.warning("SFA: tabela não encontrada ao consultar auditoria", exc_info=False)
+        return []
 
 
 def primeiro_nome(nome_completo: str) -> str:
@@ -854,7 +875,12 @@ def contatos_do_dia() -> dict:
 
     hoje = date.today()
 
-    novos = SfaPaciente.query.filter_by(status_geral="SINAN_Notificado").all()
+    try:
+        novos = SfaPaciente.query.filter_by(status_geral="SINAN_Notificado").all()
+    except (ProgrammingError, OperationalError, NoSuchTableError, InternalError):
+        db.session.rollback()
+        log.warning("SFA: tabela 'sfa_paciente' não encontrada em contatos_do_dia", exc_info=False)
+        return {"data": hoje.strftime("%d/%m/%Y"), "novos": [], "t10": [], "t30": []}
 
     def vencendo_em(paciente, campo_data: str, status: str) -> bool:
         if getattr(paciente, f"status_{campo_data}") != "Aguardando":
@@ -864,8 +890,9 @@ def contatos_do_dia() -> dict:
             return False
         return 0 <= (dt - hoje).days <= DIAS_LEMBRETE
 
-    pend_t10 = [p for p in SfaPaciente.query.all() if vencendo_em(p, "t10", "Aguardando")]
-    pend_t30 = [p for p in SfaPaciente.query.all() if vencendo_em(p, "t30", "Aguardando")]
+    todos = _safe_query_all(SfaPaciente)
+    pend_t10 = [p for p in todos if vencendo_em(p, "t10", "Aguardando")]
+    pend_t30 = [p for p in todos if vencendo_em(p, "t30", "Aguardando")]
 
     return {
         "data": hoje.strftime("%d/%m/%Y"),
@@ -883,7 +910,7 @@ def stats_painel() -> dict:
     """Retorna KPIs e fila do dia para o dashboard Flask."""
     from models.sfa import SfaAuditoria, SfaPaciente
 
-    todos = SfaPaciente.query.all()
+    todos = _safe_query_all(SfaPaciente)
     total = len(todos)
 
     def cnt(fn):
@@ -898,12 +925,17 @@ def stats_painel() -> dict:
         )
     )[:25]
 
-    alertas_recentes = (
-        SfaAuditoria.query
-        .order_by(SfaAuditoria.timestamp.desc())
-        .limit(10)
-        .all()
-    )
+    try:
+        alertas_recentes = (
+            SfaAuditoria.query
+            .order_by(SfaAuditoria.timestamp.desc())
+            .limit(10)
+            .all()
+        )
+    except (ProgrammingError, OperationalError, NoSuchTableError, InternalError):
+        db.session.rollback()
+        log.warning("SFA: tabela 'sfa_auditoria' não encontrada em stats_painel", exc_info=False)
+        alertas_recentes = []
 
     pendentes_revisao = [p for p in todos if p.grupo == GRUPO_PENDENTE]
 

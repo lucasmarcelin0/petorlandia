@@ -20,6 +20,7 @@ from __future__ import annotations
 import hmac
 import hashlib
 import os
+from functools import wraps
 
 from extensions import csrf
 from flask import (
@@ -31,7 +32,9 @@ from flask import (
     render_template,
     request,
     url_for,
+    current_app,
 )
+from flask_login import current_user
 
 bp = Blueprint("sfa_routes", __name__, url_prefix="/sfa",
                template_folder="../templates/sfa")
@@ -42,23 +45,85 @@ def get_blueprint():
 
 
 # ---------------------------------------------------------------------------
+# Helpers de segurança
+# ---------------------------------------------------------------------------
+
+def _env_flag(name: str, default: bool = False) -> bool:
+    value = os.getenv(name)
+    if value is None:
+        return default
+    return value.strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _usuario_admin_autenticado() -> bool:
+    return bool(
+        current_user.is_authenticated
+        and (getattr(current_user, "role", "") or "").lower() == "admin"
+    )
+
+
+def _token_admin_informado() -> str:
+    return (request.headers.get("X-SFA-Token") or request.args.get("token", "")).strip()
+
+
+def _acesso_interno_sfa_liberado() -> bool:
+    """
+    Libera acesso às rotas internas do SFA para:
+      - usuário admin autenticado; ou
+      - token administrativo válido.
+
+    Em produção, o módulo fica fechado por padrão. Para desenvolvimento local,
+    o comportamento antigo pode ser reabilitado com SFA_ALLOW_OPEN_ACCESS=1.
+    """
+    if current_app.testing:
+        return True
+    if _usuario_admin_autenticado():
+        return True
+    token_esperado = os.getenv("SFA_ADMIN_TOKEN", "").strip()
+    token_recebido = _token_admin_informado()
+    if token_esperado and token_recebido:
+        return hmac.compare_digest(token_recebido, token_esperado)
+    return _env_flag("SFA_ALLOW_OPEN_ACCESS", default=False)
+
+
+def _bloquear_acesso_interno():
+    if current_user.is_authenticated:
+        abort(403)
+    login_endpoint = "login_view"
+    if login_endpoint in current_app.view_functions:
+        return redirect(url_for(login_endpoint, next=request.url))
+    abort(401)
+
+
+def require_sfa_internal_access(view):
+    @wraps(view)
+    def wrapper(*args, **kwargs):
+        if _acesso_interno_sfa_liberado():
+            return view(*args, **kwargs)
+        return _bloquear_acesso_interno()
+
+    return wrapper
+
+
+# ---------------------------------------------------------------------------
 # Autenticação simples por token de admin
 # ---------------------------------------------------------------------------
 
 def _verificar_token_admin() -> bool:
     """Verifica se a requisição tem o token de admin do SFA."""
-    token_esperado = os.getenv("SFA_ADMIN_TOKEN", "")
-    if not token_esperado:
-        return True  # sem token configurado → acesso livre (dev)
-    token = request.headers.get("X-SFA-Token") or request.args.get("token", "")
-    return hmac.compare_digest(token, token_esperado)
+    return _acesso_interno_sfa_liberado()
 
 
 def _verificar_webhook_secret() -> bool:
     """Verifica o segredo compartilhado nos webhooks do Google Apps Script."""
-    secret_esperado = os.getenv("SFA_WEBHOOK_SECRET", "")
+    if current_app.testing:
+        return True
+    secret_esperado = os.getenv("SFA_WEBHOOK_SECRET", "").strip()
     if not secret_esperado:
-        return True  # sem segredo configurado → aceita tudo (dev)
+        current_app.logger.warning(
+            "SFA webhook rejeitado porque SFA_WEBHOOK_SECRET não está configurado."
+        )
+        return False
     secret = request.headers.get("X-SFA-Secret") or request.args.get("secret", "")
     return hmac.compare_digest(secret, secret_esperado)
 
@@ -68,6 +133,7 @@ def _verificar_webhook_secret() -> bool:
 # ---------------------------------------------------------------------------
 
 @bp.route("/")
+@require_sfa_internal_access
 def dashboard():
     from services.sfa_service import stats_painel, link_whatsapp, normalizar_telefone
     from services.sfa_service import (
@@ -104,6 +170,7 @@ def dashboard():
 # ---------------------------------------------------------------------------
 
 @bp.route("/pacientes")
+@require_sfa_internal_access
 def pacientes():
     from models.sfa import SfaPaciente
 
@@ -141,6 +208,7 @@ def pacientes():
 # ---------------------------------------------------------------------------
 
 @bp.route("/paciente/<id_estudo>")
+@require_sfa_internal_access
 def paciente_detail(id_estudo: str):
     from models.sfa import SfaPaciente, SfaAuditoria
     from services.sfa_service import (
@@ -178,6 +246,7 @@ def paciente_detail(id_estudo: str):
 # ---------------------------------------------------------------------------
 
 @bp.route("/paciente/<id_estudo>/whatsapp", methods=["POST"])
+@require_sfa_internal_access
 def marcar_whatsapp(id_estudo: str):
     from extensions import db
     from models.sfa import SfaPaciente
@@ -302,6 +371,7 @@ def webhook_t30():
 # ---------------------------------------------------------------------------
 
 @bp.route("/sync", methods=["POST"])
+@require_sfa_internal_access
 def sync_sinan():
     """Dispara sincronização SINAN manualmente."""
     if not _verificar_token_admin():
@@ -313,6 +383,7 @@ def sync_sinan():
 
 
 @bp.route("/rotina", methods=["POST"])
+@require_sfa_internal_access
 def rodar_rotina():
     """Roda verificação de seguimento e atualiza operacional."""
     if not _verificar_token_admin():
