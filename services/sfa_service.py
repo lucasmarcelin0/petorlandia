@@ -43,13 +43,50 @@ DIAS_LEMBRETE = int(os.getenv("SFA_DIAS_LEMBRETE", "2"))
 DIAS_SEM_T0_ALERTA = int(os.getenv("SFA_DIAS_SEM_T0_ALERTA", "5"))
 TOLERANCIA_ALERTA_DIAS = int(os.getenv("SFA_TOLERANCIA_ALERTA_DIAS", "1"))
 NOME_PESQUISADOR = os.getenv("SFA_NOME_PESQUISADOR", "Lucas")
+EMAIL_PESQUISADOR = os.getenv("SFA_EMAIL_PESQUISADOR", "lukemarki3@gmail.com")
 DDD_PADRAO = os.getenv("SFA_DDD_PADRAO", "16")
 PREFIXO_PAIS = os.getenv("SFA_PREFIXO_PAIS", "55")
-EMAIL_PESQUISADOR = os.getenv("SFA_EMAIL_PESQUISADOR", "")
 GRUPO_PENDENTE = "PENDENTE_REVISAO"
 
-# IDs da planilha SINAN no Google Sheets (usados por sincronizar_sinan)
-SHEET_ID_SINAN = os.getenv("SFA_SHEET_ID_SINAN", "")
+# Planilha SINAN no Google Sheets
+SHEET_ID_SINAN = os.getenv(
+    "SFA_SHEET_ID_SINAN",
+    "15UdUxNhuL3VUNpJr_iEiiWTVM-rlKtVcGPeY9jSFJ_E",
+)
+
+# IDs dos Google Forms
+FORM_T0_ID = os.getenv(
+    "SFA_FORM_T0_ID",
+    "1PbQj5rF4OkeNOYN44rCoVbbDYE-GftwHn-BNGC3-kmg",
+)
+FORM_T10_ID = os.getenv(
+    "SFA_FORM_T10_ID",
+    "1v8WL_3ecBUDU2N3CDDQeCULvwYI3UHCjA950aFwQj3g",
+)
+FORM_T30_ID = os.getenv(
+    "SFA_FORM_T30_ID",
+    "1VFrH7aFkjetu0Xu7lA6ch9ffqArExLNpt8933rsWyjw",
+)
+
+LINK_FORM_T10 = os.getenv(
+    "SFA_LINK_FORM_T10",
+    f"https://docs.google.com/forms/d/{FORM_T10_ID}/viewform",
+)
+LINK_FORM_T30 = os.getenv(
+    "SFA_LINK_FORM_T30",
+    f"https://docs.google.com/forms/d/{FORM_T30_ID}/viewform",
+)
+
+# Entry IDs para pré-preenchimento dos formulários
+# (extraídos via forceCorrectIds() / inspeção do Forms)
+ENTRY_T0_ID_ESTUDO = os.getenv("SFA_ENTRY_T0_ID_ESTUDO", "entry.1447355807")
+ENTRY_T0_NOME = os.getenv("SFA_ENTRY_T0_NOME", "entry.2001573769")
+ENTRY_T0_DATA_NASC_BASE = os.getenv("SFA_ENTRY_T0_DATA_NASC_BASE", "entry.1487617078")
+ENTRY_T10_NOME = os.getenv("SFA_ENTRY_T10_NOME", "entry.1342379317")
+# Pendente: rodar salvarEntryIdsAcompanhamentos() no GAS para descobrir entry de id_estudo no T10/T30
+ENTRY_T10_ID_ESTUDO = os.getenv("SFA_ENTRY_T10_ID_ESTUDO", "")
+ENTRY_T30_NOME = os.getenv("SFA_ENTRY_T30_NOME", "entry.937246935")
+ENTRY_T30_ID_ESTUDO = os.getenv("SFA_ENTRY_T30_ID_ESTUDO", "")
 
 # Mapeamento de colunas da planilha SINAN (0-indexado)
 COLS_SINAN = {
@@ -237,9 +274,25 @@ def msg_convite_t0(nome: str, id_estudo: str, token_acesso: str = "") -> str:
     )
 
 
+def _link_prefilled(base_url: str, nome: str, id_estudo: str,
+                    entry_nome: str, entry_id: str) -> str:
+    """Monta URL de formulário Google com campos pré-preenchidos."""
+    from urllib.parse import urlencode
+    params = {}
+    if entry_nome and nome:
+        params[entry_nome] = nome
+    if entry_id and id_estudo:
+        params[entry_id] = id_estudo
+    if not params:
+        return base_url
+    sep = "&" if "?" in base_url else "?"
+    return f"{base_url}{sep}usp=pp_url&{urlencode(params)}"
+
+
 def msg_lembrete_t10(nome: str, id_estudo: str) -> str:
     n = primeiro_nome(nome)
-    link = os.getenv("SFA_LINK_FORM_T10", "#")
+    link = _link_prefilled(LINK_FORM_T10, nome, id_estudo,
+                           ENTRY_T10_NOME, ENTRY_T10_ID_ESTUDO)
     return (
         f"Olá, {n}! Aqui é {NOME_PESQUISADOR} da pesquisa de arboviroses de Orlândia. 🔬\n\n"
         "Já se passaram cerca de 10 dias — está na hora do acompanhamento T10!\n\n"
@@ -251,7 +304,8 @@ def msg_lembrete_t10(nome: str, id_estudo: str) -> str:
 
 def msg_lembrete_t30(nome: str, id_estudo: str) -> str:
     n = primeiro_nome(nome)
-    link = os.getenv("SFA_LINK_FORM_T30", "#")
+    link = _link_prefilled(LINK_FORM_T30, nome, id_estudo,
+                           ENTRY_T30_NOME, ENTRY_T30_ID_ESTUDO)
     return (
         f"Olá, {n}! Aqui é {NOME_PESQUISADOR} da pesquisa de arboviroses de Orlândia. 🔬\n\n"
         "Chegamos ao final do seu acompanhamento (30 dias).\n"

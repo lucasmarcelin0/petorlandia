@@ -210,8 +210,11 @@ def redirect_t0(token: str):
     Modo debug: adicione ?debug=1 à URL.
     """
     from models.sfa import SfaPaciente
-    from services.sfa_service import registrar_auditoria
-    import os
+    from services.sfa_service import (
+        registrar_auditoria, parse_data,
+        FORM_T0_ID, ENTRY_T0_ID_ESTUDO, ENTRY_T0_NOME, ENTRY_T0_DATA_NASC_BASE,
+    )
+    from urllib.parse import urlencode
 
     debug = request.args.get("debug") == "1"
 
@@ -226,45 +229,32 @@ def redirect_t0(token: str):
                                mensagem="Participante não encontrado. Verifique o link ou entre em contato com o pesquisador."), 404
 
     # Monta URL pré-preenchida do Google Forms
-    form_t0_id = os.getenv("SFA_FORM_T0_ID", "")
-    entry_id_estudo = os.getenv("SFA_ENTRY_T0_ID_ESTUDO", "")
-    entry_nome = os.getenv("SFA_ENTRY_T0_NOME", "")
-    entry_data_nasc_base = os.getenv("SFA_ENTRY_T0_DATA_NASC_BASE", "")
-
-    link_fallback = os.getenv(
-        "SFA_LINK_FORM_T0",
-        f"https://docs.google.com/forms/d/{form_t0_id}/viewform" if form_t0_id else "#"
-    )
-
     params = {}
-    if entry_id_estudo and paciente.id_estudo:
-        params[entry_id_estudo] = paciente.id_estudo
-    if entry_nome and paciente.nome:
-        params[entry_nome] = paciente.nome
-    if entry_data_nasc_base and paciente.data_nascimento:
-        from services.sfa_service import parse_data
+    if ENTRY_T0_ID_ESTUDO and paciente.id_estudo:
+        params[ENTRY_T0_ID_ESTUDO] = paciente.id_estudo
+    if ENTRY_T0_NOME and paciente.nome:
+        params[ENTRY_T0_NOME] = paciente.nome
+    if ENTRY_T0_DATA_NASC_BASE and paciente.data_nascimento:
         d = parse_data(paciente.data_nascimento)
         if d:
-            base_id = entry_data_nasc_base.replace("entry.", "")
+            base_id = ENTRY_T0_DATA_NASC_BASE.replace("entry.", "")
             params[f"entry.{base_id}_year"] = d.year
             params[f"entry.{base_id}_month"] = d.month
             params[f"entry.{base_id}_day"] = d.day
 
-    if params and form_t0_id:
-        from urllib.parse import urlencode
-        base_url = f"https://docs.google.com/forms/d/{form_t0_id}/viewform?usp=pp_url"
-        query = urlencode(params)
-        form_url = f"{base_url}&{query}"
+    if params and FORM_T0_ID:
+        base_url = f"https://docs.google.com/forms/d/{FORM_T0_ID}/viewform?usp=pp_url"
+        form_url = f"{base_url}&{urlencode(params)}"
     else:
-        form_url = link_fallback
+        form_url = f"https://docs.google.com/forms/d/{FORM_T0_ID}/viewform" if FORM_T0_ID else "#"
 
     if debug:
         return render_template("sfa/redirect_debug.html",
                                paciente=paciente,
                                form_url=form_url,
                                params=params,
-                               entry_id_estudo=entry_id_estudo,
-                               form_t0_id=form_t0_id)
+                               entry_id_estudo=ENTRY_T0_ID_ESTUDO,
+                               form_t0_id=FORM_T0_ID)
 
     return render_template("sfa/redirect.html", form_url=form_url)
 
