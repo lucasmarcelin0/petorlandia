@@ -42,6 +42,14 @@ from .fiscal import (
     FiscalEmitter,
     FiscalEvent,
 )
+from .sfa import (
+    SfaAuditoria,
+    SfaPaciente,
+    SfaRespostaT0,
+    SfaRespostaT10,
+    SfaRespostaT30,
+    SfaSinanLog,
+)
 
 __all__ = [
     "AgendaEvento",
@@ -86,4 +94,10 @@ __all__ = [
     "FiscalEvent",
     "ClinicInventory",
     "ClinicInventoryMovement",
+    "SfaAuditoria",
+    "SfaPaciente",
+    "SfaRespostaT0",
+    "SfaRespostaT10",
+    "SfaRespostaT30",
+    "SfaSinanLog",
 ]

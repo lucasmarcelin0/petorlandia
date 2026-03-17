@@ -1,0 +1,152 @@
+{% extends "sfa/base.html" %}
+
+{% block title %}Dashboard — SFA Orlândia{% endblock %}
+{% block page_title %}Painel Operacional{% endblock %}
+
+{% block content %}
+<!-- KPIs -->
+<div class="row g-3 mb-4">
+  {% set kpis = [
+    ("Total no cadastro",         stats.total,               "fas fa-users",           "var(--sfa-teal)"),
+    ("Aguardando T0",             stats.aguardando_t0,       "fas fa-user-clock",      "#fd7e14"),
+    ("Grupo A — Dengue+",         stats.grupo_a,             "fas fa-biohazard",       "#dc3545"),
+    ("Grupo B — Indeterminado",   stats.grupo_b,             "fas fa-question-circle", "#6c757d"),
+    ("Pendentes de revisão",      stats.pendentes_revisao,   "fas fa-exclamation",     "#ffc107"),
+    ("Casos completos",           stats.completos,           "fas fa-check-circle",    "#198754"),
+  ] %}
+  {% for label, value, icon, color in kpis %}
+  <div class="col-sm-6 col-md-4 col-xl-2">
+    <div class="card card-kpi h-100" style="border-left-color:{{ color }}">
+      <div class="card-body py-2 px-3">
+        <div class="d-flex align-items-center justify-content-between">
+          <div>
+            <div class="text-muted small">{{ label }}</div>
+            <div class="fs-4 fw-bold" style="color:{{ color }}">{{ value }}</div>
+          </div>
+          <i class="{{ icon }} fa-lg" style="color:{{ color }};opacity:.3"></i>
+        </div>
+      </div>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+
+<div class="row g-3">
+  <!-- Fila do dia -->
+  <div class="col-lg-8">
+    <div class="card shadow-sm">
+      <div class="card-header d-flex align-items-center justify-content-between" style="background:var(--sfa-teal);color:white">
+        <span><i class="fas fa-list-check me-2"></i>Fila do Dia (top 25)</span>
+        <a href="{{ url_for('sfa_routes.pacientes') }}" class="btn btn-sm btn-outline-light">Ver todos</a>
+      </div>
+      <div class="card-body p-0">
+        {% if stats.fila %}
+        <div class="table-responsive">
+          <table class="table table-sm table-hover mb-0">
+            <thead class="table-light">
+              <tr>
+                <th>Prioridade</th>
+                <th>ID</th>
+                <th>Nome</th>
+                <th>Bairro</th>
+                <th>Ação</th>
+                <th>Data alvo</th>
+                <th>WhatsApp</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for p in stats.fila %}
+              <tr>
+                <td><span class="priority-{{ p.prioridade_operacional }}">{{ p.prioridade_operacional or '—' }}</span></td>
+                <td>
+                  <a href="{{ url_for('sfa_routes.paciente_detail', id_estudo=p.id_estudo) }}"
+                     class="fw-semibold text-decoration-none">{{ p.id_estudo }}</a>
+                </td>
+                <td>{{ p.nome or '—' }}</td>
+                <td><small>{{ p.bairro or '—' }}</small></td>
+                <td><span class="badge bg-secondary">{{ p.proxima_acao or '—' }}</span></td>
+                <td>
+                  <small>
+                    {{ p.data_proxima_acao or '—' }}
+                    {% if p.dias_para_acao is not none %}
+                      <span class="badge {% if p.dias_para_acao < 0 %}bg-danger{% elif p.dias_para_acao <= 2 %}bg-warning text-dark{% else %}bg-light text-dark{% endif %}">
+                        {{ p.dias_para_acao }}d
+                      </span>
+                    {% endif %}
+                  </small>
+                </td>
+                <td>
+                  {% if p._link_whatsapp %}
+                  <a href="{{ p._link_whatsapp }}" target="_blank" class="btn btn-sm btn-success py-0 px-2">
+                    <i class="fab fa-whatsapp"></i>
+                  </a>
+                  {% else %}
+                  <span class="text-muted">—</span>
+                  {% endif %}
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        {% else %}
+        <div class="p-4 text-center text-muted">
+          <i class="fas fa-check-circle fa-2x mb-2 text-success"></i><br>
+          Nenhuma ação operacional pendente hoje.
+        </div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  <!-- Coluna lateral -->
+  <div class="col-lg-4">
+    <!-- Pendências de revisão -->
+    <div class="card shadow-sm mb-3">
+      <div class="card-header" style="background:#ffc107">
+        <i class="fas fa-exclamation-triangle me-2"></i>Pendências de revisão
+        <span class="badge bg-dark ms-1">{{ stats.pendentes_revisao }}</span>
+      </div>
+      <div class="card-body p-0">
+        {% if stats.pacientes_revisao %}
+        <ul class="list-group list-group-flush">
+          {% for p in stats.pacientes_revisao[:8] %}
+          <li class="list-group-item py-1 px-3 small">
+            <a href="{{ url_for('sfa_routes.paciente_detail', id_estudo=p.id_estudo) }}"
+               class="text-decoration-none">{{ p.id_estudo }}</a>
+            — {{ p.nome or '—' }}
+          </li>
+          {% endfor %}
+        </ul>
+        {% else %}
+        <p class="p-3 mb-0 text-muted small">Sem pendências de revisão.</p>
+        {% endif %}
+      </div>
+    </div>
+
+    <!-- Alertas recentes -->
+    <div class="card shadow-sm">
+      <div class="card-header" style="background:var(--sfa-teal);color:white">
+        <i class="fas fa-bell me-2"></i>Alertas recentes
+      </div>
+      <div class="card-body p-0">
+        {% if stats.alertas_recentes %}
+        <ul class="list-group list-group-flush">
+          {% for a in stats.alertas_recentes %}
+          <li class="list-group-item py-1 px-3 small">
+            <span class="badge {% if a.nivel == 'ERROR' %}bg-danger{% elif a.nivel == 'WARN' %}bg-warning text-dark{% else %}bg-secondary{% endif %} me-1">
+              {{ a.nivel }}
+            </span>
+            {{ a.mensagem | truncate(60) }}
+            <div class="text-muted" style="font-size:.7rem">{{ a.timestamp.strftime('%d/%m %H:%M') if a.timestamp }}</div>
+          </li>
+          {% endfor %}
+        </ul>
+        {% else %}
+        <p class="p-3 mb-0 text-muted small">Sem alertas recentes.</p>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
