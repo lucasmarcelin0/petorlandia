@@ -21,6 +21,7 @@ import hmac
 import hashlib
 import os
 
+from extensions import csrf
 from flask import (
     Blueprint,
     abort,
@@ -264,6 +265,7 @@ def redirect_t0(token: str):
 # ---------------------------------------------------------------------------
 
 @bp.route("/webhook/t0", methods=["POST"])
+@csrf.exempt
 def webhook_t0():
     if not _verificar_webhook_secret():
         abort(403)
@@ -274,6 +276,7 @@ def webhook_t0():
 
 
 @bp.route("/webhook/t10", methods=["POST"])
+@csrf.exempt
 def webhook_t10():
     if not _verificar_webhook_secret():
         abort(403)
@@ -284,6 +287,7 @@ def webhook_t10():
 
 
 @bp.route("/webhook/t30", methods=["POST"])
+@csrf.exempt
 def webhook_t30():
     if not _verificar_webhook_secret():
         abort(403)
