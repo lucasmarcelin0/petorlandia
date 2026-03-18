@@ -64,6 +64,9 @@ frozenlist==1.7.0
 git-filter-repo==2.47.0
 glom==24.11.0
 greenlet==3.2.3
+google-api-python-client==2.154.0
+google-auth==2.40.1
+google-auth-httplib2==0.2.0
 gunicorn==23.0.0
 h11==0.16.0
 h2==4.3.0

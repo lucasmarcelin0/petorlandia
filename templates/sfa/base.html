@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}SFA Orlândia{% endblock %}</title>
+
+  <!-- Bootstrap 5 -->
+  <link href="{{ url_for('static', filename='bootstrap.min.css') }}" rel="stylesheet">
+  <script src="{{ url_for('static', filename='bootstrap.bundle.min.js') }}"></script>
+
+  <!-- Font Awesome -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+  <style>
+    :root {
+      --sfa-teal: #015F73;
+      --sfa-teal-light: #e8f4f7;
+      --sfa-orange: #e8711c;
+    }
+    body { font-family: 'Segoe UI', sans-serif; background: #f4f6f9; }
+    .sfa-sidebar {
+      min-height: 100vh;
+      background: var(--sfa-teal);
+      color: white;
+      padding-top: 1rem;
+      width: 220px;
+      position: fixed;
+      top: 0; left: 0;
+      z-index: 100;
+    }
+    .sfa-sidebar .nav-link {
+      color: rgba(255,255,255,.8);
+      padding: .5rem 1.25rem;
+      font-size: .9rem;
+    }
+    .sfa-sidebar .nav-link:hover,
+    .sfa-sidebar .nav-link.active {
+      color: white;
+      background: rgba(255,255,255,.15);
+      border-radius: .25rem;
+    }
+    .sfa-sidebar .nav-link i { width: 20px; }
+    .sfa-main { margin-left: 220px; padding: 1.5rem; }
+    .sfa-header {
+      background: white;
+      border-bottom: 3px solid var(--sfa-teal);
+      padding: .75rem 1.5rem;
+      margin-left: 220px;
+      position: sticky; top: 0; z-index: 99;
+    }
+    .badge-grupo-A  { background: #198754; }
+    .badge-grupo-B  { background: #6c757d; }
+    .badge-grupo-PR { background: #ffc107; color: #212529; }
+    .card-kpi { border-left: 4px solid var(--sfa-teal); }
+    .priority-Alta  { color: #dc3545; font-weight: 600; }
+    .priority-Media { color: #fd7e14; font-weight: 600; }
+    .priority-Baixa { color: #198754; }
+    .sfa-brand { font-size: 1.15rem; font-weight: 700; padding: 1rem 1.25rem .5rem; letter-spacing: .5px; }
+    .table-sm td, .table-sm th { vertical-align: middle; }
+  </style>
+
+  {% block head %}{% endblock %}
+</head>
+<body>
+
+<!-- Sidebar -->
+<nav class="sfa-sidebar d-flex flex-column">
+  <div class="sfa-brand">
+    <i class="fas fa-virus-covid me-2"></i>SFA Orlândia
+  </div>
+  <ul class="nav flex-column mt-2">
+    <li class="nav-item">
+      <a class="nav-link {% if request.endpoint == 'sfa_routes.dashboard' %}active{% endif %}"
+         href="{{ url_for('sfa_routes.dashboard') }}">
+        <i class="fas fa-tachometer-alt"></i> Dashboard
+      </a>
+    </li>
+    <li class="nav-item">
+      <a class="nav-link {% if request.endpoint == 'sfa_routes.pacientes' %}active{% endif %}"
+         href="{{ url_for('sfa_routes.pacientes') }}">
+        <i class="fas fa-users"></i> Pacientes
+      </a>
+    </li>
+    <li class="nav-item mt-3">
+      <span class="nav-link text-white-50" style="font-size:.75rem;text-transform:uppercase;letter-spacing:.8px">Ações</span>
+    </li>
+    <li class="nav-item">
+      <form method="POST" action="{{ url_for('sfa_routes.sync_sinan') }}" class="px-3 mb-1">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button class="btn btn-sm btn-outline-light w-100 text-start">
+          <i class="fas fa-sync me-1"></i> Sync SINAN
+        </button>
+      </form>
+    </li>
+    <li class="nav-item">
+      <form method="POST" action="{{ url_for('sfa_routes.rodar_rotina') }}" class="px-3">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button class="btn btn-sm btn-outline-light w-100 text-start">
+          <i class="fas fa-play me-1"></i> Rodar Rotina
+        </button>
+      </form>
+    </li>
+  </ul>
+  <div class="mt-auto p-3" style="font-size:.7rem;opacity:.5">v1.0 — SFA Flask</div>
+</nav>
+
+<!-- Top header -->
+<div class="sfa-header d-flex align-items-center justify-content-between">
+  <h6 class="mb-0 fw-semibold">{% block page_title %}SFA{% endblock %}</h6>
+  <small class="text-muted">Estudo de Síndromes Febris Agudas — Orlândia/SP</small>
+</div>
+
+<!-- Main content -->
+<main class="sfa-main">
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% for cat, msg in messages %}
+      <div class="alert alert-{{ 'danger' if cat == 'error' else cat }} alert-dismissible fade show" role="alert">
+        {{ msg }}
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+      </div>
+    {% endfor %}
+  {% endwith %}
+
+  {% block content %}{% endblock %}
+</main>
+
+{% block scripts %}{% endblock %}
+</body>
+</html>

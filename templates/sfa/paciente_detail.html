@@ -1,0 +1,235 @@
+{% extends "sfa/base.html" %}
+
+{% block title %}{{ p.id_estudo }} — SFA Orlândia{% endblock %}
+{% block page_title %}Paciente {{ p.id_estudo }}{% endblock %}
+
+{% block content %}
+<div class="row g-3">
+  <!-- Coluna principal -->
+  <div class="col-lg-8">
+
+    <!-- Cabeçalho do paciente -->
+    <div class="card shadow-sm mb-3">
+      <div class="card-header d-flex align-items-center justify-content-between"
+           style="background:var(--sfa-teal);color:white">
+        <span>
+          <i class="fas fa-user me-2"></i>{{ p.nome or '—' }}
+          <small class="ms-2 opacity-75">{{ p.id_estudo }}</small>
+        </span>
+        <div class="d-flex gap-2">
+          {% if p.grupo == 'A' %}
+            <span class="badge badge-grupo-A fs-6">Grupo A</span>
+          {% elif p.grupo == 'B' %}
+            <span class="badge badge-grupo-B fs-6">Grupo B</span>
+          {% else %}
+            <span class="badge badge-grupo-PR fs-6">Pendente revisão</span>
+          {% endif %}
+          <span class="badge bg-light text-dark fs-6">{{ p.status_geral or '—' }}</span>
+        </div>
+      </div>
+      <div class="card-body">
+        <div class="row g-2 small">
+          <div class="col-sm-4">
+            <strong>Data de nascimento:</strong><br>{{ p.data_nascimento or '—' }}
+          </div>
+          <div class="col-sm-4">
+            <strong>Telefone:</strong><br>{{ p.telefone or '—' }}
+          </div>
+          <div class="col-sm-4">
+            <strong>Bairro:</strong><br>{{ p.bairro or '—' }}
+          </div>
+          <div class="col-sm-8">
+            <strong>Endereço:</strong><br>{{ p.endereco or '—' }}
+          </div>
+          <div class="col-sm-4">
+            <strong>Ficha SINAN:</strong><br>{{ p.ficha_sinan or '—' }}
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Linha do tempo de acompanhamento -->
+    <div class="card shadow-sm mb-3">
+      <div class="card-header"><i class="fas fa-timeline me-2"></i>Acompanhamento</div>
+      <div class="card-body">
+        <div class="row text-center">
+          {% for etapa, data_campo, status_campo in [
+              ('T0', 'data_t0', 'status_t0'),
+              ('T10', 'data_t10', 'status_t10'),
+              ('T30', 'data_t30', 'status_t30'),
+          ] %}
+          {% set status = p[status_campo] if p[status_campo] is defined else getattr(p, status_campo, '') %}
+          {% set data_v = p[data_campo] if p[data_campo] is defined else getattr(p, data_campo, '') %}
+          <div class="col-4">
+            <div class="border rounded p-3">
+              <div class="fs-4 fw-bold
+                {% if 'Completo' in (status or '') %}text-success
+                {% elif 'ATRASADO' in (status or '') %}text-danger
+                {% elif 'Aguardando' in (status or '') %}text-warning
+                {% else %}text-muted{% endif %}">
+                {{ etapa }}
+              </div>
+              <div class="small text-muted">{{ data_v or '—' }}</div>
+              <span class="badge mt-1
+                {% if 'Completo' in (status or '') %}bg-success
+                {% elif 'ATRASADO' in (status or '') %}bg-danger
+                {% elif 'Aguardando' in (status or '') %}bg-warning text-dark
+                {% else %}bg-secondary{% endif %}">
+                {{ status or '—' }}
+              </span>
+            </div>
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+
+    <!-- Respostas T0 -->
+    {% if p.resposta_t0 %}
+    <div class="card shadow-sm mb-3">
+      <div class="card-header"><i class="fas fa-clipboard-list me-2"></i>Resposta T0</div>
+      <div class="card-body small">
+        <div class="row g-2">
+          <div class="col-sm-4"><strong>Início sintomas:</strong> {{ p.resposta_t0.data_inicio_sintomas or '—' }}</div>
+          <div class="col-sm-4"><strong>Tipo residência:</strong> {{ p.resposta_t0.tipo_residencia or '—' }}</div>
+          <div class="col-sm-4"><strong>Dias incapacitado:</strong> {{ p.resposta_t0.dias_incap }}</div>
+          <div class="col-sm-4"><strong>Internação:</strong> {{ p.resposta_t0.internacao or '—' }}</div>
+          <div class="col-sm-4"><strong>Custo total (R$):</strong> {{ "%.2f"|format(p.resposta_t0.custo_total|float) }}</div>
+          <div class="col-sm-4"><strong>Ausência familiar:</strong> {{ p.resposta_t0.ausencia_familiar or '—' }}</div>
+        </div>
+      </div>
+    </div>
+    {% endif %}
+
+    <!-- Respostas T10 -->
+    {% if p.respostas_t10 %}
+    {% set t10 = p.respostas_t10[-1] %}
+    <div class="card shadow-sm mb-3">
+      <div class="card-header"><i class="fas fa-clipboard-check me-2"></i>Resposta T10</div>
+      <div class="card-body small">
+        <div class="row g-2">
+          <div class="col-sm-4"><strong>Dias incap. (novos):</strong> {{ t10.dias_incap_novos }}</div>
+          <div class="col-sm-4"><strong>Medicamentos:</strong> R$ {{ "%.2f"|format(t10.custo_remedios|float) }}</div>
+          <div class="col-sm-4"><strong>Consultas/exames:</strong> R$ {{ "%.2f"|format(t10.custo_consultas|float) }}</div>
+          <div class="col-sm-4"><strong>Transporte:</strong> R$ {{ "%.2f"|format(t10.custo_transporte|float) }}</div>
+          <div class="col-sm-4"><strong>Outros:</strong> R$ {{ "%.2f"|format(t10.custo_outros|float) }}</div>
+          <div class="col-sm-4"><strong>Total T10:</strong> R$ {{ "%.2f"|format(t10.custo_total|float) }}</div>
+        </div>
+      </div>
+    </div>
+    {% endif %}
+
+    <!-- Respostas T30 -->
+    {% if p.respostas_t30 %}
+    {% set t30 = p.respostas_t30[-1] %}
+    <div class="card shadow-sm mb-3">
+      <div class="card-header"><i class="fas fa-clipboard-check me-2"></i>Resposta T30</div>
+      <div class="card-body small">
+        <div class="row g-2">
+          <div class="col-sm-4"><strong>Dias incap. (novos):</strong> {{ t30.dias_incap_novos }}</div>
+          <div class="col-sm-4"><strong>Medicamentos:</strong> R$ {{ "%.2f"|format(t30.custo_remedios|float) }}</div>
+          <div class="col-sm-4"><strong>Consultas/exames:</strong> R$ {{ "%.2f"|format(t30.custo_consultas|float) }}</div>
+          <div class="col-sm-4"><strong>Transporte:</strong> R$ {{ "%.2f"|format(t30.custo_transporte|float) }}</div>
+          <div class="col-sm-4"><strong>Outros:</strong> R$ {{ "%.2f"|format(t30.custo_outros|float) }}</div>
+          <div class="col-sm-4"><strong>Total T30:</strong> R$ {{ "%.2f"|format(t30.custo_total|float) }}</div>
+        </div>
+      </div>
+    </div>
+    {% endif %}
+
+    <!-- Auditoria -->
+    {% if auditoria %}
+    <div class="card shadow-sm">
+      <div class="card-header"><i class="fas fa-history me-2"></i>Histórico de auditoria</div>
+      <div class="card-body p-0">
+        <ul class="list-group list-group-flush small">
+          {% for a in auditoria %}
+          <li class="list-group-item py-1 px-3">
+            <span class="badge {% if a.nivel == 'ERROR' %}bg-danger{% elif a.nivel == 'WARN' %}bg-warning text-dark{% else %}bg-secondary{% endif %} me-1">{{ a.nivel }}</span>
+            <strong>{{ a.categoria }}</strong> — {{ a.mensagem }}
+            <span class="float-end text-muted" style="font-size:.7rem">{{ a.timestamp.strftime('%d/%m %H:%M') if a.timestamp }}</span>
+          </li>
+          {% endfor %}
+        </ul>
+      </div>
+    </div>
+    {% endif %}
+  </div>
+
+  <!-- Coluna lateral -->
+  <div class="col-lg-4">
+    <!-- Operacional -->
+    <div class="card shadow-sm mb-3">
+      <div class="card-header"><i class="fas fa-cogs me-2"></i>Operacional</div>
+      <div class="card-body small">
+        <dl class="row mb-0">
+          <dt class="col-6">Fase atual</dt>
+          <dd class="col-6">{{ p.fase_atual or '—' }}</dd>
+          <dt class="col-6">Próxima fase</dt>
+          <dd class="col-6">{{ p.proxima_fase or '—' }}</dd>
+          <dt class="col-6">Ação</dt>
+          <dd class="col-6"><span class="badge bg-secondary">{{ p.proxima_acao or '—' }}</span></dd>
+          <dt class="col-6">Prioridade</dt>
+          <dd class="col-6 priority-{{ p.prioridade_operacional }}">{{ p.prioridade_operacional or '—' }}</dd>
+          <dt class="col-6">Data alvo</dt>
+          <dd class="col-6">{{ p.data_proxima_acao or '—' }}</dd>
+          <dt class="col-6">Dias p/ ação</dt>
+          <dd class="col-6">{{ p.dias_para_acao if p.dias_para_acao is not none else '—' }}</dd>
+          <dt class="col-6">WhatsApp</dt>
+          <dd class="col-6">{{ p.status_whatsapp or '—' }}</dd>
+          <dt class="col-6">Retorno</dt>
+          <dd class="col-6">{{ p.retorno_contato or '—' }}</dd>
+        </dl>
+
+        <!-- Marcar WhatsApp -->
+        <hr>
+        <form method="POST" action="{{ url_for('sfa_routes.marcar_whatsapp', id_estudo=p.id_estudo) }}">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <div class="d-flex gap-1">
+            <select name="status" class="form-select form-select-sm">
+              <option value="ENVIADO">Enviado</option>
+              <option value="RESPONDIDO">Respondido</option>
+              <option value="SEM_WHATSAPP">Sem WhatsApp</option>
+            </select>
+            <button class="btn btn-sm btn-success"><i class="fab fa-whatsapp"></i></button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- Links de ação -->
+    <div class="card shadow-sm mb-3">
+      <div class="card-header"><i class="fab fa-whatsapp me-2"></i>Links WhatsApp</div>
+      <div class="card-body small d-grid gap-2">
+        {% for etapa, link in links_whatsapp.items() %}
+        <a href="{{ link }}" target="_blank" class="btn btn-sm btn-outline-success">
+          <i class="fab fa-whatsapp me-1"></i>Convidar {{ etapa }}
+        </a>
+        {% else %}
+        <p class="text-muted mb-0">Telefone não disponível.</p>
+        {% endfor %}
+      </div>
+    </div>
+
+    <!-- Links formulários -->
+    <div class="card shadow-sm">
+      <div class="card-header"><i class="fas fa-link me-2"></i>Links formulários T0</div>
+      <div class="card-body small d-grid gap-2">
+        {% if url_t0 %}
+        <a href="{{ url_t0 }}" target="_blank" class="btn btn-sm btn-outline-primary">
+          <i class="fas fa-external-link-alt me-1"></i>Abrir T0
+        </a>
+        {% endif %}
+        {% if url_t0_debug %}
+        <a href="{{ url_t0_debug }}" target="_blank" class="btn btn-sm btn-outline-secondary">
+          <i class="fas fa-bug me-1"></i>Debug T0
+        </a>
+        {% endif %}
+        <div class="mt-1 text-muted" style="font-size:.7rem;word-break:break-all">
+          Token: {{ p.token_acesso or '—' }}
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,157 @@
+{% extends "sfa/base.html" %}
+
+{% block title %}Pacientes — SFA Orlândia{% endblock %}
+{% block page_title %}Pacientes{% endblock %}
+
+{% block content %}
+<!-- Filtros -->
+<div class="card shadow-sm mb-3">
+  <div class="card-body py-2">
+    <form method="GET" class="row g-2 align-items-end">
+      <div class="col-sm-4">
+        <input type="text" name="q" class="form-control form-control-sm"
+               placeholder="Buscar por nome, ID, bairro…" value="{{ filtros.q }}">
+      </div>
+      <div class="col-sm-2">
+        <select name="grupo" class="form-select form-select-sm">
+          <option value="">Todos os grupos</option>
+          <option value="A" {% if filtros.grupo == 'A' %}selected{% endif %}>A — Dengue+</option>
+          <option value="B" {% if filtros.grupo == 'B' %}selected{% endif %}>B — Indeterminado</option>
+          <option value="PENDENTE_REVISAO" {% if filtros.grupo == 'PENDENTE_REVISAO' %}selected{% endif %}>Pendente revisão</option>
+        </select>
+      </div>
+      <div class="col-sm-3">
+        <select name="status" class="form-select form-select-sm">
+          <option value="">Todos os status</option>
+          <option value="SINAN_Notificado" {% if filtros.status == 'SINAN_Notificado' %}selected{% endif %}>SINAN notificado</option>
+          <option value="Em_Andamento" {% if filtros.status == 'Em_Andamento' %}selected{% endif %}>Em andamento</option>
+          <option value="COMPLETO" {% if filtros.status == 'COMPLETO' %}selected{% endif %}>Completo</option>
+          <option value="PERDA_SEGUIMENTO" {% if filtros.status == 'PERDA_SEGUIMENTO' %}selected{% endif %}>Perda de seguimento</option>
+        </select>
+      </div>
+      <div class="col-auto">
+        <button type="submit" class="btn btn-sm btn-primary">Filtrar</button>
+        <a href="{{ url_for('sfa_routes.pacientes') }}" class="btn btn-sm btn-outline-secondary">Limpar</a>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Tabela -->
+<div class="card shadow-sm">
+  <div class="card-header d-flex align-items-center justify-content-between" style="background:var(--sfa-teal);color:white">
+    <span><i class="fas fa-users me-2"></i>{{ paginacao.total }} paciente(s)</span>
+  </div>
+  <div class="card-body p-0">
+    <div class="table-responsive">
+      <table class="table table-sm table-hover mb-0">
+        <thead class="table-light">
+          <tr>
+            <th>ID</th>
+            <th>Nome</th>
+            <th>Bairro</th>
+            <th>Grupo</th>
+            <th>Status</th>
+            <th>T0</th>
+            <th>T10</th>
+            <th>T30</th>
+            <th>Prioridade</th>
+            <th>Ação</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for p in pacientes %}
+          <tr>
+            <td>
+              <a href="{{ url_for('sfa_routes.paciente_detail', id_estudo=p.id_estudo) }}"
+                 class="fw-semibold text-decoration-none">{{ p.id_estudo }}</a>
+            </td>
+            <td>{{ p.nome or '—' }}</td>
+            <td><small>{{ p.bairro or '—' }}</small></td>
+            <td>
+              {% if p.grupo == 'A' %}
+                <span class="badge badge-grupo-A">A</span>
+              {% elif p.grupo == 'B' %}
+                <span class="badge badge-grupo-B">B</span>
+              {% else %}
+                <span class="badge badge-grupo-PR" title="Pendente revisão">PR</span>
+              {% endif %}
+            </td>
+            <td><small class="text-muted">{{ p.status_geral or '—' }}</small></td>
+            <td>
+              <span class="badge {% if p.status_t0 == 'T0_Completo' %}bg-success{% else %}bg-secondary{% endif %}">
+                {{ 'OK' if p.status_t0 == 'T0_Completo' else '—' }}
+              </span>
+            </td>
+            <td>
+              {% if p.status_t10 == 'T10_Completo' %}
+                <span class="badge bg-success">OK</span>
+              {% elif p.status_t10 == 'ATRASADO' %}
+                <span class="badge bg-danger">Atrasado</span>
+              {% elif p.status_t10 == 'Aguardando' %}
+                <span class="badge bg-warning text-dark">{{ p.data_t10 or 'Ag.' }}</span>
+              {% else %}
+                <span class="text-muted">—</span>
+              {% endif %}
+            </td>
+            <td>
+              {% if p.status_t30 == 'T30_Completo' %}
+                <span class="badge bg-success">OK</span>
+              {% elif p.status_t30 == 'ATRASADO' %}
+                <span class="badge bg-danger">Atrasado</span>
+              {% elif p.status_t30 == 'Aguardando' %}
+                <span class="badge bg-warning text-dark">{{ p.data_t30 or 'Ag.' }}</span>
+              {% else %}
+                <span class="text-muted">—</span>
+              {% endif %}
+            </td>
+            <td><span class="priority-{{ p.prioridade_operacional }}">{{ p.prioridade_operacional or '—' }}</span></td>
+            <td><small class="badge bg-secondary">{{ p.proxima_acao or '—' }}</small></td>
+            <td>
+              <a href="{{ url_for('sfa_routes.paciente_detail', id_estudo=p.id_estudo) }}"
+                 class="btn btn-xs btn-outline-primary py-0 px-1" style="font-size:.75rem">
+                <i class="fas fa-eye"></i>
+              </a>
+            </td>
+          </tr>
+          {% else %}
+          <tr>
+            <td colspan="11" class="text-center text-muted py-4">Nenhum paciente encontrado.</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Paginação -->
+  {% if paginacao.pages > 1 %}
+  <div class="card-footer">
+    <nav>
+      <ul class="pagination pagination-sm mb-0 justify-content-center">
+        {% if paginacao.has_prev %}
+        <li class="page-item">
+          <a class="page-link" href="{{ url_for('sfa_routes.pacientes', page=paginacao.prev_num, **filtros) }}">«</a>
+        </li>
+        {% endif %}
+        {% for p in paginacao.iter_pages(left_edge=1, right_edge=1, left_current=2, right_current=2) %}
+          {% if p %}
+          <li class="page-item {% if p == paginacao.page %}active{% endif %}">
+            <a class="page-link" href="{{ url_for('sfa_routes.pacientes', page=p, **filtros) }}">{{ p }}</a>
+          </li>
+          {% else %}
+          <li class="page-item disabled"><span class="page-link">…</span></li>
+          {% endif %}
+        {% endfor %}
+        {% if paginacao.has_next %}
+        <li class="page-item">
+          <a class="page-link" href="{{ url_for('sfa_routes.pacientes', page=paginacao.next_num, **filtros) }}">»</a>
+        </li>
+        {% endif %}
+      </ul>
+    </nav>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="refresh" content="0;url={{ form_url }}">
+  <title>Redirecionando…</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <style>
+    body { font-family: sans-serif; display:flex; align-items:center; justify-content:center;
+           min-height:100vh; margin:0; background:#f4f6f9; text-align:center; }
+    .box { background:white; border-radius:12px; padding:2rem 3rem; box-shadow:0 2px 8px rgba(0,0,0,.1); }
+  </style>
+</head>
+<body>
+  <div class="box">
+    <div style="font-size:2rem;margin-bottom:.5rem">⏳</div>
+    <p>Redirecionando para o formulário…</p>
+    <p><a href="{{ form_url }}">Clique aqui se não for redirecionado automaticamente.</a></p>
+  </div>
+  <script>window.location.replace({{ form_url | tojson }});</script>
+</body>
+</html>

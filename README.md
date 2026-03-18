@@ -44,6 +44,7 @@ pytest
 Full documentation is available in the [`docs/`](docs/) folder:
 
 - **[📚 Documentation Index](docs/INDEX.md)** - Complete guide to all documentation
+- **[SFA setup guide](docs/sfa_setup.md)** - Setup and security checklist for the research workflow
 - **[🏗️ Architecture Guide](docs/ARCHITECTURE.md)** *(to be created)*
 - **[🤝 Contributing Guide](docs/CONTRIBUTING.md)** - How to contribute to the project
 - **[🧭 Revisão de propósito e melhorias](docs/revisao_proposito_e_melhorias.md)** - Diagnóstico detalhado da aplicação e roadmap de evolução

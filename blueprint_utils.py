@@ -38,6 +38,7 @@ def register_domain_blueprints(app):
         mensagens,
         oauth,
         planos,
+        sfa,
     )
 
     clinica_bp = clinica.get_blueprint()
@@ -84,3 +85,7 @@ def register_domain_blueprints(app):
     api_bp = api.get_blueprint()
     if not _is_blueprint_registered(app, api_bp):
         _register_with_alias(app, api_bp)
+
+    sfa_bp = sfa.get_blueprint()
+    if not _is_blueprint_registered(app, sfa_bp):
+        _register_with_alias(app, sfa_bp)

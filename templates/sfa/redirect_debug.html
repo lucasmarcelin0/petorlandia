@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <title>Debug T0 — SFA</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <style>
+    body { font-family: 'Segoe UI', sans-serif; background:#f4f6f9; padding:2rem; }
+    .box { background:white; border-radius:8px; padding:1.5rem; box-shadow:0 2px 8px rgba(0,0,0,.08); max-width:700px; margin:auto; }
+    pre { background:#f5f5f5; padding:.75rem; border-radius:4px; font-size:.8rem; word-break:break-all; white-space:pre-wrap; }
+    h3 { color:#015F73; }
+    .badge { background:#015F73; color:white; padding:.2em .5em; border-radius:4px; font-size:.8rem; }
+  </style>
+</head>
+<body>
+<div class="box">
+  <h3><i class="fas fa-bug"></i> Diagnóstico Web App — SFA Orlândia</h3>
+  <hr>
+
+  <p><strong>Paciente:</strong> {{ paciente.nome or '(sem nome)' }}</p>
+  <p><strong>id_estudo:</strong> <code>{{ paciente.id_estudo }}</code></p>
+  <p><strong>token_acesso:</strong> <code>{{ paciente.token_acesso or '(vazio)' }}</code></p>
+  <p><strong>FORM_T0_ID configurado:</strong>
+    {% if form_t0_id %}
+      <span class="badge">✅ {{ form_t0_id }}</span>
+    {% else %}
+      <span style="color:red">⚠ SFA_FORM_T0_ID não definido</span>
+    {% endif %}
+  </p>
+  <p><strong>Entry ID para id_estudo:</strong>
+    {% if entry_id_estudo %}
+      <code>{{ entry_id_estudo }}</code>
+    {% else %}
+      <span style="color:red">⚠ SFA_ENTRY_T0_ID_ESTUDO não definido</span>
+    {% endif %}
+  </p>
+
+  <p><strong>Parâmetros montados ({{ params | length }}):</strong></p>
+  {% if params %}
+  <ul>
+    {% for k, v in params.items() %}
+    <li><code>{{ k }}</code> = <strong>{{ v }}</strong></li>
+    {% endfor %}
+  </ul>
+  {% else %}
+  <p style="color:red">⚠ Nenhum parâmetro! Verifique as variáveis de ambiente SFA_ENTRY_*</p>
+  {% endif %}
+
+  <p><strong>URL final gerada:</strong></p>
+  <pre>{{ form_url }}</pre>
+
+  <a href="{{ form_url }}" target="_blank" class="btn" style="background:#015F73;color:white;padding:.5rem 1rem;border-radius:4px;text-decoration:none">
+    <i class="fas fa-external-link-alt"></i> Abrir formulário com esta URL
+  </a>
+</div>
+</body>
+</html>
