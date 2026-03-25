@@ -29,7 +29,11 @@ class TestingAwareSQLAlchemy(SQLAlchemy):
                 if ":memory:" in uri:
                     # Dispose the engine to get a fresh in-memory database,
                     # avoiding stale state from circular FK drop_all failures.
-                    self.engine.dispose()
+                    engine = None
+                    if hasattr(self, "engines"):
+                        engine = self.engines.get(None)
+                    if engine is not None:
+                        engine.dispose()
                 elif uri.startswith("sqlite"):
                     super().drop_all(bind_key=bind)
             return super().create_all(bind_key=bind)

@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <title>Debug {{ form_name or "T0 nativo" }}</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <style>
+    body { font-family: "Trebuchet MS", "Segoe UI", sans-serif; background: #f4f7f7; padding: 2rem; color: #17313a; }
+    .box { background: #fff; border-radius: 18px; padding: 1.5rem; max-width: 860px; margin: 0 auto; box-shadow: 0 10px 24px rgba(0,0,0,.08); }
+    pre { background: #f6f8f8; border-radius: 12px; padding: 1rem; overflow-x: auto; white-space: pre-wrap; }
+    .grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; }
+    .card { background: #f8fbfb; border: 1px solid #d7e1de; border-radius: 14px; padding: 1rem; }
+    .badge { display: inline-block; background: #0b6b73; color: #fff; padding: 0.25rem 0.55rem; border-radius: 999px; font-size: 0.8rem; }
+    @media (max-width: 720px) { .grid { grid-template-columns: 1fr; } body { padding: 1rem; } }
+  </style>
+</head>
+<body>
+  <div class="box">
+    <p><span class="badge">Modo nativo</span></p>
+    <h1>Debug {{ form_name or "T0" }}</h1>
+    <p><strong>Paciente:</strong> {{ paciente.nome or "(sem nome)" }}</p>
+    <p><strong>Codigo:</strong> {{ paciente.id_estudo }}</p>
+    <p><strong>Token:</strong> {{ paciente.token_acesso or "(vazio)" }}</p>
+    <p><strong>Schema:</strong> <code>{{ schema._path }}</code></p>
+    <p><strong>Total de campos renderizados:</strong> {{ field_count }}</p>
+
+    <div class="grid">
+      <div class="card">
+        <h3>Valores iniciais</h3>
+        <pre>{{ values | tojson(indent=2) }}</pre>
+      </div>
+      <div class="card">
+        <h3>Campos do formulario</h3>
+        <pre>{% for section in schema.sections %}{{ section.title }}
+{% for field in section.fields %}- {{ field.key }} ({{ field.type }}){% if field.required %} [obrigatorio]{% endif %}
+{% endfor %}
+
+{% endfor %}</pre>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

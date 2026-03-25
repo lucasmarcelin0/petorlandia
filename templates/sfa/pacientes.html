@@ -33,6 +33,14 @@
         <button type="submit" class="btn btn-sm btn-primary">Filtrar</button>
         <a href="{{ url_for('sfa_routes.pacientes') }}" class="btn btn-sm btn-outline-secondary">Limpar</a>
       </div>
+      <div class="col-auto ms-auto">
+        <a href="{{ url_for('sfa_routes.export_cadastro_csv', **filtros) }}" class="btn btn-sm btn-outline-secondary">
+          Exportar cadastro
+        </a>
+        <a href="{{ url_for('sfa_routes.export_analitico_csv', **filtros) }}" class="btn btn-sm btn-outline-primary">
+          Exportar analitico
+        </a>
+      </div>
     </form>
   </div>
 </div>

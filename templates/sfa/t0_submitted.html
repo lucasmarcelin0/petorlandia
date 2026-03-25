@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{ form_name or "Resposta registrada" }}</title>
+  <style>
+    :root {
+      --sfa-ink: #183038;
+      --sfa-teal: #0b6b73;
+      --sfa-ok: #2f6d52;
+      --sfa-soft: #eef7f6;
+      --sfa-line: #d6e3df;
+    }
+
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      display: grid;
+      place-items: center;
+      padding: 1.2rem;
+      font-family: "Trebuchet MS", "Segoe UI", sans-serif;
+      color: var(--sfa-ink);
+      background:
+        radial-gradient(circle at top right, rgba(11, 107, 115, 0.13), transparent 24%),
+        linear-gradient(180deg, #f7fbfb 0%, #f3efe7 100%);
+    }
+
+    .card {
+      width: min(680px, 100%);
+      background: rgba(255, 255, 255, 0.94);
+      border: 1px solid var(--sfa-line);
+      border-radius: 24px;
+      padding: 2rem 1.7rem;
+      box-shadow: 0 20px 40px rgba(24, 48, 56, 0.10);
+      text-align: center;
+    }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 78px;
+      height: 78px;
+      border-radius: 50%;
+      background: var(--sfa-soft);
+      color: var(--sfa-ok);
+      font-size: 2.1rem;
+      font-weight: 700;
+      margin-bottom: 1rem;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: clamp(1.8rem, 4vw, 2.4rem);
+    }
+
+    p {
+      margin: 0.9rem auto 0;
+      max-width: 42rem;
+      line-height: 1.6;
+      color: rgba(24, 48, 56, 0.78);
+    }
+
+    .meta {
+      margin-top: 1.2rem;
+      display: inline-flex;
+      gap: 0.6rem;
+      flex-wrap: wrap;
+      justify-content: center;
+    }
+
+    .meta span {
+      padding: 0.55rem 0.8rem;
+      border-radius: 999px;
+      background: #fff;
+      border: 1px solid var(--sfa-line);
+      font-size: 0.92rem;
+    }
+  </style>
+</head>
+<body>
+  <section class="card">
+    <div class="badge">{% if already_submitted %}i{% else %}OK{% endif %}</div>
+    <h1>
+      {% if already_submitted %}
+      Sua resposta ja foi registrada
+      {% else %}
+      Obrigado pela sua participacao
+      {% endif %}
+    </h1>
+    <p>
+      {% if already_submitted %}
+      Este link do {{ form_name or "formulario" }} ja possui uma resposta registrada para {{ paciente.nome or "este participante" }}.
+      Se precisar corrigir alguma informacao, entre em contato com a equipe da pesquisa.
+      {% else %}
+      Sua resposta do {{ form_name or "formulario" }} foi salva com sucesso no sistema da pesquisa e ajudara a equipe a acompanhar melhor os casos no municipio.
+      {% endif %}
+    </p>
+    <div class="meta">
+      <span><strong>Participante:</strong> {{ paciente.nome or "Nao identificado" }}</span>
+      <span><strong>Codigo:</strong> {{ paciente.id_estudo }}</span>
+    </div>
+  </section>
+</body>
+</html>

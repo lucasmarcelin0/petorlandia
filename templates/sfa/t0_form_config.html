@@ -1,0 +1,229 @@
+{% extends "sfa/base.html" %}
+
+{% block title %}{{ form_name or "Formulario T0" }} - Configuracao{% endblock %}
+{% block page_title %}Configuracao do {{ form_name or "Formulario T0" }}{% endblock %}
+
+{% block content %}
+<style>
+  .schema-editor-shell {
+    display: grid;
+    grid-template-columns: minmax(280px, 340px) minmax(0, 1fr);
+    gap: 1rem;
+  }
+
+  .schema-editor-sidebar {
+    position: sticky;
+    top: 1rem;
+    align-self: start;
+  }
+
+  .schema-section-card,
+  .schema-field-card {
+    border: 1px solid rgba(15, 92, 109, 0.15);
+    border-radius: 1rem;
+    background: #fff;
+    box-shadow: 0 0.35rem 1rem rgba(15, 92, 109, 0.08);
+  }
+
+  .schema-section-card {
+    overflow: hidden;
+  }
+
+  .schema-section-head {
+    background: linear-gradient(135deg, rgba(15, 92, 109, 0.08), rgba(15, 92, 109, 0.02));
+    border-bottom: 1px solid rgba(15, 92, 109, 0.12);
+    padding: 1rem 1rem 0.9rem;
+  }
+
+  .schema-field-card {
+    padding: 1rem;
+  }
+
+  .schema-field-card + .schema-field-card {
+    margin-top: 0.85rem;
+  }
+
+  .schema-controls .btn {
+    --bs-btn-padding-y: 0.2rem;
+    --bs-btn-padding-x: 0.55rem;
+    --bs-btn-font-size: 0.8rem;
+  }
+
+  .schema-empty-state {
+    border: 1px dashed rgba(15, 92, 109, 0.25);
+    border-radius: 1rem;
+    padding: 1rem;
+    text-align: center;
+    color: #5f6f74;
+    background: rgba(15, 92, 109, 0.03);
+  }
+
+  .schema-json-panel textarea {
+    min-height: 16rem;
+  }
+
+  .schema-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.2rem 0.6rem;
+    border-radius: 999px;
+    font-size: 0.78rem;
+    background: rgba(15, 92, 109, 0.08);
+    color: var(--sfa-teal);
+  }
+
+  @media (max-width: 991.98px) {
+    .schema-editor-shell {
+      grid-template-columns: 1fr;
+    }
+
+    .schema-editor-sidebar {
+      position: static;
+    }
+  }
+</style>
+
+<div class="schema-editor-shell">
+  <div class="schema-editor-sidebar">
+    <div class="card shadow-sm">
+      <div class="card-header text-white" style="background:var(--sfa-teal)">
+        <i class="fas fa-magic me-2"></i>Editor visual
+      </div>
+      <div class="card-body">
+        <p class="mb-3">
+          Agora voce pode montar o formulario por secoes e perguntas, sem depender de JSON para o dia a dia.
+        </p>
+        <div class="small text-muted mb-3">
+          Salvou? Os proximos acessos ao link {{ (form_stage or "t0").upper() }} ja usam essa nova versao.
+        </div>
+        <ul class="list-group list-group-flush small">
+          <li class="list-group-item px-0">
+            <strong>Titulo atual:</strong>
+            <div id="schemaSummaryTitle">{{ schema.title or "-" }}</div>
+          </li>
+          <li class="list-group-item px-0">
+            <strong>Total de secoes:</strong>
+            <span id="schemaSummarySections">{{ schema.sections|length }}</span>
+          </li>
+          <li class="list-group-item px-0">
+            <strong>Total de campos:</strong>
+            <span id="schemaSummaryFields">{{ field_count }}</span>
+          </li>
+          <li class="list-group-item px-0">
+            <strong>Arquivo:</strong><br>
+            <code>{{ schema._path }}</code>
+          </li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="card shadow-sm mt-3">
+      <div class="card-header bg-light">
+        <i class="fas fa-lightbulb me-2"></i>Dicas rapidas
+      </div>
+      <div class="card-body small">
+        <p><strong>Tipos:</strong> texto, data, numero, paragrafo, multipla escolha, lista e caixas de selecao.</p>
+        <p><strong>Obrigatoria:</strong> impede envio sem resposta.</p>
+        <p><strong>Prefill:</strong> pode usar campos do paciente como <code>nome</code>, <code>ficha_sinan</code> e <code>endereco</code>.</p>
+        <p class="mb-0"><strong>Modo avancado:</strong> o JSON continua disponivel abaixo como plano B.</p>
+      </div>
+    </div>
+  </div>
+
+  <div>
+    <div class="card shadow-sm">
+      <div class="card-header d-flex flex-wrap align-items-center justify-content-between gap-2" style="background:var(--sfa-teal-light)">
+        <div>
+          <strong>Monte o {{ form_name or "formulario T0" }}</strong>
+          <div class="small text-muted">Organize secoes, perguntas e opcoes de forma visual.</div>
+        </div>
+        <span class="schema-badge">
+          <i class="fas fa-layer-group"></i>{{ (form_stage or "t0").upper() }}
+        </span>
+      </div>
+      <div class="card-body">
+        {% if errors %}
+        <div class="alert alert-danger">
+          <div class="fw-semibold mb-2">Nao foi possivel salvar:</div>
+          <ul class="mb-0">
+            {% for error in errors %}
+            <li>{{ error }}</li>
+            {% endfor %}
+          </ul>
+        </div>
+        {% endif %}
+
+        <div id="schemaEditorAlert" class="alert alert-danger d-none"></div>
+
+        <form method="POST" id="schemaBuilderForm">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <input type="hidden" name="schema_json" id="schema_json">
+
+          <div class="card border-0 bg-light mb-3">
+            <div class="card-body">
+              <div class="row g-3">
+                <div class="col-md-6">
+                  <label for="formTitle" class="form-label fw-semibold">Titulo do formulario</label>
+                  <input type="text" class="form-control" id="formTitle" placeholder="Ex.: T10 Estudo SFA Orlandia">
+                </div>
+                <div class="col-md-6">
+                  <label for="formSubmitLabel" class="form-label fw-semibold">Texto do botao</label>
+                  <input type="text" class="form-control" id="formSubmitLabel" placeholder="Ex.: Enviar acompanhamento">
+                </div>
+                <div class="col-12">
+                  <label for="formSubtitle" class="form-label fw-semibold">Subtitulo</label>
+                  <textarea class="form-control" id="formSubtitle" rows="2" placeholder="Explique rapidamente o objetivo do formulario."></textarea>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="d-flex flex-wrap gap-2 mb-3">
+            <button type="button" class="btn btn-outline-primary" id="addSectionBtn">
+              <i class="fas fa-plus me-1"></i>Adicionar secao
+            </button>
+            <button type="button" class="btn btn-outline-secondary" id="refreshJsonBtn">
+              Atualizar JSON
+            </button>
+          </div>
+
+          <div id="sectionsContainer" class="d-grid gap-3"></div>
+
+          <details class="schema-json-panel mt-4">
+            <summary class="fw-semibold mb-3">Modo avancado: editar JSON bruto</summary>
+            <div class="alert alert-warning small">
+              Se voce editar o JSON manualmente, clique em <strong>Aplicar JSON ao editor</strong> antes de salvar.
+            </div>
+            <div class="mb-2">
+              <label for="schema_json_raw" class="form-label fw-semibold">JSON do {{ form_name or "formulario T0" }}</label>
+              <textarea id="schema_json_raw" class="form-control font-monospace" spellcheck="false">{{ schema_text }}</textarea>
+            </div>
+            <div class="d-flex flex-wrap gap-2">
+              <button type="button" class="btn btn-outline-secondary" id="applyRawJsonBtn">
+                Aplicar JSON ao editor
+              </button>
+              <button type="button" class="btn btn-outline-secondary" id="copyFromEditorBtn">
+                Regerar JSON a partir do editor
+              </button>
+            </div>
+          </details>
+
+          <div class="d-flex flex-wrap gap-2 mt-4">
+            <button type="submit" class="btn btn-primary">
+              <i class="fas fa-save me-1"></i>Salvar formulario
+            </button>
+            <a href="{{ url_for('sfa_routes.dashboard') }}" class="btn btn-outline-secondary">
+              Voltar ao painel
+            </a>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script id="schema-builder-data" type="application/json">{{ schema_text }}</script>
+<script id="schema-builder-fallback" type="application/json">{{ schema|tojson }}</script>
+<script src="{{ url_for('static', filename='js/sfa_form_builder.js') }}"></script>
+{% endblock %}

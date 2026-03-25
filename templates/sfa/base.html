@@ -82,6 +82,30 @@
         <i class="fas fa-users"></i> Pacientes
       </a>
     </li>
+    <li class="nav-item">
+      <a class="nav-link {% if request.endpoint == 'sfa_routes.t0_form_config' %}active{% endif %}"
+         href="{{ url_for('sfa_routes.t0_form_config') }}">
+        <i class="fas fa-clipboard-list"></i> Formulario T0
+      </a>
+    </li>
+    <li class="nav-item">
+      <a class="nav-link {% if request.endpoint == 'sfa_routes.t10_form_config' %}active{% endif %}"
+         href="{{ url_for('sfa_routes.t10_form_config') }}">
+        <i class="fas fa-clipboard-check"></i> Formulario T10
+      </a>
+    </li>
+    <li class="nav-item">
+      <a class="nav-link {% if request.endpoint == 'sfa_routes.t30_form_config' %}active{% endif %}"
+         href="{{ url_for('sfa_routes.t30_form_config') }}">
+        <i class="fas fa-flag-checkered"></i> Formulario T30
+      </a>
+    </li>
+    <li class="nav-item">
+      <a class="nav-link {% if request.endpoint in ['sfa_routes.tcle_signatures', 'sfa_routes.export_tcle_signatures_csv'] %}active{% endif %}"
+         href="{{ url_for('sfa_routes.tcle_signatures') }}">
+        <i class="fas fa-signature"></i> Assinaturas TCLE
+      </a>
+    </li>
     <li class="nav-item mt-3">
       <span class="nav-link text-white-50" style="font-size:.75rem;text-transform:uppercase;letter-spacing:.8px">Ações</span>
     </li>

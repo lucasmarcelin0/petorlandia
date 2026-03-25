@@ -1,0 +1,62 @@
+{% extends "sfa/base.html" %}
+
+{% block title %}Assinaturas TCLE - SFA Orlandia{% endblock %}
+{% block page_title %}Assinaturas TCLE{% endblock %}
+
+{% block content %}
+<div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3">
+  <div>
+    <h5 class="mb-1">Registro interno de consentimento</h5>
+    <p class="text-muted mb-0">Lista das assinaturas de TCLE registradas no T0 com nome, horario e metadados do aceite.</p>
+  </div>
+  <div class="d-flex gap-2">
+    <span class="badge bg-secondary fs-6">{{ total_assinaturas }} assinatura(s)</span>
+    <a href="{{ url_for('sfa_routes.export_tcle_signatures_csv') }}" class="btn btn-sm btn-outline-primary">
+      <i class="fas fa-file-csv me-1"></i>Exportar CSV
+    </a>
+  </div>
+</div>
+
+<div class="card shadow-sm">
+  <div class="card-body p-0">
+    {% if assinaturas %}
+    <div class="table-responsive">
+      <table class="table table-sm table-hover align-middle mb-0">
+        <thead class="table-light">
+          <tr>
+            <th>Assinado em</th>
+            <th>Codigo</th>
+            <th>Ficha SINAN</th>
+            <th>Participante</th>
+            <th>Assinatura</th>
+            <th>IP</th>
+            <th>Navegador</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for item in assinaturas %}
+          <tr>
+            <td>{{ item.assinado_em or "-" }}</td>
+            <td>
+              {% if item.id_estudo %}
+              <a href="{{ url_for('sfa_routes.paciente_detail', id_estudo=item.id_estudo) }}">{{ item.id_estudo }}</a>
+              {% else %}
+              -
+              {% endif %}
+            </td>
+            <td>{{ item.ficha_sinan or "-" }}</td>
+            <td>{{ item.participante or "-" }}</td>
+            <td>{{ item.nome_assinatura or "-" }}</td>
+            <td>{{ item.ip or "-" }}</td>
+            <td class="small text-muted" style="min-width: 18rem; word-break: break-word;">{{ item.user_agent or "-" }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <div class="p-4 text-muted">Nenhuma assinatura de TCLE foi registrada ainda.</div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

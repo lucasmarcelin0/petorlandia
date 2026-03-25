@@ -1,7 +1,8 @@
 from datetime import timedelta
+from urllib.parse import parse_qs, unquote, urlparse
 
 from extensions import db
-from models import OAuthAuthorizationCode, OAuthClient, OAuthRefreshToken, User
+from models import OAuthAuthorizationCode, OAuthClient, OAuthRefreshToken, User, Veterinario
 from time_utils import utcnow
 
 
@@ -9,6 +10,18 @@ def _login(client, user_id: int):
     with client.session_transaction() as sess:
         sess['_user_id'] = str(user_id)
         sess['_fresh'] = True
+
+
+def _seed_client(app, *, client_id: str, scopes: str) -> None:
+    with app.app_context():
+        oauth_client = OAuthClient(
+            client_id=client_id,
+            name='ChatGPT connector',
+            redirect_uris='https://chatgpt.example/callback',
+            scopes=scopes,
+        )
+        db.session.add(oauth_client)
+        db.session.commit()
 
 
 def test_oauth_authorize_rejects_wildcard_redirect(app, client):
@@ -75,6 +88,112 @@ def test_oauth_authorize_requires_explicit_scope_consent(app, client):
 
     assert response.status_code == 400
     assert response.get_json()['error'] == 'invalid_scope'
+
+
+def test_oauth_authorize_redirects_unauthenticated_users_to_login_with_next(app, client):
+    _seed_client(app, client_id='client-login-flow', scopes='openid profile email tutors:write pets:write')
+
+    response = client.get(
+        '/oauth/authorize',
+        query_string={
+            'response_type': 'code',
+            'client_id': 'client-login-flow',
+            'redirect_uri': 'https://chatgpt.example/callback',
+            'scope': 'openid profile email tutors:write pets:write',
+            'state': 'vet-flow',
+            'code_challenge': 'challenge',
+            'code_challenge_method': 'S256',
+        },
+        follow_redirects=False,
+    )
+
+    assert response.status_code == 302
+    parsed = urlparse(response.headers['Location'])
+    assert parsed.path == '/login'
+    login_query = parse_qs(parsed.query)
+    assert 'next' in login_query
+    next_target = unquote(login_query['next'][0])
+    assert '/oauth/authorize' in next_target
+    assert 'client_id=client-login-flow' in next_target
+
+
+def test_login_page_explains_chatgpt_connection_flow(app, client):
+    response = client.get(
+        '/login',
+        query_string={
+            'next': '/oauth/authorize?client_id=client-login-flow',
+        },
+    )
+
+    assert response.status_code == 200
+    page = response.get_data(as_text=True)
+    assert 'conectar o PetOrlândia ao ChatGPT' in page
+    assert 'name="next"' in page
+
+
+def test_oauth_authorize_blocks_non_veterinarian_for_write_scopes(app, client):
+    _seed_client(app, client_id='client-vet-only', scopes='openid profile email tutors:write pets:write')
+
+    with app.app_context():
+        user = User(name='Tutor OAuth', email='tutor-oauth@example.com', role='adotante')
+        user.set_password('secret123')
+        db.session.add(user)
+        db.session.commit()
+        user_id = user.id
+
+    _login(client, user_id)
+    response = client.get(
+        '/oauth/authorize',
+        query_string={
+            'response_type': 'code',
+            'client_id': 'client-vet-only',
+            'redirect_uri': 'https://chatgpt.example/callback',
+            'scope': 'openid profile email tutors:write pets:write',
+            'state': 'vet-only',
+            'code_challenge': 'challenge',
+            'code_challenge_method': 'S256',
+        },
+    )
+
+    assert response.status_code == 403
+    page = response.get_data(as_text=True)
+    assert 'conta veterinária' in page
+    assert 'Sair e entrar com outra conta' in page
+
+
+def test_oauth_authorize_allows_veterinarian_for_write_scopes(app, client):
+    _seed_client(app, client_id='client-vet-ok', scopes='openid profile email tutors:write pets:write')
+
+    with app.app_context():
+        user = User(
+            name='Dra. OAuth',
+            email='vet-oauth@example.com',
+            role='veterinario',
+            worker='veterinario',
+        )
+        user.set_password('secret123')
+        db.session.add(user)
+        db.session.flush()
+        db.session.add(Veterinario(user_id=user.id, crmv='CRMV-9000'))
+        db.session.commit()
+        user_id = user.id
+
+    _login(client, user_id)
+    response = client.get(
+        '/oauth/authorize',
+        query_string={
+            'response_type': 'code',
+            'client_id': 'client-vet-ok',
+            'redirect_uri': 'https://chatgpt.example/callback',
+            'scope': 'openid profile email tutors:write pets:write',
+            'state': 'vet-ok',
+            'code_challenge': 'challenge',
+            'code_challenge_method': 'S256',
+        },
+    )
+
+    assert response.status_code == 200
+    assert 'Autorizar acesso' in response.get_data(as_text=True)
 
 
 def test_refresh_rotation_and_reuse_detection_revokes_family(app, client):

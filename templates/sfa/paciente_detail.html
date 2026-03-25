@@ -1,19 +1,78 @@
 {% extends "sfa/base.html" %}
 
-{% block title %}{{ p.id_estudo }} — SFA Orlândia{% endblock %}
+{% block title %}{{ p.id_estudo }} - SFA Orlandia{% endblock %}
 {% block page_title %}Paciente {{ p.id_estudo }}{% endblock %}
+
+{% block head %}
+<style>
+  .response-metric {
+    border: 1px solid rgba(1, 95, 115, 0.12);
+    border-radius: 14px;
+    padding: 0.8rem 0.9rem;
+    background: #fbfefe;
+    height: 100%;
+  }
+
+  .response-metric-label {
+    font-size: 0.74rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: #6c757d;
+    margin-bottom: 0.3rem;
+  }
+
+  .response-metric-value {
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: #12343b;
+    line-height: 1.35;
+  }
+
+  .response-answer-card {
+    border: 1px solid rgba(1, 95, 115, 0.1);
+    border-radius: 14px;
+    padding: 0.85rem 0.95rem;
+    background: #fff;
+    height: 100%;
+  }
+
+  .response-answer-card.is-empty {
+    background: #f8f9fa;
+    color: #7a8691;
+  }
+
+  .response-answer-label {
+    font-size: 0.78rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    color: #6c757d;
+    margin-bottom: 0.35rem;
+  }
+
+  .response-answer-value {
+    font-size: 0.94rem;
+    line-height: 1.45;
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
+
+  .patient-panel-label {
+    color: #6c757d;
+    font-size: 0.78rem;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+  }
+</style>
+{% endblock %}
 
 {% block content %}
 <div class="row g-3">
-  <!-- Coluna principal -->
   <div class="col-lg-8">
-
-    <!-- Cabeçalho do paciente -->
     <div class="card shadow-sm mb-3">
-      <div class="card-header d-flex align-items-center justify-content-between"
-           style="background:var(--sfa-teal);color:white">
+      <div class="card-header d-flex align-items-center justify-content-between" style="background:var(--sfa-teal);color:white">
         <span>
-          <i class="fas fa-user me-2"></i>{{ p.nome or '—' }}
+          <i class="fas fa-user me-2"></i>{{ p.nome or "-" }}
           <small class="ms-2 opacity-75">{{ p.id_estudo }}</small>
         </span>
         <div class="d-flex gap-2">
@@ -22,33 +81,37 @@
           {% elif p.grupo == 'B' %}
             <span class="badge badge-grupo-B fs-6">Grupo B</span>
           {% else %}
-            <span class="badge badge-grupo-PR fs-6">Pendente revisão</span>
+            <span class="badge badge-grupo-PR fs-6">Pendente revisao</span>
           {% endif %}
-          <span class="badge bg-light text-dark fs-6">{{ p.status_geral or '—' }}</span>
+          <span class="badge bg-light text-dark fs-6">{{ p.status_geral or "-" }}</span>
         </div>
       </div>
       <div class="card-body">
-        <div class="row g-2 small">
+        <div class="row g-3 small">
           <div class="col-sm-4">
-            <strong>Data de nascimento:</strong><br>{{ p.data_nascimento or '—' }}
+            <div class="patient-panel-label">Data de nascimento</div>
+            <div>{{ p.data_nascimento or "-" }}</div>
           </div>
           <div class="col-sm-4">
-            <strong>Telefone:</strong><br>{{ p.telefone or '—' }}
+            <div class="patient-panel-label">Telefone</div>
+            <div>{{ p.telefone or "-" }}</div>
           </div>
           <div class="col-sm-4">
-            <strong>Bairro:</strong><br>{{ p.bairro or '—' }}
+            <div class="patient-panel-label">Bairro</div>
+            <div>{{ p.bairro or "-" }}</div>
           </div>
           <div class="col-sm-8">
-            <strong>Endereço:</strong><br>{{ p.endereco or '—' }}
+            <div class="patient-panel-label">Endereco</div>
+            <div>{{ p.endereco or "-" }}</div>
           </div>
           <div class="col-sm-4">
-            <strong>Ficha SINAN:</strong><br>{{ p.ficha_sinan or '—' }}
+            <div class="patient-panel-label">Ficha SINAN</div>
+            <div>{{ p.ficha_sinan or "-" }}</div>
           </div>
         </div>
       </div>
     </div>
 
-    <!-- Linha do tempo de acompanhamento -->
     <div class="card shadow-sm mb-3">
       <div class="card-header"><i class="fas fa-timeline me-2"></i>Acompanhamento</div>
       <div class="card-body">
@@ -69,13 +132,13 @@
                 {% else %}text-muted{% endif %}">
                 {{ etapa }}
               </div>
-              <div class="small text-muted">{{ data_v or '—' }}</div>
+              <div class="small text-muted">{{ data_v or '-' }}</div>
               <span class="badge mt-1
                 {% if 'Completo' in (status or '') %}bg-success
                 {% elif 'ATRASADO' in (status or '') %}bg-danger
                 {% elif 'Aguardando' in (status or '') %}bg-warning text-dark
                 {% else %}bg-secondary{% endif %}">
-                {{ status or '—' }}
+                {{ status or '-' }}
               </span>
             </div>
           </div>
@@ -84,69 +147,87 @@
       </div>
     </div>
 
-    <!-- Respostas T0 -->
-    {% if p.resposta_t0 %}
+    {% for form in response_views %}
     <div class="card shadow-sm mb-3">
-      <div class="card-header"><i class="fas fa-clipboard-list me-2"></i>Resposta T0</div>
-      <div class="card-body small">
-        <div class="row g-2">
-          <div class="col-sm-4"><strong>Início sintomas:</strong> {{ p.resposta_t0.data_inicio_sintomas or '—' }}</div>
-          <div class="col-sm-4"><strong>Tipo residência:</strong> {{ p.resposta_t0.tipo_residencia or '—' }}</div>
-          <div class="col-sm-4"><strong>Dias incapacitado:</strong> {{ p.resposta_t0.dias_incap }}</div>
-          <div class="col-sm-4"><strong>Internação:</strong> {{ p.resposta_t0.internacao or '—' }}</div>
-          <div class="col-sm-4"><strong>Custo total (R$):</strong> {{ "%.2f"|format(p.resposta_t0.custo_total|float) }}</div>
-          <div class="col-sm-4"><strong>Ausência familiar:</strong> {{ p.resposta_t0.ausencia_familiar or '—' }}</div>
+      <div class="card-header d-flex flex-wrap align-items-center justify-content-between gap-2">
+        <div>
+          <i class="{{ form.icon }} me-2"></i>{{ form.stage_label }} - {{ form.title }}
+          <span class="badge bg-{{ form.badge_class }} ms-2">{{ form.answered }}/{{ form.total }} campos</span>
+        </div>
+        <div class="small text-muted">Registrado em {{ form.submitted_at }}</div>
+      </div>
+      <div class="card-body">
+        {% if form.summary %}
+        <div class="row g-2 mb-3">
+          {% for item in form.summary %}
+          <div class="col-md-6 col-xl-3">
+            <div class="response-metric">
+              <div class="response-metric-label">{{ item.label }}</div>
+              <div class="response-metric-value">{{ item.value }}</div>
+            </div>
+          </div>
+          {% endfor %}
+        </div>
+        {% endif %}
+
+        <div class="accordion" id="accordion-{{ form.stage }}">
+          {% for section in form.sections %}
+          {% set answered_fields = section.fields | selectattr('has_value') | list %}
+          <div class="accordion-item">
+            <h2 class="accordion-header" id="heading-{{ form.stage }}-{{ loop.index }}">
+              <button class="accordion-button {% if not loop.first %}collapsed{% endif %}" type="button"
+                      data-bs-toggle="collapse"
+                      data-bs-target="#collapse-{{ form.stage }}-{{ loop.index }}"
+                      aria-expanded="{{ 'true' if loop.first else 'false' }}"
+                      aria-controls="collapse-{{ form.stage }}-{{ loop.index }}">
+                <span>{{ section.title }}</span>
+                <span class="badge bg-light text-dark ms-2">{{ section.answered }}/{{ section.total }}</span>
+              </button>
+            </h2>
+            <div id="collapse-{{ form.stage }}-{{ loop.index }}"
+                 class="accordion-collapse collapse {% if loop.first %}show{% endif %}"
+                 aria-labelledby="heading-{{ form.stage }}-{{ loop.index }}"
+                 data-bs-parent="#accordion-{{ form.stage }}">
+              <div class="accordion-body">
+                {% if section.description %}
+                <p class="small text-muted mb-3">{{ section.description }}</p>
+                {% endif %}
+
+                {% if answered_fields %}
+                <div class="row g-2">
+                  {% for item in answered_fields %}
+                  <div class="col-md-6">
+                    <div class="response-answer-card">
+                      <div class="response-answer-label">{{ item.label }}</div>
+                      <div class="response-answer-value">{{ item.value }}</div>
+                    </div>
+                  </div>
+                  {% endfor %}
+                </div>
+                {% else %}
+                <div class="response-answer-card is-empty">
+                  <div class="response-answer-label">Sem resposta registrada</div>
+                  <div class="response-answer-value">Nenhum campo desta secao foi preenchido.</div>
+                </div>
+                {% endif %}
+              </div>
+            </div>
+          </div>
+          {% endfor %}
         </div>
       </div>
     </div>
-    {% endif %}
+    {% endfor %}
 
-    <!-- Respostas T10 -->
-    {% if p.respostas_t10 %}
-    {% set t10 = p.respostas_t10[-1] %}
-    <div class="card shadow-sm mb-3">
-      <div class="card-header"><i class="fas fa-clipboard-check me-2"></i>Resposta T10</div>
-      <div class="card-body small">
-        <div class="row g-2">
-          <div class="col-sm-4"><strong>Dias incap. (novos):</strong> {{ t10.dias_incap_novos }}</div>
-          <div class="col-sm-4"><strong>Medicamentos:</strong> R$ {{ "%.2f"|format(t10.custo_remedios|float) }}</div>
-          <div class="col-sm-4"><strong>Consultas/exames:</strong> R$ {{ "%.2f"|format(t10.custo_consultas|float) }}</div>
-          <div class="col-sm-4"><strong>Transporte:</strong> R$ {{ "%.2f"|format(t10.custo_transporte|float) }}</div>
-          <div class="col-sm-4"><strong>Outros:</strong> R$ {{ "%.2f"|format(t10.custo_outros|float) }}</div>
-          <div class="col-sm-4"><strong>Total T10:</strong> R$ {{ "%.2f"|format(t10.custo_total|float) }}</div>
-        </div>
-      </div>
-    </div>
-    {% endif %}
-
-    <!-- Respostas T30 -->
-    {% if p.respostas_t30 %}
-    {% set t30 = p.respostas_t30[-1] %}
-    <div class="card shadow-sm mb-3">
-      <div class="card-header"><i class="fas fa-clipboard-check me-2"></i>Resposta T30</div>
-      <div class="card-body small">
-        <div class="row g-2">
-          <div class="col-sm-4"><strong>Dias incap. (novos):</strong> {{ t30.dias_incap_novos }}</div>
-          <div class="col-sm-4"><strong>Medicamentos:</strong> R$ {{ "%.2f"|format(t30.custo_remedios|float) }}</div>
-          <div class="col-sm-4"><strong>Consultas/exames:</strong> R$ {{ "%.2f"|format(t30.custo_consultas|float) }}</div>
-          <div class="col-sm-4"><strong>Transporte:</strong> R$ {{ "%.2f"|format(t30.custo_transporte|float) }}</div>
-          <div class="col-sm-4"><strong>Outros:</strong> R$ {{ "%.2f"|format(t30.custo_outros|float) }}</div>
-          <div class="col-sm-4"><strong>Total T30:</strong> R$ {{ "%.2f"|format(t30.custo_total|float) }}</div>
-        </div>
-      </div>
-    </div>
-    {% endif %}
-
-    <!-- Auditoria -->
     {% if auditoria %}
     <div class="card shadow-sm">
-      <div class="card-header"><i class="fas fa-history me-2"></i>Histórico de auditoria</div>
+      <div class="card-header"><i class="fas fa-history me-2"></i>Historico de auditoria</div>
       <div class="card-body p-0">
         <ul class="list-group list-group-flush small">
           {% for a in auditoria %}
           <li class="list-group-item py-1 px-3">
             <span class="badge {% if a.nivel == 'ERROR' %}bg-danger{% elif a.nivel == 'WARN' %}bg-warning text-dark{% else %}bg-secondary{% endif %} me-1">{{ a.nivel }}</span>
-            <strong>{{ a.categoria }}</strong> — {{ a.mensagem }}
+            <strong>{{ a.categoria }}</strong> - {{ a.mensagem }}
             <span class="float-end text-muted" style="font-size:.7rem">{{ a.timestamp.strftime('%d/%m %H:%M') if a.timestamp }}</span>
           </li>
           {% endfor %}
@@ -156,32 +237,29 @@
     {% endif %}
   </div>
 
-  <!-- Coluna lateral -->
   <div class="col-lg-4">
-    <!-- Operacional -->
     <div class="card shadow-sm mb-3">
       <div class="card-header"><i class="fas fa-cogs me-2"></i>Operacional</div>
       <div class="card-body small">
         <dl class="row mb-0">
           <dt class="col-6">Fase atual</dt>
-          <dd class="col-6">{{ p.fase_atual or '—' }}</dd>
-          <dt class="col-6">Próxima fase</dt>
-          <dd class="col-6">{{ p.proxima_fase or '—' }}</dd>
-          <dt class="col-6">Ação</dt>
-          <dd class="col-6"><span class="badge bg-secondary">{{ p.proxima_acao or '—' }}</span></dd>
+          <dd class="col-6">{{ p.fase_atual or '-' }}</dd>
+          <dt class="col-6">Proxima fase</dt>
+          <dd class="col-6">{{ p.proxima_fase or '-' }}</dd>
+          <dt class="col-6">Acao</dt>
+          <dd class="col-6"><span class="badge bg-secondary">{{ p.proxima_acao or '-' }}</span></dd>
           <dt class="col-6">Prioridade</dt>
-          <dd class="col-6 priority-{{ p.prioridade_operacional }}">{{ p.prioridade_operacional or '—' }}</dd>
+          <dd class="col-6 priority-{{ p.prioridade_operacional }}">{{ p.prioridade_operacional or '-' }}</dd>
           <dt class="col-6">Data alvo</dt>
-          <dd class="col-6">{{ p.data_proxima_acao or '—' }}</dd>
-          <dt class="col-6">Dias p/ ação</dt>
-          <dd class="col-6">{{ p.dias_para_acao if p.dias_para_acao is not none else '—' }}</dd>
+          <dd class="col-6">{{ p.data_proxima_acao or '-' }}</dd>
+          <dt class="col-6">Dias p/ acao</dt>
+          <dd class="col-6">{{ p.dias_para_acao if p.dias_para_acao is not none else '-' }}</dd>
           <dt class="col-6">WhatsApp</dt>
-          <dd class="col-6">{{ p.status_whatsapp or '—' }}</dd>
+          <dd class="col-6">{{ p.status_whatsapp or '-' }}</dd>
           <dt class="col-6">Retorno</dt>
-          <dd class="col-6">{{ p.retorno_contato or '—' }}</dd>
+          <dd class="col-6">{{ p.retorno_contato or '-' }}</dd>
         </dl>
 
-        <!-- Marcar WhatsApp -->
         <hr>
         <form method="POST" action="{{ url_for('sfa_routes.marcar_whatsapp', id_estudo=p.id_estudo) }}">
           <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
@@ -197,23 +275,21 @@
       </div>
     </div>
 
-    <!-- Links de ação -->
     <div class="card shadow-sm mb-3">
       <div class="card-header"><i class="fab fa-whatsapp me-2"></i>Links WhatsApp</div>
       <div class="card-body small d-grid gap-2">
         {% for etapa, link in links_whatsapp.items() %}
         <a href="{{ link }}" target="_blank" class="btn btn-sm btn-outline-success">
-          <i class="fab fa-whatsapp me-1"></i>Convidar {{ etapa }}
+          <i class="fab fa-whatsapp me-1"></i>{% if etapa == 'T0' %}Convidar{% else %}Enviar{% endif %} {{ etapa }}
         </a>
         {% else %}
-        <p class="text-muted mb-0">Telefone não disponível.</p>
+        <p class="text-muted mb-0">Telefone nao disponivel.</p>
         {% endfor %}
       </div>
     </div>
 
-    <!-- Links formulários -->
-    <div class="card shadow-sm">
-      <div class="card-header"><i class="fas fa-link me-2"></i>Links formulários T0</div>
+    <div class="card shadow-sm mb-3">
+      <div class="card-header"><i class="fas fa-link me-2"></i>Links formularios</div>
       <div class="card-body small d-grid gap-2">
         {% if url_t0 %}
         <a href="{{ url_t0 }}" target="_blank" class="btn btn-sm btn-outline-primary">
@@ -225,9 +301,41 @@
           <i class="fas fa-bug me-1"></i>Debug T0
         </a>
         {% endif %}
+        {% if url_t10 %}
+        <a href="{{ url_t10 }}" target="_blank" class="btn btn-sm btn-outline-primary">
+          <i class="fas fa-external-link-alt me-1"></i>Abrir T10
+        </a>
+        {% endif %}
+        {% if url_t10_debug %}
+        <a href="{{ url_t10_debug }}" target="_blank" class="btn btn-sm btn-outline-secondary">
+          <i class="fas fa-bug me-1"></i>Debug T10
+        </a>
+        {% endif %}
+        {% if url_t30 %}
+        <a href="{{ url_t30 }}" target="_blank" class="btn btn-sm btn-outline-primary">
+          <i class="fas fa-external-link-alt me-1"></i>Abrir T30
+        </a>
+        {% endif %}
+        {% if url_t30_debug %}
+        <a href="{{ url_t30_debug }}" target="_blank" class="btn btn-sm btn-outline-secondary">
+          <i class="fas fa-bug me-1"></i>Debug T30
+        </a>
+        {% endif %}
         <div class="mt-1 text-muted" style="font-size:.7rem;word-break:break-all">
-          Token: {{ p.token_acesso or '—' }}
+          Token: {{ p.token_acesso or '-' }}
         </div>
+      </div>
+    </div>
+
+    <div class="card shadow-sm">
+      <div class="card-header"><i class="fas fa-file-export me-2"></i>Exportacao</div>
+      <div class="card-body small d-grid gap-2">
+        <a href="{{ url_for('sfa_routes.export_cadastro_csv', q=p.id_estudo) }}" class="btn btn-sm btn-outline-secondary">
+          <i class="fas fa-table me-1"></i>Exportar cadastro CSV
+        </a>
+        <a href="{{ url_for('sfa_routes.export_analitico_csv', q=p.id_estudo) }}" class="btn btn-sm btn-outline-primary">
+          <i class="fas fa-file-csv me-1"></i>Exportar analitico CSV
+        </a>
       </div>
     </div>
   </div>

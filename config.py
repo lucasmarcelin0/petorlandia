@@ -1,6 +1,11 @@
 import os
-from typing import Optional
+import secrets
 from datetime import timedelta
+from pathlib import Path
+from typing import Optional
+
+
+PROJECT_ROOT = Path(__file__).resolve().parent
 
 
 def _env_optional(name: str) -> Optional[str]:
@@ -14,8 +19,35 @@ def _env_bool(name: str, default: bool = False) -> bool:
     return value.strip().lower() in {"1", "true", "yes", "on"}
 
 
+def _load_secret_key(project_root: Optional[Path] = None) -> str:
+    env_secret = os.environ.get("SECRET_KEY")
+    if env_secret:
+        return env_secret
+
+    root = project_root or PROJECT_ROOT
+    secret_file = root / "config" / "secret_key"
+
+    try:
+        secret = secret_file.read_text(encoding="utf-8").strip()
+    except UnicodeDecodeError:
+        secret = secret_file.read_text(encoding="utf-8-sig").strip()
+    except OSError:
+        secret = ""
+
+    if secret:
+        return secret
+
+    secret = secrets.token_hex(32)
+    try:
+        secret_file.parent.mkdir(parents=True, exist_ok=True)
+        secret_file.write_text(secret, encoding="utf-8")
+    except OSError:
+        pass
+    return secret
+
+
 class Config:
-    SECRET_KEY = os.environ.get("SECRET_KEY", os.urandom(32))
+    SECRET_KEY = _load_secret_key()
     SQLALCHEMY_DATABASE_URI = os.environ.get(
         "SQLALCHEMY_DATABASE_URI",
         "postgresql://u82pgjdcmkbq7v:p0204cb9289674b66bfcbb9248eaf9d6a71e2dece2722fe22d6bd976c77b411e6@c2hbg00ac72j9d.cluster-czrs8kj4isg7.us-east-1.rds.amazonaws.com:5432/d2nnmcuqa8ljli",
@@ -38,7 +70,10 @@ class Config:
     OAUTH_AUTHORIZATION_CODE_EXPIRES_IN = int(os.environ.get("OAUTH_AUTHORIZATION_CODE_EXPIRES_IN", "300"))
     OAUTH_ACCESS_TOKEN_EXPIRES_IN = int(os.environ.get("OAUTH_ACCESS_TOKEN_EXPIRES_IN", "900"))
     OAUTH_REFRESH_TOKEN_EXPIRES_IN = int(os.environ.get("OAUTH_REFRESH_TOKEN_EXPIRES_IN", "2592000"))
-    OAUTH_ALLOWED_SCOPES = os.environ.get("OAUTH_ALLOWED_SCOPES", "openid profile email")
+    OAUTH_ALLOWED_SCOPES = os.environ.get(
+        "OAUTH_ALLOWED_SCOPES",
+        "openid profile email pets:read appointments:read tutors:write pets:write",
+    )
 
     # Performance: cache static files for 1 hour (overridden by env var for dev)
     SEND_FILE_MAX_AGE_DEFAULT = int(os.environ.get("SEND_FILE_MAX_AGE_DEFAULT", "3600"))

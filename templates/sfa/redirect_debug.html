@@ -35,6 +35,20 @@
       <span style="color:red">⚠ SFA_ENTRY_T0_ID_ESTUDO não definido</span>
     {% endif %}
   </p>
+  <p><strong>Entry ID para ficha_sinan:</strong>
+    {% if entry_ficha_sinan %}
+      <code>{{ entry_ficha_sinan }}</code>
+    {% else %}
+      <span style="color:#9c6b00">Opcional, mas recomendado quando o formulÃ¡rio usa a Ficha SINAN para identificaÃ§Ã£o.</span>
+    {% endif %}
+  </p>
+  <p><strong>Entry ID para token_acesso:</strong>
+    {% if entry_token %}
+      <code>{{ entry_token }}</code>
+    {% else %}
+      <span style="color:#9c6b00">Opcional, mas recomendado para identificação única.</span>
+    {% endif %}
+  </p>
 
   <p><strong>Parâmetros montados ({{ params | length }}):</strong></p>
   {% if params %}

@@ -59,13 +59,25 @@ SFA_WEBHOOK_SECRET=gere-outro-segredo-longo
 SFA_WEBAPP_URL=https://seu-dominio.com
 
 SFA_SHEET_ID_SINAN=...
+SFA_SHEET_RANGE_SINAN=A:T
+# Opcional se a aba de leitura não for a primeira:
+# SFA_SHEET_TITLE_SINAN=SINAN
+# SFA_SHEET_GID_SINAN=0
 SFA_FORM_T0_ID=...
 SFA_FORM_T10_ID=...
 SFA_FORM_T30_ID=...
+SFA_T0_RESPONSE_SHEET=https://docs.google.com/spreadsheets/d/.../edit#gid=...
+SFA_T0_RESPONSE_RANGE=A:ZZ
+SFA_T0_FORM_SCHEMA_FILE=config/sfa_t0_form.json
+SFA_T10_FORM_SCHEMA_FILE=config/sfa_t10_form.json
+SFA_T30_FORM_SCHEMA_FILE=config/sfa_t30_form.json
+SFA_AUTO_SYNC_MINUTES=0
 
 SFA_ENTRY_T0_ID_ESTUDO=entry.xxxxx
+SFA_ENTRY_T0_FICHA_SINAN=entry.xxxxx
 SFA_ENTRY_T0_NOME=entry.xxxxx
 SFA_ENTRY_T0_DATA_NASC_BASE=entry.xxxxx
+SFA_ENTRY_T0_TOKEN=entry.xxxxx
 SFA_ENTRY_T10_NOME=entry.xxxxx
 SFA_ENTRY_T10_ID_ESTUDO=entry.xxxxx
 SFA_ENTRY_T30_NOME=entry.xxxxx
@@ -103,24 +115,46 @@ Passos:
 1. Crie uma service account no Google Cloud.
 2. Baixe o JSON de credenciais.
 3. Defina `SFA_GOOGLE_CREDENTIALS_FILE` ou `SFA_GOOGLE_CREDENTIALS_JSON`.
+   Se houver apenas um JSON valido de service account na raiz do projeto, a aplicacao tenta detecta-lo automaticamente em ambiente local.
 4. Compartilhe a planilha do SINAN com o e-mail da service account com permissão de leitura.
 5. Copie o ID da planilha para `SFA_SHEET_ID_SINAN`.
+6. Se precisar ler uma aba específica, configure `SFA_SHEET_TITLE_SINAN` ou `SFA_SHEET_GID_SINAN`.
 
 Sem isso, `sincronizar_sinan()` não conseguirá importar os casos.
 
-## 6. Configuração dos Google Forms
+## 6. Configuração dos formulários
 
-Você precisa de três formulários:
+Hoje o sistema suporta formulários nativos para:
 
 - T0
 - T10
 - T30
 
-Defina os IDs dos formulários e os `entry.*` usados no pré-preenchimento.
+Os links públicos do paciente passam a abrir estas rotas nativas:
+
+- `/sfa/p/<token>` para T0
+- `/sfa/p/<token>/t10` para T10
+- `/sfa/p/<token>/t30` para T30
+
+As perguntas e opções ficam em arquivos de schema editáveis pelo painel interno:
+
+- `/sfa/config/t0`
+- `/sfa/config/t10`
+- `/sfa/config/t30`
+
+Arquivos padrão:
+
+- `config/sfa_t0_form.json`
+- `config/sfa_t10_form.json`
+- `config/sfa_t30_form.json`
+
+Os IDs e `entry.*` do Google Forms continuam apenas como compatibilidade legada.
 
 Observação importante:
 
-- `SFA_ENTRY_T10_ID_ESTUDO` e `SFA_ENTRY_T30_ID_ESTUDO` ainda precisam ser preenchidos manualmente para o link sair completo.
+- Alterações no schema entram em vigor assim que forem salvas.
+- O formulário nativo identifica o paciente pelo `token_acesso` do link, sem depender de `entry.*`.
+- Webhooks do Apps Script ainda podem coexistir, mas deixam de ser necessários para T0/T10/T30 quando o fluxo nativo estiver sendo usado.
 
 ## 7. Webhooks do Apps Script
 
@@ -145,6 +179,12 @@ Exemplo de payload mínimo do T0:
   "data_nascimento": "2000-01-31"
 }
 ```
+
+Alternativa sem Apps Script:
+
+- defina `SFA_T0_RESPONSE_SHEET` com a planilha de respostas do Forms;
+- opcionalmente ative `SFA_AUTO_SYNC_MINUTES` para importar respostas novas por polling;
+- o botão de sync interno do SFA também passa a importar respostas T0.
 
 ## 8. Operação diária
 

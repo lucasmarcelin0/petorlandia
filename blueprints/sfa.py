@@ -17,8 +17,10 @@ Rotas:
 """
 from __future__ import annotations
 
+from datetime import date
 import hmac
 import hashlib
+import json
 import os
 from functools import wraps
 
@@ -152,9 +154,9 @@ def dashboard():
                 if acao == "Convidar T0":
                     msg = msg_convite_t0(p.nome, p.id_estudo, p.token_acesso or "")
                 elif "T10" in acao:
-                    msg = msg_lembrete_t10(p.nome, p.id_estudo)
+                    msg = msg_lembrete_t10(p.nome, p.id_estudo, p.token_acesso or "")
                 elif "T30" in acao:
-                    msg = msg_lembrete_t30(p.nome, p.id_estudo)
+                    msg = msg_lembrete_t30(p.nome, p.id_estudo, p.token_acesso or "")
                 else:
                     msg = ""
                 if msg:
@@ -169,15 +171,21 @@ def dashboard():
 # Lista de pacientes
 # ---------------------------------------------------------------------------
 
-@bp.route("/pacientes")
-@require_sfa_internal_access
-def pacientes():
+def _coletar_filtros_pacientes() -> dict[str, str]:
+    return {
+        "grupo": request.args.get("grupo", ""),
+        "status": request.args.get("status", ""),
+        "q": request.args.get("q", "").strip(),
+    }
+
+
+def _consulta_pacientes_filtrada(filtros: dict[str, str] | None = None):
     from models.sfa import SfaPaciente
 
-    grupo = request.args.get("grupo", "")
-    status = request.args.get("status", "")
-    busca = request.args.get("q", "").strip()
-    page = request.args.get("page", 1, type=int)
+    filtros = filtros or _coletar_filtros_pacientes()
+    grupo = filtros.get("grupo", "")
+    status = filtros.get("status", "")
+    busca = filtros.get("q", "").strip()
 
     q = SfaPaciente.query
 
@@ -194,13 +202,75 @@ def pacientes():
             | SfaPaciente.ficha_sinan.ilike(like)
         )
 
-    q = q.order_by(SfaPaciente.timestamp_cadastro.desc())
+    return q.order_by(SfaPaciente.timestamp_cadastro.desc())
+
+@bp.route("/pacientes")
+@require_sfa_internal_access
+def pacientes():
+    filtros = _coletar_filtros_pacientes()
+    page = request.args.get("page", 1, type=int)
+
+    q = _consulta_pacientes_filtrada(filtros)
     paginacao = q.paginate(page=page, per_page=50, error_out=False)
 
     return render_template("sfa/pacientes.html",
                            pacientes=paginacao.items,
                            paginacao=paginacao,
-                           filtros={"grupo": grupo, "status": status, "q": busca})
+                           filtros=filtros)
+
+
+def _csv_download_response(csv_text: str, filename: str):
+    response = current_app.response_class(
+        "\ufeff" + csv_text,
+        mimetype="text/csv; charset=utf-8",
+    )
+    response.headers["Content-Disposition"] = f'attachment; filename="{filename}"'
+    return response
+
+
+@bp.route("/export/cadastro.csv")
+@require_sfa_internal_access
+def export_cadastro_csv():
+    from services.sfa_service import gerar_csv_exportacao_cadastro
+
+    filtros = _coletar_filtros_pacientes()
+    pacientes = _consulta_pacientes_filtrada(filtros).all()
+    csv_text = gerar_csv_exportacao_cadastro(pacientes)
+    return _csv_download_response(csv_text, f"sfa_cadastro_{date.today().isoformat()}.csv")
+
+
+@bp.route("/export/analitico.csv")
+@require_sfa_internal_access
+def export_analitico_csv():
+    from services.sfa_service import gerar_csv_exportacao_analitica
+
+    filtros = _coletar_filtros_pacientes()
+    pacientes = _consulta_pacientes_filtrada(filtros).all()
+    csv_text = gerar_csv_exportacao_analitica(pacientes)
+    return _csv_download_response(csv_text, f"sfa_analitico_{date.today().isoformat()}.csv")
+
+
+@bp.route("/tcle/assinaturas")
+@require_sfa_internal_access
+def tcle_signatures():
+    from services.sfa_service import listar_assinaturas_tcle
+
+    assinaturas = listar_assinaturas_tcle()
+    return render_template(
+        "sfa/tcle_signatures.html",
+        assinaturas=assinaturas,
+        total_assinaturas=len(assinaturas),
+    )
+
+
+@bp.route("/tcle/assinaturas.csv")
+@require_sfa_internal_access
+def export_tcle_signatures_csv():
+    from services.sfa_service import gerar_csv_assinaturas_tcle, listar_assinaturas_tcle
+
+    assinaturas = listar_assinaturas_tcle()
+    csv_text = gerar_csv_assinaturas_tcle(assinaturas)
+    return _csv_download_response(csv_text, f"sfa_tcle_assinaturas_{date.today().isoformat()}.csv")
 
 
 # ---------------------------------------------------------------------------
@@ -214,8 +284,37 @@ def paciente_detail(id_estudo: str):
     from services.sfa_service import (
         link_whatsapp, normalizar_telefone,
         msg_convite_t0, msg_lembrete_t10, msg_lembrete_t30,
-        gerar_url_t0,
+        gerar_url_t0, gerar_url_t10, gerar_url_t30,
+        carregar_t0_form_schema, carregar_t10_form_schema, carregar_t30_form_schema,
+        montar_visao_resposta_formulario, obter_resposta_formulario,
     )
+
+    def _format_currency(value) -> str:
+        if value in (None, ""):
+            return "Nao informado"
+        return f"R$ {float(value):.2f}"
+
+    def _format_timestamp(value) -> str:
+        text = str(value or "").strip()
+        if not text:
+            return "Nao informado"
+        try:
+            return date.fromisoformat(text).strftime("%d/%m/%Y")
+        except ValueError:
+            pass
+        try:
+            from datetime import datetime
+
+            return datetime.fromisoformat(text.replace("Z", "+00:00")).strftime("%d/%m/%Y %H:%M")
+        except ValueError:
+            return text
+
+    def _compact_summary(items):
+        return [
+            {"label": label, "value": value}
+            for label, value in items
+            if value not in (None, "", "Nao informado")
+        ]
 
     p = SfaPaciente.query.filter_by(id_estudo=id_estudo).first_or_404()
     auditoria = (SfaAuditoria.query
@@ -227,18 +326,86 @@ def paciente_detail(id_estudo: str):
     links_whatsapp = {}
     if tel:
         links_whatsapp["T0"] = link_whatsapp(tel, msg_convite_t0(p.nome, p.id_estudo, p.token_acesso or ""))
-        links_whatsapp["T10"] = link_whatsapp(tel, msg_lembrete_t10(p.nome, p.id_estudo))
-        links_whatsapp["T30"] = link_whatsapp(tel, msg_lembrete_t30(p.nome, p.id_estudo))
+        links_whatsapp["T10"] = link_whatsapp(tel, msg_lembrete_t10(p.nome, p.id_estudo, p.token_acesso or ""))
+        links_whatsapp["T30"] = link_whatsapp(tel, msg_lembrete_t30(p.nome, p.id_estudo, p.token_acesso or ""))
 
     url_t0 = gerar_url_t0(p.id_estudo, p.token_acesso or "")
     url_t0_debug = gerar_url_t0(p.id_estudo, p.token_acesso or "", debug=True)
+    url_t10 = gerar_url_t10(p.id_estudo, p.token_acesso or "")
+    url_t10_debug = gerar_url_t10(p.id_estudo, p.token_acesso or "", debug=True)
+    url_t30 = gerar_url_t30(p.id_estudo, p.token_acesso or "")
+    url_t30_debug = gerar_url_t30(p.id_estudo, p.token_acesso or "", debug=True)
+
+    schemas = {
+        "t0": carregar_t0_form_schema(),
+        "t10": carregar_t10_form_schema(),
+        "t30": carregar_t30_form_schema(),
+    }
+    response_views = []
+
+    for stage, stage_label, icon, badge_class in [
+        ("t0", "T0", "fas fa-clipboard-list", "success"),
+        ("t10", "T10", "fas fa-clipboard-check", "warning"),
+        ("t30", "T30", "fas fa-flag-checkered", "primary"),
+    ]:
+        resposta = obter_resposta_formulario(p, stage)
+        if not resposta:
+            continue
+
+        view = montar_visao_resposta_formulario(stage, resposta, schema=schemas[stage])
+        payload = view["payload"]
+
+        if stage == "t0":
+            summary = _compact_summary(
+                [
+                    ("Inicio sintomas", payload.get("data_inicio_sintomas") or getattr(resposta, "data_inicio_sintomas", "")),
+                    ("Tipo de moradia", payload.get("tipo_residencia") or getattr(resposta, "tipo_residencia", "")),
+                    ("Dias incapacitado", payload.get("dias_incap") or getattr(resposta, "dias_incap", "")),
+                    ("Custo total", _format_currency(getattr(resposta, "custo_total", ""))),
+                    ("TCLE assinado por", payload.get("tcle_assinado_por")),
+                    ("TCLE registrado em", _format_timestamp(payload.get("consentimento_registrado_em"))),
+                ]
+            )
+        elif stage == "t10":
+            summary = _compact_summary(
+                [
+                    ("Evolucao", payload.get("classificacao_melhora")),
+                    ("Dias incapacitado", payload.get("dias_incap_novos") or getattr(resposta, "dias_incap_novos", "")),
+                    ("Custo total", _format_currency(getattr(resposta, "custo_total", ""))),
+                    ("Previsao retorno", payload.get("retorno_atividades_previsao")),
+                ]
+            )
+        else:
+            summary = _compact_summary(
+                [
+                    ("Estado final", payload.get("estado_saude_final")),
+                    ("Dias incapacitado", payload.get("dias_incap_novos") or getattr(resposta, "dias_incap_novos", "")),
+                    ("Custo total", _format_currency(getattr(resposta, "custo_total", ""))),
+                    ("Retorno atividades", payload.get("retorno_atividades_normais")),
+                ]
+            )
+
+        response_views.append(
+            {
+                **view,
+                "stage_label": stage_label,
+                "icon": icon,
+                "badge_class": badge_class,
+                "summary": summary,
+            }
+        )
 
     return render_template("sfa/paciente_detail.html",
                            p=p,
                            auditoria=auditoria,
                            links_whatsapp=links_whatsapp,
+                           response_views=response_views,
                            url_t0=url_t0,
-                           url_t0_debug=url_t0_debug)
+                           url_t0_debug=url_t0_debug,
+                           url_t10=url_t10,
+                           url_t10_debug=url_t10_debug,
+                           url_t30=url_t30,
+                           url_t30_debug=url_t30_debug)
 
 
 # ---------------------------------------------------------------------------
@@ -271,62 +438,273 @@ def marcar_whatsapp(id_estudo: str):
 # Redirect T0 — substitui o doGet() do Web App GAS
 # ---------------------------------------------------------------------------
 
-@bp.route("/p/<token>")
-def redirect_t0(token: str):
-    """
-    Recebe o token de acesso ou id_estudo, busca o paciente e redireciona
-    para o Google Form com os campos pré-preenchidos.
-
-    Modo debug: adicione ?debug=1 à URL.
-    """
+def _buscar_paciente_publico_t0(token: str):
     from models.sfa import SfaPaciente
-    from services.sfa_service import (
-        registrar_auditoria, parse_data,
-        FORM_T0_ID, ENTRY_T0_ID_ESTUDO, ENTRY_T0_NOME, ENTRY_T0_DATA_NASC_BASE,
+
+    return (
+        SfaPaciente.query.filter_by(token_acesso=token).first()
+        or SfaPaciente.query.filter_by(id_estudo=token).first()
     )
-    from urllib.parse import urlencode
+
+
+def _resposta_publica_existente(paciente, form_stage: str) -> bool:
+    stage = str(form_stage or "").strip().lower()
+    if stage == "t0":
+        return bool(getattr(paciente, "resposta_t0", None))
+    if stage == "t10":
+        return bool(getattr(paciente, "respostas_t10", []))
+    if stage == "t30":
+        return bool(getattr(paciente, "respostas_t30", []))
+    return False
+
+
+def _render_public_native_form(
+    token: str,
+    form_stage: str,
+    form_name: str,
+    schema_loader,
+    initial_builder,
+    collector,
+    submitter,
+):
+    from services.sfa_service import iterar_campos_form, registrar_auditoria
 
     debug = request.args.get("debug") == "1"
-
-    # Busca por token_acesso primeiro, depois por id_estudo
-    paciente = (SfaPaciente.query.filter_by(token_acesso=token).first()
-                or SfaPaciente.query.filter_by(id_estudo=token).first())
+    paciente = _buscar_paciente_publico_t0(token)
 
     if not paciente:
-        registrar_auditoria("WARN", "PACIENTE_NAO_ENCONTRADO", "redirect_t0",
-                             f"Token/id não encontrado: {token}")
-        return render_template("sfa/erro.html",
-                               mensagem="Participante não encontrado. Verifique o link ou entre em contato com o pesquisador."), 404
+        registrar_auditoria(
+            "WARN",
+            "PACIENTE_NAO_ENCONTRADO",
+            f"redirect_{form_stage}",
+            f"Token/id nao encontrado: {token}",
+        )
+        return render_template(
+            "sfa/erro.html",
+            mensagem=(
+                "Participante nao encontrado. Verifique o link ou entre em contato "
+                "com o pesquisador."
+            ),
+        ), 404
 
-    # Monta URL pré-preenchida do Google Forms
-    params = {}
-    if ENTRY_T0_ID_ESTUDO and paciente.id_estudo:
-        params[ENTRY_T0_ID_ESTUDO] = paciente.id_estudo
-    if ENTRY_T0_NOME and paciente.nome:
-        params[ENTRY_T0_NOME] = paciente.nome
-    if ENTRY_T0_DATA_NASC_BASE and paciente.data_nascimento:
-        d = parse_data(paciente.data_nascimento)
-        if d:
-            base_id = ENTRY_T0_DATA_NASC_BASE.replace("entry.", "")
-            params[f"entry.{base_id}_year"] = d.year
-            params[f"entry.{base_id}_month"] = d.month
-            params[f"entry.{base_id}_day"] = d.day
+    schema = schema_loader()
+    values = initial_builder(paciente, schema)
+    errors: dict[str, str] = {}
 
-    if params and FORM_T0_ID:
-        base_url = f"https://docs.google.com/forms/d/{FORM_T0_ID}/viewform?usp=pp_url"
-        form_url = f"{base_url}&{urlencode(params)}"
-    else:
-        form_url = f"https://docs.google.com/forms/d/{FORM_T0_ID}/viewform" if FORM_T0_ID else "#"
+    if request.method == "POST":
+        if _resposta_publica_existente(paciente, form_stage):
+            return render_template(
+                "sfa/t0_submitted.html",
+                paciente=paciente,
+                already_submitted=True,
+                form_name=form_name,
+                form_stage=form_stage,
+            )
+
+        for field in iterar_campos_form(schema):
+            key = field["key"]
+            if field.get("type") == "checkboxes":
+                values[key] = request.form.getlist(key)
+            else:
+                values[key] = str(request.form.get(key) or "").strip()
+
+        dados, errors = collector(schema, request.form, paciente)
+        if not errors:
+            if form_stage == "t0":
+                forwarded_for = str(request.headers.get("X-Forwarded-For") or "").strip()
+                dados["consentimento_ip"] = (
+                    forwarded_for.split(",")[0].strip()
+                    if forwarded_for
+                    else str(request.remote_addr or "").strip()
+                )
+                dados["consentimento_user_agent"] = str(
+                    request.headers.get("User-Agent") or ""
+                ).strip()
+            resultado = submitter(dados)
+            if resultado.get("ok"):
+                return render_template(
+                    "sfa/t0_submitted.html",
+                    paciente=paciente,
+                    already_submitted=False,
+                    form_name=form_name,
+                    form_stage=form_stage,
+                )
+            errors["__all__"] = (
+                resultado.get("erro")
+                or "Nao foi possivel registrar sua resposta agora. Tente novamente em alguns minutos."
+            )
 
     if debug:
-        return render_template("sfa/redirect_debug.html",
-                               paciente=paciente,
-                               form_url=form_url,
-                               params=params,
-                               entry_id_estudo=ENTRY_T0_ID_ESTUDO,
-                               form_t0_id=FORM_T0_ID)
+        return render_template(
+            "sfa/t0_debug.html",
+            paciente=paciente,
+            schema=schema,
+            values=values,
+            field_count=sum(1 for _ in iterar_campos_form(schema)),
+            form_name=form_name,
+            form_stage=form_stage,
+        )
 
-    return render_template("sfa/redirect.html", form_url=form_url)
+    if request.method == "GET" and _resposta_publica_existente(paciente, form_stage):
+        return render_template(
+            "sfa/t0_submitted.html",
+            paciente=paciente,
+            already_submitted=True,
+            form_name=form_name,
+            form_stage=form_stage,
+        )
+
+    return render_template(
+        "sfa/t0_form.html",
+        paciente=paciente,
+        schema=schema,
+        values=values,
+        errors=errors,
+        form_name=form_name,
+        form_stage=form_stage,
+    )
+
+
+def _render_form_config(form_name: str, form_stage: str, schema_loader, schema_saver):
+    from services.sfa_service import (
+        iterar_campos_form,
+        serializar_t0_form_schema,
+        validar_t0_form_schema,
+    )
+
+    schema = schema_loader()
+    schema_text = serializar_t0_form_schema(schema)
+    errors: list[str] = []
+
+    if request.method == "POST":
+        schema_text = request.form.get("schema_json", "").strip()
+        try:
+            schema_enviado = json.loads(schema_text or "{}")
+            errors = validar_t0_form_schema(schema_enviado)
+            if errors:
+                flash(
+                    f"Nao foi possivel salvar o {form_name.lower()}. Revise os erros abaixo.",
+                    "error",
+                )
+            else:
+                schema_saver(schema_enviado)
+                flash(f"{form_name} atualizado com sucesso.", "success")
+                return redirect(url_for(f"sfa_routes.{form_stage}_form_config"))
+        except json.JSONDecodeError as exc:
+            errors = [f"JSON invalido na linha {exc.lineno}, coluna {exc.colno}."]
+            flash(
+                f"Nao foi possivel salvar o {form_name.lower()}. O JSON esta invalido.",
+                "error",
+            )
+
+    return render_template(
+        "sfa/t0_form_config.html",
+        schema=schema,
+        schema_text=schema_text,
+        errors=errors,
+        field_count=sum(1 for _ in iterar_campos_form(schema)),
+        form_name=form_name,
+        form_stage=form_stage,
+    )
+
+
+@bp.route("/p/<token>", methods=["GET", "POST"])
+@csrf.exempt
+def redirect_t0(token: str):
+    from services.sfa_service import (
+        carregar_t0_form_schema,
+        coletar_resposta_t0_nativa,
+        construir_valores_iniciais_t0,
+        on_submit_t0,
+    )
+    return _render_public_native_form(
+        token=token,
+        form_stage="t0",
+        form_name="Formulario T0",
+        schema_loader=carregar_t0_form_schema,
+        initial_builder=construir_valores_iniciais_t0,
+        collector=coletar_resposta_t0_nativa,
+        submitter=on_submit_t0,
+    )
+
+
+@bp.route("/p/<token>/t10", methods=["GET", "POST"])
+@csrf.exempt
+def redirect_t10(token: str):
+    from services.sfa_service import (
+        carregar_t10_form_schema,
+        coletar_resposta_t10_nativa,
+        construir_valores_iniciais_t10,
+        on_submit_t10,
+    )
+    return _render_public_native_form(
+        token=token,
+        form_stage="t10",
+        form_name="Formulario T10",
+        schema_loader=carregar_t10_form_schema,
+        initial_builder=construir_valores_iniciais_t10,
+        collector=coletar_resposta_t10_nativa,
+        submitter=on_submit_t10,
+    )
+
+
+@bp.route("/p/<token>/t30", methods=["GET", "POST"])
+@csrf.exempt
+def redirect_t30(token: str):
+    from services.sfa_service import (
+        carregar_t30_form_schema,
+        coletar_resposta_t30_nativa,
+        construir_valores_iniciais_t30,
+        on_submit_t30,
+    )
+    return _render_public_native_form(
+        token=token,
+        form_stage="t30",
+        form_name="Formulario T30",
+        schema_loader=carregar_t30_form_schema,
+        initial_builder=construir_valores_iniciais_t30,
+        collector=coletar_resposta_t30_nativa,
+        submitter=on_submit_t30,
+    )
+
+
+@bp.route("/config/t0", methods=["GET", "POST"])
+@require_sfa_internal_access
+def t0_form_config():
+    from services.sfa_service import carregar_t0_form_schema, salvar_t0_form_schema
+
+    return _render_form_config(
+        form_name="Formulario T0",
+        form_stage="t0",
+        schema_loader=carregar_t0_form_schema,
+        schema_saver=salvar_t0_form_schema,
+    )
+
+
+@bp.route("/config/t10", methods=["GET", "POST"])
+@require_sfa_internal_access
+def t10_form_config():
+    from services.sfa_service import carregar_t10_form_schema, salvar_t10_form_schema
+
+    return _render_form_config(
+        form_name="Formulario T10",
+        form_stage="t10",
+        schema_loader=carregar_t10_form_schema,
+        schema_saver=salvar_t10_form_schema,
+    )
+
+
+@bp.route("/config/t30", methods=["GET", "POST"])
+@require_sfa_internal_access
+def t30_form_config():
+    from services.sfa_service import carregar_t30_form_schema, salvar_t30_form_schema
+
+    return _render_form_config(
+        form_name="Formulario T30",
+        form_stage="t30",
+        schema_loader=carregar_t30_form_schema,
+        schema_saver=salvar_t30_form_schema,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -376,9 +754,15 @@ def sync_sinan():
     """Dispara sincronização SINAN manualmente."""
     if not _verificar_token_admin():
         abort(403)
-    from services.sfa_service import sincronizar_sinan
+    from services.sfa_service import sincronizar_respostas_t0, sincronizar_sinan
     resultado = sincronizar_sinan()
-    flash(f"SINAN sync: {resultado['novos']} novo(s), {resultado['erros']} erro(s).", "info")
+    resultado_t0 = sincronizar_respostas_t0()
+    flash(
+        f"SINAN sync: {resultado['novos']} novo(s), {resultado['erros']} erro(s). "
+        f"T0: {resultado_t0['importados']} importada(s), {resultado_t0['ignorados']} ignorada(s), "
+        f"{resultado_t0['erros']} erro(s).",
+        "info",
+    )
     return redirect(url_for("sfa_routes.dashboard"))
 
 
@@ -388,11 +772,12 @@ def rodar_rotina():
     """Roda verificação de seguimento e atualiza operacional."""
     if not _verificar_token_admin():
         abort(403)
-    from services.sfa_service import verificar_seguimento
+    from services.sfa_service import sincronizar_respostas_t0, verificar_seguimento
     from models.sfa import SfaPaciente
     from extensions import db
     from services.sfa_service import atualizar_operacional_paciente
 
+    resultado_t0 = sincronizar_respostas_t0()
     resultado = verificar_seguimento()
     # Atualiza campos operacionais de todos os pacientes
     for p in SfaPaciente.query.all():
@@ -401,7 +786,8 @@ def rodar_rotina():
 
     flash(
         f"Rotina concluída: {len(resultado['atrasados_t10'])} T10 atrasados, "
-        f"{len(resultado['atrasados_t30'])} T30 atrasados.",
+        f"{len(resultado['atrasados_t30'])} T30 atrasados, "
+        f"{resultado_t0['importados']} T0 importada(s).",
         "info"
     )
     return redirect(url_for("sfa_routes.dashboard"))

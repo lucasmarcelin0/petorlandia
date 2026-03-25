@@ -2,6 +2,7 @@
 venv/
 env/
 .venv
+.venv-codex/
 *.egg-info/
 
 # Python
@@ -24,6 +25,8 @@ __pycache__/
 .env.*.local
 instance/
 config/secret_key
+sfao-*.json
+*service-account*.json
 
 # Database
 *.db
@@ -38,6 +41,7 @@ logs/
 flask_session/
 .coverage
 .pytest_cache/
+.codex-site-packages/
 
 # OS
 .DS_Store

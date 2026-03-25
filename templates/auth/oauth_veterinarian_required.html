@@ -1,0 +1,52 @@
+{% extends "layout.html" %}
+
+{% block main %}
+<div class="container py-5">
+    <div class="row justify-content-center">
+        <div class="col-12 col-lg-7">
+            <div class="card shadow-lg border-0 rounded-4">
+                <div class="card-body p-4 p-lg-5">
+                    <span class="badge bg-warning text-dark mb-3">Acesso restrito</span>
+                    <h1 class="h3 mb-3">Essa conexão precisa de uma conta veterinária</h1>
+                    <p class="text-muted mb-4">
+                        {{ client.name or 'Este aplicativo' }} pediu permissão para cadastrar tutores e pets diretamente no PetOrlândia.
+                        Esse tipo de ação só fica disponível para contas com perfil de veterinário.
+                    </p>
+
+                    <div class="alert alert-danger rounded-4" role="alert">
+                        {{ error_message }}
+                    </div>
+
+                    <dl class="row mb-4">
+                        <dt class="col-sm-4">Conta atual</dt>
+                        <dd class="col-sm-8">{{ current_account.name or current_account.email }}</dd>
+
+                        <dt class="col-sm-4">E-mail</dt>
+                        <dd class="col-sm-8">{{ current_account.email }}</dd>
+
+                        <dt class="col-sm-4">Escopos pedidos</dt>
+                        <dd class="col-sm-8">{{ requested_scopes | join(', ') }}</dd>
+                    </dl>
+
+                    <p class="small text-muted mb-4">
+                        Se você já tem uma conta veterinária, saia desta conta e entre novamente com a conta correta.
+                        Se ainda não tiver perfil veterinário, finalize esse cadastro no PetOrlândia antes de tentar conectar pelo ChatGPT.
+                    </p>
+
+                    <div class="d-flex flex-column flex-md-row gap-2">
+                        <a class="btn btn-primary rounded-pill px-4" href="{{ switch_account_url }}">
+                            Sair e entrar com outra conta
+                        </a>
+                        <a class="btn btn-outline-secondary rounded-pill px-4" href="{{ continue_url }}">
+                            Recarregar verificação
+                        </a>
+                        <a class="btn btn-link text-decoration-none" href="{{ url_for('index') }}">
+                            Voltar ao início
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

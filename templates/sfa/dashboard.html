@@ -37,7 +37,10 @@
     <div class="card shadow-sm">
       <div class="card-header d-flex align-items-center justify-content-between" style="background:var(--sfa-teal);color:white">
         <span><i class="fas fa-list-check me-2"></i>Fila do Dia (top 25)</span>
-        <a href="{{ url_for('sfa_routes.pacientes') }}" class="btn btn-sm btn-outline-light">Ver todos</a>
+        <div class="d-flex flex-wrap gap-2">
+          <a href="{{ url_for('sfa_routes.export_analitico_csv') }}" class="btn btn-sm btn-outline-light">Exportar analitico</a>
+          <a href="{{ url_for('sfa_routes.pacientes') }}" class="btn btn-sm btn-outline-light">Ver todos</a>
+        </div>
       </div>
       <div class="card-body p-0">
         {% if stats.fila %}
