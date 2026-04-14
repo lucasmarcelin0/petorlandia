@@ -1,0 +1,155 @@
+{% extends "layout.html" %}
+
+{% block main %}
+<div class="container mt-4">
+
+  <!-- Cabeçalho -->
+  <div class="d-flex flex-wrap align-items-center justify-content-between gap-3 mb-4">
+    <div>
+      <h2 class="fw-bold mb-1">
+        <i class="fas fa-capsules me-2 text-primary"></i>Bulário Veterinário
+      </h2>
+      <p class="text-muted small mb-0">
+        Base de medicamentos para cães e gatos — fonte VetSmart
+      </p>
+    </div>
+  </div>
+
+  <!-- Busca -->
+  <form method="GET" action="{{ url_for('bulario') }}" class="mb-4">
+    <div class="input-group input-group-lg shadow-sm">
+      <span class="input-group-text bg-white border-end-0">
+        <i class="fas fa-search text-muted"></i>
+      </span>
+      <input
+        type="text"
+        name="q"
+        value="{{ q }}"
+        class="form-control border-start-0 ps-0"
+        placeholder="Buscar por nome, princípio ativo ou classificação…"
+        autofocus
+      >
+      {% if q %}
+      <a href="{{ url_for('bulario') }}" class="btn btn-outline-secondary">
+        <i class="fas fa-times"></i>
+      </a>
+      {% endif %}
+      <button class="btn btn-primary px-4" type="submit">Buscar</button>
+    </div>
+  </form>
+
+  <!-- Resultados -->
+  {% if q %}
+  <p class="text-muted mb-3">
+    {{ paginacao.total }} resultado(s) para <strong>"{{ q }}"</strong>
+  </p>
+  {% endif %}
+
+  {% if medicamentos %}
+  <div class="row row-cols-1 row-cols-md-2 row-cols-xl-3 g-3">
+    {% for med in medicamentos %}
+    <div class="col">
+      <a href="{{ url_for('bulario_detalhe', medicamento_id=med.id) }}"
+         class="card h-100 border-0 shadow-sm text-decoration-none text-dark card-hover">
+        <div class="card-body">
+          <div class="d-flex align-items-start gap-2 mb-2">
+            <div class="bg-primary bg-opacity-10 rounded p-2 flex-shrink-0">
+              <i class="fas fa-pills text-primary"></i>
+            </div>
+            <div class="flex-grow-1 min-w-0">
+              <h6 class="fw-bold mb-0 text-truncate">{{ med.nome }}</h6>
+              {% if med.principio_ativo %}
+              <small class="text-muted">{{ med.principio_ativo | truncate(60) }}</small>
+              {% endif %}
+            </div>
+          </div>
+
+          <div class="d-flex flex-wrap gap-1 mt-2">
+            {% if med.classificacao %}
+            <span class="badge bg-primary bg-opacity-10 text-primary fw-normal">
+              {{ med.classificacao | truncate(30) }}
+            </span>
+            {% endif %}
+            {% if med.via_administracao %}
+            <span class="badge bg-secondary bg-opacity-10 text-secondary fw-normal">
+              <i class="fas fa-syringe me-1" style="font-size:.7em"></i>{{ med.via_administracao }}
+            </span>
+            {% endif %}
+            {% if med.apresentacoes %}
+            <span class="badge bg-success bg-opacity-10 text-success fw-normal">
+              {{ med.apresentacoes | length }} apresentação(ões)
+            </span>
+            {% endif %}
+          </div>
+
+          {% if med.dosagem_recomendada %}
+          <p class="text-muted small mt-2 mb-0">
+            <i class="fas fa-ruler-combined me-1"></i>
+            {{ med.dosagem_recomendada | truncate(80) }}
+          </p>
+          {% endif %}
+        </div>
+        <div class="card-footer bg-transparent border-top-0 pt-0">
+          <small class="text-primary fw-semibold">
+            Ver bula completa <i class="fas fa-arrow-right ms-1"></i>
+          </small>
+        </div>
+      </a>
+    </div>
+    {% endfor %}
+  </div>
+
+  <!-- Paginação -->
+  {% if paginacao.pages > 1 %}
+  <nav class="mt-4 d-flex justify-content-center" aria-label="Paginação">
+    <ul class="pagination">
+      <li class="page-item {% if not paginacao.has_prev %}disabled{% endif %}">
+        <a class="page-link" href="{{ url_for('bulario', page=paginacao.prev_num, q=q) }}">
+          <i class="fas fa-chevron-left"></i>
+        </a>
+      </li>
+      {% for p in paginacao.iter_pages(left_edge=1, right_edge=1, left_current=2, right_current=2) %}
+        {% if p %}
+        <li class="page-item {% if p == paginacao.page %}active{% endif %}">
+          <a class="page-link" href="{{ url_for('bulario', page=p, q=q) }}">{{ p }}</a>
+        </li>
+        {% else %}
+        <li class="page-item disabled"><span class="page-link">…</span></li>
+        {% endif %}
+      {% endfor %}
+      <li class="page-item {% if not paginacao.has_next %}disabled{% endif %}">
+        <a class="page-link" href="{{ url_for('bulario', page=paginacao.next_num, q=q) }}">
+          <i class="fas fa-chevron-right"></i>
+        </a>
+      </li>
+    </ul>
+  </nav>
+  {% endif %}
+
+  {% else %}
+  <div class="text-center py-5">
+    <i class="fas fa-search fa-3x text-muted mb-3"></i>
+    <h5 class="text-muted">
+      {% if q %}
+        Nenhum medicamento encontrado para "{{ q }}"
+      {% else %}
+        Nenhum medicamento cadastrado ainda.
+        <br>
+        <small>Execute o script de importação para popular o bulário.</small>
+      {% endif %}
+    </h5>
+  </div>
+  {% endif %}
+
+</div>
+
+<style>
+.card-hover {
+  transition: transform .15s ease, box-shadow .15s ease;
+}
+.card-hover:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 .5rem 1.5rem rgba(0,0,0,.1) !important;
+}
+</style>
+{% endblock %}

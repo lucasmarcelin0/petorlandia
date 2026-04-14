@@ -8408,7 +8408,7 @@ def oauth_authorize():
         _oauth_log_event('oauth_authorization_code_issued', client_id=client_id, user_id=current_user.id, grant_type='authorization_code')
 
         query = urlencode({'code': auth_code.code, 'state': state})
-        return redirect(f'{redirect_uri}?{query}')
+        return redirect(f'{redirect_uri}?{query}')
     return _oauth_render_consent_page(
         client_name=client.name,
         scope=scope,
@@ -22808,6 +22808,81 @@ def atualizar_bloco_orcamento(bloco_id):
 
     historico_html = _render_orcamento_history(bloco.animal, bloco.clinica_id)
     return jsonify(success=True, html=historico_html)
+
+
+# ---------------------------------------------------------------------------
+# Bulário de Medicamentos
+# ---------------------------------------------------------------------------
+def bulario():
+    """Lista paginada de medicamentos com busca."""
+    from models.base import Medicamento
+    from sqlalchemy import or_
+
+    q = request.args.get("q", "").strip()
+    page = request.args.get("page", 1, type=int)
+    per_page = 20
+
+    query = Medicamento.query.order_by(Medicamento.nome)
+    if q:
+        like = f"%{q}%"
+        query = query.filter(
+            or_(
+                Medicamento.nome.ilike(like),
+                Medicamento.principio_ativo.ilike(like),
+                Medicamento.classificacao.ilike(like),
+            )
+        )
+
+    paginacao = query.paginate(page=page, per_page=per_page, error_out=False)
+    return render_template(
+        "bulario/lista.html",
+        medicamentos=paginacao.items,
+        paginacao=paginacao,
+        q=q,
+    )
+
+
+def bulario_detalhe(medicamento_id):
+    """Detalhe de um medicamento do bulário."""
+    from models.base import Medicamento
+    med = Medicamento.query.get_or_404(medicamento_id)
+    return render_template("bulario/detalhe.html", med=med)
+
+
+def bulario_buscar_api():
+    """API JSON para autocomplete de medicamentos (usado em prescrições)."""
+    from models.base import Medicamento
+    from sqlalchemy import or_
+
+    q = request.args.get("q", "").strip()
+    if not q or len(q) < 2:
+        return jsonify([])
+
+    like = f"%{q}%"
+    resultados = (
+        Medicamento.query
+        .filter(
+            or_(
+                Medicamento.nome.ilike(like),
+                Medicamento.principio_ativo.ilike(like),
+            )
+        )
+        .order_by(Medicamento.nome)
+        .limit(15)
+        .all()
+    )
+
+    return jsonify([
+        {
+            "id": m.id,
+            "nome": m.nome,
+            "principio_ativo": m.principio_ativo or "",
+            "via_administracao": m.via_administracao or "",
+            "dosagem_recomendada": m.dosagem_recomendada or "",
+            "frequencia": m.frequencia or "",
+        }
+        for m in resultados
+    ])
 
 
 from blueprint_utils import register_domain_blueprints
