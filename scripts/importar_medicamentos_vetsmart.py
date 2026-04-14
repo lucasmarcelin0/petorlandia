@@ -1,36 +1,46 @@
 """
-Script: importar_medicamentos_vetsmart.py  (v3 – Playwright + cookie consent)
-==============================================================================
-Faz scraping completo do VetSmart (cães e gatos) usando Playwright,
-aceitando o banner de cookies/privacidade antes de extrair os dados.
+Script: importar_medicamentos_vetsmart.py  (v4 – extração precisa com BeautifulSoup)
+=====================================================================================
+Usa Playwright para carregar as páginas (JS) e BeautifulSoup para extrair
+os dados com base na estrutura real do DOM do VetSmart.
+
+Estrutura real descoberta via diagnóstico:
+  - Nome:          <h2 class="side-nav-title">
+  - Fabricante:    <div class="side-nav-subtitle">  → "POR XYZ"
+  - Classificação: <p><b>Classificaçāo:</b> valor</p>
+  - Espécies:      <p><b>Espécies:</b> valor</p>
+  - Seções:        <section class="container-content">
+                     <h2 class="title-content"><strong>Título</strong></h2>
+                     <div class="content-comercial-info"> ... </div>
+                     <p class="disabled"> ← indica seção vazia
+  - Apresentações: <ul><li>Nome, <span>forma</span>(qtd)</li></ul>
+                   dentro da seção "Apresentações e concentrações"
 
 USO:
-  pip install playwright psycopg2-binary
+  pip install playwright psycopg2-binary beautifulsoup4
   playwright install chromium
 
-  # Testar com 5 produtos (sem alterar banco):
-  python scripts/importar_medicamentos_vetsmart.py --limite 5 --dry-run
-
-  # Executar completo:
+  python scripts/importar_medicamentos_vetsmart.py --limite 5 --dry-run --visible
   python scripts/importar_medicamentos_vetsmart.py
-
-  # Usar cache já gerado:
   python scripts/importar_medicamentos_vetsmart.py --usar-cache
 """
 
-import os
-import sys
-import time
-import re
-import json
-import argparse
-import logging
+import os, sys, time, re, json, argparse, logging
 from dataclasses import dataclass, field
 from typing import Optional, List, Dict, Any
 
 import psycopg2
 from psycopg2.extras import RealDictCursor
 
+try:
+    from bs4 import BeautifulSoup
+except ImportError:
+    print("Instale: pip install beautifulsoup4")
+    sys.exit(1)
+
+# ---------------------------------------------------------------------------
+# Logging
+# ---------------------------------------------------------------------------
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(message)s",
@@ -41,6 +51,9 @@ logging.basicConfig(
 )
 log = logging.getLogger(__name__)
 
+# ---------------------------------------------------------------------------
+# Constantes
+# ---------------------------------------------------------------------------
 BASE_URL      = "https://vetsmart.com.br"
 LIST_URL      = f"{BASE_URL}/cg/produto/lista"
 DELAY_PAGINAS = 1.5
@@ -59,20 +72,38 @@ if DATABASE_URL.startswith("postgres://"):
 
 CREATED_BY_USER_ID = 1
 
+# Frases que indicam seção vazia no VetSmart
+FRASES_VAZIO = [
+    "ainda não tem informações",
+    "ainda não tem videos",
+    "ainda não tem distribuidores",
+    "não há nenhum estudo",
+    "não contém interações",
+    "ainda não foi preenchida",
+    "não tem referências",
+]
 
+
+# ---------------------------------------------------------------------------
+# Estrutura de dados
+# ---------------------------------------------------------------------------
 @dataclass
 class ProdutoVetsmart:
     vetsmart_id: int
     nome: str
+    fabricante:           Optional[str] = None
     classificacao:        Optional[str] = None
+    especies:             Optional[str] = None
     principio_ativo:      Optional[str] = None
     via_administracao:    Optional[str] = None
     dosagem_recomendada:  Optional[str] = None
     frequencia:           Optional[str] = None
     duracao_tratamento:   Optional[str] = None
+    indicacoes:           Optional[str] = None
     observacoes:          Optional[str] = None
+    interacoes:           Optional[str] = None
+    farmacologia:         Optional[str] = None
     bula:                 Optional[str] = None
-    fabricante:           Optional[str] = None
     apresentacoes: List[Dict[str, str]] = field(default_factory=list)
 
 
@@ -107,24 +138,14 @@ def listar_medicamentos_banco(conn) -> List[Dict]:
 # Cookie / privacidade
 # ---------------------------------------------------------------------------
 COOKIE_SELECTORS = [
-    "button:has-text('Aceitar')",
-    "button:has-text('Aceitar todos')",
-    "button:has-text('Concordo')",
-    "button:has-text('OK')",
-    "button:has-text('Entendi')",
-    "button:has-text('Continuar')",
-    "a:has-text('Aceitar')",
-    "[id*='accept']",
-    "[class*='accept']",
-    "[id*='cookie'] button",
-    "[class*='cookie'] button",
-    "[id*='lgpd'] button",
-    "[class*='lgpd'] button",
-    "[class*='consent'] button",
-    "#onetrust-accept-btn-handler",
-    ".cc-accept",
-    ".cc-btn",
-    ".cookie-accept",
+    "button:has-text('Aceitar')", "button:has-text('Aceitar todos')",
+    "button:has-text('Concordo')", "button:has-text('OK')",
+    "button:has-text('Entendi')", "button:has-text('Continuar')",
+    "a:has-text('Aceitar')", "[id*='accept']", "[class*='accept']",
+    "[id*='cookie'] button", "[class*='cookie'] button",
+    "[id*='lgpd'] button", "[class*='lgpd'] button",
+    "[class*='consent'] button", "#onetrust-accept-btn-handler",
+    ".cc-accept", ".cc-btn",
 ]
 
 
@@ -145,8 +166,9 @@ def aceitar_cookies(page) -> bool:
 def aguardar_e_aceitar_cookies(page, timeout=8000):
     try:
         page.wait_for_selector(
-            "[id*='cookie'], [class*='cookie'], [id*='lgpd'], [class*='lgpd'], "
-            "button:has-text('Aceitar'), button:has-text('Concordo')",
+            "[id*='cookie'], [class*='cookie'], [id*='lgpd'], "
+            "button:has-text('Aceitar'), button:has-text('Concordo'), "
+            "button:has-text('ENTENDI')",
             timeout=timeout
         )
         time.sleep(0.5)
@@ -156,7 +178,272 @@ def aguardar_e_aceitar_cookies(page, timeout=8000):
 
 
 # ---------------------------------------------------------------------------
-# Scraping da lista
+# Extração via BeautifulSoup (estrutura real do VetSmart)
+# ---------------------------------------------------------------------------
+def _eh_vazio(texto: str) -> bool:
+    """Verifica se o texto de uma seção indica conteúdo vazio."""
+    t = texto.lower()
+    return any(f in t for f in FRASES_VAZIO)
+
+
+def _limpar(texto: Optional[str], max_len: int = 500) -> Optional[str]:
+    if not texto:
+        return None
+    texto = re.sub(r'\s+', ' ', texto).strip()
+    return texto[:max_len] if texto else None
+
+
+def extrair_produto_do_html(html: str, pid: int, nome_fallback: str) -> ProdutoVetsmart:
+    """Extrai todos os dados do produto a partir do HTML completo da página."""
+    soup = BeautifulSoup(html, 'html.parser')
+
+    # ── Nome ──────────────────────────────────────────────────────────────
+    nome_el = soup.find('h2', class_='side-nav-title')
+    nome = nome_el.get_text(strip=True) if nome_el else nome_fallback
+    nome = nome[:100] or nome_fallback
+
+    # ── Fabricante ────────────────────────────────────────────────────────
+    fab_el = soup.find(class_='side-nav-subtitle')
+    fabricante = None
+    if fab_el:
+        # Usa separator=' ' para preservar espaços entre elementos filhos
+        fab_raw = fab_el.get_text(separator=' ', strip=True)
+        fabricante = re.sub(r'^POR\s+', '', fab_raw, flags=re.IGNORECASE).strip() or None
+
+    # ── Classificação e Espécies ──────────────────────────────────────────
+    classificacao = None
+    especies = None
+    for p in soup.find_all('p'):
+        b = p.find('b')
+        if not b:
+            continue
+        b_txt = b.get_text(strip=True)
+        # Usa separator=' ' para não colapsar "Classificação:Valor" em uma string sem espaço
+        p_txt = p.get_text(separator=' ', strip=True)
+        if 'Classifica' in b_txt and not classificacao:
+            # VetSmart usa 'ā' (mácron U+0101) em vez de 'ã', então usamos [\w\W]{1,3}
+            classificacao = re.sub(
+                r'Classifica.{1,4}o\s*:\s*', '', p_txt, flags=re.IGNORECASE
+            ).strip() or None
+        if 'Espécie' in b_txt and not especies:
+            especies = re.sub(
+                r'Espécies?\s*:\s*', '', p_txt, flags=re.IGNORECASE
+            ).strip() or None
+
+    # ── Coleta todas as seções ────────────────────────────────────────────
+    secoes: Dict[str, Optional[str]] = {}
+    secoes_uls: Dict[str, Any] = {}
+
+    for sec in soup.find_all('section', class_='container-content'):
+        title_el = sec.find(class_='title-content')
+        if not title_el:
+            continue
+        titulo = title_el.get_text(strip=True)
+
+        # Seção vazia?
+        disabled = sec.find('p', class_='disabled')
+        if disabled:
+            conteudo = disabled.get_text(strip=True)
+            secoes[titulo] = None if _eh_vazio(conteudo) else conteudo
+            continue
+
+        content_div = sec.find(class_='content-comercial-info')
+        if not content_div:
+            secoes[titulo] = None
+            continue
+
+        # Remove o título do conteúdo para não repetir
+        for el in content_div.find_all(class_='title-content'):
+            el.decompose()
+
+        # Salva a <ul> para parsing especial das apresentações
+        ul = content_div.find('ul')
+        if ul:
+            secoes_uls[titulo] = ul
+
+        conteudo = content_div.get_text(separator='\n', strip=True)
+        secoes[titulo] = None if _eh_vazio(conteudo) else conteudo
+
+    # ── Apresentações ─────────────────────────────────────────────────────
+    apresentacoes = []
+    ul_apres = secoes_uls.get('Apresentações e concentrações')
+    if ul_apres:
+        for li in ul_apres.find_all('li'):
+            forma_el = li.find('span')
+            forma = forma_el.get_text(strip=True) if forma_el else ''
+            # Concentração / embalagem = texto do li sem o span
+            if forma_el:
+                forma_el.extract()
+            li_txt = li.get_text(separator=' ', strip=True)
+            # Remove traço inicial e nome do produto
+            conc = re.sub(r'^[-–]\s*' + re.escape(nome) + r'\s*,?\s*', '', li_txt, flags=re.I).strip()
+            conc = re.sub(r'^,\s*', '', conc).strip()
+            if forma or conc:
+                apresentacoes.append({
+                    'forma': forma[:50] if forma else 'N/A',
+                    'concentracao': conc[:100] if conc else ''
+                })
+
+    # ── Administração e doses ─────────────────────────────────────────────
+    admin_txt = secoes.get('Administração e doses') or ''
+
+    via_administracao   = _extrair_via(admin_txt)
+    dosagem_recomendada = _extrair_dose(admin_txt)
+    frequencia          = _extrair_campo_estrito(admin_txt, 'Frequência', 'Frequencia', 'Intervalo de')
+    duracao_tratamento  = _extrair_campo_estrito(admin_txt, 'Duração do tratamento', 'Período de tratamento')
+
+    # Se não extraiu campos individuais mas há conteúdo real, usa o texto completo como posologia
+    if admin_txt and not dosagem_recomendada and not via_administracao:
+        dosagem_recomendada = _limpar(admin_txt, 500)
+
+    # ── Indicações / Observações / Interações / Farmacologia ─────────────
+    indicacoes  = _limpar(secoes.get('Indicações e contraindicações'), 800)
+    interacoes  = _limpar(secoes.get('Interações medicamentosas'), 500)
+    farmacologia = _limpar(secoes.get('Farmacologia'), 800)
+
+    # Observações = indicações + interações concatenadas
+    obs_partes = []
+    if indicacoes:
+        obs_partes.append(f"Indicações/Contraindicações:\n{indicacoes}")
+    if interacoes:
+        obs_partes.append(f"Interações medicamentosas:\n{interacoes}")
+    observacoes = '\n\n'.join(obs_partes) or None
+
+    # Bula = farmacologia ou descritivo do produto (seção Sobre)
+    sobre_txt = secoes.get('Sobre') or ''
+    bula = _limpar(farmacologia or _extrair_descritivo(sobre_txt), 5000)
+
+    # Princípio ativo — tenta extrair da seção Sobre
+    principio_ativo = _extrair_campo(
+        sobre_txt,
+        'Princípio ativo', 'Princípio Ativo', 'Substância ativa',
+        'Composição', 'Componente ativo', 'Fórmula'
+    )
+    # Fallback: classificação como princípio se não encontrou
+    if not principio_ativo and especies:
+        principio_ativo = None  # não força
+
+    return ProdutoVetsmart(
+        vetsmart_id         = pid,
+        nome                = nome,
+        fabricante          = fabricante,
+        classificacao       = _limpar(classificacao, 100),
+        especies            = _limpar(especies, 100),
+        principio_ativo     = _limpar(principio_ativo, 200),
+        via_administracao   = _limpar(via_administracao, 80),
+        dosagem_recomendada = _limpar(dosagem_recomendada, 300),
+        frequencia          = _limpar(frequencia, 100),
+        duracao_tratamento  = _limpar(duracao_tratamento, 100),
+        indicacoes          = indicacoes,
+        observacoes         = observacoes,
+        interacoes          = interacoes,
+        farmacologia        = farmacologia,
+        bula                = bula,
+        apresentacoes       = apresentacoes,
+    )
+
+
+def _extrair_campo(texto: str, *rotulos) -> Optional[str]:
+    """Extrai o valor de um campo a partir de rótulos conhecidos no texto."""
+    for rotulo in rotulos:
+        pat = re.compile(
+            rf'{re.escape(rotulo)}\s*[:\-]?\s*([^\n]{{3,250}})',
+            re.IGNORECASE
+        )
+        m = pat.search(texto)
+        if m:
+            val = m.group(1).strip().rstrip('.')
+            if val and len(val) > 2 and not _eh_vazio(val):
+                return val[:250]
+    return None
+
+
+def _extrair_campo_estrito(texto: str, *rotulos) -> Optional[str]:
+    """Como _extrair_campo, mas exige rótulo exato seguido de ':' para evitar falsos positivos."""
+    for rotulo in rotulos:
+        pat = re.compile(
+            rf'^{re.escape(rotulo)}\s*:\s*(.{{3,250}})$',
+            re.IGNORECASE | re.MULTILINE
+        )
+        m = pat.search(texto)
+        if m:
+            val = m.group(1).strip()
+            if val and len(val) > 2 and not _eh_vazio(val):
+                return val[:250]
+    return None
+
+
+# Padrões específicos para via de administração
+_VIA_PATTERNS = [
+    # "Via de administração: oral" ou "Via: oral" na mesma linha
+    re.compile(r'Via\s+de\s+administra[çc][aã]o\s*:\s*([^\n]{2,80})', re.I),
+    re.compile(r'\bVia\s*:\s*([^\n]{2,60})', re.I),
+    # "administração oral" / "administração intravenosa" etc.
+    re.compile(
+        r'administra[çc][aã]o\s+(oral|intramuscular|intravenosa|subcutânea|tópica|'
+        r'oftálmica|auricular|nasal|retal|IM|IV|SC|EV)\b',
+        re.I
+    ),
+    # "via oral", "via IM", etc. em qualquer parte do texto
+    re.compile(
+        r'\bvia\s+(oral|intramuscular|intravenosa|subcutânea|tópica|'
+        r'oftálmica|auricular|nasal|retal|IM|IV|SC|EV)\b',
+        re.I
+    ),
+]
+
+_VIA_INVALIDAS = {'(s)', 's', 'a', 'o', 'os', 'as'}
+
+
+def _extrair_via(texto: str) -> Optional[str]:
+    """Extrai a via de administração com padrões específicos."""
+    for pat in _VIA_PATTERNS:
+        m = pat.search(texto)
+        if m:
+            # Pega o grupo de captura (grupo 1) ou o match completo
+            val = (m.group(1) if m.lastindex else m.group(0)).strip().rstrip('.,')
+            if val.lower() not in _VIA_INVALIDAS and len(val) > 1:
+                return val[:80]
+    return None
+
+
+# Padrões específicos para dosagem
+_DOSE_PATTERNS = [
+    # "X mg/kg" ou "X mL/kg" — captura a linha inteira com o valor numérico
+    re.compile(r'(\d[\d,\.]*\s*(?:mg|mL|mcg|UI|g)/\s*kg[^\n]{0,80})', re.I),
+    re.compile(r'(\d[\d,\.]*\s*(?:mg|mL|mcg|UI|g)/\s*(?:animal|dose|comprimido)[^\n]{0,80})', re.I),
+    # "Dose: X" na mesma linha (precisa ter número ou unidade)
+    re.compile(r'Dose\s*(?:recomendada|usual|terapêutica)?\s*:\s*([\d][^\n]{2,150})', re.I),
+    re.compile(r'Posologia\s*:\s*([\d][^\n]{2,150})', re.I),
+]
+
+_DOSE_INVALIDAS = {'indicada', 'conforme', 'prescrita', 'recomendada pelo veterinário'}
+
+
+def _extrair_dose(texto: str) -> Optional[str]:
+    """Extrai dosagem com padrões específicos — evita frases genéricas."""
+    for pat in _DOSE_PATTERNS:
+        m = pat.search(texto)
+        if m:
+            val = m.group(1).strip().rstrip('.,')
+            if val.lower().strip() not in _DOSE_INVALIDAS and len(val) > 3:
+                return val[:300]
+    return None
+
+
+def _extrair_descritivo(sobre_txt: str) -> Optional[str]:
+    """Extrai o 'Descritivo do Produto' da seção Sobre."""
+    m = re.search(
+        r'Descritivo do Produto\s*\n([\s\S]{20,2000}?)(?:\n[A-Z]{3,}|\Z)',
+        sobre_txt, re.IGNORECASE
+    )
+    if m:
+        return m.group(1).strip()
+    return None
+
+
+# ---------------------------------------------------------------------------
+# Scraping da lista de produtos
 # ---------------------------------------------------------------------------
 def scrape_lista_produtos(page) -> List[Dict[str, Any]]:
     log.info(f"Abrindo lista: {LIST_URL}")
@@ -185,12 +472,11 @@ def scrape_lista_produtos(page) -> List[Dict[str, Any]]:
                 continue
             nome_raw = (link.inner_text() or "").strip()
             nome = re.sub(r"^\s*(Avaliar|Ver|Detalhes)\s+", "", nome_raw, flags=re.IGNORECASE).strip()
-            nome = nome or f"Produto #{pid}"
             url = BASE_URL + href if href.startswith("/") else href
-            produtos.append({"id": pid, "nome": nome[:100], "url": url})
+            produtos.append({"id": pid, "nome": (nome or f"Produto #{pid}")[:100], "url": url})
             encontrados += 1
 
-        log.info(f"     +{encontrados} produtos (total: {len(produtos)})")
+        log.info(f"     +{encontrados} (total: {len(produtos)})")
         if encontrados == 0:
             break
 
@@ -204,40 +490,13 @@ def scrape_lista_produtos(page) -> List[Dict[str, Any]]:
         pagina += 1
         time.sleep(0.8)
 
-    log.info(f"Total: {len(produtos)} produtos na lista.")
+    log.info(f"Total na lista: {len(produtos)} produtos.")
     return produtos
 
 
 # ---------------------------------------------------------------------------
-# Scraping do detalhe
+# Scraping de detalhe — usa BS4 no HTML completo
 # ---------------------------------------------------------------------------
-def _texto(page, *seletores) -> Optional[str]:
-    for sel in seletores:
-        try:
-            el = page.query_selector(sel)
-            if el:
-                t = (el.inner_text() or "").strip()
-                if t:
-                    return t
-        except Exception:
-            pass
-    return None
-
-
-def _extrair_rotulo(texto: str, *rotulos) -> Optional[str]:
-    for rotulo in rotulos:
-        pat = re.compile(
-            rf"{re.escape(rotulo)}\s*[:\-]?\s*([^\n]{{3,300}})",
-            re.IGNORECASE
-        )
-        m = pat.search(texto)
-        if m:
-            val = m.group(1).strip().rstrip(".")
-            if val and len(val) > 2 and "privacidade" not in val.lower():
-                return val[:300]
-    return None
-
-
 def scrape_detalhe_produto(page, info: Dict) -> ProdutoVetsmart:
     pid       = info["id"]
     url       = info["url"]
@@ -246,87 +505,16 @@ def scrape_detalhe_produto(page, info: Dict) -> ProdutoVetsmart:
     page.goto(url, wait_until="networkidle", timeout=60000)
     aguardar_e_aceitar_cookies(page, timeout=4000)
 
+    # Aguarda o conteúdo principal carregar
     try:
-        page.wait_for_selector("h1, .nome-produto, .product-title", timeout=10000)
+        page.wait_for_selector("h2.side-nav-title, section.container-content", timeout=10000)
     except Exception:
         pass
 
     time.sleep(1.0)
 
-    try:
-        texto = page.inner_text("body") or ""
-    except Exception:
-        texto = ""
-
-    # Remove ruído do banner de privacidade do texto
-    texto = re.sub(
-        r"(política de privacidade|termos de uso|cookies?|lgpd).*?(aceitar|concordo|entendi)",
-        " ", texto, flags=re.IGNORECASE | re.DOTALL
-    )
-
-    # Nome
-    nome_raw = _texto(page, "h1.nome-produto", ".nome-produto", "h1") or nome_base
-    nome = re.sub(r"^\s*(Avaliar|Ver)\s+", "", nome_raw, flags=re.IGNORECASE).strip()
-    nome = (nome or nome_base)[:100]
-
-    # Campos
-    fabricante        = _extrair_rotulo(texto, "Fabricante", "Laboratório", "Empresa", "Marca")
-    classificacao     = _extrair_rotulo(texto, "Classificação", "Categoria", "Grupo terapêutico", "Classe terapêutica")
-    principio_ativo   = _extrair_rotulo(texto, "Princípio ativo", "Substância ativa", "Composição", "Componente ativo")
-    via_administracao = _extrair_rotulo(texto, "Via de administração", "Via de administracao", "Administração")
-    dosagem           = _extrair_rotulo(texto, "Dose recomendada", "Dosagem recomendada", "Dosagem", "Posologia", "Dose ")
-    frequencia        = _extrair_rotulo(texto, "Frequência", "Frequencia", "Intervalo de administração")
-    duracao           = _extrair_rotulo(texto, "Duração do tratamento", "Duração", "Período de tratamento")
-
-    obs_partes = []
-    for rot in ["Contraindicações", "Reações adversas", "Efeitos adversos", "Precauções", "Interações medicamentosas"]:
-        val = _extrair_rotulo(texto, rot)
-        if val:
-            obs_partes.append(f"{rot}: {val}")
-    observacoes = "\n".join(obs_partes) or None
-
-    # Bula
-    bula_el = page.query_selector(
-        ".bula, .bula-texto, #bula, .farmacologia, "
-        ".descricao-completa, .product-description, .conteudo-bula"
-    )
-    bula = None
-    if bula_el:
-        bula_txt = (bula_el.inner_text() or "").strip()
-        if bula_txt and "privacidade" not in bula_txt.lower()[:100]:
-            bula = bula_txt[:5000]
-
-    # Apresentações
-    apresentacoes = []
-    for el in page.query_selector_all(".apresentacao, .apresentacoes li, .concentracao-item, .product-variant"):
-        t = (el.inner_text() or "").strip()
-        if not t or "privacidade" in t.lower():
-            continue
-        m = re.match(
-            r"(comprimido|cápsula|capsula|ampola|frasco|solução|suspensão|"
-            r"pomada|creme|gel|spray|injetável|líquido|sachê|gotas?)[^\d]*"
-            r"([\d,.]+ ?(?:mg|g|ml|mL|UI|%)[/\w]*)?",
-            t, re.IGNORECASE
-        )
-        if m:
-            apresentacoes.append({"forma": m.group(1).capitalize(), "concentracao": (m.group(2) or t[:80]).strip()})
-        else:
-            apresentacoes.append({"forma": "N/A", "concentracao": t[:100]})
-
-    return ProdutoVetsmart(
-        vetsmart_id         = pid,
-        nome                = nome,
-        fabricante          = (fabricante or "")[:100] or None,
-        classificacao       = (classificacao or "")[:100] or None,
-        principio_ativo     = (principio_ativo or "")[:200] or None,
-        via_administracao   = (via_administracao or "")[:50] or None,
-        dosagem_recomendada = dosagem,
-        frequencia          = (frequencia or "")[:100] or None,
-        duracao_tratamento  = duracao,
-        observacoes         = observacoes,
-        bula                = bula,
-        apresentacoes       = apresentacoes,
-    )
+    html = page.content()
+    return extrair_produto_do_html(html, pid, nome_base)
 
 
 # ---------------------------------------------------------------------------
@@ -346,16 +534,17 @@ def cruzar_e_atualizar(conn, medicamentos_banco, produtos, dry_run=False):
 
         if existente:
             updates = {}
-            for campo, valor in {
-                "classificacao": p.classificacao,
-                "principio_ativo": p.principio_ativo,
-                "via_administracao": p.via_administracao,
-                "dosagem_recomendada": p.dosagem_recomendada,
-                "frequencia": p.frequencia,
-                "duracao_tratamento": p.duracao_tratamento,
-                "observacoes": p.observacoes,
-                "bula": p.bula,
-            }.items():
+            mapa = {
+                "classificacao":        p.classificacao,
+                "principio_ativo":      p.principio_ativo,
+                "via_administracao":    p.via_administracao,
+                "dosagem_recomendada":  p.dosagem_recomendada,
+                "frequencia":           p.frequencia,
+                "duracao_tratamento":   p.duracao_tratamento,
+                "observacoes":          p.observacoes,
+                "bula":                 p.bula,
+            }
+            for campo, valor in mapa.items():
                 if not existente.get(campo) and valor:
                     updates[campo] = valor
 
@@ -379,7 +568,7 @@ def cruzar_e_atualizar(conn, medicamentos_banco, produtos, dry_run=False):
             }
             for ap in p.apresentacoes:
                 chave = (_norm(ap.get("forma", "")), _norm(ap.get("concentracao", "")))
-                if chave not in apres_existentes and ap.get("forma") not in ("N/A", ""):
+                if chave not in apres_existentes and ap.get("forma") not in ("N/A", "", None):
                     if not dry_run:
                         with conn.cursor() as cur:
                             cur.execute(
@@ -388,7 +577,7 @@ def cruzar_e_atualizar(conn, medicamentos_banco, produtos, dry_run=False):
                             )
                     apres_existentes.add(chave)
         else:
-            log.info(f"  INSERIR: '{p.nome}'")
+            log.info(f"  INSERIR: '{p.nome}'  [{p.classificacao or '—'}]")
             if not dry_run:
                 with conn.cursor() as cur:
                     cur.execute("""
@@ -401,7 +590,7 @@ def cruzar_e_atualizar(conn, medicamentos_banco, produtos, dry_run=False):
                         p.nome[:100],
                         (p.classificacao or "")[:100] or None,
                         (p.principio_ativo or "")[:200] or None,
-                        (p.via_administracao or "")[:50] or None,
+                        (p.via_administracao or "")[:80] or None,
                         p.dosagem_recomendada, (p.frequencia or "")[:100] or None,
                         p.duracao_tratamento, p.observacoes, p.bula, CREATED_BY_USER_ID,
                     ))
@@ -431,7 +620,6 @@ def main():
     p.add_argument("--created-by",     type=int, default=CREATED_BY_USER_ID)
     p.add_argument("--visible",        action="store_true")
     args = p.parse_args()
-
     CREATED_BY_USER_ID = args.created_by
 
     conn = conectar_banco()
@@ -449,10 +637,13 @@ def main():
     if args.usar_cache and os.path.exists(CACHE_FILE):
         log.info(f"Carregando cache '{CACHE_FILE}'…")
         with open(CACHE_FILE, encoding="utf-8") as f:
-            for d in json.load(f):
-                d.pop("fabricante", None)
-                produtos.append(ProdutoVetsmart(**d))
-        log.info(f"{len(produtos)} produtos do cache.")
+            raw = json.load(f)
+        for d in raw:
+            # Compatibilidade com caches antigos
+            for campo_novo in ['fabricante', 'especies', 'indicacoes', 'interacoes', 'farmacologia']:
+                d.setdefault(campo_novo, None)
+            produtos.append(ProdutoVetsmart(**d))
+        log.info(f"{len(produtos)} produtos carregados do cache.")
     else:
         try:
             from playwright.sync_api import sync_playwright
@@ -470,7 +661,7 @@ def main():
             )
             page = context.new_page()
 
-            # Aceita cookies na home primeiro
+            # Aceita cookies na home
             log.info("Abrindo home para aceitar cookies…")
             page.goto(BASE_URL, wait_until="networkidle", timeout=30000)
             aguardar_e_aceitar_cookies(page, timeout=8000)
@@ -486,7 +677,14 @@ def main():
                 try:
                     prod = scrape_detalhe_produto(page, info)
                     produtos.append(prod)
-                    log.info(f"    ✓ pa={prod.principio_ativo!r} via={prod.via_administracao!r} apres={len(prod.apresentacoes)}")
+                    log.info(
+                        f"    ✓ fab={prod.fabricante!r} "
+                        f"class={prod.classificacao!r} "
+                        f"pa={prod.principio_ativo!r} "
+                        f"via={prod.via_administracao!r} "
+                        f"dose={prod.dosagem_recomendada!r} "
+                        f"apres={len(prod.apresentacoes)}"
+                    )
                 except Exception as exc:
                     log.warning(f"    ⚠ Erro: {exc}")
                     produtos.append(ProdutoVetsmart(vetsmart_id=info["id"], nome=info["nome"]))
@@ -497,11 +695,22 @@ def main():
         # Salva cache
         with open(CACHE_FILE, "w", encoding="utf-8") as f:
             json.dump([{
-                "vetsmart_id": p.vetsmart_id, "nome": p.nome,
-                "classificacao": p.classificacao, "principio_ativo": p.principio_ativo,
-                "via_administracao": p.via_administracao, "dosagem_recomendada": p.dosagem_recomendada,
-                "frequencia": p.frequencia, "duracao_tratamento": p.duracao_tratamento,
-                "observacoes": p.observacoes, "bula": p.bula, "apresentacoes": p.apresentacoes,
+                "vetsmart_id":         p.vetsmart_id,
+                "nome":                p.nome,
+                "fabricante":          p.fabricante,
+                "classificacao":       p.classificacao,
+                "especies":            p.especies,
+                "principio_ativo":     p.principio_ativo,
+                "via_administracao":   p.via_administracao,
+                "dosagem_recomendada": p.dosagem_recomendada,
+                "frequencia":          p.frequencia,
+                "duracao_tratamento":  p.duracao_tratamento,
+                "indicacoes":          p.indicacoes,
+                "observacoes":         p.observacoes,
+                "interacoes":          p.interacoes,
+                "farmacologia":        p.farmacologia,
+                "bula":                p.bula,
+                "apresentacoes":       p.apresentacoes,
             } for p in produtos], f, ensure_ascii=False, indent=2)
         log.info(f"Cache salvo em '{CACHE_FILE}'.")
 
@@ -516,16 +725,16 @@ def main():
     conn.close()
 
     print(f"""
-{'='*60}
+{'='*65}
   RESULTADO
-{'='*60}
+{'='*65}
   Banco (antes):     {len(medicamentos_banco)}
   Scrapeados:        {len(produtos)}
   Atualizados:       {stats['atualizados']}
   Inseridos:         {stats['inseridos']}
   Sem alteração:     {stats['sem_alteracao']}
   Dry-run:           {'SIM' if args.dry_run else 'NÃO'}
-{'='*60}
+{'='*65}
 """)
 
 

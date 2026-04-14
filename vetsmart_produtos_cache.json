@@ -2,66 +2,114 @@
   {
     "vetsmart_id": 2616,
     "nome": "4Dx® Plus",
-    "classificacao": null,
+    "fabricante": "IDEXX",
+    "classificacao": "Teste Diagnóstico",
+    "especies": "Cães",
     "principio_ativo": null,
     "via_administracao": null,
     "dosagem_recomendada": null,
     "frequencia": null,
     "duracao_tratamento": null,
-    "observacoes": "Contraindicações: Administrações e doses\nInterações medicamentosas: Farmacologia",
-    "bula": null,
-    "apresentacoes": []
+    "indicacoes": "Indicações DOENÇAS TRANSMITIDAS POR VETORES Anaplasma Anaplasma phagocytophilum Anaplasma platys Dirofilaria Dirofilaria immitis Doença de Lyme Borrelia burgdorferi Ehrlichia Ehrlichia canis Ehrlichia ewingii",
+    "observacoes": "Indicações/Contraindicações:\nIndicações DOENÇAS TRANSMITIDAS POR VETORES Anaplasma Anaplasma phagocytophilum Anaplasma platys Dirofilaria Dirofilaria immitis Doença de Lyme Borrelia burgdorferi Ehrlichia Ehrlichia canis Ehrlichia ewingii",
+    "interacoes": null,
+    "farmacologia": null,
+    "bula": "Os testes rápidos SNAP utilizam a tecnologia IDEXX ELISA (Enzyme-Linked Immunosorbent Assay), fornecendo em minutos análises de alta precisão, equivalentes às realizadas em um laboratório de referência. A tecnologia ELISA presente no SNAP utiliza conjugado e substrato exclusivos que amplificam os resultados. O processo de fluxo bidirecional evidencia a ligação antígeno-anticorpo, proporcionando alta sensibilidade e resultados confiáveis. Preciso, simples e econômico, SNAP é a tecnologia de diagnóstico rápido ideal para uso em consultórios, clínicas e hospitais veterinários.",
+    "apresentacoes": [
+      {
+        "forma": "caixa",
+        "concentracao": "(5 un)"
+      },
+      {
+        "forma": "caixa",
+        "concentracao": "(30 un)"
+      }
+    ]
   },
   {
     "vetsmart_id": 6928,
     "nome": "ACQUA Limp",
-    "classificacao": null,
+    "fabricante": "BIOFARM",
+    "classificacao": "Oftálmico",
+    "especies": "Cães e Gatos",
     "principio_ativo": "Cada 100 ml contém: Álcool polivinllico 1,400 g Citrato de sódio 0,400g Clonito da sódio 0,250g Veiculo q.s.p. 100,0mL",
-    "via_administracao": null,
-    "dosagem_recomendada": null,
-    "frequencia": null,
-    "duracao_tratamento": null,
-    "observacoes": "Contraindicações: Administrações e doses\nInterações medicamentosas: Farmacologia",
+    "via_administracao": "(s)",
+    "dosagem_recomendada": "indicada",
+    "frequencia": "de utilização",
+    "duracao_tratamento": "do tratamento",
+    "indicacoes": "Indicações O ACQUA Limp é uma solução oftálmica que possui pH neutro e proporciona conforto por conter propriedade lubrificante ocular. Por este fator, pode aliviar a irritação, o ardor e a secura ocular, provocados por fatores externos, tais como, exposição ao vento, ar condicionado, sol, baixa umidade do ar, fumaça, poeira ou exposição a substâncias irritantes, como xampus. O ACQUA Limp é recomendado também na remoção de sujidades e limpeza de secreções oculares antes da aplicação do colírio terapêutico. É indicado para a higienização, lubrificação de secreções oculares antes da aplicação do colírio terapêutico. Contraindicações / precauções Recomenda-se evitar o contato do conta-gotas com os olhos do animal ou qualquer outra superfície para prevenção de possíveis contaminações do produt",
+    "observacoes": "Indicações/Contraindicações:\nIndicações O ACQUA Limp é uma solução oftálmica que possui pH neutro e proporciona conforto por conter propriedade lubrificante ocular. Por este fator, pode aliviar a irritação, o ardor e a secura ocular, provocados por fatores externos, tais como, exposição ao vento, ar condicionado, sol, baixa umidade do ar, fumaça, poeira ou exposição a substâncias irritantes, como xampus. O ACQUA Limp é recomendado também na remoção de sujidades e limpeza de secreções oculares antes da aplicação do colírio terapêutico. É indicado para a higienização, lubrificação de secreções oculares antes da aplicação do colírio terapêutico. Contraindicações / precauções Recomenda-se evitar o contato do conta-gotas com os olhos do animal ou qualquer outra superfície para prevenção de possíveis contaminações do produt",
+    "interacoes": null,
+    "farmacologia": null,
     "bula": null,
-    "apresentacoes": []
+    "apresentacoes": [
+      {
+        "forma": "Frasco",
+        "concentracao": "(15 ml)"
+      }
+    ]
   },
   {
     "vetsmart_id": 7395,
     "nome": "AN2Go Adulto sabor carne bovina",
-    "classificacao": null,
-    "principio_ativo": "Níveis de garantia",
+    "fabricante": "WOW PET FOOD",
+    "classificacao": "Petisco Mastigável Natural",
+    "especies": "Cães",
+    "principio_ativo": null,
     "via_administracao": null,
     "dosagem_recomendada": null,
     "frequencia": null,
     "duracao_tratamento": null,
+    "indicacoes": null,
     "observacoes": null,
-    "bula": null,
+    "interacoes": null,
+    "farmacologia": null,
+    "bula": "A AN2Go (\"\"Alimento Natural to go\"\") é uma refeição completa, em formato de bolinhas, que pode ser servida em qualquer ocasião, e quando falamos qualquer ocasião, é em qualquer ocasião mesmo! Até no espaço!",
     "apresentacoes": []
   },
   {
     "vetsmart_id": 7396,
     "nome": "AN2Go Sênior sabor carne bovina",
-    "classificacao": null,
-    "principio_ativo": "Níveis de garantia",
-    "via_administracao": null,
-    "dosagem_recomendada": null,
-    "frequencia": null,
-    "duracao_tratamento": null,
-    "observacoes": null,
-    "bula": null,
-    "apresentacoes": []
-  },
-  {
-    "vetsmart_id": 476,
-    "nome": "Acalmin",
-    "classificacao": null,
+    "fabricante": "WOW PET FOOD",
+    "classificacao": "Petisco Mastigável Natural",
+    "especies": "Cães",
     "principio_ativo": null,
     "via_administracao": null,
     "dosagem_recomendada": null,
     "frequencia": null,
     "duracao_tratamento": null,
-    "observacoes": "Contraindicações: Administrações e doses\nInterações medicamentosas: Farmacologia",
-    "bula": null,
+    "indicacoes": null,
+    "observacoes": null,
+    "interacoes": null,
+    "farmacologia": null,
+    "bula": "A AN2Go (\"\"Alimento Natural to go\"\") é uma refeição completa, em formato de bolinhas, que pode ser servida em qualquer ocasião, e quando falamos qualquer ocasião, é em qualquer ocasião mesmo! Até no espaço!",
     "apresentacoes": []
+  },
+  {
+    "vetsmart_id": 476,
+    "nome": "Acalmin",
+    "fabricante": "BRAVET",
+    "classificacao": "Analgésico",
+    "especies": "Cães e Gatos",
+    "principio_ativo": null,
+    "via_administracao": "(s)",
+    "dosagem_recomendada": null,
+    "frequencia": "de utilização",
+    "duracao_tratamento": null,
+    "indicacoes": "Indicações Pomada antiflogística e sedativa, para todas as espécies animais. Indicada nos estados inflamatórios em geral. Nas dores e inchações das juntas e articulações. Para aliviar a dor nos reumatismos, artrites, contusões, machucados e luxações.",
+    "observacoes": "Indicações/Contraindicações:\nIndicações Pomada antiflogística e sedativa, para todas as espécies animais. Indicada nos estados inflamatórios em geral. Nas dores e inchações das juntas e articulações. Para aliviar a dor nos reumatismos, artrites, contusões, machucados e luxações.\n\nInterações medicamentosas:\nObservações da interação Desconhecida Aviso Legal - Interações Medicamentosas O Aplicativo Vetsmart contém informações de interação medicamentosas em geral, que foram levantadas por pesquisa realizada pelo próprio Vetsmart, de modo que as informações médicas e sobre medicamentos não é um aconselhamento médico veterinário e não deve ser tratado como tal. Portanto, a Vetsmart não garante nem declara que a informação sobre tratamentos médicos veterinários ou interações medicamentosas do Aplicativo ",
+    "interacoes": "Observações da interação Desconhecida Aviso Legal - Interações Medicamentosas O Aplicativo Vetsmart contém informações de interação medicamentosas em geral, que foram levantadas por pesquisa realizada pelo próprio Vetsmart, de modo que as informações médicas e sobre medicamentos não é um aconselhamento médico veterinário e não deve ser tratado como tal. Portanto, a Vetsmart não garante nem declara que a informação sobre tratamentos médicos veterinários ou interações medicamentosas do Aplicativo ",
+    "farmacologia": null,
+    "bula": null,
+    "apresentacoes": [
+      {
+        "forma": "bisnaga",
+        "concentracao": "(30 g)"
+      },
+      {
+        "forma": "bisnaga",
+        "concentracao": "(100 g)"
+      }
+    ]
   }
 ]
