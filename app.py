@@ -1,7 +1,6 @@
 # ───────────────────────────  app.py  ───────────────────────────
 import os, sys, pathlib, importlib, logging, uuid, re, secrets, hashlib, base64
 import requests
-import html
 from collections import defaultdict, Counter
 import math
 from types import SimpleNamespace
@@ -7043,34 +7042,6 @@ def _extrair_idade(unidade_texto):
     return numero, unidade
 
 
-OAUTH_VETERINARIAN_ONLY_SCOPES = {'tutors:write', 'pets:write'}
-
-
-def _safe_redirect_target(candidate: str | None, fallback_endpoint: str = 'index') -> str:
-    fallback_url = url_for(fallback_endpoint)
-    target = (candidate or '').strip()
-    if not target:
-        return fallback_url
-
-    parsed = urlparse(target)
-    if not parsed.scheme and not parsed.netloc and target.startswith('/'):
-        return target
-
-    current_origin = urlparse(request.host_url)
-    if parsed.scheme == current_origin.scheme and parsed.netloc == current_origin.netloc:
-        return target
-
-    return fallback_url
-
-
-def _is_oauth_authorize_target(candidate: str | None) -> bool:
-    target = (candidate or '').strip()
-    if not target:
-        return False
-    parsed = urlparse(target)
-    return parsed.path == url_for('oauth_authorize')
-
-
 def _preencher_idade_form(form, animal=None):
     if not hasattr(form, 'age') or not hasattr(form, 'age_unit'):
         return
@@ -7205,9 +7176,6 @@ def add_animal():
 def login_view():
     form = LoginForm()
     is_json_request = request.accept_mimetypes['application/json'] > request.accept_mimetypes['text/html']
-    requested_next = request.form.get('next') if request.method == 'POST' else request.args.get('next')
-    next_target = _safe_redirect_target(requested_next) if requested_next else url_for('index')
-    oauth_login_flow = _is_oauth_authorize_target(next_target)
     
     if form.validate_on_submit():
         user = User.query.filter_by(email=form.email.data).first()
@@ -7216,9 +7184,9 @@ def login_view():
             if form.remember.data:
                 session.permanent = True
             if is_json_request:
-                return jsonify({'success': True, 'redirect': next_target})
+                return jsonify({'success': True, 'redirect': url_for('index')})
             flash('Login realizado com sucesso!', 'success')
-            return redirect(next_target)
+            return redirect(url_for('index'))
         else:
             if is_json_request:
                 return jsonify({'success': False, 'errors': {'email': ['Email ou senha inválidos.']}, 'message': 'Email ou senha inválidos.'}), 400
@@ -7233,12 +7201,7 @@ def login_view():
             errors = {'form': ['Erro na validação do formulário. Por favor, recarregue a página e tente novamente.']}
         return jsonify({'success': False, 'errors': errors, 'message': 'Não foi possível processar o login.'}), 400
 
-    return render_template(
-        'auth/login.html',
-        form=form,
-        next_url=next_target if requested_next else '',
-        oauth_login_flow=oauth_login_flow,
-    )
+    return render_template('auth/login.html', form=form)
 
 
 _OAUTH_PRIVATE_JWK = None
@@ -7333,61 +7296,9 @@ def _oauth_error_response(error: str, description: str, status_code: int = 400):
     return jsonify({'error': error, 'error_description': description}), status_code
 
 
-DEFAULT_OAUTH_ALLOWED_SCOPES = (
-    'openid profile email pets:read appointments:read tutors:write pets:write'
-)
-OAUTH_SCOPE_ORDER = [
-    'openid',
-    'profile',
-    'email',
-    'pets:read',
-    'appointments:read',
-    'tutors:write',
-    'pets:write',
-]
-INTEGRATION_PLACEHOLDER_EMAIL_DOMAIN = 'cadastro.petorlandia.local'
-INTEGRATION_SPECIES_ALIASES = {
-    'cao': 'Cachorro',
-    'caes': 'Cachorro',
-    'cachorro': 'Cachorro',
-    'cachorra': 'Cachorro',
-    'canino': 'Cachorro',
-    'canina': 'Cachorro',
-    'dog': 'Cachorro',
-    'gato': 'Gato',
-    'gata': 'Gato',
-    'felino': 'Gato',
-    'felina': 'Gato',
-    'cat': 'Gato',
-}
-
-
 def _oauth_allowed_scopes() -> set[str]:
-    configured = app.config.get('OAUTH_ALLOWED_SCOPES', DEFAULT_OAUTH_ALLOWED_SCOPES)
+    configured = app.config.get('OAUTH_ALLOWED_SCOPES', 'openid profile email pets:read appointments:read')
     return {scope.strip() for scope in str(configured).split() if scope.strip()}
-
-
-def _oauth_supported_scopes() -> list[str]:
-    allowed = _oauth_allowed_scopes()
-    ordered_scopes = [scope for scope in OAUTH_SCOPE_ORDER if scope in allowed]
-    ordered_scopes.extend(sorted(allowed.difference(set(OAUTH_SCOPE_ORDER))))
-    return ordered_scopes
-
-
-def _oauth_scopes_require_veterinarian(scopes: Iterable[str]) -> bool:
-    return bool(set(scopes).intersection(OAUTH_VETERINARIAN_ONLY_SCOPES))
-
-
-def _oauth_user_can_access_registration_scopes(user) -> bool:
-    return bool(user and has_veterinarian_profile(user))
-
-
-def _oauth_scope_access_error(user, scopes: Iterable[str]) -> str | None:
-    if _oauth_scopes_require_veterinarian(scopes) and not _oauth_user_can_access_registration_scopes(user):
-        return (
-            'O cadastro direto via ChatGPT está disponível apenas para contas com perfil de veterinário.'
-        )
-    return None
 
 
 def _oauth_normalize_scope(scope_raw: str, client: OAuthClient | None = None) -> str:
@@ -7402,8 +7313,9 @@ def _oauth_normalize_scope(scope_raw: str, client: OAuthClient | None = None) ->
     if not requested.issubset(allowed):
         raise ValueError('Requested scope is not allowed.')
 
-    ordered_scopes = [scope for scope in OAUTH_SCOPE_ORDER if scope in requested]
-    ordered_scopes.extend(sorted(requested.difference(set(OAUTH_SCOPE_ORDER))))
+    scope_order = ['openid', 'profile', 'email', 'pets:read', 'appointments:read']
+    ordered_scopes = [scope for scope in scope_order if scope in requested]
+    ordered_scopes.extend(sorted(requested.difference(set(scope_order))))
     return ' '.join(ordered_scopes)
 
 
@@ -7478,665 +7390,6 @@ def _integration_user_clinic_id(user: User) -> int | None:
         membership = ensure_veterinarian_membership(getattr(user, 'veterinario', None))
         return membership.clinica_id if membership else None
     return getattr(user, 'clinica_id', None)
-
-
-def _integration_text(value) -> str:
-    return (str(value or '')).strip()
-
-
-def _integration_digits(value) -> str:
-    return re.sub(r'\D', '', str(value or ''))
-
-
-def _integration_ascii_key(value) -> str:
-    normalized = unicodedata.normalize('NFKD', _integration_text(value))
-    return normalized.encode('ascii', 'ignore').decode('ascii').strip().lower()
-
-
-def _integration_slug(value) -> str:
-    slug = re.sub(r'[^a-z0-9]+', '-', _integration_ascii_key(value))
-    return slug.strip('-') or 'cadastro'
-
-
-def _integration_extract_cep(value) -> str | None:
-    match = re.search(r'(\d{5})-?(\d{3})', str(value or ''))
-    if not match:
-        return None
-    return f'{match.group(1)}-{match.group(2)}'
-
-
-def _integration_parse_date(value, field_label: str) -> date | None:
-    text = _integration_text(value)
-    if not text:
-        return None
-    try:
-        return date.fromisoformat(text)
-    except ValueError as exc:
-        raise ValueError(f"Campo '{field_label}' deve estar no formato YYYY-MM-DD.") from exc
-
-
-def _integration_parse_float(value, field_label: str) -> float | None:
-    text = _integration_text(value)
-    if not text:
-        return None
-    try:
-        return float(text.replace(',', '.'))
-    except ValueError as exc:
-        raise ValueError(f"Campo '{field_label}' deve ser numérico.") from exc
-
-
-def _integration_merge_text(existing, addition):
-    existing_text = _integration_text(existing)
-    addition_text = _integration_text(addition)
-    if not addition_text:
-        return existing_text or None
-    if not existing_text:
-        return addition_text
-    if addition_text in existing_text:
-        return existing_text
-    return f'{existing_text}\n\n{addition_text}'
-
-
-def _integration_compose_address(raw_address, structured_address: dict | None = None) -> str | None:
-    raw_text = _integration_text(raw_address)
-    if raw_text:
-        return raw_text
-
-    structured = structured_address if isinstance(structured_address, dict) else {}
-    street = _integration_text(structured.get('rua') or structured.get('street'))
-    number = _integration_text(structured.get('numero') or structured.get('number'))
-    district = _integration_text(structured.get('bairro') or structured.get('district'))
-    city = _integration_text(structured.get('cidade') or structured.get('city'))
-    state = _integration_text(structured.get('estado') or structured.get('state')).upper()
-    cep = _integration_text(structured.get('cep')) or _integration_extract_cep(raw_address)
-
-    parts = []
-    if street:
-        parts.append(f'{street}, {number}' if number else street)
-    if district:
-        parts.append(district)
-    if city or state:
-        location = '/'.join(part for part in [city, state] if part)
-        if location:
-            parts.append(location)
-    if cep:
-        parts.append(f'CEP {cep}')
-
-    return ' - '.join(parts) or None
-
-
-def _integration_build_endereco(raw_address, structured_address: dict | None = None):
-    structured = structured_address if isinstance(structured_address, dict) else {}
-    cep = _integration_text(structured.get('cep')) or _integration_extract_cep(raw_address)
-    if not cep:
-        return None
-
-    cep_digits = _integration_digits(cep)
-    if len(cep_digits) != 8:
-        raise ValueError('CEP do tutor deve ter 8 dígitos.')
-
-    street = _integration_text(structured.get('rua') or structured.get('street')) or None
-    number = _integration_text(structured.get('numero') or structured.get('number')) or None
-    complement = _integration_text(structured.get('complemento') or structured.get('complement')) or None
-    district = _integration_text(structured.get('bairro') or structured.get('district')) or None
-    city = _integration_text(structured.get('cidade') or structured.get('city')) or None
-    state = _integration_text(structured.get('estado') or structured.get('state')).upper() or None
-
-    return Endereco(
-        cep=f'{cep_digits[:5]}-{cep_digits[5:]}',
-        rua=street,
-        numero=number,
-        complemento=complement,
-        bairro=district,
-        cidade=city,
-        estado=state[:2] if state else None,
-    )
-
-
-def _integration_is_placeholder_email(email: str | None) -> bool:
-    return bool(email and email.lower().endswith(f'@{INTEGRATION_PLACEHOLDER_EMAIL_DOMAIN}'))
-
-
-def _integration_generate_placeholder_email(name: str, *, phone: str = '', cpf: str = '') -> str:
-    base_slug = _integration_slug(name)[:32]
-    digits = _integration_digits(cpf or phone)
-    stem = f'{base_slug}-{digits[-8:]}' if digits else f'{base_slug}-{uuid.uuid4().hex[:8]}'
-    candidate = f'{stem}@{INTEGRATION_PLACEHOLDER_EMAIL_DOMAIN}'
-    suffix = 2
-
-    while User.query.filter(func.lower(User.email) == candidate.lower()).first():
-        candidate = f'{stem}-{suffix}@{INTEGRATION_PLACEHOLDER_EMAIL_DOMAIN}'
-        suffix += 1
-
-    return candidate
-
-
-def _integration_find_existing_tutor(
-    *,
-    name: str,
-    email: str = '',
-    phone: str = '',
-    cpf: str = '',
-    clinic_id: int | None = None,
-):
-    if email:
-        existing = User.query.filter(func.lower(User.email) == email.lower()).first()
-        if existing:
-            return existing
-
-    if cpf:
-        existing = User.query.filter(User.cpf == cpf).first()
-        if existing:
-            return existing
-
-    phone_digits = _integration_digits(phone)
-    if phone_digits:
-        query = User.query.filter(User.phone.isnot(None))
-        if clinic_id is not None:
-            query = query.filter(or_(User.clinica_id == clinic_id, User.clinica_id.is_(None)))
-        normalized_name = _integration_ascii_key(name)
-        for candidate in query.all():
-            if (
-                _integration_digits(candidate.phone) == phone_digits
-                and _integration_ascii_key(candidate.name) == normalized_name
-            ):
-                return candidate
-
-    return None
-
-
-def _integration_find_or_create_tutor(auth_user: User, tutor_payload: dict, clinic_id: int | None = None):
-    if not isinstance(tutor_payload, dict):
-        raise ValueError("O campo 'tutor' deve ser um objeto.")
-
-    name = _integration_text(tutor_payload.get('nome') or tutor_payload.get('name'))
-    if not name:
-        raise ValueError('Informe o nome do tutor.')
-
-    email = _integration_text(tutor_payload.get('email')).lower()
-    phone = _integration_text(tutor_payload.get('telefone') or tutor_payload.get('phone'))
-    cpf = _integration_text(tutor_payload.get('cpf')) or None
-    rg = _integration_text(tutor_payload.get('rg')) or None
-    raw_address = _integration_text(tutor_payload.get('endereco') or tutor_payload.get('address'))
-    structured_address = (
-        tutor_payload.get('endereco_struct')
-        or tutor_payload.get('endereco_structurado')
-        or tutor_payload.get('address_struct')
-    )
-    if structured_address is not None and not isinstance(structured_address, dict):
-        raise ValueError('O endereço estruturado do tutor deve ser um objeto.')
-
-    birth_date = _integration_parse_date(
-        tutor_payload.get('date_of_birth') or tutor_payload.get('data_nascimento'),
-        'tutor.date_of_birth',
-    )
-    tutor_address = _integration_compose_address(raw_address, structured_address)
-
-    tutor = _integration_find_existing_tutor(
-        name=name,
-        email=email,
-        phone=phone,
-        cpf=cpf or '',
-        clinic_id=clinic_id,
-    )
-    created = False
-    updated_fields = []
-    warnings = []
-
-    if tutor:
-        if email and _integration_is_placeholder_email(tutor.email):
-            email_owner = User.query.filter(
-                func.lower(User.email) == email.lower(),
-                User.id != tutor.id,
-            ).first()
-            if email_owner:
-                warnings.append('O e-mail informado já pertence a outro cadastro e não substituiu o provisório.')
-            else:
-                tutor.email = email
-                updated_fields.append('email')
-        if phone and not tutor.phone:
-            tutor.phone = phone
-            updated_fields.append('telefone')
-        if cpf and not tutor.cpf:
-            tutor.cpf = cpf
-            updated_fields.append('cpf')
-        if rg and not tutor.rg:
-            tutor.rg = rg
-            updated_fields.append('rg')
-        if birth_date and not tutor.date_of_birth:
-            tutor.date_of_birth = birth_date
-            updated_fields.append('data_nascimento')
-        if tutor_address and not tutor.address:
-            tutor.address = tutor_address
-            updated_fields.append('endereco')
-        if clinic_id and not tutor.clinica_id:
-            tutor.clinica_id = clinic_id
-            updated_fields.append('clinica_id')
-        if getattr(tutor, 'added_by_id', None) is None:
-            tutor.added_by_id = auth_user.id
-            updated_fields.append('added_by_id')
-        if not tutor.endereco_id:
-            endereco = _integration_build_endereco(raw_address, structured_address)
-            if endereco:
-                db.session.add(endereco)
-                db.session.flush()
-                tutor.endereco_id = endereco.id
-                updated_fields.append('endereco_struct')
-    else:
-        created = True
-        email_to_use = email or _integration_generate_placeholder_email(name, phone=phone, cpf=cpf or '')
-        tutor = User(
-            name=name,
-            email=email_to_use,
-            role='adotante',
-            clinica_id=clinic_id,
-            added_by_id=auth_user.id,
-            is_private=True,
-        )
-        tutor.set_password(secrets.token_urlsafe(18))
-        tutor.phone = phone or None
-        tutor.cpf = cpf
-        tutor.rg = rg
-        tutor.date_of_birth = birth_date
-        tutor.address = tutor_address
-        db.session.add(tutor)
-
-        endereco = _integration_build_endereco(raw_address, structured_address)
-        if endereco:
-            db.session.add(endereco)
-            db.session.flush()
-            tutor.endereco_id = endereco.id
-
-    db.session.flush()
-    return tutor, created, updated_fields, warnings
-
-
-def _integration_normalize_species_name(value: str | None) -> str | None:
-    key = _integration_ascii_key(value)
-    if not key:
-        return None
-    return INTEGRATION_SPECIES_ALIASES.get(key, _integration_text(value).title())
-
-
-def _integration_find_or_create_species(value: str | None):
-    normalized_name = _integration_normalize_species_name(value)
-    if not normalized_name:
-        return None
-
-    target_key = _integration_ascii_key(normalized_name)
-    for species in Species.query.all():
-        if _integration_ascii_key(species.name) == target_key:
-            return species
-
-    species = Species(name=normalized_name)
-    db.session.add(species)
-    db.session.flush()
-    return species
-
-
-def _integration_find_or_create_breed(value: str | None, species):
-    breed_name = _integration_text(value)
-    if not breed_name or species is None:
-        return None
-
-    target_key = _integration_ascii_key(breed_name)
-    query = Breed.query.filter(Breed.species_id == species.id)
-    for breed in query.all():
-        if _integration_ascii_key(breed.name) == target_key:
-            return breed
-
-    breed = Breed(name=breed_name.title(), species_id=species.id)
-    db.session.add(breed)
-    db.session.flush()
-    return breed
-
-
-def _integration_parse_pet_age(pet_payload: dict) -> tuple[date | None, str | None]:
-    birth_date = _integration_parse_date(
-        pet_payload.get('date_of_birth') or pet_payload.get('data_nascimento'),
-        'pets[].date_of_birth',
-    )
-    if birth_date:
-        delta = relativedelta(date.today(), birth_date)
-        if delta.years > 0:
-            return birth_date, _formatar_idade(delta.years, 'anos')
-        return birth_date, _formatar_idade(max(delta.months, 0), 'meses')
-
-    age_value = pet_payload.get('idade')
-    if age_value is None:
-        age_value = pet_payload.get('age')
-    age_text = _integration_text(age_value)
-    age_unit = pet_payload.get('idade_unidade') or pet_payload.get('age_unit')
-
-    if not age_text:
-        return None, None
-
-    try:
-        age_number = int(float(age_text.replace(',', '.')))
-        normalized_unit = _normalizar_unidade_idade(age_unit)
-    except ValueError:
-        age_number, normalized_unit = _extrair_idade(age_text)
-        normalized_unit = normalized_unit or _normalizar_unidade_idade(age_unit)
-        if age_number is None:
-            return None, age_text
-
-    if normalized_unit == 'meses':
-        birth_date = date.today() - relativedelta(months=age_number)
-    else:
-        birth_date = date.today() - relativedelta(years=age_number)
-
-    return birth_date, _formatar_idade(age_number, normalized_unit)
-
-
-def _integration_normalize_pet_sex(value: str | None) -> str | None:
-    key = _integration_ascii_key(value)
-    if not key:
-        return None
-    if key in {'m', 'male', 'macho'} or key.startswith('mach'):
-        return 'Macho'
-    if key in {'f', 'female', 'femea'} or key.startswith('fem'):
-        return 'Fêmea'
-    return _integration_text(value)
-
-
-def _integration_find_existing_pet(
-    tutor: User,
-    *,
-    name: str,
-    species_id: int | None = None,
-    age_label: str | None = None,
-    birth_date: date | None = None,
-    microchip_number: str | None = None,
-):
-    query = Animal.query.filter(
-        Animal.user_id == tutor.id,
-        Animal.removido_em.is_(None),
-        func.lower(Animal.name) == name.lower(),
-    )
-    if species_id is not None:
-        query = query.filter(Animal.species_id == species_id)
-    if microchip_number:
-        query = query.filter(Animal.microchip_number == microchip_number)
-    elif birth_date:
-        query = query.filter(Animal.date_of_birth == birth_date)
-    elif age_label:
-        query = query.filter(Animal.age == age_label)
-    return query.order_by(Animal.date_added.desc()).first()
-
-
-def _integration_ensure_initial_consulta(
-    animal,
-    *,
-    auth_user: User,
-    clinic_id: int | None = None,
-    clinical_note: str | None = None,
-    availability_note: str | None = None,
-):
-    query = Consulta.query.filter_by(animal_id=animal.id, status='in_progress')
-    if clinic_id is not None:
-        query = query.filter(or_(Consulta.clinica_id == clinic_id, Consulta.clinica_id.is_(None)))
-    consulta = query.order_by(Consulta.created_at.desc(), Consulta.id.desc()).first()
-
-    availability_text = (
-        f'Disponibilidade informada: {availability_note}'
-        if _integration_text(availability_note)
-        else None
-    )
-    created = False
-
-    if consulta is None:
-        consulta = Consulta(
-            animal_id=animal.id,
-            created_by=auth_user.id,
-            clinica_id=clinic_id,
-            status='in_progress',
-            queixa_principal=_integration_text(clinical_note) or None,
-            historico_clinico=availability_text,
-        )
-        db.session.add(consulta)
-        db.session.flush()
-        created = True
-        return consulta, created
-
-    if clinical_note and not _integration_text(consulta.queixa_principal):
-        consulta.queixa_principal = _integration_text(clinical_note)
-    elif clinical_note:
-        consulta.historico_clinico = _integration_merge_text(
-            consulta.historico_clinico,
-            f'Observação clínica inicial: {clinical_note}',
-        )
-
-    if availability_text:
-        consulta.historico_clinico = _integration_merge_text(
-            consulta.historico_clinico,
-            availability_text,
-        )
-
-    if clinic_id and not consulta.clinica_id:
-        consulta.clinica_id = clinic_id
-
-    return consulta, created
-
-
-def _integration_find_or_create_pet(
-    auth_user: User,
-    tutor: User,
-    pet_payload: dict,
-    *,
-    clinic_id: int | None = None,
-    shared_clinical_note: str | None = None,
-    availability_note: str | None = None,
-):
-    if not isinstance(pet_payload, dict):
-        raise ValueError("Cada item de 'pets' deve ser um objeto.")
-
-    pet_name = _integration_text(pet_payload.get('nome') or pet_payload.get('name'))
-    if not pet_name:
-        raise ValueError('Cada pet precisa de um nome.')
-
-    species = _integration_find_or_create_species(
-        pet_payload.get('especie') or pet_payload.get('species')
-    )
-    breed = _integration_find_or_create_breed(
-        pet_payload.get('raca') or pet_payload.get('breed'),
-        species,
-    )
-    birth_date, age_label = _integration_parse_pet_age(pet_payload)
-    sex = _integration_normalize_pet_sex(pet_payload.get('sexo') or pet_payload.get('sex'))
-    weight = _integration_parse_float(
-        pet_payload.get('peso_kg') or pet_payload.get('peso'),
-        f'peso do pet {pet_name}',
-    )
-    microchip_number = _integration_text(
-        pet_payload.get('microchip_number') or pet_payload.get('microchip')
-    ) or None
-    health_plan = _integration_text(
-        pet_payload.get('plano_saude') or pet_payload.get('health_plan')
-    ) or None
-    pet_note = _integration_text(
-        pet_payload.get('observacao_clinica') or pet_payload.get('clinical_note')
-    )
-    description = _integration_text(pet_payload.get('descricao') or pet_payload.get('description'))
-    combined_note = pet_note or _integration_text(shared_clinical_note)
-    description = _integration_merge_text(description, combined_note)
-
-    animal = _integration_find_existing_pet(
-        tutor,
-        name=pet_name,
-        species_id=getattr(species, 'id', None),
-        age_label=age_label,
-        birth_date=birth_date,
-        microchip_number=microchip_number,
-    )
-    created = False
-    updated_fields = []
-
-    if animal:
-        if species and not animal.species_id:
-            animal.species_id = species.id
-            updated_fields.append('especie')
-        if breed and not animal.breed_id:
-            animal.breed_id = breed.id
-            updated_fields.append('raca')
-        if sex and not animal.sex:
-            animal.sex = sex
-            updated_fields.append('sexo')
-        if birth_date and not animal.date_of_birth:
-            animal.date_of_birth = birth_date
-            updated_fields.append('data_nascimento')
-        if age_label and not animal.age:
-            animal.age = age_label
-            updated_fields.append('idade')
-        if weight is not None and animal.peso is None:
-            animal.peso = weight
-            updated_fields.append('peso')
-        if microchip_number and not animal.microchip_number:
-            animal.microchip_number = microchip_number
-            updated_fields.append('microchip')
-        if health_plan and not animal.health_plan:
-            animal.health_plan = health_plan
-            updated_fields.append('plano_saude')
-        if description and not animal.description:
-            animal.description = description
-            updated_fields.append('descricao')
-        if clinic_id and not animal.clinica_id:
-            animal.clinica_id = clinic_id
-            updated_fields.append('clinica_id')
-    else:
-        created = True
-        animal = Animal(
-            name=pet_name,
-            species_id=getattr(species, 'id', None),
-            breed_id=getattr(breed, 'id', None),
-            sex=sex,
-            date_of_birth=birth_date,
-            age=age_label,
-            microchip_number=microchip_number,
-            peso=weight,
-            health_plan=health_plan,
-            user_id=tutor.id,
-            added_by_id=auth_user.id,
-            clinica_id=clinic_id,
-            status='disponível',
-            description=description,
-            is_alive=True,
-            modo='adotado',
-        )
-        db.session.add(animal)
-        db.session.flush()
-
-    consulta, consulta_created = _integration_ensure_initial_consulta(
-        animal,
-        auth_user=auth_user,
-        clinic_id=clinic_id,
-        clinical_note=combined_note,
-        availability_note=availability_note,
-    )
-
-    return {
-        'animal': animal,
-        'created': created,
-        'updated_fields': updated_fields,
-        'consulta': consulta,
-        'consulta_created': consulta_created,
-    }
-
-
-def _integration_register_tutor_and_pets(auth_user: User, payload: dict) -> dict:
-    if not isinstance(payload, dict):
-        raise ValueError('Os argumentos do cadastro devem ser um objeto JSON.')
-
-    tutor_payload = payload.get('tutor')
-    pets_payload = payload.get('pets')
-    if not tutor_payload:
-        raise ValueError("O campo 'tutor' é obrigatório.")
-    if not isinstance(pets_payload, list) or not pets_payload:
-        raise ValueError("O campo 'pets' deve conter pelo menos um item.")
-
-    requested_clinic_id = payload.get('clinica_id')
-    clinic_id = None
-    if requested_clinic_id not in (None, ''):
-        try:
-            clinic_id = int(requested_clinic_id)
-        except (TypeError, ValueError) as exc:
-            raise ValueError("Campo 'clinica_id' deve ser numérico.") from exc
-    else:
-        clinic_id = _integration_user_clinic_id(auth_user)
-
-    shared_clinical_note = _integration_text(
-        payload.get('observacao_clinica') or payload.get('clinical_note')
-    )
-    availability_note = _integration_text(
-        payload.get('disponibilidade') or payload.get('availability')
-    )
-
-    tutor, tutor_created, tutor_updates, tutor_warnings = _integration_find_or_create_tutor(
-        auth_user,
-        tutor_payload,
-        clinic_id=clinic_id,
-    )
-
-    pets_result = []
-    created_pets = 0
-    reused_pets = 0
-    created_consultas = 0
-
-    for pet_payload in pets_payload:
-        pet_result = _integration_find_or_create_pet(
-            auth_user,
-            tutor,
-            pet_payload,
-            clinic_id=clinic_id,
-            shared_clinical_note=shared_clinical_note,
-            availability_note=availability_note,
-        )
-        animal = pet_result['animal']
-        consulta = pet_result['consulta']
-        if pet_result['created']:
-            created_pets += 1
-        else:
-            reused_pets += 1
-        if pet_result['consulta_created']:
-            created_consultas += 1
-
-        pets_result.append(
-            {
-                'id': animal.id,
-                'nome': animal.name,
-                'especie': animal.species.name if animal.species else None,
-                'raca': animal.breed.name if animal.breed else None,
-                'idade': animal.age,
-                'sexo': animal.sex,
-                'ja_existia': not pet_result['created'],
-                'campos_atualizados': pet_result['updated_fields'],
-                'consulta_id': consulta.id if consulta else None,
-            }
-        )
-
-    db.session.commit()
-
-    return {
-        'status': 'ok',
-        'clinica_id': clinic_id,
-        'tutor': {
-            'id': tutor.id,
-            'nome': tutor.name,
-            'email': tutor.email,
-            'telefone': tutor.phone,
-            'cpf': tutor.cpf,
-            'ja_existia': not tutor_created,
-            'email_provisorio': _integration_is_placeholder_email(tutor.email),
-            'campos_atualizados': tutor_updates,
-        },
-        'pets': pets_result,
-        'resumo': {
-            'novo_tutor': tutor_created,
-            'pets_criados': created_pets,
-            'pets_reaproveitados': reused_pets,
-            'consultas_iniciais_criadas': created_consultas,
-        },
-        'warnings': tutor_warnings,
-    }
 
 
 def integration_bearer_required(*required_scopes: str):
@@ -8231,93 +7484,6 @@ def _oauth_revoke_refresh_family(refresh_token: OAuthRefreshToken):
                 db.session.add(access)
 
 
-
-def _oauth_render_consent_page(
-    *,
-    client_name: str,
-    scope: str,
-    requested_scopes: list[str],
-    state: str,
-    redirect_uri: str,
-    response_type: str,
-    client_id: str,
-    nonce: str | None,
-    code_challenge: str,
-    code_challenge_method: str,
-    csrf_token_value: str,
-):
-    def _escape(value: str | None) -> str:
-        return html.escape(str(value or ''), quote=True)
-
-    hidden_fields = {
-        'csrf_token': csrf_token_value,
-        'response_type': response_type,
-        'client_id': client_id,
-        'redirect_uri': redirect_uri,
-        'scope': scope,
-        'state': state,
-        'nonce': nonce or '',
-        'code_challenge': code_challenge,
-        'code_challenge_method': code_challenge_method,
-    }
-    hidden_html = '\n'.join(
-        f'<input type="hidden" name="{_escape(key)}" value="{_escape(value)}">'
-        for key, value in hidden_fields.items()
-    )
-
-    checkbox_html = '\n'.join(
-        (
-            f'<div style="margin-bottom:8px;">'
-            f'<label for="scope_{index}" style="cursor:pointer;">'
-            f'<input id="scope_{index}" type="checkbox" name="consent_scopes" value="{_escape(item)}" checked required> '
-            f'{_escape(item)}'
-            f'</label>'
-            f'</div>'
-        )
-        for index, item in enumerate(requested_scopes, start=1)
-    )
-
-    page = (
-        '<!doctype html>'
-        '<html lang="pt-BR">'
-        '<head>'
-        '<meta charset="utf-8">'
-        '<meta name="viewport" content="width=device-width, initial-scale=1">'
-        '<title>Consentimento OAuth</title>'
-        '<style>'
-        'body{font-family:Arial,sans-serif;background:#f6f8fa;color:#24292f;margin:0;padding:24px;}'
-        '.card{max-width:520px;margin:0 auto;background:#fff;border:1px solid #d0d7de;border-radius:12px;padding:20px;}'
-        '.actions{display:flex;gap:12px;margin-top:16px;}'
-        'button{padding:10px 16px;border-radius:8px;border:1px solid #d0d7de;cursor:pointer;font-weight:600;}'
-        '.primary{background:#1f6feb;color:#fff;border-color:#1f6feb;}'
-        '.secondary{background:#fff;color:#24292f;}'
-        '</style>'
-        '</head>'
-        '<body>'
-        '<main class="card">'
-        '<h1 style="margin-top:0;">Autorizar acesso</h1>'
-        f'<p><strong>{_escape(client_name)}</strong> solicita acesso a sua conta.</p>'
-        '<form method="post">'
-        f'{hidden_html}'
-        '<p><strong>Escopos solicitados:</strong></p>'
-        f'{checkbox_html}'
-        '<div class="actions">'
-        '<button class="primary" type="submit" name="consent_action" value="approve">Autorizar</button>'
-        '<button class="secondary" type="submit" name="consent_action" value="deny">Negar</button>'
-        '</div>'
-        '</form>'
-        '</main>'
-        '</body>'
-        '</html>'
-    )
-
-    response = make_response(page, 200)
-    response.headers['Content-Type'] = 'text/html; charset=utf-8'
-    response.headers['Cache-Control'] = 'no-store'
-    response.headers['Pragma'] = 'no-cache'
-    return response
-
-
 def oauth_authorize():
     response_type = request.values.get('response_type', '').strip()
     client_id = request.values.get('client_id', '').strip()
@@ -8339,10 +7505,8 @@ def oauth_authorize():
 
     client = OAuthClient.query.filter_by(client_id=client_id).first()
     if not client:
-        _oauth_log_event('oauth_authorize_unknown_client', client_id=client_id, user_id=getattr(current_user, 'id', None), grant_type='authorization_code')
-        return _oauth_error_response('invalid_client', 'Unknown OAuth client. Register the client at /oauth/register or provision it in oauth_client.', 401)
+        return _oauth_error_response('invalid_client', 'Unknown OAuth client.', 401)
     if not _oauth_client_redirect_valid(client, redirect_uri):
-        _oauth_log_event('oauth_authorize_invalid_redirect_uri', client_id=client_id, user_id=getattr(current_user, 'id', None), grant_type='authorization_code')
         return _oauth_error_response('invalid_request', 'redirect_uri is not allowed for this client.')
 
     requires_pkce = _oauth_requires_pkce(client)
@@ -8359,28 +7523,6 @@ def oauth_authorize():
     if not current_user.is_authenticated:
         login_url = url_for('login_view', next=request.url)
         return redirect(login_url)
-
-    scope_access_error = _oauth_scope_access_error(current_user, requested_scopes)
-    if scope_access_error:
-        switch_account_url = url_for(
-            'logout',
-            next=url_for('login_view', next=request.url),
-        )
-        response = make_response(
-            render_template(
-                'auth/oauth_veterinarian_required.html',
-                client=client,
-                requested_scopes=requested_scopes,
-                switch_account_url=switch_account_url,
-                continue_url=request.url,
-                current_account=current_user,
-                error_message=scope_access_error,
-            ),
-            403,
-        )
-        response.headers['Cache-Control'] = 'no-store'
-        response.headers['Pragma'] = 'no-cache'
-        return response
 
     if request.method == 'POST':
         if request.form.get('consent_action') != 'approve':
@@ -8409,8 +7551,10 @@ def oauth_authorize():
 
         query = urlencode({'code': auth_code.code, 'state': state})
         return redirect(f'{redirect_uri}?{query}')
-    return _oauth_render_consent_page(
-        client_name=client.name,
+
+    return render_template(
+        'auth/oauth_consent.html',
+        client=client,
         scope=scope,
         requested_scopes=requested_scopes,
         state=state,
@@ -8420,8 +7564,9 @@ def oauth_authorize():
         nonce=nonce,
         code_challenge=code_challenge,
         code_challenge_method=code_challenge_method,
-        csrf_token_value=generate_csrf(),
+        csrf_token=generate_csrf(),
     )
+
 
 @csrf.exempt
 def oauth_token():
@@ -8437,7 +7582,7 @@ def oauth_token():
 
         client = OAuthClient.query.filter_by(client_id=client_id).first()
         if not client:
-            return _oauth_error_response('invalid_client', 'Unknown OAuth client. Register the client at /oauth/register or provision it in oauth_client.', 401)
+            return _oauth_error_response('invalid_client', 'Unknown OAuth client.', 401)
         if not _oauth_validate_client_secret(client, client_secret):
             return _oauth_error_response('invalid_client', 'client authentication failed.', 401)
 
@@ -8525,7 +7670,7 @@ def oauth_token():
 
         client = OAuthClient.query.filter_by(client_id=client_id).first()
         if not client:
-            return _oauth_error_response('invalid_client', 'Unknown OAuth client. Register the client at /oauth/register or provision it in oauth_client.', 401)
+            return _oauth_error_response('invalid_client', 'Unknown OAuth client.', 401)
         if not _oauth_validate_client_secret(client, client_secret):
             return _oauth_error_response('invalid_client', 'client authentication failed.', 401)
 
@@ -8658,7 +7803,7 @@ def openid_configuration():
         'response_types_supported': ['code'],
         'subject_types_supported': ['public'],
         'id_token_signing_alg_values_supported': ['RS256'],
-        'scopes_supported': _oauth_supported_scopes(),
+        'scopes_supported': ['openid', 'profile', 'email', 'pets:read', 'appointments:read'],
         'token_endpoint_auth_methods_supported': ['none', 'client_secret_post', 'client_secret_basic'],
         'grant_types_supported': ['authorization_code', 'refresh_token'],
         'claims_supported': ['sub', 'email', 'name'],
@@ -8745,29 +7890,8 @@ def _mcp_ok(req_id, result):
     return jsonify({'jsonrpc': '2.0', 'id': req_id, 'result': result})
 
 
-def _mcp_err(req_id, code, message, data=None):
-    error_payload = {'code': code, 'message': message}
-    if data is not None:
-        error_payload['data'] = data
-    return jsonify({'jsonrpc': '2.0', 'id': req_id, 'error': error_payload})
-
-
-def _mcp_require_scopes(req_id, token_obj, *required_scopes: str):
-    token_scope_set = {item.strip() for item in (token_obj.scope or '').split() if item.strip()}
-    required_scope_set = {scope for scope in required_scopes if scope}
-    missing_scopes = sorted(required_scope_set.difference(token_scope_set))
-    if missing_scopes:
-        return _mcp_err(
-            req_id,
-            -32003,
-            'Insufficient scope for this tool.',
-            {
-                'required_scopes': sorted(required_scope_set),
-                'granted_scopes': sorted(token_scope_set),
-                'missing_scopes': missing_scopes,
-            },
-        )
-    return None
+def _mcp_err(req_id, code, message):
+    return jsonify({'jsonrpc': '2.0', 'id': req_id, 'error': {'code': code, 'message': message}})
 
 
 def _mcp_unauthorized():
@@ -8868,83 +7992,6 @@ def mcp_server():
                 },
             },
         ]
-        if _oauth_user_can_access_registration_scopes(user):
-            tools.append(
-                {
-                    'name': 'cadastrar_tutor_e_pets',
-                    'description': (
-                        'Cadastra ou reaproveita um tutor e registra um ou mais pets diretamente '
-                        'no PetOrlandia. Use quando o usuario quiser que o cadastro seja salvo no '
-                        'sistema em vez de receber texto para copiar e colar.'
-                    ),
-                    'inputSchema': {
-                        'type': 'object',
-                        'properties': {
-                            'clinica_id': {
-                                'type': 'integer',
-                                'description': 'Clinica de destino (opcional; padrao = clinica vinculada ao usuario autenticado).',
-                            },
-                            'tutor': {
-                                'type': 'object',
-                                'description': 'Dados do tutor.',
-                                'properties': {
-                                    'nome': {'type': 'string'},
-                                    'email': {'type': 'string'},
-                                    'telefone': {'type': 'string'},
-                                    'cpf': {'type': 'string'},
-                                    'rg': {'type': 'string'},
-                                    'date_of_birth': {'type': 'string', 'description': 'Data em YYYY-MM-DD.'},
-                                    'endereco': {'type': 'string'},
-                                    'endereco_struct': {
-                                        'type': 'object',
-                                        'properties': {
-                                            'cep': {'type': 'string'},
-                                            'rua': {'type': 'string'},
-                                            'numero': {'type': 'string'},
-                                            'complemento': {'type': 'string'},
-                                            'bairro': {'type': 'string'},
-                                            'cidade': {'type': 'string'},
-                                            'estado': {'type': 'string'},
-                                        },
-                                    },
-                                },
-                                'required': ['nome'],
-                            },
-                            'pets': {
-                                'type': 'array',
-                                'minItems': 1,
-                                'items': {
-                                    'type': 'object',
-                                    'properties': {
-                                        'nome': {'type': 'string'},
-                                        'especie': {'type': 'string'},
-                                        'raca': {'type': 'string'},
-                                        'sexo': {'type': 'string'},
-                                        'idade': {'type': 'string'},
-                                        'idade_unidade': {'type': 'string'},
-                                        'date_of_birth': {'type': 'string', 'description': 'Data em YYYY-MM-DD.'},
-                                        'peso_kg': {'type': 'number'},
-                                        'microchip_number': {'type': 'string'},
-                                        'plano_saude': {'type': 'string'},
-                                        'observacao_clinica': {'type': 'string'},
-                                        'descricao': {'type': 'string'},
-                                    },
-                                    'required': ['nome'],
-                                },
-                            },
-                            'observacao_clinica': {
-                                'type': 'string',
-                                'description': 'Observacao clinica geral para ser salva na consulta inicial.',
-                            },
-                            'disponibilidade': {
-                                'type': 'string',
-                                'description': 'Janela de disponibilidade ou preferencia de horario informada pelo tutor.',
-                            },
-                        },
-                        'required': ['tutor', 'pets'],
-                    },
-                }
-            )
         return _mcp_ok(req_id, {'tools': tools})
 
     # ── tools/call ───────────────────────────────────────────────────────────
@@ -8953,9 +8000,6 @@ def mcp_server():
         tool_args = params.get('arguments') or {}
 
         if tool_name == 'listar_meus_pets':
-            scope_error = _mcp_require_scopes(req_id, token_obj, 'pets:read')
-            if scope_error:
-                return scope_error
             animals = (
                 Animal.query
                 .filter_by(user_id=user.id, removido_em=None)
@@ -8982,9 +8026,6 @@ def mcp_server():
             return _mcp_ok(req_id, {'content': [{'type': 'text', 'text': text}]})
 
         if tool_name == 'listar_agendamentos':
-            scope_error = _mcp_require_scopes(req_id, token_obj, 'appointments:read')
-            if scope_error:
-                return scope_error
             q = Appointment.query.filter_by(tutor_id=user.id)
             status_filter = str(tool_args.get('status', '') or '').strip()
             if status_filter:
@@ -9002,28 +8043,6 @@ def mcp_server():
                 for a in appts
             ]
             text = json.dumps(data_out, ensure_ascii=False, indent=2) if data_out else '[]'
-            return _mcp_ok(req_id, {'content': [{'type': 'text', 'text': text}]})
-
-        if tool_name == 'cadastrar_tutor_e_pets':
-            scope_error = _mcp_require_scopes(req_id, token_obj, 'tutors:write', 'pets:write')
-            if scope_error:
-                return scope_error
-            if not _oauth_user_can_access_registration_scopes(user):
-                return _mcp_err(
-                    req_id,
-                    -32003,
-                    'Only authenticated veterinarian accounts can create tutors and pets.',
-                )
-            try:
-                result = _integration_register_tutor_and_pets(user, tool_args)
-            except ValueError as exc:
-                db.session.rollback()
-                return _mcp_err(req_id, -32602, str(exc))
-            except Exception:
-                db.session.rollback()
-                current_app.logger.exception('MCP tutor/pet registration failed for user %s', user.id)
-                return _mcp_err(req_id, -32603, 'Nao foi possivel concluir o cadastro agora.')
-            text = json.dumps(result, ensure_ascii=False, indent=2)
             return _mcp_ok(req_id, {'content': [{'type': 'text', 'text': text}]})
 
         return _mcp_err(req_id, -32601, f'Tool not found: {tool_name}')
@@ -9051,10 +8070,9 @@ def mcp_protected_resource_metadata():
 
 @login_required
 def logout():
-    next_target = _safe_redirect_target(request.args.get('next'))
     logout_user()
     flash('Você saiu com sucesso!', 'success')
-    return redirect(next_target)
+    return redirect(url_for('index'))
 
 @login_required
 def profile():
@@ -10313,29 +9331,10 @@ def _run_financial_snapshot_job() -> None:
         update_financial_snapshots_daily()
 
 
-def _run_sfa_t0_response_sync_job() -> None:
-    """Periodic hook to ingest T0 responses from the Google Forms response sheet."""
-
-    from services.sfa_service import sincronizar_respostas_t0
-
-    with app.app_context():
-        resultado = sincronizar_respostas_t0()
-        if any(resultado.values()):
-            app.logger.info("SFA T0 response sync: %s", resultado)
-
-
 if not app.config.get("TESTING"):
     scheduler = BackgroundScheduler(timezone=str(BR_TZ))
     scheduler.add_job(verificar_datas_proximas, 'cron', hour=8)
     scheduler.add_job(_run_financial_snapshot_job, 'cron', hour=2, minute=30)
-    sfa_auto_sync_minutes = int(os.getenv("SFA_AUTO_SYNC_MINUTES", "0") or 0)
-    if sfa_auto_sync_minutes > 0:
-        scheduler.add_job(
-            _run_sfa_t0_response_sync_job,
-            "interval",
-            minutes=sfa_auto_sync_minutes,
-            max_instances=1,
-        )
     scheduler.start()
 
 
@@ -13500,6 +12499,394 @@ def veterinarios():
     return render_template('veterinarios/veterinarios.html', veterinarios=veterinarios)
 
 
+def _veterinarian_activity_kind_label(kind):
+    labels = {
+        'appointment': 'Agendamento',
+        'consulta': 'Consulta',
+        'prescription': 'Prescrição',
+        'exam_request': 'Exame solicitado',
+        'vaccine': 'Vacina',
+        'document': 'Documento',
+    }
+    return labels.get(kind, 'Atividade')
+
+
+def _veterinarian_activity_status_label(raw_status):
+    if not raw_status:
+        return '—'
+
+    labels = {
+        'scheduled': 'Agendado',
+        'agendado': 'Agendado',
+        'confirmed': 'Confirmado',
+        'confirmado': 'Confirmado',
+        'completed': 'Concluído',
+        'concluido': 'Concluído',
+        'finalizada': 'Finalizada',
+        'in_progress': 'Em andamento',
+        'pending': 'Pendente',
+        'pendente': 'Pendente',
+        'cancelled': 'Cancelado',
+        'cancelado': 'Cancelado',
+        'aplicada': 'Aplicada',
+        'uploaded': 'Anexado',
+    }
+    normalized = str(raw_status).strip().lower()
+    return labels.get(normalized, str(raw_status).replace('_', ' ').title())
+
+
+def _veterinarian_activity_timestamp_local(value):
+    if value is None:
+        return None
+    if isinstance(value, date) and not isinstance(value, datetime):
+        return datetime.combine(value, time.min, tzinfo=BR_TZ)
+    if value.tzinfo is None:
+        return value.replace(tzinfo=BR_TZ)
+    return value.astimezone(BR_TZ)
+
+
+def _veterinarian_activity_in_range(value, start_date, end_date):
+    local_value = _veterinarian_activity_timestamp_local(value)
+    if local_value is None:
+        return False
+    return start_date <= local_value.date() <= end_date
+
+
+def _consulta_activity_timestamp(consulta):
+    if getattr(consulta, 'finalizada_em', None):
+        return consulta.finalizada_em
+    if getattr(consulta, 'created_at', None):
+        return consulta.created_at
+    appointment = getattr(consulta, 'appointment', None)
+    if appointment and getattr(appointment, 'scheduled_at', None):
+        return appointment.scheduled_at
+    return None
+
+
+def _can_view_veterinarian_activity_report(veterinario):
+    if not current_user.is_authenticated:
+        return False
+    if getattr(current_user, 'role', None) == 'admin':
+        return True
+    current_vet = getattr(current_user, 'veterinario', None)
+    return bool(current_vet and current_vet.id == veterinario.id)
+
+
+def _build_veterinarian_activity_report(veterinario, start_date, end_date):
+    activities = []
+    vet_user_id = getattr(veterinario, 'user_id', None)
+
+    appointments = (
+        Appointment.query.options(
+            joinedload(Appointment.animal).joinedload(Animal.owner),
+            joinedload(Appointment.clinica),
+        )
+        .filter(Appointment.veterinario_id == veterinario.id)
+        .all()
+    )
+    for appointment in appointments:
+        if not _veterinarian_activity_in_range(appointment.scheduled_at, start_date, end_date):
+            continue
+        activities.append(
+            {
+                'kind': 'appointment',
+                'timestamp': _veterinarian_activity_timestamp_local(appointment.scheduled_at),
+                'status': _veterinarian_activity_status_label(appointment.status),
+                'animal_name': getattr(getattr(appointment, 'animal', None), 'name', '—'),
+                'tutor_name': getattr(getattr(getattr(appointment, 'animal', None), 'owner', None), 'name', '—'),
+                'clinic_name': getattr(getattr(appointment, 'clinica', None), 'nome', None)
+                or getattr(getattr(veterinario, 'clinica', None), 'nome', '—'),
+                'detail': appointment.notes or f"Tipo: {(appointment.kind or 'consulta').replace('_', ' ').title()}",
+                'record_id': appointment.id,
+                'detail_url': url_for('appointments', view_as='veterinario', veterinario_id=veterinario.id),
+            }
+        )
+
+    consultas = (
+        Consulta.query.options(
+            joinedload(Consulta.animal).joinedload(Animal.owner),
+            joinedload(Consulta.clinica),
+            joinedload(Consulta.appointment),
+        )
+        .filter(Consulta.created_by == vet_user_id)
+        .all()
+    )
+    consultas_by_id = {}
+    consultas_by_animal_day = defaultdict(list)
+    for consulta in consultas:
+        timestamp = _consulta_activity_timestamp(consulta)
+        if not _veterinarian_activity_in_range(timestamp, start_date, end_date):
+            continue
+        consultas_by_id[consulta.id] = consulta
+        local_timestamp = _veterinarian_activity_timestamp_local(timestamp)
+        consultas_by_animal_day[(consulta.animal_id, local_timestamp.date())].append(consulta)
+        detail_parts = [
+            consulta.queixa_principal,
+            consulta.conduta,
+            consulta.exames_solicitados,
+        ]
+        activities.append(
+            {
+                'kind': 'consulta',
+                'timestamp': local_timestamp,
+                'status': _veterinarian_activity_status_label(consulta.status),
+                'animal_name': getattr(getattr(consulta, 'animal', None), 'name', '—'),
+                'tutor_name': getattr(getattr(getattr(consulta, 'animal', None), 'owner', None), 'name', '—'),
+                'clinic_name': getattr(getattr(consulta, 'clinica', None), 'nome', None)
+                or getattr(getattr(veterinario, 'clinica', None), 'nome', '—'),
+                'detail': ' | '.join(part.strip() for part in detail_parts if part) or 'Atendimento clínico registrado.',
+                'record_id': consulta.id,
+                'detail_url': url_for('consulta_direct', animal_id=consulta.animal_id, c=consulta.id),
+            }
+        )
+
+    prescricoes = (
+        BlocoPrescricao.query.options(
+            joinedload(BlocoPrescricao.animal).joinedload(Animal.owner),
+            joinedload(BlocoPrescricao.clinica),
+            joinedload(BlocoPrescricao.prescricoes),
+        )
+        .filter(BlocoPrescricao.saved_by_id == vet_user_id)
+        .all()
+    )
+    for bloco in prescricoes:
+        if not _veterinarian_activity_in_range(bloco.data_criacao, start_date, end_date):
+            continue
+        medicamentos = [prescricao.medicamento for prescricao in (bloco.prescricoes or []) if prescricao.medicamento]
+        detail = ', '.join(medicamentos[:4])
+        if len(medicamentos) > 4:
+            detail = f"{detail} e mais {len(medicamentos) - 4}"
+        activities.append(
+            {
+                'kind': 'prescription',
+                'timestamp': _veterinarian_activity_timestamp_local(bloco.data_criacao),
+                'status': _veterinarian_activity_status_label('completed'),
+                'animal_name': getattr(getattr(bloco, 'animal', None), 'name', '—'),
+                'tutor_name': getattr(getattr(getattr(bloco, 'animal', None), 'owner', None), 'name', '—'),
+                'clinic_name': getattr(getattr(bloco, 'clinica', None), 'nome', None)
+                or getattr(getattr(veterinario, 'clinica', None), 'nome', '—'),
+                'detail': detail or bloco.instrucoes_gerais or 'Prescrição registrada no prontuário.',
+                'record_id': bloco.id,
+                'detail_url': url_for('ficha_animal', animal_id=bloco.animal_id),
+            }
+        )
+
+    consulta_animal_ids = {consulta.animal_id for consulta in consultas_by_id.values()}
+    if consulta_animal_ids:
+        exam_blocks = (
+            BlocoExames.query.options(
+                joinedload(BlocoExames.animal).joinedload(Animal.owner),
+                joinedload(BlocoExames.exames),
+            )
+            .filter(BlocoExames.animal_id.in_(consulta_animal_ids))
+            .all()
+        )
+        for bloco in exam_blocks:
+            if not _veterinarian_activity_in_range(bloco.data_criacao, start_date, end_date):
+                continue
+            local_timestamp = _veterinarian_activity_timestamp_local(bloco.data_criacao)
+            related_consulta = None
+            if getattr(bloco, 'consulta_id', None):
+                related_consulta = consultas_by_id.get(bloco.consulta_id)
+            if related_consulta is None:
+                same_day_consultas = consultas_by_animal_day.get((bloco.animal_id, local_timestamp.date()), [])
+                if same_day_consultas:
+                    related_consulta = same_day_consultas[0]
+            if related_consulta is None:
+                continue
+            for exame in bloco.exames or []:
+                activities.append(
+                    {
+                        'kind': 'exam_request',
+                        'timestamp': local_timestamp,
+                        'status': _veterinarian_activity_status_label(exame.status),
+                        'animal_name': getattr(getattr(bloco, 'animal', None), 'name', '—'),
+                        'tutor_name': getattr(getattr(getattr(bloco, 'animal', None), 'owner', None), 'name', '—'),
+                        'clinic_name': getattr(getattr(related_consulta, 'clinica', None), 'nome', None)
+                        or getattr(getattr(veterinario, 'clinica', None), 'nome', '—'),
+                        'detail': exame.nome if not exame.justificativa else f"{exame.nome} | {exame.justificativa}",
+                        'record_id': exame.id,
+                        'detail_url': url_for('consulta_direct', animal_id=related_consulta.animal_id, c=related_consulta.id),
+                    }
+                )
+
+    vacinas = (
+        Vacina.query.options(joinedload(Vacina.animal).joinedload(Animal.owner))
+        .filter(or_(Vacina.aplicada_por == vet_user_id, Vacina.created_by == vet_user_id))
+        .all()
+    )
+    for vacina in vacinas:
+        vacina_timestamp = vacina.aplicada_em or vacina.criada_em
+        if not _veterinarian_activity_in_range(vacina_timestamp, start_date, end_date):
+            continue
+        status = 'aplicada' if vacina.aplicada else 'pending'
+        activities.append(
+            {
+                'kind': 'vaccine',
+                'timestamp': _veterinarian_activity_timestamp_local(vacina_timestamp),
+                'status': _veterinarian_activity_status_label(status),
+                'animal_name': getattr(getattr(vacina, 'animal', None), 'name', '—'),
+                'tutor_name': getattr(getattr(getattr(vacina, 'animal', None), 'owner', None), 'name', '—'),
+                'clinic_name': getattr(getattr(veterinario, 'clinica', None), 'nome', '—'),
+                'detail': vacina.nome or 'Vacina registrada.',
+                'record_id': vacina.id,
+                'detail_url': url_for('ficha_animal', animal_id=vacina.animal_id),
+            }
+        )
+
+    documentos = (
+        AnimalDocumento.query.options(joinedload(AnimalDocumento.animal).joinedload(Animal.owner))
+        .filter(AnimalDocumento.veterinario_id == vet_user_id)
+        .all()
+    )
+    for documento in documentos:
+        if not _veterinarian_activity_in_range(documento.uploaded_at, start_date, end_date):
+            continue
+        activities.append(
+            {
+                'kind': 'document',
+                'timestamp': _veterinarian_activity_timestamp_local(documento.uploaded_at),
+                'status': _veterinarian_activity_status_label('uploaded'),
+                'animal_name': getattr(getattr(documento, 'animal', None), 'name', '—'),
+                'tutor_name': getattr(getattr(getattr(documento, 'animal', None), 'owner', None), 'name', '—'),
+                'clinic_name': getattr(getattr(veterinario, 'clinica', None), 'nome', '—'),
+                'detail': documento.descricao or documento.filename,
+                'record_id': documento.id,
+                'detail_url': documento.file_url,
+            }
+        )
+
+    activities.sort(
+        key=lambda item: item.get('timestamp') or datetime.min.replace(tzinfo=BR_TZ),
+        reverse=True,
+    )
+
+    unique_animals = {
+        item['animal_name']
+        for item in activities
+        if item.get('animal_name') and item.get('animal_name') != '—'
+    }
+    summary = {
+        'total': len(activities),
+        'appointments': sum(1 for item in activities if item['kind'] == 'appointment'),
+        'consultas': sum(1 for item in activities if item['kind'] == 'consulta'),
+        'prescriptions': sum(1 for item in activities if item['kind'] == 'prescription'),
+        'exam_requests': sum(1 for item in activities if item['kind'] == 'exam_request'),
+        'vaccines': sum(1 for item in activities if item['kind'] == 'vaccine'),
+        'documents': sum(1 for item in activities if item['kind'] == 'document'),
+        'animals': len(unique_animals),
+        'days_with_activity': len(
+            {
+                item['timestamp'].date()
+                for item in activities
+                if item.get('timestamp') is not None
+            }
+        ),
+    }
+
+    return activities, summary
+
+
+def _export_veterinarian_activity_csv(veterinario, activities, start_date, end_date):
+    output = StringIO()
+    writer = csv.writer(output)
+    writer.writerow([
+        'Veterinario',
+        'CRMV',
+        'Periodo inicial',
+        'Periodo final',
+        'Data',
+        'Tipo',
+        'Status',
+        'Animal',
+        'Tutor',
+        'Clinica',
+        'Detalhes',
+        'Registro ID',
+        'Link',
+    ])
+    for item in activities:
+        writer.writerow([
+            getattr(getattr(veterinario, 'user', None), 'name', ''),
+            getattr(veterinario, 'crmv', ''),
+            start_date.isoformat(),
+            end_date.isoformat(),
+            item['timestamp'].strftime('%Y-%m-%d %H:%M') if item.get('timestamp') else '',
+            _veterinarian_activity_kind_label(item['kind']),
+            item.get('status', ''),
+            item.get('animal_name', ''),
+            item.get('tutor_name', ''),
+            item.get('clinic_name', ''),
+            item.get('detail', ''),
+            item.get('record_id', ''),
+            item.get('detail_url', ''),
+        ])
+    response = make_response(output.getvalue())
+    response.headers['Content-Type'] = 'text/csv; charset=utf-8'
+    response.headers['Content-Disposition'] = (
+        f'attachment; filename=veterinario-{veterinario.id}-atividades-{start_date.isoformat()}-{end_date.isoformat()}.csv'
+    )
+    return response
+
+
+def _export_veterinarian_activity_pdf(veterinario, activities, summary, start_date, end_date):
+    from reportlab.lib.pagesizes import A4
+    from reportlab.pdfgen import canvas
+
+    buffer = BytesIO()
+    pdf = canvas.Canvas(buffer, pagesize=A4)
+    width, height = A4
+    y = height - 40
+
+    header_lines = [
+        'Relatório de atividades do veterinário',
+        f"Profissional: {getattr(getattr(veterinario, 'user', None), 'name', '—')} | CRMV: {getattr(veterinario, 'crmv', '—')}",
+        f"Período: {start_date.strftime('%d/%m/%Y')} a {end_date.strftime('%d/%m/%Y')}",
+        (
+            f"Total: {summary['total']} | Consultas: {summary['consultas']} | "
+            f"Agendamentos: {summary['appointments']} | Prescrições: {summary['prescriptions']}"
+        ),
+        (
+            f"Exames: {summary['exam_requests']} | Vacinas: {summary['vaccines']} | "
+            f"Documentos: {summary['documents']} | Animais: {summary['animals']}"
+        ),
+    ]
+
+    for text_line in header_lines:
+        pdf.drawString(36, y, text_line[:120])
+        y -= 16
+    y -= 8
+
+    for item in activities:
+        lines = [
+            (
+                f"{item['timestamp'].strftime('%d/%m/%Y %H:%M') if item.get('timestamp') else '—'} | "
+                f"{_veterinarian_activity_kind_label(item['kind'])} | {item.get('status', '—')}"
+            ),
+            (
+                f"Animal: {item.get('animal_name', '—')} | Tutor: {item.get('tutor_name', '—')} | "
+                f"Clínica: {item.get('clinic_name', '—')}"
+            ),
+            f"Detalhes: {(item.get('detail') or '—')[:110]}",
+        ]
+        for line in lines:
+            if y < 40:
+                pdf.showPage()
+                y = height - 40
+            pdf.drawString(36, y, line[:120])
+            y -= 14
+        y -= 8
+
+    pdf.save()
+    buffer.seek(0)
+    return send_file(
+        buffer,
+        mimetype='application/pdf',
+        as_attachment=True,
+        download_name=f'veterinario-{veterinario.id}-atividades-{start_date.isoformat()}-{end_date.isoformat()}.pdf',
+    )
+
+
 def vet_detail(veterinario_id):
     from models import Animal, User  # import local para evitar ciclos
 
@@ -13667,6 +13054,57 @@ def vet_detail(veterinario_id):
         admin_default_selection_value=admin_default_selection_value,
         calendar_summary_vets=calendar_summary_vets,
         calendar_summary_clinic_ids=calendar_summary_clinic_ids,
+    )
+
+
+@login_required
+def veterinarian_activity_report(veterinario_id):
+    veterinario = Veterinario.query.options(
+        joinedload(Veterinario.user),
+        joinedload(Veterinario.clinica),
+    ).get_or_404(veterinario_id)
+
+    if not _can_view_veterinarian_activity_report(veterinario):
+        abort(403)
+
+    today_local = datetime.now(BR_TZ).date()
+    default_start = today_local.replace(day=1)
+
+    try:
+        start_date = date.fromisoformat(request.args.get('start_date', default_start.isoformat()))
+    except ValueError:
+        start_date = default_start
+    try:
+        end_date = date.fromisoformat(request.args.get('end_date', today_local.isoformat()))
+    except ValueError:
+        end_date = today_local
+
+    if start_date > end_date:
+        start_date, end_date = end_date, start_date
+
+    activities, summary = _build_veterinarian_activity_report(veterinario, start_date, end_date)
+
+    export_format = (request.args.get('format') or '').strip().lower()
+    if export_format == 'csv':
+        return _export_veterinarian_activity_csv(veterinario, activities, start_date, end_date)
+    if export_format == 'pdf':
+        return _export_veterinarian_activity_pdf(veterinario, activities, summary, start_date, end_date)
+
+    query_args = {
+        'start_date': start_date.isoformat(),
+        'end_date': end_date.isoformat(),
+    }
+    csv_args = dict(query_args, format='csv')
+    pdf_args = dict(query_args, format='pdf')
+
+    return render_template(
+        'veterinarios/activity_report.html',
+        veterinario=veterinario,
+        activities=activities,
+        summary=summary,
+        filters=query_args,
+        csv_args=csv_args,
+        pdf_args=pdf_args,
     )
 
 
@@ -13869,18 +13307,12 @@ def tutores():
                 tutores_adicionados=tutores_adicionados,
                 pagination=pagination,
                 scope=resolved_scope,
-                tutor_sort=tutor_sort,
                 scope_param=request.args.get('scope_param', 'scope'),
                 search_param='tutor_search',
                 sort_param='tutor_sort',
                 page_param=request.args.get('page_param', 'page'),
                 fetch_url=url_for('tutores'),
                 compact=True,
-                shared_access_map={
-                    t.id: _resolve_shared_access_for_user(t, viewer=current_user, clinic_scope=clinic_scope)
-                    for t in tutores_adicionados
-                },
-                viewer_clinic_id=clinic_id,
             )
             return jsonify(
                 message='Tutor criado com sucesso!',
@@ -22814,211 +22246,6 @@ def atualizar_bloco_orcamento(bloco_id):
 
     historico_html = _render_orcamento_history(bloco.animal, bloco.clinica_id)
     return jsonify(success=True, html=historico_html)
-
-
-# ---------------------------------------------------------------------------
-# Bulário de Medicamentos (somente admin)
-# ---------------------------------------------------------------------------
-def _is_admin():
-    return current_user.is_authenticated and (current_user.role or "").lower() == "admin"
-
-
-@login_required
-def bulario():
-    """Lista paginada de medicamentos com busca — somente admin."""
-    if not _is_admin():
-        abort(403)
-
-    from models.base import Medicamento
-    from sqlalchemy import or_, func
-
-    q = request.args.get("q", "").strip()
-    classificacao = request.args.get("classe", "").strip()
-    page = request.args.get("page", 1, type=int)
-    per_page = 24
-
-    query = Medicamento.query.order_by(Medicamento.nome)
-
-    if q:
-        like = f"%{q}%"
-        query = query.filter(
-            or_(
-                Medicamento.nome.ilike(like),
-                Medicamento.principio_ativo.ilike(like),
-                Medicamento.classificacao.ilike(like),
-            )
-        )
-
-    if classificacao:
-        query = query.filter(Medicamento.classificacao.ilike(f"%{classificacao}%"))
-
-    # Classes únicas para filtro
-    classes = [
-        r[0] for r in
-        db.session.query(Medicamento.classificacao)
-        .filter(Medicamento.classificacao.isnot(None))
-        .distinct()
-        .order_by(Medicamento.classificacao)
-        .all()
-        if r[0]
-    ]
-
-    total = query.count()
-    paginacao = query.paginate(page=page, per_page=per_page, error_out=False)
-    return render_template(
-        "bulario/lista.html",
-        medicamentos=paginacao.items,
-        paginacao=paginacao,
-        q=q,
-        classificacao=classificacao,
-        classes=classes,
-        total=total,
-    )
-
-
-@login_required
-def bulario_detalhe(medicamento_id):
-    """Detalhe de um medicamento do bulário — somente admin."""
-    if not _is_admin():
-        abort(403)
-    from models.base import Medicamento
-    med = Medicamento.query.get_or_404(medicamento_id)
-    return render_template("bulario/detalhe.html", med=med)
-
-
-@login_required
-def bulario_novo():
-    """Cria um novo medicamento — somente admin."""
-    if not _is_admin():
-        abort(403)
-    from models.base import Medicamento, ApresentacaoMedicamento
-
-    if request.method == "POST":
-        med = Medicamento(
-            nome                = request.form.get("nome", "").strip()[:100],
-            classificacao       = request.form.get("classificacao", "").strip()[:100] or None,
-            principio_ativo     = request.form.get("principio_ativo", "").strip()[:200] or None,
-            via_administracao   = request.form.get("via_administracao", "").strip()[:80] or None,
-            dosagem_recomendada = request.form.get("dosagem_recomendada", "").strip() or None,
-            frequencia          = request.form.get("frequencia", "").strip()[:100] or None,
-            duracao_tratamento  = request.form.get("duracao_tratamento", "").strip() or None,
-            observacoes         = request.form.get("observacoes", "").strip() or None,
-            bula                = request.form.get("bula", "").strip() or None,
-            created_by          = current_user.id,
-        )
-        db.session.add(med)
-        db.session.flush()
-
-        # Apresentações dinâmicas
-        formas = request.form.getlist("apres_forma[]")
-        concs  = request.form.getlist("apres_conc[]")
-        for forma, conc in zip(formas, concs):
-            forma = forma.strip()[:50]
-            conc  = conc.strip()[:100]
-            if forma:
-                db.session.add(ApresentacaoMedicamento(
-                    medicamento_id=med.id, forma=forma, concentracao=conc
-                ))
-
-        db.session.commit()
-        flash("Medicamento criado com sucesso.", "success")
-        return redirect(url_for("bulario_detalhe", medicamento_id=med.id))
-
-    return render_template("bulario/form.html", med=None, titulo="Novo medicamento")
-
-
-@login_required
-def bulario_editar(medicamento_id):
-    """Edita um medicamento existente — somente admin."""
-    if not _is_admin():
-        abort(403)
-    from models.base import Medicamento, ApresentacaoMedicamento
-
-    med = Medicamento.query.get_or_404(medicamento_id)
-
-    if request.method == "POST":
-        med.nome                = request.form.get("nome", "").strip()[:100]
-        med.classificacao       = request.form.get("classificacao", "").strip()[:100] or None
-        med.principio_ativo     = request.form.get("principio_ativo", "").strip()[:200] or None
-        med.via_administracao   = request.form.get("via_administracao", "").strip()[:80] or None
-        med.dosagem_recomendada = request.form.get("dosagem_recomendada", "").strip() or None
-        med.frequencia          = request.form.get("frequencia", "").strip()[:100] or None
-        med.duracao_tratamento  = request.form.get("duracao_tratamento", "").strip() or None
-        med.observacoes         = request.form.get("observacoes", "").strip() or None
-        med.bula                = request.form.get("bula", "").strip() or None
-
-        # Recriar apresentações
-        for apres in list(med.apresentacoes):
-            db.session.delete(apres)
-        db.session.flush()
-
-        formas = request.form.getlist("apres_forma[]")
-        concs  = request.form.getlist("apres_conc[]")
-        for forma, conc in zip(formas, concs):
-            forma = forma.strip()[:50]
-            conc  = conc.strip()[:100]
-            if forma:
-                db.session.add(ApresentacaoMedicamento(
-                    medicamento_id=med.id, forma=forma, concentracao=conc
-                ))
-
-        db.session.commit()
-        flash("Medicamento atualizado com sucesso.", "success")
-        return redirect(url_for("bulario_detalhe", medicamento_id=med.id))
-
-    return render_template("bulario/form.html", med=med, titulo=f"Editar — {med.nome}")
-
-
-@login_required
-def bulario_excluir(medicamento_id):
-    """Exclui um medicamento — somente admin."""
-    if not _is_admin():
-        abort(403)
-    from models.base import Medicamento
-
-    med = Medicamento.query.get_or_404(medicamento_id)
-    nome = med.nome
-    db.session.delete(med)
-    db.session.commit()
-    flash(f'Medicamento "{nome}" excluído.', "info")
-    return redirect(url_for("bulario"))
-
-
-@login_required
-def bulario_buscar_api():
-    """API JSON para autocomplete de medicamentos (usado em prescrições)."""
-    from models.base import Medicamento
-    from sqlalchemy import or_
-
-    q = request.args.get("q", "").strip()
-    if not q or len(q) < 2:
-        return jsonify([])
-
-    like = f"%{q}%"
-    resultados = (
-        Medicamento.query
-        .filter(
-            or_(
-                Medicamento.nome.ilike(like),
-                Medicamento.principio_ativo.ilike(like),
-            )
-        )
-        .order_by(Medicamento.nome)
-        .limit(15)
-        .all()
-    )
-
-    return jsonify([
-        {
-            "id": m.id,
-            "nome": m.nome,
-            "principio_ativo": m.principio_ativo or "",
-            "via_administracao": m.via_administracao or "",
-            "dosagem_recomendada": m.dosagem_recomendada or "",
-            "frequencia": m.frequencia or "",
-        }
-        for m in resultados
-    ])
 
 
 from blueprint_utils import register_domain_blueprints

@@ -281,6 +281,13 @@ def formatar_data(d) -> str:
     return str(d)
 
 
+def bool_env(nome: str, default: bool = False) -> bool:
+    valor = os.getenv(nome)
+    if valor is None:
+        return default
+    return valor.strip().lower() in {"1", "true", "yes", "on"}
+
+
 def parse_data(valor) -> Optional[date]:
     if not valor:
         return None
@@ -971,6 +978,121 @@ def proximo_id_estudo() -> str:
     from models.sfa import SfaPaciente
     total = SfaPaciente.query.count()
     return f"SFA-{(total + 1):03d}"
+
+
+def diagnostico_configuracao() -> dict:
+    """Resume o estado da configuração do SFA para exibição no dashboard."""
+    cred_file = os.getenv("SFA_GOOGLE_CREDENTIALS_FILE", "").strip()
+    cred_json = os.getenv("SFA_GOOGLE_CREDENTIALS_JSON", "").strip()
+    cred_file_ok = bool(cred_file and os.path.exists(cred_file))
+    cred_json_ok = bool(cred_json)
+    webhook_ok = bool(os.getenv("SFA_WEBHOOK_SECRET", "").strip())
+    admin_token_ok = bool(os.getenv("SFA_ADMIN_TOKEN", "").strip())
+    open_access = bool_env("SFA_ALLOW_OPEN_ACCESS", default=False)
+
+    checks = [
+        {
+            "label": "Credencial Google",
+            "ok": cred_file_ok or cred_json_ok,
+            "detail": cred_file if cred_file_ok else (
+                "Configurada via JSON em variável de ambiente" if cred_json_ok else "Não configurada"
+            ),
+        },
+        {
+            "label": "Planilha SINAN",
+            "ok": bool(SHEET_ID_SINAN),
+            "detail": SHEET_ID_SINAN or "Não configurada",
+        },
+        {
+            "label": "Formulário T0",
+            "ok": bool(FORM_T0_ID),
+            "detail": FORM_T0_ID or "Não configurado",
+        },
+        {
+            "label": "Formulário T10",
+            "ok": bool(FORM_T10_ID),
+            "detail": FORM_T10_ID or "Não configurado",
+        },
+        {
+            "label": "Formulário T30",
+            "ok": bool(FORM_T30_ID),
+            "detail": FORM_T30_ID or "Não configurado",
+        },
+        {
+            "label": "Webhook secreto",
+            "ok": webhook_ok,
+            "detail": "Configurado" if webhook_ok else "Pendente",
+        },
+        {
+            "label": "Token admin",
+            "ok": admin_token_ok,
+            "detail": "Configurado" if admin_token_ok else "Pendente",
+        },
+        {
+            "label": "Acesso aberto",
+            "ok": not open_access,
+            "detail": "Desativado" if not open_access else "Ativado",
+        },
+    ]
+
+    pendencias = [check["label"] for check in checks if not check["ok"]]
+    return {
+        "checks": checks,
+        "pendencias": pendencias,
+        "pronto_para_fluxo_local": (cred_file_ok or cred_json_ok) and bool(FORM_T0_ID),
+    }
+
+
+def criar_paciente_manual(dados: dict) -> tuple[bool, str, Optional[object]]:
+    """Cria um paciente manualmente para testes/uso local do fluxo de pesquisa."""
+    from models.sfa import SfaPaciente
+
+    nome = str(dados.get("nome") or "").strip()
+    if not nome:
+        return False, "Informe o nome do participante.", None
+
+    data_nascimento = str(dados.get("data_nascimento") or "").strip()
+    telefone = normalizar_telefone(dados.get("telefone") or "") or str(dados.get("telefone") or "").strip()
+    bairro = str(dados.get("bairro") or "").strip()
+    endereco = str(dados.get("endereco") or "").strip()
+    grupo = str(dados.get("grupo") or "PENDENTE_REVISAO").strip() or "PENDENTE_REVISAO"
+    ficha_sinan = str(dados.get("ficha_sinan") or "").strip()
+
+    nome_norm = normalizar_nome_chave(nome)
+    nasc_norm = str(parse_data(data_nascimento) or "")
+    for existente in SfaPaciente.query.all():
+        if (
+            normalizar_nome_chave(existente.nome or "") == nome_norm
+            and str(parse_data(existente.data_nascimento) or "") == nasc_norm
+        ):
+            return False, f"Já existe um participante compatível: {existente.id_estudo}.", existente
+
+    paciente = SfaPaciente(
+        id_estudo=proximo_id_estudo(),
+        ficha_sinan=ficha_sinan,
+        nome=nome,
+        data_nascimento=data_nascimento,
+        telefone=telefone,
+        bairro=bairro,
+        endereco=endereco,
+        grupo=grupo,
+        status_t0="SINAN_Aguardando_T0",
+        status_geral="SINAN_Notificado",
+    )
+    paciente.gerar_token()
+    atualizar_operacional_paciente(paciente)
+    db.session.add(paciente)
+    db.session.commit()
+
+    registrar_auditoria(
+        "INFO",
+        "CADASTRO_MANUAL",
+        "criar_paciente_manual",
+        "Paciente criado manualmente para operação local do estudo.",
+        {"nome": nome, "grupo": grupo},
+        id_estudo=paciente.id_estudo,
+    )
+    return True, paciente.id_estudo, paciente
 
 
 # ---------------------------------------------------------------------------
