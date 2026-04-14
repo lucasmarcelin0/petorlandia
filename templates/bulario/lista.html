@@ -1,99 +1,155 @@
 {% extends "layout.html" %}
-
 {% block main %}
-<div class="container mt-4">
 
-  <!-- Cabeçalho -->
-  <div class="d-flex flex-wrap align-items-center justify-content-between gap-3 mb-4">
-    <div>
-      <h2 class="fw-bold mb-1">
-        <i class="fas fa-capsules me-2 text-primary"></i>Bulário Veterinário
-      </h2>
-      <p class="text-muted small mb-0">
-        Base de medicamentos para cães e gatos — fonte VetSmart
+<!-- ═══════════════════════  HERO / BUSCA  ═══════════════════════ -->
+<div class="bulario-hero">
+  <div class="container py-5">
+    <div class="text-center mb-4">
+      <span class="bulario-hero__badge">
+        <i class="fas fa-capsules me-2"></i>Bulário Veterinário
+      </span>
+      <h1 class="bulario-hero__title mt-3">Medicamentos para cães e gatos</h1>
+      <p class="bulario-hero__sub">
+        Consulte princípios ativos, posologia, apresentações e contraindicações
       </p>
     </div>
+
+    <form method="GET" action="{{ url_for('bulario') }}" id="bulario-form">
+      <input type="hidden" name="classe" value="{{ classificacao }}">
+      <div class="bulario-search mx-auto">
+        <i class="fas fa-search bulario-search__icon"></i>
+        <input
+          type="text"
+          name="q"
+          id="bulario-q"
+          value="{{ q }}"
+          class="bulario-search__input"
+          placeholder="Ex: amoxicilina, antibiótico, Frontline…"
+          autocomplete="off"
+          autofocus
+        >
+        {% if q %}
+        <a href="{{ url_for('bulario', classe=classificacao) }}" class="bulario-search__clear" title="Limpar">
+          <i class="fas fa-times"></i>
+        </a>
+        {% endif %}
+        <button type="submit" class="bulario-search__btn">Buscar</button>
+      </div>
+    </form>
+
+    <!-- Estatísticas rápidas -->
+    <div class="bulario-stats mx-auto mt-4">
+      <div class="bulario-stats__item">
+        <strong>{{ total }}</strong>
+        <span>{{ 'resultado(s)' if q or classificacao else 'medicamentos' }}</span>
+      </div>
+      {% if classes %}
+      <div class="bulario-stats__sep"></div>
+      <div class="bulario-stats__item">
+        <strong>{{ classes | length }}</strong>
+        <span>categorias</span>
+      </div>
+      {% endif %}
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════  FILTROS  ═══════════════════════ -->
+{% if classes %}
+<div class="bg-white border-bottom sticky-top" style="top: var(--topbar-height, 56px); z-index: 100;">
+  <div class="container py-2">
+    <div class="bulario-filters" id="bulario-filters">
+      <a href="{{ url_for('bulario', q=q) }}"
+         class="bulario-filter-chip {% if not classificacao %}active{% endif %}">
+        Todos
+      </a>
+      {% for cls in classes %}
+      <a href="{{ url_for('bulario', q=q, classe=cls) }}"
+         class="bulario-filter-chip {% if classificacao == cls %}active{% endif %}">
+        {{ cls }}
+      </a>
+      {% endfor %}
+    </div>
+  </div>
+</div>
+{% endif %}
+
+<!-- ═══════════════════════  RESULTADOS  ═══════════════════════ -->
+<div class="container py-4">
+
+  {% if not medicamentos %}
+  <div class="bulario-empty">
+    <i class="fas fa-search-minus fa-3x mb-3 text-muted"></i>
+    <h5 class="text-muted">
+      {% if q or classificacao %}
+        Nenhum medicamento encontrado para os filtros aplicados.
+      {% else %}
+        Nenhum medicamento cadastrado ainda.<br>
+        <small>Execute o script de importação para popular o bulário.</small>
+      {% endif %}
+    </h5>
+    {% if q or classificacao %}
+    <a href="{{ url_for('bulario') }}" class="btn btn-outline-primary mt-3">
+      <i class="fas fa-times me-1"></i> Limpar filtros
+    </a>
+    {% endif %}
   </div>
 
-  <!-- Busca -->
-  <form method="GET" action="{{ url_for('bulario') }}" class="mb-4">
-    <div class="input-group input-group-lg shadow-sm">
-      <span class="input-group-text bg-white border-end-0">
-        <i class="fas fa-search text-muted"></i>
-      </span>
-      <input
-        type="text"
-        name="q"
-        value="{{ q }}"
-        class="form-control border-start-0 ps-0"
-        placeholder="Buscar por nome, princípio ativo ou classificação…"
-        autofocus
-      >
-      {% if q %}
-      <a href="{{ url_for('bulario') }}" class="btn btn-outline-secondary">
-        <i class="fas fa-times"></i>
-      </a>
-      {% endif %}
-      <button class="btn btn-primary px-4" type="submit">Buscar</button>
-    </div>
-  </form>
+  {% else %}
 
-  <!-- Resultados -->
-  {% if q %}
-  <p class="text-muted mb-3">
-    {{ paginacao.total }} resultado(s) para <strong>"{{ q }}"</strong>
-  </p>
-  {% endif %}
-
-  {% if medicamentos %}
-  <div class="row row-cols-1 row-cols-md-2 row-cols-xl-3 g-3">
+  <div class="row g-3">
     {% for med in medicamentos %}
-    <div class="col">
+    <div class="col-sm-6 col-lg-4 col-xl-3">
       <a href="{{ url_for('bulario_detalhe', medicamento_id=med.id) }}"
-         class="card h-100 border-0 shadow-sm text-decoration-none text-dark card-hover">
-        <div class="card-body">
-          <div class="d-flex align-items-start gap-2 mb-2">
-            <div class="bg-primary bg-opacity-10 rounded p-2 flex-shrink-0">
-              <i class="fas fa-pills text-primary"></i>
-            </div>
-            <div class="flex-grow-1 min-w-0">
-              <h6 class="fw-bold mb-0 text-truncate">{{ med.nome }}</h6>
-              {% if med.principio_ativo %}
-              <small class="text-muted">{{ med.principio_ativo | truncate(60) }}</small>
-              {% endif %}
-            </div>
-          </div>
+         class="bulario-card text-decoration-none">
 
-          <div class="d-flex flex-wrap gap-1 mt-2">
-            {% if med.classificacao %}
-            <span class="badge bg-primary bg-opacity-10 text-primary fw-normal">
-              {{ med.classificacao | truncate(30) }}
-            </span>
-            {% endif %}
-            {% if med.via_administracao %}
-            <span class="badge bg-secondary bg-opacity-10 text-secondary fw-normal">
-              <i class="fas fa-syringe me-1" style="font-size:.7em"></i>{{ med.via_administracao }}
-            </span>
-            {% endif %}
-            {% if med.apresentacoes %}
-            <span class="badge bg-success bg-opacity-10 text-success fw-normal">
-              {{ med.apresentacoes | length }} apresentação(ões)
-            </span>
-            {% endif %}
-          </div>
-
-          {% if med.dosagem_recomendada %}
-          <p class="text-muted small mt-2 mb-0">
-            <i class="fas fa-ruler-combined me-1"></i>
-            {{ med.dosagem_recomendada | truncate(80) }}
-          </p>
+        <!-- Ícone de categoria -->
+        <div class="bulario-card__icon">
+          {% if med.classificacao and 'antibi' in med.classificacao|lower %}
+            <i class="fas fa-bacteria"></i>
+          {% elif med.classificacao and ('anti-inflamat' in med.classificacao|lower or 'antiinflamat' in med.classificacao|lower) %}
+            <i class="fas fa-fire-flame-curved"></i>
+          {% elif med.classificacao and 'parasit' in med.classificacao|lower %}
+            <i class="fas fa-bug"></i>
+          {% elif med.classificacao and 'vacin' in med.classificacao|lower %}
+            <i class="fas fa-syringe"></i>
+          {% elif med.classificacao and 'hormôn' in med.classificacao|lower %}
+            <i class="fas fa-dna"></i>
+          {% else %}
+            <i class="fas fa-pills"></i>
           {% endif %}
         </div>
-        <div class="card-footer bg-transparent border-top-0 pt-0">
-          <small class="text-primary fw-semibold">
-            Ver bula completa <i class="fas fa-arrow-right ms-1"></i>
-          </small>
+
+        <div class="bulario-card__body">
+          <h6 class="bulario-card__name">{{ med.nome }}</h6>
+
+          {% if med.principio_ativo %}
+          <p class="bulario-card__pa">{{ med.principio_ativo | truncate(55) }}</p>
+          {% endif %}
+
+          <div class="bulario-card__badges">
+            {% if med.classificacao %}
+            <span class="bulario-badge bulario-badge--blue">{{ med.classificacao | truncate(28) }}</span>
+            {% endif %}
+            {% if med.via_administracao %}
+            <span class="bulario-badge bulario-badge--gray">
+              <i class="fas fa-route me-1" style="font-size:.65em"></i>{{ med.via_administracao }}
+            </span>
+            {% endif %}
+          </div>
         </div>
+
+        <div class="bulario-card__footer">
+          {% if med.dosagem_recomendada %}
+          <span class="bulario-card__dose">
+            <i class="fas fa-ruler-combined me-1"></i>{{ med.dosagem_recomendada | truncate(50) }}
+          </span>
+          {% else %}
+          <span class="bulario-card__dose text-muted">Ver informações</span>
+          {% endif %}
+          <i class="fas fa-arrow-right bulario-card__arrow"></i>
+        </div>
+
       </a>
     </div>
     {% endfor %}
@@ -101,55 +157,248 @@
 
   <!-- Paginação -->
   {% if paginacao.pages > 1 %}
-  <nav class="mt-4 d-flex justify-content-center" aria-label="Paginação">
-    <ul class="pagination">
-      <li class="page-item {% if not paginacao.has_prev %}disabled{% endif %}">
-        <a class="page-link" href="{{ url_for('bulario', page=paginacao.prev_num, q=q) }}">
-          <i class="fas fa-chevron-left"></i>
-        </a>
-      </li>
-      {% for p in paginacao.iter_pages(left_edge=1, right_edge=1, left_current=2, right_current=2) %}
-        {% if p %}
-        <li class="page-item {% if p == paginacao.page %}active{% endif %}">
-          <a class="page-link" href="{{ url_for('bulario', page=p, q=q) }}">{{ p }}</a>
-        </li>
-        {% else %}
-        <li class="page-item disabled"><span class="page-link">…</span></li>
-        {% endif %}
-      {% endfor %}
-      <li class="page-item {% if not paginacao.has_next %}disabled{% endif %}">
-        <a class="page-link" href="{{ url_for('bulario', page=paginacao.next_num, q=q) }}">
-          <i class="fas fa-chevron-right"></i>
-        </a>
-      </li>
-    </ul>
+  <nav class="mt-5 d-flex justify-content-center gap-2 flex-wrap" aria-label="Paginação">
+    {% if paginacao.has_prev %}
+    <a class="btn btn-outline-primary btn-sm"
+       href="{{ url_for('bulario', page=paginacao.prev_num, q=q, classe=classificacao) }}">
+      <i class="fas fa-chevron-left me-1"></i>Anterior
+    </a>
+    {% endif %}
+
+    <span class="btn btn-light btn-sm disabled">
+      Página {{ paginacao.page }} de {{ paginacao.pages }}
+    </span>
+
+    {% if paginacao.has_next %}
+    <a class="btn btn-outline-primary btn-sm"
+       href="{{ url_for('bulario', page=paginacao.next_num, q=q, classe=classificacao) }}">
+      Próxima<i class="fas fa-chevron-right ms-1"></i>
+    </a>
+    {% endif %}
   </nav>
   {% endif %}
 
-  {% else %}
-  <div class="text-center py-5">
-    <i class="fas fa-search fa-3x text-muted mb-3"></i>
-    <h5 class="text-muted">
-      {% if q %}
-        Nenhum medicamento encontrado para "{{ q }}"
-      {% else %}
-        Nenhum medicamento cadastrado ainda.
-        <br>
-        <small>Execute o script de importação para popular o bulário.</small>
-      {% endif %}
-    </h5>
-  </div>
   {% endif %}
-
 </div>
 
+<!-- ═══════════════════════  CSS  ═══════════════════════ -->
 <style>
-.card-hover {
-  transition: transform .15s ease, box-shadow .15s ease;
+/* ── Hero ─────────────────────────────────────────── */
+.bulario-hero {
+  background: linear-gradient(135deg, #0f4c8a 0%, #1565c0 50%, #1976d2 100%);
+  color: #fff;
+  position: relative;
+  overflow: hidden;
 }
-.card-hover:hover {
-  transform: translateY(-3px);
-  box-shadow: 0 .5rem 1.5rem rgba(0,0,0,.1) !important;
+.bulario-hero::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23ffffff' fill-opacity='0.04'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
+}
+.bulario-hero__badge {
+  display: inline-block;
+  background: rgba(255,255,255,.15);
+  border: 1px solid rgba(255,255,255,.3);
+  color: #fff;
+  border-radius: 999px;
+  padding: .35rem 1rem;
+  font-size: .85rem;
+  font-weight: 600;
+  letter-spacing: .03em;
+}
+.bulario-hero__title {
+  font-size: clamp(1.6rem, 4vw, 2.4rem);
+  font-weight: 700;
+  margin-bottom: .5rem;
+}
+.bulario-hero__sub {
+  font-size: 1rem;
+  opacity: .85;
+  margin-bottom: 0;
+}
+
+/* ── Search ───────────────────────────────────────── */
+.bulario-search {
+  position: relative;
+  max-width: 680px;
+  display: flex;
+  background: #fff;
+  border-radius: 12px;
+  box-shadow: 0 8px 32px rgba(0,0,0,.18);
+  overflow: hidden;
+}
+.bulario-search__icon {
+  position: absolute;
+  left: 1rem;
+  top: 50%;
+  transform: translateY(-50%);
+  color: #6b7280;
+  pointer-events: none;
+  font-size: 1rem;
+}
+.bulario-search__input {
+  flex: 1;
+  border: none;
+  outline: none;
+  padding: .9rem 1rem .9rem 2.8rem;
+  font-size: 1rem;
+  color: #1f2937;
+  background: transparent;
+  min-width: 0;
+}
+.bulario-search__input::placeholder { color: #9ca3af; }
+.bulario-search__clear {
+  display: flex;
+  align-items: center;
+  padding: 0 .6rem;
+  color: #9ca3af;
+  text-decoration: none;
+  font-size: .85rem;
+}
+.bulario-search__clear:hover { color: #ef4444; }
+.bulario-search__btn {
+  padding: 0 1.5rem;
+  background: #1976d2;
+  color: #fff;
+  border: none;
+  font-weight: 600;
+  font-size: .95rem;
+  cursor: pointer;
+  transition: background .15s;
+  white-space: nowrap;
+}
+.bulario-search__btn:hover { background: #1565c0; }
+
+/* ── Stats ────────────────────────────────────────── */
+.bulario-stats {
+  max-width: 680px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 1rem;
+  font-size: .9rem;
+  opacity: .9;
+}
+.bulario-stats__item { display: flex; align-items: baseline; gap: .3rem; }
+.bulario-stats__item strong { font-size: 1.1rem; }
+.bulario-stats__sep { width: 1px; height: 1rem; background: rgba(255,255,255,.4); }
+
+/* ── Filtros ──────────────────────────────────────── */
+.bulario-filters {
+  display: flex;
+  gap: .5rem;
+  overflow-x: auto;
+  padding-bottom: 2px;
+  scrollbar-width: none;
+}
+.bulario-filters::-webkit-scrollbar { display: none; }
+.bulario-filter-chip {
+  flex-shrink: 0;
+  padding: .3rem .9rem;
+  border-radius: 999px;
+  border: 1px solid #dee2e6;
+  background: #fff;
+  color: #495057;
+  font-size: .82rem;
+  font-weight: 500;
+  text-decoration: none;
+  transition: all .15s;
+  white-space: nowrap;
+}
+.bulario-filter-chip:hover { border-color: #1976d2; color: #1976d2; }
+.bulario-filter-chip.active {
+  background: #1976d2;
+  border-color: #1976d2;
+  color: #fff;
+}
+
+/* ── Cards ────────────────────────────────────────── */
+.bulario-card {
+  display: flex;
+  flex-direction: column;
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 14px;
+  overflow: hidden;
+  height: 100%;
+  transition: transform .18s ease, box-shadow .18s ease, border-color .18s;
+  color: inherit;
+}
+.bulario-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 12px 32px rgba(25,118,210,.12);
+  border-color: #93c5fd;
+}
+.bulario-card__icon {
+  background: linear-gradient(135deg, #eff6ff, #dbeafe);
+  color: #1976d2;
+  padding: 1rem 1.25rem .7rem;
+  font-size: 1.4rem;
+}
+.bulario-card__body {
+  padding: .85rem 1.1rem;
+  flex: 1;
+}
+.bulario-card__name {
+  font-size: .97rem;
+  font-weight: 700;
+  color: #111827;
+  margin-bottom: .25rem;
+  line-height: 1.3;
+}
+.bulario-card__pa {
+  font-size: .8rem;
+  color: #6b7280;
+  margin-bottom: .5rem;
+  line-height: 1.4;
+}
+.bulario-card__badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .3rem;
+}
+.bulario-badge {
+  display: inline-block;
+  padding: .15rem .55rem;
+  border-radius: 999px;
+  font-size: .72rem;
+  font-weight: 600;
+  line-height: 1.5;
+}
+.bulario-badge--blue { background: #eff6ff; color: #1d4ed8; }
+.bulario-badge--gray { background: #f3f4f6; color: #374151; }
+.bulario-card__footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: .65rem 1.1rem;
+  border-top: 1px solid #f3f4f6;
+  background: #fafafa;
+}
+.bulario-card__dose {
+  font-size: .78rem;
+  color: #6b7280;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.bulario-card__arrow {
+  color: #1976d2;
+  font-size: .8rem;
+  flex-shrink: 0;
+  margin-left: .5rem;
+  transition: transform .15s;
+}
+.bulario-card:hover .bulario-card__arrow { transform: translateX(3px); }
+
+/* ── Empty ────────────────────────────────────────── */
+.bulario-empty {
+  text-align: center;
+  padding: 4rem 1rem;
 }
 </style>
+
 {% endblock %}

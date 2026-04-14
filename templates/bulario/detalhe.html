@@ -1,174 +1,416 @@
 {% extends "layout.html" %}
-
 {% block main %}
-<div class="container mt-4">
 
-  <!-- Breadcrumb -->
-  <nav aria-label="breadcrumb" class="mb-3">
-    <ol class="breadcrumb">
-      <li class="breadcrumb-item">
-        <a href="{{ url_for('bulario') }}">
-          <i class="fas fa-capsules me-1"></i>Bulário
-        </a>
-      </li>
-      <li class="breadcrumb-item active">{{ med.nome }}</li>
-    </ol>
-  </nav>
+<!-- ════════  CABEÇALHO  ════════ -->
+<div class="bd-hero">
+  <div class="container py-4">
 
-  <!-- Cabeçalho do medicamento -->
-  <div class="card border-0 shadow-sm mb-4">
-    <div class="card-body p-4">
-      <div class="d-flex flex-wrap align-items-start gap-3">
-        <div class="bg-primary bg-opacity-10 rounded-3 p-3">
-          <i class="fas fa-pills fa-2x text-primary"></i>
-        </div>
-        <div class="flex-grow-1">
-          <h2 class="fw-bold mb-1">{{ med.nome }}</h2>
-          {% if med.principio_ativo %}
-          <p class="text-muted mb-2">
-            <i class="fas fa-atom me-1"></i>{{ med.principio_ativo }}
-          </p>
+    <!-- Breadcrumb -->
+    <nav aria-label="breadcrumb" class="mb-3">
+      <ol class="breadcrumb bd-breadcrumb">
+        <li class="breadcrumb-item">
+          <a href="{{ url_for('bulario') }}">
+            <i class="fas fa-capsules me-1"></i>Bulário
+          </a>
+        </li>
+        <li class="breadcrumb-item active text-white-50">{{ med.nome }}</li>
+      </ol>
+    </nav>
+
+    <div class="d-flex flex-wrap align-items-start gap-4">
+      <!-- Ícone -->
+      <div class="bd-hero__icon">
+        {% if med.classificacao and 'antibi' in med.classificacao|lower %}
+          <i class="fas fa-bacteria"></i>
+        {% elif med.classificacao and ('anti-inflamat' in med.classificacao|lower or 'antiinflamat' in med.classificacao|lower) %}
+          <i class="fas fa-fire-flame-curved"></i>
+        {% elif med.classificacao and 'parasit' in med.classificacao|lower %}
+          <i class="fas fa-bug"></i>
+        {% elif med.classificacao and 'vacin' in med.classificacao|lower %}
+          <i class="fas fa-syringe"></i>
+        {% else %}
+          <i class="fas fa-pills"></i>
+        {% endif %}
+      </div>
+
+      <!-- Info principal -->
+      <div class="flex-grow-1">
+        <h1 class="bd-hero__name mb-1">{{ med.nome }}</h1>
+        {% if med.principio_ativo %}
+        <p class="bd-hero__pa mb-2">
+          <i class="fas fa-atom me-1 opacity-75"></i>{{ med.principio_ativo }}
+        </p>
+        {% endif %}
+        <div class="d-flex flex-wrap gap-2">
+          {% if med.classificacao %}
+          <span class="bd-tag bd-tag--light">
+            <i class="fas fa-tag me-1"></i>{{ med.classificacao }}
+          </span>
           {% endif %}
-          <div class="d-flex flex-wrap gap-2">
-            {% if med.classificacao %}
-            <span class="badge bg-primary bg-opacity-10 text-primary fs-6 fw-normal px-3 py-2">
-              {{ med.classificacao }}
-            </span>
-            {% endif %}
-            {% if med.via_administracao %}
-            <span class="badge bg-secondary bg-opacity-10 text-secondary fs-6 fw-normal px-3 py-2">
-              <i class="fas fa-syringe me-1"></i>{{ med.via_administracao }}
-            </span>
-            {% endif %}
-          </div>
+          {% if med.via_administracao %}
+          <span class="bd-tag bd-tag--outline">
+            <i class="fas fa-route me-1"></i>{{ med.via_administracao }}
+          </span>
+          {% endif %}
+          {% if med.apresentacoes %}
+          <span class="bd-tag bd-tag--outline">
+            <i class="fas fa-box-open me-1"></i>{{ med.apresentacoes|length }} apresentação(ões)
+          </span>
+          {% endif %}
         </div>
       </div>
+
+      <!-- Ação rápida -->
+      <button class="btn bd-btn-copy" onclick="copiarParaPrescricao()" title="Copiar para prescrição">
+        <i class="fas fa-prescription me-2"></i>Usar em prescrição
+      </button>
     </div>
   </div>
+</div>
 
-  <div class="row g-4">
+<!-- ════════  TABS  ════════ -->
+<div class="bg-white border-bottom sticky-top" style="top: var(--topbar-height, 56px); z-index: 99;">
+  <div class="container">
+    <ul class="nav bd-tabs" id="bdTabs" role="tablist">
+      <li class="nav-item" role="presentation">
+        <button class="bd-tab active" data-bs-toggle="tab" data-bs-target="#tab-posologia" type="button">
+          <i class="fas fa-ruler-combined me-2"></i>Posologia
+        </button>
+      </li>
+      {% if med.bula %}
+      <li class="nav-item" role="presentation">
+        <button class="bd-tab" data-bs-toggle="tab" data-bs-target="#tab-bula" type="button">
+          <i class="fas fa-file-medical me-2"></i>Bula
+        </button>
+      </li>
+      {% endif %}
+      {% if med.observacoes %}
+      <li class="nav-item" role="presentation">
+        <button class="bd-tab" data-bs-toggle="tab" data-bs-target="#tab-obs" type="button">
+          <i class="fas fa-exclamation-triangle me-2"></i>Contraindicações
+        </button>
+      </li>
+      {% endif %}
+      {% if med.apresentacoes %}
+      <li class="nav-item" role="presentation">
+        <button class="bd-tab" data-bs-toggle="tab" data-bs-target="#tab-apres" type="button">
+          <i class="fas fa-boxes me-2"></i>Apresentações
+        </button>
+      </li>
+      {% endif %}
+    </ul>
+  </div>
+</div>
 
-    <!-- Coluna principal -->
-    <div class="col-lg-8">
+<!-- ════════  CONTEÚDO  ════════ -->
+<div class="container py-4">
+  <div class="tab-content" id="bdTabsContent">
 
-      <!-- Posologia -->
+    <!-- ── Posologia ── -->
+    <div class="tab-pane fade show active" id="tab-posologia" role="tabpanel">
       {% if med.dosagem_recomendada or med.frequencia or med.duracao_tratamento %}
-      <div class="card border-0 shadow-sm mb-4">
-        <div class="card-header bg-transparent border-bottom fw-semibold py-3">
-          <i class="fas fa-ruler-combined me-2 text-primary"></i>Posologia
+      <div class="row g-3 mb-4">
+
+        {% if med.dosagem_recomendada %}
+        <div class="col-md-4">
+          <div class="bd-info-card">
+            <div class="bd-info-card__icon bd-info-card__icon--blue">
+              <i class="fas fa-weight-scale"></i>
+            </div>
+            <div>
+              <small class="text-muted d-block mb-1">Dose recomendada</small>
+              <strong>{{ med.dosagem_recomendada }}</strong>
+            </div>
+          </div>
         </div>
-        <div class="card-body p-0">
-          <table class="table table-hover mb-0">
+        {% endif %}
+
+        {% if med.frequencia %}
+        <div class="col-md-4">
+          <div class="bd-info-card">
+            <div class="bd-info-card__icon bd-info-card__icon--green">
+              <i class="fas fa-clock"></i>
+            </div>
+            <div>
+              <small class="text-muted d-block mb-1">Frequência</small>
+              <strong>{{ med.frequencia }}</strong>
+            </div>
+          </div>
+        </div>
+        {% endif %}
+
+        {% if med.duracao_tratamento %}
+        <div class="col-md-4">
+          <div class="bd-info-card">
+            <div class="bd-info-card__icon bd-info-card__icon--orange">
+              <i class="fas fa-calendar-days"></i>
+            </div>
+            <div>
+              <small class="text-muted d-block mb-1">Duração</small>
+              <strong>{{ med.duracao_tratamento }}</strong>
+            </div>
+          </div>
+        </div>
+        {% endif %}
+
+      </div>
+      {% endif %}
+
+      <!-- Apresentações em resumo -->
+      {% if med.apresentacoes %}
+      <div class="bd-section mb-4">
+        <h6 class="bd-section__title">
+          <i class="fas fa-box-open me-2 text-primary"></i>Formas disponíveis
+        </h6>
+        <div class="d-flex flex-wrap gap-2">
+          {% for ap in med.apresentacoes %}
+          <div class="bd-apres-chip">
+            <span class="bd-apres-chip__forma">{{ ap.forma }}</span>
+            {% if ap.concentracao and ap.concentracao != 'N/A' %}
+            <span class="bd-apres-chip__conc">{{ ap.concentracao }}</span>
+            {% endif %}
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+      {% endif %}
+
+      {% if not med.dosagem_recomendada and not med.frequencia and not med.duracao_tratamento and not med.apresentacoes %}
+      <div class="bd-empty">
+        <i class="fas fa-circle-info fa-2x mb-2 text-muted"></i>
+        <p class="text-muted mb-0">Posologia não disponível ainda para este medicamento.</p>
+      </div>
+      {% endif %}
+    </div>
+
+    <!-- ── Bula ── -->
+    {% if med.bula %}
+    <div class="tab-pane fade" id="tab-bula" role="tabpanel">
+      <div class="bd-section">
+        <div class="bd-bula-texto">{{ med.bula }}</div>
+      </div>
+    </div>
+    {% endif %}
+
+    <!-- ── Contraindicações ── -->
+    {% if med.observacoes %}
+    <div class="tab-pane fade" id="tab-obs" role="tabpanel">
+      <div class="bd-section bd-section--warning">
+        <div class="d-flex align-items-start gap-3 mb-3">
+          <div class="bd-warn-icon">
+            <i class="fas fa-triangle-exclamation"></i>
+          </div>
+          <div>
+            <h6 class="fw-bold mb-1">Atenção</h6>
+            <p class="text-muted small mb-0">
+              Consulte sempre um veterinário antes de administrar qualquer medicamento.
+            </p>
+          </div>
+        </div>
+        <div class="bd-bula-texto">{{ med.observacoes }}</div>
+      </div>
+    </div>
+    {% endif %}
+
+    <!-- ── Apresentações (detalhe) ── -->
+    {% if med.apresentacoes %}
+    <div class="tab-pane fade" id="tab-apres" role="tabpanel">
+      <div class="bd-section">
+        <div class="table-responsive">
+          <table class="table bd-table">
+            <thead>
+              <tr>
+                <th>Forma farmacêutica</th>
+                <th>Concentração / Embalagem</th>
+              </tr>
+            </thead>
             <tbody>
-              {% if med.dosagem_recomendada %}
+              {% for ap in med.apresentacoes %}
               <tr>
-                <th class="ps-4 text-muted fw-normal" style="width:200px">Dose recomendada</th>
-                <td class="fw-semibold">{{ med.dosagem_recomendada }}</td>
+                <td>
+                  <i class="fas fa-circle-dot me-2 text-primary" style="font-size:.65em"></i>
+                  {{ ap.forma }}
+                </td>
+                <td>{{ ap.concentracao if ap.concentracao and ap.concentracao != 'N/A' else '—' }}</td>
               </tr>
-              {% endif %}
-              {% if med.frequencia %}
-              <tr>
-                <th class="ps-4 text-muted fw-normal">Frequência</th>
-                <td class="fw-semibold">{{ med.frequencia }}</td>
-              </tr>
-              {% endif %}
-              {% if med.duracao_tratamento %}
-              <tr>
-                <th class="ps-4 text-muted fw-normal">Duração</th>
-                <td class="fw-semibold">{{ med.duracao_tratamento }}</td>
-              </tr>
-              {% endif %}
+              {% endfor %}
             </tbody>
           </table>
         </div>
       </div>
-      {% endif %}
-
-      <!-- Bula -->
-      {% if med.bula %}
-      <div class="card border-0 shadow-sm mb-4">
-        <div class="card-header bg-transparent border-bottom fw-semibold py-3">
-          <i class="fas fa-file-medical me-2 text-primary"></i>Bula / Informações técnicas
-        </div>
-        <div class="card-body">
-          <div class="bula-texto" style="white-space: pre-wrap; font-size: .92rem; line-height: 1.7;">
-            {{ med.bula }}
-          </div>
-        </div>
-      </div>
-      {% endif %}
-
-      <!-- Observações / Contraindicações -->
-      {% if med.observacoes %}
-      <div class="card border-0 shadow-sm border-start border-warning border-3 mb-4">
-        <div class="card-header bg-transparent border-bottom fw-semibold py-3">
-          <i class="fas fa-exclamation-triangle me-2 text-warning"></i>Contraindicações e observações
-        </div>
-        <div class="card-body">
-          <div style="white-space: pre-wrap; font-size: .92rem; line-height: 1.7;">
-            {{ med.observacoes }}
-          </div>
-        </div>
-      </div>
-      {% endif %}
-
-      {% if not med.bula and not med.observacoes and not med.dosagem_recomendada %}
-      <div class="alert alert-light border text-center py-4">
-        <i class="fas fa-info-circle text-muted me-2"></i>
-        Informações detalhadas ainda não disponíveis para este medicamento.
-        Execute o script de importação para enriquecer os dados.
-      </div>
-      {% endif %}
-
     </div>
+    {% endif %}
 
-    <!-- Coluna lateral -->
-    <div class="col-lg-4">
-
-      <!-- Apresentações -->
-      {% if med.apresentacoes %}
-      <div class="card border-0 shadow-sm mb-4">
-        <div class="card-header bg-transparent border-bottom fw-semibold py-3">
-          <i class="fas fa-box-open me-2 text-primary"></i>Apresentações
-        </div>
-        <ul class="list-group list-group-flush">
-          {% for ap in med.apresentacoes %}
-          <li class="list-group-item d-flex justify-content-between align-items-center">
-            <span>
-              <i class="fas fa-circle-dot me-2 text-muted" style="font-size:.7em"></i>
-              {{ ap.forma }}
-            </span>
-            <span class="badge bg-light text-dark border">{{ ap.concentracao }}</span>
-          </li>
-          {% endfor %}
-        </ul>
-      </div>
-      {% endif %}
-
-      <!-- Ações rápidas -->
-      {% if current_user.is_authenticated %}
-      <div class="card border-0 shadow-sm">
-        <div class="card-header bg-transparent border-bottom fw-semibold py-3">
-          <i class="fas fa-bolt me-2 text-primary"></i>Ações rápidas
-        </div>
-        <div class="card-body d-grid gap-2">
-          <button
-            class="btn btn-primary"
-            onclick="copiarParaPrescricao()"
-            title="Copiar dados para uma prescrição">
-            <i class="fas fa-prescription me-2"></i>Usar em prescrição
-          </button>
-          <a href="{{ url_for('bulario') }}" class="btn btn-outline-secondary">
-            <i class="fas fa-arrow-left me-2"></i>Voltar ao bulário
-          </a>
-        </div>
-      </div>
-      {% endif %}
-
-    </div>
   </div>
 
+  <!-- Voltar -->
+  <div class="mt-4">
+    <a href="{{ url_for('bulario') }}" class="btn btn-outline-secondary btn-sm">
+      <i class="fas fa-arrow-left me-1"></i>Voltar ao bulário
+    </a>
+  </div>
 </div>
+
+<!-- ════════  CSS  ════════ -->
+<style>
+/* ── Hero ─────────────────────────────────────── */
+.bd-hero {
+  background: linear-gradient(135deg, #0f4c8a 0%, #1565c0 60%, #1976d2 100%);
+  color: #fff;
+}
+.bd-breadcrumb .breadcrumb-item a { color: rgba(255,255,255,.75); text-decoration: none; }
+.bd-breadcrumb .breadcrumb-item a:hover { color: #fff; }
+.bd-breadcrumb .breadcrumb-item + .breadcrumb-item::before { color: rgba(255,255,255,.4); }
+.bd-hero__icon {
+  width: 68px; height: 68px;
+  background: rgba(255,255,255,.15);
+  border: 1px solid rgba(255,255,255,.25);
+  border-radius: 16px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 1.8rem;
+  flex-shrink: 0;
+}
+.bd-hero__name {
+  font-size: clamp(1.4rem, 3vw, 2rem);
+  font-weight: 700;
+}
+.bd-hero__pa { color: rgba(255,255,255,.8); font-size: .95rem; }
+.bd-tag {
+  display: inline-flex; align-items: center;
+  padding: .3rem .8rem;
+  border-radius: 999px;
+  font-size: .82rem; font-weight: 600;
+}
+.bd-tag--light { background: rgba(255,255,255,.2); color: #fff; }
+.bd-tag--outline { border: 1px solid rgba(255,255,255,.35); color: rgba(255,255,255,.9); }
+.bd-btn-copy {
+  background: rgba(255,255,255,.15);
+  border: 1px solid rgba(255,255,255,.35);
+  color: #fff;
+  font-weight: 600;
+  border-radius: 10px;
+  padding: .55rem 1.2rem;
+  white-space: nowrap;
+  transition: background .15s;
+}
+.bd-btn-copy:hover { background: rgba(255,255,255,.25); color: #fff; }
+
+/* ── Tabs ──────────────────────────────────────── */
+.bd-tabs {
+  gap: 0;
+  border-bottom: none;
+}
+.bd-tab {
+  background: none;
+  border: none;
+  border-bottom: 3px solid transparent;
+  color: #6b7280;
+  font-size: .9rem;
+  font-weight: 500;
+  padding: .85rem 1.1rem;
+  cursor: pointer;
+  transition: all .15s;
+  white-space: nowrap;
+}
+.bd-tab:hover { color: #1976d2; }
+.bd-tab.active { color: #1976d2; border-bottom-color: #1976d2; }
+
+/* ── Info cards ────────────────────────────────── */
+.bd-info-card {
+  display: flex;
+  align-items: flex-start;
+  gap: .9rem;
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 14px;
+  padding: 1.1rem 1.2rem;
+  height: 100%;
+  box-shadow: 0 1px 4px rgba(0,0,0,.05);
+}
+.bd-info-card__icon {
+  width: 40px; height: 40px;
+  border-radius: 10px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 1.1rem;
+  flex-shrink: 0;
+}
+.bd-info-card__icon--blue  { background: #eff6ff; color: #1976d2; }
+.bd-info-card__icon--green { background: #f0fdf4; color: #16a34a; }
+.bd-info-card__icon--orange{ background: #fff7ed; color: #ea580c; }
+
+/* ── Section ───────────────────────────────────── */
+.bd-section {
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 14px;
+  padding: 1.5rem;
+  box-shadow: 0 1px 4px rgba(0,0,0,.05);
+}
+.bd-section--warning {
+  border-left: 4px solid #f59e0b;
+}
+.bd-section__title {
+  font-size: .9rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+  color: #374151;
+  margin-bottom: 1rem;
+}
+.bd-warn-icon {
+  width: 40px; height: 40px;
+  background: #fef3c7;
+  color: #d97706;
+  border-radius: 10px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 1.1rem;
+  flex-shrink: 0;
+}
+
+/* ── Bula texto ────────────────────────────────── */
+.bd-bula-texto {
+  white-space: pre-wrap;
+  font-size: .92rem;
+  line-height: 1.75;
+  color: #374151;
+}
+
+/* ── Apresentações chips ───────────────────────── */
+.bd-apres-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: .4rem;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: .4rem .8rem;
+  font-size: .83rem;
+}
+.bd-apres-chip__forma { font-weight: 600; color: #1e40af; }
+.bd-apres-chip__conc  { color: #64748b; }
+
+/* ── Table ─────────────────────────────────────── */
+.bd-table { font-size: .9rem; }
+.bd-table thead th {
+  background: #f8fafc;
+  font-weight: 600;
+  font-size: .8rem;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+  color: #64748b;
+  border-bottom: 2px solid #e2e8f0;
+}
+.bd-table tbody tr:hover td { background: #f8fafc; }
+
+/* ── Empty ─────────────────────────────────────── */
+.bd-empty {
+  text-align: center;
+  padding: 3rem 1rem;
+  background: #f8fafc;
+  border-radius: 14px;
+  border: 1px dashed #cbd5e1;
+}
+</style>
 
 <script>
 function copiarParaPrescricao() {
@@ -178,25 +420,33 @@ function copiarParaPrescricao() {
     frequencia: "{{ (med.frequencia or '') | e }}",
     duracao: "{{ (med.duracao_tratamento or '') | e }}",
   };
-  // Tenta preencher campos de prescrição se estiver na mesma página
-  const campos = {
-    '#prescricao_medicamento, [name="medicamento"]': dados.nome,
-    '#prescricao_dosagem, [name="dosagem"]': dados.dosagem,
-    '#prescricao_frequencia, [name="frequencia"]': dados.frequencia,
-    '#prescricao_duracao, [name="duracao"]': dados.duracao,
-  };
+  const seletores = [
+    ['#prescricao_medicamento, [name="medicamento"]', dados.nome],
+    ['#prescricao_dosagem, [name="dosagem"]',         dados.dosagem],
+    ['#prescricao_frequencia, [name="frequencia"]',   dados.frequencia],
+    ['#prescricao_duracao, [name="duracao"]',         dados.duracao],
+  ];
   let preencheu = false;
-  for (const [sel, val] of Object.entries(campos)) {
+  for (const [sel, val] of seletores) {
     const el = document.querySelector(sel);
     if (el && val) { el.value = val; preencheu = true; }
   }
   if (!preencheu) {
-    // Copia para área de transferência
-    const texto = `Medicamento: ${dados.nome}\nDose: ${dados.dosagem}\nFrequência: ${dados.frequencia}\nDuração: ${dados.duracao}`;
+    const texto = [
+      dados.nome     && `Medicamento: ${dados.nome}`,
+      dados.dosagem  && `Dose: ${dados.dosagem}`,
+      dados.frequencia && `Frequência: ${dados.frequencia}`,
+      dados.duracao  && `Duração: ${dados.duracao}`,
+    ].filter(Boolean).join('\n');
     navigator.clipboard.writeText(texto).then(() => {
-      alert('Dados copiados para a área de transferência!');
+      const btn = document.querySelector('.bd-btn-copy');
+      const orig = btn.innerHTML;
+      btn.innerHTML = '<i class="fas fa-check me-2"></i>Copiado!';
+      btn.style.background = 'rgba(34,197,94,.3)';
+      setTimeout(() => { btn.innerHTML = orig; btn.style.background = ''; }, 2000);
     });
   }
 }
 </script>
+
 {% endblock %}

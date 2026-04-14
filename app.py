@@ -22811,18 +22811,28 @@ def atualizar_bloco_orcamento(bloco_id):
 
 
 # ---------------------------------------------------------------------------
-# Bulário de Medicamentos
+# Bulário de Medicamentos (somente admin)
 # ---------------------------------------------------------------------------
+def _is_admin():
+    return current_user.is_authenticated and (current_user.role or "").lower() == "admin"
+
+
+@login_required
 def bulario():
-    """Lista paginada de medicamentos com busca."""
+    """Lista paginada de medicamentos com busca — somente admin."""
+    if not _is_admin():
+        abort(403)
+
     from models.base import Medicamento
-    from sqlalchemy import or_
+    from sqlalchemy import or_, func
 
     q = request.args.get("q", "").strip()
+    classificacao = request.args.get("classe", "").strip()
     page = request.args.get("page", 1, type=int)
-    per_page = 20
+    per_page = 24
 
     query = Medicamento.query.order_by(Medicamento.nome)
+
     if q:
         like = f"%{q}%"
         query = query.filter(
@@ -22833,22 +22843,44 @@ def bulario():
             )
         )
 
+    if classificacao:
+        query = query.filter(Medicamento.classificacao.ilike(f"%{classificacao}%"))
+
+    # Classes únicas para filtro
+    classes = [
+        r[0] for r in
+        db.session.query(Medicamento.classificacao)
+        .filter(Medicamento.classificacao.isnot(None))
+        .distinct()
+        .order_by(Medicamento.classificacao)
+        .all()
+        if r[0]
+    ]
+
+    total = query.count()
     paginacao = query.paginate(page=page, per_page=per_page, error_out=False)
     return render_template(
         "bulario/lista.html",
         medicamentos=paginacao.items,
         paginacao=paginacao,
         q=q,
+        classificacao=classificacao,
+        classes=classes,
+        total=total,
     )
 
 
+@login_required
 def bulario_detalhe(medicamento_id):
-    """Detalhe de um medicamento do bulário."""
+    """Detalhe de um medicamento do bulário — somente admin."""
+    if not _is_admin():
+        abort(403)
     from models.base import Medicamento
     med = Medicamento.query.get_or_404(medicamento_id)
     return render_template("bulario/detalhe.html", med=med)
 
 
+@login_required
 def bulario_buscar_api():
     """API JSON para autocomplete de medicamentos (usado em prescrições)."""
     from models.base import Medicamento

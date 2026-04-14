@@ -421,6 +421,8 @@ def cruzar_e_atualizar(conn, medicamentos_banco, produtos, dry_run=False):
 # Main
 # ---------------------------------------------------------------------------
 def main():
+    global CREATED_BY_USER_ID
+
     p = argparse.ArgumentParser()
     p.add_argument("--dry-run",        action="store_true")
     p.add_argument("--somente-listar", action="store_true")
@@ -430,7 +432,6 @@ def main():
     p.add_argument("--visible",        action="store_true")
     args = p.parse_args()
 
-    global CREATED_BY_USER_ID
     CREATED_BY_USER_ID = args.created_by
 
     conn = conectar_banco()
